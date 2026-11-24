@@ -19,7 +19,7 @@ configurations:
     query: DeviceEvents | take 1
     scheduling: 3H
     alert:
-      category: Execution
+      title: Defender Removed
     impacted_entities:
       user: AccountSid
     scope:

@@ -36,7 +36,7 @@ fn rule_text(alert: &str, model: bool) -> String {
          created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: A rule.\n{model}\
          response:\n  alert_severity: High\nconfigurations:\n  defender_for_endpoint:\n    \
          status: STAGING\n    query: |\n      DeviceProcessEvents\n      | take 1\n    \
-         scheduling: 1H\n    alert:\n      category: Execution\n{alert}    \
+         scheduling: 1H\n    alert:\n      description: Alert.\n{alert}    \
          impacted_entities:\n      device: device_id\n"
     )
 }

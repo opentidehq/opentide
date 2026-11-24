@@ -1203,12 +1203,6 @@ class DefenderAlert:
     def __reduce__(self, /) -> tuple[Any, tuple[dict]]: ...
     def __repr__(self, /) -> str: ...
     @property
-    def category(self, /) -> str:
-        """
-        Defender alert category. Deploy removes spaces (`Suspicious Activity` is sent as
-        `SuspiciousActivity`).
-        """
-    @property
     def description(self, /) -> str | None:
         """
         Alert description. Deploy uses the rule `description` when omitted.

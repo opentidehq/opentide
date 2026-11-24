@@ -143,7 +143,7 @@ fn a_block_severity_takes_what_deploy_maps() {
     };
     let defender = |severity: Json| {
         json!({"status": "S", "query": "x", "scheduling": "1H", "impacted_entities": {},
-               "alert": {"category": "Execution", "severity": severity}})
+               "alert": {"severity": severity}})
     };
     let expected = "deploy takes Informational, Low, Medium, High or Critical (exact case)";
     assert_eq!(
@@ -193,7 +193,7 @@ fn every_query_text_refuses_a_blank_query() {
         ),
         (
             "defender_for_endpoint",
-            json!({"status": "S", "alert": {"category": "c"}, "impacted_entities": {},
+            json!({"status": "S", "alert": {}, "impacted_entities": {},
                    "scheduling": "NRT"}),
         ),
     ] {

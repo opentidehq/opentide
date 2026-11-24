@@ -195,7 +195,7 @@ fn under(path: &Path, root: &Path) -> bool {
 
 const DEFENDER: &str = "defender_for_endpoint";
 
-const TEMPLATE: &str = "\nname: {name}\n#references:\n  #public:\n    #1: \n  #internal:\n    #a: \n\nmetadata:\n  uuid: {uuid}\n  schema: rule::1.0\n  version: 1\n  created: {created}\n  modified: {modified}\n  tlp: amber+strict\n  author: {author}\n  #contributors:\n    #-\n\ndescription: |\n{description}\n#detection_model: \n\nresponse:\n  alert_severity: {alert_severity}\n  #playbook: https://\n  #responders: \n  #procedure:\n\nconfigurations:\n  defender_for_endpoint: \n    schema: platform::defender_for_endpoint::1.0\n    status: {status}\n    {contributors}\n    tenants:\n      - {tenants}\n    #flags:\n      #-\n    \n    scheduling: {schedule}\n    \n    alert:\n      #title: \n      category: {category}{techniques}\n      #severity: \n      {alert_recommendation}\n    \n    {impacted_entities_flag}impacted_entities:\n      {impacted_device}\n      #mailbox: \n      {impacted_user} \n    \n    #actions:\n    \n      #devices:\n        #isolate_device: \n        #collect_investigation_package: true\n        #run_antivirus_scan: true\n        #initiate_investigation: true\n        #restrict_app_execution: true\n    \n      #files:\n        #allow_block:\n          #action: \n          #column: \n          #groups:\n            #selection: \n            #device_groups:\n              #-\n        #quarantine_file: \n    \n    scope:\n      selection: All\n      #device_groups:\n        #-\n    \n    query: |\n{query}\n";
+const TEMPLATE: &str = "\nname: {name}\n#references:\n  #public:\n    #1: \n  #internal:\n    #a: \n\nmetadata:\n  uuid: {uuid}\n  schema: rule::1.0\n  version: 1\n  created: {created}\n  modified: {modified}\n  tlp: amber+strict\n  author: {author}\n  #contributors:\n    #-\n\ndescription: |\n{description}\n#detection_model: \n\nresponse:\n  alert_severity: {alert_severity}\n  #playbook: https://\n  #responders: \n  #procedure:\n\nconfigurations:\n  defender_for_endpoint: \n    schema: platform::defender_for_endpoint::1.0\n    status: {status}\n    {contributors}\n    tenants:\n      - {tenants}\n    #flags:\n      #-\n    \n    scheduling: {schedule}\n    \n    alert:\n      title: {title}{techniques}\n      #severity: \n      {alert_recommendation}\n    \n    {impacted_entities_flag}impacted_entities:\n      {impacted_device}\n      #mailbox: \n      {impacted_user} \n    \n    #actions:\n    \n      #devices:\n        #isolate_device: \n        #collect_investigation_package: true\n        #run_antivirus_scan: true\n        #initiate_investigation: true\n        #restrict_app_execution: true\n    \n      #files:\n        #allow_block:\n          #action: \n          #column: \n          #groups:\n            #selection: \n            #device_groups:\n              #-\n        #quarantine_file: \n    \n    scope:\n      selection: All\n      #device_groups:\n        #-\n    \n    query: |\n{query}\n";
 const NO_CONTRIBUTORS_TEMPLATE: &str = "\n    #contributors:\n      #-\n";
 const CONTRIBUTORS_TEMPLATE: &str = "\n    contributors:\n      - {contributor}\n";
 const NO_RECOMMENDATION_TEMPLATE: &str = "\n      #recommendation: |\n        #Type Here\n";
@@ -211,19 +211,6 @@ fn fix_multiline(text: &str, indentation: usize) -> String {
         .map(|line| format!("{}{line}", " ".repeat(indentation)))
         .collect::<Vec<_>>()
         .join("\n")
-}
-
-/// Graph's category in words: a space before each capital but the first
-/// character (`InitialAccess` is `Initial Access`).
-fn space_before_uppercase(text: &str) -> String {
-    let mut out = String::new();
-    for (index, c) in text.chars().enumerate() {
-        if c.is_uppercase() && index > 0 {
-            out.push(' ');
-        }
-        out.push(c);
-    }
-    out
 }
 
 /// The longest stem [`sanitize_filename`] returns, in bytes: callers add a
@@ -376,7 +363,13 @@ fn render_rule(rule: &CJson, tenant_names: &[String]) -> Result<(String, String)
         CJson::Int(number) => number.to_string(),
         _ => return Err(FieldError::not("schedule.period", "a string")),
     };
-    let category = space_before_uppercase(alert("category")?);
+    // Graph's alert title; the rule's name when the tenant sets none. It keeps `alert:` a
+    // mapping now that the deprecated `category` no longer opens the block.
+    let title = template
+        .get("title")
+        .and_then(CJson::as_str)
+        .filter(|title| !title.is_empty())
+        .unwrap_or(name);
     let query = need_text(
         need(rule, "queryCondition", "queryCondition")?,
         "queryText",
@@ -493,7 +486,7 @@ fn render_rule(rule: &CJson, tenant_names: &[String]) -> Result<(String, String)
             ("contributors", &contributors),
             ("description", &fix_multiline(&description, 2)),
             ("schedule", &plain(&schedule)),
-            ("category", &plain(&category)),
+            ("title", &plain(title)),
             ("techniques", &techniques),
             (
                 "query",
@@ -714,10 +707,6 @@ mod tests {
     #[test]
     fn multiline_text_is_trimmed_and_indented() {
         assert_eq!(fix_multiline("  a \n\n\tb\r\n", 2), "  a\n  b");
-        assert_eq!(
-            space_before_uppercase("SuspiciousActivity"),
-            "Suspicious Activity"
-        );
         assert_eq!(sanitize_filename("a:b/c?"), "a b c ");
         assert_eq!(sanitize_filename("a\tb\nc\u{7f}d"), "a b c d");
         assert_eq!(
@@ -797,7 +786,7 @@ mod tests {
                 "detectorId": "d1", "queryCondition": {"queryText": "T\n | take 1"},
                 "schedule": {"period": "0"},
                 "detectionAction": {"alertTemplate": {"severity": "medium",
-                  "description": "Desc", "category": "InitialAccess", "recommendedActions": "Do it",
+                  "description": "Desc", "recommendedActions": "Do it",
                   "mitreTechniques": ["T1", "T2"], "impactedAssets": [
                   {"@odata.type": "#microsoft.graph.security.impactedUserAsset", "identifier": "accountUpn"}]}}}"##,
         )
@@ -821,7 +810,7 @@ mod tests {
         assert!(body.contains("    scheduling: NRT\n"), "{body}");
         assert!(
             body.contains(
-                "category: Initial Access\n      techniques:\n        - T1\n        - T2\n"
+                "title: \"Encoded: \\\"x\\\"\"\n      techniques:\n        - T1\n        - T2\n"
             ),
             "{body}"
         );
@@ -852,7 +841,7 @@ mod tests {
                 "detectorId": "null", "queryCondition": {"queryText": "T"},
                 "schedule": {"period": "1H #x"},
                 "detectionAction": {"alertTemplate": {"severity": "high: #1",
-                  "description": "Desc", "category": "[x]",
+                  "title": "[x]", "description": "Desc",
                   "mitreTechniques": ["T1: x", "'q", "- y"], "impactedAssets": [
                   {"@odata.type": "#impactedUserAsset", "identifier": "a #b: c"}]}}}"##,
         )
@@ -892,7 +881,7 @@ mod tests {
             "{body}"
         );
         assert_eq!(
-            block_at(&["alert", "category"]).as_deref(),
+            block_at(&["alert", "title"]).as_deref(),
             Some("[x]"),
             "{body}"
         );

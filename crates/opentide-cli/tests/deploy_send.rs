@@ -1329,7 +1329,7 @@ fn crowdstrike_stops_on_a_delete_the_tenant_refuses() {
 fn defender_deletes_a_recorded_rule_and_forgets_its_id() {
     let uuid = "00000000-0000-4000-8099-000000000071";
     let block = "  defender_for_endpoint:\n    status: REMOVED\n    query: |\n      DeviceProcessEvents\n      \
-         | take 1\n    scheduling: 1H\n    alert:\n      category: Execution\n    impacted_entities:\n      \
+         | take 1\n    scheduling: 1H\n    alert:\n      description: Alert.\n    impacted_entities:\n      \
          device: device_id\n"
         .to_owned();
     let ws = stated(

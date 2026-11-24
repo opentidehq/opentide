@@ -37,9 +37,6 @@ use crate::pins::Pins;
     )
 )]
 pub struct DefenderAlert {
-    /// Defender alert category. Deploy removes spaces (`Suspicious Activity` is sent as
-    /// `SuspiciousActivity`).
-    pub category: String,
     /// Alert title. Deploy uses the rule `name` when omitted.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,

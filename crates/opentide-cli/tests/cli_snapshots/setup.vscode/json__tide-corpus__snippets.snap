@@ -168,7 +168,6 @@ objective:
   query: |
     ...
   alert:
-    category: 
     #title: 
     #description: |
       #...
@@ -720,7 +719,6 @@ configurations:
     #query: |
       #...
     #alert:
-      #category: 
       #title: 
       #description: |
         #...
@@ -1426,7 +1424,6 @@ configurations:
     #query: |
       #...
     #alert:
-      #category: 
       #title: 
       #description: |
         #...
@@ -2318,7 +2315,6 @@ threat:
             "    #query: |",
             "      #...",
             "    #alert:",
-            "      #category: ",
             "      #title: ",
             "      #description: |",
             "        #...",
@@ -2980,7 +2976,6 @@ threat:
             "  query: |",
             "    ${2:...}",
             "  alert:",
-            "    category: ${3:category}",
             "    #title: ",
             "    #description: |",
             "      #...",

@@ -214,11 +214,6 @@ pub fn body_with_warnings(
         None if rule.response().is_some() => severity(rule.alert_severity())?,
         None => severity("Informational")?,
     };
-    let category = alert
-        .and_then(|alert| alert.get("category"))
-        .and_then(Json::as_str)
-        .unwrap_or_default()
-        .replace(' ', "");
     let mut template = Object::new();
     template.insert(
         "title".into(),
@@ -231,7 +226,6 @@ pub fn body_with_warnings(
             .into(),
     );
     template.insert("severity".into(), severity.into());
-    template.insert("category".into(), category.into());
     let own = strings(alert.and_then(|alert| alert.get("techniques")));
     let inherited = own.is_empty();
     let mut techniques = deploy::platform_techniques(cx, DISPLAY, rule, own)?;

@@ -27,6 +27,6 @@ configurations:
       | take 1
     scheduling: 1H
     alert:
-      category: Execution
+      title: Shared rule to create
     impacted_entities:
       device: device_id

@@ -27,7 +27,6 @@ configurations:
       | where FileName == "powershell.exe"
     scheduling: NRT
     alert:
-      category: Suspicious Activity
       title: Encoded PowerShell
       description: An encoded command line ran.
       severity: Medium
