@@ -8,6 +8,12 @@
       "name": "comment.line.opentide"
     },
     {
+      "begin": "/\\*",
+      "comment": "capture:comment",
+      "end": "\\*/",
+      "name": "comment.line.opentide"
+    },
+    {
       "begin": "(?:(?<![A-Za-z0-9_$])[hH])?```",
       "comment": "capture:string",
       "end": "```",
@@ -28,6 +34,16 @@
       "comment": "capture:number",
       "match": "\\b(?:0[xX][0-9A-Fa-f]*|[0-9]+(?:\\.[0-9]+)?(?:[eE][+-]?[0-9]+)?)\\b",
       "name": "constant.numeric.opentide"
+    },
+    {
+      "comment": "tm_extras:builtin-call",
+      "match": "(?i)(?<![\\w.$@#:])(?:geo_intersection_line_with_polygon|gzip_decompress_from_base64_string|zlib_decompress_from_base64_string|geo_intersects_line_with_polygon|unixtime_microseconds_todatetime|unixtime_milliseconds_todatetime|unixtime_nanoseconds_todatetime|current_principal_is_member_of|gzip_compress_to_base64_string|unicode_codepoints_from_string|zlib_compress_to_base64_string|geo_distance_point_to_polygon|geo_closest_point_on_polygon|geo_geohash_to_central_point|unicode_codepoints_to_string|geo_h3cell_to_central_point|geo_s2cell_to_central_point|geo_simplify_polygons_array|punycode_domain_from_string|unixtime_seconds_todatetime|geo_distance_point_to_line|geo_intersection_2polygons|geo_line_interpolate_point|series_decompose_anomalies|series_pearson_correlation|current_principal_details|geo_closest_point_on_line|percentiles_array_tdigest|punycode_domain_to_string|series_decompose_forecast|series_fit_2lines_dynamic|current_cluster_endpoint|geo_info_from_ip_address|geo_intersects_2polygons|geo_union_polygons_array|series_cosine_similarity|base64_encode_fromarray|datetime_list_timezones|geo_intersection_2lines|ipv4_range_to_cidr_list|series_fit_line_dynamic|series_periods_validate|base64_decode_tostring|base64_encode_fromguid|base64_encode_tostring|geo_geohash_to_polygon|geo_polygon_to_h3cells|geo_polygon_to_s2cells|base64_decode_toarray|datetime_local_to_utc|datetime_utc_to_local|geo_geohash_neighbors|geo_h3cell_to_polygon|geo_intersects_2lines|geo_line_locate_point|geo_polygon_perimeter|geo_s2cell_to_polygon|geo_union_lines_array|series_greater_equals|series_periods_detect|base64_decode_toguid|geo_distance_2points|geo_h3cell_neighbors|geo_point_in_polygon|geo_point_to_geohash|geo_polygon_centroid|geo_polygon_simplify|geo_s2cell_neighbors|ipv4_is_in_any_range|ipv6_is_in_any_range|make_list_with_nulls|punycode_from_string|series_fill_backward|series_stats_dynamic|url_encode_component|base64_decodestring|base64_encodestring|convert_temperature|cursor_before_or_at|geo_h3cell_children|geo_line_to_s2cells|geo_point_in_circle|geo_point_to_h3cell|geo_point_to_s2cell|geo_polygon_densify|has_any_ipv4_prefix|ipv4_netmask_suffix|percentrank_tdigest|series_fill_forward|stored_query_result|array_rotate_right|binary_shift_right|estimate_data_size|geo_polygon_buffer|parse_command_line|percentile_tdigest|percentilesw_array|punycode_to_string|row_window_session|series_dot_product|series_fill_linear|series_less_equals|array_rotate_left|array_shift_right|binary_shift_left|bitset_count_ones|current_principal|geo_h3cell_parent|geo_line_centroid|geo_line_simplify|materialized_view|percentiles_array|series_fill_const|series_fit_2lines|series_not_equals|array_shift_left|bag_pack_columns|count_distinctif|current_database|format_ipv4_mask|geo_h3cell_level|geo_h3cell_rings|geo_line_densify|geo_point_buffer|geo_polygon_area|ipv4_is_in_range|ipv6_is_in_range|parse_user_agent|series_decompose|series_magnitude|array_sort_desc|bag_remove_keys|column_ifexists|column_names_of|dynamic_to_json|format_datetime|format_timespan|geo_line_buffer|geo_line_length|has_ipv4_prefix|ipv4_is_private|pack_dictionary|parse_ipv4_mask|parse_ipv6_mask|replace_strings|series_fit_line|series_fit_poly|series_multiply|series_outliers|series_seasonal|series_subtract|set_has_element|array_index_of|array_sort_asc|binary_all_and|binary_all_xor|columnifexists|convert_energy|convert_length|convert_volume|count_distinct|current_cursor|cursor_current|external_table|ingestion_time|parse_urlquery|replace_string|row_rank_dense|series_ceiling|series_greater|series_product|set_difference|_GetWatchlist|array_reverse|binary_all_or|convert_angle|convert_force|convert_speed|covariancepif|datetime_diff|datetime_part|has_any_index|hash_xxhash64|indexof_regex|ipv4_is_match|ipv6_is_match|jaccard_index|make_datetime|make_timespan|merge_tdigest|parse_version|parseurlquery|replace_regex|series_divide|series_equals|set_intersect|tdigest_merge|array_concat|array_length|convert_mass|covarianceif|cursor_after|datetime_add|extract_json|format_bytes|geo_from_wkt|has_any_ipv4|hash_combine|ipv4_compare|ipv6_compare|make_list_if|percentilesw|rank_tdigest|row_rank_min|series_floor|series_stats|startofmonth|strcat_array|strcat_delim|week_of_year|array_slice|array_split|arraylength|bag_has_key|bag_set_key|buildschema|covariancep|extent_tags|extract_all|extractjson|format_ipv4|geo_azimuth|hash_sha256|make_bag_if|make_set_if|make_string|materialize|monthofyear|percentiles|percentilew|regex_quote|series_acos|series_asin|series_atan|series_ifft|series_less|series_sign|startofweek|startofyear|string_size|variancepif|binary_and|binary_not|binary_xor|covariance|dayofmonth|dcount_hll|endofmonth|extractall|isnotempty|pack_array|parse_ipv4|parse_ipv6|parse_json|parse_path|percentile|row_cumsum|row_number|series_abs|series_add|series_cos|series_exp|series_fft|series_fir|series_iir|series_log|series_pow|series_sin|series_sum|series_tan|startofday|take_anyif|todatetime|totimespan|trim_start|url_decode|url_encode|varianceif|weekofyear|welch_test|array_iff|array_iif|array_sum|bag_merge|binary_or|dayofweek|dayofyear|endofweek|endofyear|extent_id|geo_angle|hash_many|hash_sha1|hll_merge|hourofday|isnotnull|make_list|parse_csv|parse_url|parse_xml|parsejson|set_union|substring|toboolean|todecimal|todynamic|translate|variancep|workspace|bag_keys|bag_pack|beta_cdf|beta_inv|beta_pdf|bin_auto|coalesce|database|datepart|dcountif|endofday|extentid|getmonth|has_ipv4|hash_md5|isfinite|loggamma|make_bag|make_set|makelist|new_guid|notempty|pack_all|parseurl|take_any|todouble|toobject|toscalar|tostring|treepath|trim_end|variance|arg_max|arg_min|bag_zip|ceiling|cluster|countif|countof|degrees|extract|gettype|getyear|indexof|isascii|isempty|makeset|notnull|radians|replace|reverse|stdevif|tdigest|to_utf8|tolower|toupper|argmax|argmin|around|assert|bin_at|dcount|hll_if|isnull|isutf8|labels|max_of|min_of|repeat|stdevp|strcat|strcmp|strlen|strrep|tobool|toguid|tolong|toreal|totime|anyif|atan2|avgif|count|exp10|floor|gamma|graph|isinf|isnan|log10|maxif|minif|range|round|split|stdev|sumif|table|tohex|toint|acos|asin|atan|case|erfc|exp2|hash|log2|next|pack|prev|rand|sign|sqrt|trim|abs|ago|any|avg|bin|cos|cot|erf|exp|hll|iff|iif|log|max|min|not|now|pow|sin|sum|tan|zip|pi)(?=\\s*\\()",
+      "name": "support.function.opentide"
+    },
+    {
+      "comment": "tm_extras:field",
+      "match": "(?<![\\w.$@#])[$@#]?[A-Za-z_][\\w.]*(?=\\s*(?i:==|!=|=~|!~|<=|>=|:=|=|<|>|!?(?:has(?:_any|_all|cs)?|contains(?:cs)?|startswith(?:cs)?|endswith(?:cs)?|in~?|between|like)\\b|matches\\s+regex\\b))",
+      "name": "variable.other.property.opentide"
     },
     {
       "comment": "capture:error",
@@ -258,6 +274,35 @@
       "comment": "capture:type",
       "match": "(?i)(?<![A-Za-z0-9_])(?:dynamic)(?![A-Za-z0-9_])",
       "name": "entity.name.type.opentide"
+    },
+    {
+      "captures": {
+        "2": {
+          "name": "entity.name.type.opentide"
+        }
+      },
+      "comment": "tm_extras:table",
+      "match": "^(\\s*)((?i:(?!(?:and|as|asc|by|consume|datatable|declare|default|desc|distinct|evaluate|extend|external_data|externaldata|facet|filter|find|first|fork|from|getschema|invoke|join|kind|last|let|limit|lookup|mvexpand|nulls|of|on|optional|order|others|output|parse|partition|print|project|range|reduce|render|sample|scan|search|serialize|sort|step|summarize|take|to|top|typeof|union|where|with)\\b))[A-Za-z_]\\w*)(?=\\s*(?:$|\\|))"
+    },
+    {
+      "comment": "tm_extras:word-operator",
+      "match": "(?i)(?<![\\w.])!?(?:in|between)~?(?![\\w.])",
+      "name": "keyword.operator.opentide"
+    },
+    {
+      "comment": "tm_extras:boolean",
+      "match": "(?i)(?<![\\w.$@#])(?:true|false)(?![\\w.])",
+      "name": "constant.language.boolean.opentide"
+    },
+    {
+      "comment": "tm_extras:call",
+      "match": "(?<![\\w.$@#:])[A-Za-z_][\\w.]*(?=\\s*\\()",
+      "name": "entity.name.function.opentide"
+    },
+    {
+      "comment": "tm_extras:identifier",
+      "match": "(?<![\\w.$@#])[A-Za-z_]\\w*(?![\\w(])",
+      "name": "variable.other.opentide"
     }
   ],
   "scopeName": "source.kql"

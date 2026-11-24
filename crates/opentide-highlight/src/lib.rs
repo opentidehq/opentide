@@ -11,9 +11,11 @@
     reason = "imported from language-server with public items undocumented: crates/AGENTS.md, Lints"
 )]
 
+mod function_names;
 mod keywords;
 mod markdown;
 mod tide_model;
+mod tm_extras;
 
 use opentide_core::{ByteSpan, LanguageId, LineIndex, Range};
 use serde::{Deserialize, Serialize};
@@ -941,6 +943,24 @@ fn generate_tm_language_from(
             "comment": "capture:comment",
         }));
     }
+    if matches!(
+        language,
+        LanguageId::Kql
+            | LanguageId::Esql
+            | LanguageId::Eql
+            | LanguageId::Yara
+            | LanguageId::Yaral
+            | LanguageId::Cql
+    ) {
+        // A block comment that goes on past its line: the match rule above
+        // takes only one that ends on the line it starts.
+        patterns.push(serde_json::json!({
+            "name": comment_tm,
+            "begin": "/\\*",
+            "end": "\\*/",
+            "comment": "capture:comment",
+        }));
+    }
     if language == LanguageId::Spl
         && let Some(maps) = spec.captures.get("macro")
     {
@@ -1047,6 +1067,8 @@ fn generate_tm_language_from(
             }));
         }
     }
+    patterns.extend(tm_extras::before_keywords(language, spec));
+    let extras_pairs = pairs.clone();
     for (capture, tokens) in &keywords::by_capture(pairs) {
         let Some(maps) = spec.captures.get(capture) else {
             continue;
@@ -1078,6 +1100,7 @@ fn generate_tm_language_from(
             }));
         }
     }
+    patterns.extend(tm_extras::after_keywords(language, spec, &extras_pairs));
     if language == LanguageId::TideYaml {
         // First, so a query block is the embedded language, not YAML.
         patterns.insert(0, tide_embedded_queries(spec));

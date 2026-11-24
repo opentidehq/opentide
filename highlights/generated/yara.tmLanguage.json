@@ -8,6 +8,12 @@
       "name": "comment.line.opentide"
     },
     {
+      "begin": "/\\*",
+      "comment": "capture:comment",
+      "end": "\\*/",
+      "name": "comment.line.opentide"
+    },
+    {
       "comment": "capture:string",
       "match": "\"(\\\\.|[^\"\\\\])*\"|'(\\\\.|[^'\\\\])*'",
       "name": "string.quoted.opentide"
@@ -16,6 +22,11 @@
       "comment": "capture:number",
       "match": "\\b[0-9]+(\\.[0-9]+)?\\b",
       "name": "constant.numeric.opentide"
+    },
+    {
+      "comment": "tm_extras:field",
+      "match": "(?<![\\w.$@#])[$@#]?[A-Za-z_][\\w.]*(?=\\s*(?i:==|!=|=~|!~|<=|>=|:=|=|<|>))",
+      "name": "variable.other.property.opentide"
     },
     {
       "comment": "capture:keyword",
@@ -156,6 +167,16 @@
       "comment": "capture:punctuation.delimiter",
       "match": ":",
       "name": "punctuation.delimiter.opentide"
+    },
+    {
+      "comment": "tm_extras:boolean",
+      "match": "(?i)(?<![\\w.$@#])(?:true|false)(?![\\w.])",
+      "name": "constant.language.boolean.opentide"
+    },
+    {
+      "comment": "tm_extras:call",
+      "match": "(?<![\\w.$@#:])[A-Za-z_][\\w.]*(?=\\s*\\()",
+      "name": "entity.name.function.opentide"
     }
   ],
   "scopeName": "source.opentide.yara"
