@@ -17,7 +17,7 @@ Commands:
   env        Write .env.example and ignore .env
   hooks      Validate objects on every commit
   mcp        Write MCP configuration for editors and agents
-  vscode     Write VS Code schemas and snippets (deprecated)
+  vscode     Write VS Code snippets and recommend the opentide extension
   skills     Discover and install agent skills
 
 Options:
@@ -91,7 +91,7 @@ Options:
           Branch that deploys and receives inflight shards (default: origin/HEAD, then the checked-out branch, then init.defaultBranch, then main; GitLab uses $CI_DEFAULT_BRANCH)
 
       --vscode-setup
-          Run deprecated setup vscode: the extension recommendation and snippets
+          Run setup vscode: the extension recommendation and snippets (the opentide VS Code extension is the recommended path)
 
       --mcp <HOST>
           Write MCP configuration for vscode, cursor, claude-code or generic (repeatable)

@@ -15,4 +15,4 @@ Reported by `opentide doctor`. Warns when `settings.json` maps objects to openti
 
 ## How to fix
 
-Run `opentide setup vscode`. It recommends the extension and removes opentide's `yaml.schemas` entries, keeping your other settings.
+Install the extension, the recommended way to use opentide in VS Code: `code --install-extension opentidehq.opentide` (it bundles opentide). To have `.vscode/extensions.json` recommend it to the team, and remove opentide's `yaml.schemas` entries earlier releases wrote, run `opentide setup vscode`; your other settings are kept.

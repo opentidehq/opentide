@@ -61,7 +61,7 @@ The wizard needs a terminal and a stdout it can draw on, so it is incompatible w
 | `--variable-group` | Azure only, repeatable: link this Azure DevOps Library variable group in `variables:` (see [setup ci](#setup-ci)); github and gitlab warn that it is ignored |
 | `--app-token` / `--no-app-token` | GitHub only: the jobs that push to the default branch use a GitHub App token instead of `GITHUB_TOKEN` (see [setup ci](#setup-ci)); omit to keep what the existing pipeline has; gitlab and azure warn that `--app-token` is ignored |
 | `--default-branch` | Branch that deploys and receives inflight shards (see [setup ci](#setup-ci)) |
-| `--vscode-setup` | Deprecated `setup vscode`: recommend the opentide extension, write snippets (generate-first) |
+| `--vscode-setup` | Run [`setup vscode`](#setup-vscode): recommend the opentide extension, write snippets (generate-first) |
 | `--mcp` | MCP configuration for `vscode`, `cursor`, `claude-code` or `generic` (repeatable): the [setup mcp](#setup-mcp) step |
 | `--skills` | Agent skills for `claude-code`, `cursor`, `github-copilot` or `generic` (repeatable): the [setup skills](#setup-skills) step, with its default skills |
 | `--plugin` | Register the opentidehq/skills Agent Plugin for Claude Code, as `setup skills --plugin` |
@@ -373,9 +373,15 @@ The plugin starts the MCP server in its own folder; [Agent Plugins](../mcp/confi
 
 The full wizard checks skill availability before writing repository files. If the catalogue or a requested slug cannot be fetched, the standalone skills command fails without installing a partial tree. The full `opentide setup` wizard omits the skills step with a warning so the rest of the scaffold can still apply.
 
-### setup vscode (deprecated)
+### setup vscode
 
-Recommends the opentide VS Code extension and writes the object snippets. By default the command generates templates and JSON schemas into `.opentide/`, then writes `.vscode/extensions.json` and the snippets. A missing target path is created first so generate-first setup does not `chdir` into a nonexistent directory. Deprecation is logged once per invocation.
+**The recommended way to use opentide in VS Code is the opentide VS Code extension**, `opentidehq.opentide`, on the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=opentidehq.opentide) and on Open VSX. It bundles opentide, so there is nothing else to install:
+
+```bash
+code --install-extension opentidehq.opentide
+```
+
+`setup vscode` stays as an alternative, for a repository whose editors do not have the extension yet. It recommends the extension to the team and writes the object snippets. The command prints one `note:` line with the install command above (the `--json` result carries no such field). By default the command generates templates and JSON schemas into `.opentide/`, then writes `.vscode/extensions.json` and the snippets. A missing target path is created first so generate-first setup does not `chdir` into a nonexistent directory.
 
 `.vscode/extensions.json` recommends `opentidehq.opentide`, the opentide extension: its language server checks object files, and it bundles the templates and the MCP server. Recommendations already there are kept, and the extension is not added when the file lists it under `unwantedRecommendations`.
 

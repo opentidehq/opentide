@@ -127,10 +127,4 @@ exit: 0
   }
 }
 
-━━━ stderr · json, 1 lines
-{
-  "detail": "opentide setup vscode is deprecated and will be removed when the opentide VS Code extension ships with a bundled language server and template actions.",
-  "event": "vscode_setup_deprecated",
-  "level": "warning",
-  "timestamp": "0000-00-00 00:00:00"
-}
+━━━ stderr · empty
