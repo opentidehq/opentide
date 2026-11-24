@@ -9,12 +9,12 @@ description: Install opentide as a library dependency with PEP 561 typing suppor
 
 ```python
 # pyproject.toml — pin the current release candidate in CI
-dependencies = ["opentide==1.0.0rc4"]
+dependencies = ["opentide==1.0.0rc5"]
 ```
 
 ```bash
 pip install --pre opentide              # the newest release candidate
-pip install 'opentide==1.0.0rc4'        # or pin it
+pip install 'opentide==1.0.0rc5'        # or pin it
 ```
 
 This SDK (`opentide.Workspace` and the rest of these pages) is new in 1.0, which is a release candidate until it is final: pip skips it unless asked, and `pip install opentide` still installs 0.28.1, which has none of it. See [release candidates](../usage/installation.md#release-candidates) for uv, pipx, crates.io and the binaries.
