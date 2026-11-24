@@ -898,6 +898,14 @@ pub fn tm_scope_name(language: LanguageId) -> String {
     }
 }
 
+/// Where a token may start in a TextMate pattern: at the line start or after
+/// a blank or an opening or separating character.
+macro_rules! token_start {
+    () => {
+        r"(?:^|(?<=[\s|(\[{,;]))"
+    };
+}
+
 /// A KQL string on one line in the TextMate grammar: `"..."`, `'...'`,
 /// `@"..."` and `@'...'`, each with an optional obfuscating `h` or `H` that
 /// starts a name, as the lexer reads it (`ah"b"` and `$h"b"` are a name
@@ -941,14 +949,17 @@ fn generate_tm_language_from(
         .unwrap_or("constant.numeric");
     let comment_match = match language {
         LanguageId::TideYaml => Some("(?m)^\\s*#.*$"),
-        LanguageId::Kql
-        | LanguageId::Esql
-        | LanguageId::Eql
-        | LanguageId::Yara
-        | LanguageId::Yaral => Some("//.*$|/\\*[\\s\\S]*?\\*/"),
+        LanguageId::Kql => Some("//.*$|/\\*[\\s\\S]*?\\*/"),
+        // A block comment starts only where a token may: `\/*` in a regular
+        // expression literal is no comment.
+        LanguageId::Esql | LanguageId::Eql | LanguageId::Yara | LanguageId::Yaral => {
+            Some(concat!("//.*$|", token_start!(), "/\\*[\\s\\S]*?\\*/"))
+        }
         LanguageId::Spl => Some("```[^`]*```"),
-        // A CQL comment starts only where a token may: `https://x` is one pattern.
-        LanguageId::Cql => Some("(?:^|(?<=[\\s|(\\[{,;]))//.*$|/\\*[\\s\\S]*?\\*/"),
+        // A CQL comment starts only where a token may: `https://x` is one
+        // pattern and `docker/* foo=1` is a value and a pair (the engine's
+        // lexer reads `/*` as a comment only when it is terminated).
+        LanguageId::Cql => Some(concat!(token_start!(), "(?://.*$|/\\*[\\s\\S]*?\\*/)")),
         // Kibana KQL, Lucene, Falco conditions and the Exabeam Query
         // Language have no comment syntax.
         LanguageId::Kuery | LanguageId::Lucene | LanguageId::Falco | LanguageId::Exabeam => None,
@@ -961,20 +972,17 @@ fn generate_tm_language_from(
             "comment": "capture:comment",
         }));
     }
+    // A block comment that goes on past its line: the match rule above takes
+    // only one that ends on the line it starts. Not KQL (no block comments)
+    // and not CQL (`docker/* foo=1` opens none, and a grammar cannot tell a
+    // terminated comment from the rest), and only where a token may start.
     if matches!(
         language,
-        LanguageId::Kql
-            | LanguageId::Esql
-            | LanguageId::Eql
-            | LanguageId::Yara
-            | LanguageId::Yaral
-            | LanguageId::Cql
+        LanguageId::Esql | LanguageId::Eql | LanguageId::Yara | LanguageId::Yaral
     ) {
-        // A block comment that goes on past its line: the match rule above
-        // takes only one that ends on the line it starts.
         patterns.push(serde_json::json!({
             "name": comment_tm,
-            "begin": "/\\*",
+            "begin": concat!(token_start!(), "/\\*"),
             "end": "\\*/",
             "comment": "capture:comment",
         }));

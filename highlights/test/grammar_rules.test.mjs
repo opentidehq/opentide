@@ -93,7 +93,7 @@ test('an SPL ```comment``` is a comment, even between pipes', async () => {
 });
 
 test('a block comment over several lines is a comment on every line', async () => {
-  for (const lang of ['kql', 'esql', 'eql', 'yaral', 'cql']) {
+  for (const lang of ['esql', 'eql', 'yaral', 'yara']) {
     const all = await tokens(lang, '/* first\nsecond where\nthird */ x');
     for (const piece of ['first', 'second where', 'third']) {
       const hit = all.find(([t]) => t.includes(piece));
@@ -108,4 +108,36 @@ test('no language leaves more than 30% of its real queries in the default foregr
     assert.ok(m.meaningful > 50, `${lang}: only ${m.meaningful} tokens measured`);
     assert.ok(m.share <= 0.3, `${lang}: ${(m.share * 100).toFixed(1)}% plain (${m.plain}/${m.meaningful})`);
   }
+});
+
+test('CQL: `/*` inside a value opens no comment (the engine reads a terminated /* */ only)', async () => {
+  const all = await tokens('cql', 'repo.name=docker/* foo=1\ncount(x) | groupBy([a])');
+  const comment = all.filter(([, scope]) => scope.includes('comment'));
+  assert.deepEqual(comment, [], JSON.stringify(all));
+  // The next line is CQL: a function call and a pipe.
+  assert.ok((await scopeOf('cql', 'count(x) | groupBy([a])', 'groupBy')).includes('support.function'));
+  // The `//` form and a terminated block still start where a token may.
+  for (const text of ['x | // note', 'x | /* note */ y', '/* first */ x']) {
+    const hit = (await tokens('cql', text)).find(([t]) => t.includes('note') || t.includes('first'));
+    assert.ok(hit && hit[1].includes('comment'), `${text}: ${JSON.stringify(await tokens('cql', text))}`);
+  }
+  // No begin/end rule: an unterminated `/*` at a token start does not run on.
+  const next = await tokens('cql', 'x | /* open\ncount(x)');
+  assert.ok(!next.find(([t]) => t.includes('count'))[1].includes('comment'), JSON.stringify(next));
+});
+
+test('a `/*` inside a regular expression literal is no comment in YARA and YARA-L', async () => {
+  for (const [lang, text] of [
+    ['yaral', '$e.target.url = /https?:\\/*foo/\n$e.principal.hostname = "h"'],
+    ['yara', 'rule a { strings: $r = /ab\\/*c/\ncondition: $r }'],
+  ]) {
+    const all = await tokens(lang, text);
+    assert.deepEqual(all.filter(([, scope]) => scope.includes('comment')), [], `${lang}: ${JSON.stringify(all)}`);
+  }
+});
+
+test('KQL has no block comment rule that runs on', async () => {
+  const all = await tokens('kql', 'T | where a /* b\n| where c == 1');
+  const next = all.filter(([t]) => t.includes('c') || t.includes('1') || t.trim() === 'where').slice(-3);
+  assert.ok(next.length > 0 && next.every(([, scope]) => !scope.includes('comment')), JSON.stringify(all));
 });

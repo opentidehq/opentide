@@ -80,3 +80,29 @@ test('every scope of the generated Tide grammar for a server construct is under 
   const stray = all.filter(([, scope]) => scope.split(' ').every((s) => !free.test(s)) && !types.some((t) => underType(scope, t)));
   assert.deepEqual(stray, []);
 });
+
+test('an Elastic guide `setup:` block is plain block text, as the server colours it; a Google SecOps one is YARA-L', async () => {
+  const rule = `configurations:
+  elastic:
+    guide:
+      setup: |
+        # Setup
+        Use \`code\` here
+  google_secops:
+    setup: |
+      $e.metadata.event_type = "X"
+`;
+  let st = textmate.INITIAL;
+  const out = [];
+  for (const line of rule.split('\n')) {
+    const r = grammar.tokenizeLine(line, st);
+    st = r.ruleStack;
+    for (const t of r.tokens) out.push([line.slice(t.startIndex, t.endIndex), t.scopes.slice(1)]);
+  }
+  const heading = out.find(([t]) => t.includes('# Setup'));
+  assert.ok(heading, JSON.stringify(out));
+  assert.ok(heading[1].some((s) => s.startsWith('string.unquoted.block')), heading[1].join(' '));
+  assert.ok(!heading[1].some((s) => s.includes('markdown')), heading[1].join(' '));
+  const yaral = out.find(([t]) => t.includes('event_type'));
+  assert.ok(yaral && yaral[1].some((s) => s.startsWith('meta.embedded.block.yaral')), JSON.stringify(yaral));
+});
