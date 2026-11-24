@@ -681,11 +681,7 @@ pub fn lsp_token_type_index(capture: &str) -> u32 {
     let name = match capture {
         "comment" => "comment",
         "keyword" | "tide.keyword" => "keyword",
-        "operator"
-        | "operator.pipe"
-        | "punctuation"
-        | "punctuation.bracket"
-        | "punctuation.delimiter" => "operator",
+        "operator" | "operator.pipe" => "operator",
         "function" | "function.builtin" => "function",
         "type" | "tide.schema" => "type",
         "variable" => "variable",
@@ -693,13 +689,11 @@ pub fn lsp_token_type_index(capture: &str) -> u32 {
         "string" => "string",
         "number" | "tide.uuid" => "number",
         "boolean" | "constant" => "enumMember",
-        "error" => "macro",
         "markdown.heading" => "type",
         "markdown.strong" => "keyword",
         "markdown.emphasis" => "variable",
         "markdown.code" => "regexp",
         "markdown.link" => "decorator",
-        "markdown.list" => "operator",
         "markdown.quote" => "comment",
         "macro" => "macro",
         _ => "variable",
@@ -707,24 +701,43 @@ pub fn lsp_token_type_index(capture: &str) -> u32 {
     LSP_TOKEN_TYPES.iter().position(|n| *n == name).unwrap_or(8) as u32
 }
 
+/// Whether a capture gets a semantic token in the LSP encoding.
+///
+/// Punctuation (`punctuation*`, a Markdown list marker, the Tide YAML key
+/// colon and list dash) and parse errors get none: the TextMate scope already
+/// colours punctuation, and diagnostics mark errors. A semantic token of a
+/// borrowed type (`operator`, `macro`) would repaint them in the keyword or
+/// macro colour in many themes. LSP allows gaps between tokens.
+pub fn lsp_capture_has_semantic_token(capture: &str) -> bool {
+    !matches!(
+        capture,
+        "punctuation" | "punctuation.bracket" | "punctuation.delimiter" | "markdown.list" | "error"
+    )
+}
+
 pub fn encode_semantic_tokens(tokens: &[HighlightToken]) -> Vec<u32> {
-    encode_semantic_tokens_with(tokens, |t| t.token_type)
+    encode_semantic_tokens_with(tokens, |_| true, |t| t.token_type)
 }
 
 /// Encode using the standard LSP legend so VS Code / Monaco actually color
 /// pipes, builtins, Tide keys, and punctuation.
 pub fn encode_lsp_semantic_tokens(tokens: &[HighlightToken]) -> Vec<u32> {
-    encode_semantic_tokens_with(tokens, |t| lsp_token_type_index(&t.capture))
+    encode_semantic_tokens_with(
+        tokens,
+        |t| lsp_capture_has_semantic_token(&t.capture),
+        |t| lsp_token_type_index(&t.capture),
+    )
 }
 
 fn encode_semantic_tokens_with(
     tokens: &[HighlightToken],
+    keep: impl Fn(&HighlightToken) -> bool,
     token_type: impl Fn(&HighlightToken) -> u32,
 ) -> Vec<u32> {
     let mut data = Vec::with_capacity(tokens.len() * 5);
     let mut prev_line = 0u32;
     let mut prev_char = 0u32;
-    for token in tokens {
+    for token in tokens.iter().filter(|t| keep(t)) {
         let line = token.range.start.line;
         let character = token.range.start.character;
         let delta_line = line.saturating_sub(prev_line);
@@ -1431,6 +1444,68 @@ mod tests {
         let data = encode_lsp_semantic_tokens(&tokens);
         assert_eq!(&data[0..5], &[0, 0, 1, lsp_token_type_index("keyword"), 0]);
         assert_eq!(&data[5..10], &[1, 0, 2, lsp_token_type_index("string"), 0]);
+    }
+
+    #[test]
+    fn lsp_encoding_sends_no_token_for_punctuation_or_errors() {
+        let spec = HighlightSpec::load().unwrap();
+        let src = "a|b:c- d,e";
+        let captures = [
+            (0, 1, "keyword"),
+            (1, 2, "operator.pipe"),
+            (2, 3, "punctuation.bracket"),
+            (3, 4, "punctuation.delimiter"),
+            (4, 5, "punctuation"),
+            (5, 6, "operator"),
+            (6, 7, "error"),
+            (7, 8, "markdown.list"),
+            (8, 9, "string"),
+        ];
+        let spans: Vec<(ByteSpan, &str)> = captures
+            .iter()
+            .map(|(a, b, c)| (ByteSpan::new(*a, *b), *c))
+            .collect();
+        let tokens = tokens_from_spans(&spec, src, &spans).unwrap();
+        let data = encode_lsp_semantic_tokens(&tokens);
+        let operator = lsp_token_type_index("operator");
+        // keyword, pipe, operator, string: five u32s each, deltas skip the gaps.
+        assert_eq!(
+            data,
+            vec![
+                0,
+                0,
+                1,
+                lsp_token_type_index("keyword"),
+                0,
+                0,
+                1,
+                1,
+                operator,
+                0,
+                0,
+                4,
+                1,
+                operator,
+                0,
+                0,
+                3,
+                1,
+                lsp_token_type_index("string"),
+                0,
+            ]
+        );
+        for capture in [
+            "punctuation",
+            "punctuation.bracket",
+            "punctuation.delimiter",
+            "markdown.list",
+            "error",
+        ] {
+            assert!(!lsp_capture_has_semantic_token(capture), "{capture}");
+        }
+        for capture in ["operator", "operator.pipe", "keyword", "macro"] {
+            assert!(lsp_capture_has_semantic_token(capture), "{capture}");
+        }
     }
 
     #[test]
