@@ -2492,6 +2492,33 @@ mod tests {
         assert_eq!((deep[0].0, deep[0].1), (28, 35), "{deep:?}");
     }
 
+    /// `FROM` and `EXPLAIN` are keywords wherever they stand: after a nested
+    /// block comment and inside `EXPLAIN (…)` (a contrast audit saw them as
+    /// `enumMember`, which is `boolean` / `constant`).
+    #[test]
+    fn source_commands_are_keywords_after_nested_comments_and_in_explain() {
+        for query in [
+            "/* /* */ */ FROM logs-* | LIMIT 1",
+            "/* /* */ */\nFROM logs-*\n| LIMIT 1",
+            "// c\n/* a /* b */ c */\nfrom logs-* METADATA _id",
+            "EXPLAIN (FROM logs-* | LIMIT 1)",
+            "EXPLAIN (\n  FROM logs-*\n  | LIMIT 1\n)",
+            "/* /* */ */ EXPLAIN (FROM logs-*)",
+        ] {
+            let tokens = analyze(query).tokens;
+            for word in ["FROM", "from", "EXPLAIN"] {
+                for (at, _) in query.match_indices(word) {
+                    let token = tokens.iter().find(|t| t.span.start == at);
+                    assert_eq!(
+                        token.map(|t| t.capture.as_str()),
+                        Some("keyword"),
+                        "`{word}` in {query:?}: {tokens:?}"
+                    );
+                }
+            }
+        }
+    }
+
     /// Highlight, hover and the debug kinds read the tree as tree-sitter did:
     /// only a call's first node is its name, an element ends before the
     /// offset at its end, and a comment is a named node.

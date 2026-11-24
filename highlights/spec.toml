@@ -2,7 +2,7 @@
 
 [meta]
 id = "opentide-highlight"
-version = "0.3.0"
+version = "0.3.1"
 legend = [
   "comment",
   "keyword",
@@ -176,6 +176,6 @@ monaco = "comment"
 helix = "markup.quote"
 
 [captures.macro]
-tm = "entity.name.function.macro.opentide"
+tm = "entity.name.function.preprocessor.opentide"
 monaco = "predefined"
 helix = "function.macro"

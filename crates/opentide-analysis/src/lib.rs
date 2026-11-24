@@ -964,6 +964,42 @@ mod tests {
         assert!(!h.tokens.is_empty());
     }
 
+    /// Punctuation and Tide YAML's key colons and list dashes get no semantic
+    /// token (the TextMate scope colours them), and the pipe keeps its one.
+    #[test]
+    fn semantic_tokens_leave_gaps_for_punctuation() {
+        // (line, start column) of every token in an encoding.
+        fn starts(data: &[u32]) -> Vec<(u32, u32)> {
+            let (mut line, mut col) = (0, 0);
+            data.as_chunks::<5>()
+                .0
+                .iter()
+                .map(|t| {
+                    line += t[0];
+                    col = if t[0] == 0 { col + t[1] } else { t[1] };
+                    (line, col)
+                })
+                .collect()
+        }
+        let kql = "T | where x in (1, 2)";
+        let at = starts(&semantic_tokens(LanguageId::Kql, kql).data);
+        for punct in ["(", ",", ")"] {
+            let col = u32::try_from(kql.find(punct).unwrap_or_default()).unwrap_or_default();
+            assert!(!at.contains(&(0, col)), "`{punct}` has a token: {at:?}");
+        }
+        let pipe = u32::try_from(kql.find('|').unwrap_or_default()).unwrap_or_default();
+        assert!(at.contains(&(0, pipe)), "the pipe keeps its token: {at:?}");
+
+        let tide = "metadata:\n  tags:\n    - a\n";
+        let at = starts(&semantic_tokens(LanguageId::TideYaml, tide).data);
+        assert!(!at.contains(&(0, 8)), "key colon: {at:?}");
+        assert!(!at.contains(&(2, 4)), "list dash: {at:?}");
+        assert!(
+            at.contains(&(0, 0)),
+            "the key itself keeps its token: {at:?}"
+        );
+    }
+
     #[test]
     fn hover_and_completions_for_kql() {
         let host = MemoryWorkspace { files: vec![] };
