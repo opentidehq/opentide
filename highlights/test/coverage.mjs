@@ -29,7 +29,9 @@ export const LANGS = {
   yara: ['source.opentide.yara', 'yara', ['yara']],
   yaral: ['source.yaral', 'yaral', ['yaral']],
 };
-const scopeFile = Object.fromEntries(Object.values(LANGS).map(([s, f]) => [s, `${f}.tmLanguage.json`]));
+// Not in the corpus table: the Tide grammar (tide_alignment.test.mjs).
+const EXTRA = { tide: ['source.opentide-yaml', 'tide'] };
+const scopeFile = Object.fromEntries([...Object.values(LANGS), ...Object.values(EXTRA)].map(([s, f]) => [s, `${f}.tmLanguage.json`]));
 const registry = new textmate.Registry({
   onigLib: Promise.resolve({
     createOnigScanner: (p) => new oniguruma.OnigScanner(p),
@@ -58,7 +60,7 @@ function texts(lang, dirs) {
 }
 
 const WORD = /^[A-Za-z_#@$][\w.\-]*$|^[0-9]/;
-export const grammarFor = (lang) => registry.loadGrammar(LANGS[lang][0]);
+export const grammarFor = (lang) => registry.loadGrammar((LANGS[lang] ?? EXTRA[lang])[0]);
 
 export async function measure(lang) {
   const [, , dirs] = LANGS[lang];

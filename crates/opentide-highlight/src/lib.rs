@@ -14,7 +14,12 @@
 mod function_names;
 mod keywords;
 mod markdown;
+mod tide_grammar;
 mod tide_model;
+pub use tide_grammar::{
+    KEY_VALUE_SCOPE, LIST_DASH_SCOPE, LSP_TYPE_SCOPES, block_text_scope, capture_base_scope,
+    construct_captures, construct_scope, plain_value_scope,
+};
 mod tm_extras;
 
 use opentide_core::{ByteSpan, LanguageId, LineIndex, Range};
@@ -983,6 +988,28 @@ fn generate_tm_language_from(
             "comment": "capture:macro",
         }));
     }
+    // Tide YAML's rules come before the string and number rules (the leftmost
+    // match wins, then the first), and its scopes are each construct's,
+    // generated from the semantic-token mapping (`tide_grammar`).
+    if language == LanguageId::TideYaml {
+        patterns.extend(tide_grammar::structure_rules(spec));
+        for (capture, regex) in [
+            (
+                "tide.uuid",
+                "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
+            ),
+            ("tide.schema", "\\b[A-Za-z][A-Za-z0-9_]*::[0-9.]+"),
+            ("boolean", "(?<![A-Za-z0-9_])(?:true|false)(?![A-Za-z0-9_])"),
+        ] {
+            if let Some(scope) = tide_grammar::construct_scope(capture) {
+                patterns.push(serde_json::json!({
+                    "name": scope,
+                    "match": regex,
+                    "comment": format!("capture:{capture}"),
+                }));
+            }
+        }
+    }
     if language == LanguageId::Kql {
         // KQL's literals as its lexer reads them: any string may be
         // obfuscated (`h` or `H` right before it), the multi-line ```` ``` ````
@@ -1017,68 +1044,6 @@ fn generate_tm_language_from(
             "match": "\\b[0-9]+(\\.[0-9]+)?\\b",
             "comment": "capture:number",
         }));
-    }
-    if language == LanguageId::TideYaml {
-        for capture in ["tide.property", "tide.keyword"] {
-            let keys = tide_keys_for_capture(capture);
-            if keys.is_empty() {
-                continue;
-            }
-            if let Some(maps) = spec.captures.get(capture) {
-                let joined = keys
-                    .iter()
-                    .map(|k| regex::escape(k))
-                    .collect::<Vec<_>>()
-                    .join("|");
-                patterns.push(serde_json::json!({
-                    "name": maps.tm,
-                    "match": format!("(?m)^\\s*(?:{joined})\\s*:"),
-                    "comment": format!("capture:{capture}"),
-                }));
-            }
-        }
-        if let Some(maps) = spec.captures.get("markdown.heading") {
-            patterns.push(serde_json::json!({
-                "name": maps.tm,
-                "match": "(?m)^\\s*#{1,6}\\s+.*$",
-                "comment": "capture:markdown.heading",
-            }));
-        }
-        if let Some(maps) = spec.captures.get("markdown.code") {
-            patterns.push(serde_json::json!({
-                "name": maps.tm,
-                "match": "`[^`]+`",
-                "comment": "capture:markdown.code",
-            }));
-        }
-        if let Some(maps) = spec.captures.get("markdown.list") {
-            patterns.push(serde_json::json!({
-                "name": maps.tm,
-                "match": "(?m)^\\s*(?:[-*+]|\\d+\\.)\\s+",
-                "comment": "capture:markdown.list",
-            }));
-        }
-        if let Some(maps) = spec.captures.get("tide.uuid") {
-            patterns.push(serde_json::json!({
-                "name": maps.tm,
-                "match": "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
-                "comment": "capture:tide.uuid",
-            }));
-        }
-        if let Some(maps) = spec.captures.get("tide.schema") {
-            patterns.push(serde_json::json!({
-                "name": maps.tm,
-                "match": "\\b[A-Za-z][A-Za-z0-9_]*::[0-9.]+",
-                "comment": "capture:tide.schema",
-            }));
-        }
-        if let Some(maps) = spec.captures.get("boolean") {
-            patterns.push(serde_json::json!({
-                "name": maps.tm,
-                "match": "(?<![A-Za-z0-9_])(?:true|false)(?![A-Za-z0-9_])",
-                "comment": "capture:boolean",
-            }));
-        }
     }
     patterns.extend(tm_extras::before_keywords(language, spec));
     let extras_pairs = pairs.clone();
@@ -1186,13 +1151,13 @@ fn tide_embedded_queries(spec: &HighlightSpec) -> serde_json::Value {
             let keys = keys.join("|");
             serde_json::json!({
                 "comment": format!("configurations.{{{}}}: {} queries (#171)", platforms.join(","), language.as_str()),
-                "begin": format!("^(\\s+)({})\\s*:\\s*(?:#.*)?$", platforms.join("|")),
-                "beginCaptures": { "2": { "name": key } },
+                "begin": format!("^(\\s+)({})(\\s*)(:)\\s*(?:#.*)?$", platforms.join("|")),
+                "beginCaptures": { "2": { "name": key }, "4": { "name": tide_grammar::KEY_VALUE_SCOPE } },
                 "end": until_dedent,
                 "patterns": [
                     {
-                        "begin": format!("^(\\s+)({keys})\\s*:\\s*[|>][-+0-9]*\\s*(?:#.*)?$"),
-                        "beginCaptures": { "2": { "name": key } },
+                        "begin": format!("^(\\s+)({keys})(\\s*)(:)\\s*[|>][-+0-9]*\\s*(?:#.*)?$"),
+                        "beginCaptures": { "2": { "name": key }, "4": { "name": tide_grammar::KEY_VALUE_SCOPE } },
                         "end": until_dedent,
                         "contentName": scope,
                         "patterns": [{ "include": include }],
@@ -1202,14 +1167,15 @@ fn tide_embedded_queries(spec: &HighlightSpec) -> serde_json::Value {
                         // (`string.quoted`), its text is the embedded language's, and a
                         // trailing ` # comment` is YAML's too: it ends the query.
                         "match": format!(
-                            "^(\\s+)({keys})\\s*:\\s+(?![|>])(?:(['\"])(.*)(\\3)|(.+?))(?=[ \\t]+#|[ \\t]*$)"
+                            "^(\\s+)({keys})(\\s*)(:)\\s+(?![|>])(?:(['\"])(.*)(\\5)|(.+?))(?=[ \\t]+#|[ \\t]*$)"
                         ),
                         "captures": {
                             "2": { "name": key },
-                            "3": { "name": "string.quoted.yaml punctuation.definition.string.begin.yaml" },
-                            "4": { "name": scope, "patterns": [{ "include": include }] },
-                            "5": { "name": "string.quoted.yaml punctuation.definition.string.end.yaml" },
+                            "4": { "name": tide_grammar::KEY_VALUE_SCOPE },
+                            "5": { "name": "string.quoted.yaml punctuation.definition.string.begin.yaml" },
                             "6": { "name": scope, "patterns": [{ "include": include }] },
+                            "7": { "name": "string.quoted.yaml punctuation.definition.string.end.yaml" },
+                            "8": { "name": scope, "patterns": [{ "include": include }] },
                         },
                     },
                     // The ` # note` after an inline query (the line-start comment rule
@@ -1228,8 +1194,8 @@ fn tide_embedded_queries(spec: &HighlightSpec) -> serde_json::Value {
     patterns.push(serde_json::json!({ "include": "$self" }));
     serde_json::json!({
         "comment": "configurations: the queries whose path fixes their language are embedded regions (#171); Elastic queries are left to semantic tokens",
-        "begin": "^(configurations)\\s*:\\s*(?:#.*)?$",
-        "beginCaptures": { "1": { "name": key } },
+        "begin": "^(configurations)(\\s*)(:)\\s*(?:#.*)?$",
+        "beginCaptures": { "1": { "name": key }, "3": { "name": tide_grammar::KEY_VALUE_SCOPE } },
         "end": "^(?=\\S)",
         "patterns": patterns,
     })
@@ -1709,7 +1675,7 @@ mod tm_language_stub_bug {
             .unwrap();
         let m = key["match"].as_str().unwrap();
         assert!(
-            m.contains(r"^\s*"),
+            m.contains(r"^(\s*)"),
             "expected real whitespace class, got {m}"
         );
         assert!(
@@ -1729,7 +1695,7 @@ mod tm_language_stub_bug {
         // The embedded query regions come first (#171).
         assert_eq!(
             tm["patterns"][0]["begin"],
-            "^(configurations)\\s*:\\s*(?:#.*)?$"
+            "^(configurations)(\\s*)(:)\\s*(?:#.*)?$"
         );
     }
 

@@ -2,7 +2,7 @@
 
 [meta]
 id = "opentide-highlight"
-version = "0.3.1"
+version = "0.3.2"
 legend = [
   "comment",
   "keyword",
@@ -131,7 +131,7 @@ monaco = "variable"
 helix = "property"
 
 [captures."tide.uuid"]
-tm = "constant.other.uuid.tide"
+tm = "constant.numeric.uuid.tide"
 monaco = "number"
 helix = "constant"
 
@@ -141,27 +141,27 @@ monaco = "type"
 helix = "type"
 
 [captures."markdown.heading"]
-tm = "markup.heading.markdown.tide"
+tm = "entity.name.type.markdown.tide"
 monaco = "type"
 helix = "markup.heading"
 
 [captures."markdown.emphasis"]
-tm = "markup.italic.markdown.tide"
+tm = "variable.other.readwrite.emphasis.markdown.tide"
 monaco = "variable"
 helix = "markup.italic"
 
 [captures."markdown.strong"]
-tm = "markup.bold.markdown.tide"
+tm = "keyword.control.strong.markdown.tide"
 monaco = "keyword"
 helix = "markup.bold"
 
 [captures."markdown.code"]
-tm = "markup.inline.raw.markdown.tide"
+tm = "variable.other.constant.markdown.tide"
 monaco = "string"
 helix = "markup.raw.inline"
 
 [captures."markdown.link"]
-tm = "markup.underline.link.markdown.tide"
+tm = "entity.name.decorator.link.markdown.tide"
 monaco = "type"
 helix = "markup.link.url"
 
@@ -171,7 +171,7 @@ monaco = "keyword"
 helix = "markup.list"
 
 [captures."markdown.quote"]
-tm = "markup.quote.markdown.tide"
+tm = "comment.quote.markdown.tide"
 monaco = "comment"
 helix = "markup.quote"
 
