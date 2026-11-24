@@ -13,9 +13,15 @@
 #            (device_os, process_integrity_level).
 #
 # `list = true`: a process can hold several values (the field matches when one
-# does). Whether a field is tokenized is not recorded: Carbon Black documents
-# that only on developer.carbonblack.com, not reachable when this file was
-# written, so the upper-case regexp hint stays on every field.
+# does).
+#
+# `tokenized = true`: Carbon Black lower-cases the field's tokens, so a regexp
+# with an upper-case letter never matches it (the upper-case regexp hint,
+# #1560). A field without the key is not tokenized: the hint stays quiet there.
+# Carbon Black documents tokenization only on developer.carbonblack.com, which
+# was not reachable when this was written (nor for #162), so the flag is set
+# for the free-text command-line fields only; set it on another field once
+# the documentation confirms it.
 
 [[field]]
 name = "process_name"
@@ -26,6 +32,7 @@ source = "sdk"
 [[field]]
 name = "process_cmdline"
 type = "string"
+tokenized = true
 list = true
 description = "Command line the process ran."
 source = "sdk"
@@ -142,6 +149,7 @@ source = "sdk"
 [[field]]
 name = "parent_cmdline"
 type = "string"
+tokenized = true
 description = "Command line the parent process ran."
 source = "pysigma"
 
@@ -192,6 +200,7 @@ source = "sdk"
 [[field]]
 name = "childproc_cmdline"
 type = "string"
+tokenized = true
 description = "Command line a child process ran."
 source = "sdk"
 
