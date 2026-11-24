@@ -67,6 +67,9 @@ fn options(inputs: &toml::Table) -> Options {
         app_token: inputs
             .get("app_token")
             .is_some_and(|value| value.as_bool().unwrap()),
+        prune: !inputs
+            .get("no_prune")
+            .is_some_and(|value| value.as_bool().unwrap()),
         user_region: None,
     }
 }
@@ -287,5 +290,37 @@ fn only_the_release_deploys_prune() {
                 assert!(rendered.contains("# opentide deploy --strategy PREVIEW --file r.yaml"));
             }
         }
+    }
+}
+
+/// `--no-prune` (#1713): no line of the pipeline passes `--prune`, the
+/// header records the flag, and [`opentide_compile::ci::no_prune`] reads it
+/// back; a pruning pipeline records nothing.
+#[test]
+fn no_prune_writes_no_prune_and_records_it() {
+    for case in cases() {
+        let name = case.file_stem().unwrap().to_string_lossy().into_owned();
+        let inputs: toml::Table = std::fs::read_to_string(&case).unwrap().parse().unwrap();
+        let mut options = options(&inputs);
+        let pruning = render(&options).unwrap();
+        assert!(!opentide_compile::ci::no_prune(&pruning), "{name}");
+        options.prune = false;
+        let warning = render(&options).unwrap();
+        assert!(!warning.contains("--prune "), "{name}: {warning}");
+        assert!(!warning.contains("--prune\n"), "{name}: {warning}");
+        assert!(opentide_compile::ci::no_prune(&warning), "{name}");
+        assert!(
+            warning.lines().next().unwrap().ends_with(" --no-prune`"),
+            "{name}"
+        );
+        let lines = generated_deploy_lines(&warning);
+        assert_eq!(
+            lines
+                .iter()
+                .filter(|line| line.contains("--strategy RELEASE"))
+                .count(),
+            2,
+            "{name}"
+        );
     }
 }

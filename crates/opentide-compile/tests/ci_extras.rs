@@ -30,6 +30,7 @@ fn options(provider: Provider) -> Options {
         sharing_credentials: Vec::new(),
         variable_groups: Vec::new(),
         app_token: false,
+        prune: true,
         user_region: None,
     }
 }

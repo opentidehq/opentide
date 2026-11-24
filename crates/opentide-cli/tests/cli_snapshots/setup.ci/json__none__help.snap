@@ -64,6 +64,9 @@ Options:
       --app-token, --no-app-token
           GitHub Actions: the jobs that push to the default branch check out and push with a GitHub App token (variable OPENTIDE_APP_CLIENT_ID, secret OPENTIDE_APP_PRIVATE_KEY) instead of GITHUB_TOKEN; omit to keep what the existing pipeline has (ignored with a warning for gitlab and azure)
 
+      --prune, --no-prune
+          The production job's RELEASE deploy retires the rules whose file the push deleted (deploy --prune); the default, unless the existing pipeline records --no-prune
+
       --default-branch <DEFAULT_BRANCH>
           Branch that deploys and receives inflight shards (default: origin/HEAD, then the checked-out branch, then init.defaultBranch, then main; GitLab uses $CI_DEFAULT_BRANCH)
 

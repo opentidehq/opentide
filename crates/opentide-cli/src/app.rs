@@ -1049,6 +1049,7 @@ impl Run<'_> {
             explorer_pages: pipeline.explorer_pages,
             variable_group: pipeline.variable_group.clone(),
             app_token: pipeline.app_token_choice(),
+            prune: pipeline.prune_choice(),
             stdout: ci.stdout,
             default_branch: pipeline.default_branch.clone(),
             plan: ci.confirm.plan || args.plan,

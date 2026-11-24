@@ -1151,6 +1151,8 @@ pub struct GroupArgs {
     pub variable_group: Vec<String>,
     /// `--app-token/--no-app-token`; `None` keeps the existing pipeline's.
     pub app_token: Option<bool>,
+    /// `--prune/--no-prune`; `None` keeps the existing pipeline's.
+    pub prune: Option<bool>,
     /// `--promotion/--no-promotion`.
     pub promotion: Option<bool>,
     /// `--promotion-target`.
@@ -1206,6 +1208,9 @@ fn ignored_ci_flags(args: &GroupArgs) -> Vec<String> {
     }
     if args.app_token == Some(true) {
         ignored.push("--app-token");
+    }
+    if args.prune == Some(false) {
+        ignored.push("--no-prune");
     }
     if args.python_version != "3.12" {
         ignored.push("--python-version");
@@ -1559,6 +1564,7 @@ fn base_ci_args(args: &GroupArgs) -> CiArgs {
         explorer_pages: args.explorer_pages,
         variable_group: args.variable_group.clone(),
         app_token: args.app_token,
+        prune: args.prune,
         stdout: false,
         default_branch: args.default_branch.clone(),
         plan: args.plan,

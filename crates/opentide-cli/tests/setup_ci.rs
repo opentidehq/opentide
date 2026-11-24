@@ -925,3 +925,51 @@ fn an_unreadable_user_region_keeps_the_file() {
         );
     }
 }
+
+/// `--no-prune` (#1713): the production job only warns about deleted rule
+/// files; the header records it, so a regenerate keeps it and says so, and
+/// `--prune` turns it back on. On every provider.
+#[test]
+fn no_prune_is_recorded_and_kept_on_regenerate() {
+    let (_scratch, ws) = tide_corpus();
+    for (provider, file) in [
+        ("github", ".github/workflows/opentide.yml"),
+        ("gitlab", ".gitlab-ci.yml"),
+        ("azure", "azure-pipelines.yml"),
+    ] {
+        let path = ws.join(file);
+        let generate = |flag: Option<&str>| {
+            let mut args = vec!["setup", "ci", provider, "--default-branch", "main", "--yes"];
+            args.extend(flag);
+            let (code, stdout, stderr) = opentide(&ws, &args);
+            assert_eq!(code, 0, "{provider}: {stdout}{stderr}");
+            (std::fs::read_to_string(&path).unwrap(), stderr)
+        };
+        let (pruned, _) = generate(None);
+        assert!(
+            pruned.contains("opentide deploy --strategy RELEASE --prune --skip-unconfigured"),
+            "{provider}: {pruned}"
+        );
+
+        let (off, stderr) = generate(Some("--no-prune"));
+        assert!(!off.contains("--prune "), "{provider}: {off}");
+        assert!(!off.contains("--prune\n"), "{provider}: {off}");
+        let first = off.lines().next().unwrap();
+        assert!(first.contains(" --no-prune`"), "{provider}: {first}");
+        assert!(off.contains("opentide deploy --strategy RELEASE --skip-unconfigured"));
+        assert!(!stderr.contains("keeping --no-prune"), "{stderr}");
+
+        // A regenerate without the flag keeps it, and says so.
+        let (kept, stderr) = generate(None);
+        assert_eq!(kept, off, "{provider}");
+        assert!(
+            stderr.contains(&format!("keeping --no-prune from {file}")),
+            "{provider}: {stderr}"
+        );
+
+        // `--prune` turns it back on, and the header forgets it.
+        let (on, stderr) = generate(Some("--prune"));
+        assert_eq!(on, pruned, "{provider}");
+        assert!(!stderr.contains("keeping --no-prune"), "{stderr}");
+    }
+}

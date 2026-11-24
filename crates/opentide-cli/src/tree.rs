@@ -691,6 +691,18 @@ pub struct SetupPipelineFields {
     )]
     pub no_app_token: bool,
     #[arg(
+        long = "prune",
+        help = "The production job's RELEASE deploy retires the rules whose file the push deleted (deploy --prune); the default, unless the existing pipeline records --no-prune",
+        overrides_with = "no_prune"
+    )]
+    pub prune: bool,
+    #[arg(
+        long = "no-prune",
+        overrides_with = "prune",
+        help = "The production job only warns about rules whose file the push deleted; recorded in the pipeline's header, so a regenerate keeps it until --prune"
+    )]
+    pub no_prune: bool,
+    #[arg(
         long = "no-explorer-pages",
         overrides_with = "explorer_pages",
         help = "Turn --explorer-pages off"

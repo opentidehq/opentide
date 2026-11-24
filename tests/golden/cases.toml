@@ -2455,6 +2455,14 @@ variant = "azure"
 args = ["setup", "ci", "azure", "--default-branch", "development", "--yes"]
 fixtures = ["tide-corpus"]
 
+# #1713: --no-prune writes the production deploy without --prune and
+# records the flag in the header, so a regenerate keeps it.
+[[case]]
+command = "setup ci"
+variant = "no-prune"
+args = ["setup", "ci", "gitlab", "--no-prune", "--yes"]
+fixtures = ["tide-corpus"]
+
 [[case]]
 command = "setup ci"
 variant = "gitlab-plan"
