@@ -1897,6 +1897,22 @@
           "default": null,
           "description": "Dry run: one entry per rule that would fail to compile",
           "title": "Diagnostics"
+        },
+        "retirable": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/PlannedChange"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Without --prune: the rules deployed earlier whose file is gone that a RELEASE run with --prune would retire, one entry per rule and tenant (action delete); nothing was sent. An entry a platform cannot retire carries `unsupported`, why (#1713)",
+          "title": "Retirable"
         }
       },
       "required": [
@@ -5249,6 +5265,19 @@
           "default": null,
           "description": "Dry run: true when the rule could not compile, so it is not counted",
           "title": "Fails"
+        },
+        "retired": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "true for a rule whose file is gone, retired by --prune (#1713); absent otherwise",
+          "title": "Retired"
         }
       },
       "required": [
@@ -6290,6 +6319,19 @@
           "default": null,
           "description": "Why a skipped or not attempted rule was not sent",
           "title": "Reason"
+        },
+        "retired": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "true for a rule whose file is gone, retired by --prune (#1713); absent otherwise",
+          "title": "Retired"
         }
       },
       "required": [

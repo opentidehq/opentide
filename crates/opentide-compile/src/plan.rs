@@ -631,6 +631,9 @@ pub struct Change {
     pub action: &'static str,
     /// A dry run could not compile it.
     pub fails: bool,
+    /// A rule whose file is gone, retired by `deploy --prune` (#1713): its
+    /// `action` is `delete` and its `status` the one its file last had.
+    pub retired: bool,
 }
 
 /// The actions, in tally order, with their words in a plan.
@@ -657,6 +660,9 @@ impl Change {
         row.insert("action".into(), self.action.into());
         if self.fails {
             row.insert("fails".into(), Json::Bool(true));
+        }
+        if self.retired {
+            row.insert("retired".into(), Json::Bool(true));
         }
         Json::Object(row)
     }
@@ -1001,6 +1007,7 @@ mod tests {
             status: "S".into(),
             action,
             fails,
+            retired: false,
         };
         let changes = [
             change("create", false),

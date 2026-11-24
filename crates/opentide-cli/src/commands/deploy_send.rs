@@ -116,6 +116,8 @@ pub struct Args {
     pub skip_unconfigured: bool,
     /// `--persist-state-externally`.
     pub persist_state_externally: bool,
+    /// `--prune`: retire the rules whose file is gone (#1713).
+    pub prune: bool,
 }
 
 /// Where the run's lines go while it runs: the checklist's lines and steps
@@ -346,6 +348,7 @@ fn run_deploy(args: &Args, cx: &Context<'_>) -> Vec<(String, Json)> {
     let mut warnings: Vec<String> = Vec::new();
     let mut skipped: Vec<plan::Skipped> = Vec::new();
     let mut promoted = Unpromote::default();
+    let mut retirable: Option<Json> = None;
     let mut result = deploy(
         args,
         cx,
@@ -353,8 +356,13 @@ fn run_deploy(args: &Args, cx: &Context<'_>) -> Vec<(String, Json)> {
         &mut warnings,
         &mut skipped,
         &mut promoted,
+        &mut retirable,
     );
     promoted.finish().apply(&mut result, &mut warnings);
+    // What `--prune` would retire, sent nowhere (#1713).
+    if let Some(retirable) = retirable {
+        result.push(("retirable".into(), retirable));
+    }
     if (!args.uuids.is_empty() || !args.files.is_empty()) && !has(&result, "scope") {
         result.push(("scope".into(), Json::str("selected")));
     }
@@ -582,6 +590,63 @@ fn promotes(args: &Args, runs: &[StatusStrategy], env: &Env) -> bool {
     !args.skip_promotion && super::promotion_preview::applies(runs, reads_changes, env)
 }
 
+/// The batch that opens `tenant` (one of `tables`) for its retirements: no
+/// rule of its own.
+fn tenant_batch(tables: &[CJson], tenant: &str) -> Batch {
+    let table = tables
+        .iter()
+        .find(|table| opentide_compile::deploy::tenant_name(table) == tenant)
+        .cloned()
+        .unwrap_or(CJson::Null);
+    Batch {
+        tenant: Configured {
+            name: tenant.to_owned(),
+            setup: table
+                .get("setup")
+                .and_then(CJson::as_object)
+                .cloned()
+                .unwrap_or_default(),
+        },
+        table,
+        rules: Vec::new(),
+    }
+}
+
+/// Why `--prune` cannot run with these arguments (#1713): only a `RELEASE`
+/// run retires rules, and `--uuid` and `--file` name rules whose file is
+/// there.
+pub fn prune_refusal(
+    prune: bool,
+    runs: &[StatusStrategy],
+    uuids: &[String],
+    files: &[String],
+) -> Option<&'static str> {
+    if !prune {
+        None
+    } else if !uuids.is_empty() || !files.is_empty() {
+        Some(
+            "--prune retires the rules whose file is gone; --uuid and --file name rules that \
+             exist. Pass one or the other",
+        )
+    } else if !runs.contains(&StatusStrategy::Release) {
+        Some("--prune retires rules, which only a --strategy RELEASE run does")
+    } else {
+        None
+    }
+}
+
+/// Which rules the run reads, as [`super::deploy_retire::find`] reads
+/// evidence of deleted ones.
+fn retire_mode(args: &Args) -> super::deploy_retire::Mode {
+    if !args.uuids.is_empty() || !args.files.is_empty() {
+        super::deploy_retire::Mode::Selected
+    } else if args.all {
+        super::deploy_retire::Mode::All
+    } else {
+        super::deploy_retire::Mode::Changes
+    }
+}
+
 /// `_deploy` for a run that sends.
 #[expect(
     clippy::too_many_lines,
@@ -594,6 +659,7 @@ fn deploy(
     plan_warnings: &mut Vec<String>,
     plan_skipped: &mut Vec<plan::Skipped>,
     promoted: &mut Unpromote,
+    retirable: &mut Option<Json>,
 ) -> Vec<(String, Json)> {
     if let Some(value) = cx
         .env
@@ -630,6 +696,9 @@ fn deploy(
                 return result;
             }
         };
+    if let Some(message) = prune_refusal(args.prune, &runs, &args.uuids, &args.files) {
+        return usage(message, code::USAGE_ERROR, Some("--prune"));
+    }
     let fs = workspace.fs().as_ref();
     let (rules_dir, folder) = opentide_compile::dry_run::rules_folder(workspace);
     let local = plan::local_scope(fs, &rules_dir, &folder);
@@ -791,27 +860,44 @@ fn deploy(
             .filter(|entry| args.platform.as_ref().is_none_or(|p| p == &entry.platform))
             .cloned(),
     );
+    // The rules deployed earlier whose file is gone (#1713): warned about,
+    // and with `--prune` retired below.
+    let found = super::deploy_retire::find(&super::deploy_retire::Search {
+        workspace,
+        owned: &owned,
+        env: cx.env,
+        cwd: cx.cwd,
+        mode: retire_mode(args),
+        platform: args.platform.as_deref(),
+        prune: args.prune,
+    });
+    plan_warnings.extend(found.warnings.iter().cloned());
+    *retirable = found.retirable_json().as_ref().map(convert);
+    let retiring = !found.retirements.is_empty();
     // The commits changed no rule file: say so, rather than blame a status.
     let unchanged = !selecting && !args.all && scope.files.is_empty() && scope.nested.is_empty();
     let refused = !selection.refused.is_empty();
     let refused_rules = selection.refused.clone();
     let mut deployment = selection.platforms.clone();
     if let Some(platform) = &args.platform {
-        let Some(uuids) = deployment.shift_remove(platform) else {
-            return nothing(
-                if unchanged {
-                    opentide_compile::dry_run::NO_RULE_FILE_CHANGED
-                } else {
-                    "No rules to deploy for this platform"
-                },
-                refused,
-                ("platform", Json::str(platform)),
-            );
-        };
-        deployment = IndexMap::from([(platform.clone(), uuids)]);
+        match deployment.shift_remove(platform) {
+            Some(uuids) => deployment = IndexMap::from([(platform.clone(), uuids)]),
+            None if retiring => deployment = IndexMap::new(),
+            None => {
+                return nothing(
+                    if unchanged {
+                        opentide_compile::dry_run::NO_RULE_FILE_CHANGED
+                    } else {
+                        "No rules to deploy for this platform"
+                    },
+                    refused,
+                    ("platform", Json::str(platform)),
+                );
+            }
+        }
     }
     let run_names = names(&runs);
-    if deployment.is_empty() {
+    if deployment.is_empty() && !retiring {
         // A run without --platform: the command writes `emit_warning`'s CI
         // annotation (`no_rules_warning`); with one, the platform's absence
         // returned above.
@@ -955,8 +1041,36 @@ fn deploy(
         }
         targets.insert(platform.clone(), per_tenant);
     }
-    let changes = plan_changes(workspace, &owned, &deployment, &targets);
-    let tenant_count: usize = targets.values().map(IndexMap::len).sum();
+    let mut changes = plan_changes(workspace, &owned, &deployment, &targets);
+    changes.extend(
+        found
+            .retirements
+            .iter()
+            .map(super::deploy_retire::Retirement::change),
+    );
+    // Each platform the run sends to: those it deploys, then those it only
+    // retires on.
+    let mut order: IndexMap<String, Vec<String>> = deployment.clone();
+    for platform in found.platforms() {
+        order.entry(platform).or_default();
+    }
+    let mut reached: Vec<(&str, &str)> = targets
+        .iter()
+        .flat_map(|(platform, tenants)| {
+            tenants
+                .keys()
+                .map(move |tenant| (platform.as_str(), tenant.as_str()))
+        })
+        .chain(
+            found
+                .retirements
+                .iter()
+                .map(|r| (r.platform.as_str(), r.tenant.as_str())),
+        )
+        .collect();
+    reached.sort_unstable();
+    reached.dedup();
+    let tenant_count = reached.len();
     let started = Instant::now();
     let separator = format!(" {} ", glyphs::SEPARATOR);
     // The header is bold throughout, its labels bold and dim.
@@ -966,10 +1080,7 @@ fn deploy(
     let strategy_names: Vec<&str> = runs.iter().map(|run| run.name()).collect();
     header.append(&strategy_names.join(" "), &Style::new().bold());
     header.append(
-        &format!(
-            "{separator}{}",
-            plan::scope_text(deployment.len(), tenant_count)
-        ),
+        &format!("{separator}{}", plan::scope_text(order.len(), tenant_count)),
         &bold_dim,
     );
     cx.lines.line(&header, false);
@@ -1010,19 +1121,31 @@ fn deploy(
         cancel: CancellationToken::new(),
         runtime: opentide_connectors::runtime::shared(),
     };
-    let total = deployment.len();
+    let total = order.len();
     let mut deployed: Vec<String> = Vec::new();
     let mut failure: Option<(String, Raised)> = None;
     let mut completed = 0;
     let mut steps: Vec<Step> = Vec::new();
-    for (system, uuids) in &deployment {
+    for (system, uuids) in &order {
         let mut step = Step::new(system);
         step.unit = "rule".into();
-        step.count = Some(uuids.len());
+        let retirements: Vec<&super::deploy_retire::Retirement> = found.on(system).collect();
+        step.count = Some(uuids.len() + retirements.len());
         let step_started = Instant::now();
         let failed_before = sender.failed;
         let mut sent = false;
-        let deployed_here = sender.platform(system, uuids, &mut log);
+        let deployed_here = if uuids.is_empty() {
+            Ok(())
+        } else {
+            sender.platform(system, uuids, &mut log)
+        };
+        // The rules whose file is gone, once the platform's own are sent.
+        let deployed_here = match deployed_here {
+            Ok(()) if !retirements.is_empty() && !sender.interrupted() => {
+                sender.retire(system, &retirements, &mut log)
+            }
+            other => other,
+        };
         // A platform that stopped its own tenants on an interrupt returns:
         // the run stops after it all the same.
         let deployed_here = match deployed_here {
@@ -1098,11 +1221,11 @@ fn deploy(
         }
     }
     if let Some((system, _)) = &failure {
-        let after = deployment
+        let after = order
             .keys()
             .position(|name| name == system)
-            .map_or(deployment.len(), |at| at + 1);
-        for rest in deployment.keys().skip(after) {
+            .map_or(order.len(), |at| at + 1);
+        for rest in order.keys().skip(after) {
             let mut step = Step::new(rest);
             step.unit = "rule".into();
             step.status = StepStatus::Skipped;
@@ -1115,7 +1238,7 @@ fn deploy(
     cx.lines.checklist(&steps);
     let seconds = started.elapsed().as_secs_f64();
     let results = log.results.clone();
-    let platforms = deployment.len();
+    let platforms = order.len();
     let common = |result: &mut Vec<(String, Json)>| {
         result.push((
             "deployed".into(),
@@ -1459,6 +1582,7 @@ fn plan_changes(
                 status,
                 action,
                 fails: false,
+                retired: false,
             });
         }
     }
@@ -1482,6 +1606,8 @@ struct RuleResult {
     /// Old copies the platform deleted beside the rule (a renamed Splunk
     /// rule's saved searches).
     removed: Vec<String>,
+    /// A rule whose file is gone, retired by `--prune` (#1713).
+    retired: bool,
     started: Instant,
 }
 
@@ -1498,6 +1624,7 @@ impl RuleResult {
             error: None,
             reason: None,
             removed: Vec::new(),
+            retired: false,
             started: Instant::now(),
         }
     }
@@ -1543,6 +1670,10 @@ impl RuleResult {
                 "removed",
                 Json::Array(self.removed.iter().map(Json::str).collect()),
             ));
+        }
+        // Only a rule whose file is gone says so (#1713).
+        if self.retired {
+            members.push(("retired", Json::Bool(true)));
         }
         Json::object(members)
     }
@@ -2797,6 +2928,159 @@ impl Sender<'_, '_> {
                     break;
                 }
             }
+        }
+        Ok(())
+    }
+
+    /// The rules of *platform* whose file is gone, retired tenant by tenant
+    /// (`--prune`, #1713): each a delete through the platform's `Deployer`,
+    /// by the id deployment state records (then forgotten) or, on a platform
+    /// that keeps none, by the rule's UUID or Splunk name. A platform that
+    /// cannot retire a deleted rule skips it and says why; a rule the
+    /// tenant no longer has (`404`) is skipped as already gone.
+    fn retire(
+        &mut self,
+        platform: &str,
+        retirements: &[&super::deploy_retire::Retirement],
+        log: &mut DeployLog<'_>,
+    ) -> Result<(), Raised> {
+        use super::deploy_retire::Request;
+        let mut tenants: Vec<&str> = Vec::new();
+        for retirement in retirements {
+            if !tenants.contains(&retirement.tenant.as_str()) {
+                tenants.push(&retirement.tenant);
+            }
+        }
+        let tables: Vec<CJson> = plan::tenants(&self.compile.config.clone(), platform)
+            .into_iter()
+            .cloned()
+            .collect();
+        for tenant in tenants {
+            // A tenant the platform's own rules stopped: its retirements
+            // are not attempted ([`DeployLog::settle`]).
+            if self
+                .stopped_tenants
+                .iter()
+                .any(|(name, stopped)| name == platform && stopped == tenant)
+            {
+                continue;
+            }
+            let mine: Vec<&super::deploy_retire::Retirement> = retirements
+                .iter()
+                .copied()
+                .filter(|retirement| retirement.tenant == tenant)
+                .collect();
+            let row = |retirement: &super::deploy_retire::Retirement| {
+                let mut result =
+                    RuleResult::new(platform, Some(tenant), &retirement.uuid, &retirement.name);
+                result.action = Some("delete".to_owned());
+                result.retired = true;
+                result
+            };
+            // A platform that cannot retire it says so, before any tenant
+            // is opened.
+            let mut sendable = Vec::new();
+            for retirement in mine {
+                match &retirement.request {
+                    Request::Unsupported(reason) => {
+                        let mut result = row(retirement);
+                        result.skip(reason);
+                        result.seconds = Some(0.0);
+                        log.finished(result);
+                    }
+                    Request::Delete {
+                        rule_id,
+                        body,
+                        state,
+                    } => sendable.push((retirement, rule_id, body, *state)),
+                }
+            }
+            if sendable.is_empty() {
+                continue;
+            }
+            let Some(deployer) = self
+                .cx
+                .registry
+                .get(platform)
+                .and_then(opentide_connectors::Platform::deployer)
+            else {
+                for (retirement, ..) in sendable {
+                    let mut result = row(retirement);
+                    self.rule_error(
+                        &mut result,
+                        &format!("Cannot find a deployment engine for {platform}"),
+                    );
+                    log.finished(result);
+                }
+                continue;
+            };
+            let batch = tenant_batch(&tables, tenant);
+            let Some(connection) = self.open_or_fail(platform, &batch, log, deployer)? else {
+                continue;
+            };
+            for (retirement, rule_id, body, state) in sendable {
+                let mut result = row(retirement);
+                connection.rule_begins();
+                let request = DeployRequest::new(rule_id.clone(), Operation::Delete, body.clone())
+                    .at(self.cx.now);
+                let outcome = self.retire_rule(
+                    platform,
+                    tenant,
+                    deployer,
+                    &connection,
+                    &request,
+                    state,
+                    &mut result,
+                );
+                if self.raised_before_any_rule(&connection, platform, tenant, log, &outcome) {
+                    break;
+                }
+                if let Err(raised) = self.close(log, result, outcome) {
+                    self.tenant_failed(platform, tenant, log, raised, true)?;
+                    break;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// One retirement's delete on an open tenant: a recorded id is forgotten
+    /// once the tenant deleted the rule, or once it says it has none (`404`,
+    /// skipped as already gone).
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "one retirement on its open tenant, and the row it fills"
+    )]
+    fn retire_rule(
+        &mut self,
+        platform: &str,
+        tenant: &str,
+        deployer: &dyn Deployer,
+        connection: &Connection,
+        request: &DeployRequest,
+        state: bool,
+        result: &mut RuleResult,
+    ) -> Result<(), Raised> {
+        let context = self.context(connection);
+        let answer = self
+            .block(async { Ok(deployer.deploy(context, request).await) })
+            .map_err(|error| raised(&error))?;
+        match answer {
+            Ok(done) => {
+                for warning in &done.warnings {
+                    if warning.code == opentide_connectors::splunk::RENAMED_DELETED {
+                        result.removed.push(warning.message.clone());
+                    }
+                }
+            }
+            // Gone already: nothing to retire, and nothing to keep.
+            Err(failed) if failed.failure.status == Some(404) => {
+                result.skip("already gone from the tenant");
+            }
+            Err(failed) => return Err(scoped(failed, |error| raised(&error))),
+        }
+        if state {
+            self.record_deleted(result, platform, tenant);
         }
         Ok(())
     }

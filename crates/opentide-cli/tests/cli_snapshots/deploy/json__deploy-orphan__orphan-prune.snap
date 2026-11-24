@@ -1,0 +1,63 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: deploy/json/deploy-orphan/orphan-prune
+---
+args: opentide --json deploy --platform sentinel_one --strategy RELEASE --all --dry-run --prune
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "changes": [
+    {
+      "action": "delete",
+      "name": "00000000-0000-4000-8047-000000000099",
+      "platform": "sentinel_one",
+      "retired": true,
+      "status": "",
+      "tenant": "lab",
+      "uuid": "00000000-0000-4000-8047-000000000099"
+    }
+  ],
+  "command": "deploy",
+  "deployed": [],
+  "dry_run": true,
+  "duration_ms": 0,
+  "exit_code": 0,
+  "failure": null,
+  "message": "Plan: 0 to create, 0 to update, 0 to disable, 1 to delete",
+  "next_actions": [],
+  "ok": true,
+  "payloads": {},
+  "plan": {},
+  "platform": "sentinel_one",
+  "schema_version": 1,
+  "skipped": [
+    {
+      "platform": "sentinel_one",
+      "rule": "SentinelOne create rule",
+      "status": "STAGING",
+      "strategy": "PREVIEW",
+      "uuid": "00000000-0000-4000-8047-000000000011"
+    },
+    {
+      "platform": "sentinel_one",
+      "rule": "SentinelOne update rule",
+      "status": "STAGING",
+      "strategy": "PREVIEW",
+      "uuid": "00000000-0000-4000-8047-000000000014"
+    }
+  ],
+  "status": "completed",
+  "summary": {
+    "create": 0,
+    "delete": 1,
+    "disable": 0,
+    "platforms": 1,
+    "skipped": 2,
+    "tenants": 1,
+    "update": 0,
+    "upsert": 0
+  }
+}
+
+━━━ stderr · empty

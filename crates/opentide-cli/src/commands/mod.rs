@@ -13,6 +13,7 @@ pub mod cve;
 pub mod deploy;
 pub mod deploy_promote;
 pub mod deploy_replay;
+pub mod deploy_retire;
 pub mod deploy_send;
 pub mod deploy_state;
 pub mod doctor;

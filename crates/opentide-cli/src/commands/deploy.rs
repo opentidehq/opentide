@@ -45,6 +45,10 @@ const NO_WORKSPACE_STEP: (&str, &str) = ("opentide setup", "no workspace here: c
 
 /// The command's arguments.
 #[derive(Clone, Debug, Default)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "the command's flags, each its own option"
+)]
 pub struct Args {
     /// `--strategy` values, as typed.
     pub strategies: Vec<String>,
@@ -65,6 +69,9 @@ pub struct Args {
     /// `--skip-promotion`: the push's deploy does not promote, so the dry
     /// run previews no promotion either.
     pub skip_promotion: bool,
+    /// `--prune`: the plan shows the rules whose file is gone, retired
+    /// (#1713).
+    pub prune: bool,
 }
 
 impl From<&crate::tree::DeployArgs> for Args {
@@ -77,6 +84,7 @@ impl From<&crate::tree::DeployArgs> for Args {
             platform: args.platform.as_ref().map(|platform| platform.0.clone()),
             plan: args.plan.clone(),
             skip_promotion: args.skip_promotion,
+            prune: args.prune,
             wide: args.wide,
             keep_deprecated: if args.keep_deprecated {
                 Some(true)
@@ -230,6 +238,9 @@ pub fn run(args: &Args, cx: &Context<'_>) -> DryRun {
         &Vocabularies::bundled(),
         &workspace.configuration().resolved,
     );
+    if let Some(refusal) = prune_refused(args, &owned) {
+        return refusal;
+    }
     // A RELEASE push promotes before it deploys: plan the promoted rules,
     // as the push's deploy will (#1653, smoke E13).
     let preview = match preview(args, cx, &workspace, &owned, options) {
@@ -312,9 +323,164 @@ pub fn run(args: &Args, cx: &Context<'_>) -> DryRun {
             );
         }
     }
+    with_retirements(&mut result, args, cx, &workspace, &owned);
     // The index is large on a heavy workspace (see `app::release`).
     crate::app::release(workspace);
     result
+}
+
+/// `--prune` needs a RELEASE run and no selection; an unknown strategy is
+/// the plan's own usage error.
+fn prune_refused(args: &Args, owned: &Owned) -> Option<DryRun> {
+    let runs = opentide_compile::strategy::parse_strategies(
+        &args.strategies,
+        &owned.statuses,
+        "--strategy",
+    )
+    .ok()?;
+    let message = super::deploy_send::prune_refusal(args.prune, &runs, &args.uuids, &args.files)?;
+    Some(refused(message.to_owned(), code::USAGE_ERROR, "--prune"))
+}
+
+/// The rules deployed earlier whose file is gone (#1713).
+fn retirements(
+    args: &Args,
+    cx: &Context<'_>,
+    workspace: &opentide_workspace::Workspace,
+    owned: &Owned,
+) -> super::deploy_retire::Found {
+    super::deploy_retire::find(&super::deploy_retire::Search {
+        workspace,
+        owned,
+        env: cx.env,
+        cwd: cx.cwd,
+        mode: if !args.uuids.is_empty() || !args.files.is_empty() {
+            super::deploy_retire::Mode::Selected
+        } else if args.all {
+            super::deploy_retire::Mode::All
+        } else {
+            super::deploy_retire::Mode::Changes
+        },
+        platform: args.platform.as_deref(),
+        prune: args.prune,
+    })
+}
+
+/// The rules whose file is gone, in the plan (#1713): what the search says
+/// among the warnings, and with `--prune` each retirement a `delete` row of
+/// `changes`, counted in the tally. A plan of retirements alone is a plan,
+/// not a skipped run.
+fn with_retirements(
+    dry: &mut DryRun,
+    args: &Args,
+    cx: &Context<'_>,
+    workspace: &opentide_workspace::Workspace,
+    owned: &Owned,
+) {
+    if dry.outcome.status == "failed" {
+        return;
+    }
+    let found = &retirements(args, cx, workspace, owned);
+    dry.warnings.extend(found.warnings.iter().cloned());
+    // What `--prune` would retire, sent nowhere.
+    if let Some(retirable) = found.retirable_json() {
+        let retirable = convert(&retirable);
+        dry.outcome
+            .data
+            .push(("retirable".to_owned(), retirable.clone()));
+        if let Json::Object(members) = &mut dry.result {
+            members.insert("retirable".to_owned(), retirable);
+        }
+    }
+    if found.retirements.is_empty() {
+        return;
+    }
+    let rows: Vec<Json> = found
+        .retirements
+        .iter()
+        .map(|retirement| convert(&retirement.change().to_json()))
+        .collect();
+    let mut changes: Vec<Json> = match dry.result.get("changes") {
+        Some(Json::Array(items)) => items.clone(),
+        _ => Vec::new(),
+    };
+    changes.extend(rows);
+    let planned: Vec<opentide_compile::plan::Change> =
+        changes.iter().filter_map(change_of).collect();
+    let mut platforms: Vec<&str> = planned.iter().map(|c| c.platform.as_str()).collect();
+    platforms.sort_unstable();
+    platforms.dedup();
+    let mut tenants: Vec<(&str, &str)> = planned
+        .iter()
+        .filter_map(|c| c.tenant.as_deref().map(|t| (c.platform.as_str(), t)))
+        .collect();
+    tenants.sort_unstable();
+    tenants.dedup();
+    let message = opentide_compile::plan::message(&planned);
+    let summary = convert(&opentide_compile::plan::summary(
+        &planned,
+        platforms.len(),
+        tenants.len(),
+    ));
+    let changes = Json::Array(changes);
+    let set = |items: &mut Vec<(String, Json)>, key: &str, value: Json| match items
+        .iter_mut()
+        .find(|(name, _)| name == key)
+    {
+        Some(entry) => entry.1 = value,
+        None => items.push((key.to_owned(), value)),
+    };
+    let was_skipped = dry.outcome.status == "skipped";
+    if was_skipped {
+        // Nothing else to deploy: the retirements are the plan.
+        "completed".clone_into(&mut dry.outcome.status);
+        dry.outcome.exit_code = 0;
+        dry.outcome.failure = None;
+        dry.outcome.next_actions.clear();
+        dry.outcome
+            .data
+            .retain(|(key, _)| !matches!(key.as_str(), "advice" | "detail" | "_outcome"));
+        dry.plan_kind = true;
+    }
+    set(&mut dry.outcome.data, "changes", changes.clone());
+    dry.outcome.message.clone_from(&message);
+    dry.outcome_line = Some(message.clone());
+    // The plan's counts again, the rest of the summary (`skipped`) kept.
+    if let Json::Object(members) = summary {
+        for (key, count) in members {
+            set(&mut dry.outcome.summary, &key, count);
+        }
+    }
+    if let Json::Object(members) = &mut dry.result {
+        let mut items: Vec<(String, Json)> = std::mem::take(members).into_iter().collect();
+        set(&mut items, "changes", changes);
+        set(&mut items, "message", Json::str(message));
+        set(&mut items, "status", Json::str(dry.outcome.status.clone()));
+        if was_skipped {
+            items.retain(|(key, _)| !matches!(key.as_str(), "advice" | "detail"));
+        }
+        *members = items.into_iter().collect();
+    }
+}
+
+/// A row of a dry run's `changes`, read back into the plan's change.
+fn change_of(row: &Json) -> Option<opentide_compile::plan::Change> {
+    let text = |key: &str| row.get(key).and_then(Json::as_str).map(str::to_owned);
+    let action = text("action")?;
+    let action = opentide_compile::plan::ACTIONS
+        .iter()
+        .find(|(name, _)| *name == action)
+        .map(|(name, _)| *name)?;
+    Some(opentide_compile::plan::Change {
+        platform: text("platform")?,
+        tenant: text("tenant"),
+        uuid: text("uuid").unwrap_or_default(),
+        name: text("name").unwrap_or_default(),
+        status: text("status").unwrap_or_default(),
+        action,
+        fails: row.get("fails") == Some(&Json::Bool(true)),
+        retired: row.get("retired") == Some(&Json::Bool(true)),
+    })
 }
 
 /// The canonical UUIDs of the rules a dry run's `changes` send to a tenant.
@@ -745,6 +911,10 @@ fn plan_view(result: &Json, summary: &[(String, Json)]) -> Vec<(Text, Option<usi
                         _ => uuid.clone(),
                     };
                     let status = match row.get("status") {
+                        // A rule whose file is gone (#1713).
+                        _ if row.get("retired") == Some(&Json::Bool(true)) => {
+                            "rule file deleted".to_owned()
+                        }
                         Some(Json::Str(status)) if !status.is_empty() => {
                             format!("status {status}")
                         }

@@ -287,6 +287,12 @@ about = "`deploy-tenants` as a git checkout whose last commit, a push, wrote a S
 edits = [{ path = ".opentide/configurations/deployment.toml", find = "", replace = "[promotion]\nenabled = true\npromotion_target = \"LIVE}\"\n\n[[statuses]]\nname = \"STAGING\"\ndescription = \"Staging\"\nstrategy = \"PREVIEW\"\n\n[[statuses]]\nname = \"PRODUCTION\"\ndescription = \"Production\"\nstrategy = \"RELEASE\"\n\n[[statuses]]\nname = \"LIVE}\"\ndescription = \"Live\"\nstrategy = \"RELEASE\"\n\n[[statuses]]\nname = \"DISABLED\"\ndescription = \"Disabled\"\nstrategy = \"DISABLEMENT\"\n\n[[statuses]]\nname = \"REMOVED\"\ndescription = \"Removed\"\nstrategy = \"DELETION\"\n" }]
 pushed = [{ path = "objects/rules/splunk-a-create.yaml", find = "configurations:\n  splunk:\n", replace = "configurations:\n  sentinel: {status: STAGING}\n  splunk:\n" }]
 
+[fixtures.deploy-orphan]
+kind = "copy"
+source = "tests/golden/fixtures/deploy-tenants"
+about = "`deploy-tenants` with a deployment state shard whose rule no file holds: a rule deployed to sentinel_one tenant lab, its file since deleted, which `deploy --all` warns about and `--prune` retires (#1713)"
+edits = [{ path = ".opentide/states/deployment/00000000-0000-4000-8047-000000000099.json", find = "", replace = "{\n  \"object_uuid\": \"00000000-0000-4000-8047-000000000099\",\n  \"platforms\": {\n    \"sentinel_one\": {\n      \"lab\": \"1800000000000000099\"\n    }\n  },\n  \"schema\": \"deployment.state::1.0\"\n}\n" }]
+
 [fixtures.share-misp]
 kind = "copy"
 source = "tests/golden/fixtures/share-misp"
@@ -3708,3 +3714,18 @@ args = ["validate"]
 env = { TF_BUILD = "True", BUILD_SOURCESDIRECTORY = "<WS>", AGENT_TEMPDIRECTORY = "<TMP>/tmp/agent" }
 modes = ["plain"]
 fixtures = ["vscode"]
+
+# #1713: a rule deployed earlier whose file is gone. Without --prune the
+# run lists it under `retirable` and sends nothing; with --prune the plan
+# deletes it by the id deployment state records (`retired: true`).
+[[case]]
+command = "deploy"
+variant = "orphan-retirable"
+args = ["deploy", "--platform", "sentinel_one", "--strategy", "RELEASE", "--all", "--dry-run"]
+fixtures = ["deploy-orphan"]
+
+[[case]]
+command = "deploy"
+variant = "orphan-prune"
+args = ["deploy", "--platform", "sentinel_one", "--strategy", "RELEASE", "--all", "--dry-run", "--prune"]
+fixtures = ["deploy-orphan"]

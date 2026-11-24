@@ -233,6 +233,19 @@ pub fn recorded(workspace: &Path, platform: &str, tenant: &str) -> Vec<String> {
         .collect()
 }
 
+/// The canonical uuid of every shard in the workspace's deployment state,
+/// sorted: the rules deploy has recorded an id for (#1713). A file whose
+/// name is no UUID is left out.
+pub fn recorded_uuids(workspace: &Path) -> Vec<String> {
+    let mut uuids: Vec<String> = shard_entries(&state_dir(workspace))
+        .iter()
+        .filter_map(|name| canonical(json_stem(name)))
+        .collect();
+    uuids.sort();
+    uuids.dedup();
+    uuids
+}
+
 /// The stem of a `*.json` name, whatever the extension's case.
 fn json_stem(name: &str) -> &str {
     let cut = name.len().saturating_sub(".json".len());

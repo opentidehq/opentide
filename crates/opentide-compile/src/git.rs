@@ -10,7 +10,8 @@
 //! branch, a push against the branch's previous tip, outside CI the last
 //! commit against its first parent. A repository's first commit, which has no
 //! parent, added every file it holds. Added, renamed and modified files count;
-//! deleted ones do not (there is nothing left to deploy). Paths are relative
+//! deleted ones do not (there is nothing left to deploy), but
+//! [`deleted_paths`] lists them with their old content, for retirement (#1713). Paths are relative
 //! to the git top level, as git writes them, non-ASCII paths included.
 //!
 //! This module and [`crate::plan::state_id`] are the crate's only reads: the
@@ -672,6 +673,68 @@ fn changed_between(
     base: Option<ObjectId>,
     head: ObjectId,
 ) -> Result<Vec<String>, GitError> {
+    let mut paths: Vec<String> = tree_changes(repo, base, head)?
+        .into_iter()
+        .filter_map(|change| match change {
+            gix_diff::tree::recorder::Change::Addition {
+                entry_mode, path, ..
+            }
+            | gix_diff::tree::recorder::Change::Modification {
+                entry_mode, path, ..
+            } if !entry_mode.is_tree() => Some(String::from_utf8_lossy(&path).into_owned()),
+            _ => None,
+        })
+        .collect();
+    paths.sort();
+    paths.dedup();
+    Ok(paths)
+}
+
+/// The files deleted from `base` to `head`, each with the content `base`
+/// held, sorted by path. With no `base`, nothing was deleted.
+fn deleted_between(
+    repo: &Repo,
+    base: Option<ObjectId>,
+    head: ObjectId,
+) -> Result<Vec<Deleted>, GitError> {
+    if base.is_none() {
+        return Ok(Vec::new());
+    }
+    let mut deleted = Vec::new();
+    for change in tree_changes(repo, base, head)? {
+        let gix_diff::tree::recorder::Change::Deletion {
+            entry_mode,
+            oid,
+            path,
+            ..
+        } = change
+        else {
+            continue;
+        };
+        if entry_mode.is_tree() {
+            continue;
+        }
+        let mut buf = Vec::new();
+        let blob = repo
+            .odb
+            .find_blob(&oid, &mut buf)
+            .map_err(|error| failed(format!("Could not find git object {oid}: {error}")))?;
+        deleted.push(Deleted {
+            path: String::from_utf8_lossy(&path).into_owned(),
+            content: blob.data.to_vec(),
+        });
+    }
+    deleted.sort_by(|a, b| a.path.cmp(&b.path));
+    Ok(deleted)
+}
+
+/// Every change of a file or folder from `base` to `head`, as gix records
+/// them (no rename tracking: a rename is a deletion and an addition).
+fn tree_changes(
+    repo: &Repo,
+    base: Option<ObjectId>,
+    head: ObjectId,
+) -> Result<Vec<gix_diff::tree::recorder::Change>, GitError> {
     let tree = |id: ObjectId| -> Result<Vec<u8>, GitError> {
         let commit = repo
             .commit(id)
@@ -702,22 +765,25 @@ fn changed_between(
         &mut recorder,
     )
     .map_err(|error| failed(format!("Could not find git object: {error}")))?;
-    let mut paths: Vec<String> = recorder
-        .records
-        .into_iter()
-        .filter_map(|change| match change {
-            gix_diff::tree::recorder::Change::Addition {
-                entry_mode, path, ..
-            }
-            | gix_diff::tree::recorder::Change::Modification {
-                entry_mode, path, ..
-            } if !entry_mode.is_tree() => Some(String::from_utf8_lossy(&path).into_owned()),
-            _ => None,
-        })
-        .collect();
-    paths.sort();
-    paths.dedup();
-    Ok(paths)
+    Ok(recorder.records)
+}
+
+/// A file the run's commits deleted, with the content it had before.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Deleted {
+    /// Its path, relative to the git top level.
+    pub path: String,
+    /// What the base commit held.
+    pub content: Vec<u8>,
+}
+
+/// The commits a run's diff spans: `base` (none for a root commit or a
+/// push that created its branch) to `head`.
+struct Range {
+    repo: Repo,
+    base: Option<ObjectId>,
+    head: ObjectId,
+    note: Option<String>,
 }
 
 /// The commit HEAD names, if any.
@@ -743,13 +809,47 @@ pub fn changed_paths(
 /// the checkout does not hold it, so earlier commits of the same push are
 /// not in the diff. A push that created its branch (an all-zero `before`)
 /// reads every file of the run's commit.
-#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 pub fn changed_paths_noted(
     workspace: &Path,
     cwd: &Path,
     env: Env<'_>,
     source: DiffSource,
 ) -> Result<(Vec<String>, Option<String>), GitError> {
+    match diff_range(workspace, cwd, env, source)? {
+        Some(range) => Ok((
+            changed_between(&range.repo, range.base, range.head)?,
+            range.note,
+        )),
+        None => Ok((Vec::new(), None)),
+    }
+}
+
+/// The rule files [`changed_paths_noted`]'s diff deleted, each with the
+/// content its base held, so a deploy can retire the rule (#1713). The diff
+/// is the same one: a base it cannot find (a shallow checkout, a missing
+/// commit) is the same error, never an empty list, and a push that created
+/// its branch, or a repository's first commit, deleted nothing.
+pub fn deleted_paths(
+    workspace: &Path,
+    cwd: &Path,
+    env: Env<'_>,
+    source: DiffSource,
+) -> Result<Vec<Deleted>, GitError> {
+    match diff_range(workspace, cwd, env, source)? {
+        Some(range) => deleted_between(&range.repo, range.base, range.head),
+        None => Ok(Vec::new()),
+    }
+}
+
+/// The commits the run's diff spans; `None` for a local checkout with no
+/// commit yet.
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
+fn diff_range(
+    workspace: &Path,
+    cwd: &Path,
+    env: Env<'_>,
+    source: DiffSource,
+) -> Result<Option<Range>, GitError> {
     let platform = ci(env);
     let mut note = None;
     if source == DiffSource::LastCommit || platform == Ci::Local {
@@ -758,13 +858,16 @@ pub fn changed_paths_noted(
         }
         let repo = open(workspace)?;
         let Some(head) = head_commit(&repo) else {
-            return Ok((Vec::new(), None));
+            return Ok(None);
         };
         // A root commit (no parent) added every file it holds.
-        return Ok((
-            changed_between(&repo, production_base(&repo, head)?, head)?,
-            None,
-        ));
+        let base = production_base(&repo, head)?;
+        return Ok(Some(Range {
+            repo,
+            base,
+            head,
+            note: None,
+        }));
     }
     let variable = match platform {
         Ci::GitHub => "GITHUB_WORKSPACE",
@@ -799,14 +902,14 @@ pub fn changed_paths_noted(
         (Ci::GitHub, DiffSource::Push) => match github_push_before(&repo, env) {
             PushBefore::Commit(before) => Some(before),
             PushBefore::Created => {
-                return Ok((whole_tree(&repo, latest.as_deref(), tip_name)?, None));
+                return whole_tree(repo, latest.as_deref(), tip_name).map(Some);
             }
             PushBefore::Unknown(why) => match first_parent()? {
                 Some(base) => {
                     note = Some(last_commit_only(&why));
                     Some(base.to_string())
                 }
-                None => return Ok((root_changes(&repo, latest.as_deref(), tip_name)?, None)),
+                None => return root_changes(repo, latest.as_deref(), tip_name).map(Some),
             },
         },
         (Ci::GitHub, DiffSource::ChangeRequest) => {
@@ -850,14 +953,14 @@ pub fn changed_paths_noted(
         (Ci::GitLab, DiffSource::Push) => match gitlab_push_before(&repo, env) {
             PushBefore::Commit(before) => Some(before),
             PushBefore::Created => {
-                return Ok((whole_tree(&repo, latest.as_deref(), tip_name)?, None));
+                return whole_tree(repo, latest.as_deref(), tip_name).map(Some);
             }
             PushBefore::Unknown(why) => match first_parent()? {
                 Some(base) => {
                     note = Some(last_commit_only(&why));
                     Some(base.to_string())
                 }
-                None => return Ok((root_changes(&repo, latest.as_deref(), tip_name)?, None)),
+                None => return root_changes(repo, latest.as_deref(), tip_name).map(Some),
             },
         },
         (Ci::GitLab, DiffSource::ChangeRequest) => {
@@ -888,7 +991,7 @@ pub fn changed_paths_noted(
                 ));
                 Some(base.to_string())
             }
-            None => return Ok((root_changes(&repo, latest.as_deref(), tip_name)?, None)),
+            None => return root_changes(repo, latest.as_deref(), tip_name).map(Some),
         },
         (Ci::Azure, DiffSource::ChangeRequest) => {
             let (Some(source_branch), Some(target_branch)) = (
@@ -922,38 +1025,50 @@ pub fn changed_paths_noted(
     })?;
     let latest = commit_id(&repo, &latest)
         .ok_or_else(|| failed(format!("Could not find git commit {latest}")))?;
-    Ok((changed_between(&repo, Some(source_commit), latest)?, note))
+    Ok(Some(Range {
+        repo,
+        base: Some(source_commit),
+        head: latest,
+        note,
+    }))
 }
 
 /// A push that created its branch (an all-zero `before`): every file
 /// `latest`, the run's commit named by `tip_name`, holds.
-fn whole_tree(repo: &Repo, latest: Option<&str>, tip_name: &str) -> Result<Vec<String>, GitError> {
+fn whole_tree(repo: Repo, latest: Option<&str>, tip_name: &str) -> Result<Range, GitError> {
     let latest = latest.ok_or_else(|| {
         failed(format!(
             "{tip_name} is required to compute the changed rules"
         ))
     })?;
-    let commit = commit_id(repo, latest)
+    let commit = commit_id(&repo, latest)
         .ok_or_else(|| failed(format!("Could not find git commit {latest}")))?;
-    changed_between(repo, None, commit)
+    Ok(Range {
+        repo,
+        base: None,
+        head: commit,
+        note: None,
+    })
 }
 
 /// A push whose HEAD has no parent: the files `latest`, the run's commit
 /// named by `tip_name`, changed against its own first parent, or, when it
 /// has none (the repository's first commit), every file it holds.
-fn root_changes(
-    repo: &Repo,
-    latest: Option<&str>,
-    tip_name: &str,
-) -> Result<Vec<String>, GitError> {
+fn root_changes(repo: Repo, latest: Option<&str>, tip_name: &str) -> Result<Range, GitError> {
     let latest = latest.ok_or_else(|| {
         failed(format!(
             "{tip_name} is required to compute the changed rules"
         ))
     })?;
-    let commit = commit_id(repo, latest)
+    let commit = commit_id(&repo, latest)
         .ok_or_else(|| failed(format!("Could not find git commit {latest}")))?;
-    changed_between(repo, production_base(repo, commit)?, commit)
+    let base = production_base(&repo, commit)?;
+    Ok(Range {
+        repo,
+        base,
+        head: commit,
+        note: None,
+    })
 }
 
 /// The failure of a CI checkout at `searched` whose HEAD names no commit.

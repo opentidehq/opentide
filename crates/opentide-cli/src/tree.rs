@@ -1179,6 +1179,11 @@ pub struct DeployArgs {
         help = "Allow Defender, SentinelOne and CrowdStrike creates in a CI run other than a RELEASE run on a push; this pipeline must commit .opentide/states/deployment/ itself"
     )]
     pub persist_state_externally: bool,
+    #[arg(
+        long = "prune",
+        help = "With --strategy RELEASE: retire (delete) the rules deployed earlier whose rule file is gone: those the run's diff deleted, or with --all those deployment state records and no file holds. Without it, deploy only warns about them"
+    )]
+    pub prune: bool,
     #[command(subcommand)]
     pub command: Option<DeployCommand>,
 }

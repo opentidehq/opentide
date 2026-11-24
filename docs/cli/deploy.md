@@ -53,6 +53,7 @@ A real (non-dry-run) deploy contacts the platform API, so it needs:
 | `--keep-deprecated` / `--drop-deprecated` | Include rules whose status maps to `DISABLEMENT` or `DELETION`, so a `RELEASE` run disables or deletes them. Default: on, off with `--all` |
 | `--skip-promotion` | Skip the promotion step of a `RELEASE` run on a push to the default branch |
 | `--skip-unconfigured` | Exit 0 when every platform with rules to deploy has no `[[tenants]]` block |
+| `--prune` | With `--strategy RELEASE`: retire (delete) the rules deployed earlier whose rule file is gone, shown first in the dry run's plan. Without it, deploy only warns about them. Not with `--uuid` or `--file`. See [Deleted rule files](#deleted-rule-files) |
 | `--persist-state-externally` | In CI, allow a run other than `--strategy RELEASE` on a push to create rules on the platforms that keep vendor ids (Defender for Endpoint, SentinelOne, CrowdStrike, Sysdig, Bitdefender, Graylog, Exabeam and Google SecOps, and platform plugins). Pass it only when the pipeline commits `.opentide/states/deployment/` itself; see [Creates outside the production job](../usage/concepts/deployment-state.md#creates-outside-the-production-job) |
 
 ### Selecting rules
@@ -340,7 +341,43 @@ Splunk names a saved search after its rule's title, with ` - Rule` for a correla
 - **Reported.** The result row lists the deleted names under `removed`, and the dry run's note says the deletes will happen; the listing and the deletes are not in the dry run's plan, since only the tenant knows its saved searches.
 - **Failures.** A copy that cannot be listed or deleted fails the rule with `splunk_renamed_search_not_deleted`. The message says the new saved search was written, names the copy and the ones already deleted, and `removed` still lists those. The next deploy of the rule finds the copy again.
 - **Saved searches from 0.28.1 and earlier** have no `opentide rule` line until they are deployed again. A rule renamed before its first deploy with this release leaves its old saved search: delete it in Splunk.
-- **A deleted rule file** is never sent, so nothing deletes its saved searches: retire the rule with a `DELETION` status first, deploy, then delete the file.
+- **A deleted rule file** is retired by a `RELEASE` run with `--prune` from the run that deleted it: its saved search under its last name, then every copy that carries its marker ([Deleted rule files](#deleted-rule-files)).
+
+### Deleted rule files
+
+Deleting a rule file does not delete the rule from the tenants it reached. Every run looks for rules deployed earlier whose file is gone, and warns about them: without `--prune`, `--json` lists each one under `retirable` (one entry per rule and tenant: `platform`, `tenant`, `uuid`, `name`, the block's last `status`, `action: "delete"`, and `unsupported` with the reason where the platform cannot retire it), and nothing is sent. A `RELEASE` run with `--prune` retires them, as each platform retires a rule whose status maps to `DELETION`:
+
+```bash
+opentide deploy --strategy RELEASE --prune --dry-run   # the plan shows the retirements
+opentide deploy --strategy RELEASE --prune             # default-branch job
+```
+
+opentide retires only what it can show it deployed, from two kinds of evidence:
+
+- **The run's diff.** A change-detection run (no `--all`, `--uuid` or `--file`) reads the rule files its commits deleted directly in the rules folder, as the diff's base commit held them: the rule's UUID, its name and its platform blocks. A block whose status maps to `DELETION` (already retired) or `INERT` (never deployed) is left alone; any other block is retired on the tenants it reached.
+- **Deployment state.** On the platforms that keep vendor ids (Defender for Endpoint, SentinelOne, CrowdStrike, Sysdig, Bitdefender, Graylog, Exabeam, Google SecOps, and platform plugins), only the tenants and ids the rule's [shard](../usage/concepts/deployment-state.md) records are retired, then forgotten. An `--all` run reads every shard: a shard whose rule no file in the workspace holds is retired.
+
+| Platform | Retired by |
+|---|---|
+| Sentinel, Elastic | A delete of the rule's UUID, from the diff |
+| Splunk | A delete of the saved search under the deleted file's name (` - Rule` for a correlation search), then of every copy whose description carries `opentide rule <uuid>` ([Splunk's renamed rules](#splunks-renamed-rules)), from the diff |
+| HarfangLab | A delete of the rule's UUID, of the deleted block's kind (Sigma or YARA), from the diff |
+| The platforms that keep vendor ids | A delete of the id deployment state records, by the diff or by `--all` |
+| Carbon Black Cloud | Not supported: the row is `skipped` and says to remove the report from the watchlist by hand |
+
+An `--all` run cannot find a deleted rule on the platforms that keep no state; only the run whose diff deleted the file can. Run `--prune` on the push that deletes rules, or retire them with a `DELETION` status before deleting the file.
+
+A retirement is a `delete` row of `changes` and `results` with `"retired": true`, counted under `delete` in the summary; the plan view says `rule file deleted` in place of a status. A delete the tenant answers `404` is `skipped` (`already gone from the tenant`), and a recorded id is forgotten all the same. Each retirement goes to its tenant after the platform's own rules, and a tenant that stopped on one of them is not asked.
+
+Nothing is retired, and a warning says why, when:
+
+- a rule with the same UUID is still in the workspace (a file moved or renamed is not deleted);
+- any object file fails to load: its rule would look deleted (`opentide validate` shows where);
+- an `--all` run reads no rule at all: an empty or misplaced rules folder would make every shard an orphan;
+- the run cannot read its diff. A shallow checkout or a base commit the checkout does not hold fails the run as it does without `--prune`; a push that created its branch has no deletions;
+- deployment state records a tenant the platform's file no longer configures.
+
+`--prune` with a `PREVIEW`-only run, or with `--uuid` or `--file`, is a usage error (exit `2`).
 
 ### Connectors and status promotion
 

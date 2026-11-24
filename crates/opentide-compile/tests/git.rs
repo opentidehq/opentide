@@ -1544,3 +1544,93 @@ fn uncommitted_object_files_the_scope_leaves_out_are_noted_outside_ci() {
         None
     );
 }
+
+fn deleted(root: &Path, pairs: &[(&str, &str)]) -> Result<Vec<(String, String)>, GitError> {
+    let map: HashMap<String, String> = pairs
+        .iter()
+        .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
+        .collect();
+    let env = move |name: &str| map.get(name).cloned();
+    let source = git::diff_source(&env);
+    git::deleted_paths(root, root, &env, source).map(|files| {
+        files
+            .into_iter()
+            .map(|file| (file.path, String::from_utf8(file.content).unwrap()))
+            .collect()
+    })
+}
+
+/// The files a diff deleted, with what its base held (#1713): the push's
+/// range, not only its last commit; a file deleted and a modified one in
+/// the same range are told apart.
+#[test]
+fn the_files_a_diff_deleted_come_with_their_last_content() {
+    let h = history();
+    // Outside CI, the last commit: the merge deleted nothing.
+    assert_eq!(deleted(&h.root, &[]).unwrap(), Vec::new());
+    std::fs::remove_file(h.root.join("objects/rules/r1.yaml")).unwrap();
+    let d = commit(&h.root, "d");
+    assert_eq!(
+        deleted(&h.root, &[]).unwrap(),
+        [("objects/rules/r1.yaml".to_owned(), "a: 2\n".to_owned())]
+    );
+    // A push from a: r1 was there at a (as `a: 1`), and is gone at d.
+    let event = h.root.join("event.json");
+    std::fs::write(&event, format!("{{\"before\": \"{}\"}}", h.a)).unwrap();
+    let event = event.to_string_lossy().into_owned();
+    let pushed = deleted(
+        &h.root,
+        &[
+            ("GITHUB_ACTIONS", "true"),
+            ("GITHUB_SHA", &d),
+            ("GITHUB_EVENT_PATH", &event),
+        ],
+    )
+    .unwrap();
+    assert_eq!(
+        pushed,
+        [("objects/rules/r1.yaml".to_owned(), "a: 1\n".to_owned())]
+    );
+    // A push that created its branch has no base: nothing was deleted.
+    std::fs::write(
+        h.root.join("event.json"),
+        "{\"before\": \"0000000000000000000000000000000000000000\"}",
+    )
+    .unwrap();
+    let created = deleted(
+        &h.root,
+        &[
+            ("GITHUB_ACTIONS", "true"),
+            ("GITHUB_SHA", &d),
+            ("GITHUB_EVENT_PATH", &event),
+        ],
+    )
+    .unwrap();
+    assert_eq!(created, Vec::new());
+}
+
+/// A shallow checkout's deletions are its diff's failure, never an empty
+/// list a deploy would read as "nothing deleted" (#1713).
+#[test]
+fn a_shallow_clone_cannot_list_what_it_deleted() {
+    let h = history();
+    let dir = tempfile::tempdir().unwrap();
+    let shallow = dunce::canonicalize(dir.path()).unwrap().join("shallow");
+    let path = h.root.to_string_lossy().replace('\\', "/");
+    let url = format!("file:///{}", path.trim_start_matches('/'));
+    git_cmd(
+        dir.path(),
+        &[
+            "clone",
+            "-q",
+            "--depth",
+            "1",
+            &url,
+            &shallow.to_string_lossy(),
+        ],
+    );
+    assert!(matches!(
+        deleted(&shallow, &[]).unwrap_err(),
+        GitError::Failed(message) if message.contains("the checkout is shallow")
+    ));
+}
