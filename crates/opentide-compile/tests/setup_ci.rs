@@ -67,6 +67,9 @@ fn options(inputs: &toml::Table) -> Options {
         app_token: inputs
             .get("app_token")
             .is_some_and(|value| value.as_bool().unwrap()),
+        prune: !inputs
+            .get("no_prune")
+            .is_some_and(|value| value.as_bool().unwrap()),
         user_region: None,
     }
 }
@@ -225,4 +228,99 @@ fn generated_actions_are_not_older_than_the_repositorys_own() {
         stale.join(", ")
     );
     assert!(seen >= 5, "only {seen} actions compared:\n{written}");
+}
+
+/// Every `opentide deploy` line a generated pipeline runs, outside the
+/// user-owned region (whose lines are the user's own, kept as written).
+fn generated_deploy_lines(rendered: &str) -> Vec<String> {
+    let mut inside = false;
+    let mut lines = Vec::new();
+    for line in rendered.lines() {
+        if line.contains(opentide_compile::ci::USER_BEGIN) {
+            inside = true;
+        } else if line.contains(opentide_compile::ci::USER_END) {
+            inside = false;
+        } else if !inside && let Some(at) = line.find("opentide deploy ") {
+            lines.push(line[at..].trim_end().to_owned());
+        }
+    }
+    lines
+}
+
+/// The production job retires the rules whose file the push deleted (#1713):
+/// its RELEASE preview and deploy pass `--prune`, and no other deploy line
+/// does (`--prune` without RELEASE is a usage error), on every provider and
+/// every variant `setup ci` writes: staging on or off, `--app-token`,
+/// variable groups, a user-owned region holding a deploy of the user's own.
+#[test]
+fn only_the_release_deploys_prune() {
+    for case in cases() {
+        let name = case.file_stem().unwrap().to_string_lossy().into_owned();
+        let inputs: toml::Table = std::fs::read_to_string(&case).unwrap().parse().unwrap();
+        let mut options = options(&inputs);
+        for region in [
+            None,
+            Some("  # opentide deploy --strategy PREVIEW --file r.yaml".to_owned()),
+        ] {
+            options.user_region.clone_from(&region);
+            let rendered = render(&options).unwrap();
+            let lines = generated_deploy_lines(&rendered);
+            let release: Vec<&String> = lines
+                .iter()
+                .filter(|line| line.contains("--strategy RELEASE"))
+                .collect();
+            assert_eq!(
+                release.len(),
+                2,
+                "{name}: the preview and the deploy: {lines:#?}"
+            );
+            for line in &lines {
+                let releases = line.contains("--strategy RELEASE");
+                assert_eq!(
+                    line.contains("--prune"),
+                    releases,
+                    "{name}: `--prune` exactly on RELEASE deploys: {line}"
+                );
+                assert!(
+                    !line.contains("--uuid") && !line.contains("--file") && !line.contains("--all"),
+                    "{name}: a generated deploy reads the push's changed and deleted files: {line}"
+                );
+            }
+            if region.is_some() {
+                assert!(rendered.contains("# opentide deploy --strategy PREVIEW --file r.yaml"));
+            }
+        }
+    }
+}
+
+/// `--no-prune` (#1713): no line of the pipeline passes `--prune`, the
+/// header records the flag, and [`opentide_compile::ci::no_prune`] reads it
+/// back; a pruning pipeline records nothing.
+#[test]
+fn no_prune_writes_no_prune_and_records_it() {
+    for case in cases() {
+        let name = case.file_stem().unwrap().to_string_lossy().into_owned();
+        let inputs: toml::Table = std::fs::read_to_string(&case).unwrap().parse().unwrap();
+        let mut options = options(&inputs);
+        let pruning = render(&options).unwrap();
+        assert!(!opentide_compile::ci::no_prune(&pruning), "{name}");
+        options.prune = false;
+        let warning = render(&options).unwrap();
+        assert!(!warning.contains("--prune "), "{name}: {warning}");
+        assert!(!warning.contains("--prune\n"), "{name}: {warning}");
+        assert!(opentide_compile::ci::no_prune(&warning), "{name}");
+        assert!(
+            warning.lines().next().unwrap().ends_with(" --no-prune`"),
+            "{name}"
+        );
+        let lines = generated_deploy_lines(&warning);
+        assert_eq!(
+            lines
+                .iter()
+                .filter(|line| line.contains("--strategy RELEASE"))
+                .count(),
+            2,
+            "{name}"
+        );
+    }
 }

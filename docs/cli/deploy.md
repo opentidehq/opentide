@@ -349,7 +349,7 @@ Deleting a rule file does not delete the rule from the tenants it reached. Every
 
 ```bash
 opentide deploy --strategy RELEASE --prune --dry-run   # the plan shows the retirements
-opentide deploy --strategy RELEASE --prune             # default-branch job
+opentide deploy --strategy RELEASE --prune             # the job `setup ci` generates for the default branch
 ```
 
 opentide retires only what it can show it deployed, from two kinds of evidence:

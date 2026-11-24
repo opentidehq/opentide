@@ -107,7 +107,7 @@ const GROUPS: &[(&str, &[&str], usize)] = &[
             "setup.skills.show",
             "setup.vscode",
         ],
-        83,
+        84,
     ),
     // Dry runs, and sends to tenants served from cassettes.
     ("deploy", &["deploy", "deploy.migrate-state"], 63),

@@ -37,6 +37,7 @@ fn merge_script() -> String {
         sharing_credentials: Vec::new(),
         variable_groups: Vec::new(),
         app_token: false,
+        prune: true,
         user_region: None,
     })
     .unwrap();

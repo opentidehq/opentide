@@ -403,10 +403,10 @@ jobs:
             state_base=$(git commit-tree "$(git write-tree)" -p HEAD -m "opentide: deployment state of the default branch")
           fi
           echo "$state_base" > "$(git rev-parse --git-path opentide-state-base)"
-      - run: opentide deploy --dry-run --strategy RELEASE
+      - run: opentide deploy --dry-run --strategy RELEASE --prune
       - name: Deploy
         id: deploy
-        run: opentide deploy --strategy RELEASE --skip-unconfigured
+        run: opentide deploy --strategy RELEASE --prune --skip-unconfigured
       - name: Commit deployment write-backs
         if: ${{ always() && steps.deploy.outcome != 'skipped' }}
         run: |

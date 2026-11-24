@@ -85,6 +85,8 @@ pub struct CiArgs {
     pub variable_group: Vec<String>,
     /// `--app-token/--no-app-token`; `None` keeps the existing pipeline's.
     pub app_token: Option<bool>,
+    /// `--prune/--no-prune`; `None` keeps the existing pipeline's.
+    pub prune: Option<bool>,
     /// `--stdout`: print the pipeline, write nothing.
     pub stdout: bool,
     /// `--default-branch`; `None` detects it.
@@ -724,6 +726,27 @@ fn app_token(
     kept
 }
 
+/// Whether the production job passes `--prune` (#1713): `--prune` or
+/// `--no-prune`, or, when neither is given, what the existing pipeline
+/// opentide wrote records (`warnings` says so when that is `--no-prune`).
+fn prune(
+    args: &CiArgs,
+    pipeline: &str,
+    before: &Result<Option<String>, String>,
+    warnings: &mut Vec<String>,
+) -> bool {
+    if let Some(choice) = args.prune {
+        return choice;
+    }
+    let kept = matches!(before, Ok(Some(old)) if generated(old) && ci::no_prune(old));
+    if kept {
+        warnings.push(format!(
+            "keeping --no-prune from {pipeline}: the production deploy only warns about rules whose file the push deleted; pass --prune to retire them"
+        ));
+    }
+    !kept
+}
+
 /// What the existing pipeline holds between its user-owned region's markers
 /// (`ci::user_region`), which the regenerated one keeps: `Err` when the
 /// markers cannot be read, which is why. Only a pipeline opentide wrote has
@@ -958,6 +981,7 @@ pub(crate) fn prepare(
         sharing_credentials,
         variable_groups: Vec::new(),
         app_token: false,
+        prune: true,
         user_region: None,
     };
     let pipeline = args.provider.path();
@@ -965,6 +989,7 @@ pub(crate) fn prepare(
     let before = files::read_text(stage, &existing);
     options.variable_groups = variable_groups(args, pipeline, &before, &mut warnings);
     options.app_token = app_token(args, pipeline, &before, &mut warnings);
+    options.prune = prune(args, pipeline, &before, &mut warnings);
     let region = user_region(&before);
     options.user_region = region.clone().unwrap_or(None);
     let text = ci::render(&options)
@@ -1469,6 +1494,7 @@ mod tests {
             explorer_pages: false,
             variable_group: Vec::new(),
             app_token: None,
+            prune: None,
             stdout: false,
             default_branch: None,
             plan: false,
@@ -1534,6 +1560,7 @@ mod tests {
             explorer_pages: false,
             variable_group: Vec::new(),
             app_token: None,
+            prune: None,
             stdout: false,
             default_branch: None,
             plan: false,
@@ -1611,6 +1638,7 @@ mod tests {
             explorer_pages: false,
             variable_group: Vec::new(),
             app_token: None,
+            prune: None,
             stdout: false,
             default_branch: None,
             plan: false,

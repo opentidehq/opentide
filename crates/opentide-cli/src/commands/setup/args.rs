@@ -66,6 +66,19 @@ impl SetupPipelineFields {
     }
 }
 
+impl SetupPipelineFields {
+    /// `--prune/--no-prune`; `None` keeps what the existing pipeline has.
+    pub fn prune_choice(&self) -> Option<bool> {
+        if self.prune {
+            Some(true)
+        } else if self.no_prune {
+            Some(false)
+        } else {
+            None
+        }
+    }
+}
+
 impl From<CiPlatform> for opentide_compile::ci::Provider {
     fn from(platform: CiPlatform) -> Self {
         match platform {
@@ -95,6 +108,7 @@ impl From<&SetupArgs> for GroupArgs {
             explorer_pages: pipeline.explorer_pages,
             variable_group: pipeline.variable_group.clone(),
             app_token: pipeline.app_token_choice(),
+            prune: pipeline.prune_choice(),
             promotion: pipeline.promotion_choice(),
             promotion_target: pipeline.promotion_target.clone(),
             python_version: pipeline.python_version.clone(),
