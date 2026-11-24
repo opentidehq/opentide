@@ -49,7 +49,7 @@ pub enum Step {
     Repo(files::RepoOptions),
     /// `setup mcp`, the hosts in the flags' order.
     Mcp(Vec<String>),
-    /// `setup vscode` (deprecated).
+    /// `setup vscode`.
     Vscode(super::vscode::Options),
 }
 
@@ -674,13 +674,13 @@ fn run_step(command: &str, step: &Step, root: &Path, cx: &Context<'_>) -> Report
     finish(command, result, None, root, cx)
 }
 
-/// `opentide setup vscode` (deprecated): it never asks, says it is
-/// deprecated first, and fails (exit 1) when the snippets it was asked for
+/// `opentide setup vscode`: it never asks, recommends the extension first,
+/// and fails (exit 1) when the snippets it was asked for
 /// could not be written, keeping what it wrote.
 fn vscode(options: super::vscode::Options, shown: &Path, plan: bool, cx: &Context<'_>) -> Report {
     const COMMAND: &str = "setup vscode";
     let root = root_of(cx, shown);
-    super::vscode::deprecation(cx);
+    super::vscode::recommendation(cx);
     // A configuration file that does not parse is `config_parse`, its place
     // and its diagnostic (#1659), not the generic `command_failed`.
     let shown_root = root.to_string_lossy().into_owned();
@@ -1516,7 +1516,7 @@ fn run_steps(
         }
     }
     if args.vscode_setup {
-        super::vscode::deprecation(cx);
+        super::vscode::recommendation(cx);
         let done = super::vscode::run(
             &mut recorder.stage,
             &root,

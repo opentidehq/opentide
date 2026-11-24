@@ -122,9 +122,9 @@ opentide setup skills --yes --generic --name SOC --org "Example Corp"
 
 See [Agentic setup](./workflows/agentic-setup.md) for details.
 
-## VS Code settings (deprecated)
+## VS Code
 
-`opentide setup vscode` generates templates and JSON schemas, recommends the opentide VS Code extension (`opentidehq.opentide`) in `.vscode/extensions.json`, and writes snippets. It writes no `yaml.schemas`, and removes the router mapping earlier releases wrote to `.vscode/settings.json`: the extension's language server checks object files. Pass `--mcp` to also write `.vscode/mcp.json` via the same helper as `opentide setup mcp --vscode`. Both paths are valid; parent `--vscode-setup` does not imply MCP. A missing target directory is created before generate. Pass `--no-generate` to skip generation when artifacts already exist. The command fails if snippets were requested but could not be written.
+The recommended way to use opentide in VS Code is the opentide extension (`opentidehq.opentide`, on the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=opentidehq.opentide) and Open VSX), which bundles opentide: `code --install-extension opentidehq.opentide`. `opentide setup vscode` is an alternative that recommends the extension to the team. It generates templates and JSON schemas, recommends the opentide VS Code extension (`opentidehq.opentide`) in `.vscode/extensions.json`, and writes snippets. It writes no `yaml.schemas`, and removes the router mapping earlier releases wrote to `.vscode/settings.json`: the extension's language server checks object files. Pass `--mcp` to also write `.vscode/mcp.json` via the same helper as `opentide setup mcp --vscode`. Both paths are valid; parent `--vscode-setup` does not imply MCP. A missing target directory is created before generate. Pass `--no-generate` to skip generation when artifacts already exist. The command fails if snippets were requested but could not be written.
 
 ## CLI reference
 

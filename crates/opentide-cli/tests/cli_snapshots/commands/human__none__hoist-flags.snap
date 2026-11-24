@@ -49,7 +49,7 @@ exit: 0
 ␛[1m  env            Write .env.example and ignore .env␛[0m
 ␛[1m  hooks          Validate objects on every commit␛[0m
 ␛[1m  mcp            Write MCP configuration for editors and agents␛[0m
-␛[1m  vscode         Write VS Code schemas and snippets (deprecated)␛[0m
+␛[1m  vscode         Write VS Code snippets and recommend the opentide extension␛[0m
 ␛[1m  skills         Discover and install agent skills␛[0m
 ␛[1m    discover     List the skills in the opentidehq/skills catalogue␛[0m
 ␛[1m    show         Show one skill from the catalogue␛[0m

@@ -13569,7 +13569,7 @@ exit: 0
           "flags": [
             "--vscode-setup"
           ],
-          "help": "Run deprecated setup vscode: the extension recommendation and snippets",
+          "help": "Run setup vscode: the extension recommendation and snippets (the opentide VS Code extension is the recommended path)",
           "is_flag": true,
           "multiple": false,
           "name": "vscode_setup",
@@ -14704,7 +14704,7 @@ exit: 0
       "deprecated": false,
       "example": "opentide setup vscode --settings",
       "group": false,
-      "help": "Recommend the opentide extension and write snippets (deprecated). Default: both.",
+      "help": "Recommend the opentide extension and write snippets. Default: both.\n\nThe recommended way to use opentide in VS Code is the opentide extension (opentidehq.opentide, on the VS Code Marketplace and Open VSX). It bundles opentide, so nothing else is installed. This command is an alternative for setups without it.",
       "name": "vscode",
       "options": [
         {
@@ -14843,7 +14843,7 @@ exit: 0
       "path": "setup vscode",
       "runs_alone": true,
       "subcommands": [],
-      "summary": "Write VS Code schemas and snippets (deprecated)"
+      "summary": "Write VS Code snippets and recommend the opentide extension"
     },
     {
       "arguments": [],

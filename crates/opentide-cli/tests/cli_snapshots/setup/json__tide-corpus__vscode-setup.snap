@@ -19,7 +19,6 @@ exit: 0
   "status": "completed",
   "steps": [
     {
-      "deprecated": "opentide setup vscode is deprecated and will be removed when the opentide VS Code extension ships with a bundled language server and template actions.",
       "files": [
         ".vscode/extensions.json",
         ".vscode/model-templates.code-snippets"
@@ -28,7 +27,7 @@ exit: 0
         "templates",
         "schemas"
       ],
-      "message": "VS Code setup complete (deprecated)",
+      "message": "VS Code setup complete",
       "status": "completed",
       "step": "vscode"
     }
@@ -36,13 +35,7 @@ exit: 0
   "summary": {}
 }
 
-━━━ stderr · json, 1 lines
-{
-  "detail": "opentide setup vscode is deprecated and will be removed when the opentide VS Code extension ships with a bundled language server and template actions.",
-  "event": "vscode_setup_deprecated",
-  "level": "warning",
-  "timestamp": "0000-00-00 00:00:00"
-}
+━━━ stderr · empty
 
 ━━━ ws/.opentide/lsp/ · created 0755
 

@@ -68,6 +68,11 @@ const MCP_OUTPUT_PATHS: [(&str, &str); 4] = [
     ("generic", "opentide.mcp.json"),
 ];
 
+/// What `vscode_settings` suggests when the repository does not recommend the
+/// extension: install it (the recommended path), or have the repository
+/// recommend it to the team with `setup vscode`.
+const INSTALL_EXTENSION_FIX: &str = "code --install-extension opentidehq.opentide (or opentide setup vscode, to recommend it to the team)";
+
 /// The opentide VS Code extension.
 const EXTENSION_ID: &str = "opentidehq.opentide";
 
@@ -1643,7 +1648,7 @@ impl Doctor<'_> {
                 "skip",
                 format!("No .vscode/extensions.json: VS Code does not suggest {EXTENSION_ID}"),
             )
-            .fix("opentide setup vscode")
+            .fix(INSTALL_EXTENSION_FIX)
         } else if recommended.is_none() {
             Check::new(
                 "vscode_settings",
@@ -1671,7 +1676,7 @@ impl Doctor<'_> {
                 "warn",
                 format!(".vscode/extensions.json does not recommend {EXTENSION_ID}"),
             )
-            .fix("opentide setup vscode")
+            .fix(INSTALL_EXTENSION_FIX)
         };
         checks.push(check);
         let snippets = self.snippet_file();

@@ -548,7 +548,7 @@ pub struct SetupArgs {
     pub pipeline: SetupPipelineFields,
     #[arg(
         long = "vscode-setup",
-        help = "Run deprecated setup vscode: the extension recommendation and snippets"
+        help = "Run setup vscode: the extension recommendation and snippets (the opentide VS Code extension is the recommended path)"
     )]
     pub vscode_setup: bool,
     #[arg(long = "mcp", help = "Write MCP configuration for vscode, cursor, claude-code or generic (repeatable)", action = clap::ArgAction::Append, value_name = "HOST")]
@@ -2010,9 +2010,9 @@ pub enum SetupCommand {
     Mcp(SetupMcpArgs),
     #[command(
         name = "vscode",
-        about = "Write VS Code schemas and snippets (deprecated)",
-        long_about = "Recommend the opentide extension and write snippets (deprecated). Default: both.",
-        after_help = "Examples:\n  $ opentide setup vscode --settings"
+        about = "Write VS Code snippets and recommend the opentide extension",
+        long_about = "Recommend the opentide extension and write snippets. Default: both.\n\nThe recommended way to use opentide in VS Code is the opentide extension (opentidehq.opentide, on the VS Code Marketplace and Open VSX). It bundles opentide, so nothing else is installed. This command is an alternative for setups without it.",
+        after_help = "Install the extension (recommended):\n  $ code --install-extension opentidehq.opentide\n\nExamples:\n  $ opentide setup vscode --settings"
     )]
     Vscode(SetupVscodeArgs),
     #[command(

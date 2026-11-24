@@ -113,14 +113,14 @@ pub struct Context<'a> {
     /// `--quiet`: no summary of the files written.
     pub quiet: bool,
     /// The streams' styles and widths: what a step prints as it runs (the
-    /// wizard's screens, `setup vscode`'s deprecation).
+    /// wizard's screens, `setup vscode`'s recommendation).
     pub terminal: crate::commands::Terminal,
     /// Ctrl-C for this run: a wizard question answered with Ctrl-C stops the
     /// run as Ctrl-C does elsewhere (`error: interrupted`, exit 130).
     pub interrupt: crate::app::Interrupt,
     /// stderr, shared with the log lines: what a step prints there as it
     /// runs comes before the log lines it writes after (`setup vscode`'s
-    /// deprecation).
+    /// recommendation).
     pub stderr: crate::logging::Sink,
     /// `--proxy`: how `setup skills` reaches the skills repository.
     pub proxy: Option<&'a str>,

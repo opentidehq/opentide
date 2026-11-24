@@ -1,6 +1,7 @@
 //! `opentide setup vscode` and the `vscode` step of `setup --vscode-setup`
-//! (`services/setup/vscode.py`): deprecated, superseded by the opentide VS
-//! Code extension. The step runs `generate templates` and `generate schemas`
+//! (`services/setup/vscode.py`): an alternative to the opentide VS Code
+//! extension, which is the recommended way to use opentide in VS Code. The
+//! step runs `generate templates` and `generate schemas`
 //! first, recommends the extension in `.vscode/extensions.json`, removes the
 //! `yaml.schemas` mappings earlier releases wrote from
 //! `.vscode/settings.json`, writes the template snippets and, with `--mcp`,
@@ -26,10 +27,11 @@ use super::stage::Stage;
 use crate::json::{Json, Object};
 use crate::mode::Mode;
 
-/// What every run says first: the command is on its way out.
-pub const DEPRECATION_MESSAGE: &str = "opentide setup vscode is deprecated and will be removed \
-     when the opentide VS Code extension ships with a bundled language server and template \
-     actions.";
+/// What every run says first: the extension is the recommended path, and
+/// this command an alternative to it. The command is not deprecated.
+pub const RECOMMENDATION: &str = "The recommended way to use opentide in VS Code is the opentide \
+     extension (opentidehq.opentide, also on Open VSX), which bundles opentide: \
+     code --install-extension opentidehq.opentide";
 
 /// `.opentide/` in a workspace.
 const OPENTIDE_DIR: &str = files::OPENTIDE_DIR;
@@ -88,18 +90,18 @@ pub struct Done {
     pub failed: bool,
 }
 
-/// The deprecation, said once where the step runs, before anything it
-/// logs: a log line under `--json` (`vscode_setup_deprecated`), else a
-/// `warning:` line on stderr (`emit_vscode_deprecation`).
-pub fn deprecation(cx: &Context<'_>) {
+/// The recommendation, said once where the step runs, before anything it
+/// logs: a log line under `--json` (`vscode_extension_recommended`), else a
+/// `note:` line on stderr.
+pub fn recommendation(cx: &Context<'_>) {
     if cx.mode == Mode::Json {
-        tracing::warn!(detail = DEPRECATION_MESSAGE, "vscode_setup_deprecated");
+        tracing::info!(detail = RECOMMENDATION, "vscode_extension_recommended");
         return;
     }
     let line = cx
         .terminal
         .stderr
-        .warnings(&[DEPRECATION_MESSAGE.trim_end_matches('.').to_owned()]);
+        .notes(&[("note".to_owned(), RECOMMENDATION.to_owned())]);
     if let Ok(mut stderr) = cx.stderr.lock() {
         let _ = stderr.write_all(line.as_bytes());
         let _ = stderr.flush();
@@ -164,10 +166,9 @@ pub fn run(
     }
     let extension_mcp = options.mcp && files::recommends_extension(stage, root);
     let mut result = StepResult::new([
-        ("message", Json::str("VS Code setup complete (deprecated)")),
+        ("message", Json::str("VS Code setup complete")),
         ("files", strings(&written)),
         ("generated", strings(&generated)),
-        ("deprecated", Json::str(DEPRECATION_MESSAGE)),
         ("status", Json::str("completed")),
     ]);
     if !warnings.is_empty() {

@@ -101,7 +101,7 @@ exit: 0
     },
     {
       "code": "vscode_settings",
-      "fix": "opentide setup vscode",
+      "fix": "code --install-extension opentidehq.opentide (or opentide setup vscode, to recommend it to the team)",
       "message": "No .vscode/extensions.json: VS Code does not suggest opentidehq.opentide",
       "status": "skip",
       "subject": null
