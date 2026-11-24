@@ -1289,13 +1289,15 @@ jobs:
       # cassettes (no network in the module; the extension host performs the
       # requests); and `opentide mcp start` answering a client that waits for
       # each answer before its next request, and, with OPENTIDE_FETCH=stdio,
-      # making its tenant requests through McpFetchBridge.
-      - name: opentide serve and mcp start, in the WASI module
+      # making its tenant requests through McpFetchBridge; and `opentide lsp
+      # start` answering a workspace pull under Node's poll_oneoff and VS
+      # Code's (wasi-run.mjs --poll-oneoff=vscode).
+      - name: opentide serve, mcp start and lsp start, in the WASI module
         env:
           OPENTIDE_WASI_CLI: target/wasm32-wasip1/wasi/opentide.wasm
         run: |
           (cd packages/wasi-host && npm ci)
-          node --experimental-strip-types --test --test-name-pattern='^(serve|mcp) \(wasi\)' packages/wasi-host/src/index.test.ts
+          node --experimental-strip-types --test --test-name-pattern='^(serve|mcp|lsp) \(wasi\)' packages/wasi-host/src/index.test.ts
 
       - name: npm packages build and pack
         run: |

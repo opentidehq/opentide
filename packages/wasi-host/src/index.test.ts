@@ -1,12 +1,22 @@
 import assert from "node:assert/strict";
 import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
-import { appendFileSync, cpSync, existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
+import {
+  appendFileSync,
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import * as http from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   FETCH_CAPABILITY,
   FetchFailure,
@@ -1697,3 +1707,133 @@ test("mcp (wasi): with OPENTIDE_FETCH=stdio, cancelling the call withdraws its r
     }
   });
 });
+
+// ---- `opentide lsp start` in the WASI module, under each host's poll_oneoff ----
+
+/** A workspace of *count* rules: enough that a workspace pull runs past the 20 ms after which it asks about its input. */
+function lspWorkspace(count: number): string {
+  const ws = realpathSync(mkdtempSync(join(tmpdir(), "wasi-lsp-")));
+  mkdirSync(join(ws, "objects", "rules"), { recursive: true });
+  for (let n = 0; n < count; n += 1) {
+    const hex = n.toString(16).padStart(12, "0");
+    writeFileSync(
+      join(ws, "objects", "rules", `rule-${n}.yaml`),
+      `name: Rule ${n}\nmetadata:\n  uuid: 6d1c3a52-8f0e-4b7a-9c21-${hex}\n  schema: rule::1.1\n  tlp: amber\n` +
+        `detection_model: 04149254-2a5b-4c1e-9f0e-3c1d2b5a6e7f\nconfigurations:\n  sentinel:\n    query: |\n` +
+        `      DeviceProcessEvents\n      | where FileName =~ "rule-${n}.exe"\n`,
+    );
+  }
+  return ws;
+}
+
+/** `opentide lsp start` in the module under scripts/engine/wasi-run.mjs with *flags*: an LSP client over its stdio. */
+function lspSession(flags: string[], ws: string) {
+  const server = spawn(
+    process.execPath,
+    ["--no-turbo-fast-api-calls", join(root, "scripts/engine/wasi-run.mjs"), ...flags, wasiModule as string, "lsp", "start"],
+    { cwd: ws, env: { PATH: process.env.PATH ?? "", HOME: ws, PWD: ws, NO_COLOR: "1", TZ: "UTC", LANG: "C.UTF-8" } },
+  );
+  let stderr = "";
+  let buffer = Buffer.alloc(0);
+  let next = 0;
+  const waiting = new Map<number, (message: Record<string, unknown>) => void>();
+  const send = (message: object): void => {
+    const body = Buffer.from(JSON.stringify({ jsonrpc: "2.0", ...message }));
+    // As vscode-jsonrpc writes a message: the header, then the body.
+    server.stdin.write(`Content-Length: ${body.length}\r\n\r\n`);
+    server.stdin.write(body);
+  };
+  server.stderr.setEncoding("utf8");
+  server.stderr.on("data", (chunk: string) => {
+    stderr += chunk;
+  });
+  server.stdout.on("data", (chunk: Buffer) => {
+    buffer = Buffer.concat([buffer, chunk]);
+    for (;;) {
+      const end = buffer.indexOf("\r\n\r\n");
+      if (end < 0) return;
+      const length = Number(/Content-Length: (\d+)/i.exec(buffer.subarray(0, end).toString("ascii"))?.[1]);
+      if (buffer.length < end + 4 + length) return;
+      const message = JSON.parse(buffer.subarray(end + 4, end + 4 + length).toString("utf8")) as Record<string, unknown>;
+      buffer = buffer.subarray(end + 4 + length);
+      if (typeof message.method === "string" && message.id !== undefined) {
+        // client/registerCapability, a refresh: the client accepts.
+        send({ id: message.id, result: null });
+      } else if (typeof message.id === "number") {
+        waiting.get(message.id)?.(message);
+        waiting.delete(message.id);
+      }
+    }
+  });
+  const exited = new Promise<void>((resolve) => server.once("close", () => resolve()));
+  return {
+    stderr: () => stderr,
+    notify: (method: string, params: object): void => send({ method, params }),
+    /** The answer to *method*, or a failure after *ms* with nothing more sent meanwhile. */
+    request: (method: string, params: object, ms: number): Promise<Record<string, unknown>> => {
+      next += 1;
+      const id = next;
+      return new Promise((resolve, reject) => {
+        const timer = setTimeout(
+          () => reject(new Error(`no answer to ${method} in ${ms} ms:\n${stderr.slice(-2000)}`)),
+          ms,
+        );
+        waiting.set(id, (message) => {
+          clearTimeout(timer);
+          resolve(message);
+        });
+        send({ id, method, params });
+      });
+    },
+    close: async (): Promise<void> => {
+      server.stdin.end();
+      server.kill();
+      await exited;
+    },
+  };
+}
+
+// The client VS Code's language client is: it pulls diagnostics, the workspace's included, and watches files (the
+// server keeps what a pull found from one batch to the next, so a pull may yield to the messages behind it, #1767).
+const PULLING_CLIENT = {
+  textDocument: { diagnostic: { dynamicRegistration: true }, synchronization: { dynamicRegistration: true } },
+  workspace: {
+    workspaceFolders: true,
+    diagnostics: { refreshSupport: true },
+    didChangeWatchedFiles: { dynamicRegistration: true },
+  },
+};
+
+// A workspace pull yields to input the client sent while it runs, and asks the host whether there is any. VS Code's
+// WASI host (@vscode/wasm-wasi) answers poll_oneoff for every subscription at once, a pipe's with an error: taken
+// for input, every pull yielded and waited, unanswered, for a message the client had no reason to send (the
+// editor's closed files never got their diagnostics). Under each host a pull with nothing behind it is answered.
+for (const [host, flags] of [
+  ["node:wasi", []],
+  ["VS Code's poll_oneoff", ["--poll-oneoff=vscode"]],
+] as const) {
+  test(
+    `lsp (wasi): a workspace pull with no input behind it is answered, under ${host}`,
+    { skip: wasiModule === undefined ? "wasi: no WASI module (OPENTIDE_WASI_CLI)" : false, timeout: 180_000 },
+    async () => {
+      const ws = lspWorkspace(300);
+      const session = lspSession([...flags], ws);
+      try {
+        const uri = pathToFileURL(ws).href;
+        const initialized = await session.request(
+          "initialize",
+          { processId: null, rootUri: uri, workspaceFolders: [{ uri, name: "ws" }], capabilities: PULLING_CLIENT },
+          120_000,
+        );
+        assert.ok(initialized.result, JSON.stringify(initialized));
+        session.notify("initialized", {});
+        const pulled = await session.request("workspace/diagnostic", { previousResultIds: [] }, 60_000);
+        const items = (pulled.result as { items: { uri: string }[] }).items;
+        assert.equal(items.filter((item) => item.uri.endsWith(".yaml")).length, 300, JSON.stringify(pulled).slice(0, 500));
+      } finally {
+        await session.close();
+        rmSync(ws, { recursive: true, force: true });
+      }
+    },
+  );
+}

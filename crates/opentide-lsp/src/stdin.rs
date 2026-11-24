@@ -5,8 +5,11 @@
 //!
 //! The hosts answer the question in different ways. One Wasm runtime's `poll_oneoff`
 //! says when stdin has bytes; Node's (uvwasi) never does, but lets stdin be
-//! read without waiting (`O_NONBLOCK`), which that runtime refuses. The probe
-//! asks `poll` first, then reads without waiting and keeps what it read for
+//! read without waiting (`O_NONBLOCK`), which that runtime refuses; VS Code's
+//! (`@vscode/wasm-wasi`) answers every subscription at once, a pipe's with an
+//! error, and from its 1.0.3 reads a pipe without waiting. The probe
+//! asks `poll` first, and believes it only when it reports bytes to read
+//! ([`readable`]), then reads without waiting and keeps what it read for
 //! the reader. A host that answers neither gets `false`: the pull runs to
 //! its end, as it did before.
 //!
@@ -62,6 +65,18 @@ impl Read for ProbedStdin {
     }
 }
 
+/// Whether what `poll` reported for stdin says it has bytes to read. A host
+/// that answers every subscription at once, whether or not the stream has
+/// any (VS Code's WASI host answers a pipe's with "not supported", which
+/// `poll` reports as `POLLERR`), has said nothing about the input: the probe
+/// then asks with a read that does not wait. Counting such an answer as input
+/// made every workspace pull yield, and wait unanswered for a message the
+/// client had no reason to send.
+fn readable(revents: PollFlags) -> bool {
+    revents.intersects(PollFlags::IN | PollFlags::RDNORM)
+        && !revents.intersects(PollFlags::ERR | PollFlags::NVAL)
+}
+
 /// Whether stdin has bytes to read now, never waiting for them.
 fn waiting(ahead: &Ahead) -> bool {
     if !ahead
@@ -77,7 +92,7 @@ fn waiting(ahead: &Ahead) -> bool {
         tv_nsec: 0,
     };
     let mut fds = [PollFd::new(&stdin, PollFlags::IN)];
-    if poll(&mut fds, Some(&now)).is_ok_and(|ready| ready > 0) {
+    if poll(&mut fds, Some(&now)).is_ok_and(|ready| ready > 0) && readable(fds[0].revents()) {
         return true;
     }
     // A host whose `poll` says nothing of stdin (Node's): read without
