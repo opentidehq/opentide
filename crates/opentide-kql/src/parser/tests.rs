@@ -642,3 +642,29 @@ fn an_unclosed_value_list_before_a_pipe_is_a_missing_paren() {
         );
     }
 }
+
+// #1638: `materialize(...)` is a tabular keyword; in a scalar position Kusto
+// rejects it and hints at the bracketed name.
+#[test]
+fn materialize_in_a_scalar_position_is_an_error_and_in_a_tabular_one_is_not() {
+    for source in [
+        "T | extend x = materialize(y)",
+        "T | where materialize(a) == 1",
+        "T | project f(materialize(a))",
+        "print materialize(1)",
+    ] {
+        let found = errors(source);
+        assert_eq!(found.len(), 1, "{source}: {found:?}");
+        assert!(found[0].contains("['materialize']"), "{source}: {found:?}");
+    }
+    for source in [
+        "let x = materialize(T | take 10); x",
+        "materialize(T | take 10) | take 1",
+        "T | join (materialize(U | take 1)) on a",
+        "T | extend ['materialize'] = 1",
+        "T | extend x = ['materialize']",
+        "T | where a in (materialize(U | take 1))",
+    ] {
+        assert_eq!(errors(source), Vec::<String>::new(), "{source}");
+    }
+}
