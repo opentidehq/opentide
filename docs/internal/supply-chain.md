@@ -34,23 +34,23 @@ checkout, and build dependencies (`cc`) run at build time and link nothing in, a
 
 **Advisories.** Vulnerable, unsound, unmaintained and yanked crates all fail. An exception is an
 `[advisories] ignore` entry with its reason and its follow-up issue; `cargo audit` reads the same
-list (`scripts/engine/audit.py ignores`). Today there are eleven:
+list (`scripts/engine/audit.py ignores`). Today there are two:
 
 - Two are unmaintained, with no safe upgrade and no vulnerability: RUSTSEC-2026-0543 (`chrono`,
   through `rmcp` and `schemars`) and RUSTSEC-2026-0542 (`humantime`, dev-only through `trycmd`).
   [#1513](https://github.com/opentidehq/opentide/issues/1513) removes them.
-- Nine are unsound: RUSTSEC-2026-0574 to RUSTSEC-2026-0582 (`heapless` 0.8). It comes only through
-  `faster-hex` 0.10, under `gix-hash` and `gix-packetline`. `faster-hex` uses it only without its
-  `alloc` feature, which both always enable (through `std`), so it is compiled but never run.
-  [#1675](https://github.com/opentidehq/opentide/issues/1675) drops these ignores when both gix
-  crates move to `faster-hex` 1.0.
+
+Nine more, RUSTSEC-2026-0574 to RUSTSEC-2026-0582 (`heapless` 0.8, unsound), went with the move to
+the gix 0.29 generation, whose `gix-hash` uses `faster-hex` 2.0, where `heapless` is optional
+([#1675](https://github.com/opentidehq/opentide/issues/1675)). That generation reads dates with
+`jiff` 1 and locks with `parking_lot` 0.13, so `[bans] skip` names the second versions (see Bans).
 
 An earlier one, RUSTSEC-2024-0449
 (`unsafe-libyaml`, unmaintained, through `serde_yaml` 0.9), went when the engine moved its Tide
 YAML onto the node tree every crate reads YAML with, `opentide_core::node` (saphyr, YAML 1.2)
 ([#850](https://github.com/opentidehq/opentide/issues/850)).
 
-**Bans.** A second version of a crate we ship fails, unless `[bans] skip` lists it with its reason. There is one: `syn` 2, which `garde_derive` 0.23 needs (`opentide-schema`'s validation derive, plan D-2; no garde release uses `syn` 3 yet), beside the `syn` 3 of every other proc macro. Dev-dependencies are
+**Bans.** A second version of a crate we ship fails, unless `[bans] skip` lists it with its reason. There is `syn` 2, which `garde_derive` 0.23 needs (`opentide-schema`'s validation derive, plan D-2; no garde release uses `syn` 3 yet), beside the `syn` 3 of every other proc macro. The gix 0.29 generation (#1675) also brings `jiff` 1 (with `jiff-core` 1), `parking_lot` 0.13 (with `parking_lot_core` 0.10, `lock_api` 0.5 and `redox_syscall` 0.9) beside `jiff` 0.2 and `parking_lot` 0.12: `skip` names each. We stay on `jiff` 0.2 because the `opentide` facade re-exports `jiff::Timestamp`, so `jiff` 1 is a facade major; `crossterm`, `prodash` and `jsonschema` are still on `parking_lot` 0.12. Dev-dependencies are
 left out, as cargo-deny leaves them out by default. These test tools duplicate a shipped crate,
 reviewed and harmless because none of them ships: `trycmd`'s `toml_edit` 0.25 (with `winnow` 1,
 `toml_datetime` 1 and `serde_spanned` 1) beside the engine's `toml` 0.8 and `toml_edit` 0.22;
