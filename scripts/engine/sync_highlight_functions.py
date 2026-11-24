@@ -18,8 +18,9 @@ from __future__ import annotations
 import argparse
 import re
 import sys
-import tomllib
 from pathlib import Path
+
+import tomllib
 
 ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "crates" / "opentide-highlight" / "src" / "function_names.rs"
@@ -56,7 +57,7 @@ def main() -> int:
     text = render()
     if ap.parse_args().check:
         if OUT.read_text(encoding="utf-8") != text:
-            print(f"{OUT} is stale: run scripts/engine/sync_highlight_functions.py", file=sys.stderr)
+            print(f"{OUT} is stale: run {Path(__file__).name}", file=sys.stderr)
             return 1
         return 0
     OUT.write_text(text, encoding="utf-8")
