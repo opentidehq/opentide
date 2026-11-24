@@ -150,7 +150,7 @@ configurations:
   defender_for_endpoint:
     status: STAGING
     query: DeviceProcessEvents | take 1
-    alert: {category: Execution}
+    alert: {title: t}
     impacted_entities: {device: DeviceId}
     scheduling: 1H
   splunk:
@@ -450,7 +450,7 @@ description: d
 configurations:
   defender_for_endpoint:
     status: STAGING
-    alert: {category: Execution}
+    alert: {title: t}
     impacted_entities: {device: DeviceId}
     scheduling: 1H
 '''
@@ -879,7 +879,7 @@ configurations:
   defender_for_endpoint:
     status: STAGING
     query: DeviceProcessEvents | take 1
-    alert: {category: Execution}
+    alert: {title: t}
     impacted_entities: {device: DeviceId}
     scheduling: 1H
     actions:
@@ -910,7 +910,7 @@ configurations:
   defender_for_endpoint:
     status: STAGING
     query: DeviceProcessEvents | take 1
-    alert: {category: Execution}
+    alert: {title: t}
     impacted_entities: {device: DeviceId}
     scheduling: 2H
 '''
@@ -933,7 +933,7 @@ configurations:
   defender_for_endpoint:
     status: STAGING
     query: DeviceProcessEvents | take 1
-    alert: {category: Execution}
+    alert: {title: t}
     impacted_entities: {device: DeviceId}
     scheduling: 1
 '''
@@ -956,7 +956,7 @@ configurations:
   defender_for_endpoint:
     status: STAGING
     query: DeviceProcessEvents | take 1
-    alert: {category: Execution}
+    alert: {title: t}
     impacted_entities: {device: DeviceId}
     scheduling: 1H
     scope: {selection: Some}

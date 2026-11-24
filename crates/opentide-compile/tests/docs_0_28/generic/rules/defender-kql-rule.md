@@ -64,7 +64,7 @@ DeviceProcessEvents
 | Setting | Value | Description |
 | --- | --- | --- |
 | `name` | Defender KQL Rule | Platform-specific rule name. |
-| `alert.category` | `Execution` | Defender alert category. |
+| `alert.title` | Defender KQL Rule | Alert title. |
 | `impacted_entities.device` | `device_id` | Device column. |
 | `scheduling` | `1H` | `NRT`, `1H`, `3H`, `12H`, or `24H`. |
 | `scope.selection` | `All` | `All` or `Specific`. |

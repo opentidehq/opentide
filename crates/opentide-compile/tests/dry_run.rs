@@ -129,7 +129,7 @@ fn a_preview_run_plans_creates_and_updates_from_the_deployment_state() {
     // an update of the id it records (`42`) for the other; it was the block.
     let body = |uuid: &str| {
         format!(
-            r#"{{"displayName":"Rule {uuid}","queryCondition":{{"queryText":""}},"schedule":{{"period":""}},"detectionAction":{{"alertTemplate":{{"title":"Rule {uuid}","description":"d","severity":"informational","category":"","mitreTechniques":[],"impactedAssets":[],"recommendedActions":null}},"responseActions":[],"organizationalScope":null}},"isEnabled":true}}"#
+            r#"{{"displayName":"Rule {uuid}","queryCondition":{{"queryText":""}},"schedule":{{"period":""}},"detectionAction":{{"alertTemplate":{{"title":"Rule {uuid}","description":"d","severity":"informational","mitreTechniques":[],"impactedAssets":[],"recommendedActions":null}},"responseActions":[],"organizationalScope":null}},"isEnabled":true}}"#
         )
     };
     let (a, b) = (

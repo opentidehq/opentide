@@ -27,7 +27,6 @@ configurations:
     enabled: true
     status: STAGING
     alert:
-      category: Execution
       title: Query Extraction Block Scalars
     impacted_entities:
       device: DeviceName

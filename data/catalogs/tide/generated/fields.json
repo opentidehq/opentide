@@ -1,5 +1,5 @@
 {
-  "opentide": "0.28.0-1342-g12eb30138",
+  "opentide": "0.0.0",
   "generator": "opentide.generation.lsp_catalog",
   "ref_leaves": {
     "threats": "threat",
@@ -3635,23 +3635,6 @@
       "const": null,
       "array": false,
       "closed": true
-    },
-    {
-      "schema": "rule::1.0",
-      "path": "configurations.defender_for_endpoint.alert.category",
-      "name": "category",
-      "title": "Category",
-      "description": "Defender alert category. Deploy removes spaces (Suspicious Activity is sent as SuspiciousActivity).",
-      "type": "string",
-      "required": true,
-      "markdown": false,
-      "hidden": false,
-      "capture": "tide.property",
-      "enum": [],
-      "enum_docs": [],
-      "ref": null,
-      "const": null,
-      "array": false
     },
     {
       "schema": "rule::1.0",
@@ -15390,23 +15373,6 @@
       "const": null,
       "array": false,
       "closed": true
-    },
-    {
-      "schema": "rule::1.1",
-      "path": "configurations.defender_for_endpoint.alert.category",
-      "name": "category",
-      "title": "Category",
-      "description": "Defender alert category. Deploy removes spaces (Suspicious Activity is sent as SuspiciousActivity).",
-      "type": "string",
-      "required": true,
-      "markdown": false,
-      "hidden": false,
-      "capture": "tide.property",
-      "enum": [],
-      "enum_docs": [],
-      "ref": null,
-      "const": null,
-      "array": false
     },
     {
       "schema": "rule::1.1",

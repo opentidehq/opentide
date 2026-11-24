@@ -108,8 +108,7 @@ configurations:
     scheduling: NRT
     
     alert:
-      #title: 
-      category: Suspicious Activity
+      title: Office spawns PowerShell
       #severity: 
       #recommendation: |
         #Type Here
@@ -194,8 +193,7 @@ configurations:
     scheduling: 1H
     
     alert:
-      #title: 
-      category: Execution
+      title: Encoded PowerShell
       techniques:
         - T1059.001
         - T1027
@@ -282,8 +280,7 @@ configurations:
     scheduling: 1H
     
     alert:
-      #title: 
-      category: Suspicious Activity
+      title: office spawns powershell
       #severity: 
       #recommendation: |
         #Type Here

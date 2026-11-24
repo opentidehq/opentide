@@ -666,11 +666,6 @@
     "DefenderAlert": {
       "additionalProperties": false,
       "properties": {
-        "category": {
-          "description": "Defender alert category. Deploy removes spaces (Suspicious Activity is sent as SuspiciousActivity).",
-          "markdownDescription": "Defender alert category. Deploy removes spaces (`Suspicious Activity` is sent as\n`SuspiciousActivity`).",
-          "type": "string"
-        },
         "description": {
           "description": "Alert description. Deploy uses the rule description when omitted.",
           "markdownDescription": "Alert description. Deploy uses the rule `description` when omitted.",
@@ -714,9 +709,6 @@
           ]
         }
       },
-      "required": [
-        "category"
-      ],
       "type": "object"
     },
     "DefenderAllowBlockAction": {

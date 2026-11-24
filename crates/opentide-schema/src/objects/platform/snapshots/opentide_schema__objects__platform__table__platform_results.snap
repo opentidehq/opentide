@@ -28,7 +28,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
         },
         "defender_for_endpoint": {
           "alert": {
-            "category": "Execution"
+            "title": "t"
           },
           "enabled": false,
           "impacted_entities": {
@@ -516,7 +516,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
             }
           },
           "alert": {
-            "category": "Execution"
+            "title": "t"
           },
           "enabled": false,
           "exclusions": [
@@ -624,25 +624,6 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
   },
   "platform-defender-missing": {
     "errors": [
-      {
-        "ctx": {},
-        "field_path": [
-          "configurations",
-          "defender_for_endpoint",
-          "alert",
-          "category"
-        ],
-        "input": null,
-        "msg": "Field required",
-        "span": [
-          14,
-          5,
-          10,
-          false
-        ],
-        "type": "missing",
-        "yaml_line": null
-      },
       {
         "ctx": {},
         "field_path": [

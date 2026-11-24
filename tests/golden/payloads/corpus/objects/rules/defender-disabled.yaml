@@ -16,7 +16,7 @@ configurations:
     query: DeviceEvents | take 1
     scheduling: 24H
     alert:
-      category: Initial Access
+      title: Defender Disabled
     impacted_entities:
       device: DeviceId
     actions:

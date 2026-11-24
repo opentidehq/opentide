@@ -12,7 +12,6 @@
   query: |
     ...
   alert:
-    category: 
     #title: 
     #description: |
       #...

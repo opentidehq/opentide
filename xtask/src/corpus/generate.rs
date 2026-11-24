@@ -916,10 +916,10 @@ fn defender(
         ("scheduling", Yaml::s(rng.pick(&["1H", "3H", "12H", "24H"]))),
         (
             "alert",
-            Yaml::map(vec![
-                ("category", Yaml::s("Execution")),
-                ("severity", Yaml::s(rng.pick(&["Low", "Medium", "High"]))),
-            ]),
+            Yaml::map(vec![(
+                "severity",
+                Yaml::s(rng.pick(&["Low", "Medium", "High"])),
+            )]),
         ),
         (
             "impacted_entities",
