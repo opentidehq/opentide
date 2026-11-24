@@ -1,0 +1,2 @@
+// prod:graph_shortest_paths_operator valid
+DeviceNetworkEvents | make-graph DeviceName --> RemoteIP | graph-shortest-paths output=any (a)-[e*1..5]->(b) where a.DeviceName == "x" and b.RemoteIP == "1.2.3.4" project a.DeviceName, b.RemoteIP

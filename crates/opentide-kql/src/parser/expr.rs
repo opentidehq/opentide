@@ -185,7 +185,7 @@ fn multiplicative(p: &mut P<'_>) -> Option<CompletedMarker> {
 }
 
 /// A sign, once, then a primary: `--a` is an error.
-fn unary(p: &mut P<'_>) -> Option<CompletedMarker> {
+pub(super) fn unary(p: &mut P<'_>) -> Option<CompletedMarker> {
     if !matches!(p.current(), K::MINUS | K::PLUS) {
         return primary(p);
     }
@@ -279,6 +279,22 @@ fn primary(p: &mut P<'_>) -> Option<CompletedMarker> {
             }
             _ => return Some(lhs),
         }
+    }
+}
+
+/// A range bound of a graph edge, `*1..3`: a signed primary, no operator.
+pub(super) fn graph_bound(p: &mut P<'_>) {
+    if unary(p).is_none() {
+        p.error(NOT_AN_EXPRESSION);
+    }
+}
+
+/// A name token of a graph edge, as a bare token (the edge's own `name`).
+pub(super) fn name_ref_token(p: &mut P<'_>) {
+    if p.at(K::QUOTED_IDENT) {
+        p.bump();
+    } else {
+        p.bump_as(K::IDENT);
     }
 }
 

@@ -1,0 +1,1 @@
+SigninLogs | make-graph UserPrincipalName --> IPAddress | graph-shortest-paths output=any (u)-[s*1..5]->(i) where u.id == "x" and i.id == "1.2.3.4" project u.id, i.id

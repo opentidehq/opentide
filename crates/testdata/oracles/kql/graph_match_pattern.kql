@@ -1,0 +1,1 @@
+SigninLogs | make-graph UserPrincipalName --> IPAddress | graph-match cycles=none (u)-[s*1..3]->(i)<-[t]-(v), ()-->(w)--(z)<--(y) where u.id == "x" and s.Count > 2 project src = u.id, v.id

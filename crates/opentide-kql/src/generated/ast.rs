@@ -738,7 +738,7 @@ impl TabularSource {
     }
 }
 
-/// `TabularOperator = WhereOperator | FilterOperator | ProjectOperator | ProjectAwayOperator | ProjectRenameOperator | ProjectKeepOperator | ProjectReorderOperator | ExtendOperator | SummarizeOperator | JoinOperator | UnionOperator | ParseOperator | ParseWhereOperator | ParseKvOperator | LookupOperator | TakeOperator | LimitOperator | TopOperator | CountOperator | MvExpandOperator | MvApplyOperator | MakeSeriesOperator | EvaluateOperator | SortOperator | DistinctOperator | RenderOperator | RangeOperator | TopNestedOperator | SampleDistinctOperator | ForkOperator | FacetOperator | PartitionOperator | ScanOperator | SerializeOperator | AsOperator | TopHittersOperator | ReduceOperator | SearchOperator | KeywordOperator | UnknownOperator`
+/// `TabularOperator = WhereOperator | FilterOperator | ProjectOperator | ProjectAwayOperator | ProjectRenameOperator | ProjectKeepOperator | ProjectReorderOperator | ExtendOperator | SummarizeOperator | JoinOperator | UnionOperator | ParseOperator | ParseWhereOperator | ParseKvOperator | LookupOperator | TakeOperator | LimitOperator | TopOperator | CountOperator | MvExpandOperator | MvApplyOperator | MakeSeriesOperator | EvaluateOperator | SortOperator | DistinctOperator | RenderOperator | RangeOperator | TopNestedOperator | SampleDistinctOperator | ForkOperator | FacetOperator | PartitionOperator | ScanOperator | SerializeOperator | AsOperator | TopHittersOperator | ReduceOperator | SearchOperator | MakeGraphOperator | GraphMatchOperator | GraphShortestPathsOperator | GraphToTableOperator | GraphMarkComponentsOperator | KeywordOperator | UnknownOperator`
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum TabularOperator {
     /// A `WhereOperator`.
@@ -817,6 +817,16 @@ pub enum TabularOperator {
     ReduceOperator(ReduceOperator),
     /// A `SearchOperator`.
     SearchOperator(SearchOperator),
+    /// A `MakeGraphOperator`.
+    MakeGraphOperator(MakeGraphOperator),
+    /// A `GraphMatchOperator`.
+    GraphMatchOperator(GraphMatchOperator),
+    /// A `GraphShortestPathsOperator`.
+    GraphShortestPathsOperator(GraphShortestPathsOperator),
+    /// A `GraphToTableOperator`.
+    GraphToTableOperator(GraphToTableOperator),
+    /// A `GraphMarkComponentsOperator`.
+    GraphMarkComponentsOperator(GraphMarkComponentsOperator),
     /// A `KeywordOperator`.
     KeywordOperator(KeywordOperator),
     /// A `UnknownOperator`.
@@ -864,6 +874,11 @@ impl AstNode for TabularOperator {
             || TopHittersOperator::can_cast(kind)
             || ReduceOperator::can_cast(kind)
             || SearchOperator::can_cast(kind)
+            || MakeGraphOperator::can_cast(kind)
+            || GraphMatchOperator::can_cast(kind)
+            || GraphShortestPathsOperator::can_cast(kind)
+            || GraphToTableOperator::can_cast(kind)
+            || GraphMarkComponentsOperator::can_cast(kind)
             || KeywordOperator::can_cast(kind)
             || UnknownOperator::can_cast(kind)
     }
@@ -925,6 +940,21 @@ impl AstNode for TabularOperator {
             }
             SyntaxKind::REDUCE_OPERATOR => Self::ReduceOperator(ReduceOperator { syntax }),
             SyntaxKind::SEARCH_OPERATOR => Self::SearchOperator(SearchOperator { syntax }),
+            SyntaxKind::MAKE_GRAPH_OPERATOR => {
+                Self::MakeGraphOperator(MakeGraphOperator { syntax })
+            }
+            SyntaxKind::GRAPH_MATCH_OPERATOR => {
+                Self::GraphMatchOperator(GraphMatchOperator { syntax })
+            }
+            SyntaxKind::GRAPH_SHORTEST_PATHS_OPERATOR => {
+                Self::GraphShortestPathsOperator(GraphShortestPathsOperator { syntax })
+            }
+            SyntaxKind::GRAPH_TO_TABLE_OPERATOR => {
+                Self::GraphToTableOperator(GraphToTableOperator { syntax })
+            }
+            SyntaxKind::GRAPH_MARK_COMPONENTS_OPERATOR => {
+                Self::GraphMarkComponentsOperator(GraphMarkComponentsOperator { syntax })
+            }
             SyntaxKind::KEYWORD_OPERATOR => Self::KeywordOperator(KeywordOperator { syntax }),
             SyntaxKind::UNKNOWN_OPERATOR => Self::UnknownOperator(UnknownOperator { syntax }),
             _ => return None,
@@ -971,6 +1001,11 @@ impl AstNode for TabularOperator {
             Self::TopHittersOperator(it) => it.syntax(),
             Self::ReduceOperator(it) => it.syntax(),
             Self::SearchOperator(it) => it.syntax(),
+            Self::MakeGraphOperator(it) => it.syntax(),
+            Self::GraphMatchOperator(it) => it.syntax(),
+            Self::GraphShortestPathsOperator(it) => it.syntax(),
+            Self::GraphToTableOperator(it) => it.syntax(),
+            Self::GraphMarkComponentsOperator(it) => it.syntax(),
             Self::KeywordOperator(it) => it.syntax(),
             Self::UnknownOperator(it) => it.syntax(),
         }
@@ -1202,6 +1237,36 @@ impl From<ReduceOperator> for TabularOperator {
 impl From<SearchOperator> for TabularOperator {
     fn from(node: SearchOperator) -> Self {
         Self::SearchOperator(node)
+    }
+}
+
+impl From<MakeGraphOperator> for TabularOperator {
+    fn from(node: MakeGraphOperator) -> Self {
+        Self::MakeGraphOperator(node)
+    }
+}
+
+impl From<GraphMatchOperator> for TabularOperator {
+    fn from(node: GraphMatchOperator) -> Self {
+        Self::GraphMatchOperator(node)
+    }
+}
+
+impl From<GraphShortestPathsOperator> for TabularOperator {
+    fn from(node: GraphShortestPathsOperator) -> Self {
+        Self::GraphShortestPathsOperator(node)
+    }
+}
+
+impl From<GraphToTableOperator> for TabularOperator {
+    fn from(node: GraphToTableOperator) -> Self {
+        Self::GraphToTableOperator(node)
+    }
+}
+
+impl From<GraphMarkComponentsOperator> for TabularOperator {
+    fn from(node: GraphMarkComponentsOperator) -> Self {
+        Self::GraphMarkComponentsOperator(node)
     }
 }
 
@@ -3658,7 +3723,213 @@ impl SearchOperator {
     }
 }
 
-/// `KeywordOperator = name:('find' | 'invoke' | 'getschema' | 'sample' | 'externaldata' | 'consume' | 'make-graph' | 'graph-match' | 'graph-shortest-paths' | 'graph-to-table' | 'graph-mark-components') args:Expr?`
+/// `MakeGraphOperator = keyword:'make-graph' source:NameRef MakeGraphArrow target:NameRef (MakeGraphNodes | node_id:OperatorOption)? MakeGraphPartition?`
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct MakeGraphOperator {
+    syntax: SyntaxNode,
+}
+
+impl AstNode for MakeGraphOperator {
+    type Language = Lang;
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == SyntaxKind::MAKE_GRAPH_OPERATOR
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Self { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+
+impl MakeGraphOperator {
+    /// The token child.
+    pub fn keyword(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![make - graph])
+    }
+    /// The `NameRef` child.
+    pub fn source(&self) -> Option<NameRef> {
+        support::child(&self.syntax)
+    }
+    /// The `MakeGraphArrow` child.
+    pub fn make_graph_arrow(&self) -> Option<MakeGraphArrow> {
+        support::child(&self.syntax)
+    }
+    /// The `NameRef` child, number 1 from 0 among the `NameRef` children.
+    pub fn target(&self) -> Option<NameRef> {
+        support::nth_child(&self.syntax, 1)
+    }
+    /// The `MakeGraphNodes` child.
+    pub fn make_graph_nodes(&self) -> Option<MakeGraphNodes> {
+        support::child(&self.syntax)
+    }
+    /// The `OperatorOption` child.
+    pub fn node_id(&self) -> Option<OperatorOption> {
+        support::child(&self.syntax)
+    }
+    /// The `MakeGraphPartition` child.
+    pub fn make_graph_partition(&self) -> Option<MakeGraphPartition> {
+        support::child(&self.syntax)
+    }
+}
+
+/// `GraphMatchOperator = keyword:'graph-match' OperatorOption* GraphPattern ('where' predicate:Expr)? GraphProject?`
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct GraphMatchOperator {
+    syntax: SyntaxNode,
+}
+
+impl AstNode for GraphMatchOperator {
+    type Language = Lang;
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == SyntaxKind::GRAPH_MATCH_OPERATOR
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Self { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+
+impl GraphMatchOperator {
+    /// The token child.
+    pub fn keyword(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![graph-match])
+    }
+    /// The `OperatorOption` children.
+    pub fn operator_options(&self) -> AstChildren<OperatorOption> {
+        support::children(&self.syntax)
+    }
+    /// The `GraphPattern` child.
+    pub fn graph_pattern(&self) -> Option<GraphPattern> {
+        support::child(&self.syntax)
+    }
+    /// The token child.
+    pub fn where_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![where])
+    }
+    /// The `Expr` child.
+    pub fn predicate(&self) -> Option<Expr> {
+        support::child(&self.syntax)
+    }
+    /// The `GraphProject` child.
+    pub fn graph_project(&self) -> Option<GraphProject> {
+        support::child(&self.syntax)
+    }
+}
+
+/// `GraphShortestPathsOperator = keyword:'graph-shortest-paths' OperatorOption* GraphPattern ('where' predicate:Expr)? GraphProject?`
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct GraphShortestPathsOperator {
+    syntax: SyntaxNode,
+}
+
+impl AstNode for GraphShortestPathsOperator {
+    type Language = Lang;
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == SyntaxKind::GRAPH_SHORTEST_PATHS_OPERATOR
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Self { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+
+impl GraphShortestPathsOperator {
+    /// The token child.
+    pub fn keyword(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![graph - shortest - paths])
+    }
+    /// The `OperatorOption` children.
+    pub fn operator_options(&self) -> AstChildren<OperatorOption> {
+        support::children(&self.syntax)
+    }
+    /// The `GraphPattern` child.
+    pub fn graph_pattern(&self) -> Option<GraphPattern> {
+        support::child(&self.syntax)
+    }
+    /// The token child.
+    pub fn where_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![where])
+    }
+    /// The `Expr` child.
+    pub fn predicate(&self) -> Option<Expr> {
+        support::child(&self.syntax)
+    }
+    /// The `GraphProject` child.
+    pub fn graph_project(&self) -> Option<GraphProject> {
+        support::child(&self.syntax)
+    }
+}
+
+/// `GraphToTableOperator = keyword:'graph-to-table' GraphToTableItem (',' GraphToTableItem)*`
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct GraphToTableOperator {
+    syntax: SyntaxNode,
+}
+
+impl AstNode for GraphToTableOperator {
+    type Language = Lang;
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == SyntaxKind::GRAPH_TO_TABLE_OPERATOR
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Self { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+
+impl GraphToTableOperator {
+    /// The token child.
+    pub fn keyword(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![graph - to - table])
+    }
+    /// The `GraphToTableItem` children.
+    pub fn graph_to_table_items(&self) -> AstChildren<GraphToTableItem> {
+        support::children(&self.syntax)
+    }
+    /// The token child.
+    pub fn comma_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![,])
+    }
+}
+
+/// `GraphMarkComponentsOperator = keyword:'graph-mark-components' OperatorOption*`
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct GraphMarkComponentsOperator {
+    syntax: SyntaxNode,
+}
+
+impl AstNode for GraphMarkComponentsOperator {
+    type Language = Lang;
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == SyntaxKind::GRAPH_MARK_COMPONENTS_OPERATOR
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Self { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+
+impl GraphMarkComponentsOperator {
+    /// The token child.
+    pub fn keyword(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![graph - mark - components])
+    }
+    /// The `OperatorOption` children.
+    pub fn operator_options(&self) -> AstChildren<OperatorOption> {
+        support::children(&self.syntax)
+    }
+}
+
+/// `KeywordOperator = name:('find' | 'invoke' | 'getschema' | 'sample' | 'externaldata' | 'consume') args:Expr?`
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct KeywordOperator {
     syntax: SyntaxNode,
@@ -3689,11 +3960,6 @@ impl KeywordOperator {
                 T![sample],
                 T![externaldata],
                 T![consume],
-                T![make - graph],
-                T![graph-match],
-                T![graph - shortest - paths],
-                T![graph - to - table],
-                T![graph - mark - components],
             ],
         )
     }
@@ -4845,6 +5111,416 @@ impl TopHittersBy {
     }
 }
 
+/// `MakeGraphArrow = open:'-' close:'-' head:'cmp_op'?`
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct MakeGraphArrow {
+    syntax: SyntaxNode,
+}
+
+impl AstNode for MakeGraphArrow {
+    type Language = Lang;
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == SyntaxKind::MAKE_GRAPH_ARROW
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Self { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+
+impl MakeGraphArrow {
+    /// The token child.
+    pub fn open(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![-])
+    }
+    /// The token child.
+    pub fn close(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![-])
+    }
+    /// The token child.
+    pub fn head(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![cmp_op])
+    }
+}
+
+/// `MakeGraphNodes = 'with' MakeGraphNodeTable (',' MakeGraphNodeTable)*`
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct MakeGraphNodes {
+    syntax: SyntaxNode,
+}
+
+impl AstNode for MakeGraphNodes {
+    type Language = Lang;
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == SyntaxKind::MAKE_GRAPH_NODES
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Self { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+
+impl MakeGraphNodes {
+    /// The token child.
+    pub fn with_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![with])
+    }
+    /// The `MakeGraphNodeTable` children.
+    pub fn make_graph_node_tables(&self) -> AstChildren<MakeGraphNodeTable> {
+        support::children(&self.syntax)
+    }
+    /// The token child.
+    pub fn comma_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![,])
+    }
+}
+
+/// `MakeGraphPartition = keyword:'ident' '-' 'by' column:('ident' | 'quoted_ident') '(' Subquery ')'`
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct MakeGraphPartition {
+    syntax: SyntaxNode,
+}
+
+impl AstNode for MakeGraphPartition {
+    type Language = Lang;
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == SyntaxKind::MAKE_GRAPH_PARTITION
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Self { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+
+impl MakeGraphPartition {
+    /// The token child.
+    pub fn keyword(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![ident])
+    }
+    /// The token child.
+    pub fn minus_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![-])
+    }
+    /// The token child.
+    pub fn by_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![by])
+    }
+    /// The token child.
+    pub fn column(&self) -> Option<SyntaxToken> {
+        support::token_in(&self.syntax, &[T![ident], T![quoted_ident]])
+    }
+    /// The token child.
+    pub fn l_paren_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T!['('])
+    }
+    /// The `Subquery` child.
+    pub fn subquery(&self) -> Option<Subquery> {
+        support::child(&self.syntax)
+    }
+    /// The token child.
+    pub fn r_paren_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![')'])
+    }
+}
+
+/// `MakeGraphNodeTable = TabularSource 'on' key:NameRef`
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct MakeGraphNodeTable {
+    syntax: SyntaxNode,
+}
+
+impl AstNode for MakeGraphNodeTable {
+    type Language = Lang;
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == SyntaxKind::MAKE_GRAPH_NODE_TABLE
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Self { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+
+impl MakeGraphNodeTable {
+    /// The `TabularSource` child.
+    pub fn tabular_source(&self) -> Option<TabularSource> {
+        support::child(&self.syntax)
+    }
+    /// The token child.
+    pub fn on_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![on])
+    }
+    /// The `NameRef` child.
+    pub fn key(&self) -> Option<NameRef> {
+        support::child(&self.syntax)
+    }
+}
+
+/// `GraphPattern = GraphPath (',' GraphPath)*`
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct GraphPattern {
+    syntax: SyntaxNode,
+}
+
+impl AstNode for GraphPattern {
+    type Language = Lang;
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == SyntaxKind::GRAPH_PATTERN
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Self { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+
+impl GraphPattern {
+    /// The `GraphPath` children.
+    pub fn graph_paths(&self) -> AstChildren<GraphPath> {
+        support::children(&self.syntax)
+    }
+    /// The token child.
+    pub fn comma_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![,])
+    }
+}
+
+/// `GraphProject = 'project' ColumnItem (',' ColumnItem)*`
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct GraphProject {
+    syntax: SyntaxNode,
+}
+
+impl AstNode for GraphProject {
+    type Language = Lang;
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == SyntaxKind::GRAPH_PROJECT
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Self { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+
+impl GraphProject {
+    /// The token child.
+    pub fn project_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![project])
+    }
+    /// The `ColumnItem` children.
+    pub fn column_items(&self) -> AstChildren<ColumnItem> {
+        support::children(&self.syntax)
+    }
+    /// The token child.
+    pub fn comma_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![,])
+    }
+}
+
+/// `GraphPath = (GraphNode | GraphEdge)*`
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct GraphPath {
+    syntax: SyntaxNode,
+}
+
+impl AstNode for GraphPath {
+    type Language = Lang;
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == SyntaxKind::GRAPH_PATH
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Self { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+
+impl GraphPath {
+    /// The `GraphNode` children.
+    pub fn graph_nodes(&self) -> AstChildren<GraphNode> {
+        support::children(&self.syntax)
+    }
+    /// The `GraphEdge` children.
+    pub fn graph_edges(&self) -> AstChildren<GraphEdge> {
+        support::children(&self.syntax)
+    }
+}
+
+/// `GraphNode = '(' name:('ident' | 'quoted_ident')? ')'`
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct GraphNode {
+    syntax: SyntaxNode,
+}
+
+impl AstNode for GraphNode {
+    type Language = Lang;
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == SyntaxKind::GRAPH_NODE
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Self { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+
+impl GraphNode {
+    /// The token child.
+    pub fn l_paren_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T!['('])
+    }
+    /// The token child.
+    pub fn name(&self) -> Option<SyntaxToken> {
+        support::token_in(&self.syntax, &[T![ident], T![quoted_ident]])
+    }
+    /// The token child.
+    pub fn r_paren_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![')'])
+    }
+}
+
+/// `GraphEdge = backward:'cmp_op'? open:'-' ('[' name:('ident' | 'quoted_ident')? GraphRange? ']')? close:'-' forward:'cmp_op'?`
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct GraphEdge {
+    syntax: SyntaxNode,
+}
+
+impl AstNode for GraphEdge {
+    type Language = Lang;
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == SyntaxKind::GRAPH_EDGE
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Self { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+
+impl GraphEdge {
+    /// The token child.
+    pub fn backward(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![cmp_op])
+    }
+    /// The token child.
+    pub fn open(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![-])
+    }
+    /// The token child.
+    pub fn l_brack_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T!['['])
+    }
+    /// The token child.
+    pub fn name(&self) -> Option<SyntaxToken> {
+        support::token_in(&self.syntax, &[T![ident], T![quoted_ident]])
+    }
+    /// The `GraphRange` child.
+    pub fn graph_range(&self) -> Option<GraphRange> {
+        support::child(&self.syntax)
+    }
+    /// The token child.
+    pub fn r_brack_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![']'])
+    }
+    /// The token child.
+    pub fn close(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![-])
+    }
+    /// The token child.
+    pub fn forward(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![cmp_op])
+    }
+}
+
+/// `GraphRange = '*' min:Expr '..' max:Expr`
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct GraphRange {
+    syntax: SyntaxNode,
+}
+
+impl AstNode for GraphRange {
+    type Language = Lang;
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == SyntaxKind::GRAPH_RANGE
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Self { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+
+impl GraphRange {
+    /// The token child.
+    pub fn star_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![*])
+    }
+    /// The `Expr` child.
+    pub fn min(&self) -> Option<Expr> {
+        support::child(&self.syntax)
+    }
+    /// The token child.
+    pub fn dotdot_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![..])
+    }
+    /// The `Expr` child, number 1 from 0 among the `Expr` children.
+    pub fn max(&self) -> Option<Expr> {
+        support::nth_child(&self.syntax, 1)
+    }
+}
+
+/// `GraphToTableItem = kind:'ident' ('as' alias:('ident' | 'quoted_ident'))? OperatorOption*`
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct GraphToTableItem {
+    syntax: SyntaxNode,
+}
+
+impl AstNode for GraphToTableItem {
+    type Language = Lang;
+    fn can_cast(kind: SyntaxKind) -> bool {
+        kind == SyntaxKind::GRAPH_TO_TABLE_ITEM
+    }
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        Self::can_cast(syntax.kind()).then_some(Self { syntax })
+    }
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+}
+
+impl GraphToTableItem {
+    /// The token child.
+    pub fn kind(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![ident])
+    }
+    /// The token child.
+    pub fn as_token(&self) -> Option<SyntaxToken> {
+        support::token(&self.syntax, T![as])
+    }
+    /// The token child.
+    pub fn alias(&self) -> Option<SyntaxToken> {
+        support::token_in(&self.syntax, &[T![ident], T![quoted_ident]])
+    }
+    /// The `OperatorOption` children.
+    pub fn operator_options(&self) -> AstChildren<OperatorOption> {
+        support::children(&self.syntax)
+    }
+}
+
 /// `OrExpr = Expr ('or' Expr)*`
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct OrExpr {
@@ -5878,6 +6554,11 @@ pub static RULES: &[NodeRule] = &[
                     Rule::Kind(SyntaxKind::TOP_HITTERS_OPERATOR as u16),
                     Rule::Kind(SyntaxKind::REDUCE_OPERATOR as u16),
                     Rule::Kind(SyntaxKind::SEARCH_OPERATOR as u16),
+                    Rule::Kind(SyntaxKind::MAKE_GRAPH_OPERATOR as u16),
+                    Rule::Kind(SyntaxKind::GRAPH_MATCH_OPERATOR as u16),
+                    Rule::Kind(SyntaxKind::GRAPH_SHORTEST_PATHS_OPERATOR as u16),
+                    Rule::Kind(SyntaxKind::GRAPH_TO_TABLE_OPERATOR as u16),
+                    Rule::Kind(SyntaxKind::GRAPH_MARK_COMPONENTS_OPERATOR as u16),
                     Rule::Kind(SyntaxKind::KEYWORD_OPERATOR as u16),
                     Rule::Kind(SyntaxKind::UNKNOWN_OPERATOR as u16),
                 ]),
@@ -7698,6 +8379,11 @@ pub static RULES: &[NodeRule] = &[
                         Rule::Kind(SyntaxKind::TOP_HITTERS_OPERATOR as u16),
                         Rule::Kind(SyntaxKind::REDUCE_OPERATOR as u16),
                         Rule::Kind(SyntaxKind::SEARCH_OPERATOR as u16),
+                        Rule::Kind(SyntaxKind::MAKE_GRAPH_OPERATOR as u16),
+                        Rule::Kind(SyntaxKind::GRAPH_MATCH_OPERATOR as u16),
+                        Rule::Kind(SyntaxKind::GRAPH_SHORTEST_PATHS_OPERATOR as u16),
+                        Rule::Kind(SyntaxKind::GRAPH_TO_TABLE_OPERATOR as u16),
+                        Rule::Kind(SyntaxKind::GRAPH_MARK_COMPONENTS_OPERATOR as u16),
                         Rule::Kind(SyntaxKind::KEYWORD_OPERATOR as u16),
                         Rule::Kind(SyntaxKind::UNKNOWN_OPERATOR as u16),
                     ]),
@@ -8046,9 +8732,115 @@ pub static RULES: &[NodeRule] = &[
         ]),
     },
     NodeRule {
+        kind: SyntaxKind::MAKE_GRAPH_OPERATOR as u16,
+        name: "MakeGraphOperator",
+        text: "keyword:'make-graph' source:NameRef MakeGraphArrow target:NameRef (MakeGraphNodes | node_id:OperatorOption)? MakeGraphPartition?",
+        rule: Rule::Seq(&[
+            Rule::Kind(T![make - graph] as u16),
+            Rule::Kind(SyntaxKind::NAME_REF as u16),
+            Rule::Kind(SyntaxKind::MAKE_GRAPH_ARROW as u16),
+            Rule::Kind(SyntaxKind::NAME_REF as u16),
+            Rule::Opt(&Rule::Alt(&[
+                Rule::Kind(SyntaxKind::MAKE_GRAPH_NODES as u16),
+                Rule::Kind(SyntaxKind::OPERATOR_OPTION as u16),
+            ])),
+            Rule::Opt(&Rule::Kind(SyntaxKind::MAKE_GRAPH_PARTITION as u16)),
+        ]),
+    },
+    NodeRule {
+        kind: SyntaxKind::GRAPH_MATCH_OPERATOR as u16,
+        name: "GraphMatchOperator",
+        text: "keyword:'graph-match' OperatorOption* GraphPattern ('where' predicate:Expr)? GraphProject?",
+        rule: Rule::Seq(&[
+            Rule::Kind(T![graph-match] as u16),
+            Rule::Rep(&Rule::Kind(SyntaxKind::OPERATOR_OPTION as u16)),
+            Rule::Kind(SyntaxKind::GRAPH_PATTERN as u16),
+            Rule::Opt(&Rule::Seq(&[
+                Rule::Kind(T![where] as u16),
+                Rule::Alt(&[
+                    Rule::Kind(SyntaxKind::OR_EXPR as u16),
+                    Rule::Kind(SyntaxKind::AND_EXPR as u16),
+                    Rule::Kind(SyntaxKind::NOT_EXPR as u16),
+                    Rule::Kind(SyntaxKind::COMPARISON_EXPR as u16),
+                    Rule::Kind(SyntaxKind::IN_EXPR as u16),
+                    Rule::Kind(SyntaxKind::BETWEEN_EXPR as u16),
+                    Rule::Kind(SyntaxKind::ADDITIVE_EXPR as u16),
+                    Rule::Kind(SyntaxKind::MULTIPLICATIVE_EXPR as u16),
+                    Rule::Kind(SyntaxKind::UNARY_EXPR as u16),
+                    Rule::Kind(SyntaxKind::MEMBER_EXPR as u16),
+                    Rule::Kind(SyntaxKind::INDEX_EXPR as u16),
+                    Rule::Kind(SyntaxKind::FUNCTION_CALL as u16),
+                    Rule::Kind(SyntaxKind::TOSCALAR_EXPR as u16),
+                    Rule::Kind(SyntaxKind::PAREN_EXPR as u16),
+                    Rule::Kind(SyntaxKind::NAME_REF as u16),
+                    Rule::Kind(SyntaxKind::LITERAL as u16),
+                    Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                    Rule::Kind(SyntaxKind::STAR_EXPR as u16),
+                ]),
+            ])),
+            Rule::Opt(&Rule::Kind(SyntaxKind::GRAPH_PROJECT as u16)),
+        ]),
+    },
+    NodeRule {
+        kind: SyntaxKind::GRAPH_SHORTEST_PATHS_OPERATOR as u16,
+        name: "GraphShortestPathsOperator",
+        text: "keyword:'graph-shortest-paths' OperatorOption* GraphPattern ('where' predicate:Expr)? GraphProject?",
+        rule: Rule::Seq(&[
+            Rule::Kind(T![graph - shortest - paths] as u16),
+            Rule::Rep(&Rule::Kind(SyntaxKind::OPERATOR_OPTION as u16)),
+            Rule::Kind(SyntaxKind::GRAPH_PATTERN as u16),
+            Rule::Opt(&Rule::Seq(&[
+                Rule::Kind(T![where] as u16),
+                Rule::Alt(&[
+                    Rule::Kind(SyntaxKind::OR_EXPR as u16),
+                    Rule::Kind(SyntaxKind::AND_EXPR as u16),
+                    Rule::Kind(SyntaxKind::NOT_EXPR as u16),
+                    Rule::Kind(SyntaxKind::COMPARISON_EXPR as u16),
+                    Rule::Kind(SyntaxKind::IN_EXPR as u16),
+                    Rule::Kind(SyntaxKind::BETWEEN_EXPR as u16),
+                    Rule::Kind(SyntaxKind::ADDITIVE_EXPR as u16),
+                    Rule::Kind(SyntaxKind::MULTIPLICATIVE_EXPR as u16),
+                    Rule::Kind(SyntaxKind::UNARY_EXPR as u16),
+                    Rule::Kind(SyntaxKind::MEMBER_EXPR as u16),
+                    Rule::Kind(SyntaxKind::INDEX_EXPR as u16),
+                    Rule::Kind(SyntaxKind::FUNCTION_CALL as u16),
+                    Rule::Kind(SyntaxKind::TOSCALAR_EXPR as u16),
+                    Rule::Kind(SyntaxKind::PAREN_EXPR as u16),
+                    Rule::Kind(SyntaxKind::NAME_REF as u16),
+                    Rule::Kind(SyntaxKind::LITERAL as u16),
+                    Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                    Rule::Kind(SyntaxKind::STAR_EXPR as u16),
+                ]),
+            ])),
+            Rule::Opt(&Rule::Kind(SyntaxKind::GRAPH_PROJECT as u16)),
+        ]),
+    },
+    NodeRule {
+        kind: SyntaxKind::GRAPH_TO_TABLE_OPERATOR as u16,
+        name: "GraphToTableOperator",
+        text: "keyword:'graph-to-table' GraphToTableItem (',' GraphToTableItem)*",
+        rule: Rule::Seq(&[
+            Rule::Kind(T![graph - to - table] as u16),
+            Rule::Kind(SyntaxKind::GRAPH_TO_TABLE_ITEM as u16),
+            Rule::Rep(&Rule::Seq(&[
+                Rule::Kind(T![,] as u16),
+                Rule::Kind(SyntaxKind::GRAPH_TO_TABLE_ITEM as u16),
+            ])),
+        ]),
+    },
+    NodeRule {
+        kind: SyntaxKind::GRAPH_MARK_COMPONENTS_OPERATOR as u16,
+        name: "GraphMarkComponentsOperator",
+        text: "keyword:'graph-mark-components' OperatorOption*",
+        rule: Rule::Seq(&[
+            Rule::Kind(T![graph - mark - components] as u16),
+            Rule::Rep(&Rule::Kind(SyntaxKind::OPERATOR_OPTION as u16)),
+        ]),
+    },
+    NodeRule {
         kind: SyntaxKind::KEYWORD_OPERATOR as u16,
         name: "KeywordOperator",
-        text: "name:('find' | 'invoke' | 'getschema' | 'sample' | 'externaldata' | 'consume' | 'make-graph' | 'graph-match' | 'graph-shortest-paths' | 'graph-to-table' | 'graph-mark-components') args:Expr?",
+        text: "name:('find' | 'invoke' | 'getschema' | 'sample' | 'externaldata' | 'consume') args:Expr?",
         rule: Rule::Seq(&[
             Rule::Alt(&[
                 Rule::Kind(T![find] as u16),
@@ -8057,11 +8849,6 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(T![sample] as u16),
                 Rule::Kind(T![externaldata] as u16),
                 Rule::Kind(T![consume] as u16),
-                Rule::Kind(T![make - graph] as u16),
-                Rule::Kind(T![graph-match] as u16),
-                Rule::Kind(T![graph - shortest - paths] as u16),
-                Rule::Kind(T![graph - to - table] as u16),
-                Rule::Kind(T![graph - mark - components] as u16),
             ]),
             Rule::Opt(&Rule::Alt(&[
                 Rule::Kind(SyntaxKind::OR_EXPR as u16),
@@ -8157,6 +8944,11 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::TOP_HITTERS_OPERATOR as u16),
                 Rule::Kind(SyntaxKind::REDUCE_OPERATOR as u16),
                 Rule::Kind(SyntaxKind::SEARCH_OPERATOR as u16),
+                Rule::Kind(SyntaxKind::MAKE_GRAPH_OPERATOR as u16),
+                Rule::Kind(SyntaxKind::GRAPH_MATCH_OPERATOR as u16),
+                Rule::Kind(SyntaxKind::GRAPH_SHORTEST_PATHS_OPERATOR as u16),
+                Rule::Kind(SyntaxKind::GRAPH_TO_TABLE_OPERATOR as u16),
+                Rule::Kind(SyntaxKind::GRAPH_MARK_COMPONENTS_OPERATOR as u16),
                 Rule::Kind(SyntaxKind::KEYWORD_OPERATOR as u16),
                 Rule::Kind(SyntaxKind::UNKNOWN_OPERATOR as u16),
             ]),
@@ -8201,6 +8993,11 @@ pub static RULES: &[NodeRule] = &[
                     Rule::Kind(SyntaxKind::TOP_HITTERS_OPERATOR as u16),
                     Rule::Kind(SyntaxKind::REDUCE_OPERATOR as u16),
                     Rule::Kind(SyntaxKind::SEARCH_OPERATOR as u16),
+                    Rule::Kind(SyntaxKind::MAKE_GRAPH_OPERATOR as u16),
+                    Rule::Kind(SyntaxKind::GRAPH_MATCH_OPERATOR as u16),
+                    Rule::Kind(SyntaxKind::GRAPH_SHORTEST_PATHS_OPERATOR as u16),
+                    Rule::Kind(SyntaxKind::GRAPH_TO_TABLE_OPERATOR as u16),
+                    Rule::Kind(SyntaxKind::GRAPH_MARK_COMPONENTS_OPERATOR as u16),
                     Rule::Kind(SyntaxKind::KEYWORD_OPERATOR as u16),
                     Rule::Kind(SyntaxKind::UNKNOWN_OPERATOR as u16),
                 ]),
@@ -8764,6 +9561,234 @@ pub static RULES: &[NodeRule] = &[
                 Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
                 Rule::Kind(SyntaxKind::STAR_EXPR as u16),
             ]),
+        ]),
+    },
+    NodeRule {
+        kind: SyntaxKind::MAKE_GRAPH_ARROW as u16,
+        name: "MakeGraphArrow",
+        text: "open:'-' close:'-' head:'cmp_op'?",
+        rule: Rule::Seq(&[
+            Rule::Kind(T![-] as u16),
+            Rule::Kind(T![-] as u16),
+            Rule::Opt(&Rule::Kind(T![cmp_op] as u16)),
+        ]),
+    },
+    NodeRule {
+        kind: SyntaxKind::MAKE_GRAPH_NODES as u16,
+        name: "MakeGraphNodes",
+        text: "'with' MakeGraphNodeTable (',' MakeGraphNodeTable)*",
+        rule: Rule::Seq(&[
+            Rule::Kind(T![with] as u16),
+            Rule::Kind(SyntaxKind::MAKE_GRAPH_NODE_TABLE as u16),
+            Rule::Rep(&Rule::Seq(&[
+                Rule::Kind(T![,] as u16),
+                Rule::Kind(SyntaxKind::MAKE_GRAPH_NODE_TABLE as u16),
+            ])),
+        ]),
+    },
+    NodeRule {
+        kind: SyntaxKind::MAKE_GRAPH_PARTITION as u16,
+        name: "MakeGraphPartition",
+        text: "keyword:'ident' '-' 'by' column:('ident' | 'quoted_ident') '(' Subquery ')'",
+        rule: Rule::Seq(&[
+            Rule::Kind(T![ident] as u16),
+            Rule::Kind(T![-] as u16),
+            Rule::Kind(T![by] as u16),
+            Rule::Alt(&[
+                Rule::Kind(T![ident] as u16),
+                Rule::Kind(T![quoted_ident] as u16),
+            ]),
+            Rule::Kind(T!['('] as u16),
+            Rule::Kind(SyntaxKind::SUBQUERY as u16),
+            Rule::Kind(T![')'] as u16),
+        ]),
+    },
+    NodeRule {
+        kind: SyntaxKind::MAKE_GRAPH_NODE_TABLE as u16,
+        name: "MakeGraphNodeTable",
+        text: "TabularSource 'on' key:NameRef",
+        rule: Rule::Seq(&[
+            Rule::Kind(SyntaxKind::TABULAR_SOURCE as u16),
+            Rule::Kind(T![on] as u16),
+            Rule::Kind(SyntaxKind::NAME_REF as u16),
+        ]),
+    },
+    NodeRule {
+        kind: SyntaxKind::GRAPH_PATTERN as u16,
+        name: "GraphPattern",
+        text: "GraphPath (',' GraphPath)*",
+        rule: Rule::Seq(&[
+            Rule::Kind(SyntaxKind::GRAPH_PATH as u16),
+            Rule::Rep(&Rule::Seq(&[
+                Rule::Kind(T![,] as u16),
+                Rule::Kind(SyntaxKind::GRAPH_PATH as u16),
+            ])),
+        ]),
+    },
+    NodeRule {
+        kind: SyntaxKind::GRAPH_PROJECT as u16,
+        name: "GraphProject",
+        text: "'project' ColumnItem (',' ColumnItem)*",
+        rule: Rule::Seq(&[
+            Rule::Kind(T![project] as u16),
+            Rule::Alt(&[
+                Rule::Kind(SyntaxKind::ASSIGNMENT as u16),
+                Rule::Kind(SyntaxKind::TUPLE_ASSIGNMENT as u16),
+                Rule::Alt(&[
+                    Rule::Kind(SyntaxKind::OR_EXPR as u16),
+                    Rule::Kind(SyntaxKind::AND_EXPR as u16),
+                    Rule::Kind(SyntaxKind::NOT_EXPR as u16),
+                    Rule::Kind(SyntaxKind::COMPARISON_EXPR as u16),
+                    Rule::Kind(SyntaxKind::IN_EXPR as u16),
+                    Rule::Kind(SyntaxKind::BETWEEN_EXPR as u16),
+                    Rule::Kind(SyntaxKind::ADDITIVE_EXPR as u16),
+                    Rule::Kind(SyntaxKind::MULTIPLICATIVE_EXPR as u16),
+                    Rule::Kind(SyntaxKind::UNARY_EXPR as u16),
+                    Rule::Kind(SyntaxKind::MEMBER_EXPR as u16),
+                    Rule::Kind(SyntaxKind::INDEX_EXPR as u16),
+                    Rule::Kind(SyntaxKind::FUNCTION_CALL as u16),
+                    Rule::Kind(SyntaxKind::TOSCALAR_EXPR as u16),
+                    Rule::Kind(SyntaxKind::PAREN_EXPR as u16),
+                    Rule::Kind(SyntaxKind::NAME_REF as u16),
+                    Rule::Kind(SyntaxKind::LITERAL as u16),
+                    Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                    Rule::Kind(SyntaxKind::STAR_EXPR as u16),
+                ]),
+            ]),
+            Rule::Rep(&Rule::Seq(&[
+                Rule::Kind(T![,] as u16),
+                Rule::Alt(&[
+                    Rule::Kind(SyntaxKind::ASSIGNMENT as u16),
+                    Rule::Kind(SyntaxKind::TUPLE_ASSIGNMENT as u16),
+                    Rule::Alt(&[
+                        Rule::Kind(SyntaxKind::OR_EXPR as u16),
+                        Rule::Kind(SyntaxKind::AND_EXPR as u16),
+                        Rule::Kind(SyntaxKind::NOT_EXPR as u16),
+                        Rule::Kind(SyntaxKind::COMPARISON_EXPR as u16),
+                        Rule::Kind(SyntaxKind::IN_EXPR as u16),
+                        Rule::Kind(SyntaxKind::BETWEEN_EXPR as u16),
+                        Rule::Kind(SyntaxKind::ADDITIVE_EXPR as u16),
+                        Rule::Kind(SyntaxKind::MULTIPLICATIVE_EXPR as u16),
+                        Rule::Kind(SyntaxKind::UNARY_EXPR as u16),
+                        Rule::Kind(SyntaxKind::MEMBER_EXPR as u16),
+                        Rule::Kind(SyntaxKind::INDEX_EXPR as u16),
+                        Rule::Kind(SyntaxKind::FUNCTION_CALL as u16),
+                        Rule::Kind(SyntaxKind::TOSCALAR_EXPR as u16),
+                        Rule::Kind(SyntaxKind::PAREN_EXPR as u16),
+                        Rule::Kind(SyntaxKind::NAME_REF as u16),
+                        Rule::Kind(SyntaxKind::LITERAL as u16),
+                        Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                        Rule::Kind(SyntaxKind::STAR_EXPR as u16),
+                    ]),
+                ]),
+            ])),
+        ]),
+    },
+    NodeRule {
+        kind: SyntaxKind::GRAPH_PATH as u16,
+        name: "GraphPath",
+        text: "(GraphNode | GraphEdge)*",
+        rule: Rule::Rep(&Rule::Alt(&[
+            Rule::Kind(SyntaxKind::GRAPH_NODE as u16),
+            Rule::Kind(SyntaxKind::GRAPH_EDGE as u16),
+        ])),
+    },
+    NodeRule {
+        kind: SyntaxKind::GRAPH_NODE as u16,
+        name: "GraphNode",
+        text: "'(' name:('ident' | 'quoted_ident')? ')'",
+        rule: Rule::Seq(&[
+            Rule::Kind(T!['('] as u16),
+            Rule::Opt(&Rule::Alt(&[
+                Rule::Kind(T![ident] as u16),
+                Rule::Kind(T![quoted_ident] as u16),
+            ])),
+            Rule::Kind(T![')'] as u16),
+        ]),
+    },
+    NodeRule {
+        kind: SyntaxKind::GRAPH_EDGE as u16,
+        name: "GraphEdge",
+        text: "backward:'cmp_op'? open:'-' ('[' name:('ident' | 'quoted_ident')? GraphRange? ']')? close:'-' forward:'cmp_op'?",
+        rule: Rule::Seq(&[
+            Rule::Opt(&Rule::Kind(T![cmp_op] as u16)),
+            Rule::Kind(T![-] as u16),
+            Rule::Opt(&Rule::Seq(&[
+                Rule::Kind(T!['['] as u16),
+                Rule::Opt(&Rule::Alt(&[
+                    Rule::Kind(T![ident] as u16),
+                    Rule::Kind(T![quoted_ident] as u16),
+                ])),
+                Rule::Opt(&Rule::Kind(SyntaxKind::GRAPH_RANGE as u16)),
+                Rule::Kind(T![']'] as u16),
+            ])),
+            Rule::Kind(T![-] as u16),
+            Rule::Opt(&Rule::Kind(T![cmp_op] as u16)),
+        ]),
+    },
+    NodeRule {
+        kind: SyntaxKind::GRAPH_RANGE as u16,
+        name: "GraphRange",
+        text: "'*' min:Expr '..' max:Expr",
+        rule: Rule::Seq(&[
+            Rule::Kind(T![*] as u16),
+            Rule::Alt(&[
+                Rule::Kind(SyntaxKind::OR_EXPR as u16),
+                Rule::Kind(SyntaxKind::AND_EXPR as u16),
+                Rule::Kind(SyntaxKind::NOT_EXPR as u16),
+                Rule::Kind(SyntaxKind::COMPARISON_EXPR as u16),
+                Rule::Kind(SyntaxKind::IN_EXPR as u16),
+                Rule::Kind(SyntaxKind::BETWEEN_EXPR as u16),
+                Rule::Kind(SyntaxKind::ADDITIVE_EXPR as u16),
+                Rule::Kind(SyntaxKind::MULTIPLICATIVE_EXPR as u16),
+                Rule::Kind(SyntaxKind::UNARY_EXPR as u16),
+                Rule::Kind(SyntaxKind::MEMBER_EXPR as u16),
+                Rule::Kind(SyntaxKind::INDEX_EXPR as u16),
+                Rule::Kind(SyntaxKind::FUNCTION_CALL as u16),
+                Rule::Kind(SyntaxKind::TOSCALAR_EXPR as u16),
+                Rule::Kind(SyntaxKind::PAREN_EXPR as u16),
+                Rule::Kind(SyntaxKind::NAME_REF as u16),
+                Rule::Kind(SyntaxKind::LITERAL as u16),
+                Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
+            ]),
+            Rule::Kind(T![..] as u16),
+            Rule::Alt(&[
+                Rule::Kind(SyntaxKind::OR_EXPR as u16),
+                Rule::Kind(SyntaxKind::AND_EXPR as u16),
+                Rule::Kind(SyntaxKind::NOT_EXPR as u16),
+                Rule::Kind(SyntaxKind::COMPARISON_EXPR as u16),
+                Rule::Kind(SyntaxKind::IN_EXPR as u16),
+                Rule::Kind(SyntaxKind::BETWEEN_EXPR as u16),
+                Rule::Kind(SyntaxKind::ADDITIVE_EXPR as u16),
+                Rule::Kind(SyntaxKind::MULTIPLICATIVE_EXPR as u16),
+                Rule::Kind(SyntaxKind::UNARY_EXPR as u16),
+                Rule::Kind(SyntaxKind::MEMBER_EXPR as u16),
+                Rule::Kind(SyntaxKind::INDEX_EXPR as u16),
+                Rule::Kind(SyntaxKind::FUNCTION_CALL as u16),
+                Rule::Kind(SyntaxKind::TOSCALAR_EXPR as u16),
+                Rule::Kind(SyntaxKind::PAREN_EXPR as u16),
+                Rule::Kind(SyntaxKind::NAME_REF as u16),
+                Rule::Kind(SyntaxKind::LITERAL as u16),
+                Rule::Kind(SyntaxKind::DYNAMIC_LITERAL as u16),
+                Rule::Kind(SyntaxKind::STAR_EXPR as u16),
+            ]),
+        ]),
+    },
+    NodeRule {
+        kind: SyntaxKind::GRAPH_TO_TABLE_ITEM as u16,
+        name: "GraphToTableItem",
+        text: "kind:'ident' ('as' alias:('ident' | 'quoted_ident'))? OperatorOption*",
+        rule: Rule::Seq(&[
+            Rule::Kind(T![ident] as u16),
+            Rule::Opt(&Rule::Seq(&[
+                Rule::Kind(T![as] as u16),
+                Rule::Alt(&[
+                    Rule::Kind(T![ident] as u16),
+                    Rule::Kind(T![quoted_ident] as u16),
+                ]),
+            ])),
+            Rule::Rep(&Rule::Kind(SyntaxKind::OPERATOR_OPTION as u16)),
         ]),
     },
     NodeRule {

@@ -90,11 +90,15 @@ const PARENT_RULES: &[(K, K, &str)] = &[
     (K::FACET_OPERATOR, K::FACET_KW, "keyword"),
     (K::KEYWORD_OPERATOR, K::CONSUME_KW, "keyword"),
     (K::REDUCE_OPERATOR, K::REDUCE_KW, "keyword"),
-    (K::KEYWORD_OPERATOR, K::MAKE_GRAPH_KW, "keyword"),
-    (K::KEYWORD_OPERATOR, K::GRAPH_MATCH_KW, "keyword"),
-    (K::KEYWORD_OPERATOR, K::GRAPH_SHORTEST_PATHS_KW, "keyword"),
-    (K::KEYWORD_OPERATOR, K::GRAPH_TO_TABLE_KW, "keyword"),
-    (K::KEYWORD_OPERATOR, K::GRAPH_MARK_COMPONENTS_KW, "keyword"),
+    (K::MAKE_GRAPH_OPERATOR, K::MAKE_GRAPH_KW, "keyword"),
+    (K::GRAPH_MATCH_OPERATOR, K::GRAPH_MATCH_KW, "keyword"),
+    (K::GRAPH_MATCH_OPERATOR, K::WHERE_KW, "keyword"),
+    (K::GRAPH_SHORTEST_PATHS_OPERATOR, K::GRAPH_SHORTEST_PATHS_KW, "keyword"),
+    (K::GRAPH_SHORTEST_PATHS_OPERATOR, K::WHERE_KW, "keyword"),
+    (K::GRAPH_PROJECT, K::PROJECT_KW, "keyword"),
+    (K::GRAPH_TO_TABLE_OPERATOR, K::GRAPH_TO_TABLE_KW, "keyword"),
+    (K::GRAPH_TO_TABLE_ITEM, K::AS_KW, "keyword"),
+    (K::GRAPH_MARK_COMPONENTS_OPERATOR, K::GRAPH_MARK_COMPONENTS_KW, "keyword"),
     (K::TOP_HITTERS_OPERATOR, K::TOP_HITTERS_KW, "keyword"),
     (K::TOP_HITTERS_OPERATOR, K::OF_KW, "keyword"),
     (K::TOP_NESTED_CLAUSE, K::TOP_NESTED_KW, "keyword"),
@@ -290,6 +294,27 @@ mod tests {
             ["operator.pipe", "operator.pipe", "operator.pipe"]
         );
         assert_eq!(find("User*"), ["variable"], "a column pattern is one span");
+    }
+
+    #[test]
+    fn the_graph_operators_colour_their_keywords_and_arrows() {
+        let got = captures(
+            "T | make-graph a --> b with N on id | graph-match (x)-[e*1..3]->(y) where x.k == 1 project x",
+        );
+        let all = |text: &str| {
+            got.iter()
+                .filter(|(t, _)| *t == text)
+                .map(|(_, c)| *c)
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(all("make-graph"), ["keyword"]);
+        assert_eq!(all("graph-match"), ["keyword"]);
+        assert_eq!(all("with"), ["keyword"]);
+        assert_eq!(all("on"), ["keyword"]);
+        assert_eq!(all("where"), ["keyword"]);
+        assert_eq!(all("project"), ["keyword"]);
+        assert_eq!(all("*"), ["operator"], "the range's star");
+        assert_eq!(all("e"), ["variable"], "an edge's name");
     }
 
     #[test]
