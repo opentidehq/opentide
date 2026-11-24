@@ -9,7 +9,7 @@ view: diagnostics (code, severity, file, line, column and counts; a warning's te
 ━━━ stdout · json
 findings: 45
   falco_output_syntax | error | objects/rules/covert-implant-rule-0165.yaml | 43 | 30
-  eql_unknown_function | error | objects/rules/covert-injection-rule-0262.yaml | 81 | 21
+  eql_unknown_function | error | objects/rules/covert-injection-rule-0262.yaml | 80 | 21
   kuery_parse_error | error | objects/rules/covert-pivot-rule-0073.yaml | 48 | 19
   spl_search_operator | error | objects/rules/elevated-dropper-rule-0068.yaml | 59 | 22
   spl_command_without_pipe | error | objects/rules/elevated-exfiltration-rule-0043.yaml | 65 | 7
@@ -18,10 +18,10 @@ findings: 45
   eql_parse_error | error | objects/rules/encoded-implant-rule-0216.yaml | 46 | 37
   kql_parse_error | error | objects/rules/encoded-tunnel-rule-0049.yaml | 51 | 29
   falco_append_condition | error | objects/rules/encoded-tunnel-rule-0077.yaml | 65 | 7
-  lucene_fuzzy | error | objects/rules/encoded-tunnel-rule-0080.yaml | 55 | 23
+  lucene_fuzzy | error | objects/rules/encoded-tunnel-rule-0080.yaml | 54 | 23
   kql_control_command_unsupported | error | objects/rules/hidden-beacon-rule-0062.yaml | 63 | 7
   spl_empty_command | error | objects/rules/hidden-dropper-rule-0055.yaml | 37 | 17
-  eql_argument_type | error | objects/rules/hidden-dropper-rule-0067.yaml | 66 | 28
+  eql_argument_type | error | objects/rules/hidden-dropper-rule-0067.yaml | 65 | 28
   eql_maxspan_unit | error | objects/rules/hidden-dropper-rule-0194.yaml | 100 | 29
   kql_unknown_table | error | objects/rules/hidden-pivot-rule-0041.yaml | 41 | 7
   falco_unknown_event | error | objects/rules/lateral-downgrade-rule-0139.yaml | 58 | 18
@@ -32,9 +32,9 @@ findings: 45
   falco_value_type | error | objects/rules/persistent-harvest-rule-0152.yaml | 52 | 38
   falco_operator_type | error | objects/rules/rapid-dropper-rule-0103.yaml | 61 | 36
   spl_unknown_datamodel_field | error | objects/rules/rapid-implant-rule-0082.yaml | 59 | 59
-  esql_unknown_type | error | objects/rules/rapid-pivot-rule-0223.yaml | 77 | 56
-  eql_not_boolean | error | objects/rules/remote-dropper-rule-0197.yaml | 59 | 21
-  ecs_type_mismatch | error | objects/rules/remote-spray-rule-0119.yaml | 69 | 20
+  esql_unknown_type | error | objects/rules/rapid-pivot-rule-0223.yaml | 76 | 56
+  eql_not_boolean | error | objects/rules/remote-dropper-rule-0197.yaml | 58 | 21
+  ecs_type_mismatch | error | objects/rules/remote-spray-rule-0119.yaml | 68 | 20
   kql_unknown_operator | error | objects/rules/rogue-exfiltration-rule-0092.yaml | 65 | 9
   spl_parse_error | error | objects/rules/rogue-harvest-rule-0056.yaml | 70 | 27
   kql_type_mismatch | error | objects/rules/rogue-harvest-rule-0066.yaml | 61 | 26
@@ -43,7 +43,7 @@ findings: 45
   lucene_parse_error | error | objects/rules/scheduled-harvest-rule-0099.yaml | 59 | 19
   eql_function_arity | error | objects/rules/scheduled-relay-rule-0151.yaml | 57 | 21
   kql_unknown_column | error | objects/rules/silent-beacon-rule-0079.yaml | 43 | 15
-  esql_unknown_command | error | objects/rules/silent-beacon-rule-0158.yaml | 73 | 34
+  esql_unknown_command | error | objects/rules/silent-beacon-rule-0158.yaml | 72 | 34
   esql_unknown_function | error | objects/rules/silent-dropper-rule-0177.yaml | 56 | 43
   falco_unknown_field | error | objects/rules/silent-implant-rule-0142.yaml | 53 | 27
   eql_field_comparison | error | objects/rules/silent-pivot-rule-0086.yaml | 50 | 21

@@ -27,7 +27,7 @@ findings: 106
   schema_validation | error | <WS>/objects/rules/covert-dropper-rule-0064.yaml | 41 | 3
   falco_output_syntax | error | <WS>/objects/rules/covert-implant-rule-0165.yaml | 43 | 30
   schema_validation | error | <WS>/objects/rules/covert-injection-rule-0032.yaml | 1 | 1
-  eql_unknown_function | error | <WS>/objects/rules/covert-injection-rule-0262.yaml | 81 | 21
+  eql_unknown_function | error | <WS>/objects/rules/covert-injection-rule-0262.yaml | 80 | 21
   kuery_parse_error | error | <WS>/objects/rules/covert-pivot-rule-0073.yaml | 48 | 19
   spl_search_operator | error | <WS>/objects/rules/elevated-dropper-rule-0068.yaml | 59 | 22
   schema_validation | error | <WS>/objects/rules/elevated-exfiltration-rule-0014.yaml | 9 | 13
@@ -44,10 +44,10 @@ findings: 106
   vocab_unknown | error | <WS>/objects/rules/encoded-tunnel-rule-0049.yaml | 9 | 8
   kql_parse_error | error | <WS>/objects/rules/encoded-tunnel-rule-0049.yaml | 51 | 29
   falco_append_condition | error | <WS>/objects/rules/encoded-tunnel-rule-0077.yaml | 65 | 7
-  lucene_fuzzy | error | <WS>/objects/rules/encoded-tunnel-rule-0080.yaml | 55 | 23
+  lucene_fuzzy | error | <WS>/objects/rules/encoded-tunnel-rule-0080.yaml | 54 | 23
   kql_control_command_unsupported | error | <WS>/objects/rules/hidden-beacon-rule-0062.yaml | 63 | 7
   spl_empty_command | error | <WS>/objects/rules/hidden-dropper-rule-0055.yaml | 37 | 17
-  eql_argument_type | error | <WS>/objects/rules/hidden-dropper-rule-0067.yaml | 66 | 28
+  eql_argument_type | error | <WS>/objects/rules/hidden-dropper-rule-0067.yaml | 65 | 28
   eql_maxspan_unit | error | <WS>/objects/rules/hidden-dropper-rule-0194.yaml | 100 | 29
   missing_uuid | error | <WS>/objects/rules/hidden-implant-rule-0006.yaml | - | -
   schema_validation | error | <WS>/objects/rules/hidden-loader-rule-0008.yaml | 1 | 1
@@ -69,13 +69,13 @@ findings: 106
   spl_unknown_datamodel_field | error | <WS>/objects/rules/rapid-implant-rule-0082.yaml | 59 | 59
   invalid_ref | error | <WS>/objects/rules/rapid-injection-rule-0013.yaml | 23 | 18
   config_enum_unknown | error | <WS>/objects/rules/rapid-injection-rule-0023.yaml | 62 | 13
-  esql_unknown_type | error | <WS>/objects/rules/rapid-pivot-rule-0223.yaml | 77 | 56
+  esql_unknown_type | error | <WS>/objects/rules/rapid-pivot-rule-0223.yaml | 76 | 56
   schema_missing | error | <WS>/objects/rules/rapid-relay-rule-0007.yaml | 3 | 1
   schema_validation | error | <WS>/objects/rules/remote-beacon-rule-0061.yaml | 46 | 3
   schema_validation | error | <WS>/objects/rules/remote-dropper-rule-0048.yaml | 36 | 3
   schema_validation | error | <WS>/objects/rules/remote-dropper-rule-0074.yaml | 48 | 3
-  eql_not_boolean | error | <WS>/objects/rules/remote-dropper-rule-0197.yaml | 59 | 21
-  ecs_type_mismatch | error | <WS>/objects/rules/remote-spray-rule-0119.yaml | 69 | 20
+  eql_not_boolean | error | <WS>/objects/rules/remote-dropper-rule-0197.yaml | 58 | 21
+  ecs_type_mismatch | error | <WS>/objects/rules/remote-spray-rule-0119.yaml | 68 | 20
   kql_unknown_operator | error | <WS>/objects/rules/rogue-exfiltration-rule-0092.yaml | 65 | 9
   duplicate_id | error | <WS>/objects/rules/rogue-harvest-rule-0003.yaml | 4 | 9
   external_id_in_rule | error | <WS>/objects/rules/rogue-harvest-rule-0027.yaml | 55 | 14
@@ -90,7 +90,7 @@ findings: 106
   eql_function_arity | error | <WS>/objects/rules/scheduled-relay-rule-0151.yaml | 57 | 21
   schema_validation | error | <WS>/objects/rules/scheduled-relay-rule-0243.yaml | 38 | 3
   kql_unknown_column | error | <WS>/objects/rules/silent-beacon-rule-0079.yaml | 43 | 15
-  esql_unknown_command | error | <WS>/objects/rules/silent-beacon-rule-0158.yaml | 73 | 34
+  esql_unknown_command | error | <WS>/objects/rules/silent-beacon-rule-0158.yaml | 72 | 34
   esql_unknown_function | error | <WS>/objects/rules/silent-dropper-rule-0177.yaml | 56 | 43
   falco_unknown_field | error | <WS>/objects/rules/silent-implant-rule-0142.yaml | 53 | 27
   schema_validation | error | <WS>/objects/rules/silent-injection-rule-0022.yaml | 51 | 3
