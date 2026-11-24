@@ -87,6 +87,14 @@ pub fn query_validation_platforms() -> Vec<&'static str> {
 /// The commands of the catalogue gate, which write findings reports.
 pub const GATE_COMMANDS: [&str; 2] = ["validate", "lint"];
 
+/// The production job's preview of its deploy: a RELEASE plan that shows
+/// the rules whose file the push deleted retired (`--prune`, #1713).
+pub const RELEASE_DRY_RUN: &str = "opentide deploy --dry-run --strategy RELEASE --prune";
+
+/// The production job's deploy: RELEASE, retiring the rules whose file the
+/// push deleted (`--prune`, #1713); a workspace with no tenants skips.
+pub const RELEASE_DEPLOY: &str = "opentide deploy --strategy RELEASE --prune --skip-unconfigured";
+
 /// Where the gate commands write their reports.
 pub const REPORTS_DIR: &str = "opentide-reports";
 
@@ -970,8 +978,10 @@ fn values(options: &Options) -> Value {
         docs_output => options.docs_output,
         docs_path => serde_json::to_string(&format!("{}/", options.docs_output)).unwrap_or_default(),
         docs_publish_path => serde_json::to_string(&format!("$(Build.SourcesDirectory)/{}", options.docs_output)).unwrap_or_default(),
-        dry_run => "opentide deploy --dry-run --strategy RELEASE",
-        deploy => "opentide deploy --strategy RELEASE --skip-unconfigured",
+        // `--prune`: the production deploy retires the rules whose file
+        // the push deleted (#1713); only a RELEASE run takes it.
+        dry_run => RELEASE_DRY_RUN,
+        deploy => RELEASE_DEPLOY,
         rules => shell_word(&options.rules_folder).into_owned(),
     }
 }

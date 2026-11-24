@@ -168,11 +168,11 @@ deploy_production:
         state_base=$(git commit-tree "$(git write-tree)" -p HEAD -m "opentide: deployment state of the default branch")
       fi
       echo "$state_base" > "$(git rev-parse --git-path opentide-state-base)"
-    - opentide deploy --dry-run --strategy RELEASE
+    - opentide deploy --dry-run --strategy RELEASE --prune
     - |
       deploy_status=0
       touch "$(git rev-parse --git-path opentide-deploy-started)"
-      opentide deploy --strategy RELEASE --skip-unconfigured || deploy_status=$?
+      opentide deploy --strategy RELEASE --prune --skip-unconfigured || deploy_status=$?
       if [ "$deploy_status" -ne 0 ]; then
         echo "Deploy failed (exit $deploy_status); committing what it recorded before it stopped." >&2
       fi

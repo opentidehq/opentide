@@ -124,7 +124,7 @@ A tenant that accepts `RELEASE` also receives the disables and deletes of a `REL
 | Job | Runs on | Command | Deploys |
 |-----|---------|---------|---------|
 | `deploy_staging` | Pull or merge request | `opentide deploy --strategy PREVIEW` | The changed rules that map to `PREVIEW` or `UNIVERSAL`, to tenants accepting `PREVIEW` |
-| `deploy_production` | Push to the default branch | `opentide deploy --strategy RELEASE` | The changed rules that map to `RELEASE` or `UNIVERSAL`, to tenants accepting `RELEASE`; disables or deletes changed rules that map to `DISABLEMENT` or `DELETION` there |
+| `deploy_production` | Push to the default branch | `opentide deploy --strategy RELEASE --prune` | The changed rules that map to `RELEASE` or `UNIVERSAL`, to tenants accepting `RELEASE`; disables or deletes changed rules that map to `DISABLEMENT` or `DELETION` there, and retires the rules whose file the push deleted ([Deleted rule files](../../cli/deploy.md#deleted-rule-files)) |
 
 The job names are CI job ids. They are not statuses and not strategies.
 

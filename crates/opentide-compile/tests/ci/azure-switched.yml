@@ -258,9 +258,9 @@ stages:
                 state_base=$(git commit-tree "$(git write-tree)" -p HEAD -m "opentide: deployment state of the default branch")
               fi
               echo "$state_base" > "$(git rev-parse --git-path opentide-state-base)"
-              opentide deploy --dry-run --strategy RELEASE
+              opentide deploy --dry-run --strategy RELEASE --prune
               echo "##vso[task.setvariable variable=OPENTIDE_DEPLOY_STARTED]true"
-              opentide deploy --strategy RELEASE --skip-unconfigured
+              opentide deploy --strategy RELEASE --prune --skip-unconfigured
             env:
               AZURE_CLIENT_ID: $(AZURE_CLIENT_ID)
               AZURE_CLIENT_SECRET: $(AZURE_CLIENT_SECRET)
