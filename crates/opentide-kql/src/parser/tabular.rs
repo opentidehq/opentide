@@ -361,17 +361,25 @@ fn operator(p: &mut P<'_>) {
             search_body(p, false);
             K::SEARCH_OPERATOR
         }
+        K::MAKE_GRAPH_KW => make_graph(p),
+        K::GRAPH_MATCH_KW => graph_match(p, K::GRAPH_MATCH_OPERATOR, &["cycles"]),
+        K::GRAPH_SHORTEST_PATHS_KW => {
+            graph_match(p, K::GRAPH_SHORTEST_PATHS_OPERATOR, &["output", "cycles"])
+        }
+        K::GRAPH_TO_TABLE_KW => graph_to_table(p),
+        K::GRAPH_MARK_COMPONENTS_KW => {
+            p.bump();
+            while at_named_option(p, &["kind", "with_component_id"]) {
+                option_after_name(p, K::OPERATOR_OPTION);
+            }
+            K::GRAPH_MARK_COMPONENTS_OPERATOR
+        }
         K::FIND_KW
         | K::INVOKE_KW
         | K::GETSCHEMA_KW
         | K::SAMPLE_KW
         | K::EXTERNALDATA_KW
-        | K::CONSUME_KW
-        | K::MAKE_GRAPH_KW
-        | K::GRAPH_MATCH_KW
-        | K::GRAPH_SHORTEST_PATHS_KW
-        | K::GRAPH_TO_TABLE_KW
-        | K::GRAPH_MARK_COMPONENTS_KW => {
+        | K::CONSUME_KW => {
             p.bump();
             if expr::at_expr_start(p) {
                 expr::expr(p);
@@ -1203,4 +1211,233 @@ fn reduce(p: &mut P<'_>) -> K {
         }
     }
     K::REDUCE_OPERATOR
+}
+
+// ------------------------------------------------------------ graph operators
+
+/// A name for a graph's node, edge or column: a word or a quoted name.
+fn graph_name(p: &mut P<'_>) -> bool {
+    if p.at(K::QUOTED_IDENT) || p.name_at(0) {
+        expr::name_ref(p);
+        true
+    } else {
+        p.error("expected a name");
+        false
+    }
+}
+
+/// Whether the token at `n` is `text` of the comparison class: the `<` and
+/// `>` of a graph edge's arrow head.
+fn at_arrow_head(p: &P<'_>, n: usize, text: &str) -> bool {
+    p.nth(n) == K::CMP_OP && p.nth_text(n) == text
+}
+
+/// `make-graph a --> b`, with `with Nodes on id` or `with_node_id=id`, and
+/// `partitioned-by p (operators)`. The arrow's tokens touch.
+fn make_graph(p: &mut P<'_>) -> K {
+    p.bump();
+    graph_name(p);
+    let arrow = p.start();
+    if p.at(K::MINUS) && p.nth(1) == K::MINUS && p.tokens_touch(0, 1) {
+        let head = at_arrow_head(p, 2, ">") && p.tokens_touch(1, 2);
+        p.bump();
+        p.bump();
+        if head {
+            p.bump();
+        }
+    } else {
+        p.error("expected `-->` or `--`");
+    }
+    p.done(arrow, K::MAKE_GRAPH_ARROW);
+    graph_name(p);
+    if p.at(K::WITH_KW) {
+        let m = p.start();
+        p.bump();
+        list(p, make_graph_node_table);
+        p.done(m, K::MAKE_GRAPH_NODES);
+    } else if at_named_option(p, &["with_node_id"]) {
+        option_after_name(p, K::OPERATOR_OPTION);
+    }
+    if p.nth_text(0) == "partitioned"
+        && p.nth(1) == K::MINUS
+        && p.nth(2) == K::BY_KW
+        && p.tokens_touch(0, 1)
+        && p.tokens_touch(1, 2)
+    {
+        let m = p.start();
+        p.bump_as(K::IDENT);
+        p.bump();
+        p.bump();
+        graph_name_token(p);
+        paren_subquery(p);
+        p.done(m, K::MAKE_GRAPH_PARTITION);
+    }
+    K::MAKE_GRAPH_OPERATOR
+}
+
+/// The partition column: a name, bare, not a reference.
+fn graph_name_token(p: &mut P<'_>) {
+    if !p.eat(K::QUOTED_IDENT) {
+        p.expect_name();
+    }
+}
+
+/// `Nodes on id`, the table a source, as a join's right side is.
+fn make_graph_node_table(p: &mut P<'_>) {
+    let m = p.start();
+    let s = p.start();
+    source(p);
+    p.done(s, K::TABULAR_SOURCE);
+    p.expect(K::ON_KW);
+    graph_name(p);
+    p.done(m, K::MAKE_GRAPH_NODE_TABLE);
+}
+
+/// `graph-match` and `graph-shortest-paths`: options (`names`), a pattern,
+/// then `where` and `project`, each optional as Kusto reads it.
+fn graph_match(p: &mut P<'_>, kind: K, names: &[&str]) -> K {
+    p.bump();
+    while at_named_option(p, names) {
+        option_after_name(p, K::OPERATOR_OPTION);
+    }
+    graph_pattern(p);
+    if p.eat(K::WHERE_KW) {
+        expr::expr(p);
+    }
+    if p.at(K::PROJECT_KW) {
+        let m = p.start();
+        p.bump();
+        list(p, assignment_or_expr);
+        p.done(m, K::GRAPH_PROJECT);
+    }
+    kind
+}
+
+/// Paths separated by commas.
+fn graph_pattern(p: &mut P<'_>) {
+    let m = p.start();
+    loop {
+        graph_path(p);
+        if !p.eat(K::COMMA) {
+            break;
+        }
+    }
+    p.done(m, K::GRAPH_PATTERN);
+}
+
+/// Nodes and edges as written: Kusto parses any run of them and checks the
+/// alternation later, so none is required here. At least one is.
+fn graph_path(p: &mut P<'_>) {
+    let m = p.start();
+    let mut any = false;
+    loop {
+        if p.at(K::L_PAREN) {
+            let n = p.start();
+            p.bump();
+            if p.at(K::QUOTED_IDENT) || p.name_at(0) {
+                expr::name_ref_token(p);
+            }
+            p.expect(K::R_PAREN);
+            p.done(n, K::GRAPH_NODE);
+        } else if at_graph_edge(p) {
+            graph_edge(p);
+        } else {
+            break;
+        }
+        any = true;
+    }
+    if !any {
+        p.error("expected a graph pattern, such as `(a)-[e]->(b)`");
+    }
+    p.done(m, K::GRAPH_PATH);
+}
+
+/// Where an edge starts: `-[`, `--`, `<-[` or `<--`, the tokens touching.
+fn at_graph_edge(p: &P<'_>) -> bool {
+    let back = at_arrow_head(p, 0, "<");
+    let dash = usize::from(back);
+    (!back || p.tokens_touch(0, 1))
+        && p.nth(dash) == K::MINUS
+        && matches!(p.nth(dash + 1), K::L_BRACKET | K::MINUS)
+        && p.tokens_touch(dash, dash + 1)
+}
+
+/// `-[e]->`, `<-[e*1..3]-`, `-->`, `<--`, `--`.
+fn graph_edge(p: &mut P<'_>) {
+    let m = p.start();
+    let back = at_arrow_head(p, 0, "<");
+    if back {
+        p.bump();
+    }
+    p.bump();
+    let mut bracketed = false;
+    if p.at(K::L_BRACKET) {
+        bracketed = true;
+        p.bump();
+        if p.at(K::QUOTED_IDENT) || p.name_at(0) {
+            expr::name_ref_token(p);
+        }
+        if p.at(K::STAR) {
+            let r = p.start();
+            p.bump();
+            expr::graph_bound(p);
+            p.expect(K::DOT_DOT);
+            expr::graph_bound(p);
+            p.done(r, K::GRAPH_RANGE);
+        }
+        if !p.at(K::R_BRACKET) {
+            p.error("expected `]`");
+            p.done(m, K::GRAPH_EDGE);
+            return;
+        }
+        if p.nth(1) == K::MINUS && p.tokens_touch(0, 1) {
+            p.bump();
+        } else {
+            p.error("expected `]-` or `]->`, the tokens together");
+            p.bump();
+            p.done(m, K::GRAPH_EDGE);
+            return;
+        }
+    }
+    // The closing dash: the second of a bare `--`, or the one after `]`.
+    // The arrow head `>` goes with a bare `-->`, and with a bracketed edge;
+    // `<-->` is no arrow.
+    let head = (bracketed || !back) && at_arrow_head(p, 1, ">") && p.tokens_touch(0, 1);
+    p.bump();
+    if head {
+        p.bump();
+    }
+    p.done(m, K::GRAPH_EDGE);
+}
+
+/// `graph-to-table nodes as N with_node_id=id, edges as E with_source_id=s`.
+fn graph_to_table(p: &mut P<'_>) -> K {
+    p.bump();
+    list(p, graph_to_table_item);
+    K::GRAPH_TO_TABLE_OPERATOR
+}
+
+fn graph_to_table_item(p: &mut P<'_>) {
+    let names: &[&str] = if !p.name_at(0) {
+        &[]
+    } else if p.nth_text(0) == "nodes" {
+        &["with_node_id"]
+    } else if p.nth_text(0) == "edges" {
+        &["with_source_id", "with_target_id"]
+    } else {
+        &[]
+    };
+    if names.is_empty() {
+        p.error("expected `nodes` or `edges`");
+        return;
+    }
+    let m = p.start();
+    p.bump_as(K::IDENT);
+    if p.eat(K::AS_KW) {
+        graph_name_token(p);
+    }
+    while at_named_option(p, names) {
+        option_after_name(p, K::OPERATOR_OPTION);
+    }
+    p.done(m, K::GRAPH_TO_TABLE_ITEM);
 }

@@ -145,6 +145,21 @@ Newer graph operators (Sentinel/Azure Monitor support is indicated on each Learn
 | `graph-to-table` | — | Graph | Emit nodes/edges of a graph as tables. | [graph-to-table](https://learn.microsoft.com/kusto/query/graph-to-table-operator) | **Hunting** |
 | `graph-mark-components` | — | Graph | Mark connected components on a graph. | [graph-mark-components](https://learn.microsoft.com/kusto/query/graph-mark-components-operator) | **Hunting** |
 
+The engine parses all five with the grammar the reference parser reads (#1637): `make-graph a --> b`
+(or `--`) with `with Nodes on key, ...`, `with_node_id=` and `partitioned-by col (operators)`;
+`graph-match` and `graph-shortest-paths` with their options (`cycles=`, `output=`), comma-separated
+patterns of `(node)` and edge elements (`-[e]->`, `<-[e]-`, `-[e*1..3]-`, `<-[e]->`, and `-->`, `<--`,
+`--` without brackets), an optional `where` and an optional `project`; `graph-to-table` with
+`nodes` and `edges` items (`as Name`, `with_node_id=`, `with_source_id=`, `with_target_id=`); and
+`graph-mark-components` with `kind=` and `with_component_id=`. The arrows and brackets are runs of touching tokens, as
+there: `]->` with a blank inside is a syntax error. A range needs both bounds (`*1..3`).
+
+Semantics are lenient: the schema after a graph operator is open. The names in a pattern (`a`, `e`) and
+the columns a graph's nodes carry are not checked, and a column after the graph is never reported as
+unknown. Option values (`cycles=`, `kind=`, `output=`) are not checked against the values Learn lists, because the
+reference parser does not check them at the syntax level either. `graph-merge` and `graph-union`
+are not operators of the reference grammar, so they stay unknown operators.
+
 ---
 
 ## Visualization

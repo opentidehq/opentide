@@ -1,0 +1,2 @@
+// prod:graph_shortest_paths_operator invalid
+DeviceNetworkEvents | make-graph DeviceName --> RemoteIP | graph-shortest-paths output=any

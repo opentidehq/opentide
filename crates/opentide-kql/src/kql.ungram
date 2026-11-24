@@ -145,6 +145,11 @@ TabularOperator =
 | TopHittersOperator
 | ReduceOperator
 | SearchOperator
+| MakeGraphOperator
+| GraphMatchOperator
+| GraphShortestPathsOperator
+| GraphToTableOperator
+| GraphMarkComponentsOperator
 | KeywordOperator
 | UnknownOperator
 
@@ -298,13 +303,61 @@ SearchOperator =
   'search' OperatorOption*
   ('in' '(' (table:('ident' | 'quoted_ident') | TablePattern) (',' (table:('ident' | 'quoted_ident') | TablePattern))* ')')? predicate:Expr
 
-// `invoke`, `getschema`, `sample`, `consume`, `make-graph`, ...: an operator
-// that takes at most one argument.
+// `invoke`, `getschema`, `sample`, `consume`, ...: an operator that takes at
+// most one argument.
 KeywordOperator =
   name:('find' | 'invoke' | 'getschema' | 'sample'
-      | 'externaldata' | 'consume' | 'make-graph' | 'graph-match'
-      | 'graph-shortest-paths' | 'graph-to-table' | 'graph-mark-components')
+      | 'externaldata' | 'consume')
   args:Expr?
+
+// The graph operators. Their arrows and brackets are runs of touching
+// tokens, as Kusto reads them: `-->` is `-`, `-`, `>`, and `]->` is `]`,
+// `-`, `>` with no blank between (the parser checks it).
+//
+// `T | make-graph a --> b`, `... with Nodes on id, Other on id2`,
+// `... with_node_id=id`, `... partitioned-by p (graph-match ...)`.
+MakeGraphOperator =
+  keyword:'make-graph' source:NameRef MakeGraphArrow target:NameRef
+  (MakeGraphNodes | node_id:OperatorOption)?
+  MakeGraphPartition?
+MakeGraphArrow = open:'-' close:'-' head:'cmp_op'?
+MakeGraphNodes = 'with' MakeGraphNodeTable (',' MakeGraphNodeTable)*
+MakeGraphNodeTable = TabularSource 'on' key:NameRef
+// `partitioned-by`: `partitioned`, `-` and `by` touch.
+MakeGraphPartition =
+  keyword:'ident' '-' 'by' column:('ident' | 'quoted_ident') '(' Subquery ')'
+
+// `graph-match cycles=none (a)-[e*1..3]->(b) where a.x == 1 project a, b`.
+GraphMatchOperator =
+  keyword:'graph-match' OperatorOption* GraphPattern
+  ('where' predicate:Expr)?
+  GraphProject?
+GraphShortestPathsOperator =
+  keyword:'graph-shortest-paths' OperatorOption* GraphPattern
+  ('where' predicate:Expr)?
+  GraphProject?
+GraphProject = 'project' ColumnItem (',' ColumnItem)*
+// Paths separated by commas; a path is nodes and edges as written, Kusto
+// checks what alternates after parsing.
+GraphPattern = GraphPath (',' GraphPath)*
+GraphPath = (GraphNode | GraphEdge)*
+GraphNode = '(' name:('ident' | 'quoted_ident')? ')'
+// `-[e]->`, `<-[e]-`, `-[e]-`, `<-[e]->`, and without the brackets `-->`,
+// `<--`, `--`.
+GraphEdge =
+  backward:'cmp_op'? open:'-'
+  ('[' name:('ident' | 'quoted_ident')? GraphRange? ']')?
+  close:'-' forward:'cmp_op'?
+// `*1..3`: both bounds, each a signed primary.
+GraphRange = '*' min:Expr '..' max:Expr
+
+// `graph-to-table nodes as N with_node_id=id, edges as E with_source_id=s`.
+GraphToTableOperator =
+  keyword:'graph-to-table' GraphToTableItem (',' GraphToTableItem)*
+GraphToTableItem =
+  kind:'ident' ('as' alias:('ident' | 'quoted_ident'))? OperatorOption*
+// `graph-mark-components kind=weak with_component_id=c`.
+GraphMarkComponentsOperator = keyword:'graph-mark-components' OperatorOption*
 
 // A name the engine does not know as an operator: the catalog decides.
 UnknownOperator = name:'ident' args:Expr?

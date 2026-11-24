@@ -539,6 +539,11 @@ const KQL_REQUIRED: &[&str] = &[
     "comment",
     "string",
     "number",
+    "make_graph_operator",
+    "graph_match_operator",
+    "graph_shortest_paths_operator",
+    "graph_to_table_operator",
+    "graph_mark_components_operator",
 ];
 
 const SPL_REQUIRED: &[&str] = &[

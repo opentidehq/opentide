@@ -271,6 +271,22 @@ pub enum SyntaxKind {
     JSON_OBJECT,
     JSON_PROPERTY,
     JSON_SCALAR,
+    MAKE_GRAPH_OPERATOR,
+    MAKE_GRAPH_ARROW,
+    MAKE_GRAPH_NODES,
+    MAKE_GRAPH_NODE_TABLE,
+    MAKE_GRAPH_PARTITION,
+    GRAPH_MATCH_OPERATOR,
+    GRAPH_SHORTEST_PATHS_OPERATOR,
+    GRAPH_PATTERN,
+    GRAPH_PATH,
+    GRAPH_NODE,
+    GRAPH_EDGE,
+    GRAPH_RANGE,
+    GRAPH_TO_TABLE_OPERATOR,
+    GRAPH_TO_TABLE_ITEM,
+    GRAPH_MARK_COMPONENTS_OPERATOR,
+    GRAPH_PROJECT,
 }
 
 use SyntaxKind as K;
@@ -323,6 +339,7 @@ pub(crate) const ALL: &[SyntaxKind] = &[
     K::RANGE, K::MEMBER_EXPR, K::INDEX_EXPR, K::FUNCTION_CALL, K::NAMED_ARGUMENT, K::STAR_ARG, K::STAR_EXPR,
     K::TOSCALAR_EXPR, K::PAREN_EXPR, K::NAME_REF, K::LITERAL, K::DYNAMIC_LITERAL, K::JSON_ARRAY,
     K::JSON_OBJECT, K::JSON_PROPERTY, K::JSON_SCALAR,
+    K::MAKE_GRAPH_OPERATOR, K::MAKE_GRAPH_ARROW, K::MAKE_GRAPH_NODES, K::MAKE_GRAPH_NODE_TABLE, K::MAKE_GRAPH_PARTITION, K::GRAPH_MATCH_OPERATOR, K::GRAPH_SHORTEST_PATHS_OPERATOR, K::GRAPH_PATTERN, K::GRAPH_PATH, K::GRAPH_NODE, K::GRAPH_EDGE, K::GRAPH_RANGE, K::GRAPH_TO_TABLE_OPERATOR, K::GRAPH_TO_TABLE_ITEM, K::GRAPH_MARK_COMPONENTS_OPERATOR, K::GRAPH_PROJECT,
 ];
 
 impl SyntaxKind {
@@ -631,10 +648,10 @@ mod tests {
         }
         assert_eq!(
             ALL.last().copied(),
-            Some(K::JSON_SCALAR),
+            Some(K::GRAPH_PROJECT),
             "a kind is missing from ALL"
         );
-        assert_eq!(ALL.len(), K::JSON_SCALAR as usize + 1);
+        assert_eq!(ALL.len(), K::GRAPH_PROJECT as usize + 1);
         assert!(!K::ERROR.is_token() && K::REGEX_KW.is_token());
         assert!((K::LET_KW as usize..=K::REGEX_KW as usize).all(|i| ALL[i].is_word()));
     }
