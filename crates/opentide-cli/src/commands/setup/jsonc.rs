@@ -165,10 +165,10 @@ fn merge_with(
                         }
                         // Not an object (`null`, a string): not an entry
                         // anyone could have customised; opentide's replaces it.
-                        _ => prop.set_value(input(entry)),
+                        _ => set_unless_same(&prop, entry),
                     }
                 }
-                Some(prop) => prop.set_value(input(entry)),
+                Some(prop) => set_unless_same(&prop, entry),
                 None => {
                     existing.append(name, input(entry));
                 }
@@ -179,6 +179,18 @@ fn merge_with(
     // The edit must read back as a document: never write one that does not.
     parse(&merged).map_err(MergeError::Invalid)?;
     Ok((merged, kept))
+}
+
+/// Sets `prop` to `value`, unless it holds `value` already: the user's
+/// layout and comments inside an entry that is right stay (#743).
+fn set_unless_same(prop: &jsonc_parser::cst::CstObjectProp, value: &Json) {
+    let same = prop
+        .value()
+        .and_then(|node| node_json(&node))
+        .is_some_and(|current| &current == value);
+    if !same {
+        prop.set_value(input(value));
+    }
 }
 
 /// Adds to `own` each of `fields` it lacks, one object level down too; a

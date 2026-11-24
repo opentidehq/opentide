@@ -266,6 +266,11 @@ impl Stage {
         for (path, staged) in std::mem::take(&mut self.files) {
             match staged {
                 Staged::File { bytes, executable } => {
+                    // Nothing to change: the file stays as it is, its
+                    // modification time too (#743).
+                    if unchanged(&path, &bytes, executable) {
+                        continue;
+                    }
                     if let Some(parent) = path.parent() {
                         std::fs::create_dir_all(parent)
                             .map_err(|error| format!("{}: {error}", parent.display()))?;
@@ -297,6 +302,15 @@ impl Stage {
         self.before.clear();
         Ok(())
     }
+}
+
+/// Whether the file at `path` holds `bytes` already and is as executable as
+/// asked (a file already executable stays so, as [`set_executable`] only adds
+/// the bits). A link is no file of its own: it is written through.
+fn unchanged(path: &Path, bytes: &[u8], executable: bool) -> bool {
+    !path.is_symlink()
+        && std::fs::read(path).is_ok_and(|found| found == bytes)
+        && (!executable || executable_on_disk(path))
 }
 
 /// Removes the link at `path` itself; nothing when it is gone already.
@@ -432,5 +446,31 @@ mod tests {
         assert_eq!(mode(&tool) & 0o111, 0o111);
         assert_eq!(mode(&plain) & 0o111, 0);
         assert_eq!(std::fs::read_to_string(&tool).unwrap(), "new\n");
+    }
+
+    /// A staged file that holds what the disk has is not written: its
+    /// modification time stays (#743), and a changed one is written.
+    #[test]
+    fn committing_an_unchanged_file_leaves_its_modification_time() {
+        let dir = tempfile::tempdir().unwrap();
+        let (same, other) = (dir.path().join("same.json"), dir.path().join("other.json"));
+        let past = std::time::SystemTime::now() - std::time::Duration::from_secs(3600);
+        for path in [&same, &other] {
+            std::fs::write(path, "{\r\n  // mine\r\n}\r\n").unwrap();
+            std::fs::File::options()
+                .write(true)
+                .open(path)
+                .unwrap()
+                .set_modified(past)
+                .unwrap();
+        }
+        let modified = |path: &Path| std::fs::metadata(path).unwrap().modified().unwrap();
+        let mut stage = Stage::new();
+        stage.write(&same, "{\r\n  // mine\r\n}\r\n");
+        stage.write(&other, "{}\r\n");
+        stage.commit().unwrap();
+        assert_eq!(modified(&same), past);
+        assert!(modified(&other) > past);
+        assert_eq!(std::fs::read_to_string(&other).unwrap(), "{}\r\n");
     }
 }
