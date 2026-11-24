@@ -43,6 +43,20 @@
                   "name": "variable.other.property.tide"
                 },
                 "3": {
+                  "name": "string.quoted.yaml punctuation.definition.string.begin.yaml"
+                },
+                "4": {
+                  "name": "meta.embedded.block.kql",
+                  "patterns": [
+                    {
+                      "include": "source.kql"
+                    }
+                  ]
+                },
+                "5": {
+                  "name": "string.quoted.yaml punctuation.definition.string.end.yaml"
+                },
+                "6": {
                   "name": "meta.embedded.block.kql",
                   "patterns": [
                     {
@@ -51,7 +65,12 @@
                   ]
                 }
               },
-              "match": "^(\\s+)(query)\\s*:\\s+(?![|>])(.+)$"
+              "match": "^(\\s+)(query)\\s*:\\s+(?![|>])(?:(['\"])(.*)(\\3)|(.+?))(?=[ \\t]+#|[ \\t]*$)"
+            },
+            {
+              "comment": "capture:comment",
+              "match": "(?<=[ \\t])#.*$",
+              "name": "comment.line.opentide"
             },
             {
               "include": "$self"
@@ -89,6 +108,20 @@
                   "name": "variable.other.property.tide"
                 },
                 "3": {
+                  "name": "string.quoted.yaml punctuation.definition.string.begin.yaml"
+                },
+                "4": {
+                  "name": "meta.embedded.block.spl",
+                  "patterns": [
+                    {
+                      "include": "source.spl"
+                    }
+                  ]
+                },
+                "5": {
+                  "name": "string.quoted.yaml punctuation.definition.string.end.yaml"
+                },
+                "6": {
                   "name": "meta.embedded.block.spl",
                   "patterns": [
                     {
@@ -97,7 +130,12 @@
                   ]
                 }
               },
-              "match": "^(\\s+)(query|search)\\s*:\\s+(?![|>])(.+)$"
+              "match": "^(\\s+)(query|search)\\s*:\\s+(?![|>])(?:(['\"])(.*)(\\3)|(.+?))(?=[ \\t]+#|[ \\t]*$)"
+            },
+            {
+              "comment": "capture:comment",
+              "match": "(?<=[ \\t])#.*$",
+              "name": "comment.line.opentide"
             },
             {
               "include": "$self"
@@ -135,6 +173,20 @@
                   "name": "variable.other.property.tide"
                 },
                 "3": {
+                  "name": "string.quoted.yaml punctuation.definition.string.begin.yaml"
+                },
+                "4": {
+                  "name": "meta.embedded.block.lucene",
+                  "patterns": [
+                    {
+                      "include": "source.lucene"
+                    }
+                  ]
+                },
+                "5": {
+                  "name": "string.quoted.yaml punctuation.definition.string.end.yaml"
+                },
+                "6": {
                   "name": "meta.embedded.block.lucene",
                   "patterns": [
                     {
@@ -143,7 +195,12 @@
                   ]
                 }
               },
-              "match": "^(\\s+)(query)\\s*:\\s+(?![|>])(.+)$"
+              "match": "^(\\s+)(query)\\s*:\\s+(?![|>])(?:(['\"])(.*)(\\3)|(.+?))(?=[ \\t]+#|[ \\t]*$)"
+            },
+            {
+              "comment": "capture:comment",
+              "match": "(?<=[ \\t])#.*$",
+              "name": "comment.line.opentide"
             },
             {
               "include": "$self"
@@ -181,6 +238,20 @@
                   "name": "variable.other.property.tide"
                 },
                 "3": {
+                  "name": "string.quoted.yaml punctuation.definition.string.begin.yaml"
+                },
+                "4": {
+                  "name": "meta.embedded.block.falco",
+                  "patterns": [
+                    {
+                      "include": "source.falco"
+                    }
+                  ]
+                },
+                "5": {
+                  "name": "string.quoted.yaml punctuation.definition.string.end.yaml"
+                },
+                "6": {
                   "name": "meta.embedded.block.falco",
                   "patterns": [
                     {
@@ -189,7 +260,12 @@
                   ]
                 }
               },
-              "match": "^(\\s+)(condition)\\s*:\\s+(?![|>])(.+)$"
+              "match": "^(\\s+)(condition)\\s*:\\s+(?![|>])(?:(['\"])(.*)(\\3)|(.+?))(?=[ \\t]+#|[ \\t]*$)"
+            },
+            {
+              "comment": "capture:comment",
+              "match": "(?<=[ \\t])#.*$",
+              "name": "comment.line.opentide"
             },
             {
               "include": "$self"
@@ -227,6 +303,20 @@
                   "name": "variable.other.property.tide"
                 },
                 "3": {
+                  "name": "string.quoted.yaml punctuation.definition.string.begin.yaml"
+                },
+                "4": {
+                  "name": "meta.embedded.block.cql",
+                  "patterns": [
+                    {
+                      "include": "source.opentide.cql"
+                    }
+                  ]
+                },
+                "5": {
+                  "name": "string.quoted.yaml punctuation.definition.string.end.yaml"
+                },
+                "6": {
                   "name": "meta.embedded.block.cql",
                   "patterns": [
                     {
@@ -235,7 +325,12 @@
                   ]
                 }
               },
-              "match": "^(\\s+)(query)\\s*:\\s+(?![|>])(.+)$"
+              "match": "^(\\s+)(query)\\s*:\\s+(?![|>])(?:(['\"])(.*)(\\3)|(.+?))(?=[ \\t]+#|[ \\t]*$)"
+            },
+            {
+              "comment": "capture:comment",
+              "match": "(?<=[ \\t])#.*$",
+              "name": "comment.line.opentide"
             },
             {
               "include": "$self"
@@ -273,6 +368,20 @@
                   "name": "variable.other.property.tide"
                 },
                 "3": {
+                  "name": "string.quoted.yaml punctuation.definition.string.begin.yaml"
+                },
+                "4": {
+                  "name": "meta.embedded.block.yaral",
+                  "patterns": [
+                    {
+                      "include": "source.yaral"
+                    }
+                  ]
+                },
+                "5": {
+                  "name": "string.quoted.yaml punctuation.definition.string.end.yaml"
+                },
+                "6": {
                   "name": "meta.embedded.block.yaral",
                   "patterns": [
                     {
@@ -281,7 +390,12 @@
                   ]
                 }
               },
-              "match": "^(\\s+)(setup|events|outcome|condition|export)\\s*:\\s+(?![|>])(.+)$"
+              "match": "^(\\s+)(setup|events|outcome|condition|export)\\s*:\\s+(?![|>])(?:(['\"])(.*)(\\3)|(.+?))(?=[ \\t]+#|[ \\t]*$)"
+            },
+            {
+              "comment": "capture:comment",
+              "match": "(?<=[ \\t])#.*$",
+              "name": "comment.line.opentide"
             },
             {
               "include": "$self"
