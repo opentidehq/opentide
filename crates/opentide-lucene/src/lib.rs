@@ -854,18 +854,29 @@ fn regexp_body(
             push_body(f, codes::GRAYLOG_REGEX_QUOTE, Severity::Warning, out);
         }
     }
-    regexp_pcre_habits(body, start, cx, dialect, out);
+    // Carbon Black lower-cases only the tokens of tokenized fields: the upper-case hint is
+    // for a regexp under one of those, never for another field or for no field.
+    let tokenized = ancestors
+        .iter()
+        .rev()
+        .find(|n| n.kind() == K::FieldQuery)
+        .and_then(Node::field)
+        .and_then(|f| carbon_black::field(f.text(source)))
+        .is_some_and(|f| f.tokenized);
+    regexp_pcre_habits(body, start, cx, dialect, tokenized, out);
 }
 
 /// Valid Lucene, but not what a PCRE author meant: `(?:`, `(?i)`, and the
 /// anchors `^` and `$` are literal text, because Lucene regexps always match
 /// the whole term. Carbon Black matches lower-cased tokens, so upper-case
-/// letters cannot match on tokenized fields.
+/// letters cannot match on tokenized fields (`tokenized`: the regexp's field
+/// is one).
 fn regexp_pcre_habits(
     body: &str,
     start: usize,
     cx: Cx<'_>,
     dialect: Dialect,
+    tokenized: bool,
     out: &mut Vec<Diagnostic>,
 ) {
     let chars: Vec<(usize, char)> = body.char_indices().collect();
@@ -929,6 +940,7 @@ fn regexp_pcre_habits(
         ));
     }
     if dialect == Dialect::CarbonBlack
+        && tokenized
         && let Some(b) = upper
     {
         let mut d = Diagnostic::warning(
@@ -1440,11 +1452,16 @@ mod tests {
                 "{src}"
             );
         }
-        assert!(
-            cb("process_name:/CMD.*/")
+        // The upper-case hint is for a tokenized field (`process_cmdline`) only.
+        let hinted = |src: &str| {
+            cb(src)
                 .iter()
                 .any(|(c, s)| c == codes::LUCENE_REGEXP && *s == Severity::Hint)
-        );
+        };
+        assert!(hinted("process_cmdline:/.*CMD.*/"));
+        assert!(!hinted("process_name:/CMD.*/"), "an untokenized field");
+        assert!(!hinted("not_a_catalog_field:/CMD.*/"), "an unknown field");
+        assert!(!hinted("/CMD.*/"), "no field");
         // Diagnostics stay on the source line they belong to.
         let found = analyze_dialect(
             "process_name:cmd.exe\n  AND\n  _exists_:x",

@@ -20,6 +20,10 @@ pub struct Field {
     pub kind: String,
     #[serde(default)]
     pub list: bool,
+    /// Carbon Black lower-cases the tokens of the field, so a regexp with an upper-case letter
+    /// never matches there (the hint of `lucene_regexp`).
+    #[serde(default)]
+    pub tokenized: bool,
     pub description: String,
     #[serde(default)]
     pub values: Vec<String>,
@@ -156,6 +160,20 @@ mod tests {
             field("device_os").unwrap().values,
             ["WINDOWS", "LINUX", "MAC"]
         );
+    }
+
+    #[test]
+    fn only_the_command_line_fields_are_tokenized() {
+        let tokenized: Vec<&str> = fields()
+            .iter()
+            .filter(|f| f.tokenized)
+            .map(|f| f.name.as_str())
+            .collect();
+        assert_eq!(
+            tokenized,
+            ["process_cmdline", "parent_cmdline", "childproc_cmdline"]
+        );
+        assert!(!field("process_name").unwrap().tokenized);
     }
 
     #[test]
