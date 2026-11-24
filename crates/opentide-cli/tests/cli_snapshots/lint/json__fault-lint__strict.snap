@@ -16,14 +16,14 @@ findings: 86
   kql_wildcard_table | warning | objects/rules/covert-exfiltration-rule-0157.yaml | 45 | 33
   esql_group_by_column | warning | objects/rules/covert-relay-rule-0307.yaml | 51 | 7
   kql_unscoped_union | warning | objects/rules/covert-tunnel-rule-0170.yaml | 49 | 13
-  eql_expression_depth | warning | objects/rules/covert-tunnel-rule-0392.yaml | 76 | 271
+  eql_expression_depth | warning | objects/rules/covert-tunnel-rule-0392.yaml | 75 | 271
   falco_unknown_source | warning | objects/rules/elevated-beacon-rule-0256.yaml | 68 | 5
   falco_unsafe_na_check | warning | objects/rules/elevated-harvest-rule-0259.yaml | 83 | 22
   esql_unavailable | info | objects/rules/elevated-harvest-rule-0372.yaml | 39 | 34
   spl_unknown_command | warning | objects/rules/elevated-relay-rule-0107.yaml | 58 | 20
   esql_expression_depth | warning | objects/rules/elevated-relay-rule-0242.yaml | 53 | 349
   kql_deprecated_function | warning | objects/rules/elevated-tunnel-rule-0101.yaml | 53 | 19
-  lucene_bare_term | info | objects/rules/encoded-beacon-rule-0145.yaml | 73 | 23
+  lucene_bare_term | info | objects/rules/encoded-beacon-rule-0145.yaml | 72 | 23
   falco_field_as_value | warning | objects/rules/encoded-downgrade-rule-0181.yaml | 83 | 39
   lucene_lowercase_operator | warning | objects/rules/encoded-dropper-rule-0294.yaml | 44 | 28
   falco_no_evttype | warning | objects/rules/encoded-injection-rule-0204.yaml | 57 | 7
@@ -33,37 +33,37 @@ findings: 86
   lucene_escape | warning | objects/rules/encoded-tunnel-rule-0164.yaml | 42 | 31
   falco_deprecated_field | warning | objects/rules/encoded-tunnel-rule-0178.yaml | 37 | 27
   lucene_kuery_syntax | warning | objects/rules/hidden-downgrade-rule-0229.yaml | 55 | 19
-  lucene_unescaped_slash | warning | objects/rules/hidden-exfiltration-rule-0470.yaml | 55 | 17
+  lucene_unescaped_slash | warning | objects/rules/hidden-exfiltration-rule-0470.yaml | 54 | 17
   threshold_lookback | warning | objects/rules/hidden-harvest-rule-0060.yaml | 62 | 7
   falco_regex_simple | warning | objects/rules/hidden-harvest-rule-0217.yaml | 57 | 43
   kuery_lucene_syntax | warning | objects/rules/hidden-injection-rule-0268.yaml | 57 | 13
   eql_maxspan_missing | info | objects/rules/hidden-relay-rule-0476.yaml | 60 | 7
   risk_band | warning | objects/rules/hidden-tunnel-rule-0528.yaml | 67 | 5
-  lucene_mixed_operators | warning | objects/rules/lateral-downgrade-rule-0340.yaml | 79 | 22
+  lucene_mixed_operators | warning | objects/rules/lateral-downgrade-rule-0340.yaml | 78 | 22
   kql_where_not_first | warning | objects/rules/lateral-dropper-rule-0144.yaml | 52 | 9
   eql_regex | warning | objects/rules/lateral-exfiltration-rule-0606.yaml | 49 | 40
-  eql_nested_comment | warning | objects/rules/lateral-pivot-rule-0587.yaml | 57 | 21
-  eql_runs_ignored | warning | objects/rules/lateral-spray-rule-0652.yaml | 67 | 53
+  eql_nested_comment | warning | objects/rules/lateral-pivot-rule-0587.yaml | 56 | 21
+  eql_runs_ignored | warning | objects/rules/lateral-spray-rule-0652.yaml | 66 | 53
   spl_dataset_not_declared | warning | objects/rules/persistent-beacon-rule-0121.yaml | 59 | 18
   falco_unknown_macro | warning | objects/rules/persistent-beacon-rule-0233.yaml | 87 | 27
-  kuery_range_type | info | objects/rules/persistent-dropper-rule-0379.yaml | 62 | 7
+  kuery_range_type | info | objects/rules/persistent-dropper-rule-0379.yaml | 61 | 7
   falco_newer_syntax | warning | objects/rules/persistent-loader-rule-0191.yaml | 46 | 37
-  lookback_zero | warning | objects/rules/rapid-beacon-rule-0509.yaml | 67 | 7
+  lookback_zero | warning | objects/rules/rapid-beacon-rule-0509.yaml | 66 | 7
   spl_empty_stage | warning | objects/rules/rapid-implant-rule-0083.yaml | 70 | 27
   kuery_quoted_wildcard | info | objects/rules/rapid-injection-rule-0333.yaml | 49 | 20
-  esql_metadata_id | warning | objects/rules/remote-downgrade-rule-0353.yaml | 75 | 7
+  esql_metadata_id | warning | objects/rules/remote-downgrade-rule-0353.yaml | 74 | 7
   kql_unscoped_union | warning | objects/rules/remote-dropper-rule-0140.yaml | 75 | 13
   falco_transformer_as_value | warning | objects/rules/remote-injection-rule-0220.yaml | 51 | 39
   ecs_unknown_field | warning | objects/rules/remote-loader-rule-0398.yaml | 61 | 7
   kql_deprecated_operator | warning | objects/rules/remote-pivot-rule-0105.yaml | 44 | 24
   eql_maxspan_window | warning | objects/rules/remote-tunnel-rule-0541.yaml | 51 | 29
   falco_unknown_list | warning | objects/rules/rogue-beacon-rule-0230.yaml | 46 | 40
-  elastic_dataset_not_declared | warning | objects/rules/rogue-beacon-rule-0574.yaml | 77 | 9
+  elastic_dataset_not_declared | warning | objects/rules/rogue-beacon-rule-0574.yaml | 76 | 9
   lucene_regexp | warning | objects/rules/rogue-downgrade-rule-0424.yaml | 58 | 21
   spl_subsearch_truncation | warning | objects/rules/rogue-dropper-rule-0095.yaml | 73 | 20
   kql_join_summarize_before_project | warning | objects/rules/rogue-dropper-rule-0118.yaml | 45 | 9
   eql_until_term | warning | objects/rules/rogue-injection-rule-0671.yaml | 60 | 77
-  eql_maxspan_lookback | warning | objects/rules/rogue-pivot-rule-0457.yaml | 68 | 29
+  eql_maxspan_lookback | warning | objects/rules/rogue-pivot-rule-0457.yaml | 67 | 29
   lookback_long | warning | objects/rules/rogue-pivot-rule-0463.yaml | 60 | 7
   eql_literal_wildcard | warning | objects/rules/rogue-spray-rule-0411.yaml | 53 | 37
   spl_wildcard | warning | objects/rules/rogue-tunnel-rule-0120.yaml | 64 | 7
@@ -74,16 +74,16 @@ findings: 86
   kuery_lucene_syntax | warning | objects/rules/scheduled-dropper-rule-0203.yaml | 48 | 7
   kuery_lucene_syntax | warning | objects/rules/scheduled-dropper-rule-0203.yaml | 48 | 36
   kuery_looks_like_lucene | warning | objects/rules/scheduled-dropper-rule-0203.yaml | 48 | 7
-  kuery_question_mark | info | objects/rules/scheduled-implant-rule-0314.yaml | 77 | 19
+  kuery_question_mark | info | objects/rules/scheduled-implant-rule-0314.yaml | 76 | 19
   falco_unknown_rule | warning | objects/rules/scheduled-relay-rule-0243.yaml | 52 | 5
   lucene_elasticsearch_only | warning | objects/rules/scheduled-spray-rule-0037.yaml | 57 | 7
   sysdig_list_self_reference | warning | objects/rules/scheduled-tunnel-rule-0269.yaml | 63 | 9
   falco_unknown_source | warning | objects/rules/silent-pivot-rule-0025.yaml | 88 | 5
   falco_output_syntax | warning | objects/rules/silent-pivot-rule-0025.yaml | 83 | 53
-  kuery_free_text | info | objects/rules/silent-tunnel-rule-0184.yaml | 65 | 7
-  lucene_lowercase_operator | warning | objects/rules/silent-tunnel-rule-0275.yaml | 59 | 28
-  lucene_kuery_syntax | warning | objects/rules/silent-tunnel-rule-0275.yaml | 59 | 43
-  lucene_looks_like_kuery | warning | objects/rules/silent-tunnel-rule-0275.yaml | 59 | 7
+  kuery_free_text | info | objects/rules/silent-tunnel-rule-0184.yaml | 64 | 7
+  lucene_lowercase_operator | warning | objects/rules/silent-tunnel-rule-0275.yaml | 58 | 28
+  lucene_kuery_syntax | warning | objects/rules/silent-tunnel-rule-0275.yaml | 58 | 43
+  lucene_looks_like_kuery | warning | objects/rules/silent-tunnel-rule-0275.yaml | 58 | 7
   spl_leading_not | warning | objects/rules/staged-beacon-rule-0094.yaml | 40 | 7
   kql_unscoped_search | warning | objects/rules/staged-pivot-rule-0131.yaml | 36 | 7
   yaml_parse | error | objects/threats/encoded-exfiltration-threat-0030.yaml | - | -

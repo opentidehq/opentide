@@ -8,7 +8,6 @@ exit: 1
 ━━━ stdout · json, 1 lines
 {
   "command": "setup vscode",
-  "deprecated": "opentide setup vscode is deprecated and will be removed when the opentide VS Code extension ships with a bundled language server and template actions.",
   "duration_ms": 0,
   "error": "VS Code snippets were not generated (no templates in .opentide/templates)",
   "exit_code": 1,
@@ -30,6 +29,5 @@ exit: 1
 }
 
 ━━━ stderr
-{"detail":"opentide setup vscode is deprecated and will be removed when the opentide VS Code extension ships with a bundled language server and template actions.","event":"vscode_setup_deprecated","level":"warning","timestamp":"0000-00-00 00:00:00"}
 {"detail":"No templates in .opentide/templates — run opentide generate first","event":"vscode_snippets_skipped","level":"warning","timestamp":"0000-00-00 00:00:00"}
 {"detail":"VS Code snippets were not generated (no templates in .opentide/templates)","event":"vscode_snippets_missing","level":"error","timestamp":"0000-00-00 00:00:00"}

@@ -286,6 +286,50 @@ mod validate {
     }
 
     #[test]
+    fn a_defender_alert_category_is_an_unknown_key_that_says_microsoft_removed_it() {
+        // Microsoft Graph removed `category` from the custom detection's alert template
+        // (2026-10-01), so it is reported like any unknown key, with a hint that names why;
+        // another unknown key in the same block gets no such hint.
+        let fs = workspace();
+        fs.write(
+            "/ws/objects/rules/a.yaml",
+            format!(
+                "{}configurations:\n  defender_for_endpoint:\n    status: STAGING\n    alert:\n      \
+                 category: Execution\n      colour: red\n",
+                rule(U1, "A")
+            ),
+        );
+        let validation = run(&fs, &Options::default());
+        let finding = |key: &str| {
+            with_code(&validation, "schema_validation")
+                .into_iter()
+                .find(|d| {
+                    d.field_path.join(".")
+                        == format!("configurations.defender_for_endpoint.alert.{key}")
+                })
+                .unwrap_or_else(|| panic!("{key}: {:?}", validation.report.issues))
+        };
+        let category = finding("category");
+        assert!(
+            category
+                .message
+                .starts_with(opentide_schema::from_node::messages::EXTRA_FORBIDDEN)
+        );
+        let help = category.help.as_deref().unwrap_or_default();
+        assert!(help.contains("Microsoft removed `category`"), "{help}");
+        let other = finding("colour");
+        assert!(
+            !other
+                .help
+                .as_deref()
+                .unwrap_or_default()
+                .contains("Microsoft"),
+            "{:?}",
+            other.help
+        );
+    }
+
+    #[test]
     fn a_file_that_does_not_exist_is_file_not_found() {
         let fs = workspace();
         fs.write("/ws/objects/rules/a.yaml", rule(U1, "A"));

@@ -6,7 +6,7 @@
     "-c",
     "cp -R tests/golden/fixtures/deploy-tenants \"$HOME/ws\" && exec opentide --repo \"$HOME/ws\" --json deploy --platform defender_for_endpoint --strategy PREVIEW --strategy RELEASE --all --keep-deprecated"
   ],
-  "digest": "sha256:15cb2511568db938facd32a70affdedb1b75d7cfc465681088251fab801f66d6",
+  "digest": "sha256:63ecebdaabb8f9109a8997be309ddf383c2ae842ca56f40ebe001eb477f3e7ae",
   "interactions": [
     {
       "request": {
@@ -49,7 +49,7 @@
             "application/json"
           ]
         ],
-        "body": "{\"displayName\":\"Defender create rule\",\"queryCondition\":{\"queryText\":\"DeviceProcessEvents\\n| take 1\\n\"},\"schedule\":{\"period\":\"1H\"},\"detectionAction\":{\"alertTemplate\":{\"title\":\"Defender create rule\",\"description\":\"A rule the defender stand-in tenant receives in a deploy that sends.\",\"severity\":\"high\",\"category\":\"Execution\",\"mitreTechniques\":[],\"impactedAssets\":[{\"@odata.type\":\"#microsoft.graph.security.impactedDeviceAsset\",\"identifier\":\"device_id\"}],\"recommendedActions\":null},\"responseActions\":[],\"organizationalScope\":null},\"isEnabled\":true}"
+        "body": "{\"displayName\":\"Defender create rule\",\"queryCondition\":{\"queryText\":\"DeviceProcessEvents\\n| take 1\\n\"},\"schedule\":{\"period\":\"1H\"},\"detectionAction\":{\"alertTemplate\":{\"title\":\"Defender create rule\",\"description\":\"A rule the defender stand-in tenant receives in a deploy that sends.\",\"severity\":\"high\",\"mitreTechniques\":[],\"impactedAssets\":[{\"@odata.type\":\"#microsoft.graph.security.impactedDeviceAsset\",\"identifier\":\"device_id\"}],\"recommendedActions\":null},\"responseActions\":[],\"organizationalScope\":null},\"isEnabled\":true}"
       },
       "response": {
         "status": 201,
@@ -80,7 +80,7 @@
             "application/json"
           ]
         ],
-        "body": "{\"displayName\":\"Defender update rule\",\"queryCondition\":{\"queryText\":\"DeviceProcessEvents\\n| take 1\\n\"},\"schedule\":{\"period\":\"1H\"},\"detectionAction\":{\"alertTemplate\":{\"title\":\"Defender update rule\",\"description\":\"A rule the defender stand-in tenant receives in a deploy that sends.\",\"severity\":\"high\",\"category\":\"Execution\",\"mitreTechniques\":[],\"impactedAssets\":[{\"@odata.type\":\"#microsoft.graph.security.impactedDeviceAsset\",\"identifier\":\"device_id\"}],\"recommendedActions\":null},\"responseActions\":[],\"organizationalScope\":null},\"isEnabled\":true}"
+        "body": "{\"displayName\":\"Defender update rule\",\"queryCondition\":{\"queryText\":\"DeviceProcessEvents\\n| take 1\\n\"},\"schedule\":{\"period\":\"1H\"},\"detectionAction\":{\"alertTemplate\":{\"title\":\"Defender update rule\",\"description\":\"A rule the defender stand-in tenant receives in a deploy that sends.\",\"severity\":\"high\",\"mitreTechniques\":[],\"impactedAssets\":[{\"@odata.type\":\"#microsoft.graph.security.impactedDeviceAsset\",\"identifier\":\"device_id\"}],\"recommendedActions\":null},\"responseActions\":[],\"organizationalScope\":null},\"isEnabled\":true}"
       },
       "response": {
         "status": 404,

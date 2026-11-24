@@ -6,7 +6,9 @@ args: opentide --json setup vscode --help
 exit: 0
 
 ━━━ stdout
-Recommend the opentide extension and write snippets (deprecated). Default: both.
+Recommend the opentide extension and write snippets. Default: both.
+
+The recommended way to use opentide in VS Code is the opentide extension (opentidehq.opentide, on the VS Code Marketplace and Open VSX). It bundles opentide, so nothing else is installed. This command is an alternative for setups without it.
 
 Usage: opentide setup vscode [OPTIONS]
 
@@ -39,6 +41,9 @@ Options:
 
       --help
           Print help
+
+Install the extension (recommended):
+  $ code --install-extension opentidehq.opentide
 
 Examples:
   $ opentide setup vscode --settings

@@ -29,7 +29,7 @@ configurations:
       | take 1
     scheduling: 1H
     alert:
-      category: Execution
+      title: Defender KQL Rule
     impacted_entities:
       device: device_id
     scope:

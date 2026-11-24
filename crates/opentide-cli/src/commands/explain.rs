@@ -267,7 +267,7 @@ mod tests {
             panic!("no body");
         };
         assert!(text.starts_with("# vocab_unknown\n\nA value"));
-        assert!(text.ends_with("recommends it).\n"));
+        assert!(text.ends_with("recommends it to the team).\n"));
     }
 
     #[test]

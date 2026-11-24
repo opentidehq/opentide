@@ -146,7 +146,7 @@ One line per check, its fix under it, then the outcome line. `✓` is a pass, `!
   → add a [[tenants]] entry in .opentide/configurations/platforms/sentinel.toml
 ○ No proxy set (--proxy, OPENTIDE_PROXY, https_proxy, http_proxy, all_proxy) · proxy
 ○ No .vscode/extensions.json: VS Code does not suggest opentidehq.opentide · vscode_settings
-  → opentide setup vscode
+  → code --install-extension opentidehq.opentide (or opentide setup vscode, to recommend it to the team)
 ○ No snippets at .vscode/model-templates.code-snippets · vscode_snippets
   → opentide generate snippets
 ○ No MCP configuration: agents in editors cannot call opentide tools · mcp_config

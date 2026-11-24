@@ -97,7 +97,10 @@ warmup = 1
 # as `Low`, `Medium` or `High` where it wrote them in lower case, which deploy (and so the dry
 # run) refuses as "Invalid Severity" (the model's five names, `map_severity`). The same holds
 # for the medians: 0.23.0 reads `severity` as any string.
-digest = "3b65f46efbfcf566"
+# #1704 moved it from 3b65f46efbfcf566: the generator no longer writes the Defender block's
+# `alert.category`, which Microsoft removed and the model no longer has. The medians stand: the
+# oracle's model still reads it, but the generated rules are otherwise the same.
+digest = "a90642f9859edb09"
 # The platforms the heavy workspace holds: the ones opentide 0.23.0 knows, in the connector
 # order (xtask's bench::oracle::ORACLE_PLATFORMS). Bitdefender, Graylog, Exabeam and Google
 # SecOps join when the oracle pin moves past 0.28.

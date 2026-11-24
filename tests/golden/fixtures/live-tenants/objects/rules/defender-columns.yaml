@@ -17,7 +17,7 @@ configurations:
       | project Timestamp, DeviceId, ReportId
     scheduling: 1H
     alert:
-      category: Execution
+      title: Defender columns rule
     impacted_entities:
       device: device_id
     scope:

@@ -202,7 +202,6 @@ exit: 0
             "body": {
               "detectionAction": {
                 "alertTemplate": {
-                  "category": "Execution",
                   "description": "Simulated Defender rule for CLI E2E corpus.\n",
                   "impactedAssets": [
                     {

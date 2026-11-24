@@ -22,7 +22,6 @@ configurations:
     scheduling: 1H
     alert:
       title: odata_type seen
-      category: Collection
       description: The event's odata_type is Message.
     impacted_entities:
       user: AccountObjectId
