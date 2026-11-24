@@ -31,6 +31,10 @@ cargo run -p opentide-lsp -- generate-highlights --check
 
 Commit the generated files. Do not hand-edit them. Editor repos copy the zip produced from these files; they do not author a second grammar.
 
+## Rules beyond the `KEYWORDS` table
+
+`crates/opentide-highlight/src/tm_extras.rs` adds the grammar's function, field, boolean-operator and leading-table rules, so the first paint (before semantic tokens) is not monochrome. Their scopes are spec captures' `tm` (plus the standard `keyword.operator.logical.opentide`); never a colour. The built-in names come from the catalogs' `functions.toml` through `scripts/engine/sync_highlight_functions.py` (`--check` compares). `highlights/test/coverage.mjs` measures the share of real queries a grammar leaves in the default foreground (`npm test` there holds every language to 30%).
+
 ## Captures
 
 A capture a language uses must be a legend member: each language crate colours its tree with HighlightSpec captures (its `highlight`), and its `KEYWORDS` table (`crates/opentide-highlight/src/keywords/<lang>.rs`, which the TextMate grammar is generated from) names spec captures only (`keyword_tables_name_spec_captures`). There are no `.scm` queries (#1231).

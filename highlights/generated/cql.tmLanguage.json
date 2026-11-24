@@ -8,6 +8,12 @@
       "name": "comment.line.opentide"
     },
     {
+      "begin": "/\\*",
+      "comment": "capture:comment",
+      "end": "\\*/",
+      "name": "comment.line.opentide"
+    },
+    {
       "comment": "capture:string",
       "match": "\"(\\\\.|[^\"\\\\])*\"|'(\\\\.|[^'\\\\])*'",
       "name": "string.quoted.opentide"
@@ -16,6 +22,21 @@
       "comment": "capture:number",
       "match": "\\b[0-9]+(\\.[0-9]+)?\\b",
       "name": "constant.numeric.opentide"
+    },
+    {
+      "comment": "tm_extras:builtin-call",
+      "match": "(?i)(?<![\\w.$@#:])(?:bitfield:extractFlagsAsString|bitfield:extractFlagsAsArray|math:spherical2cartesian|readPersistedAggregation|text:editDistanceAsArray|bitfield:extractFlags|array:intersection|array:reduceColumn|geography:distance|objectArray:exists|time:dayOfWeekName|appendAggregation|slidingTimeWindow|text:editDistance|json:prettyPrint|objectArray:eval|time:millisecond|array:reduceAll|array:reduceRow|eventFieldCount|explain:asTable|parseFixedWidth|setTimeInterval|text:positionOf|text:startsWith|time:dayOfMonth|time:weekOfYear|xml:prettyPrint|array:contains|beta:repeating|eventInternals|formatDuration|parseHexString|parseTimestamp|selfJoinFilter|shannonEntropy|stripAnsiCodes|text:substring|time:dayOfWeek|time:dayOfYear|time:monthName|counterAsRate|crypto:sha256|findTimestamp|selectFromMax|selectFromMin|slidingWindow|text:contains|text:endsWith|array:append|array:exists|array:filter|array:length|array:rename|base64Decode|base64Encode|callFunction|createEvents|matchAsArray|math:arctan2|math:deg2rad|math:rad2deg|unit:convert|array:dedup|array:regex|array:union|communityId|concatArray|crypto:sha1|defineTable|hashRewrite|holtwinters|math:arccos|math:arcsin|math:arctan|remoteTable|splitString|text:length|time:minute|time:second|accumulate|array:drop|array:eval|array:sort|beta:param|crypto:md5|fieldstats|formatTime|ioc:lookup|ipLocation|math:expm1|math:floor|math:log10|math:log1p|percentage|percentile|reverseDns|selectLast|time:month|copyEvent|correlate|dropEvent|eventSize|hashMatch|lowercase|math:ceil|math:cosh|math:log2|math:sinh|math:sqrt|math:tanh|parseJson|parseLEEF|partition|text:trim|time:hour|time:year|timeChart|tokenHash|transpose|urlDecode|urlEncode|writeJson|coalesce|duration|fieldset|getField|math:abs|math:cos|math:exp|math:log|math:mod|math:pow|math:sin|math:tan|neighbor|parseCEF|parseCsv|parseInt|parseUri|parseUrl|parseXml|readFile|selfJoin|setField|wildcard|worldMap|collect|default|geohash|groupBy|kvParse|replace|session|bucket|concat|format|length|linReg|lookup|rename|sample|sankey|select|series|stdDev|subnet|window|count|lower|match|range|regex|round|split|start|stats|table|upper|cidr|drop|eval|hash|head|join|rdns|sort|tail|test|asn|avg|end|max|min|now|sum|top|if|in)(?=\\s*\\()",
+      "name": "support.function.opentide"
+    },
+    {
+      "comment": "tm_extras:field",
+      "match": "(?<![\\w.$@#])[$@#]?[A-Za-z_][\\w.]*(?=\\s*(?i:==|!=|=~|!~|<=|>=|:=|=|<|>|:))",
+      "name": "variable.other.property.opentide"
+    },
+    {
+      "comment": "tm_extras:logical",
+      "match": "(?i)(?<![\\w.])(?:and|or|not)(?![\\w.])",
+      "name": "keyword.operator.logical.opentide"
     },
     {
       "comment": "capture:keyword",
@@ -176,6 +197,21 @@
       "comment": "capture:string",
       "match": "/",
       "name": "string.quoted.opentide"
+    },
+    {
+      "comment": "tm_extras:boolean",
+      "match": "(?i)(?<![\\w.$@#])(?:true|false)(?![\\w.])",
+      "name": "constant.language.boolean.opentide"
+    },
+    {
+      "comment": "tm_extras:call",
+      "match": "(?<![\\w.$@#:])[A-Za-z_][\\w.]*(?::\\w+)?(?=\\s*\\()",
+      "name": "entity.name.function.opentide"
+    },
+    {
+      "comment": "tm_extras:identifier",
+      "match": "(?<![\\w.$@#])[A-Za-z_]\\w*(?![\\w(])",
+      "name": "variable.other.opentide"
     }
   ],
   "scopeName": "source.opentide.cql"

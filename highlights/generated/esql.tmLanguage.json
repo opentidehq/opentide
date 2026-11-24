@@ -8,6 +8,12 @@
       "name": "comment.line.opentide"
     },
     {
+      "begin": "/\\*",
+      "comment": "capture:comment",
+      "end": "\\*/",
+      "name": "comment.line.opentide"
+    },
+    {
       "comment": "capture:string",
       "match": "\"(\\\\.|[^\"\\\\])*\"|'(\\\\.|[^'\\\\])*'",
       "name": "string.quoted.opentide"
@@ -16,6 +22,28 @@
       "comment": "capture:number",
       "match": "\\b[0-9]+(\\.[0-9]+)?\\b",
       "name": "constant.numeric.opentide"
+    },
+    {
+      "captures": {
+        "1": {
+          "name": "keyword.control.opentide"
+        },
+        "3": {
+          "name": "entity.name.type.opentide"
+        }
+      },
+      "comment": "tm_extras:esql-source",
+      "match": "(?i)(?<![\\w.])(from)(\\s+)([^\\s|,()=]+(?:\\s*,\\s*[^\\s|,()=]+)*)"
+    },
+    {
+      "comment": "tm_extras:builtin-call",
+      "match": "(?i)(?<![\\w.$@#:])(?:mv_median_absolute_deviation|st_simplifypreservetopology|to_aggregate_metric_double|median_absolute_deviation|count_distinct_over_time|to_exponential_histogram|mv_pseries_weighted_sum|percentile_over_time|url_encode_component|variance_over_time|network_direction|present_over_time|to_cartesianpoint|to_cartesianshape|absent_over_time|range_intersects|st_symdifference|stddev_over_time|to_unsigned_long|count_over_time|date_unit_count|first_over_time|mv_intersection|st_centroid_agg|st_geometrytype|st_intersection|to_dense_vector|to_double_range|to_timeduration|count_distinct|last_over_time|range_contains|text_embedding|avg_over_time|field_extract|max_over_time|min_over_time|mv_difference|mv_intersects|mv_percentile|st_difference|st_extent_agg|st_intersects|sum_over_time|to_date_nanos|to_date_range|to_dateperiod|v_dot_product|date_extract|json_extract|match_phrase|range_within|st_dimension|top_snippets|weighted_avg|byte_length|date_format|from_base64|json_string|multi_match|mv_contains|mv_in_range|st_contains|st_disjoint|st_distance|st_envelope|st_simplify|starts_with|to_datetime|to_geopoint|to_geoshape|v_magnitude|bit_length|categorize|cidr_match|date_parse|date_trunc|month_name|mv_greater|percentile|st_geohash|st_geotile|st_isempty|st_npoints|to_boolean|to_counter|to_degrees|to_geohash|to_geotile|to_integer|to_radians|to_tdigest|to_version|url_decode|url_encode|clamp_max|clamp_min|copy_sign|date_diff|embedding|ends_with|ip_prefix|mv_append|mv_concat|mv_dedupe|mv_median|range_max|range_min|sparkline|st_buffer|st_geohex|st_within|substring|to_base64|to_double|to_geohex|to_string|v_hamming|v_l1_norm|v_l2_norm|coalesce|contains|day_name|earliest|greatest|increase|mv_count|mv_first|mv_rlike|mv_slice|mv_union|round_to|st_union|to_gauge|to_lower|to_range|to_upper|v_cosine|variance|mv_last|mv_less|mv_like|mv_sort|present|replace|reverse|st_xmax|st_xmin|st_ymax|st_ymin|std_dev|tbucket|to_long|to_text|without|absent|bucket|concat|idelta|latest|length|locate|median|mv_avg|mv_max|mv_min|mv_sum|mv_zip|repeat|sample|sha256|signum|trange|values|acosh|asinh|atan2|atanh|chunk|clamp|count|decay|delta|deriv|first|floor|hypot|irate|least|log10|ltrim|match|month|right|round|rtrim|scalb|score|space|split|to_ip|tstep|acos|asin|atan|case|cbrt|ceil|cosh|hash|hour|last|left|qstr|rate|sha1|sinh|sqrt|st_x|st_y|tanh|trim|year|abs|avg|cos|day|exp|knn|kql|log|max|md5|min|now|pow|sin|sum|tan|tau|top|pi|e)(?=\\s*\\()",
+      "name": "support.function.opentide"
+    },
+    {
+      "comment": "tm_extras:field",
+      "match": "(?<![\\w.$@#])[$@#]?[A-Za-z_][\\w.]*(?=\\s*(?i:==|!=|=~|!~|<=|>=|:=|=|<|>|(?:not\\s+)?(?:like|rlike|in)\\b|is\\s+(?:not\\s+)?null\\b))",
+      "name": "variable.other.property.opentide"
     },
     {
       "comment": "capture:keyword",
@@ -141,6 +169,21 @@
       "comment": "capture:punctuation.delimiter",
       "match": ";",
       "name": "punctuation.delimiter.opentide"
+    },
+    {
+      "comment": "tm_extras:word-operator",
+      "match": "(?i)(?<![\\w.])(?:in|like|rlike|is)(?![\\w.])",
+      "name": "keyword.operator.opentide"
+    },
+    {
+      "comment": "tm_extras:boolean",
+      "match": "(?i)(?<![\\w.$@#])(?:true|false)(?![\\w.])",
+      "name": "constant.language.boolean.opentide"
+    },
+    {
+      "comment": "tm_extras:call",
+      "match": "(?<![\\w.$@#:])[A-Za-z_][\\w.]*(?=\\s*\\()",
+      "name": "entity.name.function.opentide"
     }
   ],
   "scopeName": "source.opentide.esql"

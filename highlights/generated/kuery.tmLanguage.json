@@ -13,6 +13,16 @@
       "name": "constant.numeric.opentide"
     },
     {
+      "comment": "tm_extras:field",
+      "match": "(?<![\\w.$@#])[$@#]?[A-Za-z_][\\w.]*(?=\\s*(?i:==|!=|=~|!~|<=|>=|:=|=|<|>|:))",
+      "name": "variable.other.property.opentide"
+    },
+    {
+      "comment": "tm_extras:logical",
+      "match": "(?i)(?<![\\w.])(?:and|or|not)(?![\\w.])",
+      "name": "keyword.operator.logical.opentide"
+    },
+    {
       "comment": "capture:operator",
       "match": ":",
       "name": "keyword.operator.opentide"
