@@ -197,24 +197,39 @@ fn enumerated_keys() -> BTreeMap<String, BTreeSet<String>> {
     keys
 }
 
-/// The keys a query is written under: the embedded regions' keys, `query`
-/// (an Elastic query is left to the server) and a Falco `output`.
+/// The keys whose block scalar the grammar leaves to a query language outside
+/// the embedded regions: an Elastic or hunt `query`, a Falco `output`, a macro's
+/// `condition`. A key that only the embedded regions write a query under
+/// (Google SecOps' `setup`, `events`, `outcome`, `export`) is not one: the
+/// region reads it, and the same name elsewhere (Elastic's `guide.setup`) is
+/// plain text.
 fn query_keys() -> BTreeSet<&'static str> {
-    crate::EMBEDDED_QUERIES
-        .iter()
-        .flat_map(|(_, keys, _)| keys.iter().copied())
-        .chain(["query", "output"])
-        .collect()
+    BTreeSet::from(["query", "search", "condition", "output"])
 }
 
-/// The keys whose block scalar is Markdown text: a catalogue field with
-/// the `markdown` flag, less the keys an embedded query block is written
-/// under (those are the query language's).
+/// Whether the field at `path` is a query an embedded region reads
+/// (`configurations.google_secops.setup`).
+fn is_region_query(path: &str, name: &str) -> bool {
+    let mut parts = path.split('.');
+    let (Some("configurations"), Some(platform)) = (parts.next(), parts.next()) else {
+        return false;
+    };
+    crate::EMBEDDED_QUERIES
+        .iter()
+        .any(|(platforms, keys, _)| platforms.contains(&platform) && keys.contains(&name))
+}
+
+/// The keys whose block scalar is Markdown text: a catalogue field with the
+/// `markdown` flag that is no query (the flag also marks the queries of
+/// Google SecOps and Falco).
 fn markdown_keys() -> Vec<String> {
     let queries = query_keys();
     let mut keys = BTreeSet::new();
     for field in &tide_catalog().fields {
-        if field.markdown && !queries.contains(field.name.as_str()) {
+        if field.markdown
+            && !queries.contains(field.name.as_str())
+            && !is_region_query(&field.path, &field.name)
+        {
             keys.insert(field.name.clone());
         }
     }

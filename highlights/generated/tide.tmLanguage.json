@@ -521,7 +521,7 @@
       ]
     },
     {
-      "begin": "^(\\s*)(condition|outcome|events|export|output|search|query|setup)(\\s*)(:)(\\s*)[|>][-+0-9]*\\s*(?:#.*)?$",
+      "begin": "^(\\s*)(condition|output|search|query)(\\s*)(:)(\\s*)[|>][-+0-9]*\\s*(?:#.*)?$",
       "beginCaptures": {
         "2": {
           "name": "variable.other.property.tide"
@@ -604,7 +604,7 @@
       ]
     },
     {
-      "begin": "^(\\s*)(-)(\\s)(condition|outcome|events|export|output|search|query|setup)(\\s*)(:)(\\s*)[|>][-+0-9]*\\s*(?:#.*)?$",
+      "begin": "^(\\s*)(-)(\\s)(condition|output|search|query)(\\s*)(:)(\\s*)[|>][-+0-9]*\\s*(?:#.*)?$",
       "beginCaptures": {
         "2": {
           "name": "punctuation.definition.list.begin.tide"

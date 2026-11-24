@@ -8,12 +8,6 @@
       "name": "comment.line.opentide"
     },
     {
-      "begin": "/\\*",
-      "comment": "capture:comment",
-      "end": "\\*/",
-      "name": "comment.line.opentide"
-    },
-    {
       "begin": "(?:(?<![A-Za-z0-9_$])[hH])?```",
       "comment": "capture:string",
       "end": "```",

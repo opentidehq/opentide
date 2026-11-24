@@ -154,3 +154,33 @@ fn collect(rule: &Value, out: &mut Vec<String>) {
         _ => {}
     }
 }
+
+/// Google SecOps' `setup` (YARA-L) is read by its embedded region; the same
+/// name under Elastic's `guide` is plain text the server colours as a string,
+/// so it is neither a query block nor Markdown outside the region.
+#[test]
+fn setup_is_a_query_only_inside_the_google_secops_region() {
+    let spec = HighlightSpec::load().expect("spec");
+    let grammar = generate_tm_language(LanguageId::TideYaml, &spec);
+    let begin = |comment: &str| -> String {
+        grammar["patterns"]
+            .as_array()
+            .expect("patterns")
+            .iter()
+            .find(|p| p["comment"] == comment)
+            .and_then(|p| p["begin"].as_str())
+            .unwrap_or_else(|| panic!("no rule {comment}"))
+            .to_string()
+    };
+    let markdown = begin("tide:block-scalar:markdown");
+    assert!(
+        markdown.contains("description") && markdown.contains("analysis"),
+        "{markdown}"
+    );
+    assert!(!markdown.contains("setup"), "{markdown}");
+    let query = begin("tide:block-scalar:query");
+    assert!(
+        query.contains("query") && !query.contains("setup"),
+        "{query}"
+    );
+}
