@@ -6784,7 +6784,7 @@ severity: 3          # must be one of the severity names
 
 ### How to fix
 
-The message is the schema's own (a missing required field, a wrong type, an unknown key). The location points at the field, or at the mapping it belongs in when the field is missing. Compare the object with the template under `.opentide/templates/`, or let the opentide VS Code extension check it as you type (`opentide setup vscode` recommends it). A `metadata.schema` that names no registered revision, or another object type, is reported with this code as well.
+The message is the schema's own (a missing required field, a wrong type, an unknown key). The location points at the field, or at the mapping it belongs in when the field is missing. Compare the object with the template under `.opentide/templates/`, or let the opentide VS Code extension check it as you type (install it with `code --install-extension opentidehq.opentide`; `opentide setup vscode` recommends it to the team). A `metadata.schema` that names no registered revision, or another object type, is reported with this code as well.
 
 ## schemas_fresh
 
@@ -7579,7 +7579,7 @@ metadata:
 
 ### How to fix
 
-Use a value from the vocabulary the label names. When a close value exists, `help` names it and `fix` carries the edit; the edit is marked `safe` only when the two spell the same word (they differ in case, spaces, `-` or `_`) and hold no digit, so an ATT&CK id is never replaced unreviewed. The opentide VS Code extension completes vocabulary values (`opentide setup vscode` recommends it).
+Use a value from the vocabulary the label names. When a close value exists, `help` names it and `fix` carries the edit; the edit is marked `safe` only when the two spell the same word (they differ in case, spaces, `-` or `_`) and hold no digit, so an ATT&CK id is never replaced unreviewed. The opentide VS Code extension completes vocabulary values (install it with `code --install-extension opentidehq.opentide`; `opentide setup vscode` recommends it to the team).
 
 ## vscode_settings
 
@@ -7598,7 +7598,7 @@ Reported by `opentide doctor`. Warns when `settings.json` maps objects to openti
 
 ### How to fix
 
-Run `opentide setup vscode`. It recommends the extension and removes opentide's `yaml.schemas` entries, keeping your other settings.
+Install the extension, the recommended way to use opentide in VS Code: `code --install-extension opentidehq.opentide` (it bundles opentide). To have `.vscode/extensions.json` recommend it to the team, and remove opentide's `yaml.schemas` entries earlier releases wrote, run `opentide setup vscode`; your other settings are kept.
 
 ## vscode_snippets
 
