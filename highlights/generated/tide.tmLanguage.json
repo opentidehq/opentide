@@ -1,6 +1,6 @@
 {
   "name": "opentide opentide-yaml",
-  "opentideHighlightSpec": "0.3.0",
+  "opentideHighlightSpec": "0.3.1",
   "patterns": [
     {
       "begin": "^(configurations)\\s*:\\s*(?:#.*)?$",

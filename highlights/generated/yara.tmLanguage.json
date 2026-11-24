@@ -1,6 +1,6 @@
 {
   "name": "opentide yara",
-  "opentideHighlightSpec": "0.3.0",
+  "opentideHighlightSpec": "0.3.1",
   "patterns": [
     {
       "comment": "capture:comment",
