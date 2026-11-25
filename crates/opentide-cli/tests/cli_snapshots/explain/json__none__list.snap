@@ -1346,7 +1346,7 @@ exit: 0
     },
     {
       "code": "microsoft_defender_incident",
-      "meaning": "A Microsoft Defender block's `incident` is not `{exclude_from_correlation: true|false}`."
+      "meaning": "A Microsoft Defender block's `incident` is not a mapping whose `exclude_from_correlation` is `true` or `false`."
     },
     {
       "code": "microsoft_defender_isolation_type",

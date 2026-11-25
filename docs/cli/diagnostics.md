@@ -346,7 +346,7 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`microsoft_defender_entity_mapping`](#microsoft_defender_entity_mapping) | A Microsoft Defender entity mapping is empty, is not a mapping, or names a field its kind does not have. |
 | [`microsoft_defender_frequency`](#microsoft_defender_frequency) | A Microsoft Defender block's `schedule.frequency` is not `NRT`, `<n>H` or `<n>D`. |
 | [`microsoft_defender_grouping`](#microsoft_defender_grouping) | A Microsoft Defender block's `alert.grouping` is not `alert_per_event` or `single_alert`. |
-| [`microsoft_defender_incident`](#microsoft_defender_incident) | A Microsoft Defender block's `incident` is not `{exclude_from_correlation: true|false}`. |
+| [`microsoft_defender_incident`](#microsoft_defender_incident) | A Microsoft Defender block's `incident` is not a mapping whose `exclude_from_correlation` is `true` or `false`. |
 | [`microsoft_defender_isolation_type`](#microsoft_defender_isolation_type) | A Microsoft Defender `isolate_devices` target's `isolation_type` is not `full` or `selective`. |
 | [`microsoft_defender_lookback`](#microsoft_defender_lookback) | A Microsoft Defender block's `schedule.lookback` is not a duration, is set on a near-real-time rule, or is shorter than its frequency. |
 | [`microsoft_defender_no_entities`](#microsoft_defender_no_entities) | A Microsoft Defender block maps no entity. |
@@ -6282,7 +6282,7 @@ Write `single_alert` or `alert_per_event`, or remove the key: Defender then crea
 
 ## microsoft_defender_incident
 
-A Microsoft Defender block's `incident` is not `{exclude_from_correlation: true|false}`.
+A Microsoft Defender block's `incident` is not a mapping whose `exclude_from_correlation` is `true` or `false`.
 
 Severity: error. Reported by `opentide validate` (its `schema` check) on a `microsoft_defender` block (microsoft-defender-1.0). `incident` is beta-only and is sent as Graph's `incidentConfiguration`. The finding is on `incident`.
 

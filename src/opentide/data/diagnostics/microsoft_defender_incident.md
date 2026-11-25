@@ -1,6 +1,6 @@
 # microsoft_defender_incident
 
-A Microsoft Defender block's `incident` is not `{exclude_from_correlation: true|false}`.
+A Microsoft Defender block's `incident` is not a mapping whose `exclude_from_correlation` is `true` or `false`.
 
 Severity: error. Reported by `opentide validate` (its `schema` check) on a `microsoft_defender` block (microsoft-defender-1.0). `incident` is beta-only and is sent as Graph's `incidentConfiguration`. The finding is on `incident`.
 
