@@ -6,8 +6,13 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-11-25
+
+From 1.0.0 the language server and engine ship in lockstep with opentide: one version, one tag, `v1.0.0`. The `engine-v*` series ended at 0.16.1.
+
 ### Upgrade
 
+- If your editor downloads the engine's assets (`opentide-lsp-vX.Y.Z-<target>`, `highlights-vX.Y.Z.zip`, `opentide-wasm-web-vX.Y.Z.zip`), take them from opentide's release, `https://github.com/opentidehq/opentide/releases/download/v1.0.0/<asset>`: no `engine-v*` tag follows 0.16.1.
 - If you call `opentide_compile::splunk::create_query(rule, block)`, call `create_query(block)`: the search is the block's `query`, trimmed, with no `MDR_UUID` `eval` and no mapping macro. If you deploy to Splunk through `Deployer::deploy` and do not want a write to delete the rule's other saved searches, send a body whose `description` does not end with `opentide rule <uuid>`.
 - If you build an `opentide_connectors::splunk::SavedSearch` with a struct literal, set its new `content` field (`Vec::new()` when you have no settings to compare).
 - If you build or match `opentide_core::node::Value::Str` or `Value::Datetime` (also through `opentide_schema::node`), they hold an `opentide_core::node::CompactString` where they held a `String`: build one with `.into()` from a `&str` or a `String`, read it as a `&str` (it derefs; `as_str()`), and call `.to_string()` where you need an owned `String`.
@@ -1021,6 +1026,8 @@ The first working server serves KQL, SPL and Tide YAML over stdio and WASM, with
 - **A frozen HighlightSpec with generated editor maps.** Semantic tokens use the standard LSP legend.
 - **Stdio and WASM hosts, with Zed, Helix and Neovim samples.**
 
+[Unreleased]: https://github.com/opentidehq/opentide/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/opentidehq/opentide/releases/tag/v1.0.0
 [0.16.1]: https://github.com/opentidehq/language-server/compare/v0.16.0...v0.16.1
 [0.16.0]: https://github.com/opentidehq/language-server/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/opentidehq/language-server/compare/v0.14.0...v0.15.0
