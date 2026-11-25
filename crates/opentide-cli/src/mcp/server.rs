@@ -559,6 +559,12 @@ mod tests {
         let depth = &chaining.input_schema["properties"]["depth"];
         assert_eq!(depth["type"], "integer", "{depth}");
         assert_eq!(depth["minimum"], 0, "{depth}");
+        // The default the tool applies, so a client sees it before a call.
+        assert_eq!(
+            depth["default"],
+            super::super::catalog::DEFAULT_CHAINING_DEPTH,
+            "{depth}"
+        );
         assert!(
             chaining.input_schema["required"]
                 .as_array()

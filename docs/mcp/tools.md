@@ -113,7 +113,7 @@ Return the threat → objective → rule lineage for a UUID, plus threat-to-thre
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `uuid` | string | Threat, objective, or rule UUID; a signal UUID (`objective.signals[].uuid`) names its objective |
-| `depth` | integer, 0 or more | Optional. The hops from the object to follow, in each direction: threat ↔ objective ↔ rule, and `threat.chaining` links. `0` is the object alone. Omitted is the whole lineage |
+| `depth` | integer, 0 or more | Optional, default `1`. The hops from the object to follow, in each direction: threat ↔ objective ↔ rule, and `threat.chaining` links. `0` is the object alone. Pass a larger depth for more of the lineage |
 
 ```json
 // call — objective that lists a threat and is the detection_model of a rule
@@ -134,35 +134,19 @@ Return the threat → objective → rule lineage for a UUID, plus threat-to-thre
     "objectives": ["00000000-0000-4000-8002-000000000001"],
     "rules": ["00000000-0000-4000-8003-000000000001"]
   },
-  "chaining_index": {
-    "00000000-0000-4000-8001-000000000001": {
-      "threats": ["00000000-0000-4000-8001-000000000001"],
-      "objectives": ["00000000-0000-4000-8002-000000000001"],
-      "rules": ["00000000-0000-4000-8003-000000000001"]
-    },
-    "00000000-0000-4000-8002-000000000001": {
-      "threats": ["00000000-0000-4000-8001-000000000001"],
-      "objectives": ["00000000-0000-4000-8002-000000000001"],
-      "rules": ["00000000-0000-4000-8003-000000000001"]
-    },
-    "00000000-0000-4000-8003-000000000001": {
-      "threats": ["00000000-0000-4000-8001-000000000001"],
-      "objectives": ["00000000-0000-4000-8002-000000000001"],
-      "rules": ["00000000-0000-4000-8003-000000000001"]
-    }
-  }
+  "chaining_index": {}
 }
 ```
 
-`rules` lists every rule in the connected set. A repository with several rules on one objective returns all of those UUIDs; the snippet above shows the shape with one rule.
+With the default `depth` of 1, `rules` lists the rules whose `detection_model` is this objective, and `threats` the threats it lists. A threat's other objectives, or a rule's sibling rules, are two hops away: ask for `depth: 2` or more. When the lineage goes on beyond the depth, the answer adds `"truncated": true` and a `hint` that says to call again with a larger depth; neither is present when the answer holds the whole lineage.
 
-When this threat has `threat.chaining` entries, `graph` stays `{relation: [vector_uuid, …]}` (for example `{"preceeds": ["…"]}`). `lineage` is still present and lists the threats, objectives, and rules reached through `objective.threats`, `rule.detection_model`, and those threat-to-threat links. `chaining_index` maps every UUID of the returned lineage (and the object itself, with the vectors of its `threat.chaining` entries) to that UUID's `graph`; it holds no other object of the repository, so the response stays small on a large catalogue. An empty `graph` means the object has no lineage. A missing UUID returns `{ "uuid": "…", "found": false, "graph": {} }`.
+When this threat has `threat.chaining` entries, `graph` stays `{relation: [vector_uuid, …]}` (for example `{"preceeds": ["…"]}`). `lineage` is still present and lists the threats, objectives, and rules reached through `objective.threats`, `rule.detection_model`, and those threat-to-threat links. `chaining_index` maps each returned threat that has `threat.chaining` entries to its relation, `{relation: [vector_uuid, …]}`. Every other returned object's graph is `lineage`, which is not repeated per object, so `chaining_index` is `{}` when no returned threat chains. An empty `graph` means the object has no lineage. A missing UUID returns `{ "uuid": "…", "found": false, "graph": {} }`.
 
 A rule whose `detection_model` is a signal UUID belongs to the lineage of the objective that defines the signal, and an objective's `graph` lists such rules. Asking for a signal UUID returns its objective (`uuid`, `type: "objective"`) and adds `resolved_from: {"type": "signal", "uuid": "…"}`.
 
 The UUID is matched case-insensitively and trimmed; `uuid` in the response is the object's UUID as written in the repository.
 
-`depth` counts hops over the references in either direction, so a lineage is walked up and down: depth 2 from a rule includes the other rules of its objective (rule → objective → rule), and depth 2 from an objective includes the objectives that cover the same threats. With `depth`, `lineage`, `graph` and `chaining_index` hold only the objects within that many hops of the object: each `chaining_index` entry lists only UUIDs that the response returns. `depth: 0` returns the object alone: `graph` is `{}`, `lineage` stays and holds only the object, and `chaining_index` has at most one entry (none when the object has neither a chaining relation nor a lineage); a depth at least as long as the longest path returns what an omitted `depth` does. A negative or non-integer `depth` fails the call (`isError: true`, `argument depth must be 0 or more, not -1`) and returns nothing.
+`depth` counts hops over the references in either direction, so a lineage is walked up and down: depth 2 from a rule includes the other rules of its objective (rule → objective → rule), and depth 2 from an objective includes the objectives that cover the same threats. `lineage`, `graph` and `chaining_index` hold only the objects within `depth` hops of the object: each `chaining_index` entry lists only UUIDs that the response returns. `depth: 0` returns the object alone: `graph` is `{}`, `lineage` stays and holds only the object, and `chaining_index` has at most the object's own relation. A depth at least as long as the longest path returns the whole lineage, without `truncated`. Through 1.0.0-rc.5 an omitted `depth` returned the whole lineage, and `chaining_index` repeated it under each of its objects, which reached megabytes on a large catalogue. A negative or non-integer `depth` fails the call (`isError: true`, `argument depth must be 0 or more, not -1`) and returns nothing.
 
 ## coverage
 
@@ -582,7 +566,7 @@ Chain the tools into safe, end-to-end recipes.
 
 ```text
 search(query="T1059")                     → find or confirm the objective
-get_chaining(uuid=<objective>)            → inspect graph + chaining_index
+get_chaining(uuid=<objective>)            → its threats and rules (depth 1); truncated → call again with a larger depth
 # write objects/rules/<name>.yaml from opentide://templates/rule, detection_model=<objective>
 validation_report(file=<new rule file>)   → apply each issue's fix.edits, explain(code) the rest
 validation_report(file=<new rule file>)   → repeat until ok is true
@@ -605,7 +589,7 @@ search(technique=<gap>)                   → confirm nothing exists
 
 ```text
 validation_report(object_type="rule")     → surface dangling detection_model (invalid_ref)
-get_chaining(uuid=<rule>)                 → inspect related objects in chaining_index
+get_chaining(uuid=<rule>)                 → inspect the related objects in lineage
 # correct the UUID, then re-run validation_report
 ```
 

@@ -1080,6 +1080,48 @@ mod tests {
         }
     }
 
+    /// The deploy jobs run one at a time per environment and never drop a
+    /// queued run: GitHub queues them in a concurrency group with
+    /// `queue: max` (without it a third run would cancel the pending one,
+    /// whose diff would then never deploy), GitLab in a resource group.
+    #[test]
+    fn deploy_jobs_queue_one_environment_at_a_time() {
+        // The job's header: everything before its steps (GitHub) or script
+        // (GitLab).
+        let header = |written: &str, job: &str, end: &str| -> String {
+            let from = written
+                .find(job)
+                .unwrap_or_else(|| panic!("{job}: {written}"));
+            let rest = &written[from..];
+            rest[..rest.find(end).unwrap_or(rest.len())].to_owned()
+        };
+        let written = render(&options(Provider::GitHub)).unwrap();
+        for (job, group) in [
+            ("\n  deploy_staging:\n", "opentide-deploy-staging"),
+            ("\n  deploy_production:\n", "opentide-deploy-production"),
+        ] {
+            let header = header(&written, job, "    steps:");
+            let want = format!(
+                "    concurrency:\n      group: {group}\n      cancel-in-progress: false\n      queue: max\n"
+            );
+            assert!(header.contains(&want), "{header}");
+        }
+        // Never on the workflow, where it would hold the gate jobs too.
+        assert!(!written.contains("\nconcurrency:"), "{written}");
+
+        let written = render(&options(Provider::GitLab)).unwrap();
+        for (job, group) in [
+            ("\ndeploy_staging:\n", "opentide-staging"),
+            ("\ndeploy_production:\n", "opentide-production"),
+        ] {
+            let header = header(&written, job, "  script:");
+            assert!(
+                header.contains(&format!("  resource_group: {group}\n")),
+                "{header}"
+            );
+        }
+    }
+
     /// A Library variable group makes Azure's `variables:` a list, since a
     /// map cannot hold a `- group:` entry (#1790); without one it stays a map.
     #[test]

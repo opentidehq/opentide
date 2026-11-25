@@ -19,14 +19,16 @@
 //! cleaned up.
 
 use std::collections::BTreeSet;
-use std::io::Write;
 use std::path::Path;
 use std::process::{Command, Stdio};
 
 use indexmap::IndexMap;
 
 use super::deploy_state::{Shard, StateError};
+use super::{Report, counted};
 use crate::env::Env;
+use crate::envelope::Failure;
+use crate::json::Json;
 
 /// The deployment-state folder, relative to the repository root.
 pub const DEPLOYMENT_STATES: &str = ".opentide/states/deployment";
@@ -251,32 +253,52 @@ pub fn replay(root: &Path, env: &Env, state_commit: &str) -> Result<Replayed, Re
     Ok(result)
 }
 
-/// Runs the command from *cwd*, the repository root: the conflicts on
-/// stderr, the summary on stdout; the exit code.
-pub fn run(
-    cwd: &Path,
-    env: &Env,
-    state_commit: &str,
-    out: &mut dyn Write,
-    err: &mut dyn Write,
-) -> std::io::Result<i32> {
+/// The command's name in its `--json` document.
+pub const COMMAND: &str = "deploy replay-state";
+
+/// Runs the command from *cwd*, the repository root. The shards written and
+/// removed are the document's `written` and `removed`; each binding a
+/// concurrent run changed too is a `deployment_state_conflict` line in
+/// `conflicts` and `warnings`, so the CI log shows both ids.
+pub fn report(cwd: &Path, env: &Env, state_commit: &str) -> Report {
+    let paths = |paths: &[String]| Json::Array(paths.iter().map(Json::str).collect());
     match replay(cwd, env, state_commit) {
         Ok(result) => {
-            for line in &result.conflicts {
-                writeln!(err, "{line}")?;
-            }
-            writeln!(
-                out,
-                "Replayed deployment state: {} written, {} removed, {} conflicting",
-                result.written.len(),
+            let mut report = Report::completed(
+                COMMAND,
+                [
+                    ("state_commit".to_owned(), Json::str(state_commit)),
+                    ("written".to_owned(), paths(&result.written)),
+                    ("removed".to_owned(), paths(&result.removed)),
+                    ("conflicts".to_owned(), paths(&result.conflicts)),
+                ],
+            );
+            let count = |count: usize| Json::Int(i64::try_from(count).unwrap_or(i64::MAX));
+            report.outcome.summary = vec![
+                ("written".to_owned(), count(result.written.len())),
+                ("removed".to_owned(), count(result.removed.len())),
+                ("conflicts".to_owned(), count(result.conflicts.len())),
+            ];
+            report.outcome.message = format!(
+                "Replayed deployment state · {} written, {} removed, {} conflicting",
+                counted(result.written.len(), "shard"),
                 result.removed.len(),
                 result.conflicts.len()
-            )?;
-            Ok(0)
+            );
+            report.warnings = result.conflicts;
+            report
         }
         Err(error) => {
-            writeln!(err, "error: {error}")?;
-            Ok(1)
+            let message = format!("Could not replay {state_commit}: {error}");
+            let mut report = Report::completed(
+                COMMAND,
+                [("state_commit".to_owned(), Json::str(state_commit))],
+            );
+            "failed".clone_into(&mut report.outcome.status);
+            report.outcome.message.clone_from(&message);
+            report.outcome.exit_code = 1;
+            report.outcome.failure = Some(Failure::new(super::COMMAND_FAILED, message));
+            report
         }
     }
 }
@@ -379,13 +401,18 @@ mod tests {
         let result = replay(root, &env(), "HEAD").unwrap();
         assert_eq!(result.removed.len(), 1);
         assert!(!path.exists());
-        let mut out = Vec::new();
-        let mut err = Vec::new();
-        assert_eq!(run(root, &env(), "HEAD~1", &mut out, &mut err).unwrap(), 0);
+        let report = report(root, &env(), "HEAD~1");
+        assert_eq!(report.outcome.exit_code, 0);
         assert!(
-            String::from_utf8(out)
-                .unwrap()
-                .starts_with("Replayed deployment state: ")
+            report
+                .outcome
+                .message
+                .starts_with("Replayed deployment state · "),
+            "{}",
+            report.outcome.message
         );
+        let failed = super::report(root, &env(), "no-such-commit");
+        assert_eq!(failed.outcome.exit_code, 1);
+        assert_eq!(failed.outcome.status, "failed");
     }
 }
