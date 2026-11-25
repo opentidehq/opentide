@@ -29,8 +29,8 @@
 pub mod bitdefender;
 pub mod carbon_black;
 pub mod crowdstrike;
-pub mod defender;
 pub mod deprecation;
+pub mod microsoft_defender;
 /// Elastic Security durations: `opentide_core::duration`, the grammar the
 /// language server's advisories share.
 pub use opentide_core::duration as durations;
@@ -62,13 +62,13 @@ use crate::objects::checks::Violation;
 pub use bitdefender::BitdefenderConfig;
 pub use carbon_black::CarbonBlackConfig;
 pub use crowdstrike::CrowdstrikeConfig;
-pub use defender::DefenderConfig;
 pub use elastic::ElasticConfig;
 pub use exabeam::ExabeamConfig;
 pub use google_secops::GoogleSecopsConfig;
 pub use google_secops::advisories::Advisory;
 pub use graylog::GraylogConfig;
 pub use harfanglab::HarfangLabConfig;
+pub use microsoft_defender::MicrosoftDefenderConfig;
 pub use sentinel::SentinelConfig;
 pub use sentinel_one::SentinelOneConfig;
 pub use splunk::SplunkConfig;
@@ -261,7 +261,7 @@ pub struct Registered {
 /// as an extra key).
 pub const PLATFORM_CONFIG_MODELS: [Registered; crate::platforms::COUNT] = [
     registered::<SentinelConfig>("sentinel", "SentinelConfig"),
-    registered::<DefenderConfig>("microsoft_defender", "DefenderConfig"),
+    registered::<MicrosoftDefenderConfig>("microsoft_defender", "MicrosoftDefenderConfig"),
     registered::<SplunkConfig>("splunk", "SplunkConfig"),
     registered::<SentinelOneConfig>("sentinel_one", "SentinelOneConfig"),
     registered::<CrowdstrikeConfig>("crowdstrike", "CrowdstrikeConfig"),
@@ -475,6 +475,7 @@ pub fn block_advisories(rule: &Node, graylog_tenants: &[graylog::TenantView<'_>]
             .map(|advisory| convert(advisory.code, advisory.field_path, advisory.message)),
     );
     found.extend(exabeam::advisories(rule));
+    found.extend(microsoft_defender::advisories(rule));
     found.extend(google_secops::advisories::advisories(rule));
     found
 }
@@ -806,7 +807,7 @@ pub enum PlatformConfig {
     /// `sentinel`.
     Sentinel(SentinelConfig),
     /// `microsoft_defender`.
-    Defender(DefenderConfig),
+    MicrosoftDefender(MicrosoftDefenderConfig),
     /// `splunk`.
     Splunk(SplunkConfig),
     /// `sentinel_one`.
@@ -857,7 +858,7 @@ pub fn parse_platform_config(platform: &str, node: &Node) -> Result<PlatformConf
     }
     match platform {
         "sentinel" => read(node, PlatformConfig::Sentinel),
-        "microsoft_defender" => read(node, PlatformConfig::Defender),
+        "microsoft_defender" => read(node, PlatformConfig::MicrosoftDefender),
         "splunk" => read(node, PlatformConfig::Splunk),
         "sentinel_one" => read(node, PlatformConfig::SentinelOne),
         "crowdstrike" => read(node, PlatformConfig::Crowdstrike),

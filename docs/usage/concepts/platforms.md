@@ -141,7 +141,7 @@ Every key on `configurations.<platform>`, required and optional, is specified un
 <Cards>
   <Card title="Platforms" href="/docs/specifications/specs/platforms/" description="Shared fields, external rule ids, and the three checks: validate, load, deploy." />
   <Card title="Sentinel" href="/docs/specifications/specs/platforms/sentinel-1.0/" description="KQL analytics rule. Grouping is optional at validate and required at deploy." />
-  <Card title="Microsoft Defender" href="/docs/specifications/specs/platforms/microsoft-defender-1.0/" description="KQL custom detection, response actions, and the scope the loader requires." />
+  <Card title="Microsoft Defender" href="/docs/specifications/specs/platforms/microsoft-defender-1.0/" description="KQL custom detection on the Graph beta API: schedule, alert, entities, automated actions, device-group scope." />
   <Card title="Splunk" href="/docs/specifications/specs/platforms/splunk-1.0/" description="SPL saved search." />
   <Card title="SentinelOne" href="/docs/specifications/specs/platforms/sentinel-one-1.0/" description="STAR rule: one S1QL query or a correlation of sub-queries." />
   <Card title="Carbon Black Cloud" href="/docs/specifications/specs/platforms/carbon-black-cloud-1.0/" description="Lucene IOC on an existing watchlist report." />
@@ -170,7 +170,7 @@ for platform in ws.info()["platforms"]:
 
 ## ATT&CK techniques
 
-On every platform whose block holds a technique list, the block's list wins; otherwise the rule's objective supplies the techniques. Sentinel (`alert.techniques`, `alert.tactics`) and Microsoft Defender (`alert.techniques`) have such lists: when the block sets one (an empty list counts as unset), deploy sends it, and only when it does not are the techniques resolved from the rule's `detection_model` sent. The two lists are never merged. Sentinel holds what it sends to ATT&CK v18 and warns about each id it changes. CrowdStrike is the exception: its `details.tactic` and `details.technique` hold one value each, so they are sent only when set and never inherited. The platforms with no block field send the rule's own `techniques` with the objective's (Carbon Black the objective's only; SentinelOne and HarfangLab none). See [ATT&CK techniques](../../cli/deploy.md#attck-techniques) for each platform.
+On every platform whose block holds a technique list, the block's list wins; otherwise the rule's objective supplies the techniques. Sentinel (`alert.techniques`, `alert.tactics`) and Microsoft Defender (`alert.techniques`, sent as a tactics tree) have such lists: when the block sets one (an empty list counts as unset), deploy sends it, and only when it does not are the techniques resolved from the rule's `detection_model` sent. The two lists are never merged. Sentinel holds what it sends to ATT&CK v18 and warns about each id it changes. CrowdStrike is the exception: its `details.tactic` and `details.technique` hold one value each, so they are sent only when set and never inherited. The platforms with no block field send the rule's own `techniques` with the objective's (Carbon Black the objective's only; SentinelOne and HarfangLab none). See [ATT&CK techniques](../../cli/deploy.md#attck-techniques) for each platform.
 
 ## Query validation policy
 

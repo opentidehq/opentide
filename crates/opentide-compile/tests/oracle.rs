@@ -870,7 +870,13 @@ fn a_dry_run_without_a_tenant_shows_the_writes_with_tenant_placeholders() {
         }
     }
     seen.sort_unstable();
-    let mut expected = deployers.clone();
+    // Microsoft Defender's requests are held by the specification's goldens
+    // (tests/microsoft_defender.rs): the oracle knew only the pre-1.0 API.
+    let mut expected: Vec<&str> = deployers
+        .iter()
+        .copied()
+        .filter(|platform| *platform != "microsoft_defender")
+        .collect();
     expected.sort_unstable();
     assert_eq!(seen, expected, "the corpus previews every such platform");
     for key in [

@@ -257,6 +257,9 @@ CHECKS: Mapping[str, tuple[str, ...]] = {
         "docs/usage/installation.md",
         "docs/usage/concepts/platforms.md",
     ),
+    # The website sync guard (the `website` job): opentidehq/website's own
+    # sync, tests and build on this tree's docs/, which it publishes.
+    "website": ("docs/*",),
     # opentide-schema's compile-fail cases (trybuild): the derive, the crate,
     # the cases (the lockfile and the toolchain are in EVERYTHING).
     "schema_ui": (

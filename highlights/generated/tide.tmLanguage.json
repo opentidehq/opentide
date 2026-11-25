@@ -761,6 +761,24 @@
           "name": "variable.other.enummember.tide"
         }
       },
+      "comment": "tide:enum:isolation_type",
+      "match": "^(\\s*)(?:(-)(\\s+))?(isolation_type)(\\s*)(:)([ \\t]+)(selective|full)(?=[ \\t]*(?:#.*)?$)"
+    },
+    {
+      "captures": {
+        "2": {
+          "name": "punctuation.definition.list.begin.tide"
+        },
+        "4": {
+          "name": "variable.other.property.tide"
+        },
+        "6": {
+          "name": "punctuation.separator.key-value.tide"
+        },
+        "8": {
+          "name": "variable.other.enummember.tide"
+        }
+      },
       "comment": "tide:enum:killchain",
       "match": "^(\\s*)(?:(-)(\\s+))?(killchain)(\\s*)(:)([ \\t]+)(Privilege Escalation|Social Engineering|Command \\& Control|Credential Access|Lateral Movement|Defense Evasion|Reconnaissance|Weaponization|Exfiltration|Exploitation|Persistence|Collection|Objectives|Discovery|Execution|Delivery|Pivoting|Impact)(?=[ \\t]*(?:#.*)?$)"
     },
@@ -871,24 +889,6 @@
       },
       "comment": "tide:enum:run_frequency",
       "match": "^(\\s*)(?:(-)(\\s+))?(run_frequency)(\\s*)(:)([ \\t]+)(HOURLY_CUSTOMIZABLE|LIVE_CUSTOMIZABLE|DAILY|LIVE)(?=[ \\t]*(?:#.*)?$)"
-    },
-    {
-      "captures": {
-        "2": {
-          "name": "punctuation.definition.list.begin.tide"
-        },
-        "4": {
-          "name": "variable.other.property.tide"
-        },
-        "6": {
-          "name": "punctuation.separator.key-value.tide"
-        },
-        "8": {
-          "name": "variable.other.enummember.tide"
-        }
-      },
-      "comment": "tide:enum:selection",
-      "match": "^(\\s*)(?:(-)(\\s+))?(selection)(\\s*)(:)([ \\t]+)(Specific|All)(?=[ \\t]*(?:#.*)?$)"
     },
     {
       "captures": {

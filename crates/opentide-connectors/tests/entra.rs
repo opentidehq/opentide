@@ -12,7 +12,7 @@ use opentide_connectors::credentials::Mode;
 use opentide_connectors::entra::{self, CredentialNames};
 use opentide_connectors::token::TokenCache;
 use opentide_connectors::{
-    ConnectorError, Environment, HttpClient, HttpSettings, Tenant, defender, sentinel,
+    ConnectorError, Environment, HttpClient, HttpSettings, Tenant, microsoft_defender, sentinel,
 };
 use tokio_util::sync::CancellationToken;
 use wiremock::matchers::{method, path};
@@ -173,7 +173,10 @@ async fn the_sign_in_is_one_client_credentials_post() {
 fn each_resource_has_its_scope_and_each_platform_its_names() {
     assert_eq!(sentinel::ARM_SCOPE, "https://management.azure.com/.default");
     assert_eq!(sentinel::LOGS_SCOPE, "https://api.loganalytics.io/.default");
-    assert_eq!(defender::SCOPE, "https://graph.microsoft.com/.default");
+    assert_eq!(
+        microsoft_defender::SCOPE,
+        "https://graph.microsoft.com/.default"
+    );
     assert_eq!(
         sentinel::CREDENTIALS,
         CredentialNames {
@@ -183,7 +186,7 @@ fn each_resource_has_its_scope_and_each_platform_its_names() {
         }
     );
     assert_eq!(
-        defender::CREDENTIALS,
+        microsoft_defender::CREDENTIALS,
         CredentialNames {
             tenant_id: "tenant_id",
             client_id: "client_id",

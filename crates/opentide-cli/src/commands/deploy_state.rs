@@ -930,7 +930,7 @@ mod tests {
         record_created(
             dir.path(),
             UUID,
-            "microsoft_defender",
+            "sentinel_one",
             "lab",
             &ExternalId::Text("7".into()),
         )
@@ -940,7 +940,7 @@ mod tests {
             text.contains("\"crowdstrike\": {\n      \"a\": \"y\",\n      \"b\": \"x\"\n    }")
         );
         assert!(text.contains("\"zeta\": [\n    1,\n    {\n      \"a\": \"é\",\n      \"b\": 2\n"));
-        record_deleted(dir.path(), UUID, "microsoft_defender", "lab").unwrap();
+        record_deleted(dir.path(), UUID, "sentinel_one", "lab").unwrap();
         record_deleted(dir.path(), UUID, "crowdstrike", "a").unwrap();
         record_deleted(dir.path(), UUID, "crowdstrike", "b").unwrap();
         assert!(!path.exists());

@@ -118,9 +118,9 @@ def on(outputs: dict[str, str]) -> set[str]:
     return {key for key, value in outputs.items() if value == "true"}
 
 
-def test_a_docs_only_change_runs_docs_alone() -> None:
+def test_a_docs_only_change_runs_docs_and_the_website_guard_alone() -> None:
     outputs = plan("docs/usage/configuration.md")
-    assert on(outputs) == {"docs"}
+    assert on(outputs) == {"docs", "website"}
     assert outputs["crates"] == ""
 
 
@@ -288,8 +288,11 @@ def test_pushes_and_the_nightly_check_everything(event: str, scope: str, mode: s
         ("xtask/src/codegen.rs", set()),
         ("src/opentide/data/vocabulary/README.md", set()),
         # Shared configuration runs every check, as a push does.
-        ("Cargo.lock", {"vocab", "fields", "schema_ui", "stubs", "wiring"}),
-        (".github/workflows/ci.yml", {"vocab", "fields", "schema_ui", "stubs", "wiring"}),
+        ("Cargo.lock", {"vocab", "fields", "schema_ui", "stubs", "wiring", "website"}),
+        (
+            ".github/workflows/ci.yml",
+            {"vocab", "fields", "schema_ui", "stubs", "wiring", "website"},
+        ),
         # The files outside a crate that the language wiring test reads.
         ("scripts/engine/wasm-smoke.mjs", {"wiring"}),
         ("scripts/engine/fuzz.sh", {"wiring"}),
@@ -300,13 +303,20 @@ def test_pushes_and_the_nightly_check_everything(event: str, scope: str, mode: s
         ("tests/bench/instructions.toml", {"wiring"}),
         # The pages that restate the platform registry (platform_docs).
         ("AGENTS.md", {"wiring"}),
-        ("docs/cli/new.md", {"wiring"}),
-        ("docs/cli/query.md", {"wiring"}),
-        ("docs/cli/setup.md", {"wiring"}),
-        ("docs/cli/validate.md", {"wiring"}),
-        ("docs/usage/installation.md", {"wiring"}),
-        ("docs/usage/concepts/platforms.md", {"wiring"}),
+        ("docs/cli/new.md", {"wiring", "website"}),
+        ("docs/cli/query.md", {"wiring", "website"}),
+        ("docs/cli/setup.md", {"wiring", "website"}),
+        ("docs/cli/validate.md", {"wiring", "website"}),
+        ("docs/usage/installation.md", {"wiring", "website"}),
+        ("docs/usage/concepts/platforms.md", {"wiring", "website"}),
         ("crates/testdata/corpus/kql/take.kql", {"wiring"}),
+        # What opentidehq/website syncs and publishes: docs/ (the website guard).
+        ("docs/sdk/typescript.md", {"website"}),
+        ("docs/meta.json", {"website"}),
+        ("docs/engine/THROUGHPUT.md", {"website"}),
+        # Not docs/: the root guides and the changelog are not synced.
+        ("README.md", set()),
+        ("CHANGELOG.md", set()),
     ],
 )
 def test_build_s_checks_run_when_their_inputs_change(path: str, checks: set[str]) -> None:

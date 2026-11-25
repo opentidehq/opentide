@@ -2,8 +2,8 @@
 //! would send, or why it would fail.
 
 use opentide_schema::objects::platform::{
-    BitdefenderConfig, CarbonBlackConfig, CrowdstrikeConfig, DefenderConfig, ElasticConfig,
-    ExabeamConfig, GoogleSecopsConfig, GraylogConfig, HarfangLabConfig, SentinelConfig,
+    BitdefenderConfig, CarbonBlackConfig, CrowdstrikeConfig, ElasticConfig, ExabeamConfig,
+    GoogleSecopsConfig, GraylogConfig, HarfangLabConfig, MicrosoftDefenderConfig, SentinelConfig,
     SentinelOneConfig, SplunkConfig, SysdigConfig,
 };
 use serde::Serialize;
@@ -12,8 +12,8 @@ use serde::de::DeserializeOwned;
 use crate::json::{Json, Object};
 use crate::rule::{CompileError, Rule};
 use crate::{
-    Context, bitdefender, carbon_black, crowdstrike, defender, deploy, elastic, exabeam,
-    google_secops, graylog, harfanglab, plan, sentinel, sentinel_one, splunk, sysdig,
+    Context, bitdefender, carbon_black, crowdstrike, deploy, elastic, exabeam, google_secops,
+    graylog, harfanglab, microsoft_defender, plan, sentinel, sentinel_one, splunk, sysdig,
 };
 
 /// The tenant a preview compiles for: exclusions scoped to a tenant name are
@@ -165,7 +165,7 @@ fn tenant_writes(
 ) -> Result<Json, CompileError> {
     let id = inputs.known.as_deref();
     let writes = match platform {
-        "microsoft_defender" => defender::compile(cx, rule, tenant, id),
+        "microsoft_defender" => microsoft_defender::compile(cx, rule, tenant),
         "sentinel_one" => sentinel_one::compile(cx, rule, config, id),
         "crowdstrike" => crowdstrike::compile(cx, rule, config, id),
         "harfanglab" => harfanglab::compile(cx, rule, config),
@@ -401,7 +401,7 @@ pub fn block_preview(platform: &str, block: &Json) -> Json {
 fn model_config_dump(platform: &str, block: &Json) -> Option<Json> {
     match platform {
         "sentinel" => model_dump::<SentinelConfig>(block),
-        "microsoft_defender" => model_dump::<DefenderConfig>(block),
+        "microsoft_defender" => model_dump::<MicrosoftDefenderConfig>(block),
         "splunk" => model_dump::<SplunkConfig>(block),
         "sentinel_one" => model_dump::<SentinelOneConfig>(block),
         "crowdstrike" => model_dump::<CrowdstrikeConfig>(block),

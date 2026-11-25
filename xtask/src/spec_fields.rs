@@ -51,7 +51,7 @@ pub const MIN_CHECKED: usize = 100;
 /// points at another spec page, or says what the spec says rather than what
 /// the model enforces. The Python check's list, with the serialised names
 /// (`schema` for `schema_id` and `platform_schema`).
-pub const REWRITTEN: [(&str, &str); 22] = [
+pub const REWRITTEN: [(&str, &str); 17] = [
     ("DetectionObjective", "metadata"),
     ("DetectionRule", "metadata"),
     // The spec calls these the rule's lifecycle status and severity; deploy
@@ -59,14 +59,6 @@ pub const REWRITTEN: [(&str, &str); 22] = [
     // response.alert_severity.
     ("DetectionRule", "severity"),
     ("DetectionRule", "status"),
-    // Until the block follows microsoft-defender-1.0 (RFC 0021): renamed
-    // from defender_for_endpoint, it keeps its pre-1.0 alert until the
-    // change that replaces the model.
-    ("DefenderAlert", "description"),
-    ("DefenderAlert", "recommendation"),
-    ("DefenderAlert", "severity"),
-    ("DefenderAlert", "techniques"),
-    ("DefenderAlert", "title"),
     ("ElasticActions", "respond"),
     ("ElasticRisk", "score"),
     ("ElasticThreatMatch", "filters"),
@@ -308,6 +300,20 @@ pub fn check(rows: &[Row], models: &Models) -> Outcome {
     outcome
 }
 
+/// Whether a spec's front matter marks it `status: deprecated`: a spec kept
+/// as a record of something removed.
+pub fn is_deprecated(text: &str) -> bool {
+    let Some(front) = text.strip_prefix("---\n") else {
+        return false;
+    };
+    front
+        .split("\n---")
+        .next()
+        .unwrap_or_default()
+        .lines()
+        .any(|line| line.trim() == "status: deprecated")
+}
+
 /// Expands `SPEC_FILES` under `specs`, each pattern's files sorted.
 fn spec_files(specs: &Path) -> Result<Vec<PathBuf>> {
     let mut files = Vec::new();
@@ -335,6 +341,12 @@ pub fn run(specifications: &Path, list: bool, out: &mut String) -> Result<bool> 
     let mut all = Vec::new();
     for path in spec_files(&specs)? {
         let text = fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
+        // A spec withdrawn as a record (`status: deprecated`, RFC 0021's
+        // defender-for-endpoint-1.0) defines no behaviour: no model follows
+        // it, and its tables may reuse a model's name.
+        if is_deprecated(&text) {
+            continue;
+        }
         let source = path
             .strip_prefix(&specs)
             .unwrap_or(&path)
@@ -447,6 +459,17 @@ mod tests {
 |-----|-------------|
 | `description` | What the block does |
 ";
+
+    #[test]
+    fn a_deprecated_spec_is_a_record_and_is_not_read() {
+        assert!(is_deprecated(
+            "---\nspec: x\nstatus: deprecated\n---\n# X\n"
+        ));
+        assert!(!is_deprecated(
+            "---\nspec: x\nstatus: normative\n---\nstatus: deprecated\n"
+        ));
+        assert!(!is_deprecated("# X\nstatus: deprecated\n"));
+    }
 
     #[test]
     fn rows_are_the_first_described_table_under_a_model_heading() {

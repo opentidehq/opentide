@@ -539,7 +539,7 @@ Per-platform deployment state for a rule. Vendor rule ids come from the rule's [
   "found": true,
   "uuid": "00000000-0000-4000-8003-000000000001",
   "platforms": {
-    "microsoft_defender": {
+    "sentinel_one": {
       "deployed": true,
       "rule_id": "12345",
       "external_ids": { "contoso": "12345" },
@@ -556,7 +556,7 @@ Per-platform deployment state for a rule. Vendor rule ids come from the rule's [
 }
 ```
 
-`deployed` is true once a vendor id is recorded or the block names `tenants`. `external_ids` maps tenant name to the stored id (for the platforms that store one, below). `rule_id` is that id when exactly one tenant is bound, otherwise `null`. A shard that cannot be read adds `state_error` with its `deployment_state_*` code. A platform that addresses its rules without a vendor id (Sentinel, Splunk, HarfangLab, Carbon Black Cloud and Elastic; the others store the id their vendor gives: Microsoft Defender, SentinelOne, CrowdStrike, Sysdig, Bitdefender, Graylog, Exabeam and Google SecOps) keeps no deployment state, so a deploy to it leaves nothing for this tool to read: it adds a `note` saying so, and `deployed` is true only when the rule's block names `tenants`, never because a deploy went through. Ask the tenant instead (`validate_query` or `run_query` with `live: true`).
+`deployed` is true once a vendor id is recorded or the block names `tenants`. `external_ids` maps tenant name to the stored id (for the platforms that store one, below). `rule_id` is that id when exactly one tenant is bound, otherwise `null`. A shard that cannot be read adds `state_error` with its `deployment_state_*` code. A platform that addresses its rules without a vendor id (Sentinel, Microsoft Defender, Splunk, HarfangLab, Carbon Black Cloud and Elastic; the others store the id their vendor gives: SentinelOne, CrowdStrike, Sysdig, Bitdefender, Graylog, Exabeam and Google SecOps) keeps no deployment state, so a deploy to it leaves nothing for this tool to read: it adds a `note` saying so, and `deployed` is true only when the rule's block names `tenants`, never because a deploy went through. Ask the tenant instead (`validate_query` or `run_query` with `live: true`).
 
 ## Agent workflows
 

@@ -693,10 +693,14 @@ DeviceProcessEvents
 | Setting | Value | Description |
 | --- | --- | --- |
 | `name` | Defender KQL Rule | Platform-specific rule name. |
+| `schedule.frequency` | `1H` | `NRT`, `<n>H`, or `<n>D`, `n` a positive integer without a leading zero. |
 | `alert.title` | Defender KQL Rule | Alert title. |
-| `impacted_entities.device` | `device_id` | Device column. |
-| `scheduling` | `1H` | `NRT`, `1H`, `3H`, `12H`, or `24H`. |
-| `scope.selection` | `All` | `All` or `Specific`. |
+
+**`entities.hosts`**: Devices (`hosts`).
+
+| `device_id` |
+| --- |
+| `device_id` |
 
 ## Response
 
