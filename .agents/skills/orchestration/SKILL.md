@@ -1,6 +1,6 @@
 ---
 name: orchestration
-description: Run several agent sessions on opentide at once without making them wait on each other - branches per PR rather than per session, the merge steward's loop (update, merge, notify the owner), changelog series, review tiers chosen by what a change touches, environment prerequisites set up front, how blocked sessions surface, and when to re-plan. Use when starting, steering or reviewing multi-session work, or when work feels sequential.
+description: Run several agent sessions on opentide at once without making them wait on each other - branches per PR rather than per session, the merge steward's loop (update, merge, notify the owner), changelog series, review tiers chosen by what a change touches, environment prerequisites set up front, how blocked sessions surface, when to re-plan, and briefs that carry their precedent. Use when starting, steering or reviewing multi-session work, or when work feels sequential.
 ---
 
 # Orchestration - parallel sessions, one quality bar
@@ -100,6 +100,28 @@ Profiling and oracles find real problems, and fixing them before a release is ri
 finding adds more than two PRs, re-plan instead of queueing them behind one session: split by file
 ownership across free sessions, and say what moves the finish line.
 
+## 8. A brief carries its precedent
+
+A worker meets the bar it is shown. A brief that states only what to change gets a change that is
+correct and thin: RFC 0021 (Microsoft Defender) shipped with its decisions right but without the
+full YAML shape, the field table or the Graph mapping that every earlier platform RFC carries,
+and the owner sent it back.
+
+- **Name the precedent.** Every brief for a spec, RFC, platform, connector, docs page or skill names
+  the two or three closest existing ones by path ("as detailed as `rfcs/00NN-exabeam...`") and
+  says to match their sections and depth, not only their format.
+- **State the artefacts, not only the decisions.** For a platform RFC or spec: the complete and the
+  minimal YAML block, a field table (type, required, default, allowed values, vendor property), the
+  exact request the connector sends for the complete example, the deploy lifecycle per status, every
+  validation code with an example, the upgrade path, alternatives and risks. Other kinds of work
+  list theirs the same way.
+- **Review against the precedent.** Before merging, put the result beside the precedent it named:
+  a section the precedent has and the result lacks is a finding, however correct the rest is. CI
+  checks that a document builds; only this comparison checks that it is complete.
+- When the repository has its own authoring guide or template (opentidehq/specifications' RFC
+  guidance), the brief points to it and the review checks it was followed; a gap found in review
+  goes back into that guide too.
+
 ## Anti-patterns
 
 - One push branch per session, so a session's independent fixes go up one after another.
@@ -109,3 +131,5 @@ ownership across free sessions, and say what moves the finish line.
   fix merged on the author's review alone.
 - Relaying vendor-oracle runs through another session because a container lacks a toolchain.
 - A worker blocked on an interactive question in a session nobody is watching.
+- A brief that lists the decisions but no precedent, and a review that checks only that CI is green:
+  the result is correct and thinner than everything before it.
