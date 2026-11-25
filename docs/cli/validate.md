@@ -491,8 +491,8 @@ client is built, and names the file to edit.
 A tenant the check cannot reach (a refused connection, a DNS or TLS failure, a
 connect timeout, a proxy that will not connect, or three queries in a row with no
 answer; see [Slow queries and timeouts](#slow-queries-and-timeouts)) fails the check with exit `1`, not a
-traceback. On Splunk, SentinelOne, Elastic, Carbon Black Cloud and Defender for
-Endpoint, `--json` names the `tenant` and the `host` that failed, and `message`
+traceback. On Splunk, SentinelOne, Elastic, Carbon Black Cloud and Microsoft
+Defender, `--json` names the `tenant` and the `host` that failed, and `message`
 carries the network error; Sentinel does too, where it used to report only a rejected query. The human output prints the same message as an `error:` line,
 with the `advice` as a `help:` line under it. The platform's remaining tenants are not checked after the
 first one that cannot be reached. The sample is illustrative, because it needs a
