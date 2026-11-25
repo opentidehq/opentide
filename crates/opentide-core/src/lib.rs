@@ -2235,7 +2235,7 @@ pub mod codes {
                 "`scope` is not `{device_groups: [...]}` with a non-empty list of non-blank names."
             }
             MICROSOFT_DEFENDER_INCIDENT => {
-                "`incident` is not `{exclude_from_correlation: true|false}`."
+                "`incident` is not a mapping whose `exclude_from_correlation` is `true` or `false`."
             }
             MICROSOFT_DEFENDER_NO_ENTITIES => {
                 "The block maps no entity, so the alert names no device, user, or mailbox to triage or act on."
