@@ -85,6 +85,7 @@ opentide's command line, MCP server, language server, `opentide tui` and `openti
 - If a script reads exit code `2` from `opentide query` run outside a workspace, read exit code `1` and `failure.code` `workspace_not_found`, or run it from the workspace (`--repo`).
 - If an MCP client calls `get_chaining` without `depth` and needs more than the object's direct neighbours, pass a larger `depth`, or call again when the answer has `truncated: true`. Read every object's graph from `lineage`; `chaining_index` now holds only threat chaining relations.
 - If you generated a GitHub or GitLab pipeline with `opentide setup ci`, run `opentide setup ci <github|gitlab> --yes` again, so staging and production deploys queue one at a time instead of overlapping.
+- If your repository is on a GitHub Enterprise Server that does not know `queue: max`, delete the `concurrency:` block of `deploy_staging` and `deploy_production` after each `opentide setup ci github --yes`: the server otherwise rejects the workflow and runs no job ([GitHub Enterprise Server](docs/usage/workflows/ci-cd.md#production-write-back)).
 
 ### Breaking
 
