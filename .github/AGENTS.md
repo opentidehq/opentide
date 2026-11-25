@@ -336,7 +336,9 @@ final release (trusted publishing covers `npm publish` only). The
 GitHub Release carries `opentide-wasm32-wasip1.wasm`, the command line as one WASI module for the VS
 Code extension (built by `engine-release-build.yml`'s `wasm` job with the release's
 `OPENTIDE_BUILD_VERSION`, run under wasmtime before it is an asset, a *product* asset for the licence scan). `dry_run` publishes nothing;
-`checkout_ref: vX.Y.Z` resumes a release. Steps:
+A failure after `build` is fixed with **Re-run failed jobs** on the same run (its artifacts: nothing
+rebuilds); `checkout_ref: vX.Y.Z` resumes a release that a re-run cannot (a fix to `publish.yml`,
+expired artifacts), rebuilding from the tag. Steps:
 [release-management](../.agents/skills/release-management/SKILL.md); the registries' settings and
 the decisions (no musl, the free-threaded sdist): [`docs/internal/publishing.md`](../docs/internal/publishing.md#the-release-train).
 `tests/test_ci/test_workflows.py` fails if any workflow can run on a `v*` tag, or if anything

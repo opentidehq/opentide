@@ -155,7 +155,9 @@ It runs only in the release tier: ci.yml's `release` job passes `av-gate` when `
 
 ### Resuming a run
 
-A run that failed partway is resumed with `checkout_ref` set to its tag: it rebuilds from the tag, uploads nothing to its GitHub Release, verifies the published assets and publishes only what each registry lacks. Never retag and never delete a published Release. **Which ref to run on depends on whose `publish.yml` is the default branch's:**
+**Re-run the failed jobs first.** Every job after `build` (`attest`, `release`, `verify-assets`, `pypi`, `crates`, `npm`, `smoke-registries`) works from the run's artifacts and is safe to run again: the GitHub Release job deletes the untagged draft a failed attempt left (`release.py stale-draft`, #1874) and never uploads over a published release, PyPI uploads with `skip-existing`, and crates.io and npm skip what they already have. So a failure there (a GitHub 5xx, a registry outage, the PyPI CDN delay, a trusted publisher registered late) is fixed with **Re-run failed jobs** on that run (`gh run rerun <run id> --failed`, or the API's `actions_run_trigger` with `rerun_failed_jobs`): nothing is rebuilt, smoke-tested or scanned again, and the attestations name the same run. The 1.0.0 release instead ran Publish a second time from nothing (45662486442, 63 jobs, 315 job-minutes) because its fix, #1874, changed `publish.yml` itself, and a re-run runs the workflow file of the original attempt.
+
+**Resume with `checkout_ref`** when a re-run cannot do it: the fix is in `publish.yml` or a script it runs, the artifacts have expired, or the run is gone. A run that failed partway is resumed with `checkout_ref` set to its tag: it rebuilds from the tag, uploads nothing to its GitHub Release, verifies the published assets and publishes only what each registry lacks. Never retag and never delete a published Release. **Which ref to run on depends on whose `publish.yml` is the default branch's:**
 
 | Period | Resume with |
 |--------|-------------|

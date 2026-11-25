@@ -1359,6 +1359,9 @@ class ReleaseWorkflowTest(unittest.TestCase):
         pypi = workflow_jobs()["pypi"]
         resume = "gh workflow run publish.yml --repo opentidehq/opentide --ref development"
         self.assertIn(resume, pypi)
+        # A re-run of the failed jobs comes first: it reuses the run's artifacts.
+        self.assertIn("gh run rerun {run_id} --failed", pypi)
+        self.assertLess(pypi.index("gh run rerun"), pypi.index(resume))
         self.assertIn("Run workflow on development with checkout_ref=v{version}", pypi)
         self.assertIn("event_type=publish", pypi)
         self.assertIn("-f checkout_ref=v{version}", pypi)
