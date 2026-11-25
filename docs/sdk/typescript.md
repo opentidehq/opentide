@@ -1,6 +1,6 @@
 ---
 title: TypeScript SDK
-description: The @opentide/opentide npm package — the opentide SDK and command line for Node.js: open a Tide workspace, validate and lint it, read its catalogue and coverage, plan a deploy, query, check and deploy on its tenants with promises, and run the CLI with npx.
+description: "The @opentide/opentide npm package — the opentide SDK and command line for Node.js: open a Tide workspace, validate and lint it, read its catalogue and coverage, plan a deploy, query, check and deploy on its tenants with promises, and run the CLI with npx."
 ---
 
 # TypeScript SDK
