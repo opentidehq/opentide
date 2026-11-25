@@ -1,6 +1,7 @@
 name: Docs
 
-# Content-only checks in opentide. Build and deploy live in opentidehq/website (Fumadocs).
+# Content checks in opentide. Build and deploy live in opentidehq/website (Fumadocs),
+# which syncs docs/ every hour; `website` runs its sync and build on this tree.
 
 on:
   push:
@@ -10,12 +11,14 @@ on:
       - 'scripts/validate-docs.sh'
       - 'scripts/build/check_docs_mdx.py'
       - '.github/workflows/docs.yml'
+      - 'scripts/ci/website-sync.sh'
   pull_request:
     paths:
       - 'docs/**'
       - 'scripts/validate-docs.sh'
       - 'scripts/build/check_docs_mdx.py'
       - '.github/workflows/docs.yml'
+      - 'scripts/ci/website-sync.sh'
   workflow_dispatch:
 
 concurrency:
@@ -34,3 +37,104 @@ jobs:
 
       - name: Validate Fumadocs-ready content
         run: scripts/validate-docs.sh
+
+  # The website sync guard. opentidehq/website syncs docs/ every hour ("Sync
+  # docs and deploy", its sync-docs.yml); a page it refuses or cannot build
+  # stops the site updating, silently. This job runs the site's own sync and
+  # checks against this run's docs/, so the break fails the pull request
+  # that causes it (as opentidehq/specifications' website-sync.yml does for
+  # the specifications): the website's main, this tree's docs/ (not the
+  # branch the website's .gitmodules names) and the specifications' main.
+  # Each step is scripts/ci/website-sync.sh, which puts the website's own
+  # error in an annotation and the job summary.
+  website:
+    name: Website docs sync
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      # The step script; the website goes under website/, which this
+      # checkout's clean would delete if it came second.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: scripts/ci
+
+      - name: Check out opentidehq/website (main)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: opentidehq/website
+          ref: main
+          path: website
+          submodules: false
+          persist-credentials: false
+
+      - name: Check out this tree's docs/ as vendor/opentide
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: website/vendor/opentide
+          sparse-checkout: docs
+          persist-credentials: false
+
+      - name: Check out opentidehq/specifications (main) as vendor/specifications
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: opentidehq/specifications
+          ref: main
+          path: website/vendor/specifications
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+
+      # pnpm at the version the website's packageManager names (corepack),
+      # and its store cached by the website's lockfile: restored always,
+      # saved by a push when the key missed.
+      - name: Set up pnpm
+        id: pnpm
+        working-directory: website
+        run: |
+          corepack enable
+          pnpm --version
+          echo "store=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore the pnpm store
+        id: pnpm-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.pnpm.outputs.store }}
+          key: website-pnpm-${{ hashFiles('website/pnpm-lock.yaml') }}
+          restore-keys: website-pnpm-
+
+      - name: Install the website's dependencies
+        working-directory: website
+        run: pnpm install --frozen-lockfile
+
+      - name: Save the pnpm store
+        if: github.event_name != 'pull_request' && steps.pnpm-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.pnpm.outputs.store }}
+          key: website-pnpm-${{ hashFiles('website/pnpm-lock.yaml') }}
+
+      # The site's MDX safety check on every synced page.
+      - name: pnpm sync:content
+        run: scripts/ci/website-sync.sh sync website
+
+      # The site's unit suite but "workspace committed docs match vendor
+      # gitlinks", which compares the website's own committed content/docs
+      # with its gitlinks (this job replaces both on purpose).
+      - name: pnpm test
+        run: scripts/ci/website-sync.sh test website
+
+      # Every synced page through fumadocs-mdx (frontmatter, components) and
+      # the type check; `next build`, not `pnpm build`, whose prebuild
+      # downloads releases that do not depend on this tree.
+      - name: next build
+        run: scripts/ci/website-sync.sh build website
+
+      - name: pnpm verify:docs
+        run: scripts/ci/website-sync.sh verify website
