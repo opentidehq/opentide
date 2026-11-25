@@ -45,7 +45,7 @@ Never tag by hand. Trunk is `development`.
 
 | Where | What | Built by |
 |-------|------|----------|
-| PyPI | One `cp310-abi3` wheel per platform (manylinux_2_28 x86_64 and aarch64, macOS Intel and Apple silicon, Windows x64 and Arm64) and the sdist | maturin (`[tool.maturin]` in `pyproject.toml`) through PyO3/maturin-action in `build-packages.yml`, each wheel smoke-tested on its own OS; `maturin sdist` |
+| PyPI | One `cp310-abi3` wheel per platform (manylinux_2_28 x86_64 and aarch64, macOS Intel and Apple silicon, Windows x64 and Arm64) and the sdist | maturin (`[tool.maturin]` in `pyproject.toml`) through PyO3/maturin-action in `build-packages.yml`, each wheel smoke-tested on its own OS by `release-build.yml`'s one smoke matrix; `maturin sdist` |
 | crates.io | Every crate without `publish = false`, dependencies first: the engine crates, `opentide-schema`, `-schema-derive`, `-workspace`, `-compile`, `-connectors`, `-cli`, `-lsp`, and the facade `opentide` (`cargo install opentide --features cli`) | `scripts/engine/release.py publish` |
 | npm | `@opentide/opentide` and its six native packages (napi-rs), the `opentide` alias, `@opentide/lsp-client`, `@opentide/lsp-worker`, `@opentide/wasi-host`, with provenance | `bindings/node/build.mjs` per target, `npm pack` |
 | GitHub Release | `opentide-vX.Y.Z-<target>` and `opentide-lsp-vX.Y.Z-<target>` for the four Linux and macOS targets (no Windows binary), `opentide-installer.sh`, `highlights-vX.Y.Z.zip`, `opentide-wasm-web-vX.Y.Z.zip`, the WASI build, the licences, eight CycloneDX SBOMs, `SHA256SUMS` (`release.py assets vX.Y.Z` lists them) | `engine-release-build.yml` |

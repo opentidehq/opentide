@@ -13,7 +13,7 @@
 #
 #   - wheels-<platform>: one cp310-abi3 wheel, built by maturin (linux-x64,
 #     linux-arm64, macos-x64, macos-arm64, windows-x64, windows-arm64), each
-#     installed and run on its own OS before the build passes (`wheel-smoke`);
+#     installed and run on its own OS by release-build.yml's `smoke`;
 #   - npm-packages: every npm tarball in publishing order (1-native, 2-package,
 #     3-alias, 4-lsp), which release-build.yml smoke-tests and publish.yml
 #     attests and publishes; a tester installs
@@ -122,7 +122,7 @@ jobs:
   # cross-compiled (rust-cross's image: no QEMU); macOS and Windows build on
   # the runner, x86_64-apple-darwin and aarch64-pc-windows-msvc
   # cross-compiled. Each wheel is then installed and run on its own OS
-  # (`wheel-smoke`). manylinux_2_28 only: no musllinux (the maintainer's
+  # (release-build.yml's `smoke`). manylinux_2_28 only: no musllinux (the maintainer's
   # decision; docs/internal/publishing.md).
   wheels:
     name: Wheel (${{ matrix.platform }})
@@ -220,64 +220,6 @@ jobs:
           path: wheelhouse/*.whl
           if-no-files-found: error
           retention-days: ${{ inputs.retention-days }}
-
-  # Each wheel installed the way a user installs it, on its own OS and
-  # architecture (the build cross-compiles three of them): the module's
-  # version, the engine (check_query), the package's smoke
-  # (scripts/build/smoke_package.py: `opentide --version`, its requirements,
-  # validate on the tide corpus, the SDK) and doctor.
-  wheel-smoke:
-    name: Wheel smoke (${{ matrix.platform }})
-    needs: [versions, wheels]
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-latest
-            platform: linux-x64
-          - os: ubuntu-24.04-arm
-            platform: linux-arm64
-          - os: macos-15-intel
-            platform: macos-x64
-          - os: macos-latest
-            platform: macos-arm64
-          - os: windows-latest
-            platform: windows-x64
-          - os: windows-11-arm
-            platform: windows-arm64
-    env:
-      PYPI_VERSION: ${{ needs.versions.outputs.pypi }}
-    steps:
-      # scripts/build/smoke_package.py and the tide corpus, at the commit built.
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          ref: ${{ inputs.revision }}
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-        with:
-          python-version: "3.12"
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: wheels-${{ matrix.platform }}
-          path: ${{ runner.temp }}/wheels
-      - name: pip install the wheel, then the engine, the package's smoke and doctor
-        shell: bash
-        run: |
-          set -euo pipefail
-          python -m venv "${RUNNER_TEMP}/venv"
-          if [[ -x "${RUNNER_TEMP}/venv/Scripts/python.exe" ]]; then bin="${RUNNER_TEMP}/venv/Scripts"; else bin="${RUNNER_TEMP}/venv/bin"; fi
-          "${bin}/python" -m pip install --quiet --find-links "${RUNNER_TEMP}/wheels" --only-binary opentide "opentide==${PYPI_VERSION}"
-          "${bin}/opentide" --version
-          "${bin}/python" -c "import sys, opentide._native as n; assert n.__version__ == sys.argv[1], n.__version__" "${PYPI_VERSION}"
-          "${bin}/python" -c "from opentide.analysis import check_query; assert [f.code for f in check_query('SecurityEvent | wher x', language='kql')] == ['kql_unknown_operator']"
-          # The tide corpus (tests/fixtures/tide_corpus) validates, and Workspace.open reads it.
-          "${bin}/python" -I scripts/build/smoke_package.py "${PYPI_VERSION}"
-          workspace="${RUNNER_TEMP}/smoke-workspace"
-          "${bin}/opentide" --json setup --path "${workspace}" --yes > /dev/null
-          cd "${workspace}"
-          "${bin}/opentide" --json doctor --offline
 
   # @opentide/opentide's native packages (napi-rs, UC-5.3): the facade with
   # `cli` for each target, as `opentide.<platform>.node`, built with the npm

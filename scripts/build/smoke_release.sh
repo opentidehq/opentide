@@ -7,7 +7,10 @@
 #       `opentide --version` (the release's version) and `opentide-lsp
 #       --version` (no standalone binary ships for Windows: it installs from
 #       PyPI or npm; on Windows, the check that no Windows binary or
-#       installer is an asset); then, on every platform, every npm tarball
+#       installer is an asset); then, on every platform, this platform's
+#       wheel installed with pip into a fresh virtual environment (the
+#       module's version, the engine's check_query, scripts/build/smoke_package.py,
+#       then `opentide setup` and `opentide doctor --offline`); then every npm tarball
 #       published to a throwaway local registry and `npm install
 #       @opentide/opentide` in a clean project
 #       (scripts/engine/npm-local-registry/test.mjs: npm chooses exactly this
@@ -23,9 +26,8 @@
 #       resolves each to its package: release.py crate-patch).
 #
 # Environment: SMOKE_ARTIFACTS (release-assets/, npm/, dist/, crates/ under
-# it, as the job downloads them), VERSION (the binaries'), NPM_VERSION,
-# PYPI_VERSION, CRATES_VERSION. The wheels' own smoke, on each platform, is
-# build-packages.yml's `wheel-smoke`.
+# it, as the job downloads them; wheels/ holds the platform's wheel), VERSION
+# (the binaries'), NPM_VERSION, PYPI_VERSION, CRATES_VERSION.
 set -euo pipefail
 
 kind="${1:?platform, shape, sdist or cargo}"
@@ -34,7 +36,7 @@ tmp="${RUNNER_TEMP:-$(mktemp -d)}"
 
 case "${kind}" in
   platform)
-    : "${VERSION:?}" "${NPM_VERSION:?}"
+    : "${VERSION:?}" "${NPM_VERSION:?}" "${PYPI_VERSION:?}"
     assets="${artifacts}/release-assets"
     bin="${tmp}/bin"
     if [[ "${OS:-}" == "Windows_NT" ]]; then
@@ -52,6 +54,18 @@ case "${kind}" in
       grep -qF "${VERSION}" <<<"${out}" || { echo "opentide --version printed ${out}, not ${VERSION}" >&2; exit 1; }
       "${bin}/opentide-lsp" --version
     fi
+    wheels="${artifacts}/wheels"
+    venv="${tmp}/wheel-venv"
+    python -m venv "${venv}"
+    if [[ -x "${venv}/Scripts/python.exe" ]]; then py="${venv}/Scripts"; else py="${venv}/bin"; fi
+    "${py}/python" -m pip install --quiet --find-links "${wheels}" --only-binary opentide "opentide==${PYPI_VERSION}"
+    "${py}/opentide" --version
+    "${py}/python" -c "import sys, opentide._native as n; assert n.__version__ == sys.argv[1], n.__version__" "${PYPI_VERSION}"
+    "${py}/python" -c "from opentide.analysis import check_query; assert [f.code for f in check_query('SecurityEvent | wher x', language='kql')] == ['kql_unknown_operator']"
+    "${py}/python" -I scripts/build/smoke_package.py "${PYPI_VERSION}"
+    workspace="${tmp}/smoke-workspace"
+    "${py}/opentide" --json setup --path "${workspace}" --yes >/dev/null
+    (cd "${workspace}" && "${py}/opentide" --json doctor --offline)
     node scripts/engine/npm-local-registry/test.mjs --version "${NPM_VERSION}" --tarballs "${artifacts}/npm"
     ;;
   shape)

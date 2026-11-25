@@ -1151,9 +1151,17 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertEqual(kinds, ["platform"] * 6 + ["shape"])
         sources = re.findall(r"kind: (\w+) \}", built["smoke-sources"])
         self.assertEqual(sources, ["sdist", "cargo"])
-        # The wheels are smoke-tested on their own OS in build-packages.yml.
-        smoke = workflow_jobs(PACKAGES)["wheel-smoke"]
-        self.assertIn("needs: [versions, wheels]", smoke)
+        # One smoke matrix: each platform cell also installs that platform's
+        # wheel; build-packages.yml smoke-tests nothing of its own.
+        self.assertIn("name: wheels-${{ matrix.name }}", built["smoke"])
+        self.assertNotIn("smoke", "".join(workflow_jobs(PACKAGES)))
+        script = (Path(__file__).resolve().parents[1] / "build" / "smoke_release.sh").read_text(
+            encoding="utf-8"
+        )
+        platform = script[script.index("  platform)") : script.index("  shape)")]
+        self.assertIn("--only-binary opentide", platform)
+        self.assertIn("smoke_package.py", platform)
+        self.assertIn("doctor --offline", platform)
         # A dry run and an internal candidate stop before attest, and so
         # before every write after it.
         self.assertIn(

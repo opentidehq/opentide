@@ -107,8 +107,7 @@ checked before the next pull request builds on it.
 **The release tier** (a release pull request, `scope: release`, and the nightly): one job,
 `release` ([`release-build.yml`](workflows/release-build.yml), which publish.yml calls too, so
 each build and smoke test exists once): `packages` ([`build-packages.yml`](workflows/build-packages.yml):
-every wheel, built by maturin (PyO3/maturin-action), each installed and run on its own platform
-(`wheel-smoke`), and every npm tarball, one `npm-packages` artifact), `engine-assets`
+every wheel, built by maturin (PyO3/maturin-action), and every npm tarball, one `npm-packages` artifact), `engine-assets`
 ([`engine-release-build.yml`](workflows/engine-release-build.yml): every binary (Linux and macOS:
 no standalone Windows executable ships), the installer, every WebAssembly build, SBOM and
 SHA256SUMS), `sdist` (`maturin sdist`, twine's check) and
@@ -116,8 +115,8 @@ SHA256SUMS), `sdist` (`maturin sdist`, twine's check) and
 at `X.Y.Z.devN` / `X.Y.Z-dev.N`, kept 14 days
 ([`docs/internal/publishing.md`](../docs/internal/publishing.md#testing-a-build-without-publishing));
 then two smoke jobs running [`scripts/build/smoke_release.sh`](../scripts/build/smoke_release.sh):
-`smoke`, the binary installer on Linux and macOS, `npm install` from a throwaway local registry on
-each of the six platforms (Linux x64 and arm64, macOS arm64 and x64, Windows x64 and arm64) and the
+`smoke`, **one smoke matrix per run**: the binary installer on Linux and macOS, then on each of the
+six platforms its wheel (`pip install`, the engine, `smoke_package.py`, `doctor`) and `npm install` from a throwaway local registry (Linux x64 and arm64, macOS arm64 and x64, Windows x64 and arm64) and the
 PyPI dist's shape (one version, six cp310-abi3 wheels, one sdist); and `smoke-sources`, which starts
 as soon as its packages exist (not after the slowest binary): a build from the sdist with the
 runner's stable Rust, and `cargo install opentide --features cli` from the crate packages. In a release pull request or

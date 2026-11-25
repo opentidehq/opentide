@@ -13,9 +13,8 @@
 # Jobs:
 #
 #   - `release-versions`: the revision (a 40-hex SHA) and the versions every build carries;
-#   - `packages` (build-packages.yml): the six cp310-abi3 wheels, each
-#     installed and run on its own OS (`wheel-smoke`), the six npm addons and
-#     every npm tarball (`npm-packages`);
+#   - `packages` (build-packages.yml): the six cp310-abi3 wheels, the six
+#     npm addons and every npm tarball (`npm-packages`);
 #   - `engine-assets` (engine-release-build.yml): the GitHub Release's assets,
 #     `release-assets` (the binaries per Linux and macOS target, the
 #     installer, the WebAssembly builds, the SBOMs, SHA256SUMS);
@@ -24,11 +23,11 @@
 #     licence scan (`crates`);
 #   - `smoke` and `smoke-sources`, one script (scripts/build/smoke_release.sh):
 #     on Linux and macOS the binary installer against `release-assets`, on
-#     each of the six platforms `npm install` from a throwaway local registry
-#     of `npm-packages`, and the PyPI dist's shape (one version, six
+#     each of the six platforms the platform's wheel (`pip install`, the
+#     engine, the package's smoke, doctor) and `npm install` from a throwaway
+#     local registry of `npm-packages`: one smoke matrix per run, and the PyPI dist's shape (one version, six
 #     cp310-abi3 wheels, one sdist); then, as soon as their packages exist, a
-#     build from the sdist and `cargo install` from the crate packages. The
-#     wheels' own smoke is build-packages.yml's.
+#     build from the sdist and `cargo install` from the crate packages.
 #
 # Artifacts keep their names (wheels-<platform>, npm-packages, release-assets,
 # sdist, crates): publish.yml's attest, internal-release and registry jobs
@@ -327,6 +326,15 @@ jobs:
         with:
           persist-credentials: false
           ref: ${{ needs.release-versions.outputs.revision }}
+      - if: matrix.kind == 'platform'
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - if: matrix.kind == 'platform'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: wheels-${{ matrix.name }}
+          path: smoke-artifacts/wheels
       - if: matrix.kind == 'platform'
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
