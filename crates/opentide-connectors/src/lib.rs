@@ -11,7 +11,7 @@
 //! ([`runtime`]), progress events ([`progress`]) and the errors with the
 //! failure codes they map to ([`error`]).
 //!
-//! The platforms built on it: [`crowdstrike`], [`defender`], [`elastic`],
+//! The platforms built on it: [`crowdstrike`], [`microsoft_defender`], [`elastic`],
 //! [`harfanglab`], [`sentinel_one`] and [`sysdig`] (UC-4.2, #832), the REST
 //! platforms, and [`splunk`], [`carbon_black`] and [`sentinel`] (UC-4.3,
 //! #833), whose vendors ship SDKs; each a client, deployer and query runner
