@@ -55,6 +55,8 @@ _INSTALL = re.compile(r"^\s*(?:uv )?pip install .*$", re.MULTILINE)
 _CANDIDATE_PIN = re.compile(r"opentide==\d+\.\d+\.\d+rc\d+")
 #: ``## 0.19.0 — 29 October 2026`` in ``docs/usage/releases.md``.
 _RELEASES_HEADING = re.compile(r"^##\s+(\d+\.\d+\.\d+)\b")
+#: ``## Since 1.0.0-rc.4`` in a notes file: the changes after that version.
+_SINCE = re.compile(r"^##\s+Since\s+v?(\S+)\s*$", re.MULTILINE)
 
 
 class ReleaseError(Exception):
@@ -115,6 +117,7 @@ def problems(root: Path, tag: str) -> list[str]:
         found.append(
             f"README.md pins opentide=={', '.join(sorted(pins)) or '(nothing)'}, not {release}"
         )
+    found.extend(_since_problems(root, tag))
     if _leads_with_pre(readme) and not _documents_a_candidate(root):
         found.append(
             "README.md's first install command is a `--pre` one, but "
@@ -175,7 +178,48 @@ def candidate_problems(root: Path, tag: str) -> list[str]:
         )
     if _section(changelog, "Unreleased") is None:
         found.append("CHANGELOG.md has no ## [Unreleased] heading, which a candidate's notes quote")
+    found.extend(_since_problems(root, tag))
     return found
+
+
+def _previous(root: Path, tag: str) -> str | None:
+    """The version just before ``tag``, which its notes' ``## Since`` names: candidate
+    N's is candidate N-1, the first candidate's the newest dated release, and a release's
+    its own newest candidate (the newest ``vX.Y.Z-rc.N.md`` notes file), if it had one."""
+    if match := _CANDIDATE.fullmatch(tag):
+        candidate, number = match.group(1), int(match.group(2))
+        if number > 1:
+            return f"{candidate}-rc.{number - 1}"
+        try:
+            return version(root)
+        except ReleaseError:
+            return None
+    if match := _TAG.fullmatch(tag):
+        release = match.group(1)
+        numbers = [
+            int(found.group(2))
+            for path in (root / ".github" / "release-notes").glob(f"v{release}-rc.*.md")
+            if (found := _CANDIDATE.fullmatch(path.stem)) and found.group(1) == release
+        ]
+        return f"{release}-rc.{max(numbers)}" if numbers else None
+    return None
+
+
+def _since_problems(root: Path, tag: str) -> list[str]:
+    """A ``## Since X`` heading in ``tag``'s notes file that does not name the version
+    just before it (``v1.0.0-rc.5.md`` headed its own changes ``Since 1.0.0-rc.5``)."""
+    notes = root / ".github" / "release-notes" / f"{tag}.md"
+    if not notes.is_file():
+        return []
+    previous = _previous(root, tag)
+    if previous is None:
+        return []
+    return [
+        f"{notes.relative_to(root).as_posix()}: '## Since {since}' should name {previous}, "
+        f"the version before {tag.removeprefix('v')}"
+        for since in _SINCE.findall(notes.read_text(encoding="utf-8"))
+        if since != previous
+    ]
 
 
 def notes(root: Path, tag: str, *, internal: bool = False) -> str:

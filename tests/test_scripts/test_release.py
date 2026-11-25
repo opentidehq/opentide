@@ -294,3 +294,42 @@ def test_a_pre_release_pin_in_the_readme_is_not_a_release_pin() -> None:
         "opentide==1.3.0.dev4 opentide==1.2.0.\n"
     )
     assert set(pins) == {"1.2.0"}
+
+
+def test_a_candidates_since_heading_names_the_candidate_before_it(repo: Path) -> None:
+    # v1.0.0-rc.5.md headed rc.5's own changes "Since 1.0.0-rc.5".
+    _edit(repo / "CHANGELOG.md", "## [Unreleased]\n", "## [Unreleased]\n\n- A change.\n")
+    notes = repo / ".github" / "release-notes"
+    _write(notes / "v1.3.0-rc.5.md", "Summary.\n\n## Since 1.3.0-rc.5\n\n- A change.\n")
+    script = _script()
+    assert script.candidate_problems(repo, "v1.3.0-rc.5") == [
+        ".github/release-notes/v1.3.0-rc.5.md: '## Since 1.3.0-rc.5' should name "
+        "1.3.0-rc.4, the version before 1.3.0-rc.5"
+    ]
+    _edit(notes / "v1.3.0-rc.5.md", "Since 1.3.0-rc.5", "Since 1.3.0-rc.4")
+    assert script.candidate_problems(repo, "v1.3.0-rc.5") == []
+    # The first candidate's changes are since the last release.
+    _write(notes / "v1.3.0-rc.1.md", "## Since 1.3.0-rc.0\n")
+    assert script.candidate_problems(repo, "v1.3.0-rc.1") == [
+        ".github/release-notes/v1.3.0-rc.1.md: '## Since 1.3.0-rc.0' should name 1.2.0, "
+        "the version before 1.3.0-rc.1"
+    ]
+
+
+def test_a_releases_since_heading_names_its_last_candidate(repo: Path) -> None:
+    notes = repo / ".github" / "release-notes"
+    _write(notes / "v1.2.0-rc.1.md", "## Since 1.1.0\n")
+    _write(notes / "v1.2.0-rc.2.md", "## Since 1.2.0-rc.1\n")
+    _write(notes / "v1.2.0.md", "# 1.2.0\n\n## Since 1.2.0-rc.1\n")
+    assert _script().problems(repo, "v1.2.0") == [
+        ".github/release-notes/v1.2.0.md: '## Since 1.2.0-rc.1' should name 1.2.0-rc.2, "
+        "the version before 1.2.0"
+    ]
+    _write(notes / "v1.2.0.md", "# 1.2.0\n\n## Since 1.2.0-rc.2\n")
+    assert _script().problems(repo, "v1.2.0") == []
+
+
+def test_this_repositorys_candidate_notes_name_the_candidate_before_them() -> None:
+    script = _script()
+    for path in sorted((ROOT / ".github" / "release-notes").glob("v*-rc.*.md")):
+        assert script._since_problems(ROOT, path.stem) == [], path.name
