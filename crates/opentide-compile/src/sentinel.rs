@@ -132,99 +132,10 @@ pub fn compile(cx: &Context<'_>, rule: &Rule, tenant: &str) -> Result<Json, Comp
     compile_with_warnings(cx, rule, tenant).map(|(body, _)| body)
 }
 
-/// What v18 holds in place of `id`, an id it does not know, and why: the v18
-/// ids that replace it (none when it has no equivalent), and the reason.
-///
-/// - an id newer than v18 becomes the v18 id(s) it replaced; with none, its
-///   v18 parent when it is a sub-technique (`T1027.018` sends `T1027`), or the
-///   v18 parents its newer parent replaced (`T1685.007` sends `T1562`);
-/// - a retired id becomes the id(s) that replaced it;
-/// - an id the list does not know at all has none.
-fn v18_replacement<'a>(attack: &'a SentinelAttack, id: &str) -> (Vec<&'a String>, String) {
-    let version = opentide_schema::vocab::sentinel::VERSION;
-    let known = |id: &&String| attack.techniques.contains_key(*id);
-    if let Some(newer) = attack.later.techniques.get(id) {
-        let replaced: Vec<&String> = newer.replaces.iter().filter(known).collect();
-        let instead = if replaced.is_empty() {
-            // A sub-technique with no replacement stands for its parent: the
-            // parent when v18 has it, else the parent's own v18 parents (the
-            // dot-free ids it replaced).
-            id.split_once('.')
-                .map(|(parent, _)| {
-                    attack.techniques.get_key_value(parent).map_or_else(
-                        || {
-                            attack
-                                .later
-                                .techniques
-                                .get(parent)
-                                .map(|newer| {
-                                    newer
-                                        .replaces
-                                        .iter()
-                                        .filter(|old| !old.contains('.'))
-                                        .filter(known)
-                                        .collect()
-                                })
-                                .unwrap_or_default()
-                        },
-                        |(parent, _)| vec![parent],
-                    )
-                })
-                .unwrap_or_default()
-        } else {
-            replaced
-        };
-        (instead, format!("newer than ATT&CK v{version}"))
-    } else if let Some(retired) = attack.retired.get(id) {
-        (
-            retired.replaced_by.iter().filter(known).collect(),
-            format!("retired before ATT&CK v{version}"),
-        )
-    } else {
-        (
-            Vec::new(),
-            format!("not an ATT&CK v{version} id Sentinel knows"),
-        )
-    }
-}
-
-/// For a parent technique newer than ATT&CK v18, where its sub-technique ids
-/// go, as deploy sends them: `Its sub-techniques map to ATT&CK v18 as
-/// T1685.002 → T1562.008, ...` (`none` for one with no v18 equivalent). `None`
-/// for a sub-technique or an id the list does not hold as newer.
-fn sub_technique_hint(attack: &SentinelAttack, id: &str) -> Option<String> {
-    if id.contains('.') || !attack.later.techniques.contains_key(id) {
-        return None;
-    }
-    let prefix = format!("{id}.");
-    let version = opentide_schema::vocab::sentinel::VERSION;
-    let mappings: Vec<String> = attack
-        .later
-        .techniques
-        .keys()
-        .filter(|sub| sub.starts_with(&prefix))
-        .map(|sub| {
-            let (instead, _) = v18_replacement(attack, sub);
-            if instead.is_empty() {
-                format!("{sub} → none")
-            } else {
-                let names: Vec<&str> = instead.iter().map(|id| id.as_str()).collect();
-                format!("{sub} → {}", names.join(" and "))
-            }
-        })
-        .collect();
-    if mappings.is_empty() {
-        return None;
-    }
-    Some(format!(
-        "Its sub-techniques map to ATT&CK v{version} as {}",
-        mappings.join(", ")
-    ))
-}
-
 /// The ids Sentinel takes for the `resolved` ATT&CK ids (the block's, else the
 /// objective's), each change with a warning naming the rule, the id and what
-/// is sent instead (see [`v18_replacement`]); an id v18 has is kept.
+/// is sent instead (see [`SentinelAttack::v18_replacement`]); an id v18 has
+/// is kept.
 fn v18_techniques(
     label: &str,
     resolved: &[String],
@@ -240,7 +151,7 @@ fn v18_techniques(
             }
             continue;
         }
-        let (instead, why) = v18_replacement(attack, id);
+        let (instead, why) = attack.v18_replacement(id);
         let mut message = if instead.is_empty() {
             format!("{label}: leaving out {id}, which is {why} and has no v{version} equivalent")
         } else {
@@ -250,7 +161,7 @@ fn v18_techniques(
                 names.join(" and ")
             )
         };
-        if let Some(hint) = sub_technique_hint(attack, id) {
+        if let Some(hint) = attack.sub_technique_map(id) {
             message.push_str(". ");
             message.push_str(&hint);
         }

@@ -115,7 +115,7 @@ impl SentinelAttack {
         }
         if let Some(newer) = self.later.techniques.get(value) {
             let lead = format!("; {value} ({}) is newer than ATT&CK v{VERSION}", newer.name);
-            return if newer.replaces.is_empty() {
+            let mut hint = if newer.replaces.is_empty() {
                 format!("{lead} and has no v{VERSION} equivalent")
             } else {
                 format!(
@@ -123,6 +123,13 @@ impl SentinelAttack {
                     newer.replaces.join(" or ")
                 )
             };
+            // A newer parent: where each of its sub-techniques goes, as
+            // deploy says it when it sends them.
+            if let Some(subs) = self.sub_technique_map(value) {
+                hint.push_str(". ");
+                hint.push_str(&subs);
+            }
+            return hint;
         }
         if let Some(retired) = self.retired.get(value) {
             let lead = format!(
@@ -143,11 +150,121 @@ impl SentinelAttack {
             .map(|id| format!("; did you mean {id} ({})?", self.techniques[id]))
             .unwrap_or_default()
     }
+
+    /// What v18 holds in place of `id`, an id it does not know, and why: the v18
+    /// ids that replace it (none when it has no equivalent), and the reason.
+    ///
+    /// - an id newer than v18 becomes the v18 id(s) it replaced; with none, its
+    ///   v18 parent when it is a sub-technique (`T1027.018` sends `T1027`), or the
+    ///   v18 parents its newer parent replaced (`T1685.007` sends `T1562`);
+    /// - a retired id becomes the id(s) that replaced it;
+    /// - an id the list does not know at all has none.
+    pub fn v18_replacement(&self, id: &str) -> (Vec<&String>, String) {
+        let attack = self;
+        let known = |id: &&String| attack.techniques.contains_key(*id);
+        if let Some(newer) = attack.later.techniques.get(id) {
+            let replaced: Vec<&String> = newer.replaces.iter().filter(known).collect();
+            let instead = if replaced.is_empty() {
+                // A sub-technique with no replacement stands for its parent: the
+                // parent when v18 has it, else the parent's own v18 parents (the
+                // dot-free ids it replaced).
+                id.split_once('.')
+                    .map(|(parent, _)| {
+                        attack.techniques.get_key_value(parent).map_or_else(
+                            || {
+                                attack
+                                    .later
+                                    .techniques
+                                    .get(parent)
+                                    .map(|newer| {
+                                        newer
+                                            .replaces
+                                            .iter()
+                                            .filter(|old| !old.contains('.'))
+                                            .filter(known)
+                                            .collect()
+                                    })
+                                    .unwrap_or_default()
+                            },
+                            |(parent, _)| vec![parent],
+                        )
+                    })
+                    .unwrap_or_default()
+            } else {
+                replaced
+            };
+            (instead, format!("newer than ATT&CK v{VERSION}"))
+        } else if let Some(retired) = attack.retired.get(id) {
+            (
+                retired.replaced_by.iter().filter(known).collect(),
+                format!("retired before ATT&CK v{VERSION}"),
+            )
+        } else {
+            (
+                Vec::new(),
+                format!("not an ATT&CK v{VERSION} id Sentinel knows"),
+            )
+        }
+    }
+
+    /// For a parent technique newer than ATT&CK v18, where its sub-technique ids
+    /// go, as deploy sends them and as `validate`'s hint names them: `Its sub-techniques map to ATT&CK v18 as
+    /// T1685.002 → T1562.008, ...` (`none` for one with no v18 equivalent). `None`
+    /// for a sub-technique or an id the list does not hold as newer.
+    pub fn sub_technique_map(&self, id: &str) -> Option<String> {
+        let attack = self;
+        if id.contains('.') || !attack.later.techniques.contains_key(id) {
+            return None;
+        }
+        let prefix = format!("{id}.");
+        let mappings: Vec<String> = attack
+            .later
+            .techniques
+            .keys()
+            .filter(|sub| sub.starts_with(&prefix))
+            .map(|sub| {
+                let (instead, _) = attack.v18_replacement(sub);
+                if instead.is_empty() {
+                    format!("{sub} → none")
+                } else {
+                    let names: Vec<&str> = instead.iter().map(|id| id.as_str()).collect();
+                    format!("{sub} → {}", names.join(" and "))
+                }
+            })
+            .collect();
+        if mappings.is_empty() {
+            return None;
+        }
+        Some(format!(
+            "Its sub-techniques map to ATT&CK v{VERSION} as {}",
+            mappings.join(", ")
+        ))
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_newer_parents_hint_names_where_its_sub_techniques_go() {
+        // OT-1: T1685's hint listed only the ids T1685 itself replaced.
+        let list = SentinelAttack::bundled();
+        let hint = list.hint("T1685");
+        assert_eq!(
+            hint,
+            "; T1685 (Disable or Modify Tools) is newer than ATT&CK v18: use T1562 or T1562.001 \
+             or T1562.006, which it replaced. Its sub-techniques map to ATT&CK v18 as \
+             T1685.001 → T1562.002, T1685.002 → T1562.008, T1685.003 → T1562.011, \
+             T1685.004 → T1562.012, T1685.005 → T1070.001, T1685.006 → T1070.002, \
+             T1685.007 → T1562"
+        );
+        // The same sentence deploy appends to its warning.
+        assert!(hint.ends_with(&list.sub_technique_map("T1685").unwrap()));
+        // A sub-technique, or an id v18 has, gets no such sentence.
+        assert_eq!(list.sub_technique_map("T1685.002"), None);
+        assert_eq!(list.sub_technique_map("T1059"), None);
+    }
 
     #[test]
     fn the_bundled_list_reads() {

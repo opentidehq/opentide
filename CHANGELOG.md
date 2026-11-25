@@ -438,6 +438,7 @@ opentide's command line, MCP server, language server, `opentide tui` and `openti
 
 ### Fixed
 
+- **`validate` names where a newer Sentinel technique's sub-techniques go.** `alert.techniques: [T1685]` fails with `sentinel_attack_technique`, as before, but the hint listed only `T1562`, `T1562.001` and `T1562.006`, the ids T1685 itself replaced. It now adds `Its sub-techniques map to ATT&CK v18 as T1685.001 → …`, the same mapping deploy's warning gives, so the rule can name the v18 sub-technique it means.
 - **An inline quoted query in a Tide rule is coloured as its language.** `query: '…'` on one line was coloured as one string in the editor, and a trailing `# comment` was taken into the query; the quotes now stay YAML's, the query is highlighted as KQL, SPL, CQL and the others, and the comment stays a comment.
 - **`search *` is valid KQL again.** `search * | where * has 'term'` no longer fails `validate`, `lint` and the editor with a false syntax error; a lone `*` is accepted as a `search` predicate (#739).
 - **`opentide setup` no longer touches files it has no edit for.** A re-run leaves a file's bytes and modification time alone, and keeps the layout and comments of a settings entry that is already right (#743).

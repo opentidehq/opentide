@@ -780,8 +780,10 @@ ATT&CK v19 renamed Defense Evasion (TA0005) to Stealth and split Defense Impairm
 Microsoft Sentinel is aligned to ATT&CK v18, while the `att&ck` vocabulary that threats, objectives and a rule's own `techniques` use follows ATT&CK 20.0. `configurations.sentinel.alert.techniques` therefore takes its own list: every technique and sub-technique of the ATT&CK 18.1 Enterprise, Mobile and ICS matrices that is not revoked or deprecated (18.0 has the same ids). An id outside it fails validation (`sentinel_attack_technique`), and the message says what to use instead (the ids an objective maps are different: when the block sets none, deploy maps the objective's to v18 ids and warns, see [Sentinel techniques](../cli/deploy.md#sentinel-techniques)):
 
 ```text
-'T1685' is not an ATT&CK v18 technique or sub-technique id, which is what Sentinel is aligned to; T1685 (Disable or Modify Tools) is newer than ATT&CK v18: use T1562 or T1562.001 or T1562.006, which it replaced
+'T1685' is not an ATT&CK v18 technique or sub-technique id, which is what Sentinel is aligned to; T1685 (Disable or Modify Tools) is newer than ATT&CK v18: use T1562 or T1562.001 or T1562.006, which it replaced. Its sub-techniques map to ATT&CK v18 as T1685.001 → T1562.002, T1685.002 → T1562.008, T1685.003 → T1562.011, T1685.004 → T1562.012, T1685.005 → T1070.001, T1685.006 → T1070.002, T1685.007 → T1562
 ```
+
+For a newer parent such as T1685, the message also says where each of its sub-techniques goes, as deploy does when it sends them, so the block can name the v18 sub-technique the rule means.
 
 An id ATT&CK added after v18 with no predecessor, such as T1696, says it has no v18 equivalent; leave it out of the Sentinel block. An id ATT&CK retired before v18, which an imported or older rule may carry, names the v18 id that replaced it (`T1086`: use `T1059.001`), or says it has no replacement (`T1064`). Editors offer the v18 ids after `opentide generate schemas`. The list applies to this field only: the techniques deploy resolves from the rule's objective, which it sends when the block sets none, still come from the `att&ck` vocabulary.
 
