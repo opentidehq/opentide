@@ -116,7 +116,7 @@ pub const REVISIONS: &[Revision] = &[
     revision(
         "platform::microsoft_defender::1.0",
         Kind::Platform,
-        "DefenderConfig",
+        "MicrosoftDefenderConfig",
     ),
     revision("platform::sentinel::1.0", Kind::Platform, "SentinelConfig"),
     revision(

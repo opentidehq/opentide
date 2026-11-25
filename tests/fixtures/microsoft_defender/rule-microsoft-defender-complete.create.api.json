@@ -1,0 +1,305 @@
+{
+  "method": "POST",
+  "url": "https://graph.microsoft.com/beta/security/rules/detectionRules",
+  "body": {
+    "id": "00000000-0000-4000-8003-0000000000d5",
+    "displayName": "Encoded PowerShell with follow-on activity",
+    "description": "Encoded PowerShell followed by network, mail, and identity activity: every Microsoft Defender key set.\n",
+    "status": "enabled",
+    "queryCondition": {
+      "queryText": "DeviceProcessEvents\n| where FileName =~ \"powershell.exe\" and ProcessCommandLine has \"-enc\"\n| join kind=leftouter (DeviceNetworkEvents | project DeviceId, RemoteIP, RemoteIPType, RemoteUrl, LocalIP) on DeviceId\n| project Timestamp, ReportId, DeviceId, DeviceName, DeviceDnsDomain, DeviceNetBiosName, DeviceNtDomain,\n    AccountObjectId, AccountSid, AccountUpn, AccountUpnSuffix, AccountName, AccountDomain, AccountDnsDomain,\n    FileName, SHA1, SHA256, InitiatingProcessSHA1, InitiatingProcessSHA256, ProcessCommandLine,\n    RemoteIP, RemoteIPType, RemoteUrl, DnsQuery, LocalIP, DnsServerIP, RegistryKey, RegistryValueName,\n    NetworkMessageId, RecipientEmailAddress, SenderFromAddress, Subject, MailClusterQuery, MailClusterSource,\n    ApplicationId, Application, OAuthApplicationId, GroupObjectId, GroupSid, GroupDistinguishedName,\n    AzureResourceId, AmazonResourceName, GcpFullResourceName\n"
+    },
+    "schedule": {
+      "frequency": "PT1H",
+      "lookback": "PT4H"
+    },
+    "detectionAction": {
+      "alertTemplate": {
+        "title": "Encoded PowerShell with follow-on activity",
+        "description": "An encoded PowerShell command ran and was followed by network, mail, and identity activity.",
+        "severity": "high",
+        "recommendedActions": "Review the decoded command line, isolate the device, and reset the account's credentials.",
+        "tactics": [
+          {
+            "tactic": "InitialAccess",
+            "techniques": [
+              {
+                "technique": "T1078",
+                "subTechniques": [
+                  "T1078.004"
+                ]
+              }
+            ]
+          },
+          {
+            "tactic": "Execution",
+            "techniques": [
+              {
+                "technique": "T1059",
+                "subTechniques": [
+                  "T1059.001"
+                ]
+              }
+            ]
+          },
+          {
+            "tactic": "Persistence",
+            "techniques": [
+              {
+                "technique": "T1078",
+                "subTechniques": [
+                  "T1078.004"
+                ]
+              }
+            ]
+          },
+          {
+            "tactic": "PrivilegeEscalation",
+            "techniques": [
+              {
+                "technique": "T1078",
+                "subTechniques": [
+                  "T1078.004"
+                ]
+              }
+            ]
+          },
+          {
+            "tactic": "DefenseEvasion",
+            "techniques": [
+              {
+                "technique": "T1078",
+                "subTechniques": [
+                  "T1078.004"
+                ]
+              }
+            ]
+          }
+        ],
+        "entityMappings": {
+          "hosts": [
+            {
+              "deviceIdColumn": "DeviceId",
+              "nameColumn": "DeviceName",
+              "dnsDomainColumn": "DeviceDnsDomain",
+              "netBiosNameColumn": "DeviceNetBiosName",
+              "ntDomainColumn": "DeviceNtDomain"
+            }
+          ],
+          "accounts": [
+            {
+              "aadUserIdColumn": "AccountObjectId",
+              "sidColumn": "AccountSid",
+              "upnColumn": "AccountUpn",
+              "upnSuffixColumn": "AccountUpnSuffix",
+              "nameColumn": "AccountName",
+              "ntDomainColumn": "AccountDomain",
+              "dnsDomainColumn": "AccountDnsDomain"
+            }
+          ],
+          "mailboxes": [
+            {
+              "primaryAddressColumn": "RecipientEmailAddress"
+            }
+          ],
+          "files": [
+            {
+              "nameColumn": "FileName",
+              "sha1Column": "SHA1",
+              "sha256Column": "SHA256"
+            }
+          ],
+          "processes": [
+            {
+              "sha1Column": "InitiatingProcessSHA1",
+              "sha256Column": "InitiatingProcessSHA256"
+            }
+          ],
+          "ips": [
+            {
+              "addressColumn": "RemoteIP",
+              "scopeColumn": "RemoteIPType"
+            }
+          ],
+          "urls": [
+            {
+              "addressColumn": "RemoteUrl"
+            }
+          ],
+          "dns": [
+            {
+              "domainNameColumn": "DnsQuery",
+              "hostIpAddressColumn": "LocalIP",
+              "serverIpColumn": "DnsServerIP"
+            }
+          ],
+          "registryValues": [
+            {
+              "keyColumn": "RegistryKey",
+              "valueNameColumn": "RegistryValueName"
+            }
+          ],
+          "mailMessages": [
+            {
+              "networkMessageIdColumn": "NetworkMessageId",
+              "recipientColumn": "RecipientEmailAddress",
+              "senderColumn": "SenderFromAddress",
+              "subjectColumn": "Subject"
+            }
+          ],
+          "mailClusters": [
+            {
+              "queryColumn": "MailClusterQuery",
+              "sourceColumn": "MailClusterSource"
+            }
+          ],
+          "cloudApplications": [
+            {
+              "appIdColumn": "ApplicationId",
+              "nameColumn": "Application"
+            }
+          ],
+          "oAuthApplications": [
+            {
+              "oAuthAppIdColumn": "OAuthApplicationId"
+            }
+          ],
+          "securityGroups": [
+            {
+              "objectIdColumn": "GroupObjectId",
+              "sidColumn": "GroupSid",
+              "distinguishedNameColumn": "GroupDistinguishedName"
+            }
+          ],
+          "azureResources": [
+            {
+              "resourceIdColumn": "AzureResourceId"
+            }
+          ],
+          "amazonResources": [
+            {
+              "amazonResourceIdColumn": "AmazonResourceName"
+            }
+          ],
+          "googleCloudResources": [
+            {
+              "fullResourceNameColumn": "GcpFullResourceName"
+            }
+          ]
+        },
+        "customDetails": {
+          "CommandLine": "ProcessCommandLine",
+          "RemoteAddress": "RemoteIP"
+        },
+        "eventGroupingKind": "singleAlert"
+      },
+      "automatedActions": {
+        "isolateDevices": [
+          {
+            "deviceIdColumn": "DeviceId",
+            "isolationType": "selective"
+          }
+        ],
+        "collectInvestigationPackages": [
+          {
+            "deviceIdColumn": "DeviceId"
+          }
+        ],
+        "runAntivirusScans": [
+          {
+            "deviceIdColumn": "DeviceId"
+          }
+        ],
+        "initiateInvestigations": [
+          {
+            "deviceIdColumn": "DeviceId"
+          }
+        ],
+        "restrictAppExecutions": [
+          {
+            "deviceIdColumn": "DeviceId"
+          }
+        ],
+        "allowFiles": [
+          {
+            "sha1Column": "SHA1",
+            "sha256Column": "SHA256",
+            "deviceGroupNames": [
+              "Developer workstations"
+            ]
+          }
+        ],
+        "blockFiles": [
+          {
+            "sha1Column": "SHA1",
+            "sha256Column": "SHA256",
+            "deviceGroupNames": [
+              "Tier 0",
+              "Servers"
+            ]
+          }
+        ],
+        "stopAndQuarantineFiles": [
+          {
+            "deviceIdColumn": "DeviceId",
+            "sha1Column": "SHA1"
+          }
+        ],
+        "disableUsers": [
+          {
+            "accountSidColumn": "AccountSid"
+          }
+        ],
+        "forceUserPasswordResets": [
+          {
+            "accountSidColumn": "AccountSid"
+          }
+        ],
+        "markUsersAsCompromised": [
+          {
+            "accountObjectIdColumn": "AccountObjectId"
+          }
+        ],
+        "softDeleteEmails": [
+          {
+            "networkMessageIdColumn": "NetworkMessageId",
+            "recipientColumn": "RecipientEmailAddress"
+          }
+        ],
+        "hardDeleteEmails": [
+          {
+            "networkMessageIdColumn": "NetworkMessageId",
+            "recipientColumn": "RecipientEmailAddress"
+          }
+        ],
+        "moveEmailsToDeletedItems": [
+          {
+            "networkMessageIdColumn": "NetworkMessageId",
+            "recipientColumn": "RecipientEmailAddress"
+          }
+        ],
+        "moveEmailsToInbox": [
+          {
+            "networkMessageIdColumn": "NetworkMessageId",
+            "recipientColumn": "RecipientEmailAddress"
+          }
+        ],
+        "moveEmailsToJunk": [
+          {
+            "networkMessageIdColumn": "NetworkMessageId",
+            "recipientColumn": "RecipientEmailAddress"
+          }
+        ]
+      },
+      "organizationalScope": {
+        "deviceGroups": [
+          "Tier 0",
+          "Servers"
+        ]
+      },
+      "incidentConfiguration": {
+        "isExcludedFromIncidentCorrelation": true
+      }
+    }
+  }
+}

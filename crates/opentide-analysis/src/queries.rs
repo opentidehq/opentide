@@ -1234,7 +1234,7 @@ mod tests {
     #[test]
     fn every_code_lint_reports_outside_the_engines_is_configurable() {
         use opentide_schema::objects::platform::{
-            bitdefender, exabeam, google_secops, graylog, harfanglab,
+            bitdefender, exabeam, google_secops, graylog, harfanglab, microsoft_defender,
         };
         let reported: Vec<&str> = ELASTIC_ADVISORIES
             .into_iter()
@@ -1245,6 +1245,7 @@ mod tests {
             .chain(bitdefender::advisories::ADVISORY_CODES)
             .chain(exabeam::ADVISORY_CODES)
             .chain(google_secops::advisories::ADVISORY_CODES)
+            .chain(microsoft_defender::ADVISORY_CODES)
             .collect();
         for code in reported {
             assert!(

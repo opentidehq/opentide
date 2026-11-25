@@ -33,7 +33,6 @@ pub mod carbon_black;
 pub mod connector;
 pub mod credentials;
 pub mod crowdstrike;
-pub mod defender;
 pub mod elastic;
 pub mod entra;
 pub mod env;
@@ -43,6 +42,7 @@ pub mod google_secops;
 pub mod graylog;
 pub mod harfanglab;
 pub mod http;
+pub mod microsoft_defender;
 pub mod misp;
 pub mod pace;
 pub mod paging;
@@ -78,7 +78,7 @@ pub use tenant::{Tenant, TenantLabel};
 /// A platform without a connector gets the defaults.
 pub fn http_settings(platform: &str, timeout: std::time::Duration) -> HttpSettings {
     match platform {
-        "microsoft_defender" => defender::http_settings(),
+        "microsoft_defender" => microsoft_defender::http_settings(),
         "sentinel_one" => sentinel_one::http_settings(),
         "crowdstrike" => crowdstrike::http_defaults(),
         "harfanglab" => harfanglab::http_defaults(),
@@ -134,7 +134,7 @@ pub fn builtin() -> Registry {
 pub fn builtin_with(environment: &Environment) -> Registry {
     let mut platforms: Vec<Box<dyn Platform>> = vec![
         Box::new(sentinel::Sentinel::new()),
-        Box::new(defender::Defender::new()),
+        Box::new(microsoft_defender::MicrosoftDefender::new()),
         Box::new(splunk::Splunk::new()),
         Box::new(sentinel_one::SentinelOne),
         Box::new(crowdstrike::Crowdstrike::new()),
@@ -186,7 +186,7 @@ mod tests {
         );
         assert_eq!(
             super::http_settings("microsoft_defender", timeout),
-            super::defender::http_settings()
+            super::microsoft_defender::http_settings()
         );
         assert_eq!(
             super::http_settings("google_secops", timeout),

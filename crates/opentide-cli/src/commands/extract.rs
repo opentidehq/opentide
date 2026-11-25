@@ -3,7 +3,8 @@
 //! `extraction/elastic_importer.py`): the rules of a tenant pulled through
 //! the connectors and written as opentide rule files under `Imported/`.
 //!
-//! Defender's files are the oracle's template filled in, byte for byte;
+//! Both write the rule document with serde-saphyr's emitter: Defender's
+//! from Graph's beta custom detection shape (microsoft-defender-1.0);
 //! Elastic's are the rule document written by serde-saphyr's emitter
 //! (`rule_yaml`): the same data, keys in the importer's order, formatted
 //! as serde-saphyr formats YAML where the oracle used PyYAML's
@@ -195,22 +196,13 @@ fn under(path: &Path, root: &Path) -> bool {
 
 const DEFENDER: &str = "microsoft_defender";
 
-const TEMPLATE: &str = "\nname: {name}\n#references:\n  #public:\n    #1: \n  #internal:\n    #a: \n\nmetadata:\n  uuid: {uuid}\n  schema: rule::1.0\n  version: 1\n  created: {created}\n  modified: {modified}\n  tlp: amber+strict\n  author: {author}\n  #contributors:\n    #-\n\ndescription: |\n{description}\n#detection_model: \n\nresponse:\n  alert_severity: {alert_severity}\n  #playbook: https://\n  #responders: \n  #procedure:\n\nconfigurations:\n  microsoft_defender: \n    schema: platform::microsoft_defender::1.0\n    status: {status}\n    {contributors}\n    tenants:\n      - {tenants}\n    #flags:\n      #-\n    \n    scheduling: {schedule}\n    \n    alert:\n      title: {title}{techniques}\n      #severity: \n      {alert_recommendation}\n    \n    {impacted_entities_flag}impacted_entities:\n      {impacted_device}\n      #mailbox: \n      {impacted_user} \n    \n    #actions:\n    \n      #devices:\n        #isolate_device: \n        #collect_investigation_package: true\n        #run_antivirus_scan: true\n        #initiate_investigation: true\n        #restrict_app_execution: true\n    \n      #files:\n        #allow_block:\n          #action: \n          #column: \n          #groups:\n            #selection: \n            #device_groups:\n              #-\n        #quarantine_file: \n    \n    scope:\n      selection: All\n      #device_groups:\n        #-\n    \n    query: |\n{query}\n";
-const NO_CONTRIBUTORS_TEMPLATE: &str = "\n    #contributors:\n      #-\n";
-const CONTRIBUTORS_TEMPLATE: &str = "\n    contributors:\n      - {contributor}\n";
-const NO_RECOMMENDATION_TEMPLATE: &str = "\n      #recommendation: |\n        #Type Here\n";
-const RECOMMENDATION_TEMPLATE: &str = "\n      recommendation: |\n{recommendation}\n";
-const TECHNIQUES_TEMPLATE: &str = "\n      techniques:\n        {techniques_list}\n";
-
-/// Each non-blank line of `text`, without its surrounding whitespace, on
-/// its own line indented by `indentation` spaces.
-fn fix_multiline(text: &str, indentation: usize) -> String {
-    text.lines()
-        .map(str::trim)
-        .filter(|line| !line.is_empty())
-        .map(|line| format!("{}{line}", " ".repeat(indentation)))
-        .collect::<Vec<_>>()
-        .join("\n")
+/// The namespace of the UUIDs derived from Defender rule ids that are not
+/// UUIDs (a rule created in the portal): the same id gives the same UUID.
+fn defender_namespace() -> uuid::Uuid {
+    uuid::Uuid::new_v5(
+        &uuid::Uuid::NAMESPACE_URL,
+        b"https://opentide.org/ns/microsoft-defender-rule",
+    )
 }
 
 /// The longest stem [`sanitize_filename`] returns, in bytes: callers add a
@@ -237,14 +229,6 @@ fn sanitize_filename(name: &str) -> String {
     opentide_workspace::lint::device_safe(&stem)
 }
 
-/// `text` as one YAML scalar that reads back as `text` (plain where that is
-/// safe, quoted otherwise): a value from the tenant goes into the template
-/// this way, so a `: `, a ` #`, a `[` or a `yes` cannot break the rule's
-/// YAML or change what it says.
-fn plain(text: &str) -> String {
-    sentinel::scalar(&CJson::Str(text.to_owned()))
-}
-
 /// `text` as a JSON string.
 fn json_string(text: &str) -> String {
     serde_json::to_string(text).unwrap_or_default()
@@ -262,7 +246,7 @@ fn capitalised(text: &str) -> String {
 /// of another type than it reads: the rule is skipped and reported.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct FieldError {
-    /// The field, as a dotted path in the listing (`schedule.period`).
+    /// The field, as a dotted path in the listing (`schedule.frequency`).
     pub field: String,
     /// What the field should be (`a string`), none when it is missing.
     pub expected: Option<&'static str>,
@@ -315,201 +299,463 @@ fn need_text<'j>(value: &'j CJson, key: &str, shown: &str) -> Result<&'j str, Fi
         .ok_or_else(|| FieldError::not(shown, "a string"))
 }
 
+/// The string at `key` in `value`, when set and not empty.
+fn optional_text<'j>(
+    value: &'j CJson,
+    key: &str,
+    shown: &str,
+) -> Result<Option<&'j str>, FieldError> {
+    match value.get(key) {
+        None | Some(CJson::Null) => Ok(None),
+        Some(CJson::Str(text)) if text.is_empty() => Ok(None),
+        Some(CJson::Str(text)) => Ok(Some(text)),
+        Some(_) => Err(FieldError::not(shown, "a string")),
+    }
+}
+
 /// The date of an ISO 8601 timestamp (`2026-01-02` of `2026-01-02T03:04:05Z`).
 fn date(timestamp: &str) -> &str {
     timestamp.split('T').next().unwrap_or_default()
 }
 
-/// The file name and YAML of one custom detection, which targets
-/// `tenant_names`, or the field that keeps it from being imported.
+/// A positive whole number without a leading zero, as written.
+fn count(text: &str) -> Option<u64> {
+    (!text.is_empty() && !text.starts_with('0') && text.bytes().all(|b| b.is_ascii_digit()))
+        .then(|| text.parse().ok())
+        .flatten()
+}
+
+/// Graph's ISO 8601 schedule duration as the block writes it
+/// (microsoft-defender-1.0, `schedule`): a zero duration is `NRT`, `PT<n>H`
+/// is `<n>H`, `P<n>D` is `<n>D`, and whole hours in minutes are hours.
+/// `None` for a duration the block cannot write.
+fn short_duration(iso: &str) -> Option<String> {
+    let zero = |text: &str| !text.is_empty() && text.bytes().all(|b| b == b'0');
+    if let Some(time) = iso.strip_prefix("PT") {
+        let (number, unit) = time.split_at(time.len().checked_sub(1)?);
+        if zero(number) && matches!(unit, "S" | "M" | "H") {
+            return Some("NRT".to_owned());
+        }
+        return match unit {
+            "H" => count(number).map(|hours| format!("{hours}H")),
+            "M" => count(number)
+                .filter(|minutes| minutes % 60 == 0)
+                .map(|minutes| format!("{}H", minutes / 60)),
+            _ => None,
+        };
+    }
+    let days = iso.strip_prefix('P')?.strip_suffix('D')?;
+    if zero(days) {
+        return Some("NRT".to_owned());
+    }
+    count(days).map(|days| format!("{days}D"))
+}
+
+/// A list of strings.
+fn strings(value: &CJson, shown: &str) -> Result<Vec<String>, FieldError> {
+    match value {
+        CJson::Array(items) => items
+            .iter()
+            .map(|item| {
+                item.as_str()
+                    .map(str::to_owned)
+                    .ok_or_else(|| FieldError::not(shown, "a list of strings"))
+            })
+            .collect(),
+        _ => Err(FieldError::not(shown, "a list of strings")),
+    }
+}
+
+/// The technique ids of Graph's `tactics` tree: each parent named with no
+/// sub-technique, and each sub-technique, once, in order.
+fn listed_techniques(tactics: &CJson) -> Result<Vec<String>, FieldError> {
+    const SHOWN: &str = "detectionAction.alertTemplate.tactics";
+    let CJson::Array(tactics) = tactics else {
+        return Err(FieldError::not(SHOWN, "a list"));
+    };
+    let mut ids: Vec<String> = Vec::new();
+    let mut push = |id: String| {
+        if !ids.contains(&id) {
+            ids.push(id);
+        }
+    };
+    for tactic in tactics {
+        let techniques = match tactic.get("techniques") {
+            None | Some(CJson::Null) => continue,
+            Some(CJson::Array(items)) => items,
+            Some(_) => return Err(FieldError::not(&format!("{SHOWN}[].techniques"), "a list")),
+        };
+        for technique in techniques {
+            let shown = format!("{SHOWN}[].techniques[]");
+            let parent = need_text(technique, "technique", &format!("{shown}.technique"))?;
+            let subs = match technique.get("subTechniques") {
+                None | Some(CJson::Null) => Vec::new(),
+                Some(value) => strings(value, &format!("{shown}.subTechniques"))?,
+            };
+            if subs.is_empty() {
+                push(parent.to_owned());
+            }
+            for sub in subs {
+                push(sub);
+            }
+        }
+    }
+    Ok(ids)
+}
+
+/// Graph's mappings or targets (`entityMappings`, `automatedActions`) as the
+/// block's `entities` or `actions`, through the kinds' table; a kind or a
+/// field the table does not have keeps the rule from being imported.
+fn imported_kinds(
+    graph: &CJson,
+    table: &[opentide_schema::objects::platform::microsoft_defender::Kind],
+    shown: &str,
+) -> Result<Object, FieldError> {
+    let CJson::Object(kinds) = graph else {
+        return Err(FieldError::not(shown, "an object"));
+    };
+    let mut out = Object::new();
+    for kind in table {
+        let items = match kinds.get(kind.graph) {
+            None | Some(CJson::Null) => continue,
+            Some(CJson::Array(items)) if items.is_empty() => continue,
+            Some(CJson::Array(items)) => items,
+            Some(_) => {
+                return Err(FieldError::not(
+                    &format!("{shown}.{}", kind.graph),
+                    "a list",
+                ));
+            }
+        };
+        let mut converted = Vec::new();
+        for item in items {
+            let CJson::Object(fields) = item else {
+                return Err(FieldError::not(
+                    &format!("{shown}.{}[]", kind.graph),
+                    "an object",
+                ));
+            };
+            let mut mapping = Object::new();
+            for (graph_field, value) in fields {
+                if value.is_null() {
+                    continue;
+                }
+                let Some((field, _)) = kind.fields.iter().find(|(_, graph)| graph == graph_field)
+                else {
+                    return Err(FieldError::not(
+                        &format!("{shown}.{}[].{graph_field}", kind.graph),
+                        "a field opentide models",
+                    ));
+                };
+                mapping.insert((*field).into(), value.clone());
+            }
+            // The table's order.
+            let mut ordered = Object::new();
+            for (field, _) in kind.fields {
+                if let Some(value) = mapping.get(*field) {
+                    ordered.insert((*field).into(), value.clone());
+                }
+            }
+            converted.push(CJson::Object(ordered));
+        }
+        out.insert(kind.key.into(), CJson::Array(converted));
+    }
+    for graph_kind in kinds.keys() {
+        if !table.iter().any(|kind| kind.graph == graph_kind)
+            && kinds.get(graph_kind).is_some_and(CJson::is_filled)
+        {
+            return Err(FieldError::not(
+                &format!("{shown}.{graph_kind}"),
+                "a kind opentide models",
+            ));
+        }
+    }
+    Ok(out)
+}
+
+/// The block `microsoft_defender` of one custom detection, listed in Graph's
+/// beta shape (microsoft-defender-1.0), deployed to `tenant_names`.
 #[expect(
     clippy::too_many_lines,
-    reason = "the template's fields, one by one, in one place"
+    reason = "the block's keys, one by one, in the specification's order"
 )]
-fn render_rule(rule: &CJson, tenant_names: &[String]) -> Result<(String, String), FieldError> {
-    const TECHNIQUES: &str = "detectionAction.alertTemplate.mitreTechniques";
+fn defender_block(rule: &CJson, tenant_names: &[String]) -> Result<Object, FieldError> {
+    use opentide_schema::objects::platform::microsoft_defender::{
+        ACTIONS, ENTITY_KINDS, GROUPINGS,
+    };
+    let author = optional_text(rule, "createdBy", "createdBy")?;
+    let mut block = Object::new();
+    block.insert(
+        "schema".into(),
+        CJson::from("platform::microsoft_defender::1.0"),
+    );
+    let status = match optional_text(rule, "status", "status")? {
+        Some("disabled") => "DISABLED",
+        _ => "PRODUCTION",
+    };
+    block.insert("status".into(), status.into());
+    block.insert(
+        "tenants".into(),
+        CJson::Array(
+            tenant_names
+                .iter()
+                .map(|name| CJson::from(name.as_str()))
+                .collect(),
+        ),
+    );
+    // A rule last changed by someone other than its author names them.
+    if let Some(editor) = optional_text(rule, "lastModifiedBy", "lastModifiedBy")?
+        && Some(editor) != author
+    {
+        block.insert("contributors".into(), CJson::Array(vec![editor.into()]));
+    }
+    let query = need_text(
+        need(rule, "queryCondition", "queryCondition")?,
+        "queryText",
+        "queryCondition.queryText",
+    )?;
+    block.insert(
+        "query".into(),
+        sentinel::block_text(query, "queryCondition.queryText")?.into(),
+    );
+    let schedule = need(rule, "schedule", "schedule")?;
+    let mut timing = Object::new();
+    let frequency = need_text(schedule, "frequency", "schedule.frequency")?;
+    timing.insert(
+        "frequency".into(),
+        short_duration(frequency)
+            .ok_or_else(|| FieldError::not("schedule.frequency", "NRT, hours or days"))?
+            .into(),
+    );
+    if let Some(lookback) = optional_text(schedule, "lookback", "schedule.lookback")? {
+        timing.insert(
+            "lookback".into(),
+            short_duration(lookback)
+                .filter(|lookback| lookback != "NRT")
+                .ok_or_else(|| FieldError::not("schedule.lookback", "hours or days"))?
+                .into(),
+        );
+    }
+    block.insert("schedule".into(), CJson::Object(timing));
+
+    let action = need(rule, "detectionAction", "detectionAction")?;
+    let empty = CJson::Object(Object::new());
+    let template = action.get("alertTemplate").unwrap_or(&empty);
+    let shown = |key: &str| format!("detectionAction.alertTemplate.{key}");
+    let mut alert = Object::new();
+    if let Some(title) = optional_text(template, "title", &shown("title"))? {
+        alert.insert("title".into(), title.into());
+    }
+    if let Some(recommended) =
+        optional_text(template, "recommendedActions", &shown("recommendedActions"))?
+    {
+        alert.insert(
+            "recommendation".into(),
+            sentinel::block_text(recommended, &shown("recommendedActions"))?.into(),
+        );
+    }
+    if let Some(tactics) = template.get("tactics").filter(|tactics| !tactics.is_null()) {
+        let ids = listed_techniques(tactics)?;
+        if !ids.is_empty() {
+            alert.insert(
+                "techniques".into(),
+                CJson::Array(ids.into_iter().map(CJson::from).collect()),
+            );
+        }
+    }
+    match template.get("customDetails") {
+        None | Some(CJson::Null) => {}
+        Some(CJson::Object(details)) if details.is_empty() => {}
+        Some(CJson::Object(details)) => {
+            alert.insert("custom_details".into(), CJson::Object(details.clone()));
+        }
+        Some(_) => return Err(FieldError::not(&shown("customDetails"), "an object")),
+    }
+    if let Some(kind) = optional_text(template, "eventGroupingKind", &shown("eventGroupingKind"))? {
+        let grouping = GROUPINGS
+            .iter()
+            .find(|(_, graph)| *graph == kind)
+            .map(|(name, _)| *name)
+            .ok_or_else(|| {
+                FieldError::not(&shown("eventGroupingKind"), "alertPerEvent or singleAlert")
+            })?;
+        alert.insert("grouping".into(), grouping.into());
+    }
+    if !alert.is_empty() {
+        block.insert("alert".into(), CJson::Object(alert));
+    }
+    if let Some(mappings) = template
+        .get("entityMappings")
+        .filter(|value| !value.is_null())
+    {
+        let entities = imported_kinds(mappings, &ENTITY_KINDS, &shown("entityMappings"))?;
+        if !entities.is_empty() {
+            block.insert("entities".into(), CJson::Object(entities));
+        }
+    }
+    if let Some(automated) = action
+        .get("automatedActions")
+        .filter(|value| !value.is_null())
+    {
+        let actions = imported_kinds(automated, &ACTIONS, "detectionAction.automatedActions")?;
+        if !actions.is_empty() {
+            block.insert("actions".into(), CJson::Object(actions));
+        }
+    }
+    if let Some(scope) = action
+        .get("organizationalScope")
+        .filter(|value| !value.is_null())
+    {
+        let groups = match scope.get("deviceGroups") {
+            None | Some(CJson::Null) => Vec::new(),
+            Some(value) => strings(value, "detectionAction.organizationalScope.deviceGroups")?,
+        };
+        if !groups.is_empty() {
+            let mut scope = Object::new();
+            scope.insert(
+                "device_groups".into(),
+                CJson::Array(groups.into_iter().map(CJson::from).collect()),
+            );
+            block.insert("scope".into(), CJson::Object(scope));
+        }
+    }
+    if let Some(incident) = action
+        .get("incidentConfiguration")
+        .filter(|value| !value.is_null())
+    {
+        match incident.get("isExcludedFromIncidentCorrelation") {
+            None | Some(CJson::Null) => {}
+            Some(CJson::Bool(excluded)) => {
+                let mut incident = Object::new();
+                incident.insert("exclude_from_correlation".into(), CJson::Bool(*excluded));
+                block.insert("incident".into(), CJson::Object(incident));
+            }
+            Some(_) => {
+                return Err(FieldError::not(
+                    "detectionAction.incidentConfiguration.isExcludedFromIncidentCorrelation",
+                    "a boolean",
+                ));
+            }
+        }
+    }
+    Ok(block)
+}
+
+/// The rule's `metadata.uuid`: the Defender rule id when it is a UUID, as
+/// deploy addresses the rule by it; otherwise a UUID derived from the id,
+/// and `false`: a deploy of the file creates a new rule beside it.
+fn defender_uuid(id: &str) -> (String, bool) {
+    match uuid::Uuid::try_parse(id) {
+        Ok(parsed) => (parsed.hyphenated().to_string(), true),
+        Err(_) => (
+            uuid::Uuid::new_v5(&defender_namespace(), id.as_bytes())
+                .hyphenated()
+                .to_string(),
+            false,
+        ),
+    }
+}
+
+/// The rule document of one custom detection, listed in Graph's beta shape,
+/// deployed to `tenant_names`, under `uuid`: the rule's name, metadata,
+/// description and severity, and its `microsoft_defender` block.
+fn defender_document(
+    rule: &CJson,
+    uuid: &str,
+    tenant_names: &[String],
+) -> Result<Object, FieldError> {
     let name = need_text(rule, "displayName", "displayName")?;
-    let uuid = need_text(rule, "detectorId", "detectorId")?;
     let created = date(need_text(rule, "createdDateTime", "createdDateTime")?);
     let modified = date(need_text(
         rule,
         "lastModifiedDateTime",
         "lastModifiedDateTime",
     )?);
-    let action = need(rule, "detectionAction", "detectionAction")?;
-    let empty = CJson::Object(Object::new());
-    let template = action.get("alertTemplate").unwrap_or(&empty);
-    let alert = |key: &str| -> Result<&str, FieldError> {
-        need_text(
-            template,
-            key,
-            &format!("detectionAction.alertTemplate.{key}"),
-        )
-    };
-    let severity = alert("severity")?;
-    let author = need_text(rule, "createdBy", "createdBy")?;
-    let mut description = sentinel::block_text(
-        alert("description")?,
-        "detectionAction.alertTemplate.description",
+    let template = need(rule, "detectionAction", "detectionAction")?
+        .get("alertTemplate")
+        .cloned()
+        .unwrap_or(CJson::Object(Object::new()));
+    let severity = need_text(
+        &template,
+        "severity",
+        "detectionAction.alertTemplate.severity",
     )?;
-    let schedule = match need(
-        need(rule, "schedule", "schedule")?,
-        "period",
-        "schedule.period",
-    )? {
-        CJson::Str(text) if text == "0" => "NRT".to_owned(),
-        CJson::Int(0) => "NRT".to_owned(),
-        CJson::Str(text) => text.clone(),
-        CJson::Int(number) => number.to_string(),
-        _ => return Err(FieldError::not("schedule.period", "a string")),
+    let description = match optional_text(rule, "description", "description")? {
+        Some(text) => text.to_owned(),
+        None => need_text(
+            &template,
+            "description",
+            "detectionAction.alertTemplate.description",
+        )?
+        .to_owned(),
     };
-    // Graph's alert title; the rule's name when the tenant sets none. It keeps `alert:` a
-    // mapping now that the deprecated `category` no longer opens the block.
-    let title = template
-        .get("title")
-        .and_then(CJson::as_str)
-        .filter(|title| !title.is_empty())
-        .unwrap_or(name);
-    let query = need_text(
-        need(rule, "queryCondition", "queryCondition")?,
-        "queryText",
-        "queryCondition.queryText",
-    )?;
-    let status = if rule.get("isEnabled") == Some(&CJson::Bool(true)) {
-        "PRODUCTION"
-    } else {
-        "DISABLED"
-    };
-    // A rule last changed by someone other than its author names them as a
-    // contributor.
-    let contributors = match rule.get("lastModifiedBy") {
-        Some(CJson::Str(editor)) if editor != author => {
-            fill(CONTRIBUTORS_TEMPLATE, &[("contributor", &plain(editor))])
-                .trim()
-                .to_owned()
-        }
-        _ => NO_CONTRIBUTORS_TEMPLATE.trim().to_owned(),
-    };
-    let techniques = match template.get("mitreTechniques") {
-        None | Some(CJson::Null) => String::new(),
-        Some(CJson::Array(items)) if items.is_empty() => String::new(),
-        Some(CJson::Array(items)) => {
-            let names = items
-                .iter()
-                .map(|item| {
-                    item.as_str()
-                        .ok_or_else(|| FieldError::not(TECHNIQUES, "a list of strings"))
-                })
-                .collect::<Result<Vec<_>, _>>()?;
-            let names: Vec<String> = names.into_iter().map(plain).collect();
-            let list = format!("- {}", names.join("\n        - "));
-            fill(TECHNIQUES_TEMPLATE, &[("techniques_list", &list)])
-                .trim_end()
-                .to_owned()
-        }
-        Some(_) => return Err(FieldError::not(TECHNIQUES, "a list of strings")),
-    };
-    let alert_recommendation = match template.get("recommendedActions") {
-        None | Some(CJson::Null) => NO_RECOMMENDATION_TEMPLATE.trim().to_owned(),
-        Some(CJson::Str(recommended)) if recommended.is_empty() => {
-            NO_RECOMMENDATION_TEMPLATE.trim().to_owned()
-        }
-        Some(CJson::Str(recommended)) => {
-            let recommended = &sentinel::block_text(
-                recommended,
-                "detectionAction.alertTemplate.recommendedActions",
-            )?;
-            description.push_str("\n\n---\nRecommended Actions : ");
-            description.push_str(recommended);
-            fill(
-                RECOMMENDATION_TEMPLATE,
-                &[("recommendation", &fix_multiline(recommended, 8))],
-            )
-            .trim()
-            .to_owned()
-        }
-        Some(_) => {
-            return Err(FieldError::not(
-                "detectionAction.alertTemplate.recommendedActions",
-                "a string",
-            ));
-        }
-    };
-    let mut impacted_device = "#device:".to_owned();
-    let mut impacted_user = "#user:".to_owned();
-    let mut impacted_entities_flag = "#";
-    let assets = match template.get("impactedAssets") {
-        None | Some(CJson::Null) => &[][..],
-        Some(CJson::Array(items)) => items.as_slice(),
-        Some(_) => {
-            return Err(FieldError::not(
-                "detectionAction.alertTemplate.impactedAssets",
-                "a list",
-            ));
-        }
-    };
-    for asset in assets {
-        let shown = |key: &str| format!("detectionAction.alertTemplate.impactedAssets[].{key}");
-        let kind = need_text(asset, "@odata.type", &shown("@odata.type"))?;
-        let identifier = || need_text(asset, "identifier", &shown("identifier"));
-        if kind.ends_with("impactedDeviceAsset") {
-            impacted_device = format!("device: {}", plain(&capitalised(identifier()?)));
-            impacted_entities_flag = "";
-        }
-        if kind.ends_with("impactedUserAsset") {
-            impacted_user = format!("user: {}", plain(&capitalised(identifier()?)));
-            impacted_entities_flag = "";
-        }
+    let mut metadata = Object::new();
+    metadata.insert("uuid".into(), uuid.into());
+    metadata.insert("schema".into(), "rule::1.0".into());
+    metadata.insert("version".into(), CJson::Int(1));
+    metadata.insert("created".into(), created.into());
+    metadata.insert("modified".into(), modified.into());
+    metadata.insert("tlp".into(), "amber+strict".into());
+    if let Some(author) = optional_text(rule, "createdBy", "createdBy")? {
+        metadata.insert("author".into(), author.into());
     }
-    let tenants = tenant_names
-        .iter()
-        .map(|name| opentide_schema::node::double_quoted(name))
-        .collect::<Vec<_>>()
-        .join("\n      - ");
-    let body = fill(
-        TEMPLATE,
-        &[
-            ("name", &opentide_schema::node::double_quoted(name)),
-            ("tenants", &tenants),
-            ("uuid", &plain(uuid)),
-            ("created", &sentinel::date_scalar(created)),
-            ("modified", &sentinel::date_scalar(modified)),
-            (
-                "alert_severity",
-                &plain(&capitalised(&severity.to_lowercase())),
-            ),
-            ("alert_recommendation", &alert_recommendation),
-            ("impacted_device", &impacted_device),
-            ("impacted_user", &impacted_user),
-            ("impacted_entities_flag", impacted_entities_flag),
-            ("author", &plain(author)),
-            ("contributors", &contributors),
-            ("description", &fix_multiline(&description, 2)),
-            ("schedule", &plain(&schedule)),
-            ("title", &plain(title)),
-            ("techniques", &techniques),
-            (
-                "query",
-                &fix_multiline(&sentinel::block_text(query, "queryCondition.queryText")?, 6),
-            ),
-            ("status", status),
-        ],
+    let mut response = Object::new();
+    response.insert(
+        "alert_severity".into(),
+        capitalised(&severity.to_lowercase()).into(),
     );
-    Ok((sanitize_filename(name), body.trim().to_owned()))
+    let mut configurations = Object::new();
+    configurations.insert(
+        DEFENDER.into(),
+        CJson::Object(defender_block(rule, tenant_names)?),
+    );
+    let mut document = Object::new();
+    document.insert("name".into(), name.into());
+    document.insert("metadata".into(), CJson::Object(metadata));
+    document.insert(
+        "description".into(),
+        sentinel::block_text(&description, "description")?.into(),
+    );
+    document.insert("response".into(), CJson::Object(response));
+    document.insert("configurations".into(), CJson::Object(configurations));
+    Ok(document)
 }
 
-/// What makes two tenants' copies of one detection the same rule (`_content`).
-fn content(rule: &CJson) -> [Option<&CJson>; 5] {
+/// The file name and YAML of one custom detection, or the field that keeps
+/// it from being imported, or why the YAML would not validate.
+fn render_rule(
+    rule: &CJson,
+    uuid: &str,
+    tenant_names: &[String],
+) -> Result<(String, String), String> {
+    let name = need_text(rule, "displayName", "displayName").map_err(|e| e.to_string())?;
+    let document = defender_document(rule, uuid, tenant_names).map_err(|e| e.to_string())?;
+    let text = rule_yaml(&document)?;
+    if let Some(reason) = unwritable_reason(
+        &document,
+        &text,
+        DEFENDER,
+        "platform::microsoft_defender::1.0",
+    ) {
+        return Err(reason);
+    }
+    Ok((sanitize_filename(name), text))
+}
+
+/// What makes two tenants' copies of one detection the same rule.
+fn content(rule: &CJson) -> [Option<&CJson>; 6] {
     [
         rule.get("displayName"),
-        rule.get("isEnabled"),
+        rule.get("description"),
+        rule.get("status"),
         rule.get("schedule"),
         rule.get("queryCondition"),
         rule.get("detectionAction"),
     ]
 }
 
-/// `opentide generate extract defender` (`_import_defender_rules`).
+/// `opentide generate extract defender`: every custom detection of the
+/// configured tenants, as rule files under `Imported/`.
 pub fn defender(cx: &Context<'_>) -> Report {
     if let Some(refused) = config_refusal(DEFENDER, cx) {
         return refused;
@@ -538,7 +784,7 @@ fn defender_run(cx: &Context<'_>, written_count: &mut usize) -> Outcome {
     let destination = cx.cwd.join("Imported");
     std::fs::create_dir_all(&destination)
         .map_err(|error| format!("{}: {error}", destination.display()))?;
-    let connector = opentide_connectors::defender::Defender::new();
+    let connector = opentide_connectors::microsoft_defender::MicrosoftDefender::new();
     let mut listed: Vec<(String, Vec<(String, CJson)>)> = Vec::new();
     let mut skipped = Skipped::new("defender_import_rule_skipped");
     for configured in &tenants {
@@ -559,7 +805,7 @@ fn defender_run(cx: &Context<'_>, written_count: &mut usize) -> Outcome {
             connector.list_rules(context).await
         })?
         .map_err(|error| match error {
-            opentide_connectors::defender::DefenderError::Authentication { .. } => {
+            opentide_connectors::microsoft_defender::DefenderError::Authentication { .. } => {
                 tracing::error!(
                     detail = format!("Cannot authenticate against {}", configured.name).as_str(),
                     critical = true,
@@ -570,8 +816,12 @@ fn defender_run(cx: &Context<'_>, written_count: &mut usize) -> Outcome {
                     configured.name
                 )
             }
-            opentide_connectors::defender::DefenderError::Refused { message, .. } => message,
-            opentide_connectors::defender::DefenderError::Connector(error) => error.to_string(),
+            opentide_connectors::microsoft_defender::DefenderError::Refused { message, .. } => {
+                message
+            }
+            opentide_connectors::microsoft_defender::DefenderError::Connector(error) => {
+                error.to_string()
+            }
         })?;
         for rule in rules {
             let shown = rule
@@ -579,47 +829,35 @@ fn defender_run(cx: &Context<'_>, written_count: &mut usize) -> Outcome {
                 .and_then(CJson::as_str)
                 .unwrap_or_default()
                 .to_owned();
-            let detector = match need_text(&rule, "detectorId", "detectorId") {
-                Ok(detector) => detector.to_owned(),
+            let id = match need_text(&rule, "id", "id") {
+                Ok(id) => id.trim().to_owned(),
                 Err(error) => {
                     skipped.push(&shown, &error.to_string());
                     continue;
                 }
             };
-            let external = match rule.get("id") {
-                Some(CJson::Int(number)) => super::deploy_state::ExternalId::Int(*number),
-                Some(CJson::Str(text)) => super::deploy_state::ExternalId::Text(text.clone()),
-                Some(CJson::Null) | None => {
-                    skipped.push(&shown, &FieldError::missing("id").to_string());
-                    continue;
-                }
-                Some(_) => {
-                    skipped.push(&shown, &FieldError::not("id", "a string").to_string());
-                    continue;
-                }
-            };
-            record_external_id(&root, &detector, &configured.name, &external)?;
-            match listed.iter_mut().find(|(seen, _)| *seen == detector) {
+            match listed.iter_mut().find(|(seen, _)| *seen == id) {
                 Some((_, copies)) => copies.push((configured.name.clone(), rule)),
-                None => listed.push((detector, vec![(configured.name.clone(), rule)])),
+                None => listed.push((id, vec![(configured.name.clone(), rule)])),
             }
         }
     }
     let mut written: Vec<String> = Vec::new();
-    for (detector, copies) in &listed {
+    for (id, copies) in &listed {
         let names: Vec<String> = copies.iter().map(|(name, _)| name.clone()).collect();
         let first = &copies[0].1;
         let shown = first
             .get("displayName")
             .and_then(CJson::as_str)
-            .unwrap_or(detector);
+            .unwrap_or(id);
+        let (uuid, addressed) = defender_uuid(id);
         if copies[1..]
             .iter()
             .any(|(_, rule)| content(rule) != content(first))
         {
             tracing::warn!(
                 rule = shown,
-                uuid = detector.as_str(),
+                uuid = uuid.as_str(),
                 detail = format!(
                     "Imported from {}; the copies in {} differ",
                     names[0],
@@ -629,15 +867,30 @@ fn defender_run(cx: &Context<'_>, written_count: &mut usize) -> Outcome {
                 "defender_import_tenants_differ"
             );
         }
-        let (mut filename, body) = match render_rule(first, &names) {
+        if !addressed {
+            // Deploy addresses a Defender rule by its uuid
+            // (microsoft-defender-1.0): this file deploys as a new rule.
+            tracing::warn!(
+                rule = shown,
+                uuid = uuid.as_str(),
+                detail = format!(
+                    "the tenant's rule id {id} is not a UUID, so deploy cannot address it: \
+                     the file was given the UUID {uuid}, and deploying it creates a new rule; \
+                     disable or delete the original in the portal"
+                )
+                .as_str(),
+                "defender_import_new_uuid"
+            );
+        }
+        let (mut filename, body) = match render_rule(first, &uuid, &names) {
             Ok(rendered) => rendered,
             Err(error) => {
-                skipped.push(shown, &format!("rule {detector}: {error}"));
+                skipped.push(shown, &format!("rule {id}: {error}"));
                 continue;
             }
         };
         if written.contains(&filename.to_lowercase()) {
-            let short: String = detector.chars().take(8).collect();
+            let short: String = uuid.chars().take(8).collect();
             filename = format!("{filename} {short}");
         }
         written.push(filename.to_lowercase());
@@ -684,30 +937,12 @@ impl Skipped {
     }
 }
 
-/// Binds the tenant's Graph id in the rule's deployment state.
-fn record_external_id(
-    workspace: &Path,
-    uuid: &str,
-    tenant: &str,
-    id: &super::deploy_state::ExternalId,
-) -> Result<(), String> {
-    let mut shard = super::deploy_state::Shard::load(workspace, uuid)
-        .map_err(|error| format!("the deployment state of rule {uuid}: {}", error.message))?;
-    shard
-        .set(DEFENDER, tenant, id)
-        .map_err(|error| format!("the deployment state of rule {uuid}: {}", error.message))?;
-    shard
-        .save()
-        .map_err(|error| format!("the deployment state of rule {uuid}: {error}"))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn multiline_text_is_trimmed_and_indented() {
-        assert_eq!(fix_multiline("  a \n\n\tb\r\n", 2), "  a\n  b");
+    fn file_names_are_safe_on_every_system() {
         assert_eq!(sanitize_filename("a:b/c?"), "a b c ");
         assert_eq!(sanitize_filename("a\tb\nc\u{7f}d"), "a b c d");
         assert_eq!(
@@ -715,320 +950,175 @@ mod tests {
             "Encoded PowerShell"
         );
         assert_eq!(capitalised("deviceId"), "DeviceId");
-        assert_eq!(json_string("a\"é"), "\"a\\\"é\"");
-    }
-
-    #[test]
-    fn a_long_name_is_cut_at_a_character_boundary() {
-        assert_eq!(sanitize_filename(&"a".repeat(300)), "a".repeat(200));
-        // 'é' takes two bytes: 100 of them are 200 bytes, and a cut inside
-        // the next one leaves it out.
         let long = "é".repeat(150);
-        assert_eq!(sanitize_filename(&long), "é".repeat(100));
-        let odd = format!("a{}", "é".repeat(150));
-        let cut = sanitize_filename(&odd);
-        assert_eq!(cut, format!("a{}", "é".repeat(99)));
-        assert_eq!(cut.len(), 199);
-        assert_eq!(sanitize_filename("short"), "short");
+        let cut = sanitize_filename(&long);
+        assert!(cut.len() <= STEM_LIMIT && cut.chars().all(|c| c == 'é'));
+        assert_eq!(sanitize_filename("CON"), "_CON");
     }
 
     #[test]
-    fn a_windows_device_name_gets_an_underscore() {
-        for (name, expected) in [
-            ("CON", "_CON"),
-            ("nul", "_nul"),
-            ("Aux.txt", "_Aux.txt"),
-            ("prn.tar.gz", "_prn.tar.gz"),
-            ("COM1", "_COM1"),
-            ("com9.log", "_com9.log"),
-            ("LPT5", "_LPT5"),
-            ("lpt9 ", "_lpt9 "),
-            (" con", "_ con"),
-            ("con<", "_con "),
-            ("COM0", "_COM0"),
-            ("LPT0", "_LPT0"),
-            ("COM\u{b9}", "_COM\u{b9}"),
-            ("CONIN$", "_CONIN$"),
+    fn durations_read_back_as_the_block_writes_them() {
+        for (iso, short) in [
+            ("PT0S", Some("NRT")),
+            ("PT0M", Some("NRT")),
+            ("P0D", Some("NRT")),
+            ("PT1H", Some("1H")),
+            ("PT24H", Some("24H")),
+            ("PT120M", Some("2H")),
+            ("P1D", Some("1D")),
+            ("PT90M", None),
+            ("PT01H", None),
+            ("1H", None),
         ] {
-            assert_eq!(sanitize_filename(name), expected, "{name:?}");
-        }
-        for name in [
-            "CONSOLE",
-            "COM",
-            "COM10",
-            "LPT",
-            "ACON",
-            "con ect",
-            "NULL",
-            "my.con",
-            "Encoded PowerShell",
-        ] {
-            assert_eq!(sanitize_filename(name), name, "{name:?}");
+            assert_eq!(short_duration(iso).as_deref(), short, "{iso}");
         }
     }
 
     #[test]
-    fn a_field_error_names_the_field_and_the_problem() {
+    fn a_uuid_id_is_kept_and_another_id_gets_a_derived_uuid() {
         assert_eq!(
-            FieldError::missing("schedule.period").to_string(),
-            "field `schedule.period` is missing"
+            defender_uuid("8D7C6B5A-0000-4000-8000-000000000201"),
+            ("8d7c6b5a-0000-4000-8000-000000000201".to_owned(), true)
         );
+        let (derived, addressed) = defender_uuid("7506");
+        assert!(!addressed);
         assert_eq!(
-            FieldError::not("displayName", "a string").to_string(),
-            "field `displayName` is not a string"
+            derived,
+            defender_uuid("7506").0,
+            "the same id, the same uuid"
         );
+        assert!(uuid::Uuid::try_parse(&derived).is_ok());
     }
 
     fn rule() -> CJson {
         serde_json::from_str(
-            r##"{"id": "201", "displayName": "Encoded: \"x\"", "isEnabled": true,
-                "createdBy": "a@x", "lastModifiedBy": "b@x",
-                "createdDateTime": "2026-01-02T03:04:05Z", "lastModifiedDateTime": "2026-02-03T00:00:00Z",
-                "detectorId": "d1", "queryCondition": {"queryText": "T\n | take 1"},
-                "schedule": {"period": "0"},
-                "detectionAction": {"alertTemplate": {"severity": "medium",
-                  "description": "Desc", "recommendedActions": "Do it",
-                  "mitreTechniques": ["T1", "T2"], "impactedAssets": [
-                  {"@odata.type": "#microsoft.graph.security.impactedUserAsset", "identifier": "accountUpn"}]}}}"##,
+            r#"{
+              "id": "8d7c6b5a-0000-4000-8000-000000000201",
+              "displayName": "Suspicious PowerShell: \"encoded\" command",
+              "description": "An encoded command line.",
+              "status": "enabled",
+              "createdBy": "alice@contoso.example",
+              "createdDateTime": "2026-01-02T03:04:05.123Z",
+              "lastModifiedBy": "bob@contoso.example",
+              "lastModifiedDateTime": "2026-02-03T04:05:06Z",
+              "queryCondition": {"queryText": "DeviceProcessEvents\n  | where FileName == \"powershell.exe\"\n"},
+              "schedule": {"frequency": "PT1H", "lookback": "PT4H"},
+              "detectionAction": {
+                "alertTemplate": {
+                  "title": "Encoded PowerShell",
+                  "description": "An encoded command line.",
+                  "severity": "medium",
+                  "recommendedActions": "Isolate the device.",
+                  "tactics": [
+                    {"tactic": "Execution", "techniques": [{"technique": "T1059", "subTechniques": ["T1059.001"]}]},
+                    {"tactic": "DefenseEvasion", "techniques": [{"technique": "T1027"}]}
+                  ],
+                  "entityMappings": {"hosts": [{"nameColumn": "DeviceName", "deviceIdColumn": "DeviceId"}]},
+                  "customDetails": {"CommandLine": "ProcessCommandLine"},
+                  "eventGroupingKind": "singleAlert"
+                },
+                "automatedActions": {"isolateDevices": [{"deviceIdColumn": "DeviceId", "isolationType": "full"}]},
+                "organizationalScope": {"deviceGroups": ["Tier 0"]},
+                "incidentConfiguration": {"isExcludedFromIncidentCorrelation": true}
+              }
+            }"#,
         )
         .unwrap()
     }
 
     #[test]
-    fn a_detection_renders_into_the_template() {
-        let (name, body) = render_rule(&rule(), &["lab".into(), "prod".into()]).unwrap();
-        assert_eq!(name, "Encoded  \"x\"".replace('"', " "));
-        assert!(
-            body.starts_with("name: \"Encoded: \\\"x\\\"\"\n#references:"),
-            "{body}"
+    fn a_detection_becomes_a_rule_that_validates() {
+        let (uuid, _) = defender_uuid("8d7c6b5a-0000-4000-8000-000000000201");
+        let (name, body) = render_rule(&rule(), &uuid, &["lab".into(), "prod".into()]).unwrap();
+        assert_eq!(
+            name,
+            "Suspicious PowerShell  \"encoded\" command".replace('"', " ")
         );
-        assert!(body.contains("  alert_severity: Medium\n"), "{body}");
-        assert!(body.contains("    contributors:\n      - b@x\n"), "{body}");
-        assert!(
-            body.contains("      - \"lab\"\n      - \"prod\"\n"),
-            "{body}"
-        );
-        assert!(body.contains("    scheduling: NRT\n"), "{body}");
-        assert!(
-            body.contains(
-                "title: \"Encoded: \\\"x\\\"\"\n      techniques:\n        - T1\n        - T2\n"
-            ),
-            "{body}"
-        );
-        assert!(
-            body.contains("      recommendation: |\n        Do it\n"),
-            "{body}"
-        );
-        assert!(body.contains("    impacted_entities:\n      #device:\n      #mailbox: \n      user: AccountUpn \n"), "{body}");
-        assert!(
-            body.contains("  Desc\n  ---\n  Recommended Actions : Do it\n"),
-            "{body}"
-        );
-        assert!(
-            body.ends_with("    query: |\n      T\n      | take 1"),
-            "{body}"
-        );
+        let expected = r#"name: "Suspicious PowerShell: \"encoded\" command"
+metadata:
+  uuid: 8d7c6b5a-0000-4000-8000-000000000201
+  schema: rule::1.0
+  version: 1
+  created: "2026-01-02"
+  modified: "2026-02-03"
+  tlp: amber+strict
+  author: alice@contoso.example
+description: An encoded command line.
+response:
+  alert_severity: Medium
+configurations:
+  microsoft_defender:
+    schema: platform::microsoft_defender::1.0
+    status: PRODUCTION
+    tenants:
+      - lab
+      - prod
+    contributors:
+      - bob@contoso.example
+    query: |
+      DeviceProcessEvents
+        | where FileName == "powershell.exe"
+    schedule:
+      frequency: 1H
+      lookback: 4H
+    alert:
+      title: Encoded PowerShell
+      recommendation: Isolate the device.
+      techniques:
+        - T1059.001
+        - T1027
+      custom_details:
+        CommandLine: ProcessCommandLine
+      grouping: single_alert
+    entities:
+      hosts:
+        - device_id: DeviceId
+          name: DeviceName
+    actions:
+      isolate_devices:
+        - device_id: DeviceId
+          isolation_type: full
+    scope:
+      device_groups:
+        - Tier 0
+    incident:
+      exclude_from_correlation: true
+"#;
+        assert_eq!(body, expected);
     }
 
-    /// A tenant's values go into the template as YAML scalars: none of them
-    /// can break the rule's YAML or change what it reads as.
     #[test]
-    fn hostile_values_read_back_as_written() {
-        let hostile = "Mimikatz: dump [x] #1";
-        let rule: CJson = serde_json::from_str(
-            r##"{"id": "201", "displayName": "D", "isEnabled": true,
-                "createdBy": "Mimikatz: dump [x] #1", "lastModifiedBy": "yes",
-                "createdDateTime": "2026: 01 #x", "lastModifiedDateTime": "2026-02-03T00:00:00Z",
-                "detectorId": "null", "queryCondition": {"queryText": "T"},
-                "schedule": {"period": "1H #x"},
-                "detectionAction": {"alertTemplate": {"severity": "high: #1",
-                  "title": "[x]", "description": "Desc",
-                  "mitreTechniques": ["T1: x", "'q", "- y"], "impactedAssets": [
-                  {"@odata.type": "#impactedUserAsset", "identifier": "a #b: c"}]}}}"##,
-        )
-        .unwrap();
-        let (_, body) = render_rule(&rule, &["lab".into()]).unwrap();
-        let document =
-            opentide_schema::node::load(&body).unwrap_or_else(|e| panic!("{e:?}\n{body}"));
-        let root = document.root().unwrap();
-        let at = |path: &[&str]| -> Option<String> {
-            let mut node = root;
-            for key in path {
-                node = node.get(key)?;
-            }
-            node.value.as_str().map(str::to_owned)
-        };
-        assert_eq!(
-            at(&["metadata", "author"]).as_deref(),
-            Some(hostile),
-            "{body}"
-        );
-        assert_eq!(at(&["metadata", "uuid"]).as_deref(), Some("null"), "{body}");
-        assert_eq!(
-            at(&["metadata", "created"]).as_deref(),
-            Some("2026: 01 #x"),
-            "{body}"
-        );
-        assert_eq!(
-            at(&["response", "alert_severity"]).as_deref(),
-            Some("High: #1"),
-            "{body}"
-        );
-        let block = ["configurations", "microsoft_defender"];
-        let block_at = |rest: &[&str]| at(&[block.as_slice(), rest].concat());
-        assert_eq!(
-            block_at(&["scheduling"]).as_deref(),
-            Some("1H #x"),
-            "{body}"
-        );
-        assert_eq!(
-            block_at(&["alert", "title"]).as_deref(),
-            Some("[x]"),
-            "{body}"
-        );
-        assert_eq!(
-            block_at(&["impacted_entities", "user"]).as_deref(),
-            Some("A #b: c"),
-            "{body}"
-        );
-        let configuration = root
-            .get("configurations")
-            .unwrap()
-            .get("microsoft_defender")
-            .unwrap();
-        let strings = |node: &opentide_schema::node::Node| -> Vec<String> {
-            match &node.value {
-                opentide_schema::node::Value::Seq(items) => items
-                    .iter()
-                    .map(|item| item.value.as_str().unwrap_or("<not a string>").to_owned())
-                    .collect(),
-                other => panic!("{other:?}"),
-            }
-        };
-        assert_eq!(
-            strings(configuration.get("contributors").unwrap()),
-            ["yes"],
-            "{body}"
-        );
-        assert_eq!(
-            strings(
-                configuration
-                    .get("alert")
-                    .unwrap()
-                    .get("techniques")
-                    .unwrap()
-            ),
-            ["T1: x", "'q", "- y"],
-            "{body}"
-        );
-    }
-
-    /// A lone CR, NEL or line separator in tenant text cannot end a block
-    /// scalar and start a key; a control character refuses the rule.
-    #[test]
-    fn line_breaks_in_tenant_text_stay_inside_their_block() {
-        let rule = |edit: &dyn Fn(&mut Object)| {
+    fn a_missing_mistyped_or_unmodelled_field_names_the_field() {
+        let failed = |change: &dyn Fn(&mut Object)| {
             let mut rule = rule();
-            if let CJson::Object(object) = &mut rule {
-                edit(object);
+            if let CJson::Object(fields) = &mut rule {
+                change(fields);
             }
-            rule
-        };
-        let template = |object: &mut Object, key: &str, value: &str| {
-            let Some(CJson::Object(action)) = object.get_mut("detectionAction") else {
-                panic!()
-            };
-            let Some(CJson::Object(template)) = action.get_mut("alertTemplate") else {
-                panic!()
-            };
-            template.insert(key.into(), CJson::Str(value.into()));
-        };
-        let rule = rule(&|object| {
-            template(
-                object,
-                "description",
-                "line1\rstatus: INJECTED\u{2028}schema: x",
-            );
-            template(object, "recommendedActions", "r\rname: X\u{85}y");
-            object.insert(
-                "queryCondition".into(),
-                serde_json::from_str(r#"{"queryText": "T\rname: INJECTED"}"#).unwrap(),
-            );
-            object.insert("displayName".into(), CJson::Str("a\u{7f}b\u{85}c".into()));
-        });
-        let (_, body) = render_rule(&rule, &["lab".into()]).unwrap();
-        let document =
-            opentide_schema::node::load(&body).unwrap_or_else(|e| panic!("{e:?}\n{body}"));
-        let root = document.root().unwrap();
-        assert_eq!(
-            root.get("name").unwrap().value.as_str(),
-            Some("a\u{7f}b\u{85}c"),
-            "{body}"
-        );
-        assert!(root.get("status").is_none(), "{body}");
-        assert!(root.get("schema").is_none(), "{body}");
-        let description = root.get("description").unwrap().value.as_str().unwrap();
-        assert!(description.contains("status: INJECTED"), "{body}");
-        let query = root
-            .get("configurations")
-            .and_then(|block| block.get("microsoft_defender"))
-            .and_then(|block| block.get("query"))
-            .unwrap();
-        assert_eq!(query.value.as_str(), Some("T\nname: INJECTED"), "{body}");
-
-        let control = rule_with_description("a\u{1}b");
-        assert_eq!(
-            render_rule(&control, &[]).unwrap_err().to_string(),
-            "field `detectionAction.alertTemplate.description` is not text without control characters"
-        );
-    }
-
-    fn rule_with_description(description: &str) -> CJson {
-        let mut rule = rule();
-        if let CJson::Object(object) = &mut rule
-            && let Some(CJson::Object(action)) = object.get_mut("detectionAction")
-            && let Some(CJson::Object(template)) = action.get_mut("alertTemplate")
-        {
-            template.insert("description".into(), CJson::Str(description.into()));
-        }
-        rule
-    }
-
-    #[test]
-    fn a_missing_or_mistyped_field_names_the_field() {
-        let failed = |edit: &dyn Fn(&mut Object)| {
-            let mut rule = rule();
-            if let CJson::Object(object) = &mut rule {
-                edit(object);
-            }
-            render_rule(&rule, &[]).unwrap_err().to_string()
+            render_rule(&rule, "8d7c6b5a-0000-4000-8000-000000000201", &[]).unwrap_err()
         };
         assert_eq!(
             failed(&|rule| {
-                rule.shift_remove("detectorId");
+                rule.shift_remove("displayName");
             }),
-            "field `detectorId` is missing"
+            "field `displayName` is missing"
         );
         assert_eq!(
             failed(&|rule| {
-                rule.insert("displayName".into(), CJson::Int(3));
+                rule.insert(
+                    "schedule".into(),
+                    serde_json::from_str(r#"{"frequency": "PT90M"}"#).unwrap(),
+                );
             }),
-            "field `displayName` is not a string"
-        );
-        assert_eq!(
-            failed(&|rule| {
-                rule.insert("schedule".into(), CJson::Object(Object::new()));
-            }),
-            "field `schedule.period` is missing"
+            "field `schedule.frequency` is not NRT, hours or days"
         );
         assert_eq!(
             failed(&|rule| {
                 rule.insert(
                     "detectionAction".into(),
-                    serde_json::from_str(r#"{"alertTemplate": {"severity": null}}"#).unwrap(),
+                    serde_json::from_str(r#"{"alertTemplate": {"severity": "low", "entityMappings": {"hosts": [{"deviceIdColumn": "DeviceId", "osColumn": "Os"}]}}}"#).unwrap(),
                 );
             }),
-            "field `detectionAction.alertTemplate.severity` is missing"
+            "field `detectionAction.alertTemplate.entityMappings.hosts[].osColumn` is not a field opentide models"
         );
     }
 }
@@ -1944,7 +2034,7 @@ fn is_uuid(text: &str) -> bool {
 
 /// Why `document` must not be written: every file written must load as
 /// `rule::1.0`. The reason names the first error and counts the others.
-fn unwritable_reason(document: &Object, text: &str) -> Option<String> {
+fn unwritable_reason(document: &Object, text: &str, platform: &str, model: &str) -> Option<String> {
     let id = document
         .get("metadata")
         .and_then(|metadata| metadata.get("uuid"))
@@ -1968,15 +2058,12 @@ fn unwritable_reason(document: &Object, text: &str) -> Option<String> {
                 opentide_schema::PathSegment::Key(first),
                 opentide_schema::PathSegment::Key(second),
                 ..
-            ] if first == "configurations" && second == ELASTIC
+            ] if first == "configurations" && second == platform
         )
     };
     let (model, found): (&str, Vec<&opentide_schema::SchemaError>) =
         if errors.iter().any(|error| in_block(&error)) {
-            (
-                "platform::elastic::1.0",
-                errors.iter().filter(in_block).collect(),
-            )
+            (model, errors.iter().filter(in_block).collect())
         } else {
             ("rule::1.0", errors.iter().collect())
         };
@@ -2091,7 +2178,9 @@ fn elastic_run(
             let document = kibana_to_opentide(rule, true);
             let text = rule_yaml(&document)?;
             let name = document.get("name").map(text_of).unwrap_or_default();
-            if let Some(reason) = unwritable_reason(&document, &text) {
+            if let Some(reason) =
+                unwritable_reason(&document, &text, ELASTIC, "platform::elastic::1.0")
+            {
                 tracing::warn!(
                     rule = name.as_str(),
                     reason = reason.as_str(),
@@ -2234,7 +2323,10 @@ mod elastic_tests {
             text.contains("    exceptions:\n      endpoint: true\n"),
             "{text}"
         );
-        assert!(unwritable_reason(&converted, &text).is_none() || text.contains("name: Encoded"));
+        assert!(
+            unwritable_reason(&converted, &text, ELASTIC, "platform::elastic::1.0").is_none()
+                || text.contains("name: Encoded")
+        );
         assert!(is_uuid("{11111111-1111-4111-8111-111111111111}"));
         assert!(!is_uuid("rule-1"));
         assert_eq!(elastic_filename("a:  b"), "a b");
@@ -2345,13 +2437,18 @@ mod elastic_tests {
             "query": "x", "index": ["logs-*"]}"#;
         let converted = kibana_to_opentide(&rule(kibana), true);
         let text = rule_yaml(&converted).unwrap();
-        assert_eq!(unwritable_reason(&converted, &text), None, "{text}");
+        assert_eq!(
+            unwritable_reason(&converted, &text, ELASTIC, "platform::elastic::1.0"),
+            None,
+            "{text}"
+        );
         let broken = kibana_to_opentide(
             &rule(&kibana.replace("\"type\": \"query\"", "\"type\": \"saved_query\"")),
             true,
         );
         let text = rule_yaml(&broken).unwrap();
-        let reason = unwritable_reason(&broken, &text).unwrap_or_else(|| panic!("{text}"));
+        let reason = unwritable_reason(&broken, &text, ELASTIC, "platform::elastic::1.0")
+            .unwrap_or_else(|| panic!("{text}"));
         assert!(
             reason
                 .starts_with("does not validate as platform::elastic::1.0: configurations.elastic"),
@@ -2365,7 +2462,7 @@ mod elastic_tests {
             serde_json::from_str(r#"{"uuid": "rule-1"}"#).unwrap(),
         );
         assert_eq!(
-            unwritable_reason(&unnamed, "").unwrap(),
+            unwritable_reason(&unnamed, "", ELASTIC, "platform::elastic::1.0").unwrap(),
             "Kibana rule_id \"rule-1\" is not a UUID"
         );
     }

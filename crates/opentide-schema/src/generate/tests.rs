@@ -44,8 +44,8 @@ fn object_schemas() -> Vec<(String, Value)> {
             schemars::schema_for!(platform::SentinelConfig),
         ),
         (
-            "DefenderConfig",
-            schemars::schema_for!(platform::DefenderConfig),
+            "MicrosoftDefenderConfig",
+            schemars::schema_for!(platform::MicrosoftDefenderConfig),
         ),
         (
             "SplunkConfig",

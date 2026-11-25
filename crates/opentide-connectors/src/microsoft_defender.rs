@@ -1,16 +1,21 @@
-//! Microsoft Defender through Microsoft Graph (UC-4.2, #832):
-//! `platforms/microsoft_defender/client.py` (`MicrosoftDefenderService`),
-//! the deploy calls its `deployer.py` makes, `runner.py` (advanced hunting)
-//! and `validator.py` (the columns a custom detection needs), request for
-//! request.
+//! Microsoft Defender through the Microsoft Graph beta security API
+//! (microsoft-defender-1.0, RFC 0021): custom detection rules addressed by the
+//! rule's `metadata.uuid`, advanced hunting (`runHuntingQuery`) for
+//! `opentide query` and `validate query --live`, and the columns a custom
+//! detection needs.
 //!
 //! The client signs in to Entra ID with the tenant's app registration
 //! ([`crate::entra`]: `tenant_id`, `client_id`, `client_secret`, scope
 //! Graph's), keeps the token until it is due for renewal (a `401` gets one
-//! new token and one resend), and sends every call to Graph's
-//! beta security API with the bearer token and `Content-Type:
-//! application/json`. Bodies are the compiled rule (`opentide-compile`
-//! `defender::body`), sent as compact JSON.
+//! new token and one resend), and sends every call to Graph's beta security
+//! API with the bearer token and `Content-Type: application/json`.
+//!
+//! Deploy keeps no deployment state ([`MicrosoftDefender::deploy`]): an
+//! active status sends `PATCH {base}/{uuid}`, and on a `404` `POST {base}`
+//! with `id`; a `409` on that `POST` (a concurrent create) is followed by one
+//! more `PATCH`. A DISABLEMENT is a `PATCH` with `status: disabled`, and a
+//! `404` there creates nothing ([`RULE_ABSENT`]). A DELETION is a `DELETE`,
+//! whose `404` is the rule already gone.
 
 use std::sync::Arc;
 
@@ -30,7 +35,7 @@ use crate::token::TokenCache;
 use crate::{HttpSettings, Secret};
 
 /// The platform's identifier.
-pub const PLATFORM: &str = "microsoft_defender";
+pub const PLATFORM: &str = opentide_schema::objects::platform::microsoft_defender::PLATFORM;
 
 /// The tenant setup's names for the app registration.
 pub const CREDENTIALS: CredentialNames = CredentialNames {
@@ -41,8 +46,7 @@ pub const CREDENTIALS: CredentialNames = CredentialNames {
 /// Graph's security API.
 pub const GRAPH_API_ENDPOINT: &str = "https://graph.microsoft.com/beta/security";
 /// The custom detection rules collection.
-pub const DETECTION_RULES_ENDPOINT: &str =
-    "https://graph.microsoft.com/beta/security/rules/detectionRules";
+pub const DETECTION_RULES_ENDPOINT: &str = opentide_compile::microsoft_defender::ENDPOINT;
 /// Advanced hunting.
 pub const HUNTING_QUERY_ENDPOINT: &str =
     "https://graph.microsoft.com/beta/security/runHuntingQuery";
@@ -52,15 +56,7 @@ pub const SCOPE: &str = "https://graph.microsoft.com/.default";
 /// Advanced hunting keeps 30 days of data; Graph refuses a longer timespan.
 pub const MAX_LOOKBACK_DAYS: i64 = 30;
 
-/// Response actions the safer configuration drops: they map user
-/// identifiers a query may not return.
-pub const RISKY_RESPONSE_ACTIONS: [&str; 3] = [
-    "#microsoft.graph.security.markUserAsCompromisedResponseAction",
-    "#microsoft.graph.security.disableUserResponseAction",
-    "#microsoft.graph.security.forceUserPasswordResetResponseAction",
-];
-
-/// The HTTP settings of a Defender tenant: 120 s and the connectors'
+/// The HTTP settings of a Microsoft Defender tenant: 120 s and the connectors'
 /// retries.
 pub fn http_settings() -> HttpSettings {
     HttpSettings {
@@ -112,25 +108,10 @@ impl DefenderError {
     }
 }
 
-/// The warning of a rule created with the safer configuration
-/// ([`Created::partial`]): the event `opentide deploy` logs for it.
-pub const PARTIAL_DEPLOYMENT: &str =
-    "this_is_a_partial_deployment_check_the_mde_gui_to_see_the_availa";
-
-/// A rule Graph created.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Created {
-    /// Graph's id of the rule, kept in deployment state.
-    pub id: i64,
-    /// Created with the safer configuration after the full one was refused
-    /// (`DEPLOYMENT_WARNING_RAISED`): check the impacted assets in the portal.
-    pub partial: bool,
-}
-
 /// The Microsoft Defender connector. A tenant's token serves every call
 /// until it is due for renewal.
 #[derive(Debug, Default)]
-pub struct Defender {
+pub struct MicrosoftDefender {
     tokens: Arc<TokenCache>,
 }
 
@@ -150,7 +131,7 @@ fn authentication(error: ConnectorError) -> DefenderError {
     }
 }
 
-impl Defender {
+impl MicrosoftDefender {
     /// A connector with no tenant signed in yet.
     pub fn new() -> Self {
         Self::default()
@@ -200,54 +181,6 @@ impl Defender {
             )
             .await
             .map_err(authentication)
-    }
-
-    /// Creates a custom detection rule from its compiled *body*
-    /// (`create_detection_rule`). When Graph refuses it, it is sent again
-    /// with the safer configuration (device impacted asset, no user response
-    /// action) to the same collection.
-    pub async fn create_rule(
-        &self,
-        cx: TenantContext<'_>,
-        body: &Json,
-    ) -> Result<Created, DefenderError> {
-        let tenant = &cx.tenant.label.tenant;
-        let answer = self
-            .graph(
-                cx,
-                crate::transport::Method::POST,
-                DETECTION_RULES_ENDPOINT,
-                Some(body),
-            )
-            .await?;
-        if answer.status == 201 {
-            return Ok(Created {
-                id: created_id(&answer, tenant)?,
-                partial: false,
-            });
-        }
-        let safer = safer_configuration(body);
-        let answer = self
-            .graph(
-                cx,
-                crate::transport::Method::POST,
-                DETECTION_RULES_ENDPOINT,
-                Some(&safer),
-            )
-            .await?;
-        if answer.status == 201 {
-            return Ok(Created {
-                id: created_id(&answer, tenant)?,
-                partial: true,
-            });
-        }
-        Err(DefenderError::Refused {
-            message: format!(
-                "Failed to create detection rule in tenant {tenant} with the safer configuration - Error Code {}",
-                answer.status
-            ),
-            context: Some(error_body(&answer)),
-        })
     }
 
     /// Every custom detection rule of the tenant, across Graph's pages
@@ -307,51 +240,6 @@ impl Defender {
             }
         }
         Ok(rules)
-    }
-
-    /// Replaces rule *rule_id* with *body* (`update_detection_rule`).
-    pub async fn update_rule(
-        &self,
-        cx: TenantContext<'_>,
-        body: &Json,
-        rule_id: &str,
-    ) -> Result<(), DefenderError> {
-        let url = format!("{DETECTION_RULES_ENDPOINT}/{rule_id}");
-        let answer = self
-            .graph(cx, crate::transport::Method::PATCH, &url, Some(body))
-            .await?;
-        if answer.status == 200 {
-            return Ok(());
-        }
-        Err(DefenderError::Refused {
-            message: format!(
-                "Failed to update detection rule with id {rule_id} in tenant {} ({url}) - Error Code {}",
-                cx.tenant.label.tenant, answer.status
-            ),
-            context: Some(error_body(&answer)),
-        })
-    }
-
-    /// Deletes rule *rule_id* (`delete_detection_rule`).
-    pub async fn delete_rule(
-        &self,
-        cx: TenantContext<'_>,
-        rule_id: &str,
-    ) -> Result<(), DefenderError> {
-        let url = format!("{DETECTION_RULES_ENDPOINT}/{rule_id}");
-        let answer = self
-            .graph(cx, crate::transport::Method::DELETE, &url, None)
-            .await?;
-        if answer.status == 204 {
-            return Ok(());
-        }
-        Err(DefenderError::Refused {
-            message: format!(
-                "Failed to delete detection rule with id {rule_id} in tenant {}",
-                cx.tenant.label.tenant
-            ),
-            context: None,
-        })
     }
 
     /// Runs an advanced hunting query over the request's window
@@ -507,57 +395,6 @@ fn json_body(cx: TenantContext<'_>, body: &Json) -> Result<Vec<u8>, ConnectorErr
         tenant: cx.tenant.label.tenant.clone(),
         message: format!("the request body cannot be written: {error}"),
     })
-}
-
-/// `int(response.json()["id"])`.
-fn created_id(answer: &Answer, tenant: &str) -> Result<i64, DefenderError> {
-    let id = answer.json().and_then(|body| match body.get("id") {
-        Some(Json::Str(text)) => text.trim().parse::<i64>().ok(),
-        Some(Json::Int(id)) => Some(*id),
-        _ => None,
-    });
-    id.ok_or_else(|| DefenderError::Refused {
-        message: format!("Graph created a rule in tenant {tenant} without a numeric id"),
-        context: Some(answer.text()),
-    })
-}
-
-/// The rule reconfigured to a minimal but functional state
-/// (`_safer_configuation`): one device impacted asset, mapped by `deviceId`,
-/// and no response action that maps a user.
-pub fn safer_configuration(body: &Json) -> Json {
-    let mut rule = body.clone();
-    let Json::Object(top) = &mut rule else {
-        return rule;
-    };
-    let Some(Json::Object(action)) = top.get_mut("detectionAction") else {
-        return rule;
-    };
-    if let Some(Json::Object(template)) = action.get_mut("alertTemplate")
-        && template.get("impactedAssets").is_some_and(Json::is_filled)
-    {
-        let mut device = Object::new();
-        device.insert(
-            "@odata.type".into(),
-            "#microsoft.graph.security.impactedDeviceAsset".into(),
-        );
-        device.insert("identifier".into(), "deviceId".into());
-        template.insert(
-            "impactedAssets".into(),
-            Json::Array(vec![Json::Object(device)]),
-        );
-    }
-    if let Some(Json::Array(actions)) = action.get_mut("responseActions")
-        && !actions.is_empty()
-    {
-        actions.retain(|action| {
-            !action
-                .get("@odata.type")
-                .and_then(Json::as_str)
-                .is_some_and(|kind| RISKY_RESPONSE_ACTIONS.contains(&kind))
-        });
-    }
-    rule
 }
 
 /// `_error_body`: the JSON of an error answer, else its text, else a note.
@@ -762,7 +599,7 @@ pub fn missing_required_column_groups(query: &str, returned: &[&str]) -> Vec<Str
         .collect()
 }
 
-impl Defender {
+impl MicrosoftDefender {
     /// What a deploy does before its first rule: the Entra ID sign-in
     /// ([`Deployer::open`], and [`Prober::probe`]'s first step).
     async fn open_tenant(&self, cx: TenantContext<'_>) -> Result<(), ConnectorError> {
@@ -773,7 +610,7 @@ impl Defender {
     }
 }
 
-impl Prober for Defender {
+impl Prober for MicrosoftDefender {
     /// Opens the tenant as a deploy does (the Entra ID sign-in), then reads
     /// the first page of custom detection rules: `GET .../detectionRules`, the
     /// collection URL a listing starts from (the recorded listing's), which
@@ -805,7 +642,158 @@ impl Prober for Defender {
     }
 }
 
-impl Deployer for Defender {
+/// The event of a rule created after its `PATCH` found none.
+pub const RULE_CREATED: &str = "microsoft_defender_rule_created";
+/// The event of a rule updated in place, disabled included.
+pub const RULE_UPDATED: &str = "microsoft_defender_rule_updated";
+/// The event of a rule deleted.
+pub const RULE_DELETED: &str = "microsoft_defender_rule_deleted";
+/// The warning of a DISABLEMENT that found no rule with the uuid on the
+/// tenant: nothing is created (microsoft-defender-1.0, Diagnostics).
+pub const RULE_ABSENT: &str = "microsoft_defender_rule_absent";
+
+/// What one rule's deploy did.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Sent {
+    /// Created: `POST` after a `404` on `PATCH`.
+    Created,
+    /// Updated: `PATCH`, the first or the one after a `409` on the `POST`.
+    Updated,
+    /// A DISABLEMENT's `PATCH` answered `404`: nothing to disable.
+    Absent,
+    /// Deleted: `DELETE` answered `2xx`.
+    Deleted,
+}
+
+impl Sent {
+    /// The event `opentide deploy` logs for it.
+    pub const fn event(self) -> &'static str {
+        match self {
+            Self::Created => RULE_CREATED,
+            Self::Updated => RULE_UPDATED,
+            Self::Absent => RULE_ABSENT,
+            Self::Deleted => RULE_DELETED,
+        }
+    }
+}
+
+/// Whether an answer is a success.
+const fn succeeded(status: u16) -> bool {
+    status >= 200 && status < 300
+}
+
+impl MicrosoftDefender {
+    /// A rule's failure on the tenant: Graph refused `verb` with `answer`.
+    fn refused(
+        cx: TenantContext<'_>,
+        verb: &str,
+        id: &str,
+        answer: &Answer,
+    ) -> crate::connector::DeployError {
+        let tenant = &cx.tenant.label.tenant;
+        crate::connector::DeployError::rule(
+            crate::connector::DeployFailure::new(
+                "tenant_refused",
+                format!(
+                    "Graph refused to {verb} detection rule {id} on tenant {tenant}: HTTP {} ({})",
+                    answer.status,
+                    error_message(answer)
+                ),
+            )
+            .with_status(answer.status)
+            .with_field("platform", PLATFORM)
+            .with_field("tenant", tenant.as_str())
+            .with_field("detail", error_body(answer)),
+        )
+    }
+
+    /// One Graph call of a deploy; a failure to send fails the tenant.
+    async fn send(
+        &self,
+        cx: TenantContext<'_>,
+        method: crate::transport::Method,
+        url: &str,
+        body: Option<&Json>,
+    ) -> Result<Answer, crate::connector::DeployError> {
+        self.graph(cx, method, url, body)
+            .await
+            .map_err(|error| error.into_connector(&cx.tenant.label.tenant).into())
+    }
+
+    /// An active status (microsoft-defender-1.0, Deploy): `PATCH
+    /// {base}/{id}` with *body*; on `404`, `POST {base}` with the body and
+    /// `id`; a `409` on that `POST` (the rule was created meanwhile) gets one
+    /// more `PATCH`, never another `POST`.
+    pub async fn upsert(
+        &self,
+        cx: TenantContext<'_>,
+        id: &str,
+        body: &Json,
+    ) -> Result<Sent, crate::connector::DeployError> {
+        use crate::transport::Method;
+        let url = opentide_compile::microsoft_defender::rule_url(id);
+        let answer = self.send(cx, Method::PATCH, &url, Some(body)).await?;
+        if succeeded(answer.status) {
+            return Ok(Sent::Updated);
+        }
+        if answer.status != 404 {
+            return Err(Self::refused(cx, "update", id, &answer));
+        }
+        let create = opentide_compile::microsoft_defender::create_body(id, body);
+        let answer = self
+            .send(cx, Method::POST, DETECTION_RULES_ENDPOINT, Some(&create))
+            .await?;
+        if succeeded(answer.status) {
+            return Ok(Sent::Created);
+        }
+        if answer.status != 409 {
+            return Err(Self::refused(cx, "create", id, &answer));
+        }
+        let answer = self.send(cx, Method::PATCH, &url, Some(body)).await?;
+        if succeeded(answer.status) {
+            return Ok(Sent::Updated);
+        }
+        Err(Self::refused(cx, "update", id, &answer))
+    }
+
+    /// A DISABLEMENT: `PATCH {base}/{id}` with *body* (`status: disabled`);
+    /// a `404` creates nothing and is [`Sent::Absent`].
+    pub async fn disable(
+        &self,
+        cx: TenantContext<'_>,
+        id: &str,
+        body: &Json,
+    ) -> Result<Sent, crate::connector::DeployError> {
+        let url = opentide_compile::microsoft_defender::rule_url(id);
+        let answer = self
+            .send(cx, crate::transport::Method::PATCH, &url, Some(body))
+            .await?;
+        match answer.status {
+            status if succeeded(status) => Ok(Sent::Updated),
+            404 => Ok(Sent::Absent),
+            _ => Err(Self::refused(cx, "disable", id, &answer)),
+        }
+    }
+
+    /// A DELETION: `DELETE {base}/{id}`. A `404` (the rule already gone) is a
+    /// failure with status `404`, which `opentide deploy` reports as skipped.
+    pub async fn delete(
+        &self,
+        cx: TenantContext<'_>,
+        id: &str,
+    ) -> Result<Sent, crate::connector::DeployError> {
+        let url = opentide_compile::microsoft_defender::rule_url(id);
+        let answer = self
+            .send(cx, crate::transport::Method::DELETE, &url, None)
+            .await?;
+        if succeeded(answer.status) {
+            return Ok(Sent::Deleted);
+        }
+        Err(Self::refused(cx, "delete", id, &answer))
+    }
+}
+
+impl Deployer for MicrosoftDefender {
     /// The Entra ID sign-in, once: the first rule's request reuses its token.
     fn open<'a>(
         &'a self,
@@ -814,68 +802,65 @@ impl Deployer for Defender {
         crate::connector::opening(self.open_tenant(cx))
     }
 
+    /// One rule by its uuid (`request.rule_id`, lower-cased), with the
+    /// compiled update body: [`MicrosoftDefender::upsert`] for a create or an
+    /// update, [`MicrosoftDefender::disable`], [`MicrosoftDefender::delete`].
+    /// No id is recorded: `remote_id` is the uuid while the rule exists.
     fn deploy<'a>(
         &'a self,
         cx: TenantContext<'a>,
         request: &'a DeployRequest,
     ) -> BoxFuture<'a, Result<DeployOutcome, crate::connector::DeployError>> {
         Box::pin(async move {
-            // Graph's refusal keeps its answer as the detail; a token Entra
-            // ID did not issue fails the tenant, whatever its answer, as
-            // `opentide deploy` stops it: the tenant signs in first (on its
-            // kept token, if any).
-            let answer = |error: DefenderError| error.into_connector(&cx.tenant.label.tenant);
+            let tenant = cx.tenant.label.tenant.clone();
+            // A token Entra ID did not issue fails the tenant, whatever its
+            // answer: the tenant signs in first (on its kept token, if any).
             self.token(cx).await.map_err(|error| {
-                let mut failed = crate::connector::DeployError::from(answer(error));
+                let mut failed = crate::connector::DeployError::from(error.into_connector(&tenant));
                 failed.scope = crate::connector::DeployScope::Tenant;
                 failed
             })?;
-            let body = || -> Result<Json, ConnectorError> {
-                serde_json::from_slice(&request.body).map_err(|error| ConnectorError::Setup {
-                    platform: PLATFORM.into(),
-                    tenant: cx.tenant.label.tenant.clone(),
-                    message: format!("the compiled rule is not JSON: {error}"),
+            let id = request.rule_id.trim().to_ascii_lowercase();
+            let body = || -> Result<Json, crate::connector::DeployError> {
+                serde_json::from_slice(&request.body).map_err(|error| {
+                    ConnectorError::Setup {
+                        platform: PLATFORM.into(),
+                        tenant: tenant.clone(),
+                        message: format!("the compiled rule is not JSON: {error}"),
+                    }
+                    .into()
                 })
             };
-            let mut warnings = Vec::new();
-            let remote_id = match request.operation {
-                Operation::Create => {
-                    let created = self.create_rule(cx, &body()?).await.map_err(answer)?;
-                    if created.partial {
-                        warnings.push(DeployWarning::new(
-                            PARTIAL_DEPLOYMENT,
-                            "the rule was created with a safer configuration after Defender \
-                             refused the full one: check the impacted assets in the Defender \
-                             portal",
-                        ));
-                    }
-                    Some(created.id.to_string())
-                }
-                // A disabled rule is the rule with `isEnabled` false.
-                Operation::Update | Operation::Disable => {
-                    self.update_rule(cx, &body()?, &request.rule_id)
-                        .await
-                        .map_err(answer)?;
-                    Some(request.rule_id.clone())
-                }
-                Operation::Delete => {
-                    self.delete_rule(cx, &request.rule_id)
-                        .await
-                        .map_err(answer)?;
-                    None
-                }
+            let sent = match request.operation {
+                Operation::Create | Operation::Update => self.upsert(cx, &id, &body()?).await?,
+                Operation::Disable => self.disable(cx, &id, &body()?).await?,
+                Operation::Delete => self.delete(cx, &id).await?,
             };
+            let mut warnings = Vec::new();
+            if sent == Sent::Absent {
+                warnings.push(DeployWarning::new(
+                    RULE_ABSENT,
+                    format!("rule {id} is not on tenant '{tenant}': nothing to disable"),
+                ));
+            }
             Ok(DeployOutcome {
-                events: Vec::new(),
-                remote_id,
-                operation: request.operation,
+                events: vec![
+                    crate::connector::DeployEvent::new(sent.event())
+                        .with_field("rule_id", id.clone()),
+                ],
+                remote_id: matches!(sent, Sent::Created | Sent::Updated).then_some(id),
+                operation: match sent {
+                    Sent::Created => Operation::Create,
+                    Sent::Deleted => Operation::Delete,
+                    Sent::Updated | Sent::Absent => request.operation,
+                },
                 warnings,
             })
         })
     }
 }
 
-impl QueryRunner for Defender {
+impl QueryRunner for MicrosoftDefender {
     /// An advanced hunting query over the request's window; the 30-day
     /// retention is counted from now.
     fn run<'a>(
@@ -883,11 +868,13 @@ impl QueryRunner for Defender {
         cx: TenantContext<'a>,
         request: &'a QueryRequest,
     ) -> BoxFuture<'a, Result<QueryOutcome, ConnectorError>> {
-        Box::pin(async move { Defender::run(self, cx, request, jiff::Timestamp::now()).await })
+        Box::pin(
+            async move { MicrosoftDefender::run(self, cx, request, jiff::Timestamp::now()).await },
+        )
     }
 }
 
-impl LiveValidator for Defender {
+impl LiveValidator for MicrosoftDefender {
     /// A search for one row over the request's window, then the columns a
     /// custom detection needs.
     fn validate<'a>(
@@ -899,7 +886,7 @@ impl LiveValidator for Defender {
     }
 }
 
-impl Platform for Defender {
+impl Platform for MicrosoftDefender {
     fn id(&self) -> &'static str {
         PLATFORM
     }

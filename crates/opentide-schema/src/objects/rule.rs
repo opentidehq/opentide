@@ -13,8 +13,8 @@ use crate::FromNode;
 use crate::objects::any::Any;
 use crate::objects::metadata::{ObjectMetadata, ObjectReferences, RuleMetadata};
 use crate::objects::platform::{
-    BitdefenderConfig, CarbonBlackConfig, CrowdstrikeConfig, DefenderConfig, ElasticConfig,
-    ExabeamConfig, GoogleSecopsConfig, GraylogConfig, HarfangLabConfig, PlatformBlock,
+    BitdefenderConfig, CarbonBlackConfig, CrowdstrikeConfig, ElasticConfig, ExabeamConfig,
+    GoogleSecopsConfig, GraylogConfig, HarfangLabConfig, MicrosoftDefenderConfig, PlatformBlock,
     SentinelConfig, SentinelOneConfig, SplunkConfig, SysdigConfig,
 };
 use crate::objects::response::RuleResponse;
@@ -52,7 +52,7 @@ pub struct RuleConfigurations {
     /// Microsoft Defender custom detection (`platform::microsoft_defender::1.0`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[garde(dive)]
-    pub microsoft_defender: Option<DefenderConfig>,
+    pub microsoft_defender: Option<MicrosoftDefenderConfig>,
     /// Splunk saved search (`platform::splunk::1.0`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[garde(dive)]

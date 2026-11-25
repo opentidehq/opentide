@@ -1,0 +1,25 @@
+name: Defender disable absent rule
+metadata:
+  uuid: 00000000-0000-4000-8047-0000000000d4
+  schema: rule::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: |
+  A rule the Microsoft Defender stand-in tenant receives in a deploy that sends; to disable, but the tenant has no rule with its uuid: microsoft_defender_rule_absent, nothing created.
+response:
+  alert_severity: High
+configurations:
+  microsoft_defender:
+    status: DISABLED
+    query: |
+      DeviceProcessEvents
+      | take 1
+    schedule:
+      frequency: 1H
+    alert:
+      title: Defender disable absent rule
+    entities:
+      hosts:
+        - device_id: DeviceId

@@ -6,8 +6,8 @@
 
 use opentide_schema::from_node::Model;
 use opentide_schema::objects::platform::{
-    BitdefenderConfig, CarbonBlackConfig, CrowdstrikeConfig, DefenderConfig, ElasticConfig,
-    ExabeamConfig, GoogleSecopsConfig, GraylogConfig, HarfangLabConfig, SentinelConfig,
+    BitdefenderConfig, CarbonBlackConfig, CrowdstrikeConfig, ElasticConfig, ExabeamConfig,
+    GoogleSecopsConfig, GraylogConfig, HarfangLabConfig, MicrosoftDefenderConfig, SentinelConfig,
     SentinelOneConfig, SplunkConfig, SysdigConfig,
 };
 
@@ -19,7 +19,7 @@ use crate::json::{Json, Object};
 pub fn typed_roots(platform: &str) -> Vec<&'static str> {
     let fields: &[(&str, &str)] = match platform {
         "sentinel" => SentinelConfig::FIELDS,
-        "microsoft_defender" => DefenderConfig::FIELDS,
+        "microsoft_defender" => MicrosoftDefenderConfig::FIELDS,
         "splunk" => SplunkConfig::FIELDS,
         "sentinel_one" => SentinelOneConfig::FIELDS,
         "crowdstrike" => CrowdstrikeConfig::FIELDS,

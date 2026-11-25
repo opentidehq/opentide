@@ -663,46 +663,342 @@
       ],
       "type": "object"
     },
-    "DefenderAlert": {
+    "DefenderAccountMapping": {
       "additionalProperties": false,
       "properties": {
-        "description": {
-          "description": "Alert description. Deploy uses the rule description when omitted.",
-          "markdownDescription": "Alert description. Deploy uses the rule `description` when omitted.",
+        "aad_user_id": {
+          "description": "Column holding the Microsoft Entra object id (aadUserIdColumn).",
+          "markdownDescription": "Column holding the Microsoft Entra object id (`aadUserIdColumn`).",
           "type": [
             "string",
             "null"
           ]
         },
+        "dns_domain": {
+          "description": "Column holding the DNS domain (dnsDomainColumn).",
+          "markdownDescription": "Column holding the DNS domain (`dnsDomainColumn`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "description": "Column holding the account name (nameColumn).",
+          "markdownDescription": "Column holding the account name (`nameColumn`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "nt_domain": {
+          "description": "Column holding the NT domain (ntDomainColumn).",
+          "markdownDescription": "Column holding the NT domain (`ntDomainColumn`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sid": {
+          "description": "Column holding the SID (sidColumn).",
+          "markdownDescription": "Column holding the SID (`sidColumn`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "upn": {
+          "description": "Column holding the user principal name (upnColumn).",
+          "markdownDescription": "Column holding the user principal name (`upnColumn`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "upn_suffix": {
+          "description": "Column holding the UPN suffix (upnSuffixColumn).",
+          "markdownDescription": "Column holding the UPN suffix (`upnSuffixColumn`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "DefenderAccountObjectTarget": {
+      "additionalProperties": false,
+      "properties": {
+        "account_object_id": {
+          "description": "Column holding the account's Microsoft Entra object id (accountObjectIdColumn).",
+          "markdownDescription": "Column holding the account's Microsoft Entra object id\n(`accountObjectIdColumn`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "DefenderAccountSidTarget": {
+      "additionalProperties": false,
+      "properties": {
+        "account_sid": {
+          "description": "Column holding the account's SID (accountSidColumn).",
+          "markdownDescription": "Column holding the account's SID (`accountSidColumn`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "DefenderActions": {
+      "additionalProperties": false,
+      "properties": {
+        "allow_files": {
+          "description": "Allow the files (allowFiles).",
+          "items": {
+            "$ref": "#/$defs/DefenderFileTarget"
+          },
+          "markdownDescription": "Allow the files (`allowFiles`).",
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "block_files": {
+          "description": "Block the files (blockFiles).",
+          "items": {
+            "$ref": "#/$defs/DefenderFileTarget"
+          },
+          "markdownDescription": "Block the files (`blockFiles`).",
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "collect_investigation_packages": {
+          "description": "Collect an investigation package (collectInvestigationPackages).",
+          "items": {
+            "$ref": "#/$defs/DefenderDeviceTarget"
+          },
+          "markdownDescription": "Collect an investigation package (`collectInvestigationPackages`).",
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "disable_users": {
+          "description": "Disable the users (disableUsers).",
+          "items": {
+            "$ref": "#/$defs/DefenderAccountSidTarget"
+          },
+          "markdownDescription": "Disable the users (`disableUsers`).",
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "force_user_password_resets": {
+          "description": "Force a password reset (forceUserPasswordResets).",
+          "items": {
+            "$ref": "#/$defs/DefenderAccountSidTarget"
+          },
+          "markdownDescription": "Force a password reset (`forceUserPasswordResets`).",
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "hard_delete_emails": {
+          "description": "Hard-delete the emails (hardDeleteEmails).",
+          "items": {
+            "$ref": "#/$defs/DefenderEmailTarget"
+          },
+          "markdownDescription": "Hard-delete the emails (`hardDeleteEmails`).",
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "initiate_investigations": {
+          "description": "Start an automated investigation (initiateInvestigations).",
+          "items": {
+            "$ref": "#/$defs/DefenderDeviceTarget"
+          },
+          "markdownDescription": "Start an automated investigation (`initiateInvestigations`).",
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "isolate_devices": {
+          "description": "Isolate the devices (isolateDevices).",
+          "items": {
+            "$ref": "#/$defs/DefenderIsolationTarget"
+          },
+          "markdownDescription": "Isolate the devices (`isolateDevices`).",
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "mark_users_as_compromised": {
+          "description": "Mark the users as compromised (markUsersAsCompromised).",
+          "items": {
+            "$ref": "#/$defs/DefenderAccountObjectTarget"
+          },
+          "markdownDescription": "Mark the users as compromised (`markUsersAsCompromised`).",
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "move_emails_to_deleted_items": {
+          "description": "Move the emails to Deleted Items (moveEmailsToDeletedItems).",
+          "items": {
+            "$ref": "#/$defs/DefenderEmailTarget"
+          },
+          "markdownDescription": "Move the emails to Deleted Items (`moveEmailsToDeletedItems`).",
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "move_emails_to_inbox": {
+          "description": "Move the emails to the inbox (moveEmailsToInbox).",
+          "items": {
+            "$ref": "#/$defs/DefenderEmailTarget"
+          },
+          "markdownDescription": "Move the emails to the inbox (`moveEmailsToInbox`).",
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "move_emails_to_junk": {
+          "description": "Move the emails to Junk (moveEmailsToJunk).",
+          "items": {
+            "$ref": "#/$defs/DefenderEmailTarget"
+          },
+          "markdownDescription": "Move the emails to Junk (`moveEmailsToJunk`).",
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "restrict_app_executions": {
+          "description": "Restrict app execution (restrictAppExecutions).",
+          "items": {
+            "$ref": "#/$defs/DefenderDeviceTarget"
+          },
+          "markdownDescription": "Restrict app execution (`restrictAppExecutions`).",
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "run_antivirus_scans": {
+          "description": "Run an antivirus scan (runAntivirusScans).",
+          "items": {
+            "$ref": "#/$defs/DefenderDeviceTarget"
+          },
+          "markdownDescription": "Run an antivirus scan (`runAntivirusScans`).",
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "soft_delete_emails": {
+          "description": "Soft-delete the emails (softDeleteEmails).",
+          "items": {
+            "$ref": "#/$defs/DefenderEmailTarget"
+          },
+          "markdownDescription": "Soft-delete the emails (`softDeleteEmails`).",
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "stop_and_quarantine_files": {
+          "description": "Stop and quarantine the files (stopAndQuarantineFiles).",
+          "items": {
+            "$ref": "#/$defs/DefenderQuarantineTarget"
+          },
+          "markdownDescription": "Stop and quarantine the files (`stopAndQuarantineFiles`).",
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "DefenderAlert": {
+      "additionalProperties": false,
+      "properties": {
+        "custom_details": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Alert custom details: detail name to result column. Not sent when unset.",
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "description": {
+          "description": "Alert description. No Graph constraint.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "grouping": {
+          "anyOf": [
+            {
+              "enum": [
+                "alert_per_event",
+                "single_alert"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Beta-only. alert_per_event (sent as alertPerEvent) or single_alert (singleAlert). single_alert groups the events of one run into one alert; it does not merge alerts across runs. Omitted, Defender creates one alert per event.",
+          "markdownDescription": "**Beta-only.** `alert_per_event` (sent as `alertPerEvent`) or `single_alert`\n(`singleAlert`). `single_alert` groups the events of one run into one alert; it does not\nmerge alerts across runs. Omitted, Defender creates one alert per event."
+        },
         "recommendation": {
-          "description": "Recommended actions text.",
+          "description": "Recommended actions text. Not sent when unset. No Graph constraint.",
           "type": [
             "string",
             "null"
           ]
         },
         "severity": {
-          "description": "Informational, Low, Medium, High, or Critical. Deploy uses response.alert_severity when omitted. Critical is sent as high.",
-          "markdownDescription": "`Informational`, `Low`, `Medium`, `High`, or `Critical`. Deploy uses\n`response.alert_severity` when omitted. `Critical` is sent as `high`.",
+          "description": "Informational, Low, Medium, High, or Critical, sent lower-cased; Critical is sent as high.",
+          "markdownDescription": "`Informational`, `Low`, `Medium`, `High`, or `Critical`, sent lower-cased; `Critical` is\nsent as `high`.",
           "type": [
             "string",
             "null"
           ]
         },
         "techniques": {
-          "description": "MITRE ATT&CK technique or sub-technique ids (T1528, T1059.001), sent as the alert's mitreTechniques when set; an empty list counts as unset. Left out, the techniques of the rule's objective are sent, those outside Enterprise ATT&CK left out. generate extract imports the tenant's.",
+          "description": "MITRE ATT&CK technique or sub-technique ids (T1528, T1059.001). An empty list counts as unset. Left out, the techniques of the rule's objective are used. Sent grouped by tactic (ATT&CK).",
           "items": {
             "type": "string"
           },
-          "markdownDescription": "MITRE ATT&CK technique or sub-technique ids (`T1528`, `T1059.001`), sent\nas the alert's `mitreTechniques` when set; an empty list counts as unset. Left out, the\ntechniques of the rule's objective are sent, those outside Enterprise ATT&CK left out.\n`generate extract` imports the tenant's.",
+          "markdownDescription": "MITRE ATT&CK technique or sub-technique ids (`T1528`, `T1059.001`). An empty list counts\nas unset. Left out, the techniques of the rule's objective are used. Sent grouped by\ntactic (ATT&CK).",
           "type": [
             "array",
             "null"
           ]
         },
         "title": {
-          "description": "Alert title. Deploy uses the rule name when omitted.",
-          "markdownDescription": "Alert title. Deploy uses the rule `name` when omitted.",
+          "description": "Alert title. No Graph constraint.",
           "type": [
             "string",
             "null"
@@ -711,223 +1007,311 @@
       },
       "type": "object"
     },
-    "DefenderAllowBlockAction": {
+    "DefenderAmazonResourceMapping": {
       "additionalProperties": false,
       "properties": {
-        "action": {
-          "description": "Allow or Block.",
-          "enum": [
-            "Allow",
-            "Block"
-          ],
-          "markdownDescription": "`Allow` or `Block`.",
-          "type": "string"
-        },
-        "groups": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/DefenderAllowBlockGroupScoping"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Device groups the allow or block applies to."
-        },
-        "identifier": {
-          "description": "Column identifying the file. Deploy lowercases the first character.",
-          "type": "string"
+        "amazon_resource_id": {
+          "description": "Column holding the Amazon resource id (amazonResourceIdColumn).",
+          "markdownDescription": "Column holding the Amazon resource id (`amazonResourceIdColumn`).",
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
-      "required": [
-        "action",
-        "identifier"
-      ],
       "type": "object"
     },
-    "DefenderAllowBlockGroupScoping": {
+    "DefenderAzureResourceMapping": {
       "additionalProperties": false,
       "properties": {
-        "device_groups": {
-          "description": "Group names. Used when selection is Specific.",
-          "items": {
-            "type": "string"
-          },
-          "markdownDescription": "Group names. Used when `selection` is `Specific`.",
+        "resource_id": {
+          "description": "Column holding the resource id (resourceIdColumn).",
+          "markdownDescription": "Column holding the resource id (`resourceIdColumn`).",
           "type": [
-            "array",
+            "string",
             "null"
           ]
-        },
-        "selection": {
-          "description": "All or Specific.",
-          "enum": [
-            "All",
-            "Specific"
-          ],
-          "markdownDescription": "`All` or `Specific`.",
-          "type": "string"
         }
       },
-      "required": [
-        "selection"
-      ],
       "type": "object"
     },
-    "DefenderConfig": {
+    "DefenderCloudApplicationMapping": {
       "additionalProperties": false,
       "properties": {
-        "actions": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/DefenderResponseActions"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Response actions run when the detection fires."
-        },
-        "alert": {
-          "$ref": "#/$defs/DefenderAlert",
-          "description": "Custom detection alert template."
-        },
-        "contributors": {
-          "description": "Platform contributors.",
-          "items": {
-            "type": "string"
-          },
+        "app_id": {
+          "description": "Column holding the application id (appIdColumn).",
+          "markdownDescription": "Column holding the application id (`appIdColumn`).",
           "type": [
-            "array",
+            "string",
             "null"
           ]
-        },
-        "enabled": {
-          "default": false,
-          "description": "Whether this platform block is active.",
-          "type": "boolean"
-        },
-        "exclusions": {
-          "description": "Per-tenant KQL fragments appended to query.",
-          "items": {
-            "$ref": "#/$defs/DefenderExclusion"
-          },
-          "markdownDescription": "Per-tenant KQL fragments appended to `query`.",
-          "type": [
-            "array",
-            "null"
-          ]
-        },
-        "flags": {
-          "description": "Platform flags.",
-          "items": {
-            "type": "string"
-          },
-          "type": [
-            "array",
-            "null"
-          ]
-        },
-        "impacted_entities": {
-          "$ref": "#/$defs/DefenderImpactedEntities",
-          "description": "Columns that identify the impacted device, user, or mailbox."
         },
         "name": {
-          "default": "",
-          "description": "Platform-specific rule name.",
-          "type": "string"
-        },
-        "query": {
-          "description": "KQL. Multiline. Compiled with matching exclusions before deploy.",
-          "markdownDescription": "KQL. Multiline. Compiled with matching `exclusions` before deploy.",
-          "type": "string"
-        },
-        "scheduling": {
-          "description": "NRT, 1H, 3H, 12H, or 24H.",
-          "enum": [
-            "NRT",
-            "1H",
-            "3H",
-            "12H",
-            "24H"
-          ],
-          "markdownDescription": "`NRT`, `1H`, `3H`, `12H`, or `24H`.",
-          "type": "string"
-        },
-        "schema": {
-          "description": "Platform schema identifier, for example platform::sentinel::1.0.",
-          "markdownDescription": "Platform schema identifier, for example `platform::sentinel::1.0`.",
+          "description": "Column holding the application name (nameColumn).",
+          "markdownDescription": "Column holding the application name (`nameColumn`).",
           "type": [
             "string",
-            "null"
-          ]
-        },
-        "scope": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/DefenderGroupScoping"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Device-group scope. Required by registry load. The current deployer does not send it."
-        },
-        "status": {
-          "description": "Deployment status of this platform block, from the statuses in deployment.toml. Required: the deploy planner selects on it.",
-          "markdownDescription": "Deployment status of this platform block, from the statuses in `deployment.toml`. Required:\nthe deploy planner selects on it.",
-          "type": "string"
-        },
-        "tenants": {
-          "description": "Target tenant identifiers.",
-          "items": {
-            "type": "string"
-          },
-          "type": [
-            "array",
             "null"
           ]
         }
       },
-      "required": [
-        "status",
-        "query",
-        "alert",
-        "impacted_entities",
-        "scheduling"
-      ],
       "type": "object"
     },
-    "DefenderDeviceActions": {
+    "DefenderDeviceTarget": {
       "additionalProperties": false,
       "properties": {
-        "collect_investigation_package": {
-          "default": false,
-          "description": "Collect an investigation package.",
-          "type": "boolean"
-        },
-        "initiate_investigation": {
-          "default": false,
-          "description": "Start an automated investigation.",
-          "type": "boolean"
-        },
-        "isolate_device": {
-          "description": "Isolation type. Deploy lowercases the first character (Full is sent as full).",
-          "markdownDescription": "Isolation type. Deploy lowercases the first character (`Full` is sent as `full`).",
+        "device_id": {
+          "description": "Column holding the device id (deviceIdColumn).",
+          "markdownDescription": "Column holding the device id (`deviceIdColumn`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "DefenderDnsMapping": {
+      "additionalProperties": false,
+      "properties": {
+        "domain_name": {
+          "description": "Column holding the domain name (domainNameColumn).",
+          "markdownDescription": "Column holding the domain name (`domainNameColumn`).",
           "type": [
             "string",
             "null"
           ]
         },
-        "restrict_app_execution": {
-          "default": false,
-          "description": "Restrict app execution.",
-          "type": "boolean"
+        "host_ip_address": {
+          "description": "Column holding the host's IP address (hostIpAddressColumn).",
+          "markdownDescription": "Column holding the host's IP address (`hostIpAddressColumn`).",
+          "type": [
+            "string",
+            "null"
+          ]
         },
-        "run_antivirus_scan": {
-          "default": false,
-          "description": "Run an antivirus scan.",
-          "type": "boolean"
+        "server_ip": {
+          "description": "Column holding the DNS server's IP (serverIpColumn).",
+          "markdownDescription": "Column holding the DNS server's IP (`serverIpColumn`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "DefenderEmailTarget": {
+      "additionalProperties": false,
+      "properties": {
+        "network_message_id": {
+          "description": "Column holding the network message id (networkMessageIdColumn).",
+          "markdownDescription": "Column holding the network message id (`networkMessageIdColumn`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "recipient": {
+          "description": "Column holding the recipient (recipientColumn).",
+          "markdownDescription": "Column holding the recipient (`recipientColumn`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "DefenderEntities": {
+      "additionalProperties": false,
+      "properties": {
+        "accounts": {
+          "description": "User accounts (accounts).",
+          "items": {
+            "$ref": "#/$defs/DefenderAccountMapping"
+          },
+          "markdownDescription": "User accounts (`accounts`).",
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "amazon_resources": {
+          "description": "Amazon resources (amazonResources).",
+          "items": {
+            "$ref": "#/$defs/DefenderAmazonResourceMapping"
+          },
+          "markdownDescription": "Amazon resources (`amazonResources`).",
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "azure_resources": {
+          "description": "Azure resources (azureResources).",
+          "items": {
+            "$ref": "#/$defs/DefenderAzureResourceMapping"
+          },
+          "markdownDescription": "Azure resources (`azureResources`).",
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "cloud_applications": {
+          "description": "Cloud applications (cloudApplications).",
+          "items": {
+            "$ref": "#/$defs/DefenderCloudApplicationMapping"
+          },
+          "markdownDescription": "Cloud applications (`cloudApplications`).",
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "dns": {
+          "description": "DNS resolutions (dns).",
+          "items": {
+            "$ref": "#/$defs/DefenderDnsMapping"
+          },
+          "markdownDescription": "DNS resolutions (`dns`).",
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "files": {
+          "description": "Files (files).",
+          "items": {
+            "$ref": "#/$defs/DefenderFileMapping"
+          },
+          "markdownDescription": "Files (`files`).",
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "google_cloud_resources": {
+          "description": "Google Cloud resources (googleCloudResources).",
+          "items": {
+            "$ref": "#/$defs/DefenderGoogleCloudResourceMapping"
+          },
+          "markdownDescription": "Google Cloud resources (`googleCloudResources`).",
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "hosts": {
+          "description": "Devices (hosts).",
+          "items": {
+            "$ref": "#/$defs/DefenderHostMapping"
+          },
+          "markdownDescription": "Devices (`hosts`).",
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "ips": {
+          "description": "IP addresses (ips).",
+          "items": {
+            "$ref": "#/$defs/DefenderIpMapping"
+          },
+          "markdownDescription": "IP addresses (`ips`).",
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "mail_clusters": {
+          "description": "Mail clusters (mailClusters).",
+          "items": {
+            "$ref": "#/$defs/DefenderMailClusterMapping"
+          },
+          "markdownDescription": "Mail clusters (`mailClusters`).",
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "mail_messages": {
+          "description": "Mail messages (mailMessages).",
+          "items": {
+            "$ref": "#/$defs/DefenderMailMessageMapping"
+          },
+          "markdownDescription": "Mail messages (`mailMessages`).",
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "mailboxes": {
+          "description": "Mailboxes (mailboxes).",
+          "items": {
+            "$ref": "#/$defs/DefenderMailboxMapping"
+          },
+          "markdownDescription": "Mailboxes (`mailboxes`).",
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "oauth_applications": {
+          "description": "OAuth applications (oAuthApplications).",
+          "items": {
+            "$ref": "#/$defs/DefenderOAuthApplicationMapping"
+          },
+          "markdownDescription": "OAuth applications (`oAuthApplications`).",
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "processes": {
+          "description": "Processes (processes).",
+          "items": {
+            "$ref": "#/$defs/DefenderProcessMapping"
+          },
+          "markdownDescription": "Processes (`processes`).",
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "registry_values": {
+          "description": "Registry values (registryValues).",
+          "items": {
+            "$ref": "#/$defs/DefenderRegistryValueMapping"
+          },
+          "markdownDescription": "Registry values (`registryValues`).",
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "security_groups": {
+          "description": "Security groups (securityGroups).",
+          "items": {
+            "$ref": "#/$defs/DefenderSecurityGroupMapping"
+          },
+          "markdownDescription": "Security groups (`securityGroups`).",
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "urls": {
+          "description": "URLs (urls).",
+          "items": {
+            "$ref": "#/$defs/DefenderUrlMapping"
+          },
+          "markdownDescription": "URLs (`urls`).",
+          "type": [
+            "array",
+            "null"
+          ]
         }
       },
       "type": "object"
@@ -966,22 +1350,28 @@
       ],
       "type": "object"
     },
-    "DefenderFileActions": {
+    "DefenderFileMapping": {
       "additionalProperties": false,
       "properties": {
-        "allow_block": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/DefenderAllowBlockAction"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Allow or block a file identifier."
+        "name": {
+          "description": "Column holding the file name (nameColumn).",
+          "markdownDescription": "Column holding the file name (`nameColumn`).",
+          "type": [
+            "string",
+            "null"
+          ]
         },
-        "quarantine_file": {
-          "description": "Column identifying the file to quarantine.",
+        "sha1": {
+          "description": "Column holding the SHA-1 (sha1Column).",
+          "markdownDescription": "Column holding the SHA-1 (`sha1Column`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sha256": {
+          "description": "Column holding the SHA-256 (sha256Column).",
+          "markdownDescription": "Column holding the SHA-256 (`sha256Column`).",
           "type": [
             "string",
             "null"
@@ -990,54 +1380,127 @@
       },
       "type": "object"
     },
-    "DefenderGroupScoping": {
+    "DefenderFileTarget": {
       "additionalProperties": false,
       "properties": {
         "device_groups": {
-          "description": "Group names. Used when selection is Specific.",
+          "description": "Device group names the action applies to (deviceGroupNames). Omitted: every device group.",
           "items": {
             "type": "string"
           },
-          "markdownDescription": "Group names. Used when `selection` is `Specific`.",
+          "markdownDescription": "Device group names the action applies to (`deviceGroupNames`). Omitted: every device group.",
           "type": [
             "array",
             "null"
           ]
         },
-        "selection": {
-          "description": "All or Specific.",
-          "enum": [
-            "All",
-            "Specific"
-          ],
-          "markdownDescription": "`All` or `Specific`.",
-          "type": "string"
+        "sha1": {
+          "description": "Column holding the file's SHA-1 (sha1Column).",
+          "markdownDescription": "Column holding the file's SHA-1 (`sha1Column`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sha256": {
+          "description": "Column holding the file's SHA-256 (sha256Column).",
+          "markdownDescription": "Column holding the file's SHA-256 (`sha256Column`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "DefenderGoogleCloudResourceMapping": {
+      "additionalProperties": false,
+      "properties": {
+        "full_resource_name": {
+          "description": "Column holding the full resource name (fullResourceNameColumn).",
+          "markdownDescription": "Column holding the full resource name (`fullResourceNameColumn`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "DefenderHostMapping": {
+      "additionalProperties": false,
+      "properties": {
+        "device_id": {
+          "description": "Column holding the device id (deviceIdColumn).",
+          "markdownDescription": "Column holding the device id (`deviceIdColumn`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "dns_domain": {
+          "description": "Column holding the DNS domain (dnsDomainColumn).",
+          "markdownDescription": "Column holding the DNS domain (`dnsDomainColumn`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "description": "Column holding the device name (nameColumn).",
+          "markdownDescription": "Column holding the device name (`nameColumn`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "netbios_name": {
+          "description": "Column holding the NetBIOS name (netBiosNameColumn).",
+          "markdownDescription": "Column holding the NetBIOS name (`netBiosNameColumn`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "nt_domain": {
+          "description": "Column holding the NT domain (ntDomainColumn).",
+          "markdownDescription": "Column holding the NT domain (`ntDomainColumn`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "DefenderIncident": {
+      "additionalProperties": false,
+      "properties": {
+        "exclude_from_correlation": {
+          "description": "true: each alert opens its own single-alert incident. false: alerts may be correlated with related alerts (Defender's default).",
+          "markdownDescription": "`true`: each alert opens its own single-alert incident. `false`: alerts may be correlated\nwith related alerts (Defender's default).",
+          "type": "boolean"
         }
       },
       "required": [
-        "selection"
+        "exclude_from_correlation"
       ],
       "type": "object"
     },
-    "DefenderImpactedEntities": {
+    "DefenderIpMapping": {
       "additionalProperties": false,
       "properties": {
-        "device": {
-          "description": "Device column.",
+        "address": {
+          "description": "Column holding the address (addressColumn).",
+          "markdownDescription": "Column holding the address (`addressColumn`).",
           "type": [
             "string",
             "null"
           ]
         },
-        "mailbox": {
-          "description": "Mailbox column.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "user": {
-          "description": "User column.",
+        "scope": {
+          "description": "Column holding the address's scope (scopeColumn).",
+          "markdownDescription": "Column holding the address's scope (`scopeColumn`).",
           "type": [
             "string",
             "null"
@@ -1046,64 +1509,264 @@
       },
       "type": "object"
     },
-    "DefenderResponseActions": {
+    "DefenderIsolationTarget": {
       "additionalProperties": false,
       "properties": {
-        "devices": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/DefenderDeviceActions"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Device actions: isolate, collect an investigation package, scan, investigate or restrict app execution."
+        "device_id": {
+          "description": "Column holding the device id (deviceIdColumn).",
+          "markdownDescription": "Column holding the device id (`deviceIdColumn`).",
+          "type": [
+            "string",
+            "null"
+          ]
         },
-        "files": {
+        "isolation_type": {
           "anyOf": [
             {
-              "$ref": "#/$defs/DefenderFileActions"
+              "enum": [
+                "full",
+                "selective"
+              ],
+              "type": "string"
             },
             {
               "type": "null"
             }
           ],
-          "description": "File actions: allow or block, and quarantine."
-        },
-        "users": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/DefenderUserActions"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "User actions: mark as compromised, disable, or force a password reset."
+          "description": "full or selective (isolationType).",
+          "markdownDescription": "`full` or `selective` (`isolationType`)."
         }
       },
       "type": "object"
     },
-    "DefenderUserActions": {
+    "DefenderMailClusterMapping": {
       "additionalProperties": false,
       "properties": {
-        "disable_user": {
-          "description": "User column.",
+        "query": {
+          "description": "Column holding the cluster's query (queryColumn).",
+          "markdownDescription": "Column holding the cluster's query (`queryColumn`).",
           "type": [
             "string",
             "null"
           ]
         },
-        "force_password_reset": {
-          "description": "User column.",
+        "source": {
+          "description": "Column holding the cluster's source (sourceColumn).",
+          "markdownDescription": "Column holding the cluster's source (`sourceColumn`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "DefenderMailMessageMapping": {
+      "additionalProperties": false,
+      "properties": {
+        "network_message_id": {
+          "description": "Column holding the network message id (networkMessageIdColumn).",
+          "markdownDescription": "Column holding the network message id (`networkMessageIdColumn`).",
           "type": [
             "string",
             "null"
           ]
         },
-        "mark_as_compromised": {
-          "description": "User column.",
+        "recipient": {
+          "description": "Column holding the recipient (recipientColumn).",
+          "markdownDescription": "Column holding the recipient (`recipientColumn`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sender": {
+          "description": "Column holding the sender (senderColumn).",
+          "markdownDescription": "Column holding the sender (`senderColumn`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "subject": {
+          "description": "Column holding the subject (subjectColumn).",
+          "markdownDescription": "Column holding the subject (`subjectColumn`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "DefenderMailboxMapping": {
+      "additionalProperties": false,
+      "properties": {
+        "primary_address": {
+          "description": "Column holding the primary address (primaryAddressColumn).",
+          "markdownDescription": "Column holding the primary address (`primaryAddressColumn`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "DefenderOAuthApplicationMapping": {
+      "additionalProperties": false,
+      "properties": {
+        "oauth_app_id": {
+          "description": "Column holding the OAuth application id (oAuthAppIdColumn).",
+          "markdownDescription": "Column holding the OAuth application id (`oAuthAppIdColumn`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "DefenderProcessMapping": {
+      "additionalProperties": false,
+      "properties": {
+        "sha1": {
+          "description": "Column holding the image's SHA-1 (sha1Column).",
+          "markdownDescription": "Column holding the image's SHA-1 (`sha1Column`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sha256": {
+          "description": "Column holding the image's SHA-256 (sha256Column).",
+          "markdownDescription": "Column holding the image's SHA-256 (`sha256Column`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "DefenderQuarantineTarget": {
+      "additionalProperties": false,
+      "properties": {
+        "device_id": {
+          "description": "Column holding the device id (deviceIdColumn).",
+          "markdownDescription": "Column holding the device id (`deviceIdColumn`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sha1": {
+          "description": "Column holding the file's SHA-1 (sha1Column).",
+          "markdownDescription": "Column holding the file's SHA-1 (`sha1Column`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "DefenderRegistryValueMapping": {
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "description": "Column holding the registry key (keyColumn).",
+          "markdownDescription": "Column holding the registry key (`keyColumn`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "value_name": {
+          "description": "Column holding the value name (valueNameColumn).",
+          "markdownDescription": "Column holding the value name (`valueNameColumn`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "DefenderSchedule": {
+      "additionalProperties": false,
+      "properties": {
+        "frequency": {
+          "description": "NRT, <n>H, or <n>D, n a positive integer without a leading zero.",
+          "markdownDescription": "`NRT`, `<n>H`, or `<n>D`, `n` a positive integer without a leading zero.",
+          "type": "string"
+        },
+        "lookback": {
+          "description": "Beta-only. <n>H or <n>D. Omitted, Defender derives the lookback from the frequency.",
+          "markdownDescription": "**Beta-only.** `<n>H` or `<n>D`. Omitted, Defender derives the lookback from the frequency.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "frequency"
+      ],
+      "type": "object"
+    },
+    "DefenderScope": {
+      "additionalProperties": false,
+      "properties": {
+        "device_groups": {
+          "description": "Device group names.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "device_groups"
+      ],
+      "type": "object"
+    },
+    "DefenderSecurityGroupMapping": {
+      "additionalProperties": false,
+      "properties": {
+        "distinguished_name": {
+          "description": "Column holding the distinguished name (distinguishedNameColumn).",
+          "markdownDescription": "Column holding the distinguished name (`distinguishedNameColumn`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "object_id": {
+          "description": "Column holding the group's object id (objectIdColumn).",
+          "markdownDescription": "Column holding the group's object id (`objectIdColumn`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sid": {
+          "description": "Column holding the group's SID (sidColumn).",
+          "markdownDescription": "Column holding the group's SID (`sidColumn`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "DefenderUrlMapping": {
+      "additionalProperties": false,
+      "properties": {
+        "address": {
+          "description": "Column holding the URL (addressColumn).",
+          "markdownDescription": "Column holding the URL (`addressColumn`).",
           "type": [
             "string",
             "null"
@@ -3602,6 +4265,146 @@
         }
       ]
     },
+    "MicrosoftDefenderConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "actions": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DefenderActions"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Automated actions run on the entities a detection finds."
+        },
+        "alert": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DefenderAlert"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The alert template. Every field has a deploy-time default."
+        },
+        "contributors": {
+          "description": "Platform contributors.",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "enabled": {
+          "default": false,
+          "description": "Whether this platform block is active.",
+          "type": "boolean"
+        },
+        "entities": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DefenderEntities"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Result columns mapped to the alert's entities."
+        },
+        "exclusions": {
+          "description": "Per-tenant KQL fragments appended to query.",
+          "items": {
+            "$ref": "#/$defs/DefenderExclusion"
+          },
+          "markdownDescription": "Per-tenant KQL fragments appended to `query`.",
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "flags": {
+          "description": "Platform flags.",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "incident": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DefenderIncident"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Beta-only. Incident correlation.",
+          "markdownDescription": "**Beta-only.** Incident correlation."
+        },
+        "name": {
+          "default": "",
+          "description": "Platform-specific rule name.",
+          "type": "string"
+        },
+        "query": {
+          "description": "KQL. Multiline. Compiled with matching exclusions before deploy.",
+          "markdownDescription": "KQL. Multiline. Compiled with matching `exclusions` before deploy.",
+          "type": "string"
+        },
+        "schedule": {
+          "$ref": "#/$defs/DefenderSchedule",
+          "description": "How often the rule runs, and how far back each run reads."
+        },
+        "schema": {
+          "description": "Platform schema identifier, for example platform::sentinel::1.0.",
+          "markdownDescription": "Platform schema identifier, for example `platform::sentinel::1.0`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "scope": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DefenderScope"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Device groups the rule applies to. Omitted: every device."
+        },
+        "status": {
+          "description": "Deployment status of this platform block, from the statuses in deployment.toml. Required: the deploy planner selects on it.",
+          "markdownDescription": "Deployment status of this platform block, from the statuses in `deployment.toml`. Required:\nthe deploy planner selects on it.",
+          "type": "string"
+        },
+        "tenants": {
+          "description": "Target tenant identifiers.",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "status",
+        "query",
+        "schedule"
+      ],
+      "type": "object"
+    },
     "ObjectReferences": {
       "additionalProperties": false,
       "properties": {
@@ -3840,7 +4643,7 @@
         "microsoft_defender": {
           "anyOf": [
             {
-              "$ref": "#/$defs/DefenderConfig"
+              "$ref": "#/$defs/MicrosoftDefenderConfig"
             },
             {
               "type": "null"

@@ -2054,7 +2054,8 @@ fn answered(
     found: LiveCheck,
 ) -> RuleCheck {
     if platform == "microsoft_defender" && !found.errors.is_empty() {
-        let mut tables = opentide_connectors::defender::defender_xdr_tables_in_query(text);
+        let mut tables =
+            opentide_connectors::microsoft_defender::defender_xdr_tables_in_query(text);
         tables.sort();
         tables.dedup();
         let tables = if tables.is_empty() {

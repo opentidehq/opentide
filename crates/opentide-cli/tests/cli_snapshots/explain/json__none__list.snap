@@ -1313,6 +1313,70 @@ exit: 0
       "meaning": "An object has no `metadata.author` or `metadata.organisation`."
     },
     {
+      "code": "microsoft_defender_action_kind",
+      "meaning": "A key of a Microsoft Defender block's `actions` is not an automated action."
+    },
+    {
+      "code": "microsoft_defender_action_target",
+      "meaning": "A Microsoft Defender automated action has no target, or a target is empty or names a field its action does not take."
+    },
+    {
+      "code": "microsoft_defender_column",
+      "meaning": "A Microsoft Defender column name is blank or not a string."
+    },
+    {
+      "code": "microsoft_defender_custom_details",
+      "meaning": "A Microsoft Defender block's `alert.custom_details` is not a mapping of non-blank names to result columns."
+    },
+    {
+      "code": "microsoft_defender_entity_kind",
+      "meaning": "A key of a Microsoft Defender block's `entities` is not an entity kind."
+    },
+    {
+      "code": "microsoft_defender_entity_mapping",
+      "meaning": "A Microsoft Defender entity mapping is empty, is not a mapping, or names a field its kind does not have."
+    },
+    {
+      "code": "microsoft_defender_frequency",
+      "meaning": "A Microsoft Defender block's `schedule.frequency` is not `NRT`, `<n>H` or `<n>D`."
+    },
+    {
+      "code": "microsoft_defender_grouping",
+      "meaning": "A Microsoft Defender block's `alert.grouping` is not `alert_per_event` or `single_alert`."
+    },
+    {
+      "code": "microsoft_defender_incident",
+      "meaning": "A Microsoft Defender block's `incident` is not `{exclude_from_correlation: true|false}`."
+    },
+    {
+      "code": "microsoft_defender_isolation_type",
+      "meaning": "A Microsoft Defender `isolate_devices` target's `isolation_type` is not `full` or `selective`."
+    },
+    {
+      "code": "microsoft_defender_lookback",
+      "meaning": "A Microsoft Defender block's `schedule.lookback` is not a duration, is set on a near-real-time rule, or is shorter than its frequency."
+    },
+    {
+      "code": "microsoft_defender_no_entities",
+      "meaning": "A Microsoft Defender block maps no entity."
+    },
+    {
+      "code": "microsoft_defender_rule_absent",
+      "meaning": "A Microsoft Defender rule to disable is not on the tenant, so nothing was disabled or created."
+    },
+    {
+      "code": "microsoft_defender_schema",
+      "meaning": "A Microsoft Defender block's `schema` names another schema."
+    },
+    {
+      "code": "microsoft_defender_scope",
+      "meaning": "A Microsoft Defender block's `scope` is not a non-empty list of device group names."
+    },
+    {
+      "code": "microsoft_defender_severity",
+      "meaning": "A Microsoft Defender block's `alert.severity` is not one of opentide's five severities."
+    },
+    {
       "code": "missing_author",
       "meaning": "Retired in opentide 0.24.0; `opentide lint` reports a missing recommended metadata field as `metadata_recommended`."
     },
@@ -1913,13 +1977,13 @@ exit: 0
   "duration_ms": 0,
   "exit_code": 0,
   "failure": null,
-  "message": "475 diagnostic codes",
+  "message": "491 diagnostic codes",
   "next_actions": [],
   "ok": true,
   "schema_version": 1,
   "status": "completed",
   "summary": {
-    "codes": 475
+    "codes": 491
   }
 }
 

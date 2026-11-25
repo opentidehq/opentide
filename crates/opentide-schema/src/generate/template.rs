@@ -6,7 +6,7 @@
 //! not commented again. Hidden fields (`tide.template.hide`) and paths are
 //! left out; `tide.template.required` overrides whether a field is required;
 //! `tide.template.spacer` puts a blank line before a field;
-//! `tide.template.multiline` (and the names `description`, `query`,
+//! `tide.template.multiline` (or, when a field does not set it, the names `description`, `query`,
 //! `analysis` and `sighting`) render `key: |` with `...` under it. Placeholders
 //! are typed (`YYYY-MM-DD`, `https://`, `3`, `false`), never YAML `null`.
 
@@ -335,7 +335,13 @@ impl<'s> Walker<'s> {
             Core::List(items) => self.list(model, key, property, items, indent, state, depth),
             Core::Dict(values) => self.dict(model, key, values, indent, state, depth),
             Core::Scalar(schema, literal) => {
-                if flag(property, keys::TEMPLATE_MULTILINE) || MULTILINE_NAMES.contains(&key) {
+                // `tide.template.multiline` decides when the field sets it
+                // (`false` for a column named `query`); the names otherwise.
+                let multiline = property
+                    .get(keys::TEMPLATE_MULTILINE)
+                    .and_then(Value::as_bool)
+                    .unwrap_or_else(|| MULTILINE_NAMES.contains(&key));
+                if multiline {
                     return Ok(vec![format!("{pad}{key}: |"), format!("{pad}  ...")]);
                 }
                 let placeholder = scalar_placeholder(

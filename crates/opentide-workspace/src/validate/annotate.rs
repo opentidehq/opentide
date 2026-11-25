@@ -69,21 +69,6 @@ fn is_root_composition(diagnostic: &Diagnostic) -> bool {
             .starts_with(opentide_schema::from_node::messages::EXTRA_FORBIDDEN)
 }
 
-/// What to do with a Defender block's `alert.category`, which Microsoft Graph removed
-/// (deprecated in favour of `tactics`, removal dated 2026-10-01).
-const DEFENDER_ALERT_CATEGORY_HELP: &str = "Microsoft removed `category` from the Graph custom \
-    detection's alert template (it was deprecated in favour of the MITRE `tactics`); delete the key";
-
-/// A Defender block's `configurations.microsoft_defender.alert.category`: an unknown key
-/// since Microsoft removed the field.
-fn is_defender_alert_category(diagnostic: &Diagnostic) -> bool {
-    diagnostic.code == "schema_validation"
-        && diagnostic.field_path == ["configurations", "microsoft_defender", "alert", "category"]
-        && diagnostic
-            .message
-            .starts_with(opentide_schema::from_node::messages::EXTRA_FORBIDDEN)
-}
-
 /// `yaml_parse` problems that are not syntax: the indentation hint would
 /// mislead.
 const YAML_PARSE_HELP: [(&str, &str); 7] = [
@@ -581,8 +566,6 @@ fn annotate_one(
         help = Some(format!("write {expected}"));
     } else if help.is_none() && is_root_composition(diagnostic) {
         help = Some(ROOT_COMPOSITION_HELP.to_owned());
-    } else if help.is_none() && is_defender_alert_category(diagnostic) {
-        help = Some(DEFENDER_ALERT_CATEGORY_HELP.to_owned());
     } else if help.is_none() {
         help = default_help(&diagnostic.code).map(str::to_owned);
     }

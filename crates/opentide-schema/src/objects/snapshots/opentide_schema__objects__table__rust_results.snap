@@ -99,14 +99,17 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
             "title": "Defender KQL Rule"
           },
           "enabled": true,
-          "impacted_entities": {
-            "device": "device_id"
+          "entities": {
+            "hosts": [
+              {
+                "device_id": "device_id"
+              }
+            ]
           },
           "name": "Defender KQL Rule",
           "query": "DeviceProcessEvents\n| take 1\n",
-          "scheduling": "1H",
-          "scope": {
-            "selection": "All"
+          "schedule": {
+            "frequency": "1H"
           },
           "status": "STAGING"
         }

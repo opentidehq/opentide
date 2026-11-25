@@ -43,7 +43,7 @@ exit: 1
   "message": "Validation failed",
   "next_actions": [
     {
-      "command": "opentide --json explain schema_validation",
+      "command": "opentide --json explain microsoft_defender_severity",
       "reason": "how to fix it"
     },
     {
@@ -55,14 +55,12 @@ exit: 1
   "report": {
     "issues": [
       {
-        "code": "schema_validation",
+        "code": "microsoft_defender_severity",
         "column": 17,
-        "context": {
-          "expected": "Informational, Low, Medium, High or Critical"
-        },
+        "context": {},
         "end_column": 23,
-        "end_line": 33,
-        "explain": "opentide explain schema_validation",
+        "end_line": 34,
+        "explain": "opentide explain microsoft_defender_severity",
         "field_path": [
           "configurations",
           "microsoft_defender",
@@ -71,15 +69,15 @@ exit: 1
         ],
         "file_path": "<WS>/Objects/Detection Rules/rule-0002-defender-kql.yaml",
         "fix": null,
-        "help": "write Informational, Low, Medium, High or Critical",
-        "line": 33,
-        "message": "deploy takes Informational, Low, Medium, High or Critical (exact case), not \"Severe\"",
+        "help": null,
+        "line": 34,
+        "message": "alert.severity \"Severe\" is not Informational, Low, Medium, High or Critical (exact case)",
         "object_type": "rule",
         "object_uuid": "00000000-0000-4000-8003-000000000002",
         "path": "Objects/Detection Rules/rule-0002-defender-kql.yaml",
         "severity": "error",
         "suggestion": null,
-        "yaml_line": 32
+        "yaml_line": 33
       },
       {
         "code": "schema_validation",

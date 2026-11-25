@@ -5,7 +5,7 @@
 //! - [`sentinel`], [`elastic`], [`sysdig`]: the request bodies of the platforms whose body
 //!   is built from the rule alone (`compile_offline`), byte for byte the
 //!   oracle's ([`json::Json`] keeps the order keys are built in).
-//! - [`defender`], [`splunk`], [`sentinel_one`], [`crowdstrike`],
+//! - [`microsoft_defender`], [`splunk`], [`sentinel_one`], [`crowdstrike`],
 //!   [`harfanglab`], [`carbon_black`]: the writes a deployer sends for a rule
 //!   to one tenant, built from the tenant and the deployment state
 //!   ([`deploy`]: create, update or delete).
@@ -26,7 +26,6 @@ pub mod bitdefender;
 pub mod carbon_black;
 pub mod ci;
 pub mod crowdstrike;
-pub mod defender;
 pub mod deploy;
 pub mod dry_run;
 pub mod duration;
@@ -39,6 +38,7 @@ pub mod graylog;
 pub mod harfanglab;
 pub mod json;
 pub mod kql;
+pub mod microsoft_defender;
 pub mod modifiers;
 pub mod plan;
 pub mod preview;

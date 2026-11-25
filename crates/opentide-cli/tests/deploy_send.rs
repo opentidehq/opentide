@@ -1326,38 +1326,6 @@ fn crowdstrike_stops_on_a_delete_the_tenant_refuses() {
 }
 
 #[test]
-fn defender_deletes_a_recorded_rule_and_forgets_its_id() {
-    let uuid = "00000000-0000-4000-8099-000000000071";
-    let block = "  microsoft_defender:\n    status: REMOVED\n    query: |\n      DeviceProcessEvents\n      \
-         | take 1\n    scheduling: 1H\n    alert:\n      description: Alert.\n    impacted_entities:\n      \
-         device: device_id\n"
-        .to_owned();
-    let ws = stated(
-        "microsoft_defender",
-        "tenant_id = \"contoso-tenant-id\"\nclient_id = \"opentide-app-id\"\nclient_secret = \
-         \"$DEFENDER_CLIENT_SECRET\"\n",
-        &[("a.yaml", uuid, block, "42")],
-    );
-    // The sign-in, then the DELETE Graph answers 204.
-    let (proxy, env, _ca) = replay("defender/deploy", &[0, 5], "DEFENDER_CLIENT_SECRET");
-    let (sent, stderr) = deploy(
-        ws.path(),
-        "microsoft_defender",
-        &env,
-        &opentide_connectors::builtin(),
-        0,
-    );
-    assert_eq!(proxy.verify(), Vec::new());
-    assert_eq!(rows(&sent), [("deployed".to_owned(), None)]);
-    assert!(stderr.contains("✓ deleted   Recorded rule"), "{stderr}");
-    assert!(
-        !ws.path()
-            .join(format!(".opentide/states/deployment/{uuid}.json"))
-            .exists()
-    );
-}
-
-#[test]
 fn sysdig_forgets_a_rule_to_disable_the_tenant_lost_and_stops_on_a_refused_read() {
     let block = |status: &str| {
         format!(
@@ -3960,7 +3928,7 @@ fn first_request_cases() -> Vec<Case> {
             |credential, _| {
                 format!("tenant_id = \"t\"\nclient_id = \"c\"\nclient_secret = \"{credential}\"\n")
             },
-            fixture("defender-a-create.yaml"),
+            fixture("microsoft-defender-a-create.yaml"),
         ),
         (
             "splunk",
@@ -4853,17 +4821,35 @@ fn a_defender_dry_run_shows_the_requests_the_tenant_receives() {
         "golden/deploy-defender-continues",
         "DEFENDER_CLIENT_SECRET",
     );
-    // A create, an update of the recorded id, a delete of the other.
+    // Defender's dry run shows each rule's first request: the PATCH of its
+    // uuid (an upsert or a disablement), or the DELETE of a deletion. What
+    // follows on the tenant's answer (a POST after a 404, one more PATCH
+    // after a 409) is not planned, so each planned write is the first
+    // request the tenant received at its URL.
     let at = |write: &Json, key: &str| write.get(key).cloned().unwrap_or(Json::Null);
     assert_eq!(
         planned
             .iter()
             .map(|write| at(write, "method"))
             .collect::<Vec<_>>(),
-        ["POST", "PATCH", "DELETE"].map(Json::str)
+        ["PATCH", "PATCH", "PATCH", "PATCH", "DELETE", "PATCH"].map(Json::str)
     );
-    assert_eq!(at(&at(&planned[0], "body"), "isEnabled"), Json::Bool(true));
-    assert_sent_as_planned(&planned, &received, 0);
+    for write in &planned {
+        let shown = write.to_compact();
+        let text = |key: &str| write.get(key).and_then(Json::as_str).unwrap_or_default();
+        let Some((method, _, body)) = received
+            .iter()
+            .find(|(_, url, _)| same_url(text("url"), url))
+        else {
+            panic!("the tenant never received {shown}")
+        };
+        assert_eq!(text("method"), method.as_str(), "{shown}");
+        assert!(
+            same_body(write.get("body").unwrap_or(&Json::Null), body, 0),
+            "{shown}\nreceived: {}",
+            String::from_utf8_lossy(body)
+        );
+    }
 }
 
 #[test]

@@ -10,7 +10,7 @@
 
 from typing import Any, Final, SupportsIndex, final
 
-__all__ = ["ValidationError", "BitdefenderActions", "BitdefenderConfig", "BitdefenderCriterion", "BitdefenderDetection", "BitdefenderProcessScope", "BitdefenderTargets", "BitdefenderYara", "CarbonBlackConfig", "CrowdstrikeConfig", "CrowdstrikeDetails", "CrowdstrikeSchedule", "DefenderAlert", "DefenderAllowBlockAction", "DefenderAllowBlockGroupScoping", "DefenderConfig", "DefenderDeviceActions", "DefenderExclusion", "DefenderFileActions", "DefenderGroupScoping", "DefenderImpactedEntities", "DefenderResponseActions", "DefenderUserActions", "DeprecatedModelFields", "DetectionExample", "DetectionObjective", "DetectionRule", "DetectionRule_v1_1", "DetectionSignal", "ElasticActions", "ElasticCardinality", "ElasticConfig", "ElasticEql", "ElasticExceptionList", "ElasticExceptions", "ElasticFilter", "ElasticGuide", "ElasticIntegration", "ElasticMachineLearning", "ElasticNewTerms", "ElasticOverrides", "ElasticRequiredField", "ElasticRisk", "ElasticRiskScoreMapping", "ElasticScheduling", "ElasticSeverity", "ElasticSeverityMapping", "ElasticSuppression", "ElasticThreatEntry", "ElasticThreatGroup", "ElasticThreatMatch", "ElasticThreshold", "ElasticTimeline", "ExabeamConfig", "ExabeamCorrelation", "ExabeamEmail", "ExabeamRecurrence", "ExabeamSequence", "ExabeamSuppression", "ExabeamThreshold", "ExternalDetector", "GoogleSecopsConfig", "GoogleSecopsMatch", "GoogleSecopsOptions", "GoogleSecopsSchedule", "GraylogAggregation", "GraylogConfig", "GraylogEventLookup", "GraylogEventTemplate", "GraylogLookupTable", "GraylogSchedule", "HarfangLabConfig", "HarfangLabSigma", "HarfangLabSigmaLogSource", "HarfangLabSigmaSelection", "HarfangLabYara", "HarfangLabYaraMeta", "ObjectMetadata", "ObjectReferences", "ObjectiveBody", "ObjectiveComposition", "Organisation", "ResponseProcedure", "ResponseSearch", "RuleConfigurations", "RuleMetadata", "RuleResponse", "SentinelAlert", "SentinelAlertGrouping", "SentinelConfig", "SentinelCustomDetails", "SentinelDynamicProperties", "SentinelEntityMapping", "SentinelExclusion", "SentinelGrouping", "SentinelMappingEntry", "SentinelOneCondition", "SentinelOneConfig", "SentinelOneCorrelation", "SentinelOneDetails", "SentinelOneResponse", "SentinelOneSingleEvent", "SentinelOneSubQuery", "SentinelScheduling", "SentinelTemplate", "SentinelTrigger", "SignalData", "SplunkActions", "SplunkConfig", "SplunkEmail", "SplunkEmailInclude", "SplunkNotable", "SplunkNotableDrilldown", "SplunkNotableEvent", "SplunkRisk", "SplunkRiskObject", "SplunkSchedule", "SplunkScheduling", "SplunkThreatObject", "SplunkThrottling", "SplunkTimerange", "SplunkTrigger", "SysdigConfig", "SysdigException", "SysdigList", "SysdigMacro", "ThreatActor", "ThreatBody", "ThreatVector"]
+__all__ = ["ValidationError", "BitdefenderActions", "BitdefenderConfig", "BitdefenderCriterion", "BitdefenderDetection", "BitdefenderProcessScope", "BitdefenderTargets", "BitdefenderYara", "CarbonBlackConfig", "CrowdstrikeConfig", "CrowdstrikeDetails", "CrowdstrikeSchedule", "DefenderAccountMapping", "DefenderAccountObjectTarget", "DefenderAccountSidTarget", "DefenderActions", "DefenderAlert", "DefenderAmazonResourceMapping", "DefenderAzureResourceMapping", "DefenderCloudApplicationMapping", "DefenderDeviceTarget", "DefenderDnsMapping", "DefenderEmailTarget", "DefenderEntities", "DefenderExclusion", "DefenderFileMapping", "DefenderFileTarget", "DefenderGoogleCloudResourceMapping", "DefenderHostMapping", "DefenderIncident", "DefenderIpMapping", "DefenderIsolationTarget", "DefenderMailClusterMapping", "DefenderMailMessageMapping", "DefenderMailboxMapping", "DefenderOAuthApplicationMapping", "DefenderProcessMapping", "DefenderQuarantineTarget", "DefenderRegistryValueMapping", "DefenderSchedule", "DefenderScope", "DefenderSecurityGroupMapping", "DefenderUrlMapping", "DeprecatedModelFields", "DetectionExample", "DetectionObjective", "DetectionRule", "DetectionRule_v1_1", "DetectionSignal", "ElasticActions", "ElasticCardinality", "ElasticConfig", "ElasticEql", "ElasticExceptionList", "ElasticExceptions", "ElasticFilter", "ElasticGuide", "ElasticIntegration", "ElasticMachineLearning", "ElasticNewTerms", "ElasticOverrides", "ElasticRequiredField", "ElasticRisk", "ElasticRiskScoreMapping", "ElasticScheduling", "ElasticSeverity", "ElasticSeverityMapping", "ElasticSuppression", "ElasticThreatEntry", "ElasticThreatGroup", "ElasticThreatMatch", "ElasticThreshold", "ElasticTimeline", "ExabeamConfig", "ExabeamCorrelation", "ExabeamEmail", "ExabeamRecurrence", "ExabeamSequence", "ExabeamSuppression", "ExabeamThreshold", "ExternalDetector", "GoogleSecopsConfig", "GoogleSecopsMatch", "GoogleSecopsOptions", "GoogleSecopsSchedule", "GraylogAggregation", "GraylogConfig", "GraylogEventLookup", "GraylogEventTemplate", "GraylogLookupTable", "GraylogSchedule", "HarfangLabConfig", "HarfangLabSigma", "HarfangLabSigmaLogSource", "HarfangLabSigmaSelection", "HarfangLabYara", "HarfangLabYaraMeta", "MicrosoftDefenderConfig", "ObjectMetadata", "ObjectReferences", "ObjectiveBody", "ObjectiveComposition", "Organisation", "ResponseProcedure", "ResponseSearch", "RuleConfigurations", "RuleMetadata", "RuleResponse", "SentinelAlert", "SentinelAlertGrouping", "SentinelConfig", "SentinelCustomDetails", "SentinelDynamicProperties", "SentinelEntityMapping", "SentinelExclusion", "SentinelGrouping", "SentinelMappingEntry", "SentinelOneCondition", "SentinelOneConfig", "SentinelOneCorrelation", "SentinelOneDetails", "SentinelOneResponse", "SentinelOneSingleEvent", "SentinelOneSubQuery", "SentinelScheduling", "SentinelTemplate", "SentinelTrigger", "SignalData", "SplunkActions", "SplunkConfig", "SplunkEmail", "SplunkEmailInclude", "SplunkNotable", "SplunkNotableDrilldown", "SplunkNotableEvent", "SplunkRisk", "SplunkRiskObject", "SplunkSchedule", "SplunkScheduling", "SplunkThreatObject", "SplunkThrottling", "SplunkTimerange", "SplunkTrigger", "SysdigConfig", "SysdigException", "SysdigList", "SysdigMacro", "ThreatActor", "ThreatBody", "ThreatVector"]
 
 ValidationError: Final[type[ValueError]]
 """
@@ -1184,9 +1184,10 @@ class CrowdstrikeSchedule:
         """
 
 @final
-class DefenderAlert:
+class DefenderAccountMapping:
     """
-    Custom detection alert template (`DefenderAlert`).
+    A user account: `alertTemplate.entityMappings.accounts`
+    (`DefenderAccountMapping`).
     """
     __tide_fields__: Final[list[tuple[str, str]]]
     """
@@ -1203,9 +1204,434 @@ class DefenderAlert:
     def __reduce__(self, /) -> tuple[Any, tuple[dict]]: ...
     def __repr__(self, /) -> str: ...
     @property
+    def aad_user_id(self, /) -> str | None:
+        """
+        Column holding the Microsoft Entra object id (`aadUserIdColumn`).
+        """
+    @property
+    def dns_domain(self, /) -> str | None:
+        """
+        Column holding the DNS domain (`dnsDomainColumn`).
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> DefenderAccountMapping:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
+    def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> DefenderAccountMapping:
+        """
+        A copy, with `update`'s fields replaced; the result is
+        validated. Models are frozen, so `deep` changes nothing.
+        """
+    def model_dump(self, /, *, mode: str = "python", by_alias: bool = False, exclude_none: bool = False) -> dict:
+        """
+        The fields as a dict: attribute names (`by_alias`: the
+        serialised ones), nested models as dicts. `mode` is
+        `"python"` or `"json"`, which give the same values.
+        """
+    def model_dump_json(self, /, *, by_alias: bool = False, exclude_none: bool = False, indent: SupportsIndex | None = None) -> str:
+        """
+        `model_dump` as JSON text, non-ASCII characters as they are.
+        """
+    @classmethod
+    def model_json_schema(cls, /, by_alias: bool = True, mode: str = "validation") -> dict:
+        """
+        The model's JSON Schema, the fields under their serialised
+        names (`by_alias=True` only); `mode` is `"validation"` or
+        `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
+        """
+    @classmethod
+    def model_validate(cls, /, obj: Any) -> DefenderAccountMapping:
+        """
+        Builds the model from a dict (or a model), checked; raises
+        `ValidationError` with every error.
+        """
+    @classmethod
+    def model_validate_json(cls, /, json_data: str) -> DefenderAccountMapping:
+        """
+        `model_validate` of a JSON document.
+        """
+    @property
+    def name(self, /) -> str | None:
+        """
+        Column holding the account name (`nameColumn`).
+        """
+    @property
+    def nt_domain(self, /) -> str | None:
+        """
+        Column holding the NT domain (`ntDomainColumn`).
+        """
+    @property
+    def sid(self, /) -> str | None:
+        """
+        Column holding the SID (`sidColumn`).
+        """
+    @property
+    def upn(self, /) -> str | None:
+        """
+        Column holding the user principal name (`upnColumn`).
+        """
+    @property
+    def upn_suffix(self, /) -> str | None:
+        """
+        Column holding the UPN suffix (`upnSuffixColumn`).
+        """
+
+@final
+class DefenderAccountObjectTarget:
+    """
+    A target of `mark_users_as_compromised` (`DefenderAccountObjectTarget`).
+    """
+    __tide_fields__: Final[list[tuple[str, str]]]
+    """
+    Each field's attribute and serialised name, in order.
+    """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
+    def __eq__(self, value: object, /) -> bool: ...
+    def __hash__(self, /) -> int: ...
+    def __ne__(self, value: object, /) -> bool: ...
+    def __reduce__(self, /) -> tuple[Any, tuple[dict]]: ...
+    def __repr__(self, /) -> str: ...
+    @property
+    def account_object_id(self, /) -> str | None:
+        """
+        Column holding the account's Microsoft Entra object id
+        (`accountObjectIdColumn`).
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> DefenderAccountObjectTarget:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
+    def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> DefenderAccountObjectTarget:
+        """
+        A copy, with `update`'s fields replaced; the result is
+        validated. Models are frozen, so `deep` changes nothing.
+        """
+    def model_dump(self, /, *, mode: str = "python", by_alias: bool = False, exclude_none: bool = False) -> dict:
+        """
+        The fields as a dict: attribute names (`by_alias`: the
+        serialised ones), nested models as dicts. `mode` is
+        `"python"` or `"json"`, which give the same values.
+        """
+    def model_dump_json(self, /, *, by_alias: bool = False, exclude_none: bool = False, indent: SupportsIndex | None = None) -> str:
+        """
+        `model_dump` as JSON text, non-ASCII characters as they are.
+        """
+    @classmethod
+    def model_json_schema(cls, /, by_alias: bool = True, mode: str = "validation") -> dict:
+        """
+        The model's JSON Schema, the fields under their serialised
+        names (`by_alias=True` only); `mode` is `"validation"` or
+        `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
+        """
+    @classmethod
+    def model_validate(cls, /, obj: Any) -> DefenderAccountObjectTarget:
+        """
+        Builds the model from a dict (or a model), checked; raises
+        `ValidationError` with every error.
+        """
+    @classmethod
+    def model_validate_json(cls, /, json_data: str) -> DefenderAccountObjectTarget:
+        """
+        `model_validate` of a JSON document.
+        """
+
+@final
+class DefenderAccountSidTarget:
+    """
+    A target of `disable_users` and `force_user_password_resets`
+    (`DefenderAccountSidTarget`).
+    """
+    __tide_fields__: Final[list[tuple[str, str]]]
+    """
+    Each field's attribute and serialised name, in order.
+    """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
+    def __eq__(self, value: object, /) -> bool: ...
+    def __hash__(self, /) -> int: ...
+    def __ne__(self, value: object, /) -> bool: ...
+    def __reduce__(self, /) -> tuple[Any, tuple[dict]]: ...
+    def __repr__(self, /) -> str: ...
+    @property
+    def account_sid(self, /) -> str | None:
+        """
+        Column holding the account's SID (`accountSidColumn`).
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> DefenderAccountSidTarget:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
+    def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> DefenderAccountSidTarget:
+        """
+        A copy, with `update`'s fields replaced; the result is
+        validated. Models are frozen, so `deep` changes nothing.
+        """
+    def model_dump(self, /, *, mode: str = "python", by_alias: bool = False, exclude_none: bool = False) -> dict:
+        """
+        The fields as a dict: attribute names (`by_alias`: the
+        serialised ones), nested models as dicts. `mode` is
+        `"python"` or `"json"`, which give the same values.
+        """
+    def model_dump_json(self, /, *, by_alias: bool = False, exclude_none: bool = False, indent: SupportsIndex | None = None) -> str:
+        """
+        `model_dump` as JSON text, non-ASCII characters as they are.
+        """
+    @classmethod
+    def model_json_schema(cls, /, by_alias: bool = True, mode: str = "validation") -> dict:
+        """
+        The model's JSON Schema, the fields under their serialised
+        names (`by_alias=True` only); `mode` is `"validation"` or
+        `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
+        """
+    @classmethod
+    def model_validate(cls, /, obj: Any) -> DefenderAccountSidTarget:
+        """
+        Builds the model from a dict (or a model), checked; raises
+        `ValidationError` with every error.
+        """
+    @classmethod
+    def model_validate_json(cls, /, json_data: str) -> DefenderAccountSidTarget:
+        """
+        `model_validate` of a JSON document.
+        """
+
+@final
+class DefenderActions:
+    """
+    Automated actions run on the entities a detection finds
+    (`DefenderActions`).
+    """
+    __tide_fields__: Final[list[tuple[str, str]]]
+    """
+    Each field's attribute and serialised name, in order.
+    """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
+    def __eq__(self, value: object, /) -> bool: ...
+    def __hash__(self, /) -> int: ...
+    def __ne__(self, value: object, /) -> bool: ...
+    def __reduce__(self, /) -> tuple[Any, tuple[dict]]: ...
+    def __repr__(self, /) -> str: ...
+    @property
+    def allow_files(self, /) -> list[DefenderFileTarget] | None:
+        """
+        Allow the files (`allowFiles`).
+        """
+    @property
+    def block_files(self, /) -> list[DefenderFileTarget] | None:
+        """
+        Block the files (`blockFiles`).
+        """
+    @property
+    def collect_investigation_packages(self, /) -> list[DefenderDeviceTarget] | None:
+        """
+        Collect an investigation package (`collectInvestigationPackages`).
+        """
+    @property
+    def disable_users(self, /) -> list[DefenderAccountSidTarget] | None:
+        """
+        Disable the users (`disableUsers`).
+        """
+    @property
+    def force_user_password_resets(self, /) -> list[DefenderAccountSidTarget] | None:
+        """
+        Force a password reset (`forceUserPasswordResets`).
+        """
+    @property
+    def hard_delete_emails(self, /) -> list[DefenderEmailTarget] | None:
+        """
+        Hard-delete the emails (`hardDeleteEmails`).
+        """
+    @property
+    def initiate_investigations(self, /) -> list[DefenderDeviceTarget] | None:
+        """
+        Start an automated investigation (`initiateInvestigations`).
+        """
+    @property
+    def isolate_devices(self, /) -> list[DefenderIsolationTarget] | None:
+        """
+        Isolate the devices (`isolateDevices`).
+        """
+    @property
+    def mark_users_as_compromised(self, /) -> list[DefenderAccountObjectTarget] | None:
+        """
+        Mark the users as compromised (`markUsersAsCompromised`).
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> DefenderActions:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
+    def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> DefenderActions:
+        """
+        A copy, with `update`'s fields replaced; the result is
+        validated. Models are frozen, so `deep` changes nothing.
+        """
+    def model_dump(self, /, *, mode: str = "python", by_alias: bool = False, exclude_none: bool = False) -> dict:
+        """
+        The fields as a dict: attribute names (`by_alias`: the
+        serialised ones), nested models as dicts. `mode` is
+        `"python"` or `"json"`, which give the same values.
+        """
+    def model_dump_json(self, /, *, by_alias: bool = False, exclude_none: bool = False, indent: SupportsIndex | None = None) -> str:
+        """
+        `model_dump` as JSON text, non-ASCII characters as they are.
+        """
+    @classmethod
+    def model_json_schema(cls, /, by_alias: bool = True, mode: str = "validation") -> dict:
+        """
+        The model's JSON Schema, the fields under their serialised
+        names (`by_alias=True` only); `mode` is `"validation"` or
+        `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
+        """
+    @classmethod
+    def model_validate(cls, /, obj: Any) -> DefenderActions:
+        """
+        Builds the model from a dict (or a model), checked; raises
+        `ValidationError` with every error.
+        """
+    @classmethod
+    def model_validate_json(cls, /, json_data: str) -> DefenderActions:
+        """
+        `model_validate` of a JSON document.
+        """
+    @property
+    def move_emails_to_deleted_items(self, /) -> list[DefenderEmailTarget] | None:
+        """
+        Move the emails to Deleted Items (`moveEmailsToDeletedItems`).
+        """
+    @property
+    def move_emails_to_inbox(self, /) -> list[DefenderEmailTarget] | None:
+        """
+        Move the emails to the inbox (`moveEmailsToInbox`).
+        """
+    @property
+    def move_emails_to_junk(self, /) -> list[DefenderEmailTarget] | None:
+        """
+        Move the emails to Junk (`moveEmailsToJunk`).
+        """
+    @property
+    def restrict_app_executions(self, /) -> list[DefenderDeviceTarget] | None:
+        """
+        Restrict app execution (`restrictAppExecutions`).
+        """
+    @property
+    def run_antivirus_scans(self, /) -> list[DefenderDeviceTarget] | None:
+        """
+        Run an antivirus scan (`runAntivirusScans`).
+        """
+    @property
+    def soft_delete_emails(self, /) -> list[DefenderEmailTarget] | None:
+        """
+        Soft-delete the emails (`softDeleteEmails`).
+        """
+    @property
+    def stop_and_quarantine_files(self, /) -> list[DefenderQuarantineTarget] | None:
+        """
+        Stop and quarantine the files (`stopAndQuarantineFiles`).
+        """
+
+@final
+class DefenderAlert:
+    """
+    The alert template (`DefenderAlert`). Every field has a deploy-time
+    default.
+    """
+    __tide_fields__: Final[list[tuple[str, str]]]
+    """
+    Each field's attribute and serialised name, in order.
+    """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
+    def __eq__(self, value: object, /) -> bool: ...
+    def __hash__(self, /) -> int: ...
+    def __ne__(self, value: object, /) -> bool: ...
+    def __reduce__(self, /) -> tuple[Any, tuple[dict]]: ...
+    def __repr__(self, /) -> str: ...
+    @property
+    def custom_details(self, /) -> dict[str, str] | None:
+        """
+        Alert custom details: detail name to result column. Not sent when unset.
+        """
+    @property
     def description(self, /) -> str | None:
         """
-        Alert description. Deploy uses the rule `description` when omitted.
+        Alert description. No Graph constraint.
+        """
+    @property
+    def grouping(self, /) -> str | None:
+        """
+        **Beta-only.** `alert_per_event` (sent as `alertPerEvent`) or `single_alert`
+        (`singleAlert`). `single_alert` groups the events of one run into one alert; it does not
+        merge alerts across runs. Omitted, Defender creates one alert per event.
         """
     @classmethod
     def model_construct(cls, /, _fields_set: Any | None = None, **values) -> DefenderAlert:
@@ -1261,32 +1687,32 @@ class DefenderAlert:
     @property
     def recommendation(self, /) -> str | None:
         """
-        Recommended actions text.
+        Recommended actions text. Not sent when unset. No Graph constraint.
         """
     @property
     def severity(self, /) -> str | None:
         """
-        `Informational`, `Low`, `Medium`, `High`, or `Critical`. Deploy uses
-        `response.alert_severity` when omitted. `Critical` is sent as `high`.
+        `Informational`, `Low`, `Medium`, `High`, or `Critical`, sent lower-cased; `Critical` is
+        sent as `high`.
         """
     @property
     def techniques(self, /) -> list[str] | None:
         """
-        MITRE ATT&CK technique or sub-technique ids (`T1528`, `T1059.001`), sent
-        as the alert's `mitreTechniques` when set; an empty list counts as unset. Left out, the
-        techniques of the rule's objective are sent, those outside Enterprise ATT&CK left out.
-        `generate extract` imports the tenant's.
+        MITRE ATT&CK technique or sub-technique ids (`T1528`, `T1059.001`). An empty list counts
+        as unset. Left out, the techniques of the rule's objective are used. Sent grouped by
+        tactic (ATT&CK).
         """
     @property
     def title(self, /) -> str | None:
         """
-        Alert title. Deploy uses the rule `name` when omitted.
+        Alert title. No Graph constraint.
         """
 
 @final
-class DefenderAllowBlockAction:
+class DefenderAmazonResourceMapping:
     """
-    Allow or block a file identifier (`DefenderAllowBlockAction`).
+    An Amazon resource: `alertTemplate.entityMappings.amazonResources`
+    (`DefenderAmazonResourceMapping`).
     """
     __tide_fields__: Final[list[tuple[str, str]]]
     """
@@ -1303,28 +1729,18 @@ class DefenderAllowBlockAction:
     def __reduce__(self, /) -> tuple[Any, tuple[dict]]: ...
     def __repr__(self, /) -> str: ...
     @property
-    def action(self, /) -> str:
+    def amazon_resource_id(self, /) -> str | None:
         """
-        `Allow` or `Block`.
-        """
-    @property
-    def groups(self, /) -> DefenderAllowBlockGroupScoping | None:
-        """
-        Device groups the allow or block applies to.
-        """
-    @property
-    def identifier(self, /) -> str:
-        """
-        Column identifying the file. Deploy lowercases the first character.
+        Column holding the Amazon resource id (`amazonResourceIdColumn`).
         """
     @classmethod
-    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> DefenderAllowBlockAction:
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> DefenderAmazonResourceMapping:
         """
         Deprecated (Pydantic's): `model_validate(values)`, with a
         `DeprecationWarning`. Unlike Pydantic's, the values are
         validated: a Rust model never holds an unchecked value.
         """
-    def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> DefenderAllowBlockAction:
+    def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> DefenderAmazonResourceMapping:
         """
         A copy, with `update`'s fields replaced; the result is
         validated. Models are frozen, so `deep` changes nothing.
@@ -1358,21 +1774,22 @@ class DefenderAllowBlockAction:
         `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
-    def model_validate(cls, /, obj: Any) -> DefenderAllowBlockAction:
+    def model_validate(cls, /, obj: Any) -> DefenderAmazonResourceMapping:
         """
         Builds the model from a dict (or a model), checked; raises
         `ValidationError` with every error.
         """
     @classmethod
-    def model_validate_json(cls, /, json_data: str) -> DefenderAllowBlockAction:
+    def model_validate_json(cls, /, json_data: str) -> DefenderAmazonResourceMapping:
         """
         `model_validate` of a JSON document.
         """
 
 @final
-class DefenderAllowBlockGroupScoping:
+class DefenderAzureResourceMapping:
     """
-    Device groups an allow or block applies to (`DefenderAllowBlockGroupScoping`).
+    An Azure resource: `alertTemplate.entityMappings.azureResources`
+    (`DefenderAzureResourceMapping`).
     """
     __tide_fields__: Final[list[tuple[str, str]]]
     """
@@ -1388,19 +1805,14 @@ class DefenderAllowBlockGroupScoping:
     def __ne__(self, value: object, /) -> bool: ...
     def __reduce__(self, /) -> tuple[Any, tuple[dict]]: ...
     def __repr__(self, /) -> str: ...
-    @property
-    def device_groups(self, /) -> list[str] | None:
-        """
-        Group names. Used when `selection` is `Specific`.
-        """
     @classmethod
-    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> DefenderAllowBlockGroupScoping:
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> DefenderAzureResourceMapping:
         """
         Deprecated (Pydantic's): `model_validate(values)`, with a
         `DeprecationWarning`. Unlike Pydantic's, the values are
         validated: a Rust model never holds an unchecked value.
         """
-    def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> DefenderAllowBlockGroupScoping:
+    def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> DefenderAzureResourceMapping:
         """
         A copy, with `update`'s fields replaced; the result is
         validated. Models are frozen, so `deep` changes nothing.
@@ -1434,28 +1846,28 @@ class DefenderAllowBlockGroupScoping:
         `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
-    def model_validate(cls, /, obj: Any) -> DefenderAllowBlockGroupScoping:
+    def model_validate(cls, /, obj: Any) -> DefenderAzureResourceMapping:
         """
         Builds the model from a dict (or a model), checked; raises
         `ValidationError` with every error.
         """
     @classmethod
-    def model_validate_json(cls, /, json_data: str) -> DefenderAllowBlockGroupScoping:
+    def model_validate_json(cls, /, json_data: str) -> DefenderAzureResourceMapping:
         """
         `model_validate` of a JSON document.
         """
     @property
-    def selection(self, /) -> str:
+    def resource_id(self, /) -> str | None:
         """
-        `All` or `Specific`.
+        Column holding the resource id (`resourceIdColumn`).
         """
 
 @final
-class DefenderConfig:
+class DefenderCloudApplicationMapping:
     """
-    Microsoft Defender custom detection (`DefenderConfig`).
+    A cloud application: `alertTemplate.entityMappings.cloudApplications`
+    (`DefenderCloudApplicationMapping`).
     """
-    __schema_identifier__: Final[str]
     __tide_fields__: Final[list[tuple[str, str]]]
     """
     Each field's attribute and serialised name, in order.
@@ -1471,48 +1883,18 @@ class DefenderConfig:
     def __reduce__(self, /) -> tuple[Any, tuple[dict]]: ...
     def __repr__(self, /) -> str: ...
     @property
-    def actions(self, /) -> DefenderResponseActions | None:
+    def app_id(self, /) -> str | None:
         """
-        Response actions run when the detection fires.
-        """
-    @property
-    def alert(self, /) -> DefenderAlert:
-        """
-        Custom detection alert template.
-        """
-    @property
-    def contributors(self, /) -> list[str] | None:
-        """
-        Platform contributors.
-        """
-    @property
-    def enabled(self, /) -> bool:
-        """
-        Whether this platform block is active.
-        """
-    @property
-    def exclusions(self, /) -> list[DefenderExclusion] | None:
-        """
-        Per-tenant KQL fragments appended to `query`.
-        """
-    @property
-    def flags(self, /) -> list[str] | None:
-        """
-        Platform flags.
-        """
-    @property
-    def impacted_entities(self, /) -> DefenderImpactedEntities:
-        """
-        Columns that identify the impacted device, user, or mailbox.
+        Column holding the application id (`appIdColumn`).
         """
     @classmethod
-    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> DefenderConfig:
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> DefenderCloudApplicationMapping:
         """
         Deprecated (Pydantic's): `model_validate(values)`, with a
         `DeprecationWarning`. Unlike Pydantic's, the values are
         validated: a Rust model never holds an unchecked value.
         """
-    def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> DefenderConfig:
+    def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> DefenderCloudApplicationMapping:
         """
         A copy, with `update`'s fields replaced; the result is
         validated. Models are frozen, so `deep` changes nothing.
@@ -1546,68 +1928,26 @@ class DefenderConfig:
         `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
-    def model_validate(cls, /, obj: Any) -> DefenderConfig:
+    def model_validate(cls, /, obj: Any) -> DefenderCloudApplicationMapping:
         """
         Builds the model from a dict (or a model), checked; raises
         `ValidationError` with every error.
         """
     @classmethod
-    def model_validate_json(cls, /, json_data: str) -> DefenderConfig:
+    def model_validate_json(cls, /, json_data: str) -> DefenderCloudApplicationMapping:
         """
         `model_validate` of a JSON document.
         """
     @property
-    def name(self, /) -> str:
+    def name(self, /) -> str | None:
         """
-        Platform-specific rule name.
-        """
-    @property
-    def platform_schema(self, /) -> str | None:
-        """
-        Platform schema identifier, for example `platform::sentinel::1.0`.
-        """
-    @property
-    def query(self, /) -> str:
-        """
-        KQL. Multiline. Compiled with matching `exclusions` before deploy.
-        """
-    @property
-    def scheduling(self, /) -> str:
-        """
-        `NRT`, `1H`, `3H`, `12H`, or `24H`.
-        """
-    @property
-    def schema(self, /) -> str | None:
-        """
-        The serialised name of the schema identifier field,
-        read-only (`metadata.schema`, `block.schema`).
-        """
-    @classmethod
-    def schema_identifier(cls, /) -> str:
-        """
-        The canonical schema identifier (`rule::1.0`).
-        """
-    @property
-    def scope(self, /) -> DefenderGroupScoping | None:
-        """
-        Device-group scope. Required by registry load. The current deployer does not send it.
-        """
-    @property
-    def status(self, /) -> str:
-        """
-        Deployment status of this platform block, from the statuses in `deployment.toml`. Required:
-        the deploy planner selects on it.
-        """
-    @property
-    def tenants(self, /) -> list[str] | None:
-        """
-        Target tenant identifiers.
+        Column holding the application name (`nameColumn`).
         """
 
 @final
-class DefenderDeviceActions:
+class DefenderDeviceTarget:
     """
-    Device actions (`DefenderDeviceActions`).
+    A target of a device action (`DefenderDeviceTarget`).
     """
     __tide_fields__: Final[list[tuple[str, str]]]
     """
@@ -1624,28 +1964,18 @@ class DefenderDeviceActions:
     def __reduce__(self, /) -> tuple[Any, tuple[dict]]: ...
     def __repr__(self, /) -> str: ...
     @property
-    def collect_investigation_package(self, /) -> bool:
+    def device_id(self, /) -> str | None:
         """
-        Collect an investigation package.
-        """
-    @property
-    def initiate_investigation(self, /) -> bool:
-        """
-        Start an automated investigation.
-        """
-    @property
-    def isolate_device(self, /) -> str | None:
-        """
-        Isolation type. Deploy lowercases the first character (`Full` is sent as `full`).
+        Column holding the device id (`deviceIdColumn`).
         """
     @classmethod
-    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> DefenderDeviceActions:
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> DefenderDeviceTarget:
         """
         Deprecated (Pydantic's): `model_validate(values)`, with a
         `DeprecationWarning`. Unlike Pydantic's, the values are
         validated: a Rust model never holds an unchecked value.
         """
-    def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> DefenderDeviceActions:
+    def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> DefenderDeviceTarget:
         """
         A copy, with `update`'s fields replaced; the result is
         validated. Models are frozen, so `deep` changes nothing.
@@ -1679,25 +2009,339 @@ class DefenderDeviceActions:
         `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
-    def model_validate(cls, /, obj: Any) -> DefenderDeviceActions:
+    def model_validate(cls, /, obj: Any) -> DefenderDeviceTarget:
         """
         Builds the model from a dict (or a model), checked; raises
         `ValidationError` with every error.
         """
     @classmethod
-    def model_validate_json(cls, /, json_data: str) -> DefenderDeviceActions:
+    def model_validate_json(cls, /, json_data: str) -> DefenderDeviceTarget:
+        """
+        `model_validate` of a JSON document.
+        """
+
+@final
+class DefenderDnsMapping:
+    """
+    A DNS resolution: `alertTemplate.entityMappings.dns`
+    (`DefenderDnsMapping`).
+    """
+    __tide_fields__: Final[list[tuple[str, str]]]
+    """
+    Each field's attribute and serialised name, in order.
+    """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
+    def __eq__(self, value: object, /) -> bool: ...
+    def __hash__(self, /) -> int: ...
+    def __ne__(self, value: object, /) -> bool: ...
+    def __reduce__(self, /) -> tuple[Any, tuple[dict]]: ...
+    def __repr__(self, /) -> str: ...
+    @property
+    def domain_name(self, /) -> str | None:
+        """
+        Column holding the domain name (`domainNameColumn`).
+        """
+    @property
+    def host_ip_address(self, /) -> str | None:
+        """
+        Column holding the host's IP address (`hostIpAddressColumn`).
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> DefenderDnsMapping:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
+    def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> DefenderDnsMapping:
+        """
+        A copy, with `update`'s fields replaced; the result is
+        validated. Models are frozen, so `deep` changes nothing.
+        """
+    def model_dump(self, /, *, mode: str = "python", by_alias: bool = False, exclude_none: bool = False) -> dict:
+        """
+        The fields as a dict: attribute names (`by_alias`: the
+        serialised ones), nested models as dicts. `mode` is
+        `"python"` or `"json"`, which give the same values.
+        """
+    def model_dump_json(self, /, *, by_alias: bool = False, exclude_none: bool = False, indent: SupportsIndex | None = None) -> str:
+        """
+        `model_dump` as JSON text, non-ASCII characters as they are.
+        """
+    @classmethod
+    def model_json_schema(cls, /, by_alias: bool = True, mode: str = "validation") -> dict:
+        """
+        The model's JSON Schema, the fields under their serialised
+        names (`by_alias=True` only); `mode` is `"validation"` or
+        `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
+        """
+    @classmethod
+    def model_validate(cls, /, obj: Any) -> DefenderDnsMapping:
+        """
+        Builds the model from a dict (or a model), checked; raises
+        `ValidationError` with every error.
+        """
+    @classmethod
+    def model_validate_json(cls, /, json_data: str) -> DefenderDnsMapping:
         """
         `model_validate` of a JSON document.
         """
     @property
-    def restrict_app_execution(self, /) -> bool:
+    def server_ip(self, /) -> str | None:
         """
-        Restrict app execution.
+        Column holding the DNS server's IP (`serverIpColumn`).
+        """
+
+@final
+class DefenderEmailTarget:
+    """
+    A target of an email action (`DefenderEmailTarget`).
+    """
+    __tide_fields__: Final[list[tuple[str, str]]]
+    """
+    Each field's attribute and serialised name, in order.
+    """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
+    def __eq__(self, value: object, /) -> bool: ...
+    def __hash__(self, /) -> int: ...
+    def __ne__(self, value: object, /) -> bool: ...
+    def __reduce__(self, /) -> tuple[Any, tuple[dict]]: ...
+    def __repr__(self, /) -> str: ...
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> DefenderEmailTarget:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
+    def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> DefenderEmailTarget:
+        """
+        A copy, with `update`'s fields replaced; the result is
+        validated. Models are frozen, so `deep` changes nothing.
+        """
+    def model_dump(self, /, *, mode: str = "python", by_alias: bool = False, exclude_none: bool = False) -> dict:
+        """
+        The fields as a dict: attribute names (`by_alias`: the
+        serialised ones), nested models as dicts. `mode` is
+        `"python"` or `"json"`, which give the same values.
+        """
+    def model_dump_json(self, /, *, by_alias: bool = False, exclude_none: bool = False, indent: SupportsIndex | None = None) -> str:
+        """
+        `model_dump` as JSON text, non-ASCII characters as they are.
+        """
+    @classmethod
+    def model_json_schema(cls, /, by_alias: bool = True, mode: str = "validation") -> dict:
+        """
+        The model's JSON Schema, the fields under their serialised
+        names (`by_alias=True` only); `mode` is `"validation"` or
+        `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
+        """
+    @classmethod
+    def model_validate(cls, /, obj: Any) -> DefenderEmailTarget:
+        """
+        Builds the model from a dict (or a model), checked; raises
+        `ValidationError` with every error.
+        """
+    @classmethod
+    def model_validate_json(cls, /, json_data: str) -> DefenderEmailTarget:
+        """
+        `model_validate` of a JSON document.
         """
     @property
-    def run_antivirus_scan(self, /) -> bool:
+    def network_message_id(self, /) -> str | None:
         """
-        Run an antivirus scan.
+        Column holding the network message id (`networkMessageIdColumn`).
+        """
+    @property
+    def recipient(self, /) -> str | None:
+        """
+        Column holding the recipient (`recipientColumn`).
+        """
+
+@final
+class DefenderEntities:
+    """
+    Result columns mapped to the alert's entities (`DefenderEntities`).
+    """
+    __tide_fields__: Final[list[tuple[str, str]]]
+    """
+    Each field's attribute and serialised name, in order.
+    """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
+    def __eq__(self, value: object, /) -> bool: ...
+    def __hash__(self, /) -> int: ...
+    def __ne__(self, value: object, /) -> bool: ...
+    def __reduce__(self, /) -> tuple[Any, tuple[dict]]: ...
+    def __repr__(self, /) -> str: ...
+    @property
+    def accounts(self, /) -> list[DefenderAccountMapping] | None:
+        """
+        User accounts (`accounts`).
+        """
+    @property
+    def amazon_resources(self, /) -> list[DefenderAmazonResourceMapping] | None:
+        """
+        Amazon resources (`amazonResources`).
+        """
+    @property
+    def azure_resources(self, /) -> list[DefenderAzureResourceMapping] | None:
+        """
+        Azure resources (`azureResources`).
+        """
+    @property
+    def cloud_applications(self, /) -> list[DefenderCloudApplicationMapping] | None:
+        """
+        Cloud applications (`cloudApplications`).
+        """
+    @property
+    def dns(self, /) -> list[DefenderDnsMapping] | None:
+        """
+        DNS resolutions (`dns`).
+        """
+    @property
+    def files(self, /) -> list[DefenderFileMapping] | None:
+        """
+        Files (`files`).
+        """
+    @property
+    def google_cloud_resources(self, /) -> list[DefenderGoogleCloudResourceMapping] | None:
+        """
+        Google Cloud resources (`googleCloudResources`).
+        """
+    @property
+    def hosts(self, /) -> list[DefenderHostMapping] | None:
+        """
+        Devices (`hosts`).
+        """
+    @property
+    def ips(self, /) -> list[DefenderIpMapping] | None:
+        """
+        IP addresses (`ips`).
+        """
+    @property
+    def mail_clusters(self, /) -> list[DefenderMailClusterMapping] | None:
+        """
+        Mail clusters (`mailClusters`).
+        """
+    @property
+    def mail_messages(self, /) -> list[DefenderMailMessageMapping] | None:
+        """
+        Mail messages (`mailMessages`).
+        """
+    @property
+    def mailboxes(self, /) -> list[DefenderMailboxMapping] | None:
+        """
+        Mailboxes (`mailboxes`).
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> DefenderEntities:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
+    def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> DefenderEntities:
+        """
+        A copy, with `update`'s fields replaced; the result is
+        validated. Models are frozen, so `deep` changes nothing.
+        """
+    def model_dump(self, /, *, mode: str = "python", by_alias: bool = False, exclude_none: bool = False) -> dict:
+        """
+        The fields as a dict: attribute names (`by_alias`: the
+        serialised ones), nested models as dicts. `mode` is
+        `"python"` or `"json"`, which give the same values.
+        """
+    def model_dump_json(self, /, *, by_alias: bool = False, exclude_none: bool = False, indent: SupportsIndex | None = None) -> str:
+        """
+        `model_dump` as JSON text, non-ASCII characters as they are.
+        """
+    @classmethod
+    def model_json_schema(cls, /, by_alias: bool = True, mode: str = "validation") -> dict:
+        """
+        The model's JSON Schema, the fields under their serialised
+        names (`by_alias=True` only); `mode` is `"validation"` or
+        `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
+        """
+    @classmethod
+    def model_validate(cls, /, obj: Any) -> DefenderEntities:
+        """
+        Builds the model from a dict (or a model), checked; raises
+        `ValidationError` with every error.
+        """
+    @classmethod
+    def model_validate_json(cls, /, json_data: str) -> DefenderEntities:
+        """
+        `model_validate` of a JSON document.
+        """
+    @property
+    def oauth_applications(self, /) -> list[DefenderOAuthApplicationMapping] | None:
+        """
+        OAuth applications (`oAuthApplications`).
+        """
+    @property
+    def processes(self, /) -> list[DefenderProcessMapping] | None:
+        """
+        Processes (`processes`).
+        """
+    @property
+    def registry_values(self, /) -> list[DefenderRegistryValueMapping] | None:
+        """
+        Registry values (`registryValues`).
+        """
+    @property
+    def security_groups(self, /) -> list[DefenderSecurityGroupMapping] | None:
+        """
+        Security groups (`securityGroups`).
+        """
+    @property
+    def urls(self, /) -> list[DefenderUrlMapping] | None:
+        """
+        URLs (`urls`).
         """
 
 @final
@@ -1793,9 +2437,9 @@ class DefenderExclusion:
         """
 
 @final
-class DefenderFileActions:
+class DefenderFileMapping:
     """
-    File actions (`DefenderFileActions`).
+    A file: `alertTemplate.entityMappings.files` (`DefenderFileMapping`).
     """
     __tide_fields__: Final[list[tuple[str, str]]]
     """
@@ -1811,19 +2455,14 @@ class DefenderFileActions:
     def __ne__(self, value: object, /) -> bool: ...
     def __reduce__(self, /) -> tuple[Any, tuple[dict]]: ...
     def __repr__(self, /) -> str: ...
-    @property
-    def allow_block(self, /) -> DefenderAllowBlockAction | None:
-        """
-        Allow or block a file identifier.
-        """
     @classmethod
-    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> DefenderFileActions:
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> DefenderFileMapping:
         """
         Deprecated (Pydantic's): `model_validate(values)`, with a
         `DeprecationWarning`. Unlike Pydantic's, the values are
         validated: a Rust model never holds an unchecked value.
         """
-    def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> DefenderFileActions:
+    def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> DefenderFileMapping:
         """
         A copy, with `update`'s fields replaced; the result is
         validated. Models are frozen, so `deep` changes nothing.
@@ -1857,26 +2496,36 @@ class DefenderFileActions:
         `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
-    def model_validate(cls, /, obj: Any) -> DefenderFileActions:
+    def model_validate(cls, /, obj: Any) -> DefenderFileMapping:
         """
         Builds the model from a dict (or a model), checked; raises
         `ValidationError` with every error.
         """
     @classmethod
-    def model_validate_json(cls, /, json_data: str) -> DefenderFileActions:
+    def model_validate_json(cls, /, json_data: str) -> DefenderFileMapping:
         """
         `model_validate` of a JSON document.
         """
     @property
-    def quarantine_file(self, /) -> str | None:
+    def name(self, /) -> str | None:
         """
-        Column identifying the file to quarantine.
+        Column holding the file name (`nameColumn`).
+        """
+    @property
+    def sha1(self, /) -> str | None:
+        """
+        Column holding the SHA-1 (`sha1Column`).
+        """
+    @property
+    def sha256(self, /) -> str | None:
+        """
+        Column holding the SHA-256 (`sha256Column`).
         """
 
 @final
-class DefenderGroupScoping:
+class DefenderFileTarget:
     """
-    Device-group scope (`DefenderGroupScoping`).
+    A target of `allow_files` and `block_files` (`DefenderFileTarget`).
     """
     __tide_fields__: Final[list[tuple[str, str]]]
     """
@@ -1895,16 +2544,16 @@ class DefenderGroupScoping:
     @property
     def device_groups(self, /) -> list[str] | None:
         """
-        Group names. Used when `selection` is `Specific`.
+        Device group names the action applies to (`deviceGroupNames`). Omitted: every device group.
         """
     @classmethod
-    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> DefenderGroupScoping:
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> DefenderFileTarget:
         """
         Deprecated (Pydantic's): `model_validate(values)`, with a
         `DeprecationWarning`. Unlike Pydantic's, the values are
         validated: a Rust model never holds an unchecked value.
         """
-    def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> DefenderGroupScoping:
+    def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> DefenderFileTarget:
         """
         A copy, with `update`'s fields replaced; the result is
         validated. Models are frozen, so `deep` changes nothing.
@@ -1938,26 +2587,33 @@ class DefenderGroupScoping:
         `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
-    def model_validate(cls, /, obj: Any) -> DefenderGroupScoping:
+    def model_validate(cls, /, obj: Any) -> DefenderFileTarget:
         """
         Builds the model from a dict (or a model), checked; raises
         `ValidationError` with every error.
         """
     @classmethod
-    def model_validate_json(cls, /, json_data: str) -> DefenderGroupScoping:
+    def model_validate_json(cls, /, json_data: str) -> DefenderFileTarget:
         """
         `model_validate` of a JSON document.
         """
     @property
-    def selection(self, /) -> str:
+    def sha1(self, /) -> str | None:
         """
-        `All` or `Specific`.
+        Column holding the file's SHA-1 (`sha1Column`).
+        """
+    @property
+    def sha256(self, /) -> str | None:
+        """
+        Column holding the file's SHA-256 (`sha256Column`).
         """
 
 @final
-class DefenderImpactedEntities:
+class DefenderGoogleCloudResourceMapping:
     """
-    Columns that identify the impacted entity (`DefenderImpactedEntities`).
+    A Google Cloud resource:
+    `alertTemplate.entityMappings.googleCloudResources`
+    (`DefenderGoogleCloudResourceMapping`).
     """
     __tide_fields__: Final[list[tuple[str, str]]]
     """
@@ -1974,23 +2630,18 @@ class DefenderImpactedEntities:
     def __reduce__(self, /) -> tuple[Any, tuple[dict]]: ...
     def __repr__(self, /) -> str: ...
     @property
-    def device(self, /) -> str | None:
+    def full_resource_name(self, /) -> str | None:
         """
-        Device column.
-        """
-    @property
-    def mailbox(self, /) -> str | None:
-        """
-        Mailbox column.
+        Column holding the full resource name (`fullResourceNameColumn`).
         """
     @classmethod
-    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> DefenderImpactedEntities:
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> DefenderGoogleCloudResourceMapping:
         """
         Deprecated (Pydantic's): `model_validate(values)`, with a
         `DeprecationWarning`. Unlike Pydantic's, the values are
         validated: a Rust model never holds an unchecked value.
         """
-    def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> DefenderImpactedEntities:
+    def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> DefenderGoogleCloudResourceMapping:
         """
         A copy, with `update`'s fields replaced; the result is
         validated. Models are frozen, so `deep` changes nothing.
@@ -2024,26 +2675,21 @@ class DefenderImpactedEntities:
         `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
-    def model_validate(cls, /, obj: Any) -> DefenderImpactedEntities:
+    def model_validate(cls, /, obj: Any) -> DefenderGoogleCloudResourceMapping:
         """
         Builds the model from a dict (or a model), checked; raises
         `ValidationError` with every error.
         """
     @classmethod
-    def model_validate_json(cls, /, json_data: str) -> DefenderImpactedEntities:
+    def model_validate_json(cls, /, json_data: str) -> DefenderGoogleCloudResourceMapping:
         """
         `model_validate` of a JSON document.
         """
-    @property
-    def user(self, /) -> str | None:
-        """
-        User column.
-        """
 
 @final
-class DefenderResponseActions:
+class DefenderHostMapping:
     """
-    Response actions (`DefenderResponseActions`).
+    A device: `alertTemplate.entityMappings.hosts` (`DefenderHostMapping`).
     """
     __tide_fields__: Final[list[tuple[str, str]]]
     """
@@ -2060,24 +2706,23 @@ class DefenderResponseActions:
     def __reduce__(self, /) -> tuple[Any, tuple[dict]]: ...
     def __repr__(self, /) -> str: ...
     @property
-    def devices(self, /) -> DefenderDeviceActions | None:
+    def device_id(self, /) -> str | None:
         """
-        Device actions: isolate, collect an investigation package, scan, investigate or restrict app
-        execution.
+        Column holding the device id (`deviceIdColumn`).
         """
     @property
-    def files(self, /) -> DefenderFileActions | None:
+    def dns_domain(self, /) -> str | None:
         """
-        File actions: allow or block, and quarantine.
+        Column holding the DNS domain (`dnsDomainColumn`).
         """
     @classmethod
-    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> DefenderResponseActions:
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> DefenderHostMapping:
         """
         Deprecated (Pydantic's): `model_validate(values)`, with a
         `DeprecationWarning`. Unlike Pydantic's, the values are
         validated: a Rust model never holds an unchecked value.
         """
-    def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> DefenderResponseActions:
+    def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> DefenderHostMapping:
         """
         A copy, with `update`'s fields replaced; the result is
         validated. Models are frozen, so `deep` changes nothing.
@@ -2111,26 +2756,36 @@ class DefenderResponseActions:
         `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
-    def model_validate(cls, /, obj: Any) -> DefenderResponseActions:
+    def model_validate(cls, /, obj: Any) -> DefenderHostMapping:
         """
         Builds the model from a dict (or a model), checked; raises
         `ValidationError` with every error.
         """
     @classmethod
-    def model_validate_json(cls, /, json_data: str) -> DefenderResponseActions:
+    def model_validate_json(cls, /, json_data: str) -> DefenderHostMapping:
         """
         `model_validate` of a JSON document.
         """
     @property
-    def users(self, /) -> DefenderUserActions | None:
+    def name(self, /) -> str | None:
         """
-        User actions: mark as compromised, disable, or force a password reset.
+        Column holding the device name (`nameColumn`).
+        """
+    @property
+    def netbios_name(self, /) -> str | None:
+        """
+        Column holding the NetBIOS name (`netBiosNameColumn`).
+        """
+    @property
+    def nt_domain(self, /) -> str | None:
+        """
+        Column holding the NT domain (`ntDomainColumn`).
         """
 
 @final
-class DefenderUserActions:
+class DefenderIncident:
     """
-    User actions (`DefenderUserActions`).
+    Incident correlation (`DefenderIncident`). **Beta-only.**
     """
     __tide_fields__: Final[list[tuple[str, str]]]
     """
@@ -2147,28 +2802,19 @@ class DefenderUserActions:
     def __reduce__(self, /) -> tuple[Any, tuple[dict]]: ...
     def __repr__(self, /) -> str: ...
     @property
-    def disable_user(self, /) -> str | None:
+    def exclude_from_correlation(self, /) -> bool:
         """
-        User column.
-        """
-    @property
-    def force_password_reset(self, /) -> str | None:
-        """
-        User column.
-        """
-    @property
-    def mark_as_compromised(self, /) -> str | None:
-        """
-        User column.
+        `true`: each alert opens its own single-alert incident. `false`: alerts may be correlated
+        with related alerts (Defender's default).
         """
     @classmethod
-    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> DefenderUserActions:
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> DefenderIncident:
         """
         Deprecated (Pydantic's): `model_validate(values)`, with a
         `DeprecationWarning`. Unlike Pydantic's, the values are
         validated: a Rust model never holds an unchecked value.
         """
-    def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> DefenderUserActions:
+    def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> DefenderIncident:
         """
         A copy, with `update`'s fields replaced; the result is
         validated. Models are frozen, so `deep` changes nothing.
@@ -2202,13 +2848,1069 @@ class DefenderUserActions:
         `DeprecationWarning`; a Rust class is complete when compiled.
         """
     @classmethod
-    def model_validate(cls, /, obj: Any) -> DefenderUserActions:
+    def model_validate(cls, /, obj: Any) -> DefenderIncident:
         """
         Builds the model from a dict (or a model), checked; raises
         `ValidationError` with every error.
         """
     @classmethod
-    def model_validate_json(cls, /, json_data: str) -> DefenderUserActions:
+    def model_validate_json(cls, /, json_data: str) -> DefenderIncident:
+        """
+        `model_validate` of a JSON document.
+        """
+
+@final
+class DefenderIpMapping:
+    """
+    An IP address: `alertTemplate.entityMappings.ips` (`DefenderIpMapping`).
+    """
+    __tide_fields__: Final[list[tuple[str, str]]]
+    """
+    Each field's attribute and serialised name, in order.
+    """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
+    def __eq__(self, value: object, /) -> bool: ...
+    def __hash__(self, /) -> int: ...
+    def __ne__(self, value: object, /) -> bool: ...
+    def __reduce__(self, /) -> tuple[Any, tuple[dict]]: ...
+    def __repr__(self, /) -> str: ...
+    @property
+    def address(self, /) -> str | None:
+        """
+        Column holding the address (`addressColumn`).
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> DefenderIpMapping:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
+    def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> DefenderIpMapping:
+        """
+        A copy, with `update`'s fields replaced; the result is
+        validated. Models are frozen, so `deep` changes nothing.
+        """
+    def model_dump(self, /, *, mode: str = "python", by_alias: bool = False, exclude_none: bool = False) -> dict:
+        """
+        The fields as a dict: attribute names (`by_alias`: the
+        serialised ones), nested models as dicts. `mode` is
+        `"python"` or `"json"`, which give the same values.
+        """
+    def model_dump_json(self, /, *, by_alias: bool = False, exclude_none: bool = False, indent: SupportsIndex | None = None) -> str:
+        """
+        `model_dump` as JSON text, non-ASCII characters as they are.
+        """
+    @classmethod
+    def model_json_schema(cls, /, by_alias: bool = True, mode: str = "validation") -> dict:
+        """
+        The model's JSON Schema, the fields under their serialised
+        names (`by_alias=True` only); `mode` is `"validation"` or
+        `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
+        """
+    @classmethod
+    def model_validate(cls, /, obj: Any) -> DefenderIpMapping:
+        """
+        Builds the model from a dict (or a model), checked; raises
+        `ValidationError` with every error.
+        """
+    @classmethod
+    def model_validate_json(cls, /, json_data: str) -> DefenderIpMapping:
+        """
+        `model_validate` of a JSON document.
+        """
+    @property
+    def scope(self, /) -> str | None:
+        """
+        Column holding the address's scope (`scopeColumn`).
+        """
+
+@final
+class DefenderIsolationTarget:
+    """
+    A target of `isolate_devices` (`DefenderIsolationTarget`).
+    """
+    __tide_fields__: Final[list[tuple[str, str]]]
+    """
+    Each field's attribute and serialised name, in order.
+    """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
+    def __eq__(self, value: object, /) -> bool: ...
+    def __hash__(self, /) -> int: ...
+    def __ne__(self, value: object, /) -> bool: ...
+    def __reduce__(self, /) -> tuple[Any, tuple[dict]]: ...
+    def __repr__(self, /) -> str: ...
+    @property
+    def device_id(self, /) -> str | None:
+        """
+        Column holding the device id (`deviceIdColumn`).
+        """
+    @property
+    def isolation_type(self, /) -> str | None:
+        """
+        `full` or `selective` (`isolationType`).
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> DefenderIsolationTarget:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
+    def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> DefenderIsolationTarget:
+        """
+        A copy, with `update`'s fields replaced; the result is
+        validated. Models are frozen, so `deep` changes nothing.
+        """
+    def model_dump(self, /, *, mode: str = "python", by_alias: bool = False, exclude_none: bool = False) -> dict:
+        """
+        The fields as a dict: attribute names (`by_alias`: the
+        serialised ones), nested models as dicts. `mode` is
+        `"python"` or `"json"`, which give the same values.
+        """
+    def model_dump_json(self, /, *, by_alias: bool = False, exclude_none: bool = False, indent: SupportsIndex | None = None) -> str:
+        """
+        `model_dump` as JSON text, non-ASCII characters as they are.
+        """
+    @classmethod
+    def model_json_schema(cls, /, by_alias: bool = True, mode: str = "validation") -> dict:
+        """
+        The model's JSON Schema, the fields under their serialised
+        names (`by_alias=True` only); `mode` is `"validation"` or
+        `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
+        """
+    @classmethod
+    def model_validate(cls, /, obj: Any) -> DefenderIsolationTarget:
+        """
+        Builds the model from a dict (or a model), checked; raises
+        `ValidationError` with every error.
+        """
+    @classmethod
+    def model_validate_json(cls, /, json_data: str) -> DefenderIsolationTarget:
+        """
+        `model_validate` of a JSON document.
+        """
+
+@final
+class DefenderMailClusterMapping:
+    """
+    A mail cluster: `alertTemplate.entityMappings.mailClusters`
+    (`DefenderMailClusterMapping`).
+    """
+    __tide_fields__: Final[list[tuple[str, str]]]
+    """
+    Each field's attribute and serialised name, in order.
+    """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
+    def __eq__(self, value: object, /) -> bool: ...
+    def __hash__(self, /) -> int: ...
+    def __ne__(self, value: object, /) -> bool: ...
+    def __reduce__(self, /) -> tuple[Any, tuple[dict]]: ...
+    def __repr__(self, /) -> str: ...
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> DefenderMailClusterMapping:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
+    def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> DefenderMailClusterMapping:
+        """
+        A copy, with `update`'s fields replaced; the result is
+        validated. Models are frozen, so `deep` changes nothing.
+        """
+    def model_dump(self, /, *, mode: str = "python", by_alias: bool = False, exclude_none: bool = False) -> dict:
+        """
+        The fields as a dict: attribute names (`by_alias`: the
+        serialised ones), nested models as dicts. `mode` is
+        `"python"` or `"json"`, which give the same values.
+        """
+    def model_dump_json(self, /, *, by_alias: bool = False, exclude_none: bool = False, indent: SupportsIndex | None = None) -> str:
+        """
+        `model_dump` as JSON text, non-ASCII characters as they are.
+        """
+    @classmethod
+    def model_json_schema(cls, /, by_alias: bool = True, mode: str = "validation") -> dict:
+        """
+        The model's JSON Schema, the fields under their serialised
+        names (`by_alias=True` only); `mode` is `"validation"` or
+        `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
+        """
+    @classmethod
+    def model_validate(cls, /, obj: Any) -> DefenderMailClusterMapping:
+        """
+        Builds the model from a dict (or a model), checked; raises
+        `ValidationError` with every error.
+        """
+    @classmethod
+    def model_validate_json(cls, /, json_data: str) -> DefenderMailClusterMapping:
+        """
+        `model_validate` of a JSON document.
+        """
+    @property
+    def query(self, /) -> str | None:
+        """
+        Column holding the cluster's query (`queryColumn`).
+        """
+    @property
+    def source(self, /) -> str | None:
+        """
+        Column holding the cluster's source (`sourceColumn`).
+        """
+
+@final
+class DefenderMailMessageMapping:
+    """
+    A mail message: `alertTemplate.entityMappings.mailMessages`
+    (`DefenderMailMessageMapping`).
+    """
+    __tide_fields__: Final[list[tuple[str, str]]]
+    """
+    Each field's attribute and serialised name, in order.
+    """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
+    def __eq__(self, value: object, /) -> bool: ...
+    def __hash__(self, /) -> int: ...
+    def __ne__(self, value: object, /) -> bool: ...
+    def __reduce__(self, /) -> tuple[Any, tuple[dict]]: ...
+    def __repr__(self, /) -> str: ...
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> DefenderMailMessageMapping:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
+    def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> DefenderMailMessageMapping:
+        """
+        A copy, with `update`'s fields replaced; the result is
+        validated. Models are frozen, so `deep` changes nothing.
+        """
+    def model_dump(self, /, *, mode: str = "python", by_alias: bool = False, exclude_none: bool = False) -> dict:
+        """
+        The fields as a dict: attribute names (`by_alias`: the
+        serialised ones), nested models as dicts. `mode` is
+        `"python"` or `"json"`, which give the same values.
+        """
+    def model_dump_json(self, /, *, by_alias: bool = False, exclude_none: bool = False, indent: SupportsIndex | None = None) -> str:
+        """
+        `model_dump` as JSON text, non-ASCII characters as they are.
+        """
+    @classmethod
+    def model_json_schema(cls, /, by_alias: bool = True, mode: str = "validation") -> dict:
+        """
+        The model's JSON Schema, the fields under their serialised
+        names (`by_alias=True` only); `mode` is `"validation"` or
+        `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
+        """
+    @classmethod
+    def model_validate(cls, /, obj: Any) -> DefenderMailMessageMapping:
+        """
+        Builds the model from a dict (or a model), checked; raises
+        `ValidationError` with every error.
+        """
+    @classmethod
+    def model_validate_json(cls, /, json_data: str) -> DefenderMailMessageMapping:
+        """
+        `model_validate` of a JSON document.
+        """
+    @property
+    def network_message_id(self, /) -> str | None:
+        """
+        Column holding the network message id (`networkMessageIdColumn`).
+        """
+    @property
+    def recipient(self, /) -> str | None:
+        """
+        Column holding the recipient (`recipientColumn`).
+        """
+    @property
+    def sender(self, /) -> str | None:
+        """
+        Column holding the sender (`senderColumn`).
+        """
+    @property
+    def subject(self, /) -> str | None:
+        """
+        Column holding the subject (`subjectColumn`).
+        """
+
+@final
+class DefenderMailboxMapping:
+    """
+    A mailbox: `alertTemplate.entityMappings.mailboxes`
+    (`DefenderMailboxMapping`).
+    """
+    __tide_fields__: Final[list[tuple[str, str]]]
+    """
+    Each field's attribute and serialised name, in order.
+    """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
+    def __eq__(self, value: object, /) -> bool: ...
+    def __hash__(self, /) -> int: ...
+    def __ne__(self, value: object, /) -> bool: ...
+    def __reduce__(self, /) -> tuple[Any, tuple[dict]]: ...
+    def __repr__(self, /) -> str: ...
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> DefenderMailboxMapping:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
+    def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> DefenderMailboxMapping:
+        """
+        A copy, with `update`'s fields replaced; the result is
+        validated. Models are frozen, so `deep` changes nothing.
+        """
+    def model_dump(self, /, *, mode: str = "python", by_alias: bool = False, exclude_none: bool = False) -> dict:
+        """
+        The fields as a dict: attribute names (`by_alias`: the
+        serialised ones), nested models as dicts. `mode` is
+        `"python"` or `"json"`, which give the same values.
+        """
+    def model_dump_json(self, /, *, by_alias: bool = False, exclude_none: bool = False, indent: SupportsIndex | None = None) -> str:
+        """
+        `model_dump` as JSON text, non-ASCII characters as they are.
+        """
+    @classmethod
+    def model_json_schema(cls, /, by_alias: bool = True, mode: str = "validation") -> dict:
+        """
+        The model's JSON Schema, the fields under their serialised
+        names (`by_alias=True` only); `mode` is `"validation"` or
+        `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
+        """
+    @classmethod
+    def model_validate(cls, /, obj: Any) -> DefenderMailboxMapping:
+        """
+        Builds the model from a dict (or a model), checked; raises
+        `ValidationError` with every error.
+        """
+    @classmethod
+    def model_validate_json(cls, /, json_data: str) -> DefenderMailboxMapping:
+        """
+        `model_validate` of a JSON document.
+        """
+    @property
+    def primary_address(self, /) -> str | None:
+        """
+        Column holding the primary address (`primaryAddressColumn`).
+        """
+
+@final
+class DefenderOAuthApplicationMapping:
+    """
+    An OAuth application: `alertTemplate.entityMappings.oAuthApplications`
+    (`DefenderOAuthApplicationMapping`).
+    """
+    __tide_fields__: Final[list[tuple[str, str]]]
+    """
+    Each field's attribute and serialised name, in order.
+    """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
+    def __eq__(self, value: object, /) -> bool: ...
+    def __hash__(self, /) -> int: ...
+    def __ne__(self, value: object, /) -> bool: ...
+    def __reduce__(self, /) -> tuple[Any, tuple[dict]]: ...
+    def __repr__(self, /) -> str: ...
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> DefenderOAuthApplicationMapping:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
+    def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> DefenderOAuthApplicationMapping:
+        """
+        A copy, with `update`'s fields replaced; the result is
+        validated. Models are frozen, so `deep` changes nothing.
+        """
+    def model_dump(self, /, *, mode: str = "python", by_alias: bool = False, exclude_none: bool = False) -> dict:
+        """
+        The fields as a dict: attribute names (`by_alias`: the
+        serialised ones), nested models as dicts. `mode` is
+        `"python"` or `"json"`, which give the same values.
+        """
+    def model_dump_json(self, /, *, by_alias: bool = False, exclude_none: bool = False, indent: SupportsIndex | None = None) -> str:
+        """
+        `model_dump` as JSON text, non-ASCII characters as they are.
+        """
+    @classmethod
+    def model_json_schema(cls, /, by_alias: bool = True, mode: str = "validation") -> dict:
+        """
+        The model's JSON Schema, the fields under their serialised
+        names (`by_alias=True` only); `mode` is `"validation"` or
+        `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
+        """
+    @classmethod
+    def model_validate(cls, /, obj: Any) -> DefenderOAuthApplicationMapping:
+        """
+        Builds the model from a dict (or a model), checked; raises
+        `ValidationError` with every error.
+        """
+    @classmethod
+    def model_validate_json(cls, /, json_data: str) -> DefenderOAuthApplicationMapping:
+        """
+        `model_validate` of a JSON document.
+        """
+    @property
+    def oauth_app_id(self, /) -> str | None:
+        """
+        Column holding the OAuth application id (`oAuthAppIdColumn`).
+        """
+
+@final
+class DefenderProcessMapping:
+    """
+    A process: `alertTemplate.entityMappings.processes`
+    (`DefenderProcessMapping`).
+    """
+    __tide_fields__: Final[list[tuple[str, str]]]
+    """
+    Each field's attribute and serialised name, in order.
+    """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
+    def __eq__(self, value: object, /) -> bool: ...
+    def __hash__(self, /) -> int: ...
+    def __ne__(self, value: object, /) -> bool: ...
+    def __reduce__(self, /) -> tuple[Any, tuple[dict]]: ...
+    def __repr__(self, /) -> str: ...
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> DefenderProcessMapping:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
+    def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> DefenderProcessMapping:
+        """
+        A copy, with `update`'s fields replaced; the result is
+        validated. Models are frozen, so `deep` changes nothing.
+        """
+    def model_dump(self, /, *, mode: str = "python", by_alias: bool = False, exclude_none: bool = False) -> dict:
+        """
+        The fields as a dict: attribute names (`by_alias`: the
+        serialised ones), nested models as dicts. `mode` is
+        `"python"` or `"json"`, which give the same values.
+        """
+    def model_dump_json(self, /, *, by_alias: bool = False, exclude_none: bool = False, indent: SupportsIndex | None = None) -> str:
+        """
+        `model_dump` as JSON text, non-ASCII characters as they are.
+        """
+    @classmethod
+    def model_json_schema(cls, /, by_alias: bool = True, mode: str = "validation") -> dict:
+        """
+        The model's JSON Schema, the fields under their serialised
+        names (`by_alias=True` only); `mode` is `"validation"` or
+        `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
+        """
+    @classmethod
+    def model_validate(cls, /, obj: Any) -> DefenderProcessMapping:
+        """
+        Builds the model from a dict (or a model), checked; raises
+        `ValidationError` with every error.
+        """
+    @classmethod
+    def model_validate_json(cls, /, json_data: str) -> DefenderProcessMapping:
+        """
+        `model_validate` of a JSON document.
+        """
+    @property
+    def sha1(self, /) -> str | None:
+        """
+        Column holding the image's SHA-1 (`sha1Column`).
+        """
+    @property
+    def sha256(self, /) -> str | None:
+        """
+        Column holding the image's SHA-256 (`sha256Column`).
+        """
+
+@final
+class DefenderQuarantineTarget:
+    """
+    A target of `stop_and_quarantine_files` (`DefenderQuarantineTarget`).
+    """
+    __tide_fields__: Final[list[tuple[str, str]]]
+    """
+    Each field's attribute and serialised name, in order.
+    """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
+    def __eq__(self, value: object, /) -> bool: ...
+    def __hash__(self, /) -> int: ...
+    def __ne__(self, value: object, /) -> bool: ...
+    def __reduce__(self, /) -> tuple[Any, tuple[dict]]: ...
+    def __repr__(self, /) -> str: ...
+    @property
+    def device_id(self, /) -> str | None:
+        """
+        Column holding the device id (`deviceIdColumn`).
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> DefenderQuarantineTarget:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
+    def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> DefenderQuarantineTarget:
+        """
+        A copy, with `update`'s fields replaced; the result is
+        validated. Models are frozen, so `deep` changes nothing.
+        """
+    def model_dump(self, /, *, mode: str = "python", by_alias: bool = False, exclude_none: bool = False) -> dict:
+        """
+        The fields as a dict: attribute names (`by_alias`: the
+        serialised ones), nested models as dicts. `mode` is
+        `"python"` or `"json"`, which give the same values.
+        """
+    def model_dump_json(self, /, *, by_alias: bool = False, exclude_none: bool = False, indent: SupportsIndex | None = None) -> str:
+        """
+        `model_dump` as JSON text, non-ASCII characters as they are.
+        """
+    @classmethod
+    def model_json_schema(cls, /, by_alias: bool = True, mode: str = "validation") -> dict:
+        """
+        The model's JSON Schema, the fields under their serialised
+        names (`by_alias=True` only); `mode` is `"validation"` or
+        `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
+        """
+    @classmethod
+    def model_validate(cls, /, obj: Any) -> DefenderQuarantineTarget:
+        """
+        Builds the model from a dict (or a model), checked; raises
+        `ValidationError` with every error.
+        """
+    @classmethod
+    def model_validate_json(cls, /, json_data: str) -> DefenderQuarantineTarget:
+        """
+        `model_validate` of a JSON document.
+        """
+    @property
+    def sha1(self, /) -> str | None:
+        """
+        Column holding the file's SHA-1 (`sha1Column`).
+        """
+
+@final
+class DefenderRegistryValueMapping:
+    """
+    A registry value: `alertTemplate.entityMappings.registryValues`
+    (`DefenderRegistryValueMapping`).
+    """
+    __tide_fields__: Final[list[tuple[str, str]]]
+    """
+    Each field's attribute and serialised name, in order.
+    """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
+    def __eq__(self, value: object, /) -> bool: ...
+    def __hash__(self, /) -> int: ...
+    def __ne__(self, value: object, /) -> bool: ...
+    def __reduce__(self, /) -> tuple[Any, tuple[dict]]: ...
+    def __repr__(self, /) -> str: ...
+    @property
+    def key(self, /) -> str | None:
+        """
+        Column holding the registry key (`keyColumn`).
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> DefenderRegistryValueMapping:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
+    def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> DefenderRegistryValueMapping:
+        """
+        A copy, with `update`'s fields replaced; the result is
+        validated. Models are frozen, so `deep` changes nothing.
+        """
+    def model_dump(self, /, *, mode: str = "python", by_alias: bool = False, exclude_none: bool = False) -> dict:
+        """
+        The fields as a dict: attribute names (`by_alias`: the
+        serialised ones), nested models as dicts. `mode` is
+        `"python"` or `"json"`, which give the same values.
+        """
+    def model_dump_json(self, /, *, by_alias: bool = False, exclude_none: bool = False, indent: SupportsIndex | None = None) -> str:
+        """
+        `model_dump` as JSON text, non-ASCII characters as they are.
+        """
+    @classmethod
+    def model_json_schema(cls, /, by_alias: bool = True, mode: str = "validation") -> dict:
+        """
+        The model's JSON Schema, the fields under their serialised
+        names (`by_alias=True` only); `mode` is `"validation"` or
+        `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
+        """
+    @classmethod
+    def model_validate(cls, /, obj: Any) -> DefenderRegistryValueMapping:
+        """
+        Builds the model from a dict (or a model), checked; raises
+        `ValidationError` with every error.
+        """
+    @classmethod
+    def model_validate_json(cls, /, json_data: str) -> DefenderRegistryValueMapping:
+        """
+        `model_validate` of a JSON document.
+        """
+    @property
+    def value_name(self, /) -> str | None:
+        """
+        Column holding the value name (`valueNameColumn`).
+        """
+
+@final
+class DefenderSchedule:
+    """
+    How often the rule runs and how far back each run reads
+    (`DefenderSchedule`).
+    """
+    __tide_fields__: Final[list[tuple[str, str]]]
+    """
+    Each field's attribute and serialised name, in order.
+    """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
+    def __eq__(self, value: object, /) -> bool: ...
+    def __hash__(self, /) -> int: ...
+    def __ne__(self, value: object, /) -> bool: ...
+    def __reduce__(self, /) -> tuple[Any, tuple[dict]]: ...
+    def __repr__(self, /) -> str: ...
+    @property
+    def frequency(self, /) -> str:
+        """
+        `NRT`, `<n>H`, or `<n>D`, `n` a positive integer without a leading zero.
+        """
+    @property
+    def lookback(self, /) -> str | None:
+        """
+        **Beta-only.** `<n>H` or `<n>D`. Omitted, Defender derives the lookback from the frequency.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> DefenderSchedule:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
+    def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> DefenderSchedule:
+        """
+        A copy, with `update`'s fields replaced; the result is
+        validated. Models are frozen, so `deep` changes nothing.
+        """
+    def model_dump(self, /, *, mode: str = "python", by_alias: bool = False, exclude_none: bool = False) -> dict:
+        """
+        The fields as a dict: attribute names (`by_alias`: the
+        serialised ones), nested models as dicts. `mode` is
+        `"python"` or `"json"`, which give the same values.
+        """
+    def model_dump_json(self, /, *, by_alias: bool = False, exclude_none: bool = False, indent: SupportsIndex | None = None) -> str:
+        """
+        `model_dump` as JSON text, non-ASCII characters as they are.
+        """
+    @classmethod
+    def model_json_schema(cls, /, by_alias: bool = True, mode: str = "validation") -> dict:
+        """
+        The model's JSON Schema, the fields under their serialised
+        names (`by_alias=True` only); `mode` is `"validation"` or
+        `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
+        """
+    @classmethod
+    def model_validate(cls, /, obj: Any) -> DefenderSchedule:
+        """
+        Builds the model from a dict (or a model), checked; raises
+        `ValidationError` with every error.
+        """
+    @classmethod
+    def model_validate_json(cls, /, json_data: str) -> DefenderSchedule:
+        """
+        `model_validate` of a JSON document.
+        """
+
+@final
+class DefenderScope:
+    """
+    Device groups the rule applies to (`DefenderScope`).
+    """
+    __tide_fields__: Final[list[tuple[str, str]]]
+    """
+    Each field's attribute and serialised name, in order.
+    """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
+    def __eq__(self, value: object, /) -> bool: ...
+    def __hash__(self, /) -> int: ...
+    def __ne__(self, value: object, /) -> bool: ...
+    def __reduce__(self, /) -> tuple[Any, tuple[dict]]: ...
+    def __repr__(self, /) -> str: ...
+    @property
+    def device_groups(self, /) -> list[str]:
+        """
+        Device group names.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> DefenderScope:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
+    def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> DefenderScope:
+        """
+        A copy, with `update`'s fields replaced; the result is
+        validated. Models are frozen, so `deep` changes nothing.
+        """
+    def model_dump(self, /, *, mode: str = "python", by_alias: bool = False, exclude_none: bool = False) -> dict:
+        """
+        The fields as a dict: attribute names (`by_alias`: the
+        serialised ones), nested models as dicts. `mode` is
+        `"python"` or `"json"`, which give the same values.
+        """
+    def model_dump_json(self, /, *, by_alias: bool = False, exclude_none: bool = False, indent: SupportsIndex | None = None) -> str:
+        """
+        `model_dump` as JSON text, non-ASCII characters as they are.
+        """
+    @classmethod
+    def model_json_schema(cls, /, by_alias: bool = True, mode: str = "validation") -> dict:
+        """
+        The model's JSON Schema, the fields under their serialised
+        names (`by_alias=True` only); `mode` is `"validation"` or
+        `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
+        """
+    @classmethod
+    def model_validate(cls, /, obj: Any) -> DefenderScope:
+        """
+        Builds the model from a dict (or a model), checked; raises
+        `ValidationError` with every error.
+        """
+    @classmethod
+    def model_validate_json(cls, /, json_data: str) -> DefenderScope:
+        """
+        `model_validate` of a JSON document.
+        """
+
+@final
+class DefenderSecurityGroupMapping:
+    """
+    A security group: `alertTemplate.entityMappings.securityGroups`
+    (`DefenderSecurityGroupMapping`).
+    """
+    __tide_fields__: Final[list[tuple[str, str]]]
+    """
+    Each field's attribute and serialised name, in order.
+    """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
+    def __eq__(self, value: object, /) -> bool: ...
+    def __hash__(self, /) -> int: ...
+    def __ne__(self, value: object, /) -> bool: ...
+    def __reduce__(self, /) -> tuple[Any, tuple[dict]]: ...
+    def __repr__(self, /) -> str: ...
+    @property
+    def distinguished_name(self, /) -> str | None:
+        """
+        Column holding the distinguished name (`distinguishedNameColumn`).
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> DefenderSecurityGroupMapping:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
+    def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> DefenderSecurityGroupMapping:
+        """
+        A copy, with `update`'s fields replaced; the result is
+        validated. Models are frozen, so `deep` changes nothing.
+        """
+    def model_dump(self, /, *, mode: str = "python", by_alias: bool = False, exclude_none: bool = False) -> dict:
+        """
+        The fields as a dict: attribute names (`by_alias`: the
+        serialised ones), nested models as dicts. `mode` is
+        `"python"` or `"json"`, which give the same values.
+        """
+    def model_dump_json(self, /, *, by_alias: bool = False, exclude_none: bool = False, indent: SupportsIndex | None = None) -> str:
+        """
+        `model_dump` as JSON text, non-ASCII characters as they are.
+        """
+    @classmethod
+    def model_json_schema(cls, /, by_alias: bool = True, mode: str = "validation") -> dict:
+        """
+        The model's JSON Schema, the fields under their serialised
+        names (`by_alias=True` only); `mode` is `"validation"` or
+        `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
+        """
+    @classmethod
+    def model_validate(cls, /, obj: Any) -> DefenderSecurityGroupMapping:
+        """
+        Builds the model from a dict (or a model), checked; raises
+        `ValidationError` with every error.
+        """
+    @classmethod
+    def model_validate_json(cls, /, json_data: str) -> DefenderSecurityGroupMapping:
+        """
+        `model_validate` of a JSON document.
+        """
+    @property
+    def object_id(self, /) -> str | None:
+        """
+        Column holding the group's object id (`objectIdColumn`).
+        """
+    @property
+    def sid(self, /) -> str | None:
+        """
+        Column holding the group's SID (`sidColumn`).
+        """
+
+@final
+class DefenderUrlMapping:
+    """
+    A URL: `alertTemplate.entityMappings.urls` (`DefenderUrlMapping`).
+    """
+    __tide_fields__: Final[list[tuple[str, str]]]
+    """
+    Each field's attribute and serialised name, in order.
+    """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
+    def __eq__(self, value: object, /) -> bool: ...
+    def __hash__(self, /) -> int: ...
+    def __ne__(self, value: object, /) -> bool: ...
+    def __reduce__(self, /) -> tuple[Any, tuple[dict]]: ...
+    def __repr__(self, /) -> str: ...
+    @property
+    def address(self, /) -> str | None:
+        """
+        Column holding the URL (`addressColumn`).
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> DefenderUrlMapping:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
+    def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> DefenderUrlMapping:
+        """
+        A copy, with `update`'s fields replaced; the result is
+        validated. Models are frozen, so `deep` changes nothing.
+        """
+    def model_dump(self, /, *, mode: str = "python", by_alias: bool = False, exclude_none: bool = False) -> dict:
+        """
+        The fields as a dict: attribute names (`by_alias`: the
+        serialised ones), nested models as dicts. `mode` is
+        `"python"` or `"json"`, which give the same values.
+        """
+    def model_dump_json(self, /, *, by_alias: bool = False, exclude_none: bool = False, indent: SupportsIndex | None = None) -> str:
+        """
+        `model_dump` as JSON text, non-ASCII characters as they are.
+        """
+    @classmethod
+    def model_json_schema(cls, /, by_alias: bool = True, mode: str = "validation") -> dict:
+        """
+        The model's JSON Schema, the fields under their serialised
+        names (`by_alias=True` only); `mode` is `"validation"` or
+        `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
+        """
+    @classmethod
+    def model_validate(cls, /, obj: Any) -> DefenderUrlMapping:
+        """
+        Builds the model from a dict (or a model), checked; raises
+        `ValidationError` with every error.
+        """
+    @classmethod
+    def model_validate_json(cls, /, json_data: str) -> DefenderUrlMapping:
         """
         `model_validate` of a JSON document.
         """
@@ -7566,6 +9268,166 @@ class HarfangLabYaraMeta:
         """
 
 @final
+class MicrosoftDefenderConfig:
+    """
+    Microsoft Defender custom detection rule, on the Microsoft Graph beta custom detection API
+    (`MicrosoftDefenderConfig`).
+    """
+    __schema_identifier__: Final[str]
+    __tide_fields__: Final[list[tuple[str, str]]]
+    """
+    Each field's attribute and serialised name, in order.
+    """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
+    def __eq__(self, value: object, /) -> bool: ...
+    def __hash__(self, /) -> int: ...
+    def __ne__(self, value: object, /) -> bool: ...
+    def __reduce__(self, /) -> tuple[Any, tuple[dict]]: ...
+    def __repr__(self, /) -> str: ...
+    @property
+    def actions(self, /) -> DefenderActions | None:
+        """
+        Automated actions run on the entities a detection finds.
+        """
+    @property
+    def alert(self, /) -> DefenderAlert | None:
+        """
+        The alert template. Every field has a deploy-time default.
+        """
+    @property
+    def contributors(self, /) -> list[str] | None:
+        """
+        Platform contributors.
+        """
+    @property
+    def enabled(self, /) -> bool:
+        """
+        Whether this platform block is active.
+        """
+    @property
+    def entities(self, /) -> DefenderEntities | None:
+        """
+        Result columns mapped to the alert's entities.
+        """
+    @property
+    def exclusions(self, /) -> list[DefenderExclusion] | None:
+        """
+        Per-tenant KQL fragments appended to `query`.
+        """
+    @property
+    def flags(self, /) -> list[str] | None:
+        """
+        Platform flags.
+        """
+    @property
+    def incident(self, /) -> DefenderIncident | None:
+        """
+        **Beta-only.** Incident correlation.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> MicrosoftDefenderConfig:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
+    def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> MicrosoftDefenderConfig:
+        """
+        A copy, with `update`'s fields replaced; the result is
+        validated. Models are frozen, so `deep` changes nothing.
+        """
+    def model_dump(self, /, *, mode: str = "python", by_alias: bool = False, exclude_none: bool = False) -> dict:
+        """
+        The fields as a dict: attribute names (`by_alias`: the
+        serialised ones), nested models as dicts. `mode` is
+        `"python"` or `"json"`, which give the same values.
+        """
+    def model_dump_json(self, /, *, by_alias: bool = False, exclude_none: bool = False, indent: SupportsIndex | None = None) -> str:
+        """
+        `model_dump` as JSON text, non-ASCII characters as they are.
+        """
+    @classmethod
+    def model_json_schema(cls, /, by_alias: bool = True, mode: str = "validation") -> dict:
+        """
+        The model's JSON Schema, the fields under their serialised
+        names (`by_alias=True` only); `mode` is `"validation"` or
+        `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
+        """
+    @classmethod
+    def model_validate(cls, /, obj: Any) -> MicrosoftDefenderConfig:
+        """
+        Builds the model from a dict (or a model), checked; raises
+        `ValidationError` with every error.
+        """
+    @classmethod
+    def model_validate_json(cls, /, json_data: str) -> MicrosoftDefenderConfig:
+        """
+        `model_validate` of a JSON document.
+        """
+    @property
+    def name(self, /) -> str:
+        """
+        Platform-specific rule name.
+        """
+    @property
+    def platform_schema(self, /) -> str | None:
+        """
+        Platform schema identifier, for example `platform::sentinel::1.0`.
+        """
+    @property
+    def query(self, /) -> str:
+        """
+        KQL. Multiline. Compiled with matching `exclusions` before deploy.
+        """
+    @property
+    def schedule(self, /) -> DefenderSchedule:
+        """
+        How often the rule runs, and how far back each run reads.
+        """
+    @property
+    def schema(self, /) -> str | None:
+        """
+        The serialised name of the schema identifier field,
+        read-only (`metadata.schema`, `block.schema`).
+        """
+    @classmethod
+    def schema_identifier(cls, /) -> str:
+        """
+        The canonical schema identifier (`rule::1.0`).
+        """
+    @property
+    def scope(self, /) -> DefenderScope | None:
+        """
+        Device groups the rule applies to. Omitted: every device.
+        """
+    @property
+    def status(self, /) -> str:
+        """
+        Deployment status of this platform block, from the statuses in `deployment.toml`. Required:
+        the deploy planner selects on it.
+        """
+    @property
+    def tenants(self, /) -> list[str] | None:
+        """
+        Target tenant identifiers.
+        """
+
+@final
 class ObjectMetadata:
     """
     The metadata of every Tide object (`ObjectMetadata`).
@@ -8279,7 +10141,7 @@ class RuleConfigurations:
         HarfangLab Sigma or YARA rule (`platform::harfanglab::1.0`).
         """
     @property
-    def microsoft_defender(self, /) -> DefenderConfig | None:
+    def microsoft_defender(self, /) -> MicrosoftDefenderConfig | None:
         """
         Microsoft Defender custom detection (`platform::microsoft_defender::1.0`).
         """
