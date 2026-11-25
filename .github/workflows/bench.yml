@@ -78,7 +78,7 @@ jobs:
       # that the crates both build hit). This workflow saves none: its two
       # target trees evicted the caches pull requests restore (the 10 GB
       # GitHub keeps per repository).
-      - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
+      - uses: taiki-e/install-action@fe3acb53a98b62c772db35de75ce0e4595e7ca8c # v2.90.8
         with:
           tool: sccache@0.19.0
       # The compiler cache's week: its key is the toolchain and the ISO week,
