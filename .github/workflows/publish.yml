@@ -807,10 +807,17 @@ jobs:
                   sys.exit(0)
               if time.monotonic() >= deadline:
                   print(f"::error::The index is missing {missing} for {project} {version} ({status}).")
-                  # A resume runs development's publish.yml: Run workflow, or the
-                  # repository_dispatch trigger for a token without actions: write.
+                  # First choice: re-run this run's failed jobs, which reuse its
+                  # artifacts (no rebuild). Otherwise a resume runs development's
+                  # publish.yml: Run workflow, or the repository_dispatch trigger
+                  # for a token without actions: write; it rebuilds from the tag.
+                  run_id = os.environ.get("GITHUB_RUN_ID", "<run id>")
                   print(
-                      "Resume without retagging; skip-existing uploads only the missing files:\n"
+                      "Re-run this run's failed jobs once the index has caught up; they reuse its\n"
+                      "artifacts, nothing is rebuilt, and skip-existing uploads only the missing files:\n"
+                      f"  gh run rerun {run_id} --failed --repo opentidehq/opentide\n"
+                      "If this run cannot be re-run (its artifacts expired, or publish.yml needs a fix),\n"
+                      "resume without retagging (this rebuilds from the tag):\n"
                       "  gh workflow run publish.yml --repo opentidehq/opentide --ref development \\\n"
                       f"    -f checkout_ref=v{version}\n"
                       f"or Actions > Publish > Run workflow on development with checkout_ref=v{version}"

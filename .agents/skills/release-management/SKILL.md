@@ -281,7 +281,7 @@ gh api "repos/opentidehq/opentide/actions/workflows/publish.yml/runs?per_page=1"
   --jq '.workflow_runs[0] | "\(.id) \(.status) \(.conclusion) \(.head_sha)"'
 ```
 
-**Resume a release that failed partway.** Never retag, never delete a published Release. Run **Publish** with `checkout_ref: v0.x.y` (a candidate: `vX.Y.Z-rc.N`). It rebuilds from the tag, uploads nothing to its Release (consumers pinned those digests), verifies the published assets, and publishes only what each registry lacks (`skip-existing` on PyPI, crates already on crates.io and npm versions already there are skipped). **The ref matters:** a run uses the `publish.yml` of the ref it is dispatched on.
+**Resume a release that failed partway.** Never retag, never delete a published Release. **First, Re-run failed jobs on the same run** (`gh run rerun <run id> --failed`; cloud: `actions_run_trigger` with `method: rerun_failed_jobs` and the `run_id`): every job after `build` works from the run's artifacts and is safe to repeat (the GitHub Release job deletes an untagged draft a failed attempt left, PyPI `skip-existing`, crates and npm versions already published are skipped), so nothing is rebuilt, smoke-tested or scanned again. Only when a re-run cannot help (the fix is in `publish.yml` or a script it runs: a re-run uses the original attempt's workflow file; the artifacts expired) run **Publish** with `checkout_ref: v0.x.y` (a candidate: `vX.Y.Z-rc.N`). It rebuilds from the tag, uploads nothing to its Release (consumers pinned those digests), verifies the published assets, and publishes only what each registry lacks (`skip-existing` on PyPI, crates already on crates.io and npm versions already there are skipped). **The ref matters:** a run uses the `publish.yml` of the ref it is dispatched on.
 
 | When | Resume with |
 |------|-------------|
@@ -380,7 +380,8 @@ Link that pull request from the tracking issue in Step 4.
 | Run workflow does not list Publish, or the API cannot find `publish.yml` | `publish.yml` is not on `development`, the default branch, yet: land the stub (`docs/internal/publishing.md`, "Release candidates") |
 | A smoke test failed | Nothing was tagged or published. Fix on `development`, run again |
 | `AV gate` failed (markers, sizes, ClamAV, YARA or Defender) | Nothing was tagged or published. The job's log names the engine, the signature or rule and the file ([Step 1a](#step-1a--the-antivirus-gate)); fix the build, or report a false positive to the vendor and add a reviewed YARA allow-list entry. Never upload the artifact to a public scanner |
-| A registry job failed after the **GitHub Release** job created the tag | Run workflow on `development` with `checkout_ref=v0.x.y` (cloud: `actions_run_trigger` with `ref: development` and `inputs: {checkout_ref: v0.x.y}`). Do not delete the tag or the Release |
+| `GitHub Release` failed (a GitHub 5xx while uploading or publishing) | Re-run failed jobs on that run: the job deletes the untagged draft it left and starts again, from the run's artifacts |
+| A registry job failed after the **GitHub Release** job created the tag | Re-run failed jobs on that run first (its artifacts, no rebuild); if that cannot work (a fix to `publish.yml`, expired artifacts), Run workflow on `development` with `checkout_ref=v0.x.y` (cloud: `actions_run_trigger` with `ref: development` and `inputs: {checkout_ref: v0.x.y}`). Do not delete the tag or the Release |
 | `Verify the published assets` failed | It is the published assets that failed (sums, set, attestation): fix the cause, then resume with `checkout_ref`, or cut a patch release |
 | 403 `invalid-publisher` on PyPI | OIDC fields: owner `opentidehq` (lowercase), workflow `publish.yml`, environment `pypi` (a candidate's too). Re-run; do not retag |
 | crates.io: `trusted publishing tokens do not support creating new crates` with no `CARGO_REGISTRY_TOKEN` | A crate's first version needs the stored token (docs/internal/publishing.md, step 10). Add the secret, resume, then **delete** it again. The trust step runs only when the trusted login failed or a crate was created with the token; a failure there is a warning |
@@ -393,8 +394,8 @@ Link that pull request from the tracking issue in Step 4.
 | npm: `npm's next is already …, newer than …` | The candidate would move `next` backwards (an older candidate resumed, or an older branch). Nothing was published to npm; cut the next candidate instead |
 | Guard: `… is older than v1.0.0-rc.3, the first candidate that publishes to npm` | A `checkout_ref` resume of `v1.0.0-rc.1` or `rc.2` would publish an old version under `next`. Cut the next candidate |
 | npm: `::warning::next trails latest …` (after a release) | Trusted publishing cannot move a dist-tag. As a maintainer signed in to npm run `npm dist-tag add <pkg>@X.Y.Z next` for each of the eleven packages (`docs/internal/publishing.md`, "After the final release") |
-| `502` / 5xx on PyPI upload, some files already there (0.4.0) | Resume with `checkout_ref=v0.x.y` on `development`; `skip-existing` uploads only the missing files. The step log prints the command |
-| Verify PyPI lists every built file fails | Wait out the CDN delay (Step 3), then resume |
+| `502` / 5xx on PyPI upload, some files already there (0.4.0) | Re-run failed jobs on that run (`skip-existing` uploads only the missing files); otherwise resume with `checkout_ref=v0.x.y` on `development`; `skip-existing` uploads only the missing files. The step log prints the command |
+| Verify PyPI lists every built file fails | Wait out the CDN delay (Step 3), then re-run failed jobs (the step prints the command) |
 | New tag not shown as Latest | `gh release edit v0.x.y --repo opentidehq/opentide --latest` |
 | Core Metadata 2.5 | Already pinned to `2.4` in pyproject sdist/wheel. `uvx twine check dist/*` before tag |
 
