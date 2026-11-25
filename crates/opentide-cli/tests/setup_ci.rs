@@ -397,7 +397,10 @@ fn a_variable_group_is_linked_on_azure_and_ignored_elsewhere() {
         "{stderr}"
     );
     let github = std::fs::read_to_string(ws.join(".github/workflows/opentide.yml")).unwrap();
-    assert!(!github.contains("group"), "{github}");
+    // No Library variable group: the deploy jobs' `concurrency: group:` is
+    // not one.
+    assert!(!github.contains("- group:"), "{github}");
+    assert!(!github.contains("group: x"), "{github}");
 
     let (code, _stdout, stderr) = opentide(
         &ws,
