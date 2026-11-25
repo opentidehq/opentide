@@ -150,16 +150,16 @@ jobs:
 
   # Everything a platform ships, in at most two jobs per platform with one
   # toolchain (the release rust-toolchain.toml pins, installed by name:
-  # scripts/build/install-rust.sh) and one target directory each. Grouped
-  # where the builds share their compilation and the job stays off the
-  # critical path, split where the numbers say so (publish.yml dry run
-  # 45689884299, one job per platform: macos-arm64 39 min, windows-x64 32,
-  # against about 22 for the longest leg below):
+  # scripts/build/install-rust.sh) and one target directory each, grouped
+  # where the builds share their compilation, split where one job would set
+  # the run's length (measured: publish.yml dry runs 45689884299, one job per
+  # platform, macos-arm64 39 min and windows-x64 32; 45697222643, macOS npm
+  # with the wheel, 32):
   #   - the binaries (`opentide-lsp`, then `opentide`, which reuses its crates:
-  #     11 min after it on macOS, 17 alone) and, on Linux, the npm addon (the
-  #     facade with `cli`, the binaries' own crate graph);
-  #   - the wheel (maturin), and on macOS the npm addon before it; on Linux in
-  #     the manylinux_2_28 image, which shares nothing with the host's builds;
+  #     11 min after it on macOS, 17 alone), then the npm addon (the facade
+  #     with `cli`, the binaries' own crate graph: 5 to 7 min after them);
+  #   - the wheel (maturin; on Linux in the manylinux_2_28 image, which shares
+  #     nothing with the host's builds);
   #   - on Windows (no binary ships) the addon and the wheel apart: together
   #     32 min, the run's longest.
   # Each artifact reports the version its users see: the binaries the tag's
@@ -182,10 +182,10 @@ jobs:
           - { platform: linux-x64, part: wheel, os: ubuntu-latest, target: x86_64-unknown-linux-gnu, binaries: false, addon: false, wheel: true, npm: linux-x64-gnu, tag: manylinux_2_28_x86_64 }
           - { platform: linux-arm64, part: binaries + npm, os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu, binaries: true, addon: true, wheel: false, npm: linux-arm64-gnu, tag: manylinux_2_28_aarch64 }
           - { platform: linux-arm64, part: wheel, os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu, binaries: false, addon: false, wheel: true, npm: linux-arm64-gnu, tag: manylinux_2_28_aarch64 }
-          - { platform: macos-arm64, part: binaries, os: macos-latest, target: aarch64-apple-darwin, binaries: true, addon: false, wheel: false, npm: darwin-arm64, tag: macosx_11_0_arm64 }
-          - { platform: macos-arm64, part: npm + wheel, os: macos-latest, target: aarch64-apple-darwin, binaries: false, addon: true, wheel: true, npm: darwin-arm64, tag: macosx_11_0_arm64 }
-          - { platform: macos-x64, part: binaries, os: macos-latest, target: x86_64-apple-darwin, binaries: true, addon: false, wheel: false, npm: darwin-x64, tag: macosx_10_12_x86_64 }
-          - { platform: macos-x64, part: npm + wheel, os: macos-latest, target: x86_64-apple-darwin, binaries: false, addon: true, wheel: true, npm: darwin-x64, tag: macosx_10_12_x86_64 }
+          - { platform: macos-arm64, part: binaries + npm, os: macos-latest, target: aarch64-apple-darwin, binaries: true, addon: true, wheel: false, npm: darwin-arm64, tag: macosx_11_0_arm64 }
+          - { platform: macos-arm64, part: wheel, os: macos-latest, target: aarch64-apple-darwin, binaries: false, addon: false, wheel: true, npm: darwin-arm64, tag: macosx_11_0_arm64 }
+          - { platform: macos-x64, part: binaries + npm, os: macos-latest, target: x86_64-apple-darwin, binaries: true, addon: true, wheel: false, npm: darwin-x64, tag: macosx_10_12_x86_64 }
+          - { platform: macos-x64, part: wheel, os: macos-latest, target: x86_64-apple-darwin, binaries: false, addon: false, wheel: true, npm: darwin-x64, tag: macosx_10_12_x86_64 }
           - { platform: windows-x64, part: npm, os: windows-latest, target: x86_64-pc-windows-msvc, binaries: false, addon: true, wheel: false, npm: win32-x64-msvc, tag: win_amd64 }
           - { platform: windows-x64, part: wheel, os: windows-latest, target: x86_64-pc-windows-msvc, binaries: false, addon: false, wheel: true, npm: win32-x64-msvc, tag: win_amd64 }
           - { platform: windows-arm64, part: npm, os: windows-11-arm, target: aarch64-pc-windows-msvc, binaries: false, addon: true, wheel: false, npm: win32-arm64-msvc, tag: win_arm64 }
@@ -530,6 +530,7 @@ jobs:
           set -euo pipefail
           npm install --global npm@11.21.1
           version="$(npm --version)"
+          # shellcheck disable=SC2016 # a JavaScript template string, not the shell's
           node -e '
             const [major, minor, patch] = process.argv[1].split(".").map(Number);
             const ok = major > 11 || (major === 11 && (minor > 5 || (minor === 5 && patch >= 1)));
@@ -543,6 +544,7 @@ jobs:
             version="$(node -p "require('./${dir}/package.json').version")"
             echo "::group::${name}@${version}"
             (cd "${dir}" && npm pack --dry-run --json) > "${RUNNER_TEMP}/pack.json"
+            # shellcheck disable=SC2016 # a JavaScript template string, not the shell's
             node -e '
               const files = require(process.argv[1])[0].files.map((file) => file.path).sort();
               const expected = ["LICENSE", "README.md", "package.json"];
