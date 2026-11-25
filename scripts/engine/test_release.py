@@ -1380,11 +1380,23 @@ class ReleaseWorkflowTest(unittest.TestCase):
 
     def test_a_released_tag_is_never_uploaded_again(self) -> None:
         attach = workflow_jobs()["release"]
+        # Only an untagged draft (never published) is cleared, then nothing is
+        # uploaded to a release that has assets: the uploads go to the draft
+        # this step creates, and only publishing it creates the tag.
+        stale = attach.index('python3 scripts/engine/release.py stale-draft "${TAG}"')
         guard = attach.index('python3 scripts/engine/release.py unpublished "${TAG}"')
-        self.assertLess(guard, attach.index("gh release create"))
-        self.assertNotIn("gh release upload", attach)
-        self.assertNotIn("--clobber", attach)
+        create = attach.index('gh release create "${TAG}"')
+        upload = attach.index('gh release upload "${TAG}"')
+        publish = attach.index('gh release edit "${TAG}"')
+        self.assertLess(stale, guard)
+        self.assertLess(guard, create)
+        self.assertLess(create, upload)
+        self.assertLess(upload, publish)
+        self.assertIn("--draft \\\n", attach[create:upload])
+        self.assertIn("publish=(--draft=false)", attach[upload:publish])
+        self.assertEqual(attach.count("gh release upload"), 1)
         self.assertNotIn("delete-asset", attach)
+        self.assertNotIn("gh release delete", attach)
 
     def test_run_workflow_releases_from_development_only(self) -> None:
         guard = workflow_jobs()["guard"]
