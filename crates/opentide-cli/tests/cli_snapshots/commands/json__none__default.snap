@@ -5725,6 +5725,137 @@ exit: 0
       "title": "QueryWindow",
       "type": "object"
     },
+    "ReplayStateResult": {
+      "additionalProperties": true,
+      "description": "``opentide deploy replay-state``: one commit's deployment-state changes replayed onto the checkout.",
+      "properties": {
+        "command": {
+          "description": "The command that ran, such as 'validate query'",
+          "title": "Command",
+          "type": "string"
+        },
+        "conflicts": {
+          "description": "One deployment_state_conflict line per binding a concurrent run changed too: this commit's id was kept",
+          "items": {
+            "type": "string"
+          },
+          "title": "Conflicts",
+          "type": "array"
+        },
+        "duration_ms": {
+          "description": "Wall time of the command",
+          "title": "Duration Ms",
+          "type": "integer"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "On a failure: the error message",
+          "title": "Error"
+        },
+        "exit_code": {
+          "description": "The process exit code",
+          "title": "Exit Code",
+          "type": "integer"
+        },
+        "failure": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FailureModel"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "null exactly when exit_code is 0"
+        },
+        "message": {
+          "description": "The outcome in one sentence",
+          "title": "Message",
+          "type": "string"
+        },
+        "next_actions": {
+          "description": "Commands worth running next",
+          "items": {
+            "$ref": "#/$defs/NextActionModel"
+          },
+          "title": "Next Actions",
+          "type": "array"
+        },
+        "ok": {
+          "description": "false when the command failed",
+          "title": "Ok",
+          "type": "boolean"
+        },
+        "removed": {
+          "description": "Shards removed because no binding was left",
+          "items": {
+            "type": "string"
+          },
+          "title": "Removed",
+          "type": "array"
+        },
+        "schema_version": {
+          "const": 1,
+          "description": "Version of the envelope",
+          "title": "Schema Version",
+          "type": "integer"
+        },
+        "state_commit": {
+          "description": "The commit whose deployment-state changes were replayed",
+          "title": "State Commit",
+          "type": "string"
+        },
+        "status": {
+          "description": "completed, passed, issues, skipped or failed",
+          "title": "Status",
+          "type": "string"
+        },
+        "summary": {
+          "additionalProperties": true,
+          "description": "Counts behind the outcome line",
+          "title": "Summary",
+          "type": "object"
+        },
+        "warnings": {
+          "description": "Present when the command has warnings",
+          "items": {
+            "type": "string"
+          },
+          "title": "Warnings",
+          "type": "array"
+        },
+        "written": {
+          "description": "Shards written, relative to the repository root",
+          "items": {
+            "type": "string"
+          },
+          "title": "Written",
+          "type": "array"
+        }
+      },
+      "required": [
+        "ok",
+        "status",
+        "message",
+        "schema_version",
+        "command",
+        "duration_ms",
+        "exit_code",
+        "summary",
+        "next_actions",
+        "failure"
+      ],
+      "title": "ReplayStateResult",
+      "type": "object"
+    },
     "RuleOutcome": {
       "additionalProperties": true,
       "description": "How one rule on one tenant went in a real run (#675).",
@@ -12632,7 +12763,8 @@ exit: 0
       "path": "deploy",
       "runs_alone": true,
       "subcommands": [
-        "migrate-state"
+        "migrate-state",
+        "replay-state"
       ],
       "summary": "Deploy rules to platform tenants"
     },
@@ -12658,6 +12790,40 @@ exit: 0
       "runs_alone": true,
       "subcommands": [],
       "summary": "Move vendor ids from rules into deployment state"
+    },
+    {
+      "arguments": [
+        {
+          "choices": null,
+          "default": null,
+          "envvars": [],
+          "help": "Commit whose deployment-state changes to replay",
+          "multiple": false,
+          "name": "state_commit",
+          "required": true,
+          "type": "string"
+        }
+      ],
+      "deprecated": false,
+      "example": "opentide deploy replay-state HEAD",
+      "group": false,
+      "help": "Replay one commit's deployment-state changes onto the checkout (CI write-back).\n\nThe generated production write-back runs it when its rule files conflict\nwith a concurrent merge: only the bindings <state_commit> changed against\nits parent are applied to the checkout's shards, so ids other runs recorded\nare kept. A binding both runs changed keeps this commit's id and prints\ndeployment_state_conflict with both ids. No vendor calls.",
+      "name": "replay-state",
+      "options": [],
+      "output_schema": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/ReplayStateResult"
+          },
+          {
+            "$ref": "#/$defs/CommandError"
+          }
+        ]
+      },
+      "path": "deploy replay-state",
+      "runs_alone": true,
+      "subcommands": [],
+      "summary": "Replay one commit's deployment-state changes onto the checkout (CI write-back)"
     },
     {
       "arguments": [],
@@ -15880,14 +16046,14 @@ exit: 0
       "type": "boolean"
     }
   ],
-  "message": "58 commands",
+  "message": "59 commands",
   "next_actions": [],
   "ok": true,
   "program": "opentide",
   "schema_version": 1,
   "status": "completed",
   "summary": {
-    "commands": 58,
+    "commands": 59,
     "groups": 15
   },
   "version": "0.28.1"

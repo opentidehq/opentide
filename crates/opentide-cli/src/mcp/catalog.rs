@@ -456,12 +456,20 @@ fn within_hops(edges: &[Edge], start: &str, depth: usize) -> HashSet<String> {
     reached
 }
 
+/// The hops `get_chaining` follows when the call names no `depth`: the
+/// object's direct neighbours. A whole lineage can hold most of a large
+/// catalogue, so it is fetched only by asking for a larger depth.
+pub const DEFAULT_CHAINING_DEPTH: usize = 1;
+
 /// `get_chaining`: the lineage of the object `uuid` names; a signal's UUID
-/// names its objective (`resolved_from`). With `depth`, only the objects
-/// within that many hops of it, in either direction (`0`: the object
-/// alone). `chaining_index` holds only the UUIDs of the returned graph, and
-/// each entry only those of them.
-pub fn get_chaining(index: &Index, uuid: &str, depth: Option<usize>) -> Json {
+/// names its objective (`resolved_from`). Only the objects within `depth`
+/// hops of it, in either direction, are returned (`0`: the object alone);
+/// when the lineage reaches further, the answer says so with `truncated` and
+/// a `hint`. `chaining_index` holds the `threat.chaining` relation of each
+/// returned threat that has one, narrowed to the returned objects; every
+/// other returned object's graph is `lineage`, which is not repeated per
+/// object.
+pub fn get_chaining(index: &Index, uuid: &str, depth: usize) -> Json {
     let (found, resolved_from) = match get_object(index, uuid) {
         Some(found) => (Some(found), None),
         None => match index.signal(uuid) {
@@ -478,9 +486,11 @@ pub fn get_chaining(index: &Index, uuid: &str, depth: Option<usize>) -> Json {
     };
     let edges = lineage_edges(index);
     let lineages = lineage_by_uuid(index, &edges);
-    // What a `depth` lets through; every UUID without one.
-    let allowed = depth.map(|depth| within_hops(&edges, node.uuid, depth));
-    let keeps = |uuid: &str| allowed.as_ref().is_none_or(|set| set.contains(uuid.trim()));
+    let allowed = within_hops(&edges, node.uuid, depth);
+    // Cut when the walk could still go on: an object `depth` hops away has
+    // a neighbour that was not reached.
+    let truncated = within_hops(&edges, node.uuid, depth.saturating_add(1)).len() > allowed.len();
+    let keeps = |uuid: &str| allowed.contains(uuid.trim());
     let narrow_relation = |relation: &IndexMap<String, Vec<String>>| {
         let kept: IndexMap<String, Vec<String>> = relation
             .iter()
@@ -488,7 +498,7 @@ pub fn get_chaining(index: &Index, uuid: &str, depth: Option<usize>) -> Json {
                 let vectors: Vec<String> = vectors.iter().filter(|v| keeps(v)).cloned().collect();
                 (name.clone(), vectors)
             })
-            .filter(|(_, vectors)| allowed.is_none() || !vectors.is_empty())
+            .filter(|(_, vectors)| !vectors.is_empty())
             .collect();
         relation_json(&kept)
     };
@@ -501,7 +511,7 @@ pub fn get_chaining(index: &Index, uuid: &str, depth: Option<usize>) -> Json {
     let alone = |lineage: &Lineage| lineage.iter().map(Vec::len).sum::<usize>() <= 1;
     let graph = match (relation, &lineage) {
         (Some(relation), _) => narrow_relation(relation),
-        (None, Some(lineage)) if allowed.is_none() || !alone(lineage) => lineage_json(lineage),
+        (None, Some(lineage)) if !alone(lineage) => lineage_json(lineage),
         _ => Json::object::<&str>([]),
     };
     // Every UUID the response names: the object, the vectors of its
@@ -519,23 +529,15 @@ pub fn get_chaining(index: &Index, uuid: &str, depth: Option<usize>) -> Json {
     if let Some(lineage) = &lineage {
         present.extend(lineage.iter().flatten().cloned());
     }
-    let mut chaining_index: Vec<(String, Json)> = index
+    // Only the chaining relations: an object without one has `lineage` for
+    // its graph, and repeating it under every member made the answer grow
+    // with the square of the lineage.
+    let chaining_index: Vec<(String, Json)> = index
         .chaining
         .iter()
         .filter(|(uuid, relation)| !relation.is_empty() && present.contains(*uuid))
         .map(|(uuid, relation)| (uuid.clone(), narrow_relation(relation)))
         .collect();
-    for (uuid, lineage) in &lineages {
-        if present.contains(uuid) && !chaining_index.iter().any(|(key, _)| key == uuid) {
-            let lineage = narrow_lineage(lineage);
-            let entry = if alone(&lineage) && allowed.is_some() {
-                Json::object::<&str>([])
-            } else {
-                lineage_json(&lineage)
-            };
-            chaining_index.push((uuid.clone(), entry));
-        }
-    }
     let mut payload = vec![
         ("uuid".to_owned(), Json::str(node.uuid)),
         ("found".to_owned(), Json::Bool(true)),
@@ -551,6 +553,15 @@ pub fn get_chaining(index: &Index, uuid: &str, depth: Option<usize>) -> Json {
     }
     if let Some(lineage) = &lineage {
         payload.push(("lineage".to_owned(), lineage_json(lineage)));
+    }
+    if truncated {
+        payload.push(("truncated".to_owned(), Json::Bool(true)));
+        payload.push((
+            "hint".to_owned(),
+            Json::str(format!(
+                "The lineage goes on beyond {depth} hop(s): call get_chaining again with a larger depth to follow it."
+            )),
+        ));
     }
     Json::object(payload)
 }
@@ -1008,7 +1019,11 @@ mod tests {
     #[test]
     fn chaining_links_threats_objectives_and_rules() {
         let ws = ws();
-        let graph = get_chaining(ws.index(), "33333333-3333-4333-8333-333333333333", None);
+        let graph = get_chaining(
+            ws.index(),
+            "33333333-3333-4333-8333-333333333333",
+            usize::MAX,
+        );
         assert_eq!(graph.get("type"), Some(&Json::str("rule")));
         let lineage = graph.get("lineage").unwrap();
         assert_eq!(
@@ -1018,7 +1033,7 @@ mod tests {
             ))
         );
         assert_eq!(graph.get("graph"), Some(lineage));
-        let unknown = get_chaining(ws.index(), "nope", None);
+        let unknown = get_chaining(ws.index(), "nope", usize::MAX);
         assert_eq!(unknown.get("found"), Some(&Json::Bool(false)));
     }
 
@@ -1064,7 +1079,7 @@ mod tests {
     #[test]
     fn a_rule_on_a_signal_stays_in_its_objectives_lineage() {
         let ws = signal_ws();
-        let rule = get_chaining(ws.index(), SIGNAL_RULE, None);
+        let rule = get_chaining(ws.index(), SIGNAL_RULE, usize::MAX);
         let graph = rule.get("graph").unwrap();
         assert_eq!(
             ids(graph.get("objectives")),
@@ -1076,7 +1091,11 @@ mod tests {
             ["11111111-1111-4111-8111-111111111111"]
         );
         // The objective sees its rule.
-        let objective = get_chaining(ws.index(), "22222222-2222-4222-8222-222222222222", None);
+        let objective = get_chaining(
+            ws.index(),
+            "22222222-2222-4222-8222-222222222222",
+            usize::MAX,
+        );
         assert_eq!(
             ids(objective.get("graph").unwrap().get("rules")),
             [SIGNAL_RULE]
@@ -1087,7 +1106,7 @@ mod tests {
     #[test]
     fn a_signal_uuid_resolves_to_its_objective() {
         let ws = signal_ws();
-        let chained = get_chaining(ws.index(), SIGNAL, None);
+        let chained = get_chaining(ws.index(), SIGNAL, usize::MAX);
         assert_eq!(chained.get("found"), Some(&Json::Bool(true)));
         assert_eq!(chained.get("type"), Some(&Json::str("objective")));
         assert_eq!(
@@ -1105,23 +1124,34 @@ mod tests {
     }
 
     #[test]
-    fn chaining_index_holds_only_the_returned_graph() {
+    fn the_answer_holds_only_the_returned_lineage() {
         let ws = signal_ws();
-        let chained = get_chaining(ws.index(), SIGNAL_RULE, None);
-        let Some(Json::Object(entries)) = chained.get("chaining_index") else {
-            panic!("no chaining_index");
-        };
-        let keys: Vec<&str> = entries.iter().map(|(key, _)| key.as_str()).collect();
-        assert!(keys.contains(&SIGNAL_RULE), "{keys:?}");
+        let chained = get_chaining(ws.index(), SIGNAL_RULE, usize::MAX);
+        let members = lineage_ids(&chained);
+        assert!(members.contains(&SIGNAL_RULE.to_owned()), "{members:?}");
         assert!(
-            !keys.contains(&OTHER_THREAT)
-                && !keys.contains(&"77777777-7777-4777-8777-777777777777"),
-            "an unrelated threat stays out: {keys:?}"
+            !members.contains(&OTHER_THREAT.to_owned())
+                && !members.contains(&"77777777-7777-4777-8777-777777777777".to_owned()),
+            "an unrelated threat stays out: {members:?}"
         );
+        // No threat here has a chaining relation: `lineage` is every
+        // object's graph, and it is not repeated per object.
+        assert!(index_keys(&chained).is_empty(), "{chained:?}");
     }
 
     const OBJECTIVE_ID: &str = "22222222-2222-4222-8222-222222222222";
     const THREAT_ID: &str = "11111111-1111-4111-8111-111111111111";
+
+    /// Every UUID of the answer's `lineage`, sorted.
+    fn lineage_ids(chained: &Json) -> Vec<String> {
+        let lineage = chained.get("lineage").expect("a lineage");
+        let mut members: Vec<String> = ["threats", "objectives", "rules"]
+            .into_iter()
+            .flat_map(|family| ids(lineage.get(family)))
+            .collect();
+        members.sort();
+        members
+    }
 
     fn index_keys(chained: &Json) -> Vec<String> {
         let Some(Json::Object(entries)) = chained.get("chaining_index") else {
@@ -1135,10 +1165,11 @@ mod tests {
     #[test]
     fn depth_zero_is_the_object_alone() {
         let ws = signal_ws();
-        let chained = get_chaining(ws.index(), SIGNAL_RULE, Some(0));
+        let chained = get_chaining(ws.index(), SIGNAL_RULE, 0);
         assert_eq!(chained.get("found"), Some(&Json::Bool(true)));
         assert_eq!(chained.get("graph"), Some(&Json::object::<&str>([])));
-        assert_eq!(index_keys(&chained), [SIGNAL_RULE]);
+        assert!(index_keys(&chained).is_empty(), "{chained:?}");
+        assert_eq!(chained.get("truncated"), Some(&Json::Bool(true)));
         let lineage = chained.get("lineage").unwrap();
         assert_eq!(ids(lineage.get("rules")), [SIGNAL_RULE]);
         assert!(ids(lineage.get("objectives")).is_empty());
@@ -1149,35 +1180,30 @@ mod tests {
     fn depth_one_is_the_neighbours_in_both_directions() {
         let ws = signal_ws();
         // From the rule: its objective, not the threat behind it.
-        let rule = get_chaining(ws.index(), SIGNAL_RULE, Some(1));
+        let rule = get_chaining(ws.index(), SIGNAL_RULE, 1);
         let graph = rule.get("graph").unwrap();
         assert_eq!(ids(graph.get("objectives")), [OBJECTIVE_ID]);
         assert_eq!(ids(graph.get("rules")), [SIGNAL_RULE]);
         assert!(ids(graph.get("threats")).is_empty(), "{graph:?}");
         let mut expected = vec![SIGNAL_RULE.to_owned(), OBJECTIVE_ID.to_owned()];
         expected.sort();
-        assert_eq!(index_keys(&rule), expected);
-        // An entry names only what is returned: not the threat two hops out.
-        let Some(Json::Object(entries)) = rule.get("chaining_index") else {
-            panic!("no chaining_index");
-        };
-        for (_, entry) in entries {
-            assert!(ids(entry.get("threats")).is_empty(), "{entry:?}");
-        }
+        assert_eq!(lineage_ids(&rule), expected);
+        assert_eq!(rule.get("truncated"), Some(&Json::Bool(true)), "the threat");
         // From the objective: the threat above it and the rule below it.
-        let objective = get_chaining(ws.index(), OBJECTIVE_ID, Some(1));
+        let objective = get_chaining(ws.index(), OBJECTIVE_ID, 1);
         let graph = objective.get("graph").unwrap();
         assert_eq!(ids(graph.get("threats")), [THREAT_ID]);
         assert_eq!(ids(graph.get("rules")), [SIGNAL_RULE]);
-        assert_eq!(index_keys(&objective).len(), 3);
+        assert_eq!(lineage_ids(&objective).len(), 3);
+        assert_eq!(objective.get("truncated"), None, "{objective:?}");
     }
 
     #[test]
     fn a_depth_that_reaches_the_whole_lineage_is_the_whole_lineage() {
         let ws = signal_ws();
-        let full = get_chaining(ws.index(), SIGNAL_RULE, None);
-        assert_eq!(get_chaining(ws.index(), SIGNAL_RULE, Some(2)), full);
-        assert_eq!(get_chaining(ws.index(), SIGNAL_RULE, Some(50)), full);
+        let full = get_chaining(ws.index(), SIGNAL_RULE, usize::MAX);
+        assert_eq!(get_chaining(ws.index(), SIGNAL_RULE, 2), full);
+        assert_eq!(get_chaining(ws.index(), SIGNAL_RULE, 50), full);
         assert_eq!(ids(full.get("graph").unwrap().get("threats")), [THREAT_ID]);
     }
 
@@ -1225,15 +1251,16 @@ mod tests {
             ("objects/rules/r1.yaml", &r1),
             ("objects/rules/r2.yaml", &r2),
         ]);
-        let one = get_chaining(ws.index(), R1, Some(1));
+        let one = get_chaining(ws.index(), R1, 1);
         assert_eq!(
-            index_keys(&one),
+            lineage_ids(&one),
             sorted(vec![R1.into(), OBJECTIVE_ID.into()])
         );
-        let two = get_chaining(ws.index(), R1, Some(2));
+        let two = get_chaining(ws.index(), R1, 2);
         assert_eq!(ids(two.get("graph").unwrap().get("rules")), [R1, R2]);
         assert_eq!(ids(two.get("graph").unwrap().get("threats")), [THREAT_ID]);
-        assert_eq!(index_keys(&two).len(), 4);
+        assert_eq!(lineage_ids(&two).len(), 4);
+        assert_eq!(two.get("truncated"), None);
     }
 
     #[test]
@@ -1243,29 +1270,30 @@ mod tests {
             ("objects/threats/a.yaml", &a),
             ("objects/threats/b.yaml", &b),
         ]);
-        let full = get_chaining(ws.index(), TA, None);
+        let full = get_chaining(ws.index(), TA, usize::MAX);
         for depth in [1, 2, 9] {
-            let chained = get_chaining(ws.index(), TA, Some(depth));
+            let chained = get_chaining(ws.index(), TA, depth);
             assert_eq!(index_keys(&chained), [TA, TB], "depth {depth}");
             assert_eq!(chained, full, "depth {depth}");
         }
-        let alone = get_chaining(ws.index(), TA, Some(0));
+        let alone = get_chaining(ws.index(), TA, 0);
         assert_eq!(index_keys(&alone), [TA]);
+        assert_eq!(alone.get("truncated"), Some(&Json::Bool(true)));
         assert_eq!(alone.get("graph"), Some(&Json::object::<&str>([])));
     }
 
     #[test]
     fn a_signal_uuid_combines_with_depth() {
         let ws = signal_ws();
-        let alone = get_chaining(ws.index(), SIGNAL, Some(0));
+        let alone = get_chaining(ws.index(), SIGNAL, 0);
         assert_eq!(alone.get("uuid"), Some(&Json::str(OBJECTIVE_ID)));
         assert_eq!(
             alone.get("resolved_from").and_then(|r| r.get("uuid")),
             Some(&Json::str(SIGNAL))
         );
         assert_eq!(alone.get("graph"), Some(&Json::object::<&str>([])));
-        assert_eq!(index_keys(&alone), [OBJECTIVE_ID]);
-        let one = get_chaining(ws.index(), SIGNAL, Some(1));
+        assert_eq!(lineage_ids(&alone), [OBJECTIVE_ID]);
+        let one = get_chaining(ws.index(), SIGNAL, 1);
         assert_eq!(one.get("resolved_from"), alone.get("resolved_from"));
         assert_eq!(ids(one.get("graph").unwrap().get("threats")), [THREAT_ID]);
         assert_eq!(ids(one.get("graph").unwrap().get("rules")), [SIGNAL_RULE]);
@@ -1284,7 +1312,7 @@ mod tests {
             ("objects/objectives/o.yaml", &objective),
             ("objects/rules/r.yaml", &rule),
         ]);
-        let one = get_chaining(ws.index(), THREAT_ID, Some(1));
+        let one = get_chaining(ws.index(), THREAT_ID, 1);
         // graph stays the chaining relation; lineage is cut at one hop.
         assert_eq!(
             one.get("graph"),
@@ -1298,12 +1326,16 @@ mod tests {
         assert_eq!(ids(lineage.get("objectives")), [OBJECTIVE_ID]);
         assert!(ids(lineage.get("rules")).is_empty());
         assert_eq!(
-            index_keys(&one),
+            lineage_ids(&one),
             sorted(vec![THREAT_ID.into(), TB.into(), OBJECTIVE_ID.into()])
         );
-        let two = get_chaining(ws.index(), THREAT_ID, Some(2));
+        // Only the chaining relation is indexed: the objective's graph is
+        // `lineage`.
+        assert_eq!(index_keys(&one), [THREAT_ID]);
+        assert_eq!(one.get("truncated"), Some(&Json::Bool(true)), "the rule");
+        let two = get_chaining(ws.index(), THREAT_ID, 2);
         assert_eq!(ids(two.get("lineage").unwrap().get("rules")), [R1]);
-        assert_eq!(two, get_chaining(ws.index(), THREAT_ID, None));
+        assert_eq!(two, get_chaining(ws.index(), THREAT_ID, usize::MAX));
     }
 
     #[test]
@@ -1325,7 +1357,7 @@ mod tests {
         let first = "11111111-1111-4111-8111-111111111111";
         let second = "22222222-2222-4222-8222-222222222222";
         let third = "33333333-3333-4333-8333-333333333333";
-        let near = get_chaining(ws.index(), first, Some(1));
+        let near = get_chaining(ws.index(), first, 1);
         assert_eq!(
             near.get("graph"),
             Some(&Json::object([(
@@ -1333,13 +1365,20 @@ mod tests {
                 Json::Array(vec![Json::str(second)])
             )]))
         );
+        assert_eq!(lineage_ids(&near), [first, second]);
         assert_eq!(index_keys(&near), [first, second]);
-        // Backwards too: the threat that chains into this one.
-        let back = get_chaining(ws.index(), third, Some(1));
-        assert_eq!(index_keys(&back), [second, third]);
-        // Without a depth the whole chain.
-        assert_eq!(index_keys(&get_chaining(ws.index(), first, None)).len(), 3);
-        let alone = get_chaining(ws.index(), first, Some(0));
+        assert_eq!(near.get("truncated"), Some(&Json::Bool(true)), "{near:?}");
+        // Backwards too: the threat that chains into this one, whose
+        // relation is indexed; the third threat has none.
+        let back = get_chaining(ws.index(), third, 1);
+        assert_eq!(lineage_ids(&back), [second, third]);
+        assert_eq!(index_keys(&back), [second]);
+        // A depth as long as the chain returns all of it, uncut.
+        let whole = get_chaining(ws.index(), first, 2);
+        assert_eq!(lineage_ids(&whole).len(), 3);
+        assert_eq!(whole.get("truncated"), None, "{whole:?}");
+        assert_eq!(whole, get_chaining(ws.index(), first, usize::MAX));
+        let alone = get_chaining(ws.index(), first, 0);
         assert_eq!(alone.get("graph"), Some(&Json::object::<&str>([])));
         assert_eq!(index_keys(&alone), [first]);
     }
@@ -1362,18 +1401,60 @@ mod tests {
             ("objects/threats/c.yaml", &c),
             ("objects/objectives/o.yaml", objective),
         ]);
-        let chained = get_chaining(ws.index(), "11111111-1111-4111-8111-111111111111", None);
+        let chained = get_chaining(
+            ws.index(),
+            "11111111-1111-4111-8111-111111111111",
+            usize::MAX,
+        );
         let Some(Json::Object(entries)) = chained.get("chaining_index") else {
             panic!("no chaining_index");
         };
         let keys: Vec<&str> = entries.iter().map(|(key, _)| key.as_str()).collect();
-        for expected in [
-            "11111111-1111-4111-8111-111111111111",
-            "22222222-2222-4222-8222-222222222222",
-            "33333333-3333-4333-8333-333333333333",
-        ] {
-            assert!(keys.contains(&expected), "{expected} in {keys:?}");
-        }
+        // The two threats that chain; the third has `lineage` for its graph.
+        assert_eq!(
+            keys,
+            [
+                "11111111-1111-4111-8111-111111111111",
+                "22222222-2222-4222-8222-222222222222",
+            ]
+        );
+        assert_eq!(lineage_ids(&chained).len(), 3, "{chained:?}");
+    }
+
+    /// The answer no longer repeats the lineage under each of its objects:
+    /// on one objective with many rules it grows with the rules, not with
+    /// their square (2.1 MB on a user's catalogue in 1.0.0-rc.5).
+    #[test]
+    fn a_large_lineage_is_not_repeated_per_object() {
+        let objective = format!(
+            "name: Goal\nmetadata: {{uuid: {OBJECTIVE_ID}, schema: objective::1.0}}\nobjective:\n  threats: [{THREAT_ID}]\n"
+        );
+        let threat = threat_yaml(THREAT_ID, &[]);
+        let rules: Vec<(String, String)> = (0..200)
+            .map(|n| {
+                let uuid = format!("c0c0c0c0-c0c0-4c0c-8c0c-{n:012}");
+                (
+                    format!("objects/rules/r{n}.yaml"),
+                    rule_yaml(&uuid, OBJECTIVE_ID),
+                )
+            })
+            .collect();
+        let mut files: Vec<(&str, &str)> = vec![
+            ("objects/threats/t.yaml", &threat),
+            ("objects/objectives/o.yaml", &objective),
+        ];
+        files.extend(
+            rules
+                .iter()
+                .map(|(path, text)| (path.as_str(), text.as_str())),
+        );
+        let ws = index(&files);
+        let whole = get_chaining(ws.index(), THREAT_ID, usize::MAX);
+        assert_eq!(lineage_ids(&whole).len(), 202);
+        assert!(index_keys(&whole).is_empty());
+        // One lineage (~200 UUIDs of 36 characters) and the graph beside it.
+        let size = whole.to_compact().len();
+        assert!(size < 25_000, "{size} bytes");
     }
 
     #[test]

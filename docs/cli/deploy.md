@@ -142,7 +142,7 @@ opentide --json deploy --platform sentinel --dry-run --strategy PREVIEW --all
 - **Bitdefender**: the `createCustomRule` JSON-RPC body. **Exabeam** and **Graylog**: the create request, `{"method", "path", "body"}`. **Google SecOps**: the `rules.create` body with the run state the deploy sets.
 - **Microsoft Defender, SentinelOne, CrowdStrike, HarfangLab, Splunk and Carbon Black Cloud**: the requests a deploy sends to the first tenant the run sends the rule to, in order, each `{"method", "url", "body"}`, and the entry names that `tenant`. Each `url` is the whole URL the deploy sends to: Splunk's create goes to `https://<url>:<port>/servicesNS/nobody/<app>/saved/searches/` (port `8089` and app `search` when the tenant names none), with the trailing slash, and each update to the saved search's percent-encoded name after it; Carbon Black's URLs start with the tenant's `url`. Splunk sends each body as a form (`application/x-www-form-urlencoded`), not as JSON, so a number or a boolean shown in it (`"is_scheduled": 1`, `"alert.severity": 5`) reaches the tenant as its text (`1`, `5`). `[]` means nothing is sent: a rule to disable or delete that the deployment state has no id for. The rule is compiled for every tenant the run sends it to, so a tenant that cannot take it (a Carbon Black tenant with no watchlist, a SentinelOne tenant with neither `site_id` nor `account_id`) fails the dry run, and the error names it.
 
-Microsoft Defender, SentinelOne and CrowdStrike create a rule, or update or delete the id `.opentide/states/deployment/` records for the tenant, as `changes` says. HarfangLab writes a Sigma rule by its UUID (a `PUT` the tenant answers `404` is sent again as a create) and posts a YARA file. Splunk and Carbon Black Cloud look the rule up on the tenant as they send, and `api_request` is what a tenant that does not hold it yet receives:
+SentinelOne and CrowdStrike create a rule, or update or delete the id `.opentide/states/deployment/` records for the tenant, as `changes` says. Microsoft Defender addresses each rule by its `metadata.uuid`, which is the Defender rule id, and keeps no deployment state ([Microsoft Defender rules](#microsoft-defender-rules)): `api_request` is the rule's first request, the `PATCH` of `detectionRules/<uuid>` that creates, updates or disables it, or the `DELETE` that retires it. HarfangLab writes a Sigma rule by its UUID (a `PUT` the tenant answers `404` is sent again as a create) and posts a YARA file. Splunk and Carbon Black Cloud look the rule up on the tenant as they send, and `api_request` is what a tenant that does not hold it yet receives:
 
 - a Splunk tenant that holds the saved search gets the same updates without the create, and a rule to delete is deleted there (`[]` here); after the writes, or the delete, a deploy sends one `GET` listing the saved searches that name the rule and a `DELETE` for each copy an earlier name of it left, and, once per tenant and only when the listing holds a copy owned by another user, one `GET /services/authentication/current-context` to read the user the token signs in as ([Splunk's renamed rules](#splunks-renamed-rules)): none of them is in `api_request`, since only the tenant knows its saved searches and its user;
 - a Carbon Black report of the same title is updated in place, and a rule to retire has its IOC taken out of the report that holds it (`[]` here).
@@ -180,7 +180,7 @@ The codes are `compile_missing_field`, `compile_empty_block`, `compile_invalid_v
 | Platform | Block field | Sent as |
 |---|---|---|
 | Sentinel | `alert.techniques`, `alert.tactics` | `techniques`, `subTechniques`, `tactics` ([below](#sentinel-techniques)) |
-| Microsoft Defender | `alert.techniques` | the alert template's `mitreTechniques` ([below](#microsoft-defender-techniques)) |
+| Microsoft Defender | `alert.techniques` | the alert template's `tactics` ([below](#microsoft-defender-techniques)) |
 
 **CrowdStrike is the exception.** Its block's `details.tactic` and `details.technique` each hold one value, so they are sent only when set and never inherited: picking one of an objective's several techniques would be arbitrary. The rule's `techniques` are not sent to CrowdStrike either.
 
@@ -202,7 +202,19 @@ Deploy writes the alert rule with ARM api-version `2025-10-01-preview`, because 
 
 #### Microsoft Defender techniques
 
-A Microsoft Defender block's `alert.techniques` is sent as the alert template's `mitreTechniques` (technique and sub-technique ids such as `T1528` and `T1059.001`), as written. A block that sets none, or an empty list, sends the rule's objective's techniques instead, except those outside Enterprise ATT&CK (Mobile and ICS ids): each is left out with a `technique_not_enterprise_left_out` warning in the log naming the rule and the id. A rule whose objective maps techniques cannot send none: to send `[]`, the rule must have no objective techniques. The rule's own `techniques` field is not sent. Defender takes the `att&ck` vocabulary's ids as they are: the Sentinel v18 mapping does not apply. `opentide generate extract defender` imports the tenant's `mitreTechniques` into `alert.techniques`, so an extracted rule redeploys with the same ids.
+A Microsoft Defender block's `alert.techniques` (technique and sub-technique ids such as `T1528` and `T1059.001`) is sent as the alert template's `tactics`: each technique under the tactics the `att&ck` vocabulary gives it, each sub-technique under its parent, with Stealth and Defense Impairment sent as `DefenseEvasion`. A block that sets none, or an empty list, sends the rule's objective's techniques instead. An id outside Enterprise ATT&CK (Mobile and ICS ids), or one the vocabulary does not know, is left out with a `technique_not_enterprise_left_out` warning in the log naming the rule and the id. When no technique is left, the alert template has no `tactics`. The rule's own `techniques` field is not sent. Defender takes the `att&ck` vocabulary's ids as they are: the Sentinel v18 mapping does not apply. `opentide generate extract defender` imports the tenant's tactics tree into `alert.techniques`, so an extracted rule redeploys with the same ids.
+
+#### Microsoft Defender rules
+
+Microsoft Defender rules are custom detections on the Graph **beta** API, `https://graph.microsoft.com/beta/security/rules/detectionRules` ([`platform::microsoft_defender::1.0`](/docs/specifications/specs/platforms/microsoft-defender-1.0/)). The rule's `metadata.uuid` is the Defender rule id, so a deploy reads no deployment state and writes none:
+
+| Change | Requests | The tenant's answer |
+|---|---|---|
+| create or update | `PATCH detectionRules/<uuid>` with the rule | `404`: `POST detectionRules` with the rule and its `id`; that create's `409` (another run created it first): one more `PATCH` |
+| disable (`DISABLED`) | `PATCH detectionRules/<uuid>` with the rule and `status: disabled` | `404`: the rule is skipped, `not on the tenant: nothing to disable`, with the `microsoft_defender_rule_absent` warning |
+| delete (`REMOVED`, `--prune`) | `DELETE detectionRules/<uuid>` | `404`: skipped, `already gone from the tenant` |
+
+The plan counts each active rule as `create or update`; the row of `results` says which it was. Any other answer fails the rule with `tenant_refused`, the status and Graph's message. A deleted rule file is retired by its UUID, like Sentinel and Elastic.
 
 When no rule the run read has a status mapping to its strategies, the command reports `skipped` with exit `0`. The reserved `deploy metadata` command is hidden and returns a non-zero “not implemented” result rather than reporting false success.
 
@@ -393,7 +405,7 @@ A status promotion (a `RELEASE` run on a push to the default branch in CI, witho
 
 ### deploy migrate-state
 
-Moves vendor rule ids off rule files into [deployment state](../usage/concepts/deployment-state.md). Run it once, in every workspace that has deployed to Microsoft Defender, SentinelOne or CrowdStrike with an earlier release. It calls no vendor API and deploys nothing.
+Moves vendor rule ids off rule files into [deployment state](../usage/concepts/deployment-state.md). Run it once, in every workspace that has deployed to SentinelOne or CrowdStrike with an earlier release. It calls no vendor API and deploys nothing.
 
 ```bash
 opentide deploy migrate-state
@@ -404,9 +416,9 @@ What it does:
 
 1. **Refuses a gitignored destination.** If git ignores `.opentide/states/deployment/` (the `.opentide/states/` line older setups wrote does), it exits `1` with `deployment_state_ignored`, names the ignore line, and edits nothing. Replace that line with `.opentide/states/sharing.jsonl`; the command does not edit `.gitignore` itself.
 2. **Scans every `.yaml` and `.yml` file under `objects/rules/`, subfolders included**, for `rule_id`, `rule_id_bundle` and `rule_id::<tenant>` at the root of each platform block.
-3. **Writes the Defender, SentinelOne and CrowdStrike ids to `.opentide/states/deployment/<uuid>.json` first**, flushed to disk, and only then removes the keys from the YAML. Comments, key order and whitespace are kept: only the id lines go.
-4. **Drops the keys of every other platform.** Sentinel, Splunk, HarfangLab, Carbon Black Cloud and the rest address their rules without a vendor id, so their keys are removed and printed as `external_id_unused` (platform, tenant, value, file), not stored.
-5. **Leaves a rule untouched and exits `1`** when a tenant is mapped twice or to a different id than the shard already holds (`external_id_conflict`), or when a value is not a usable id (`external_id_shape`: not a string or integer, an empty tenant or id, or a Defender or SentinelOne id that is not a plain decimal like `12345`). Other rules still migrate.
+3. **Writes the SentinelOne and CrowdStrike ids to `.opentide/states/deployment/<uuid>.json` first**, flushed to disk, and only then removes the keys from the YAML. Comments, key order and whitespace are kept: only the id lines go.
+4. **Drops the keys of every other platform.** Microsoft Defender (whose rule id is the rule's UUID), Sentinel, Splunk, HarfangLab, Carbon Black Cloud and the rest address their rules without a vendor id, so their keys are removed and printed as `external_id_unused` (platform, tenant, value, file), not stored.
+5. **Leaves a rule untouched and exits `1`** when a tenant is mapped twice or to a different id than the shard already holds (`external_id_conflict`), or when a value is not a usable id (`external_id_shape`: not a string or integer, an empty tenant or id, or a SentinelOne id that is not a plain decimal like `12345`). Other rules still migrate.
 
 It exits `0` after a migration, after a second run with nothing left to move, and when the only findings are `external_id_unused` warnings. It exits `1` when any rule fails or git ignores the deployment state directory. If the command stopped after writing a shard and before editing the rule, the next run finds the two agree and finishes the edit.
 
@@ -415,6 +427,25 @@ It runs through the same deployment-state code as a deploy: the same shards, edi
 <Callout type="warn">
 The migration is done when it is committed. Commit the edited rules together with every new file under `.opentide/states/deployment/`. A deploy from a checkout that has the stripped rules but not the shards creates a second live rule for every one of them.
 </Callout>
+
+### deploy replay-state
+
+Replays one commit's deployment-state changes onto the checkout. The production job that [`setup ci`](./setup.md#setup-ci) writes runs it in its [write-back](../usage/workflows/ci-cd.md#production-write-back): when its rule files conflict with a merge that landed during the deploy, the job resets to the default branch's tip, runs `opentide deploy replay-state "$state_commit"` with the commit that recorded the deploy, commits what it changed and pushes, so no vendor id is lost. You need it by hand only to do the same after a failed write-back left a state commit on `refs/opentide/deployment-state/<commit>`. It calls no vendor API and deploys nothing.
+
+```bash
+opentide deploy replay-state HEAD
+opentide --json deploy replay-state "$state_commit"
+```
+
+`<state_commit>` is any commit git resolves in the checkout. Only what it changed under `.opentide/states/deployment/` against its first parent is applied, per platform and tenant, so the ids other runs recorded since are kept:
+
+- a binding the commit added or changed is set on the checkout's shard;
+- a binding the commit removed is removed, and a shard left with no binding is deleted;
+- every binding the commit did not touch keeps the checkout's value.
+
+When the checkout's shard holds another id for a binding the commit changed, the commit's id is kept and a `deployment_state_conflict <shard> <platform>/<tenant>: kept "<id>", the default branch had "<id>"` line is printed (`warnings` and `conflicts` in `--json`), so the duplicate remote rule can be removed by hand. The command stages and commits nothing.
+
+`--json` returns `state_commit`, `written` and `removed` (shard paths), and `conflicts`, with their counts under `summary`. It exits `0` after a replay, conflicts included, and `1` when git cannot read the commit or a shard does not parse. Through 1.0.0-rc.5 the command was hidden from `--help` and printed one line of text whatever the output mode.
 
 ### deploy metadata
 

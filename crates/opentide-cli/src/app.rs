@@ -1515,7 +1515,9 @@ impl Run<'_> {
                 if self.interrupted() {
                     return Ok(INTERRUPTED_EXIT_CODE);
                 }
-                crate::commands::deploy_replay::run(&cwd, self.env, &replay.state_commit, out, err)
+                let report =
+                    crate::commands::deploy_replay::report(&cwd, self.env, &replay.state_commit);
+                self.emit_report(&report, out, err)
             }
             Some(Command::Metadata(metadata)) => {
                 let platform = clap::ValueEnum::to_possible_value(&metadata.platform)

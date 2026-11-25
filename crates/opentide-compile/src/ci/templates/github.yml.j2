@@ -125,6 +125,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: generate
     if: ${{ [[ premerge ]] && [[ not_skipped ]] }}
+    concurrency:
+      group: opentide-deploy-staging
+      cancel-in-progress: false
+      queue: max
 {% if credentials %}
     [[ secrets(credentials) | indent(4) ]]
 {% endif %}
@@ -197,6 +201,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: generate
     if: ${{ [[ production ]] && [[ not_skipped ]] }}
+    concurrency:
+      group: opentide-deploy-production
+      cancel-in-progress: false
+      queue: max
     permissions:
       contents: write
 {% if credentials %}

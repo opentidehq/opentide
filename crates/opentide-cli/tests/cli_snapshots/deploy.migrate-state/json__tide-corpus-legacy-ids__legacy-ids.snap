@@ -13,7 +13,7 @@ exit: 0
   "errors": [],
   "exit_code": 0,
   "failure": null,
-  "message": "Moved 4 vendor ids to .opentide/states/deployment/ · 4 rules edited, 3 shards written",
+  "message": "Moved 2 vendor ids to .opentide/states/deployment/ · 4 rules edited, 2 shards written",
   "migrated": [
     {
       "bindings": [],
@@ -25,24 +25,13 @@ exit: 0
       "uuid": "00000000-0000-4000-8003-000000000001"
     },
     {
-      "bindings": [
-        {
-          "external_id": "12345",
-          "platform": "microsoft_defender",
-          "tenant": "prod"
-        },
-        {
-          "external_id": "678",
-          "platform": "microsoft_defender",
-          "tenant": "lab"
-        }
-      ],
+      "bindings": [],
       "file": "Objects/Detection Rules/rule-0002-defender-kql.yaml",
       "removed": [
         "configurations.microsoft_defender.rule_id::prod",
         "configurations.microsoft_defender.rule_id_bundle"
       ],
-      "shard": ".opentide/states/deployment/00000000-0000-4000-8003-000000000002.json",
+      "shard": null,
       "uuid": "00000000-0000-4000-8003-000000000002"
     },
     {
@@ -80,12 +69,12 @@ exit: 0
   "ok": true,
   "rules_edited": 4,
   "schema_version": 1,
-  "shards_written": 3,
+  "shards_written": 2,
   "status": "completed",
   "summary": {
-    "ids": 4,
+    "ids": 2,
     "rules": 4,
-    "shards": 3
+    "shards": 2
   },
   "unused": [
     {
@@ -94,39 +83,37 @@ exit: 0
       "platform": "sentinel",
       "tenant": "soc",
       "uuid": "00000000-0000-4000-8003-000000000001"
+    },
+    {
+      "external_id": "12345",
+      "file": "Objects/Detection Rules/rule-0002-defender-kql.yaml",
+      "platform": "microsoft_defender",
+      "tenant": "prod",
+      "uuid": "00000000-0000-4000-8003-000000000002"
+    },
+    {
+      "external_id": "678",
+      "file": "Objects/Detection Rules/rule-0002-defender-kql.yaml",
+      "platform": "microsoft_defender",
+      "tenant": "lab",
+      "uuid": "00000000-0000-4000-8003-000000000002"
     }
   ],
   "warnings": [
-    "external_id_unused: sentinel tenant soc id 9f2c removed from Objects/Detection Rules/rule-0001-sentinel-kql.yaml (never read by its deployer; not stored)"
+    "external_id_unused: sentinel tenant soc id 9f2c removed from Objects/Detection Rules/rule-0001-sentinel-kql.yaml (never read by its deployer; not stored)",
+    "external_id_unused: microsoft_defender tenant prod id 12345 removed from Objects/Detection Rules/rule-0002-defender-kql.yaml (never read by its deployer; not stored)",
+    "external_id_unused: microsoft_defender tenant lab id 678 removed from Objects/Detection Rules/rule-0002-defender-kql.yaml (never read by its deployer; not stored)"
   ]
 }
 
-━━━ stderr · json, 1 lines
-{
-  "event": "external_id_unused",
-  "file": "Objects/Detection Rules/rule-0001-sentinel-kql.yaml",
-  "level": "warning",
-  "platform": "sentinel",
-  "tenant": "soc",
-  "timestamp": "0000-00-00 00:00:00",
-  "value": "9f2c"
-}
+━━━ stderr
+{"platform":"sentinel","tenant":"soc","value":"9f2c","file":"Objects/Detection Rules/rule-0001-sentinel-kql.yaml","event":"external_id_unused","level":"warning","timestamp":"0000-00-00 00:00:00"}
+{"platform":"microsoft_defender","tenant":"prod","value":"12345","file":"Objects/Detection Rules/rule-0002-defender-kql.yaml","event":"external_id_unused","level":"warning","timestamp":"0000-00-00 00:00:00"}
+{"platform":"microsoft_defender","tenant":"lab","value":"678","file":"Objects/Detection Rules/rule-0002-defender-kql.yaml","event":"external_id_unused","level":"warning","timestamp":"0000-00-00 00:00:00"}
 
 ━━━ ws/.opentide/states/ · created 0755
 
 ━━━ ws/.opentide/states/deployment/ · created 0755
-
-━━━ ws/.opentide/states/deployment/00000000-0000-4000-8003-000000000002.json · created 0644
-{
-  "object_uuid": "00000000-0000-4000-8003-000000000002",
-  "platforms": {
-    "microsoft_defender": {
-      "lab": "678",
-      "prod": "12345"
-    }
-  },
-  "schema": "deployment.state::1.0"
-}
 
 ━━━ ws/.opentide/states/deployment/00000000-0000-4000-8003-000000000004.json · created 0644
 {
@@ -223,13 +210,13 @@ configurations:
     query: |
       DeviceProcessEvents
       | take 1
-    scheduling: 1H
+    schedule:
+      frequency: 1H
     alert:
       title: Defender KQL Rule
-    impacted_entities:
-      device: device_id
-    scope:
-      selection: All
+    entities:
+      hosts:
+        - device_id: device_id
 
 ━━━ ws/Objects/Detection Rules/rule-0004-sentinel-one-s1ql.yaml · modified 0644
 name: SentinelOne S1QL Rule

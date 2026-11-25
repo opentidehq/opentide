@@ -12,6 +12,7 @@ Usage: opentide deploy [OPTIONS] [COMMAND]
 
 Commands:
   migrate-state  Move vendor ids from rules into deployment state
+  replay-state   Replay one commit's deployment-state changes onto the checkout (CI write-back)
 
 Options:
       --platform <PLATFORM>

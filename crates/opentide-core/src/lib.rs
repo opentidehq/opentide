@@ -1035,6 +1035,22 @@ pub mod codes {
     pub const GOOGLE_SECOPS_RULE_ID_LITERAL: &str = "google_secops_rule_id_literal";
     pub const GOOGLE_SECOPS_LIVE_FREQUENCY_UNAVAILABLE: &str =
         "google_secops_live_frequency_unavailable";
+    // The constraints and advisory of microsoft-defender-1.0.
+    pub const MICROSOFT_DEFENDER_SCHEMA: &str = "microsoft_defender_schema";
+    pub const MICROSOFT_DEFENDER_FREQUENCY: &str = "microsoft_defender_frequency";
+    pub const MICROSOFT_DEFENDER_LOOKBACK: &str = "microsoft_defender_lookback";
+    pub const MICROSOFT_DEFENDER_SEVERITY: &str = "microsoft_defender_severity";
+    pub const MICROSOFT_DEFENDER_GROUPING: &str = "microsoft_defender_grouping";
+    pub const MICROSOFT_DEFENDER_CUSTOM_DETAILS: &str = "microsoft_defender_custom_details";
+    pub const MICROSOFT_DEFENDER_ENTITY_KIND: &str = "microsoft_defender_entity_kind";
+    pub const MICROSOFT_DEFENDER_ENTITY_MAPPING: &str = "microsoft_defender_entity_mapping";
+    pub const MICROSOFT_DEFENDER_ACTION_KIND: &str = "microsoft_defender_action_kind";
+    pub const MICROSOFT_DEFENDER_ACTION_TARGET: &str = "microsoft_defender_action_target";
+    pub const MICROSOFT_DEFENDER_ISOLATION_TYPE: &str = "microsoft_defender_isolation_type";
+    pub const MICROSOFT_DEFENDER_COLUMN: &str = "microsoft_defender_column";
+    pub const MICROSOFT_DEFENDER_SCOPE: &str = "microsoft_defender_scope";
+    pub const MICROSOFT_DEFENDER_INCIDENT: &str = "microsoft_defender_incident";
+    pub const MICROSOFT_DEFENDER_NO_ENTITIES: &str = "microsoft_defender_no_entities";
 
     // The Exabeam Query Language (specifications exabeam-1.0, language).
     pub const EXABEAM_PARSE_ERROR: &str = "exabeam_parse_error";
@@ -1397,6 +1413,21 @@ pub mod codes {
         GOOGLE_SECOPS_RISK_SCORE_MISSING,
         GOOGLE_SECOPS_RULE_ID_LITERAL,
         GOOGLE_SECOPS_LIVE_FREQUENCY_UNAVAILABLE,
+        MICROSOFT_DEFENDER_SCHEMA,
+        MICROSOFT_DEFENDER_FREQUENCY,
+        MICROSOFT_DEFENDER_LOOKBACK,
+        MICROSOFT_DEFENDER_SEVERITY,
+        MICROSOFT_DEFENDER_GROUPING,
+        MICROSOFT_DEFENDER_CUSTOM_DETAILS,
+        MICROSOFT_DEFENDER_ENTITY_KIND,
+        MICROSOFT_DEFENDER_ENTITY_MAPPING,
+        MICROSOFT_DEFENDER_ACTION_KIND,
+        MICROSOFT_DEFENDER_ACTION_TARGET,
+        MICROSOFT_DEFENDER_ISOLATION_TYPE,
+        MICROSOFT_DEFENDER_COLUMN,
+        MICROSOFT_DEFENDER_SCOPE,
+        MICROSOFT_DEFENDER_INCIDENT,
+        MICROSOFT_DEFENDER_NO_ENTITIES,
     ];
 
     /// One sentence on what a code means, for hosts that explain a diagnostic
@@ -2167,6 +2198,47 @@ pub mod codes {
             }
             GOOGLE_SECOPS_LIVE_FREQUENCY_UNAVAILABLE => {
                 "`run_frequency` is `LIVE` on a multi-event rule: Google stores `LIVE_CUSTOMIZABLE`, so the block differs from the tenant on every deploy."
+            }
+            MICROSOFT_DEFENDER_SCHEMA => {
+                "`schema`, when set, is not `platform::microsoft_defender::1.0`."
+            }
+            MICROSOFT_DEFENDER_FREQUENCY => "`schedule.frequency` is not `NRT`, `<n>H` or `<n>D`.",
+            MICROSOFT_DEFENDER_LOOKBACK => {
+                "`schedule.lookback` is not `<n>H` or `<n>D`, is set with `frequency: NRT`, or is shorter than `frequency`."
+            }
+            MICROSOFT_DEFENDER_SEVERITY => {
+                "`alert.severity` is not `Informational`, `Low`, `Medium`, `High`, or `Critical`."
+            }
+            MICROSOFT_DEFENDER_GROUPING => {
+                "`alert.grouping` is not `alert_per_event` or `single_alert`."
+            }
+            MICROSOFT_DEFENDER_CUSTOM_DETAILS => {
+                "`alert.custom_details` is not a mapping of non-blank names to strings."
+            }
+            MICROSOFT_DEFENDER_ENTITY_KIND => {
+                "A key of `entities` is not one of the seventeen entity kinds."
+            }
+            MICROSOFT_DEFENDER_ENTITY_MAPPING => {
+                "An entity kind does not hold a list, or a mapping is empty or names a field its kind does not have."
+            }
+            MICROSOFT_DEFENDER_ACTION_KIND => {
+                "A key of `actions` is not one of the sixteen automated actions."
+            }
+            MICROSOFT_DEFENDER_ACTION_TARGET => {
+                "An action does not hold a non-empty list, a target is empty or names a field its action does not take, or `device_groups` is not a non-empty list of names."
+            }
+            MICROSOFT_DEFENDER_ISOLATION_TYPE => "`isolation_type` is not `full` or `selective`.",
+            MICROSOFT_DEFENDER_COLUMN => {
+                "A column name (an entity field, an action column, a custom detail's value) is blank or not a string."
+            }
+            MICROSOFT_DEFENDER_SCOPE => {
+                "`scope` is not `{device_groups: [...]}` with a non-empty list of non-blank names."
+            }
+            MICROSOFT_DEFENDER_INCIDENT => {
+                "`incident` is not a mapping whose `exclude_from_correlation` is `true` or `false`."
+            }
+            MICROSOFT_DEFENDER_NO_ENTITIES => {
+                "The block maps no entity, so the alert names no device, user, or mailbox to triage or act on."
             }
             _ => return None,
         })

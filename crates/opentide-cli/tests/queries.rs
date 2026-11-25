@@ -588,10 +588,15 @@ fn lint_reports_query_warnings_and_advisories_but_not_engine_errors() {
                 && *line == 19),
         "{found:#?}"
     );
+    // So is Defender's: the block maps no entity.
+    assert!(
+        found.contains(&("microsoft_defender_no_entities".into(), "warning".into(), 9)),
+        "{found:#?}"
+    );
     // The query the engine rejects (`kql_parse_error` on line 12) is
     // validate's, and the object's other findings (schema, metadata) are not
     // the queries check's.
-    assert_eq!(found.len(), 2, "{found:#?}");
+    assert_eq!(found.len(), 3, "{found:#?}");
 }
 
 #[test]

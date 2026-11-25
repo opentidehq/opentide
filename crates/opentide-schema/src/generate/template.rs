@@ -6,7 +6,8 @@
 //! not commented again. Hidden fields (`tide.template.hide`) and paths are
 //! left out; `tide.template.required` overrides whether a field is required;
 //! `tide.template.spacer` puts a blank line before a field;
-//! `tide.template.multiline` (and the names `description`, `query`,
+//! a field without a default takes the first of its JSON Schema `examples`;
+//! `tide.template.multiline` (or, when a field does not set it, the names `description`, `query`,
 //! `analysis` and `sighting`) render `key: |` with `...` under it. Placeholders
 //! are typed (`YYYY-MM-DD`, `https://`, `3`, `false`), never YAML `null`.
 
@@ -335,7 +336,13 @@ impl<'s> Walker<'s> {
             Core::List(items) => self.list(model, key, property, items, indent, state, depth),
             Core::Dict(values) => self.dict(model, key, values, indent, state, depth),
             Core::Scalar(schema, literal) => {
-                if flag(property, keys::TEMPLATE_MULTILINE) || MULTILINE_NAMES.contains(&key) {
+                // `tide.template.multiline` decides when the field sets it
+                // (`false` for a column named `query`); the names otherwise.
+                let multiline = property
+                    .get(keys::TEMPLATE_MULTILINE)
+                    .and_then(Value::as_bool)
+                    .unwrap_or_else(|| MULTILINE_NAMES.contains(&key));
+                if multiline {
                     return Ok(vec![format!("{pad}{key}: |"), format!("{pad}  ...")]);
                 }
                 let placeholder = scalar_placeholder(
@@ -567,6 +574,13 @@ fn scalar_placeholder(
     if let Some(default) = default {
         return format_scalar(default);
     }
+    if let Some(example) = extras
+        .get("examples")
+        .and_then(Value::as_array)
+        .and_then(|examples| examples.first())
+    {
+        return format_scalar(example);
+    }
     let format = extras.get("format").and_then(Value::as_str);
     if format == Some("date") || DATE_NAMES.contains(&name) {
         return "YYYY-MM-DD".to_owned();
@@ -690,6 +704,26 @@ mod tests {
         assert_eq!(
             uncomment_optional_blocks("a: \n#b:\n  #- x\n\n"),
             "a: \nb:\n  - x\n\n"
+        );
+    }
+
+    #[test]
+    fn a_field_without_a_default_takes_its_first_example() {
+        let state = State {
+            schema_id: None,
+            comment_optionals: true,
+        };
+        let schema = serde_json::json!({"type": "string"});
+        let extras = serde_json::json!({"type": "string", "examples": ["1H", "NRT"]});
+        assert_eq!(
+            scalar_placeholder("frequency", &schema, false, &extras, &state, None),
+            "1H"
+        );
+        // A default wins over the examples.
+        let default = Value::from("NRT");
+        assert_eq!(
+            scalar_placeholder("frequency", &schema, false, &extras, &state, Some(&default)),
+            "NRT"
         );
     }
 

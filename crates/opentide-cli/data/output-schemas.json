@@ -279,6 +279,16 @@
         }
       ]
     },
+    "deploy replay-state": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ReplayStateResult"
+        },
+        {
+          "$ref": "#/$defs/CommandError"
+        }
+      ]
+    },
     "share": {
       "anyOf": [
         {
@@ -4590,6 +4600,137 @@
         "failure"
       ],
       "title": "MigrateStateResult",
+      "type": "object"
+    },
+    "ReplayStateResult": {
+      "additionalProperties": true,
+      "description": "``opentide deploy replay-state``: one commit's deployment-state changes replayed onto the checkout.",
+      "properties": {
+        "ok": {
+          "description": "false when the command failed",
+          "title": "Ok",
+          "type": "boolean"
+        },
+        "status": {
+          "description": "completed, passed, issues, skipped or failed",
+          "title": "Status",
+          "type": "string"
+        },
+        "message": {
+          "description": "The outcome in one sentence",
+          "title": "Message",
+          "type": "string"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "On a failure: the error message",
+          "title": "Error"
+        },
+        "warnings": {
+          "description": "Present when the command has warnings",
+          "items": {
+            "type": "string"
+          },
+          "title": "Warnings",
+          "type": "array"
+        },
+        "schema_version": {
+          "const": 1,
+          "description": "Version of the envelope",
+          "title": "Schema Version",
+          "type": "integer"
+        },
+        "command": {
+          "description": "The command that ran, such as 'validate query'",
+          "title": "Command",
+          "type": "string"
+        },
+        "duration_ms": {
+          "description": "Wall time of the command",
+          "title": "Duration Ms",
+          "type": "integer"
+        },
+        "exit_code": {
+          "description": "The process exit code",
+          "title": "Exit Code",
+          "type": "integer"
+        },
+        "summary": {
+          "additionalProperties": true,
+          "description": "Counts behind the outcome line",
+          "title": "Summary",
+          "type": "object"
+        },
+        "next_actions": {
+          "description": "Commands worth running next",
+          "items": {
+            "$ref": "#/$defs/NextActionModel"
+          },
+          "title": "Next Actions",
+          "type": "array"
+        },
+        "failure": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FailureModel"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "null exactly when exit_code is 0"
+        },
+        "state_commit": {
+          "description": "The commit whose deployment-state changes were replayed",
+          "title": "State Commit",
+          "type": "string"
+        },
+        "written": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Shards written, relative to the repository root",
+          "title": "Written"
+        },
+        "removed": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Shards removed because no binding was left",
+          "title": "Removed"
+        },
+        "conflicts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "One deployment_state_conflict line per binding a concurrent run changed too: this commit's id was kept",
+          "title": "Conflicts"
+        }
+      },
+      "required": [
+        "ok",
+        "status",
+        "message",
+        "schema_version",
+        "command",
+        "duration_ms",
+        "exit_code",
+        "summary",
+        "next_actions",
+        "failure"
+      ],
+      "title": "ReplayStateResult",
       "type": "object"
     },
     "MigrateVocabScopeResult": {

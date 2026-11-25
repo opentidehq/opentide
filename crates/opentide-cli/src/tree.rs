@@ -2110,9 +2110,9 @@ pub enum DeployCommand {
     MigrateState(DeployMigrateStateArgs),
     #[command(
         name = "replay-state",
-        about = "Replay one commit's deployment-state changes onto the checkout (CI write-back).",
-        long_about = "Replay one commit's deployment-state changes onto the checkout (CI write-back).\n\nUsed by the generated production write-back when its rule files conflict\nwith a concurrent merge. A subcommand rather than a script, so it needs\nnothing but opentide.",
-        hide = true
+        about = "Replay one commit's deployment-state changes onto the checkout (CI write-back)",
+        long_about = "Replay one commit's deployment-state changes onto the checkout (CI write-back).\n\nThe generated production write-back runs it when its rule files conflict\nwith a concurrent merge: only the bindings <state_commit> changed against\nits parent are applied to the checkout's shards, so ids other runs recorded\nare kept. A binding both runs changed keeps this commit's id and prints\ndeployment_state_conflict with both ids. No vendor calls.",
+        after_help = "Examples:\n  $ opentide deploy replay-state HEAD"
     )]
     ReplayState(DeployReplayStateArgs),
     #[command(

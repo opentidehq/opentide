@@ -26,7 +26,7 @@ exit: 0
       "uuid": "00000000-0000-4000-8003-000000000008"
     },
     {
-      "action": "create",
+      "action": "upsert",
       "name": "Defender KQL Rule",
       "platform": "microsoft_defender",
       "status": "STAGING",
@@ -100,7 +100,7 @@ exit: 0
   "duration_ms": 0,
   "exit_code": 0,
   "failure": null,
-  "message": "Plan: 4 to create, 0 to update, 6 to create or update, 0 to disable, 0 to delete",
+  "message": "Plan: 3 to create, 0 to update, 7 to create or update, 0 to disable, 0 to delete",
   "missing_tenants": {
     "carbon_black_cloud": ".opentide/configurations/platforms/carbon_black_cloud.toml",
     "crowdstrike": ".opentide/configurations/platforms/crowdstrike.toml",
@@ -295,36 +295,42 @@ exit: 0
         "api_request": [
           {
             "body": {
+              "description": "Simulated Defender rule for CLI E2E corpus.\n",
               "detectionAction": {
                 "alertTemplate": {
                   "description": "Simulated Defender rule for CLI E2E corpus.\n",
-                  "impactedAssets": [
+                  "entityMappings": {
+                    "hosts": [
+                      {
+                        "deviceIdColumn": "device_id"
+                      }
+                    ]
+                  },
+                  "severity": "high",
+                  "tactics": [
                     {
-                      "@odata.type": "#microsoft.graph.security.impactedDeviceAsset",
-                      "identifier": "device_id"
+                      "tactic": "Execution",
+                      "techniques": [
+                        {
+                          "technique": "T1059"
+                        }
+                      ]
                     }
                   ],
-                  "mitreTechniques": [
-                    "T1059"
-                  ],
-                  "recommendedActions": null,
-                  "severity": "high",
                   "title": "Defender KQL Rule"
-                },
-                "organizationalScope": null,
-                "responseActions": []
+                }
               },
               "displayName": "Defender KQL Rule",
-              "isEnabled": true,
               "queryCondition": {
                 "queryText": "DeviceProcessEvents\n| take 1\n"
               },
               "schedule": {
-                "period": "1H"
-              }
+                "frequency": "PT1H"
+              },
+              "status": "enabled"
             },
-            "method": "POST",
-            "url": "https://graph.microsoft.com/beta/security/rules/detectionRules"
+            "method": "PATCH",
+            "url": "https://graph.microsoft.com/beta/security/rules/detectionRules/00000000-0000-4000-8003-000000000002"
           }
         ],
         "name": "Defender KQL Rule",
@@ -574,13 +580,13 @@ exit: 0
     "RELEASE"
   ],
   "summary": {
-    "create": 4,
+    "create": 3,
     "delete": 0,
     "disable": 0,
     "platforms": 9,
     "tenants": 2,
     "update": 0,
-    "upsert": 6
+    "upsert": 7
   },
   "tenants": {
     "elastic": {

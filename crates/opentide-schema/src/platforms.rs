@@ -168,8 +168,8 @@ pub const PLATFORMS: &[Platform] = &[
         id: "microsoft_defender",
         label: "Microsoft Defender",
         configuration_name: "Microsoft Defender",
-        config_class: "DefenderConfig",
-        external_id: ExternalId::Int,
+        config_class: "MicrosoftDefenderConfig",
+        external_id: ExternalId::None,
         deploys: true,
         compiles_offline: false,
         live_check: true,
@@ -647,7 +647,6 @@ mod tests {
         assert_eq!(
             state_platforms(),
             [
-                "microsoft_defender",
                 "sentinel_one",
                 "crowdstrike",
                 "sysdig",
@@ -659,7 +658,7 @@ mod tests {
         );
         assert_eq!(
             ids_where(|p| p.external_id == ExternalId::Int),
-            ["microsoft_defender", "sentinel_one", "sysdig"]
+            ["sentinel_one", "sysdig"]
         );
         assert_eq!(
             ids_where(|p| p.live_check),

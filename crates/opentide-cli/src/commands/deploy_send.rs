@@ -2577,11 +2577,12 @@ impl Sender<'_, '_> {
             Some(PlatformId::Exabeam) => self.exabeam(&batches, log),
             Some(PlatformId::GoogleSecops) => self.google_secops(&batches, log),
             Some(PlatformId::Graylog) => self.graylog(&batches, log),
-            Some(
-                PlatformId::MicrosoftDefender | PlatformId::SentinelOne | PlatformId::Crowdstrike,
-            ) => self.with_state(platform, &batches, log),
+            Some(PlatformId::SentinelOne | PlatformId::Crowdstrike) => {
+                self.with_state(platform, &batches, log)
+            }
             Some(
                 PlatformId::Sentinel
+                | PlatformId::MicrosoftDefender
                 | PlatformId::Splunk
                 | PlatformId::CarbonBlackCloud
                 | PlatformId::Harfanglab,
@@ -3153,6 +3154,48 @@ impl Sender<'_, '_> {
         })
     }
 
+    /// The request a Microsoft Defender rule sends (microsoft-defender-1.0,
+    /// Deploy): addressed by its lowercase canonical uuid, with the compiled
+    /// update body; a DELETION carries none. The objective's techniques
+    /// left out of the alert's tactics are warned about once per rule.
+    fn microsoft_defender_request(
+        &mut self,
+        platform: &str,
+        batch: &Batch,
+        rule: &opentide_compile::Rule,
+        strategy: StatusStrategy,
+    ) -> Result<DeployRequest, Raised> {
+        use opentide_compile::microsoft_defender::{body_with_warnings, rule_id};
+        let tenant = batch.tenant.name.as_str();
+        self.deployer(platform)?;
+        let id = rule_id(rule);
+        if strategy == StatusStrategy::Deletion {
+            return Ok(DeployRequest::delete(id));
+        }
+        let (body, warnings) = body_with_warnings(self.compile, rule, tenant)
+            .map_err(|error| Raised::new(format!("Rule {} ({}): {error}", rule.uuid, rule.name)))?;
+        if !warnings.is_empty()
+            && self
+                .sentinel_warned
+                .insert(format!("{platform}:{}", rule.uuid))
+        {
+            self.warned = true;
+            for (code, message) in warnings {
+                tracing::warn!(detail = message.as_str(), "{code}");
+            }
+        }
+        let operation = if strategy == StatusStrategy::Disablement {
+            Operation::Disable
+        } else {
+            Operation::Update
+        };
+        Ok(DeployRequest::new(
+            id,
+            operation,
+            body.to_compact().into_bytes(),
+        ))
+    }
+
     /// The request a Splunk rule sends: its saved search's settings under its
     /// name (` - Rule` for a correlation search), or its deletion.
     fn splunk_request(
@@ -3318,6 +3361,9 @@ impl Sender<'_, '_> {
         let id = PlatformId::parse(platform);
         let request = match id {
             Some(PlatformId::Sentinel) => self.sentinel_request(platform, batch, rule, deletion)?,
+            Some(PlatformId::MicrosoftDefender) => {
+                self.microsoft_defender_request(platform, batch, rule, strategy)?
+            }
             Some(PlatformId::Splunk) => self.splunk_request(platform, batch, rule, deletion)?,
             Some(PlatformId::CarbonBlackCloud) => {
                 match self.carbon_black_request(connection, batch, rule)? {
@@ -3332,6 +3378,18 @@ impl Sender<'_, '_> {
         let answer = self
             .block(async { Ok(deployer.deploy(context, &request).await) })
             .map_err(|error| raised(&error))?;
+        let answer = match answer {
+            // A DELETION whose rule the tenant no longer has: already gone.
+            Err(failed)
+                if id == Some(PlatformId::MicrosoftDefender)
+                    && deletion
+                    && failed.failure.status == Some(404) =>
+            {
+                result.skip("already gone from the tenant");
+                return Ok(());
+            }
+            other => other,
+        };
         let (outcome, failed) = match answer {
             Ok(outcome) => (outcome, None),
             // What the deploy did before it failed (the old saved searches
@@ -3360,6 +3418,15 @@ impl Sender<'_, '_> {
                 Some(PlatformId::CarbonBlackCloud) => {
                     tracing::warn!(report = warning.message.as_str(), "{}", warning.code);
                 }
+                // `microsoft_defender_rule_absent`: a DISABLEMENT found no
+                // rule with the uuid; nothing was created.
+                Some(PlatformId::MicrosoftDefender) => {
+                    self.warned |= warning.raised;
+                    tracing::warn!(detail = warning.message.as_str(), "{}", warning.code);
+                    if warning.code == opentide_connectors::microsoft_defender::RULE_ABSENT {
+                        result.skip("not on the tenant: nothing to disable");
+                    }
+                }
                 _ => {}
             }
         }
@@ -3367,6 +3434,22 @@ impl Sender<'_, '_> {
         // rename's cleanup may still have deleted old copies (`removed`).
         if failed.is_none() && outcome.unchanged() {
             result.action = Some(UNCHANGED.to_owned());
+        } else if failed.is_none() && id == Some(PlatformId::MicrosoftDefender) && upsert {
+            // Defender's `PATCH` first (microsoft-defender-1.0, Deploy): an
+            // `upsert` reads as what Graph did, a create after a `404` or an
+            // update.
+            if let Some(action) =
+                outcome
+                    .events
+                    .iter()
+                    .find_map(|event| match event.name.as_str() {
+                        opentide_connectors::microsoft_defender::RULE_CREATED => Some("create"),
+                        opentide_connectors::microsoft_defender::RULE_UPDATED => Some("update"),
+                        _ => None,
+                    })
+            {
+                result.action = Some(action.to_owned());
+            }
         } else if failed.is_none() && id == Some(PlatformId::Sentinel) && upsert {
             // Sentinel reads before it writes (OT-3): an `upsert` reads as
             // what ARM did, a create or an update; none found keeps the plan's.
@@ -3601,7 +3684,7 @@ impl Sender<'_, '_> {
         }
     }
 
-    /// Microsoft Defender, SentinelOne and CrowdStrike: each rule planned
+    /// SentinelOne and CrowdStrike: each rule planned
     /// from deployment state, then created (its id recorded), updated or
     /// deleted (its id forgotten).
     fn with_state(
@@ -3615,11 +3698,8 @@ impl Sender<'_, '_> {
             if planned.is_empty() {
                 continue;
             }
-            // Defender's open signs in (Entra ID); the rules reuse its token.
-            let defender = opentide_connectors::defender::Defender::new();
             let crowdstrike = opentide_connectors::crowdstrike::Crowdstrike::new();
             let opener: &dyn Deployer = match PlatformId::parse(platform) {
-                Some(PlatformId::MicrosoftDefender) => &defender,
                 Some(PlatformId::Crowdstrike) => &crowdstrike,
                 _ => &opentide_connectors::sentinel_one::SentinelOne,
             };
@@ -3664,7 +3744,6 @@ impl Sender<'_, '_> {
                     &batch.table,
                     tenant,
                     context,
-                    &defender,
                     session,
                     rule,
                     &action,
@@ -3823,7 +3902,6 @@ impl Sender<'_, '_> {
         table: &CJson,
         tenant: &str,
         context: TenantContext<'_>,
-        defender: &opentide_connectors::defender::Defender,
         session: Option<&opentide_connectors::crowdstrike::Crowdstrike>,
         rule: &opentide_compile::Rule,
         action: &Planned,
@@ -3833,25 +3911,6 @@ impl Sender<'_, '_> {
             Raised::new(format!("Rule {} ({}): {error}", rule.uuid, rule.name))
         };
         let body = match PlatformId::parse(platform) {
-            Some(PlatformId::MicrosoftDefender) => {
-                opentide_compile::defender::body_with_warnings(self.compile, rule, tenant).map(
-                    |(body, warnings)| {
-                        // Once per rule, not once per tenant: the techniques
-                        // are the rule's, so the warning is the same on each.
-                        if !warnings.is_empty()
-                            && self
-                                .sentinel_warned
-                                .insert(format!("defender:{}", rule.uuid))
-                        {
-                            self.warned = true;
-                            for (code, message) in warnings {
-                                tracing::warn!(detail = message.as_str(), "{code}");
-                            }
-                        }
-                        body
-                    },
-                )
-            }
             Some(PlatformId::SentinelOne) => {
                 let table =
                     resolved_table(table, context.tenant).map_err(|e| unset_variable(&e))?;
@@ -3865,10 +3924,6 @@ impl Sender<'_, '_> {
         }
         .map_err(compile_error)?;
         let (remote_id, name) = match PlatformId::parse(platform) {
-            Some(PlatformId::MicrosoftDefender) => (
-                self.defender_deploy(tenant, context, defender, rule, action, &body)?,
-                "Defender",
-            ),
             Some(PlatformId::SentinelOne) => (
                 self.sentinel_one_deploy(tenant, context, rule, action, &body)?,
                 "SentinelOne",
@@ -3887,7 +3942,7 @@ impl Sender<'_, '_> {
         };
         match (action, remote_id) {
             (Planned::Delete(_), _) => self.record_deleted(result, platform, tenant),
-            // CrowdStrike's ids are text; Defender's and SentinelOne's numbers.
+            // CrowdStrike's ids are text; SentinelOne's numbers.
             (Planned::Create, Some(id)) if name == "CrowdStrike" => {
                 self.record_created(result, platform, tenant, &ExternalId::Text(id));
             }
@@ -3909,79 +3964,6 @@ impl Sender<'_, '_> {
             (Planned::Update(_), _) => {}
         }
         Ok(())
-    }
-
-    /// One rule sent to Microsoft Defender: the id the tenant gave it.
-    /// Graph's refusal is raised with its answer, and a partial deploy's
-    /// warnings are logged.
-    fn defender_deploy(
-        &mut self,
-        tenant: &str,
-        context: TenantContext<'_>,
-        defender: &opentide_connectors::defender::Defender,
-        rule: &opentide_compile::Rule,
-        action: &Planned,
-        body: &CJson,
-    ) -> Result<Option<String>, Raised> {
-        let advice = opentide_connectors::text::json_text(body);
-        // Graph's refusal of a rule call, its answer the detail.
-        let refused = |error: ConnectorError, action: &Planned| match error {
-            ConnectorError::Refused {
-                message, detail, ..
-            } => {
-                let context = detail.unwrap_or_default();
-                match action {
-                    Planned::Create => tracing::error!(
-                        detail = message.as_str(),
-                        context = context.as_str(),
-                        critical = true,
-                        "fatal_error"
-                    ),
-                    Planned::Update(_) => tracing::error!(
-                        detail = message.as_str(),
-                        context = context.as_str(),
-                        advice = advice.as_str(),
-                        critical = true,
-                        "fatal_error"
-                    ),
-                    Planned::Delete(_) => tracing::error!(
-                        detail = message.as_str(),
-                        context_1 =
-                            "Double check scope permissions, and whether the ID actually exists",
-                        critical = true,
-                        "fatal_error"
-                    ),
-                }
-                let context = if context.is_empty() {
-                    String::new()
-                } else {
-                    format!(" ({context})")
-                };
-                Raised::new(format!(
-                    "could not {} the rule on tenant '{tenant}': {message}{context}",
-                    action_verb(action)
-                ))
-            }
-            other => raised(&other),
-        };
-        // The Deployer's request: the stored id addresses an update
-        // or a delete; the body is the compiled rule.
-        let compiled = || body.to_compact().into_bytes();
-        let request = match action {
-            Planned::Delete(id) => DeployRequest::delete(id.clone()),
-            Planned::Update(id) => DeployRequest::new(id.clone(), Operation::Update, compiled()),
-            Planned::Create => DeployRequest::new(rule.uuid.clone(), Operation::Create, compiled()),
-        };
-        let outcome = self
-            .block(async { Ok(defender.deploy(context, &request).await) })
-            .map_err(|error| refused(error, action))?
-            .map_err(|failed| scoped(failed, |error| refused(error, action)))?;
-        // The partial deployment: raised, as the warnings exit.
-        for warning in &outcome.warnings {
-            self.warned |= warning.raised;
-            tracing::warn!("{}", warning.code);
-        }
-        Ok(outcome.remote_id)
     }
 
     /// One rule sent to SentinelOne: the id the tenant gave it. The console's

@@ -13,7 +13,7 @@ exit: 0
   ␛[1m␛[32m+ create or update␛[0m  ␛[1mStaging Promote Rule␛[0m  ␛[2m…000000000008␛[0m  ␛[2mstatus STAGING␛[0m
 
 ␛[1mmicrosoft_defender␛[0m␛[2m · 0 tenants␛[0m
-  ␛[1m␛[32m+ create␛[0m  ␛[1mDefender KQL Rule␛[0m  ␛[2m…000000000002␛[0m  ␛[2mstatus STAGING␛[0m
+  ␛[1m␛[32m+ create or update␛[0m  ␛[1mDefender KQL Rule␛[0m  ␛[2m…000000000002␛[0m  ␛[2mstatus STAGING␛[0m
 
 ␛[1msplunk␛[0m␛[2m · 0 tenants␛[0m
   ␛[1m␛[32m+ create or update␛[0m  ␛[1mSplunk SPL Rule␛[0m  ␛[2m…000000000003␛[0m  ␛[2mstatus STAGING␛[0m
@@ -38,7 +38,7 @@ exit: 0
   ␛[1mstaging␛[0m
     ␛[1m␛[32m+ create␛[0m  ␛[1mSysdig Falco Rule␛[0m  ␛[2m…0000005d1a90␛[0m  ␛[2mstatus STAGING␛[0m
 
-␛[1mPlan:␛[0m 4 to create, 0 to update, 6 to create or update, 0 to disable, 0 to delete
+␛[1mPlan:␛[0m 3 to create, 0 to update, 7 to create or update, 0 to disable, 0 to delete
   ␛[1m␛[34mnote:␛[0m splunk: once a rule's saved search is written or deleted, any other saved search in the
         tenant's app whose description ends with the line `opentide rule <uuid>` for the rule (one
         an earlier name of the rule left) is deleted

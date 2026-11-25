@@ -36,6 +36,7 @@ exit: 0
 ␛[1m  unreviewed     List rules not reviewed within a window␛[0m
 ␛[1mdeploy           Deploy rules to platform tenants␛[0m
 ␛[1m  migrate-state  Move vendor ids from rules into deployment state␛[0m
+␛[1m  replay-state   Replay one commit's deployment-state changes onto the checkout (CI write-back)␛[0m
 ␛[1mshare            Publish objects to intelligence platforms␛[0m
 ␛[1m  push           Create or update one MISP event per selected object␛[0m
 ␛[1m  preview        Show what push would do, without a request␛[0m
@@ -64,6 +65,6 @@ exit: 0
 ␛[1mlsp              Serve the language server for editors␛[0m
 ␛[1m  start          Serve LSP on stdio until the editor closes stdin␛[0m
 ␛[1mserve            Run CLI commands in one warm process, for editors␛[0m
-␛[1m✓␛[0m 58 commands
+␛[1m✓␛[0m 59 commands
 
 ━━━ stderr · empty

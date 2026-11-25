@@ -84,7 +84,7 @@
     {
       "name": "get_chaining",
       "title": "Threat, objective and rule lineage",
-      "description": "Threat -> objective -> rule lineage of any object, before you edit or add one.\n\nReturns {uuid, found, type, graph, lineage: {threats, objectives, rules},\nchaining_index}. graph is the lineage, or {relation: [threat uuids]} for a\nthreat with threat.chaining entries. chaining_index has an entry for each\nUUID of the returned lineage, not for the whole catalogue.\ndepth (an integer, 0 or more) limits the lineage to the objects within that\nmany hops of the object, in either direction (threat <-> objective <-> rule\nand threat chaining links); 0 is the object alone, omitted is the whole\nlineage. Hops run in either direction: depth 2 from a rule includes the other\nrules of its objective. graph, lineage and chaining_index then hold only those objects. A signal UUID\n(objective.signals[].uuid) returns its objective, with resolved_from:\n{type: \"signal\", uuid}; a rule whose detection_model is a signal is in that\nobjective's lineage. An unknown UUID returns only {uuid, found: false,\ngraph: {}}.\n",
+      "description": "Threat -> objective -> rule lineage of any object, before you edit or add one.\n\nReturns {uuid, found, type, graph, lineage: {threats, objectives, rules},\nchaining_index}. graph is the lineage, or {relation: [threat uuids]} for a\nthreat with threat.chaining entries. chaining_index maps each returned threat\nwith threat.chaining entries to its relation; every other object's graph is\nlineage.\ndepth (an integer, 0 or more, default 1) limits the lineage to the objects\nwithin that many hops of the object (threat <-> objective <-> rule and threat\nchaining links); 0 is the object alone. Hops run in either direction: depth 2 from a rule includes the other\nrules of its objective. graph, lineage and chaining_index hold only those\nobjects. When the lineage goes further, the answer has truncated: true and a\nhint: call again with a larger depth to follow it. A signal UUID\n(objective.signals[].uuid) returns its objective, with resolved_from:\n{type: \"signal\", uuid}; a rule whose detection_model is a signal is in that\nobjective's lineage. An unknown UUID returns only {uuid, found: false,\ngraph: {}}.\n",
       "annotations": {
         "readOnlyHint": true,
         "destructiveHint": false,
@@ -98,7 +98,8 @@
             "type": "string"
           },
           "depth": {
-            "description": "Hops from the object, in each direction; 0 is the object alone. Omitted: the whole lineage.",
+            "default": 1,
+            "description": "Hops from the object, in each direction; 0 is the object alone. Default 1, the direct neighbours; pass a larger depth for more of the lineage.",
             "minimum": 0,
             "title": "Depth",
             "type": "integer"

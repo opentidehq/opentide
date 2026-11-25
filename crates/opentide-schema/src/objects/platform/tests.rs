@@ -57,7 +57,7 @@ fn the_registry_is_closed_and_in_the_containers_order() {
     assert_eq!(registered_model("sysdig").unwrap().model, "SysdigConfig");
     assert_eq!(registered_model("sentinal"), None);
     assert_eq!(SysdigConfig::platform(), "sysdig");
-    assert_eq!(DefenderConfig::platform(), "microsoft_defender");
+    assert_eq!(MicrosoftDefenderConfig::platform(), "microsoft_defender");
     assert_eq!(
         parse_platform_config("sentinal", &json_node(&json!({}))),
         Err(ParseError::UnknownPlatform(
@@ -142,7 +142,7 @@ fn a_block_severity_takes_what_deploy_maps() {
                "schedule": {"frequency": "1h", "lookback": "1h"}})
     };
     let defender = |severity: Json| {
-        json!({"status": "S", "query": "x", "scheduling": "1H", "impacted_entities": {},
+        json!({"status": "S", "query": "x", "schedule": {"frequency": "1H"},
                "alert": {"severity": severity}})
     };
     let expected = "deploy takes Informational, Low, Medium, High or Critical (exact case)";
@@ -150,9 +150,11 @@ fn a_block_severity_takes_what_deploy_maps() {
         errors("crowdstrike", &crowdstrike(json!("low"))),
         format!("details.severity: {expected}, not \"low\"; did you mean \"Low\"?")
     );
+    // Defender's is its own constraint (microsoft-defender-1.0).
     assert_eq!(
         errors("microsoft_defender", &defender(json!("Severe"))),
-        format!("alert.severity: {expected}, not \"Severe\"")
+        "alert.severity: alert.severity \"Severe\" is not Informational, Low, Medium, High or \
+         Critical (exact case)"
     );
     // The five names, `null` and an empty string (deploy reads both as
     // unset: the rule's `response.alert_severity`) pass.
@@ -193,8 +195,7 @@ fn every_query_text_refuses_a_blank_query() {
         ),
         (
             "microsoft_defender",
-            json!({"status": "S", "alert": {}, "impacted_entities": {},
-                   "scheduling": "NRT"}),
+            json!({"status": "S", "schedule": {"frequency": "NRT"}}),
         ),
     ] {
         for blank in ["", "   ", "\n\t", "\r\n", "\u{a0}"] {

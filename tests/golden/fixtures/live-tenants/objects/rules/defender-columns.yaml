@@ -15,10 +15,10 @@ configurations:
     query: |
       DeviceProcessEvents
       | project Timestamp, DeviceId, ReportId
-    scheduling: 1H
+    schedule:
+      frequency: 1H
     alert:
       title: Defender columns rule
-    impacted_entities:
-      device: device_id
-    scope:
-      selection: All
+    entities:
+      hosts:
+        - device_id: device_id

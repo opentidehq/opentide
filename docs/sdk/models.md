@@ -74,7 +74,7 @@ rule.configurations.sentinel.query
 | Model | YAML key | Schema ID | Spec |
 |-------|----------|-----------|------|
 | `SentinelConfig` | `sentinel` | `platform::sentinel::1.0` | [sentinel-1.0](/docs/specifications/specs/platforms/sentinel-1.0/) |
-| `DefenderConfig` | `microsoft_defender` | `platform::microsoft_defender::1.0` | [microsoft-defender-1.0](/docs/specifications/specs/platforms/microsoft-defender-1.0/) |
+| `MicrosoftDefenderConfig` | `microsoft_defender` | `platform::microsoft_defender::1.0` | [microsoft-defender-1.0](/docs/specifications/specs/platforms/microsoft-defender-1.0/) |
 | `SplunkConfig` | `splunk` | `platform::splunk::1.0` | [splunk-1.0](/docs/specifications/specs/platforms/splunk-1.0/) |
 | `SentinelOneConfig` | `sentinel_one` | `platform::sentinel_one::1.0` | [sentinel-one-1.0](/docs/specifications/specs/platforms/sentinel-one-1.0/) |
 | `CrowdstrikeConfig` | `crowdstrike` | `platform::crowdstrike::1.0` | [crowdstrike-1.0](/docs/specifications/specs/platforms/crowdstrike-1.0/) |

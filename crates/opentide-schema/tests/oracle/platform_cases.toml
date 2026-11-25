@@ -150,9 +150,9 @@ configurations:
   microsoft_defender:
     status: STAGING
     query: DeviceProcessEvents | take 1
+    schedule: {frequency: 1H}
     alert: {title: t}
-    impacted_entities: {device: DeviceId}
-    scheduling: 1H
+    entities: {hosts: [{device_id: DeviceId}]}
   splunk:
     status: STAGING
     query: index=main | head 1
@@ -450,9 +450,9 @@ description: d
 configurations:
   microsoft_defender:
     status: STAGING
+    schedule: {frequency: 1H}
     alert: {title: t}
-    impacted_entities: {device: DeviceId}
-    scheduling: 1H
+    entities: {hosts: [{device_id: DeviceId}]}
 '''
 
 [[case]]
@@ -879,16 +879,17 @@ configurations:
   microsoft_defender:
     status: STAGING
     query: DeviceProcessEvents | take 1
-    alert: {title: t}
-    impacted_entities: {device: DeviceId}
-    scheduling: 1H
+    schedule: {frequency: 1H, lookback: 4H}
+    alert: {title: t, severity: Critical, techniques: [T1059.001], custom_details: {C: ProcessCommandLine}, grouping: single_alert}
+    entities: {hosts: [{device_id: DeviceId}], accounts: [{sid: AccountSid}]}
     actions:
-      devices: {isolate_device: Full, collect_investigation_package: true, run_antivirus_scan: true}
-      files:
-        allow_block: {action: Block, identifier: SHA1, groups: {selection: Specific, device_groups: [g]}}
-        quarantine_file: SHA1
-      users: {mark_as_compromised: AccountSid, disable_user: AccountSid}
-    scope: {selection: All}
+      isolate_devices: [{device_id: DeviceId, isolation_type: full}]
+      collect_investigation_packages: [{device_id: DeviceId}]
+      block_files: [{sha1: SHA1, device_groups: [g]}]
+      stop_and_quarantine_files: [{device_id: DeviceId, sha1: SHA1}]
+      disable_users: [{account_sid: AccountSid}]
+    scope: {device_groups: [g]}
+    incident: {exclude_from_correlation: true}
     exclusions: [{query: '| where 1', reason: r, let: {a: 1}}]
 '''
 
@@ -911,8 +912,8 @@ configurations:
     status: STAGING
     query: DeviceProcessEvents | take 1
     alert: {title: t}
-    impacted_entities: {device: DeviceId}
-    scheduling: 2H
+    entities: {hosts: [{device_id: DeviceId}]}
+    schedule: {frequency: PT2H}
 '''
 
 [[case]]
@@ -934,8 +935,8 @@ configurations:
     status: STAGING
     query: DeviceProcessEvents | take 1
     alert: {title: t}
-    impacted_entities: {device: DeviceId}
-    scheduling: 1
+    entities: {hosts: [{device_id: DeviceId}]}
+    schedule: {frequency: 1}
 '''
 
 [[case]]
@@ -956,11 +957,11 @@ configurations:
   microsoft_defender:
     status: STAGING
     query: DeviceProcessEvents | take 1
-    alert: {title: t}
-    impacted_entities: {device: DeviceId}
-    scheduling: 1H
-    scope: {selection: Some}
-    actions: {files: {allow_block: {action: allow, identifier: x}}, devices: {run_antivirus_scan: maybe}}
+    alert: {title: t, grouping: singleAlert}
+    entities: {hosts: [{device_id: DeviceId}]}
+    schedule: {frequency: 1H}
+    scope: {device_groups: []}
+    actions: {isolate_devices: [{device_id: DeviceId, isolation_type: Full}], run_antivirus_scans: maybe}
 '''
 
 [[case]]

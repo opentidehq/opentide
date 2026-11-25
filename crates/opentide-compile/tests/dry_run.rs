@@ -72,13 +72,18 @@ fn text(outcome: &Outcome, key: &str) -> String {
         .unwrap_or_default()
 }
 
+/// The keys a Microsoft Defender block requires, then `extra`.
+fn defender(extra: &str) -> String {
+    format!("    query: DeviceEvents\n    schedule:\n      frequency: 1H\n{extra}")
+}
+
 const DEFENDER: &str = "[platform]\nenabled = true\n\n[[tenants]]\nname = \"one\"\n\
     description = \"d\"\nstrategies = [\"PREVIEW\"]\n[tenants.setup]\nssl = true\n\
     tenant_id = \"$DEFENDER_TENANT\"\nclient_id = \"$DEFENDER_CLIENT\"\n\n[[tenants]]\n\
     name = \"two\"\ndescription = \"d\"\nstrategies = [\"RELEASE\"]\n[tenants.setup]\nssl = true\n";
 
 #[test]
-fn a_preview_run_plans_creates_and_updates_from_the_deployment_state() {
+fn a_preview_run_plans_an_upsert_of_each_rule_by_its_uuid() {
     let ws = workspace(&[
         (
             ".opentide/configurations/platforms/microsoft_defender.toml",
@@ -90,7 +95,7 @@ fn a_preview_run_plans_creates_and_updates_from_the_deployment_state() {
                 "00000000-0000-4000-8000-00000000000a",
                 "microsoft_defender",
                 "STAGING",
-                "",
+                &defender(""),
             ),
         ),
         (
@@ -99,21 +104,15 @@ fn a_preview_run_plans_creates_and_updates_from_the_deployment_state() {
                 "00000000-0000-4000-8000-00000000000b",
                 "microsoft_defender",
                 "STAGING",
-                "",
+                &defender(""),
             ),
-        ),
-        (
-            ".opentide/states/deployment/00000000-0000-4000-8000-00000000000b.json",
-            "{\"schema\": \"deployment.state::1.0\", \"object_uuid\": \
-             \"00000000-0000-4000-8000-00000000000b\", \"platforms\": \
-             {\"microsoft_defender\": {\"one\": \"42\"}}}",
         ),
     ]);
     let outcome = run(&ws, all(&["preview"]), &["DEFENDER_CLIENT"]);
     assert_eq!(outcome.exit_code, 0);
     assert_eq!(
         text(&outcome, "message"),
-        "\"Plan: 1 to create, 1 to update, 0 to disable, 0 to delete\""
+        "\"Plan: 0 to create, 0 to update, 2 to create or update, 0 to disable, 0 to delete\""
     );
     assert_eq!(
         text(&outcome, "tenants"),
@@ -124,12 +123,11 @@ fn a_preview_run_plans_creates_and_updates_from_the_deployment_state() {
         r#"["a real deploy would need $DEFENDER_TENANT, which is unset"]"#
     );
     assert_eq!(outcome.outcome_kind, Some("plan"));
-    // Defender's preview is the request a deploy sends to the first tenant
-    // (#1712): a create for the rule the deployment state does not record,
-    // an update of the id it records (`42`) for the other; it was the block.
+    // Defender keeps no deployment state: a deploy's first request is the
+    // PATCH of the rule its uuid names (platform::microsoft_defender::1.0).
     let body = |uuid: &str| {
         format!(
-            r#"{{"displayName":"Rule {uuid}","queryCondition":{{"queryText":""}},"schedule":{{"period":""}},"detectionAction":{{"alertTemplate":{{"title":"Rule {uuid}","description":"d","severity":"informational","mitreTechniques":[],"impactedAssets":[],"recommendedActions":null}},"responseActions":[],"organizationalScope":null}},"isEnabled":true}}"#
+            r#"{{"displayName":"Rule {uuid}","description":"d","status":"enabled","queryCondition":{{"queryText":"DeviceEvents"}},"schedule":{{"frequency":"PT1H"}},"detectionAction":{{"alertTemplate":{{"title":"Rule {uuid}","description":"d","severity":"medium"}}}}}}"#
         )
     };
     let (a, b) = (
@@ -140,7 +138,7 @@ fn a_preview_run_plans_creates_and_updates_from_the_deployment_state() {
     assert_eq!(
         text(&outcome, "payloads"),
         format!(
-            r#"{{"microsoft_defender":[{{"uuid":"{a}","name":"Rule {a}","api_request":[{{"method":"POST","url":"{endpoint}","body":{}}}],"tenant":"one"}},{{"uuid":"{b}","name":"Rule {b}","api_request":[{{"method":"PATCH","url":"{endpoint}/42","body":{}}}],"tenant":"one"}}]}}"#,
+            r#"{{"microsoft_defender":[{{"uuid":"{a}","name":"Rule {a}","api_request":[{{"method":"PATCH","url":"{endpoint}/{a}","body":{}}}],"tenant":"one"}},{{"uuid":"{b}","name":"Rule {b}","api_request":[{{"method":"PATCH","url":"{endpoint}/{b}","body":{}}}],"tenant":"one"}}]}}"#,
             body(a),
             body(b)
         )
@@ -166,7 +164,7 @@ fn the_unset_variable_warning_counts_only_the_tenants_the_plan_reaches() {
                 "00000000-0000-4000-8000-00000000000a",
                 "microsoft_defender",
                 "STAGING",
-                "",
+                &defender(""),
             ),
         ),
     ]);
@@ -202,7 +200,7 @@ fn a_defender_rules_alert_techniques_are_in_the_dry_runs_request() {
                 "00000000-0000-4000-8000-00000000000a",
                 "microsoft_defender",
                 "STAGING",
-                "    alert:\n      techniques: [T1528, T1059.001]\n",
+                &defender("    alert:\n      techniques: [T1528, T1059.001]\n"),
             ),
         ),
     ]);
@@ -210,7 +208,9 @@ fn a_defender_rules_alert_techniques_are_in_the_dry_runs_request() {
     assert_eq!(outcome.exit_code, 0);
     let payloads = text(&outcome, "payloads");
     assert!(
-        payloads.contains(r#""mitreTechniques":["T1528","T1059.001"]"#),
+        payloads.contains(
+            r#""tactics":[{"tactic":"Execution","techniques":[{"technique":"T1059","subTechniques":["T1059.001"]}]},{"tactic":"CredentialAccess","techniques":[{"technique":"T1528"}]}]"#
+        ),
         "{payloads}"
     );
 }
@@ -228,7 +228,7 @@ fn blocks_no_run_deploys_are_counted_and_a_release_run_retires() {
                 "00000000-0000-4000-8000-00000000000a",
                 "microsoft_defender",
                 "PRODUCTION",
-                "",
+                &defender(""),
             ),
         ),
         (
@@ -237,7 +237,7 @@ fn blocks_no_run_deploys_are_counted_and_a_release_run_retires() {
                 "00000000-0000-4000-8000-00000000000b",
                 "microsoft_defender",
                 "DISABLED",
-                "",
+                &defender(""),
             ),
         ),
     ]);
@@ -257,7 +257,7 @@ fn blocks_no_run_deploys_are_counted_and_a_release_run_retires() {
     );
     assert_eq!(
         text(&release, "message"),
-        "\"Plan: 1 to create, 0 to update, 1 to disable, 0 to delete\""
+        "\"Plan: 0 to create, 0 to update, 1 to create or update, 1 to disable, 0 to delete\""
     );
 }
 
@@ -281,7 +281,7 @@ fn a_platform_run_counts_only_its_own_blocks_as_left_out() {
                 "00000000-0000-4000-8000-00000000000a",
                 "microsoft_defender",
                 "STAGING",
-                "",
+                &defender(""),
             ),
         ),
         (
@@ -487,7 +487,7 @@ fn a_scope_failure_stops_the_run_with_its_own_exit_code() {
             "00000000-0000-4000-8000-00000000000a",
             "microsoft_defender",
             "STAGING",
-            "",
+            &defender(""),
         ),
     )]);
     let owned = Owned::new(&Vocabularies::bundled(), &ws.configuration().resolved);

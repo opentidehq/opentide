@@ -1,9 +1,0 @@
-{
-  "schema": "deployment.state::1.0",
-  "object_uuid": "00000000-0000-4000-8005-000000000202",
-  "platforms": {
-    "microsoft_defender": {
-      "contoso": "4343"
-    }
-  }
-}

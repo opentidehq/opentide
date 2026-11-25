@@ -1,0 +1,163 @@
+# Every key platform::microsoft_defender::1.0 defines, each set once.
+# Mirrors the "Complete block" example in specs/platforms/microsoft-defender-1.0.md.
+name: Microsoft Defender complete block
+metadata:
+  uuid: 00000000-0000-4000-8003-0000000000d5
+  schema: rule::1.1
+  version: 1
+  created: "2026-11-25"
+  modified: "2026-11-25"
+  tlp: clear
+description: |
+  Encoded PowerShell followed by network, mail, and identity activity: every Microsoft Defender key set.
+status: PRODUCTION
+response:
+  alert_severity: High
+configurations:
+  microsoft_defender:
+    enabled: true
+    name: Encoded PowerShell with follow-on activity
+    schema: platform::microsoft_defender::1.0
+    status: PRODUCTION
+    tenants: [contoso, fabrikam]
+    flags: [tier0]
+    contributors: [Detection Engineering]
+    # Illustrative: this block sets every key so each one is shown once. A real rule's query
+    # returns exactly the columns its mappings and actions name, and picks only the actions it needs.
+    query: |
+      DeviceProcessEvents
+      | where FileName =~ "powershell.exe" and ProcessCommandLine has "-enc"
+      | join kind=leftouter (DeviceNetworkEvents | project DeviceId, RemoteIP, RemoteIPType, RemoteUrl, LocalIP) on DeviceId
+      | project Timestamp, ReportId, DeviceId, DeviceName, DeviceDnsDomain, DeviceNetBiosName, DeviceNtDomain,
+          AccountObjectId, AccountSid, AccountUpn, AccountUpnSuffix, AccountName, AccountDomain, AccountDnsDomain,
+          FileName, SHA1, SHA256, InitiatingProcessSHA1, InitiatingProcessSHA256, ProcessCommandLine,
+          RemoteIP, RemoteIPType, RemoteUrl, DnsQuery, LocalIP, DnsServerIP, RegistryKey, RegistryValueName,
+          NetworkMessageId, RecipientEmailAddress, SenderFromAddress, Subject, MailClusterQuery, MailClusterSource,
+          ApplicationId, Application, OAuthApplicationId, GroupObjectId, GroupSid, GroupDistinguishedName,
+          AzureResourceId, AmazonResourceName, GcpFullResourceName
+    schedule:
+      frequency: 1H
+      lookback: 4H  # beta-only
+    alert:
+      title: Encoded PowerShell with follow-on activity
+      description: An encoded PowerShell command ran and was followed by network, mail, and identity activity.
+      severity: High
+      recommendation: Review the decoded command line, isolate the device, and reset the account's credentials.
+      techniques: [T1059.001, T1078.004]
+      custom_details:
+        CommandLine: ProcessCommandLine
+        RemoteAddress: RemoteIP
+      grouping: single_alert  # beta-only
+    entities:
+      hosts:
+        - device_id: DeviceId
+          name: DeviceName
+          dns_domain: DeviceDnsDomain
+          netbios_name: DeviceNetBiosName
+          nt_domain: DeviceNtDomain
+      accounts:
+        - aad_user_id: AccountObjectId
+          sid: AccountSid
+          upn: AccountUpn
+          upn_suffix: AccountUpnSuffix
+          name: AccountName
+          nt_domain: AccountDomain
+          dns_domain: AccountDnsDomain
+      mailboxes:
+        - primary_address: RecipientEmailAddress
+      files:
+        - name: FileName
+          sha1: SHA1
+          sha256: SHA256
+      processes:
+        - sha1: InitiatingProcessSHA1
+          sha256: InitiatingProcessSHA256
+      ips:
+        - address: RemoteIP
+          scope: RemoteIPType
+      urls:
+        - address: RemoteUrl
+      dns:
+        - domain_name: DnsQuery
+          host_ip_address: LocalIP
+          server_ip: DnsServerIP
+      registry_values:
+        - key: RegistryKey
+          value_name: RegistryValueName
+      mail_messages:
+        - network_message_id: NetworkMessageId
+          recipient: RecipientEmailAddress
+          sender: SenderFromAddress
+          subject: Subject
+      mail_clusters:
+        - query: MailClusterQuery
+          source: MailClusterSource
+      cloud_applications:
+        - app_id: ApplicationId
+          name: Application
+      oauth_applications:
+        - oauth_app_id: OAuthApplicationId
+      security_groups:
+        - object_id: GroupObjectId
+          sid: GroupSid
+          distinguished_name: GroupDistinguishedName
+      azure_resources:
+        - resource_id: AzureResourceId
+      amazon_resources:
+        - amazon_resource_id: AmazonResourceName
+      google_cloud_resources:
+        - full_resource_name: GcpFullResourceName
+    actions:
+      isolate_devices:
+        - device_id: DeviceId
+          isolation_type: selective
+      collect_investigation_packages:
+        - device_id: DeviceId
+      run_antivirus_scans:
+        - device_id: DeviceId
+      initiate_investigations:
+        - device_id: DeviceId
+      restrict_app_executions:
+        - device_id: DeviceId
+      allow_files:
+        - sha1: SHA1
+          sha256: SHA256
+          device_groups: [Developer workstations]
+      block_files:
+        - sha1: SHA1
+          sha256: SHA256
+          device_groups: [Tier 0, Servers]
+      stop_and_quarantine_files:
+        - device_id: DeviceId
+          sha1: SHA1
+      disable_users:
+        - account_sid: AccountSid
+      force_user_password_resets:
+        - account_sid: AccountSid
+      mark_users_as_compromised:
+        - account_object_id: AccountObjectId
+      soft_delete_emails:
+        - network_message_id: NetworkMessageId
+          recipient: RecipientEmailAddress
+      hard_delete_emails:
+        - network_message_id: NetworkMessageId
+          recipient: RecipientEmailAddress
+      move_emails_to_deleted_items:
+        - network_message_id: NetworkMessageId
+          recipient: RecipientEmailAddress
+      move_emails_to_inbox:
+        - network_message_id: NetworkMessageId
+          recipient: RecipientEmailAddress
+      move_emails_to_junk:
+        - network_message_id: NetworkMessageId
+          recipient: RecipientEmailAddress
+    scope:
+      device_groups: [Tier 0, Servers]
+    incident:  # beta-only
+      exclude_from_correlation: true
+    exclusions:
+      - query: '| where DeviceName != BuildAgent'
+        reason: The build agent runs encoded PowerShell on purpose.
+        tenant: fabrikam
+        let:
+          BuildAgent: build-agent-01
