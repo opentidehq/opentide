@@ -11,12 +11,12 @@ The opentide MCP server exposes catalogue search, validation, deployment, and re
 ## Quick start
 
 ```bash
-pip install --pre opentide      # the 1.0 release candidate, which these pages describe
+pip install 'opentide==1.0.0'
 export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 opentide setup mcp --cursor --yes
 ```
 
-`pip install opentide` is all it takes — `mcp` is a base dependency since 0.14.0 — but without `--pre` it installs 0.28.1, not the 1.0 release candidate these pages describe ([release candidates](../usage/installation.md#release-candidates)). See [Installation](./installation.md).
+`pip install opentide` is all it takes: the server is compiled into the package. See [Installation](./installation.md).
 
 Start manually:
 

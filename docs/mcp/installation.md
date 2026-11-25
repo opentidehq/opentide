@@ -10,11 +10,9 @@ description: Install opentide and start the stdio server with opentide mcp start
 The server ships in the base package:
 
 ```bash
-pip install --pre opentide              # the newest 1.0 release candidate
-pip install 'opentide==1.0.0rc5'        # or pin it
+pip install opentide              # the latest release
+pip install 'opentide==1.0.0'     # or pin it
 ```
-
-These pages describe 1.0, a release candidate until it is final: pip skips it unless asked, and `pip install opentide` installs 0.28.1. See [release candidates](../usage/installation.md#release-candidates).
 
 Command: **`opentide mcp start`**. The server is the command line's own, in Rust (rmcp, the official Rust MCP SDK): it needs no Python package of its own.
 

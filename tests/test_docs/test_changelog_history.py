@@ -37,6 +37,21 @@ def _released_from(text: str, version: str) -> str:
     return text[start:]
 
 
+_LINK = re.compile(r"^\[([^\]]+)\]: ", re.MULTILINE)
+
+
+def _without_newer_links(text: str) -> str:
+    """*text* without the footer links of versions it has no section for.
+
+    A release adds its own link and moves ``[Unreleased]``'s compare base: neither is
+    history of the releases *text* holds."""
+    return "\n".join(
+        line
+        for line in text.split("\n")
+        if not (link := _LINK.match(line)) or f"\n## [{link.group(1)}]" in text
+    )
+
+
 def _repeated_entries(text: str) -> list[str]:
     """Each entry (``- **Lead** …``) of *text* that an earlier section already has."""
     seen: dict[str, str] = {}
@@ -84,4 +99,6 @@ def test_released_sections_read_as_development_released_them() -> None:
     if merged is None:
         pytest.skip(f"{MERGED_COMMIT[:9]} is not in this checkout (a shallow clone)")
     ours = CHANGELOG.read_text(encoding="utf-8")
-    assert _released_from(ours, MERGED_RELEASE) == _released_from(merged, MERGED_RELEASE)
+    assert _without_newer_links(_released_from(ours, MERGED_RELEASE)) == _without_newer_links(
+        _released_from(merged, MERGED_RELEASE)
+    )

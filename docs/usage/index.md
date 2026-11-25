@@ -20,7 +20,7 @@ Detection content in opentide is a small graph of typed objects. Understanding t
   <Card title="How opentide works" href="./how-it-works.md" description="The full lifecycle: author → generate → validate → deploy → document." />
   <Card title="Object model" href="./concepts/object-model.md" description="Threats, objectives, and rules — and how they chain together." />
   <Card title="Platforms" href="./concepts/platforms.md" description="Which SIEM/EDR platforms deploy and which support query validation." />
-  <Card title="0.28.1 release" href="./releases.md" description="Current PyPI release — pin opentide==0.28.1. Optional fields such as author are notes, not warnings; lint --strict no longer fails on them." />
+  <Card title="1.0.0 release" href="./releases.md" description="Current PyPI release — pin opentide==1.0.0. opentide runs on one Rust core: a far smaller install, commands that start in about 20 ms, and SDKs for Python, Rust and Node.js." />
 </Cards>
 
 ## Pick your path
@@ -30,7 +30,7 @@ opentide serves several audiences. Follow the path that matches you.
 | You are… | Start here | Then |
 |-----------|-----------|------|
 | **New to opentide, greenfield repo** | [Installation](./installation.md) → [Repository setup](./repository-setup.md) | [Tutorial](./tutorial.md) → [Detection-as-code](./workflows/detection-as-code.md) |
-| **Checking what shipped** | [Releases](./releases.md) | [0.28.1 on PyPI](https://pypi.org/project/opentide/0.28.1/) |
+| **Checking what shipped** | [Releases](./releases.md) | [1.0.0 on PyPI](https://pypi.org/project/opentide/1.0.0/) |
 | **Evaluating the project** | [Why opentide](./why-opentide.md) → [How it works](./how-it-works.md) | [Object model](./concepts/object-model.md) |
 | **Wiring up an AI agent** | [Agentic setup](./workflows/agentic-setup.md) | [MCP reference](../mcp/index.md) |
 | **Embedding opentide in Python** | [SDK](../sdk/index.md) | [SDK workspace](../sdk/workspace.md) |

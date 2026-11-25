@@ -40,10 +40,14 @@ def test_repository_links_point_at_trunk() -> None:
         assert "/blob/development/" in target, target
 
 
-def test_install_names_the_candidates_flag_as_well_as_the_stable_pin() -> None:
+def test_install_names_the_candidates_flag_only_while_a_candidate_is_current() -> None:
+    """While a candidate is current the README names `--pre` beside the stable pin; the
+    final release's notes PR removes it (release-management, "pins")."""
     text = _text()
-    assert "pip install --pre opentide" in text
-    assert "uv pip install --prerelease=allow opentide" in text
+    installation = (ROOT / "docs" / "usage" / "installation.md").read_text(encoding="utf-8")
+    candidate = re.search(r"opentide==1\.0\.0rc\d+", installation) is not None
+    assert ("pip install --pre opentide" in text) is candidate
+    assert ("uv pip install --prerelease=allow opentide" in text) is candidate
     # An exact candidate pin would read as 1.0.0 to the release guard's pin check.
     assert not re.search(r"opentide==\d+\.\d+\.\d+rc", text)
 

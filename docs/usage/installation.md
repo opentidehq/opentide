@@ -40,7 +40,7 @@ uv venv
 
 ## PyPI install
 
-The latest release is **0.28.1** (13 November 2026), which `pip install opentide` installs: pip leaves out pre-releases. The next one is 1.0.0, now a release candidate, **1.0.0rc5**, on PyPI as a pre-release ([release candidates](#release-candidates)). The first public release was **0.1.0** (9 September 2026). Notes: [Releases](./releases.md).
+The latest release is **1.0.0** (25 November 2026), which `pip install opentide` installs. The first public release was **0.1.0** (9 September 2026). Notes: [Releases](./releases.md).
 
 <Tabs items={['venv + pip', 'uv']}>
 
@@ -49,7 +49,7 @@ The latest release is **0.28.1** (13 November 2026), which `pip install opentide
 ```bash
 pip install opentide              # latest on PyPI
 # python -m pip install opentide  # in constrained environments
-pip install 'opentide==0.28.1'     # pin the current release
+pip install 'opentide==1.0.0'      # pin the current release
 ```
 
 </Tab>
@@ -58,7 +58,7 @@ pip install 'opentide==0.28.1'     # pin the current release
 
 ```bash
 uv pip install opentide              # latest on PyPI
-uv pip install 'opentide==0.28.1'    # pin the current release
+uv pip install 'opentide==1.0.0'     # pin the current release
 ```
 
 </Tab>
@@ -67,52 +67,51 @@ uv pip install 'opentide==0.28.1'    # pin the current release
 
 That installs all of opentide: the `opentide` CLI, validation, generation, deploy adapters, the MCP server, the language server and its query analysis engine, and all thirteen platforms. `pip install opentide` is the only install: the package has no Python dependencies, and its one extra, `plugins` (pydantic), is for writing a [platform plugin](../sdk/platforms.md). You do **not** pick Sentinel or Splunk at install time — enable platforms in your repo with `opentide setup platforms` (writes `.opentide/configurations/platforms/*.toml`).
 
-### Release candidates
+### Binaries, crates and npm
 
-The 1.0 release, opentide on one Rust core, is out as a release candidate before it is final. A candidate is a pre-release on every channel, so none of them installs it unless you ask. One candidate has one version in two spellings, which name the same release: Python's `1.0.0rc5` (PyPI, `opentide --version` from pip) and SemVer's `1.0.0-rc.5` (crates.io, the GitHub Release, the binaries). From the candidate after 1.0.0-rc.1, `opentide --version`, `opentide-lsp --version` and `opentide doctor` report the candidate on every channel, and `doctor` treats the two spellings as one version. 1.0.0-rc.1 itself was built before that: its `opentide-lsp` reports `1.0.0`, and `doctor` can warn that a catalog is "from opentide 1.0.0rc1, not 1.0.0-rc.1", when a pip install and a binary share a workspace (it is only a warning).
-
-**PyPI**
-
-```bash
-pip install --pre opentide              # the newest pre-release
-pip install 'opentide==1.0.0rc5'        # or pin the candidate
-uv pip install --prerelease=allow opentide
-```
-
-`pipx install --pip-args=--pre opentide` and `uv tool install 'opentide==1.0.0rc5'` install it as a tool. A candidate has the same wheels as a release (and the same sdist for musl and free-threaded Python), and `pip install opentide` without `--pre` stays on 0.28.1.
+Each release publishes the same version everywhere: PyPI, crates.io, npm and a GitHub Release with binaries. `uv tool install opentide` and `pipx install opentide` install the command line as a tool.
 
 **crates.io**
 
 ```bash
-cargo install opentide --version 1.0.0-rc.5 --features cli --locked      # the opentide binary
-cargo install opentide-lsp --version 1.0.0-rc.5 --locked                 # the language server alone
+cargo install opentide --features cli --locked      # the opentide binary
+cargo install opentide-lsp --locked                 # the language server alone
 ```
 
-Cargo needs the version spelled out for a pre-release. The same crate is the [Rust SDK](../sdk/rust.md): `cargo add opentide@=1.0.0-rc.5`.
+The same crate is the [Rust SDK](../sdk/rust.md): `cargo add opentide`.
+
+**npm**
+
+```bash
+npm install @opentide/opentide        # the TypeScript SDK and the opentide command
+npx @opentide/opentide --version
+```
+
+See the [TypeScript SDK](../sdk/typescript.md). A release candidate publishes under the dist-tag `next`, never `latest`.
 
 **GitHub Release binaries**
 
-The `v1.0.0-rc.5` [GitHub Release](https://github.com/opentidehq/opentide/releases/tag/v1.0.0-rc.5) is marked a pre-release. It carries the `opentide` and `opentide-lsp` binaries for glibc Linux and macOS, and an installer that installs both. (1.0.0-rc.1 and 1.0.0-rc.2 also carried Windows binaries and a PowerShell installer; later releases do not: on Windows, install from PyPI or npm, as [Windows](#windows) describes.)
+The `v1.0.0` [GitHub Release](https://github.com/opentidehq/opentide/releases/tag/v1.0.0) carries the `opentide` and `opentide-lsp` binaries for glibc Linux and macOS, and an installer that installs both. There are no Windows binaries: on Windows, install from PyPI or npm, as [Windows](#windows) describes.
 
 ```bash
 curl --proto '=https' --tlsv1.2 -sSfLO \
-  https://github.com/opentidehq/opentide/releases/download/v1.0.0-rc.5/opentide-installer.sh
+  https://github.com/opentidehq/opentide/releases/download/v1.0.0/opentide-installer.sh
 sh opentide-installer.sh                 # into ~/.local/bin; OPENTIDE_INSTALL_DIR changes it
-opentide --version                       # opentide 1.0.0-rc.5
-opentide-lsp --version                   # opentide-lsp 1.0.0-rc.5
+opentide --version                       # opentide 1.0.0
+opentide-lsp --version                   # opentide-lsp 1.0.0
 ```
 
 The installer checks each binary against the release's `SHA256SUMS` before it installs it. To check what you downloaded yourself, and where it was built:
 
 ```bash
-BASE=https://github.com/opentidehq/opentide/releases/download/v1.0.0-rc.5
+BASE=https://github.com/opentidehq/opentide/releases/download/v1.0.0
 curl -sSfLO "$BASE/SHA256SUMS"
-curl -sSfLO "$BASE/opentide-v1.0.0-rc.5-x86_64-unknown-linux-gnu"
+curl -sSfLO "$BASE/opentide-v1.0.0-x86_64-unknown-linux-gnu"
 sha256sum --check --ignore-missing SHA256SUMS
-gh attestation verify opentide-v1.0.0-rc.5-x86_64-unknown-linux-gnu -R opentidehq/opentide
+gh attestation verify opentide-v1.0.0-x86_64-unknown-linux-gnu -R opentidehq/opentide
 ```
 
-`sha256sum --check` names each file that matches. `gh attestation verify` checks the file's build provenance, an attestation signed by the release workflow (`publish.yml` of opentidehq/opentide); it exits 0 when the file is genuine and prints nothing on a non-terminal, so check the exit status (add `--format json` to see the workflow). There are no musl binaries: on Alpine, install from the sdist or `cargo install`, as [below](#the-analysis-engine-and-the-language-server) describes. The npm packages are published with the candidates from `1.0.0-rc.3` on (`1.0.0-rc.1` and `1.0.0-rc.2` have none), under the dist-tag `next`: `npm install @opentide/opentide@next` installs the newest candidate, or `npm install @opentide/opentide@1.0.0-rc.5` a specific one, and until 1.0.0 a plain `npm install @opentide/opentide` installs the empty `0.0.0` placeholder, not a candidate.
+`sha256sum --check` names each file that matches. `gh attestation verify` checks the file's build provenance, an attestation signed by the release workflow (`publish.yml` of opentidehq/opentide); it exits 0 when the file is genuine and prints nothing on a non-terminal, so check the exit status (add `--format json` to see the workflow). There are no musl binaries: on Alpine, install from the sdist or `cargo install`, as [below](#the-analysis-engine-and-the-language-server) describes.
 
 ### MCP server
 
@@ -143,14 +142,14 @@ The build takes several minutes. `opentide doctor` reports it (`analysis_engine`
 
 ### Windows
 
-On Windows, install opentide from PyPI or npm. There is no standalone `opentide.exe` or `opentide-lsp.exe` to download and no PowerShell installer: 1.0.0-rc.1 and 1.0.0-rc.2 carried them, and later releases do not, so that no unsigned executable is downloaded on its own. The recommended install is a uv tool, which puts `opentide` on `PATH` in an environment of its own:
+On Windows, install opentide from PyPI or npm. There is no standalone `opentide.exe` or `opentide-lsp.exe` to download and no PowerShell installer, so that no unsigned executable is downloaded on its own. The recommended install is a uv tool, which puts `opentide` on `PATH` in an environment of its own:
 
 ```powershell
-uv tool install opentide                 # or: uv tool install 'opentide==1.0.0rc5' for the candidate
+uv tool install opentide                 # or: uv tool install 'opentide==1.0.0'
 opentide --version
 ```
 
-`pipx install opentide`, `pip install opentide` in a virtual environment, or `npm i -g @opentide/opentide` (the npm package, from 1.0.0) give you the same `opentide` command: a launcher that uv, pip or pipx writes, or Node.js. Each ships wheels or native packages for Windows x64 and Arm, with the engine compiled in.
+`pipx install opentide`, `pip install opentide` in a virtual environment, or `npm i -g @opentide/opentide` (the npm package) give you the same `opentide` command: a launcher that uv, pip or pipx writes, or Node.js. Each ships wheels or native packages for Windows x64 and Arm, with the engine compiled in.
 
 **The language server** on Windows is the command line's: point Neovim, Helix, Zed or any other LSP client at `opentide lsp start` (stdio) where it would run `opentide-lsp` ([`opentide lsp`](../cli/lsp.md)). The VS Code extension runs its own WebAssembly build and needs nothing installed.
 
