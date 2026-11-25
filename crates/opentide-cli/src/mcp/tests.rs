@@ -1275,23 +1275,36 @@ fn get_chaining_takes_a_depth_and_refuses_a_bad_one() {
     let scratch = tempfile::tempdir().unwrap();
     let ws = corpus(scratch.path());
     let server = server(&ws);
-    let full = call(&server, "get_chaining", json!({"uuid": THREAT}));
     let alone = call(&server, "get_chaining", json!({"uuid": THREAT, "depth": 0}));
     assert_eq!(alone["graph"], json!({}), "{alone}");
-    assert_eq!(
-        alone["chaining_index"].as_object().unwrap().len(),
-        1,
+    assert_eq!(alone["truncated"], true, "{alone}");
+    assert!(
+        alone["hint"].as_str().unwrap().contains("larger depth"),
         "{alone}"
     );
     let one = call(&server, "get_chaining", json!({"uuid": THREAT, "depth": 1}));
     assert_eq!(one["graph"]["objectives"][0], OBJECTIVE, "{one}");
-    assert_eq!(
-        call(
-            &server,
-            "get_chaining",
-            json!({"uuid": THREAT, "depth": 99})
-        ),
-        full
+    // Without a depth, one hop: the whole lineage only when asked for.
+    assert_eq!(call(&server, "get_chaining", json!({"uuid": THREAT})), one);
+    let full = call(
+        &server,
+        "get_chaining",
+        json!({"uuid": THREAT, "depth": 99}),
+    );
+    assert!(full.get("truncated").is_none(), "{full}");
+    assert!(full.get("hint").is_none(), "{full}");
+    let members = |answer: &serde_json::Value| -> usize {
+        ["threats", "objectives", "rules"]
+            .iter()
+            .map(|family| answer["lineage"][family].as_array().unwrap().len())
+            .sum()
+    };
+    // The rules under the threat's objective are two hops away.
+    assert!(members(&full) > members(&one), "{full} vs {one}");
+    assert_eq!(one["truncated"], true, "{one}");
+    assert!(
+        one["lineage"]["rules"].as_array().unwrap().is_empty(),
+        "{one}"
     );
     for (bad, reason) in [
         (json!(-1), "argument depth must be 0 or more, not -1"),

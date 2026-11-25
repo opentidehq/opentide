@@ -69,7 +69,9 @@ pub fn call(name: &str, arguments: &Map<String, Value>, context: &Context<'_>) -
         })(),
         "get_chaining" => (|| {
             let uuid = args.required("uuid")?;
-            let depth = args.optional_count("depth")?;
+            let depth = args
+                .optional_count("depth")?
+                .unwrap_or(catalog::DEFAULT_CHAINING_DEPTH);
             let workspace = catalog::require(context)?;
             Ok(Payload::One(catalog::get_chaining(
                 workspace.index(),

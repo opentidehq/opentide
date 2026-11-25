@@ -428,6 +428,25 @@ It runs through the same deployment-state code as a deploy: the same shards, edi
 The migration is done when it is committed. Commit the edited rules together with every new file under `.opentide/states/deployment/`. A deploy from a checkout that has the stripped rules but not the shards creates a second live rule for every one of them.
 </Callout>
 
+### deploy replay-state
+
+Replays one commit's deployment-state changes onto the checkout. The production job that [`setup ci`](./setup.md#setup-ci) writes runs it in its [write-back](../usage/workflows/ci-cd.md#production-write-back): when its rule files conflict with a merge that landed during the deploy, the job resets to the default branch's tip, runs `opentide deploy replay-state "$state_commit"` with the commit that recorded the deploy, commits what it changed and pushes, so no vendor id is lost. You need it by hand only to do the same after a failed write-back left a state commit on `refs/opentide/deployment-state/<commit>`. It calls no vendor API and deploys nothing.
+
+```bash
+opentide deploy replay-state HEAD
+opentide --json deploy replay-state "$state_commit"
+```
+
+`<state_commit>` is any commit git resolves in the checkout. Only what it changed under `.opentide/states/deployment/` against its first parent is applied, per platform and tenant, so the ids other runs recorded since are kept:
+
+- a binding the commit added or changed is set on the checkout's shard;
+- a binding the commit removed is removed, and a shard left with no binding is deleted;
+- every binding the commit did not touch keeps the checkout's value.
+
+When the checkout's shard holds another id for a binding the commit changed, the commit's id is kept and a `deployment_state_conflict <shard> <platform>/<tenant>: kept "<id>", the default branch had "<id>"` line is printed (`warnings` and `conflicts` in `--json`), so the duplicate remote rule can be removed by hand. The command stages and commits nothing.
+
+`--json` returns `state_commit`, `written` and `removed` (shard paths), and `conflicts`, with their counts under `summary`. It exits `0` after a replay, conflicts included, and `1` when git cannot read the commit or a shard does not parse. Through 1.0.0-rc.5 the command was hidden from `--help` and printed one line of text whatever the output mode.
+
 ### deploy metadata
 
 Reserved stub. Hidden from `--help`; it deploys nothing and exits `2` with “not implemented”:
