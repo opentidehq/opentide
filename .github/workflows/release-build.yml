@@ -175,7 +175,6 @@ jobs:
       tag: ${{ inputs.tag }}
       wheel-version: ${{ inputs.pypi-version }}
       dry-run: ${{ inputs.dry-run }}
-      av-gate: ${{ inputs.av-gate }}
 
   # The sdist carries the workspace's manifests, sources and embedded data: a
   # platform without a wheel (musl, free-threaded CPython) builds from it
@@ -269,19 +268,23 @@ jobs:
           if-no-files-found: error
           retention-days: ${{ inputs.retention-days }}
 
-  # The antivirus gate over the wheels (each holds the extension module), the
-  # npm packages (the Node.js addons), the sdist and the crates (#1743):
-  # av-gate.yml. The release assets' own gate is engine-release-build.yml's.
-  # Only for the release tier and the release train.
-  av-gate-packages:
-    name: AV gate (packages)
-    needs: [release-versions, packages, sdist, crate-packages]
+  # The antivirus gate (#1743, av-gate.yml), once per run over every artifact
+  # this workflow built: the wheels (each holds the extension module), the
+  # npm packages (the Node.js addons), the sdist, the crates and the GitHub
+  # Release's assets (the binaries, the WebAssembly builds, the SBOMs). One
+  # gate, not one per build: each scanner job installs its tools and fetches
+  # its signatures once. Only for the release tier and the release train; a
+  # failure fails this workflow, so its caller's `build`, and nothing
+  # downstream (the internal release, the attestations, the registries) runs.
+  av-gate:
+    name: AV gate
+    needs: [release-versions, packages, engine-assets, sdist, crate-packages]
     if: ${{ inputs.av-gate }}
     permissions:
       contents: read
     uses: ./.github/workflows/av-gate.yml
     with:
-      artifacts: "{wheels-*,sdist,npm-packages,crates}"
+      artifacts: "{wheels-*,sdist,npm-packages,crates,release-assets}"
       revision: ${{ needs.release-versions.outputs.revision }}
 
   # Each artifact installed the way a user installs it, on its own platform

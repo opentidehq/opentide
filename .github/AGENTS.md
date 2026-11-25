@@ -124,9 +124,10 @@ runner's stable Rust, and `cargo install opentide --features cli` from the crate
 `scope: release` run (not the nightly), the **antivirus gate** ([`av-gate.yml`](workflows/av-gate.yml),
 #1743) scans every artifact with ClamAV, YARA (signature-base and protections-artifacts at pinned
 commits, a reviewed allow-list) and Microsoft Defender (`windows-latest`), checks that no marker
-string sits in plain text in any of them, and holds each to its size budget: `release-build.yml`'s
-`av-gate` job the wheels, npm packages, sdist and crates, `engine-release-build.yml`'s the Release's
-assets ([`docs/internal/publishing.md`](../docs/internal/publishing.md#the-antivirus-gate)). It
+string sits in plain text in any of them, and holds each to its size budget: one
+`av-gate` job in `release-build.yml`, once per run, over every artifact it built (the wheels,
+npm packages, sdist, crates and the Release's assets,
+[`docs/internal/publishing.md`](../docs/internal/publishing.md#the-antivirus-gate)). It
 is off for every other pull request. Also `publish-dry-run`
 ([`publish-dry-run.yml`](workflows/publish-dry-run.yml): the registry placeholders) and `docs`.
 
@@ -287,8 +288,8 @@ merging** → add `PR gate`, remove the others → **Save changes**.
 - [`release-build.yml`](workflows/release-build.yml): every artifact a release ships, built and
   smoke-tested once; ci.yml's `release` and publish.yml's `build` call it (above).
 - [`av-gate.yml`](workflows/av-gate.yml): the antivirus gate (ClamAV, YARA, Microsoft Defender, the
-  marker and size checks), a reusable workflow that `release-build.yml` and
-  `engine-release-build.yml` call with `av-gate: true` from the release tier and the release train
+  marker and size checks), a reusable workflow that `release-build.yml`
+  calls once per run, over every artifact, with `av-gate: true` from the release tier and the release train
   (its scripts are [`scripts/av/`](../scripts/av/)). It holds no token and uploads nothing to a scanner.
 - Deleted (2026-11-14): `docs.yml` (now ci.yml's `docs` job), `stack-comment.yml`, `golden.yml`
   and `golden-preview.yml` (their `cargo xtask golden` commands were deleted too, #1142).

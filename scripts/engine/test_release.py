@@ -1138,14 +1138,13 @@ class ReleaseWorkflowTest(unittest.TestCase):
             assert needs is not None
             needed |= set(needs.group(1).split(", ")) - {"release-versions"}
         # Between them the two smoke jobs wait for every build.
-        self.assertEqual(needed, set(built) - {"release-versions", *smokes, "av-gate-packages"})
-        # The antivirus gate scans the same builds, and fails the workflow (so `build`) itself.
-        gate = re.search(r"^    needs: \[(.*)\]$", built["av-gate-packages"], re.MULTILINE)
+        self.assertEqual(needed, set(built) - {"release-versions", *smokes, "av-gate"})
+        # One antivirus gate per run scans every build, and fails the workflow (so `build`) itself.
+        gate = re.search(r"^    needs: \[(.*)\]$", built["av-gate"], re.MULTILINE)
         assert gate is not None
-        self.assertEqual(
-            set(gate.group(1).split(", ")) - {"release-versions"},
-            {"packages", "sdist", "crate-packages"},
-        )
+        self.assertEqual(set(gate.group(1).split(", ")) - {"release-versions"}, needed)
+        self.assertIn('artifacts: "{wheels-*,sdist,npm-packages,crates,release-assets}"', built["av-gate"])
+        self.assertNotIn("av-gate.yml", BUILD.read_text(encoding="utf-8"))
         # Each of the six platforms and the PyPI dist's shape; then the sdist
         # and the crate packages, built from source.
         kinds = re.findall(r"kind: (\w+) \}", built["smoke"])

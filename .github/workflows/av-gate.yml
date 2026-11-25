@@ -33,7 +33,7 @@ on:
   workflow_call:
     inputs:
       artifacts:
-        description: "A glob of the run's artifact names to scan, as download-artifact's `pattern` (brace alternatives allowed): `release-assets`, or `{wheels-*,sdist,npm-packages,crates}`."
+        description: "A glob of the run's artifact names to scan, as download-artifact's `pattern` (brace alternatives allowed): release-build.yml passes every artifact it built, `{wheels-*,sdist,npm-packages,crates,release-assets}`, once per run."
         required: true
         type: string
       windows-binaries:
