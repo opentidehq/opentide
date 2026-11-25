@@ -8,7 +8,7 @@
     "--json",
     "query",
     "--platform",
-    "defender_for_endpoint",
+    "microsoft_defender",
     "--from",
     "2099-01-01T00:00:00Z",
     "--to",
@@ -17,7 +17,7 @@
     "1",
     "DeviceProcessEvents | project Timestamp, DeviceName"
   ],
-  "digest": "sha256:0d2bdfec2c2461003a3e7ec2f07e3a3fc89ff6c3ee8fbea51d3aaf5264860008",
+  "digest": "sha256:20109974b9662073e8dced649a678661e554ab3adeeecf533ab7ed38148aed57",
   "interactions": [
     {
       "request": {
@@ -29,7 +29,7 @@
             "application/x-www-form-urlencoded"
           ]
         ],
-        "body": "client_id=00000000-0000-4000-8000-00000000c11d&client_secret=REDACTED&grant_type=client_credentials&scope=https%3A%2F%2Fgraph.microsoft.com%2F.default"
+        "body": "grant_type=client_credentials&client_id=00000000-0000-4000-8000-00000000c11d&client_secret=REDACTED&scope=https%3A%2F%2Fgraph.microsoft.com%2F.default"
       },
       "response": {
         "status": 200,
@@ -60,7 +60,7 @@
             "application/json"
           ]
         ],
-        "body": "{\"Query\": \"DeviceProcessEvents | project Timestamp, DeviceName\\n| take 2\", \"Timespan\": \"2099-01-01T00:00:00.000Z/2099-01-01T01:00:00.000Z\"}"
+        "body": "{\"Query\":\"DeviceProcessEvents | project Timestamp, DeviceName\\n| take 2\",\"Timespan\":\"2099-01-01T00:00:00.000Z/2099-01-01T01:00:00.000Z\"}"
       },
       "response": {
         "status": 200,
