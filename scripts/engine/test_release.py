@@ -245,6 +245,44 @@ class UnpublishedTest(unittest.TestCase):
         with self.gh(0, self.release_json([])):
             self.assertEqual(release.published_assets("v1.0.0", "o/r"), [])
 
+    def gh_sequence(self, *answers: tuple[int, str, str]) -> mock.MagicMock:
+        done = [
+            subprocess.CompletedProcess([], code, stdout=out, stderr=err)
+            for code, out, err in answers
+        ]
+        return mock.patch.object(release.subprocess, "run", side_effect=done)
+
+    def test_an_untagged_draft_a_failed_release_left_is_deleted(self) -> None:
+        # The draft, then the tag's ref: 404, then the delete.
+        with self.gh_sequence(
+            (0, json.dumps({"isDraft": True}), ""),
+            (1, "", "gh: Not Found (HTTP 404)\n"),
+            (0, "", ""),
+        ) as run:
+            self.assertTrue(release.delete_stale_draft("v1.0.0", "o/r"))
+        self.assertEqual(run.call_args.args[0][:4], ["gh", "release", "delete", "v1.0.0"])
+        self.assertNotIn("--cleanup-tag", run.call_args.args[0])
+
+    def test_a_tagged_draft_or_a_published_release_is_kept(self) -> None:
+        # An internal candidate: a draft whose tag exists.
+        with self.gh_sequence((0, json.dumps({"isDraft": True}), ""), (0, "{}", "")) as run:
+            self.assertFalse(release.delete_stale_draft("v1.0.0-rc.6", "o/r"))
+        self.assertEqual(run.call_count, 2)
+        with self.gh_sequence((0, json.dumps({"isDraft": False}), "")) as run:
+            self.assertFalse(release.delete_stale_draft("v1.0.0", "o/r"))
+        self.assertEqual(run.call_count, 1)
+        with self.gh_sequence((1, "", "release not found\n")):
+            self.assertFalse(release.delete_stale_draft("v1.0.0", "o/r"))
+
+    def test_an_outage_never_reads_as_no_tag(self) -> None:
+        with (
+            self.gh_sequence(
+                (0, json.dumps({"isDraft": True}), ""), (1, "", "HTTP 502: Bad Gateway\n")
+            ),
+            self.assertRaises(RuntimeError),
+        ):
+            release.delete_stale_draft("v1.0.0", "o/r")
+
     def test_a_gh_failure_is_an_error_not_an_unreleased_tag(self) -> None:
         with self.gh(1, stderr="HTTP 502: Bad Gateway\n"), self.assertRaises(RuntimeError):
             release.published_assets("v1.0.0", "o/r")
