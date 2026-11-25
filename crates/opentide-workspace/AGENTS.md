@@ -17,7 +17,7 @@ coverage, `info`'s data and `rules unreviewed` (UC-2.4, #819: `cli/services/cata
 domain, tier 0 (`xtask/layers.toml`), beside opentide-tide: it depends on opentide-schema (the
 YAML 1.2 node tree, the configuration models and their layering) and on no other domain crate.
 `publish = false` while opentide-schema is unpublished; CI packages it with neither and scans its
-source (`release-build.yml` `crate-packages`, `scripts/ci-local.sh`).
+source (`release-pipeline.yml` `sources`, `scripts/ci-local.sh`).
 
 ## Layout
 

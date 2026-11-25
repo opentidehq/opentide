@@ -370,7 +370,7 @@ def test_the_av_gates_clamav_job_scans_both_trees_and_extracts_first() -> None:
     """The gate's design (#1743, kept by the CI review of 2026-11): ClamAV opens the
     archives itself on the artifacts, and scans the extractor's files one by one too,
     each seeing what the other might skip. A faster scan may not drop a tree."""
-    steps = load(WORKFLOWS / "av-gate.yml")["jobs"]["clamav"]["steps"]
+    steps = load(WORKFLOWS / "release-pipeline.yml")["jobs"]["av-scan"]["steps"]
     runs_ = [str(step.get("run", "")) for step in steps]
     extract = next(i for i, run in enumerate(runs_) if "scripts/av/extract.py" in run)
     scan = next(i for i, run in enumerate(runs_) if "scripts/av/clamav-scan.sh" in run)

@@ -108,7 +108,7 @@ rust_jobs() {
   trap 'python3 scripts/engine/release.py vendor --clean >/dev/null' EXIT
   python3 scripts/engine/release.py vendor
   # Every crate the release train publishes, from its package, as in ci.yml's
-  # release job (release-build.yml's crate-packages); the unpublished members' sources are scanned, and
+  # release job (release-pipeline.yml's sources); the unpublished members' sources are scanned, and
   # opentide-cli, which carries opentide's package data, as a product.
   cargo package --locked --workspace --exclude opentide-native --exclude xtask --exclude opentide-cassette --exclude opentide-wasm --exclude opentide-node --allow-dirty --quiet
   find "${CARGO_TARGET_DIR:-target}/package" -maxdepth 1 -name '*.crate' ! -name 'opentide-cli-*' -print0 | xargs -0 bash scripts/engine/license-scan.sh

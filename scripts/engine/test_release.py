@@ -1,6 +1,6 @@
 """Tests for scripts/engine/release.py (tags, the asset set, checksums, the one
 version) and for the shape of the release train, .github/workflows/publish.yml,
-and the asset build it shares with ci.yml's dry run, engine-release-build.yml
+and the release pipeline it shares with ci.yml, release-pipeline.yml
 (language-server#196, opentide#801, #840).
 
     python3 -m unittest discover -s scripts -p 'test_*.py'
@@ -156,9 +156,9 @@ class LegalFilesTest(unittest.TestCase):
         )
 
     def test_the_release_builds_and_checks_the_bundle(self) -> None:
-        jobs = workflow_jobs(BUILD)
-        bundle = "release.py legal-bundle dist/THIRD-PARTY-DATA-LICENSES.txt"
-        self.assertIn(bundle, jobs["licences"])
+        jobs = workflow_jobs(PIPELINE)
+        bundle = "release.py legal-bundle legal/THIRD-PARTY-DATA-LICENSES.txt"
+        self.assertIn(bundle, jobs["sources"])
         self.assertIn("release.py legal pkg", jobs["wasm"])
         self.assertIn(release.DATA_LICENSES, release.FIXED_ASSETS)
 
@@ -724,11 +724,9 @@ class LockstepTest(unittest.TestCase):
 
 WORKFLOWS = Path(__file__).resolve().parents[2] / ".github" / "workflows"
 WORKFLOW = WORKFLOWS / "publish.yml"
-BUILD = WORKFLOWS / "engine-release-build.yml"
-PACKAGES = WORKFLOWS / "build-packages.yml"
-#: What publish.yml and ci.yml call: the two builds above, the sdist, the
-#: crate packages and the smoke tests.
-RELEASE_BUILD = WORKFLOWS / "release-build.yml"
+#: The one release pipeline publish.yml and ci.yml call: every build, the
+#: assembled artifacts, the smoke tests and the antivirus gate.
+PIPELINE = WORKFLOWS / "release-pipeline.yml"
 
 
 def workflow_jobs(path: Path = WORKFLOW) -> dict[str, str]:
@@ -753,7 +751,7 @@ def workflow_jobs(path: Path = WORKFLOW) -> dict[str, str]:
 def all_jobs() -> dict[str, str]:
     """The jobs of the release workflow and the three it calls; their names do
     not collide."""
-    workflows = [workflow_jobs(path) for path in (WORKFLOW, RELEASE_BUILD, BUILD, PACKAGES)]
+    workflows = [workflow_jobs(path) for path in (WORKFLOW, PIPELINE)]
     jobs: dict[str, str] = {}
     for each in workflows:
         assert not jobs.keys() & each.keys(), jobs.keys() & each.keys()
@@ -906,15 +904,24 @@ class TagTest(unittest.TestCase):
         self.assertIn("missing asset: NOTICE", missing.stderr)
 
     def test_the_native_matrix_builds_every_target(self) -> None:
-        native = workflow_jobs(BUILD)["native"]
-        built = re.findall(r"^\s+target: (\S+)$", native, re.MULTILINE)
-        self.assertEqual(built, release.BINARY_TARGETS)
-        self.assertFalse([t for t in built if "windows" in t])
-        npm = workflow_jobs(PACKAGES)["npm-native"]
-        self.assertEqual(
-            sorted(re.findall(r"^\s+target: (\S+)$", npm, re.MULTILINE)), sorted(release.TARGETS)
+        # The platform builds, at most two jobs per platform: between them each
+        # target builds its wheel and its npm addon once, and the binaries once
+        # (not on Windows).
+        native = workflow_jobs(PIPELINE)["native"]
+        cells = re.findall(
+            r"target: (\S+), binaries: (\w+), addon: (\w+), wheel: (\w+), npm: (\S+), tag:", native
         )
-        platforms = re.findall(r"^\s+platform: (\S+)$", npm, re.MULTILINE)
+
+        def built(flag: int) -> list[str]:
+            return [cell[0] for cell in cells if cell[flag] == "true"]
+
+        self.assertEqual(sorted(built(3)), sorted(release.TARGETS))
+        self.assertEqual(sorted(built(2)), sorted(release.TARGETS))
+        self.assertEqual(built(1), release.BINARY_TARGETS)
+        self.assertFalse([t for t in built(1) if "windows" in t])
+        self.assertEqual(len({t for t, *_ in cells}), len(release.TARGETS))
+        self.assertLessEqual(max(sum(1 for c in cells if c[0] == t) for t, *_ in cells), 2)
+        platforms = [cell[4] for cell in cells if cell[2] == "true"]
         self.assertEqual(sorted(platforms), [d.name for d in release.npm_native_dirs()])
 
 
@@ -1005,13 +1012,13 @@ class ReleaseWorkflowTest(unittest.TestCase):
             # Every job states its permissions, so none inherits a token.
             self.assertIn("permissions:", jobs[job], job)
         # The asset and package builds, which ci.yml also runs, hold none.
-        for path in (RELEASE_BUILD, BUILD, PACKAGES):
+        for path in (PIPELINE,):
             self.assertNotIn("id-token", path.read_text(encoding="utf-8"), path.name)
             self.assertNotIn("secrets.", path.read_text(encoding="utf-8"), path.name)
         self.assertRegex(jobs["build"], r"permissions:\n      contents: read\n")
-        built = workflow_jobs(RELEASE_BUILD)
-        self.assertRegex(built["packages"], r"permissions:\n      contents: read\n")
-        self.assertRegex(built["engine-assets"], r"permissions:\n      contents: read\n")
+        self.assertRegex(
+            PIPELINE.read_text(encoding="utf-8"), r"(?m)^permissions:\n  contents: read\n"
+        )
         # There is no crates dry-run job: a candidate's crates are published.
         self.assertNotIn("crates-dry-run", jobs)
 
@@ -1025,7 +1032,7 @@ class ReleaseWorkflowTest(unittest.TestCase):
         # a job builds comes from `rustup target add`, which with no toolchain
         # named adds it to the pinned release. (A build from the sdist, which
         # leaves the pin out, runs pip with the runner's Rust, as a user's does.)
-        # The npm addons (build-packages.yml) are stricter: they run
+        # The platform builds (release-pipeline.yml's `native`) are stricter: they run
         # scripts/build/install-rust.sh, which installs that release by name
         # with the minimal profile, without the file's components, adds the
         # target and names the release in RUSTUP_TOOLCHAIN, so that rustup
@@ -1040,37 +1047,33 @@ class ReleaseWorkflowTest(unittest.TestCase):
             for job, body in jobs.items()
             if re.search(
                 r"\bcargo (?:build|run|install|package|publish)\b|build-wasm\.sh|build\.mjs"
-                r"|release\.py (?:vendor|publish)|kind: cargo\b",
+                r"|release\.py (?:vendor|publish)|kind: \[.*\bcargo\b",
                 body,
             )
         )
         self.assertEqual(
             rust,
             [
-                "crate-packages",
                 "crates",
-                "highlights",
-                "licences",
                 "native",
-                "npm-native",
-                "sbom",
                 "smoke-registries",
                 # `cargo install` from the crate packages (smoke_release.sh cargo).
                 "smoke-sources",
+                # The crate packages, cargo-about, cargo-cyclonedx.
+                "sources",
                 "wasm",
             ],
         )
         by_script = sorted(job for job, body in jobs.items() if script in body)
-        self.assertEqual(by_script, ["npm-native"])
-        # The wheels build with maturin-action, which installs rust-toolchain.toml's
-        # release itself (in the manylinux container on Linux) and sets it as the
-        # directory's override: no other toolchain is named.
-        wheels = jobs["wheels"]
+        self.assertEqual(by_script, ["native"])
+        # The wheel builds with maturin-action, which installs rust-toolchain.toml's
+        # release itself in the manylinux container on Linux: no other toolchain is named.
+        wheels = jobs["native"]
         self.assertIn("uses: PyO3/maturin-action@", wheels)
         self.assertNotIn("rust-toolchain:", wheels)
-        self.assertNotIn("rustup", wheels)
-        # npm-native cross-compiles: the script adds its target.
-        self.assertIn(f'{script} "${{TARGET}}"', jobs["npm-native"])
+        # Every build of the platform job (the binaries' cross builds on macOS
+        # too) uses the target the script added.
+        self.assertIn(f'{script} "${{TARGET}}"', jobs["native"])
         for job, body in jobs.items():
             self.assertNotIn("dtolnay/rust-toolchain", body, job)
             self.assertNotRegex(body, r"rustup (?:default|override)|cargo \+", job)
@@ -1091,10 +1094,16 @@ class ReleaseWorkflowTest(unittest.TestCase):
                 for name in re.findall(target, line)
             }
             self.assertLessEqual(built[job], added, job)
-        # The matrix build cross-compiles for x86_64-apple-darwin and the like.
-        self.assertEqual(built["native"], {"${{ matrix.target }}"})
-        # npm-native adds its target through the script, with TARGET its matrix's.
-        self.assertIn("TARGET: ${{ matrix.target }}", jobs["npm-native"])
+        self.assertEqual(
+            {
+                name
+                for line in jobs["native"].splitlines()
+                if re.search(r"\bcargo build\b|build\.mjs", line)
+                for name in re.findall(target, line)
+            },
+            {'"${TARGET}"'},
+        )
+        self.assertIn("TARGET: ${{ matrix.target }}", jobs["native"])
         # build-wasm.sh adds its own targets, but the job states them.
         self.assertEqual(targets_added(jobs["wasm"]), {"wasm32-unknown-unknown", "wasm32-wasip1"})
 
@@ -1104,9 +1113,9 @@ class ReleaseWorkflowTest(unittest.TestCase):
         # cargo builds with: the cross builds failed with "can't find crate
         # for `std`" (v0.13.0). The target is added with rustup in the checkout.
         native = all_jobs()["native"]
-        self.assertIn("rustup target add ${{ matrix.target }}", native)
+        self.assertIn('scripts/build/install-rust.sh "${TARGET}"', native)
         self.assertNotRegex(native, r"targets:\s*\$\{\{ matrix\.target \}\}")
-        self.assertLess(native.index("actions/checkout"), native.index("rustup target add"))
+        self.assertLess(native.index("actions/checkout"), native.index("install-rust.sh"))
 
     def test_the_attest_job_builds_and_runs_nothing(self) -> None:
         attest = workflow_jobs()["attest"]
@@ -1129,32 +1138,39 @@ class ReleaseWorkflowTest(unittest.TestCase):
             assert needs is not None
             # `build` passes only when its smoke matrix and every build passed.
             self.assertIn("build", needs.group(1).split(", "), job)
-        self.assertIn("uses: ./.github/workflows/release-build.yml", jobs["build"])
-        built = workflow_jobs(RELEASE_BUILD)
-        smokes = ("smoke", "smoke-sources")
-        needed: set[str] = set()
-        for job in smokes:
-            needs = re.search(r"^    needs: \[(.*)\]$", built[job], re.MULTILINE)
-            assert needs is not None
-            needed |= set(needs.group(1).split(", ")) - {"release-versions"}
-        # Between them the two smoke jobs wait for every build.
-        self.assertEqual(needed, set(built) - {"release-versions", *smokes, "av-gate-packages"})
-        # The antivirus gate scans the same builds, and fails the workflow (so `build`) itself.
-        gate = re.search(r"^    needs: \[(.*)\]$", built["av-gate-packages"], re.MULTILINE)
-        assert gate is not None
+        self.assertIn("uses: ./.github/workflows/release-pipeline.yml", jobs["build"])
+        built = workflow_jobs(PIPELINE)
+
+        def needs(job: str) -> set[str]:
+            found = re.search(r"^    needs: (?:\[(.*)\]|(\S+))$", built[job], re.MULTILINE)
+            assert found is not None, job
+            return set((found.group(1) or found.group(2)).split(", ")) - {"plan"}
+
+        # The platform smoke and the antivirus gate verify what `assemble` put
+        # together, which needs every build; the builds from source start as
+        # soon as `sources` packed them. Each verify job exists once.
+        builds = {"native", "wasm", "sources"}
+        self.assertEqual(needs("assemble"), builds)
+        for job in ("smoke", "av-scan", "av-defender"):
+            self.assertEqual(needs(job), {"assemble"}, job)
+        self.assertEqual(needs("smoke-sources"), {"sources"})
         self.assertEqual(
-            set(gate.group(1).split(", ")) - {"release-versions"},
-            {"packages", "sdist", "crate-packages"},
+            set(built),
+            {"plan", *builds, "assemble", "smoke", "smoke-sources", "av-scan", "av-defender"},
         )
-        # Each of the six platforms and the PyPI dist's shape; then the sdist
-        # and the crate packages, built from source.
-        kinds = re.findall(r"kind: (\w+) \}", built["smoke"])
-        self.assertEqual(kinds, ["platform"] * 6 + ["shape"])
-        sources = re.findall(r"kind: (\w+) \}", built["smoke-sources"])
-        self.assertEqual(sources, ["sdist", "cargo"])
-        # The wheels are smoke-tested on their own OS in build-packages.yml.
-        smoke = workflow_jobs(PACKAGES)["wheel-smoke"]
-        self.assertIn("needs: [versions, wheels]", smoke)
+        # Each of the six platforms; then the sdist and the crate packages,
+        # built from source; the PyPI dist's shape in `assemble`.
+        self.assertEqual(len(re.findall(r"- \{ name: [\w-]+, os: ", built["smoke"])), 6)
+        self.assertIn("smoke_release.sh platform", built["smoke"])
+        self.assertIn("kind: [sdist, cargo]", built["smoke-sources"])
+        self.assertIn("smoke_release.sh shape", built["assemble"])
+        # Each platform cell installs that platform's wheel.
+        self.assertIn("name: wheels-${{ matrix.name }}", built["smoke"])
+        # The antivirus gate scans every artifact, once.
+        for job in ("av-scan", "av-defender"):
+            self.assertIn(
+                'pattern: "{wheels-*,sdist,npm-packages,crates,release-assets}"', built[job]
+            )
         # A dry run and an internal candidate stop before attest, and so
         # before every write after it.
         self.assertIn(
@@ -1164,7 +1180,7 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertIn("needs.attest.result == 'success'", jobs["verify-assets"])
 
     def test_the_npm_smoke_installs_from_a_local_registry(self) -> None:
-        smoke = workflow_jobs(RELEASE_BUILD)["smoke"]
+        smoke = workflow_jobs(PIPELINE)["smoke"]
         self.assertIn("name: npm-packages", smoke)
         script = (Path(__file__).resolve().parents[1] / "build" / "smoke_release.sh").read_text(
             encoding="utf-8"
@@ -1180,14 +1196,14 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertNotIn("id-token", smoke)
         # Every package that carries the engine ships the licence, NOTICE and the
         # licence files NOTICE cites (#1753), which the pack checks.
-        pack = workflow_jobs(PACKAGES)["npm-pack"]
+        pack = workflow_jobs(PIPELINE)["assemble"]
         self.assertIn("release.py legal bindings/node bindings/node/npm/*/", pack)
         self.assertIn("release.legal_files()", pack)
         self.assertIn("npm/1-native/*.tgz npm/2-package/*.tgz", pack)
         # ci.yml runs this smoke on the release tier and the nightly: its
         # `release` job is this build, so no job of its own repeats the test.
         ci = workflow_jobs(WORKFLOWS / "ci.yml")
-        self.assertIn("uses: ./.github/workflows/release-build.yml", ci["release"])
+        self.assertIn("uses: ./.github/workflows/release-pipeline.yml", ci["release"])
         self.assertIn("needs.changes.outputs.mode == 'nightly'", ci["release"])
         self.assertNotIn("npm-local-registry/test.mjs", "\n".join(ci.values()))
 
@@ -1257,19 +1273,17 @@ class ReleaseWorkflowTest(unittest.TestCase):
         publish = crates.index("python3 scripts/engine/release.py publish")
         self.assertLess(crates.index(bump), publish)
         # The packages the build makes and smoke-tests carry the candidate's
-        # version too: release-build.yml's crate packages bump to it.
+        # version too: release-pipeline.yml's `sources` bumps the crate packages to it.
         self.assertIn("crates-version: ${{ needs.guard.outputs.version }}", jobs["build"])
-        built = workflow_jobs(RELEASE_BUILD)
-        package = built["crate-packages"]
+        built = workflow_jobs(PIPELINE)
+        package = built["sources"]
         self.assertIn(
-            "if: needs.release-versions.outputs.crates != needs.release-versions.outputs.workspace",
+            "if: needs.plan.outputs.crates != needs.plan.outputs.workspace",
             package,
         )
-        self.assertIn("VERSION: ${{ needs.release-versions.outputs.crates }}", package)
+        self.assertIn("VERSION: ${{ needs.plan.outputs.crates }}", package)
         self.assertLess(package.index(bump), package.index("release.py vendor"))
-        self.assertIn(
-            "CRATES_VERSION: ${{ needs.release-versions.outputs.crates }}", built["smoke-sources"]
-        )
+        self.assertIn("CRATES_VERSION: ${{ needs.plan.outputs.crates }}", built["smoke-sources"])
         script = (Path(__file__).resolve().parents[1] / "build" / "smoke_release.sh").read_text(
             encoding="utf-8"
         )
@@ -1370,7 +1384,7 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertRegex(text, r"(?m)^  repository_dispatch:")
 
     def test_the_release_ships_the_set_the_asset_build_checked(self) -> None:
-        assets = workflow_jobs(BUILD)["assets"]
+        assets = workflow_jobs(PIPELINE)["assemble"]
         lines = [line.strip() for line in assets.splitlines()]
         # Whole lines in a `set -euo pipefail` step: nothing turns a failure into a pass.
         for gate in [
@@ -1387,7 +1401,7 @@ class ReleaseWorkflowTest(unittest.TestCase):
             self.assertIn("name: release-assets", workflow_jobs()[job], job)
 
     def test_the_licence_scan_reads_every_engine_asset_in_full(self) -> None:
-        assets = workflow_jobs(BUILD)["assets"]
+        assets = workflow_jobs(PIPELINE)["assemble"]
         lines = [line.strip() for line in assets.splitlines()]
         self.assertIn("bash scripts/engine/license-scan.sh dist", lines)
         # Only the product's files (the `opentide` binaries, which carry the
@@ -1506,21 +1520,25 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertEqual(release.verify_sums(tmp), [])
 
     def test_the_asset_build_makes_the_module_with_the_releases_version(self) -> None:
-        wasm = workflow_jobs(BUILD)["wasm"]
+        wasm = workflow_jobs(PIPELINE)["wasm"]
         build = wasm[wasm.index("- name: build the opentide command line (wasm32-wasip1)") :]
         build = build[: build.index("\n      - name:", 1)]
         # build-wasm.sh cli, with the version the binaries report (the tag without its v).
         self.assertIn("run: bash scripts/engine/build-wasm.sh cli", build)
         # The version is the job's variable (every WebAssembly build has it, below).
         self.assertIn(
-            "      OPENTIDE_BUILD_VERSION: ${{ needs.meta.outputs.semver }}\n",
+            "      OPENTIDE_BUILD_VERSION: ${{ needs.plan.outputs.semver }}\n",
             wasm.split("    steps:\n", 1)[0],
         )
         self.assertEqual(
-            re.findall(
-                r"^\s+OPENTIDE_BUILD_VERSION: (.*)$", workflow_jobs(BUILD)["native"], re.MULTILINE
+            set(
+                re.findall(
+                    r"^\s+OPENTIDE_BUILD_VERSION: (.*)$",
+                    workflow_jobs(PIPELINE)["native"],
+                    re.MULTILINE,
+                )
             ),
-            ["${{ needs.meta.outputs.semver }}"],
+            {"${{ needs.plan.outputs.semver }}"},
         )
         # The size budget (the .vsix's 15 MiB, gzipped) stays in the script the job runs.
         script = (Path(__file__).resolve().parent / "build-wasm.sh").read_text(encoding="utf-8")
@@ -1547,7 +1565,7 @@ class ReleaseWorkflowTest(unittest.TestCase):
             package,
         )
         self.assertIn("name: product-asset-opentide-wasm", package)
-        assets = workflow_jobs(BUILD)["assets"]
+        assets = workflow_jobs(PIPELINE)["assemble"]
         self.assertIn("pattern: product-asset-*", assets)
         self.assertLess(
             assets.index("license-scan.sh --product product"), assets.index("mv product/* dist/")
@@ -1774,9 +1792,9 @@ class ReleaseWorkflowTest(unittest.TestCase):
         browser module, the language server's WASI module and the command line's)
         needs it. It is the `wasm` job's own variable, once, so no step can leave
         it out."""
-        wasm = workflow_jobs(BUILD)["wasm"]
+        wasm = workflow_jobs(PIPELINE)["wasm"]
         header, steps = wasm.split("    steps:\n", 1)
-        self.assertIn("      OPENTIDE_BUILD_VERSION: ${{ needs.meta.outputs.semver }}\n", header)
+        self.assertIn("      OPENTIDE_BUILD_VERSION: ${{ needs.plan.outputs.semver }}\n", header)
         self.assertEqual(len(re.findall(r"OPENTIDE_BUILD_VERSION:", wasm)), 1)
         # Every build runs in that job through build-wasm.sh, which passes the
         # environment on to cargo and never clears it.
@@ -1808,11 +1826,11 @@ class ReleaseWorkflowTest(unittest.TestCase):
             "aarch64-apple-darwin",
             "x86_64-pc-windows-msvc",
         }
-        wasm = targets_added(workflow_jobs(BUILD)["wasm"])
+        wasm = targets_added(workflow_jobs(PIPELINE)["wasm"])
         self.assertEqual(wasm, {"wasm32-unknown-unknown", "wasm32-wasip1"})
         self.assertEqual(set(about["targets"]), native | wasm)
         # The licences job renders it for the workspace, from this file.
-        licences = workflow_jobs(BUILD)["licences"]
+        licences = workflow_jobs(PIPELINE)["sources"]
         self.assertIn("cargo about generate --workspace about.hbs", licences)
 
     @unittest.skipUnless(shutil.which("bash") and shutil.which("node"), "bash and node are needed")
@@ -2134,7 +2152,7 @@ class ReleaseWorkflowTest(unittest.TestCase):
                 f"{workflow}@refs/heads/integration/unified-core",
                 f"{workflow}@refs/tags/v1.2.3",
                 f"{workflows}/ci.yml@refs/heads/development",
-                f"{workflows}/engine-release-build.yml@refs/heads/development",
+                f"{workflows}/release-pipeline.yml@refs/heads/development",
                 f"{workflows}/engine-release.yml@refs/heads/development",
                 workflow.replace("opentidehq", "someone") + "@refs/heads/development",
                 "https://github.com/opentidehq/language-server/.github/workflows/release.yml"
