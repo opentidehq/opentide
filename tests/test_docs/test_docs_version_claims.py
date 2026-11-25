@@ -151,23 +151,30 @@ def test_a_pre_release_pin_is_not_a_release_pin(text: str, pins: list[str]) -> N
     assert _PINNED_INSTALL.findall(text) == pins
 
 
-def test_the_installation_page_documents_the_release_candidate() -> None:
-    """RC1-4: PyPI's ``--pre``, the crates, the installer and how to verify it."""
+def test_the_installation_page_documents_the_binaries() -> None:
+    """RC1-4: the crates, the installer and how to verify it, for the documented version.
+
+    While a candidate is current, the page's Release candidates section installs it
+    (PyPI's ``--pre``, its ``-rc.N`` crates and Release); the final release removes that
+    section, and the page installs the release's crates and Release instead.
+    """
     page = (DOCS / "usage" / "installation.md").read_text(encoding="utf-8")
-    for text in (
-        "pip install --pre opentide",
-        "opentide-installer.sh",
-        "SHA256SUMS",
-        "gh attestation verify",
-    ):
+    for text in ("opentide-installer.sh", "SHA256SUMS", "gh attestation verify"):
         assert text in page, text
+    candidate = _candidate()
+    if candidate is None:
+        version, _ = _current_release()
+        assert "--pre" not in page, "the installation page still installs with --pre"
+        assert "#release-candidates" not in page, "the installation page links the candidates"
+        assert "cargo install opentide --features cli" in page
+        assert f"releases/download/v{version}/opentide-installer.sh" in page
+        assert not re.findall(r"releases/(?:download|tag)/v(?!" + re.escape(version) + r"\b)", page)
+        return
     # The current candidate's pins, whichever candidate that is: each candidate
     # moves them (release-management skill, "Known locations").
-    pypi = re.search(r"opentide==1\.0\.0rc(\d+)", page)
-    assert pypi, "no opentide==1.0.0rcN pin"
-    n = pypi.group(1)
-    assert f"cargo install opentide --version 1.0.0-rc.{n} --features cli" in page
-    assert f"releases/download/v1.0.0-rc.{n}/opentide-installer.sh" in page
+    assert "pip install --pre opentide" in page
+    assert f"cargo install opentide --version 1.0.0-rc.{candidate} --features cli" in page
+    assert f"releases/download/v1.0.0-rc.{candidate}/opentide-installer.sh" in page
 
 
 #: Pages that document the 1.0 API and the Rust core's behaviour. 0.28.1, which

@@ -9,17 +9,17 @@ description: "The @opentide/opentide npm package — the opentide SDK and comman
 
 ## Install
 
-A release candidate publishes the packages to npm from `1.0.0-rc.3`, under the dist-tag `next`, and the final release will publish them under `latest`: `npm install @opentide/opentide@next` installs the newest candidate (`1.0.0-rc.1` and `1.0.0-rc.2` published none). Until 1.0.0, a plain `npm install @opentide/opentide` installs the empty `0.0.0` placeholder, not a candidate: always ask for `@next` or an exact version. Build from this repository for anything newer.
+Each release publishes the packages to npm under the dist-tag `latest`; a release candidate publishes them under `next`. Build from this repository for anything newer.
 
 ```bash
-npm install @opentide/opentide@next
+npm install @opentide/opentide
 ```
 
 npm installs the one native package your machine needs (`@opentide/opentide-<platform>`, an optional dependency) beside it: Linux x64 and arm64 (glibc; there is no musl build, so not Alpine), macOS x64 and arm64, and Windows x64 and arm64, on Node.js 18 or later.
 
 On any other platform the install succeeds, but loading the package fails with the loader's error naming the native package it looked for: there is no WebAssembly fallback, which could not reach your tenants.
 
-Until then, build it from a checkout. It needs the Rust release `rust-toolchain.toml` names and a C compiler (for the query engines' grammars):
+To build it from a checkout instead, you need the Rust release `rust-toolchain.toml` names and a C compiler (for the query engines' grammars):
 
 ```bash
 cd bindings/node

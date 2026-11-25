@@ -9,11 +9,11 @@ icon: Terminal
 The `opentide` command is opentide's Rust core, compiled into the package and run in process by its console script:
 
 ```bash
-pip install --pre opentide              # the newest 1.0 release candidate
-pip install 'opentide==1.0.0rc5'        # or pin it
+pip install opentide              # the latest release
+pip install 'opentide==1.0.0'     # or pin it
 ```
 
-This reference describes 1.0, a release candidate until it is final: pip skips it unless asked, and `pip install opentide` installs 0.28.1. See [release candidates](../usage/installation.md#release-candidates).
+See [Installation](../usage/installation.md) for uv, pipx, crates.io, npm and the binaries.
 
 Run `opentide --help` for the live command tree.
 

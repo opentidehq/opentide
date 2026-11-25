@@ -9,30 +9,28 @@ The `opentide` crate is opentide's Rust API, and the only opentide crate with a 
 
 ## Install
 
-The `opentide` crate and the engine crates it wraps are on [crates.io](https://crates.io/crates/opentide), and the API is on [docs.rs](https://docs.rs/opentide). Their current version is the 1.0 release candidate, `1.0.0-rc.5`. Cargo does not pick a pre-release for a requirement such as `opentide = "1"`, so name the version:
+The `opentide` crate and the engine crates it wraps are on [crates.io](https://crates.io/crates/opentide), and the API is on [docs.rs](https://docs.rs/opentide). Their current version is `1.0.0`, the version `pip install opentide` installs:
 
 ```bash
-cargo add opentide@=1.0.0-rc.5 --features queries
+cargo add opentide
 ```
 
 ```toml
 [dependencies]
-opentide = { version = "=1.0.0-rc.5", features = ["queries"] }
+opentide = "1"
 ```
 
-`queries` (the offline query engines) is a default feature of the candidates after 1.0.0-rc.1, so `features = ["queries"]` is redundant there and harmless. 1.0.0-rc.1 itself has it off by default: a program that validates with the default `ValidateOptions` needs the feature, or it fails every workspace with `engine_unavailable`.
+It needs the Rust release `rust-toolchain.toml` names (1.95 or later), and a C compiler for the TLS library the `connectors` and `cli` features build.
 
-It needs the Rust release `rust-toolchain.toml` names (1.95 or later), and a C compiler for the TLS library the `connectors` and `cli` features build. Once 1.0.0 is released, `cargo add opentide` will do. The version is the one `pip install --pre opentide` installs, which PyPI spells `1.0.0rc5`: see [release candidates](../usage/installation.md#release-candidates).
-
-The default features open a workspace, validate and lint its objects (the offline query engines included, `queries`, from the candidate after 1.0.0-rc.1), and plan a deploy. They are the ones `opentide validate` runs on; a build that wants fewer dependencies sets `default-features = false` and names what it needs (the [feature table](#features) says what each adds).
+The default features open a workspace, validate and lint its objects (the offline query engines included, `queries`), and plan a deploy. They are the ones `opentide validate` runs on; a build that wants fewer dependencies sets `default-features = false` and names what it needs (the [feature table](#features) says what each adds).
 
 The command line, with its `--json commands` tree identical to the PyPI package's:
 
 ```bash
-cargo install opentide --version 1.0.0-rc.5 --features cli --locked
+cargo install opentide --features cli --locked
 ```
 
-The language server on its own: `cargo install opentide-lsp --version 1.0.0-rc.5 --locked`, or the binaries and installers of the [GitHub Release](../usage/installation.md#release-candidates).
+The language server on its own: `cargo install opentide-lsp --locked`, or the binaries and installer of the [GitHub Release](../usage/installation.md#binaries-crates-and-npm).
 
 ## Features
 
@@ -51,7 +49,7 @@ The language server on its own: `cargo install opentide-lsp --version 1.0.0-rc.5
 | `python` | no | `opentide::python`: the Tide models as Python classes, for the Python package's binding; brings PyO3 |
 | `stubs` | no | PyO3's introspection data behind `python`, for `cargo xtask stubs` |
 
-`queries` is a default feature (from the candidate after 1.0.0-rc.1; in 1.0.0-rc.1 it is off by default and its error message does not name it), because the default `ValidateOptions` run the queries check. Without it (`default-features = false` and no feature that implies it, such as `cli`), a queries check is never skipped: `validate` reports one `engine_unavailable` error and `lint` fails with that code. The error's message names the fix: add `features = ["queries"]` to the dependency, or turn the check off (`QueriesMode::Off`) to validate without it.
+`queries` is a default feature, because the default `ValidateOptions` run the queries check. Without it (`default-features = false` and no feature that implies it, such as `cli`), a queries check is never skipped: `validate` reports one `engine_unavailable` error and `lint` fails with that code. The error's message names the fix: add `features = ["queries"]` to the dependency, or turn the check off (`QueriesMode::Off`) to validate without it.
 
 ## Open a workspace
 

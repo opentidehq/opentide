@@ -8,16 +8,16 @@ description: Install opentide as a library dependency with PEP 561 typing suppor
 ## Base package
 
 ```python
-# pyproject.toml — pin the current release candidate in CI
-dependencies = ["opentide==1.0.0rc5"]
+# pyproject.toml — pin the current release in CI
+dependencies = ["opentide==1.0.0"]
 ```
 
 ```bash
-pip install --pre opentide              # the newest release candidate
-pip install 'opentide==1.0.0rc5'        # or pin it
+pip install opentide              # the latest release
+pip install 'opentide==1.0.0'     # or pin it
 ```
 
-This SDK (`opentide.Workspace` and the rest of these pages) is new in 1.0, which is a release candidate until it is final: pip skips it unless asked, and `pip install opentide` still installs 0.28.1, which has none of it. See [release candidates](../usage/installation.md#release-candidates) for uv, pipx, crates.io and the binaries.
+This SDK (`opentide.Workspace` and the rest of these pages) is new in 1.0: the 0.x releases have none of it ([Migrating to Workspace](./migration.md)). See [Installation](../usage/installation.md) for uv, pipx, crates.io, npm and the binaries.
 
 Includes the CLI, the thirteen platform connectors, the MCP server and the SDK, all compiled into one Rust core inside the wheel; it has no Python dependency. The `plugins` extra installs `pydantic`, which the [plugin API](./platforms.md#platform-plugins) needs: `pip install 'opentide[plugins]'`; nothing else asks for an extra. Start the MCP server with `opentide mcp start`; see [MCP installation](../mcp/installation.md).
 
