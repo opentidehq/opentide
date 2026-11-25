@@ -1,6 +1,6 @@
 ---
 name: orchestration
-description: Run several agent sessions on opentide at once without making them wait on each other - branches per PR rather than per session, the merge steward's loop (update, merge, notify the owner), changelog series, review tiers chosen by what a change touches, environment prerequisites set up front, how blocked sessions surface, and when to re-plan. Use when starting, steering or reviewing multi-session work, or when work feels sequential.
+description: Run several agent sessions on opentide at once without making them wait on each other - branches per PR rather than per session, the merge steward's loop (update, merge, notify the owner), changelog series, review tiers chosen by what a change touches, environment prerequisites set up front, how blocked sessions surface, when to re-plan, and briefs that carry their precedent. Use when starting, steering or reviewing multi-session work, or when work feels sequential.
 ---
 
 # Orchestration - parallel sessions, one quality bar
@@ -100,6 +100,37 @@ Profiling and oracles find real problems, and fixing them before a release is ri
 finding adds more than two PRs, re-plan instead of queueing them behind one session: split by file
 ownership across free sessions, and say what moves the finish line.
 
+## 8. A brief carries its precedent
+
+A worker meets the bar it is shown. A brief that states only what to change gets a change that is
+correct and thin. RFC 0021 (Microsoft Defender) was merged in opentidehq/specifications#102 with
+its decisions right, and the owner then judged it too thin: it had no complete YAML example and
+no field-by-field table of block keys to Graph properties, which the closest platform RFCs carry
+(opentidehq/specifications `rfcs/0016-bitdefender-gravityzone-platform.md`, `rfcs/0017-graylog-platform.md`,
+`rfcs/0007-elastic-security-platform.md`). The brief had named no precedent, and the review checked only that CI was
+green.
+
+- **Name the precedent.** Every brief for a spec, RFC, platform, connector, docs page or skill names
+  the two or three closest existing ones by repository and path ("as detailed as
+  opentidehq/specifications `rfcs/0017-graylog-platform.md`"), and says to match their sections
+  and depth, not only their format. Precedents are uneven (Sysdig's 0014 and Exabeam's 0018 have no
+  YAML block); pick the fullest.
+- **State the artefacts, not only the decisions.** The target for a platform RFC or spec is what
+  the best precedents carry together: the complete and the minimal YAML block, a field table
+  (type, required, default, allowed values, the vendor property), the request the connector sends
+  for the complete example, the deploy lifecycle per status, the validation codes with examples,
+  the upgrade path, alternatives and risks. This list wins over a thinner precedent. Other kinds of
+  work list their artefacts the same way.
+- **Review against the precedent.** Before merging, put the result beside the precedents the brief
+  named: a section they have that applies to this work, and the result lacks, is a finding however
+  correct the rest is. CI checks a document's form, not its depth. The comparison is part of
+  whichever review section 4 assigns; for work in another repository, part of that repository's
+  review.
+- **Use the repository's own guide.** For opentidehq/specifications that is
+  `.agents/skills/publish-rfc/SKILL.md` and `rfcs/0000-template.md`; the brief points to them. A
+  gap found in review goes back into that guide through an issue or PR on that repository, which
+  the orchestrator decides on (section 6), not the worker on its own.
+
 ## Anti-patterns
 
 - One push branch per session, so a session's independent fixes go up one after another.
@@ -109,3 +140,5 @@ ownership across free sessions, and say what moves the finish line.
   fix merged on the author's review alone.
 - Relaying vendor-oracle runs through another session because a container lacks a toolchain.
 - A worker blocked on an interactive question in a session nobody is watching.
+- A brief that lists the decisions but no precedent, and a review that checks only that CI is green:
+  the result is correct and thinner than everything before it.

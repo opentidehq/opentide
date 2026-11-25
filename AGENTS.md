@@ -32,7 +32,7 @@
 |------|-------|
 | Writing or reviewing any change; definition of done | [`.agents/skills/review-checklist/SKILL.md`](.agents/skills/review-checklist/SKILL.md) |
 | Driving a PR to green: CI failures, review threads, merge state | [`.agents/skills/steward/SKILL.md`](.agents/skills/steward/SKILL.md) |
-| Several agent sessions at once: branches per PR, the merge steward's loop, review tiers, environment set-up, blocked sessions | [`.agents/skills/orchestration/SKILL.md`](.agents/skills/orchestration/SKILL.md) |
+| Several agent sessions at once: branches per PR, the merge steward's loop, review tiers, environment set-up, blocked sessions, briefs and their precedent | [`.agents/skills/orchestration/SKILL.md`](.agents/skills/orchestration/SKILL.md) |
 | Dependencies, Dependabot, `uv run`, pre-commit, local CI | [`.agents/skills/uv/SKILL.md`](.agents/skills/uv/SKILL.md) |
 | Ruff lint / format failures | [`.agents/skills/ruff/SKILL.md`](.agents/skills/ruff/SKILL.md) |
 | ty type-check failures, annotations | [`.agents/skills/python-typing/SKILL.md`](.agents/skills/python-typing/SKILL.md) |
