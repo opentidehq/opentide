@@ -28,8 +28,10 @@ name: Engine release build
 # dry run's is sccache, one family per runner for the binaries and one for the
 # WebAssembly builds, saved by the nightly and pushes to development (the
 # default branch, whose caches every branch reads) once a week; the small
-# jobs (highlights, licences, SBOMs) build without one, so that the caches
-# pull requests restore stay within the 10 GB GitHub keeps.
+# jobs (licences, SBOMs) build without one, so that the caches pull requests
+# restore stay within the 10 GB GitHub keeps. The highlights zip is written by
+# the x86_64 Linux opentide-lsp the native matrix builds: nothing compiles the
+# language server a second time.
 on:
   workflow_call:
     inputs:
@@ -211,6 +213,25 @@ jobs:
           set -euo pipefail
           mkdir -p out
           cp "target/${{ matrix.target }}/release/${BINARY}" "out/${BINARY}-${VERSION}-${{ matrix.target }}"
+      # highlights-<v>.zip: the language server built here writes
+      # highlights/generated (its path is this checkout's, compiled in), so no
+      # other job compiles opentide-lsp again to make it. The x86_64 Linux cell.
+      - name: highlights
+        if: matrix.binary == 'opentide-lsp' && matrix.target == 'x86_64-unknown-linux-gnu'
+        shell: bash
+        run: |
+          set -euo pipefail
+          "target/${{ matrix.target }}/release/opentide-lsp" generate-highlights
+          mkdir -p highlights-dist
+          (cd highlights && zip -r "../highlights-dist/highlights-${VERSION}.zip" spec.toml generated)
+          zip -j "highlights-dist/highlights-${VERSION}.zip" LICENSE NOTICE
+      - name: upload highlights
+        if: matrix.binary == 'opentide-lsp' && matrix.target == 'x86_64-unknown-linux-gnu'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: engine-asset-highlights
+          path: highlights-dist/*
+          if-no-files-found: error
       - name: Save the compiler cache
         if: (github.event_name == 'schedule' || github.ref == 'refs/heads/development') && inputs.dry-run && runner.os == 'Linux' && steps.sccache.outputs.cache-hit != 'true' && matrix.saves
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -347,32 +368,6 @@ jobs:
           path: product/*
           if-no-files-found: error
 
-  highlights:
-    name: Highlights zip
-    needs: meta
-    env:
-      VERSION: ${{ needs.meta.outputs.version }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      # The release rust-toolchain.toml pins (`rustup toolchain install` with no name).
-      - name: Set up Rust
-        run: rustup toolchain install --profile minimal --no-self-update
-      - run: cargo run --locked -p opentide-lsp -- generate-highlights
-      - name: zip
-        run: |
-          set -euo pipefail
-          mkdir -p dist
-          (cd highlights && zip -r "../dist/highlights-${VERSION}.zip" spec.toml generated)
-          zip -j "dist/highlights-${VERSION}.zip" LICENSE NOTICE
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: engine-asset-highlights
-          path: dist/*
-          if-no-files-found: error
-
   # The binaries embed third-party code and data: ship the notices with them.
   # NOTICE covers the embedded data, Lucene, dk.brics, and the wasi-libc the WASI
   # builds link (texts in licenses/wasi-libc, shipped as WASI-LIBC-LICENSES.txt);
@@ -391,10 +386,13 @@ jobs:
       # The release rust-toolchain.toml pins (`rustup toolchain install` with no name).
       - name: Set up Rust
         run: rustup toolchain install --profile minimal --no-self-update
+      # cargo-about prebuilt (checksummed by install-action), not compiled from source each run.
+      - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
+        with:
+          tool: cargo-about@0.8.4
       - name: licences and notices
         run: |
           set -euo pipefail
-          cargo install --locked cargo-about --version 0.8.4
           mkdir -p dist
           cargo about generate --workspace about.hbs -o dist/THIRD-PARTY-LICENSES.html
           cp LICENSE dist/LICENSE
@@ -479,7 +477,7 @@ jobs:
   # tag written in, and SHA256SUMS last.
   assets:
     name: Release assets
-    needs: [meta, native, wasm, highlights, licences, sbom]
+    needs: [meta, native, wasm, licences, sbom]
     runs-on: ubuntu-latest
     env:
       TAG: ${{ needs.meta.outputs.tag }}

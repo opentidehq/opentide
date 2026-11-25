@@ -159,6 +159,12 @@ class LegalFilesTest(unittest.TestCase):
         jobs = workflow_jobs(BUILD)
         bundle = "release.py legal-bundle dist/THIRD-PARTY-DATA-LICENSES.txt"
         self.assertIn(bundle, jobs["licences"])
+        # No job compiles a tool or a binary the run already has: cargo-about
+        # comes prebuilt, and the highlights zip is written by the release
+        # opentide-lsp the native matrix built, not by another compile of it.
+        self.assertIn("tool: cargo-about@", jobs["licences"])
+        self.assertNotIn("highlights", jobs)
+        self.assertIn("release/opentide-lsp\" generate-highlights", jobs["native"])
         self.assertIn("release.py legal pkg", jobs["wasm"])
         self.assertIn(release.DATA_LICENSES, release.FIXED_ASSETS)
 
@@ -1039,7 +1045,7 @@ class ReleaseWorkflowTest(unittest.TestCase):
             job
             for job, body in jobs.items()
             if re.search(
-                r"\bcargo (?:build|run|install|package|publish)\b|build-wasm\.sh|build\.mjs"
+                r"\bcargo (?:build|run|install|package|publish|about)\b|build-wasm\.sh|build\.mjs"
                 r"|release\.py (?:vendor|publish)|kind: cargo\b",
                 body,
             )
@@ -1049,7 +1055,6 @@ class ReleaseWorkflowTest(unittest.TestCase):
             [
                 "crate-packages",
                 "crates",
-                "highlights",
                 "licences",
                 "native",
                 "npm-native",
