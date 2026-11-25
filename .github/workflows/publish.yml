@@ -251,8 +251,11 @@ jobs:
               python scripts/build/release.py check-candidate "${tag}"
               channel=rc
             fi
+            # An untagged draft is what a release job that failed partway
+            # leaves (never published): the GitHub Release job deletes it
+            # (release.py stale-draft). A tag, or a published release, refuses.
             if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null \
-              || gh release view "${tag}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+              || [ "$(gh release view "${tag}" --repo "${GITHUB_REPOSITORY}" --json isDraft --jq .isDraft 2>/dev/null)" = "false" ]; then
               echo "::error::${tag} is already tagged. Release the next version (or candidate), or resume it with checkout_ref=${tag}." >&2
               exit 1
             fi
@@ -551,7 +554,7 @@ jobs:
   # (.github/release-notes/vX.Y.Z.md); a candidate's, its own short file
   # (.github/release-notes/vX.Y.Z-rc.N.md) when it has one, else CHANGELOG.md's
   # [Unreleased] (scripts/build/release.py notes). A candidate is a
-  # pre-release, never Latest; a release is Latest (no --latest flag).
+  # pre-release, never Latest; a release is published with --latest.
   release:
     name: GitHub Release
     needs: [guard, attest]
@@ -581,15 +584,50 @@ jobs:
           if [ "${CHANNEL}" = "rc" ]; then
             flags+=(--prerelease --latest=false)
           fi
-          # Never upload over assets a release already has: consumers pinned
-          # their digests (a re-run of this job after a partial create).
+          # A draft this job left on an earlier attempt (no tag, never
+          # published) is deleted; then never upload over assets a release
+          # already has: consumers pinned their digests.
+          python3 scripts/engine/release.py stale-draft "${TAG}"
           python3 scripts/engine/release.py unpublished "${TAG}"
-          gh release create "${TAG}" dist/* \
+          # Draft first, each asset uploaded with retries (GitHub's upload
+          # endpoint answers 5xx at times), then published, which creates the
+          # tag on the built commit. A failure leaves an untagged draft, which
+          # a re-run of this job deletes and creates again.
+          gh release create "${TAG}" \
             --repo "${GITHUB_REPOSITORY}" \
             --target "${GITHUB_SHA}" \
             --title "${VERSION}" \
             --notes-file "${RUNNER_TEMP}/notes.md" \
+            --draft \
             "${flags[@]}"
+          for asset in dist/*; do
+            for attempt in 1 2 3 4 5 6; do
+              if gh release upload "${TAG}" "${asset}" --repo "${GITHUB_REPOSITORY}" --clobber; then
+                break
+              fi
+              if [ "${attempt}" = 6 ]; then
+                echo "::error::Could not upload ${asset} after ${attempt} attempts; re-run this job." >&2
+                exit 1
+              fi
+              sleep $((attempt * 15))
+            done
+          done
+          publish=(--draft=false)
+          if [ "${CHANNEL}" = "rc" ]; then
+            publish+=(--prerelease --latest=false)
+          else
+            publish+=(--latest)
+          fi
+          for attempt in 1 2 3 4 5; do
+            if gh release edit "${TAG}" --repo "${GITHUB_REPOSITORY}" "${publish[@]}"; then
+              break
+            fi
+            if [ "${attempt}" = 5 ]; then
+              echo "::error::Could not publish the ${TAG} draft; re-run this job." >&2
+              exit 1
+            fi
+            sleep $((attempt * 15))
+          done
 
   # What a consumer downloads checks out: the sums, the asset set, and each
   # asset's attestation, signed by this workflow run from development (a
