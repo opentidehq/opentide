@@ -1,6 +1,6 @@
 # cargo-about: the licences of the Rust crates compiled into what the release ships
 # (opentide-lsp, the `opentide` binaries, and the WebAssembly modules).
-# engine-release-build.yml renders about.hbs to THIRD-PARTY-LICENSES.html for every
+# release-pipeline.yml renders about.hbs to THIRD-PARTY-LICENSES.html for every
 # release; a crate under a licence not listed here fails the release. The list is
 # deny.toml's, under the same policy: permissive licences for every crate, no
 # per-crate exceptions.
@@ -20,7 +20,7 @@ accepted = [
   "CDLA-Permissive-2.0",
 ]
 # The targets the release builds for. The native ones, and both WebAssembly
-# targets the `wasm` job builds (engine-release-build.yml): a crate only a
+# targets the `wasm` job builds (release-pipeline.yml): a crate only a
 # WebAssembly build links, such as `wasi` of the command line's WASI module
 # (opentide-wasm32-wasip1.wasm), is listed only when its target is here.
 # tests (scripts/engine/test_release.py) keep this list and that job's targets equal.
