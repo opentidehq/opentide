@@ -850,7 +850,7 @@ impl ExplorerOptions {
 /// (`dataset_reads`).
 const PROBE: &str = "__opentide_visibility_probe__";
 /// The systems whose log source names declare datasets to the query checks.
-const DATASET_SYSTEMS: [&str; 4] = ["sentinel", "defender_for_endpoint", "splunk", "elastic"];
+const DATASET_SYSTEMS: [&str; 4] = ["sentinel", "microsoft_defender", "splunk", "elastic"];
 /// A table outside the engine's catalog: a read only when its message names
 /// `visibility.toml`, as the language server's quick fix takes it.
 const UNKNOWN_TABLE_CODE: &str = "kql_unknown_table";

@@ -66,7 +66,7 @@ jobs:
           if ! git cat-file -e FETCH_HEAD:.opentide/configurations 2>/dev/null; then echo "The default branch has no .opentide/configurations yet, so no tenant is reviewed. Skipped without using platform credentials."; exit 0; fi
           git checkout FETCH_HEAD -- .opentide/configurations
           if grep -qs '^[^#]*tenants' .opentide/configurations/platforms/carbon_black_cloud.toml; then opentide validate query --platform carbon_black_cloud --live --changed; else echo "The default branch has no carbon_black_cloud tenant yet, so no tenant is reviewed. Skipped carbon_black_cloud live query validation without using platform credentials."; fi
-      - name: Validate defender_for_endpoint queries on reviewed tenants
+      - name: Validate microsoft_defender queries on reviewed tenants
         if: ${{ !contains(github.event.head_commit.message, '[skip deploy]') && !contains(github.event.pull_request.title, '[skip deploy]') && !contains(github.event.pull_request.labels.*.name, 'skip-deploy') }}
         env:
           MDE_CLIENT_ID: ${{ secrets.MDE_CLIENT_ID }}
@@ -77,7 +77,7 @@ jobs:
           if [ "$(git rev-parse --is-shallow-repository)" = true ]; then git fetch --depth=1 origin main; else git fetch origin main; fi
           if ! git cat-file -e FETCH_HEAD:.opentide/configurations 2>/dev/null; then echo "The default branch has no .opentide/configurations yet, so no tenant is reviewed. Skipped without using platform credentials."; exit 0; fi
           git checkout FETCH_HEAD -- .opentide/configurations
-          if grep -qs '^[^#]*tenants' .opentide/configurations/platforms/defender_for_endpoint.toml; then opentide validate query --platform defender_for_endpoint --live --changed; else echo "The default branch has no defender_for_endpoint tenant yet, so no tenant is reviewed. Skipped defender_for_endpoint live query validation without using platform credentials."; fi
+          if grep -qs '^[^#]*tenants' .opentide/configurations/platforms/microsoft_defender.toml; then opentide validate query --platform microsoft_defender --live --changed; else echo "The default branch has no microsoft_defender tenant yet, so no tenant is reviewed. Skipped microsoft_defender live query validation without using platform credentials."; fi
       - name: Validate elastic queries on reviewed tenants
         if: ${{ !contains(github.event.head_commit.message, '[skip deploy]') && !contains(github.event.pull_request.title, '[skip deploy]') && !contains(github.event.pull_request.labels.*.name, 'skip-deploy') }}
         env:

@@ -1,6 +1,6 @@
   #enabled: false
   #name: 
-  schema: platform::defender_for_endpoint::1.0
+  schema: platform::microsoft_defender::1.0
   status: 
   #flags:
     #- 

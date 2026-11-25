@@ -227,7 +227,7 @@ pub fn fixture(name: &str, ws: &Path) {
             for platform in [
                 "carbon_black_cloud",
                 "crowdstrike",
-                "defender_for_endpoint",
+                "microsoft_defender",
                 "elastic",
                 "harfanglab",
                 "sentinel",

@@ -103,7 +103,7 @@ pub fn language_for_field_path(path: &[&str]) -> Option<LanguageId> {
 /// (the `yara` module); SentinelOne's PowerQuery has no offline engine.
 pub fn platform_field_language(platform: PlatformId, field: &[&str]) -> Option<LanguageId> {
     match platform {
-        PlatformId::Sentinel | PlatformId::DefenderForEndpoint => {
+        PlatformId::Sentinel | PlatformId::MicrosoftDefender => {
             matches!(field, ["query"]).then_some(LanguageId::Kql)
         }
         PlatformId::Splunk => matches!(field, ["query" | "search"]).then_some(LanguageId::Spl),
@@ -145,7 +145,7 @@ pub fn platform_field_language(platform: PlatformId, field: &[&str]) -> Option<L
 pub struct InjectedQuery {
     pub language: LanguageId,
     /// The platform the query runs on, as a `configurations` key
-    /// (`sentinel`, `defender_for_endpoint`, `elastic`): the block's key for a
+    /// (`sentinel`, `microsoft_defender`, `elastic`): the block's key for a
     /// rule query, the entry's `system` for a hunt. It picks the KQL profile
     /// and the Lucene dialect.
     pub platform: String,
@@ -887,7 +887,7 @@ fn analyze_injections(
         let mut extra = Vec::new();
         let (found, query_tokens) = match inj.language {
             LanguageId::Kql => {
-                let profile = if inj.platform == "defender_for_endpoint" {
+                let profile = if inj.platform == "microsoft_defender" {
                     Profile::Defender
                 } else {
                     Profile::Sentinel
@@ -1908,7 +1908,7 @@ threat:
         use opentide_schema::platforms::PlatformId;
         let accepted: &[(PlatformId, &[&str], LanguageId)] = &[
             (PlatformId::Sentinel, &["query"], LanguageId::Kql),
-            (PlatformId::DefenderForEndpoint, &["query"], LanguageId::Kql),
+            (PlatformId::MicrosoftDefender, &["query"], LanguageId::Kql),
             (PlatformId::Splunk, &["query"], LanguageId::Spl),
             (PlatformId::Splunk, &["search"], LanguageId::Spl),
             (PlatformId::CarbonBlackCloud, &["query"], LanguageId::Lucene),
@@ -1990,7 +1990,7 @@ threat:
     fn every_platform_says_which_language_its_hunts_are() {
         use opentide_schema::platforms::PlatformId;
         let expected = |platform: PlatformId| match platform {
-            PlatformId::Sentinel | PlatformId::DefenderForEndpoint => Some(LanguageId::Kql),
+            PlatformId::Sentinel | PlatformId::MicrosoftDefender => Some(LanguageId::Kql),
             PlatformId::Splunk => Some(LanguageId::Spl),
             PlatformId::CarbonBlackCloud | PlatformId::Graylog => Some(LanguageId::Lucene),
             PlatformId::Crowdstrike => Some(LanguageId::Cql),
@@ -2230,7 +2230,7 @@ response:
   procedure:
     searches:
     - purpose: Check for Shai-Hulud network IOC egress from the device
-      system: defender_for_endpoint
+      system: microsoft_defender
       query: |-
         DeviceNetworkEvents
         | take 1
@@ -2339,7 +2339,7 @@ response:
     analysis: |-
       1. Review the sample paths
 configurations:
-  defender_for_endpoint:
+  microsoft_defender:
     enabled: true
     alert:
       title: Hello
@@ -2383,7 +2383,7 @@ configurations:
         assert!(
             pairs
                 .iter()
-                .any(|(c, t)| *c == "tide.property" && *t == "defender_for_endpoint"),
+                .any(|(c, t)| *c == "tide.property" && *t == "microsoft_defender"),
             "{pairs:?}"
         );
         assert!(

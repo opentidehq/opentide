@@ -12,9 +12,9 @@ use super::errors::{code_of, describe_error, model_errors};
 use super::merge::merge_layers;
 use super::models::{
     BitdefenderConfiguration, CarbonBlackCloudConfiguration, CrowdstrikeConfiguration,
-    DefenderForEndpointConfiguration, DeploymentConfiguration, DocumentationConfiguration,
-    ElasticConfiguration, ExabeamConfiguration, GoogleSecopsConfiguration, GraylogConfiguration,
-    HarfangLabConfiguration, PLATFORMS, PathsConfiguration, PlatformConfiguration,
+    DeploymentConfiguration, DocumentationConfiguration, ElasticConfiguration,
+    ExabeamConfiguration, GoogleSecopsConfiguration, GraylogConfiguration, HarfangLabConfiguration,
+    MicrosoftDefenderConfiguration, PLATFORMS, PathsConfiguration, PlatformConfiguration,
     SentinelConfiguration, SentinelOneConfiguration, SplunkConfiguration, SysdigConfiguration,
     VisibilityConfig,
 };
@@ -309,8 +309,8 @@ fn validate(key: &str, merged: &Node) -> Vec<Finding> {
             (convert::<CarbonBlackCloudConfiguration>(merged).0, None)
         }
         "platforms/sentinel_one.toml" => (convert::<SentinelOneConfiguration>(merged).0, None),
-        "platforms/defender_for_endpoint.toml" => {
-            (convert::<DefenderForEndpointConfiguration>(merged).0, None)
+        "platforms/microsoft_defender.toml" => {
+            (convert::<MicrosoftDefenderConfiguration>(merged).0, None)
         }
         "platforms/crowdstrike.toml" => (convert::<CrowdstrikeConfiguration>(merged).0, None),
         "platforms/harfanglab.toml" => (convert::<HarfangLabConfiguration>(merged).0, None),

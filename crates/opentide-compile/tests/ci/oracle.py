@@ -26,7 +26,7 @@ ALL = [
     "bitdefender",
     "carbon_black_cloud",
     "crowdstrike",
-    "defender_for_endpoint",
+    "microsoft_defender",
     "elastic",
     "exabeam",
     "google_secops",

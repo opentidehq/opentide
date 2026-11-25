@@ -63,7 +63,7 @@ Microsoft Sentinel scoping: project `SentinelScope_CF` when workspace scoping is
 
 ---
 
-## Endpoint (Microsoft Defender for Endpoint)
+## Endpoint (Microsoft Defender)
 
 | Table | Description | NRT | Citation |
 | --- | --- | --- | --- |

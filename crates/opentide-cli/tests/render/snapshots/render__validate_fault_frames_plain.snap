@@ -8,7 +8,7 @@ error[deployment_state_uuid_mismatch]: <WS>/.opentide/states/deployment/1fe3b71b
 error[deployment_state_shape]: <WS>/.opentide/states/deployment/8df3e0d3-8a3f-490c-9f31-b71df88f3562.json has no platforms object
   ╰─▶ .opentide/states/deployment/8df3e0d3-8a3f-490c-9f31-b71df88f3562.json
 
-error[deployment_state_platform]: <WS>/.opentide/states/deployment/f2f28c1d-8323-4b4e-acba-c53ed9cb5271.json names platform 'splunk'; only bitdefender, crowdstrike, defender_for_endpoint, graylog, exabeam, google_secops, sentinel_one, sysdig store external ids
+error[deployment_state_platform]: <WS>/.opentide/states/deployment/f2f28c1d-8323-4b4e-acba-c53ed9cb5271.json names platform 'splunk'; only bitdefender, crowdstrike, microsoft_defender, graylog, exabeam, google_secops, sentinel_one, sysdig store external ids
   ╰─▶ .opentide/states/deployment/f2f28c1d-8323-4b4e-acba-c53ed9cb5271.json
 
 error[invalid_ref]: Unknown threat reference '00000000-0000-4000-8000-00000000beef'
@@ -101,7 +101,7 @@ error[spl_unknown_datamodel_field]: `process_nam` is not a field of the CIM Endp
    │
    ╰─ help: try: Processes.process_name
 
-error[kql_unknown_table]: unknown table 'DeviceProcessEvnts'; if the workspace holds it, declare it for defender_for_endpoint in visibility.toml
+error[kql_unknown_table]: unknown table 'DeviceProcessEvnts'; if the workspace holds it, declare it for microsoft_defender in visibility.toml
    ╭─▶ objects/rules/elevated-pivot-rule-0038.yaml:59:7
    │
 58 │     query: |
@@ -816,7 +816,7 @@ error[unknown_key]: platforms/sentinel.toml.platform.colour: unknown key
 error[schema_validation]: platform.name: platforms/splunk.toml.platform.name: Input should be a valid string
   ╰─ help: the template in .opentide/templates/ shows the field and its values
 
-error[missing_field]: platforms/defender_for_endpoint.toml.tenants.0.name: required key is missing
+error[missing_field]: platforms/microsoft_defender.toml.tenants.0.name: required key is missing
 
 warning[asset_unknown]: visibility.toml.logsources.7.assets.0: logsource 'Ghost1' names asset 'ghost-1', which [[assets]] does not declare.
 

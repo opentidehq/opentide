@@ -16,7 +16,7 @@
       "end": "^(?=\\S)",
       "patterns": [
         {
-          "begin": "^(\\s+)(sentinel|defender_for_endpoint)(\\s*)(:)\\s*(?:#.*)?$",
+          "begin": "^(\\s+)(sentinel|microsoft_defender)(\\s*)(:)\\s*(?:#.*)?$",
           "beginCaptures": {
             "2": {
               "name": "variable.other.property.tide"
@@ -25,7 +25,7 @@
               "name": "punctuation.separator.key-value.tide"
             }
           },
-          "comment": "configurations.{sentinel,defender_for_endpoint}: kql queries (#171)",
+          "comment": "configurations.{sentinel,microsoft_defender}: kql queries (#171)",
           "end": "^(?!\\1\\s+\\S|\\s*$)",
           "patterns": [
             {

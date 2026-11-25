@@ -70,7 +70,7 @@ pie showData title Platform blocks by status
 | CrowdStrike Falcon | 1 | 1 |
 | Elastic Security | 1 | 1 |
 | HarfangLab | 1 | 1 |
-| Microsoft Defender for Endpoint | 1 | 1 |
+| Microsoft Defender | 1 | 1 |
 | Microsoft Sentinel | 2 | 2 |
 | SentinelOne | 1 | 1 |
 | Splunk Enterprise Security | 1 | 1 |
@@ -189,7 +189,7 @@ Detect credential access techniques
 | Threats addressed | [Simulated Actor](../threats/simulated-actor.md) |
 | Signals | 1 signal |
 | Detection rules | 10 rules |
-| Platforms | Carbon Black Cloud, CrowdStrike Falcon, Elastic Security, HarfangLab, Microsoft Defender for Endpoint, Microsoft Sentinel, SentinelOne, Splunk Enterprise Security, Sysdig Secure |
+| Platforms | Carbon Black Cloud, CrowdStrike Falcon, Elastic Security, HarfangLab, Microsoft Defender, Microsoft Sentinel, SentinelOne, Splunk Enterprise Security, Sysdig Secure |
 
 > [!WARNING]
 > 1 of 1 signal has no implementing rule yet: *Suspicious logon signal*.
@@ -213,7 +213,7 @@ Compose signals for credential access detection
 | Signal | Severity | Methodology | Effort | Rules | Platforms and status |
 | --- | --- | --- | --- | --- | --- |
 | [Suspicious logon signal](#suspicious-logon-signal) | Medium | Statistical | - | *None yet* | - |
-| *Objective as a whole* | - | - | - | [Carbon Black Lucene Rule](../rules/carbon-black-lucene-rule.md)<br>[CrowdStrike Deploy Rule](../rules/crowdstrike-deploy-rule.md)<br>[Defender KQL Rule](../rules/defender-kql-rule.md)<br>[Elastic KQL Rule](../rules/elastic-kql-rule.md)<br>[HarfangLab Deploy Rule](../rules/harfanglab-deploy-rule.md)<br>[Sentinel KQL Rule](../rules/sentinel-kql-rule.md)<br>[SentinelOne S1QL Rule](../rules/sentinelone-s1ql-rule.md)<br>[Splunk SPL Rule](../rules/splunk-spl-rule.md)<br>[Staging Promote Rule](../rules/staging-promote-rule.md)<br>[Sysdig Falco Rule](../rules/sysdig-falco-rule.md) | Carbon Black Cloud `STAGING`<br>CrowdStrike Falcon `STAGING`<br>Microsoft Defender for Endpoint `STAGING`<br>Elastic Security `STAGING`<br>HarfangLab `STAGING`<br>Microsoft Sentinel `STAGING`<br>SentinelOne `STAGING`<br>Splunk Enterprise Security `STAGING`<br>Microsoft Sentinel `STAGING`<br>Sysdig Secure `STAGING` |
+| *Objective as a whole* | - | - | - | [Carbon Black Lucene Rule](../rules/carbon-black-lucene-rule.md)<br>[CrowdStrike Deploy Rule](../rules/crowdstrike-deploy-rule.md)<br>[Defender KQL Rule](../rules/defender-kql-rule.md)<br>[Elastic KQL Rule](../rules/elastic-kql-rule.md)<br>[HarfangLab Deploy Rule](../rules/harfanglab-deploy-rule.md)<br>[Sentinel KQL Rule](../rules/sentinel-kql-rule.md)<br>[SentinelOne S1QL Rule](../rules/sentinelone-s1ql-rule.md)<br>[Splunk SPL Rule](../rules/splunk-spl-rule.md)<br>[Staging Promote Rule](../rules/staging-promote-rule.md)<br>[Sysdig Falco Rule](../rules/sysdig-falco-rule.md) | Carbon Black Cloud `STAGING`<br>CrowdStrike Falcon `STAGING`<br>Microsoft Defender `STAGING`<br>Elastic Security `STAGING`<br>HarfangLab `STAGING`<br>Microsoft Sentinel `STAGING`<br>SentinelOne `STAGING`<br>Splunk Enterprise Security `STAGING`<br>Microsoft Sentinel `STAGING`<br>Sysdig Secure `STAGING` |
 
 ### Suspicious logon signal
 
@@ -328,7 +328,7 @@ Detection rules: the queries opentide deploys, with the status each platform blo
 | CrowdStrike Falcon | 1 | 1 |
 | Elastic Security | 1 | 1 |
 | HarfangLab | 1 | 1 |
-| Microsoft Defender for Endpoint | 1 | 1 |
+| Microsoft Defender | 1 | 1 |
 | Microsoft Sentinel | 2 | 2 |
 | SentinelOne | 1 | 1 |
 | Splunk Enterprise Security | 1 | 1 |
@@ -340,7 +340,7 @@ Detection rules: the queries opentide deploys, with the status each platform blo
 | --- | --- | --- | --- | --- | --- |
 | [Carbon Black Lucene Rule](carbon-black-lucene-rule.md) | High | Carbon Black Cloud `STAGING` | `T1059` | `00000000-0000-4000-8003-000000000005` | 2 |
 | [CrowdStrike Deploy Rule](crowdstrike-deploy-rule.md) | High | CrowdStrike Falcon `STAGING` | `T1059` | `00000000-0000-4000-8003-000000000006` | 2 |
-| [Defender KQL Rule](defender-kql-rule.md) | High | Microsoft Defender for Endpoint `STAGING` | `T1059` | `00000000-0000-4000-8003-000000000002` | 2 |
+| [Defender KQL Rule](defender-kql-rule.md) | High | Microsoft Defender `STAGING` | `T1059` | `00000000-0000-4000-8003-000000000002` | 2 |
 | [Elastic KQL Rule](elastic-kql-rule.md) | High | Elastic Security `STAGING` | `T1059` | `00000000-0000-4000-8003-000000000009` | 2 |
 | [HarfangLab Deploy Rule](harfanglab-deploy-rule.md) | High | HarfangLab `STAGING` | `T1059` | `00000000-0000-4000-8003-000000000007` | 2 |
 | [Sentinel KQL Rule](sentinel-kql-rule.md) | High | Microsoft Sentinel `STAGING` | `T1059` | `00000000-0000-4000-8003-000000000001` | 2 |
@@ -637,7 +637,7 @@ Simulated Defender rule for CLI E2E corpus.
 | Severity | High |
 | Detection model | [Credential Access Objective](../objectives/credential-access-objective.md) |
 | ATT&CK | [`T1059`](https://attack.mitre.org/techniques/T1059) Command and Scripting Interpreter |
-| Platforms | Microsoft Defender for Endpoint: `STAGING` (PREVIEW runs) |
+| Platforms | Microsoft Defender: `STAGING` (PREVIEW runs) |
 
 **On this page:** [Deployment](#deployment) · [Platform configuration](#platform-configuration) · [Response](#response) · [ATT&CK techniques](#attck-techniques) · [Detection coverage](#detection-coverage) · [Metadata](#metadata)
 
@@ -647,12 +647,12 @@ What `opentide deploy` does with this rule: each platform block's status, the ru
 
 | Platform | Status | Deployed by | Tenants | Block enabled |
 | --- | --- | --- | --- | --- |
-| Microsoft Defender for Endpoint | `STAGING` | PREVIEW runs | no tenant configured | yes |
+| Microsoft Defender | `STAGING` | PREVIEW runs | no tenant configured | yes |
 
 - `STAGING` (strategy `PREVIEW`): Deployed in staging environment for operational testing
 
 > [!WARNING]
-> Microsoft Defender for Endpoint configures no tenant: a run that deploys this block fails until one is added to the platform file.
+> Microsoft Defender configures no tenant: a run that deploys this block fails until one is added to the platform file.
 
 ```mermaid
 flowchart LR
@@ -662,7 +662,7 @@ flowchart LR
         rul1["Defender KQL Rule"]
     end
     subgraph lane2["Platforms"]
-        plt1[("Microsoft Defender for<br>Endpoint<br>STAGING")]
+        plt1[("Microsoft Defender<br>STAGING")]
     end
     rul1 --> plt1
     classDef rule fill:#e9f7ef,stroke:#067647,color:#053321
@@ -679,7 +679,7 @@ flowchart LR
 
 ## Platform configuration
 
-### Microsoft Defender for Endpoint
+### Microsoft Defender
 
 Status `STAGING` · deployed by PREVIEW runs · tenants: no tenant configured
 

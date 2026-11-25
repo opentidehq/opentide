@@ -1,5 +1,5 @@
-//! Microsoft Defender for Endpoint through Microsoft Graph (UC-4.2, #832):
-//! `platforms/defender_for_endpoint/client.py` (`DefenderForEndpointService`),
+//! Microsoft Defender through Microsoft Graph (UC-4.2, #832):
+//! `platforms/microsoft_defender/client.py` (`MicrosoftDefenderService`),
 //! the deploy calls its `deployer.py` makes, `runner.py` (advanced hunting)
 //! and `validator.py` (the columns a custom detection needs), request for
 //! request.
@@ -30,7 +30,7 @@ use crate::token::TokenCache;
 use crate::{HttpSettings, Secret};
 
 /// The platform's identifier.
-pub const PLATFORM: &str = "defender_for_endpoint";
+pub const PLATFORM: &str = "microsoft_defender";
 
 /// The tenant setup's names for the app registration.
 pub const CREDENTIALS: CredentialNames = CredentialNames {
@@ -127,7 +127,7 @@ pub struct Created {
     pub partial: bool,
 }
 
-/// The Defender for Endpoint connector. A tenant's token serves every call
+/// The Microsoft Defender connector. A tenant's token serves every call
 /// until it is due for renewal.
 #[derive(Debug, Default)]
 pub struct Defender {
@@ -251,7 +251,7 @@ impl Defender {
     }
 
     /// Every custom detection rule of the tenant, across Graph's pages
-    /// (`DefenderForEndpointImporter.list_rules`, UC-4.4b): `@odata.nextLink`
+    /// (`MicrosoftDefenderImporter.list_rules`, UC-4.4b): `@odata.nextLink`
     /// is followed on Graph's origin only, each once, and for at most
     /// [`crate::paging::MAX_PAGES`] pages ([`crate::paging::NextLinks`]: a
     /// link elsewhere never receives the token), and an error answer is an
@@ -279,7 +279,7 @@ impl Defender {
                     .unwrap_or_default();
                 return Err(DefenderError::Refused {
                     message: format!(
-                        "Listing Defender for Endpoint detection rules on tenant {} failed with \
+                        "Listing Microsoft Defender detection rules on tenant {} failed with \
                          HTTP {} {reason}",
                         cx.tenant.label.tenant, answer.status
                     ),
@@ -477,7 +477,7 @@ impl Defender {
 
     /// `validate query --live`'s check of one rule query: a search for one
     /// row, then the columns a custom detection needs
-    /// (`DefenderForEndpointQueryValidator.inspect`).
+    /// (`MicrosoftDefenderQueryValidator.inspect`).
     pub async fn check(
         &self,
         cx: TenantContext<'_>,

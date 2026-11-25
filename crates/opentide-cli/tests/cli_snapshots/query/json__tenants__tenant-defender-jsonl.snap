@@ -2,7 +2,7 @@
 source: crates/opentide-cli/tests/common/snapshot.rs
 description: query/json/tenants/tenant-defender-jsonl
 ---
-args: opentide --json query --platform defender_for_endpoint --from 2099-01-01T00:00:00Z --to 2099-01-01T01:00:00Z --limit 1 --format jsonl 'DeviceProcessEvents | project Timestamp, DeviceName'
+args: opentide --json query --platform microsoft_defender --from 2099-01-01T00:00:00Z --to 2099-01-01T01:00:00Z --limit 1 --format jsonl 'DeviceProcessEvents | project Timestamp, DeviceName'
 exit: 0
 
 ━━━ stdout · json, 1 lines
@@ -12,10 +12,10 @@ exit: 0
   "exit_code": 0,
   "failure": null,
   "limit": 1,
-  "message": "1 row from 1 defender_for_endpoint tenant (limited to 1 per tenant)",
+  "message": "1 row from 1 microsoft_defender tenant (limited to 1 per tenant)",
   "next_actions": [],
   "ok": true,
-  "platform": "defender_for_endpoint",
+  "platform": "microsoft_defender",
   "query": "DeviceProcessEvents | project Timestamp, DeviceName",
   "results": [
     {

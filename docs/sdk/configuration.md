@@ -25,7 +25,7 @@ A `$NAME` placeholder is a valid value for any tenant `setup` key; the models ch
 
 ## Declared datasets
 
-A `visibility.toml` log source (`VisibilityLogSource`) is one dataset, and its `name` is that dataset: the KQL table for `sentinel` and `defender_for_endpoint`, the sourcetype for `splunk`, the index pattern for `elastic` . It takes `name`, `description`, `system`, `tenants`, `assets`, `references` and `columns`, a mapping of column name to a column (`type` from the system's column types, optional `description`).
+A `visibility.toml` log source (`VisibilityLogSource`) is one dataset, and its `name` is that dataset: the KQL table for `sentinel` and `microsoft_defender`, the sourcetype for `splunk`, the index pattern for `elastic` . It takes `name`, `description`, `system`, `tenants`, `assets`, `references` and `columns`, a mapping of column name to a column (`type` from the system's column types, optional `description`).
 
 Each violation is an issue on the key at fault: an empty `name` or a name declared twice for one `system` (`schema_validation`, `("logsources", "1", "name")`), a column type outside the system's set (`("logsources", "0", "columns", "Actor_s", "type")`), `columns` on a system with no type set, and an unknown key (`unknown_key`). The 0.20.0 keys (`tables`, `indexes`, `sourcetypes`, `macros`, `indices`, `data_views`, `ecs`) fail as `schema_validation` on that key, with a message that says what to do instead.
 

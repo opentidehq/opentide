@@ -195,7 +195,7 @@ capability there, not in a list of names.
 | `--platform` | Product | Deploy | Compiled without a tenant (`validate`'s compile check, the dry run's payload) | Tenant check (`validate query --live`) | Offline engine (`validate`'s `queries` check, `validate query`) | `opentide query` |
 |---|---|:-:|:-:|:-:|---|---|
 | `sentinel` | Microsoft Sentinel | ✅ | ✅ | ✅ | KQL | KQL |
-| `defender_for_endpoint` | Microsoft Defender for Endpoint | ✅ | — | ✅ | KQL | KQL |
+| `microsoft_defender` | Microsoft Defender | ✅ | — | ✅ | KQL | KQL |
 | `splunk` | Splunk Enterprise Security | ✅ | — | ✅ | SPL | SPL |
 | `sentinel_one` | SentinelOne | ✅ | — | ✅ | — (`--live` required) | PowerQuery |
 | `crowdstrike` | CrowdStrike Falcon | ✅ | — | `supported: false` | CQL | CQL |

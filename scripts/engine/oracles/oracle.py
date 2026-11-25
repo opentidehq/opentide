@@ -119,7 +119,7 @@ FETCH = {
 # and the hunt systems it reads in that language.
 PLATFORMS = {
     "sentinel": ("kql", ("query",)),
-    "defender_for_endpoint": ("kql", ("query",)),
+    "microsoft_defender": ("kql", ("query",)),
     "splunk": ("spl", ("query", "search")),
 }
 # A corpus fixture's tag line. SPL comments need a closing ```, so the line is

@@ -2982,7 +2982,7 @@
   {
    "id": "platform-all-nine",
    "family": "rule",
-   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sentinel:\n    status: STAGING\n    query: SecurityEvent | take 1\n    scheduling: {frequency: PT1H, lookback: PT2H}\n    alert: {title: t}\n  defender_for_endpoint:\n    status: STAGING\n    query: DeviceProcessEvents | take 1\n    alert: {title: t}\n    impacted_entities: {device: DeviceId}\n    scheduling: 1H\n  splunk:\n    status: STAGING\n    query: index=main | head 1\n  sentinel_one:\n    status: STAGING\n    condition:\n      type: Single Event\n      single_event: {query: EventType = \"Process Creation\"}\n  crowdstrike:\n    status: STAGING\n    details: {trigger: verbose, outcome: detection}\n    schedule: {frequency: 1h, lookback: 2h}\n    query: '#event_simpleName=ProcessRollup2'\n  harfanglab:\n    status: STAGING\n    sigma:\n      logsource: {category: process_creation, product: windows}\n      selections:\n      - {name: s, field: Image, value: x.exe}\n      condition: s\n  carbon_black_cloud:\n    status: STAGING\n    query: process_name:cmd.exe\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  sentinel:\n    status: STAGING\n    query: SecurityEvent | take 1\n    scheduling: {frequency: PT1H, lookback: PT2H}\n    alert: {title: t}\n  microsoft_defender:\n    status: STAGING\n    query: DeviceProcessEvents | take 1\n    alert: {title: t}\n    impacted_entities: {device: DeviceId}\n    scheduling: 1H\n  splunk:\n    status: STAGING\n    query: index=main | head 1\n  sentinel_one:\n    status: STAGING\n    condition:\n      type: Single Event\n      single_event: {query: EventType = \"Process Creation\"}\n  crowdstrike:\n    status: STAGING\n    details: {trigger: verbose, outcome: detection}\n    schedule: {frequency: 1h, lookback: 2h}\n    query: '#event_simpleName=ProcessRollup2'\n  harfanglab:\n    status: STAGING\n    sigma:\n      logsource: {category: process_creation, product: windows}\n      selections:\n      - {name: s, field: Image, value: x.exe}\n      condition: s\n  carbon_black_cloud:\n    status: STAGING\n    query: process_name:cmd.exe\n  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: cmd.exe'\n  sysdig:\n    status: STAGING\n    condition: spawned_process and proc.name = sh\n",
    "value": {
     "name": "Rule",
     "metadata": {
@@ -3012,7 +3012,7 @@
        "create_incident": true
       }
      },
-     "defender_for_endpoint": {
+     "microsoft_defender": {
       "enabled": false,
       "name": "",
       "status": "STAGING",
@@ -3465,13 +3465,13 @@
   {
    "id": "platform-query-missing",
    "family": "rule",
-   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  defender_for_endpoint:\n    status: STAGING\n    alert: {title: t}\n    impacted_entities: {device: DeviceId}\n    scheduling: 1H\n",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  microsoft_defender:\n    status: STAGING\n    alert: {title: t}\n    impacted_entities: {device: DeviceId}\n    scheduling: 1H\n",
    "errors": [
     {
      "type": "missing",
      "field_path": [
       "configurations",
-      "defender_for_endpoint",
+      "microsoft_defender",
       "query"
      ],
      "msg": "Field required",
@@ -4297,7 +4297,7 @@
   {
    "id": "platform-defender-full",
    "family": "rule",
-   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  defender_for_endpoint:\n    status: STAGING\n    query: DeviceProcessEvents | take 1\n    alert: {title: t}\n    impacted_entities: {device: DeviceId}\n    scheduling: 1H\n    actions:\n      devices: {isolate_device: Full, collect_investigation_package: true, run_antivirus_scan: true}\n      files:\n        allow_block: {action: Block, identifier: SHA1, groups: {selection: Specific, device_groups: [g]}}\n        quarantine_file: SHA1\n      users: {mark_as_compromised: AccountSid, disable_user: AccountSid}\n    scope: {selection: All}\n    exclusions: [{query: '| where 1', reason: r, let: {a: 1}}]\n",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  microsoft_defender:\n    status: STAGING\n    query: DeviceProcessEvents | take 1\n    alert: {title: t}\n    impacted_entities: {device: DeviceId}\n    scheduling: 1H\n    actions:\n      devices: {isolate_device: Full, collect_investigation_package: true, run_antivirus_scan: true}\n      files:\n        allow_block: {action: Block, identifier: SHA1, groups: {selection: Specific, device_groups: [g]}}\n        quarantine_file: SHA1\n      users: {mark_as_compromised: AccountSid, disable_user: AccountSid}\n    scope: {selection: All}\n    exclusions: [{query: '| where 1', reason: r, let: {a: 1}}]\n",
    "value": {
     "name": "Rule",
     "metadata": {
@@ -4312,7 +4312,7 @@
     "techniques": [],
     "platforms": {},
     "configurations": {
-     "defender_for_endpoint": {
+     "microsoft_defender": {
       "enabled": false,
       "name": "",
       "status": "STAGING",
@@ -4369,13 +4369,13 @@
   {
    "id": "platform-defender-schedule",
    "family": "rule",
-   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  defender_for_endpoint:\n    status: STAGING\n    query: DeviceProcessEvents | take 1\n    alert: {title: t}\n    impacted_entities: {device: DeviceId}\n    scheduling: 2H\n",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  microsoft_defender:\n    status: STAGING\n    query: DeviceProcessEvents | take 1\n    alert: {title: t}\n    impacted_entities: {device: DeviceId}\n    scheduling: 2H\n",
    "errors": [
     {
      "type": "literal_error",
      "field_path": [
       "configurations",
-      "defender_for_endpoint",
+      "microsoft_defender",
       "scheduling"
      ],
      "msg": "Input should be 'NRT', '1H', '3H', '12H' or '24H'",
@@ -4396,13 +4396,13 @@
   {
    "id": "platform-defender-schedule-int",
    "family": "rule",
-   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  defender_for_endpoint:\n    status: STAGING\n    query: DeviceProcessEvents | take 1\n    alert: {title: t}\n    impacted_entities: {device: DeviceId}\n    scheduling: 1\n",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  microsoft_defender:\n    status: STAGING\n    query: DeviceProcessEvents | take 1\n    alert: {title: t}\n    impacted_entities: {device: DeviceId}\n    scheduling: 1\n",
    "errors": [
     {
      "type": "literal_error",
      "field_path": [
       "configurations",
-      "defender_for_endpoint",
+      "microsoft_defender",
       "scheduling"
      ],
      "msg": "Input should be 'NRT', '1H', '3H', '12H' or '24H'",
@@ -4423,13 +4423,13 @@
   {
    "id": "platform-defender-literals",
    "family": "rule",
-   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  defender_for_endpoint:\n    status: STAGING\n    query: DeviceProcessEvents | take 1\n    alert: {title: t}\n    impacted_entities: {device: DeviceId}\n    scheduling: 1H\n    scope: {selection: Some}\n    actions: {files: {allow_block: {action: allow, identifier: x}}, devices: {run_antivirus_scan: maybe}}\n",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  microsoft_defender:\n    status: STAGING\n    query: DeviceProcessEvents | take 1\n    alert: {title: t}\n    impacted_entities: {device: DeviceId}\n    scheduling: 1H\n    scope: {selection: Some}\n    actions: {files: {allow_block: {action: allow, identifier: x}}, devices: {run_antivirus_scan: maybe}}\n",
    "errors": [
     {
      "type": "bool_parsing",
      "field_path": [
       "configurations",
-      "defender_for_endpoint",
+      "microsoft_defender",
       "actions",
       "devices",
       "run_antivirus_scan"
@@ -4449,7 +4449,7 @@
      "type": "literal_error",
      "field_path": [
       "configurations",
-      "defender_for_endpoint",
+      "microsoft_defender",
       "actions",
       "files",
       "allow_block",
@@ -4472,7 +4472,7 @@
      "type": "literal_error",
      "field_path": [
       "configurations",
-      "defender_for_endpoint",
+      "microsoft_defender",
       "scope",
       "selection"
      ],
@@ -4494,13 +4494,13 @@
   {
    "id": "platform-defender-missing",
    "family": "rule",
-   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  defender_for_endpoint:\n    status: STAGING\n    query: q\n    alert: {}\n",
+   "yaml": "name: Rule\nmetadata:\n  uuid: 00000000-0000-4000-8000-000000000001\n  schema: rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: d\nconfigurations:\n  microsoft_defender:\n    status: STAGING\n    query: q\n    alert: {}\n",
    "errors": [
     {
      "type": "missing",
      "field_path": [
       "configurations",
-      "defender_for_endpoint",
+      "microsoft_defender",
       "alert",
       "category"
      ],
@@ -4519,7 +4519,7 @@
      "type": "missing",
      "field_path": [
       "configurations",
-      "defender_for_endpoint",
+      "microsoft_defender",
       "impacted_entities"
      ],
      "msg": "Field required",
@@ -4537,7 +4537,7 @@
      "type": "missing",
      "field_path": [
       "configurations",
-      "defender_for_endpoint",
+      "microsoft_defender",
       "scheduling"
      ],
      "msg": "Field required",
@@ -9272,7 +9272,7 @@
   {
    "id": "file:tests/fixtures/tide_corpus/current/Objects/Detection Rules/rule-0002-defender-kql.yaml",
    "family": "rule",
-   "yaml": "name: Defender KQL Rule\n\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000002\n  schema: rule::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n\ndescription: |\n  Simulated Defender rule for CLI E2E corpus.\nstatus: STAGING\nseverity: High\ntechniques:\n  - T1059\ndetection_model: 00000000-0000-4000-8002-000000000001\n\nresponse:\n  alert_severity: High\n\nconfigurations:\n  defender_for_endpoint:\n    enabled: true\n    name: Defender KQL Rule\n    status: STAGING\n    query: |\n      DeviceProcessEvents\n      | take 1\n    scheduling: 1H\n    alert:\n      title: Defender KQL Rule\n    impacted_entities:\n      device: device_id\n    scope:\n      selection: All\n",
+   "yaml": "name: Defender KQL Rule\n\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000002\n  schema: rule::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n\ndescription: |\n  Simulated Defender rule for CLI E2E corpus.\nstatus: STAGING\nseverity: High\ntechniques:\n  - T1059\ndetection_model: 00000000-0000-4000-8002-000000000001\n\nresponse:\n  alert_severity: High\n\nconfigurations:\n  microsoft_defender:\n    enabled: true\n    name: Defender KQL Rule\n    status: STAGING\n    query: |\n      DeviceProcessEvents\n      | take 1\n    scheduling: 1H\n    alert:\n      title: Defender KQL Rule\n    impacted_entities:\n      device: device_id\n    scope:\n      selection: All\n",
    "value": {
     "name": "Defender KQL Rule",
     "metadata": {
@@ -9295,7 +9295,7 @@
      "alert_severity": "High"
     },
     "configurations": {
-     "defender_for_endpoint": {
+     "microsoft_defender": {
       "enabled": true,
       "name": "Defender KQL Rule",
       "status": "STAGING",

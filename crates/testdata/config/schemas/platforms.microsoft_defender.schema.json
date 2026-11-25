@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$defs": {
-    "DefenderForEndpointParameters": {
+    "MicrosoftDefenderParameters": {
       "additionalProperties": false,
-      "description": "`[tenants.parameters]` for Microsoft Defender for Endpoint.",
+      "description": "`[tenants.parameters]` for Microsoft Defender.",
       "properties": {
         "device_groups": {
           "anyOf": [
@@ -22,12 +22,12 @@
           "title": "Device Groups"
         }
       },
-      "title": "DefenderForEndpointParameters",
+      "title": "MicrosoftDefenderParameters",
       "type": "object"
     },
-    "DefenderForEndpointSetup": {
+    "MicrosoftDefenderSetup": {
       "additionalProperties": false,
-      "description": "`[tenants.setup]` for Microsoft Defender for Endpoint.",
+      "description": "`[tenants.setup]` for Microsoft Defender.",
       "properties": {
         "ssl": {
           "anyOf": [
@@ -70,12 +70,12 @@
         "client_id",
         "client_secret"
       ],
-      "title": "DefenderForEndpointSetup",
+      "title": "MicrosoftDefenderSetup",
       "type": "object"
     },
-    "DefenderForEndpointTenant": {
+    "MicrosoftDefenderTenant": {
       "additionalProperties": false,
-      "description": "`[[tenants]]` for Microsoft Defender for Endpoint.",
+      "description": "`[[tenants]]` for Microsoft Defender.",
       "properties": {
         "name": {
           "description": "Tenant name a rule's platform block may list.",
@@ -138,13 +138,13 @@
           "type": "boolean"
         },
         "setup": {
-          "$ref": "#/$defs/DefenderForEndpointSetup",
+          "$ref": "#/$defs/MicrosoftDefenderSetup",
           "description": "Connection settings."
         },
         "parameters": {
           "anyOf": [
             {
-              "$ref": "#/$defs/DefenderForEndpointParameters"
+              "$ref": "#/$defs/MicrosoftDefenderParameters"
             },
             {
               "type": "null"
@@ -158,7 +158,7 @@
         "name",
         "setup"
       ],
-      "title": "DefenderForEndpointTenant",
+      "title": "MicrosoftDefenderTenant",
       "type": "object"
     },
     "Modifier": {
@@ -280,13 +280,26 @@
     },
     "PlatformIdentity": {
       "additionalProperties": false,
-      "description": "`[platform]`: whether the platform is enabled, and how it is named.\n\nThe file name stem (`platforms/splunk.toml`) identifies the platform.",
+      "description": "`[platform]`: whether the platform is enabled, and how it is named.",
       "properties": {
         "enabled": {
           "default": false,
           "description": "Load and deploy to this platform.",
           "title": "Enabled",
           "type": "boolean"
+        },
+        "identifier": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Platform identifier (for example sentinel). Matches the file name stem.",
+          "title": "Identifier"
         },
         "name": {
           "anyOf": [
@@ -301,11 +314,32 @@
           "description": "Display name of the platform.",
           "title": "Name"
         },
+        "subschema": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Title of the platform's rule sub-schema.",
+          "title": "Subschema"
+        },
         "description": {
           "default": "",
           "description": "What the platform is.",
           "title": "Description",
           "type": "string"
+        },
+        "flags": {
+          "description": "Flags a modifier condition can match.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Flags",
+          "type": "array"
         }
       },
       "title": "PlatformIdentity",
@@ -313,7 +347,7 @@
     }
   },
   "additionalProperties": false,
-  "description": "Merged `platforms/defender_for_endpoint.toml`.",
+  "description": "Merged `platforms/microsoft_defender.toml`.",
   "properties": {
     "platform": {
       "$ref": "#/$defs/PlatformIdentity",
@@ -328,14 +362,14 @@
       "type": "array"
     },
     "tenants": {
-      "description": "Defender for Endpoint tenants.",
+      "description": "Microsoft Defender tenants.",
       "items": {
-        "$ref": "#/$defs/DefenderForEndpointTenant"
+        "$ref": "#/$defs/MicrosoftDefenderTenant"
       },
       "title": "Tenants",
       "type": "array"
     }
   },
-  "title": "platforms/defender_for_endpoint.toml",
+  "title": "platforms/microsoft_defender.toml",
   "type": "object"
 }

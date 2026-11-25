@@ -57,7 +57,7 @@ fn the_registry_is_closed_and_in_the_containers_order() {
     assert_eq!(registered_model("sysdig").unwrap().model, "SysdigConfig");
     assert_eq!(registered_model("sentinal"), None);
     assert_eq!(SysdigConfig::platform(), "sysdig");
-    assert_eq!(DefenderConfig::platform(), "defender_for_endpoint");
+    assert_eq!(DefenderConfig::platform(), "microsoft_defender");
     assert_eq!(
         parse_platform_config("sentinal", &json_node(&json!({}))),
         Err(ParseError::UnknownPlatform(
@@ -151,7 +151,7 @@ fn a_block_severity_takes_what_deploy_maps() {
         format!("details.severity: {expected}, not \"low\"; did you mean \"Low\"?")
     );
     assert_eq!(
-        errors("defender_for_endpoint", &defender(json!("Severe"))),
+        errors("microsoft_defender", &defender(json!("Severe"))),
         format!("alert.severity: {expected}, not \"Severe\"")
     );
     // The five names, `null` and an empty string (deploy reads both as
@@ -165,7 +165,7 @@ fn a_block_severity_takes_what_deploy_maps() {
             "{severity}"
         );
         assert_eq!(
-            errors("defender_for_endpoint", &defender(severity.clone())),
+            errors("microsoft_defender", &defender(severity.clone())),
             "",
             "{severity}"
         );
@@ -192,7 +192,7 @@ fn every_query_text_refuses_a_blank_query() {
             json!({"status": "S", "scheduling": {}, "alert": {}}),
         ),
         (
-            "defender_for_endpoint",
+            "microsoft_defender",
             json!({"status": "S", "alert": {}, "impacted_entities": {},
                    "scheduling": "NRT"}),
         ),

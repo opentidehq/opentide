@@ -7,12 +7,12 @@
   "platforms/bitdefender.toml",
   "platforms/carbon_black_cloud.toml",
   "platforms/crowdstrike.toml",
-  "platforms/defender_for_endpoint.toml",
   "platforms/elastic.toml",
   "platforms/exabeam.toml",
   "platforms/google_secops.toml",
   "platforms/graylog.toml",
   "platforms/harfanglab.toml",
+  "platforms/microsoft_defender.toml",
   "platforms/sentinel.toml",
   "platforms/sentinel_one.toml",
   "platforms/splunk.toml",
@@ -164,7 +164,7 @@
      "parameters",
      "device_groups"
     ],
-    "file_path": "/w/.opentide/configurations/platforms/defender_for_endpoint.toml",
+    "file_path": "/w/.opentide/configurations/platforms/microsoft_defender.toml",
     "message": "Input should be a valid list",
     "severity": "error"
    },
@@ -177,7 +177,7 @@
      "parameters",
      "x"
     ],
-    "file_path": "/w/.opentide/configurations/platforms/defender_for_endpoint.toml",
+    "file_path": "/w/.opentide/configurations/platforms/microsoft_defender.toml",
     "message": "unknown key",
     "severity": "error"
    }
@@ -2902,7 +2902,7 @@
      "columns"
     ],
     "file_path": "/w/.opentide/configurations/visibility.toml",
-    "message": "`columns` does not apply to system 'carbon'; it applies to a log source of sentinel, splunk, elastic, defender_for_endpoint",
+    "message": "`columns` does not apply to system 'carbon'; it applies to a log source of sentinel, splunk, elastic, microsoft_defender",
     "severity": "error"
    }
   ],
@@ -3234,11 +3234,11 @@
        "name": "Crowdstrike Falcon Correlation Rules"
       }
      },
-     "defender_for_endpoint": {
+     "microsoft_defender": {
       "platform": {
        "description": "Defender for Endpoint is a comprehensive, cloud-native endpoint\nsecurity solution that delivers visibility and AI-powered cyberthreat protection\nto help stop cyberattacks across Windows, macOS, Linux, Android, iOS, and IoT devices.\n",
        "enabled": false,
-       "name": "Microsoft Defender for Endpoint"
+       "name": "Microsoft Defender"
       }
      },
      "elastic": {
@@ -3334,11 +3334,11 @@
        "name": "Crowdstrike Falcon Correlation Rules"
       }
      },
-     "defender_for_endpoint": {
+     "microsoft_defender": {
       "platform": {
        "description": "Defender for Endpoint is a comprehensive, cloud-native endpoint\nsecurity solution that delivers visibility and AI-powered cyberthreat protection\nto help stop cyberattacks across Windows, macOS, Linux, Android, iOS, and IoT devices.\n",
        "enabled": false,
-       "name": "Microsoft Defender for Endpoint"
+       "name": "Microsoft Defender"
       }
      },
      "elastic": {
@@ -3662,11 +3662,11 @@
        "name": "Crowdstrike Falcon Correlation Rules"
       }
      },
-     "defender_for_endpoint": {
+     "microsoft_defender": {
       "platform": {
        "description": "Defender for Endpoint is a comprehensive, cloud-native endpoint\nsecurity solution that delivers visibility and AI-powered cyberthreat protection\nto help stop cyberattacks across Windows, macOS, Linux, Android, iOS, and IoT devices.\n",
        "enabled": false,
-       "name": "Microsoft Defender for Endpoint"
+       "name": "Microsoft Defender"
       }
      },
      "elastic": {
@@ -3762,11 +3762,11 @@
        "name": "Crowdstrike Falcon Correlation Rules"
       }
      },
-     "defender_for_endpoint": {
+     "microsoft_defender": {
       "platform": {
        "description": "Defender for Endpoint is a comprehensive, cloud-native endpoint\nsecurity solution that delivers visibility and AI-powered cyberthreat protection\nto help stop cyberattacks across Windows, macOS, Linux, Android, iOS, and IoT devices.\n",
        "enabled": false,
-       "name": "Microsoft Defender for Endpoint"
+       "name": "Microsoft Defender"
       }
      },
      "elastic": {
@@ -4061,11 +4061,11 @@
        "name": "Crowdstrike Falcon Correlation Rules"
       }
      },
-     "defender_for_endpoint": {
+     "microsoft_defender": {
       "platform": {
        "description": "Defender for Endpoint is a comprehensive, cloud-native endpoint\nsecurity solution that delivers visibility and AI-powered cyberthreat protection\nto help stop cyberattacks across Windows, macOS, Linux, Android, iOS, and IoT devices.\n",
        "enabled": false,
-       "name": "Microsoft Defender for Endpoint"
+       "name": "Microsoft Defender"
       }
      },
      "elastic": {
@@ -4161,11 +4161,11 @@
        "name": "Crowdstrike Falcon Correlation Rules"
       }
      },
-     "defender_for_endpoint": {
+     "microsoft_defender": {
       "platform": {
        "description": "Defender for Endpoint is a comprehensive, cloud-native endpoint\nsecurity solution that delivers visibility and AI-powered cyberthreat protection\nto help stop cyberattacks across Windows, macOS, Linux, Android, iOS, and IoT devices.\n",
        "enabled": false,
-       "name": "Microsoft Defender for Endpoint"
+       "name": "Microsoft Defender"
       }
      },
      "elastic": {
@@ -4450,11 +4450,11 @@
        "name": "Crowdstrike Falcon Correlation Rules"
       }
      },
-     "defender_for_endpoint": {
+     "microsoft_defender": {
       "platform": {
        "description": "Defender for Endpoint is a comprehensive, cloud-native endpoint\nsecurity solution that delivers visibility and AI-powered cyberthreat protection\nto help stop cyberattacks across Windows, macOS, Linux, Android, iOS, and IoT devices.\n",
        "enabled": false,
-       "name": "Microsoft Defender for Endpoint"
+       "name": "Microsoft Defender"
       }
      },
      "elastic": {
@@ -4546,11 +4546,11 @@
        "name": "Crowdstrike Falcon Correlation Rules"
       }
      },
-     "defender_for_endpoint": {
+     "microsoft_defender": {
       "platform": {
        "description": "Defender for Endpoint is a comprehensive, cloud-native endpoint\nsecurity solution that delivers visibility and AI-powered cyberthreat protection\nto help stop cyberattacks across Windows, macOS, Linux, Android, iOS, and IoT devices.\n",
        "enabled": false,
-       "name": "Microsoft Defender for Endpoint"
+       "name": "Microsoft Defender"
       }
      },
      "elastic": {
@@ -4831,11 +4831,11 @@
        "name": "Crowdstrike Falcon Correlation Rules"
       }
      },
-     "defender_for_endpoint": {
+     "microsoft_defender": {
       "platform": {
        "description": "Defender for Endpoint is a comprehensive, cloud-native endpoint\nsecurity solution that delivers visibility and AI-powered cyberthreat protection\nto help stop cyberattacks across Windows, macOS, Linux, Android, iOS, and IoT devices.\n",
        "enabled": false,
-       "name": "Microsoft Defender for Endpoint"
+       "name": "Microsoft Defender"
       }
      },
      "elastic": {
@@ -4932,11 +4932,11 @@
        "name": "Crowdstrike Falcon Correlation Rules"
       }
      },
-     "defender_for_endpoint": {
+     "microsoft_defender": {
       "platform": {
        "description": "Defender for Endpoint is a comprehensive, cloud-native endpoint\nsecurity solution that delivers visibility and AI-powered cyberthreat protection\nto help stop cyberattacks across Windows, macOS, Linux, Android, iOS, and IoT devices.\n",
        "enabled": false,
-       "name": "Microsoft Defender for Endpoint"
+       "name": "Microsoft Defender"
       }
      },
      "elastic": {
@@ -5275,11 +5275,11 @@
        "name": "Crowdstrike Falcon Correlation Rules"
       }
      },
-     "defender_for_endpoint": {
+     "microsoft_defender": {
       "platform": {
        "description": "Defender for Endpoint is a comprehensive, cloud-native endpoint\nsecurity solution that delivers visibility and AI-powered cyberthreat protection\nto help stop cyberattacks across Windows, macOS, Linux, Android, iOS, and IoT devices.\n",
        "enabled": false,
-       "name": "Microsoft Defender for Endpoint"
+       "name": "Microsoft Defender"
       }
      },
      "elastic": {
@@ -5379,11 +5379,11 @@
        "name": "Crowdstrike Falcon Correlation Rules"
       }
      },
-     "defender_for_endpoint": {
+     "microsoft_defender": {
       "platform": {
        "description": "Defender for Endpoint is a comprehensive, cloud-native endpoint\nsecurity solution that delivers visibility and AI-powered cyberthreat protection\nto help stop cyberattacks across Windows, macOS, Linux, Android, iOS, and IoT devices.\n",
        "enabled": false,
-       "name": "Microsoft Defender for Endpoint"
+       "name": "Microsoft Defender"
       }
      },
      "elastic": {
@@ -5679,11 +5679,11 @@
        "name": "Crowdstrike Falcon Correlation Rules"
       }
      },
-     "defender_for_endpoint": {
+     "microsoft_defender": {
       "platform": {
        "description": "Defender for Endpoint is a comprehensive, cloud-native endpoint\nsecurity solution that delivers visibility and AI-powered cyberthreat protection\nto help stop cyberattacks across Windows, macOS, Linux, Android, iOS, and IoT devices.\n",
        "enabled": false,
-       "name": "Microsoft Defender for Endpoint"
+       "name": "Microsoft Defender"
       }
      },
      "elastic": {
@@ -5779,11 +5779,11 @@
        "name": "Crowdstrike Falcon Correlation Rules"
       }
      },
-     "defender_for_endpoint": {
+     "microsoft_defender": {
       "platform": {
        "description": "Defender for Endpoint is a comprehensive, cloud-native endpoint\nsecurity solution that delivers visibility and AI-powered cyberthreat protection\nto help stop cyberattacks across Windows, macOS, Linux, Android, iOS, and IoT devices.\n",
        "enabled": false,
-       "name": "Microsoft Defender for Endpoint"
+       "name": "Microsoft Defender"
       }
      },
      "elastic": {
@@ -6058,11 +6058,11 @@
        "name": "Crowdstrike Falcon Correlation Rules"
       }
      },
-     "defender_for_endpoint": {
+     "microsoft_defender": {
       "platform": {
        "description": "Defender for Endpoint is a comprehensive, cloud-native endpoint\nsecurity solution that delivers visibility and AI-powered cyberthreat protection\nto help stop cyberattacks across Windows, macOS, Linux, Android, iOS, and IoT devices.\n",
        "enabled": false,
-       "name": "Microsoft Defender for Endpoint"
+       "name": "Microsoft Defender"
       }
      },
      "elastic": {
@@ -6158,11 +6158,11 @@
        "name": "Crowdstrike Falcon Correlation Rules"
       }
      },
-     "defender_for_endpoint": {
+     "microsoft_defender": {
       "platform": {
        "description": "Defender for Endpoint is a comprehensive, cloud-native endpoint\nsecurity solution that delivers visibility and AI-powered cyberthreat protection\nto help stop cyberattacks across Windows, macOS, Linux, Android, iOS, and IoT devices.\n",
        "enabled": false,
-       "name": "Microsoft Defender for Endpoint"
+       "name": "Microsoft Defender"
       }
      },
      "elastic": {
@@ -6438,11 +6438,11 @@
        "name": "Crowdstrike Falcon Correlation Rules"
       }
      },
-     "defender_for_endpoint": {
+     "microsoft_defender": {
       "platform": {
        "description": "Defender for Endpoint is a comprehensive, cloud-native endpoint\nsecurity solution that delivers visibility and AI-powered cyberthreat protection\nto help stop cyberattacks across Windows, macOS, Linux, Android, iOS, and IoT devices.\n",
        "enabled": false,
-       "name": "Microsoft Defender for Endpoint"
+       "name": "Microsoft Defender"
       }
      },
      "elastic": {
@@ -6538,11 +6538,11 @@
        "name": "Crowdstrike Falcon Correlation Rules"
       }
      },
-     "defender_for_endpoint": {
+     "microsoft_defender": {
       "platform": {
        "description": "Defender for Endpoint is a comprehensive, cloud-native endpoint\nsecurity solution that delivers visibility and AI-powered cyberthreat protection\nto help stop cyberattacks across Windows, macOS, Linux, Android, iOS, and IoT devices.\n",
        "enabled": false,
-       "name": "Microsoft Defender for Endpoint"
+       "name": "Microsoft Defender"
       }
      },
      "elastic": {
@@ -6831,11 +6831,11 @@
        "name": "Crowdstrike Falcon Correlation Rules"
       }
      },
-     "defender_for_endpoint": {
+     "microsoft_defender": {
       "platform": {
        "description": "Defender for Endpoint is a comprehensive, cloud-native endpoint\nsecurity solution that delivers visibility and AI-powered cyberthreat protection\nto help stop cyberattacks across Windows, macOS, Linux, Android, iOS, and IoT devices.\n",
        "enabled": false,
-       "name": "Microsoft Defender for Endpoint"
+       "name": "Microsoft Defender"
       }
      },
      "elastic": {
@@ -6942,11 +6942,11 @@
        "name": "Crowdstrike Falcon Correlation Rules"
       }
      },
-     "defender_for_endpoint": {
+     "microsoft_defender": {
       "platform": {
        "description": "Defender for Endpoint is a comprehensive, cloud-native endpoint\nsecurity solution that delivers visibility and AI-powered cyberthreat protection\nto help stop cyberattacks across Windows, macOS, Linux, Android, iOS, and IoT devices.\n",
        "enabled": false,
-       "name": "Microsoft Defender for Endpoint"
+       "name": "Microsoft Defender"
       }
      },
      "elastic": {
@@ -7304,11 +7304,11 @@
        "name": "Crowdstrike Falcon Correlation Rules"
       }
      },
-     "defender_for_endpoint": {
+     "microsoft_defender": {
       "platform": {
        "description": "Defender for Endpoint is a comprehensive, cloud-native endpoint\nsecurity solution that delivers visibility and AI-powered cyberthreat protection\nto help stop cyberattacks across Windows, macOS, Linux, Android, iOS, and IoT devices.\n",
        "enabled": false,
-       "name": "Microsoft Defender for Endpoint"
+       "name": "Microsoft Defender"
       }
      },
      "elastic": {
@@ -7404,11 +7404,11 @@
        "name": "Crowdstrike Falcon Correlation Rules"
       }
      },
-     "defender_for_endpoint": {
+     "microsoft_defender": {
       "platform": {
        "description": "Defender for Endpoint is a comprehensive, cloud-native endpoint\nsecurity solution that delivers visibility and AI-powered cyberthreat protection\nto help stop cyberattacks across Windows, macOS, Linux, Android, iOS, and IoT devices.\n",
        "enabled": false,
-       "name": "Microsoft Defender for Endpoint"
+       "name": "Microsoft Defender"
       }
      },
      "elastic": {

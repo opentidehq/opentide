@@ -97,7 +97,7 @@ A client may make the requests a run sends to tenants, in place of opentide's ow
 The client asks for it at `initialize`, with `{"capabilities": {"fetch": true}}`. The answer then includes `"capabilities": {"fetch": true}`, and every tenant request of every run from then on is a request from the server to the client:
 
 ```json illustrative
-{"jsonrpc":"2.0","id":"h1","method":"opentide/fetch","params":{"run":"2","platform":"defender_for_endpoint","tenant":"lab","method":"POST","url":"https://login.microsoftonline.com/<tenant>/oauth2/v2.0/token","headers":[["content-type","application/x-www-form-urlencoded"]],"body":"Y2xpZW50X2lkPS4uLg==","connect_timeout_ms":30000,"read_timeout_ms":30000,"tls":{"verify":true,"ca_bundles":[]},"proxy":null}}
+{"jsonrpc":"2.0","id":"h1","method":"opentide/fetch","params":{"run":"2","platform":"microsoft_defender","tenant":"lab","method":"POST","url":"https://login.microsoftonline.com/<tenant>/oauth2/v2.0/token","headers":[["content-type","application/x-www-form-urlencoded"]],"body":"Y2xpZW50X2lkPS4uLg==","connect_timeout_ms":30000,"read_timeout_ms":30000,"tls":{"verify":true,"ca_bundles":[]},"proxy":null}}
 {"jsonrpc":"2.0","id":"h1","result":{"status":200,"headers":[["content-type","application/json"]],"url":"https://login.microsoftonline.com/<tenant>/oauth2/v2.0/token","body":"eyJhY2Nlc3NfdG9rZW4iOi4uLn0=","elapsed_ms":182}}
 ```
 

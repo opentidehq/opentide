@@ -32,8 +32,8 @@ const CASES: &[(&str, &str, &str)] = &[
     ),
     (
         "defender",
-        "configurations:\n  defender_for_endpoint:\n    query: |{marker}\n      ...\n",
-        "configurations.defender_for_endpoint.query",
+        "configurations:\n  microsoft_defender:\n    query: |{marker}\n      ...\n",
+        "configurations.microsoft_defender.query",
     ),
     (
         "splunk",

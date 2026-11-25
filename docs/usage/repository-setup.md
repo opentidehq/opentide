@@ -29,14 +29,14 @@ opentide setup --yes \
   --org "Example Corp" \
   --description "Enterprise detection content" \
   --platform sentinel \
-  --platform defender_for_endpoint \
+  --platform microsoft_defender \
   --ci github
 ```
 
 Or step-by-step:
 
 ```bash
-opentide setup platforms --sentinel --defender-for-endpoint --yes
+opentide setup platforms --sentinel --microsoft-defender --yes
 opentide setup ci github --yes
 opentide setup env --yes
 opentide setup hooks --yes

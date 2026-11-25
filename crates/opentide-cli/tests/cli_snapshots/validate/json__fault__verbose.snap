@@ -14,7 +14,7 @@ findings: 106
   unknown_key | error | <WS>/.opentide/configurations/deployment.toml | 3 | 1
   unknown_key | error | <WS>/.opentide/configurations/deployment.toml | 4 | 1
   unknown_key | error | <WS>/.opentide/configurations/deployment.toml | 5 | 1
-  missing_field | error | <WS>/.opentide/configurations/platforms/defender_for_endpoint.toml | 6 | 1
+  missing_field | error | <WS>/.opentide/configurations/platforms/microsoft_defender.toml | 6 | 1
   unknown_key | error | <WS>/.opentide/configurations/platforms/sentinel.toml | 2 | 1
   schema_validation | error | <WS>/.opentide/configurations/platforms/splunk.toml | 4 | 8
   deployment_state_shape | error | <WS>/.opentide/states/deployment/e2cb0ccd-ebb4-4031-996c-2055d3d4de9e.json | - | -

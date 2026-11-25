@@ -34,7 +34,7 @@ pub struct RuleQuery {
     /// What the rows are not (a filter or a threshold the query omits).
     pub note: Option<String>,
     /// The KQL exclusions deploy compiles into the query per tenant
-    /// (Sentinel, Defender for Endpoint).
+    /// (Sentinel, Microsoft Defender).
     pub exclusions: Option<CJson>,
 }
 
@@ -207,7 +207,7 @@ pub fn rule_queries(rule: &Rule, platform: &str) -> Result<Vec<RuleQuery>, Strin
         ..RuleQuery::default()
     };
     match platform {
-        "sentinel" | "defender_for_endpoint" => Ok(vec![RuleQuery {
+        "sentinel" | "microsoft_defender" => Ok(vec![RuleQuery {
             exclusions: field(block, "exclusions").cloned(),
             ..plain(required(block.get("query"), rule, platform)?)
         }]),
@@ -495,10 +495,10 @@ mod tests {
         assert!(queries[0].text_for("lab").contains("svc"));
         assert_eq!(queries[0].text_for("prod"), queries[0].text_for("prod"));
         let bare = rule(&format!(
-            "{HEAD}configurations:\n  defender_for_endpoint:\n    query: DeviceEvents\n"
+            "{HEAD}configurations:\n  microsoft_defender:\n    query: DeviceEvents\n"
         ));
         assert_eq!(
-            rule_queries(&bare, "defender_for_endpoint").unwrap()[0].text_for("lab"),
+            rule_queries(&bare, "microsoft_defender").unwrap()[0].text_for("lab"),
             "DeviceEvents"
         );
     }

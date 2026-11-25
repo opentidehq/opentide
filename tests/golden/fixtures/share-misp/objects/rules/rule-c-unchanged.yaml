@@ -19,14 +19,18 @@ response:
   alert_severity: High
 
 configurations:
-  defender_for_endpoint:
+  sentinel:
     enabled: true
     status: PRODUCTION
     query: |
-      DeviceProcessEvents
+      SecurityEvent
       | take 1
-    scheduling: 1H
+    scheduling:
+      frequency: PT1H
+      lookback: PT2H
     alert:
       title: Shared rule unchanged
-    impacted_entities:
-      device: device_id
+    grouping:
+      event: SingleAlert
+      alert:
+        enabled: false

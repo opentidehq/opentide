@@ -104,7 +104,7 @@ Each rule carries per-platform query blocks under `configurations`. Six platform
 | Platform | Query language | Query validate |
 |----------|----------------|:--------------:|
 | Sentinel | KQL | yes |
-| Defender for Endpoint | KQL | yes |
+| Microsoft Defender | KQL | yes |
 | Elastic | Kuery / Lucene / EQL / ES\|QL | yes |
 | Splunk | SPL | yes |
 | SentinelOne | S1QL | yes |

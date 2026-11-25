@@ -11,7 +11,7 @@ Simulated Defender rule for CLI E2E corpus.
 | Severity | High |
 | Detection model | [Credential Access Objective](../objectives/credential-access-objective.md) |
 | ATT&CK | [`T1059`](https://attack.mitre.org/techniques/T1059) Command and Scripting Interpreter |
-| Platforms | Microsoft Defender for Endpoint: `STAGING` (PREVIEW runs) |
+| Platforms | Microsoft Defender: `STAGING` (PREVIEW runs) |
 
 **On this page:** [Deployment](#deployment) · [Platform configuration](#platform-configuration) · [Response](#response) · [ATT&CK techniques](#attck-techniques) · [Detection coverage](#detection-coverage) · [Metadata](#metadata)
 
@@ -21,12 +21,12 @@ What `opentide deploy` does with this rule: each platform block's status, the ru
 
 | Platform | Status | Deployed by | Tenants | Block enabled |
 | --- | --- | --- | --- | --- |
-| Microsoft Defender for Endpoint | `STAGING` | PREVIEW runs | no tenant configured | yes |
+| Microsoft Defender | `STAGING` | PREVIEW runs | no tenant configured | yes |
 
 - `STAGING` (strategy `PREVIEW`): Deployed in staging environment for operational testing
 
 > [!WARNING]
-> Microsoft Defender for Endpoint configures no tenant: a run that deploys this block fails until one is added to the platform file.
+> Microsoft Defender configures no tenant: a run that deploys this block fails until one is added to the platform file.
 
 ```mermaid
 flowchart LR
@@ -36,7 +36,7 @@ flowchart LR
         rul1["Defender KQL Rule"]
     end
     subgraph lane2["Platforms"]
-        plt1[("Microsoft Defender for<br>Endpoint<br>STAGING")]
+        plt1[("Microsoft Defender<br>STAGING")]
     end
     rul1 --> plt1
     classDef rule fill:#e9f7ef,stroke:#067647,color:#053321
@@ -53,7 +53,7 @@ flowchart LR
 
 ## Platform configuration
 
-### Microsoft Defender for Endpoint
+### Microsoft Defender
 
 Status `STAGING` · deployed by PREVIEW runs · tenants: no tenant configured
 

@@ -43,11 +43,11 @@ def test_columns_count_code_points_not_utf16_units() -> None:
 
 def test_the_platform_selects_the_schema() -> None:
     query = "Nope | take 1"
-    [finding] = analysis.check_query(query, language="kql", platform="defender_for_endpoint")
+    [finding] = analysis.check_query(query, language="kql", platform="microsoft_defender")
     assert (finding.code, finding.severity) == ("kql_unknown_table", "error")
     assert (
         analysis.check_query(
-            "DeviceProcessEvents | take 1", language="kql", platform="defender_for_endpoint"
+            "DeviceProcessEvents | take 1", language="kql", platform="microsoft_defender"
         )
         == []
     )

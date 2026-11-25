@@ -626,7 +626,7 @@ fn only_the_names_the_tenants_use_are_mapped() {
     )
     .unwrap();
     std::fs::write(
-        platforms.join("defender_for_endpoint.toml"),
+        platforms.join("microsoft_defender.toml"),
         "[platform]\nenabled = true\n\n[[tenants]]\nname = \"mde\"\n[tenants.setup]\nclient_id = \"$AZURE_CLIENT_ID\"\nclient_secret = \"$AZURE_CLIENT_SECRET\"\ntenant_id = \"$AZURE_TENANT_ID\"\n",
     )
     .unwrap();

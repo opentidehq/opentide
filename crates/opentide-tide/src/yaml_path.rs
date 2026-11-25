@@ -505,7 +505,7 @@ configurations:
 
     #[test]
     fn next_sequence_item_does_not_inherit_previous_keys() {
-        let src = "response:\n  procedure:\n    searches:\n    - purpose: first\n      system: defender_for_endpoint\n    - \n";
+        let src = "response:\n  procedure:\n    searches:\n    - purpose: first\n      system: microsoft_defender\n    - \n";
         let off = src.rfind("- ").unwrap() + 2;
         let c = yaml_cursor(src, off);
         assert_eq!(c.field_path(), "response.procedure.searches");

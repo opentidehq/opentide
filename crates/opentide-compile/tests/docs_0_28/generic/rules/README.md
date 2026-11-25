@@ -12,7 +12,7 @@ Detection rules: the queries opentide deploys, with the status each platform blo
 | CrowdStrike Falcon | 1 | 1 |
 | Elastic Security | 1 | 1 |
 | HarfangLab | 1 | 1 |
-| Microsoft Defender for Endpoint | 1 | 1 |
+| Microsoft Defender | 1 | 1 |
 | Microsoft Sentinel | 2 | 2 |
 | SentinelOne | 1 | 1 |
 | Splunk Enterprise Security | 1 | 1 |
@@ -24,7 +24,7 @@ Detection rules: the queries opentide deploys, with the status each platform blo
 | --- | --- | --- | --- | --- | --- |
 | [Carbon Black Lucene Rule](carbon-black-lucene-rule.md) | High | Carbon Black Cloud `STAGING` | `T1059` | `00000000-0000-4000-8003-000000000005` | 2 |
 | [CrowdStrike Deploy Rule](crowdstrike-deploy-rule.md) | High | CrowdStrike Falcon `STAGING` | `T1059` | `00000000-0000-4000-8003-000000000006` | 2 |
-| [Defender KQL Rule](defender-kql-rule.md) | High | Microsoft Defender for Endpoint `STAGING` | `T1059` | `00000000-0000-4000-8003-000000000002` | 2 |
+| [Defender KQL Rule](defender-kql-rule.md) | High | Microsoft Defender `STAGING` | `T1059` | `00000000-0000-4000-8003-000000000002` | 2 |
 | [Elastic KQL Rule](elastic-kql-rule.md) | High | Elastic Security `STAGING` | `T1059` | `00000000-0000-4000-8003-000000000009` | 2 |
 | [HarfangLab Deploy Rule](harfanglab-deploy-rule.md) | High | HarfangLab `STAGING` | `T1059` | `00000000-0000-4000-8003-000000000007` | 2 |
 | [Sentinel KQL Rule](sentinel-kql-rule.md) | High | Microsoft Sentinel `STAGING` | `T1059` | `00000000-0000-4000-8003-000000000001` | 2 |

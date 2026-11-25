@@ -15,7 +15,7 @@ pub fn required(platform: &str) -> &'static [&'static str] {
     match platform {
         "splunk" => &["status", "query"],
         "sentinel" => &["status", "query", "scheduling", "alert"],
-        "defender_for_endpoint" => &[
+        "microsoft_defender" => &[
             "status",
             "query",
             "alert",
@@ -115,7 +115,7 @@ mod tests {
         let oracle: &[(&str, &[&str])] = &[
             ("sentinel", &["status", "query", "scheduling", "alert"]),
             (
-                "defender_for_endpoint",
+                "microsoft_defender",
                 &[
                     "status",
                     "query",

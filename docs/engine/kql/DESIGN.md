@@ -38,7 +38,7 @@ Control commands (`.show`, `.create`, …) remain **unsupported** in detections
 | Profile | When | Time column | Tables |
 | --- | --- | --- | --- |
 | `sentinel` | `configurations.sentinel.query` or `.kql` default | `TimeGenerated` | Sentinel + streamed Defender tables |
-| `defender` | `configurations.defender_for_endpoint.query` | `Timestamp` | Advanced hunting schema |
+| `defender` | `configurations.microsoft_defender.query` | `Timestamp` | Advanced hunting schema |
 | `core` | unit tests / no workspace | none | operators + functions only |
 
 A query may mention a table from the active profile. Column lookup prefers

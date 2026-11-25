@@ -931,7 +931,7 @@ fn a_rules_tenants_and_remote_ids() {
     let (_dir, workspace) = open_edited("tide-corpus", |ws| {
         append(
             ws,
-            ".opentide/configurations/platforms/defender_for_endpoint.toml",
+            ".opentide/configurations/platforms/microsoft_defender.toml",
             "\n[[tenants]]\nname = \"lab\"\nstrategies = [\"PREVIEW\"]\n[tenants.setup]\nx = 1\n\n\
              [[tenants]]\nname = \"prod\"\ndescription = \"Production SOC\"\n\
              strategies = [\"RELEASE\"]\n[tenants.setup]\nx = 1\n\n\
@@ -941,14 +941,14 @@ fn a_rules_tenants_and_remote_ids() {
         std::fs::create_dir_all(&states).unwrap();
         std::fs::write(
             states.join("00000000-0000-4000-8003-000000000002.json"),
-            r#"{"schema": "deployment.state::1.0", "object_uuid": "00000000-0000-4000-8003-000000000002", "platforms": {"defender_for_endpoint": {"prod": "7002", "old": "7000"}}}"#,
+            r#"{"schema": "deployment.state::1.0", "object_uuid": "00000000-0000-4000-8003-000000000002", "platforms": {"microsoft_defender": {"prod": "7002", "old": "7000"}}}"#,
         )
         .unwrap();
     });
     let page = &render(&workspace, None).unwrap()["docs/rules/defender-kql-rule.md"];
     assert!(
         page.contains(
-            "| Microsoft Defender for Endpoint | `STAGING` | PREVIEW runs | `lab` | yes |\n\n\
+            "| Microsoft Defender | `STAGING` | PREVIEW runs | `lab` | yes |\n\n\
              - `STAGING` (strategy `PREVIEW`): Deployed in staging environment for operational \
              testing\n\n```mermaid\n"
         ),
@@ -970,10 +970,10 @@ fn a_rules_tenants_and_remote_ids() {
             "*Lines:* solid line = deployed, by the runs named on the line; dotted line = not \
              deployed: no run takes this status or tenant.\n\n### Tenant targeting\n\n\
              | Platform | Tenant | Reached by | Remote ID |\n| --- | --- | --- | --- |\n\
-             | Microsoft Defender for Endpoint | `lab` | PREVIEW runs | - |\n\
-             | Microsoft Defender for Endpoint | `prod`<br>Production SOC | no run: the tenant \
+             | Microsoft Defender | `lab` | PREVIEW runs | - |\n\
+             | Microsoft Defender | `prod`<br>Production SOC | no run: the tenant \
              takes RELEASE runs only | `7002` |\n\
-             | Microsoft Defender for Endpoint | `old` | not targeted | `7000` |\n"
+             | Microsoft Defender | `old` | not targeted | `7000` |\n"
         ),
         "{page}"
     );

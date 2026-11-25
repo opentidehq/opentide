@@ -9,16 +9,16 @@ exit: 1
 {
   "command": "generate extract defender",
   "duration_ms": 0,
-  "error": "No Defender for Endpoint tenants are configured",
+  "error": "No Microsoft Defender tenants are configured",
   "exit_code": 1,
   "failure": {
     "argument": null,
     "code": "command_failed",
     "crash_log": null,
-    "message": "No Defender for Endpoint tenants are configured",
+    "message": "No Microsoft Defender tenants are configured",
     "suggestion": null
   },
-  "message": "No Defender for Endpoint tenants are configured",
+  "message": "No Microsoft Defender tenants are configured",
   "next_actions": [],
   "ok": false,
   "schema_version": 1,
@@ -28,8 +28,8 @@ exit: 1
 
 ━━━ stderr · json, 1 lines
 {
-  "advice": "run 'opentide setup platforms --defender-for-endpoint'",
-  "detail": "You must first have Defender for Endpoint tenants configured to initiate the import",
+  "advice": "run 'opentide setup platforms --microsoft-defender'",
+  "detail": "You must first have Microsoft Defender tenants configured to initiate the import",
   "event": "defender_tenants_not_configured",
   "level": "critical",
   "timestamp": "0000-00-00 00:00:00"

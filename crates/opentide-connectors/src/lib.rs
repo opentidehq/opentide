@@ -78,7 +78,7 @@ pub use tenant::{Tenant, TenantLabel};
 /// A platform without a connector gets the defaults.
 pub fn http_settings(platform: &str, timeout: std::time::Duration) -> HttpSettings {
     match platform {
-        "defender_for_endpoint" => defender::http_settings(),
+        "microsoft_defender" => defender::http_settings(),
         "sentinel_one" => sentinel_one::http_settings(),
         "crowdstrike" => crowdstrike::http_defaults(),
         "harfanglab" => harfanglab::http_defaults(),
@@ -117,7 +117,7 @@ pub fn deploy_http_settings(platform: &str) -> HttpSettings {
 
 /// The built-in platforms with a connector, in the platform table's order
 /// ([`plugin::BUILTIN`]): CrowdStrike,
-/// HarfangLab and Sysdig (UC-4.2a), Defender for Endpoint, Elastic and
+/// HarfangLab and Sysdig (UC-4.2a), Microsoft Defender, Elastic and
 /// SentinelOne (UC-4.2b), Sentinel, Splunk and Carbon Black Cloud (UC-4.3),
 /// Bitdefender GravityZone and Graylog (the catch-up to 0.28.0), and Exabeam
 /// New-Scale SIEM (P-EX). Google SecOps reads Application Default
@@ -185,7 +185,7 @@ mod tests {
             super::sentinel::http_settings(Duration::from_mins(15)).timeout
         );
         assert_eq!(
-            super::http_settings("defender_for_endpoint", timeout),
+            super::http_settings("microsoft_defender", timeout),
             super::defender::http_settings()
         );
         assert_eq!(
@@ -213,12 +213,8 @@ mod tests {
             let seconds = match platform {
                 "sentinel" | "google_secops" => 60,
                 "elastic" | "exabeam" | "sysdig" | "bitdefender" | "graylog" => 30,
-                "defender_for_endpoint"
-                | "splunk"
-                | "sentinel_one"
-                | "carbon_black_cloud"
-                | "crowdstrike"
-                | "harfanglab" => 120,
+                "microsoft_defender" | "splunk" | "sentinel_one" | "carbon_black_cloud"
+                | "crowdstrike" | "harfanglab" => 120,
                 other => panic!("{other}: no deploy timeout pinned"),
             };
             assert_eq!(
@@ -285,7 +281,7 @@ mod tests {
             registry.ids(),
             [
                 "sentinel",
-                "defender_for_endpoint",
+                "microsoft_defender",
                 "splunk",
                 "sentinel_one",
                 "crowdstrike",
@@ -310,7 +306,7 @@ mod tests {
         assert_eq!(can("sentinel"), (true, true, true));
         assert_eq!(can("splunk"), (true, true, true));
         assert_eq!(can("carbon_black_cloud"), (true, true, true));
-        assert_eq!(can("defender_for_endpoint"), (true, true, true));
+        assert_eq!(can("microsoft_defender"), (true, true, true));
         assert_eq!(can("sentinel_one"), (true, true, true));
         assert_eq!(can("elastic"), (true, true, true));
         assert_eq!(can("crowdstrike"), (true, false, true));

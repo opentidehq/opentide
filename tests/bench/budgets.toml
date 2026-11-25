@@ -100,11 +100,11 @@ warmup = 1
 # #1704 moved it from 3b65f46efbfcf566: the generator no longer writes the Defender block's
 # `alert.category`, which Microsoft removed and the model no longer has. The medians stand: the
 # oracle's model still reads it, but the generated rules are otherwise the same.
-digest = "a90642f9859edb09"
+digest = "b3aa5ae8060ba13c"
 # The platforms the heavy workspace holds: the ones opentide 0.23.0 knows, in the connector
 # order (xtask's bench::oracle::ORACLE_PLATFORMS). Bitdefender, Graylog, Exabeam and Google
 # SecOps join when the oracle pin moves past 0.28.
-platforms = ["sentinel", "defender_for_endpoint", "splunk", "sentinel_one", "carbon_black_cloud", "crowdstrike", "harfanglab", "elastic", "sysdig"]
+platforms = ["sentinel", "microsoft_defender", "splunk", "sentinel_one", "carbon_black_cloud", "crowdstrike", "harfanglab", "elastic", "sysdig"]
 runner = "ubuntu-24.04 (GitHub-hosted, 4 vCPU, image 20261101.360.1)"
 # GitHub's runners of this class come on several CPUs (seen: AMD EPYC 9V45, 9V74 and 7763,
 # Intel Xeon Platinum 8573C). The commands' baseline_s are the medians on cpu_model,

@@ -13,7 +13,7 @@ source: crates/opentide-cli/tests/render.rs
 
 [1m[31merror[deployment_state_platform][0m[1m: <WS>/.opentide/states/deployment/[0m
   [1mf2f28c1d-8323-4b4e-acba-c53ed9cb5271.json names platform 'splunk'; only bitdefender, crowdstrike,[0m
-  [1mdefender_for_endpoint, graylog, exabeam, google_secops, sentinel_one, sysdig store external ids[0m
+  [1mmicrosoft_defender, graylog, exabeam, google_secops, sentinel_one, sysdig store external ids[0m
   [34m╰─▶[0m ]8;;file://<WS>/.opentide/states/deployment/f2f28c1d-8323-4b4e-acba-c53ed9cb5271.json\.opentide/states/deployment/f2f28c1d-8323-4b4e-acba-c53ed9cb5271.json]8;;\
 
 [1m[31merror[invalid_ref][0m[1m: Unknown threat reference '00000000-0000-4000-8000-00000000beef'[0m
@@ -110,7 +110,7 @@ source: crates/opentide-cli/tests/render.rs
    [34m╰─[0m [1m[36mhelp:[0m try: Processes.process_name
 
 [1m[31merror[kql_unknown_table][0m[1m: unknown table 'DeviceProcessEvnts'; if the workspace holds it, declare it[0m
-  [1mfor defender_for_endpoint in visibility.toml[0m
+  [1mfor microsoft_defender in visibility.toml[0m
    [34m╭─▶[0m ]8;;file://<WS>/objects/rules/elevated-pivot-rule-0038.yaml\objects/rules/elevated-pivot-rule-0038.yaml:59:7]8;;\
 [34m   │[0m
 [34m58 │[0m     query: |
@@ -870,7 +870,7 @@ source: crates/opentide-cli/tests/render.rs
   [1mvalid string[0m
   [34m╰─[0m [1m[36mhelp:[0m the template in .opentide/templates/ shows the field and its values
 
-[1m[31merror[missing_field][0m[1m: platforms/defender_for_endpoint.toml.tenants.0.name: required key is missing[0m
+[1m[31merror[missing_field][0m[1m: platforms/microsoft_defender.toml.tenants.0.name: required key is missing[0m
 
 [1m[33mwarning[asset_unknown][0m[1m: visibility.toml.logsources.7.assets.0: logsource 'Ghost1' names asset[0m
   [1m'ghost-1', which [[assets]] does not declare.[0m

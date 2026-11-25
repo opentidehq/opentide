@@ -125,7 +125,7 @@ fn kql() {
     );
     out.push_str(&queries(
         LanguageId::Kql,
-        Some("defender_for_endpoint"),
+        Some("microsoft_defender"),
         &["kql_unknown_column", "kql_unknown_table"],
         &[
             "DeviceProcesEvents | take 1",

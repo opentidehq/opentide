@@ -217,12 +217,12 @@ mod tests {
                 vec![
                     "00000000-0000-4000-8003-000000000002".into(),
                     "Defender KQL Rule".into(),
-                    "defender_for_endpoint".into(),
+                    "microsoft_defender".into(),
                 ],
                 vec![
                     "3619eda3-a6ca-43c3-b079-972f387190c8".into(),
                     "Covert Beacon Rule 0185".into(),
-                    "carbon_black_cloud, defender_for_endpoint, elastic".into(),
+                    "carbon_black_cloud, microsoft_defender, elastic".into(),
                 ],
             ],
         }
@@ -235,9 +235,9 @@ mod tests {
             [
                 "Rules (2)",
                 "UUID                                  Name                     Platforms",
-                "------------------------------------  -----------------------  --------------------------------------------------",
-                "00000000-0000-4000-8003-000000000002  Defender KQL Rule        defender_for_endpoint",
-                "3619eda3-a6ca-43c3-b079-972f387190c8  Covert Beacon Rule 0185  carbon_black_cloud, defender_for_endpoint, elastic",
+                "------------------------------------  -----------------------  -----------------------------------------------",
+                "00000000-0000-4000-8003-000000000002  Defender KQL Rule        microsoft_defender",
+                "3619eda3-a6ca-43c3-b079-972f387190c8  Covert Beacon Rule 0185  carbon_black_cloud, microsoft_defender, elastic",
             ]
         );
     }
@@ -253,7 +253,7 @@ mod tests {
         assert!(narrow.iter().all(|line| Text::plain(line).cell_len() <= 50));
         // Every cell is still there in a pipe, however long the line.
         let whole = plain(&rules().render(None));
-        assert!(whole[4].ends_with("defender_for_endpoint, elastic"));
+        assert!(whole[4].ends_with("microsoft_defender, elastic"));
     }
 
     #[test]

@@ -145,7 +145,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
         "parameters",
         "device_groups"
       ],
-      "file_path": "/w/.opentide/configurations/platforms/defender_for_endpoint.toml",
+      "file_path": "/w/.opentide/configurations/platforms/microsoft_defender.toml",
       "message": "Input should be a valid list",
       "severity": "error"
     },
@@ -158,7 +158,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
         "parameters",
         "x"
       ],
-      "file_path": "/w/.opentide/configurations/platforms/defender_for_endpoint.toml",
+      "file_path": "/w/.opentide/configurations/platforms/microsoft_defender.toml",
       "message": "unknown key",
       "severity": "error"
     }
@@ -2878,7 +2878,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
         "columns"
       ],
       "file_path": "/w/.opentide/configurations/visibility.toml",
-      "message": "`columns` does not apply to system \"carbon\"; it applies to a log source of sentinel, splunk, elastic, defender_for_endpoint",
+      "message": "`columns` does not apply to system \"carbon\"; it applies to a log source of sentinel, splunk, elastic, microsoft_defender",
       "severity": "error"
     }
   ],
@@ -3204,13 +3204,6 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
             "name": "Crowdstrike Falcon Correlation Rules"
           }
         },
-        "defender_for_endpoint": {
-          "platform": {
-            "description": "Defender for Endpoint is a comprehensive, cloud-native endpoint\nsecurity solution that delivers visibility and AI-powered cyberthreat protection\nto help stop cyberattacks across Windows, macOS, Linux, Android, iOS, and IoT devices.\n",
-            "enabled": false,
-            "name": "Microsoft Defender for Endpoint"
-          }
-        },
         "elastic": {
           "platform": {
             "description": "Elastic Security detection rules via the Kibana detection engine API.",
@@ -3244,6 +3237,13 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
             "description": "HarfangLab EDR provides advanced threat detection using Sigma rules\nfor behavioral detection and YARA rules for memory/file scanning. This integration\nsupports deploying detection rules to HarfangLab's threat intelligence API, including\nboth Sigma-based behavioral rules and YARA-based scanning rules.\n",
             "enabled": false,
             "name": "HarfangLab"
+          }
+        },
+        "microsoft_defender": {
+          "platform": {
+            "description": "Microsoft Defender XDR custom detection rules, deployed through the\nMicrosoft Graph beta custom detection API. The rules query advanced hunting across\nDefender for Endpoint, Office 365, Identity and Cloud Apps.\n",
+            "enabled": false,
+            "name": "Microsoft Defender"
           }
         },
         "sentinel": {
@@ -3304,13 +3304,6 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
             "name": "Crowdstrike Falcon Correlation Rules"
           }
         },
-        "defender_for_endpoint": {
-          "platform": {
-            "description": "Defender for Endpoint is a comprehensive, cloud-native endpoint\nsecurity solution that delivers visibility and AI-powered cyberthreat protection\nto help stop cyberattacks across Windows, macOS, Linux, Android, iOS, and IoT devices.\n",
-            "enabled": false,
-            "name": "Microsoft Defender for Endpoint"
-          }
-        },
         "elastic": {
           "platform": {
             "description": "Elastic Security detection rules via the Kibana detection engine API.",
@@ -3344,6 +3337,13 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
             "description": "HarfangLab EDR provides advanced threat detection using Sigma rules\nfor behavioral detection and YARA rules for memory/file scanning. This integration\nsupports deploying detection rules to HarfangLab's threat intelligence API, including\nboth Sigma-based behavioral rules and YARA-based scanning rules.\n",
             "enabled": false,
             "name": "HarfangLab"
+          }
+        },
+        "microsoft_defender": {
+          "platform": {
+            "description": "Microsoft Defender XDR custom detection rules, deployed through the\nMicrosoft Graph beta custom detection API. The rules query advanced hunting across\nDefender for Endpoint, Office 365, Identity and Cloud Apps.\n",
+            "enabled": false,
+            "name": "Microsoft Defender"
           }
         },
         "sentinel": {
@@ -3626,13 +3626,6 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
             "name": "Crowdstrike Falcon Correlation Rules"
           }
         },
-        "defender_for_endpoint": {
-          "platform": {
-            "description": "Defender for Endpoint is a comprehensive, cloud-native endpoint\nsecurity solution that delivers visibility and AI-powered cyberthreat protection\nto help stop cyberattacks across Windows, macOS, Linux, Android, iOS, and IoT devices.\n",
-            "enabled": false,
-            "name": "Microsoft Defender for Endpoint"
-          }
-        },
         "elastic": {
           "platform": {
             "description": "Elastic Security detection rules via the Kibana detection engine API.",
@@ -3666,6 +3659,13 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
             "description": "HarfangLab EDR provides advanced threat detection using Sigma rules\nfor behavioral detection and YARA rules for memory/file scanning. This integration\nsupports deploying detection rules to HarfangLab's threat intelligence API, including\nboth Sigma-based behavioral rules and YARA-based scanning rules.\n",
             "enabled": false,
             "name": "HarfangLab"
+          }
+        },
+        "microsoft_defender": {
+          "platform": {
+            "description": "Microsoft Defender XDR custom detection rules, deployed through the\nMicrosoft Graph beta custom detection API. The rules query advanced hunting across\nDefender for Endpoint, Office 365, Identity and Cloud Apps.\n",
+            "enabled": false,
+            "name": "Microsoft Defender"
           }
         },
         "sentinel": {
@@ -3726,13 +3726,6 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
             "name": "Crowdstrike Falcon Correlation Rules"
           }
         },
-        "defender_for_endpoint": {
-          "platform": {
-            "description": "Defender for Endpoint is a comprehensive, cloud-native endpoint\nsecurity solution that delivers visibility and AI-powered cyberthreat protection\nto help stop cyberattacks across Windows, macOS, Linux, Android, iOS, and IoT devices.\n",
-            "enabled": false,
-            "name": "Microsoft Defender for Endpoint"
-          }
-        },
         "elastic": {
           "platform": {
             "description": "Elastic Security detection rules via the Kibana detection engine API.",
@@ -3766,6 +3759,13 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
             "description": "HarfangLab EDR provides advanced threat detection using Sigma rules\nfor behavioral detection and YARA rules for memory/file scanning. This integration\nsupports deploying detection rules to HarfangLab's threat intelligence API, including\nboth Sigma-based behavioral rules and YARA-based scanning rules.\n",
             "enabled": false,
             "name": "HarfangLab"
+          }
+        },
+        "microsoft_defender": {
+          "platform": {
+            "description": "Microsoft Defender XDR custom detection rules, deployed through the\nMicrosoft Graph beta custom detection API. The rules query advanced hunting across\nDefender for Endpoint, Office 365, Identity and Cloud Apps.\n",
+            "enabled": false,
+            "name": "Microsoft Defender"
           }
         },
         "sentinel": {
@@ -4019,13 +4019,6 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
             "name": "Crowdstrike Falcon Correlation Rules"
           }
         },
-        "defender_for_endpoint": {
-          "platform": {
-            "description": "Defender for Endpoint is a comprehensive, cloud-native endpoint\nsecurity solution that delivers visibility and AI-powered cyberthreat protection\nto help stop cyberattacks across Windows, macOS, Linux, Android, iOS, and IoT devices.\n",
-            "enabled": false,
-            "name": "Microsoft Defender for Endpoint"
-          }
-        },
         "elastic": {
           "platform": {
             "description": "Elastic Security detection rules via the Kibana detection engine API.",
@@ -4059,6 +4052,13 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
             "description": "HarfangLab EDR provides advanced threat detection using Sigma rules\nfor behavioral detection and YARA rules for memory/file scanning. This integration\nsupports deploying detection rules to HarfangLab's threat intelligence API, including\nboth Sigma-based behavioral rules and YARA-based scanning rules.\n",
             "enabled": false,
             "name": "HarfangLab"
+          }
+        },
+        "microsoft_defender": {
+          "platform": {
+            "description": "Microsoft Defender XDR custom detection rules, deployed through the\nMicrosoft Graph beta custom detection API. The rules query advanced hunting across\nDefender for Endpoint, Office 365, Identity and Cloud Apps.\n",
+            "enabled": false,
+            "name": "Microsoft Defender"
           }
         },
         "sentinel": {
@@ -4119,13 +4119,6 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
             "name": "Crowdstrike Falcon Correlation Rules"
           }
         },
-        "defender_for_endpoint": {
-          "platform": {
-            "description": "Defender for Endpoint is a comprehensive, cloud-native endpoint\nsecurity solution that delivers visibility and AI-powered cyberthreat protection\nto help stop cyberattacks across Windows, macOS, Linux, Android, iOS, and IoT devices.\n",
-            "enabled": false,
-            "name": "Microsoft Defender for Endpoint"
-          }
-        },
         "elastic": {
           "platform": {
             "description": "Elastic Security detection rules via the Kibana detection engine API.",
@@ -4159,6 +4152,13 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
             "description": "HarfangLab EDR provides advanced threat detection using Sigma rules\nfor behavioral detection and YARA rules for memory/file scanning. This integration\nsupports deploying detection rules to HarfangLab's threat intelligence API, including\nboth Sigma-based behavioral rules and YARA-based scanning rules.\n",
             "enabled": false,
             "name": "HarfangLab"
+          }
+        },
+        "microsoft_defender": {
+          "platform": {
+            "description": "Microsoft Defender XDR custom detection rules, deployed through the\nMicrosoft Graph beta custom detection API. The rules query advanced hunting across\nDefender for Endpoint, Office 365, Identity and Cloud Apps.\n",
+            "enabled": false,
+            "name": "Microsoft Defender"
           }
         },
         "sentinel": {
@@ -4402,13 +4402,6 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
             "name": "Crowdstrike Falcon Correlation Rules"
           }
         },
-        "defender_for_endpoint": {
-          "platform": {
-            "description": "Defender for Endpoint is a comprehensive, cloud-native endpoint\nsecurity solution that delivers visibility and AI-powered cyberthreat protection\nto help stop cyberattacks across Windows, macOS, Linux, Android, iOS, and IoT devices.\n",
-            "enabled": false,
-            "name": "Microsoft Defender for Endpoint"
-          }
-        },
         "elastic": {
           "platform": {
             "description": "Elastic Security detection rules via the Kibana detection engine API.",
@@ -4442,6 +4435,13 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
             "description": "HarfangLab EDR provides advanced threat detection using Sigma rules\nfor behavioral detection and YARA rules for memory/file scanning. This integration\nsupports deploying detection rules to HarfangLab's threat intelligence API, including\nboth Sigma-based behavioral rules and YARA-based scanning rules.\n",
             "enabled": false,
             "name": "HarfangLab"
+          }
+        },
+        "microsoft_defender": {
+          "platform": {
+            "description": "Microsoft Defender XDR custom detection rules, deployed through the\nMicrosoft Graph beta custom detection API. The rules query advanced hunting across\nDefender for Endpoint, Office 365, Identity and Cloud Apps.\n",
+            "enabled": false,
+            "name": "Microsoft Defender"
           }
         },
         "sentinel": {
@@ -4498,13 +4498,6 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
             "name": "Crowdstrike Falcon Correlation Rules"
           }
         },
-        "defender_for_endpoint": {
-          "platform": {
-            "description": "Defender for Endpoint is a comprehensive, cloud-native endpoint\nsecurity solution that delivers visibility and AI-powered cyberthreat protection\nto help stop cyberattacks across Windows, macOS, Linux, Android, iOS, and IoT devices.\n",
-            "enabled": false,
-            "name": "Microsoft Defender for Endpoint"
-          }
-        },
         "elastic": {
           "platform": {
             "description": "Elastic Security detection rules via the Kibana detection engine API.",
@@ -4538,6 +4531,13 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
             "description": "HarfangLab EDR provides advanced threat detection using Sigma rules\nfor behavioral detection and YARA rules for memory/file scanning. This integration\nsupports deploying detection rules to HarfangLab's threat intelligence API, including\nboth Sigma-based behavioral rules and YARA-based scanning rules.\n",
             "enabled": false,
             "name": "HarfangLab"
+          }
+        },
+        "microsoft_defender": {
+          "platform": {
+            "description": "Microsoft Defender XDR custom detection rules, deployed through the\nMicrosoft Graph beta custom detection API. The rules query advanced hunting across\nDefender for Endpoint, Office 365, Identity and Cloud Apps.\n",
+            "enabled": false,
+            "name": "Microsoft Defender"
           }
         },
         "sentinel": {
@@ -4777,13 +4777,6 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
             "name": "Crowdstrike Falcon Correlation Rules"
           }
         },
-        "defender_for_endpoint": {
-          "platform": {
-            "description": "Defender for Endpoint is a comprehensive, cloud-native endpoint\nsecurity solution that delivers visibility and AI-powered cyberthreat protection\nto help stop cyberattacks across Windows, macOS, Linux, Android, iOS, and IoT devices.\n",
-            "enabled": false,
-            "name": "Microsoft Defender for Endpoint"
-          }
-        },
         "elastic": {
           "platform": {
             "description": "Elastic Security detection rules via the Kibana detection engine API.",
@@ -4817,6 +4810,13 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
             "description": "HarfangLab EDR provides advanced threat detection using Sigma rules\nfor behavioral detection and YARA rules for memory/file scanning. This integration\nsupports deploying detection rules to HarfangLab's threat intelligence API, including\nboth Sigma-based behavioral rules and YARA-based scanning rules.\n",
             "enabled": false,
             "name": "HarfangLab"
+          }
+        },
+        "microsoft_defender": {
+          "platform": {
+            "description": "Microsoft Defender XDR custom detection rules, deployed through the\nMicrosoft Graph beta custom detection API. The rules query advanced hunting across\nDefender for Endpoint, Office 365, Identity and Cloud Apps.\n",
+            "enabled": false,
+            "name": "Microsoft Defender"
           }
         },
         "sentinel": {
@@ -4878,13 +4878,6 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
             "name": "Crowdstrike Falcon Correlation Rules"
           }
         },
-        "defender_for_endpoint": {
-          "platform": {
-            "description": "Defender for Endpoint is a comprehensive, cloud-native endpoint\nsecurity solution that delivers visibility and AI-powered cyberthreat protection\nto help stop cyberattacks across Windows, macOS, Linux, Android, iOS, and IoT devices.\n",
-            "enabled": false,
-            "name": "Microsoft Defender for Endpoint"
-          }
-        },
         "elastic": {
           "platform": {
             "description": "Elastic Security detection rules via the Kibana detection engine API.",
@@ -4918,6 +4911,13 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
             "description": "HarfangLab EDR provides advanced threat detection using Sigma rules\nfor behavioral detection and YARA rules for memory/file scanning. This integration\nsupports deploying detection rules to HarfangLab's threat intelligence API, including\nboth Sigma-based behavioral rules and YARA-based scanning rules.\n",
             "enabled": false,
             "name": "HarfangLab"
+          }
+        },
+        "microsoft_defender": {
+          "platform": {
+            "description": "Microsoft Defender XDR custom detection rules, deployed through the\nMicrosoft Graph beta custom detection API. The rules query advanced hunting across\nDefender for Endpoint, Office 365, Identity and Cloud Apps.\n",
+            "enabled": false,
+            "name": "Microsoft Defender"
           }
         },
         "sentinel": {
@@ -5215,13 +5215,6 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
             "name": "Crowdstrike Falcon Correlation Rules"
           }
         },
-        "defender_for_endpoint": {
-          "platform": {
-            "description": "Defender for Endpoint is a comprehensive, cloud-native endpoint\nsecurity solution that delivers visibility and AI-powered cyberthreat protection\nto help stop cyberattacks across Windows, macOS, Linux, Android, iOS, and IoT devices.\n",
-            "enabled": false,
-            "name": "Microsoft Defender for Endpoint"
-          }
-        },
         "elastic": {
           "platform": {
             "description": "Elastic Security detection rules via the Kibana detection engine API.",
@@ -5258,6 +5251,13 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
             "description": "HarfangLab EDR provides advanced threat detection using Sigma rules\nfor behavioral detection and YARA rules for memory/file scanning. This integration\nsupports deploying detection rules to HarfangLab's threat intelligence API, including\nboth Sigma-based behavioral rules and YARA-based scanning rules.\n",
             "enabled": false,
             "name": "HarfangLab"
+          }
+        },
+        "microsoft_defender": {
+          "platform": {
+            "description": "Microsoft Defender XDR custom detection rules, deployed through the\nMicrosoft Graph beta custom detection API. The rules query advanced hunting across\nDefender for Endpoint, Office 365, Identity and Cloud Apps.\n",
+            "enabled": false,
+            "name": "Microsoft Defender"
           }
         },
         "sentinel": {
@@ -5319,13 +5319,6 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
             "name": "Crowdstrike Falcon Correlation Rules"
           }
         },
-        "defender_for_endpoint": {
-          "platform": {
-            "description": "Defender for Endpoint is a comprehensive, cloud-native endpoint\nsecurity solution that delivers visibility and AI-powered cyberthreat protection\nto help stop cyberattacks across Windows, macOS, Linux, Android, iOS, and IoT devices.\n",
-            "enabled": false,
-            "name": "Microsoft Defender for Endpoint"
-          }
-        },
         "elastic": {
           "platform": {
             "description": "Elastic Security detection rules via the Kibana detection engine API.",
@@ -5362,6 +5355,13 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
             "description": "HarfangLab EDR provides advanced threat detection using Sigma rules\nfor behavioral detection and YARA rules for memory/file scanning. This integration\nsupports deploying detection rules to HarfangLab's threat intelligence API, including\nboth Sigma-based behavioral rules and YARA-based scanning rules.\n",
             "enabled": false,
             "name": "HarfangLab"
+          }
+        },
+        "microsoft_defender": {
+          "platform": {
+            "description": "Microsoft Defender XDR custom detection rules, deployed through the\nMicrosoft Graph beta custom detection API. The rules query advanced hunting across\nDefender for Endpoint, Office 365, Identity and Cloud Apps.\n",
+            "enabled": false,
+            "name": "Microsoft Defender"
           }
         },
         "sentinel": {
@@ -5613,13 +5613,6 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
             "name": "Crowdstrike Falcon Correlation Rules"
           }
         },
-        "defender_for_endpoint": {
-          "platform": {
-            "description": "Defender for Endpoint is a comprehensive, cloud-native endpoint\nsecurity solution that delivers visibility and AI-powered cyberthreat protection\nto help stop cyberattacks across Windows, macOS, Linux, Android, iOS, and IoT devices.\n",
-            "enabled": false,
-            "name": "Microsoft Defender for Endpoint"
-          }
-        },
         "elastic": {
           "platform": {
             "description": "Elastic Security detection rules via the Kibana detection engine API.",
@@ -5653,6 +5646,13 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
             "description": "HarfangLab EDR provides advanced threat detection using Sigma rules\nfor behavioral detection and YARA rules for memory/file scanning. This integration\nsupports deploying detection rules to HarfangLab's threat intelligence API, including\nboth Sigma-based behavioral rules and YARA-based scanning rules.\n",
             "enabled": false,
             "name": "HarfangLab"
+          }
+        },
+        "microsoft_defender": {
+          "platform": {
+            "description": "Microsoft Defender XDR custom detection rules, deployed through the\nMicrosoft Graph beta custom detection API. The rules query advanced hunting across\nDefender for Endpoint, Office 365, Identity and Cloud Apps.\n",
+            "enabled": false,
+            "name": "Microsoft Defender"
           }
         },
         "sentinel": {
@@ -5713,13 +5713,6 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
             "name": "Crowdstrike Falcon Correlation Rules"
           }
         },
-        "defender_for_endpoint": {
-          "platform": {
-            "description": "Defender for Endpoint is a comprehensive, cloud-native endpoint\nsecurity solution that delivers visibility and AI-powered cyberthreat protection\nto help stop cyberattacks across Windows, macOS, Linux, Android, iOS, and IoT devices.\n",
-            "enabled": false,
-            "name": "Microsoft Defender for Endpoint"
-          }
-        },
         "elastic": {
           "platform": {
             "description": "Elastic Security detection rules via the Kibana detection engine API.",
@@ -5753,6 +5746,13 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
             "description": "HarfangLab EDR provides advanced threat detection using Sigma rules\nfor behavioral detection and YARA rules for memory/file scanning. This integration\nsupports deploying detection rules to HarfangLab's threat intelligence API, including\nboth Sigma-based behavioral rules and YARA-based scanning rules.\n",
             "enabled": false,
             "name": "HarfangLab"
+          }
+        },
+        "microsoft_defender": {
+          "platform": {
+            "description": "Microsoft Defender XDR custom detection rules, deployed through the\nMicrosoft Graph beta custom detection API. The rules query advanced hunting across\nDefender for Endpoint, Office 365, Identity and Cloud Apps.\n",
+            "enabled": false,
+            "name": "Microsoft Defender"
           }
         },
         "sentinel": {
@@ -5996,13 +5996,6 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
             "name": "Crowdstrike Falcon Correlation Rules"
           }
         },
-        "defender_for_endpoint": {
-          "platform": {
-            "description": "Defender for Endpoint is a comprehensive, cloud-native endpoint\nsecurity solution that delivers visibility and AI-powered cyberthreat protection\nto help stop cyberattacks across Windows, macOS, Linux, Android, iOS, and IoT devices.\n",
-            "enabled": false,
-            "name": "Microsoft Defender for Endpoint"
-          }
-        },
         "elastic": {
           "platform": {
             "description": "Elastic Security detection rules via the Kibana detection engine API.",
@@ -6036,6 +6029,13 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
             "description": "HarfangLab EDR provides advanced threat detection using Sigma rules\nfor behavioral detection and YARA rules for memory/file scanning. This integration\nsupports deploying detection rules to HarfangLab's threat intelligence API, including\nboth Sigma-based behavioral rules and YARA-based scanning rules.\n",
             "enabled": false,
             "name": "HarfangLab"
+          }
+        },
+        "microsoft_defender": {
+          "platform": {
+            "description": "Microsoft Defender XDR custom detection rules, deployed through the\nMicrosoft Graph beta custom detection API. The rules query advanced hunting across\nDefender for Endpoint, Office 365, Identity and Cloud Apps.\n",
+            "enabled": false,
+            "name": "Microsoft Defender"
           }
         },
         "sentinel": {
@@ -6096,13 +6096,6 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
             "name": "Crowdstrike Falcon Correlation Rules"
           }
         },
-        "defender_for_endpoint": {
-          "platform": {
-            "description": "Defender for Endpoint is a comprehensive, cloud-native endpoint\nsecurity solution that delivers visibility and AI-powered cyberthreat protection\nto help stop cyberattacks across Windows, macOS, Linux, Android, iOS, and IoT devices.\n",
-            "enabled": false,
-            "name": "Microsoft Defender for Endpoint"
-          }
-        },
         "elastic": {
           "platform": {
             "description": "Elastic Security detection rules via the Kibana detection engine API.",
@@ -6136,6 +6129,13 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
             "description": "HarfangLab EDR provides advanced threat detection using Sigma rules\nfor behavioral detection and YARA rules for memory/file scanning. This integration\nsupports deploying detection rules to HarfangLab's threat intelligence API, including\nboth Sigma-based behavioral rules and YARA-based scanning rules.\n",
             "enabled": false,
             "name": "HarfangLab"
+          }
+        },
+        "microsoft_defender": {
+          "platform": {
+            "description": "Microsoft Defender XDR custom detection rules, deployed through the\nMicrosoft Graph beta custom detection API. The rules query advanced hunting across\nDefender for Endpoint, Office 365, Identity and Cloud Apps.\n",
+            "enabled": false,
+            "name": "Microsoft Defender"
           }
         },
         "sentinel": {
@@ -6383,13 +6383,6 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
             "name": "Crowdstrike Falcon Correlation Rules"
           }
         },
-        "defender_for_endpoint": {
-          "platform": {
-            "description": "Defender for Endpoint is a comprehensive, cloud-native endpoint\nsecurity solution that delivers visibility and AI-powered cyberthreat protection\nto help stop cyberattacks across Windows, macOS, Linux, Android, iOS, and IoT devices.\n",
-            "enabled": false,
-            "name": "Microsoft Defender for Endpoint"
-          }
-        },
         "elastic": {
           "platform": {
             "description": "Elastic Security detection rules via the Kibana detection engine API.",
@@ -6423,6 +6416,13 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
             "description": "HarfangLab EDR provides advanced threat detection using Sigma rules\nfor behavioral detection and YARA rules for memory/file scanning. This integration\nsupports deploying detection rules to HarfangLab's threat intelligence API, including\nboth Sigma-based behavioral rules and YARA-based scanning rules.\n",
             "enabled": false,
             "name": "HarfangLab"
+          }
+        },
+        "microsoft_defender": {
+          "platform": {
+            "description": "Microsoft Defender XDR custom detection rules, deployed through the\nMicrosoft Graph beta custom detection API. The rules query advanced hunting across\nDefender for Endpoint, Office 365, Identity and Cloud Apps.\n",
+            "enabled": false,
+            "name": "Microsoft Defender"
           }
         },
         "sentinel": {
@@ -6494,13 +6494,6 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
             "name": "Crowdstrike Falcon Correlation Rules"
           }
         },
-        "defender_for_endpoint": {
-          "platform": {
-            "description": "Defender for Endpoint is a comprehensive, cloud-native endpoint\nsecurity solution that delivers visibility and AI-powered cyberthreat protection\nto help stop cyberattacks across Windows, macOS, Linux, Android, iOS, and IoT devices.\n",
-            "enabled": false,
-            "name": "Microsoft Defender for Endpoint"
-          }
-        },
         "elastic": {
           "platform": {
             "description": "Elastic Security detection rules via the Kibana detection engine API.",
@@ -6534,6 +6527,13 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
             "description": "HarfangLab EDR provides advanced threat detection using Sigma rules\nfor behavioral detection and YARA rules for memory/file scanning. This integration\nsupports deploying detection rules to HarfangLab's threat intelligence API, including\nboth Sigma-based behavioral rules and YARA-based scanning rules.\n",
             "enabled": false,
             "name": "HarfangLab"
+          }
+        },
+        "microsoft_defender": {
+          "platform": {
+            "description": "Microsoft Defender XDR custom detection rules, deployed through the\nMicrosoft Graph beta custom detection API. The rules query advanced hunting across\nDefender for Endpoint, Office 365, Identity and Cloud Apps.\n",
+            "enabled": false,
+            "name": "Microsoft Defender"
           }
         },
         "sentinel": {
@@ -6850,13 +6850,6 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
             "name": "Crowdstrike Falcon Correlation Rules"
           }
         },
-        "defender_for_endpoint": {
-          "platform": {
-            "description": "Defender for Endpoint is a comprehensive, cloud-native endpoint\nsecurity solution that delivers visibility and AI-powered cyberthreat protection\nto help stop cyberattacks across Windows, macOS, Linux, Android, iOS, and IoT devices.\n",
-            "enabled": false,
-            "name": "Microsoft Defender for Endpoint"
-          }
-        },
         "elastic": {
           "platform": {
             "description": "Elastic Security detection rules via the Kibana detection engine API.",
@@ -6890,6 +6883,13 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
             "description": "HarfangLab EDR provides advanced threat detection using Sigma rules\nfor behavioral detection and YARA rules for memory/file scanning. This integration\nsupports deploying detection rules to HarfangLab's threat intelligence API, including\nboth Sigma-based behavioral rules and YARA-based scanning rules.\n",
             "enabled": false,
             "name": "HarfangLab"
+          }
+        },
+        "microsoft_defender": {
+          "platform": {
+            "description": "Microsoft Defender XDR custom detection rules, deployed through the\nMicrosoft Graph beta custom detection API. The rules query advanced hunting across\nDefender for Endpoint, Office 365, Identity and Cloud Apps.\n",
+            "enabled": false,
+            "name": "Microsoft Defender"
           }
         },
         "sentinel": {
@@ -6950,13 +6950,6 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
             "name": "Crowdstrike Falcon Correlation Rules"
           }
         },
-        "defender_for_endpoint": {
-          "platform": {
-            "description": "Defender for Endpoint is a comprehensive, cloud-native endpoint\nsecurity solution that delivers visibility and AI-powered cyberthreat protection\nto help stop cyberattacks across Windows, macOS, Linux, Android, iOS, and IoT devices.\n",
-            "enabled": false,
-            "name": "Microsoft Defender for Endpoint"
-          }
-        },
         "elastic": {
           "platform": {
             "description": "Elastic Security detection rules via the Kibana detection engine API.",
@@ -6990,6 +6983,13 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
             "description": "HarfangLab EDR provides advanced threat detection using Sigma rules\nfor behavioral detection and YARA rules for memory/file scanning. This integration\nsupports deploying detection rules to HarfangLab's threat intelligence API, including\nboth Sigma-based behavioral rules and YARA-based scanning rules.\n",
             "enabled": false,
             "name": "HarfangLab"
+          }
+        },
+        "microsoft_defender": {
+          "platform": {
+            "description": "Microsoft Defender XDR custom detection rules, deployed through the\nMicrosoft Graph beta custom detection API. The rules query advanced hunting across\nDefender for Endpoint, Office 365, Identity and Cloud Apps.\n",
+            "enabled": false,
+            "name": "Microsoft Defender"
           }
         },
         "sentinel": {

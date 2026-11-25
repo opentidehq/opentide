@@ -21,9 +21,9 @@ use serde_json::{Map, Value, json};
 use crate::configuration::checks::{FILE_MODELS, GENERIC_PLATFORM_FILE};
 use crate::configuration::models::{
     BitdefenderConfiguration, CarbonBlackCloudConfiguration, CrowdstrikeConfiguration,
-    DefenderForEndpointConfiguration, DeploymentConfiguration, DocumentationConfiguration,
-    ElasticConfiguration, ExabeamConfiguration, GoogleSecopsConfiguration, GraylogConfiguration,
-    HarfangLabConfiguration, PLATFORMS, PathsConfiguration, PlatformConfiguration,
+    DeploymentConfiguration, DocumentationConfiguration, ElasticConfiguration,
+    ExabeamConfiguration, GoogleSecopsConfiguration, GraylogConfiguration, HarfangLabConfiguration,
+    MicrosoftDefenderConfiguration, PLATFORMS, PathsConfiguration, PlatformConfiguration,
     SentinelConfiguration, SentinelOneConfiguration, SharingConfiguration, SplunkConfiguration,
     SysdigConfiguration, VisibilityConfig,
 };
@@ -86,9 +86,7 @@ fn raw(file_key: &str) -> Option<Schema> {
         "platforms/splunk.toml" => model_schema::<SplunkConfiguration>(),
         "platforms/carbon_black_cloud.toml" => model_schema::<CarbonBlackCloudConfiguration>(),
         "platforms/sentinel_one.toml" => model_schema::<SentinelOneConfiguration>(),
-        "platforms/defender_for_endpoint.toml" => {
-            model_schema::<DefenderForEndpointConfiguration>()
-        }
+        "platforms/microsoft_defender.toml" => model_schema::<MicrosoftDefenderConfiguration>(),
         "platforms/crowdstrike.toml" => model_schema::<CrowdstrikeConfiguration>(),
         "platforms/harfanglab.toml" => model_schema::<HarfangLabConfiguration>(),
         "platforms/elastic.toml" => model_schema::<ElasticConfiguration>(),

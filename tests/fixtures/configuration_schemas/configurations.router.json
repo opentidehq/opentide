@@ -42,8 +42,8 @@
       "schema": "platforms.sentinel_one.schema.json",
       "merge": "deep"
     },
-    "platforms/defender_for_endpoint.toml": {
-      "schema": "platforms.defender_for_endpoint.schema.json",
+    "platforms/microsoft_defender.toml": {
+      "schema": "platforms.microsoft_defender.schema.json",
       "merge": "deep"
     },
     "platforms/crowdstrike.toml": {
