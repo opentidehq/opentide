@@ -7,6 +7,7 @@ from pathlib import Path
 from types import ModuleType
 
 import pytest
+import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -62,3 +63,21 @@ def test_the_docs_tree_parses_as_mdx() -> None:
     assert not found, "MDX cannot parse this prose; use backticks or &lt; / &#123;:\n" + "\n".join(
         sorted(found)
     )
+
+
+def test_every_pages_frontmatter_is_a_yaml_mapping() -> None:
+    """fumadocs-mdx reads the frontmatter with a YAML parser: an unquoted `: ` in a
+    description (`... for Node.js: open ...`) fails the site's build of every page."""
+    bad = []
+    for path in sorted((ROOT / "docs").rglob("*.md")):
+        text = path.read_text(encoding="utf-8")
+        if not text.startswith("---\n"):
+            continue
+        try:
+            front = yaml.safe_load(text.split("---\n", 2)[1])
+        except yaml.YAMLError as error:
+            bad.append(f"{path.relative_to(ROOT)}: {str(error).splitlines()[0]}")
+            continue
+        if not isinstance(front, dict):
+            bad.append(f"{path.relative_to(ROOT)}: frontmatter is not a mapping")
+    assert not bad, "quote the value:\n" + "\n".join(bad)
