@@ -2,7 +2,7 @@
 //! columns a log source lists for its dataset (`visibility::1.0`, #146).
 //!
 //! A log source's `name` is its dataset: a KQL table (or workspace function)
-//! for `sentinel` and `defender_for_endpoint`, a sourcetype for `splunk`, an
+//! for `sentinel` and `microsoft_defender`, a sourcetype for `splunk`, an
 //! index pattern or data stream for `elastic`. The engine reads them from the
 //! `visibility.toml` text itself ([`DeclaredDatasets::from_visibility`]); a
 //! host installs them for the process ([`install`]), again whenever the file
@@ -21,7 +21,7 @@ use std::sync::{Arc, OnceLock, RwLock};
 /// The kind of dataset a log source's `name` is, by its `system`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum DatasetKind {
-    /// KQL tables and functions (`sentinel`, `defender_for_endpoint`).
+    /// KQL tables and functions (`sentinel`, `microsoft_defender`).
     Tables,
     /// Splunk `sourcetype=`.
     Sourcetypes,
@@ -34,7 +34,7 @@ impl DatasetKind {
     /// whose log sources declare nothing to the query checks.
     pub fn of_system(system: &str) -> Option<Self> {
         match system {
-            "sentinel" | "defender_for_endpoint" => Some(Self::Tables),
+            "sentinel" | "microsoft_defender" => Some(Self::Tables),
             "splunk" => Some(Self::Sourcetypes),
             "elastic" => Some(Self::Indices),
             _ => None,
@@ -454,10 +454,7 @@ system = "okta"
         assert_eq!(d.status("sentinel", "SigninLogs"), Undeclared);
         assert_eq!(d.status("sentinel", "ntanetanalytics"), Undeclared);
         // Another platform's names never count.
-        assert_eq!(
-            d.status("defender_for_endpoint", "NTANetAnalytics"),
-            Unchecked
-        );
+        assert_eq!(d.status("microsoft_defender", "NTANetAnalytics"), Unchecked);
         assert_eq!(d.status("splunk", "wineventlog:security"), Declared);
         assert_eq!(d.status("splunk", "WinEventLog:*"), Declared);
         assert_eq!(d.status("splunk", "syslog"), Undeclared);

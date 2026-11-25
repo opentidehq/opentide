@@ -9,7 +9,7 @@
 //! platform's connector, one tenant after another, and each finished rule
 //! prints one line on stderr as it ends (`DeployLog`). A platform that
 //! raises stops the run: the rules it never reached are not attempted. The
-//! ids CrowdStrike, Defender for Endpoint, SentinelOne and Sysdig give a
+//! ids CrowdStrike, Microsoft Defender, SentinelOne and Sysdig give a
 //! rule are kept in deployment state ([`super::deploy_state`]).
 //!
 //! The run's result is the oracle's dictionary, keys in its order, read into
@@ -2578,7 +2578,7 @@ impl Sender<'_, '_> {
             Some(PlatformId::GoogleSecops) => self.google_secops(&batches, log),
             Some(PlatformId::Graylog) => self.graylog(&batches, log),
             Some(
-                PlatformId::DefenderForEndpoint | PlatformId::SentinelOne | PlatformId::Crowdstrike,
+                PlatformId::MicrosoftDefender | PlatformId::SentinelOne | PlatformId::Crowdstrike,
             ) => self.with_state(platform, &batches, log),
             Some(
                 PlatformId::Sentinel
@@ -3601,7 +3601,7 @@ impl Sender<'_, '_> {
         }
     }
 
-    /// Defender for Endpoint, SentinelOne and CrowdStrike: each rule planned
+    /// Microsoft Defender, SentinelOne and CrowdStrike: each rule planned
     /// from deployment state, then created (its id recorded), updated or
     /// deleted (its id forgotten).
     fn with_state(
@@ -3619,7 +3619,7 @@ impl Sender<'_, '_> {
             let defender = opentide_connectors::defender::Defender::new();
             let crowdstrike = opentide_connectors::crowdstrike::Crowdstrike::new();
             let opener: &dyn Deployer = match PlatformId::parse(platform) {
-                Some(PlatformId::DefenderForEndpoint) => &defender,
+                Some(PlatformId::MicrosoftDefender) => &defender,
                 Some(PlatformId::Crowdstrike) => &crowdstrike,
                 _ => &opentide_connectors::sentinel_one::SentinelOne,
             };
@@ -3833,7 +3833,7 @@ impl Sender<'_, '_> {
             Raised::new(format!("Rule {} ({}): {error}", rule.uuid, rule.name))
         };
         let body = match PlatformId::parse(platform) {
-            Some(PlatformId::DefenderForEndpoint) => {
+            Some(PlatformId::MicrosoftDefender) => {
                 opentide_compile::defender::body_with_warnings(self.compile, rule, tenant).map(
                     |(body, warnings)| {
                         // Once per rule, not once per tenant: the techniques
@@ -3865,7 +3865,7 @@ impl Sender<'_, '_> {
         }
         .map_err(compile_error)?;
         let (remote_id, name) = match PlatformId::parse(platform) {
-            Some(PlatformId::DefenderForEndpoint) => (
+            Some(PlatformId::MicrosoftDefender) => (
                 self.defender_deploy(tenant, context, defender, rule, action, &body)?,
                 "Defender",
             ),
@@ -3911,7 +3911,7 @@ impl Sender<'_, '_> {
         Ok(())
     }
 
-    /// One rule sent to Defender for Endpoint: the id the tenant gave it.
+    /// One rule sent to Microsoft Defender: the id the tenant gave it.
     /// Graph's refusal is raised with its answer, and a partial deploy's
     /// warnings are logged.
     fn defender_deploy(

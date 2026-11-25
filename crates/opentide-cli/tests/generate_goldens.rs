@@ -1069,7 +1069,7 @@ fn docs_preview_shards_refresh_signals_and_references() {
         "| [Renamed logon signal](#renamed-logon-signal) | Medium | Statistical | - | \
          *None yet* | - |\n",
         "| [Pull request signal](#pull-request-signal) | Medium | Statistical | - | \
-         [Signal Rule](../rules/signal-rule.md) | Microsoft Defender for Endpoint `STAGING` |\n",
+         [Signal Rule](../rules/signal-rule.md) | Microsoft Defender `STAGING` |\n",
         // The related-objects table reaches the pull request's objects.
         "| Signal | [Pull request signal](credential-access-objective.md#pull-request-signal) | \
          Downstream |\n",

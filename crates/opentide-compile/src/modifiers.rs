@@ -19,7 +19,7 @@ use crate::json::{Json, Object};
 pub fn typed_roots(platform: &str) -> Vec<&'static str> {
     let fields: &[(&str, &str)] = match platform {
         "sentinel" => SentinelConfig::FIELDS,
-        "defender_for_endpoint" => DefenderConfig::FIELDS,
+        "microsoft_defender" => DefenderConfig::FIELDS,
         "splunk" => SplunkConfig::FIELDS,
         "sentinel_one" => SentinelOneConfig::FIELDS,
         "crowdstrike" => CrowdstrikeConfig::FIELDS,

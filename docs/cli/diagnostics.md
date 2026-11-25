@@ -3521,7 +3521,7 @@ Severity: error. Reported by `opentide validate` (schema check).
 ### Example
 
 ```json
-{"object_uuid": "…", "platforms": {"defender_for_endpoint": {"prod": "-12"}}}
+{"object_uuid": "…", "platforms": {"microsoft_defender": {"prod": "-12"}}}
 ```
 
 ### How to fix
@@ -5486,7 +5486,7 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 A KQL table is not one the engine knows or the workspace declares, but is a near miss of one that is (one edit for a name of up to seven characters, two for a longer one, and not a custom `_CL` table): most likely a typo.
 
-Severity: error. Reported by the analysis engine in a KQL query under `sentinel`, at the table's name: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; an editor running `opentide lsp start` shows it too. It never applies to a `_CL` table, to a `let` binding or a function the engine knows, or to a name further from every known table than the bound: those are `kql_unknown_table`, a warning, because a Sentinel workspace holds tables and functions no catalog lists (`Sysmon` is a parser function two edits from `Syslog`, so it is not reported here). A match that differs only in case, `_`, `-` or spaces counts as no edit at all, so `SIGNINLOGS` is reported. Under `defender_for_endpoint` an unknown table is already an error, `kql_unknown_table`, with the same suggestion.
+Severity: error. Reported by the analysis engine in a KQL query under `sentinel`, at the table's name: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; an editor running `opentide lsp start` shows it too. It never applies to a `_CL` table, to a `let` binding or a function the engine knows, or to a name further from every known table than the bound: those are `kql_unknown_table`, a warning, because a Sentinel workspace holds tables and functions no catalog lists (`Sysmon` is a parser function two edits from `Syslog`, so it is not reported here). A match that differs only in case, `_`, `-` or spaces counts as no edit at all, so `SIGNINLOGS` is reported. Under `microsoft_defender` an unknown table is already an error, `kql_unknown_table`, with the same suggestion.
 
 The nearest table comes from the tables the workspace declares in visibility.toml first, then from the engine's catalog. Only a name a query can write bare (`[A-Za-z_][A-Za-z0-9_]*`) is suggested: a declared display name such as `Azure Activity` is never offered.
 
@@ -5512,7 +5512,7 @@ system = "sentinel"
 
 The table is one the engine knows for the platform, but no log source of the workspace declares it in visibility.toml.
 
-Severity: warning. Reported by the analysis engine on a KQL query (`sentinel`, `defender_for_endpoint`): `opentide lint` (its `queries` check) and an editor running `opentide lsp start` show it; `opentide validate` does not fail on it. It is opt-in per system: only a workspace whose `visibility.toml` has at least one log source for that platform gets it. It applies to a table the engine's catalog knows (a built-in table such as `SigninLogs`) that no log source names; a table the catalog does not know and no log source names is `kql_unknown_table` instead. Every name a query reads from counts (a pipeline's first source, a `union` leg, a `join` or `lookup` right side), whatever its case, except a `let` binding, a query parameter or a function the engine knows, so a workspace function is declared as a log source too. `*` in a declared name matches any run of characters.
+Severity: warning. Reported by the analysis engine on a KQL query (`sentinel`, `microsoft_defender`): `opentide lint` (its `queries` check) and an editor running `opentide lsp start` show it; `opentide validate` does not fail on it. It is opt-in per system: only a workspace whose `visibility.toml` has at least one log source for that platform gets it. It applies to a table the engine's catalog knows (a built-in table such as `SigninLogs`) that no log source names; a table the catalog does not know and no log source names is `kql_unknown_table` instead. Every name a query reads from counts (a pipeline's first source, a `union` leg, a `join` or `lookup` right side), whatever its case, except a `let` binding, a query parameter or a function the engine knows, so a workspace function is declared as a log source too. `*` in a declared name matches any run of characters.
 
 ### Example
 

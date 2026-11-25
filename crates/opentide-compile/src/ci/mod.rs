@@ -1211,11 +1211,11 @@ mod tests {
             )
         };
         assert!(bundled("sentinel").contains(&"AZURE_SUBSCRIPTION_ID".to_owned()));
-        assert!(bundled("defender_for_endpoint").contains(&"MDE_CLIENT_ID".to_owned()));
+        assert!(bundled("microsoft_defender").contains(&"MDE_CLIENT_ID".to_owned()));
 
         for provider in [Provider::GitHub, Provider::GitLab, Provider::Azure] {
             let mut options = options(provider);
-            options.platforms = vec!["sentinel".into(), "defender_for_endpoint".into()];
+            options.platforms = vec!["sentinel".into(), "microsoft_defender".into()];
             options.credentials = IndexMap::from([
                 (
                     "sentinel".to_owned(),
@@ -1225,7 +1225,7 @@ mod tests {
                     ],
                 ),
                 // Tenants whose values are all literals name no variable.
-                ("defender_for_endpoint".to_owned(), Vec::new()),
+                ("microsoft_defender".to_owned(), Vec::new()),
             ]);
             assert_eq!(
                 secret_names(&options),

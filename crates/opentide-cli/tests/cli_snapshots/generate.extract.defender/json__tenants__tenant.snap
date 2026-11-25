@@ -33,7 +33,7 @@ exit: 0
 {
   "object_uuid": "8d7c6b5a-0000-4000-8000-000000000201",
   "platforms": {
-    "defender_for_endpoint": {
+    "microsoft_defender": {
       "lab": "201"
     }
   },
@@ -44,7 +44,7 @@ exit: 0
 {
   "object_uuid": "8d7c6b5a-0000-4000-8000-000000000202",
   "platforms": {
-    "defender_for_endpoint": {
+    "microsoft_defender": {
       "lab": "202"
     }
   },
@@ -55,7 +55,7 @@ exit: 0
 {
   "object_uuid": "8d7c6b5a-0000-4000-8000-000000000203",
   "platforms": {
-    "defender_for_endpoint": {
+    "microsoft_defender": {
       "lab": "203"
     }
   },
@@ -95,8 +95,8 @@ response:
   #procedure:
 
 configurations:
-  defender_for_endpoint: 
-    schema: platform::defender_for_endpoint::1.0
+  microsoft_defender: 
+    schema: platform::microsoft_defender::1.0
     status: DISABLED
     #contributors:
       #-
@@ -180,8 +180,8 @@ response:
   #procedure:
 
 configurations:
-  defender_for_endpoint: 
-    schema: platform::defender_for_endpoint::1.0
+  microsoft_defender: 
+    schema: platform::microsoft_defender::1.0
     status: PRODUCTION
     contributors:
       - bob@contoso.example
@@ -267,8 +267,8 @@ response:
   #procedure:
 
 configurations:
-  defender_for_endpoint: 
-    schema: platform::defender_for_endpoint::1.0
+  microsoft_defender: 
+    schema: platform::microsoft_defender::1.0
     status: PRODUCTION
     #contributors:
       #-

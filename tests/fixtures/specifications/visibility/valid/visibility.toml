@@ -28,7 +28,7 @@ system = "sentinel"
 [[logsources]]
 name = "DeviceEvents"
 description = "Defender device events in advanced hunting"
-system = "defender_for_endpoint"
+system = "microsoft_defender"
 
 # A lowercase custom table.
 [[logsources]]

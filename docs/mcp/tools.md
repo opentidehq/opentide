@@ -365,7 +365,7 @@ Checks a query offline with the analysis engine, the same engine as `opentide va
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `query` | string | | The query to check offline. The live check reads catalogue rules, not this string |
-| `platform` | string | | Platform key: picks the language and its profile (Defender tables for `defender_for_endpoint`, the Carbon Black dialect for `carbon_black_cloud`, Graylog's Lucene for `graylog`, CQL with the Next-Gen SIEM correlation-rule checks for `crowdstrike`, Falco for `sysdig`, YARA under the HarfangLab or Bitdefender profile for `harfanglab` and `bitdefender`, the Exabeam Query Language for `exabeam`, a YARA-L rule for `google_secops`) |
+| `platform` | string | | Platform key: picks the language and its profile (Defender tables for `microsoft_defender`, the Carbon Black dialect for `carbon_black_cloud`, Graylog's Lucene for `graylog`, CQL with the Next-Gen SIEM correlation-rule checks for `crowdstrike`, Falco for `sysdig`, YARA under the HarfangLab or Bitdefender profile for `harfanglab` and `bitdefender`, the Exabeam Query Language for `exabeam`, a YARA-L rule for `google_secops`) |
 | `live` | boolean | `false` | `true` calls the tenant |
 | `language` | string | `""` | Empty: the platform's language. Elastic, the one platform with several: `esql`, `eql`, `kuery` (the default) or `lucene` |
 | `stack` | string | `""` | Elastic ES\|QL only: the stack the query must run on, `MAJOR.MINOR` such as `9.5`, or `serverless`. Empty: every supported stack. Any other value is refused with `status: "failed"` and `valid: null`, as an unknown `language` is |
@@ -450,7 +450,7 @@ SentinelOne's S1QL has no offline engine: the default refuses and names `live: t
 }
 ```
 
-Supported on the tenant: `carbon_black_cloud`, `defender_for_endpoint`, `elastic`, `exabeam`, `google_secops`, `graylog`, `sentinel`, `sentinel_one`, `splunk` (the registry's `live_check`; the tool description lists the same set). Offline: every platform but `sentinel_one`, the registry's `offline_languages`. The live next action says that it contacts the tenant with the configured credentials: ask a person before following it.
+Supported on the tenant: `carbon_black_cloud`, `microsoft_defender`, `elastic`, `exabeam`, `google_secops`, `graylog`, `sentinel`, `sentinel_one`, `splunk` (the registry's `live_check`; the tool description lists the same set). Offline: every platform but `sentinel_one`, the registry's `offline_languages`. The live next action says that it contacts the tenant with the configured credentials: ask a person before following it.
 
 ## run_query
 
@@ -555,7 +555,7 @@ Per-platform deployment state for a rule. Vendor rule ids come from the rule's [
   "found": true,
   "uuid": "00000000-0000-4000-8003-000000000001",
   "platforms": {
-    "defender_for_endpoint": {
+    "microsoft_defender": {
       "deployed": true,
       "rule_id": "12345",
       "external_ids": { "contoso": "12345" },
@@ -572,7 +572,7 @@ Per-platform deployment state for a rule. Vendor rule ids come from the rule's [
 }
 ```
 
-`deployed` is true once a vendor id is recorded or the block names `tenants`. `external_ids` maps tenant name to the stored id (for the platforms that store one, below). `rule_id` is that id when exactly one tenant is bound, otherwise `null`. A shard that cannot be read adds `state_error` with its `deployment_state_*` code. A platform that addresses its rules without a vendor id (Sentinel, Splunk, HarfangLab, Carbon Black Cloud and Elastic; the others store the id their vendor gives: Defender for Endpoint, SentinelOne, CrowdStrike, Sysdig, Bitdefender, Graylog, Exabeam and Google SecOps) keeps no deployment state, so a deploy to it leaves nothing for this tool to read: it adds a `note` saying so, and `deployed` is true only when the rule's block names `tenants`, never because a deploy went through. Ask the tenant instead (`validate_query` or `run_query` with `live: true`).
+`deployed` is true once a vendor id is recorded or the block names `tenants`. `external_ids` maps tenant name to the stored id (for the platforms that store one, below). `rule_id` is that id when exactly one tenant is bound, otherwise `null`. A shard that cannot be read adds `state_error` with its `deployment_state_*` code. A platform that addresses its rules without a vendor id (Sentinel, Splunk, HarfangLab, Carbon Black Cloud and Elastic; the others store the id their vendor gives: Microsoft Defender, SentinelOne, CrowdStrike, Sysdig, Bitdefender, Graylog, Exabeam and Google SecOps) keeps no deployment state, so a deploy to it leaves nothing for this tool to read: it adds a `note` saying so, and `deployed` is true only when the rule's block names `tenants`, never because a deploy went through. Ask the tenant instead (`validate_query` or `run_query` with `live: true`).
 
 ## Agent workflows
 

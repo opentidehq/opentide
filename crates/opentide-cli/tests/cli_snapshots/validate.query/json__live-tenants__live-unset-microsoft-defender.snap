@@ -1,8 +1,8 @@
 ---
 source: crates/opentide-cli/tests/common/snapshot.rs
-description: validate.query/json/live-tenants/live-unset-defender-for-endpoint
+description: validate.query/json/live-tenants/live-unset-microsoft-defender
 ---
-args: opentide --json validate query --live --platform defender_for_endpoint
+args: opentide --json validate query --live --platform microsoft_defender
 exit: 1
 
 ━━━ stdout · json, 1 lines
@@ -22,7 +22,7 @@ exit: 1
   "mode": "live",
   "next_actions": [],
   "ok": false,
-  "platform": "defender_for_endpoint",
+  "platform": "microsoft_defender",
   "schema_version": 1,
   "status": "failed",
   "summary": {},

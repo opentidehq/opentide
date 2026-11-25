@@ -845,11 +845,11 @@ platform!(
     SentinelOneConfiguration, "SentinelOneConfiguration", SentinelOneTenant
 );
 
-/// `[tenants.setup]` for Microsoft Defender for Endpoint.
+/// `[tenants.setup]` for Microsoft Defender.
 #[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
 #[serde(deny_unknown_fields)]
-#[from_node(model = "DefenderForEndpointSetup")]
-pub struct DefenderForEndpointSetup {
+#[from_node(model = "MicrosoftDefenderSetup")]
+pub struct MicrosoftDefenderSetup {
     /// Verify the tenant's TLS certificate.
     #[serde(default = "ssl_true")]
     pub ssl: SslValue,
@@ -862,27 +862,27 @@ pub struct DefenderForEndpointSetup {
     pub client_secret: String,
 }
 
-/// `[tenants.parameters]` for Microsoft Defender for Endpoint.
+/// `[tenants.parameters]` for Microsoft Defender.
 #[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
 #[serde(deny_unknown_fields)]
-#[from_node(model = "DefenderForEndpointParameters")]
-pub struct DefenderForEndpointParameters {
+#[from_node(model = "MicrosoftDefenderParameters")]
+pub struct MicrosoftDefenderParameters {
     /// Device groups a rule's scope may name.
     #[serde(default)]
     pub device_groups: Option<Vec<String>>,
 }
 tenant!(
-    /// `[[tenants]]` for Microsoft Defender for Endpoint.
-    DefenderForEndpointTenant,
-    "DefenderForEndpointTenant",
-    DefenderForEndpointSetup,
-    parameters: Option<DefenderForEndpointParameters>
+    /// `[[tenants]]` for Microsoft Defender.
+    MicrosoftDefenderTenant,
+    "MicrosoftDefenderTenant",
+    MicrosoftDefenderSetup,
+    parameters: Option<MicrosoftDefenderParameters>
 );
 platform!(
-    /// Merged `platforms/defender_for_endpoint.toml`.
-    DefenderForEndpointConfiguration,
-    "DefenderForEndpointConfiguration",
-    DefenderForEndpointTenant
+    /// Merged `platforms/microsoft_defender.toml`.
+    MicrosoftDefenderConfiguration,
+    "MicrosoftDefenderConfiguration",
+    MicrosoftDefenderTenant
 );
 
 /// `[tenants.setup]` for CrowdStrike Falcon.
@@ -1529,7 +1529,7 @@ pub const COLUMN_TYPES: [(&str, &[&str]); 4] = [
             "wildcard",
         ],
     ),
-    ("defender_for_endpoint", KQL_TYPES),
+    ("microsoft_defender", KQL_TYPES),
 ];
 
 /// A `custom_details` value.

@@ -145,7 +145,7 @@ fn a_platform_s_profile_applies_to_its_query_files_and_others_are_refused() {
             "validate",
             "query",
             "--platform",
-            "defender_for_endpoint",
+            "microsoft_defender",
             "--file",
             "a.kql",
         ],
@@ -154,7 +154,7 @@ fn a_platform_s_profile_applies_to_its_query_files_and_others_are_refused() {
     assert_eq!(ran.code, 0, "{}", ran.stdout);
     assert_eq!(
         ran.json()["platforms"],
-        serde_json::json!(["defender_for_endpoint"])
+        serde_json::json!(["microsoft_defender"])
     );
     let refused = opentide(
         &ws,
@@ -705,7 +705,7 @@ fn git(dir: &Path, args: &[&str]) {
 #[test]
 fn a_platform_s_profile_decides_which_tables_a_query_file_may_read() {
     let (_scratch, ws) = corpus();
-    // `SecurityEvent` is a Sentinel table, not a Defender for Endpoint one.
+    // `SecurityEvent` is a Sentinel table, not a Microsoft Defender one.
     std::fs::write(ws.join("c.kql"), "SecurityEvent | take 1\n").unwrap();
     let plain = opentide(
         &ws,
@@ -721,7 +721,7 @@ fn a_platform_s_profile_decides_which_tables_a_query_file_may_read() {
             "validate",
             "query",
             "--platform",
-            "defender_for_endpoint",
+            "microsoft_defender",
             "--file",
             "c.kql",
         ],
@@ -798,9 +798,8 @@ fn error_files_counts_each_file_once() {
     );
     assert_ne!(broken, text);
     // A second rejected query in the same file, on another platform.
-    let broken = format!(
-        "{broken}  defender_for_endpoint:\n    query: |\n      DeviceProcessEvents | where\n"
-    );
+    let broken =
+        format!("{broken}  microsoft_defender:\n    query: |\n      DeviceProcessEvents | where\n");
     std::fs::write(&path, broken).unwrap();
     let ran = opentide(
         &ws,

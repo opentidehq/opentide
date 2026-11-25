@@ -7,7 +7,7 @@ exit: 0
 
 ━━━ stdout · json, 1 lines
 {
-  "advice": "add (or uncomment) a [[tenants]] entry in .opentide/configurations/platforms/sentinel.toml; add (or uncomment) a [[tenants]] entry in .opentide/configurations/platforms/defender_for_endpoint.toml; add (or uncomment) a [[tenants]] entry in .opentide/configurations/platforms/splunk.toml; add (or uncomment) a [[tenants]] entry in .opentide/configurations/platforms/sentinel_one.toml; add (or uncomment) a [[tenants]] entry in .opentide/configurations/platforms/carbon_black_cloud.toml; add (or uncomment) a [[tenants]] entry in .opentide/configurations/platforms/crowdstrike.toml; add (or uncomment) a [[tenants]] entry in .opentide/configurations/platforms/harfanglab.toml",
+  "advice": "add (or uncomment) a [[tenants]] entry in .opentide/configurations/platforms/sentinel.toml; add (or uncomment) a [[tenants]] entry in .opentide/configurations/platforms/microsoft_defender.toml; add (or uncomment) a [[tenants]] entry in .opentide/configurations/platforms/splunk.toml; add (or uncomment) a [[tenants]] entry in .opentide/configurations/platforms/sentinel_one.toml; add (or uncomment) a [[tenants]] entry in .opentide/configurations/platforms/carbon_black_cloud.toml; add (or uncomment) a [[tenants]] entry in .opentide/configurations/platforms/crowdstrike.toml; add (or uncomment) a [[tenants]] entry in .opentide/configurations/platforms/harfanglab.toml",
   "changes": [
     {
       "action": "upsert",
@@ -28,7 +28,7 @@ exit: 0
     {
       "action": "create",
       "name": "Defender KQL Rule",
-      "platform": "defender_for_endpoint",
+      "platform": "microsoft_defender",
       "status": "STAGING",
       "tenant": null,
       "uuid": "00000000-0000-4000-8003-000000000002"
@@ -104,8 +104,8 @@ exit: 0
   "missing_tenants": {
     "carbon_black_cloud": ".opentide/configurations/platforms/carbon_black_cloud.toml",
     "crowdstrike": ".opentide/configurations/platforms/crowdstrike.toml",
-    "defender_for_endpoint": ".opentide/configurations/platforms/defender_for_endpoint.toml",
     "harfanglab": ".opentide/configurations/platforms/harfanglab.toml",
+    "microsoft_defender": ".opentide/configurations/platforms/microsoft_defender.toml",
     "sentinel": ".opentide/configurations/platforms/sentinel.toml",
     "sentinel_one": ".opentide/configurations/platforms/sentinel_one.toml",
     "splunk": ".opentide/configurations/platforms/splunk.toml"
@@ -193,50 +193,6 @@ exit: 0
           ]
         },
         "uuid": "00000000-0000-4000-8003-000000000006"
-      }
-    ],
-    "defender_for_endpoint": [
-      {
-        "api_request": [
-          {
-            "body": {
-              "detectionAction": {
-                "alertTemplate": {
-                  "description": "Simulated Defender rule for CLI E2E corpus.\n",
-                  "impactedAssets": [
-                    {
-                      "@odata.type": "#microsoft.graph.security.impactedDeviceAsset",
-                      "identifier": "device_id"
-                    }
-                  ],
-                  "mitreTechniques": [
-                    "T1059"
-                  ],
-                  "recommendedActions": null,
-                  "severity": "high",
-                  "title": "Defender KQL Rule"
-                },
-                "organizationalScope": null,
-                "responseActions": []
-              },
-              "displayName": "Defender KQL Rule",
-              "isEnabled": true,
-              "queryCondition": {
-                "queryText": "DeviceProcessEvents\n| take 1\n"
-              },
-              "schedule": {
-                "period": "1H"
-              }
-            },
-            "method": "POST",
-            "url": "https://graph.microsoft.com/beta/security/rules/detectionRules"
-          }
-        ],
-        "name": "Defender KQL Rule",
-        "unresolved": {
-          "reason": "this run deploys the rule to no defender_for_endpoint tenant: the requests are compiled for a tenant whose setup sets nothing, with no exclusion or modifier scoped to a tenant, and a value a tenant's setup gives is shown as <tenant:KEY>"
-        },
-        "uuid": "00000000-0000-4000-8003-000000000002"
       }
     ],
     "elastic": [
@@ -332,6 +288,50 @@ exit: 0
           ]
         },
         "uuid": "00000000-0000-4000-8003-000000000007"
+      }
+    ],
+    "microsoft_defender": [
+      {
+        "api_request": [
+          {
+            "body": {
+              "detectionAction": {
+                "alertTemplate": {
+                  "description": "Simulated Defender rule for CLI E2E corpus.\n",
+                  "impactedAssets": [
+                    {
+                      "@odata.type": "#microsoft.graph.security.impactedDeviceAsset",
+                      "identifier": "device_id"
+                    }
+                  ],
+                  "mitreTechniques": [
+                    "T1059"
+                  ],
+                  "recommendedActions": null,
+                  "severity": "high",
+                  "title": "Defender KQL Rule"
+                },
+                "organizationalScope": null,
+                "responseActions": []
+              },
+              "displayName": "Defender KQL Rule",
+              "isEnabled": true,
+              "queryCondition": {
+                "queryText": "DeviceProcessEvents\n| take 1\n"
+              },
+              "schedule": {
+                "period": "1H"
+              }
+            },
+            "method": "POST",
+            "url": "https://graph.microsoft.com/beta/security/rules/detectionRules"
+          }
+        ],
+        "name": "Defender KQL Rule",
+        "unresolved": {
+          "reason": "this run deploys the rule to no microsoft_defender tenant: the requests are compiled for a tenant whose setup sets nothing, with no exclusion or modifier scoped to a tenant, and a value a tenant's setup gives is shown as <tenant:KEY>"
+        },
+        "uuid": "00000000-0000-4000-8003-000000000002"
       }
     ],
     "sentinel": [
@@ -544,14 +544,14 @@ exit: 0
     "crowdstrike": [
       "00000000-0000-4000-8003-000000000006"
     ],
-    "defender_for_endpoint": [
-      "00000000-0000-4000-8003-000000000002"
-    ],
     "elastic": [
       "00000000-0000-4000-8003-000000000009"
     ],
     "harfanglab": [
       "00000000-0000-4000-8003-000000000007"
+    ],
+    "microsoft_defender": [
+      "00000000-0000-4000-8003-000000000002"
     ],
     "sentinel": [
       "00000000-0000-4000-8003-000000000001",
@@ -597,7 +597,7 @@ exit: 0
   "warnings": [
     "a real deploy would need $ELASTIC_API_KEY and $SYSDIG_SECURE_API_TOKEN, which are unset",
     "sentinel has no tenants configured in .opentide/configurations/platforms/sentinel.toml, so a real deploy would stop",
-    "defender_for_endpoint has no tenants configured in .opentide/configurations/platforms/defender_for_endpoint.toml, so a real deploy would stop",
+    "microsoft_defender has no tenants configured in .opentide/configurations/platforms/microsoft_defender.toml, so a real deploy would stop",
     "splunk has no tenants configured in .opentide/configurations/platforms/splunk.toml, so a real deploy would stop",
     "sentinel_one has no tenants configured in .opentide/configurations/platforms/sentinel_one.toml, so a real deploy would stop",
     "carbon_black_cloud has no tenants configured in .opentide/configurations/platforms/carbon_black_cloud.toml, so a real deploy would stop",

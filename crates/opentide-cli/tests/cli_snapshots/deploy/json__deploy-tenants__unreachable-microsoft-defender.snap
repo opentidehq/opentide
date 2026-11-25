@@ -1,8 +1,8 @@
 ---
 source: crates/opentide-cli/tests/common/snapshot.rs
-description: deploy/json/deploy-tenants/unreachable-defender-for-endpoint
+description: deploy/json/deploy-tenants/unreachable-microsoft-defender
 ---
-args: opentide --json deploy --platform defender_for_endpoint --strategy PREVIEW --strategy RELEASE --all --keep-deprecated
+args: opentide --json deploy --platform microsoft_defender --strategy PREVIEW --strategy RELEASE --all --keep-deprecated
 exit: 1
 
 ━━━ stdout · json, 1 lines
@@ -11,7 +11,7 @@ exit: 1
     {
       "action": "create",
       "name": "Defender create rule",
-      "platform": "defender_for_endpoint",
+      "platform": "microsoft_defender",
       "status": "STAGING",
       "tenant": "lab",
       "uuid": "00000000-0000-4000-8047-000000000001"
@@ -19,7 +19,7 @@ exit: 1
     {
       "action": "update",
       "name": "Defender update rule",
-      "platform": "defender_for_endpoint",
+      "platform": "microsoft_defender",
       "status": "STAGING",
       "tenant": "lab",
       "uuid": "00000000-0000-4000-8047-000000000002"
@@ -27,7 +27,7 @@ exit: 1
     {
       "action": "delete",
       "name": "Defender retire rule",
-      "platform": "defender_for_endpoint",
+      "platform": "microsoft_defender",
       "status": "REMOVED",
       "tenant": "lab",
       "uuid": "00000000-0000-4000-8047-000000000003"
@@ -37,27 +37,27 @@ exit: 1
   "deployed": [],
   "dry_run": false,
   "duration_ms": 0,
-  "error": "Deployment to defender_for_endpoint failed on tenant lab: Cannot reach defender_for_endpoint tenant 'lab' at https://login.microsoftonline.com: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
+  "error": "Deployment to microsoft_defender failed on tenant lab: Cannot reach microsoft_defender tenant 'lab' at https://login.microsoftonline.com: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
   "exit_code": 1,
   "failure": {
     "argument": null,
     "code": "command_failed",
     "crash_log": null,
-    "message": "Deployment to defender_for_endpoint failed on tenant lab: Cannot reach defender_for_endpoint tenant 'lab' at https://login.microsoftonline.com: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
+    "message": "Deployment to microsoft_defender failed on tenant lab: Cannot reach microsoft_defender tenant 'lab' at https://login.microsoftonline.com: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
     "suggestion": null
   },
   "failures": [
     {
-      "error": "Cannot reach defender_for_endpoint tenant 'lab' at https://login.microsoftonline.com: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
-      "platform": "defender_for_endpoint",
+      "error": "Cannot reach microsoft_defender tenant 'lab' at https://login.microsoftonline.com: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
+      "platform": "microsoft_defender",
       "tenant": "lab"
     }
   ],
-  "message": "Deployment to defender_for_endpoint failed on tenant lab: Cannot reach defender_for_endpoint tenant 'lab' at https://login.microsoftonline.com: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
+  "message": "Deployment to microsoft_defender failed on tenant lab: Cannot reach microsoft_defender tenant 'lab' at https://login.microsoftonline.com: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
   "next_actions": [],
   "ok": false,
   "plan": {
-    "defender_for_endpoint": [
+    "microsoft_defender": [
       "00000000-0000-4000-8047-000000000001",
       "00000000-0000-4000-8047-000000000002",
       "00000000-0000-4000-8047-000000000003"
@@ -69,7 +69,7 @@ exit: 1
       "error": null,
       "id": "00000000-0000-4000-8047-000000000001",
       "name": "Defender create rule",
-      "platform": "defender_for_endpoint",
+      "platform": "microsoft_defender",
       "reason": "not attempted: tenant lab failed",
       "seconds": 0.0,
       "status": "not_attempted",
@@ -80,7 +80,7 @@ exit: 1
       "error": null,
       "id": "00000000-0000-4000-8047-000000000002",
       "name": "Defender update rule",
-      "platform": "defender_for_endpoint",
+      "platform": "microsoft_defender",
       "reason": "not attempted: tenant lab failed",
       "seconds": 0.0,
       "status": "not_attempted",
@@ -91,7 +91,7 @@ exit: 1
       "error": null,
       "id": "00000000-0000-4000-8047-000000000003",
       "name": "Defender retire rule",
-      "platform": "defender_for_endpoint",
+      "platform": "microsoft_defender",
       "reason": "not attempted: tenant lab failed",
       "seconds": 0.0,
       "status": "not_attempted",
@@ -122,10 +122,10 @@ exit: 1
 
 ━━━ stderr · json, 1 lines
 {
-  "error": "Cannot reach defender_for_endpoint tenant '***' at https://login.microsoftonline.com: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
+  "error": "Cannot reach microsoft_defender tenant '***' at https://login.microsoftonline.com: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
   "event": "tenant_deployment_failed",
   "level": "critical",
-  "platform": "defender_for_endpoint",
+  "platform": "microsoft_defender",
   "tenant": "***",
   "timestamp": "0000-00-00 00:00:00"
 }

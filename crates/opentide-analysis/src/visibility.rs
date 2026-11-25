@@ -132,7 +132,7 @@ FlowType_s = { type = "string" }
         for (platform, name) in [
             ("splunk", "syslog"),
             ("elastic", "logs-*"),
-            ("defender_for_endpoint", "DeviceInfo"),
+            ("microsoft_defender", "DeviceInfo"),
         ] {
             let edit = declare_dataset(Some(VISIBILITY), platform, name);
             let applied = apply(VISIBILITY, &edit);

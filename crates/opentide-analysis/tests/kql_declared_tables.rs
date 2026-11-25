@@ -120,7 +120,7 @@ fn declared_tables_are_known_and_undeclared_ones_warn_once_a_workspace_declares_
         warning(codes::KQL_UNKNOWN_TABLE)
     );
     assert_eq!(
-        findings("defender_for_endpoint", "custom_CL | take 1"),
+        findings("microsoft_defender", "custom_CL | take 1"),
         error(codes::KQL_UNKNOWN_TABLE)
     );
 
@@ -378,7 +378,7 @@ tables = ["Custom_CL"]
     assert_eq!(actor.detail.as_deref(), Some("Contoso_Audit_CL (string)"));
 
     // Sentinel's declarations are not Defender's: Defender keeps #111.
-    assert!(findings("defender_for_endpoint", "DeviceProcessEvents | take 1").is_empty());
+    assert!(findings("microsoft_defender", "DeviceProcessEvents | take 1").is_empty());
 
     // Defender, opted in: an undeclared catalog table warns; an unknown one
     // stays an error, whose help names the declaration (#147).
@@ -386,17 +386,17 @@ tables = ["Custom_CL"]
         r#"[[logsources]]
 name = "DeviceProcessEvents"
 description = "Processes."
-system = "defender_for_endpoint"
+system = "microsoft_defender"
 "#,
     ));
-    assert!(findings("defender_for_endpoint", "DeviceProcessEvents | take 1").is_empty());
+    assert!(findings("microsoft_defender", "DeviceProcessEvents | take 1").is_empty());
     assert_eq!(
-        findings("defender_for_endpoint", "DeviceFileEvents | take 1"),
+        findings("microsoft_defender", "DeviceFileEvents | take 1"),
         warning(codes::KQL_TABLE_NOT_DECLARED)
     );
     let d = analyze_query(&QueryRequest {
         language: LanguageId::Kql,
-        platform: Some("defender_for_endpoint".into()),
+        platform: Some("microsoft_defender".into()),
         stack: None,
         text: "Custom_CL | take 1".into(),
     });
@@ -405,7 +405,7 @@ system = "defender_for_endpoint"
     assert_eq!(d[0].severity, opentide_analysis::Severity::Error);
     assert_eq!(
         d[0].message,
-        "unknown table 'Custom_CL'; if the workspace holds it, declare it for defender_for_endpoint in visibility.toml"
+        "unknown table 'Custom_CL'; if the workspace holds it, declare it for microsoft_defender in visibility.toml"
     );
 
     declare(None);

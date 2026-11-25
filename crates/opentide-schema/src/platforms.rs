@@ -165,9 +165,9 @@ pub const PLATFORMS: &[Platform] = &[
         query_file_suffixes: &["kql"],
     },
     Platform {
-        id: "defender_for_endpoint",
-        label: "Microsoft Defender for Endpoint",
-        configuration_name: "Microsoft Defender for Endpoint",
+        id: "microsoft_defender",
+        label: "Microsoft Defender",
+        configuration_name: "Microsoft Defender",
         config_class: "DefenderConfig",
         external_id: ExternalId::Int,
         deploys: true,
@@ -397,8 +397,8 @@ pub const IDS: [&str; COUNT] = {
 pub enum PlatformId {
     /// `sentinel`: Microsoft Sentinel.
     Sentinel,
-    /// `defender_for_endpoint`: Microsoft Defender for Endpoint.
-    DefenderForEndpoint,
+    /// `microsoft_defender`: Microsoft Defender.
+    MicrosoftDefender,
     /// `splunk`: Splunk Enterprise Security.
     Splunk,
     /// `sentinel_one`: SentinelOne.
@@ -427,7 +427,7 @@ impl PlatformId {
     /// Every built-in platform, in [`PLATFORMS`]'s order.
     pub const ALL: [Self; COUNT] = [
         Self::Sentinel,
-        Self::DefenderForEndpoint,
+        Self::MicrosoftDefender,
         Self::Splunk,
         Self::SentinelOne,
         Self::Crowdstrike,
@@ -457,7 +457,7 @@ impl PlatformId {
     const fn written(self) -> &'static str {
         match self {
             Self::Sentinel => "sentinel",
-            Self::DefenderForEndpoint => "defender_for_endpoint",
+            Self::MicrosoftDefender => "microsoft_defender",
             Self::Splunk => "splunk",
             Self::SentinelOne => "sentinel_one",
             Self::Crowdstrike => "crowdstrike",
@@ -625,7 +625,7 @@ mod tests {
             ids(),
             [
                 "sentinel",
-                "defender_for_endpoint",
+                "microsoft_defender",
                 "splunk",
                 "sentinel_one",
                 "crowdstrike",
@@ -647,7 +647,7 @@ mod tests {
         assert_eq!(
             state_platforms(),
             [
-                "defender_for_endpoint",
+                "microsoft_defender",
                 "sentinel_one",
                 "crowdstrike",
                 "sysdig",
@@ -659,13 +659,13 @@ mod tests {
         );
         assert_eq!(
             ids_where(|p| p.external_id == ExternalId::Int),
-            ["defender_for_endpoint", "sentinel_one", "sysdig"]
+            ["microsoft_defender", "sentinel_one", "sysdig"]
         );
         assert_eq!(
             ids_where(|p| p.live_check),
             [
                 "sentinel",
-                "defender_for_endpoint",
+                "microsoft_defender",
                 "splunk",
                 "sentinel_one",
                 "carbon_black_cloud",

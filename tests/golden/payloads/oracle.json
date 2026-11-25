@@ -184,7 +184,7 @@
   {
    "uuid": "00000000-0000-4000-8005-000000000202",
    "file": "<WS>/objects/rules/defender-disabled.yaml",
-   "platform": "defender_for_endpoint",
+   "platform": "microsoft_defender",
    "compile": {},
    "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000202\",\"name\":\"Defender Disabled\",\"api_request\":{\"enabled\":false,\"name\":\"\",\"schema\":null,\"status\":\"DISABLED\",\"flags\":null,\"tenants\":null,\"contributors\":null,\"query\":\"DeviceEvents | take 1\",\"alert\":{\"category\":\"Initial Access\",\"title\":null,\"description\":null,\"severity\":null,\"recommendation\":null,\"techniques\":null},\"impacted_entities\":{\"device\":\"DeviceId\",\"mailbox\":null,\"user\":null},\"scheduling\":\"24H\",\"actions\":{\"devices\":null,\"files\":{\"allow_block\":{\"action\":\"Allow\",\"identifier\":\"SHA256\",\"groups\":{\"selection\":\"All\",\"device_groups\":null}},\"quarantine_file\":null},\"users\":null},\"scope\":{\"selection\":\"All\",\"device_groups\":null},\"exclusions\":null}}",
    "tenants": [
@@ -201,7 +201,7 @@
   {
    "uuid": "00000000-0000-4000-8005-000000000201",
    "file": "<WS>/objects/rules/defender-full.yaml",
-   "platform": "defender_for_endpoint",
+   "platform": "microsoft_defender",
    "compile": {},
    "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000201\",\"name\":\"Defender Full\",\"api_request\":{\"enabled\":true,\"name\":\"\",\"schema\":null,\"status\":\"STAGING\",\"flags\":null,\"tenants\":null,\"contributors\":null,\"query\":\"DeviceProcessEvents\\n| where FileName == \\\"powershell.exe\\\"\\n\",\"alert\":{\"category\":\"Suspicious Activity\",\"title\":\"Encoded PowerShell\",\"description\":\"An encoded command line ran.\",\"severity\":\"Medium\",\"recommendation\":\"Isolate the device.\",\"techniques\":null},\"impacted_entities\":{\"device\":\"DeviceId\",\"mailbox\":\"RecipientEmailAddress\",\"user\":\"AccountObjectId\"},\"scheduling\":\"NRT\",\"actions\":{\"devices\":{\"isolate_device\":\"Full\",\"collect_investigation_package\":true,\"run_antivirus_scan\":true,\"initiate_investigation\":true,\"restrict_app_execution\":true},\"files\":{\"allow_block\":{\"action\":\"Block\",\"identifier\":\"SHA1\",\"groups\":{\"selection\":\"Specific\",\"device_groups\":[\"Servers\",\"Workstations\"]}},\"quarantine_file\":\"SHA1\"},\"users\":{\"mark_as_compromised\":\"AccountObjectId\",\"disable_user\":\"AccountSid\",\"force_password_reset\":\"AccountSid\"}},\"scope\":{\"selection\":\"All\",\"device_groups\":null},\"exclusions\":[{\"query\":\"| where DeviceName != \\\"build-01\\\"\",\"reason\":\"Build server\",\"tenant\":\"contoso\",\"let\":{\"threshold\":5,\"label\":\"build\"}},{\"query\":\"| where AccountName !in (admins)\",\"reason\":\"Administrators\",\"tenant\":null,\"let\":{\"admins\":\"admin\"}}]}}",
    "tenants": [
@@ -218,7 +218,7 @@
   {
    "uuid": "00000000-0000-4000-8005-000000000204",
    "file": "<WS>/objects/rules/defender-odata.yaml",
-   "platform": "defender_for_endpoint",
+   "platform": "microsoft_defender",
    "compile": {},
    "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000204\",\"name\":\"Defender odata_type\",\"api_request\":{\"enabled\":false,\"name\":\"\",\"schema\":null,\"status\":\"STAGING\",\"flags\":null,\"tenants\":null,\"contributors\":null,\"query\":\"CloudAppEvents\\n| where tostring(RawEventData.odata_type) == \\\"Message\\\"\\n\",\"alert\":{\"title\":\"odata_type seen\",\"description\":\"The event's odata_type is Message.\",\"severity\":null,\"recommendation\":null,\"techniques\":null},\"impacted_entities\":{\"device\":null,\"mailbox\":null,\"user\":\"AccountObjectId\"},\"scheduling\":\"1H\",\"actions\":null,\"scope\":{\"selection\":\"All\",\"device_groups\":null},\"exclusions\":null}}",
    "tenants": [
@@ -235,7 +235,7 @@
   {
    "uuid": "00000000-0000-4000-8005-000000000203",
    "file": "<WS>/objects/rules/defender-removed.yaml",
-   "platform": "defender_for_endpoint",
+   "platform": "microsoft_defender",
    "compile": {},
    "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000203\",\"name\":\"Defender Removed\",\"api_request\":{\"enabled\":false,\"name\":\"\",\"schema\":null,\"status\":\"REMOVED\",\"flags\":null,\"tenants\":null,\"contributors\":null,\"query\":\"DeviceEvents | take 1\",\"alert\":{\"title\":null,\"description\":null,\"severity\":null,\"recommendation\":null,\"techniques\":null},\"impacted_entities\":{\"device\":null,\"mailbox\":null,\"user\":\"AccountSid\"},\"scheduling\":\"3H\",\"actions\":null,\"scope\":{\"selection\":\"All\",\"device_groups\":null},\"exclusions\":null}}",
    "tenants": [

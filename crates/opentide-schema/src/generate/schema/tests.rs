@@ -76,7 +76,7 @@ assets = ["dc", "missing"]
 [[visibility.logsources]]
 name = "SecurityEvent"
 description = "The same table"
-system = "defender_for_endpoint"
+system = "microsoft_defender"
 "#;
 
 fn rule(identifier: &str, sources: &Sources) -> Value {
@@ -369,7 +369,7 @@ fn signals_name_the_configured_log_sources_bare_and_qualified() {
             json!("SecurityEvent"),
             json!("sentinel::SecurityEvent"),
             json!("sentinel::prod::SecurityEvent"),
-            json!("defender_for_endpoint::SecurityEvent"),
+            json!("microsoft_defender::SecurityEvent"),
         ]
     );
     assert!(offer.markdown[0].contains("---\n\n### SecurityEvent"));

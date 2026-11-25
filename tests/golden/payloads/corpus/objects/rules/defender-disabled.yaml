@@ -11,7 +11,7 @@ metadata:
 description: Defender Disabled for the compile corpus.
 
 configurations:
-  defender_for_endpoint:
+  microsoft_defender:
     status: DISABLED
     query: DeviceEvents | take 1
     scheduling: 24H

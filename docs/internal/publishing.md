@@ -237,7 +237,7 @@ Every release and public or internal candidate ships **`opentide-wasm32-wasip1.w
 
 CI proves the connectors against recorded cassettes and stand-in servers, never against a real tenant. Before a candidate (internal or public) is promoted, the maintainer runs these against real tenants, with the candidate's binary, and records the result on the candidate's release notes. Each item is something no cassette can prove ([#1171](https://github.com/opentidehq/opentide/pull/1171), [#1169](https://github.com/opentidehq/opentide/pull/1169)).
 
-- **`validate --live`, `query` and `deploy` against real Sentinel, Defender for Endpoint and CrowdStrike tenants**: each command once per platform, `deploy` with a rule created, updated and deleted.
+- **`validate --live`, `query` and `deploy` against real Sentinel, Microsoft Defender and CrowdStrike tenants**: each command once per platform, `deploy` with a rule created, updated and deleted.
 - **Entra ID takes the plain sign-in**: the token `POST` with no `Accept` header and the form fields in opentide's order (`grant_type`, `client_id`, `client_secret`, `scope`), for Sentinel (ARM and Log Analytics scopes) and Defender (Graph).
 - **An expired token is a `401`, not a `403`**: ARM, Log Analytics and Graph answer a token past its expiry with `401`, so the connector signs in again once and resends (a `403` is not retried).
 - **Entra ID's refusals read as documented**: a wrong tenant id (`AADSTS90002`), a wrong secret (`AADSTS7000215`) and an expired secret (`AADSTS7000222`) each fail the tenant as an authentication failure carrying Entra's `error_description`, and the secret appears in no output, log or `--json` document.

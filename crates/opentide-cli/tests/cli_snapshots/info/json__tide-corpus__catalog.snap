@@ -4880,7 +4880,7 @@ exit: 0
       "platforms": [
         {
           "enabled": true,
-          "id": "defender_for_endpoint",
+          "id": "microsoft_defender",
           "status": "STAGING",
           "strategy": "PREVIEW"
         }

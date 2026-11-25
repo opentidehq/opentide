@@ -347,7 +347,7 @@ impl Catalog {
     ///   the Defender XDR connector streams into a workspace, and every table
     ///   of the Azure Monitor Logs reference with its columns; ASIM parsers
     ///   are known sources ([`Catalog::asim_parser`]).
-    /// - `defender_for_endpoint`: the advanced hunting tables, with the
+    /// - `microsoft_defender`: the advanced hunting tables, with the
     ///   columns the reference lists for those it has.
     ///
     /// Hand-written columns keep their docs and are added to the reference's,
@@ -1089,7 +1089,7 @@ fn declared_targets<'d, 'n>(
 /// The platform whose `visibility.toml` declarations a profile reads.
 fn dataset_platform(profile: Profile) -> &'static str {
     match profile {
-        Profile::Defender => "defender_for_endpoint",
+        Profile::Defender => "microsoft_defender",
         Profile::Core | Profile::Sentinel => "sentinel",
     }
 }

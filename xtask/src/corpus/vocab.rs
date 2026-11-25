@@ -9,7 +9,7 @@
 /// platform table; a test checks it names every platform once.
 pub const PLATFORMS: &[&str] = &[
     "sentinel",
-    "defender_for_endpoint",
+    "microsoft_defender",
     "splunk",
     "sentinel_one",
     "carbon_black_cloud",

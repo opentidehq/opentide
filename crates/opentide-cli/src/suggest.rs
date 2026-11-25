@@ -3,7 +3,7 @@
 //! A choice that differs only in case or separators wins outright (`RULE` ->
 //! `rule`, `attack_pattern` -> `attack-pattern`), then a name people know a
 //! choice by (`--format gitlab` -> `codequality`), then the one choice the
-//! value starts (`--platform defender` -> `defender_for_endpoint`). Otherwise
+//! value starts (`--platform microsoft` -> `microsoft_defender`). Otherwise
 //! the shared rule every other suggestion follows ([`opentide_core::suggest`]:
 //! the fewest edits, at most a third of the length), so the command line, the
 //! editor and `validate` suggest the same word for the same typo. A mistyped
@@ -83,8 +83,8 @@ mod tests {
         );
         assert_eq!(dym("gitlab", &["text"]), None);
         assert_eq!(
-            dym("defender", &["sentinel", "defender_for_endpoint", "splunk"]).as_deref(),
-            Some("defender_for_endpoint")
+            dym("microsoft", &["sentinel", "microsoft_defender", "splunk"]).as_deref(),
+            Some("microsoft_defender")
         );
     }
 

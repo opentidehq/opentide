@@ -1328,12 +1328,12 @@ fn crowdstrike_stops_on_a_delete_the_tenant_refuses() {
 #[test]
 fn defender_deletes_a_recorded_rule_and_forgets_its_id() {
     let uuid = "00000000-0000-4000-8099-000000000071";
-    let block = "  defender_for_endpoint:\n    status: REMOVED\n    query: |\n      DeviceProcessEvents\n      \
+    let block = "  microsoft_defender:\n    status: REMOVED\n    query: |\n      DeviceProcessEvents\n      \
          | take 1\n    scheduling: 1H\n    alert:\n      description: Alert.\n    impacted_entities:\n      \
          device: device_id\n"
         .to_owned();
     let ws = stated(
-        "defender_for_endpoint",
+        "microsoft_defender",
         "tenant_id = \"contoso-tenant-id\"\nclient_id = \"opentide-app-id\"\nclient_secret = \
          \"$DEFENDER_CLIENT_SECRET\"\n",
         &[("a.yaml", uuid, block, "42")],
@@ -1342,7 +1342,7 @@ fn defender_deletes_a_recorded_rule_and_forgets_its_id() {
     let (proxy, env, _ca) = replay("defender/deploy", &[0, 5], "DEFENDER_CLIENT_SECRET");
     let (sent, stderr) = deploy(
         ws.path(),
-        "defender_for_endpoint",
+        "microsoft_defender",
         &env,
         &opentide_connectors::builtin(),
         0,
@@ -3956,7 +3956,7 @@ fn first_request_cases() -> Vec<Case> {
             fixture("sentinel-a-create.yaml"),
         ),
         (
-            "defender_for_endpoint",
+            "microsoft_defender",
             |credential, _| {
                 format!("tenant_id = \"t\"\nclient_id = \"c\"\nclient_secret = \"{credential}\"\n")
             },
@@ -4849,7 +4849,7 @@ fn golden_send(platform: &str, scenario: &str, variable: &str) -> (Vec<Json>, Ve
 #[test]
 fn a_defender_dry_run_shows_the_requests_the_tenant_receives() {
     let (planned, received) = golden_send(
-        "defender_for_endpoint",
+        "microsoft_defender",
         "golden/deploy-defender-continues",
         "DEFENDER_CLIENT_SECRET",
     );

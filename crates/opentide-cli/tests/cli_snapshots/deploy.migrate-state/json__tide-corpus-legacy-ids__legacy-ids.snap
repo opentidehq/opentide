@@ -28,19 +28,19 @@ exit: 0
       "bindings": [
         {
           "external_id": "12345",
-          "platform": "defender_for_endpoint",
+          "platform": "microsoft_defender",
           "tenant": "prod"
         },
         {
           "external_id": "678",
-          "platform": "defender_for_endpoint",
+          "platform": "microsoft_defender",
           "tenant": "lab"
         }
       ],
       "file": "Objects/Detection Rules/rule-0002-defender-kql.yaml",
       "removed": [
-        "configurations.defender_for_endpoint.rule_id::prod",
-        "configurations.defender_for_endpoint.rule_id_bundle"
+        "configurations.microsoft_defender.rule_id::prod",
+        "configurations.microsoft_defender.rule_id_bundle"
       ],
       "shard": ".opentide/states/deployment/00000000-0000-4000-8003-000000000002.json",
       "uuid": "00000000-0000-4000-8003-000000000002"
@@ -120,7 +120,7 @@ exit: 0
 {
   "object_uuid": "00000000-0000-4000-8003-000000000002",
   "platforms": {
-    "defender_for_endpoint": {
+    "microsoft_defender": {
       "lab": "678",
       "prod": "12345"
     }
@@ -215,7 +215,7 @@ response:
   alert_severity: High
 
 configurations:
-  defender_for_endpoint:
+  microsoft_defender:
       # staging comes later
     enabled: true
     name: Defender KQL Rule

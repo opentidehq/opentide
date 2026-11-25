@@ -3,7 +3,7 @@
 //! `query/service.py` request for request.
 //!
 //! The query runs on the platforms with a Rust connector and a query runner
-//! ([`platforms`]: Carbon Black Cloud, CrowdStrike, Defender for Endpoint,
+//! ([`platforms`]: Carbon Black Cloud, CrowdStrike, Microsoft Defender,
 //! Elastic, HarfangLab, Sentinel, SentinelOne, Splunk; every platform with a
 //! runner since UC-4.3, #833). A rule's query (`--rule`, `--file`) runs
 //! here too since UC-4.4c (#834): the queries a deploy of the rule sends,
@@ -70,7 +70,7 @@ pub fn languages(platform: &str) -> &'static [&'static str] {
 /// the setup keys it checks, in order (`reject_unsubstituted_placeholders`).
 pub(crate) fn credential_keys(platform: &str) -> (&'static str, &'static [&'static str]) {
     match platform {
-        "defender_for_endpoint" => (
+        "microsoft_defender" => (
             "Microsoft Graph",
             &["tenant_id", "client_id", "client_secret"],
         ),
@@ -93,7 +93,7 @@ pub(crate) fn credential_keys(platform: &str) -> (&'static str, &'static [&'stat
 /// without a URL (`_DEFAULT_HOSTS`).
 pub(crate) fn default_host(platform: &str) -> &'static str {
     match platform {
-        "defender_for_endpoint" => "https://graph.microsoft.com",
+        "microsoft_defender" => "https://graph.microsoft.com",
         "crowdstrike" => "https://api.crowdstrike.com",
         "sentinel" => "https://api.loganalytics.io",
         _ => "",
@@ -2088,7 +2088,7 @@ mod tests {
         let refused = no_runner("sysdig");
         assert_eq!(
             compact_of(&Json::object(refused.outcome.data.clone())),
-            r#"{"platform":"sysdig","choices":["sentinel","defender_for_endpoint","splunk","sentinel_one","crowdstrike","harfanglab","carbon_black_cloud","elastic","graylog","exabeam","google_secops"]}"#
+            r#"{"platform":"sysdig","choices":["sentinel","microsoft_defender","splunk","sentinel_one","crowdstrike","harfanglab","carbon_black_cloud","elastic","graylog","exabeam","google_secops"]}"#
         );
         assert_eq!(refused.outcome.exit_code, 2);
         let failure = refused.outcome.failure.unwrap();
@@ -2124,7 +2124,7 @@ mod tests {
         );
         assert_eq!(credential_keys("elastic").1, ["api_key"]);
         assert_eq!(credential_keys("crowdstrike").0, "CrowdStrike");
-        assert_eq!(credential_keys("defender_for_endpoint").1.len(), 3);
+        assert_eq!(credential_keys("microsoft_defender").1.len(), 3);
         assert_eq!(
             credential_keys("splunk"),
             ("Splunk", &["url", "port", "token", "app", "ssl"][..])

@@ -23,8 +23,8 @@ exit: 0
   "platforms": [
     "carbon_black_cloud",
     "crowdstrike",
-    "defender_for_endpoint",
     "elastic",
+    "microsoft_defender",
     "sentinel",
     "splunk",
     "sysdig"
@@ -48,13 +48,13 @@ exit: 0
       "errors": 0,
       "field_path": [
         "configurations",
-        "defender_for_endpoint",
+        "microsoft_defender",
         "query"
       ],
       "language": "kql",
       "line": 28,
       "path": "Objects/Detection Rules/rule-0002-defender-kql.yaml",
-      "platform": "defender_for_endpoint"
+      "platform": "microsoft_defender"
     },
     {
       "column": 12,

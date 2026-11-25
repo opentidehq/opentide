@@ -1,6 +1,5 @@
 ---
 source: crates/opentide-cli/tests/render.rs
-expression: validate_fault_summary
 ---
 ### ✗ opentide validate
 
@@ -10,7 +9,7 @@ expression: validate_fault_summary
 |---|---|---|---|
 | error | [`deployment_state_uuid_mismatch`](https://opentide.org/docs/cli/diagnostics#deployment_state_uuid_mismatch) | `.opentide/states/deployment/1fe3b71b-24be-4604-9b91-72cb32381bfc.json` | &lt;WS&gt;/.opentide/states/deployment/1fe3b71b-24be-4604-9b91-72cb32381bfc.json records object\_uuid '00000000-0000-4000-8000-000000000001', but its file name is '1fe3b71b-24be-4604-9b91-72cb32381bfc' |
 | error | [`deployment_state_shape`](https://opentide.org/docs/cli/diagnostics#deployment_state_shape) | `.opentide/states/deployment/8df3e0d3-8a3f-490c-9f31-b71df88f3562.json` | &lt;WS&gt;/.opentide/states/deployment/8df3e0d3-8a3f-490c-9f31-b71df88f3562.json has no platforms object |
-| error | [`deployment_state_platform`](https://opentide.org/docs/cli/diagnostics#deployment_state_platform) | `.opentide/states/deployment/f2f28c1d-8323-4b4e-acba-c53ed9cb5271.json` | &lt;WS&gt;/.opentide/states/deployment/f2f28c1d-8323-4b4e-acba-c53ed9cb5271.json names platform 'splunk'; only bitdefender, crowdstrike, defender\_for\_endpoint, graylog, exabeam, google\_secops, sentinel\_one, sysdig store external ids |
+| error | [`deployment_state_platform`](https://opentide.org/docs/cli/diagnostics#deployment_state_platform) | `.opentide/states/deployment/f2f28c1d-8323-4b4e-acba-c53ed9cb5271.json` | &lt;WS&gt;/.opentide/states/deployment/f2f28c1d-8323-4b4e-acba-c53ed9cb5271.json names platform 'splunk'; only bitdefender, crowdstrike, microsoft\_defender, graylog, exabeam, google\_secops, sentinel\_one, sysdig store external ids |
 | error | [`invalid_ref`](https://opentide.org/docs/cli/diagnostics#invalid_ref) | `objects/objectives/elevated-exfiltration-objective-0002.yaml:54:7` | Unknown threat reference '00000000-0000-4000-8000-00000000beef' — help: opentide info threats lists the ones that exist |
 | error | [`vocab_unknown`](https://opentide.org/docs/cli/diagnostics#vocab_unknown) | `objects/objectives/lateral-beacon-objective-0001.yaml:34:11` | 'Host::Gizmo' is not a signal entities value — help: did you mean 'Host::File'? |
 | error | [`invalid_ref`](https://opentide.org/docs/cli/diagnostics#invalid_ref) | `objects/objectives/rapid-tunnel-objective-0003.yaml:77:7` | Unknown threat reference '00000000-0000-4000-8000-00000000beef' — help: opentide info threats lists the ones that exist |
@@ -21,7 +20,7 @@ expression: validate_fault_summary
 | error | [`eql_unsupported`](https://opentide.org/docs/cli/diagnostics#eql_unsupported) | `objects/rules/elevated-downgrade-rule-0197.yaml:53:28` | Elasticsearch EQL does not support the \`unique\` pipe; only \`head\` and \`tail\` — help: the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql |
 | error | [`spl_unknown_datamodel`](https://opentide.org/docs/cli/diagnostics#spl_unknown_datamodel) | `objects/rules/elevated-dropper-rule-0066.yaml:54:37` | \`Endpointz\` is not a CIM data model; did you mean \`Endpoint\`? — help: try: Endpoint |
 | error | [`spl_unknown_datamodel_field`](https://opentide.org/docs/cli/diagnostics#spl_unknown_datamodel_field) | `objects/rules/elevated-injection-rule-0075.yaml:40:59` | \`process\_nam\` is not a field of the CIM Endpoint.Processes dataset; did you mean \`Processes.process\_name\`? — help: try: Processes.process\_name |
-| error | [`kql_unknown_table`](https://opentide.org/docs/cli/diagnostics#kql_unknown_table) | `objects/rules/elevated-pivot-rule-0038.yaml:59:7` | unknown table 'DeviceProcessEvnts'; if the workspace holds it, declare it for defender\_for\_endpoint in visibility.toml — help: did you mean 'DeviceProcessEvents'? |
+| error | [`kql_unknown_table`](https://opentide.org/docs/cli/diagnostics#kql_unknown_table) | `objects/rules/elevated-pivot-rule-0038.yaml:59:7` | unknown table 'DeviceProcessEvnts'; if the workspace holds it, declare it for microsoft\_defender in visibility.toml — help: did you mean 'DeviceProcessEvents'? |
 | error | [`vocab_unknown`](https://opentide.org/docs/cli/diagnostics#vocab_unknown) | `objects/rules/elevated-relay-rule-0034.yaml:9:8` | 'whitish' is not a TLP value |
 | error | [`kql_parse_error`](https://opentide.org/docs/cli/diagnostics#kql_parse_error) | `objects/rules/elevated-relay-rule-0034.yaml:64:21` | KQL syntax error — help: the KQL reference: https://learn.microsoft.com/kusto/query/ |
 | error | [`kql_unknown_function`](https://opentide.org/docs/cli/diagnostics#kql_unknown_function) | `objects/rules/elevated-relay-rule-0055.yaml:60:20` | unknown function 'tolowr' — help: did you mean 'tolower'? |
@@ -110,4 +109,3 @@ expression: validate_fault_summary
 | error | [`unknown_key`](https://opentide.org/docs/cli/diagnostics#unknown_key) |   | platforms/sentinel.toml.platform.colour: unknown key |
 
 … and 7 more in the job log.
-

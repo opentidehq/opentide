@@ -14,7 +14,7 @@ Detect credential access techniques
 | Threats addressed | [Simulated Actor](../threats/simulated-actor.md) |
 | Signals | 1 signal |
 | Detection rules | 10 rules |
-| Platforms | Carbon Black Cloud, CrowdStrike Falcon, Elastic Security, HarfangLab, Microsoft Defender for Endpoint, Microsoft Sentinel, SentinelOne, Splunk Enterprise Security, Sysdig Secure |
+| Platforms | Carbon Black Cloud, CrowdStrike Falcon, Elastic Security, HarfangLab, Microsoft Defender, Microsoft Sentinel, SentinelOne, Splunk Enterprise Security, Sysdig Secure |
 
 > **Warning:** 1 of 1 signal has no implementing rule yet: *Suspicious logon signal*.
 
@@ -37,7 +37,7 @@ Compose signals for credential access detection
 | Signal | Severity | Methodology | Effort | Rules | Platforms and status |
 | --- | --- | --- | --- | --- | --- |
 | [Suspicious logon signal](#suspicious-logon-signal) | Medium | Statistical | - | *None yet* | - |
-| *Objective as a whole* | - | - | - | [Carbon Black Lucene Rule](../rules/carbon-black-lucene-rule.md)<br>[CrowdStrike Deploy Rule](../rules/crowdstrike-deploy-rule.md)<br>[Defender KQL Rule](../rules/defender-kql-rule.md)<br>[Elastic KQL Rule](../rules/elastic-kql-rule.md)<br>[HarfangLab Deploy Rule](../rules/harfanglab-deploy-rule.md)<br>[Sentinel KQL Rule](../rules/sentinel-kql-rule.md)<br>[SentinelOne S1QL Rule](../rules/sentinelone-s1ql-rule.md)<br>[Splunk SPL Rule](../rules/splunk-spl-rule.md)<br>[Staging Promote Rule](../rules/staging-promote-rule.md)<br>[Sysdig Falco Rule](../rules/sysdig-falco-rule.md) | Carbon Black Cloud `STAGING`<br>CrowdStrike Falcon `STAGING`<br>Microsoft Defender for Endpoint `STAGING`<br>Elastic Security `STAGING`<br>HarfangLab `STAGING`<br>Microsoft Sentinel `STAGING`<br>SentinelOne `STAGING`<br>Splunk Enterprise Security `STAGING`<br>Microsoft Sentinel `STAGING`<br>Sysdig Secure `STAGING` |
+| *Objective as a whole* | - | - | - | [Carbon Black Lucene Rule](../rules/carbon-black-lucene-rule.md)<br>[CrowdStrike Deploy Rule](../rules/crowdstrike-deploy-rule.md)<br>[Defender KQL Rule](../rules/defender-kql-rule.md)<br>[Elastic KQL Rule](../rules/elastic-kql-rule.md)<br>[HarfangLab Deploy Rule](../rules/harfanglab-deploy-rule.md)<br>[Sentinel KQL Rule](../rules/sentinel-kql-rule.md)<br>[SentinelOne S1QL Rule](../rules/sentinelone-s1ql-rule.md)<br>[Splunk SPL Rule](../rules/splunk-spl-rule.md)<br>[Staging Promote Rule](../rules/staging-promote-rule.md)<br>[Sysdig Falco Rule](../rules/sysdig-falco-rule.md) | Carbon Black Cloud `STAGING`<br>CrowdStrike Falcon `STAGING`<br>Microsoft Defender `STAGING`<br>Elastic Security `STAGING`<br>HarfangLab `STAGING`<br>Microsoft Sentinel `STAGING`<br>SentinelOne `STAGING`<br>Splunk Enterprise Security `STAGING`<br>Microsoft Sentinel `STAGING`<br>Sysdig Secure `STAGING` |
 
 ### Suspicious logon signal
 

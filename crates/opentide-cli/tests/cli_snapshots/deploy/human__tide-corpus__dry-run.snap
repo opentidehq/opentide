@@ -12,7 +12,7 @@ exit: 0
   ␛[1m␛[32m+ create or update␛[0m  ␛[1mSentinel KQL Rule␛[0m     ␛[2m…000000000001␛[0m  ␛[2mstatus STAGING␛[0m
   ␛[1m␛[32m+ create or update␛[0m  ␛[1mStaging Promote Rule␛[0m  ␛[2m…000000000008␛[0m  ␛[2mstatus STAGING␛[0m
 
-␛[1mdefender_for_endpoint␛[0m␛[2m · 0 tenants␛[0m
+␛[1mmicrosoft_defender␛[0m␛[2m · 0 tenants␛[0m
   ␛[1m␛[32m+ create␛[0m  ␛[1mDefender KQL Rule␛[0m  ␛[2m…000000000002␛[0m  ␛[2mstatus STAGING␛[0m
 
 ␛[1msplunk␛[0m␛[2m · 0 tenants␛[0m
@@ -44,21 +44,20 @@ exit: 0
         an earlier name of the rule left) is deleted
   ␛[1m␛[36mhelp:␛[0m add (or uncomment) a [[tenants]] entry in .opentide/configurations/platforms/sentinel.toml;
         add (or uncomment) a [[tenants]] entry in
-        .opentide/configurations/platforms/defender_for_endpoint.toml; add (or uncomment) a
-        [[tenants]] entry in .opentide/configurations/platforms/splunk.toml; add (or uncomment) a
-        [[tenants]] entry in .opentide/configurations/platforms/sentinel_one.toml; add (or
-        uncomment) a [[tenants]] entry in
-        .opentide/configurations/platforms/carbon_black_cloud.toml; add (or uncomment) a [[tenants]]
-        entry in .opentide/configurations/platforms/crowdstrike.toml; add (or uncomment) a
-        [[tenants]] entry in .opentide/configurations/platforms/harfanglab.toml
+        .opentide/configurations/platforms/microsoft_defender.toml; add (or uncomment) a [[tenants]]
+        entry in .opentide/configurations/platforms/splunk.toml; add (or uncomment) a [[tenants]]
+        entry in .opentide/configurations/platforms/sentinel_one.toml; add (or uncomment) a
+        [[tenants]] entry in .opentide/configurations/platforms/carbon_black_cloud.toml; add (or
+        uncomment) a [[tenants]] entry in .opentide/configurations/platforms/crowdstrike.toml; add
+        (or uncomment) a [[tenants]] entry in .opentide/configurations/platforms/harfanglab.toml
 ␛[2mdry run, nothing sent␛[0m
 
 ━━━ stderr
 ␛[1m␛[33mwarning:␛[0m a real deploy would need $ELASTIC_API_KEY and $SYSDIG_SECURE_API_TOKEN, which are unset
 ␛[1m␛[33mwarning:␛[0m sentinel has no tenants configured in .opentide/configurations/platforms/sentinel.toml, so
          a real deploy would stop
-␛[1m␛[33mwarning:␛[0m defender_for_endpoint has no tenants configured in
-         .opentide/configurations/platforms/defender_for_endpoint.toml, so a real deploy would stop
+␛[1m␛[33mwarning:␛[0m microsoft_defender has no tenants configured in
+         .opentide/configurations/platforms/microsoft_defender.toml, so a real deploy would stop
 ␛[1m␛[33mwarning:␛[0m splunk has no tenants configured in .opentide/configurations/platforms/splunk.toml, so a
          real deploy would stop
 ␛[1m␛[33mwarning:␛[0m sentinel_one has no tenants configured in

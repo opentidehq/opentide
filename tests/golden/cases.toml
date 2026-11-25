@@ -67,9 +67,9 @@ about = "tide-corpus with `objects/threats`, `objects/objectives` and `objects/r
 [fixtures.tide-corpus-legacy-ids]
 kind = "tide-corpus"
 source = "tests/fixtures/tide_corpus/current"
-about = "tide-corpus with vendor rule ids still on its rules: Defender for Endpoint (a tenant key and a bundle), CrowdStrike and SentinelOne ids, which `deploy migrate-state` moves into deployment state shards, and a Sentinel id, which it drops as unused"
+about = "tide-corpus with vendor rule ids still on its rules: Microsoft Defender (a tenant key and a bundle), CrowdStrike and SentinelOne ids, which `deploy migrate-state` moves into deployment state shards, and a Sentinel id, which it drops as unused"
 edits = [
-  { path = "Objects/Detection Rules/rule-0002-defender-kql.yaml", find = "\n  defender_for_endpoint:\n    enabled: true\n", replace = "\n  defender_for_endpoint:\n    rule_id::prod: 12345\n    rule_id_bundle:\n      lab: '678'\n      # staging comes later\n    enabled: true\n" },
+  { path = "Objects/Detection Rules/rule-0002-defender-kql.yaml", find = "\n  microsoft_defender:\n    enabled: true\n", replace = "\n  microsoft_defender:\n    rule_id::prod: 12345\n    rule_id_bundle:\n      lab: '678'\n      # staging comes later\n    enabled: true\n" },
   { path = "Objects/Detection Rules/rule-0006-crowdstrike-deploy-only.yaml", find = "\n  crowdstrike:\n    enabled: true\n", replace = "\n  crowdstrike:\n    enabled: true\n    rule_id:\n      us-1: ab12cd34\n" },
   { path = "Objects/Detection Rules/rule-0004-sentinel-one-s1ql.yaml", find = "\n  sentinel_one:\n    enabled: true\n", replace = "\n  sentinel_one:\n    rule_id::soc: 901\n    enabled: true\n" },
   { path = "Objects/Detection Rules/rule-0001-sentinel-kql.yaml", find = "\n  sentinel:\n    enabled: true\n", replace = "\n  sentinel:\n    rule_id::soc: 9f2c\n    enabled: true\n" },
@@ -100,7 +100,7 @@ edits = [{ path = "Objects/Detection Rules/rule-0001-sentinel-kql.yaml", find = 
 [fixtures.tide-corpus-bad-values]
 kind = "tide-corpus"
 source = "tests/fixtures/tide_corpus/current"
-about = "tide-corpus with values the models do not take: CrowdStrike `trigger: sometimes` and `severity: low`, SentinelOne `treat_as_threat: maybe`, Defender for Endpoint `alert.severity: Severe` (#1751: deploy refuses both severities)"
+about = "tide-corpus with values the models do not take: CrowdStrike `trigger: sometimes` and `severity: low`, SentinelOne `treat_as_threat: maybe`, Microsoft Defender `alert.severity: Severe` (#1751: deploy refuses both severities)"
 edits = [{ path = "Objects/Detection Rules/rule-0006-crowdstrike-deploy-only.yaml", find = "      trigger: verbose\n", replace = "      trigger: sometimes\n" }, { path = "Objects/Detection Rules/rule-0006-crowdstrike-deploy-only.yaml", find = "      outcome: detection\n", replace = "      outcome: detection\n      severity: low\n" }, { path = "Objects/Detection Rules/rule-0002-defender-kql.yaml", find = "      title: Defender KQL Rule\n", replace = "      title: Defender KQL Rule\n      severity: Severe\n" }, { path = "Objects/Detection Rules/rule-0004-sentinel-one-s1ql.yaml", find = "      treat_as_threat: Malicious\n", replace = "      treat_as_threat: maybe\n" }]
 
 [fixtures.tide-corpus-splunk-advanced]
@@ -236,7 +236,7 @@ about = "a workspace whose Defender, SentinelOne, CrowdStrike, Elastic and Harfa
 [fixtures.live-tenants]
 kind = "copy"
 source = "tests/golden/fixtures/live-tenants"
-about = "the `tenants` workspace with a rule or more per platform whose tenants check queries (Splunk, Carbon Black Cloud, Elastic, Defender for Endpoint, SentinelOne, Sentinel), each sent to the stand-in tenants of tests/cassettes/<platform>/tenant.py: `validate query --live`'s cases (UC-4.6)"
+about = "the `tenants` workspace with a rule or more per platform whose tenants check queries (Splunk, Carbon Black Cloud, Elastic, Microsoft Defender, SentinelOne, Sentinel), each sent to the stand-in tenants of tests/cassettes/<platform>/tenant.py: `validate query --live`'s cases (UC-4.6)"
 
 [fixtures.deploy-tenants]
 kind = "copy"
@@ -247,7 +247,7 @@ about = "the `tenants` workspace with Sysdig's stand-in tenant, tenants that tak
 kind = "copy"
 source = "tests/golden/fixtures/deploy-tenants"
 about = "deploy-tenants with every platform but Sysdig disabled: a deploy without --platform sends to the workspace's enabled platforms, Sysdig's stand-in alone, so the `golden/deploy-sysdig` cassette serves it (UC-4.4c)"
-edits = [{ path = ".opentide/configurations/platforms/carbon_black_cloud.toml", find = "[platform]\nenabled = true\n", replace = "[platform]\nenabled = false\n" }, { path = ".opentide/configurations/platforms/crowdstrike.toml", find = "[platform]\nenabled = true\n", replace = "[platform]\nenabled = false\n" }, { path = ".opentide/configurations/platforms/defender_for_endpoint.toml", find = "[platform]\nenabled = true\n", replace = "[platform]\nenabled = false\n" }, { path = ".opentide/configurations/platforms/elastic.toml", find = "[platform]\nenabled = true\n", replace = "[platform]\nenabled = false\n" }, { path = ".opentide/configurations/platforms/harfanglab.toml", find = "[platform]\nenabled = true\n", replace = "[platform]\nenabled = false\n" }, { path = ".opentide/configurations/platforms/sentinel.toml", find = "[platform]\nenabled = true\n", replace = "[platform]\nenabled = false\n" }, { path = ".opentide/configurations/platforms/sentinel_one.toml", find = "[platform]\nenabled = true\n", replace = "[platform]\nenabled = false\n" }, { path = ".opentide/configurations/platforms/splunk.toml", find = "[platform]\nenabled = true\n", replace = "[platform]\nenabled = false\n" }]
+edits = [{ path = ".opentide/configurations/platforms/carbon_black_cloud.toml", find = "[platform]\nenabled = true\n", replace = "[platform]\nenabled = false\n" }, { path = ".opentide/configurations/platforms/crowdstrike.toml", find = "[platform]\nenabled = true\n", replace = "[platform]\nenabled = false\n" }, { path = ".opentide/configurations/platforms/microsoft_defender.toml", find = "[platform]\nenabled = true\n", replace = "[platform]\nenabled = false\n" }, { path = ".opentide/configurations/platforms/elastic.toml", find = "[platform]\nenabled = true\n", replace = "[platform]\nenabled = false\n" }, { path = ".opentide/configurations/platforms/harfanglab.toml", find = "[platform]\nenabled = true\n", replace = "[platform]\nenabled = false\n" }, { path = ".opentide/configurations/platforms/sentinel.toml", find = "[platform]\nenabled = true\n", replace = "[platform]\nenabled = false\n" }, { path = ".opentide/configurations/platforms/sentinel_one.toml", find = "[platform]\nenabled = true\n", replace = "[platform]\nenabled = false\n" }, { path = ".opentide/configurations/platforms/splunk.toml", find = "[platform]\nenabled = true\n", replace = "[platform]\nenabled = false\n" }]
 
 [fixtures.deploy-push]
 kind = "copy"
@@ -1176,8 +1176,8 @@ cassette = "golden/validate-live-elastic"
 
 [[case]]
 command = "validate query"
-variant = "live-unset-defender-for-endpoint"
-args = ["validate", "query", "--live", "--platform", "defender_for_endpoint"]
+variant = "live-unset-microsoft-defender"
+args = ["validate", "query", "--live", "--platform", "microsoft_defender"]
 fixtures = ["live-tenants"]
 
 [[case]]
@@ -1235,8 +1235,8 @@ fixtures = ["live-tenants"]
 
 [[case]]
 command = "validate query"
-variant = "live-unreachable-defender-for-endpoint"
-args = ["validate", "query", "--live", "--platform", "defender_for_endpoint"]
+variant = "live-unreachable-microsoft-defender"
+args = ["validate", "query", "--live", "--platform", "microsoft_defender"]
 fixtures = ["live-tenants"]
 env = { DEFENDER_CLIENT_SECRET = "golden-stand-in-credential" }
 
@@ -1314,7 +1314,7 @@ fixtures = ["tide-corpus"]
 [[case]]
 command = "query"
 variant = "tenant-defender"
-args = ["query", "--platform", "defender_for_endpoint", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "--limit", "1", "DeviceProcessEvents | project Timestamp, DeviceName"]
+args = ["query", "--platform", "microsoft_defender", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "--limit", "1", "DeviceProcessEvents | project Timestamp, DeviceName"]
 fixtures = ["tenants"]
 env = { DEFENDER_CLIENT_SECRET = "golden-stand-in-credential" }
 cassette = "golden/query-defender"
@@ -1322,7 +1322,7 @@ cassette = "golden/query-defender"
 [[case]]
 command = "query"
 variant = "tenant-defender-jsonl"
-args = ["query", "--platform", "defender_for_endpoint", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "--limit", "1", "--format", "jsonl", "DeviceProcessEvents | project Timestamp, DeviceName"]
+args = ["query", "--platform", "microsoft_defender", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "--limit", "1", "--format", "jsonl", "DeviceProcessEvents | project Timestamp, DeviceName"]
 fixtures = ["tenants"]
 modes = ["plain", "json"]
 env = { DEFENDER_CLIENT_SECRET = "golden-stand-in-credential" }
@@ -1331,7 +1331,7 @@ cassette = "golden/query-defender"
 [[case]]
 command = "query"
 variant = "tenant-defender-csv"
-args = ["query", "--platform", "defender_for_endpoint", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "--limit", "1", "--format", "csv", "DeviceProcessEvents | project Timestamp, DeviceName"]
+args = ["query", "--platform", "microsoft_defender", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "--limit", "1", "--format", "csv", "DeviceProcessEvents | project Timestamp, DeviceName"]
 fixtures = ["tenants"]
 modes = ["plain"]
 env = { DEFENDER_CLIENT_SECRET = "golden-stand-in-credential" }
@@ -1371,8 +1371,8 @@ cassette = "golden/query-elastic-eql"
 
 [[case]]
 command = "query"
-variant = "unset-defender-for-endpoint"
-args = ["query", "--platform", "defender_for_endpoint", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "DeviceEvents | take 1"]
+variant = "unset-microsoft-defender"
+args = ["query", "--platform", "microsoft_defender", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "DeviceEvents | take 1"]
 fixtures = ["tenants"]
 
 [[case]]
@@ -1486,8 +1486,8 @@ fixtures = ["tenants"]
 
 [[case]]
 command = "query"
-variant = "unreachable-defender-for-endpoint"
-args = ["query", "--platform", "defender_for_endpoint", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "DeviceEvents | take 1"]
+variant = "unreachable-microsoft-defender"
+args = ["query", "--platform", "microsoft_defender", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "DeviceEvents | take 1"]
 fixtures = ["tenants"]
 env = { DEFENDER_CLIENT_SECRET = "golden-stand-in-credential" }
 
@@ -2070,7 +2070,7 @@ normalise = ["live-frames"]
 [[case]]
 command = "deploy"
 variant = "send-defender"
-args = ["deploy", "--platform", "defender_for_endpoint", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
+args = ["deploy", "--platform", "microsoft_defender", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
 fixtures = ["deploy-tenants"]
 normalise = ["live-frames"]
 env = { DEFENDER_CLIENT_SECRET = "golden-stand-in-credential" }
@@ -2199,8 +2199,8 @@ cassette = "golden/deploy-sysdig"
 
 [[case]]
 command = "deploy"
-variant = "unreachable-defender-for-endpoint"
-args = ["deploy", "--platform", "defender_for_endpoint", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
+variant = "unreachable-microsoft-defender"
+args = ["deploy", "--platform", "microsoft_defender", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
 fixtures = ["deploy-tenants"]
 normalise = ["live-frames"]
 env = { DEFENDER_CLIENT_SECRET = "golden-stand-in-credential" }
@@ -3206,7 +3206,7 @@ fixtures = ["tide-corpus"]
 [[case]]
 command = "query"
 variant = "defender-file"
-args = ["query", "--platform", "defender_for_endpoint", "--file", "objects/rules/suspicious-lsass.yaml"]
+args = ["query", "--platform", "microsoft_defender", "--file", "objects/rules/suspicious-lsass.yaml"]
 fixtures = ["vscode"]
 
 # Tenant-contacting: the corpus has an elastic tenant; the network is refused.

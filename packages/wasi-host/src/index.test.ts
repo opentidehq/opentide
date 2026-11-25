@@ -578,7 +578,7 @@ const CASES: GoldenCase[] = [
     argv: [
       "query",
       "--platform",
-      "defender_for_endpoint",
+      "microsoft_defender",
       "--from",
       "2099-01-01T00:00:00Z",
       "--to",

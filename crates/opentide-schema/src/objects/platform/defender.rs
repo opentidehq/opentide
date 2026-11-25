@@ -1,5 +1,5 @@
-//! Microsoft Defender for Endpoint custom detection,
-//! `platform::defender_for_endpoint::1.0` (`DefenderConfig` and its nested
+//! Microsoft Defender custom detection,
+//! `platform::microsoft_defender::1.0` (`DefenderConfig` and its nested
 //! models).
 
 use garde::Validate;
@@ -401,7 +401,7 @@ literal_enum! {
 }
 
 platform_block! {
-    /// Microsoft Defender for Endpoint custom detection (`DefenderConfig`).
+    /// Microsoft Defender custom detection (`DefenderConfig`).
     #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, Validate, FromNode)]
     #[serde(deny_unknown_fields)]
     #[garde(context(Pins))]
@@ -410,7 +410,7 @@ platform_block! {
     #[from_node(model = "DefenderConfig")]
     #[cfg_attr(feature = "python", pyo3::pyclass(frozen, get_all, eq, name = "DefenderConfig", module = "opentide._native.models"))]
     #[cfg_attr(feature = "python", expect(clippy::unsafe_derive_deserialize, reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"))]
-    pub struct DefenderConfig ["platform::defender_for_endpoint::1.0"] {
+    pub struct DefenderConfig ["platform::microsoft_defender::1.0"] {
         /// KQL. Multiline. Compiled with matching `exclusions` before deploy.
         #[schemars(extend("tide.template.multiline" = true, "tide.template.spacer" = true))]
         #[from_node(with = "crate::objects::platform::query_text")]

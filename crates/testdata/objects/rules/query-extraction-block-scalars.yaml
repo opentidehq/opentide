@@ -23,7 +23,7 @@ configurations:
     query: >-
       SigninLogs
       | take 1
-  defender_for_endpoint:
+  microsoft_defender:
     enabled: true
     status: STAGING
     alert:

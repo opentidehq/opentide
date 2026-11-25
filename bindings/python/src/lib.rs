@@ -64,7 +64,7 @@ impl Diagnostic {
 }
 
 /// Diagnostics for one query on its own. *platform* is a `configurations` key
-/// (`defender_for_endpoint` selects the Defender schema, `carbon_black_cloud`
+/// (`microsoft_defender` selects the Defender schema, `carbon_black_cloud`
 /// the Carbon Black dialect); *stack* is an Elastic stack (`"9.5"`) for ES|QL.
 #[pyfunction]
 #[pyo3(signature = (text, language, platform=None, stack=None))]

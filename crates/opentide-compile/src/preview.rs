@@ -165,7 +165,7 @@ fn tenant_writes(
 ) -> Result<Json, CompileError> {
     let id = inputs.known.as_deref();
     let writes = match platform {
-        "defender_for_endpoint" => defender::compile(cx, rule, tenant, id),
+        "microsoft_defender" => defender::compile(cx, rule, tenant, id),
         "sentinel_one" => sentinel_one::compile(cx, rule, config, id),
         "crowdstrike" => crowdstrike::compile(cx, rule, config, id),
         "harfanglab" => harfanglab::compile(cx, rule, config),
@@ -401,7 +401,7 @@ pub fn block_preview(platform: &str, block: &Json) -> Json {
 fn model_config_dump(platform: &str, block: &Json) -> Option<Json> {
     match platform {
         "sentinel" => model_dump::<SentinelConfig>(block),
-        "defender_for_endpoint" => model_dump::<DefenderConfig>(block),
+        "microsoft_defender" => model_dump::<DefenderConfig>(block),
         "splunk" => model_dump::<SplunkConfig>(block),
         "sentinel_one" => model_dump::<SentinelOneConfig>(block),
         "crowdstrike" => model_dump::<CrowdstrikeConfig>(block),

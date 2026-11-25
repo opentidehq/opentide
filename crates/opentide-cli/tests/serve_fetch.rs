@@ -456,7 +456,7 @@ fn a_query_through_the_client_is_the_native_query() {
         argv: &[
             "query",
             "--platform",
-            "defender_for_endpoint",
+            "microsoft_defender",
             "--from",
             "2099-01-01T00:00:00Z",
             "--to",

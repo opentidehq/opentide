@@ -2,7 +2,7 @@
 source: crates/opentide-cli/tests/common/snapshot.rs
 description: deploy/json/deploy-tenants/send-defender
 ---
-args: opentide --json deploy --platform defender_for_endpoint --strategy PREVIEW --strategy RELEASE --all --keep-deprecated
+args: opentide --json deploy --platform microsoft_defender --strategy PREVIEW --strategy RELEASE --all --keep-deprecated
 exit: 1
 
 ━━━ stdout · json, 1 lines
@@ -11,7 +11,7 @@ exit: 1
     {
       "action": "create",
       "name": "Defender create rule",
-      "platform": "defender_for_endpoint",
+      "platform": "microsoft_defender",
       "status": "STAGING",
       "tenant": "lab",
       "uuid": "00000000-0000-4000-8047-000000000001"
@@ -19,7 +19,7 @@ exit: 1
     {
       "action": "update",
       "name": "Defender update rule",
-      "platform": "defender_for_endpoint",
+      "platform": "microsoft_defender",
       "status": "STAGING",
       "tenant": "lab",
       "uuid": "00000000-0000-4000-8047-000000000002"
@@ -27,7 +27,7 @@ exit: 1
     {
       "action": "delete",
       "name": "Defender retire rule",
-      "platform": "defender_for_endpoint",
+      "platform": "microsoft_defender",
       "status": "REMOVED",
       "tenant": "lab",
       "uuid": "00000000-0000-4000-8047-000000000003"
@@ -35,17 +35,17 @@ exit: 1
   ],
   "command": "deploy",
   "deployed": [
-    "defender_for_endpoint"
+    "microsoft_defender"
   ],
   "dry_run": false,
   "duration_ms": 0,
-  "error": "Deployment to defender_for_endpoint failed on Defender update rule: could not update the rule on tenant 'lab': Failed to update detection rule with id 7001 in tenant lab (https://graph.microsoft.com/beta/security/rules/detectionRules/7001) - Error Code 404 ((empty body, HTTP 404)) (and 1 more failure)",
+  "error": "Deployment to microsoft_defender failed on Defender update rule: could not update the rule on tenant 'lab': Failed to update detection rule with id 7001 in tenant lab (https://graph.microsoft.com/beta/security/rules/detectionRules/7001) - Error Code 404 ((empty body, HTTP 404)) (and 1 more failure)",
   "exit_code": 1,
   "failure": {
     "argument": null,
     "code": "issues_found",
     "crash_log": null,
-    "message": "Deployment to defender_for_endpoint failed on Defender update rule: could not update the rule on tenant 'lab': Failed to update detection rule with id 7001 in tenant lab (https://graph.microsoft.com/beta/security/rules/detectionRules/7001) - Error Code 404 ((empty body, HTTP 404)) (and 1 more failure)",
+    "message": "Deployment to microsoft_defender failed on Defender update rule: could not update the rule on tenant 'lab': Failed to update detection rule with id 7001 in tenant lab (https://graph.microsoft.com/beta/security/rules/detectionRules/7001) - Error Code 404 ((empty body, HTTP 404)) (and 1 more failure)",
     "suggestion": null
   },
   "failures": [
@@ -53,14 +53,14 @@ exit: 1
       "error": "could not update the rule on tenant 'lab': Failed to update detection rule with id 7001 in tenant lab (https://graph.microsoft.com/beta/security/rules/detectionRules/7001) - Error Code 404 ((empty body, HTTP 404))",
       "id": "00000000-0000-4000-8047-000000000002",
       "name": "Defender update rule",
-      "platform": "defender_for_endpoint",
+      "platform": "microsoft_defender",
       "tenant": "lab"
     },
     {
       "error": "could not delete the rule on tenant 'lab': Failed to delete detection rule with id 7002 in tenant lab",
       "id": "00000000-0000-4000-8047-000000000003",
       "name": "Defender retire rule",
-      "platform": "defender_for_endpoint",
+      "platform": "microsoft_defender",
       "tenant": "lab"
     }
   ],
@@ -68,7 +68,7 @@ exit: 1
   "next_actions": [],
   "ok": false,
   "plan": {
-    "defender_for_endpoint": [
+    "microsoft_defender": [
       "00000000-0000-4000-8047-000000000001",
       "00000000-0000-4000-8047-000000000002",
       "00000000-0000-4000-8047-000000000003"
@@ -80,7 +80,7 @@ exit: 1
       "error": null,
       "id": "00000000-0000-4000-8047-000000000001",
       "name": "Defender create rule",
-      "platform": "defender_for_endpoint",
+      "platform": "microsoft_defender",
       "reason": null,
       "seconds": 0.0,
       "status": "deployed",
@@ -91,7 +91,7 @@ exit: 1
       "error": "could not update the rule on tenant 'lab': Failed to update detection rule with id 7001 in tenant lab (https://graph.microsoft.com/beta/security/rules/detectionRules/7001) - Error Code 404 ((empty body, HTTP 404))",
       "id": "00000000-0000-4000-8047-000000000002",
       "name": "Defender update rule",
-      "platform": "defender_for_endpoint",
+      "platform": "microsoft_defender",
       "reason": null,
       "seconds": 0.0,
       "status": "failed",
@@ -102,7 +102,7 @@ exit: 1
       "error": "could not delete the rule on tenant 'lab': Failed to delete detection rule with id 7002 in tenant lab",
       "id": "00000000-0000-4000-8047-000000000003",
       "name": "Defender retire rule",
-      "platform": "defender_for_endpoint",
+      "platform": "microsoft_defender",
       "reason": null,
       "seconds": 0.0,
       "status": "failed",
@@ -132,7 +132,7 @@ exit: 1
 }
 
 ━━━ stderr
-{"uuid":"00000000-0000-4000-8047-000000000001","platform":"defender_for_endpoint","tenant":"***","external_id":"42","event":"external_id_recorded","level":"warning","timestamp":"0000-00-00 00:00:00"}
+{"uuid":"00000000-0000-4000-8047-000000000001","platform":"microsoft_defender","tenant":"***","external_id":"42","event":"external_id_recorded","level":"warning","timestamp":"0000-00-00 00:00:00"}
 {"detail":"Failed to update detection rule with id 7001 in tenant *** (https://graph.microsoft.com/beta/security/rules/detectionRules/7001) - Error Code 404","context":"(empty body, HTTP 404)","advice":"{\"displayName\":\"Defender update rule\",\"queryCondition\":{\"queryText\":\"DeviceProcessEvents\\n| take 1\\n\"},\"schedule\":{\"period\":\"1H\"},\"detectionAction\":{\"alertTemplate\":{\"title\":\"Defender update rule\",\"description\":\"A rule the defender stand-in tenant receives in a deploy that sends.\",\"severity\":\"high\",\"mitreTechniques\":[],\"impactedAssets\":[{\"@odata.type\":\"#microsoft.graph.security.impactedDeviceAsset\",\"identifier\":\"device_id\"}],\"recommendedActions\":null},\"responseActions\":[],\"organizationalScope\":null},\"isEnabled\":true}","event":"fatal_error","level":"critical","timestamp":"0000-00-00 00:00:00"}
 {"detail":"Failed to delete detection rule with id 7002 in tenant ***","context_1":"Double check scope permissions, and whether the ID actually exists","event":"fatal_error","level":"critical","timestamp":"0000-00-00 00:00:00"}
 
@@ -140,7 +140,7 @@ exit: 1
 {
   "object_uuid": "00000000-0000-4000-8047-000000000001",
   "platforms": {
-    "defender_for_endpoint": {
+    "microsoft_defender": {
       "lab": "42"
     }
   },

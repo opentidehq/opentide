@@ -74,17 +74,11 @@ fn is_root_composition(diagnostic: &Diagnostic) -> bool {
 const DEFENDER_ALERT_CATEGORY_HELP: &str = "Microsoft removed `category` from the Graph custom \
     detection's alert template (it was deprecated in favour of the MITRE `tactics`); delete the key";
 
-/// A Defender block's `configurations.defender_for_endpoint.alert.category`: an unknown key
+/// A Defender block's `configurations.microsoft_defender.alert.category`: an unknown key
 /// since Microsoft removed the field.
 fn is_defender_alert_category(diagnostic: &Diagnostic) -> bool {
     diagnostic.code == "schema_validation"
-        && diagnostic.field_path
-            == [
-                "configurations",
-                "defender_for_endpoint",
-                "alert",
-                "category",
-            ]
+        && diagnostic.field_path == ["configurations", "microsoft_defender", "alert", "category"]
         && diagnostic
             .message
             .starts_with(opentide_schema::from_node::messages::EXTRA_FORBIDDEN)

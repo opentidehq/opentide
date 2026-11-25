@@ -1,7 +1,7 @@
 {
   "object_uuid": "00000000-0000-4000-8047-000000000003",
   "platforms": {
-    "defender_for_endpoint": {
+    "microsoft_defender": {
       "lab": "7002"
     }
   },

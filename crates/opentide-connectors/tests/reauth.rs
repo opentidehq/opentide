@@ -1,7 +1,7 @@
 //! The `401` rule and token renewal on the real Entra ID connectors, over
 //! hand-written replays built from the recorded cassettes
 //! (`tests/cassettes/{sentinel,defender}/`): Sentinel's ARM and Log
-//! Analytics calls and Defender for Endpoint's Graph calls each sign in
+//! Analytics calls and Microsoft Defender's Graph calls each sign in
 //! again once and resend once after a `401`, fail on a second `401` naming
 //! the tenant, and a Defender token is renewed five minutes before it
 //! expires rather than kept for the run.

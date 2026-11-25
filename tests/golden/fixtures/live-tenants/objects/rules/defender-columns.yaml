@@ -10,7 +10,7 @@ description: A hunting query with a custom detection's columns.
 response:
   alert_severity: High
 configurations:
-  defender_for_endpoint:
+  microsoft_defender:
     status: STAGING
     query: |
       DeviceProcessEvents

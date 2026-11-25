@@ -1,4 +1,4 @@
-//! Defender for Endpoint against the cassettes recorded from the Python
+//! Microsoft Defender against the cassettes recorded from the Python
 //! client (`tests/cassettes/defender/`, `cargo xtask cassettes record
 //! defender/<scenario>`): every request the connector sends must be the
 //! Python client's, in order (a JSON body as the same data), and the answers must read as

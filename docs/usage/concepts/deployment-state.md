@@ -1,11 +1,11 @@
 ---
 title: Deployment state
-description: Where opentide keeps the vendor rule ids that Defender for Endpoint, SentinelOne, CrowdStrike, Sysdig, Bitdefender, Graylog, Exabeam and Google SecOps, and platform plugins, assign, and why the files must be committed.
+description: Where opentide keeps the vendor rule ids that Microsoft Defender, SentinelOne, CrowdStrike, Sysdig, Bitdefender, Graylog, Exabeam and Google SecOps, and platform plugins, assign, and why the files must be committed.
 ---
 
 # Deployment state
 
-Microsoft Defender for Endpoint, SentinelOne, CrowdStrike, Sysdig, Bitdefender, Graylog, Exabeam and Google SecOps give every rule
+Microsoft Defender, SentinelOne, CrowdStrike, Sysdig, Bitdefender, Graylog, Exabeam and Google SecOps give every rule
 opentide creates an id of their own, and so do platform plugins. The next deploy has to update or delete the
 remote rule by that id. opentide keeps it in a per-rule JSON file under
 `.opentide/states/`, not in the rule YAML.
@@ -29,7 +29,7 @@ directory: change that line before you deploy (see [0.15.0](../releases.md#0150-
 
 `<uuid>` is the rule's `metadata.uuid` in lowercase canonical form, and the
 file's `object_uuid` is exactly that string. A rule that has never been
-deployed to one of the eight platforms that keep ids (Defender for Endpoint, SentinelOne, CrowdStrike, Sysdig, Bitdefender, Graylog, Exabeam and Google SecOps), or to a [platform plugin](../../sdk/platforms.md#platform-plugins)'s
+deployed to one of the eight platforms that keep ids (Microsoft Defender, SentinelOne, CrowdStrike, Sysdig, Bitdefender, Graylog, Exabeam and Google SecOps), or to a [platform plugin](../../sdk/platforms.md#platform-plugins)'s
 platform, has no file. Sentinel, Splunk, HarfangLab, Carbon Black Cloud and
 Elastic address rules by `metadata.uuid` or by title and never get one. Splunk
 names a saved search after the rule's `name` and keeps no state for it: the
@@ -47,7 +47,7 @@ deployed again: delete it in Splunk if the rule was renamed before then.
     "crowdstrike": {
       "falcon-prod": "c5e1b2a0e4c84f0a9d3b7e6a1c8f0d22"
     },
-    "defender_for_endpoint": {
+    "microsoft_defender": {
       "contoso": "12345",
       "fabrikam": "67890"
     }

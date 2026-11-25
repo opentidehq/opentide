@@ -406,7 +406,7 @@ The engine is [opentidehq/language-server](https://github.com/opentidehq/languag
 | Platform | Language and profile |
 |----------|----------------------|
 | `sentinel` | KQL, Sentinel tables |
-| `defender_for_endpoint` | KQL, Defender tables |
+| `microsoft_defender` | KQL, Defender tables |
 | `splunk` | SPL |
 | `elastic` | ES\|QL, EQL, Kibana KQL or Lucene, by the block's `type` and `language`; ES\|QL against the lowest `setup.version` of the block's tenants |
 | `carbon_black_cloud` | Lucene, Carbon Black dialect |
@@ -456,7 +456,7 @@ error[kql_unknown_operator]: unknown tabular operator 'wher'
 
 It reports the engine's errors, as `validate` does: they fail the run with exit `1` (`failure.code` `issues_found`), or, with `--queries warn`, print as warnings and exit `0` unless `--strict`. The engine's warnings and notes, such as a slow query shape (`kql_where_not_first`, `spl_wildcard`), are style: [`opentide lint`](./lint.md#queries) reports them. A passing run ends `✓ 3 queries valid`; one under `--queries warn` with rejected queries `! 2 warnings in 1 file · 3 queries checked`. With no query to check, the result is `skipped` with exit `0`. When the engine does not load, the run fails with exit `1` and `failure.code` `engine_unavailable`: it never skips.
 
-A query file (`--file hunting/lsass.kql`) holds one query in the language its extension names, in any case (`.KQL` too). With `--platform` it is checked with that platform's profile (`--platform defender_for_endpoint` knows Defender's tables) and `platform` names it; without, with the language alone, and `platform` is empty. `field_path` is empty for it, and given alone it checks no rule. A query file that does not exist, or whose language the `--platform` does not use (a `.kql` file with `--platform splunk`), exits `2`; one that is not UTF-8 or holds no query fails with exit `1`.
+A query file (`--file hunting/lsass.kql`) holds one query in the language its extension names, in any case (`.KQL` too). With `--platform` it is checked with that platform's profile (`--platform microsoft_defender` knows Defender's tables) and `platform` names it; without, with the language alone, and `platform` is empty. `field_path` is empty for it, and given alone it checks no rule. A query file that does not exist, or whose language the `--platform` does not use (a `.kql` file with `--platform splunk`), exits `2`; one that is not UTF-8 or holds no query fails with exit `1`.
 
 `--json` reports `mode` `offline`, `queries_validated`, one entry per query under `queries` (`path`, `platform`, `language`, `field_path`, `line`, `column`, `errors`), every finding under `diagnostics` with the [diagnostic fields](#diagnostic-fields), `engine` (the engine version), and `summary` (`queries`, `files`, `errors`, `warnings`, `notes`, `error_files`, `warning_files`).
 
@@ -472,7 +472,7 @@ sub-query on its own), and is checked one way per platform:
 
 | Platform | Live check |
 |----------|------------|
-| `sentinel`, `defender_for_endpoint`, `sentinel_one` | A search for one row over the last minute. Defender also fails a query whose output lacks the columns a custom detection needs |
+| `sentinel`, `microsoft_defender`, `sentinel_one` | A search for one row over the last minute. Defender also fails a query whose output lacks the columns a custom detection needs |
 | `splunk` | Splunk's `search/parser`, with macros and lookups: no search job runs |
 | `carbon_black_cloud` | Carbon Black's `search_validation`: no process search runs |
 | `elastic` | A Kibana preview of the compiled rule (see [below](#elastic-live-validation-and-deploy)) |
@@ -637,7 +637,7 @@ Live query validation works on **nine platforms**; the offline engine on twelve,
 | Platform | `--live` | Offline |
 |----------|:--------:|:-------:|
 | `sentinel` (KQL) | ✅ | ✅ |
-| `defender_for_endpoint` (KQL) | ✅ | ✅ |
+| `microsoft_defender` (KQL) | ✅ | ✅ |
 | `elastic` (Kuery, Lucene, EQL, ES\|QL) | ✅ | ✅ |
 | `splunk` (SPL) | ✅ | ✅ |
 | `sentinel_one` (S1QL) | ✅ | ❌ |

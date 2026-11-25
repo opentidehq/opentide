@@ -67,15 +67,15 @@ exit: 0
         },
         {
           "action": "create",
-          "path": ".opentide/templates/platforms/defender_for_endpoint.template.yaml"
-        },
-        {
-          "action": "create",
           "path": ".opentide/templates/platforms/elastic.template.yaml"
         },
         {
           "action": "create",
           "path": ".opentide/templates/platforms/harfanglab.template.yaml"
+        },
+        {
+          "action": "create",
+          "path": ".opentide/templates/platforms/microsoft_defender.template.yaml"
         },
         {
           "action": "create",

@@ -147,7 +147,7 @@ configurations:
     query: SecurityEvent | take 1
     scheduling: {frequency: PT1H, lookback: PT2H}
     alert: {title: t}
-  defender_for_endpoint:
+  microsoft_defender:
     status: STAGING
     query: DeviceProcessEvents | take 1
     alert: {title: t}
@@ -448,7 +448,7 @@ metadata:
   tlp: clear
 description: d
 configurations:
-  defender_for_endpoint:
+  microsoft_defender:
     status: STAGING
     alert: {title: t}
     impacted_entities: {device: DeviceId}
@@ -876,7 +876,7 @@ metadata:
   tlp: clear
 description: d
 configurations:
-  defender_for_endpoint:
+  microsoft_defender:
     status: STAGING
     query: DeviceProcessEvents | take 1
     alert: {title: t}
@@ -907,7 +907,7 @@ metadata:
   tlp: clear
 description: d
 configurations:
-  defender_for_endpoint:
+  microsoft_defender:
     status: STAGING
     query: DeviceProcessEvents | take 1
     alert: {title: t}
@@ -930,7 +930,7 @@ metadata:
   tlp: clear
 description: d
 configurations:
-  defender_for_endpoint:
+  microsoft_defender:
     status: STAGING
     query: DeviceProcessEvents | take 1
     alert: {title: t}
@@ -953,7 +953,7 @@ metadata:
   tlp: clear
 description: d
 configurations:
-  defender_for_endpoint:
+  microsoft_defender:
     status: STAGING
     query: DeviceProcessEvents | take 1
     alert: {title: t}
@@ -977,7 +977,7 @@ metadata:
   tlp: clear
 description: d
 configurations:
-  defender_for_endpoint:
+  microsoft_defender:
     status: STAGING
     query: q
     alert: {}

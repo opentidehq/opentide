@@ -657,7 +657,7 @@ detection_model: 00000000-0000-4000-8002-000000000001
 
     #[test]
     fn next_search_item_completes_purpose_again() {
-        let src = "name: R\nmetadata:\n  schema: rule::1.0\nresponse:\n  procedure:\n    searches:\n    - purpose: first\n      system: defender_for_endpoint\n    - \n";
+        let src = "name: R\nmetadata:\n  schema: rule::1.0\nresponse:\n  procedure:\n    searches:\n    - purpose: first\n      system: microsoft_defender\n    - \n";
         let off = src.rfind("- ").unwrap() + 2;
         let items = completions_tide(src, off, &[]);
         assert!(

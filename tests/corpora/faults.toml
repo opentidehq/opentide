@@ -1060,9 +1060,9 @@ id = "kql-unknown-table"
 codes = ["kql_unknown_table"]
 severity = "error"
 command = ["validate"]
-target = { family = "rule", platform = "defender_for_endpoint" }
+target = { family = "rule", platform = "microsoft_defender" }
 ops = [
-    { op = "set", path = "configurations.defender_for_endpoint.query", value = "DeviceProcessEvnts\n| take 1\n" },
+    { op = "set", path = "configurations.microsoft_defender.query", value = "DeviceProcessEvnts\n| take 1\n" },
 ]
 
 [[kind]]

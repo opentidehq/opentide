@@ -15,9 +15,9 @@ Usage: opentide validate query [OPTIONS]
 
 Options:
       --platform <PLATFORM>
-          Check this platform's queries. Offline, default every platform the engine parses: sentinel, defender_for_endpoint, splunk, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops. --live needs one of: sentinel, defender_for_endpoint, splunk, sentinel_one, carbon_black_cloud, elastic, graylog, exabeam, google_secops
+          Check this platform's queries. Offline, default every platform the engine parses: sentinel, microsoft_defender, splunk, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops. --live needs one of: sentinel, microsoft_defender, splunk, sentinel_one, carbon_black_cloud, elastic, graylog, exabeam, google_secops
           
-          [possible values: sentinel, defender_for_endpoint, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops]
+          [possible values: sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops]
 
       --strategy <STRATEGY>
           Check only rules a run with this strategy deploys (repeatable), on the tenants that accept it. Default: PREVIEW and RELEASE

@@ -169,7 +169,7 @@ fn a_hunt_is_reported_at_its_own_path_on_its_system_s_platform() {
 fn every_platform_s_query_is_checked_in_its_language() {
     let text = rule(concat!(
         "  sentinel:\n    query: SecurityEvent | take 1\n",
-        "  defender_for_endpoint:\n    query: DeviceProcessEvnts | take 1\n",
+        "  microsoft_defender:\n    query: DeviceProcessEvnts | take 1\n",
         "  splunk:\n    query: stats count by host\n",
         "  carbon_black_cloud:\n    query: 'process_name:(a'\n",
         "  elastic:\n    type: eql\n    query: process where true | unique process.name\n",
@@ -195,7 +195,7 @@ fn every_platform_s_query_is_checked_in_its_language() {
         );
     };
     // The Defender schema has no such table; Sentinel takes what it does not know.
-    expect("kql_unknown_table", "defender_for_endpoint", "kql");
+    expect("kql_unknown_table", "microsoft_defender", "kql");
     expect("spl_command_without_pipe", "splunk", "spl");
     expect("lucene_parse_error", "carbon_black_cloud", "lucene");
     expect("eql_unsupported", "elastic", "eql");
@@ -225,7 +225,7 @@ fn line_endings_count_as_a_text_mode_read_counts_them() {
 
 #[test]
 fn a_broken_visibility_toml_declares_nothing_not_the_last_workspace_s_datasets() {
-    let text = rule("  defender_for_endpoint:\n    query: MyCustomTable | take 1\n");
+    let text = rule("  microsoft_defender:\n    query: MyCustomTable | take 1\n");
     let unknown_in = |fs: &MemoryFs| {
         let _engine = opentide_cli::queries::ENGINE.lock().unwrap();
         let profiles = Profiles::install(fs, Some(std::path::Path::new("/ws")));
@@ -241,7 +241,7 @@ fn a_broken_visibility_toml_declares_nothing_not_the_last_workspace_s_datasets()
     let declared = MemoryFs::new();
     declared.write(
         visibility_path,
-        "[[logsources]]\nname = \"MyCustomTable\"\nsystem = \"defender_for_endpoint\"\n",
+        "[[logsources]]\nname = \"MyCustomTable\"\nsystem = \"microsoft_defender\"\n",
     );
     let (unknown, problem) = unknown_in(&declared);
     assert_eq!(unknown, 0);
@@ -316,7 +316,7 @@ fn es_ql_is_checked_against_the_lowest_stack_its_tenants_declare() {
 
 #[test]
 fn declared_datasets_come_from_the_workspace_s_visibility_toml() {
-    let text = rule("  defender_for_endpoint:\n    query: MyCustomTable | take 1\n");
+    let text = rule("  microsoft_defender:\n    query: MyCustomTable | take 1\n");
     let unknown = |files: &[(&str, &str)]| {
         let ws = workspace(files);
         let path = PathBuf::from(FILE);
@@ -334,8 +334,7 @@ fn declared_datasets_come_from_the_workspace_s_visibility_toml() {
             .count()
     };
     assert_eq!(unknown(&[(FILE, &text)]), 1);
-    let visibility =
-        "[[logsources]]\nname = \"MyCustomTable\"\nsystem = \"defender_for_endpoint\"\n";
+    let visibility = "[[logsources]]\nname = \"MyCustomTable\"\nsystem = \"microsoft_defender\"\n";
     assert_eq!(
         unknown(&[
             (FILE, &text),
@@ -356,9 +355,8 @@ fn declared_datasets_come_from_the_workspace_s_visibility_toml() {
 /// the watchdog fails the test instead of letting it hang.
 #[test]
 fn queries_checks_spawned_on_a_thread_pool_each_use_their_workspace_s_datasets() {
-    let text = rule("  defender_for_endpoint:\n    query: MyCustomTable | take 1\n");
-    let visibility =
-        "[[logsources]]\nname = \"MyCustomTable\"\nsystem = \"defender_for_endpoint\"\n";
+    let text = rule("  microsoft_defender:\n    query: MyCustomTable | take 1\n");
+    let visibility = "[[logsources]]\nname = \"MyCustomTable\"\nsystem = \"microsoft_defender\"\n";
     // Enough objects that each check's own jobs split across the pool.
     const OBJECTS: usize = 48;
     let unknown = move |declared: bool| {
@@ -571,7 +569,7 @@ fn lint_reads_crlf_and_cr_files_as_their_lf_text() {
 #[test]
 fn lint_reports_query_warnings_and_advisories_but_not_engine_errors() {
     let text = rule(&format!(
-        "  sentinel:\n    query: |\n      search \"error\"\n  defender_for_endpoint:\n    \
+        "  sentinel:\n    query: |\n      search \"error\"\n  microsoft_defender:\n    \
          query: |\n      DeviceProcessEvents\n      | where (\n{ELASTIC_KUERY}    query: \
          'process.name: \"a\"'\n    scheduling:\n      interval: 5m\n      lookback: 0m\n"
     ));

@@ -132,7 +132,7 @@ impl Options {
 /// tenant names (each platform's configuration declares them).
 pub const TENANTS: &[(&str, &[&str])] = &[
     ("sentinel", &["sentinel-staging", "sentinel-production"]),
-    ("defender_for_endpoint", &["mde-production"]),
+    ("microsoft_defender", &["mde-production"]),
     ("splunk", &["splunk-es"]),
     ("elastic", &["elastic-staging", "elastic-production"]),
     ("sysdig", &["sysdig-production"]),
@@ -796,7 +796,7 @@ fn platform_block(
     let number = 4600 + rng.below(100);
     match platform {
         "sentinel" => pairs.extend(sentinel(rng, variant, process, number, name, &mut tags)),
-        "defender_for_endpoint" => pairs.extend(defender(rng, variant, process, &mut tags)),
+        "microsoft_defender" => pairs.extend(defender(rng, variant, process, &mut tags)),
         "splunk" => pairs.extend(splunk(rng, variant, number, name, &mut tags)),
         "sentinel_one" => pairs.extend(sentinel_one(rng, variant, process, name, &mut tags)),
         "carbon_black_cloud" => pairs.extend(kv(vec![(
@@ -1454,7 +1454,7 @@ fn tenant_setup(platform: &str, tenant: &str) -> String {
              azure_subscription_id = \"${var}_SUBSCRIPTION_ID\"\nazure_client_id = \"${var}_CLIENT_ID\"\n\
              azure_client_secret = \"${var}_CLIENT_SECRET\"\n"
         ),
-        "defender_for_endpoint" => format!(
+        "microsoft_defender" => format!(
             "ssl = true\ntenant_id = \"${var}_TENANT_ID\"\nclient_id = \"${var}_CLIENT_ID\"\n\
              client_secret = \"${var}_CLIENT_SECRET\"\n"
         ),
@@ -1578,12 +1578,12 @@ system = \"sentinel\"
 [[logsources]]
 name = \"DeviceProcessEvents\"
 description = \"Defender process events in advanced hunting\"
-system = \"defender_for_endpoint\"
+system = \"microsoft_defender\"
 
 [[logsources]]
 name = \"DeviceNetworkEvents\"
 description = \"Defender network events in advanced hunting\"
-system = \"defender_for_endpoint\"
+system = \"microsoft_defender\"
 
 [[logsources]]
 name = \"WinEventLog:Security\"
