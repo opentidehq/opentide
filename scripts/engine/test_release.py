@@ -255,13 +255,31 @@ class UnpublishedTest(unittest.TestCase):
     def test_an_untagged_draft_a_failed_release_left_is_deleted(self) -> None:
         # The draft, then the tag's ref: 404, then the delete.
         with self.gh_sequence(
-            (0, json.dumps({"isDraft": True}), ""),
+            (0, json.dumps({"isDraft": True, "publishedAt": None}), ""),
             (1, "", "gh: Not Found (HTTP 404)\n"),
             (0, "", ""),
+            (1, "", "release not found\n"),
         ) as run:
             self.assertTrue(release.delete_stale_draft("v1.0.0", "o/r"))
-        self.assertEqual(run.call_args.args[0][:4], ["gh", "release", "delete", "v1.0.0"])
-        self.assertNotIn("--cleanup-tag", run.call_args.args[0])
+        delete = run.call_args_list[2].args[0]
+        self.assertEqual(delete[:4], ["gh", "release", "delete", "v1.0.0"])
+        self.assertNotIn("--cleanup-tag", delete)
+
+    def test_two_stale_drafts_of_one_tag_are_both_deleted(self) -> None:
+        draft = (0, json.dumps({"isDraft": True, "publishedAt": None}), "")
+        gone = (1, "", "gh: Not Found (HTTP 404)\n")
+        with self.gh_sequence(
+            draft, gone, (0, "", ""), draft, gone, (0, "", ""), (1, "", "release not found\n")
+        ) as run:
+            self.assertTrue(release.delete_stale_draft("v1.0.0", "o/r"))
+        self.assertEqual(run.call_count, 7)
+
+    def test_a_published_release_whose_tag_was_deleted_is_kept(self) -> None:
+        # GitHub turns it back into a draft; consumers may have pinned its assets.
+        published = {"isDraft": True, "publishedAt": "2026-11-25T16:00:00Z"}
+        with self.gh_sequence((0, json.dumps(published), "")) as run:
+            self.assertFalse(release.delete_stale_draft("v1.0.0", "o/r"))
+        self.assertEqual(run.call_count, 1)
 
     def test_a_tagged_draft_or_a_published_release_is_kept(self) -> None:
         # An internal candidate: a draft whose tag exists.

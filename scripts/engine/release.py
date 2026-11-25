@@ -99,7 +99,8 @@ only the names the file lists, so an asset with no line passes it.
 already carries assets, a draft's included: the release workflow never uploads
 over them. A rebuild does not reproduce the zips byte for byte, and consumers
 pin the published digests (SHA256SUMS, an editor's pinned highlights). No
-release, or one with notes only, passes.
+release, or one with notes only, passes. The release job runs `stale-draft`
+first, so a draft it left itself never reaches this check.
 
 `stale-draft` deletes the GitHub Release of TAG when it is still a draft and
 the tag itself does not exist: what a release job leaves when an upload fails
@@ -893,23 +894,29 @@ def tag_exists(tag: str, repo: str) -> bool:
 
 
 def delete_stale_draft(tag: str, repo: str) -> bool:
-    """Delete the GitHub Release of `tag` when it is a draft and the tag does
-    not exist; whether one was deleted. A published release, a draft whose tag
-    exists and no release are left alone."""
-    result = subprocess.run(
-        ["gh", "release", "view", tag, "--repo", repo, "--json", "isDraft"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if result.returncode != 0:
-        if "release not found" in result.stderr.lower():
-            return False
-        raise RuntimeError(f"gh release view {tag}: {result.stderr.strip()}")
-    if not json.loads(result.stdout).get("isDraft", False) or tag_exists(tag, repo):
-        return False
-    subprocess.run(["gh", "release", "delete", tag, "--repo", repo, "--yes"], check=True)
-    return True
+    """Delete the GitHub Release of `tag` while it is a draft that was never
+    published and the tag does not exist; whether any was deleted. Several such
+    drafts can share a tag name: each is deleted (up to five). A published
+    release (`publishedAt` set, even one turned back into a draft by deleting
+    its tag), a draft whose tag exists and no release are left alone."""
+    deleted = False
+    for _ in range(5):
+        result = subprocess.run(
+            ["gh", "release", "view", tag, "--repo", repo, "--json", "isDraft,publishedAt"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            if "release not found" in result.stderr.lower():
+                return deleted
+            raise RuntimeError(f"gh release view {tag}: {result.stderr.strip()}")
+        found = json.loads(result.stdout)
+        if not found.get("isDraft", False) or found.get("publishedAt") or tag_exists(tag, repo):
+            return deleted
+        subprocess.run(["gh", "release", "delete", tag, "--repo", repo, "--yes"], check=True)
+        deleted = True
+    return deleted
 
 
 def write_sums(directory: Path) -> Path:

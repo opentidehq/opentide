@@ -554,7 +554,7 @@ jobs:
   # (.github/release-notes/vX.Y.Z.md); a candidate's, its own short file
   # (.github/release-notes/vX.Y.Z-rc.N.md) when it has one, else CHANGELOG.md's
   # [Unreleased] (scripts/build/release.py notes). A candidate is a
-  # pre-release, never Latest; a release is Latest (no --latest flag).
+  # pre-release, never Latest; a release is published with --latest.
   release:
     name: GitHub Release
     needs: [guard, attest]
