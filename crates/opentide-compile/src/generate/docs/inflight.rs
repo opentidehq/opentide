@@ -12,6 +12,9 @@ use opentide_schema::node::{Node, Value, load};
 use opentide_workspace::Index;
 use serde_json::Value as JsonValue;
 
+use crate::generate::inflight::{Preview, Skipped, vet};
+use crate::json::Json;
+
 /// Whether `body` is a shard envelope (`schema: inflight.shard…`).
 fn is_wrapped(body: &JsonValue) -> bool {
     body.get("schema")
@@ -139,22 +142,18 @@ fn shards(folder: &Path) -> IndexMap<String, (std::path::PathBuf, JsonValue)> {
 }
 
 /// `index` with the shards of `folder` overlaid, or `None` when there are
-/// none to apply: a shard adds an object, or replaces one of a lower
-/// version, or of the same version when it is an envelope.
-pub fn overlay(index: &Index, folder: &Path) -> Option<Index> {
+/// none to apply, and the previews left out: a shard adds an object, or
+/// replaces one of a lower version, or of the same version when it is an
+/// envelope, unless its object does not hold up ([`vet`]).
+pub fn overlay(index: &Index, folder: &Path) -> (Option<Index>, Vec<Skipped>) {
     let shards = shards(folder);
-    if shards.is_empty() {
-        return None;
-    }
-    let mut overlaid = index.clone();
-    let mut changed = false;
-    let mut objectives = Vec::new();
+    let mut previews = Vec::new();
     for (uuid, (path, shard)) in shards {
         let object = shard_object(&shard);
         let Some(family) = object_family(object) else {
             continue;
         };
-        let Some(bucket) = overlaid.objects.get(&family) else {
+        let Some(bucket) = index.objects.get(&family) else {
             continue;
         };
         let replace = match bucket.get(&uuid).and_then(|existing| existing.root()) {
@@ -171,19 +170,25 @@ pub fn overlay(index: &Index, folder: &Path) -> Option<Index> {
         let Ok(document) = load(&object.to_string()) else {
             continue;
         };
-        if overlaid.overlay(&family, &uuid, path, Arc::new(document)) {
-            changed = true;
-            if family == "objective" {
-                objectives.push(uuid);
-            }
-        }
+        let change = is_wrapped(&shard)
+            .then(|| shard.get("change"))
+            .flatten()
+            .and_then(|change| load(&change.to_string()).ok())
+            .and_then(|change| change.root().map(|root| Json::from_node(root)));
+        previews.push(Preview {
+            family,
+            uuid,
+            path,
+            document: Arc::new(document),
+            change,
+        });
     }
-    if !changed {
-        return None;
+    let count = previews.len();
+    if count == 0 {
+        return (None, Vec::new());
     }
-    overlaid.reindex_signals(&objectives);
-    overlaid.refresh_references();
-    Some(overlaid)
+    let (overlaid, skipped) = vet(index, previews, &super::catalog::check_model);
+    ((skipped.len() < count).then_some(overlaid), skipped)
 }
 
 #[cfg(test)]

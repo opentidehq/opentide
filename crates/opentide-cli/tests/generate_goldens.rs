@@ -21,11 +21,12 @@ use opentide_cli::{Host, run};
 mod replay;
 use replay::{Buffer, fixture};
 
-/// The exports that rendered before one failed are on disk, as the oracle,
-/// which writes them one after another, leaves them: a threat without
-/// `metadata.version` fails the objects table after the Navigator layer.
+/// A phase that fails writes nothing: a threat without `metadata.version`
+/// fails the objects table after the Navigator layer rendered, and neither
+/// export is written (the oracle wrote them one after another, leaving the
+/// layer of a run that failed for CI to publish).
 #[test]
-fn exports_before_a_failure_are_written() {
+fn exports_are_not_written_when_one_fails() {
     let scratch = tempfile::tempdir().unwrap();
     let ws = std::fs::canonicalize(scratch.path()).unwrap().join("ws");
     fixture("tide-corpus", &ws);
@@ -59,7 +60,7 @@ fn exports_before_a_failure_are_written() {
         "{stdout}"
     );
     let exports = ws.join(".opentide/exports");
-    assert!(exports.join("attack-navigator.json").is_file());
+    assert!(!exports.join("attack-navigator.json").exists());
     assert!(!exports.join("objects.export.json").exists());
     assert!(!exports.join("revisions.export.json").exists());
 }
@@ -131,9 +132,15 @@ fn the_explorer_publishes_only_what_this_run_chose() {
     let written: serde_json::Value =
         serde_json::from_slice(&std::fs::read(&visibility).unwrap()).unwrap();
     assert_eq!(written["tlp"], "green");
+    // A newer version of the rule that passes its model check.
+    let mut previewed =
+        object_json(&ws.join("Objects/Detection Rules/rule-0001-sentinel-kql.yaml"));
+    previewed["name"] = "Previewed".into();
+    previewed["metadata"]["version"] = 2.into();
+    previewed["configurations"]["sentinel"]["status"] = "PRODUCTION".into();
     std::fs::write(
         ws.join(".opentide/inflight/00000000-0000-4000-8003-000000000001.json"),
-        r#"{"schema": "inflight.shard::1.0", "object": {"name": "Previewed", "metadata": {"uuid": "00000000-0000-4000-8003-000000000001", "schema": "rule::1.0", "version": 2}, "configurations": {"splunk": {"status": "PRODUCTION"}}}}"#,
+        serde_json::json!({"schema": "inflight.shard::1.0", "object": previewed}).to_string(),
     )
     .unwrap();
     let (code, stdout) = run_json(&ws, &["generate", "explorer"]);
@@ -148,6 +155,222 @@ fn the_explorer_publishes_only_what_this_run_chose() {
         bundle["stagingIndex"]["productionObjects"],
         serde_json::json!(["00000000-0000-4000-8003-000000000001"])
     );
+}
+
+/// An object file as JSON.
+fn object_json(path: &Path) -> serde_json::Value {
+    let text = std::fs::read_to_string(path).unwrap();
+    let document = opentide_schema::node::load(&text).unwrap();
+    let json = opentide_compile::json::Json::from_node(document.root().unwrap());
+    serde_json::from_str(&json.to_compact()).unwrap()
+}
+
+/// Every file under `dir`, by its path from `dir`, with its bytes.
+fn files_under(dir: &Path) -> std::collections::BTreeMap<PathBuf, Vec<u8>> {
+    let mut found = std::collections::BTreeMap::new();
+    let mut folders = vec![dir.to_path_buf()];
+    while let Some(folder) = folders.pop() {
+        for entry in std::fs::read_dir(&folder).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                folders.push(path);
+            } else {
+                let bytes = std::fs::read(&path).unwrap();
+                found.insert(path.strip_prefix(dir).unwrap().to_path_buf(), bytes);
+            }
+        }
+    }
+    found
+}
+
+/// One open pull request's preview whose object fails its model check (a
+/// typo'd date, as RE-02 found on a real main) is left out with a warning
+/// naming its shard, object and pull request: `generate docs` and `generate
+/// explorer` exit 0, the committed object's page is the one written, a new
+/// object's page is not, and every other page is as without the shard.
+#[test]
+fn an_invalid_inflight_preview_is_left_out_with_a_warning() {
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = std::fs::canonicalize(scratch.path()).unwrap().join("ws");
+    fixture("tide-corpus", &ws);
+    let (code, stdout) = run_at(&ws, &["--json", "generate", "docs"]);
+    assert_eq!(code, 0, "{stdout}");
+    let docs = ws.join("docs");
+    let before = files_under(&docs);
+    let (code, stdout) = run_json(&ws, &["generate", "explorer"]);
+    assert_eq!(code, 0, "{stdout}");
+    let bundle_path = ws.join(".opentide/exports/explorer.bundle.json");
+    let bundle = || -> serde_json::Value {
+        serde_json::from_slice(&std::fs::read(&bundle_path).unwrap()).unwrap()
+    };
+    let models_before = bundle()["models"].clone();
+    let rule = object_json(&ws.join("Objects/Detection Rules/rule-0002-defender-kql.yaml"));
+    let mut newer = rule.clone();
+    newer["name"] = "Typo Rule".into();
+    newer["metadata"]["version"] = 2.into();
+    newer["metadata"]["created"] = "20256-11-06".into();
+    let mut added = rule;
+    added["name"] = "New Typo Rule".into();
+    added["metadata"]["uuid"] = "00000000-0000-4000-8003-00000000aaaa".into();
+    added["metadata"]["modified"] = "2026-11-24S".into();
+    let inflight = ws.join(".opentide/inflight");
+    std::fs::create_dir_all(&inflight).unwrap();
+    let shard = |object: serde_json::Value, change: serde_json::Value| {
+        serde_json::json!({"schema": "inflight.shard::1.0", "object": object, "change": change})
+            .to_string()
+    };
+    std::fs::write(
+        inflight.join("00000000-0000-4000-8003-000000000002.json"),
+        shard(
+            newer,
+            serde_json::json!({"platform": "github", "number": 12}),
+        ),
+    )
+    .unwrap();
+    std::fs::write(
+        inflight.join("00000000-0000-4000-8003-00000000aaaa.json"),
+        shard(
+            added,
+            serde_json::json!({"platform": "gitlab", "number": 7, "url": "https://g/p/-/merge_requests/7"}),
+        ),
+    )
+    .unwrap();
+    let warned = |stdout: &str| {
+        let document: serde_json::Value = serde_json::from_str(stdout).unwrap();
+        let warnings: Vec<String> = document["warnings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|warning| warning.as_str().unwrap().to_owned())
+            .collect();
+        assert_eq!(warnings.len(), 2, "{stdout}");
+        assert!(
+            warnings[0].starts_with(
+                "inflight preview .opentide/inflight/00000000-0000-4000-8003-000000000002.json \
+                 skipped: 00000000-0000-4000-8003-000000000002 \"Typo Rule\" from PR #12: "
+            ) && warnings[0].contains("metadata.created"),
+            "{warnings:?}"
+        );
+        assert!(
+            warnings[1].contains(
+                "00000000-0000-4000-8003-00000000aaaa \"New Typo Rule\" from MR !7 \
+                 (https://g/p/-/merge_requests/7): "
+            ) && warnings[1].contains("metadata.modified"),
+            "{warnings:?}"
+        );
+    };
+    for words in [
+        &["--json", "generate", "docs"][..],
+        &["--json", "generate", "docs", "rules"],
+        &["--json", "generate"],
+    ] {
+        let (code, stdout) = run_at(&ws, words);
+        assert_eq!(code, 0, "{words:?}: {stdout}");
+        warned(&stdout);
+        assert_eq!(files_under(&docs), before, "{words:?}");
+    }
+    let (code, stdout) = run_json(&ws, &["generate", "explorer"]);
+    assert_eq!(code, 0, "{stdout}");
+    warned(&stdout);
+    assert_eq!(bundle()["models"], models_before);
+}
+
+/// `generate inflight` refuses an object that fails its model check: the run,
+/// its own pull request's, exits 1 naming the file and the error, and writes
+/// no shard for the default branch's docs to trip on.
+#[test]
+fn inflight_shards_refuse_an_invalid_object() {
+    if !has_git() {
+        return;
+    }
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = std::fs::canonicalize(scratch.path()).unwrap().join("ws");
+    fixture("tide-corpus-folders", &ws);
+    git(&ws, &["init", "-q", "-b", "main"]);
+    git(&ws, &["add", "-A"]);
+    git(&ws, &["commit", "-q", "-m", "catalogue"]);
+    git(&ws, &["checkout", "-q", "-b", "feature"]);
+    let rule = std::fs::read_dir(ws.join("objects/rules"))
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .filter(|path| path.extension().is_some_and(|ext| ext == "yaml"))
+        .min()
+        .unwrap();
+    let text = std::fs::read_to_string(&rule).unwrap();
+    let created = text
+        .lines()
+        .find(|line| line.trim_start().starts_with("created:"))
+        .unwrap()
+        .to_owned();
+    let typo = format!(
+        "{}created: 20256-11-06",
+        &created[..created.find("created").unwrap()]
+    );
+    std::fs::write(&rule, text.replacen(&created, &typo, 1)).unwrap();
+    let (code, stdout) = run_json(&ws, &["generate", "inflight"]);
+    assert_eq!(code, 1, "{stdout}");
+    let document: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    let message = document["message"].as_str().unwrap();
+    let relative = rule
+        .strip_prefix(&ws)
+        .unwrap()
+        .to_string_lossy()
+        .into_owned();
+    assert!(
+        message.starts_with(&format!("inflight: no shard written: {relative} (")),
+        "{message}"
+    );
+    assert!(message.contains("metadata.created"), "{message}");
+    let shards = ws.join(".opentide/inflight");
+    let written = std::fs::read_dir(&shards)
+        .map(|entries| entries.filter_map(Result::ok).count())
+        .unwrap_or(0);
+    assert_eq!(written, 0);
+}
+
+/// A docs run that fails after it rendered every page (an object file that
+/// does not parse fails the phase once its pages are made) leaves the pages
+/// of the run before it, byte for byte: a changed rule's page is not
+/// rewritten, a stale page not removed, and nothing is staged beside them.
+#[test]
+fn a_failed_docs_run_leaves_the_previous_pages() {
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = std::fs::canonicalize(scratch.path()).unwrap().join("ws");
+    fixture("tide-corpus", &ws);
+    let (code, stdout) = run_at(&ws, &["--json", "generate", "docs"]);
+    assert_eq!(code, 0, "{stdout}");
+    let docs = ws.join("docs");
+    let generated = std::fs::read_to_string(docs.join("rules/sentinel-kql-rule.md")).unwrap();
+    std::fs::write(docs.join("rules/old-rule.md"), &generated).unwrap();
+    let before = files_under(&docs);
+    let siblings = || -> Vec<String> {
+        let mut names: Vec<String> = std::fs::read_dir(&ws)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        names.sort();
+        names
+    };
+    let around = siblings();
+    let rule = ws.join("Objects/Detection Rules/rule-0002-defender-kql.yaml");
+    let text = std::fs::read_to_string(&rule).unwrap();
+    std::fs::write(
+        &rule,
+        text.replacen("name: Defender KQL Rule", "name: Renamed Rule", 1),
+    )
+    .unwrap();
+    std::fs::write(
+        ws.join("Objects/Detection Rules/rule-0099-broken.yaml"),
+        "name: [unclosed\n",
+    )
+    .unwrap();
+    for words in [&["--json", "generate", "docs"][..], &["--json", "generate"]] {
+        let (code, stdout) = run_at(&ws, words);
+        assert_eq!(code, 1, "{words:?}: {stdout}");
+        assert!(stdout.contains("logged an error"), "{stdout}");
+        assert_eq!(files_under(&docs), before, "{words:?}");
+        assert_eq!(siblings(), around, "{words:?}");
+    }
 }
 
 /// Runs git in `dir`, without the host's configuration.
@@ -176,7 +399,7 @@ fn inflight_shards_follow_the_branch() {
     }
     let scratch = tempfile::tempdir().unwrap();
     let ws = std::fs::canonicalize(scratch.path()).unwrap().join("ws");
-    fixture("vscode", &ws);
+    fixture("tide-corpus-folders", &ws);
     git(&ws, &["init", "-q", "-b", "main"]);
     git(&ws, &["add", "-A"]);
     git(&ws, &["commit", "-q", "-m", "catalogue"]);
@@ -529,7 +752,7 @@ fn has_git() -> bool {
 /// The vscode fixture committed on `main`, checked out on `feature`; its
 /// rule files, sorted.
 fn feature_branch(ws: &Path) -> Vec<PathBuf> {
-    fixture("vscode", ws);
+    fixture("tide-corpus-folders", ws);
     git(ws, &["init", "-q", "-b", "main"]);
     git(ws, &["add", "-A"]);
     git(ws, &["commit", "-q", "-m", "catalogue"]);
@@ -554,7 +777,8 @@ fn inflight_skips_deleted_object_files() {
     let scratch = tempfile::tempdir().unwrap();
     let ws = std::fs::canonicalize(scratch.path()).unwrap().join("ws");
     let rules = feature_branch(&ws);
-    std::fs::remove_file(ws.join("objects/objectives/detect-lsass-access.yaml")).unwrap();
+    std::fs::remove_file(ws.join("objects/objectives/objective-0001-credential-access.yaml"))
+        .unwrap();
     let text = std::fs::read_to_string(&rules[0]).unwrap();
     std::fs::write(&rules[0], format!("{text}\n# changed\n")).unwrap();
     let inflight = ws.join(".opentide/inflight");

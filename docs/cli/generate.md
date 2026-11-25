@@ -67,6 +67,8 @@ opentide --json generate docs
 }
 ```
 
+A failed phase writes nothing: each phase stages its files and moves them into place only when it succeeds, so the files of the previous run stay as they were, and the exports, pages or bundle of a run that failed are never half-written. The files go into a hidden staging folder beside the output folder, then each replaces its predecessor with a rename. A run cut off while it moves them can leave some files of the new run beside the rest of the old one, but never a half-written file. Files the generator keeps, such as hand-written pages in the output folder, stay where they are.
+
 A phase that logged errors reports the first one, as `docs: logged an error: malformed_object_yaml (path=…, error=…)` or `logged 3 errors, first: …`. The same error logged twice counts once. A phase that logged an error and then raised reports both, the logged error after a `;`, because the skipped object is often what broke the later one. Every error is on stderr. Run [`opentide validate`](./validate.md) to list every broken object at once.
 
 Every phase that loads the registry parses every object file, and the `schemas` and `templates` phases load it again. A malformed object file therefore fails the first such phase: `opentide generate schemas templates vocabs snippets` stops at `schemas`.
@@ -299,7 +301,7 @@ The file holds the log sources `.opentide/configurations/visibility.toml` declar
 
 The datasets a query reads come from the analysis engine, which reads the table, sourcetype or index pattern as the query checks do; a declared pattern (`logs-*`) covers the datasets it matches.
 
-The explorer previews open pull requests: the bundle is built with the [inflight](#generate-inflight) shards on `.opentide/inflight/` applied over the object files, as `generate docs` is. Every other command reads the object files alone. `generate explorer` is not a phase of the default run. The pipelines `opentide setup ci github --explorer-pages` writes run `opentide --json generate explorer` and publish the site to GitHub Pages ([setup](./setup.md)).
+The explorer previews open pull requests: the bundle is built with the [inflight](#generate-inflight) shards on `.opentide/inflight/` applied over the object files, as `generate docs` is, and leaves out the same invalid previews. Every other command reads the object files alone. `generate explorer` is not a phase of the default run. The pipelines `opentide setup ci github --explorer-pages` writes run `opentide --json generate explorer` and publish the site to GitHub Pages ([setup](./setup.md)).
 
 ## generate inflight
 
@@ -311,6 +313,16 @@ opentide generate inflight prune
 ```
 
 The pipelines from `opentide setup ci` run this on every pull request and commit only `.opentide/inflight/` to the default branch, from a worktree of that branch, never the pull request itself.
+
+`generate inflight` checks each changed object as `generate docs` reads it. An object that fails its model check (a typo'd date such as `created: 20256-11-06`) fails the run with exit `1`, naming the file, the object's UUID and the first error, and no shard is written. In the pipelines this is the pull or merge request's own `inflight_shards` job, so the invalid object stays out of the default branch's previews.
+
+`generate docs` and `generate explorer` also check every shard they read. A preview is left out when its object fails its model check, when a reference it makes (a rule's `detection_model`, an objective's `threats`) does not resolve once the previews are laid over the object files, or when it drops a signal a committed rule uses. A preview that only resolved through one left out is left out too. Each is reported as a warning (with `--json`, in `warnings`) naming the shard file, the object's UUID and name, its pull or merge request, and the first error:
+
+```text
+inflight preview .opentide/inflight/<uuid>.json skipped: <uuid> "Typo Rule" from PR #12: … ; the committed object is shown instead
+```
+
+The committed object's page is written as without the preview, and a new object's page is not written. A preview never fails the run.
 
 ## generate extract
 
