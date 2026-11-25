@@ -60,7 +60,7 @@ def _tenant() -> Any:
 
 
 def _request(text: str, window: TimeWindow, limit: int) -> QueryRequest:
-    return QueryRequest(platform="defender_for_endpoint", text=text, window=window, limit=limit)
+    return QueryRequest(platform="microsoft_defender", text=text, window=window, limit=limit)
 
 
 def query() -> None:
