@@ -174,6 +174,36 @@ def test_the_gates_jobs_run_on_linux_and_only_the_build_compiles() -> None:
     assert "maturin build --locked --profile dev" in native
 
 
+def test_the_website_guard_builds_the_site_from_this_runs_docs() -> None:
+    """opentidehq/website syncs docs/ every hour; `website` runs its sync, tests,
+    build and docs check on this run's own tree (not the branch the website's
+    .gitmodules names), so a page the site refuses fails the pull request."""
+    job = ci_jobs()["website"]
+    assert job["if"] == "needs.changes.outputs.website == 'true'"
+    checkouts = {
+        str((step.get("with") or {}).get("path", ".")): step.get("with") or {}
+        for step in job["steps"]
+        if str(step.get("uses", "")).startswith("actions/checkout@")
+    }
+    assert checkouts["website"]["repository"] == "opentidehq/website"
+    assert checkouts["website"]["ref"] == "main"
+    assert checkouts["website/vendor/specifications"]["repository"] == "opentidehq/specifications"
+    assert checkouts["website/vendor/specifications"]["ref"] == "main"
+    # This run's tree: no other repository, no other ref.
+    ours = checkouts["website/vendor/opentide"]
+    assert "repository" not in ours and "ref" not in ours
+    assert ours["sparse-checkout"] == "docs"
+    steps = [str(step.get("run", "")) for step in job["steps"]]
+    assert "pnpm install --frozen-lockfile" in "\n".join(steps)
+    script = [run.split()[1] for run in steps if run.startswith("scripts/ci/website-sync.sh")]
+    assert script == ["sync", "test", "build", "verify"]
+    # The one website test skipped compares its own committed gitlinks.
+    guard = (ROOT / "scripts" / "ci" / "website-sync.sh").read_text(encoding="utf-8")
+    assert guard.count("--test-skip-pattern=") == 1
+    assert 'pattern=\\"workspace committed docs match vendor gitlinks\\"' in guard
+    assert "pnpm exec next build" in guard and "pnpm sync:content" in guard
+
+
 # --- What no workflow does ---------------------------------------------------
 
 
