@@ -1,0 +1,2 @@
+// prod:make_graph_operator invalid
+DeviceNetworkEvents | make-graph DeviceName <-- RemoteIP

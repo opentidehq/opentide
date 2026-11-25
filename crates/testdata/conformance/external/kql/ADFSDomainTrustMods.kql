@@ -1,0 +1,39 @@
+(union isfuzzy=true
+(
+AuditLogs
+| where OperationName =~ "Set federation settings on domain"
+//| where Result =~ "success"   // commenting out, as it may be interesting to capture failed attempts
+| mv-expand TargetResources
+| extend modifiedProperties = parse_json(TargetResources).modifiedProperties
+| mv-expand modifiedProperties
+| extend targetDisplayName = tostring(parse_json(modifiedProperties).displayName)
+),
+(
+AuditLogs
+| where OperationName =~ "Set domain authentication"
+//| where Result =~ "success"   // commenting out, as it may be interesting to capture failed attempts
+| mv-expand TargetResources
+| extend modifiedProperties = parse_json(TargetResources).modifiedProperties
+| mv-expand modifiedProperties
+| mv-apply Property = modifiedProperties on
+  (
+      where Property.displayName =~ "LiveType"
+      | extend targetDisplayName = tostring(Property.displayName),
+               NewDomainValue = tostring(Property.newValue)
+  )
+| where NewDomainValue has "Federated"
+)
+)
+| mv-apply AdditionalDetail = AdditionalDetails on
+  (
+      where AdditionalDetail.key =~ "User-Agent"
+      | extend UserAgent = tostring(AdditionalDetail.value)
+  )
+| extend InitiatingUserOrApp = iff(isnotempty(InitiatedBy.user.userPrincipalName),tostring(InitiatedBy.user.userPrincipalName), tostring(InitiatedBy.app.displayName))
+| extend InitiatingAppName = tostring(InitiatedBy.app.displayName)
+| extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)
+| extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)
+| extend InitiatingAadUserId = tostring(InitiatedBy.user.id)
+| extend InitiatingIpAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))
+| extend InitiatingAccountName = tostring(split(InitiatingUserPrincipalName, "@")[0]), InitiatingAccountUPNSuffix = tostring(split(InitiatingUserPrincipalName, "@")[1])
+| project-reorder TimeGenerated, OperationName, InitiatingUserOrApp, AADOperationType, targetDisplayName, Result, InitiatingIpAddress, UserAgent, CorrelationId, TenantId, AADTenantId

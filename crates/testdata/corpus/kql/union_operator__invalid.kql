@@ -1,0 +1,2 @@
+// prod:union_operator invalid
+SecurityEvent | union

@@ -1,0 +1,3 @@
+// prod:comment invalid
+FROM logs-* METADATA _id /* unterminated
+| LIMIT 1

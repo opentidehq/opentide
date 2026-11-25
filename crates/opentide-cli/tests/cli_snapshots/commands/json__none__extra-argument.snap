@@ -1,0 +1,29 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: commands/json/none/extra-argument
+---
+args: opentide --json commands extra
+exit: 2
+
+━━━ stdout · json, 1 lines
+{
+  "command": "commands",
+  "duration_ms": 0,
+  "error": "unexpected argument 'extra' found",
+  "exit_code": 2,
+  "failure": {
+    "argument": "extra",
+    "code": "usage_error",
+    "crash_log": null,
+    "message": "unexpected argument 'extra' found",
+    "suggestion": null
+  },
+  "message": "unexpected argument 'extra' found",
+  "next_actions": [],
+  "ok": false,
+  "schema_version": 1,
+  "status": "failed",
+  "summary": {}
+}
+
+━━━ stderr · empty

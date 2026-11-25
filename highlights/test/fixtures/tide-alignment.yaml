@@ -1,0 +1,35 @@
+name: HL KQL
+
+metadata:
+  uuid: 6bd65871-e768-4bb7-875b-570909c287a5
+  schema: rule::1.0
+  version: 1
+  created: 2026-11-22
+  tlp: amber
+  author: qa
+  contributors:
+    - Acme
+    - qa
+
+description: |
+  # What it finds
+  Opens a handle to `lsass.exe`, **often**, *quietly*, see [docs](https://x.y).
+  - one item
+  > a quoted line
+
+detection_model: 00000000-0000-4000-8006-000000000007
+
+response:
+  alert_severity: Informational
+
+configurations:
+  sentinel:
+    schema: platform::sentinel::1.0
+    status: STAGING
+    enabled: true
+    query: |
+      SecurityEvent
+      | where TimeGenerated > ago(1d)
+    scheduling:
+      interval: 1h
+      fields: [proc.name, proc.pname]

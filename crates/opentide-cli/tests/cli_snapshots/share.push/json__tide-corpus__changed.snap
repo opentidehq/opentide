@@ -1,0 +1,31 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: share.push/json/tide-corpus/changed
+---
+args: opentide --json share push --changed
+exit: 1
+
+━━━ stdout · json, 1 lines
+{
+  "command": "share push",
+  "duration_ms": 0,
+  "error": "opentide share push --changed runs only in GitHub Actions, GitLab CI, or Azure Pipelines",
+  "exit_code": 1,
+  "failure": {
+    "argument": null,
+    "code": "changed_outside_ci",
+    "crash_log": null,
+    "message": "opentide share push --changed runs only in GitHub Actions, GitLab CI, or Azure Pipelines",
+    "suggestion": null
+  },
+  "message": "opentide share push --changed runs only in GitHub Actions, GitLab CI, or Azure Pipelines",
+  "next_actions": [],
+  "ok": false,
+  "preflight": "changed_outside_ci",
+  "records": [],
+  "schema_version": 1,
+  "status": "failed",
+  "summary": {}
+}
+
+━━━ stderr · empty

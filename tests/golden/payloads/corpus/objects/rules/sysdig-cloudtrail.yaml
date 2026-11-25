@@ -1,0 +1,24 @@
+name: Sysdig Cloudtrail
+
+metadata:
+  uuid: 00000000-0000-4000-8005-000000000104
+  schema: rule::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+  author: Detection Team
+
+description: |
+  Sysdig Cloudtrail for the compile corpus.
+    Indented second line.
+response:
+  alert_severity: Critical
+
+configurations:
+  sysdig:
+    enabled: true
+    schema: platform::sysdig::1.0
+    status: DISABLED
+    source: aws_cloudtrail
+    condition: ct.name = ConsoleLogin and ct.error exists

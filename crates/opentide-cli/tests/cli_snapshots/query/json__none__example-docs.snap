@@ -1,0 +1,35 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: query/json/none/example-docs
+---
+args: opentide --json query --platform sentinel 'SecurityEvent | where EventID == 4688 | take 20'
+exit: 1
+
+━━━ stdout · json, 1 lines
+{
+  "command": "query",
+  "duration_ms": 0,
+  "error": "No workspace at <WS>: no .opentide/ or objects/ there or above it",
+  "exit_code": 1,
+  "failure": {
+    "argument": null,
+    "code": "workspace_not_found",
+    "crash_log": null,
+    "message": "No workspace at <WS>: no .opentide/ or objects/ there or above it",
+    "suggestion": null
+  },
+  "message": "No workspace at <WS>: no .opentide/ or objects/ there or above it",
+  "next_actions": [
+    {
+      "command": "opentide --json setup",
+      "reason": "create a workspace first"
+    }
+  ],
+  "ok": false,
+  "platform": "sentinel",
+  "schema_version": 1,
+  "status": "failed",
+  "summary": {}
+}
+
+━━━ stderr · empty

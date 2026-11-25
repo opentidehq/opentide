@@ -1,0 +1,3 @@
+// prod:comment invalid
+/* never closed
+metadata.event_type = "USER_LOGIN"

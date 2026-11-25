@@ -1,0 +1,1 @@
+print a = datetime(2024-01-01), b = datetime(2024-01-01 10:00:00), c = datetime(2024-01-01T10:00:00Z)

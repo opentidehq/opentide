@@ -1,0 +1,1 @@
+FROM logs-* | WHERE process.name RLIKE ("a.*", "b.*")

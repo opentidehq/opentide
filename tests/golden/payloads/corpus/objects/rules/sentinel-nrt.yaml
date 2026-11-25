@@ -1,0 +1,31 @@
+name: Sentinel NRT
+
+metadata:
+  uuid: 00000000-0000-4000-8005-000000000002
+  schema: rule::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+  author: Detection Team
+  contributors:
+    - Analyst One
+    - Detection Team
+
+description: |
+  Sentinel NRT for the compile corpus.
+  Second line.
+
+configurations:
+  sentinel:
+    status: DISABLED
+    query: SigninLogs | take 1
+    scheduling:
+      nrt: true
+    alert:
+      severity: Low
+      suppression: false
+    grouping:
+      event: SingleAlert
+      alert:
+        enabled: false

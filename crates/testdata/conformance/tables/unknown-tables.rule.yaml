@@ -1,0 +1,45 @@
+name: Unknown Tables
+
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000057
+  schema: rule::1.0
+  version: 1
+  created: "2026-01-01"
+  modified: "2026-01-02"
+  tlp: clear
+  author: analyst
+  organisation: opentide
+
+description: |
+  Tables opentide knows (Azure Monitor, Defender XDR), tables it does not, and a misspelt one.
+status: STAGING
+severity: High
+techniques:
+  - T1059
+detection_model: 00000000-0000-4000-8002-000000000001
+
+response:
+  alert_severity: High
+
+configurations:
+  sentinel:
+    enabled: true
+    name: Unknown Tables
+    status: STAGING
+    query: |
+      NTANetAnalytics
+      | where FlowType == "MaliciousFlow"
+      | join kind=inner (MyCustomLog_CL | where Action_s == "deny") on $left.SrcIp == $right.SrcIp_s
+      | join kind=inner (DeviceNetworkEvents | where ActionType == "ConnectionSuccess") on $left.SrcIp == $right.LocalIP
+      | join kind=inner (VendorFirewallEvents | where Action == "deny") on $left.SrcIp == $right.Ip
+      | join kind=inner (SigninLog | where ResultType == 0) on $left.SrcIp == $right.IPAddress
+    scheduling:
+      frequency: PT1H
+      lookback: PT2H
+    alert:
+      title: Unknown Tables
+      suppression: false
+    grouping:
+      event: SingleAlert
+      alert:
+        enabled: false

@@ -1,0 +1,335 @@
+# One workspace: the engine crates (crates/, imported from opentidehq/language-server
+# with their history, docs/engine/IMPORT.md), the PyO3 binding the opentide
+# package compiles in (bindings/python/, built by maturin) and the repository's
+# Rust tooling (xtask/, `cargo xtask`). Members are listed, not globbed; each one
+# has a place in the layer table, xtask/layers.toml (`cargo xtask check-layers`).
+# cargo-fuzz builds fuzz/ on nightly with its own workspace and lock file.
+[workspace]
+resolver = "2"
+exclude = ["fuzz", "vendor"]
+members = [
+    "crates/opentide-core",
+    "crates/opentide-dataset",
+    "crates/opentide-highlight",
+    "crates/opentide-parse",
+    "crates/opentide-kql",
+    "crates/opentide-spl",
+    "crates/opentide-esql",
+    "crates/opentide-eql",
+    "crates/opentide-kuery",
+    "crates/opentide-lucene",
+    "crates/opentide-falco",
+    "crates/opentide-cql",
+    "crates/opentide-exabeam",
+    "crates/opentide-ecs",
+    "crates/opentide-yara",
+    "crates/opentide-yaral",
+    "crates/opentide-schema-derive",
+    "crates/opentide-schema",
+    "crates/opentide-tide",
+    "crates/opentide-workspace",
+    "crates/opentide-compile",
+    "crates/opentide-analysis",
+    "crates/opentide-lsp",
+    "crates/opentide-wasm",
+    "crates/opentide-cli",
+    "crates/opentide-connectors",
+    "crates/opentide-cassette",
+    "crates/opentide",
+    "bindings/python",
+    "bindings/node",
+    "xtask",
+]
+
+[workspace.package]
+version = "1.0.0"
+edition = "2024"
+rust-version = "1.95"
+license = "EUPL-1.2"
+repository = "https://github.com/opentidehq/opentide"
+homepage = "https://opentide.org"
+authors = ["opentide"]
+
+[workspace.dependencies]
+opentide-core = { path = "crates/opentide-core", version = "=1.0.0" }
+opentide-dataset = { path = "crates/opentide-dataset", version = "=1.0.0" }
+opentide-highlight = { path = "crates/opentide-highlight", version = "=1.0.0" }
+opentide-parse = { path = "crates/opentide-parse", version = "=1.0.0" }
+opentide-kql = { path = "crates/opentide-kql", version = "=1.0.0" }
+opentide-spl = { path = "crates/opentide-spl", version = "=1.0.0" }
+opentide-esql = { path = "crates/opentide-esql", version = "=1.0.0" }
+opentide-eql = { path = "crates/opentide-eql", version = "=1.0.0" }
+opentide-kuery = { path = "crates/opentide-kuery", version = "=1.0.0" }
+opentide-lucene = { path = "crates/opentide-lucene", version = "=1.0.0" }
+opentide-falco = { path = "crates/opentide-falco", version = "=1.0.0" }
+opentide-cql = { path = "crates/opentide-cql", version = "=1.0.0" }
+opentide-exabeam = { path = "crates/opentide-exabeam", version = "=1.0.0" }
+opentide-ecs = { path = "crates/opentide-ecs", version = "=1.0.0" }
+opentide-yara = { path = "crates/opentide-yara", version = "=1.0.0" }
+opentide-yaral = { path = "crates/opentide-yaral", version = "=1.0.0" }
+opentide-schema = { path = "crates/opentide-schema", version = "=1.0.0" }
+opentide-schema-derive = { path = "crates/opentide-schema-derive", version = "=1.0.0" }
+opentide-tide = { path = "crates/opentide-tide", version = "=1.0.0" }
+opentide-workspace = { path = "crates/opentide-workspace", version = "=1.0.0" }
+# Without its default `terminal` feature (the terminal UI and the wizard's
+# prompts): the facade's `plugins` feature needs the engines, not a terminal;
+# its `cli` feature turns `terminal` on.
+opentide-cli = { path = "crates/opentide-cli", version = "=1.0.0", default-features = false }
+opentide-compile = { path = "crates/opentide-compile", version = "=1.0.0" }
+opentide-analysis = { path = "crates/opentide-analysis", version = "=1.0.0" }
+opentide-lsp = { path = "crates/opentide-lsp", version = "=1.0.0" }
+opentide-connectors = { path = "crates/opentide-connectors", version = "=1.0.0" }
+opentide-cassette = { path = "crates/opentide-cassette" }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["float_roundtrip"] }
+# Canonical paths without Windows' `\\?\` prefix (the CLI's E2E tests).
+dunce = "1"
+toml = "0.8"
+# Spans of configuration TOML keys (opentide-analysis `config`); `display`
+# writes an edited document back (opentide-cli `setup platforms`). The version
+# `toml` 0.8 already locks.
+toml_edit = { version = "0.22", default-features = false, features = ["parse", "display"] }
+thiserror = "2"
+anyhow = "1"
+# The LSP host (#90, #185): framing, typed messages, file URIs.
+lsp-server = "0.10"
+lsp-types = "0.97"
+url = "2.5"
+# Percent-decoding a URL path segment (opentide-cassette's matcher,
+# opentide-lsp's `file:` URIs). The version `url` already locks.
+percent-encoding = "2.3"
+regex = "1"
+# The WASI language server's stdin probe (`opentide-lsp`'s `src/stdin.rs`):
+# already in the graph through `tempfile`.
+rustix = { version = "1.1.6", default-features = false }
+# Look-around and back-references, which `regex` has not: the oracle's
+# Markdown-to-text patterns of the generated schemas (opentide-schema, UC-1.8).
+fancy-regex = "0.20"
+# Dates and times (opentide-schema `metadata.reviewed`): the calendar, the
+# clock and UTC offsets, without the time zone database.
+jiff = { version = "0.2", default-features = false, features = ["std"] }
+# Title case for an all-lower-case vocabulary name in an editor dropdown
+# (opentide-schema `generate::schema`): Gruber's English title-case rules.
+titlecase = { version = "3.6", default-features = false }
+# The parsed pattern (HIR) of a `regex` pattern, to anchor it whatever its
+# flags (opentide-schema `lint`), and the RE2 syntax of Exabeam's RGX patterns
+# and YARA-L regular expressions, parsed without compiling: the version `regex`
+# itself locks.
+regex-syntax = "0.8"
+# "did you mean" suggestions (opentide-core `suggest`): edit distances. Also clap's.
+strsim = "0.11"
+# A fast hasher seeded per process for the engine's hot-path maps, keyed by
+# query text among others (ADR 0014 §5b): SipHash cost about a seventh of a
+# KQL analysis.
+foldhash = { version = "0.2", default-features = false, features = ["std"] }
+# Unicode general categories (opentide-schema `vocab::quote`: which characters a
+# message escapes). unicode-rs, as unicode-normalization and unicode-width.
+unicode-properties = { version = "0.1", default-features = false, features = ["general-category"] }
+# The shortest text of a float (opentide-tide `yaml::number_text`): the
+# version Cargo.lock already holds.
+ryu = "1"
+clap = { version = "4", features = ["derive"] }
+# The command line's terminal styles (anstyle) and the console streams that
+# write them (anstream: VT processing, or the legacy Windows console API). The
+# versions clap already locks.
+anstyle = "1.0"
+anstream = "1.0"
+uuid = "1"
+wasm-bindgen = "0.2"
+js-sys = "0.3"
+# YARA (opentidehq/language-server#165, RFC 0015 §6): VirusTotal's lossless
+# parser (logos + rowan, error recovery) is the verdict parser, and its
+# formatter formats `.yar` files. Not the `yara-x` compiler crate: it brings
+# wasmtime and breaks the WASI build. It is an oracle only
+# (scripts/engine/oracles). Exact pins: they set the floor (rust-version 1.95).
+yara-x-parser = "=1.23.0"
+yara-x-fmt = "=1.23.0"
+# The pure-Rust parsers' toolkit (crates/opentide-parse, ADR 0012): logos
+# lexers and lossless rowan trees, the versions yara-x-parser already locks.
+# rowan stays on 0.17: 0.18 is an alpha.
+logos = "0.16.1"
+rowan = "0.17.0"
+# The grammar DSL the typed-AST codegen reads (`cargo xtask codegen`, #1221 item i):
+# rust-analyzer's, zero dependencies, a dependency of xtask only.
+ungrammar = "=1.16.1"
+# The Tide model as code (plan D-2, docs/internal/adr/0001-tide-model-as-rust-code.md):
+# JSON Schema 2020-12 from the structs, and their constraints. garde has no
+# default features; a model that needs one (`regex` for `pattern`) adds it then.
+schemars = { version = "1.2", features = ["indexmap2"] }
+# PyO3, for bindings/python/ (opentide._native) and opentide-schema's `python` feature.
+pyo3 = "0.30.1"
+garde = { version = "0.23", features = ["derive"] }
+# YAML 1.2 for opentide-schema's node tree (UC-1.2, #808): saphyr-parser's
+# events with their spans, saphyr's core-schema scalars and its emitter.
+saphyr = { version = "0.3.3", default-features = false }
+saphyr-parser = "0.3.3"
+# Writing a model as YAML (opentide-schema `node::to_yaml`): saphyr's serde
+# serializer, without its deserializer (and the parser fork it brings).
+serde-saphyr = { version = "2.1.1", default-features = false, features = ["serialize"] }
+# opentide-schema-derive, the `#[derive(FromNode)]` proc-macro.
+proc-macro2 = "1"
+quote = "1"
+syn = { version = "3", features = ["full", "extra-traits"] }
+# Test tools, for dev-dependencies only. insta: snapshot assertions, reviewed
+# with `cargo insta review` and committed beside the test (tests/snapshots/);
+# without its `colors` feature, which only colours a failing diff; with `glob`,
+# for one snapshot per corpus file (`insta::glob!`, the pure-Rust parsers'
+# tree snapshots, epic #1219). trycmd:
+# command-line cases (tests/cmd/*.trycmd). Conventions: crates/AGENTS.md.
+insta = { version = "1.49", default-features = false, features = ["glob"] }
+trycmd = "1.2"
+# Compile-fail cases (tests/ui/*.rs with the expected .stderr beside them).
+trybuild = "1.0"
+# Property tests (opentide-schema: every valid object round-trips).
+proptest = { version = "1", default-features = false, features = ["std"] }
+# Data parallelism (opentide-workspace: each object file read and parsed on
+# its own thread). The version trycmd already locks.
+rayon = "1.12"
+# The connectors (UC-4.1, #831, plan D-8): the workspace's one HTTP client.
+# reqwest on rustls with ring (no aws-lc-rs: its C build and its OpenSSL
+# licence), HTTP/2 through ALPN or HTTP/1.1, no system proxy lookup: the
+# proxies and the CA bundle come from the environment the CLI passes, per
+# tenant. tokio runs it and waits between retries; tokio-util cancels.
+reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider", "http2"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+rustls-native-certs = "0.8"
+tokio = { version = "1.48", default-features = false }
+tokio-util = { version = "0.7", default-features = false }
+# The recorded-HTTP harness (opentide-cassette, never shipped): wiremock
+# replays cassettes; the recording proxy terminates TLS with a CA rcgen makes
+# for the run (tokio-rustls, hyper's server).
+wiremock = "0.6"
+rcgen = { version = "0.14", default-features = false, features = ["ring", "pem", "crypto"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"] }
+hyper = { version = "1", features = ["server", "http1"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
+http-body-util = "0.1"
+# The version wiremock locks.
+base64 = "0.23"
+sha2 = "0.11"
+# xtask only: `cargo xtask bench` reads each benchmarked process's peak RSS
+# from wait4(2), whose safe wrapper this is (the workspace forbids `unsafe`).
+wait4 = "0.2"
+
+# Lints for every member: each one sets `[lints] workspace = true`. No crate
+# holds `unsafe` (docs/internal/unsafe.md). `forbid` cannot be relaxed inside a
+# crate, so one that needs it copies this table with `unsafe_code = "deny"`;
+# xtask/tests/lint_policy.rs fails when a copy differs from this table or
+# another crate leaves it. bindings/node (the
+# napi-rs binding) copies it, with `deny`, and writes no `unsafe`: each
+# `#[napi]` item expands to a static constructor carrying
+# `#[allow(unsafe_code)]`, which `forbid` refuses (docs/internal/unsafe.md).
+#
+# CI runs clippy with `-D warnings`, so a `warn` here fails CI as `deny` does;
+# `warn` lets a local build carry on while you work. An `allow` in a crate's
+# source names its reason (`#[expect(lint, reason = "...")]` where the lint
+# fires, so a stale one fails too).
+[workspace.lints.rust]
+unsafe_code = "forbid"
+# Every public item is documented. The crates imported from language-server
+# opt out at their crate root with `#![expect(missing_docs, reason = ...)]`
+# until they are documented (crates/AGENTS.md, "Lints").
+missing_docs = "warn"
+# cargo-fuzz builds with `--cfg fuzzing` (opentide-lsp leaves its debug test
+# hooks out of fuzz builds); cargo-llvm-cov builds with `--cfg coverage`
+# (the deep_queries stack model grows its stack there).
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(fuzzing)", "cfg(coverage)"] }
+
+[workspace.lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+# Denied outside tests: clippy.toml allows unwrap, expect and dbg! in #[test]
+# functions and #[cfg(test)] modules. A panic on user input is a bug; where a
+# value cannot fail (a catalog compiled in, a regex literal), the site says why
+# with `#[expect(clippy::expect_used, reason = "...")]`.
+unwrap_used = "deny"
+expect_used = "deny"
+dbg_macro = "deny"
+todo = "deny"
+unimplemented = "deny"
+# Every `unsafe` block states why it is sound in a `// SAFETY:` comment.
+undocumented_unsafe_blocks = "deny"
+# One unsafe operation per block, so each SAFETY comment answers for one
+# operation (docs/internal/unsafe.md lists every block).
+multiple_unsafe_ops_per_block = "deny"
+# The pedantic lints the workspace does not follow, each with its reason; the
+# rest of `pedantic` is enforced. The engine crates are published for the
+# facade's sake (plan D-5): their signatures do not change to satisfy a style
+# lint, and the facade crate (UC-5.1, #836) decides its own API conventions.
+must_use_candidate = "allow" # 284 sites: `#[must_use]` on every pure function is API noise
+return_self_not_must_use = "allow" # the builders' API, as must_use_candidate
+needless_pass_by_value = "allow" # changes public signatures (the LSP handlers take owned messages)
+unused_self = "allow" # changes signatures of methods kept on their type
+unnecessary_wraps = "allow" # LSP handlers return the Result `.on::<Request>` expects; test helpers build the Option they compare
+missing_errors_doc = "allow" # `# Errors` sections come with the missing_docs work
+missing_panics_doc = "allow" # `# Panics` sections come with the missing_docs work
+doc_markdown = "allow" # product and language names (ES|QL, CrowdStrike) are prose
+# `too_many_lines` is enforced (the pedantic default, 100 lines): an engine crate's lib.rs carries
+# one `#![expect]` (its dispatchers match every node kind in one function), any other
+# long function its own `#[expect]`.
+match_same_arms = "allow" # one arm per language or node kind, even when two arms agree
+map_unwrap_or = "allow" # style, at 57 sites
+redundant_closure_for_method_calls = "allow" # style, at 68 sites
+format_push_string = "allow" # an allocation per diagnostic message; not a hot path
+needless_raw_string_hashes = "allow" # fixtures keep `r#"` so they can gain a quote
+items_after_statements = "allow" # a OnceLock cache sits next to its one use
+single_match_else = "allow" # style, at 10 sites
+assert_is_empty = "allow" # new in clippy 1.99: 196 test sites of `assert!(v.is_empty())`, whose rewrite `assert_eq!(v, [] as [T; 0])` names each element type
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = "symbols"
+
+# The WASI build of the language server (`scripts/engine/build-wasm.sh wasi`, the release's
+# `opentide-lsp-wasm32-wasip1.wasm`): optimised for size, not speed. A host compiles the module on
+# every start (wasmtime's cache holds the compiled module compressed, and decompresses it on each
+# start; V8 compiles each function the first time it runs), so what a start costs follows the
+# module's size: `s` is 22% smaller than `release`'s opt-level 3 and starts 40 to 50 ms sooner under
+# wasmtime and Node's WASI, while validation, which runs in the code, takes 15 ms longer (#1767).
+# Native builds keep `release`.
+[profile.wasi-lsp]
+inherits = "release"
+opt-level = "s"
+
+# The WASI build of the command line (`scripts/engine/build-wasm.sh cli`), the
+# one module the VS Code extension runs (ADR 0007's amendment): optimised for
+# size, as the `.vsix` is held to 15 MiB, and `s`, not `z`, because the extension's
+# language server and MCP run from it and `s` runs them faster: against `z` it
+# is 17% larger (18.9 to 22.1 MB, 8.35 to 9.32 MB gzipped) and `--version` is
+# 14 ms slower under Node's WASI, but a 1,000-object workspace's first
+# diagnostics come 15% sooner (438 to 372 ms) and `validate` 25% sooner (851 to
+# 635 ms); opt-level 3 is larger still and no faster to start (#1774,
+# docs/internal/perf-wasi-cold-start-2026-11-22.md). Unwinding stays: the crash
+# handler catches a panic and reports it.
+[profile.wasi]
+inherits = "release"
+opt-level = "s"
+
+# What an editable install of opentide (`uv sync`, `maturin develop --profile
+# develop`) builds for development: optimised, so the engine runs at full speed in the Python test
+# suite, without the release profile's slow link-time optimisation.
+[profile.develop]
+inherits = "release"
+lto = false
+codegen-units = 16
+strip = "none"
+
+# Dependencies optimised in dev and test builds; workspace crates stay at
+# opt-level 0 with full debuginfo. The tests spend most of their time in toml,
+# serde and regex: opt-level 1 cuts the suite from ~100s to ~26s of
+# test time on 4 cores, as fast as 2 for less compile time. Line tables keep
+# file:line in a dependency's backtrace frames at a third less target/ than full
+# debuginfo. CI caches the dependencies (Swatinem/rust-cache).
+[profile.dev.package."*"]
+opt-level = 1
+debug = "line-tables-only"
+
+# Two crates with a WASI backend (vendor/README.md). memmap2: gix reads git objects,
+# packs and the index through memmap2, which has no mmap on WASI preview 1,
+# so the WASI build of the command line (ADR 0007's amendment) reads them
+# into the heap there. Native builds are upstream's code, byte for byte.
+[patch.crates-io]
+memmap2 = { path = "vendor/memmap2" }
+# filetime with WASI's file times (vendor/README.md): gix-index reads the
+# index's modification time through it, whose wasm backend panics.
+filetime = { path = "vendor/filetime" }

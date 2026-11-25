@@ -1,0 +1,26 @@
+---
+source: crates/opentide-eql/tests/parser_trees.rs
+expression: "parser::debug(&source)"
+input_file: crates/testdata/corpus/eql/comparison__invalid.eql
+---
+SOURCE_FILE@0..56
+  LINE_COMMENT@0..26 "// prod:comparison invalid"
+  WHITESPACE@26..27 "\n"
+  EVENT_QUERY@27..55
+    EVENT_CATEGORY@27..34
+      IDENTIFIER@27..34
+        WORD@27..34 "process"
+    WHITESPACE@34..35 " "
+    WHERE_KW@35..40 "where"
+    WHITESPACE@40..41 " "
+    COMPARISON@41..55
+      FIELD@41..52
+        IDENTIFIER@41..48
+          WORD@41..48 "process"
+        DOT@48..49 "."
+        IDENTIFIER@49..52
+          WORD@49..52 "pid"
+      WHITESPACE@52..53 " "
+      EQ_EQ@53..55 "=="
+  WHITESPACE@55..56 "\n"
+55..56: an expression is missing (expected a name, a function, a number, a string, a quoted name, `false`, `null`, `true`, `+`, `-`, `(`, `?`)

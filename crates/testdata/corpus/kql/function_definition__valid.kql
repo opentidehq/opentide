@@ -1,0 +1,3 @@
+// prod:function_definition valid
+let Logs = (tableName: string, lookback: timespan = 1d) { table(tableName) | where TimeGenerated > ago(lookback) };
+Logs("SigninLogs")

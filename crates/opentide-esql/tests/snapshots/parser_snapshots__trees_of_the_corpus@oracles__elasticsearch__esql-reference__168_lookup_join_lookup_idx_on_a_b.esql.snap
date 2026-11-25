@@ -1,0 +1,39 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/oracles/elasticsearch/esql-reference/168_lookup_join_lookup_idx_on_a_b.esql
+---
+SOURCE_FILE@0..45
+  QUERY@0..44
+    FROM_COMMAND@0..9
+      FROM_KW@0..4 "FROM"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..9
+        INDEX_NAME@5..9
+          SOURCE_TEXT@5..9 "logs"
+    WHITESPACE@9..10 " "
+    PIPE@10..11 "|"
+    WHITESPACE@11..12 " "
+    JOIN_COMMAND@12..44
+      LOOKUP_KW@12..18 "LOOKUP"
+      WHITESPACE@18..19 " "
+      JOIN_KW@19..23 "JOIN"
+      WHITESPACE@23..24 " "
+      INDEX_PATTERN@24..34
+        INDEX_NAME@24..34
+          SOURCE_TEXT@24..34 "lookup_idx"
+      WHITESPACE@34..35 " "
+      ON_KW@35..37 "ON"
+      WHITESPACE@37..38 " "
+      COMPARISON@38..44
+        QUALIFIED_NAME@38..39
+          IDENTIFIER@38..39
+            IDENT@38..39 "a"
+        WHITESPACE@39..40 " "
+        EQ_EQ@40..42 "=="
+        WHITESPACE@42..43 " "
+        QUALIFIED_NAME@43..44
+          IDENTIFIER@43..44
+            IDENT@43..44 "b"
+  WHITESPACE@44..45 "\n"
+--- errors

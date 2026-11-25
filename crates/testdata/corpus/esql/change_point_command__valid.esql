@@ -1,0 +1,4 @@
+// prod:change_point_command valid
+FROM metrics-*
+| STATS c = COUNT(*) BY t = BUCKET(@timestamp, 1 hour)
+| CHANGE_POINT c ON t AS type, pvalue

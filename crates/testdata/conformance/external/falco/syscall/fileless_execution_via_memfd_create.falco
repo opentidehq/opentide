@@ -1,0 +1,1 @@
+spawned_process and proc.is_exe_from_memfd=true and not known_memfd_execution_processes

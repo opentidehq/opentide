@@ -21,7 +21,7 @@ opentide --json info catalog
 |-------|---------|
 | `[section]` | Optional section: `rules`, `threats`, `objectives`, `coverage` (requires `--technique`), `vocab`, or `catalog` (see [The catalogue](#the-catalogue)) |
 | `[name]` | With `vocab` only: the vocabulary to inspect (see [Vocabulary contract revisions](#vocabulary-contract-revisions)) |
-| `--platform` | Filter platform table to one platform |
+| `--platform` | Filter the platform table to one platform. Only without a section: with one it is a [usage error](./exit-codes.md) (exit `2`), since a section's document has no platform table |
 | `--technique` | ATT&CK technique ID — use with positional `coverage` |
 | `--strict` | Exit non-zero when any object file failed to load |
 | `--json` | Structured output (**global flag** — place before `info`) |
@@ -37,7 +37,7 @@ opentide --json info --technique T1059 coverage
 
 `opentide info --technique T1059` alone does **not** include coverage data.
 
-A rule covers a technique when it lists it in its own `techniques`, or when it inherits it: from the objective its `detection_model` names (directly, or through one of that objective's signals), or, when that objective lists none, from the threats the objective covers. This is the same walk `info catalog` reports as `techniques.own` and `techniques.inherited`, and the MCP [`coverage`](../mcp/tools.md#coverage) tool and the TUI's [Coverage tab](./tui.md) read it too, so all four agree. `rules` and `count` hold both kinds; `own` and `inherited` keep them apart, since a rule that lists the technique itself is the stronger claim.
+A rule covers a technique when it lists it in its own `techniques`, or when it inherits it: from the objective its `detection_model` names (directly, or through one of that objective's signals), or, when that objective lists none, from the threats the objective covers. This is the same walk `info catalog` reports as `techniques.own` and `techniques.inherited`, and the MCP [`coverage`](../mcp/tools.md#coverage) tool and the TUI's [Coverage tab](./tui.md) read it too, as do `generate docs`, the ATT&CK Navigator layer of `generate exports` and the explorer bundle's `summaries[].techniques`, so all seven agree. `rules` and `count` hold both kinds; `own` and `inherited` keep them apart, since a rule that lists the technique itself is the stronger claim.
 
 A parent technique also matches its sub-techniques (`T1059` finds rules tagged `T1059.001`); a sub-technique does not match its parent. Matching is case-insensitive. `matched_techniques` lists the catalogue's IDs that answered.
 
@@ -48,7 +48,7 @@ Without `--json`, `info` prints a Rich table:
 - Package version
 - Rule, threat, objective counts
 - How many object files failed to load
-- One row per platform: `enabled=True` or `enabled=False`, then its capabilities — `[deploy, validate]`, or `[deploy]` for CrowdStrike, HarfangLab, Sysdig and Bitdefender
+- One row per platform: `enabled=True` or `enabled=False`, then its capabilities — `[deploy, validate]`, or `[deploy]` for CrowdStrike, HarfangLab and Sysdig
 
 With a section, the table for that section replaces the summary:
 
@@ -113,9 +113,19 @@ A variable's value is never printed, in either output. A tenant's setup values t
 }
 ```
 
+With a section, the payload holds that section's keys instead of the overview's `version`, `repo`, `counts`, `parse_error_count` and `platforms`; the envelope keys stay. So `opentide --json info rules | jq .rules` and `opentide --json info vocab | jq .vocabularies` read the section, and a script that wants the counts or the platforms reads `opentide --json info` (or `--platform <name>`) without a section:
+
+| Section | Keys beside the envelope |
+|---------|--------------------------|
+| none | `version`, `repo`, `counts`, `parse_error_count`, `platforms` |
+| `rules`, `threats`, `objectives` | the section's name: a list of UUIDs |
+| `coverage` | `coverage` |
+| `vocab` | `vocabularies` (one row per vocabulary), or with a name, `vocabulary` |
+| `catalog` | `objects`, `edges`, `signals`, `attack` |
+
 The keys from `schema_version` on are the envelope every command adds; see [JSON output](./json-output.md). Log lines are written to stderr, so `opentide --json info 2>/dev/null` is a single JSON document.
 
-With coverage, the payload adds a `coverage` object:
+With coverage, the payload is a `coverage` object:
 
 ```json output-of="opentide --json info --technique T1059 coverage"
 {
@@ -139,7 +149,7 @@ opentide info catalog
 opentide --json info catalog
 ```
 
-The document holds the `info` keys, plus `objects`, `edges`, `signals` and `attack`. `summary` adds `objects` (rows, load errors included), `signals` and `edges` to the four counts. In the [tutorial](../usage/tutorial.md) repository:
+The document holds `objects`, `edges`, `signals` and `attack`. `summary` adds `objects` (rows, load errors included), `signals` and `edges` to the four counts. In the [tutorial](../usage/tutorial.md) repository:
 
 ```json output-of="opentide --json info catalog"
 {
@@ -155,7 +165,7 @@ The document holds the `info` keys, plus `objects`, `edges`, `signals` and `atta
 | `path`, `file_path`, `line` | The file relative to the workspace (forward slashes), the same file absolute, and the 1-based line of the `name:` key (1 when there is none) |
 | `tlp`, `author`, `created`, `modified`, `reviewed` | From `metadata`; `null` when unset |
 | `platforms` | A rule's platform blocks: `{id, enabled, status, strategy}`, the strategy being the one `deployment.toml` maps the status to |
-| `deployment` | A rule's tenant bindings in `.opentide/states/deployment/`: `{platform, tenant, deployed, rule_id}`. Only Defender, SentinelOne, CrowdStrike, Sysdig, Bitdefender, Graylog, Exabeam and Google SecOps keep one |
+| `deployment` | A rule's tenant bindings in `.opentide/states/deployment/`: `{platform, tenant, deployed, rule_id}`. Only the platforms that keep a vendor id keep one: SentinelOne, CrowdStrike, Sysdig, Bitdefender, Graylog, Exabeam and Google SecOps ([deployment state](../usage/concepts/deployment-state.md)) |
 | `techniques` | `own`: the ATT&CK ids the object lists. `inherited`: those its objective or threats give it that it does not list. An objective that lists no techniques inherits those of each threat it covers that exists; a rule, its objective's (through a signal's objective) |
 | `tactics` | The tactic shortnames of all those techniques, in matrix order |
 | `actors` | The actors of the threat, of the threats an objective covers, or of the threats of a rule's objective, as written (`att&ck::G0006`) |
@@ -231,7 +241,7 @@ opentide --json info vocab surface
 | `info vocab` | One row per vocabulary: entries, keys carrying `removed`, the latest revision its lifecycle defines, and whether it is staged |
 | `info vocab <name>` | The vocabulary's title, key field, entry count, removed-key count, stage ids, then two tables: **Revisions** and **Pins** |
 
-The name is the vocabulary's `field`, which is also its file name without `.vocab.toml` (`surface`, `signal.entities`, `att&ck`). An unknown name is a [usage error](./exit-codes.md): it exits `2`, lists the available names and suggests the closest one. A name typed after any other section (`info rules surface`) also exits `2`. A key whose `version` or `removed` is not `M` or `M.m` (`1`, `1.2`) exits `1`, naming the vocabulary and the key. The vocabularies listed are the ones under the data root (bundled with the engine unless `--data` / `OPENTIDE_DATA_ROOT` points elsewhere); the object vocabularies (`rule`, `threat`, `objective`) built from your repository have no key lifecycle and are not listed.
+The name is the vocabulary's `field`, which is also its file name without `.vocab.toml` (`surface`, `signal.entities`, `att&ck`). An unknown name is a [usage error](./exit-codes.md): it exits `2`, lists the available names and suggests the closest one. A name typed after any other section (`info rules surface`) also exits `2`. A key whose `version` or `removed` is not `M` or `M.m` (`1`, `1.2`) exits `1`, naming the vocabulary and the key. The vocabularies listed are the ones compiled into opentide (`--data` and `OPENTIDE_DATA_ROOT` do not change them); the object vocabularies (`rule`, `threat`, `objective`) built from your repository have no key lifecycle and are not listed.
 
 **Revisions** lists each revision the key lifecycle defines, oldest first: the keys it introduces, the keys it removes, and how many keys a pin to it admits (introduced at or before it, and not removed at or before it).
 
@@ -276,4 +286,4 @@ A staged vocabulary whose field is not scoped takes the bare key name; only a sc
 
 ## Source
 
-`src/opentide/cli/commands/info.py`, `src/opentide/cli/services/info.py`, `src/opentide/cli/services/catalog.py`
+`crates/opentide-cli/src/commands/info.rs`

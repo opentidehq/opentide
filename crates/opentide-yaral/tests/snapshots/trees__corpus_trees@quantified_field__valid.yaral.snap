@@ -1,0 +1,48 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/quantified_field__valid.yaral
+---
+SOURCE_FILE@0..105
+  COMMENT@0..30 "// prod:quantified_field valid"
+  WHITESPACE@30..31 "\n"
+  SEARCH_QUERY@31..104
+    SEARCH_EVENTS@31..104
+      COMPARISON@31..63
+        QUANTIFIED_FIELD@31..50
+          ANY_KW@31..34 "any"
+          WHITESPACE@34..35 " "
+          UDM_FIELD@35..50
+            VARIABLE@35..37
+              VAR_TOKEN@35..37 "$e"
+            MEMBER@37..47
+              ACCESS_DOT@37..38 "."
+              FIELD_NAME@38..47 "principal"
+            MEMBER@47..50
+              ACCESS_DOT@47..48 "."
+              FIELD_NAME@48..50 "ip"
+        WHITESPACE@50..51 " "
+        EQ@51..52 "="
+        WHITESPACE@52..53 " "
+        LITERAL@53..63
+          STRING@53..63 "\"10.0.0.1\""
+      WHITESPACE@63..64 "\n"
+      COMPARISON@64..104
+        QUANTIFIED_FIELD@64..93
+          ALL_KW@64..67 "all"
+          WHITESPACE@67..68 " "
+          UDM_FIELD@68..93
+            VARIABLE@68..70
+              VAR_TOKEN@68..70 "$e"
+            MEMBER@70..86
+              ACCESS_DOT@70..71 "."
+              FIELD_NAME@71..86 "security_result"
+            MEMBER@86..93
+              ACCESS_DOT@86..87 "."
+              FIELD_NAME@87..93 "action"
+        WHITESPACE@93..94 " "
+        NOT_EQ@94..96 "!="
+        WHITESPACE@96..97 " "
+        LITERAL@97..104
+          STRING@97..104 "\"BLOCK\""
+  WHITESPACE@104..105 "\n"

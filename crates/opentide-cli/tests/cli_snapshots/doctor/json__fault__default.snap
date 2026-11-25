@@ -1,0 +1,55 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: doctor/json/fault/default
+---
+args: opentide --json doctor
+exit: 1
+view: diagnostics (code, severity, file, line, column and counts; a warning's text; log events by name; no other message text)
+
+━━━ stdout · json
+findings: 32
+  opentide_version | pass | - | - | -
+  opentide_latest | warn | - | - | -
+  workspace | pass | - | - | -
+  git | pass | - | - | -
+  git_repository | warn | - | - | -
+  configuration | pass | - | - | -
+  templates_fresh | warn | - | - | -
+  schemas_fresh | warn | - | - | -
+  lsp_catalog | pass | - | - | -
+  platforms_enabled | pass | - | - | -
+  analysis_engine | pass | - | - | -
+  credentials | warn | - | - | -
+  credentials | warn | - | - | -
+  credentials | warn | - | - | -
+  credentials | warn | - | - | -
+  credentials | skip | - | - | -
+  credentials | skip | - | - | -
+  credentials | skip | - | - | -
+  credentials | skip | - | - | -
+  credentials | warn | - | - | -
+  credentials | warn | - | - | -
+  credentials | warn | - | - | -
+  credentials | skip | - | - | -
+  credentials | skip | - | - | -
+  credentials | warn | - | - | -
+  credentials | skip | - | - | -
+  connectivity | skip | - | - | -
+  proxy | fail | - | - | -
+  vscode_settings | skip | - | - | -
+  vscode_snippets | skip | - | - | -
+  mcp_config | skip | - | - | -
+  doctor_checks_failed | - | - | - | -
+exit_code: 1
+schema_version: 1
+summary.checks: 31
+summary.failed: 1
+summary.passed: 7
+summary.skipped: 11
+summary.warnings: 12
+checks[]: 31 items
+next_actions[]: 0 items
+ok: false x1
+status: failed x1
+
+━━━ stderr · empty

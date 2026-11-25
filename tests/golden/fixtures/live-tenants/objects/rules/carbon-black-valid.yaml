@@ -1,0 +1,17 @@
+name: Carbon Black valid rule
+metadata:
+  uuid: 00000000-0000-4000-8046-000000000004
+  schema: rule::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: A process query the stand-in tenant accepts.
+response:
+  alert_severity: High
+configurations:
+  carbon_black_cloud:
+    status: STAGING
+    query: |
+      process_name:cmd.exe
+        AND netconn_count:[1 TO *]

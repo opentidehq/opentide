@@ -1,0 +1,103 @@
+---
+source: crates/opentide-kql/src/parser/tests.rs
+expression: "show(\"let f = (a: int, t: (*), u: (c: string, d: dynamic) = 1) { let y = 2; T | take 5 };\\nf(1, 2)\")"
+---
+SOURCE_FILE@0..91
+  LET_STATEMENT@0..83
+    LET_KW@0..3 "let"
+    WHITESPACE@3..4 " "
+    IDENT@4..5 "f"
+    WHITESPACE@5..6 " "
+    EQ@6..7 "="
+    WHITESPACE@7..8 " "
+    FUNCTION_DEFINITION@8..82
+      L_PAREN@8..9 "("
+      PARAMETER@9..15
+        IDENT@9..10 "a"
+        COLON@10..11 ":"
+        WHITESPACE@11..12 " "
+        TYPE@12..15
+          IDENT@12..15 "int"
+      COMMA@15..16 ","
+      WHITESPACE@16..17 " "
+      PARAMETER@17..23
+        IDENT@17..18 "t"
+        COLON@18..19 ":"
+        WHITESPACE@19..20 " "
+        TYPE@20..23
+          TABLE_TYPE@20..23
+            L_PAREN@20..21 "("
+            STAR@21..22 "*"
+            R_PAREN@22..23 ")"
+      COMMA@23..24 ","
+      WHITESPACE@24..25 " "
+      PARAMETER@25..55
+        IDENT@25..26 "u"
+        COLON@26..27 ":"
+        WHITESPACE@27..28 " "
+        TYPE@28..51
+          TABLE_TYPE@28..51
+            L_PAREN@28..29 "("
+            TABLE_COLUMN@29..38
+              IDENT@29..30 "c"
+              COLON@30..31 ":"
+              WHITESPACE@31..32 " "
+              TYPE@32..38
+                IDENT@32..38 "string"
+            COMMA@38..39 ","
+            WHITESPACE@39..40 " "
+            TABLE_COLUMN@40..50
+              IDENT@40..41 "d"
+              COLON@41..42 ":"
+              WHITESPACE@42..43 " "
+              TYPE@43..50
+                DYNAMIC_KW@43..50 "dynamic"
+            R_PAREN@50..51 ")"
+        WHITESPACE@51..52 " "
+        EQ@52..53 "="
+        WHITESPACE@53..54 " "
+        LITERAL@54..55
+          NUMBER@54..55 "1"
+      R_PAREN@55..56 ")"
+      WHITESPACE@56..57 " "
+      L_BRACE@57..58 "{"
+      WHITESPACE@58..59 " "
+      LET_STATEMENT@59..69
+        LET_KW@59..62 "let"
+        WHITESPACE@62..63 " "
+        IDENT@63..64 "y"
+        WHITESPACE@64..65 " "
+        EQ@65..66 "="
+        WHITESPACE@66..67 " "
+        LITERAL@67..68
+          NUMBER@67..68 "2"
+        SEMICOLON@68..69 ";"
+      WHITESPACE@69..70 " "
+      TABULAR_EXPRESSION@70..80
+        TABULAR_SOURCE@70..71
+          TABLE_REF@70..71
+            IDENT@70..71 "T"
+        WHITESPACE@71..72 " "
+        PIPE@72..73 "|"
+        WHITESPACE@73..74 " "
+        TAKE_OPERATOR@74..80
+          TAKE_KW@74..78 "take"
+          WHITESPACE@78..79 " "
+          NUMBER@79..80 "5"
+      WHITESPACE@80..81 " "
+      R_BRACE@81..82 "}"
+    SEMICOLON@82..83 ";"
+  WHITESPACE@83..84 "\n"
+  QUERY@84..91
+    TABULAR_EXPRESSION@84..91
+      TABULAR_SOURCE@84..91
+        FUNCTION_CALL@84..91
+          IDENT@84..85 "f"
+          L_PAREN@85..86 "("
+          LITERAL@86..87
+            NUMBER@86..87 "1"
+          COMMA@87..88 ","
+          WHITESPACE@88..89 " "
+          LITERAL@89..90
+            NUMBER@89..90 "2"
+          R_PAREN@90..91 ")"

@@ -1,0 +1,1 @@
+index=a | mvexpand | stats count by host

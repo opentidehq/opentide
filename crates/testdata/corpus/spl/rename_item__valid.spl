@@ -1,0 +1,2 @@
+``` prod:rename_item valid
+index=main | rename DNS.* as *, host AS h

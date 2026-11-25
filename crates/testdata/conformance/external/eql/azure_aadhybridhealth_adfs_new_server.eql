@@ -1,0 +1,1 @@
+any where category:"Administrative" and resourceId:"*AdFederationService*" and operationName:"MICROSOFT.ADHYBRIDHEALTHSERVICE/SERVICES/SERVICEMEMBERS/ACTION"

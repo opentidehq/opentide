@@ -1,0 +1,7 @@
+[[layer]]
+name = "foundation"
+tiers = [["core"], ["syntax"]]
+
+[[layer]]
+name = "application"
+tiers = [["lsp"]]

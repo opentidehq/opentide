@@ -1,0 +1,5 @@
+math.round(10.7) // returns 11
+math.round(1.2567, 2) // returns 1.25
+math.round(0-10.7) // returns -11
+math.round(0-1.2) // returns -1
+math.round(4) // returns 4, math.round(integer) returns the integer

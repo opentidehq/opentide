@@ -1,0 +1,13 @@
+// prod:table_call valid
+rule r {
+  meta:
+    author = "a"
+  events:
+    $e.metadata.event_type = "USER_LOGIN"
+  outcome:
+    $host = $e.principal.hostname
+  condition:
+    $e
+  export:
+    %hosts.write_row(hostname: $host)
+}

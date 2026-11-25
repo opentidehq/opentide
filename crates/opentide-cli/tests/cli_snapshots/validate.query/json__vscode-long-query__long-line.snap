@@ -1,0 +1,85 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: validate.query/json/vscode-long-query/long-line
+---
+args: opentide --json validate query --file long.lucene --platform elastic
+exit: 1
+
+━━━ stdout · json, 1 lines
+{
+  "command": "validate query",
+  "diagnostics": [
+    {
+      "code": "lucene_parse_error",
+      "column": 808,
+      "end_column": 809,
+      "end_line": 1,
+      "explain": "opentide explain lucene_parse_error",
+      "field_path": [],
+      "fix": null,
+      "help": "the Lucene query string reference: https://www.elastic.co/docs/reference/query-languages/query-dsl/query-dsl-query-string-query",
+      "line": 1,
+      "message": "Lucene syntax error: missing `)`",
+      "object_uuid": null,
+      "path": "long.lucene",
+      "severity": "error"
+    }
+  ],
+  "duration_ms": 0,
+  "engine": {
+    "engine": "1.0.0"
+  },
+  "error": "Queries rejected offline",
+  "exit_code": 1,
+  "failure": {
+    "argument": null,
+    "code": "issues_found",
+    "crash_log": null,
+    "message": "Queries rejected offline",
+    "suggestion": null
+  },
+  "message": "Queries rejected offline",
+  "mode": "offline",
+  "next_actions": [
+    {
+      "command": "opentide --json explain lucene_parse_error",
+      "reason": "how to fix it"
+    },
+    {
+      "command": "opentide --json validate query --platform elastic --file long.lucene",
+      "reason": "check again"
+    }
+  ],
+  "ok": false,
+  "platform": "elastic",
+  "platforms": [
+    "elastic"
+  ],
+  "queries": [
+    {
+      "column": 1,
+      "errors": 1,
+      "field_path": [],
+      "language": "lucene",
+      "line": 1,
+      "path": "long.lucene",
+      "platform": "elastic"
+    }
+  ],
+  "queries_validated": 1,
+  "schema_version": 1,
+  "scope": "selected",
+  "status": "failed",
+  "summary": {
+    "error_files": 1,
+    "errors": 1,
+    "files": 1,
+    "notes": 0,
+    "queries": 1,
+    "warning_files": 0,
+    "warnings": 0
+  },
+  "supported": true
+}
+
+━━━ stderr · empty

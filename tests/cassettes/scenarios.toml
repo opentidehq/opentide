@@ -1,0 +1,610 @@
+# The recorded-HTTP scenarios (UC-4.1, #831): each one is a client run whose
+# requests were recorded through the recording proxy into `<name>.json`
+# beside this file (`cargo xtask cassettes record`, retired with the oracle
+# in #1142). Never write or edit a
+# cassette by hand; `cargo xtask cassettes check` fails on one whose digest
+# does not match, on one that still holds anything redaction removes, and on a
+# scenario without its cassette or a cassette without its scenario.
+#
+# client: the command line; `{python}` was the oracle's interpreter and
+#   `{oracle}` its bin directory, so the client is the frozen Python
+#   implementation. A scenario re-recorded since the oracle was retired names
+#   the Rust client instead: `opentide` (the command line built from this
+#   tree) or a `cargo run` of an example, run from the repository root behind
+#   `opentide-cassette`'s `Proxy` in `Mode::Record`, with the variables its
+#   `client_env` gives, the stand-in tenant started first as `tenant` says
+#   (`python3` for `{python}`), and `secrets` given fresh random values.
+# tenant: a stand-in tenant to start first; it prints its port on its first
+#   line, and every host in `routes` is sent to it.
+# secrets: environment variables given a fresh random value for the run; the
+#   value is redacted wherever it appears.
+# cwd: `tmp` (an empty directory) or `repo`.
+# exit: the client's exit code when it is not 0 (a run that fails by design).
+
+[[scenario]]
+name = "mock-platform/deploy"
+description = "The sample connector: look up, create, update and disable a rule, then read one that is not there (404)."
+client = ["{python}", "tests/cassettes/mock_platform/client.py"]
+tenant = ["{python}", "tests/cassettes/mock_platform/tenant.py"]
+routes = ["mock-tenant.invalid"]
+secrets = ["MOCK_PLATFORM_TOKEN"]
+cwd = "repo"
+
+[[scenario]]
+name = "skills/manifest"
+description = "The opentidehq/skills catalogue (manifest.json on main), as `setup skills discover` fetches it; the skills golden cases that read only the catalogue replay it."
+client = ["{oracle}/opentide", "--json", "setup", "skills", "discover"]
+cwd = "tmp"
+
+[[scenario]]
+name = "skills/install"
+description = "`setup skills --install` from a stand-in opentidehq/skills repository (UC-4.4d): the catalogue, the repository's file list from GitHub's trees API, then each file of a skill with a reference file."
+client = ["{oracle}/opentide", "--json", "setup", "skills", "--generic", "--install", "sample-skill", "--yes"]
+tenant = ["{python}", "tests/cassettes/skills/tenant.py"]
+routes = ["raw.githubusercontent.com", "api.github.com"]
+cwd = "tmp"
+
+[[scenario]]
+name = "skills/broken"
+description = "`setup skills --install` of a skill one of whose files answers 404 (UC-4.4d): the failed download, which writes nothing."
+client = ["{oracle}/opentide", "--json", "setup", "skills", "--generic", "--install", "broken-skill", "--yes"]
+tenant = ["{python}", "tests/cassettes/skills/tenant.py"]
+routes = ["raw.githubusercontent.com", "api.github.com"]
+cwd = "tmp"
+exit = 1
+
+[[scenario]]
+name = "skills/catalogue-first"
+description = "`setup skills` with the starter skills from the stand-in opentidehq/skills repository (opentide 0.28.1, #1015): the catalogue lists detection-engineering, so its tree and files are downloaded; opentide-detection-rule installs from the package."
+client = ["{oracle}/opentide", "--json", "setup", "skills", "--generic", "--yes"]
+tenant = ["{python}", "tests/cassettes/skills/tenant.py"]
+routes = ["raw.githubusercontent.com", "api.github.com"]
+cwd = "tmp"
+
+[[scenario]]
+name = "skills/catalogue-first-missing"
+description = "`setup skills` with the starter skills when a file of the catalogue's detection-engineering answers 404 (opentide 0.28.1, #1015): the package's copy is written, with a warning, or an installed copy is kept."
+client = ["{oracle}/opentide", "--json", "setup", "skills", "--generic", "--yes"]
+tenant = ["{python}", "tests/cassettes/skills/tenant.py", "detection-engineering-missing"]
+routes = ["raw.githubusercontent.com", "api.github.com"]
+cwd = "tmp"
+
+[[scenario]]
+name = "crowdstrike/deploy"
+description = "CrowdStrike's deploy client: the OAuth2 token, then create, update, disable and delete a correlation rule, and a create, an update and a delete the tenant refuses."
+client = ["{python}", "tests/cassettes/crowdstrike/client.py", "deploy"]
+tenant = ["{python}", "tests/cassettes/crowdstrike/tenant.py"]
+routes = ["api.eu-1.crowdstrike.com"]
+secrets = ["CROWDSTRIKE_CLIENT_SECRET"]
+cwd = "repo"
+
+[[scenario]]
+name = "crowdstrike/query"
+description = "CrowdStrike's CQL runner: a Next-Gen SIEM query job polled until done, one with its own head, one stopped when it outlives its timeout, one the tenant cancels, a 403 and a refusal before any request."
+client = ["{python}", "tests/cassettes/crowdstrike/client.py", "query"]
+tenant = ["{python}", "tests/cassettes/crowdstrike/tenant.py"]
+routes = ["api.eu-1.crowdstrike.com"]
+secrets = ["CROWDSTRIKE_CLIENT_SECRET"]
+cwd = "repo"
+
+[[scenario]]
+name = "harfanglab/deploy"
+description = "HarfangLab's deploy client: a Sigma rule created (PUT 404, then POST), updated, disabled and deleted, a YARA file created and deleted, and a 400, a 403 and deletes of rules the tenant does not hold."
+client = ["{python}", "tests/cassettes/harfanglab/client.py", "deploy"]
+tenant = ["{python}", "tests/cassettes/harfanglab/tenant.py"]
+routes = ["hl-tenant.invalid"]
+secrets = ["HARFANGLAB_API_TOKEN"]
+cwd = "repo"
+
+[[scenario]]
+name = "harfanglab/query"
+description = "HarfangLab's telemetry runner: a source filtered by quoted and Windows-path values, a 400, a gateway's HTML page, and queries refused before any request."
+client = ["{python}", "tests/cassettes/harfanglab/client.py", "query"]
+tenant = ["{python}", "tests/cassettes/harfanglab/tenant.py"]
+routes = ["hl-tenant.invalid"]
+secrets = ["HARFANGLAB_API_TOKEN"]
+cwd = "repo"
+
+[[scenario]]
+name = "sysdig/deploy"
+description = "Sysdig's deployer on the tide corpus's Falco rule: create and join the runtime policy, update, rename, disable (leave the policy), delete, recreate a rule the tenant lost, forget one to disable, a missing policy, a rule the tenant rejects and a refused token."
+client = ["{python}", "tests/cassettes/sysdig/client.py"]
+tenant = ["{python}", "tests/cassettes/sysdig/tenant.py"]
+routes = ["sysdig-tenant.invalid"]
+secrets = ["SYSDIG_SECURE_API_TOKEN"]
+cwd = "repo"
+
+# ---- UC-4.2b (#832): Defender for Endpoint, Elastic, SentinelOne ----
+# Each platform's stand-in tenant (tenant.py) answers as the Python suite's mocks
+# do; client.py drives the oracle's own client, runner, deployer or validator
+# through the scenario. `client.py fixture <path>` writes the inputs the Rust
+# tests give the connector (crates/opentide-connectors/tests/fixtures/).
+
+[[scenario]]
+name = "defender/query"
+description = "Microsoft Defender: opentide query's hunting queries over a fixed window: rows past the limit, a syntax error, a missing permission, a gateway's page."
+client = ["{python}", "tests/cassettes/defender/client.py", "query"]
+tenant = ["{python}", "tests/cassettes/defender/tenant.py"]
+routes = ["login.microsoftonline.com", "graph.microsoft.com"]
+secrets = ["DEFENDER_CLIENT_SECRET"]
+cwd = "repo"
+
+[[scenario]]
+name = "defender/validate"
+description = "Microsoft Defender: validate query --live's one-row checks, a query with a custom detection's columns and one without."
+client = ["{python}", "tests/cassettes/defender/client.py", "validate"]
+tenant = ["{python}", "tests/cassettes/defender/tenant.py"]
+routes = ["login.microsoftonline.com", "graph.microsoft.com"]
+secrets = ["DEFENDER_CLIENT_SECRET"]
+cwd = "repo"
+
+[[scenario]]
+name = "elastic/deploy"
+description = "Elastic: one batch: create, update with preserved fields, type change, prebuilt refused, delete of a missing rule, disable, ES|QL pre-flight, threshold field checks, a missing data view, a 401 ending the batch."
+client = ["{python}", "tests/cassettes/elastic/client.py", "deploy"]
+tenant = ["{python}", "tests/cassettes/elastic/tenant.py"]
+routes = ["kibana.elastic.invalid", "es.elastic.invalid"]
+secrets = ["ELASTIC_API_KEY"]
+cwd = "repo"
+
+[[scenario]]
+name = "elastic/query"
+description = "Elastic: opentide query in ES|QL, Lucene, EQL and KQL (rule preview, the one write), on the tenant's index, a data view and --index; refusals and a gateway's page."
+client = ["{python}", "tests/cassettes/elastic/client.py", "query"]
+tenant = ["{python}", "tests/cassettes/elastic/tenant.py"]
+routes = ["kibana.elastic.invalid", "es.elastic.invalid"]
+secrets = ["ELASTIC_API_KEY"]
+cwd = "repo"
+
+[[scenario]]
+name = "elastic/validate"
+description = "Elastic: validate query --live's checks of each rule: Elasticsearch checks and a rule preview ending at a fixed time."
+client = ["{python}", "tests/cassettes/elastic/client.py", "validate"]
+tenant = ["{python}", "tests/cassettes/elastic/tenant.py"]
+routes = ["kibana.elastic.invalid", "es.elastic.invalid"]
+secrets = ["ELASTIC_API_KEY"]
+cwd = "repo"
+
+[[scenario]]
+name = "sentinel_one/deploy"
+description = "SentinelOne: create two STAR rules, update one, update an unknown id (404), disable and delete it, then validate_query twice."
+client = ["{python}", "tests/cassettes/sentinel_one/client.py", "deploy"]
+tenant = ["{python}", "tests/cassettes/sentinel_one/tenant.py"]
+routes = ["s1.invalid"]
+secrets = ["S1_API_TOKEN"]
+cwd = "repo"
+
+[[scenario]]
+name = "sentinel_one/query"
+description = "SentinelOne: opentide query's PowerQueries: polled until finished, finished at once, refused, failed."
+client = ["{python}", "tests/cassettes/sentinel_one/client.py", "query"]
+tenant = ["{python}", "tests/cassettes/sentinel_one/tenant.py"]
+routes = ["s1.invalid"]
+secrets = ["S1_API_TOKEN"]
+cwd = "repo"
+
+[[scenario]]
+name = "sentinel_one/validate"
+description = "SentinelOne: validate query --live's one-row checks of a rule's queries."
+client = ["{python}", "tests/cassettes/sentinel_one/client.py", "validate"]
+tenant = ["{python}", "tests/cassettes/sentinel_one/tenant.py"]
+routes = ["s1.invalid"]
+secrets = ["S1_API_TOKEN"]
+cwd = "repo"
+
+# ---- UC-4.2c (#832): the cassettes of `opentide query`'s golden cases ----
+# The client is the oracle's command line, on tests/golden/fixtures/tenants (the
+# golden fixture `tenants`), against the platforms' stand-in tenants above; the
+# case in tests/golden/cases.toml that names the cassette runs the same arguments,
+# with a window in 2099 so no retention or clock moves the requests.
+
+[[scenario]]
+name = "golden/query-defender"
+description = "opentide query on Microsoft Defender's stand-in, the golden cases' cassette: sign in, then one hunting query whose two rows pass --limit 1."
+client = ["{oracle}/opentide", "--repo", "tests/golden/fixtures/tenants", "--json", "query", "--platform", "microsoft_defender", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "--limit", "1", "DeviceProcessEvents | project Timestamp, DeviceName"]
+tenant = ["{python}", "tests/cassettes/defender/tenant.py"]
+routes = ["login.microsoftonline.com", "graph.microsoft.com"]
+secrets = ["DEFENDER_CLIENT_SECRET"]
+cwd = "repo"
+
+[[scenario]]
+name = "golden/query-sentinel-one"
+description = "opentide query on SentinelOne's stand-in, the golden cases' cassette: a PowerQuery that finishes at once."
+client = ["{oracle}/opentide", "--repo", "tests/golden/fixtures/tenants", "--json", "query", "--platform", "sentinel_one", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "src.process.name = 'cmd.exe'"]
+tenant = ["{python}", "tests/cassettes/sentinel_one/tenant.py"]
+routes = ["s1.invalid"]
+secrets = ["S1_API_TOKEN"]
+cwd = "repo"
+
+[[scenario]]
+name = "golden/query-crowdstrike"
+description = "opentide query on CrowdStrike's stand-in, the golden cases' cassette: the token, then a Next-Gen SIEM query job polled until done."
+client = ["{oracle}/opentide", "--repo", "tests/golden/fixtures/tenants", "--json", "query", "--platform", "crowdstrike", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "#event_simpleName=ProcessRollup2"]
+tenant = ["{python}", "tests/cassettes/crowdstrike/tenant.py"]
+routes = ["api.eu-1.crowdstrike.com"]
+secrets = ["CROWDSTRIKE_CLIENT_SECRET"]
+cwd = "repo"
+
+[[scenario]]
+name = "golden/query-elastic"
+description = "opentide query on Elastic's stand-in, the golden cases' cassette: an ES|QL query over the window."
+client = ["{oracle}/opentide", "--repo", "tests/golden/fixtures/tenants", "--json", "query", "--platform", "elastic", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "FROM logs-* | WHERE process.name == \"cmd.exe\""]
+tenant = ["{python}", "tests/cassettes/elastic/tenant.py"]
+routes = ["kibana.elastic.invalid", "es.elastic.invalid"]
+secrets = ["ELASTIC_API_KEY"]
+cwd = "repo"
+
+[[scenario]]
+name = "golden/query-elastic-eql"
+description = "opentide query on Elastic's stand-in, the golden cases' cassette: an EQL sequence on the tenant's index."
+client = ["{oracle}/opentide", "--repo", "tests/golden/fixtures/tenants", "--json", "query", "--platform", "elastic", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "--language", "eql", "sequence [process where true] [process where true]"]
+tenant = ["{python}", "tests/cassettes/elastic/tenant.py"]
+routes = ["kibana.elastic.invalid", "es.elastic.invalid"]
+secrets = ["ELASTIC_API_KEY"]
+cwd = "repo"
+
+# ---- UC-4.3 (#833): Splunk, Carbon Black Cloud, Sentinel ----
+# The platforms opentide reached through vendor SDKs (splunklib, cbc_sdk,
+# azure-identity and azure-monitor-query): each stand-in tenant answers as the
+# Python suite's stand-ins and mocks do, and client.py drives the oracle's own
+# client, runner or deployer, so the cassette is what the SDK sent.
+
+[[scenario]]
+name = "splunk/deploy"
+description = "Splunk: the tide corpus's rule through the Rust connector's deployer, as opentide deploy sends it (#1657): looked up (404), created and its settings set in two updates, then the saved searches whose description names the rule listed (none other); deployed again (found, updated, listed); retired (deleted, listed); retired again (absent, listed). Its client is examples/splunk_client.rs, which sends the deploy steps of crates/opentide-connectors/tests/fixtures/splunk.json (written by the same example's fixture command); the Python client no longer sends what opentide sends."
+client = ["cargo", "run", "-q", "-p", "opentide-connectors", "--example", "splunk_client", "--", "deploy"]
+tenant = ["{python}", "tests/cassettes/splunk/tenant.py"]
+routes = ["splunk.invalid"]
+secrets = ["SPLUNK_TOKEN"]
+cwd = "repo"
+
+[[scenario]]
+name = "splunk/query"
+description = "Splunk: opentide query's one-shot searches: rows past the limit, a query that starts with a command, warnings, an ERROR message, a refusal, rows without fields, a gateway's page."
+client = ["{python}", "tests/cassettes/splunk/client.py", "query"]
+tenant = ["{python}", "tests/cassettes/splunk/tenant.py"]
+routes = ["splunk.invalid"]
+secrets = ["SPLUNK_TOKEN"]
+cwd = "repo"
+
+[[scenario]]
+name = "splunk/validate"
+description = "Splunk: validate query --live's parser checks: two parsed, a parse error, the gateway's 307 Network Error, a gateway's 504 page."
+client = ["{python}", "tests/cassettes/splunk/client.py", "validate"]
+tenant = ["{python}", "tests/cassettes/splunk/tenant.py"]
+routes = ["splunk.invalid"]
+secrets = ["SPLUNK_TOKEN"]
+cwd = "repo"
+
+[[scenario]]
+name = "carbon_black/deploy"
+description = "Carbon Black Cloud: the deployer on the watchlist opentide: a new report added to it, the same rule's IOC replaced, a rule added to another rule's report and retired from it (report kept), the first rule retired (report deleted), a watchlist the org does not hold."
+client = ["{python}", "tests/cassettes/carbon_black/client.py", "deploy"]
+tenant = ["{python}", "tests/cassettes/carbon_black/tenant.py"]
+routes = ["cbc.invalid"]
+secrets = ["CBC_TOKEN"]
+cwd = "repo"
+
+[[scenario]]
+name = "carbon_black/query"
+description = "Carbon Black Cloud: opentide query's process searches: validated, started, polled until complete and read past the limit; one that finds nothing; one the validation refuses; one the tenant forbids."
+client = ["{python}", "tests/cassettes/carbon_black/client.py", "query"]
+tenant = ["{python}", "tests/cassettes/carbon_black/tenant.py"]
+routes = ["cbc.invalid"]
+secrets = ["CBC_TOKEN"]
+cwd = "repo"
+
+[[scenario]]
+name = "carbon_black/validate"
+description = "Carbon Black Cloud: validate query --live's search_validation of a query it accepts and one it refuses."
+client = ["{python}", "tests/cassettes/carbon_black/client.py", "validate"]
+tenant = ["{python}", "tests/cassettes/carbon_black/tenant.py"]
+routes = ["cbc.invalid"]
+secrets = ["CBC_TOKEN"]
+cwd = "repo"
+
+[[scenario]]
+name = "sentinel/deploy"
+description = "Sentinel: sign in to Entra ID (OpenID configuration, client credentials), then ARM's alertRules: create a rule, replace it, list the rules (two pages), delete it, delete it again (404)."
+client = ["{python}", "tests/cassettes/sentinel/client.py", "deploy"]
+tenant = ["{python}", "tests/cassettes/sentinel/tenant.py"]
+routes = ["login.microsoftonline.com", "management.azure.com", "api.loganalytics.io"]
+secrets = ["AZURE_CLIENT_SECRET"]
+cwd = "repo"
+
+[[scenario]]
+name = "sentinel/extract"
+description = "Sentinel: opentide generate extract sentinel on the stand-in's workspace `extract` (UC-4.4e): sign in, then ARM's alertRules listed in two pages; the oracle's files and document go to crates/opentide-cli/tests/extract_sentinel/oracle/."
+client = ["{python}", "tests/cassettes/sentinel/client.py", "extract", "crates/opentide-cli/tests/extract_sentinel"]
+tenant = ["{python}", "tests/cassettes/sentinel/tenant.py"]
+routes = ["login.microsoftonline.com", "management.azure.com", "api.loganalytics.io"]
+secrets = ["AZURE_CLIENT_SECRET"]
+cwd = "repo"
+
+[[scenario]]
+name = "sentinel/query"
+description = "Sentinel: opentide query's Log Analytics queries: rows past the limit, a partial result, two tables, a syntax error, a missing permission."
+client = ["{python}", "tests/cassettes/sentinel/client.py", "query"]
+tenant = ["{python}", "tests/cassettes/sentinel/tenant.py"]
+routes = ["login.microsoftonline.com", "management.azure.com", "api.loganalytics.io"]
+secrets = ["AZURE_CLIENT_SECRET"]
+cwd = "repo"
+
+[[scenario]]
+name = "sentinel/validate"
+description = "Sentinel: validate query --live's one-row checks of two queries."
+client = ["{python}", "tests/cassettes/sentinel/client.py", "validate"]
+tenant = ["{python}", "tests/cassettes/sentinel/tenant.py"]
+routes = ["login.microsoftonline.com", "management.azure.com", "api.loganalytics.io"]
+secrets = ["AZURE_CLIENT_SECRET"]
+cwd = "repo"
+
+# ---- UC-4.3 (#833): the cassettes of `opentide query`'s golden cases on the
+# SDK platforms. Sentinel has none: azure-core and MSAL stamp each request with
+# a random id, so a recording of the oracle's command line never replays; its
+# connector's cassettes (sentinel/*) fix the ids in client.py instead.
+
+[[scenario]]
+name = "golden/query-splunk"
+description = "opentide query on Splunk's stand-in, the golden cases' cassette: server/info read twice, then a one-shot search whose three rows pass --limit 2."
+client = ["{oracle}/opentide", "--repo", "tests/golden/fixtures/tenants", "--json", "query", "--platform", "splunk", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "--limit", "2", "index=main EventCode=4688"]
+tenant = ["{python}", "tests/cassettes/splunk/tenant.py"]
+routes = ["splunk.invalid"]
+secrets = ["SPLUNK_TOKEN"]
+cwd = "repo"
+
+[[scenario]]
+name = "golden/query-splunk-rule"
+description = "opentide query --rule on Splunk's stand-in, the golden cases' cassette: the saved search a deploy of the rule creates, as a one-shot search (UC-4.4c); recorded with the Rust CLI, the search as written (#1657)."
+client = ["opentide", "--repo", "tests/golden/fixtures/live-tenants", "--json", "query", "--platform", "splunk", "--rule", "00000000-0000-4000-8046-000000000001", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "--limit", "2"]
+tenant = ["{python}", "tests/cassettes/splunk/tenant.py"]
+routes = ["splunk.invalid"]
+secrets = ["SPLUNK_TOKEN"]
+cwd = "repo"
+
+[[scenario]]
+name = "golden/query-sentinel-one-file"
+description = "opentide query --file on SentinelOne's stand-in, the golden cases' cassette: a correlation rule's two sub-queries, each a PowerQuery of its own (UC-4.4c)."
+client = ["{oracle}/opentide", "--repo", "tests/golden/fixtures/live-tenants", "--json", "query", "--platform", "sentinel_one", "--file", "objects/rules/sentinel-one-process.yaml", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z"]
+tenant = ["{python}", "tests/cassettes/sentinel_one/tenant.py"]
+routes = ["s1.invalid"]
+secrets = ["S1_API_TOKEN"]
+cwd = "repo"
+
+[[scenario]]
+name = "golden/query-carbon-black"
+description = "opentide query on Carbon Black Cloud's stand-in, the golden cases' cassette: a process search validated, started, polled until complete and read past --limit 2."
+client = ["{oracle}/opentide", "--repo", "tests/golden/fixtures/tenants", "--json", "query", "--platform", "carbon_black_cloud", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "--limit", "2", "process_name:cmd.exe"]
+tenant = ["{python}", "tests/cassettes/carbon_black/tenant.py"]
+routes = ["cbc.invalid"]
+secrets = ["CBC_TOKEN"]
+cwd = "repo"
+
+# ---- UC-4.6 (#979): the cassettes of `validate query --live`'s golden cases ----
+# The client is the oracle's command line on tests/golden/fixtures/live-tenants
+# (the golden fixture `live-tenants`). A check's window ends now, so only the
+# platforms whose check sends no time replay: Splunk's parser, Carbon Black
+# Cloud's search_validation, and an Elastic rule refused by its Elasticsearch
+# check before its preview. Defender, SentinelOne and Sentinel search the last
+# minute; their checks are proven by their connector's cassettes
+# (`<platform>/validate`), and the CLI's flow on them by opentide-cli's
+# tests/validate_live.rs, which replays those cassettes with the time fixed.
+
+[[scenario]]
+name = "golden/validate-live-splunk-parsed"
+description = "validate query --live on Splunk's stand-in, the golden cases' cassette: server/info read twice, then the parser accepts the one rule --uuid selects; recorded with the Rust CLI, the search as written (#1657)."
+client = ["opentide", "--repo", "tests/golden/fixtures/live-tenants", "--json", "validate", "query", "--live", "--platform", "splunk", "--uuid", "00000000-0000-4000-8046-000000000001"]
+tenant = ["{python}", "tests/cassettes/splunk/tenant.py"]
+routes = ["splunk.invalid"]
+secrets = ["SPLUNK_TOKEN"]
+cwd = "repo"
+
+[[scenario]]
+name = "golden/validate-live-splunk"
+description = "validate query --live on Splunk's stand-in, the golden cases' cassette: three rules through the parser: one parsed, one unknown command refused, one the gateway answers for (a check that timed out); recorded with the Rust CLI, the search as written (#1657)."
+client = ["opentide", "--repo", "tests/golden/fixtures/live-tenants", "--json", "validate", "query", "--live", "--platform", "splunk"]
+tenant = ["{python}", "tests/cassettes/splunk/tenant.py"]
+routes = ["splunk.invalid"]
+secrets = ["SPLUNK_TOKEN"]
+cwd = "repo"
+exit = 1
+
+[[scenario]]
+name = "golden/validate-live-carbon-black-valid"
+description = "validate query --live on Carbon Black Cloud's stand-in, the golden cases' cassette: search_validation of the one rule --uuid selects, its query's lines joined, accepted."
+client = ["{oracle}/opentide", "--repo", "tests/golden/fixtures/live-tenants", "--json", "validate", "query", "--live", "--platform", "carbon_black_cloud", "--uuid", "00000000-0000-4000-8046-000000000004"]
+tenant = ["{python}", "tests/cassettes/carbon_black/tenant.py"]
+routes = ["cbc.invalid"]
+secrets = ["CBC_TOKEN"]
+cwd = "repo"
+
+[[scenario]]
+name = "golden/validate-live-carbon-black"
+description = "validate query --live on Carbon Black Cloud's stand-in, the golden cases' cassette: search_validation of two rules, one refused."
+client = ["{oracle}/opentide", "--repo", "tests/golden/fixtures/live-tenants", "--json", "validate", "query", "--live", "--platform", "carbon_black_cloud"]
+tenant = ["{python}", "tests/cassettes/carbon_black/tenant.py"]
+routes = ["cbc.invalid"]
+secrets = ["CBC_TOKEN"]
+cwd = "repo"
+exit = 1
+
+[[scenario]]
+name = "golden/validate-live-elastic"
+description = "validate query --live on Elastic's stand-in, the golden cases' cassette: an ES|QL rule's advisory, then its pre-flight refused before any preview."
+client = ["{oracle}/opentide", "--repo", "tests/golden/fixtures/live-tenants", "--json", "validate", "query", "--live", "--platform", "elastic"]
+tenant = ["{python}", "tests/cassettes/elastic/tenant.py"]
+routes = ["kibana.elastic.invalid", "es.elastic.invalid"]
+secrets = ["ELASTIC_API_KEY"]
+cwd = "repo"
+exit = 1
+
+# ---- UC-4.6 (#979): the cassettes of `opentide deploy`'s golden cases ----
+# A deploy that sends, on each platform whose requests replay, against the
+# `deploy-tenants` fixture. The client copies the fixture first: a deploy
+# writes deployment state, and the repository's copy stays as committed.
+# Sentinel has none (azure-core's and MSAL's random request ids), nor has a
+# Carbon Black Cloud create or update (the SDK stamps the report with the
+# time), nor HarfangLab (the oracle's deploy stops on an AttributeError before
+# any request: its configuration has no HarfangLab section):
+# crates/opentide-cli/tests/deploy_send.rs replays their connector cassettes
+# through the CLI flow.
+
+[[scenario]]
+name = "golden/deploy-defender-continues"
+description = "deploy on Microsoft Defender's stand-in (the Graph beta custom detection API, RFC 0021), recorded with the Rust CLI: sign in; a rule the tenant lacks (PATCH 404, then POST with its uuid as id); one it holds (PATCH); one another run creates meanwhile (PATCH 404, POST 409, PATCH); a DISABLEMENT the tenant lacks (PATCH 404: microsoft_defender_rule_absent, nothing created); a DELETION already gone (DELETE 404); and an update the tenant refuses (400): that rule fails and the run goes on."
+client = ["/bin/sh", "-c", "cp -R tests/golden/fixtures/deploy-tenants \"$HOME/ws\" && exec {oracle}/opentide --repo \"$HOME/ws\" --json deploy --platform microsoft_defender --strategy PREVIEW --strategy RELEASE --all --keep-deprecated"]
+tenant = ["{python}", "tests/cassettes/defender/tenant.py"]
+routes = ["login.microsoftonline.com", "graph.microsoft.com"]
+secrets = ["DEFENDER_CLIENT_SECRET"]
+cwd = "repo"
+exit = 1
+
+[[scenario]]
+name = "golden/deploy-sentinel-one"
+description = "deploy on SentinelOne's stand-in, the golden cases' cassette: create a STAR rule (its id recorded), delete a retired one (its id forgotten), skip a rule to disable that was never deployed, then update a recorded id the console does not hold (404): the run stops."
+client = ["/bin/sh", "-c", "cp -R tests/golden/fixtures/deploy-tenants \"$HOME/ws\" && exec {oracle}/opentide --repo \"$HOME/ws\" --json deploy --platform sentinel_one --strategy PREVIEW --strategy RELEASE --all --keep-deprecated"]
+tenant = ["{python}", "tests/cassettes/sentinel_one/tenant.py"]
+routes = ["s1.invalid"]
+secrets = ["S1_API_TOKEN"]
+cwd = "repo"
+exit = 1
+
+[[scenario]]
+name = "golden/deploy-crowdstrike"
+description = "deploy on CrowdStrike's stand-in, the golden cases' cassette: the token, then create a correlation rule (its id recorded), update a recorded one and delete a retired one (its id forgotten)."
+client = ["/bin/sh", "-c", "cp -R tests/golden/fixtures/deploy-tenants \"$HOME/ws\" && exec {oracle}/opentide --repo \"$HOME/ws\" --json deploy --platform crowdstrike --strategy PREVIEW --strategy RELEASE --all --keep-deprecated"]
+tenant = ["{python}", "tests/cassettes/crowdstrike/tenant.py"]
+routes = ["api.eu-1.crowdstrike.com"]
+secrets = ["CROWDSTRIKE_CLIENT_SECRET"]
+cwd = "repo"
+
+[[scenario]]
+name = "golden/deploy-sysdig"
+description = "deploy on Sysdig's stand-in, the golden cases' cassette: create a Falco rule and add it to the tenant's runtime policy, recreate a recorded rule the tenant lost, forget a recorded rule to disable that the tenant lost."
+client = ["/bin/sh", "-c", "cp -R tests/golden/fixtures/deploy-tenants \"$HOME/ws\" && exec {oracle}/opentide --repo \"$HOME/ws\" --json deploy --platform sysdig --strategy PREVIEW --strategy RELEASE --all --keep-deprecated"]
+tenant = ["{python}", "tests/cassettes/sysdig/tenant.py"]
+routes = ["sysdig-tenant.invalid"]
+secrets = ["SYSDIG_SECURE_API_TOKEN"]
+cwd = "repo"
+
+[[scenario]]
+name = "golden/deploy-elastic"
+description = "deploy on Elastic's stand-in, the golden cases' cassette: create a rule, update one (its remote fields kept), refuse to modify a prebuilt one, delete a retired one Kibana does not hold."
+client = ["/bin/sh", "-c", "cp -R tests/golden/fixtures/deploy-tenants \"$HOME/ws\" && exec {oracle}/opentide --repo \"$HOME/ws\" --json deploy --platform elastic --strategy PREVIEW --strategy RELEASE --all --keep-deprecated"]
+tenant = ["{python}", "tests/cassettes/elastic/tenant.py"]
+routes = ["kibana.elastic.invalid", "es.elastic.invalid"]
+secrets = ["ELASTIC_API_KEY"]
+cwd = "repo"
+exit = 1
+
+[[scenario]]
+name = "golden/deploy-elastic-unchanged"
+description = "deploy on Elastic's stand-in, the golden cases' cassette, run a second time: every rule the first run wrote is looked up and found as the run would write it, so none is written (#1711); the prebuilt rule is still refused and the retired one still absent. Recorded from the Rust command line through the proxy, after a first deploy of the same fixture to the same stand-in."
+client = ["/bin/sh", "-c", "cp -R tests/golden/fixtures/deploy-tenants \"$HOME/ws\" && opentide --repo \"$HOME/ws\" --json deploy --platform elastic --strategy PREVIEW --strategy RELEASE --all --keep-deprecated >/dev/null; exec opentide --repo \"$HOME/ws\" --json deploy --platform elastic --strategy PREVIEW --strategy RELEASE --all --keep-deprecated"]
+tenant = ["{python}", "tests/cassettes/elastic/tenant.py"]
+routes = ["kibana.elastic.invalid", "es.elastic.invalid"]
+secrets = ["ELASTIC_API_KEY"]
+cwd = "repo"
+exit = 1
+
+[[scenario]]
+name = "golden/deploy-splunk"
+description = "deploy on Splunk's stand-in, the golden cases' cassette, recorded with the Rust CLI (#1657): a saved search looked up (404), created and its settings set in two updates, then the saved searches whose description names the rule listed (none other to delete); a retired one already absent, then the saved searches that name it listed (none)."
+client = ["/bin/sh", "-c", "cp -R tests/golden/fixtures/deploy-tenants \"$HOME/ws\" && exec opentide --repo \"$HOME/ws\" --json deploy --platform splunk --strategy PREVIEW --strategy RELEASE --all --keep-deprecated"]
+tenant = ["{python}", "tests/cassettes/splunk/tenant.py"]
+routes = ["splunk.invalid"]
+secrets = ["SPLUNK_TOKEN"]
+cwd = "repo"
+
+[[scenario]]
+name = "golden/deploy-carbon-black"
+description = "deploy on Carbon Black Cloud's stand-in, the golden cases' cassette: a retired rule whose report the watchlist does not hold, then a rule in a watchlist the org does not hold: the run stops."
+client = ["/bin/sh", "-c", "cp -R tests/golden/fixtures/deploy-tenants \"$HOME/ws\" && exec {oracle}/opentide --repo \"$HOME/ws\" --json deploy --platform carbon_black_cloud --strategy PREVIEW --strategy RELEASE --all --keep-deprecated"]
+tenant = ["{python}", "tests/cassettes/carbon_black/tenant.py"]
+routes = ["cbc.invalid"]
+secrets = ["CBC_TOKEN"]
+cwd = "repo"
+exit = 1
+
+# ---- UC-4.4b (#834): the cassettes of `opentide share`'s golden cases ----
+# The client copies the `share-misp` fixture first: a push or a retract writes
+# the sharing ledger, and the repository's copy stays as committed.
+
+[[scenario]]
+name = "golden/share-push"
+description = "share push on the MISP stand-in, the golden cases' cassette: misp-prod probed (version, organisation, template), the threat and the objective created and published (the galaxy's ATT&CK and actor clusters read once), a rule updated over the instance's own object, one unchanged; misp-locked refused at its probe (403): a partial run."
+client = ["/bin/sh", "-c", "cp -R tests/golden/fixtures/share-misp \"$HOME/ws\" && exec {oracle}/opentide --repo \"$HOME/ws\" --json share push"]
+tenant = ["{python}", "tests/cassettes/misp/tenant.py"]
+routes = ["misp.invalid"]
+secrets = ["MISP_API_KEY"]
+cwd = "repo"
+exit = 3
+
+[[scenario]]
+name = "golden/share-retract"
+description = "share retract on the MISP stand-in, the golden cases' cassette: a shared rule's event unpublished, and an object gone from the catalogue whose event the instance no longer holds forgotten."
+client = ["/bin/sh", "-c", "cp -R tests/golden/fixtures/share-misp \"$HOME/ws\" && exec {oracle}/opentide --repo \"$HOME/ws\" --json share retract --target misp-prod --uuid 00000000-0000-4000-8048-000000000012 --uuid 00000000-0000-4000-8048-000000000020"]
+tenant = ["{python}", "tests/cassettes/misp/tenant.py"]
+routes = ["misp.invalid"]
+secrets = ["MISP_API_KEY"]
+cwd = "repo"
+
+[[scenario]]
+name = "golden/share-push-changed"
+description = "share push --changed on the MISP stand-in, the golden cases' cassette (UC-4.4e): share-misp as a checkout whose last commit, a GitHub push, changed one rule; misp-prod probed and that rule's event updated over the instance's own object, nothing else shared; misp-locked refused at its probe (403): a partial run."
+client = ["/bin/sh", "-c", "cp -R tests/golden/fixtures/share-misp \"$HOME/ws\" && cd \"$HOME/ws\" && export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_AUTHOR_NAME='opentide golden' GIT_AUTHOR_EMAIL=golden@opentide.invalid GIT_AUTHOR_DATE=2026-01-01T00:00:00Z GIT_COMMITTER_NAME='opentide golden' GIT_COMMITTER_EMAIL=golden@opentide.invalid GIT_COMMITTER_DATE=2026-01-01T00:00:00Z && g() { git -c init.defaultBranch=main -c commit.gpgsign=false -c core.autocrlf=false -c maintenance.auto=false -c gc.auto=0 \"$@\"; } && g init -q && g add -A && g commit -q --no-verify -m 'The fixture' && sed -i 's/^  A rule the MISP stand-in receives\\.$/  A rule the MISP stand-in receives, changed by a push./' objects/rules/rule-b-update.yaml && g commit -q --no-verify -a -m 'A push' && GITHUB_ACTIONS=true GITHUB_EVENT_NAME=push GITHUB_SHA=HEAD GITHUB_WORKSPACE=\"$HOME/ws\" exec {oracle}/opentide --repo \"$HOME/ws\" --json share push --changed"]
+tenant = ["{python}", "tests/cassettes/misp/tenant.py"]
+routes = ["misp.invalid"]
+secrets = ["MISP_API_KEY"]
+cwd = "repo"
+exit = 3
+
+# ---- UC-4.4b (#834): the cassettes of `generate extract`'s golden cases ----
+# The client copies the `tenants` fixture and runs in the copy: the importers
+# write `Imported/` in the working directory, and Defender's ids go into
+# deployment state.
+
+[[scenario]]
+name = "golden/extract-defender"
+description = "generate extract defender on Microsoft Defender's stand-in (the Graph beta custom detection API), recorded with the Rust CLI: sign in, then the custom detections listed over two pages (`@odata.nextLink`): one setting tactics, recommended actions, entities, custom details, grouping, an automated action, a scope and incident correlation, a disabled NRT one, and one whose name differs from it only in case."
+client = ["/bin/sh", "-c", "cp -R tests/golden/fixtures/tenants \"$HOME/ws\" && cd \"$HOME/ws\" && exec {oracle}/opentide --json generate extract defender"]
+tenant = ["{python}", "tests/cassettes/defender/tenant.py"]
+routes = ["login.microsoftonline.com", "graph.microsoft.com"]
+secrets = ["DEFENDER_CLIENT_SECRET"]
+cwd = "repo"
+
+[[scenario]]
+name = "golden/extract-elastic"
+description = "generate extract elastic on Elastic's stand-in (space soc), the golden cases' cassette: one page of `_find` holding a query rule with most of RFC 0007's blocks, an EQL rule, a threshold rule whose name another rule has, a new terms rule with an interval Kibana would refuse, an ES|QL rule, a prebuilt rule left out and a rule whose id is not a UUID."
+client = ["/bin/sh", "-c", "cp -R tests/golden/fixtures/tenants \"$HOME/ws\" && cd \"$HOME/ws\" && exec {oracle}/opentide --json generate extract elastic --space soc"]
+tenant = ["{python}", "tests/cassettes/elastic/tenant.py"]
+routes = ["kibana.elastic.invalid", "es.elastic.invalid"]
+secrets = ["ELASTIC_API_KEY"]
+cwd = "repo"
+
+[[scenario]]
+name = "graylog/deploy"
+description = "Graylog's deploy client on the 7.2 and 6.3 tenants: the version, the query check, a create, an update, a disable and a delete, then the failure table's refusals (an unconfirmed create, a refused one, an update of a missing definition, an immutable one, a delete of one in use)."
+client = ["{python}", "tests/cassettes/graylog/client.py", "deploy"]
+tenant = ["{python}", "tests/cassettes/graylog/tenant.py"]
+routes = ["graylog-tenant.invalid", "graylog-63.invalid"]
+secrets = ["GRAYLOG_TOKEN"]
+cwd = "repo"
+
+[[scenario]]
+name = "graylog/query"
+description = "Graylog's message search on 7.2 (every field) and on 6.3 (only the fields the query names)."
+client = ["{python}", "tests/cassettes/graylog/client.py", "query"]
+tenant = ["{python}", "tests/cassettes/graylog/tenant.py"]
+routes = ["graylog-tenant.invalid", "graylog-63.invalid"]
+secrets = ["GRAYLOG_TOKEN"]
+cwd = "repo"
+
+[[scenario]]
+name = "graylog/validate"
+description = "Graylog's live query check (`POST /api/search/validate`): an OK verdict, a warning and a refusal."
+client = ["{python}", "tests/cassettes/graylog/client.py", "validate"]
+tenant = ["{python}", "tests/cassettes/graylog/tenant.py"]
+routes = ["graylog-tenant.invalid", "graylog-63.invalid"]
+secrets = ["GRAYLOG_TOKEN"]
+cwd = "repo"

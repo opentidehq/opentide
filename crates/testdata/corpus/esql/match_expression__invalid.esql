@@ -1,0 +1,3 @@
+// prod:match_expression invalid
+FROM logs-* METADATA _id
+| WHERE message:

@@ -1,0 +1,52 @@
+---
+source: crates/opentide-lucene/tests/trees.rs
+expression: "debug_parse(\"event.category:process AND NOT process.name:(\\\"cmd.exe\\\" OR power*) AND source.port:[1024 TO *]\")"
+---
+SourceFile@0..93
+  BooleanQuery@0..93
+    FieldQuery@0..22
+      FieldName@0..14
+        Term@0..14 "event.category"
+      Colon@14..15 ":"
+      TermQuery@15..22
+        Term@15..22 "process"
+    Whitespace@22..23 " "
+    And@23..26
+      AndKw@23..26 "AND"
+    Whitespace@26..27 " "
+    ModifiedClause@27..65
+      Not@27..30
+        NotKw@27..30 "NOT"
+      Whitespace@30..31 " "
+      FieldQuery@31..65
+        FieldName@31..43
+          Term@31..43 "process.name"
+        Colon@43..44 ":"
+        Group@44..65
+          LParen@44..45 "("
+          BooleanQuery@45..64
+            PhraseQuery@45..54
+              Phrase@45..54 "\"cmd.exe\""
+            Whitespace@54..55 " "
+            Or@55..57
+              OrKw@55..57 "OR"
+            Whitespace@57..58 " "
+            TermQuery@58..64
+              WildcardTerm@58..64 "power*"
+          RParen@64..65 ")"
+    Whitespace@65..66 " "
+    And@66..69
+      AndKw@66..69 "AND"
+    Whitespace@69..70 " "
+    FieldQuery@70..93
+      FieldName@70..81
+        Term@70..81 "source.port"
+      Colon@81..82 ":"
+      RangeQuery@82..93
+        LBracket@82..83 "["
+        RangeTerm@83..87 "1024"
+        Whitespace@87..88 " "
+        ToKw@88..90 "TO"
+        Whitespace@90..91 " "
+        RangeTerm@91..92 "*"
+        RBracket@92..93 "]"

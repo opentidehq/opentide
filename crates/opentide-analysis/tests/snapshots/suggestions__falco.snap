@@ -1,0 +1,16 @@
+---
+source: crates/opentide-analysis/tests/suggestions.rs
+expression: "queries(LanguageId::Falco, None,\n&[\"falco_unknown_field\", \"falco_unknown_event\", \"falco_unknown_macro\"],\n&[\"evt.typ = execve\", \"evt.type = execvee\", \"proc.nmae = bash\",\n\"proc.Name = bash\", \"spawned_proces and proc.name = bash\",\n\"container.imge.repository = nginx\",],)"
+---
+evt.typ = execve
+  error falco_unknown_field `evt.typ` => evt.type
+evt.type = execvee
+  error falco_unknown_event `execvee` => execve
+proc.nmae = bash
+  error falco_unknown_field `proc.nmae` => proc.name
+proc.Name = bash
+  error falco_unknown_field `proc.Name` => proc.name
+spawned_proces and proc.name = bash
+  warning falco_unknown_macro `spawned_proces` => spawned_process
+container.imge.repository = nginx
+  error falco_unknown_field `container.imge.repository` => container.image.repository

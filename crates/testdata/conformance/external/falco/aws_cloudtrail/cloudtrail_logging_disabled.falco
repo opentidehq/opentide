@@ -1,0 +1,1 @@
+ct.name="StopLogging" and not ct.error exists

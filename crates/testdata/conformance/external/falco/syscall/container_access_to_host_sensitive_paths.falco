@@ -1,0 +1,4 @@
+(open_read or open_write) and container and (fd.name startswith /host/ or
+     fd.name startswith /rootfs/ or
+     fd.name startswith /hostfs/)
+and not known_container_runtime_host_access and not user_known_host_path_access

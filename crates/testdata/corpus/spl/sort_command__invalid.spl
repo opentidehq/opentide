@@ -1,0 +1,2 @@
+``` prod:sort_command invalid
+index=main | sort

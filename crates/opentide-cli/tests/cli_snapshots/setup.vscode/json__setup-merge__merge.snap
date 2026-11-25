@@ -1,0 +1,61 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: setup.vscode/json/setup-merge/merge
+---
+args: opentide --json setup vscode --settings --mcp --no-generate
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "command": "setup vscode",
+  "detail": "The opentide VS Code extension (opentidehq.opentide), which .vscode/extensions.json recommends, provides the opentide MCP server to VS Code; .vscode/mcp.json is for teammates without it",
+  "duration_ms": 0,
+  "exit_code": 0,
+  "extension_mcp": true,
+  "failure": null,
+  "files": [
+    ".vscode/extensions.json",
+    ".vscode/settings.json",
+    ".vscode/mcp.json"
+  ],
+  "generated": [],
+  "message": "Wrote 3 files",
+  "next_actions": [],
+  "ok": true,
+  "schema_version": 1,
+  "status": "completed",
+  "summary": {}
+}
+
+━━━ stderr · empty
+
+━━━ ws/.vscode/extensions.json · created 0644
+{
+  "recommendations": [
+    "opentidehq.opentide"
+  ]
+}
+
+━━━ ws/.vscode/mcp.json · modified 0644
+﻿{
+  // The team's MCP servers.
+  "servers": {
+    /* keep */ "other": {"command": "other-server", "args": []},
+    "opentide": {
+      "command": "opentide",
+      "args": ["mcp", "start"],
+      "env": {
+        "OPENTIDE_REPO_ROOT": "${workspaceFolder}",
+      },
+    },
+  },
+}
+
+━━━ ws/.vscode/settings.json · modified 0644
+{
+  // The team's editor preferences.
+  "editor.tabSize": 2,
+  "yaml.schemas": {
+    "https://json.schemastore.org/github-workflow.json": ".github/workflows/*.yml"
+  }
+}

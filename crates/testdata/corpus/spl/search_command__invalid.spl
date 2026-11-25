@@ -1,0 +1,2 @@
+``` prod:search_command invalid
+index=main | search a=

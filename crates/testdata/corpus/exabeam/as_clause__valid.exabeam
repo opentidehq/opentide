@@ -1,0 +1,2 @@
+# prod:as_clause valid
+SELECT user WHERE outcome:"fail" AS failed

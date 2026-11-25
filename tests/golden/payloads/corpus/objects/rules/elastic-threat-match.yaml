@@ -1,0 +1,46 @@
+name: Elastic Threat Match
+
+metadata:
+  uuid: 00000000-0000-4000-8006-000000000005
+  schema: rule::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+  author: Detection Team
+  contributors:
+    - Analyst One
+    - Detection Team
+
+description: |
+  Elastic Threat Match for the compile corpus.
+  Second line.
+
+response:
+  alert_severity: Medium
+
+configurations:
+  elastic:
+    status: STAGING
+    type: threat_match
+    query: source.ip:*
+    threat:
+      index:
+        - threat-intel-*
+      query: threat.indicator.type:ip
+      language: kuery
+      filters:
+        - field: threat.feed.name
+          value: abuse
+        - meta:
+            alias: all
+          query:
+            match_all: {}
+      indicator_path: threat.indicator
+      mapping:
+        - entries:
+            - field: source.ip
+              value: threat.indicator.ip
+            - value: threat.indicator.port
+              field: source.port
+              negate: true

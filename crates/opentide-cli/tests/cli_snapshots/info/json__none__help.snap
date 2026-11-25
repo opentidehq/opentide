@@ -1,0 +1,39 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: info/json/none/help
+---
+args: opentide --json info --help
+exit: 0
+
+━━━ stdout
+Show repository and platform information
+
+Usage: opentide info [OPTIONS] [section] [name]
+
+Arguments:
+  [section]
+          
+
+  [name]
+          Vocabulary to inspect, with the vocab section (e.g. surface)
+
+Options:
+      --platform <PLATFORM>
+          Detection platform: sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops
+          
+          [possible values: sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops]
+
+      --technique <TECHNIQUE>
+          ATT&CK technique ID for the coverage section (T1059)
+
+      --strict
+          Exit non-zero when any object failed to load
+
+      --help
+          Print help
+
+Examples:
+  $ opentide info
+  $ opentide info --platform sentinel
+
+━━━ stderr · empty

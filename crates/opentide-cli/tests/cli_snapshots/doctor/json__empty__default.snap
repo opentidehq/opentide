@@ -1,0 +1,149 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: doctor/json/empty/default
+---
+args: opentide --json doctor
+exit: 1
+
+━━━ stdout · json, 1 lines
+{
+  "checks": [
+    {
+      "code": "opentide_version",
+      "fix": null,
+      "message": "opentide 0.28.1",
+      "status": "pass",
+      "subject": null
+    },
+    {
+      "code": "opentide_latest",
+      "fix": "check the network or --proxy, or pass --offline to skip network checks",
+      "message": "Could not ask PyPI for the latest release (Cannot reach pypi tenant 'pypi.org' at https://pypi.org: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>))",
+      "status": "warn",
+      "subject": null
+    },
+    {
+      "code": "workspace",
+      "fix": null,
+      "message": "Workspace ./ has .opentide/ (found from the current directory)",
+      "status": "pass",
+      "subject": null
+    },
+    {
+      "code": "git",
+      "fix": null,
+      "message": "git <GIT_VERSION>",
+      "status": "pass",
+      "subject": null
+    },
+    {
+      "code": "git_repository",
+      "fix": "git init ./",
+      "message": "./ is not in a git repository",
+      "status": "warn",
+      "subject": null
+    },
+    {
+      "code": "configuration",
+      "fix": null,
+      "message": "No workspace configuration: the defaults apply",
+      "status": "pass",
+      "subject": null
+    },
+    {
+      "code": "templates_fresh",
+      "fix": "opentide generate templates schemas snippets",
+      "message": "4 template(s) missing: objective.1.0.template.yaml, rule.1.0.template.yaml, rule.1.1.template.yaml, threat.1.0.template.yaml",
+      "status": "warn",
+      "subject": null
+    },
+    {
+      "code": "schemas_fresh",
+      "fix": "opentide generate schemas",
+      "message": "6 schema(s) this version generates are missing: objective.1.0.schema.json, rule.1.0.schema.json, rule.1.1.schema.json, threat.1.0.schema.json, visibility.1.0.schema.json, opentide.schema.json",
+      "status": "warn",
+      "subject": null
+    },
+    {
+      "code": "lsp_catalog",
+      "fix": null,
+      "message": "Language-server catalog compiled into opentide 0.28.1",
+      "status": "pass",
+      "subject": null
+    },
+    {
+      "code": "platforms_enabled",
+      "fix": "opentide setup platforms --sentinel (or another platform)",
+      "message": "No platform is enabled; rules validate but nothing deploys",
+      "status": "warn",
+      "subject": null
+    },
+    {
+      "code": "analysis_engine",
+      "fix": null,
+      "message": "The analysis engine (language server 1.0.0) loads",
+      "status": "pass",
+      "subject": null
+    },
+    {
+      "code": "connectivity",
+      "fix": "opentide doctor --live reaches each tenant whose credentials are set",
+      "message": "Not checked: --live not set",
+      "status": "skip",
+      "subject": null
+    },
+    {
+      "code": "proxy",
+      "fix": "check --proxy, OPENTIDE_PROXY, https_proxy or all_proxy, and that the proxy is up",
+      "message": "Cannot connect to proxy http://127.0.0.1:9 (Connection refused (os error <ECONNREFUSED>))",
+      "status": "fail",
+      "subject": null
+    },
+    {
+      "code": "vscode_settings",
+      "fix": "code --install-extension opentidehq.opentide (or opentide setup vscode, to recommend it to the team)",
+      "message": "No .vscode/extensions.json: VS Code does not suggest opentidehq.opentide",
+      "status": "skip",
+      "subject": null
+    },
+    {
+      "code": "vscode_snippets",
+      "fix": "opentide generate snippets",
+      "message": "No snippets at .vscode/model-templates.code-snippets",
+      "status": "skip",
+      "subject": null
+    },
+    {
+      "code": "mcp_config",
+      "fix": "opentide setup mcp --vscode (or --cursor, --claude-code, --generic)",
+      "message": "No MCP configuration: agents in editors cannot call opentide tools",
+      "status": "skip",
+      "subject": null
+    }
+  ],
+  "command": "doctor",
+  "duration_ms": 0,
+  "error": "1 check failed · 6 passed, 5 warnings, 4 skipped",
+  "exit_code": 1,
+  "failure": {
+    "argument": null,
+    "code": "doctor_checks_failed",
+    "crash_log": null,
+    "message": "1 check failed · 6 passed, 5 warnings, 4 skipped",
+    "suggestion": null
+  },
+  "message": "1 check failed · 6 passed, 5 warnings, 4 skipped",
+  "next_actions": [],
+  "ok": false,
+  "schema_version": 1,
+  "status": "failed",
+  "summary": {
+    "checks": 16,
+    "failed": 1,
+    "passed": 6,
+    "skipped": 4,
+    "warnings": 5
+  }
+}
+
+━━━ stderr · empty

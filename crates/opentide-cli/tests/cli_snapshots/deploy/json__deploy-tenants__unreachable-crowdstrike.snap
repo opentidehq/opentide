@@ -1,0 +1,131 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: deploy/json/deploy-tenants/unreachable-crowdstrike
+---
+args: opentide --json deploy --platform crowdstrike --strategy PREVIEW --strategy RELEASE --all --keep-deprecated
+exit: 1
+
+━━━ stdout · json, 1 lines
+{
+  "changes": [
+    {
+      "action": "create",
+      "name": "CrowdStrike create rule",
+      "platform": "crowdstrike",
+      "status": "STAGING",
+      "tenant": "lab",
+      "uuid": "00000000-0000-4000-8047-000000000021"
+    },
+    {
+      "action": "update",
+      "name": "CrowdStrike update rule",
+      "platform": "crowdstrike",
+      "status": "PRODUCTION",
+      "tenant": "lab",
+      "uuid": "00000000-0000-4000-8047-000000000022"
+    },
+    {
+      "action": "delete",
+      "name": "CrowdStrike retire rule",
+      "platform": "crowdstrike",
+      "status": "REMOVED",
+      "tenant": "lab",
+      "uuid": "00000000-0000-4000-8047-000000000023"
+    }
+  ],
+  "command": "deploy",
+  "deployed": [],
+  "dry_run": false,
+  "duration_ms": 0,
+  "error": "Deployment to crowdstrike failed on tenant lab: Cannot reach crowdstrike tenant 'lab' at https://api.eu-1.crowdstrike.com: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
+  "exit_code": 1,
+  "failure": {
+    "argument": null,
+    "code": "command_failed",
+    "crash_log": null,
+    "message": "Deployment to crowdstrike failed on tenant lab: Cannot reach crowdstrike tenant 'lab' at https://api.eu-1.crowdstrike.com: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
+    "suggestion": null
+  },
+  "failures": [
+    {
+      "error": "Cannot reach crowdstrike tenant 'lab' at https://api.eu-1.crowdstrike.com: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
+      "platform": "crowdstrike",
+      "tenant": "lab"
+    }
+  ],
+  "message": "Deployment to crowdstrike failed on tenant lab: Cannot reach crowdstrike tenant 'lab' at https://api.eu-1.crowdstrike.com: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
+  "next_actions": [],
+  "ok": false,
+  "plan": {
+    "crowdstrike": [
+      "00000000-0000-4000-8047-000000000021",
+      "00000000-0000-4000-8047-000000000022",
+      "00000000-0000-4000-8047-000000000023"
+    ]
+  },
+  "results": [
+    {
+      "action": "create",
+      "error": null,
+      "id": "00000000-0000-4000-8047-000000000021",
+      "name": "CrowdStrike create rule",
+      "platform": "crowdstrike",
+      "reason": "not attempted: tenant lab failed",
+      "seconds": 0.0,
+      "status": "not_attempted",
+      "tenant": "lab"
+    },
+    {
+      "action": "update",
+      "error": null,
+      "id": "00000000-0000-4000-8047-000000000022",
+      "name": "CrowdStrike update rule",
+      "platform": "crowdstrike",
+      "reason": "not attempted: tenant lab failed",
+      "seconds": 0.0,
+      "status": "not_attempted",
+      "tenant": "lab"
+    },
+    {
+      "action": "delete",
+      "error": null,
+      "id": "00000000-0000-4000-8047-000000000023",
+      "name": "CrowdStrike retire rule",
+      "platform": "crowdstrike",
+      "reason": "not attempted: tenant lab failed",
+      "seconds": 0.0,
+      "status": "not_attempted",
+      "tenant": "lab"
+    }
+  ],
+  "schema_version": 1,
+  "status": "failed",
+  "strategies": [
+    "PREVIEW",
+    "RELEASE"
+  ],
+  "summary": {
+    "create": 0,
+    "delete": 0,
+    "disable": 0,
+    "failed": 0,
+    "not_attempted": 3,
+    "platforms": 1,
+    "seconds": 0.0,
+    "skipped": 0,
+    "tenants": 1,
+    "unchanged": 0,
+    "update": 0,
+    "upsert": 0
+  }
+}
+
+━━━ stderr · json, 1 lines
+{
+  "error": "Cannot reach crowdstrike tenant '***' at https://api.eu-1.crowdstrike.com: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
+  "event": "tenant_deployment_failed",
+  "level": "critical",
+  "platform": "crowdstrike",
+  "tenant": "***",
+  "timestamp": "0000-00-00 00:00:00"
+}

@@ -1,1086 +1,236 @@
-"""Nested per-platform configuration models for detection rules."""
+"""The Tide models of ``opentide.models.platform_configs``: the Rust classes (ADR 0011).
+
+Each class is the frozen Rust model of the same name (``opentide._native.models``).
+"""
 
 from __future__ import annotations
 
-from typing import Any, Literal
-
-from pydantic import (
-    ConfigDict,
-    Field,
-    SerializerFunctionWrapHandler,
-    model_serializer,
-    model_validator,
+from opentide._native.models import (
+    BitdefenderActions,
+    BitdefenderCriterion,
+    BitdefenderDetection,
+    BitdefenderProcessScope,
+    BitdefenderTargets,
+    BitdefenderYara,
+    CrowdstrikeDetails,
+    CrowdstrikeSchedule,
+    DefenderAccountMapping,
+    DefenderAccountObjectTarget,
+    DefenderAccountSidTarget,
+    DefenderActions,
+    DefenderAlert,
+    DefenderAmazonResourceMapping,
+    DefenderAzureResourceMapping,
+    DefenderCloudApplicationMapping,
+    DefenderDeviceTarget,
+    DefenderDnsMapping,
+    DefenderEmailTarget,
+    DefenderEntities,
+    DefenderExclusion,
+    DefenderFileMapping,
+    DefenderFileTarget,
+    DefenderGoogleCloudResourceMapping,
+    DefenderHostMapping,
+    DefenderIncident,
+    DefenderIpMapping,
+    DefenderIsolationTarget,
+    DefenderMailboxMapping,
+    DefenderMailClusterMapping,
+    DefenderMailMessageMapping,
+    DefenderOAuthApplicationMapping,
+    DefenderProcessMapping,
+    DefenderQuarantineTarget,
+    DefenderRegistryValueMapping,
+    DefenderSchedule,
+    DefenderScope,
+    DefenderSecurityGroupMapping,
+    DefenderUrlMapping,
+    ElasticActions,
+    ElasticCardinality,
+    ElasticEql,
+    ElasticExceptionList,
+    ElasticExceptions,
+    ElasticFilter,
+    ElasticGuide,
+    ElasticIntegration,
+    ElasticMachineLearning,
+    ElasticNewTerms,
+    ElasticOverrides,
+    ElasticRequiredField,
+    ElasticRisk,
+    ElasticRiskScoreMapping,
+    ElasticScheduling,
+    ElasticSeverity,
+    ElasticSeverityMapping,
+    ElasticSuppression,
+    ElasticThreatEntry,
+    ElasticThreatGroup,
+    ElasticThreatMatch,
+    ElasticThreshold,
+    ElasticTimeline,
+    ExabeamCorrelation,
+    ExabeamEmail,
+    ExabeamRecurrence,
+    ExabeamSequence,
+    ExabeamSuppression,
+    ExabeamThreshold,
+    GraylogAggregation,
+    GraylogEventLookup,
+    GraylogEventTemplate,
+    GraylogLookupTable,
+    GraylogSchedule,
+    HarfangLabSigma,
+    HarfangLabSigmaLogSource,
+    HarfangLabSigmaSelection,
+    HarfangLabYara,
+    HarfangLabYaraMeta,
+    SentinelAlert,
+    SentinelAlertGrouping,
+    SentinelCustomDetails,
+    SentinelDynamicProperties,
+    SentinelEntityMapping,
+    SentinelExclusion,
+    SentinelGrouping,
+    SentinelMappingEntry,
+    SentinelOneCondition,
+    SentinelOneCorrelation,
+    SentinelOneDetails,
+    SentinelOneResponse,
+    SentinelOneSingleEvent,
+    SentinelOneSubQuery,
+    SentinelScheduling,
+    SentinelTemplate,
+    SentinelTrigger,
+    SplunkActions,
+    SplunkEmail,
+    SplunkEmailInclude,
+    SplunkNotable,
+    SplunkNotableDrilldown,
+    SplunkNotableEvent,
+    SplunkRisk,
+    SplunkRiskObject,
+    SplunkSchedule,
+    SplunkScheduling,
+    SplunkThreatObject,
+    SplunkThrottling,
+    SplunkTimerange,
+    SplunkTrigger,
+    SysdigException,
+    SysdigList,
+    SysdigMacro,
 )
 
-from opentide.models.base import TideField, TideModel
-from opentide.models.sentinel_attack import SentinelTechnique
-
-
-class SentinelTemplate(TideModel):
-    uuid: str
-    """Sentinel alert-rule template name."""
-    version: str
-    """Template version."""
-
-
-class SentinelTrigger(TideModel):
-    operator: str
-    """Sentinel trigger operator."""
-    threshold: int
-    """Sentinel trigger threshold."""
-
-
-class SentinelScheduling(TideModel):
-    nrt: bool | None = None
-    """`true` deploys `kind: NRT` and skips frequency, lookback, and trigger."""
-    frequency: str | None = None
-    """Duration: ISO 8601, or shorthand converted to ISO 8601. How often a scheduled rule runs
-    (`PT1H`). Required at deploy unless `nrt` is true."""
-    lookback: str | None = None
-    """Duration: ISO 8601, or shorthand converted to ISO 8601. Query window (`PT2H`). Required at
-    deploy unless `nrt` is true."""
-
-
-class SentinelCustomDetails(TideModel):
-    key: str
-    """Alert property name."""
-    column: str
-    """Result column."""
-
-
-class SentinelDynamicProperties(TideModel):
-    property: str
-    """Sentinel alert property. `Tactics` and `Severity` are sent as the tactics and severity column
-    overrides. Any other value is an alert dynamic property."""
-    column: str
-    """Result column."""
-
-
-class SentinelAlert(TideModel):
-    title: str | None = None
-    """Alert display-name format. Empty leaves the Sentinel default. The rule `name` is still the
-    analytics-rule display name."""
-    description: str | None = None
-    """Alert description format."""
-    severity: str | None = None
-    """Sentinel severity. When omitted, deploy uses `response.alert_severity`. `Critical` is sent as
-    `High`."""
-    suppression: str | bool = False
-    """`false` disables suppression and sends a one-hour duration. A duration, ISO 8601 or
-    shorthand, enables suppression for that long. Boolean `true` fails deploy."""
-    create_incident: bool = True
-    """Whether a firing alert opens an incident."""
-    tactics: list[str] | None = None
-    """Sentinel tactic names (the ARM `AttackTactic` enum). Replaced when the rule's ATT&CK
-    techniques resolve to tactics: each `att&ck` stage maps to the tactic of the same name.
-    Stealth, Defense Impairment, and the ICS Evasion tactic map to `DefenseEvasion`. A stage with
-    no Sentinel tactic is dropped."""
-    techniques: list[SentinelTechnique] | None = None
-    """ATT&CK v18 technique and sub-technique ids, the ATT&CK version Sentinel is aligned to. A
-    sub-technique is sent in `subTechniques` and its parent in `techniques`. Replaced by the
-    rule's resolved techniques when those exist."""
-    custom_details: list[SentinelCustomDetails] | None = None
-    """Extra alert properties."""
-    dynamic_properties: list[SentinelDynamicProperties] | None = None
-    """Column-driven alert properties."""
-
-
-class SentinelAlertGrouping(TideModel):
-    enabled: bool
-    """Group alerts into one incident."""
-    reopen_closed_incidents: bool | None = None
-    """Reopen a matching closed incident. Deploy sends `false` when omitted."""
-    grouping_lookback: str | None = None
-    """Duration: ISO 8601, or shorthand converted to ISO 8601. Required at deploy when `enabled` is
-    true. When `enabled` is false and this is omitted, deploy sends `PT1H`."""
-    matching: str | None = None
-    """Sentinel matching method. Deploy sends `AllEntities` when omitted."""
-    group_by_entities: list[str] | None = None
-    """Entity types used when matching is selective."""
-    group_by_alert_details: list[str] | None = None
-    """Alert-detail fields used when matching is selective."""
-    group_by_custom_details: list[str] | None = None
-    """Custom-detail keys used when matching is selective."""
-
-
-class SentinelGrouping(TideModel):
-    event: str
-    """Sentinel `aggregationKind`. `SingleAlert` groups events into one alert. `AlertPerResult`
-    emits one alert per row."""
-    alert: SentinelAlertGrouping | None = None
-    """Incident grouping. Required at deploy."""
-
-
-class SentinelMappingEntry(TideModel):
-    identifier: str
-    """Entity identifier (`Name`, `Address`, …)."""
-    column: str
-    """Result column."""
-
-
-class SentinelEntityMapping(TideModel):
-    entity: str
-    """Sentinel entity type (`Account`, `Host`, `IP`, `URL`, …)."""
-    mappings: list[SentinelMappingEntry]
-    """Column bindings for that entity."""
-
-
-class SentinelExclusion(TideModel):
-    query: str = TideField(schema_extra={"tide.template.multiline": True})
-    """KQL fragment appended after the base query. The key is required. An empty string is accepted
-    (this field is not the non-blank rule `query`)."""
-    reason: str
-    """Why the exclusion exists. Not sent to Sentinel."""
-    tenant: str | None = None
-    """Limit the exclusion to one tenant name."""
-    let: dict[str, Any] | None = None
-    """KQL `let` bindings prepended to the query. Values may be string, number, or boolean. Other
-    types are skipped. The last definition of a name wins."""
-
-
-class DefenderAlert(TideModel):
-    category: str
-    """Defender alert category. Deploy removes spaces (`Suspicious Activity` is sent as
-    `SuspiciousActivity`)."""
-    title: str | None = None
-    """Alert title. Deploy uses the rule `name` when omitted."""
-    description: str | None = None
-    """Alert description. Deploy uses the rule `description` when omitted."""
-    severity: str | None = None
-    """`Informational`, `Low`, `Medium`, `High`, or `Critical`. Deploy uses
-    `response.alert_severity` when omitted. `Critical` is sent as `high`."""
-    recommendation: str | None = None
-    """Recommended actions text."""
-    techniques: list[str] | None = None
-    """Accepted on the block. The current deployer sends an empty technique list."""
-
-
-class DefenderImpactedEntities(TideModel):
-    device: str | None = None
-    """Device column."""
-    mailbox: str | None = None
-    """Mailbox column."""
-    user: str | None = None
-    """User column."""
-
-
-class DefenderGroupScoping(TideModel):
-    selection: Literal["All", "Specific"]
-    """`All` or `Specific`."""
-    device_groups: list[str] | None = None
-    """Group names. Used when `selection` is `Specific`."""
-
-
-class DefenderAllowBlockGroupScoping(TideModel):
-    selection: Literal["All", "Specific"]
-    """`All` or `Specific`."""
-    device_groups: list[str] | None = None
-    """Group names. Used when `selection` is `Specific`."""
-
-
-class DefenderAllowBlockAction(TideModel):
-    action: Literal["Allow", "Block"]
-    """`Allow` or `Block`."""
-    identifier: str
-    """Column identifying the file. Deploy lowercases the first character."""
-    groups: DefenderAllowBlockGroupScoping | None = None
-    """Device groups the allow or block applies to."""
-
-
-class DefenderFileActions(TideModel):
-    allow_block: DefenderAllowBlockAction | None = None
-    """Allow or block a file identifier."""
-    quarantine_file: str | None = None
-    """Column identifying the file to quarantine."""
-
-
-class DefenderDeviceActions(TideModel):
-    isolate_device: str | None = None
-    """Isolation type. Deploy lowercases the first character (`Full` is sent as `full`)."""
-    collect_investigation_package: bool = False
-    """Collect an investigation package."""
-    run_antivirus_scan: bool = False
-    """Run an antivirus scan."""
-    initiate_investigation: bool = False
-    """Start an automated investigation."""
-    restrict_app_execution: bool = False
-    """Restrict app execution."""
-
-
-class DefenderUserActions(TideModel):
-    mark_as_compromised: str | None = None
-    """User column."""
-    disable_user: str | None = None
-    """User column."""
-    force_password_reset: str | None = None
-    """User column."""
-
-
-class DefenderResponseActions(TideModel):
-    devices: DefenderDeviceActions | None = None
-    """Device actions: isolate, collect an investigation package, scan, investigate or restrict app
-    execution."""
-    files: DefenderFileActions | None = None
-    """File actions: allow or block, and quarantine."""
-    users: DefenderUserActions | None = None
-    """User actions: mark as compromised, disable, or force a password reset."""
-
-
-class DefenderExclusion(TideModel):
-    query: str = TideField(schema_extra={"tide.template.multiline": True})
-    """KQL fragment appended after the base query. The key is required. An empty string is
-    accepted."""
-    reason: str
-    """Why the exclusion exists. Not sent to Defender."""
-    tenant: str | None = None
-    """Limit the exclusion to one tenant name."""
-    let: dict[str, Any] | None = None
-    """KQL `let` bindings. String, number, or boolean."""
-
-
-class CrowdstrikeDetails(TideModel):
-    trigger: str
-    """`verbose` or `summary`, any case. Deploy lowercases the value."""
-    outcome: str
-    """`detection` or `incident`, any case. Deploy lowercases the value."""
-    name: str | None = None
-    """Falcon rule name. Deploy uses the Tide rule `name` when omitted."""
-    description: str | None = None
-    """Falcon description. Deploy uses the Tide rule `description` when omitted."""
-    severity: str | None = None
-    """`Informational`, `Low`, `Medium`, `High`, or `Critical`. Deploy uses
-    `response.alert_severity` when omitted."""
-    tactic: str | None = None
-    """Falcon tactic. Sent as given."""
-    technique: str | None = None
-    """Falcon technique. Sent as given."""
-
-
-class CrowdstrikeSchedule(TideModel):
-    frequency: str
-    """Run interval. Deploy sends it as `@every <frequency>` (`@every 1h`)."""
-    lookback: str
-    """How far back each run searches. Sent as the search lookback."""
-    start: str | None = None
-    """Do not run before this UTC time."""
-    end: str | None = None
-    """Stop running at this UTC time."""
-
-
-class SentinelOneDetails(TideModel):
-    name: str | None = None
-    """STAR rule name. Deploy uses the Tide rule `name` when omitted."""
-    description: str | None = None
-    """STAR description. Deploy uses the Tide rule `description` when omitted."""
-    severity: str | None = None
-    """Sent as the STAR severity string. When omitted, deploy maps `response.alert_severity`:
-    `Informational` and `Low` become `Low`; `Medium`, `High`, and `Critical` keep those names."""
-    expiration: str | None = None
-    """When set, the rule is `Temporary` and this value is the expiration. When omitted, the rule is
-    `Permanent`."""
-
-
-class SentinelOneSingleEvent(TideModel):
-    query: str = TideField(schema_extra={"tide.template.multiline": True})
-    """S1QL. Multiline. Sent as `queryType: events`."""
-
-
-class SentinelOneSubQuery(TideModel):
-    query: str = TideField(schema_extra={"tide.template.multiline": True})
-    """S1QL sub-query. Multiline."""
-    matches_required: int
-    """Number of matches this sub-query needs within the correlation window."""
-
-
-class SentinelOneCorrelation(TideModel):
-    entity: str
-    """Entity the sub-queries correlate on (`host`, `user`, …)."""
-    match_in_order: bool
-    """Whether sub-queries must match in list order."""
-    time_window: str
-    """Correlation window (`1h`, `30m`)."""
-    sub_queries: list[SentinelOneSubQuery]
-    """Each item has `query` (S1QL) and `matches_required` (int)."""
-
-
-class SentinelOneCondition(TideModel):
-    type: Literal["Single Event", "Correlation"]
-    """`Single Event` or `Correlation`."""
-    single_event: SentinelOneSingleEvent | None = None
-    """Required at deploy when `type` is `Single Event`."""
-    correlation: SentinelOneCorrelation | None = None
-    """Required at deploy when `type` is `Correlation`."""
-    cool_off: str | None = None
-    """Renotify window (`30m`, `1h`). Intended to become `renotifyMinutes`. The current deployer
-    does not convert it."""
-
-
-class SentinelOneResponse(TideModel):
-    treat_as_threat: Literal[False, "Malicious", "Suspicious"]
-    """`false` is sent as `UNDEFINED`."""
-    network_quarantine: bool
-    """Quarantine the endpoint from the network."""
-
-
-class HarfangLabSigmaLogSource(TideModel):
-    category: str
-    """Sigma logsource category (`process_creation`)."""
-    product: str
-    """Sigma logsource product (`windows`)."""
-
-
-class HarfangLabSigmaSelection(TideModel):
-    name: str
-    """Selection name used by `condition`."""
-    field: str
-    """Event field (`Image`, `CommandLine`)."""
-    value: str | list[str] | bool | int | float
-    """Match value. A list is a Sigma list."""
-    modifiers: list[str] | None = None
-    """Sigma modifiers (`contains`, `endswith`). Empty when omitted."""
-
-
-class HarfangLabSigma(TideModel):
-    logsource: HarfangLabSigmaLogSource
-    """Sigma logsource: `category` and `product`."""
-    selections: list[HarfangLabSigmaSelection]
-    """Named selections."""
-    condition: str
-    """Sigma condition expression (`selection`, `selection1 and selection2`)."""
-    false_positives: list[str] | None = None
-    """Sigma false-positive notes."""
-
-
-class HarfangLabYaraMeta(TideModel):
-    context: list[str]
-    """Scan contexts. The value `file` is rewritten from `os`: `Windows` → `file.pe`, `MacOS` →
-    `file.macho`, `Linux` → `file.elf`. Other context values are kept."""
-    os: str
-    """`Windows`, `MacOS`, or `Linux`. Also written to meta `os`."""
-    arch: list[str] | None = None
-    """Architectures, joined with commas."""
-    score: str | None = None
-    """`Informational`, `Low`, `Medium`, `High`, or `Critical`. A known value overrides the score
-    taken from `response.alert_severity`. An unknown value falls back to that severity, then to
-    50."""
-    classification: str | None = None
-    """Free-form classification written to meta."""
-
-
-class HarfangLabYara(TideModel):
-    """One form: `signature`, or the decomposed `meta`, `strings`, `condition`, and `imports`."""
-
-    signature: str | None = TideField(None, schema_extra={"tide.template.multiline": True})
-    """A whole YARA text: imports, then one or more YARA rules, written out in the block. Deploy
-    sends it as the YaraFile `content`, verbatim."""
-    meta: HarfangLabYaraMeta | None = None
-    """Decomposed form: scan context, OS, and optional score override. Required without
-    `signature`."""
-    strings: str | None = None
-    """Decomposed form: YARA string section body, one definition per line, without the
-    `strings:` header. Required without `signature`."""
-    condition: str | None = None
-    """Decomposed form: YARA condition body, without the `condition:` header. Required without
-    `signature`."""
-    imports: list[str] | None = None
-    """Decomposed form: YARA modules (`pe`, `elf`). Each becomes `import "<module>"`."""
-
-    @model_validator(mode="after")
-    def _decomposed_form_is_complete(self) -> HarfangLabYara:
-        if self.signature is not None:
-            return self
-        missing = [key for key in ("meta", "strings", "condition") if getattr(self, key) is None]
-        if missing:
-            raise ValueError(
-                "a yara object sets signature, or the decomposed meta, strings and condition; "
-                f"missing {', '.join(missing)}"
-            )
-        return self
-
-
-class SplunkSchedule(TideModel):
-    frequency: str | None = None
-    """`Nm`, `Nh`, or `Nd` (`5m`, `1h`, `1d`). Expected ranges are 1–59 minutes, 1–23 hours, 1–30
-    days. Values outside the range still convert, with a warning."""
-    cron: str | None = None
-    """Cron expression. Wins over `frequency` when both are set."""
-    custom_time: str | None = None
-    """Anchor for `frequency` when the tenant mode is `custom`. Format `HHhmm` (`09h15`). Required
-    at deploy for that mode."""
-
-
-class SplunkTimerange(TideModel):
-    lookback: str | None = None
-    """`Nm`, `Nh`, or `Nd`. Deploy converts it to a Splunk earliest time (`-90m@m`), including the
-    tenant skew and offset."""
-    earliest: str | None = None
-    """Raw Splunk earliest time. Wins over `lookback`."""
-    latest: str | None = None
-    """Raw Splunk latest time."""
-
-
-class SplunkScheduling(TideModel):
-    type: str | None = None
-    """`Real Time` deploys `dispatch.earliest_time` and `dispatch.latest_time` as `rt`. Any other
-    non-empty value, or a `schedule` with no `type`, deploys `is_scheduled = 1`."""
-    expires: str | None = None
-    """Splunk `alert.expires` (`2h`, `1d`)."""
-    schedule: SplunkSchedule | None = None
-    """When the search runs."""
-    timerange: SplunkTimerange | None = None
-    """Window the search covers."""
-
-
-class SplunkThrottling(TideModel):
-    fields: list[str] | None = None
-    """`alert.suppress.fields`, joined with commas."""
-    duration: str | None = None
-    """`alert.suppress.period`. When set, deploy also sets `alert.suppress` true."""
-    group_name: str | None = None
-    """`alert.suppress.group_name`."""
-
-
-class SplunkTrigger(TideModel):
-    condition: str | None = None
-    """Splunk `counttype` (`number of events`, `number of hosts`, …)."""
-    comparator: str | None = None
-    """Splunk `relation` (`greater than`, `less than`, …)."""
-    threshold: int | None = None
-    """Splunk `quantity`."""
-    severity: int | None = None
-    """Splunk `alert.severity` (1–6). When omitted, deploy maps `response.alert_severity`."""
-    custom_condition: str | None = None
-    """Splunk `alert_condition` search."""
-    type: str | None = None
-    """`once` (any case) sets `alert.digest_mode` true. Any other value sets it false."""
-    throttling: SplunkThrottling | None = None
-    """Suppression window."""
-
-
-class SplunkNotableEvent(TideModel):
-    title: str | None = None
-    """`action.notable.param.rule_title`."""
-    description: str | None = None
-    """`action.notable.param.rule_description`."""
-
-
-class SplunkNotableDrilldown(TideModel):
-    name: str | None = None
-    """`action.notable.param.drilldown_name`."""
-    search: str | None = None
-    """`action.notable.param.drilldown_search`."""
-
-
-class SplunkNotable(TideModel):
-    event: SplunkNotableEvent | None = None
-    """Notable event title and description."""
-    drilldown: SplunkNotableDrilldown | None = None
-    """Drilldown search name and query."""
-    security_domain: str | None = None
-    """`action.notable.param.security_domain`, lowercased."""
-
-
-class SplunkRiskObject(TideModel):
-    field: str
-    """Result field holding the risk object."""
-    type: str
-    """Risk object type (`system`, `user`, `other`)."""
-    score: int
-    """Risk score added to the object."""
-
-
-class SplunkThreatObject(TideModel):
-    field: str
-    """Result field holding the threat object."""
-    type: str
-    """Threat object type (`ip_address`, `domain`, …)."""
-
-
-class SplunkRisk(TideModel):
-    message: str | None = None
-    """`action.risk.param._risk_message`."""
-    risk_objects: list[SplunkRiskObject] | None = None
-    """Each item requires `field` (string), `type` (string), and `score` (int)."""
-    threat_objects: list[SplunkThreatObject] | None = None
-    """Each item requires `field` (string) and `type` (string)."""
-
-
-class SplunkEmailInclude(TideModel):
-    results_link: bool | None = None
-    """`action.email.include.results_link`."""
-    search_string: bool | None = None
-    """`action.email.include.search`."""
-    trigger_condition: bool | None = None
-    """`action.email.include.trigger`."""
-    trigger_time: bool | None = None
-    """`action.email.include.trigger_time`."""
-
-
-class SplunkEmail(TideModel):
-    to: str | None = None
-    """Recipients."""
-    cc: str | None = None
-    """Carbon-copy recipients."""
-    bcc: str | None = None
-    """Blind carbon-copy recipients."""
-    priority: str | None = None
-    """Mail priority."""
-    subject: str | None = None
-    """Subject line. Deploy key `action.email.subject`."""
-    message: str | None = None
-    """Body. Deploy key `action.email.message.alert`."""
-    content_type: str | None = None
-    """`action.email.content_type`."""
-    send_csv: bool | None = None
-    """`action.email.sendcsv` as 1 or 0."""
-    send_pdf: bool | None = None
-    """`action.email.sendpdf` as 1 or 0."""
-    inline_results: bool | None = None
-    """`action.email.inline` as 1 or 0."""
-    include: SplunkEmailInclude | None = None
-    """What the email includes: results link, search string, trigger condition and trigger time."""
-
-
-class SplunkActions(TideModel):
-    notable: SplunkNotable | None = None
-    """Enterprise Security notable event. Sent only when the tenant has Enterprise Security
-    enabled."""
-    risk: SplunkRisk | None = None
-    """Enterprise Security risk action. Sent only when the tenant has Enterprise Security
-    enabled."""
-    email: SplunkEmail | None = None
-    """Email action."""
-
-
-# --------------------------------------------------------------------------
-# Elastic Security platform models (RFC 0007 / platform::elastic::1.0)
-# --------------------------------------------------------------------------
-
-Duration = str
-
-FieldType = Literal[
-    "keyword",
-    "constant_keyword",
-    "wildcard",
-    "text",
-    "match_only_text",
-    "long",
-    "integer",
-    "short",
-    "byte",
-    "unsigned_long",
-    "double",
-    "float",
-    "half_float",
-    "scaled_float",
-    "date",
-    "date_nanos",
-    "boolean",
-    "ip",
-    "version",
-    "binary",
-    "geo_point",
-    "geo_shape",
-    "object",
-    "flattened",
-    "nested",
+__all__ = [
+    "BitdefenderActions",
+    "BitdefenderCriterion",
+    "BitdefenderDetection",
+    "BitdefenderProcessScope",
+    "BitdefenderTargets",
+    "BitdefenderYara",
+    "CrowdstrikeDetails",
+    "CrowdstrikeSchedule",
+    "DefenderAccountMapping",
+    "DefenderAccountObjectTarget",
+    "DefenderAccountSidTarget",
+    "DefenderActions",
+    "DefenderAlert",
+    "DefenderAmazonResourceMapping",
+    "DefenderAzureResourceMapping",
+    "DefenderCloudApplicationMapping",
+    "DefenderDeviceTarget",
+    "DefenderDnsMapping",
+    "DefenderEmailTarget",
+    "DefenderEntities",
+    "DefenderExclusion",
+    "DefenderFileMapping",
+    "DefenderFileTarget",
+    "DefenderGoogleCloudResourceMapping",
+    "DefenderHostMapping",
+    "DefenderIncident",
+    "DefenderIpMapping",
+    "DefenderIsolationTarget",
+    "DefenderMailClusterMapping",
+    "DefenderMailMessageMapping",
+    "DefenderMailboxMapping",
+    "DefenderOAuthApplicationMapping",
+    "DefenderProcessMapping",
+    "DefenderQuarantineTarget",
+    "DefenderRegistryValueMapping",
+    "DefenderSchedule",
+    "DefenderScope",
+    "DefenderSecurityGroupMapping",
+    "DefenderUrlMapping",
+    "ElasticActions",
+    "ElasticCardinality",
+    "ElasticEql",
+    "ElasticExceptionList",
+    "ElasticExceptions",
+    "ElasticFilter",
+    "ElasticGuide",
+    "ElasticIntegration",
+    "ElasticMachineLearning",
+    "ElasticNewTerms",
+    "ElasticOverrides",
+    "ElasticRequiredField",
+    "ElasticRisk",
+    "ElasticRiskScoreMapping",
+    "ElasticScheduling",
+    "ElasticSeverity",
+    "ElasticSeverityMapping",
+    "ElasticSuppression",
+    "ElasticThreatEntry",
+    "ElasticThreatGroup",
+    "ElasticThreatMatch",
+    "ElasticThreshold",
+    "ElasticTimeline",
+    "ExabeamCorrelation",
+    "ExabeamEmail",
+    "ExabeamRecurrence",
+    "ExabeamSequence",
+    "ExabeamSuppression",
+    "ExabeamThreshold",
+    "GraylogAggregation",
+    "GraylogEventLookup",
+    "GraylogEventTemplate",
+    "GraylogLookupTable",
+    "GraylogSchedule",
+    "HarfangLabSigma",
+    "HarfangLabSigmaLogSource",
+    "HarfangLabSigmaSelection",
+    "HarfangLabYara",
+    "HarfangLabYaraMeta",
+    "SentinelAlert",
+    "SentinelAlertGrouping",
+    "SentinelCustomDetails",
+    "SentinelDynamicProperties",
+    "SentinelEntityMapping",
+    "SentinelExclusion",
+    "SentinelGrouping",
+    "SentinelMappingEntry",
+    "SentinelOneCondition",
+    "SentinelOneCorrelation",
+    "SentinelOneDetails",
+    "SentinelOneResponse",
+    "SentinelOneSingleEvent",
+    "SentinelOneSubQuery",
+    "SentinelScheduling",
+    "SentinelTemplate",
+    "SentinelTrigger",
+    "SplunkActions",
+    "SplunkEmail",
+    "SplunkEmailInclude",
+    "SplunkNotable",
+    "SplunkNotableDrilldown",
+    "SplunkNotableEvent",
+    "SplunkRisk",
+    "SplunkRiskObject",
+    "SplunkSchedule",
+    "SplunkScheduling",
+    "SplunkThreatObject",
+    "SplunkThrottling",
+    "SplunkTimerange",
+    "SplunkTrigger",
+    "SysdigException",
+    "SysdigList",
+    "SysdigMacro",
 ]
-
-
-class ElasticSuppression(TideModel):
-    group_by: list[str] | None = None
-    """1–3 field names. Required for every type except `threshold`, where it is forbidden."""
-    duration: Duration | None = None
-    """Suppression window. Required for `threshold`. Omitted on other types suppresses for the rule
-    execution only."""
-    missing_fields_strategy: Literal["suppress", "doNotSuppress"] = "suppress"
-    """`suppress` or `doNotSuppress`: whether alerts missing a `group_by` field are suppressed
-    together. Not sent for `threshold`."""
-
-
-class ElasticCardinality(TideModel):
-    field: str
-    """Field whose distinct values are counted."""
-    value: int
-    """Minimum number of distinct values."""
-
-
-class ElasticThreshold(TideModel):
-    field: list[str] = Field(default_factory=list)
-    """Group by, 0–5 fields. `[]` counts all matches."""
-    value: int
-    """Threshold, at least 1."""
-    cardinality: ElasticCardinality | None = None
-    """Count: alert only when `field` has at least `value` distinct values."""
-
-
-class ElasticRequiredField(TideModel):
-    name: str
-    """Field name."""
-    type: FieldType
-    """Elasticsearch mapping type: `keyword`, `constant_keyword`, `wildcard`, `text`,
-    `match_only_text`, `long`, `integer`, `short`, `byte`, `unsigned_long`, `double`, `float`,
-    `half_float`, `scaled_float`, `date`, `date_nanos`, `boolean`, `ip`, `version`, `binary`,
-    `geo_point`, `geo_shape`, `object`, `flattened`, or `nested`."""
-
-
-class ElasticIntegration(TideModel):
-    package: str
-    """Integration package, for example `windows`, `endpoint`, `aws`."""
-    integration: str | None = None
-    """Policy template inside the package, for example `cloudtrail`."""
-    version: str = "*"
-    """Semver range, for example `^2.0.0`."""
-
-
-class ElasticSeverityMapping(TideModel):
-    field: str
-    """Source event field."""
-    value: str
-    """Value to match."""
-    operator: Literal["equals"] = "equals"
-    """`equals` is the only operator."""
-    severity: Literal["low", "medium", "high", "critical"]
-    """Kibana severity: `low`, `medium`, `high`, or `critical`."""
-
-
-class ElasticRiskScoreMapping(TideModel):
-    field: str
-    """Source event field holding a score."""
-    operator: Literal["equals"] = "equals"
-    """`equals` is the only operator."""
-    value: str = ""
-    """Kibana sends an empty string."""
-
-
-class ElasticThreatEntry(TideModel):
-    field: str
-    """Event field."""
-    value: str
-    """Indicator field."""
-    type: Literal["mapping"] = "mapping"
-    """`mapping` is the only type."""
-    negate: bool | None = None
-    """`true` is the UI's DOES NOT MATCH. Not sent when null."""
-
-
-class ElasticThreatGroup(TideModel):
-    entries: list[ElasticThreatEntry]
-    """Field mappings in this group. Every entry must match (AND)."""
-
-
-class ElasticScheduling(TideModel):
-    interval: Duration = "5m"
-    """Runs every."""
-    lookback: Duration = "1m"
-    """Additional look-back time. `0m` is valid."""
-    max_alerts: int | None = None
-    """Max alerts per run (`max_signals`). Omitted leaves the detection engine's default of 100."""
-
-
-class ElasticSeverity(TideModel):
-    default: str
-    """An `alert_severity` value."""
-    mapping: list[ElasticSeverityMapping] | None = None
-    """Severity override: alerts whose `field` equals `value` get `severity`."""
-
-
-class ElasticRisk(TideModel):
-    score: int | None = None
-    """0–100. Omitted derives the score from the severity."""
-    mapping: list[ElasticRiskScoreMapping] | None = None
-    """Risk score override: the alert takes its score from `field`."""
-
-
-class ElasticOverrides(TideModel):
-    name: str | None = None
-    """Rule name override: the alert title comes from this field."""
-    timestamp: str | None = None
-    """Timestamp override: the rule's time range runs on this field instead of `@timestamp`."""
-    disable_fallback: bool | None = None
-    """"Do not use @timestamp as a fallback timestamp field"."""
-
-
-class ElasticGuide(TideModel):
-    investigation: str | None = None
-    """Investigation guide (Kibana `note`). Markdown."""
-    setup: str | None = None
-    """Setup guide (Kibana `setup`). Not the tenant `setup` table."""
-
-
-class ElasticExceptionList(TideModel):
-    id: str
-    """Exception list id."""
-    list_id: str
-    """Exception list `list_id`."""
-    namespace_type: Literal["single", "agnostic"]
-    """`single` (one space) or `agnostic` (every space)."""
-    type: Literal["detection", "rule_default"]
-    """`detection` or `rule_default`."""
-
-
-class ElasticExceptions(TideModel):
-    endpoint: bool = False
-    """Attach the Elastic Endpoint exception list."""
-    lists: list[ElasticExceptionList] | None = None
-    """Existing exception lists."""
-
-
-class ElasticTimeline(TideModel):
-    id: str | None = None
-    """Timeline template id."""
-    title: str | None = None
-    """Timeline template title."""
-
-
-class ElasticActions(TideModel):
-    notify: list[dict[str, Any]] | None = None
-    """Rule actions: connector `id`, `action_type_id`, `group`, `params`, and `frequency`, in
-    Kibana's shape. Copied unchanged."""
-    respond: list[dict[str, Any]] | None = None
-    """Response actions: `{endpoint: <command>, field?, comment?}` or `{osquery: {...}}`."""
-    timeline: ElasticTimeline | None = None
-    """Timeline template attached to the rule: `id` and `title`, both optional strings."""
-
-
-class ElasticFilter(TideModel):
-    field: str | None = None
-    """Phrase shorthand: field to match."""
-    value: str | None = None
-    """Phrase shorthand: value to match."""
-    negate: bool = False
-    """Phrase shorthand: exclude matches."""
-    meta: dict[str, Any] | None = None
-    """Raw detection-engine filter `meta`."""
-    query: dict[str, Any] | None = None
-    """Raw detection-engine filter query."""
-
-
-class ElasticEql(TideModel):
-    timestamp_field: str | None = None
-    """Timestamp field for EQL sequencing."""
-    event_category_override: str | None = None
-    """Event category field."""
-    tiebreaker_field: str | None = None
-    """Tiebreaker for events with equal timestamps."""
-
-
-class ElasticNewTerms(TideModel):
-    fields: list[str]
-    """1–3 fields whose value, or combination of values, must be new."""
-    history_window_start: Duration
-    """History window size. Sent as `now-<duration>`. Separate from the schedule."""
-
-
-class ElasticThreatMatch(TideModel):
-    index: list[str]
-    """Indicator index patterns. Always a list."""
-    query: str
-    """Indicator query."""
-    language: Literal["kuery", "lucene"] | None = None
-    """`kuery` or `lucene`, for the indicator query."""
-    mapping: list[ElasticThreatGroup]
-    """Groups are OR. Entries in a group are AND."""
-    filters: list[dict[str, Any]] | None = None
-    """Indicator filters, in the same two shapes as the block `filters`."""
-    indicator_path: str | None = None
-    """Indicator prefix override. Kibana's default is `threat.indicator`."""
-
-
-class ElasticMachineLearning(TideModel):
-    job_id: str | list[str]
-    """Existing anomaly detection job id or ids. Sent unchanged, in either shape. The block does not
-    create jobs."""
-    anomaly_threshold: int
-    """Anomaly score cutoff on Kibana's 0–100 scale."""
-
-
-# --- Sysdig Secure (platform::sysdig::1.0) ---------------------------------------------
-
-
-class SysdigException(TideModel):
-    name: str
-    """Exception name. Names SHOULD be unique in the block: Falco warns on a repeated name
-    (`LOAD_EXCEPTION_NAME_NOT_UNIQUE`) and the engine reports it as a warning."""
-    fields: str | list[str]
-    """One Falco field (the single-field form) or a list of fields (the tuple form)."""
-    comps: str | list[str] | None = None
-    """Comparison operators, leading and trailing blanks ignored. Tuple form: a list aligned with
-    `fields`, each a Falco operator or a modified operator; default `=` for each field.
-    Single-field form: `in`, `pmatch`, `intersects`, or a modified operator (`startswith oneof`);
-    default `in`."""
-    values: list[Any] | None = None
-    """Tuple form: a list of rows, each a list aligned with `fields`. An item is a value or a list
-    of values; a single value under a list comparison (`in`, `pmatch`, `intersects`, or a modified
-    operator) is one value list, or the name of a list. Single-field form: a flat list of values."""
-
-
-class SysdigMacro(TideModel):
-    name: str
-    """Macro name, matching `^[A-Za-z_][A-Za-z0-9_]*$`."""
-    condition: str = TideField(schema_extra={"tide.template.multiline": True})
-    """Falco condition. It may reference other macros and lists of this block."""
-
-
-class SysdigList(TideModel):
-    name: str
-    """List name, matching `^[A-Za-z_][A-Za-z0-9_]*$`."""
-    items: list[str | int | float]
-    """List items. An item may name another list of this block."""
-
-
-# --- Bitdefender GravityZone (platform::bitdefender::1.0) ------------------------------
-
-
-class _BitdefenderTable(TideModel):
-    """A Bitdefender table that serializes only the keys it holds.
-
-    A dump re-validated (deploy planning dumps a rule to apply modifiers) must
-    not write ``companies: null`` or ``is: null`` the author never wrote: the
-    block's checks read a present key, null included, as authored
-    (bitdefender-1.0, ``bitdefender_targets_shape``, ``bitdefender_criterion_shape``).
-    """
-
-    @model_serializer(mode="wrap")
-    def _without_unset(self, handler: SerializerFunctionWrapHandler) -> Any:
-        data = handler(self)
-        if isinstance(data, dict):
-            return {key: value for key, value in data.items() if value is not None}
-        return data
-
-
-class BitdefenderCriterion(_BitdefenderTable):
-    field: str
-    """API field name (`Process.CommandLine`) from the criteria catalogue for the `target`."""
-    is_: str | int | None = Field(default=None, alias="is")
-    """Exact match. Sent as `relation: "is"`."""
-    contains: str | None = None
-    """Substring, with `*` and `?` wildcards. Sent as `relation: "contains"`."""
-    any_: list[str | int] | None = Field(default=None, alias="any")
-    """Any of the values. Sent as `relation: "any"`."""
-
-
-class BitdefenderDetection(_BitdefenderTable):
-    target: str
-    """A GravityZone detection target, as the API spells it: `process`, `file`, `connection`,
-    `registry`, `user connection`, `email`, `application`, `key vault`, `role`, `policy`,
-    `sharing link`, `url`, `ssh key`, `launch template`, `service principal`, `user group`,
-    `automation account`, `automation account hook`, `certificate authority`, `api`, `bucket`,
-    `jira project`, or `confluence page`."""
-    criteria: list[BitdefenderCriterion] = Field(min_length=1)
-    """At least one. All criteria must match (AND)."""
-    alert: str | None = None
-    """A GravityZone alert (detection) name. Sent as
-    `filters: [{"field": "detection", "value": <alert>}]`."""
-
-
-class BitdefenderYara(TideModel):
-    signature: str = TideField(
-        schema_extra={"tide.template.multiline": True, "tide.template.required": True}
-    )
-    """The YARA signature: imports, then one or more YARA rules, written out in the block. Sent as
-    `settings.yaraQuery`, verbatim."""
-    on_access: bool = True
-    """On-access scanning with this rule (`settings.status`). With `false`, the rule serves
-    on-demand scans only."""
-
-
-class BitdefenderTargets(_BitdefenderTable):
-    endpoint_tags: list[str] | None = None
-    """Aliases from the tenant's `endpoint_tags` table. Each resolves to `{tagId, companyId}`."""
-    companies: list[str] | None = None
-    """Partner tenants: aliases from the tenant's `companies` table. Each resolves to a company
-    id."""
-
-
-class BitdefenderProcessScope(TideModel):
-    include_parent: bool = False
-    """Also act on the parent process."""
-    include_children: bool = False
-    """Also act on the child processes."""
-
-
-class BitdefenderActions(_BitdefenderTable):
-    isolate: Literal[True] | None = None
-    """Isolate the endpoint (type 1)."""
-    collect_investigation_package: Literal[True] | None = None
-    """Collect an investigation package (type 2)."""
-    sandbox: Literal[True] | None = None
-    """Submit to the Sandbox Analyzer (type 3)."""
-    kill_process: Literal[True] | BitdefenderProcessScope | None = None
-    """Kill the process (type 4): `true`, or `{include_parent, include_children}`. Basic rules
-    only."""
-    antimalware_scan: Literal["quick", "full"] | None = None
-    """Run an antimalware scan (type 5): `quick` or `full`."""
-    quarantine: Literal[True] | BitdefenderProcessScope | None = None
-    """Quarantine the file (type 6): `true`, or `{include_parent, include_children}`."""
-    risk_scan: Literal[True] | None = None
-    """Run a risk scan (type 7)."""
-
-
-# --- Graylog (platform::graylog::1.0) ---------------------------------------------------
-
-
-class GraylogSchedule(TideModel):
-    every: str | None = None
-    """How often the definition runs (`execute_every_ms`). Exclusive with `cron`."""
-    window: str | None = None
-    """The time range each run searches (`search_within_ms`)"""
-    cron: str | None = None
-    """A Quartz cron expression of 6 or 7 fields (`0 */5 * * * ?`). Exclusive with `every`."""
-    timezone: str | None = None
-    """The IANA time zone `cron` runs in"""
-
-
-class GraylogAggregation(TideModel):
-    group_by: str | list[str] | None = None
-    """Message fields the events are grouped by"""
-    condition: str
-    """A boolean expression over series, in the condition grammar"""
-
-
-class GraylogEventTemplate(TideModel):
-    template: str
-    """A Graylog template (`${source.<field>}`) or constant text, sent as written."""
-
-
-class GraylogLookupTable(TideModel):
-    table: str
-    """The Graylog lookup table name."""
-    key_field: str
-    """The message field whose value is the lookup key."""
-
-
-class GraylogEventLookup(TideModel):
-    lookup: GraylogLookupTable
-    """A lookup-table value keyed by a message field."""
-
-
-#: An `event_fields` value: a bare field name or a `${...}` template string,
-#: `{template: ...}`, or `{lookup: {table, key_field}}`.
-GraylogEventField = str | GraylogEventTemplate | GraylogEventLookup
-# --- Exabeam New-Scale SIEM (platform::exabeam::1.0) -----------------------------------
-# The docstrings are the spec's table text (tests/test_models/test_spec_field_descriptions.py).
-
-
-class ExabeamThreshold(TideModel):
-    function: Literal["count", "unique_count", "value", "max", "min", "sum", "average"]
-    """`count`, `unique_count`, `value`, `max`, `min`, `sum`, or `average`"""
-    field: str | None = None
-    """The field the function reads. Required except for `count`. `count` without a field counts
-    events."""
-    operator: Literal["more_than", "less_than", "in", "not_in"]
-    """`more_than`, `less_than`, `in`, or `not_in`"""
-    value: int | float | list[str | int | float] | None = None
-    """`more_than` and `less_than`: a number (`count` and `unique_count`: a non-negative
-    integer). `in` and `not_in`: a non-empty list of strings or numbers."""
-    within: str
-    """The window: whole `m`, `h`, or `d`"""
-
-
-class ExabeamSequence(TideModel):
-    query: str = TideField(
-        schema_extra={"tide.template.multiline": True, "tide.template.required": True}
-    )
-    """A filter in the Exabeam Query Language, profile `rule`. Multiline in YAML."""
-    name: str | None = None
-    """Sequence name, shown in the console"""
-    threshold: ExabeamThreshold | None = None
-    """The condition. Without it, the sequence triggers on any matching event."""
-    group_by: list[str] | None = None
-    """One to three fields. A threshold is evaluated per value. With any match, the rule still
-    triggers on every matching event; to trigger once per value, also set `suppression.group_by`
-    to these fields (Exabeam's granular suppression)."""
-
-
-class ExabeamCorrelation(TideModel):
-    within: str
-    """The window every sequence's condition must be met in: whole `m`, `h`, or `d`"""
-    group_by: list[str] | None = None
-    """Up to three fields every sequence shares (the API's limit; the console allows more)"""
-
-
-#: The YAML key is a Python keyword: read and written only as ``for``/``from``, so
-#: ``for_``/``from_`` in a rule file is an unknown key (exabeam-1.0, Requirements).
-_KEYWORD_KEY_CONFIG = ConfigDict(
-    populate_by_name=False,
-    validate_by_name=False,
-    validate_by_alias=True,
-    serialize_by_alias=True,
-)
-
-
-class ExabeamSuppression(TideModel):
-    model_config = _KEYWORD_KEY_CONFIG
-
-    for_: str = Field(alias="for")
-    """Suppress repeated triggers for this long: whole `m`, `h`, `d`, or `w`"""
-    group_by: list[str] | None = None
-    """One to three fields. Suppress per value instead of for the whole rule."""
-
-
-class ExabeamEmail(TideModel):
-    recipients: list[str] = Field(min_length=1)
-    """One or more email addresses"""
-    subject: str | None = None
-    """Email subject"""
-    attach_csv: bool | None = None
-    """Attach the matching events as CSV"""
-
-
-class ExabeamRecurrence(TideModel):
-    model_config = _KEYWORD_KEY_CONFIG
-
-    every: Literal["day", "week", "month", "days"]
-    """`day`, `week`, `month`, or `days` (a range of weekdays)"""
-    from_: str = Field(alias="from")
-    """Start time, UTC, `H:MMZ` or `HH:MMZ` (`8:00Z`, `08:00Z`)"""
-    to: str
-    """End time, UTC, `H:MMZ` or `HH:MMZ`"""
-    days: list[str] | list[int] | None = None
-    """`week`: one or more weekday names (`monday` … `sunday`). `month`: day numbers 1–31. Not
-    allowed otherwise."""
-    last_day: bool | None = None
-    """`month` only: also the last day of the month. A `month` recurrence has `days`,
-    `last_day: true`, or both."""
-    first: str | None = None
-    """`days` only: the first weekday of the range"""
-    last: str | None = None
-    """`days` only: the last weekday of the range"""
-
-
-# --- Google Security Operations (platform::google_secops::1.0) ------------------------
-
-
-class GoogleSecopsMatch(TideModel):
-    group_by: list[str] = Field(min_length=1)
-    """The placeholders the rule groups by, each `$name`, non-empty, no repeats. Rendered joined
-    with `, `."""
-    window: str
-    """The match window: `<n>m`, `<n>h`, or `<n>d`. A hop or sliding window is at most `14d`, a
-    tumbling window at most `72h`."""
-    type: Literal["hop", "tumbling", "sliding"] | None = None
-    """`hop` (the default) renders `over`, `tumbling` renders `by`, `sliding` renders
-    `over … before|after $pivot`."""
-    pivot: str | None = None
-    """With `sliding`: the event variable the window is anchored on, `$name`."""
-    direction: Literal["before", "after"] | None = None
-    """With `sliding`: `before` or `after`."""
-
-
-class GoogleSecopsOptions(TideModel):
-    allow_zero_values: bool | None = Field(default=None, strict=True)
-    """Keep zero values of match placeholders (`false` by default). Rendered
-    `allow_zero_values = true`."""
-    suppression_window: str | None = None
-    """Suppress repeated detections for this duration (`m`, `h`, `d`). Rendered
-    `suppression_window = 1h`."""
-
-
-class GoogleSecopsSchedule(TideModel):
-    ensure_enrichment_completeness: bool | None = Field(default=None, strict=True)
-    """Sent as `scheduleCustomizations.ensureEnrichmentCompleteness`. Google's default when
-    omitted."""
-    late_arriving_data_adjustment: str | None = None
-    """A duration (`30m`, `2h`), sent as `scheduleCustomizations.lateArrivingDataAdjustment` in
-    seconds (`"1800s"`). Google's default when omitted."""

@@ -1,0 +1,862 @@
+//! Version checks for ES|QL syntax that only some release lines accept.
+//!
+//! Names (commands, functions, cast types) carry their release lines in the
+//! catalog. Forms that are not names — `RENAME new = old`, `LIKE (…)` lists,
+//! `::failures` selectors, `??` parameters, the `m` time unit, subqueries, and
+//! the 8.19-only spellings — are listed here, each with the lines whose
+//! grammar (or, for `m`, whose time-unit table) accepts it. Evidence is each
+//! release branch's `x-pack/plugin/esql/src/main/antlr` grammar and, where
+//! noted, its Java builder.
+
+use crate::syntax::SyntaxKind as K;
+use crate::version::{Availability, StackTarget};
+use crate::{SyntaxNode, ast};
+use opentide_core::{ByteSpan, Diagnostic, Range, Severity, codes};
+use opentide_parse::ast::AstNode;
+use rowan::NodeOrToken;
+
+pub(crate) type SyntaxElement = rowan::SyntaxElement<crate::Lang>;
+
+/// One version-gated construct found in the query.
+pub(crate) struct Gate {
+    /// What the message names: "function `COPY_SIGN()`", "`RENAME new = old`".
+    pub subject: String,
+    pub available: Availability,
+    /// Extra text after the version clause (a lifecycle, a rewrite).
+    pub note: Option<String>,
+    /// Replacement text for the diagnostic range.
+    pub suggestion: Option<String>,
+    /// Severity against the supported range when the newest line accepts the
+    /// form. Defaults to information; removed forms are always a warning.
+    pub floor_severity: Option<Severity>,
+    pub span: ByteSpan,
+}
+
+impl Gate {
+    fn new(subject: impl Into<String>, available: Availability, span: ByteSpan) -> Self {
+        Self {
+            subject: subject.into(),
+            available,
+            note: None,
+            suggestion: None,
+            floor_severity: None,
+            span,
+        }
+    }
+
+    fn note(mut self, note: impl Into<String>) -> Self {
+        self.note = Some(note.into());
+        self
+    }
+
+    fn suggest(mut self, suggestion: impl Into<String>) -> Self {
+        self.suggestion = Some(suggestion.into());
+        self
+    }
+
+    fn severity(mut self, severity: Severity) -> Self {
+        self.floor_severity = Some(severity);
+        self
+    }
+
+    /// Whether a gate with `available` reports on `target`: exactly when
+    /// [`Gate::diagnostic`] returns a diagnostic.
+    pub fn fires(available: Availability, target: Option<StackTarget>) -> bool {
+        match target {
+            None => !available.is_all(),
+            Some(target) => !available.on(target),
+        }
+    }
+
+    /// The diagnostic for this gate, or `None` when the stack accepts it.
+    ///
+    /// Without a target the query is checked against every supported line
+    /// (elastic-1.0: 8.19 and 9.x): information when only older lines lack
+    /// the form, a warning when the newest line rejects it (a removed form).
+    /// With a declared target, a warning when that line rejects it.
+    pub fn diagnostic(
+        self,
+        target: Option<StackTarget>,
+        range: impl Fn(ByteSpan) -> Range,
+    ) -> Option<Diagnostic> {
+        let available = self.available;
+        if !Self::fires(available, target) {
+            return None;
+        }
+        let (message, severity) = match target {
+            None => {
+                let severity = if available.on_newest() {
+                    self.floor_severity.unwrap_or(Severity::Information)
+                } else {
+                    Severity::Warning
+                };
+                (
+                    format!("{}: {}", self.subject, available.describe()),
+                    severity,
+                )
+            }
+            Some(target) => {
+                let works = if available.is_empty() {
+                    "no release accepts it".to_string()
+                } else {
+                    format!(
+                        "it works on {}",
+                        crate::version::join_versions(&available.versions())
+                    )
+                };
+                (
+                    format!(
+                        "{}: Elasticsearch {target} rejects it ({works})",
+                        self.subject
+                    ),
+                    Severity::Warning,
+                )
+            }
+        };
+        let message = match &self.note {
+            Some(note) => format!("{message}; {note}"),
+            None => message,
+        };
+        let mut d = Diagnostic::warning(codes::ESQL_UNAVAILABLE, message, range(self.span));
+        d.severity = severity;
+        if let Some(s) = self.suggestion {
+            d = d.with_suggestion(s);
+        }
+        Some(d)
+    }
+}
+
+/// Lines with 8.19 plus 9.1 and later: forms 9.0 does not have.
+const NOT_9_0: Availability = Availability::with_8_19_since_9(1);
+
+/// A rowan node's span.
+pub(crate) fn span_of(node: &SyntaxNode) -> ByteSpan {
+    let range = node.text_range();
+    ByteSpan::new(usize::from(range.start()), usize::from(range.end()))
+}
+
+/// A rowan node's text in `source`.
+pub(crate) fn text_of<'s>(node: &SyntaxNode, source: &'s str) -> &'s str {
+    let span = span_of(node);
+    source.get(span.start..span.end).unwrap_or("")
+}
+
+/// A node's children as the checks read them: its nodes and tokens in order,
+/// without whitespace and comments, and with `WITH {…}` (`NamedParameters`)
+/// read in place, as one part of the command.
+pub(crate) fn parts(node: &SyntaxNode) -> Vec<SyntaxElement> {
+    let mut out = Vec::new();
+    for child in node.children_with_tokens() {
+        match &child {
+            NodeOrToken::Node(n) if n.kind() == K::NAMED_PARAMETERS => {
+                out.extend(n.children_with_tokens().filter(|c| !trivia(c.kind())));
+            }
+            _ if trivia(child.kind()) => {}
+            _ => out.push(child),
+        }
+    }
+    out
+}
+
+/// A node's children as the tree-sitter tree listed them: its nodes, tokens
+/// and comments in order, without whitespace, with `WITH {…}` read in
+/// place; none for a one-token node (`Identifier`). Lazy: hover stops at
+/// the child it looks for.
+pub(crate) fn tree_children(node: &SyntaxNode) -> impl Iterator<Item = SyntaxElement> + use<> {
+    let leaf = crate::tree::is_leaf(node.kind());
+    node.children_with_tokens()
+        .filter(move |_| !leaf)
+        .flat_map(|child| {
+            let inner = match &child {
+                NodeOrToken::Node(n) if n.kind() == K::NAMED_PARAMETERS => {
+                    Some(n.children_with_tokens())
+                }
+                _ => None,
+            };
+            let own = inner.is_none().then_some(child);
+            own.into_iter().chain(inner.into_iter().flatten())
+        })
+        .filter(|c| c.kind() != K::WHITESPACE)
+        .inspect(|_| count_child())
+}
+
+/// The nodes of [`tree_children`], without visiting its tokens: a walk that
+/// reads nodes only allocates no cursor for each token (ADR 0014 §5).
+pub(crate) fn tree_child_nodes(node: &SyntaxNode) -> impl Iterator<Item = SyntaxNode> + use<> {
+    let leaf = crate::tree::is_leaf(node.kind());
+    node.children()
+        .filter(move |_| !leaf)
+        .flat_map(|child| {
+            let inner = (child.kind() == K::NAMED_PARAMETERS).then(|| child.children());
+            let own = inner.is_none().then_some(child);
+            own.into_iter().chain(inner.into_iter().flatten())
+        })
+        .inspect(|_| count_child())
+}
+
+#[cfg(test)]
+thread_local! {
+    /// The children [`tree_children`] and [`tree_child_nodes`] yielded on this thread.
+    static CHILDREN_READ: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Counts one child read, in tests (ADR 0014 §7).
+#[inline]
+fn count_child() {
+    #[cfg(test)]
+    CHILDREN_READ.set(CHILDREN_READ.get() + 1);
+}
+
+/// How many children [`tree_children`] and [`tree_child_nodes`] yielded on this thread.
+#[cfg(test)]
+pub(crate) fn children_read() -> usize {
+    CHILDREN_READ.get()
+}
+
+/// [`tree_children`], collected.
+pub(crate) fn children_of(node: &SyntaxNode) -> Vec<SyntaxElement> {
+    tree_children(node).collect()
+}
+
+/// Whether the tree-sitter tree named `element`: a node or a comment.
+pub(crate) fn is_named(element: &SyntaxElement) -> bool {
+    element.as_node().is_some() || element.kind() == K::COMMENT
+}
+
+/// The span of a node or token.
+pub(crate) fn element_span(element: &SyntaxElement) -> ByteSpan {
+    let range = element.text_range();
+    ByteSpan::new(usize::from(range.start()), usize::from(range.end()))
+}
+
+fn trivia(kind: K) -> bool {
+    matches!(kind, K::WHITESPACE | K::COMMENT)
+}
+
+/// The position of the first token of `kinds` in `parts`.
+pub(crate) fn first_token(parts: &[SyntaxElement], kinds: &[K]) -> Option<usize> {
+    parts
+        .iter()
+        .position(|p| p.as_token().is_some() && kinds.contains(&p.kind()))
+}
+
+/// The nodes of `parts` after position `at`.
+pub(crate) fn nodes_after(parts: &[SyntaxElement], at: usize) -> impl Iterator<Item = &SyntaxNode> {
+    parts.iter().skip(at + 1).filter_map(|p| p.as_node())
+}
+
+/// The command nodes: what a subquery's enclosing check stops at.
+pub(crate) fn is_command(kind: K) -> bool {
+    ast::Command::can_cast(kind) || kind == K::SET_COMMAND
+}
+
+/// The kinds that have a gate: [`syntax_gates`] reads no other node, so the
+/// analysis walk builds no parts for the rest (a test checks that no other
+/// kind has a gate).
+pub(crate) const GATED: &[K] = &[
+    K::RENAME_CLAUSE,
+    K::LIKE_EXPRESSION,
+    K::INDEX_PATTERN,
+    K::PARAMETER,
+    K::QUALIFIED_INTERVAL,
+    K::SOURCE_SUBQUERY,
+    K::IN_TUPLE,
+    K::LIMIT_COMMAND,
+    K::GROK_COMMAND,
+    K::CHANGE_POINT_COMMAND,
+    K::JOIN_COMMAND,
+    K::MAP_EXPRESSION,
+    K::COMPLETION_COMMAND,
+    K::RERANK_COMMAND,
+    K::METADATA,
+];
+
+/// The `"timeout"` entry of a command's `WITH {…}` options, which
+/// COMPLETION and RERANK take from 9.5: 9.4 refuses it ("Invalid option
+/// [timeout] in COMPLETION, expected one of [[inference_id,
+/// task_settings]]", and in RERANK "[[inference_id]]"). A key of a nested
+/// map is not an option. A text check first: walking the map's entries
+/// allocates a handle per node, on every command with options.
+fn timeout_option(node: &SyntaxNode, source: &str) -> Option<SyntaxNode> {
+    if !text_of(node, source).contains("timeout") {
+        return None;
+    }
+    node.children()
+        .filter(|c| c.kind() == K::NAMED_PARAMETERS)
+        .flat_map(|n| n.children())
+        .filter(|m| m.kind() == K::MAP_EXPRESSION)
+        .flat_map(|m| m.children())
+        .filter(|e| e.kind() == K::MAP_ENTRY)
+        .find(|e| {
+            e.first_child()
+                .is_some_and(|k| text_of(&k, source).trim_matches('"') == "timeout")
+        })
+}
+
+/// Version gates for one node (not names: those come from the catalog).
+pub(crate) fn syntax_gates(node: &SyntaxNode, source: &str) -> Vec<Gate> {
+    if GATED.contains(&node.kind()) {
+        gates_of(node, source)
+    } else {
+        Vec::new()
+    }
+}
+
+/// The gates of one node, of any kind.
+fn gates_of(node: &SyntaxNode, source: &str) -> Vec<Gate> {
+    // RERANK has only its option gate: answered before the parts below are
+    // collected, which allocates on every gated node. 9.2 to 9.4: "Invalid
+    // option [timeout] in RERANK, expected one of [[inference_id]]".
+    if node.kind() == K::RERANK_COMMAND {
+        return timeout_option(node, source)
+            .map(|entry| {
+                Gate::new(
+                    "the `RERANK` option `timeout`",
+                    Availability::since_9(5),
+                    span_of(&entry),
+                )
+            })
+            .into_iter()
+            .collect();
+    }
+    let mut out = Vec::new();
+    let span = span_of(node);
+    let parts = parts(node);
+    let nodes: Vec<&SyntaxNode> = parts.iter().filter_map(|p| p.as_node()).collect();
+    match node.kind() {
+        K::RENAME_CLAUSE if first_token(&parts, &[K::EQ]).is_some() => {
+            let mut gate = Gate::new("`RENAME new = old`", NOT_9_0, span)
+                .note("`RENAME old AS new` works everywhere");
+            // `old AS new`, or `new = old`.
+            let as_first = first_token(&parts, &[K::AS_KW]).is_some();
+            if let (Some(a), Some(b)) = (nodes.first(), nodes.get(1)) {
+                let (old, new) = if as_first { (a, b) } else { (b, a) };
+                gate = gate.suggest(format!(
+                    "{} AS {}",
+                    text_of(old, source),
+                    text_of(new, source)
+                ));
+            }
+            out.push(gate);
+        }
+        K::LIKE_EXPRESSION => {
+            let op = first_token(&parts, &[K::LIKE_KW, K::RLIKE_KW]);
+            let rlike = op.is_some_and(|at| parts[at].kind() == K::RLIKE_KW);
+            let word = if rlike { "RLIKE" } else { "LIKE" };
+            if first_token(&parts, &[K::L_PAREN]).is_some() {
+                let available = if rlike {
+                    Availability::since_9(2)
+                } else {
+                    NOT_9_0
+                };
+                out.push(
+                    Gate::new(format!("a `{word} (…)` pattern list"), available, span).note(
+                        format!("`x {word} \"a\" OR x {word} \"b\"` works everywhere"),
+                    ),
+                );
+            }
+            // The patterns follow the operator; the parser reads the operand
+            // before it (`expressions.rs`, `Infix::Like`).
+            let patterns = op.map(|at| nodes_after(&parts, at)).into_iter().flatten();
+            for pattern in patterns {
+                match pattern.kind() {
+                    K::STRING => {}
+                    K::PARAMETER => out.push(Gate::new(
+                        format!("a parameter as a {word} pattern"),
+                        Availability::since_9(3),
+                        span_of(pattern),
+                    )),
+                    _ => out.push(Gate::new(
+                        format!("a {word} pattern that is not a string literal"),
+                        Availability::since_9(6),
+                        span_of(pattern),
+                    )),
+                }
+            }
+        }
+        K::INDEX_PATTERN => {
+            let pattern = ast::IndexPattern::cast(node.clone());
+            if let Some(selector) = pattern.as_ref().and_then(ast::IndexPattern::selector) {
+                if pattern
+                    .as_ref()
+                    .and_then(ast::IndexPattern::cluster)
+                    .is_some()
+                {
+                    out.push(Gate::new(
+                        "a `cluster:index::selector` pattern",
+                        Availability::since_9(4),
+                        span,
+                    ));
+                } else {
+                    out.push(Gate::new(
+                        format!("the `::{}` selector", text_of(selector.syntax(), source)),
+                        NOT_9_0,
+                        span_of(selector.syntax()),
+                    ));
+                }
+            }
+        }
+        K::PARAMETER if text_of(node, source).starts_with("??") => {
+            out.push(Gate::new("a `??` identifier parameter", NOT_9_0, span));
+        }
+        K::QUALIFIED_INTERVAL => {
+            if let Some(unit) = nodes.iter().find(|n| n.kind() != K::NUMBER)
+                && text_of(unit, source).eq_ignore_ascii_case("m")
+            {
+                // EsqlDataTypeConverter.INTERVALS gains `M` on 9.3; earlier
+                // lines reject `5 m` and `5m` ("Unexpected temporal unit").
+                out.push(
+                    Gate::new(
+                        "the minute unit `m`",
+                        Availability::since_9(3),
+                        span_of(unit),
+                    )
+                    .note("`min` or `minute` works everywhere")
+                    .suggest("min"),
+                );
+            }
+        }
+        K::SOURCE_SUBQUERY => out.extend(subquery_gate(node, &nodes)),
+        K::IN_TUPLE => out.push(Gate::new(
+            "an `(a, b) IN (subquery)` tuple",
+            Availability::since_9(6),
+            span,
+        )),
+        K::LIMIT_COMMAND
+            if first_token(&parts, &[K::BY_KW])
+                .is_some_and(|by| nodes_after(&parts, by).next().is_some()) =>
+        {
+            out.push(Gate::new(
+                "`LIMIT … BY`",
+                Availability::since_9(4),
+                crate::keyword_span_of(node),
+            ));
+        }
+        K::GROK_COMMAND if nodes.len() > 2 => {
+            out.push(Gate::new(
+                "`GROK` with several patterns",
+                Availability::since_9(3),
+                span,
+            ));
+        }
+        K::CHANGE_POINT_COMMAND
+            if first_token(&parts, &[K::BY_KW])
+                .is_some_and(|by| nodes_after(&parts, by).next().is_some()) =>
+        {
+            out.push(Gate::new(
+                "`CHANGE_POINT … BY`",
+                Availability::since_9(5),
+                span,
+            ));
+        }
+        K::JOIN_COMMAND => {
+            // `LOOKUP JOIN index AS qualifier`: the grammar the catalog is
+            // generated from (elastic/elasticsearch@2c85bbdf) parses it, but
+            // 9.5.6, the newest release, rejects it ("no viable alternative
+            // at input"): 9.6 at the earliest, as DEDUP and HIGHLIGHT.
+            // Only a qualifier `ON` follows: in `LOOKUP JOIN ON source.ip`
+            // recovery reads `ON` as the index and `source.ip` as a qualifier,
+            // and the parse error says all there is to say.
+            let on = first_token(&parts, &[K::ON_KW]);
+            let qualifier = parts.iter().enumerate().find_map(|(i, p)| {
+                p.as_node()
+                    .filter(|n| n.kind() == K::JOIN_QUALIFIER && on.is_some_and(|on| on > i))
+            });
+            if let Some(qualifier) = qualifier {
+                out.push(Gate::new(
+                    "a `LOOKUP JOIN … AS` qualifier",
+                    Availability::since_9(6),
+                    span_of(qualifier),
+                ));
+            }
+            // The conditions follow `ON`; the parser reads the index before it
+            // (`processing.rs`, `join`).
+            let conditions: Vec<&SyntaxNode> = first_token(&parts, &[K::ON_KW])
+                .map(|on| nodes_after(&parts, on).collect())
+                .unwrap_or_default();
+            let simple = conditions.len() == 1 && conditions[0].kind() == K::QUALIFIED_NAME;
+            if !simple && !conditions.is_empty() {
+                // One field only through 9.1 ("JOIN ON clause only supports one
+                // field"); fields lists and expressions from 9.2.
+                out.push(Gate::new(
+                    "a `LOOKUP JOIN` condition with several fields or an expression",
+                    Availability::since_9(2),
+                    span,
+                ));
+            }
+        }
+        // A map recovery made up where `{` is missing (`WITH` at the end) is
+        // not one the query wrote: no gate on it.
+        K::MAP_EXPRESSION if span.start < span.end => {
+            let nested = node.parent().is_some_and(|p| p.kind() == K::MAP_ENTRY);
+            let entries: Vec<&&SyntaxNode> =
+                nodes.iter().filter(|c| c.kind() == K::MAP_ENTRY).collect();
+            // An entry's value is its second node (`key: value`).
+            let has_nested = entries.iter().any(|e| {
+                e.children()
+                    .nth(1)
+                    .is_some_and(|v| v.kind() == K::MAP_EXPRESSION)
+            });
+            if !nested && (entries.is_empty() || has_nested) {
+                out.push(Gate::new(
+                    "an empty or nested map",
+                    Availability::since_9(2),
+                    span,
+                ));
+            }
+        }
+        K::COMPLETION_COMMAND => {
+            // 8.19 and 9.1: `COMPLETION prompt WITH endpoint`; the first node
+            // after `WITH` that is not the `{…}` map. A target (`x =`) comes
+            // before `WITH` (`processing.rs`, `completion`).
+            let endpoint = first_token(&parts, &[K::WITH_KW])
+                .and_then(|with| nodes_after(&parts, with).find(|n| n.kind() != K::MAP_EXPRESSION));
+            if let Some(endpoint) = endpoint {
+                let id = text_of(endpoint, source).trim_matches('`');
+                out.push(
+                    Gate::new(
+                        "`COMPLETION … WITH endpoint`",
+                        Availability::from_versions(&["8.19", "9.1"]),
+                        span_of(endpoint),
+                    )
+                    .note(format!(
+                        "9.2 and later take `WITH {{\"inference_id\": \"{id}\"}}`"
+                    )),
+                );
+            } else if node
+                .children()
+                .filter(|c| c.kind() == K::NAMED_PARAMETERS)
+                .any(|n| n.children().any(|m| m.kind() == K::MAP_EXPRESSION))
+            {
+                out.push(Gate::new(
+                    "`COMPLETION … WITH {…}`",
+                    Availability::since_9(2),
+                    span,
+                ));
+                if let Some(entry) = timeout_option(node, source) {
+                    out.push(Gate::new(
+                        "the `COMPLETION` option `timeout`",
+                        Availability::since_9(5),
+                        span_of(&entry),
+                    ));
+                }
+            }
+        }
+        K::METADATA if first_token(&parts, &[K::L_BRACK]).is_some() => {
+            let fields: Vec<&str> = nodes
+                .iter()
+                .filter(|n| n.kind() == K::METADATA_FIELD)
+                .map(|f| text_of(f, source))
+                .collect();
+            out.push(
+                Gate::new("`[METADATA …]` in brackets", Availability::ONLY_8_19, span)
+                    .note("drop the brackets")
+                    .suggest(format!("METADATA {}", fields.join(", "))),
+            );
+        }
+        _ => {}
+    }
+    out
+}
+
+/// FROM subqueries are 9.4 (snapshot-only on 9.3); a ROW or TS subquery is
+/// 9.5. `IN (subquery)` is 9.5 in WHERE and EVAL, and 9.6 inside an
+/// aggregate filter, a function, a comparison, or `IS NULL`. `nodes` are the
+/// subquery's own: its source command first.
+fn subquery_gate(node: &SyntaxNode, nodes: &[&SyntaxNode]) -> Option<Gate> {
+    let parent = node.parent()?;
+    let span = span_of(node);
+    if parent.kind() == K::IN_EXPRESSION {
+        if parent
+            .children()
+            .next()
+            .is_some_and(|l| l.kind() == K::IN_TUPLE)
+        {
+            // The tuple form has its own (later) gate.
+            return None;
+        }
+        let nested = parent
+            .ancestors()
+            .skip(1)
+            .take_while(|n| !is_command(n.kind()))
+            .any(|n| {
+                matches!(
+                    n.kind(),
+                    K::AGGREGATE_FIELD | K::FUNCTION_CALL | K::COMPARISON | K::IS_NULL_EXPRESSION
+                )
+            });
+        return Some(if nested {
+            Gate::new(
+                "an `IN (subquery)` inside an aggregate filter, function, comparison, or `IS NULL`",
+                Availability::since_9(6),
+                span,
+            )
+        } else {
+            Gate::new("an `IN (subquery)`", Availability::since_9(5), span)
+        });
+    }
+    if matches!(parent.kind(), K::FROM_COMMAND | K::TS_COMMAND) {
+        if nodes.first().map(|n| n.kind()) != Some(K::FROM_COMMAND) {
+            return Some(Gate::new(
+                "a `ROW` or `TS` subquery",
+                Availability::since_9(5),
+                span,
+            ));
+        }
+        return Some(Gate::new(
+            "a subquery in `FROM`",
+            Availability::since_9(4),
+            span,
+        ));
+    }
+    None
+}
+
+/// What Elasticsearch's lexer does with the character right after a command
+/// name. Through 9.5 an unknown-command token is any run of characters other
+/// than whitespace, `[`, `]`, and `/`, and the longest match wins, so
+/// `where(x` beats the keyword `where`. 9.6 also stops the run at `(` and `)`.
+pub(crate) enum Spacing {
+    /// `(` or `)`: 9.6 and later only.
+    Paren,
+    /// `|` or `"`: one unknown word on every release.
+    Never(char),
+}
+
+/// The command's first word, when Elasticsearch's lexer may read it with
+/// the character after it as one unknown command; that word's span.
+pub(crate) fn command_spacing(node: &SyntaxNode, source: &str) -> Option<(Spacing, ByteSpan)> {
+    if !is_command(node.kind()) || node.kind() == K::UNKNOWN_COMMAND {
+        return None;
+    }
+    let keyword = tree_children(node).next()?;
+    if is_named(&keyword) {
+        return None;
+    }
+    let span = element_span(&keyword);
+    let next = source.get(span.end..)?.chars().next()?;
+    let span = ByteSpan::new(span.start, span.end + next.len_utf8());
+    match next {
+        '(' | ')' => Some((Spacing::Paren, span)),
+        '|' | '"' => Some((Spacing::Never(next), span)),
+        _ => None,
+    }
+}
+
+pub(crate) fn spacing_gate(
+    word: &str,
+    spacing: Spacing,
+    span: ByteSpan,
+    range: Range,
+) -> Result<Gate, Box<Diagnostic>> {
+    match spacing {
+        Spacing::Paren => Ok(Gate::new(
+            format!("`{word}(` with no space"),
+            Availability::since_9(6),
+            span,
+        )
+        .note(format!(
+            "earlier lexers read `{word}(…` as one unknown command, and Kibana 9.4 and 9.5 may then run a non-aggregating rule without it; add a space"
+        ))
+        .suggest(format!("{word} ("))
+        .severity(Severity::Warning)),
+        Spacing::Never(c) => Err(Box::new(Diagnostic::error(
+            codes::ESQL_PARSE_ERROR,
+            format!(
+                "Elasticsearch reads `{word}{c}` as one unknown command; put a space after `{word}`"
+            ),
+            range,
+        )
+        .with_suggestion(format!("{word} {c}")))),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::syntax::Lang;
+
+    /// The tree-sitter tree stopped a subquery's ancestors at a node whose name ends in
+    /// `_command`; the typed check stops at the same kinds.
+    #[test]
+    fn the_command_kinds_are_the_command_nodes() {
+        for raw in 0..=u16::MAX {
+            let kind = <Lang as rowan::Language>::kind_from_raw(rowan::SyntaxKind(raw));
+            if kind == K::ERROR && raw != K::ERROR as u16 {
+                break;
+            }
+            let named = format!("{kind:?}").ends_with("_COMMAND");
+            assert_eq!(is_command(kind), named, "{kind:?}");
+        }
+    }
+    /// What every gate of `query` says: (subject, the text of its span, its
+    /// suggestion). Each node that has a gate is of a [`GATED`] kind.
+    fn gates(query: &str) -> Vec<(String, &str, Option<String>)> {
+        crate::syntax_tree(query)
+            .descendants()
+            .flat_map(|n| {
+                let gates = gates_of(&n, query);
+                assert!(
+                    gates.is_empty() || GATED.contains(&n.kind()),
+                    "{:?} has a gate but is not in GATED",
+                    n.kind()
+                );
+                gates
+            })
+            .map(|g| (g.subject, &query[g.span.start..g.span.end], g.suggestion))
+            .collect()
+    }
+
+    /// The children each gate reads, by position where the grammar labels
+    /// none: a rename's old and new, a LIKE's patterns beside its operand,
+    /// a join's conditions beside its index, a completion's endpoint beside
+    /// its target, a map entry's value beside its key.
+    #[test]
+    fn each_gate_reads_its_own_children() {
+        let one = |s: &str, at: &'static str, sug: Option<&str>| {
+            vec![(s.to_string(), at, sug.map(ToString::to_string))]
+        };
+        let rename = "`RENAME new = old`";
+        assert_eq!(
+            gates("ROW a = 1 | RENAME b = a"),
+            one(rename, "b = a", Some("a AS b"))
+        );
+        assert_eq!(
+            gates("FROM i | RENAME a = b AS c"),
+            one(rename, "a = b", Some("b AS a"))
+        );
+        assert_eq!(gates("ROW a = 1 | RENAME c AS d"), []);
+        let endpoint = "`COMPLETION … WITH endpoint`";
+        assert_eq!(
+            gates("FROM i | COMPLETION p WITH ep"),
+            one(endpoint, "ep", None)
+        );
+        assert_eq!(
+            gates("FROM i | COMPLETION x = p WITH ep"),
+            one(endpoint, "ep", None)
+        );
+        let map = "an empty or nested map";
+        assert_eq!(
+            gates("FROM a | FUSE linear WITH {\"a\": {\"b\": 1}}"),
+            one(map, "{\"a\": {\"b\": 1}}", None)
+        );
+        assert_eq!(gates("FROM a | FUSE linear WITH {\"a\": 1}"), []);
+        assert_eq!(gates("FROM a | FUSE linear WITH {}"), one(map, "{}", None));
+        assert_eq!(gates("ROW a = \"x\" | WHERE a LIKE \"x\""), []);
+        assert_eq!(
+            gates("ROW a = \"x\" | WHERE a LIKE ?p"),
+            one("a parameter as a LIKE pattern", "?p", None)
+        );
+        assert_eq!(
+            gates("ROW a = \"x\" | WHERE a LIKE b"),
+            one("a LIKE pattern that is not a string literal", "b", None)
+        );
+        // 9.4.9: "Invalid option [timeout] in COMPLETION, expected one of
+        // [[inference_id, task_settings]]"; 9.5 takes it.
+        let completion =
+            "FROM a | COMPLETION c = p WITH {\"inference_id\": \"e\", \"timeout\": \"10s\"}";
+        assert!(
+            gates(completion).iter().any(
+                |g| g.0 == "the `COMPLETION` option `timeout`" && g.1 == "\"timeout\": \"10s\""
+            ),
+            "{:?}",
+            gates(completion)
+        );
+        let rerank =
+            "FROM a | RERANK \"q\" ON t WITH {\"inference_id\": \"r\", \"timeout\": \"10s\"}";
+        assert_eq!(
+            gates(rerank),
+            one(
+                "the `RERANK` option `timeout`",
+                "\"timeout\": \"10s\"",
+                None
+            )
+        );
+        assert_eq!(
+            gates("FROM a | RERANK \"q\" ON t WITH {\"inference_id\": \"r\"}"),
+            []
+        );
+        // `timeout` in the prompt, or in a nested map, is not the option.
+        for q in [
+            "FROM a | COMPLETION c = \"timeout\" WITH {\"inference_id\": \"e\"}",
+            "FROM a | COMPLETION c = p WITH {\"inference_id\": \"e\", \"task_settings\": {\"timeout\": 1}}",
+        ] {
+            assert!(
+                !gates(q)
+                    .iter()
+                    .any(|g| g.0 == "the `COMPLETION` option `timeout`"),
+                "{q}"
+            );
+        }
+        assert!(
+            !gates("FROM a | COMPLETION c = p WITH {\"inference_id\": \"e\"}")
+                .iter()
+                .any(|g| g.0 == "the `COMPLETION` option `timeout`")
+        );
+        assert_eq!(gates("FROM a | LOOKUP JOIN t ON x"), []);
+        // `AS` is optional before the qualifier, and a join inside FORK is
+        // its own command.
+        assert_eq!(
+            gates("FROM a | LOOKUP JOIN t q ON x"),
+            one("a `LOOKUP JOIN … AS` qualifier", "q", None)
+        );
+        assert_eq!(
+            gates("FROM a | FORK (LOOKUP JOIN t AS q ON x) (WHERE y)"),
+            one("a `LOOKUP JOIN … AS` qualifier", "q", None)
+        );
+        assert!(
+            !gates("FROM a | LOOKUP JOIN ON source.ip")
+                .iter()
+                .any(|g| g.0 == "a `LOOKUP JOIN … AS` qualifier"),
+            "a broken join gets its parse error only"
+        );
+        // Rejected by 9.5.6 ("no viable alternative at input"), as the
+        // Elastic parser reported for the syntax-gap hunt.
+        assert_eq!(
+            gates("FROM a | LOOKUP JOIN t AS q ON x"),
+            one("a `LOOKUP JOIN … AS` qualifier", "q", None)
+        );
+        let join = "a `LOOKUP JOIN` condition with several fields or an expression";
+        let q = "FROM a | LOOKUP JOIN t ON x, y";
+        assert_eq!(gates(q), one(join, &q[9..], None));
+        assert_eq!(
+            gates("ROW a = 1 | LIMIT 1 BY a"),
+            one("`LIMIT … BY`", "LIMIT", None)
+        );
+        assert_eq!(gates("ROW a = 1 | LIMIT 1"), []);
+        assert_eq!(
+            gates("FROM logs-* [METADATA _id, _index]"),
+            one(
+                "`[METADATA …]` in brackets",
+                "[METADATA _id, _index]",
+                Some("METADATA _id, _index")
+            )
+        );
+    }
+
+    /// Every gate fires on its form, from a node of a [`GATED`] kind.
+    #[test]
+    fn every_gated_kind_has_a_gate() {
+        let mut fired = std::collections::HashSet::new();
+        for query in [
+            "ROW a = 1 | RENAME b = a",
+            "ROW a = \"x\" | WHERE a LIKE (\"x\", \"y\")",
+            "FROM c:logs-*::data, logs-*::failures [METADATA _id]",
+            "ROW a = 1 | WHERE a == ??b",
+            "ROW a = NOW() - 5 m",
+            "FROM a, (FROM b) | WHERE (b, e) IN (FROM c | KEEP d, f)",
+            "ROW a = 1 | LIMIT 1 BY a | CHANGE_POINT a BY b",
+            "ROW a = \"x\" | GROK a \"%{WORD:b}\", \"%{WORD:c}\"",
+            "FROM a | LOOKUP JOIN t ON x, y | COMPLETION p WITH ep | FUSE linear WITH {}",
+            "FROM a | RERANK \"q\" ON t WITH {\"inference_id\": \"r\", \"timeout\": \"1s\"}",
+        ] {
+            for node in crate::syntax_tree(query).descendants() {
+                if !gates_of(&node, query).is_empty() {
+                    fired.insert(node.kind());
+                }
+            }
+        }
+        let silent: Vec<_> = GATED.iter().filter(|k| !fired.contains(k)).collect();
+        assert!(silent.is_empty(), "no gate fired on {silent:?}");
+    }
+}

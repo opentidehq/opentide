@@ -1,10 +1,12 @@
-"""The release runbook's commands must match what ``publish-pypi.yml`` accepts.
+"""The release runbook's commands must match what ``publish.yml`` accepts.
 
 Agents follow ``.agents/skills/release-management/SKILL.md`` literally. The
 0.4.0 release was cut with ``--latest=false`` and the repo kept showing 0.3.0
 as Latest; its PyPI 502 was recovered only through the documented
 ``repository_dispatch`` retry (#290). If the documented dispatch event or
 payload key drifts from the workflow, that recovery path silently stops working.
+Since the release train (#840) a GitHub Release published by hand publishes
+nothing, so no runbook may offer ``gh release create`` as a way to release.
 """
 
 from __future__ import annotations
@@ -17,7 +19,7 @@ import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
-WORKFLOW = ROOT / ".github" / "workflows" / "publish-pypi.yml"
+WORKFLOW = ROOT / ".github" / "workflows" / "publish.yml"
 SKILL = ROOT / ".agents" / "skills" / "release-management" / "SKILL.md"
 RUNBOOKS = [SKILL, ROOT / "docs" / "internal" / "pypi-trusted-publishing.md"]
 
@@ -78,18 +80,19 @@ def test_documented_retry_payload_keys_reach_the_checkout(path: Path) -> None:
     for fields in _dispatch_fields(path):
         for key in re.findall(r"client_payload\[(\w+)\]", " ".join(fields)):
             assert f"github.event.client_payload.{key}" in checkout_ref, (
-                f"{path.name}: client_payload[{key}] is ignored by publish-pypi.yml"
+                f"{path.name}: client_payload[{key}] is ignored by publish.yml"
             )
 
 
 @pytest.mark.parametrize("path", RUNBOOKS, ids=lambda path: path.name)
-def test_documented_release_create_marks_the_new_tag_latest(path: Path) -> None:
-    commands = _release_create_commands(path)
-    assert commands, f"{path.name} no longer documents gh release create"
-    for command in commands:
-        assert "--target development" in command
-        assert "--notes-file .github/release-notes/" in command
-        assert "--latest=false" not in command
+def test_no_runbook_releases_with_a_hand_made_github_release(path: Path) -> None:
+    """publish.yml runs on no `release` event: a Release made by hand would
+    carry a tag that nothing publishes."""
+    triggers = _workflow().get("on", _workflow().get(True))
+    assert "release" not in triggers
+    assert _release_create_commands(path) == [], (
+        f"{path.name} documents `gh release create`; release with Run workflow on publish.yml"
+    )
 
 
 def test_release_create_parser_reads_fenced_multiline_commands(tmp_path: Path) -> None:

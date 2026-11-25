@@ -1,0 +1,2 @@
+// prod:promql_command valid
+PROMQL index=metrics-* (rate(http_requests_total[5m]))

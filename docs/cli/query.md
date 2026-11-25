@@ -11,7 +11,7 @@ Runs a read-only query on a platform's tenants and prints the rows. Use it to tr
 opentide query --platform sentinel 'SecurityEvent | where EventID == 4688 | take 20'
 opentide query --platform splunk --rule <rule-uuid> --tenant all --since 7d
 opentide query --platform elastic --language eql --index 'logs-*' 'process where process.name == "cmd.exe"'
-opentide --json query --platform defender_for_endpoint --file objects/rules/suspicious-lsass.yaml
+opentide --json query --platform microsoft_defender --file objects/rules/suspicious-lsass.yaml
 ```
 
 `opentide validate query --live` checks that a query runs; `opentide query` returns what it finds.
@@ -21,7 +21,7 @@ opentide --json query --platform defender_for_endpoint --file objects/rules/susp
 | Input | Purpose |
 |-------|---------|
 | `[QUERY]` | The query, in the platform's language. `-` reads it from stdin |
-| `--platform` | Required. `sentinel`, `defender_for_endpoint`, `splunk`, `sentinel_one`, `carbon_black_cloud`, `crowdstrike`, `harfanglab`, `elastic`, `graylog`, `exabeam` or `google_secops`. `sysdig` and `bitdefender` have no query runner: they exit `2` (`usage_invalid_value`). `google_secops` takes no `--rule`: a YARA-L rule runs in the detection engine, not as a search |
+| `--platform` | Required. `sentinel`, `microsoft_defender`, `splunk`, `sentinel_one`, `crowdstrike`, `harfanglab`, `carbon_black_cloud`, `elastic`, `graylog`, `exabeam` or `google_secops` (a YARA-L search through `udmSearch`; `--rule` is not supported). `sysdig` has no query runner, and `bitdefender` has no query runner either: each exits `2` (`usage_invalid_value`) |
 | `--tenant` | A configured tenant name (repeatable), or `all`. Default: the only tenant configured |
 | `--rule` | Run the query this rule (by UUID) deploys to the platform |
 | `--file` | Run the query of the rule in this YAML file, saved or not: a path from the current directory or the repository root |
@@ -30,7 +30,7 @@ opentide --json query --platform defender_for_endpoint --file objects/rules/susp
 | `--from`, `--to` | An explicit window, ISO-8601. A time without an offset is UTC. `--since` and `--from` exclude each other |
 | `--limit` | Rows per tenant, 1–5000. Default `100` |
 | `--language` | Elastic only: `esql` (default), `eql`, `lucene` or `kuery` |
-| `--index` | Elastic index pattern, CrowdStrike repository, or Graylog stream alias from the tenant's `stream_ids` (or a stream id) (repeatable). Graylog default: the rule's streams, else the tenant's `streams` |
+| `--index` | Elastic index pattern, CrowdStrike repository or Graylog stream alias (repeatable) |
 | `--timeout` | Seconds to wait for an asynchronous search (SentinelOne, Carbon Black, CrowdStrike). Default `120` |
 | `--columns` | Comma-separated columns the table shows |
 | `--format` | `table` (default), `jsonl` or `csv`. `--json` prints the [envelope](./json-output.md) instead |
@@ -39,7 +39,7 @@ Give exactly one query: `QUERY`, `--query-file`, `--rule` or `--file`.
 
 ## Tenants
 
-The query runs on the tenants `--tenant` names, in the order the platform file lists them. With no `--tenant`, a platform with one tenant uses it; with several, the command exits `2` and lists them, so a query never reaches a production tenant you did not name. `--tenant all` runs on every tenant. A rule's own `tenants` list and the tenants' `strategies` do not restrict a query.
+`query` reads the tenants from the workspace: outside one it exits `1` with `workspace_not_found`, as [`new`](./new.md) does. The query runs on the tenants `--tenant` names, in the order the platform file lists them. With no `--tenant`, a platform with one tenant uses it; with several, the command exits `2` and lists them, so a query never reaches a production tenant you did not name. `--tenant all` runs on every tenant. A rule's own `tenants` list and the tenants' `strategies` do not restrict a query.
 
 Each tenant runs independently: one that refuses the query or cannot be reached is reported, and the others still return their rows.
 
@@ -56,7 +56,9 @@ Each tenant runs independently: one that refuses the query or cannot be reached 
 | HarfangLab | telemetry API | a source and `field=value` filters (below) | `@event_create_date` | `limit` |
 | Elastic | ES\|QL `_query`, EQL `_eql/search`, Lucene `_search` | `--language` | `@timestamp` range filter | `LIMIT`, `size` |
 | Elastic `kuery` | detection rule preview | KQL | the rule's look-back | the rule's `max_signals` |
+| Graylog | `POST /api/search/messages`, newest first; `--index` names stream aliases | Lucene (Graylog dialect) | `timerange`, absolute | `limit` |
 | Exabeam | Search `POST /search/v2/events`, synchronous | Exabeam Query Language, as the `filter` | `startTime`/`endTime` | `limit`, at most 3,000 |
+| Google SecOps | Chronicle `udmSearch`, `queryDialect=YL2` | YARA-L 2.0 | `timeRange.startTime`/`timeRange.endTime` | `limit`, at most 10,000 |
 
 One row past `--limit` is requested, so a result knows when more matched: `truncated` is `true` and the table says `more matched; raise --limit`.
 
@@ -76,18 +78,19 @@ Sources: `processes`, `binary`, `network`, `eventlog`, `dns`, `windows_authentic
 
 **Defender.** The app registration needs `ThreatHunting.Read.All`.
 
-**Exabeam.** The query is sent as the search `filter`, with `fields: ["*"]`, or the columns a `SELECT` names. The API key needs **Search, Analyze and Export**. Exabeam returns at most 3,000 rows: a larger `--limit` is capped, with a warning. The search is synchronous and has no cancel, so a search that outlives `--timeout` is abandoned by closing the connection. Nothing is saved on the tenant.
 
+**Exabeam.** The query is sent as the search `filter`, with `fields: ["*"]`, or the columns a `SELECT` names. The API key needs **Search, Analyze and Export**. Exabeam returns at most 3,000 rows: a larger `--limit` is capped, with a warning. The search is synchronous and has no cancel, so a search that outlives `--timeout` is abandoned by closing the connection. Nothing is saved on the tenant.
 ## Rules
 
 `--rule` and `--file` send the query `deploy` would send:
 
 - Sentinel and Defender: the query with the `exclusions` that apply to each tenant, compiled as deploy compiles them; `sent` shows the result.
-- Splunk: the query with the MDR mapping macro deploy appends.
+- Splunk: the block's `query`, as written; deploy appends nothing to it.
 - SentinelOne correlation rules: each sub-query, as its own result labelled `sub-query 1`, `sub-query 2`… The correlation itself is not applied, and each result says so.
 - Carbon Black: the lines of a multiline query joined with spaces.
-- Exabeam: each sequence's filter, as its own result labelled `sequence 1`, `sequence 2`… when the rule has several. The condition, windows and grouping are not applied, and a result whose sequence has them says so.
 - Elastic: the rule's language (`esql`, `eql`, or `kuery`/`lucene` for the other types) and its index or data view. For `threshold`, `new_terms` and `threat_match` rules only the event query runs, and a rule's `filters` are not applied; the result says so in both cases; `machine_learning` rules have no query.
+- Graylog: the event definition's Lucene query, on the block's `streams` (else the tenant's), each alias resolved through the tenant's `stream_ids`. A block's `aggregation` and `stream_categories` are not applied.
+- Exabeam: each sequence's filter, as its own result labelled `sequence 1`, `sequence 2`… when the rule has several. The condition, windows and grouping are not applied, and a result whose sequence has them says so.
 
 `--language` and `--index` override the rule's own.
 
@@ -151,7 +154,7 @@ A failed tenant has `status: "failed"`, `error` and, when the platform gave one,
 
 ## Safety
 
-The command reads telemetry and saves no search or rule. Splunk runs a one-shot job. CrowdStrike's job is stopped when the command stops waiting. SentinelOne PowerQuery and Carbon Black process searches have no cancel call: a search that outlives `--timeout` finishes on the tenant and expires there. An Elastic `kuery` query writes its preview alerts to `.preview.alerts-security.alerts-<space>`, as a preview in Kibana does; Kibana cleans that index up itself. Credentials come from the platform file, as for `deploy`; an unset `$VAR` refuses the tenant before anything is sent. Rows are telemetry: nothing is written to disk unless you redirect stdout.
+The command reads telemetry and saves no search or rule. Splunk runs a one-shot job. CrowdStrike's job is stopped when the command stops waiting. SentinelOne PowerQuery and Carbon Black process searches have no cancel call: a search that outlives `--timeout` finishes on the tenant and expires there. An Elastic `kuery` query writes its preview alerts to `.preview.alerts-security.alerts-<space>`, as a preview in Kibana does; Kibana cleans that index up itself, and creates it when a preview first raises an alert, so on a Kibana where none has, the query reports `0 rows`. Credentials come from the platform file, as for `deploy`; an unset `$VAR` refuses the tenant before anything is sent. Rows are telemetry: nothing is written to disk unless you redirect stdout.
 
 ## Related
 

@@ -20,11 +20,15 @@ The generic patterns below are reference material. This repository's workflows f
   group on a workflow whose pending runs deploy — scope it to the job that needs it.
 - **uv everywhere:** `astral-sh/setup-uv` with cache, then `uv sync --group dev`; run tools
   with `uv run`.
-- **Shard counts are tested:** the E2E matrix length must equal `--splits`
-  (`tests/test_ci/test_own_ci_workflow.py`).
+- **Every job feeds `PR gate`**, the one required check: the gate needs every job but the
+  nightly's and fails unless each needed one passed, a skipped one counting as passed (`tests/test_ci/test_workflows.py`, with pinned
+  actions, least privilege and concurrency). The tiers and the jobs: [`.github/AGENTS.md`](../../../.github/AGENTS.md).
 - **CodeQL action stays on v4** (see [`codeql`](../codeql/SKILL.md)).
-- Workflows opentide *generates* for client repos live in `src/opentide/ci/` and are tested
-  in `tests/test_ci/`; change them there, not by hand in a client repo.
+- Workflows opentide *generates* for client repos (`opentide setup ci`) are minijinja
+  templates in `crates/opentide-compile/src/ci/templates/`, rendered by `ci/mod.rs`, tested by
+  `crates/opentide-compile/tests/setup_ci.rs` against the cases in `crates/opentide-compile/tests/ci/` and, for
+  GitLab, linted by `tests/test_ci/test_gitlab_pipeline_lint.py`; change them there, not by
+  hand in a client repo.
 
 ## Purpose
 

@@ -1,0 +1,12 @@
+---
+source: crates/opentide-lucene/tests/trees.rs
+expression: "debug_parse(&source.join(\"\\n\"))"
+input_file: crates/testdata/corpus/lucene/field_query__valid.lucene
+---
+SourceFile@0..20
+  FieldQuery@0..20
+    FieldName@0..12
+      Term@0..12 "process.name"
+    Colon@12..13 ":"
+    TermQuery@13..20
+      Term@13..20 "cmd.exe"

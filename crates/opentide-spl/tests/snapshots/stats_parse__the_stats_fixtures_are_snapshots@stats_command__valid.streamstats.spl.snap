@@ -1,0 +1,39 @@
+---
+source: crates/opentide-spl/tests/stats_parse.rs
+expression: render(&body(path))
+input_file: crates/testdata/corpus/spl/stats_command__valid.streamstats.spl
+---
+SOURCE_FILE@0..59
+  PIPELINE@0..59
+    BARE_SEARCH@0..10
+      FIELD_VALUE@0..10
+        FIELD_REF@0..5
+          IDENTIFIER@0..5
+            IDENT@0..5 "index"
+        EQ@5..6 "="
+        FIELD_VALUE_RHS@6..10
+          IDENTIFIER@6..10
+            IDENT@6..10 "main"
+    WHITESPACE@10..11 " "
+    PIPE@11..12 "|"
+    WHITESPACE@12..13 " "
+    STATS_COMMAND@13..59
+      STATS_KW@13..24 "streamstats"
+      WHITESPACE@24..25 " "
+      AGGREGATE_ITEM@25..30
+        IDENTIFIER@25..30
+          IDENT@25..30 "count"
+      WHITESPACE@30..31 " "
+      BY_CLAUSE@31..59
+        BY_KW@31..33 "by"
+        WHITESPACE@33..34 " "
+        IDENTIFIER@34..38
+          IDENT@34..38 "user"
+        WHITESPACE@38..39 " "
+        COMMAND_OPTION@39..59
+          IDENTIFIER@39..54
+            IDENT@39..54 "reset_on_change"
+          EQ@54..55 "="
+          BOOLEAN@55..59
+            BOOL_KW@55..59 "true"
+--

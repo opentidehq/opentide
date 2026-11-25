@@ -1,0 +1,33 @@
+# Converted from the Falco default rule "Contact K8S API Server From Container"
+# (falcosecurity/rules, rules/falco_rules.yaml, Apache-2.0). Unmodified.
+name: Contact K8S API Server From Container
+metadata:
+  uuid: beebc42e-9a6f-45b8-8165-9f7669a7d4aa
+  schema: rule::1.0
+  version: 1
+  created: '2026-11-02'
+  modified: '2026-11-02'
+  tlp: clear
+  author: Detection Engineering
+  organisation:
+    uuid: 5f3c2a10-7b6e-4c1d-9a8f-2e4b6d0c1a73
+    name: Detection Engineering
+description: |
+  Detect attempts to communicate with the Kubernetes API server from a
+  container by non-profiled users.
+techniques:
+- T1565
+response:
+  alert_severity: Low
+configurations:
+  sysdig:
+    enabled: true
+    schema: platform::sysdig::1.0
+    status: STAGING
+    condition: >
+      evt.type=connect and (fd.typechar=4 or fd.typechar=6) and container and k8s_api_server
+      and not k8s_containers and not user_known_contact_k8s_api_server_activities
+    output: >-
+      Unexpected connection to K8s API Server from container | connection=%fd.name
+      lport=%fd.lport rport=%fd.rport fd_type=%fd.type fd_proto=%fd.l4proto
+      evt_type=%evt.type user=%user.name process=%proc.name command=%proc.cmdline

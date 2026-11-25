@@ -10,7 +10,7 @@ opentide exposes the engine to AI agents through an [MCP server](../../mcp/index
 ## What agents can and cannot do today
 
 <Callout type="warn">
-`validate_query` checks the `query` argument offline with the analysis engine (KQL, SPL, ES|QL, EQL, Kibana KQL, Lucene): it proves the query parses in its platform's language and names slow shapes, not that it returns rows. `live: true` checks the catalogue rules against the tenant, not the argument; SentinelOne queries are checked that way only. A missing SDK is a failed live check. `run_query` refuses until you pass `live: true`; then it runs a read-only query on the tenants you name and returns the rows, as the [query command](../../cli/query.md) does. Both live calls use the configured credentials, so the agent should ask first. Use `validation_report` for structured object validation an agent can act on.
+`validate_query` checks the `query` argument offline with the analysis engine (KQL, SPL, ES|QL, EQL, Kibana KQL, Lucene, Falco, CQL, YARA, Exabeam and YARA-L, by platform): it proves the query parses in its platform's language and names slow shapes, not that it returns rows. `live: true` checks the catalogue rules against the tenant, not the argument; SentinelOne queries are checked that way only. A missing SDK is a failed live check. `run_query` refuses until you pass `live: true`; then it runs a read-only query on the tenants you name and returns the rows, as the [query command](../../cli/query.md) does. Both live calls use the configured credentials, so the agent should ask first. Use `validation_report` for structured object validation an agent can act on.
 </Callout>
 
 | Capability | Status |
@@ -28,7 +28,7 @@ opentide exposes the engine to AI agents through an [MCP server](../../mcp/index
 ## Install and configure the server
 
 ```bash
-pip install 'opentide==0.28.1'
+pip install 'opentide==1.0.0'
 opentide setup mcp --cursor --yes
 ```
 
@@ -97,7 +97,7 @@ After setup, point your agent at the generated `AGENTS.md` at the repo root — 
 
 An agent connected through MCP gets the same workflow from the server's `instructions`, and the same fields from `validation_report`.
 
-`opentide-detection-rule`, `opentide-detection-objective` and `opentide-threat-vector` are installed from the package so they match the installed engine's `rule`, `objective` and `threat` revisions under `objects/`; each points to the catalogue's full authoring skill (`opentide-rule`, `opentide-objective`, `opentide-threat`) for practice beyond shape and checks. `detection-engineering` installs from the catalogue, and the package's short copy only when its files cannot be downloaded (the catalogue itself must load) and nothing is installed yet, keeping an installed copy otherwise; the result warns in both cases. Other skills are downloaded as the full tree under `skills/<slug>/` from opentidehq/skills.
+`opentide-detection-rule`, `opentide-detection-objective` and `opentide-threat-vector` are installed from the package so they match `rule::1.0`, `objective::1.0`, and `threat::1.0` under `objects/`. `detection-engineering` installs from the catalogue, and the package's short copy only when its files cannot be downloaded (the catalogue itself must load) and nothing is installed yet, keeping an installed copy otherwise; the result warns in both cases. Other skills are downloaded as the full tree under `skills/<slug>/` from opentidehq/skills.
 
 ## A safe agent workflow
 
@@ -120,7 +120,7 @@ flowchart LR
 > **Agent:** `search(query="T1059")` → finds the *Credential Access* objective `…8002…0001`.
 > `get_chaining(uuid="…8002…0001")` → confirms it covers the *Simulated Actor* threat and has no rule yet.
 > Writes `objects/rules/sentinel-t1059.yaml` from `opentide://templates/rule`, with `detection_model` pointing at the objective.
-> `validation_report(file="objects/rules/sentinel-t1059.yaml")` → one `vocab_unknown` issue at line 8, column 8: `tlp: clearr`, with a `fix` replacing it with `clear`. The fix is not `safe` (another spelling, not only another case), so the agent checks it against `help`: `did you mean 'clear'?`.
+> `validation_report(file="objects/rules/sentinel-t1059.yaml")` → one `vocab_unknown` issue at line 8, column 8: `tlp: clearr`, with a `fix` replacing it with `clear`. The fix is not `safe` (another spelling, not only another case), so the agent checks it against `help`: `did you mean "clear"?`.
 > Applies the edit. `validation_report(file=…)` → `ok: true`.
 > Runs `opentide validate query --platform sentinel --live --file objects/rules/sentinel-t1059.yaml` (CLI), which checks that one rule's query against the tenant.
 > `deploy_rule(uuid=…, platform="sentinel", dry_run=true)` → shows the planned change.
@@ -156,7 +156,8 @@ The generated `AGENTS.md` already tells the agent to validate until clean and to
   `validate_query` with `live: true` checks the catalogue rules against the tenant.
   Never report a rule as platform-ready on its result alone.
 - Ask before `run_query` with `live: true`: it queries a tenant with real credentials.
-- Never claim query validation for CrowdStrike or HarfangLab — they are deploy-only.
+- Never claim live query validation for CrowdStrike or HarfangLab: CrowdStrike's CQL is
+  checked offline only, and HarfangLab's Sigma and YARA not at all.
 - Deploys are `dry_run=true` unless a human explicitly approves a real deploy.
 ```
 

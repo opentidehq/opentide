@@ -1,0 +1,1 @@
+SecurityEvent | where Account !in ("SYSTEM")

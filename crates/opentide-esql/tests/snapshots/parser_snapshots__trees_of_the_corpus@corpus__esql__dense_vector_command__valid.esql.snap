@@ -1,0 +1,54 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/dense_vector_command__valid.esql
+---
+SOURCE_FILE@0..121
+  COMMENT@0..34 "// prod:dense_vector_command valid"
+  WHITESPACE@34..35 "\n"
+  QUERY@35..120
+    FROM_COMMAND@35..57
+      FROM_KW@35..39 "FROM"
+      WHITESPACE@39..40 " "
+      INDEX_PATTERN@40..44
+        INDEX_NAME@40..44
+          SOURCE_TEXT@40..44 "docs"
+      WHITESPACE@44..45 " "
+      METADATA@45..57
+        METADATA_KW@45..53 "METADATA"
+        WHITESPACE@53..54 " "
+        METADATA_FIELD@54..57
+          SOURCE_TEXT@54..57 "_id"
+    WHITESPACE@57..58 "\n"
+    PIPE@58..59 "|"
+    WHITESPACE@59..60 " "
+    DENSE_VECTOR_COMMAND@60..120
+      DENSE_VECTOR_KW@60..72 "DENSE_VECTOR"
+      WHITESPACE@72..73 " "
+      QUALIFIED_NAME@73..82
+        IDENTIFIER@73..82
+          IDENT@73..82 "embedding"
+      WHITESPACE@82..83 " "
+      EQ@83..84 "="
+      WHITESPACE@84..85 " "
+      QUALIFIED_NAME@85..90
+        IDENTIFIER@85..90
+          IDENT@85..90 "title"
+      WHITESPACE@90..91 " "
+      NAMED_PARAMETERS@91..120
+        WITH_KW@91..95 "WITH"
+        WHITESPACE@95..96 " "
+        MAP_EXPRESSION@96..120
+          L_BRACE@96..97 "{"
+          WHITESPACE@97..98 " "
+          MAP_ENTRY@98..118
+            STRING@98..112
+              STRING_LIT@98..112 "\"inference_id\""
+            COLON@112..113 ":"
+            WHITESPACE@113..114 " "
+            STRING@114..118
+              STRING_LIT@114..118 "\"e5\""
+          WHITESPACE@118..119 " "
+          R_BRACE@119..120 "}"
+  WHITESPACE@120..121 "\n"
+--- errors

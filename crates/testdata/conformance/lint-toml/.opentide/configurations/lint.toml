@@ -1,0 +1,12 @@
+# The repository's own conventions (#214): threat and objective file names are
+# free, rule files keep their name and start with a platform tag, and only
+# `author` is required.
+[filenames]
+style = "none"
+
+[filenames.rules]
+style = "name"
+pattern = '^\[SEN\].+$'
+
+[metadata]
+required = ["author"]

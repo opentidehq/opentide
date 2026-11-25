@@ -1,0 +1,64 @@
+[platform]
+enabled = true
+
+[[modifiers]]
+name = "defaults"
+description = "Fills gaps only"
+[modifiers.conditions]
+default = true
+[modifiers.modifications]
+"dispatch.latest_time" = "now"
+"alert.track" = "1"
+
+[[modifiers]]
+name = "staging"
+description = "Staging rules raise notables only"
+[modifiers.conditions]
+status = ["STAGING"]
+[modifiers.modifications]
+allowed_actions = ["notable"]
+"alert.digest_mode" = "false"
+
+[[modifiers]]
+name = "noisy"
+description = "Flagged rules run no action"
+[modifiers.conditions]
+flags = ["noisy"]
+[modifiers.modifications]
+allowed_actions = false
+
+[[modifiers]]
+name = "core only"
+description = "Applies to one tenant"
+[modifiers.conditions]
+tenants = ["core"]
+[modifiers.modifications]
+"alert.expires" = "7d"
+
+[[tenants]]
+name = "es"
+description = "Enterprise Security: notables and risk, the current time, skew and offset"
+[tenants.setup]
+ssl = true
+url = "splunk.example.org"
+port = 8089
+app = "search"
+token = "$SPLUNK_TOKEN"
+enterprise_security = true
+frequency_scheduling = "current"
+allow_skew = "10%"
+schedule_offset = 2
+actions_enabled = ["notable", "risk", "email"]
+default_actions = ["notable"]
+
+[[tenants]]
+name = "core"
+description = "No Enterprise Security, no correlation searches, a random schedule"
+[tenants.setup]
+ssl = true
+url = "splunk2.example.org"
+port = "8089"
+app = "detections"
+token = "$SPLUNK_TOKEN"
+correlation_searches = false
+actions_enabled = ["email", "notable"]

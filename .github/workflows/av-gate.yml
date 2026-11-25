@@ -1,0 +1,249 @@
+name: AV gate
+
+# The antivirus gate of a release (#1743): what a release ships is scanned with
+# three engines, and with a check of its own, before anything publishes.
+#
+#   - `markers`: no marker string (`moneropool`, `sekurlsa`, `Login Data`,
+#     `Invoke-Mimikatz`, `jndi:ldap`) in plain text in any artifact, archives
+#     opened (scripts/av/markers.py); every artifact within its size budget
+#     (scripts/av/sizes.py, tests/bench/sizes.toml); and the Windows
+#     imports listed, none of the key translation (GetForegroundWindow,
+#     ToUnicodeEx, ...) in the language server (scripts/av/pe_imports.py);
+#   - `clamav`: ClamAV's signatures, freshly fetched (`freshclam`), with archive
+#     scanning, on the artifacts and on their extracted files: one clamd on
+#     every core (scripts/av/clamav-scan.sh), a canary first and a verdict for
+#     every file after;
+#   - `yara`: Neo23x0 signature-base and Elastic protections-artifacts at pinned
+#     commits (scripts/av/fetch-rules.sh); a hit fails the gate unless its rule is
+#     on the reviewed allow-list (scripts/av/yara-allowlist.toml);
+#   - `defender`: Microsoft Defender on a Windows runner, signatures updated
+#     (`MpCmdRun -SignatureUpdate`), each extracted file scanned with
+#     `MpCmdRun -Scan -ScanType 3 -File ... -DisableRemediation`
+#     (scripts/av/defender-scan.ps1).
+#
+# Nothing is uploaded to an external scanner: every engine runs on the runner,
+# against signatures the runner fetched. The gate runs only in the release
+# tier: ci.yml on a release pull request (the `release` label, or a pull
+# request from the release branches) and Run workflow with scope `release`,
+# and the release train's build (publish.yml), through release-build.yml and
+# engine-release-build.yml; never on an ordinary pull request. It holds no
+# token and publishes nothing; a failure here fails the caller's build job, and
+# every publishing job of publish.yml needs that job.
+on:
+  workflow_call:
+    inputs:
+      artifacts:
+        description: "A glob of the run's artifact names to scan, as download-artifact's `pattern` (brace alternatives allowed): `release-assets`, or `{wheels-*,sdist,npm-packages,crates}`."
+        required: true
+        type: string
+      windows-binaries:
+        description: "Whether the artifacts hold Windows binaries (`.pyd`, `.node`, `.exe`) whose imports are checked: the wheels and npm packages do, the GitHub Release's assets have none since the standalone Windows executables were dropped."
+        required: false
+        default: true
+        type: boolean
+      revision:
+        description: "The commit whose scripts and budgets are used, as its 40-hex SHA; empty: the caller's."
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  markers:
+    name: AV gate - markers and sizes
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.revision || github.sha }}
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: ${{ inputs.artifacts }}
+          path: av-artifacts
+          merge-multiple: true
+      - name: Marker strings in plain text
+        run: |
+          set -o pipefail
+          ls -l av-artifacts
+          python3 scripts/av/markers.py av-artifacts | tee "${RUNNER_TEMP}/markers.txt"
+      - name: Size budgets
+        run: |
+          set -o pipefail
+          python3 scripts/av/sizes.py av-artifacts | tee "${RUNNER_TEMP}/sizes.txt"
+      # The terminal UI's binaries (the command line, the extension module, the Node.js
+      # addon) import user32's key translation (GetForegroundWindow,
+      # GetKeyboardLayout, ToUnicodeEx), as every Rust terminal UI on Windows does:
+      # listed, not failed (the experiment run 44981495486 found them clean). The
+      # language server never had the terminal UI, and may not import them. The import
+      # tables of every Windows binary are listed (scripts/av/pe_imports.py).
+      - name: Windows imports (listed; none of the key translation in the language server)
+        run: |
+          set -o pipefail
+          python3 -m pip install --quiet pefile==2024.8.26
+          python3 scripts/av/extract.py av-artifacts av-extracted
+          allow_none=""
+          if [ "${{ inputs.windows-binaries }}" != "true" ]; then allow_none="--allow-none"; fi
+          python3 scripts/av/pe_imports.py ${allow_none} av-extracted | tee "${RUNNER_TEMP}/imports.txt"
+      # Code is never compressed: no code section, and not a whole file, is at or above 7.0
+      # bits per byte (the datasets' compressed blobs are in the data sections, which are
+      # reported). scripts/av/entropy.py.
+      - name: Section entropy
+        run: |
+          set -o pipefail
+          python3 scripts/av/entropy.py av-extracted | tee "${RUNNER_TEMP}/entropy.txt"
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### AV gate: markers and sizes"
+            echo '```'
+            cat "${RUNNER_TEMP}/markers.txt" "${RUNNER_TEMP}/sizes.txt" "${RUNNER_TEMP}/imports.txt" "${RUNNER_TEMP}/entropy.txt" 2>/dev/null || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  clamav:
+    name: AV gate - ClamAV
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.revision || github.sha }}
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: ${{ inputs.artifacts }}
+          path: av-artifacts
+          merge-multiple: true
+      - name: Install ClamAV and fetch its signatures
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq clamav clamav-freshclam clamav-daemon
+          # The packages run freshclam and clamd as services: stop both (the scan
+          # starts a clamd of its own, with its own config; the packaged one,
+          # started by freshclam's reload notice, would load a second copy of the
+          # databases beside it), and fetch the databases once, in the foreground.
+          sudo systemctl stop clamav-freshclam clamav-daemon.socket clamav-daemon || true
+          sudo freshclam --quiet
+          # The databases' versions and signature counts go to the log: a verdict is only
+          # meaningful with them (a database that freshclam updated is main.cld, not main.cvd).
+          for database in main daily bytecode; do
+            file="$(find /var/lib/clamav -name "${database}.c[lv]d" | head -n 1)"
+            echo "${file}: $(sigtool --info "${file}" | grep -E '^(Version|Signatures)' | tr '\n' ' ')"
+          done
+      - name: Extract the archives
+        run: python3 scripts/av/extract.py av-artifacts av-extracted
+      # Both trees, as the gate was designed (#1743): archives opened by the
+      # engine on the artifacts, and the extracted files one by one. One clamd
+      # scans them on every core (`clamdscan --multiscan`), the databases loaded
+      # once, so what it has found clean is a cache hit when it comes again: the
+      # extracted copy of a wheel's member is not scanned a second time. One
+      # clamscan per core (#1785) scanned it again in each process that met it,
+      # each process with its own copy of the databases. Any detection, scan
+      # error, missed canary or file without a verdict fails the step
+      # (scripts/av/clamav-scan.sh).
+      - name: ClamAV scan
+        run: bash scripts/av/clamav-scan.sh "${RUNNER_TEMP}/clamav.txt" av-artifacts av-extracted
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### AV gate: ClamAV"
+            echo '```'
+            cat "${RUNNER_TEMP}/clamav.txt" 2>/dev/null || echo "no result"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  yara:
+    name: AV gate - YARA
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.revision || github.sha }}
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: ${{ inputs.artifacts }}
+          path: av-artifacts
+          merge-multiple: true
+      - name: Install YARA
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq yara
+          yara --version
+      - name: The rule sets, at their pinned commits
+        run: bash scripts/av/fetch-rules.sh "${RUNNER_TEMP}/yara-rules"
+      - name: Extract the archives
+        run: python3 scripts/av/extract.py av-artifacts av-extracted
+      - name: YARA scan
+        run: |
+          set -o pipefail
+          python3 scripts/av/yara_gate.py \
+            --signature-base "${RUNNER_TEMP}/yara-rules/signature-base" \
+            --elastic "${RUNNER_TEMP}/yara-rules/protections-artifacts" \
+            --allowlist scripts/av/yara-allowlist.toml \
+            --report "${RUNNER_TEMP}/yara.txt" \
+            av-extracted
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### AV gate: YARA"
+            echo '```'
+            cat "${RUNNER_TEMP}/yara.txt" 2>/dev/null || echo "no result"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  defender:
+    name: AV gate - Microsoft Defender
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.revision || github.sha }}
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: ${{ inputs.artifacts }}
+          path: av-artifacts
+          merge-multiple: true
+      - name: Extract the archives
+        shell: bash
+        run: python3 scripts/av/extract.py av-artifacts av-extracted
+      # The Windows binaries and the extension modules are what Defender's
+      # verdict mattered for (the Marketplace removal, the RedLine report);
+      # every extracted file is scanned, so a loose dataset would show too.
+      - name: Defender
+        shell: pwsh
+        run: |
+          ./scripts/av/defender-scan.ps1 -Path av-extracted -Report "$env:RUNNER_TEMP/defender.txt"
+      - name: Summary
+        if: always()
+        shell: pwsh
+        run: |
+          $report = Join-Path $env:RUNNER_TEMP 'defender.txt'
+          "### AV gate: Microsoft Defender" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+          '```' | Out-File -Append $env:GITHUB_STEP_SUMMARY
+          if (Test-Path $report) { Get-Content $report | Out-File -Append $env:GITHUB_STEP_SUMMARY } else { 'no result' | Out-File -Append $env:GITHUB_STEP_SUMMARY }
+          '```' | Out-File -Append $env:GITHUB_STEP_SUMMARY

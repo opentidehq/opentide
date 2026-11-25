@@ -1,0 +1,48 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/oracles/elasticsearch/esql-reference/204_highlight_error_on_message_title_with_number_of.esql
+---
+SOURCE_FILE@0..80
+  QUERY@0..79
+    FROM_COMMAND@0..9
+      FROM_KW@0..4 "FROM"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..9
+        INDEX_NAME@5..9
+          SOURCE_TEXT@5..9 "logs"
+    WHITESPACE@9..10 " "
+    PIPE@10..11 "|"
+    WHITESPACE@11..12 " "
+    HIGHLIGHT_COMMAND@12..79
+      HIGHLIGHT_KW@12..21 "HIGHLIGHT"
+      WHITESPACE@21..22 " "
+      STRING@22..29
+        STRING_LIT@22..29 "\"error\""
+      WHITESPACE@29..30 " "
+      ON_KW@30..32 "ON"
+      WHITESPACE@32..33 " "
+      NAME_PATTERN@33..40
+        ID_PATTERN@33..40
+          ID_PATTERN_TEXT@33..40 "message"
+      COMMA@40..41 ","
+      WHITESPACE@41..42 " "
+      NAME_PATTERN@42..47
+        ID_PATTERN@42..47
+          ID_PATTERN_TEXT@42..47 "title"
+      WHITESPACE@47..48 " "
+      NAMED_PARAMETERS@48..79
+        WITH_KW@48..52 "WITH"
+        WHITESPACE@52..53 " "
+        MAP_EXPRESSION@53..79
+          L_BRACE@53..54 "{"
+          MAP_ENTRY@54..78
+            STRING@54..75
+              STRING_LIT@54..75 "\"number_of_fragments\""
+            COLON@75..76 ":"
+            WHITESPACE@76..77 " "
+            NUMBER@77..78
+              NUMBER_LIT@77..78 "3"
+          R_BRACE@78..79 "}"
+  WHITESPACE@79..80 "\n"
+--- errors

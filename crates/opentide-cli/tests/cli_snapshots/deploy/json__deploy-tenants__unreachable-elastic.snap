@@ -1,0 +1,150 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: deploy/json/deploy-tenants/unreachable-elastic
+---
+args: opentide --json deploy --platform elastic --strategy PREVIEW --strategy RELEASE --all --keep-deprecated
+exit: 1
+
+━━━ stdout · json, 1 lines
+{
+  "changes": [
+    {
+      "action": "upsert",
+      "name": "Elastic create rule",
+      "platform": "elastic",
+      "status": "STAGING",
+      "tenant": "soc",
+      "uuid": "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0001"
+    },
+    {
+      "action": "upsert",
+      "name": "Elastic update rule",
+      "platform": "elastic",
+      "status": "PRODUCTION",
+      "tenant": "soc",
+      "uuid": "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0002"
+    },
+    {
+      "action": "upsert",
+      "name": "Elastic prebuilt rule",
+      "platform": "elastic",
+      "status": "STAGING",
+      "tenant": "soc",
+      "uuid": "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0004"
+    },
+    {
+      "action": "delete",
+      "name": "Elastic retire rule",
+      "platform": "elastic",
+      "status": "REMOVED",
+      "tenant": "soc",
+      "uuid": "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0005"
+    }
+  ],
+  "command": "deploy",
+  "deployed": [],
+  "dry_run": false,
+  "duration_ms": 0,
+  "error": "Deployment to elastic failed on tenant soc: Cannot reach elastic tenant 'soc' at https://kibana.elastic.invalid: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
+  "exit_code": 1,
+  "failure": {
+    "argument": null,
+    "code": "command_failed",
+    "crash_log": null,
+    "message": "Deployment to elastic failed on tenant soc: Cannot reach elastic tenant 'soc' at https://kibana.elastic.invalid: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
+    "suggestion": null
+  },
+  "failures": [
+    {
+      "error": "Cannot reach elastic tenant 'soc' at https://kibana.elastic.invalid: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
+      "platform": "elastic",
+      "tenant": "soc"
+    }
+  ],
+  "message": "Deployment to elastic failed on tenant soc: Cannot reach elastic tenant 'soc' at https://kibana.elastic.invalid: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
+  "next_actions": [],
+  "ok": false,
+  "plan": {
+    "elastic": [
+      "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0001",
+      "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0002",
+      "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0004",
+      "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0005"
+    ]
+  },
+  "results": [
+    {
+      "action": "upsert",
+      "error": null,
+      "id": "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0001",
+      "name": "Elastic create rule",
+      "platform": "elastic",
+      "reason": "not attempted: tenant soc failed",
+      "seconds": 0.0,
+      "status": "not_attempted",
+      "tenant": "soc"
+    },
+    {
+      "action": "upsert",
+      "error": null,
+      "id": "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0002",
+      "name": "Elastic update rule",
+      "platform": "elastic",
+      "reason": "not attempted: tenant soc failed",
+      "seconds": 0.0,
+      "status": "not_attempted",
+      "tenant": "soc"
+    },
+    {
+      "action": "upsert",
+      "error": null,
+      "id": "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0004",
+      "name": "Elastic prebuilt rule",
+      "platform": "elastic",
+      "reason": "not attempted: tenant soc failed",
+      "seconds": 0.0,
+      "status": "not_attempted",
+      "tenant": "soc"
+    },
+    {
+      "action": "delete",
+      "error": null,
+      "id": "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0005",
+      "name": "Elastic retire rule",
+      "platform": "elastic",
+      "reason": "not attempted: tenant soc failed",
+      "seconds": 0.0,
+      "status": "not_attempted",
+      "tenant": "soc"
+    }
+  ],
+  "schema_version": 1,
+  "status": "failed",
+  "strategies": [
+    "PREVIEW",
+    "RELEASE"
+  ],
+  "summary": {
+    "create": 0,
+    "delete": 0,
+    "disable": 0,
+    "failed": 0,
+    "not_attempted": 4,
+    "platforms": 1,
+    "seconds": 0.0,
+    "skipped": 0,
+    "tenants": 1,
+    "unchanged": 0,
+    "update": 0,
+    "upsert": 0
+  }
+}
+
+━━━ stderr · json, 1 lines
+{
+  "error": "Cannot reach elastic tenant '***' at ***: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
+  "event": "elastic_tenant_deployment_failed",
+  "level": "critical",
+  "tenant": "***",
+  "timestamp": "0000-00-00 00:00:00"
+}

@@ -1,0 +1,164 @@
+# cargo-deny (https://embarkstudios.github.io/cargo-deny/): the Rust
+# workspace's supply-chain gate (#843). `cargo deny check` runs on every pull
+# request in ci.yml's `deny` job, with the version CI pins
+# (docs/internal/supply-chain.md says why this file says what it says).
+#
+# Scope: the workspace in the root Cargo.toml and its Cargo.lock, for every
+# target. `fuzz/` (its own workspace and lock, never distributed) is checked
+# by the same job with this file: `cargo deny --manifest-path fuzz/Cargo.toml
+# check advisories bans sources`. Its licences are not: nothing from fuzz/ is
+# shipped. The crate that reserves `opentide` on crates.io
+# (publishing/placeholders/crates/opentide, its own workspace and lock) is
+# published, so the job runs every check on it.
+
+[graph]
+# Every target a wheel, a binary or a WebAssembly artifact is built for: an
+# empty list means all of them, so a dependency behind `cfg(windows)` or
+# `cfg(target_arch = "wasm32")` is gated too.
+targets = []
+all-features = true
+
+[output]
+feature-depth = 1
+
+# RustSec (https://rustsec.org). A vulnerability, an unsound crate, a yanked
+# version and an unmaintained crate all fail the check; each exception below
+# has its reason and the issue that removes it.
+[advisories]
+db-urls = ["https://github.com/rustsec/advisory-db"]
+version = 2
+yanked = "deny"
+unmaintained = "all"
+unsound = "all"
+# An exception is an entry here with its reason and its follow-up issue
+# (docs/internal/supply-chain.md). RUSTSEC-2024-0449 (unsafe-libyaml,
+# through serde_yaml) went with serde_yaml (#850).
+ignore = [
+    # chrono is unmaintained (no vulnerability, no safe upgrade). Not a direct
+    # dependency: it comes through rmcp 3.9 and schemars 1.2. #1513 removes it.
+    { id = "RUSTSEC-2026-0543", reason = "chrono unmaintained; transitive through rmcp and schemars; #1513" },
+    # humantime wraps chrono; it comes only through trycmd, a dev-dependency.
+    { id = "RUSTSEC-2026-0542", reason = "humantime unmaintained; dev-only through trycmd; #1513" },
+]
+
+# Licences of what we distribute. opentide is EUPL-1.2; every crate compiled
+# into the wheel, the npm packages or the binaries must be under a licence
+# that lets us distribute it with EUPL-1.2 code. The list is about.toml's
+# (cargo-about renders THIRD-PARTY-LICENSES.html from it for each release),
+# so the two cannot disagree: tests/test_ci/test_workflows.py checks it.
+#
+# Policy (maintainer, #952): a permissive open-source licence (MIT, MIT-0,
+# Apache-2.0, BSD, ISC, Zlib, CC0, CDLA-Permissive, Unicode, BSL-1.0 and the
+# like) goes on this list, for every crate, never as a per-crate exception.
+# A copyleft (GPL, LGPL, MPL, AGPL, EPL) or field-of-use-restricted licence
+# needs a maintainer's decision. docs/internal/supply-chain.md says why.
+[licenses]
+version = 2
+allow = [
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "MIT",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "ISC",
+  "Unicode-3.0",
+  "Unicode-DFS-2016",
+  "Zlib",
+  "EUPL-1.2",
+  "CC0-1.0",
+  "MIT-0",
+  "CDLA-Permissive-2.0",
+]
+confidence-threshold = 0.93
+# Only crates we ship need a licence on this list. dev-dependencies (test
+# tools) never leave a checkout. Build dependencies (cc) run at build time
+# and are not linked in, as about.toml's ignore-build-dependencies says.
+include-dev = false
+include-build = false
+unused-allowed-license = "allow"
+
+[licenses.private]
+# Unpublished members (publish = false: xtask, the binding in bindings/python/,
+# opentide-wasm) are skipped. The published opentide-* crates are checked
+# like any other and pass as EUPL-1.2.
+ignore = true
+
+[bans]
+multiple-versions = "deny"
+wildcards = "deny"
+allow-wildcard-paths = true
+highlight = "all"
+workspace-default-features = "allow"
+external-default-features = "allow"
+deny = [
+  # TLS is rustls, never OpenSSL: one TLS stack, no system library to link
+  # on every platform the wheel targets, and per-tenant CA settings handled
+  # in one place (plan §3.9). The connectors (UC-4) bring the first TLS.
+  { crate = "openssl-sys", reason = "TLS is rustls (plan D-8, §3 invariant 9): no OpenSSL to link" },
+  { crate = "openssl", reason = "TLS is rustls (plan D-8, §3 invariant 9): no OpenSSL to link" },
+  { crate = "native-tls", reason = "TLS is rustls (plan D-8, §3 invariant 9): no OpenSSL to link" },
+]
+# The crates we ship have one version each today (dev-dependencies are left
+# out, cargo-deny's default: test tools never leave a checkout; the ones they
+# duplicate are listed in docs/internal/supply-chain.md). A second version
+# fails the check until it is removed, or skipped here with its reason.
+skip = [
+  # gix 0.29-era crates (the release that dropped faster-hex 0.10 and with it
+  # heapless 0.8, #1675) read dates with jiff 1 and lock with parking_lot 0.13.
+  # We stay on jiff 0.2: the `opentide` facade re-exports `jiff::Timestamp`, so
+  # jiff 1 is a facade major (cargo-semver-checks), and crossterm, prodash and
+  # jsonschema are still on parking_lot 0.12. Drop these when the facade moves
+  # to jiff 1 and those crates to parking_lot 0.13.
+  { crate = "jiff@1.0.2", reason = "gix-date uses jiff 1; the facade re-exports jiff 0.2's Timestamp, so moving is a facade major; #1675" },
+  { crate = "jiff-core@1.0.1", reason = "jiff 1 (gix-date) uses jiff-core 1; jiff 0.2 uses 0.1; #1675" },
+  { crate = "parking_lot@0.13.0", reason = "gix-hashtable, gix-odb and gix-tempfile use parking_lot 0.13; crossterm, prodash and jsonschema still use 0.12; #1675" },
+  { crate = "parking_lot_core@0.10.0", reason = "parking_lot 0.13 (gix) uses parking_lot_core 0.10; parking_lot 0.12 uses 0.9; #1675" },
+  { crate = "lock_api@0.5.0", reason = "parking_lot 0.13 (gix) uses lock_api 0.5; parking_lot 0.12 uses 0.4; #1675" },
+  { crate = "redox_syscall@0.9.5", reason = "parking_lot_core 0.10 (gix) uses redox_syscall 0.9 on Redox; parking_lot_core 0.9 uses 0.5; #1675" },
+  # xtask (never published or shipped) needs rustix for the golden runner's
+  # pseudo-terminals, and tempfile: both bring bitflags 2, beside the bitflags
+  # 1 of lsp-types (fluent-uri 0.1).
+  { crate = "bitflags@2.13.2", reason = "xtask (rustix, tempfile), opentide-workspace (tempfile; inotify through notify, `--watch`) and opentide-cli (inquire and crossterm, the setup wizard's prompts) use bitflags 2; lsp-types 0.97 (directly and through fluent-uri 0.1, the latest lsp-types) and portable-pty 0.9 (a dev-dependency) still use bitflags 1" },
+  # xtask's schema comparison (UC-1.8b, #900; `cargo xtask codegen --check`)
+  # validates the corpora with the jsonschema crate, which brings these second
+  # versions. Only xtask (tooling, never shipped) depends on jsonschema.
+  { crate = "fluent-uri@0.4.1", reason = "only xtask (tooling, never shipped) uses it, through jsonschema's referencing; the shipped crates use fluent-uri 0.1 through lsp-types" },
+  { crate = "getrandom@0.3.4", reason = "only xtask (tooling, never shipped) uses it, through jsonschema's ahash; the shipped crates use getrandom 0.4 through gix" },
+  { crate = "r-efi@5.3.0", reason = "only xtask (tooling, never shipped) uses it, through getrandom 0.3 (jsonschema's ahash), on UEFI targets" },
+  # The connectors' HTTP client (UC-4.1, #831): ring 0.17, rustls's crypto
+  # provider (chosen over aws-lc-rs: no C build, no OpenSSL licence), still
+  # uses getrandom 0.2 and, on Windows, windows-sys 0.52.
+  { crate = "getrandom@0.2.17", reason = "ring 0.17 (rustls's provider for the connectors, UC-4.1) uses getrandom 0.2; gix uses 0.4" },
+  { crate = "windows-sys@0.52.0", reason = "ring 0.17 (rustls's provider for the connectors, UC-4.1) uses windows-sys 0.52 on Windows" },
+  # jsonwebtoken 9 (the Google SecOps service-account JWT, opentide-connectors)
+  # is on base64 0.22, and so is wiremock 0.6 (the recorded-HTTP harness: test
+  # tooling); our crates and reqwest's hyper-util are on 0.23. jsonwebtoken 10
+  # and later are on 0.23 but dropped the ring backend (aws-lc-rs or
+  # RustCrypto's rsa only). Drop this when the JWT moves off jsonwebtoken 9.
+  { crate = "base64@0.22.1", reason = "jsonwebtoken 9.3 (the Google SecOps JWT, on ring; 10+ has no ring backend) and wiremock 0.6 (test tooling) use base64 0.22; opentide's crates and reqwest's hyper-util use 0.23" },
+  # rcgen (opentide-cassette's test certificates: test tooling, never shipped)
+  # is on pem 4; jsonwebtoken 9 (the Google SecOps service-account JWT, on ring,
+  # UC-4; opentide-connectors) ships pem 3. Drop this when jsonwebtoken's ring
+  # backend moves to pem 4.
+  { crate = "pem@4.0.0", reason = "only opentide-cassette (test tooling, never shipped) uses it, through rcgen 0.14; jsonwebtoken 9 (the shipped Google SecOps JWT, on ring) uses pem 3" },
+  # Two proc macros convert identifiers' case at compile time: crossterm's
+  # derive_more-impl (opentide-cli's setup wizard) with convert_case 0.10, and
+  # napi-derive (the Node binding, UC-5.3) with 0.12.
+  { crate = "convert_case@0.10.0", reason = "only derive_more-impl 2.1 (crossterm, opentide-cli's setup wizard) uses it, a proc macro run at compile time; napi-derive (the Node binding's TypeScript names) uses convert_case 0.12. Neither links into an artifact" },
+  { crate = "syn@2.0.119", reason = "garde_derive 0.23 (opentide-schema's validation derive, plan D-2) depends on syn 2 and no garde release uses syn 3 yet, as do derive_more-impl, jiff-static, strum_macros, tracing-attributes, zerocopy-derive, logos-codegen, windows-implement and windows-interface and the jni macros; clap_derive, darling and the rest use syn 3. Drop this when those move" },
+  # rowan 0.17 (the latest; the lossless trees of our parser crates, and of
+  # yara-x-parser 1.23, opentide-yara's verdict parser, pinned =1.23.0) is on
+  # hashbrown 0.14 and rustc-hash 1; yara-x-parser brings itertools 0.15, a
+  # release past ratatui's.
+  { crate = "hashbrown@0.14.5", reason = "rowan 0.17 (our parser crates, and yara-x-parser 1.23) uses hashbrown 0.14; indexmap and the rest of the graph use 0.17" },
+  { crate = "rustc-hash@1.1.0", reason = "rowan 0.17 (our parser crates, and yara-x-parser 1.23) uses rustc-hash 1; the rest of the graph uses 2" },
+  { crate = "itertools@0.14.0", reason = "ratatui-core 0.1 (opentide-cli's tui) uses itertools 0.14; yara-x-parser 1.23 (opentide-yara) uses 0.15" },
+]
+
+# Every crate comes from crates.io. A git or another registry's crate fails
+# until it is named here with its reason.
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []

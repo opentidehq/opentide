@@ -1,0 +1,3739 @@
+# The command line's snapshot cases (tests/golden/README.md): what
+# crates/opentide-cli/tests/cli_snapshots.rs runs and holds to its snapshots.
+# Reviewed like code; the snapshots are generated from it and never edited.
+#
+# Each [[case]] runs in every mode of `modes` against every fixture of
+# `fixtures` (the defaults below unless it sets its own). `args` follow
+# `opentide`; `{name}` is a variable of the fixture, and a fixture without it
+# is left out of that case. json mode puts --json right after `opentide`.
+#
+# `modes` defaults to json alone: the `--json` contract, the files a command
+# writes and its exit code are what scripts and pipelines read, and what the
+# snapshots hold. The text modes' wording is held by the renderers' and the
+# commands' own tests; the cases at the end of this file run a few cases in a
+# text mode (a rendering set, and behaviours only a text mode has).
+#
+# A fixture's or a case's `view` is `full` (the default: the streams and every
+# file written, as they are), `streams` (the streams, and the paths written
+# without their text: a text-mode run of a command whose generated files its
+# json-mode case holds) or `diagnostics` (the generated corpora: the exit code,
+# the diagnostics as code, severity, file, line and column, counts and the paths
+# written; no message text, frame or file body).
+#
+# `same_as = "<variant>"` holds no snapshot: the case must do exactly what that
+# variant does in json mode on the same fixture (a flag or a variable that
+# changes nothing, as `commands`' 390 KB document under `DEBUG=*`).
+
+[defaults]
+modes = ["json"]
+fixtures = ["tide-corpus", "vscode", "heavy-small", "empty", "none"]
+timeout_secs = 180
+
+[fixtures.tide-corpus]
+kind = "tide-corpus"
+source = "tests/fixtures/tide_corpus/current"
+about = "tests/fixtures/tide_corpus, in the .opentide/ layout the Python suite gives it"
+vars = { threat = "00000000-0000-4000-8001-000000000001", objective = "00000000-0000-4000-8002-000000000001", signal = "00000000-0000-4000-8099-000000000001", rule = "00000000-0000-4000-8003-000000000001", rule_file = "objects/rules/rule-0001-sentinel-kql.yaml" }
+
+[fixtures.tide-corpus-lint-code-note]
+kind = "tide-corpus"
+source = "tests/fixtures/tide_corpus/current"
+about = "tide-corpus with `[filenames.codes] filename_mismatch = \"info\"` in lint.toml (an `edits` entry with an empty `find`): the corpus's file names are not the slugs of its names, a warning `lint --strict` fails on (`strict` case), and with the one code set to a note the same run passes while the filenames check still runs (OT-5)"
+edits = [{ path = ".opentide/configurations/lint.toml", find = "", replace = "[filenames.codes]\nfilename_mismatch = \"info\"\n" }]
+
+[fixtures.tide-corpus-lint-unknown-code]
+kind = "tide-corpus"
+source = "tests/fixtures/tide_corpus/current"
+about = "tide-corpus with a misspelt code in lint.toml (`[queries.codes] kql_unknown_tabel`): `lint` refuses the run, exit 2, naming the key and the nearest code (#1802)"
+edits = [{ path = ".opentide/configurations/lint.toml", find = "", replace = "[queries.codes]\nkql_unknown_tabel = \"off\"\n" }]
+
+[fixtures.tide-corpus-lint-engine-warning]
+kind = "tide-corpus"
+source = "tests/fixtures/tide_corpus/current"
+about = "tide-corpus whose Sentinel rule searches every table (`search`), a warning of the queries check, with lint.toml raising that code (`[queries.codes]`): the engine's finding takes the table's severity (#1802)"
+edits = [{ path = "Objects/Detection Rules/rule-0001-sentinel-kql.yaml", find = "      SecurityEvent\n      | where EventID == 4688\n      | take 1\n", replace = "      search \"mimikatz\"\n      | take 1\n" }, { path = ".opentide/configurations/lint.toml", find = "", replace = "[queries.codes]\nkql_unscoped_search = \"error\"\n" }]
+
+[fixtures.tide-corpus-lint-retired-code]
+kind = "tide-corpus"
+source = "tests/fixtures/tide_corpus/current"
+about = "tide-corpus with a retired code in lint.toml (`[filenames.codes] filename_slug`): `lint` accepts it, exit 0, and says so in `warnings` (#1802)"
+edits = [{ path = ".opentide/configurations/lint.toml", find = "", replace = "[filenames.codes]\nfilename_slug = \"off\"\n" }]
+
+[fixtures.tide-corpus-folders]
+kind = "tide-corpus"
+source = "tests/fixtures/tide_corpus/current"
+about = "tide-corpus with `objects/threats`, `objects/objectives` and `objects/rules` real folders (copies of `Objects/`), not links to them: `migrate vocab-scope` enters no link to a folder, so over the links it scans no file"
+
+[fixtures.tide-corpus-legacy-ids]
+kind = "tide-corpus"
+source = "tests/fixtures/tide_corpus/current"
+about = "tide-corpus with vendor rule ids still on its rules: Microsoft Defender (a tenant key and a bundle), CrowdStrike and SentinelOne ids, which `deploy migrate-state` moves into deployment state shards, and a Sentinel id, which it drops as unused"
+edits = [
+  { path = "Objects/Detection Rules/rule-0002-defender-kql.yaml", find = "\n  microsoft_defender:\n    enabled: true\n", replace = "\n  microsoft_defender:\n    rule_id::prod: 12345\n    rule_id_bundle:\n      lab: '678'\n      # staging comes later\n    enabled: true\n" },
+  { path = "Objects/Detection Rules/rule-0006-crowdstrike-deploy-only.yaml", find = "\n  crowdstrike:\n    enabled: true\n", replace = "\n  crowdstrike:\n    enabled: true\n    rule_id:\n      us-1: ab12cd34\n" },
+  { path = "Objects/Detection Rules/rule-0004-sentinel-one-s1ql.yaml", find = "\n  sentinel_one:\n    enabled: true\n", replace = "\n  sentinel_one:\n    rule_id::soc: 901\n    enabled: true\n" },
+  { path = "Objects/Detection Rules/rule-0001-sentinel-kql.yaml", find = "\n  sentinel:\n    enabled: true\n", replace = "\n  sentinel:\n    rule_id::soc: 9f2c\n    enabled: true\n" },
+]
+
+[fixtures.tide-corpus-legacy-id-error]
+kind = "tide-corpus"
+source = "tests/fixtures/tide_corpus/current"
+about = "tide-corpus with a SentinelOne rule id written with a leading zero, which `deploy migrate-state` refuses (exit 1) and leaves on the rule, beside a CrowdStrike id it moves"
+edits = [
+  { path = "Objects/Detection Rules/rule-0004-sentinel-one-s1ql.yaml", find = "\n  sentinel_one:\n    enabled: true\n", replace = "\n  sentinel_one:\n    rule_id::soc: '0901'\n    enabled: true\n" },
+  { path = "Objects/Detection Rules/rule-0006-crowdstrike-deploy-only.yaml", find = "\n  crowdstrike:\n    enabled: true\n", replace = "\n  crowdstrike:\n    enabled: true\n    rule_id::us-1: ab12cd34\n" },
+]
+
+[fixtures.tide-corpus-cve]
+kind = "tide-corpus"
+source = "tests/fixtures/tide_corpus/current"
+about = "tide-corpus with CVE references on its threat (one written in lower case, one repeated), which `validate --check cve` looks up on Vulnerability-Lookup: without a network every lookup fails, a warning per threat"
+edits = [{ path = "Objects/Threat Vectors/threat-0001-simulated-actor.yaml", find = "\nthreat:\n  description: Simulated threat actor for CLI E2E corpus\n", replace = "\nthreat:\n  description: Simulated threat actor for CLI E2E corpus\n  cve:\n    - cve-2024-3094\n    - GHSA-RXWQ-X6H5-QC8M\n    - CVE-2024-3094\n" }]
+
+[fixtures.tide-corpus-typo]
+kind = "tide-corpus"
+source = "tests/fixtures/tide_corpus/current"
+about = "tide-corpus with one typo `validate --fix` repairs in place (`severity: high`)"
+vars = { rule_file = "objects/rules/rule-0001-sentinel-kql.yaml" }
+edits = [{ path = "Objects/Detection Rules/rule-0001-sentinel-kql.yaml", find = "\nseverity: High\n", replace = "\nseverity: high\n" }]
+
+[fixtures.tide-corpus-bad-values]
+kind = "tide-corpus"
+source = "tests/fixtures/tide_corpus/current"
+about = "tide-corpus with values the models do not take: CrowdStrike `trigger: sometimes` and `severity: low`, SentinelOne `treat_as_threat: maybe`, Microsoft Defender `alert.severity: Severe` (#1751: deploy refuses both severities)"
+edits = [{ path = "Objects/Detection Rules/rule-0006-crowdstrike-deploy-only.yaml", find = "      trigger: verbose\n", replace = "      trigger: sometimes\n" }, { path = "Objects/Detection Rules/rule-0006-crowdstrike-deploy-only.yaml", find = "      outcome: detection\n", replace = "      outcome: detection\n      severity: low\n" }, { path = "Objects/Detection Rules/rule-0002-defender-kql.yaml", find = "      title: Defender KQL Rule\n", replace = "      title: Defender KQL Rule\n      severity: Severe\n" }, { path = "Objects/Detection Rules/rule-0004-sentinel-one-s1ql.yaml", find = "      treat_as_threat: Malicious\n", replace = "      treat_as_threat: maybe\n" }]
+
+[fixtures.tide-corpus-splunk-advanced]
+kind = "tide-corpus"
+source = "tests/fixtures/tide_corpus/current"
+about = "tide-corpus with an `advanced` table on its Splunk rule: a custom alert action's parameters, which 0.21.0 to 0.23.0 refused as a splunk::2.x key and 0.24.0 validates and deploys again"
+edits = [{ path = "Objects/Detection Rules/rule-0003-splunk-spl.yaml", find = "\n    query: index=main | head 1\n", replace = "\n    query: index=main | head 1\n    advanced:\n      action.misp_alert_create_event.param.title: \"Canary token triggered\"\n      action.misp_alert_create_event.param.distribution: 0\n      action.misp_alert_create_event.param.publish_on_creation: false\n      action.misp_alert_create_event.param.tags:\n" }]
+
+[fixtures.tide-corpus-legacy-text-id]
+kind = "tide-corpus"
+source = "tests/fixtures/tide_corpus/current"
+about = "tide-corpus with a legacy `rule_id::<tenant>` key whose id is text on its Sysdig rule, a model that refuses unknown keys: 0.23.0's validate crashed reading the tenant as a schema version (#913)"
+edits = [{ path = "Objects/Detection Rules/rule-0013-sysdig-falco.yaml", find = "\n  sysdig:\n    enabled: true\n", replace = "\n  sysdig:\n    rule_id::prod: '12'\n    enabled: true\n" }]
+
+[fixtures.tide-corpus-compile-missing-field]
+kind = "tide-corpus"
+source = "tests/fixtures/tide_corpus/current"
+about = "tide-corpus with its Sentinel rule's `grouping.alert` deleted: the schema accepts it and the Sentinel compiler refuses it, so validate's compile check reports `compile_missing_field` (UC-2.2, #817)"
+edits = [{ path = "Objects/Detection Rules/rule-0001-sentinel-kql.yaml", find = "\n      alert:\n        enabled: false\n", replace = "\n" }]
+
+[fixtures.tide-corpus-compile-invalid-value]
+kind = "tide-corpus"
+source = "tests/fixtures/tide_corpus/current"
+about = "tide-corpus with `alert.suppression: true` on its Sentinel rule, which the Sentinel compiler refuses: validate's compile check reports `compile_invalid_value` (UC-2.2, #817)"
+edits = [{ path = "Objects/Detection Rules/rule-0001-sentinel-kql.yaml", find = "      suppression: false\n", replace = "      suppression: true\n" }]
+
+[fixtures.tide-corpus-compile-empty-block]
+kind = "tide-corpus"
+source = "tests/fixtures/tide_corpus/current"
+about = "tide-corpus with its Sentinel rule's `response` empty and no `alert.severity`, so the Sentinel compiler has no alert severity to read: validate's compile check reports `compile_empty_block` (UC-2.2, #817)"
+edits = [{ path = "Objects/Detection Rules/rule-0001-sentinel-kql.yaml", find = "\nresponse:\n  alert_severity: High\n", replace = "\nresponse:\n" }]
+
+[fixtures.tide-corpus-compile-invalid-rule]
+kind = "tide-corpus"
+source = "tests/fixtures/tide_corpus/current"
+about = "tide-corpus with `scheduling.frequency: hourly` on its Sentinel rule: the oracle reports `compile_invalid_rule` from validate's compile check, the Rust model `schema_validation` on the field (KG-01, `sentinel-durations`)"
+edits = [{ path = "Objects/Detection Rules/rule-0001-sentinel-kql.yaml", find = "      frequency: PT1H\n", replace = "      frequency: hourly\n" }]
+
+[fixtures.tide-corpus-compile-elastic-severity]
+kind = "tide-corpus"
+source = "tests/fixtures/tide_corpus/current"
+about = "tide-corpus with `severity: {default: high}` and no `mapping` on its Elastic rule: the oracle's Elastic compiler fails on the missing mapping (`compile_failed`, KG-09), the Rust one sends no severity mapping"
+edits = [{ path = "Objects/Detection Rules/rule-0009-elastic-kql.yaml", find = "    scheduling:\n      interval: 5m\n", replace = "    severity:\n      default: high\n    scheduling:\n      interval: 5m\n" }]
+
+[fixtures.tide-corpus-compile-hidden]
+kind = "tide-corpus"
+source = "tests/fixtures/tide_corpus/current"
+about = "tide-corpus-compile-missing-field with an unrelated error in another rule (`tlp: clearr`): the compile check runs only when the run has no other error, so validate reports the `vocab_unknown` alone (KG-10)"
+edits = [{ path = "Objects/Detection Rules/rule-0001-sentinel-kql.yaml", find = "\n      alert:\n        enabled: false\n", replace = "\n" }, { path = "Objects/Detection Rules/rule-0002-defender-kql.yaml", find = "  tlp: clear\n", replace = "  tlp: clearr\n" }]
+
+[fixtures.vscode-unscoped]
+kind = "copy"
+source = "tests/golden/fixtures/vscode-workspace"
+about = "vscode with signal entities written without their stage or in the wrong case, which `migrate vocab-scope --apply` rewrites in place"
+edits = [{ path = "objects/objectives/detect-lsass-access.yaml", find = "\n  tlp: amber\n", replace = "\n  tlp: amber\nobjective:\n  signals:\n    - name: LSASS handle\n      entities:\n        - hostname  # no stage\n        - 'host::command line'\n    - name: Dump\n      entities: [Process, Host::Hostname]\n" }]
+
+[fixtures.vscode-folded-comment]
+kind = "copy"
+source = "tests/golden/fixtures/vscode-workspace"
+about = "vscode with the Sentinel query written as a folded `>-` block holding a `//` line, which comments out the filter after it (`query_folded_comment`, B16)"
+edits = [{ path = "detections/rules/custom-folder-rule.yaml", find = "    query: |\n      DeviceProcessEvents\n", replace = "    query: >-\n      DeviceProcessEvents\n      // procdump only\n" }]
+
+[fixtures.vscode-config-parse]
+kind = "copy"
+source = "tests/golden/fixtures/vscode-workspace"
+about = "vscode with a platform TOML whose `[platform` header is never closed: `validate`, `lint` and `generate` stop on it with `config_parse`, the file's place and its diagnostic (#1659)"
+edits = [{ path = ".opentide/configurations/platforms/sentinel.toml", find = "", replace = "enabled = true\n[platform\n" }]
+
+[fixtures.vscode-long-query]
+kind = "copy"
+source = "tests/golden/fixtures/vscode-workspace"
+about = "vscode with `long.lucene`, a 807-character Lucene query on one line whose `(` never closes: the frame shows the line in part (B22)"
+edits = [{ path = "long.lucene", find = "", replace = "(process.name:proc00.exe OR process.name:proc01.exe OR process.name:proc02.exe OR process.name:proc03.exe OR process.name:proc04.exe OR process.name:proc05.exe OR process.name:proc06.exe OR process.name:proc07.exe OR process.name:proc08.exe OR process.name:proc09.exe OR process.name:proc10.exe OR process.name:proc11.exe OR process.name:proc12.exe OR process.name:proc13.exe OR process.name:proc14.exe OR process.name:proc15.exe OR process.name:proc16.exe OR process.name:proc17.exe OR process.name:proc18.exe OR process.name:proc19.exe OR process.name:proc20.exe OR process.name:proc21.exe OR process.name:proc22.exe OR process.name:proc23.exe OR process.name:proc24.exe OR process.name:proc25.exe OR process.name:proc26.exe OR process.name:proc27.exe OR process.name:proc28.exe OR process.name:proc29.exe\n" }]
+
+[fixtures.vscode-ambiguous]
+kind = "copy"
+source = "tests/golden/fixtures/vscode-workspace"
+about = "vscode with a signal entity defined under several stages (`Account`), which `migrate vocab-scope` leaves for a person (exit 2), beside one it rewrites (`Process`)"
+edits = [{ path = "objects/objectives/detect-lsass-access.yaml", find = "\n  tlp: amber\n", replace = "\n  tlp: amber\nobjective:\n  signals:\n    - name: LSASS handle\n      entities:\n        - Account\n        - Process\n" }]
+
+[fixtures.vscode-docs-folder]
+kind = "copy"
+source = "tests/golden/fixtures/vscode-workspace"
+about = "vscode with the legacy `[paths.core]` `docs_folder` set and no documentation.toml `output`: a paths.toml both engines refuse in the step of every `generate` command (#936, #946), and which `setup ci` does not read"
+edits = [{ path = ".opentide/configurations/paths.toml", find = "[paths.objects]\n", replace = "[paths.core]\ndocs_folder = \"site\"\n\n[paths.objects]\n" }]
+
+[fixtures.vscode-own-pipeline]
+kind = "copy"
+source = "tests/golden/fixtures/vscode-workspace"
+about = "vscode with a `.gitlab-ci.yml` of the user's own (no `# Generated by opentide` line): `setup ci gitlab` and `setup --ci gitlab` keep it and warn, `--plan` lists it as `skip` (#1656)"
+edits = [{ path = ".gitlab-ci.yml", find = "", replace = "stages: [test]\ntest:\n  script: [make test]\n" }]
+
+[fixtures.vscode]
+kind = "copy"
+source = "tests/golden/fixtures/vscode-workspace"
+about = "the VS Code extension's fixture workspace, vendored (fixtures/vscode-workspace.SOURCE.toml)"
+vars = { objective = "04149254-2a5b-4c1e-9f0e-3c1d2b5a6e7f", rule = "ff8bf67e-64dc-460d-b5df-48db643f3560", rule_file = "objects/rules/suspicious-lsass-access.yaml" }
+
+[fixtures.heavy-small]
+kind = "generated"
+view = "diagnostics"
+argv = ["cargo", "xtask", "corpus", "generate", "--seed", "1", "--threats", "30", "--objectives", "30", "--rules", "50", "--out", "{out}"]
+about = "UC-0.6's heavy workspace generator, seed 1: 30 threats, 30 objectives, 50 rules; generated at record and check time, never committed"
+
+[fixtures.fault]
+kind = "generated"
+view = "diagnostics"
+argv = ["cargo", "xtask", "corpus", "faults", "--out", "{out}"]
+about = "UC-0.6's fault workspace: seed 1, 120 threats, 60 objectives, 600 rules, every fault kind not marked isolated applied; generated at record and check time, never committed. Its outputs are recorded as they are, not asserted against the fault manifest"
+
+[fixtures.fault-lint]
+kind = "generated"
+view = "diagnostics"
+argv = ["cargo", "xtask", "corpus", "faults", "--out", "{out}"]
+about = "`fault` with lint's recommended check off (`.opentide/configurations/lint.toml`). opentide 0.28.1's recommended check (#1028) builds the editor schemas from the workspace's configuration and crashes on the fault workspace's invalid configuration files (#1081); with it off, every other lint check runs on the fault workspace and compares. `lint/json/fault/recommended-crash` records the crash"
+edits = [{ path = ".opentide/configurations/lint.toml", find = "", replace = "[recommended]\nenabled = false\n" }]
+
+[fixtures.setup-merge]
+kind = "copy"
+source = "tests/golden/fixtures/setup-merge"
+about = "a workspace whose files `setup` merges into: a .vscode/mcp.json with a byte-order mark, comments and a trailing comma, a .vscode/settings.json with a comment and the yaml.schemas mapping earlier `setup vscode` releases wrote, and a sentinel.toml with `enabled = false`"
+
+[fixtures.skills-merge]
+kind = "copy"
+source = "tests/golden/fixtures/skills-merge"
+about = "a repository with its own agent files, which `setup skills` installs over (UC-4.4d): a CLAUDE.md with a byte-order mark and CRLF line endings, an AGENTS.md and Copilot instructions of its own, a .claude/settings.json with a comment and another plugin, a harness copy holding the team's notes beside an older SKILL.md, and an .agents/skills tree holding a file an older version shipped"
+
+[fixtures.tenants]
+kind = "copy"
+source = "tests/golden/fixtures/tenants"
+about = "a workspace whose Defender, SentinelOne, CrowdStrike, Elastic and HarfangLab tenants are the stand-in tenants of tests/cassettes/<platform>/tenant.py, their credentials `$NAME`s the cases set: the cassette cases, and the `unreachable` cases, which set a credential and get no cassette (UC-4.2c, #832, #834)"
+
+[fixtures.live-tenants]
+kind = "copy"
+source = "tests/golden/fixtures/live-tenants"
+about = "the `tenants` workspace with a rule or more per platform whose tenants check queries (Splunk, Carbon Black Cloud, Elastic, Microsoft Defender, SentinelOne, Sentinel), each sent to the stand-in tenants of tests/cassettes/<platform>/tenant.py: `validate query --live`'s cases (UC-4.6)"
+
+[fixtures.deploy-tenants]
+kind = "copy"
+source = "tests/golden/fixtures/deploy-tenants"
+about = "the `tenants` workspace with Sysdig's stand-in tenant, tenants that take PREVIEW and RELEASE runs, rules to create, update, retire and refuse on each platform, and the deployment state of the rules already deployed: the cases of a deploy that sends (UC-4.6)"
+
+[fixtures.deploy-tenants-sysdig]
+kind = "copy"
+source = "tests/golden/fixtures/deploy-tenants"
+about = "deploy-tenants with every platform but Sysdig disabled: a deploy without --platform sends to the workspace's enabled platforms, Sysdig's stand-in alone, so the `golden/deploy-sysdig` cassette serves it (UC-4.4c)"
+edits = [{ path = ".opentide/configurations/platforms/carbon_black_cloud.toml", find = "[platform]\nenabled = true\n", replace = "[platform]\nenabled = false\n" }, { path = ".opentide/configurations/platforms/crowdstrike.toml", find = "[platform]\nenabled = true\n", replace = "[platform]\nenabled = false\n" }, { path = ".opentide/configurations/platforms/microsoft_defender.toml", find = "[platform]\nenabled = true\n", replace = "[platform]\nenabled = false\n" }, { path = ".opentide/configurations/platforms/elastic.toml", find = "[platform]\nenabled = true\n", replace = "[platform]\nenabled = false\n" }, { path = ".opentide/configurations/platforms/harfanglab.toml", find = "[platform]\nenabled = true\n", replace = "[platform]\nenabled = false\n" }, { path = ".opentide/configurations/platforms/sentinel.toml", find = "[platform]\nenabled = true\n", replace = "[platform]\nenabled = false\n" }, { path = ".opentide/configurations/platforms/sentinel_one.toml", find = "[platform]\nenabled = true\n", replace = "[platform]\nenabled = false\n" }, { path = ".opentide/configurations/platforms/splunk.toml", find = "[platform]\nenabled = true\n", replace = "[platform]\nenabled = false\n" }]
+
+[fixtures.deploy-push]
+kind = "copy"
+source = "tests/golden/fixtures/deploy-tenants"
+about = "`deploy-tenants` as a git checkout whose last commit, a push, changed a rule in STAGING: the rule file a RELEASE deploy on a push in CI promotes (UC-4.6c)"
+pushed = [{ path = "objects/rules/splunk-a-create.yaml", find = "description: A rule the splunk", replace = "description: A changed rule the splunk" }]
+
+[fixtures.deploy-push-production]
+kind = "copy"
+source = "tests/golden/fixtures/deploy-tenants"
+about = "`deploy-tenants` as a git checkout whose last commit, a push, changed a rule already in PRODUCTION: nothing to promote (UC-4.6c)"
+pushed = [{ path = "objects/rules/crowdstrike-b-update.yaml", find = "description: A rule the crowdstrike", replace = "description: A changed rule the crowdstrike" }]
+
+[fixtures.deploy-push-anchor]
+kind = "copy"
+source = "tests/golden/fixtures/deploy-tenants"
+about = "`deploy-tenants` as a git checkout whose last commit, a push, wrote a STAGING rule's status as an anchor: a status promotion leaves alone, with a warning (UC-4.6c)"
+pushed = [{ path = "objects/rules/splunk-a-create.yaml", find = "    status: STAGING\n", replace = "    status: &status STAGING\n" }]
+
+[fixtures.deploy-push-no-target]
+kind = "copy"
+source = "tests/golden/fixtures/deploy-tenants"
+about = "`deploy-push` with a `deployment.toml` whose promotion_target is a number, not a status name: the promotion ends the run as an invalid target does (UC-6.2e)"
+edits = [{ path = ".opentide/configurations/deployment.toml", find = "", replace = "[promotion]\nenabled = true\npromotion_target = 1\n" }]
+pushed = [{ path = "objects/rules/splunk-a-create.yaml", find = "description: A rule the splunk", replace = "description: A changed rule the splunk" }]
+
+[fixtures.deploy-push-key]
+kind = "copy"
+source = "tests/golden/fixtures/deploy-tenants"
+about = "`deploy-tenants` as a git checkout whose last commit, a push, gave a STAGING rule a platform block whose key is a number: the promotion fails the run with the oracle's KeyError (UC-6.2e)"
+pushed = [{ path = "objects/rules/splunk-a-create.yaml", find = "configurations:\n  splunk:\n", replace = "configurations:\n  1:\n    status: STAGING\n  splunk:\n" }]
+
+[fixtures.deploy-push-unreadable]
+kind = "copy"
+source = "tests/golden/fixtures/deploy-tenants"
+about = "`deploy-tenants` as a git checkout whose last commit, a push, wrote a STAGING block as a flow mapping, promoted to a status whose name closes one (`LIVE}`): the promoted text does not read back, which fails the run (UC-6.2e)"
+edits = [{ path = ".opentide/configurations/deployment.toml", find = "", replace = "[promotion]\nenabled = true\npromotion_target = \"LIVE}\"\n\n[[statuses]]\nname = \"STAGING\"\ndescription = \"Staging\"\nstrategy = \"PREVIEW\"\n\n[[statuses]]\nname = \"PRODUCTION\"\ndescription = \"Production\"\nstrategy = \"RELEASE\"\n\n[[statuses]]\nname = \"LIVE}\"\ndescription = \"Live\"\nstrategy = \"RELEASE\"\n\n[[statuses]]\nname = \"DISABLED\"\ndescription = \"Disabled\"\nstrategy = \"DISABLEMENT\"\n\n[[statuses]]\nname = \"REMOVED\"\ndescription = \"Removed\"\nstrategy = \"DELETION\"\n" }]
+pushed = [{ path = "objects/rules/splunk-a-create.yaml", find = "configurations:\n  splunk:\n", replace = "configurations:\n  sentinel: {status: STAGING}\n  splunk:\n" }]
+
+[fixtures.deploy-orphan]
+kind = "copy"
+source = "tests/golden/fixtures/deploy-tenants"
+about = "`deploy-tenants` with a deployment state shard whose rule no file holds: a rule deployed to sentinel_one tenant lab, its file since deleted, which `deploy --all` warns about and `--prune` retires (#1713)"
+edits = [{ path = ".opentide/states/deployment/00000000-0000-4000-8047-000000000099.json", find = "", replace = "{\n  \"object_uuid\": \"00000000-0000-4000-8047-000000000099\",\n  \"platforms\": {\n    \"sentinel_one\": {\n      \"lab\": \"1800000000000000099\"\n    }\n  },\n  \"schema\": \"deployment.state::1.0\"\n}\n" }]
+
+[fixtures.share-misp]
+kind = "copy"
+source = "tests/golden/fixtures/share-misp"
+about = "a workspace with three MISP destinations (one enabled to the stand-in of tests/cassettes/misp/tenant.py, one whose paths answer 403, one disabled with a literal key), a threat, an objective and rules to create, update, leave unchanged and skip, and the sharing ledger of what was shared before: `share`'s cases (UC-4.4b)"
+
+[fixtures.share-misp-broken]
+kind = "copy"
+source = "tests/golden/fixtures/share-misp"
+about = "share-misp with a sharing.toml block whose max_tlp is not a TLP name: the `sharing_config` preflight (UC-4.4b)"
+edits = [{ path = ".opentide/configurations/sharing.toml", find = "max_tlp = \"amber\"", replace = "max_tlp = \"purple\"" }]
+
+[fixtures.share-misp-push]
+kind = "copy"
+source = "tests/golden/fixtures/share-misp"
+about = "`share-misp` as a git checkout whose last commit, a push, changed one shared rule: the object `share push --changed` shares (UC-4.4e)"
+pushed = [{ path = "objects/rules/rule-b-update.yaml", find = "  A rule the MISP stand-in receives.\n", replace = "  A rule the MISP stand-in receives, changed by a push.\n" }]
+
+[fixtures.share-misp-push-config]
+kind = "copy"
+source = "tests/golden/fixtures/share-misp"
+about = "`share-misp` as a git checkout whose last commit, a push, changed sharing.toml and no object: nothing for `share push --changed` to share (UC-4.4e)"
+pushed = [{ path = ".opentide/configurations/sharing.toml", find = "max_tlp = \"clear\"", replace = "max_tlp = \"green\"" }]
+
+[fixtures.deploy-first-commit]
+kind = "copy"
+source = "tests/golden/fixtures/deploy-tenants"
+about = "`deploy-tenants` as a git checkout of one commit, a new repository's first push: every rule file is new, so a deploy without --all reads them all (#1662)"
+pushed = []
+
+[fixtures.share-misp-first-commit]
+kind = "copy"
+source = "tests/golden/fixtures/share-misp"
+about = "`share-misp` as a git checkout of one commit, a new repository's first push: every object is new to `share push --changed` (#1662)"
+pushed = []
+
+[fixtures.empty]
+kind = "skeleton"
+dirs = [".opentide"]
+about = "an empty workspace: .opentide/ and nothing else"
+
+[fixtures.none]
+kind = "skeleton"
+about = "no workspace at all: an empty directory"
+
+# ---- the root ----
+
+# No command: the root's help, or a hint, depending on the mode.
+[[case]]
+command = ""
+variant = "bare"
+args = []
+modes = ["json", "plain", "agent"]
+fixtures = ["none", "tide-corpus"]
+
+[[case]]
+command = ""
+variant = "version"
+args = ["--version"]
+fixtures = ["none"]
+
+[[case]]
+command = ""
+variant = "help"
+args = ["--help"]
+fixtures = ["none"]
+
+# cli-experience.md "Errors people and agents make": a typo in a command.
+[[case]]
+command = ""
+variant = "typo-command"
+args = ["valdiate"]
+fixtures = ["none"]
+
+# A typo in a root option.
+[[case]]
+command = ""
+variant = "typo-root-option"
+args = ["--jsn", "validate"]
+fixtures = ["none"]
+
+# A --repo that does not exist.
+[[case]]
+command = ""
+variant = "repo-missing"
+args = ["--repo", "does-not-exist", "validate"]
+fixtures = ["none"]
+
+# OPENTIDE_REPO_ROOT naming no folder is held to --repo's test (#1659).
+[[case]]
+command = ""
+variant = "repo-root-env-missing"
+args = ["validate"]
+fixtures = ["none"]
+env = { OPENTIDE_REPO_ROOT = "<TMP>/no-such-folder" }
+
+# --debug: logs on stderr.
+[[case]]
+command = ""
+variant = "debug-flag"
+args = ["--debug", "info"]
+fixtures = ["tide-corpus"]
+
+# ---- every command path, --help: at least one case per path and mode ----
+
+[[case]]
+command = "validate"
+variant = "help"
+args = ["validate", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "validate query"
+variant = "help"
+args = ["validate", "query", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "query"
+variant = "help"
+args = ["query", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "lint"
+variant = "help"
+args = ["lint", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "info"
+variant = "help"
+args = ["info", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "new"
+variant = "help"
+args = ["new", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "new threat"
+variant = "help"
+args = ["new", "threat", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "new objective"
+variant = "help"
+args = ["new", "objective", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "new rule"
+variant = "help"
+args = ["new", "rule", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "generate"
+variant = "help"
+args = ["generate", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "generate explorer"
+variant = "help"
+args = ["generate", "explorer", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "generate docs"
+variant = "help"
+args = ["generate", "docs", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "generate docs rules"
+variant = "help"
+args = ["generate", "docs", "rules", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "generate docs objectives"
+variant = "help"
+args = ["generate", "docs", "objectives", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "generate docs threats"
+variant = "help"
+args = ["generate", "docs", "threats", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "generate docs index"
+variant = "help"
+args = ["generate", "docs", "index", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "generate exports"
+variant = "help"
+args = ["generate", "exports", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "generate exports navigator"
+variant = "help"
+args = ["generate", "exports", "navigator", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "generate exports objects"
+variant = "help"
+args = ["generate", "exports", "objects", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "generate exports revisions"
+variant = "help"
+args = ["generate", "exports", "revisions", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "generate extract"
+variant = "help"
+args = ["generate", "extract", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "generate extract sentinel"
+variant = "help"
+args = ["generate", "extract", "sentinel", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "generate extract defender"
+variant = "help"
+args = ["generate", "extract", "defender", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "generate extract elastic"
+variant = "help"
+args = ["generate", "extract", "elastic", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "generate inflight"
+variant = "help"
+args = ["generate", "inflight", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "generate inflight prune"
+variant = "help"
+args = ["generate", "inflight", "prune", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "rules"
+variant = "help"
+args = ["rules", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "rules unreviewed"
+variant = "help"
+args = ["rules", "unreviewed", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "deploy"
+variant = "help"
+args = ["deploy", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "deploy migrate-state"
+variant = "help"
+args = ["deploy", "migrate-state", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "share"
+variant = "help"
+args = ["share", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "share push"
+variant = "help"
+args = ["share", "push", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "share preview"
+variant = "help"
+args = ["share", "preview", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "share status"
+variant = "help"
+args = ["share", "status", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "share retract"
+variant = "help"
+args = ["share", "retract", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "share targets"
+variant = "help"
+args = ["share", "targets", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "setup"
+variant = "help"
+args = ["setup", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "setup repo"
+variant = "help"
+args = ["setup", "repo", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "setup platforms"
+variant = "help"
+args = ["setup", "platforms", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "setup ci"
+variant = "help"
+args = ["setup", "ci", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "setup env"
+variant = "help"
+args = ["setup", "env", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "setup hooks"
+variant = "help"
+args = ["setup", "hooks", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "setup mcp"
+variant = "help"
+args = ["setup", "mcp", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "setup vscode"
+variant = "help"
+args = ["setup", "vscode", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "setup skills"
+variant = "help"
+args = ["setup", "skills", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "setup skills discover"
+variant = "help"
+args = ["setup", "skills", "discover", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "setup skills show"
+variant = "help"
+args = ["setup", "skills", "show", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "doctor"
+variant = "help"
+args = ["doctor", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "migrate"
+variant = "help"
+args = ["migrate", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "migrate vocab-scope"
+variant = "help"
+args = ["migrate", "vocab-scope", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "tui"
+variant = "help"
+args = ["tui", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "explain"
+variant = "help"
+args = ["explain", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "commands"
+variant = "help"
+args = ["commands", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "mcp"
+variant = "help"
+args = ["mcp", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "mcp start"
+variant = "help"
+args = ["mcp", "start", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "lsp"
+variant = "help"
+args = ["lsp", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "lsp start"
+variant = "help"
+args = ["lsp", "start", "--help"]
+fixtures = ["none"]
+
+[[case]]
+command = "serve"
+variant = "help"
+args = ["serve", "--help"]
+fixtures = ["none"]
+
+# ---- groups that do nothing alone, run bare ----
+
+[[case]]
+command = "new"
+variant = "bare"
+args = ["new"]
+fixtures = ["none"]
+
+[[case]]
+command = "generate extract"
+variant = "bare"
+args = ["generate", "extract"]
+fixtures = ["none"]
+
+[[case]]
+command = "rules"
+variant = "bare"
+args = ["rules"]
+fixtures = ["none"]
+
+[[case]]
+command = "migrate"
+variant = "bare"
+args = ["migrate"]
+fixtures = ["none"]
+
+[[case]]
+command = "mcp"
+variant = "bare"
+args = ["mcp"]
+fixtures = ["none"]
+
+[[case]]
+command = "lsp"
+variant = "bare"
+args = ["lsp"]
+fixtures = ["none"]
+
+# ---- validate ----
+
+[[case]]
+command = "validate"
+variant = "default"
+args = ["validate"]
+fixtures = ["tide-corpus", "vscode", "heavy-small", "fault", "empty", "none"]
+
+[[case]]
+command = "validate"
+variant = "strict"
+args = ["validate", "--strict"]
+fixtures = ["tide-corpus", "vscode", "fault", "empty", "none"]
+
+# --strict on a workspace with no object: narrowed by --check it passes;
+# a report on stdout (no --output) prints why it failed on stderr.
+[[case]]
+command = "validate"
+variant = "strict-check-queries"
+args = ["validate", "--strict", "--check", "queries"]
+fixtures = ["empty"]
+
+[[case]]
+command = "validate"
+variant = "strict-sarif"
+args = ["validate", "--strict", "--format", "sarif"]
+modes = ["plain"]
+fixtures = ["empty"]
+
+[[case]]
+command = "validate"
+variant = "verbose"
+args = ["validate", "--verbose"]
+fixtures = ["tide-corpus", "fault"]
+
+[[case]]
+command = "validate"
+variant = "check-schema"
+args = ["validate", "--check", "schema"]
+fixtures = ["tide-corpus", "vscode", "fault"]
+
+# UC-4.4 (#834): the online CVE check. The golden network refuses every
+# request, so each threat with references warns cve_lookup_unavailable; a
+# threat without any reports nothing.
+[[case]]
+command = "validate"
+variant = "check-cve"
+args = ["validate", "--check", "cve"]
+fixtures = ["tide-corpus", "tide-corpus-cve"]
+
+[[case]]
+command = "validate"
+variant = "check-queries-file"
+args = ["validate", "--check", "queries", "--file", "{rule_file}"]
+fixtures = ["tide-corpus", "vscode"]
+
+[[case]]
+command = "validate"
+variant = "type-rule"
+args = ["validate", "--type", "rule"]
+fixtures = ["tide-corpus"]
+
+# A typo in a choice: did you mean.
+[[case]]
+command = "validate"
+variant = "typo-choice"
+args = ["validate", "--type", "rulez"]
+fixtures = ["tide-corpus"]
+
+# A choice that differs only in case wins outright.
+[[case]]
+command = "validate"
+variant = "choice-case"
+args = ["validate", "--type", "RULE"]
+fixtures = ["tide-corpus"]
+
+# A typo in an option.
+[[case]]
+command = "validate"
+variant = "typo-option"
+args = ["validate", "--strictt"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "validate"
+variant = "file"
+args = ["validate", "--file", "{rule_file}"]
+fixtures = ["tide-corpus", "vscode"]
+
+[[case]]
+command = "validate"
+variant = "file-missing"
+args = ["validate", "--file", "objects/rules/sentinel-kql-rul.yaml"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "validate"
+variant = "uuid"
+args = ["validate", "--uuid", "{rule}"]
+fixtures = ["tide-corpus", "vscode"]
+
+# docs/cli/validate.md: --uuid repeated.
+[[case]]
+command = "validate"
+variant = "uuid-twice"
+args = ["validate", "--uuid", "{rule}", "--uuid", "{objective}"]
+fixtures = ["tide-corpus", "vscode"]
+
+[[case]]
+command = "validate"
+variant = "queries-warn"
+args = ["validate", "--queries", "warn"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "validate"
+variant = "queries-off"
+args = ["validate", "--queries", "off"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "validate"
+variant = "fix-dry-run"
+args = ["validate", "--fix", "--dry-run"]
+fixtures = ["tide-corpus", "vscode"]
+
+[[case]]
+command = "validate"
+variant = "fix"
+args = ["validate", "--fix"]
+fixtures = ["tide-corpus", "vscode"]
+
+[[case]]
+command = "validate"
+variant = "sarif"
+args = ["validate", "--strict", "--format", "sarif", "--output", "opentide-reports/validate.sarif"]
+fixtures = ["tide-corpus", "vscode"]
+
+[[case]]
+command = "validate"
+variant = "codequality"
+args = ["validate", "--format", "codequality"]
+modes = ["json", "plain"]
+fixtures = ["tide-corpus"]
+
+# "--json after the subcommand": accepted.
+[[case]]
+command = "validate"
+variant = "json-after"
+args = ["validate", "--json"]
+modes = ["plain"]
+fixtures = ["tide-corpus"]
+
+# DEBUG='*' in the environment: ignored.
+[[case]]
+command = "validate"
+variant = "debug-star"
+args = ["validate"]
+fixtures = ["tide-corpus"]
+env = { DEBUG = "*" }
+
+# DEBUG=1 is still honoured.
+[[case]]
+command = "validate"
+variant = "debug-true"
+args = ["validate"]
+fixtures = ["tide-corpus"]
+env = { DEBUG = "1" }
+
+# A platform TOML that does not parse: config_parse, its place and its
+# diagnostic, as 0.28.1 reported it (#1659).
+[[case]]
+command = "validate"
+variant = "config-parse"
+args = ["validate"]
+fixtures = ["vscode-config-parse"]
+
+# --watch never ends on its own; under --json it is refused.
+[[case]]
+command = "validate"
+variant = "watch-json"
+args = ["validate", "--watch"]
+fixtures = ["tide-corpus"]
+timeout_secs = 60
+
+# A CI sink: GitHub annotations on stdout.
+[[case]]
+command = "validate"
+variant = "ci-github"
+args = ["validate"]
+modes = ["plain"]
+fixtures = ["vscode"]
+env = { GITHUB_ACTIONS = "true" }
+
+# UC-3.4 (#826): a report printed whole on stdout, without --output. The
+# fault workspace's validate reports are not recorded: its deployment-state
+# findings name the workspace's absolute path, which differs between two runs
+# and so does their fingerprint. lint's are (below); the renderer tests
+# compare validate's (crates/opentide-cli/tests/render.rs).
+[[case]]
+command = "validate"
+variant = "sarif-stdout"
+args = ["validate", "--format", "sarif"]
+modes = ["plain"]
+fixtures = ["tide-corpus"]
+
+# The report options' usage errors (exit 2).
+[[case]]
+command = "validate"
+variant = "output-without-format"
+args = ["validate", "--output", "report.sarif"]
+fixtures = ["tide-corpus"]
+
+# UC-3.4 (#826): the CI sinks of each provider, with its variables set and its
+# summary file captured. Annotations go to stdout; json mode has no sinks.
+[[case]]
+command = "validate"
+variant = "ci-sink-github"
+args = ["validate"]
+modes = ["plain", "json"]
+fixtures = ["fault"]
+env = { GITHUB_ACTIONS = "true", GITHUB_WORKSPACE = "<WS>", GITHUB_STEP_SUMMARY = "<TMP>/tmp/github-step-summary.md" }
+
+[[case]]
+command = "validate"
+variant = "ci-sink-gitlab"
+args = ["validate"]
+modes = ["plain", "json"]
+fixtures = ["fault"]
+env = { GITLAB_CI = "true", CI_PROJECT_DIR = "<WS>" }
+
+[[case]]
+command = "validate"
+variant = "ci-sink-azure"
+args = ["validate"]
+modes = ["plain", "json"]
+fixtures = ["fault"]
+env = { TF_BUILD = "True", BUILD_SOURCESDIRECTORY = "<WS>", AGENT_TEMPDIRECTORY = "<TMP>/tmp/agent" }
+
+# UC-3.4 (#826): progress events, NDJSON on stderr (vscode-extension CONTRACTS.md).
+# Not on the fault workspace: its vocabulary warnings come from worker threads,
+# between the events at a different place each run.
+[[case]]
+command = "validate"
+variant = "progress-json"
+args = ["validate"]
+modes = ["json", "plain"]
+fixtures = ["tide-corpus"]
+env = { OPENTIDE_PROGRESS = "json" }
+
+# UC-2.2 (#817): the compile check (#660), what a deploy would compile must
+# compile. It runs once the run has no other error (KG-10), on every rule
+# whose block's status deploys, for every enabled platform with an offline
+# compiler.
+[[case]]
+command = "validate"
+variant = "compile-check"
+args = ["validate"]
+fixtures = ["tide-corpus-compile-missing-field", "tide-corpus-compile-invalid-value", "tide-corpus-compile-empty-block", "tide-corpus-compile-invalid-rule", "tide-corpus-compile-elastic-severity", "tide-corpus-compile-hidden"]
+
+# ---- validate query ----
+
+[[case]]
+command = "validate query"
+variant = "default"
+args = ["validate", "query"]
+fixtures = ["tide-corpus", "vscode", "fault"]
+
+[[case]]
+command = "validate query"
+variant = "platform"
+args = ["validate", "query", "--platform", "sentinel"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "validate query"
+variant = "file"
+args = ["validate", "query", "--file", "{rule_file}", "--queries", "warn"]
+fixtures = ["tide-corpus", "vscode"]
+
+# Tenant-contacting: recorded as its failure without tenants.
+# UC-4.4c (#834): a live check reads one platform's tenants: without
+# --platform the run is refused.
+[[case]]
+command = "validate query"
+variant = "live-no-platform"
+args = ["validate", "query", "--live"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "validate query"
+variant = "live-no-tenant"
+args = ["validate", "query", "--live", "--platform", "sentinel"]
+fixtures = ["tide-corpus"]
+
+# Tenant-contacting: the corpus has an elastic tenant; the network is refused.
+[[case]]
+command = "validate query"
+variant = "live-elastic"
+args = ["validate", "query", "--live", "--platform", "elastic"]
+fixtures = ["tide-corpus"]
+
+# UC-4.2c (#832): a platform whose tenants cannot check a query answers
+# `supported: false` before any request.
+[[case]]
+command = "validate query"
+variant = "live-unsupported-crowdstrike"
+args = ["validate", "query", "--live", "--platform", "crowdstrike"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "validate query"
+variant = "live-unsupported-harfanglab"
+args = ["validate", "query", "--live", "--platform", "harfanglab"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "validate query"
+variant = "live-unsupported-sysdig"
+args = ["validate", "query", "--live", "--platform", "sysdig", "--check-timeout", "5"]
+fixtures = ["tide-corpus"]
+
+# UC-4.6 (#979): `validate query --live` on the connectors, on the
+# `live-tenants` fixture. Splunk, Carbon Black Cloud and Elastic are served
+# from cassettes recorded from the oracle (tests/cassettes/golden/, the
+# `golden/validate-live-*` scenarios); a check's window ends now, so the
+# platforms that search the last minute (Defender, SentinelOne, Sentinel) are
+# recorded here without credentials, and their checks proven by their
+# connectors' cassettes. In human mode the check's live region is one
+# `<LIVE>` block whatever its frames (UC-4.4, #834).
+
+[[case]]
+command = "validate query"
+variant = "live-splunk-parsed"
+args = ["validate", "query", "--live", "--platform", "splunk", "--uuid", "00000000-0000-4000-8046-000000000001"]
+fixtures = ["live-tenants"]
+env = { SPLUNK_TOKEN = "golden-stand-in-credential" }
+cassette = "golden/validate-live-splunk-parsed"
+
+[[case]]
+command = "validate query"
+variant = "live-splunk-progress-json"
+args = ["validate", "query", "--live", "--platform", "splunk", "--uuid", "00000000-0000-4000-8046-000000000001"]
+fixtures = ["live-tenants"]
+env = { SPLUNK_TOKEN = "golden-stand-in-credential", OPENTIDE_PROGRESS = "json" }
+cassette = "golden/validate-live-splunk-parsed"
+
+[[case]]
+command = "validate query"
+variant = "live-splunk"
+args = ["validate", "query", "--live", "--platform", "splunk"]
+fixtures = ["live-tenants"]
+env = { SPLUNK_TOKEN = "golden-stand-in-credential" }
+cassette = "golden/validate-live-splunk"
+
+# A refused query in CI: the platform's reason is an `::error file=…,line=…::`
+# annotation on the rule file (plain mode; json mode has no sinks), and
+# `rejected` lists it in the json case above.
+[[case]]
+command = "validate query"
+variant = "live-splunk-ci-github"
+args = ["validate", "query", "--live", "--platform", "splunk"]
+modes = ["plain"]
+fixtures = ["live-tenants"]
+env = { SPLUNK_TOKEN = "golden-stand-in-credential", GITHUB_ACTIONS = "true", GITHUB_WORKSPACE = "<WS>", GITHUB_STEP_SUMMARY = "<TMP>/tmp/github-step-summary.md" }
+cassette = "golden/validate-live-splunk"
+
+[[case]]
+command = "validate query"
+variant = "live-carbon-black-valid"
+args = ["validate", "query", "--live", "--platform", "carbon_black_cloud", "--uuid", "00000000-0000-4000-8046-000000000004"]
+fixtures = ["live-tenants"]
+env = { CBC_TOKEN = "golden-stand-in-credential" }
+cassette = "golden/validate-live-carbon-black-valid"
+
+[[case]]
+command = "validate query"
+variant = "live-carbon-black"
+args = ["validate", "query", "--live", "--platform", "carbon_black_cloud"]
+fixtures = ["live-tenants"]
+env = { CBC_TOKEN = "golden-stand-in-credential" }
+cassette = "golden/validate-live-carbon-black"
+
+[[case]]
+command = "validate query"
+variant = "live-elastic-rejected"
+args = ["validate", "query", "--live", "--platform", "elastic"]
+fixtures = ["live-tenants"]
+env = { ELASTIC_API_KEY = "golden-stand-in-credential" }
+cassette = "golden/validate-live-elastic"
+
+[[case]]
+command = "validate query"
+variant = "live-unset-microsoft-defender"
+args = ["validate", "query", "--live", "--platform", "microsoft_defender"]
+fixtures = ["live-tenants"]
+
+[[case]]
+command = "validate query"
+variant = "live-unset-sentinel-one"
+args = ["validate", "query", "--live", "--platform", "sentinel_one", "--check-timeout", "30"]
+fixtures = ["live-tenants"]
+
+[[case]]
+command = "validate query"
+variant = "live-unset-carbon-black-cloud"
+args = ["validate", "query", "--live", "--platform", "carbon_black_cloud"]
+fixtures = ["live-tenants"]
+
+[[case]]
+command = "validate query"
+variant = "live-no-tenant-reached"
+args = ["validate", "query", "--live", "--platform", "sentinel"]
+fixtures = ["live-tenants"]
+
+[[case]]
+command = "validate query"
+variant = "live-strategy-release"
+args = ["validate", "query", "--live", "--platform", "splunk", "--strategy", "RELEASE"]
+fixtures = ["live-tenants"]
+
+[[case]]
+command = "validate query"
+variant = "live-uuid-unmatched"
+args = ["validate", "query", "--live", "--platform", "splunk", "--uuid", "00000000-0000-4000-8046-000000000099"]
+fixtures = ["live-tenants"]
+
+[[case]]
+command = "validate query"
+variant = "live-changed-and-file"
+args = ["validate", "query", "--live", "--platform", "splunk", "--changed", "--uuid", "00000000-0000-4000-8046-000000000001"]
+fixtures = ["live-tenants"]
+
+[[case]]
+command = "validate query"
+variant = "live-strategy-typo"
+args = ["validate", "query", "--live", "--platform", "elastic", "--strategy", "STAGING"]
+fixtures = ["live-tenants"]
+
+[[case]]
+command = "validate query"
+variant = "live-wide-unset-elastic"
+args = ["validate", "query", "--live", "--platform", "elastic", "--wide"]
+fixtures = ["live-tenants"]
+
+# UC-4.2 (#832), UC-4.4 (#834): a requests-based platform's tenant whose
+# credential is set but which cannot be reached: no cassette, so the request
+# goes to the proxy on 127.0.0.1:9, which refuses it, and the tenant is
+# reported unreachable. In every mode, human included.
+
+[[case]]
+command = "validate query"
+variant = "live-unreachable-microsoft-defender"
+args = ["validate", "query", "--live", "--platform", "microsoft_defender"]
+fixtures = ["live-tenants"]
+env = { DEFENDER_CLIENT_SECRET = "golden-stand-in-credential" }
+
+[[case]]
+command = "validate query"
+variant = "live-unreachable-sentinel-one"
+args = ["validate", "query", "--live", "--platform", "sentinel_one"]
+fixtures = ["live-tenants"]
+env = { S1_API_TOKEN = "golden-stand-in-credential" }
+
+[[case]]
+command = "validate query"
+variant = "live-unreachable-elastic"
+args = ["validate", "query", "--live", "--platform", "elastic"]
+fixtures = ["live-tenants"]
+env = { ELASTIC_API_KEY = "golden-stand-in-credential" }
+
+# ---- query ----
+
+# Tenant-contacting: recorded as its failure without tenants.
+[[case]]
+command = "query"
+variant = "example"
+args = ["query", "--platform", "sentinel", "SecurityEvent | take 10"]
+fixtures = ["none", "tide-corpus"]
+
+# UC-3.4 (#826): a query's tenant events without tenants (the recorded
+# success paths are UC-4.1's cassettes).
+[[case]]
+command = "query"
+variant = "progress-json"
+args = ["query", "--platform", "sentinel", "SecurityEvent | take 10"]
+fixtures = ["tide-corpus"]
+env = { OPENTIDE_PROGRESS = "json" }
+
+[[case]]
+command = "query"
+variant = "rule"
+args = ["query", "--platform", "splunk", "--rule", "00000000-0000-4000-8003-000000000003"]
+fixtures = ["tide-corpus"]
+
+# docs/cli/query.md, as written.
+[[case]]
+command = "query"
+variant = "example-docs"
+args = ["query", "--platform", "sentinel", "SecurityEvent | where EventID == 4688 | take 20"]
+fixtures = ["none", "tide-corpus"]
+
+[[case]]
+command = "query"
+variant = "rule-tenant-all-since"
+args = ["query", "--platform", "splunk", "--rule", "00000000-0000-4000-8003-000000000003", "--tenant", "all", "--since", "7d"]
+fixtures = ["tide-corpus"]
+
+# A missing required option.
+[[case]]
+command = "query"
+variant = "missing-option"
+args = ["query", "SecurityEvent | take 10"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "query"
+variant = "typo-choice"
+args = ["query", "--platform", "sentinal", "x"]
+fixtures = ["tide-corpus"]
+
+
+# UC-4.2c (#832): `opentide query` on the REST platforms with a Rust connector,
+# served from cassettes recorded from the oracle (tests/cassettes/golden/, the
+# `golden/query-*` scenarios of tests/cassettes/scenarios.toml) on the `tenants`
+# fixture; the window is fixed in 2099. The credential variable is set to a
+# stand-in value: the cassette redacts it.
+
+[[case]]
+command = "query"
+variant = "tenant-defender"
+args = ["query", "--platform", "microsoft_defender", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "--limit", "1", "DeviceProcessEvents | project Timestamp, DeviceName"]
+fixtures = ["tenants"]
+env = { DEFENDER_CLIENT_SECRET = "golden-stand-in-credential" }
+cassette = "golden/query-defender"
+
+[[case]]
+command = "query"
+variant = "tenant-defender-jsonl"
+args = ["query", "--platform", "microsoft_defender", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "--limit", "1", "--format", "jsonl", "DeviceProcessEvents | project Timestamp, DeviceName"]
+fixtures = ["tenants"]
+modes = ["plain", "json"]
+env = { DEFENDER_CLIENT_SECRET = "golden-stand-in-credential" }
+cassette = "golden/query-defender"
+
+[[case]]
+command = "query"
+variant = "tenant-defender-csv"
+args = ["query", "--platform", "microsoft_defender", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "--limit", "1", "--format", "csv", "DeviceProcessEvents | project Timestamp, DeviceName"]
+fixtures = ["tenants"]
+modes = ["plain"]
+env = { DEFENDER_CLIENT_SECRET = "golden-stand-in-credential" }
+cassette = "golden/query-defender"
+
+[[case]]
+command = "query"
+variant = "tenant-sentinel-one"
+args = ["query", "--platform", "sentinel_one", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "src.process.name = 'cmd.exe'"]
+fixtures = ["tenants"]
+env = { S1_API_TOKEN = "golden-stand-in-credential" }
+cassette = "golden/query-sentinel-one"
+
+[[case]]
+command = "query"
+variant = "tenant-crowdstrike"
+args = ["query", "--platform", "crowdstrike", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "#event_simpleName=ProcessRollup2"]
+fixtures = ["tenants"]
+env = { CROWDSTRIKE_CLIENT_SECRET = "golden-stand-in-credential" }
+cassette = "golden/query-crowdstrike"
+
+[[case]]
+command = "query"
+variant = "tenant-elastic"
+args = ["query", "--platform", "elastic", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "FROM logs-* | WHERE process.name == \"cmd.exe\""]
+fixtures = ["tenants"]
+env = { ELASTIC_API_KEY = "golden-stand-in-credential" }
+cassette = "golden/query-elastic"
+
+[[case]]
+command = "query"
+variant = "tenant-elastic-eql-sequence"
+args = ["query", "--platform", "elastic", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "--language", "eql", "sequence [process where true] [process where true]"]
+fixtures = ["tenants"]
+env = { ELASTIC_API_KEY = "golden-stand-in-credential" }
+cassette = "golden/query-elastic-eql"
+
+[[case]]
+command = "query"
+variant = "unset-microsoft-defender"
+args = ["query", "--platform", "microsoft_defender", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "DeviceEvents | take 1"]
+fixtures = ["tenants"]
+
+[[case]]
+command = "query"
+variant = "unset-sentinel-one"
+args = ["query", "--platform", "sentinel_one", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "src.process.name = 'cmd.exe'"]
+fixtures = ["tenants"]
+
+[[case]]
+command = "query"
+variant = "unset-crowdstrike"
+args = ["query", "--platform", "crowdstrike", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "#event_simpleName=ProcessRollup2"]
+fixtures = ["tenants"]
+
+[[case]]
+command = "query"
+variant = "unset-harfanglab"
+args = ["query", "--platform", "harfanglab", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "processes process_name=cmd.exe"]
+fixtures = ["tenants"]
+
+# UC-4.3 (#833): the SDK platforms. Sentinel's sign-in and queries carry random
+# request ids, so its success path is proven by its connector's cassettes
+# (tests/cassettes/sentinel/), and here by its refusal without credentials.
+
+[[case]]
+command = "query"
+variant = "tenant-splunk"
+args = ["query", "--platform", "splunk", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "--limit", "2", "index=main EventCode=4688"]
+fixtures = ["tenants"]
+env = { SPLUNK_TOKEN = "golden-stand-in-credential" }
+cassette = "golden/query-splunk"
+
+# UC-4.4c (#834): a rule's query on the stand-in tenants of the
+# `live-tenants` fixture: Splunk's saved search by --rule, and a SentinelOne
+# correlation's two sub-queries by --file, each labelled, in every format.
+[[case]]
+command = "query"
+variant = "tenant-splunk-rule"
+args = ["query", "--platform", "splunk", "--rule", "00000000-0000-4000-8046-000000000001", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "--limit", "2"]
+fixtures = ["live-tenants"]
+env = { SPLUNK_TOKEN = "golden-stand-in-credential" }
+cassette = "golden/query-splunk-rule"
+
+[[case]]
+command = "query"
+variant = "tenant-sentinel-one-file"
+args = ["query", "--platform", "sentinel_one", "--file", "objects/rules/sentinel-one-process.yaml", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z"]
+fixtures = ["live-tenants"]
+env = { S1_API_TOKEN = "golden-stand-in-credential" }
+cassette = "golden/query-sentinel-one-file"
+
+[[case]]
+command = "query"
+variant = "tenant-sentinel-one-file-csv"
+args = ["query", "--platform", "sentinel_one", "--file", "objects/rules/sentinel-one-process.yaml", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "--format", "csv"]
+fixtures = ["live-tenants"]
+modes = ["plain"]
+env = { S1_API_TOKEN = "golden-stand-in-credential" }
+cassette = "golden/query-sentinel-one-file"
+
+[[case]]
+command = "query"
+variant = "tenant-sentinel-one-file-jsonl"
+args = ["query", "--platform", "sentinel_one", "--file", "objects/rules/sentinel-one-process.yaml", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "--format", "jsonl"]
+fixtures = ["live-tenants"]
+modes = ["plain"]
+env = { S1_API_TOKEN = "golden-stand-in-credential" }
+cassette = "golden/query-sentinel-one-file"
+
+[[case]]
+command = "query"
+variant = "rule-unknown"
+args = ["query", "--platform", "splunk", "--rule", "00000000-0000-4000-8046-0000000000O1"]
+fixtures = ["live-tenants"]
+
+[[case]]
+command = "query"
+variant = "rule-no-block"
+args = ["query", "--platform", "crowdstrike", "--rule", "00000000-0000-4000-8046-000000000001"]
+fixtures = ["live-tenants"]
+
+[[case]]
+command = "query"
+variant = "tenant-carbon-black"
+args = ["query", "--platform", "carbon_black_cloud", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "--limit", "2", "process_name:cmd.exe"]
+fixtures = ["tenants"]
+env = { CBC_TOKEN = "golden-stand-in-credential" }
+cassette = "golden/query-carbon-black"
+
+[[case]]
+command = "query"
+variant = "unset-splunk"
+args = ["query", "--platform", "splunk", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "index=main"]
+fixtures = ["tenants"]
+
+[[case]]
+command = "query"
+variant = "unset-carbon-black-cloud"
+args = ["query", "--platform", "carbon_black_cloud", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "process_name:cmd.exe"]
+fixtures = ["tenants"]
+
+[[case]]
+command = "query"
+variant = "unset-sentinel"
+args = ["query", "--platform", "sentinel", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "SecurityEvent | take 1"]
+fixtures = ["tenants"]
+
+# UC-4.2 (#832), UC-4.4 (#834): each requests-based platform's tenant with its
+# credential set, unreachable: no cassette, so the request goes to the
+# refusing proxy on 127.0.0.1:9.
+
+[[case]]
+command = "query"
+variant = "unreachable-microsoft-defender"
+args = ["query", "--platform", "microsoft_defender", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "DeviceEvents | take 1"]
+fixtures = ["tenants"]
+env = { DEFENDER_CLIENT_SECRET = "golden-stand-in-credential" }
+
+[[case]]
+command = "query"
+variant = "unreachable-sentinel-one"
+args = ["query", "--platform", "sentinel_one", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "src.process.name = 'cmd.exe'"]
+fixtures = ["tenants"]
+env = { S1_API_TOKEN = "golden-stand-in-credential" }
+
+[[case]]
+command = "query"
+variant = "unreachable-crowdstrike"
+args = ["query", "--platform", "crowdstrike", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "#event_simpleName=ProcessRollup2"]
+fixtures = ["tenants"]
+env = { CROWDSTRIKE_CLIENT_SECRET = "golden-stand-in-credential" }
+
+[[case]]
+command = "query"
+variant = "unreachable-elastic"
+args = ["query", "--platform", "elastic", "--from", "2099-01-01T00:00:00Z", "--to", "2099-01-01T01:00:00Z", "FROM logs-* | WHERE process.name == \"cmd.exe\""]
+fixtures = ["tenants"]
+env = { ELASTIC_API_KEY = "golden-stand-in-credential" }
+
+# ---- lint ----
+
+[[case]]
+command = "lint"
+variant = "default"
+args = ["lint"]
+fixtures = ["tide-corpus", "vscode", "heavy-small", "fault-lint", "empty", "none"]
+
+# A platform TOML that does not parse: config_parse, its place (#1659).
+[[case]]
+command = "lint"
+variant = "config-parse"
+args = ["lint"]
+fixtures = ["vscode-config-parse"]
+
+[[case]]
+command = "lint"
+variant = "strict"
+args = ["lint", "--strict"]
+fixtures = ["tide-corpus", "vscode", "fault-lint"]
+
+# OT-5: `[<check>.codes]` in lint.toml sets one code's severity. The `strict`
+# case fails on the corpus's `filename_mismatch` warnings; with that code set
+# to "info" the same run passes.
+[[case]]
+command = "lint"
+variant = "strict-code-downgraded"
+args = ["lint", "--strict"]
+fixtures = ["tide-corpus-lint-code-note"]
+
+# #1802: a misspelt code is a configuration error (exit 2, with the nearest
+# code), and `[queries.codes]` sets the severity of a real engine warning.
+[[case]]
+command = "lint"
+variant = "unknown-code"
+args = ["lint"]
+fixtures = ["tide-corpus-lint-unknown-code"]
+
+[[case]]
+command = "lint"
+variant = "check-queries-code-error"
+args = ["lint", "--check", "queries"]
+fixtures = ["tide-corpus-lint-engine-warning"]
+
+[[case]]
+command = "lint"
+variant = "retired-code"
+args = ["lint"]
+fixtures = ["tide-corpus-lint-retired-code"]
+
+# UC-3.4 (#826): lint's report files and CI sinks on the fault workspace.
+[[case]]
+command = "lint"
+variant = "sarif-fault"
+args = ["lint", "--format", "sarif", "--output", "opentide-reports/lint.sarif"]
+fixtures = ["fault-lint"]
+
+[[case]]
+command = "lint"
+variant = "codequality-fault"
+args = ["lint", "--format", "codequality", "--output", "opentide-reports/lint.codequality.json"]
+fixtures = ["fault-lint"]
+
+[[case]]
+command = "lint"
+variant = "ci-sink-github"
+args = ["lint"]
+modes = ["plain"]
+fixtures = ["fault-lint"]
+env = { GITHUB_ACTIONS = "true", GITHUB_WORKSPACE = "<WS>", GITHUB_STEP_SUMMARY = "<TMP>/tmp/github-step-summary.md" }
+
+[[case]]
+command = "lint"
+variant = "ci-sink-azure"
+args = ["lint"]
+modes = ["plain"]
+fixtures = ["fault-lint"]
+env = { TF_BUILD = "True", BUILD_SOURCESDIRECTORY = "<WS>", AGENT_TEMPDIRECTORY = "<TMP>/tmp/agent" }
+
+# opentide 0.28.1 (#1028, #1029): optional fields are notes. lint hides
+# them without --verbose (and suggests it), --strict does not fail on them,
+# the recommended check reports a rule without configurations or response,
+# and --quiet refuses --verbose.
+[[case]]
+command = "lint"
+variant = "verbose"
+args = ["lint", "--verbose"]
+fixtures = ["tide-corpus", "fault-lint"]
+
+[[case]]
+command = "lint"
+variant = "check-recommended"
+args = ["lint", "--check", "recommended"]
+fixtures = ["tide-corpus"]
+
+# opentide 0.28.1's recommended check crashes on the fault workspace's
+# invalid configuration files (#1081): the oracle's crash, recorded as
+# validate's splunk-advanced and legacy-text-id crashes are (no crash log
+# written, XDG_STATE_HOME), json mode alone. The other lint cases run on
+# `fault-lint`, with the check off.
+[[case]]
+command = "lint"
+variant = "recommended-crash"
+args = ["lint", "--check", "recommended"]
+fixtures = ["fault"]
+env = { XDG_STATE_HOME = "/dev/null/opentide-golden" }
+
+[[case]]
+command = "lint"
+variant = "strict-check-metadata"
+args = ["lint", "--strict", "--check", "metadata"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "lint"
+variant = "quiet-verbose"
+args = ["--quiet", "lint", "--verbose"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "lint"
+variant = "check-filenames"
+args = ["lint", "--check", "filenames"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "lint"
+variant = "check-queries"
+args = ["lint", "--check", "queries"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "lint"
+variant = "file"
+args = ["lint", "--file", "{rule_file}"]
+fixtures = ["tide-corpus", "vscode"]
+
+[[case]]
+command = "lint"
+variant = "fix"
+args = ["lint", "--fix"]
+fixtures = ["tide-corpus", "vscode"]
+
+[[case]]
+command = "lint"
+variant = "sarif"
+args = ["lint", "--format", "sarif"]
+modes = ["json", "plain"]
+fixtures = ["tide-corpus"]
+
+# --changed outside a git repository.
+[[case]]
+command = "lint"
+variant = "changed"
+args = ["lint", "--strict", "--changed"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "lint"
+variant = "typo-choice"
+args = ["lint", "--check", "filenamez"]
+fixtures = ["tide-corpus"]
+
+# ---- info ----
+
+[[case]]
+command = "info"
+variant = "default"
+args = ["info"]
+fixtures = ["tide-corpus", "vscode", "heavy-small", "fault", "empty", "none"]
+
+[[case]]
+command = "info"
+variant = "catalog"
+args = ["info", "catalog"]
+fixtures = ["tide-corpus", "vscode"]
+
+[[case]]
+command = "info"
+variant = "platform"
+args = ["info", "--platform", "sentinel"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "info"
+variant = "coverage"
+args = ["info", "coverage", "--technique", "T1059"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "info"
+variant = "rules"
+args = ["info", "rules"]
+fixtures = ["tide-corpus", "vscode", "fault"]
+
+[[case]]
+command = "info"
+variant = "threats"
+args = ["info", "threats"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "info"
+variant = "objectives"
+args = ["info", "objectives"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "info"
+variant = "vocab"
+args = ["info", "vocab"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "info"
+variant = "vocab-surface"
+args = ["info", "vocab", "surface"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "info"
+variant = "typo-section"
+args = ["info", "rulez"]
+fixtures = ["tide-corpus"]
+
+# ---- new ----
+
+[[case]]
+command = "new threat"
+variant = "example"
+args = ["new", "threat", "--name", "Credential Dumping"]
+normalise = ["fresh-uuids"]
+
+[[case]]
+command = "new threat"
+variant = "path"
+args = ["new", "threat", "--name", "Credential Dumping", "--path", "objects/threats/credential-dumping.yaml"]
+fixtures = ["tide-corpus"]
+normalise = ["fresh-uuids"]
+
+# A prompt with no TTY or under an agent exits 2 at once. Human mode is left out: the
+# interactive prompt (prompt_toolkit) works the terminal in raw mode and asks it for the cursor.
+[[case]]
+command = "new threat"
+variant = "prompt"
+args = ["new", "threat"]
+fixtures = ["tide-corpus"]
+normalise = ["fresh-uuids"]
+
+[[case]]
+command = "new objective"
+variant = "example"
+args = ["new", "objective", "--name", "Detect Credential Dumping", "--threat", "{threat}"]
+normalise = ["fresh-uuids"]
+
+[[case]]
+command = "new objective"
+variant = "unknown-threat"
+args = ["new", "objective", "--name", "Detect Credential Dumping", "--threat", "00000000-0000-4000-8000-000000000000"]
+fixtures = ["tide-corpus"]
+normalise = ["fresh-uuids"]
+
+[[case]]
+command = "new rule"
+variant = "example"
+args = ["new", "rule", "--name", "Suspicious LSASS Access", "--platform", "sentinel", "--objective", "{objective}"]
+normalise = ["fresh-uuids"]
+
+[[case]]
+command = "new rule"
+variant = "no-platform"
+args = ["new", "rule", "--name", "LSASS Access", "--objective", "{objective}"]
+fixtures = ["tide-corpus"]
+normalise = ["fresh-uuids"]
+
+# `--objective` also takes the UUID of a signal an objective defines.
+[[case]]
+command = "new rule"
+variant = "signal-objective"
+args = ["new", "rule", "--name", "Logon Signal", "--objective", "{signal}"]
+fixtures = ["tide-corpus"]
+normalise = ["fresh-uuids"]
+
+[[case]]
+command = "new rule"
+variant = "unknown-objective"
+args = ["new", "rule", "--name", "Orphan", "--objective", "00000000-0000-4000-8000-000000000000"]
+fixtures = ["tide-corpus"]
+normalise = ["fresh-uuids"]
+
+# ---- generate ----
+
+[[case]]
+command = "generate"
+variant = "default"
+args = ["generate"]
+fixtures = ["tide-corpus", "vscode"]
+normalise = ["fresh-uuids"]
+
+# UC-3.4 (#826): generate's steps as progress events and as the step checklist.
+[[case]]
+command = "generate"
+variant = "progress-json"
+args = ["generate"]
+modes = ["json", "plain"]
+fixtures = ["tide-corpus"]
+env = { OPENTIDE_PROGRESS = "json" }
+normalise = ["fresh-uuids"]
+view = "streams"
+
+[[case]]
+command = "generate explorer"
+variant = "default"
+args = ["generate", "explorer"]
+fixtures = ["tide-corpus", "vscode"]
+
+[[case]]
+command = "generate explorer"
+variant = "visibility"
+args = ["generate", "explorer", "--include-visibility", "--visibility-tlp", "red"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "generate docs"
+variant = "default"
+args = ["generate", "docs"]
+fixtures = ["tide-corpus", "vscode"]
+
+[[case]]
+command = "generate docs"
+variant = "rules-only"
+args = ["generate", "docs", "--rules"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "generate docs"
+variant = "output-flavor"
+args = ["generate", "docs", "--output", "docs", "--flavor", "github"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "generate docs"
+variant = "changed"
+args = ["generate", "docs", "--changed"]
+fixtures = ["tide-corpus"]
+
+# A flavour no forge has: a usage error before anything is read (#1659).
+[[case]]
+command = "generate docs"
+variant = "flavor-unknown"
+args = ["generate", "docs", "--flavor", "bogus"]
+fixtures = ["tide-corpus"]
+
+# Outside a workspace generate writes nothing (#1659); a platform TOML that
+# does not parse fails its first phase with config_parse.
+[[case]]
+command = "generate"
+variant = "no-workspace"
+args = ["generate"]
+fixtures = ["none"]
+
+[[case]]
+command = "generate"
+variant = "config-parse"
+args = ["generate"]
+fixtures = ["vscode-config-parse"]
+
+[[case]]
+command = "generate docs rules"
+variant = "default"
+args = ["generate", "docs", "rules"]
+fixtures = ["tide-corpus", "vscode"]
+
+[[case]]
+command = "generate docs objectives"
+variant = "default"
+args = ["generate", "docs", "objectives"]
+fixtures = ["tide-corpus", "vscode"]
+
+[[case]]
+command = "generate docs threats"
+variant = "default"
+args = ["generate", "docs", "threats"]
+fixtures = ["tide-corpus", "vscode"]
+
+# UC-4.4 (#834): a threat whose CVE details are fetched ([cve]
+# retrieve_details on, the default); the golden network refuses every
+# lookup, so each row says the details are unavailable. Since 0.26.0 (D3)
+# the table has CVSS, EPSS, exploitation and weakness columns; the details
+# themselves, on 0.28.1's recorded records, are crates/opentide-cli's
+# `docs_with_cve_details_fetch_each_record`.
+[[case]]
+command = "generate docs threats"
+variant = "cve-details"
+args = ["generate", "docs", "threats"]
+fixtures = ["tide-corpus-cve"]
+
+[[case]]
+command = "generate docs index"
+variant = "default"
+args = ["generate", "docs", "index"]
+fixtures = ["tide-corpus", "vscode"]
+
+[[case]]
+command = "generate exports"
+variant = "default"
+args = ["generate", "exports"]
+fixtures = ["tide-corpus", "vscode"]
+
+[[case]]
+command = "generate exports navigator"
+variant = "default"
+args = ["generate", "exports", "navigator"]
+fixtures = ["tide-corpus", "vscode"]
+
+[[case]]
+command = "generate exports objects"
+variant = "default"
+args = ["generate", "exports", "objects"]
+fixtures = ["tide-corpus", "vscode"]
+
+[[case]]
+command = "generate exports revisions"
+variant = "default"
+args = ["generate", "exports", "revisions"]
+fixtures = ["tide-corpus", "vscode"]
+
+# Tenant-contacting: recorded as its failure without tenants.
+[[case]]
+command = "generate extract sentinel"
+variant = "default"
+args = ["generate", "extract", "sentinel"]
+fixtures = ["none", "tide-corpus"]
+
+# Tenant-contacting: recorded as its failure without tenants.
+[[case]]
+command = "generate extract defender"
+variant = "default"
+args = ["generate", "extract", "defender"]
+fixtures = ["none", "tide-corpus"]
+
+# Tenant-contacting: the corpus has an elastic tenant; the network is refused.
+[[case]]
+command = "generate extract elastic"
+variant = "example"
+args = ["generate", "extract", "elastic", "--space", "default"]
+fixtures = ["none", "tide-corpus"]
+
+[[case]]
+command = "generate inflight"
+variant = "default"
+args = ["generate", "inflight"]
+fixtures = ["tide-corpus", "vscode"]
+
+[[case]]
+command = "generate inflight prune"
+variant = "default"
+args = ["generate", "inflight", "prune"]
+fixtures = ["tide-corpus", "vscode"]
+
+# ---- rules ----
+
+[[case]]
+command = "rules unreviewed"
+variant = "example"
+args = ["rules", "unreviewed", "--older-than", "90d"]
+fixtures = ["tide-corpus", "vscode", "fault"]
+
+[[case]]
+command = "rules unreviewed"
+variant = "bad-duration"
+args = ["rules", "unreviewed", "--older-than", "90x"]
+fixtures = ["tide-corpus"]
+
+# ---- deploy ----
+
+[[case]]
+command = "deploy"
+variant = "dry-run"
+args = ["deploy", "--strategy", "PREVIEW", "--all", "--dry-run"]
+fixtures = ["tide-corpus", "vscode", "fault"]
+
+# UC-3.4 (#826): the deploy plan's CI summary, and its progress events.
+[[case]]
+command = "deploy"
+variant = "ci-sink-github"
+args = ["deploy", "--strategy", "PREVIEW", "--all", "--dry-run"]
+modes = ["plain"]
+fixtures = ["tide-corpus", "fault"]
+env = { GITHUB_ACTIONS = "true", GITHUB_WORKSPACE = "<WS>", GITHUB_STEP_SUMMARY = "<TMP>/tmp/github-step-summary.md" }
+
+[[case]]
+command = "deploy"
+variant = "ci-sink-gitlab"
+args = ["deploy", "--strategy", "PREVIEW", "--all", "--dry-run"]
+modes = ["plain"]
+fixtures = ["tide-corpus", "fault"]
+env = { GITLAB_CI = "true", CI_PROJECT_DIR = "<WS>" }
+
+[[case]]
+command = "deploy"
+variant = "progress-json"
+args = ["deploy", "--strategy", "PREVIEW", "--all", "--dry-run"]
+modes = ["json", "plain"]
+fixtures = ["tide-corpus", "fault"]
+env = { OPENTIDE_PROGRESS = "json" }
+
+[[case]]
+command = "deploy"
+variant = "platform"
+args = ["deploy", "--platform", "sentinel", "--dry-run", "--strategy", "PREVIEW", "--all"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "deploy"
+variant = "uuid"
+args = ["deploy", "--dry-run", "--strategy", "PREVIEW", "--uuid", "{rule}"]
+fixtures = ["tide-corpus", "vscode"]
+
+[[case]]
+command = "deploy"
+variant = "both-strategies"
+args = ["deploy", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--dry-run"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "deploy"
+variant = "typo-choice"
+args = ["deploy", "--strategy", "PREVEW", "--dry-run"]
+fixtures = ["tide-corpus"]
+
+# Tenant-contacting: recorded as its failure without tenants.
+[[case]]
+command = "deploy"
+variant = "no-tenant"
+args = ["deploy", "--strategy", "PREVIEW", "--platform", "sentinel"]
+fixtures = ["tide-corpus"]
+
+# Tenant-contacting: the corpus has an elastic tenant; the network is refused.
+[[case]]
+command = "deploy"
+variant = "elastic-tenant"
+args = ["deploy", "--strategy", "PREVIEW", "--platform", "elastic", "--all"]
+fixtures = ["tide-corpus"]
+normalise = ["live-frames"]
+
+# UC-4.6 (#979): a deploy that sends, on the connectors, on the
+# `deploy-tenants` fixture, each platform served from a cassette recorded
+# from the oracle (tests/cassettes/golden/, the `golden/deploy-*` scenarios):
+# creates whose ids are recorded in deployment state, updates, deletes whose
+# ids are forgotten, skips and refusals. In human mode the deploy's live
+# region is one `<LIVE>` block whatever its frames (UC-4.4, #834), and
+# `live-frames` empties the frame it keeps: the platform row is updated from
+# worker threads, so Live's first render can already show their progress.
+
+[[case]]
+command = "deploy"
+variant = "send-defender"
+args = ["deploy", "--platform", "microsoft_defender", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
+fixtures = ["deploy-tenants"]
+normalise = ["live-frames"]
+env = { DEFENDER_CLIENT_SECRET = "golden-stand-in-credential" }
+cassette = "golden/deploy-defender-continues"
+
+[[case]]
+command = "deploy"
+variant = "send-sentinel-one"
+args = ["deploy", "--platform", "sentinel_one", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
+fixtures = ["deploy-tenants"]
+normalise = ["live-frames"]
+env = { S1_API_TOKEN = "golden-stand-in-credential" }
+cassette = "golden/deploy-sentinel-one"
+
+[[case]]
+command = "deploy"
+variant = "send-crowdstrike"
+args = ["deploy", "--platform", "crowdstrike", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
+fixtures = ["deploy-tenants"]
+normalise = ["live-frames"]
+env = { CROWDSTRIKE_CLIENT_SECRET = "golden-stand-in-credential" }
+cassette = "golden/deploy-crowdstrike"
+
+[[case]]
+command = "deploy"
+variant = "send-sysdig"
+args = ["deploy", "--platform", "sysdig", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
+fixtures = ["deploy-tenants"]
+normalise = ["live-frames"]
+env = { SYSDIG_SECURE_API_TOKEN = "golden-stand-in-credential" }
+cassette = "golden/deploy-sysdig"
+
+[[case]]
+command = "deploy"
+variant = "send-elastic"
+args = ["deploy", "--platform", "elastic", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
+fixtures = ["deploy-tenants"]
+normalise = ["live-frames"]
+env = { ELASTIC_API_KEY = "golden-stand-in-credential" }
+cassette = "golden/deploy-elastic"
+
+# A second deploy of the same rules: each rule Elastic already holds as the
+# run would write it is not written, and reads unchanged (#1711).
+[[case]]
+command = "deploy"
+variant = "send-elastic-unchanged"
+args = ["deploy", "--platform", "elastic", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
+fixtures = ["deploy-tenants"]
+normalise = ["live-frames"]
+env = { ELASTIC_API_KEY = "golden-stand-in-credential" }
+cassette = "golden/deploy-elastic-unchanged"
+
+[[case]]
+command = "deploy"
+variant = "send-splunk"
+args = ["deploy", "--platform", "splunk", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
+fixtures = ["deploy-tenants"]
+normalise = ["live-frames"]
+env = { SPLUNK_TOKEN = "golden-stand-in-credential" }
+cassette = "golden/deploy-splunk"
+
+# #1657: retiring a Splunk rule also deletes the saved searches an earlier
+# name of it left, which only the tenant knows: a dry run that plans only a
+# retirement says so.
+[[case]]
+command = "deploy"
+variant = "dry-run-splunk-retire"
+args = ["deploy", "--dry-run", "--platform", "splunk", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--uuid", "00000000-0000-4000-8047-000000000042", "--keep-deprecated"]
+fixtures = ["deploy-tenants"]
+
+[[case]]
+command = "deploy"
+variant = "send-carbon-black"
+args = ["deploy", "--platform", "carbon_black_cloud", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
+fixtures = ["deploy-tenants"]
+normalise = ["live-frames"]
+env = { CBC_TOKEN = "golden-stand-in-credential" }
+cassette = "golden/deploy-carbon-black"
+
+[[case]]
+command = "deploy"
+variant = "send-splunk-progress-json"
+args = ["deploy", "--platform", "splunk", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
+fixtures = ["deploy-tenants"]
+env = { SPLUNK_TOKEN = "golden-stand-in-credential", OPENTIDE_PROGRESS = "json" }
+cassette = "golden/deploy-splunk"
+
+[[case]]
+command = "deploy"
+variant = "send-crowdstrike-ci-github"
+args = ["deploy", "--platform", "crowdstrike", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
+fixtures = ["deploy-tenants"]
+modes = ["plain"]
+env = { CROWDSTRIKE_CLIENT_SECRET = "golden-stand-in-credential", GITHUB_ACTIONS = "true", GITHUB_WORKSPACE = "<WS>", GITHUB_STEP_SUMMARY = "<TMP>/tmp/github-step-summary.md" }
+cassette = "golden/deploy-crowdstrike"
+
+# UC-4.4c (#834): a deploy without --platform sends to the workspace's
+# enabled platforms: refused where they have no tenants, a warning on the CI
+# run where no rule matched, and Sysdig's stand-in alone where it is the one
+# platform enabled.
+[[case]]
+command = "deploy"
+variant = "send-every-platform"
+args = ["deploy", "--strategy", "PREVIEW", "--all"]
+fixtures = ["tide-corpus", "empty"]
+
+[[case]]
+command = "deploy"
+variant = "send-every-platform-ci-github"
+args = ["deploy", "--strategy", "PREVIEW", "--all"]
+fixtures = ["empty"]
+modes = ["plain"]
+env = { GITHUB_ACTIONS = "true", GITHUB_WORKSPACE = "<WS>", GITHUB_STEP_SUMMARY = "<TMP>/tmp/github-step-summary.md" }
+
+[[case]]
+command = "deploy"
+variant = "send-enabled-platforms"
+args = ["deploy", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
+fixtures = ["deploy-tenants-sysdig"]
+env = { SYSDIG_SECURE_API_TOKEN = "golden-stand-in-credential" }
+cassette = "golden/deploy-sysdig"
+
+# UC-4.2 (#832): a deploy that sends, to each requests-based platform's
+# tenant with its credential set, unreachable: no cassette, so the first
+# request goes to the refusing proxy on 127.0.0.1:9 and the run fails.
+
+[[case]]
+command = "deploy"
+variant = "unreachable-microsoft-defender"
+args = ["deploy", "--platform", "microsoft_defender", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
+fixtures = ["deploy-tenants"]
+normalise = ["live-frames"]
+env = { DEFENDER_CLIENT_SECRET = "golden-stand-in-credential" }
+
+[[case]]
+command = "deploy"
+variant = "unreachable-sentinel-one"
+args = ["deploy", "--platform", "sentinel_one", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
+fixtures = ["deploy-tenants"]
+normalise = ["live-frames"]
+env = { S1_API_TOKEN = "golden-stand-in-credential" }
+
+[[case]]
+command = "deploy"
+variant = "unreachable-crowdstrike"
+args = ["deploy", "--platform", "crowdstrike", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
+fixtures = ["deploy-tenants"]
+normalise = ["live-frames"]
+env = { CROWDSTRIKE_CLIENT_SECRET = "golden-stand-in-credential" }
+
+[[case]]
+command = "deploy"
+variant = "unreachable-elastic"
+args = ["deploy", "--platform", "elastic", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
+fixtures = ["deploy-tenants"]
+normalise = ["live-frames"]
+env = { ELASTIC_API_KEY = "golden-stand-in-credential" }
+
+[[case]]
+command = "deploy"
+variant = "unreachable-sysdig"
+args = ["deploy", "--platform", "sysdig", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
+fixtures = ["deploy-tenants"]
+normalise = ["live-frames"]
+env = { SYSDIG_SECURE_API_TOKEN = "golden-stand-in-credential" }
+
+# #1701 (smoke D7): a tenant whose credential variable is unset fails before
+# any rule is sent, whatever the platform: each of its rules is `not
+# attempted`, the failure is the tenant's, and the run exits 1.
+
+[[case]]
+command = "deploy"
+variant = "unset-credential-splunk"
+args = ["deploy", "--platform", "splunk", "--strategy", "PREVIEW", "--strategy", "RELEASE", "--all", "--keep-deprecated"]
+fixtures = ["deploy-tenants"]
+
+[[case]]
+command = "deploy"
+variant = "send-sentinel-no-rule"
+args = ["deploy", "--platform", "sentinel", "--strategy", "PREVIEW", "--uuid", "00000000-0000-4000-8047-000000000072"]
+fixtures = ["deploy-tenants"]
+
+# UC-4.6c (#979): a RELEASE deploy on a push in CI promotes the rules the push
+# changed (`status promotion`) before it plans: the rule file rewritten in
+# place, `--skip-promotion` leaving it, a push with nothing to promote, and a
+# status written as an anchor, left with a warning. The plan reads the
+# promoted files again, so a promoted rule goes to the tenant that takes
+# RELEASE (#1653): here `lab`, which does not resolve, so its deploy fails.
+# The oracle planned from the status before the promotion and reached none.
+
+[[case]]
+command = "deploy"
+variant = "promote-push"
+args = ["deploy", "--platform", "splunk", "--strategy", "RELEASE"]
+fixtures = ["deploy-push", "deploy-push-production", "deploy-push-anchor"]
+env = { SPLUNK_TOKEN = "golden-stand-in-credential", GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_REF = "refs/heads/main", OPENTIDE_DEFAULT_BRANCH = "main", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
+
+# A push to any other branch (or a tag) promotes nothing: the rules stay
+# STAGING and no production tenant is planned (F-01).
+[[case]]
+command = "deploy"
+variant = "promote-feature-push"
+args = ["deploy", "--platform", "splunk", "--strategy", "RELEASE"]
+fixtures = ["deploy-push", "deploy-push-production", "deploy-push-anchor"]
+env = { SPLUNK_TOKEN = "golden-stand-in-credential", GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_REF = "refs/heads/feature/foo", OPENTIDE_DEFAULT_BRANCH = "main", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
+
+# A push whose default branch the CI environment does not say promotes
+# nothing and warns, naming OPENTIDE_DEFAULT_BRANCH.
+[[case]]
+command = "deploy"
+variant = "promote-unknown-default-push"
+args = ["deploy", "--platform", "splunk", "--strategy", "RELEASE"]
+fixtures = ["deploy-push"]
+env = { SPLUNK_TOKEN = "golden-stand-in-credential", GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_REF = "refs/heads/main", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
+
+# UC-6.2e: a promotion target that is not a status name (a number), a
+# promoted block whose key is not a string, and promoted text that does not
+# read back: each ends the run as the oracle's promotion does.
+
+[[case]]
+command = "deploy"
+variant = "promote-fails"
+args = ["deploy", "--platform", "splunk", "--strategy", "RELEASE"]
+fixtures = ["deploy-push-no-target", "deploy-push-key", "deploy-push-unreadable"]
+env = { SPLUNK_TOKEN = "golden-stand-in-credential", GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_REF = "refs/heads/main", OPENTIDE_DEFAULT_BRANCH = "main", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
+
+[[case]]
+command = "deploy"
+variant = "promote-skip"
+args = ["deploy", "--platform", "splunk", "--strategy", "RELEASE", "--skip-promotion"]
+fixtures = ["deploy-push"]
+env = { SPLUNK_TOKEN = "golden-stand-in-credential", GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_REF = "refs/heads/main", OPENTIDE_DEFAULT_BRANCH = "main", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
+
+# Git without the network (ADR 0007's amendment): a git checkout read with
+# gix, which the WASI build must read as natively. The dry run plans the rule
+# the push changed (read from the push's commits) and sends nothing; `docs
+# --changed` resolves the default branch's baseline, against which nothing
+# changed.
+[[case]]
+command = "deploy"
+variant = "dry-run-push"
+args = ["deploy", "--dry-run", "--platform", "splunk", "--strategy", "PREVIEW"]
+fixtures = ["deploy-push"]
+env = { GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
+
+# #1662: a repository's first commit has no parent, so every rule file it
+# holds is new: outside CI (the last commit) and on a GitHub push (an
+# all-zero `before`, HEAD's first parent missing), the dry run plans them all.
+[[case]]
+command = "deploy"
+variant = "dry-run-first-commit"
+args = ["deploy", "--dry-run", "--platform", "splunk", "--strategy", "PREVIEW"]
+fixtures = ["deploy-first-commit"]
+
+[[case]]
+command = "deploy"
+variant = "dry-run-first-push"
+args = ["deploy", "--dry-run", "--platform", "splunk", "--strategy", "PREVIEW"]
+fixtures = ["deploy-first-commit"]
+env = { GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
+
+# A push whose commits changed no rule file reads none, and says so rather
+# than blame a status (#1662).
+[[case]]
+command = "deploy"
+variant = "dry-run-no-rule-changed"
+args = ["deploy", "--dry-run", "--strategy", "PREVIEW"]
+fixtures = ["share-misp-push-config"]
+env = { GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
+
+[[case]]
+command = "generate docs"
+variant = "changed-push"
+args = ["generate", "docs", "--changed"]
+fixtures = ["deploy-push"]
+
+[[case]]
+command = "deploy"
+variant = "promote-gitlab-progress-json"
+args = ["deploy", "--platform", "splunk", "--strategy", "RELEASE"]
+fixtures = ["deploy-push"]
+env = { SPLUNK_TOKEN = "golden-stand-in-credential", GITLAB_CI = "true", CI_COMMIT_BRANCH = "main", CI_DEFAULT_BRANCH = "main", CI = "true", CI_COMMIT_SHA = "HEAD", CI_PROJECT_DIR = "<WS>", OPENTIDE_PROGRESS = "json" }
+
+[[case]]
+command = "deploy migrate-state"
+variant = "default"
+args = ["deploy", "migrate-state"]
+fixtures = ["tide-corpus", "vscode"]
+
+# UC-4.4 (#834): ids moved into a shard and dropped as unused, then a rule
+# refused, on the Rust command line as on the oracle.
+[[case]]
+command = "deploy migrate-state"
+variant = "legacy-ids"
+args = ["deploy", "migrate-state"]
+fixtures = ["tide-corpus-legacy-ids", "tide-corpus-legacy-id-error"]
+
+# ---- share (MISP): tenant-contacting, recorded as failures without targets ----
+
+[[case]]
+command = "share"
+variant = "dry-run"
+args = ["share", "--dry-run"]
+fixtures = ["tide-corpus", "vscode"]
+
+[[case]]
+command = "share push"
+variant = "example"
+args = ["share", "push", "--target", "misp-prod"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "share preview"
+variant = "default"
+args = ["share", "preview"]
+fixtures = ["tide-corpus", "vscode"]
+
+[[case]]
+command = "share status"
+variant = "default"
+args = ["share", "status"]
+fixtures = ["tide-corpus", "vscode"]
+
+[[case]]
+command = "share retract"
+variant = "example"
+args = ["share", "retract", "--uuid", "{rule}"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "share targets"
+variant = "default"
+args = ["share", "targets"]
+fixtures = ["tide-corpus", "vscode"]
+
+# ---- setup ----
+
+[[case]]
+command = "setup"
+variant = "plan"
+args = ["setup", "--plan", "--platform", "sentinel", "--ci", "github", "--mcp", "vscode", "--hooks", "--env"]
+fixtures = ["none", "empty"]
+env = { PATH = "<TMP>/bin:/usr/local/bin:/usr/bin:/bin" }
+
+[[case]]
+command = "setup"
+variant = "yes"
+args = ["setup", "--yes", "--name", "Detections", "--platform", "sentinel", "--ci", "github"]
+fixtures = ["none"]
+normalise = ["fresh-uuids"]
+
+# A prompt with no TTY or under an agent exits 2 at once. Human mode is left out: the
+# interactive prompt (prompt_toolkit) works the terminal in raw mode and asks it for the cursor.
+[[case]]
+command = "setup"
+variant = "prompt"
+args = ["setup"]
+fixtures = ["none"]
+
+[[case]]
+command = "setup repo"
+variant = "example"
+args = ["setup", "repo", "--yes", "--name", "Detections", "--platform", "sentinel"]
+fixtures = ["none", "tide-corpus"]
+normalise = ["fresh-uuids"]
+
+[[case]]
+command = "setup platforms"
+variant = "example"
+args = ["setup", "platforms", "--sentinel", "--splunk", "--yes"]
+fixtures = ["empty", "tide-corpus"]
+
+[[case]]
+command = "setup ci"
+variant = "github"
+args = ["setup", "ci", "github", "--yes"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "setup ci"
+variant = "azure"
+args = ["setup", "ci", "azure", "--default-branch", "development", "--yes"]
+fixtures = ["tide-corpus"]
+
+# #1713: --no-prune writes the production deploy without --prune and
+# records the flag in the header, so a regenerate keeps it.
+[[case]]
+command = "setup ci"
+variant = "no-prune"
+args = ["setup", "ci", "gitlab", "--no-prune", "--yes"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "setup ci"
+variant = "gitlab-plan"
+args = ["setup", "ci", "gitlab", "--plan"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "setup ci"
+variant = "missing-argument"
+args = ["setup", "ci", "--yes"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "setup ci"
+variant = "typo-choice"
+args = ["setup", "ci", "githb", "--yes"]
+fixtures = ["tide-corpus"]
+
+# --promotion-target reads the statuses from the merged configuration,
+# unchecked: a paths.toml its model refuses (legacy [paths.core]) does not
+# stop it (#957).
+[[case]]
+command = "setup ci"
+variant = "promotion-target"
+args = ["setup", "ci", "github", "--promotion-target", "STAGING", "--yes"]
+fixtures = ["vscode-docs-folder"]
+
+# GitLab merges its Code Quality reports on the job's Python, with no module
+# the release does not ship (#1656).
+[[case]]
+command = "setup ci"
+variant = "gitlab"
+args = ["setup", "ci", "gitlab", "--yes"]
+fixtures = ["tide-corpus"]
+
+# The explorer job installs the pinned release, as every job does (#1656).
+[[case]]
+command = "setup ci"
+variant = "explorer-pages"
+args = ["setup", "ci", "github", "--default-branch", "main", "--explorer-pages", "--yes"]
+fixtures = ["tide-corpus"]
+
+# The tenants name their own variables ($ELASTIC_API_KEY, $S1_API_TOKEN,
+# $DEFENDER_CLIENT_SECRET, ...): the jobs that reach a tenant map each one,
+# from GitHub's secrets and in each Azure step's env (#1655).
+[[case]]
+command = "setup ci"
+variant = "tenant-variables-github"
+args = ["setup", "ci", "github", "--default-branch", "main", "--yes"]
+fixtures = ["tenants"]
+
+[[case]]
+command = "setup ci"
+variant = "tenant-variables-azure"
+args = ["setup", "ci", "azure", "--default-branch", "main", "--yes"]
+fixtures = ["tenants"]
+
+# sharing.toml's destinations read ${MISP_API_KEY}: the share job maps it
+# (#1655).
+[[case]]
+command = "setup ci"
+variant = "sharing-variables-github"
+args = ["setup", "ci", "github", "--default-branch", "main", "--sharing", "--yes"]
+fixtures = ["share-misp"]
+
+[[case]]
+command = "setup ci"
+variant = "sharing-variables-azure"
+args = ["setup", "ci", "azure", "--default-branch", "main", "--sharing", "--yes"]
+fixtures = ["share-misp"]
+
+# A pipeline the user wrote is kept, in a plan and in a run, by the command
+# and by the group (#1656).
+[[case]]
+command = "setup ci"
+variant = "own-pipeline-kept"
+args = ["setup", "ci", "gitlab", "--yes"]
+fixtures = ["vscode-own-pipeline"]
+
+[[case]]
+command = "setup"
+variant = "own-pipeline-plan"
+args = ["setup", "--ci", "gitlab", "--plan"]
+fixtures = ["vscode-own-pipeline"]
+
+# --python-version is written into the pipeline as it is: a version opentide
+# does not install on exits 2 and writes nothing (#1656).
+[[case]]
+command = "setup ci"
+variant = "python-version-refused"
+args = ["setup", "ci", "github", "--python-version", "2.7", "--yes"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "setup env"
+variant = "example"
+args = ["setup", "env", "--yes"]
+fixtures = ["empty", "tide-corpus"]
+
+[[case]]
+command = "setup hooks"
+variant = "example"
+args = ["setup", "hooks", "--yes"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "setup mcp"
+variant = "example"
+args = ["setup", "mcp", "--vscode", "--yes"]
+fixtures = ["tide-corpus"]
+env = { PATH = "<TMP>/bin:/usr/local/bin:/usr/bin:/bin" }
+
+# `opentide` not on PATH: every configuration runs it, so setup warns and
+# reports mcp_available: false (#1670, smoke C6). `<TMP>/empty` holds nothing.
+[[case]]
+command = "setup mcp"
+variant = "not-on-path"
+args = ["setup", "mcp", "--vscode", "--yes"]
+fixtures = ["tide-corpus"]
+env = { PATH = "<TMP>/empty" }
+
+[[case]]
+command = "setup mcp"
+variant = "cursor-vscode"
+args = ["setup", "mcp", "--cursor", "--vscode", "--yes"]
+fixtures = ["tide-corpus"]
+env = { PATH = "<TMP>/bin:/usr/local/bin:/usr/bin:/bin" }
+
+# An existing configuration with a byte-order mark and comments, merged into (#743).
+[[case]]
+command = "setup mcp"
+variant = "merge"
+args = ["setup", "mcp", "--vscode", "--yes"]
+fixtures = ["setup-merge"]
+env = { PATH = "<TMP>/bin:/usr/local/bin:/usr/bin:/bin" }
+
+# An existing platform file, enabled in place.
+[[case]]
+command = "setup platforms"
+variant = "merge"
+args = ["setup", "platforms", "--sentinel", "--yes"]
+fixtures = ["setup-merge"]
+
+[[case]]
+command = "setup vscode"
+variant = "settings"
+args = ["setup", "vscode", "--settings"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "setup vscode"
+variant = "snippets"
+args = ["setup", "vscode", "--snippets"]
+fixtures = ["tide-corpus"]
+
+# UC-3.6c (#951): the plan of `setup vscode`, its merges into the user's
+# .vscode files, its failure without templates, and `setup --vscode-setup`.
+[[case]]
+command = "setup vscode"
+variant = "plan"
+args = ["setup", "vscode", "--plan"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "setup vscode"
+variant = "merge"
+args = ["setup", "vscode", "--settings", "--mcp", "--no-generate"]
+fixtures = ["setup-merge"]
+
+[[case]]
+command = "setup vscode"
+variant = "no-templates"
+args = ["setup", "vscode", "--snippets", "--no-generate"]
+fixtures = ["empty"]
+
+[[case]]
+command = "setup"
+variant = "vscode-setup"
+args = ["setup", "--yes", "--vscode-setup"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "setup skills"
+variant = "example"
+args = ["setup", "skills", "--claude-code", "--yes"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "setup skills discover"
+variant = "example"
+args = ["setup", "skills", "discover", "--query", "sigma"]
+fixtures = ["none", "tide-corpus"]
+
+[[case]]
+command = "setup skills show"
+variant = "example"
+args = ["setup", "skills", "show", "opentide-detection-rule"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "setup skills show"
+variant = "unknown"
+args = ["setup", "skills", "show", "no-such-skill"]
+fixtures = ["tide-corpus"]
+
+# The skills catalogue, served from a recorded cassette (UC-4.1, #831):
+# tests/cassettes/skills/manifest.json, recorded from the oracle. The cases above run the same
+# commands with the network refused.
+
+[[case]]
+command = "setup skills discover"
+variant = "catalogue"
+args = ["setup", "skills", "discover"]
+fixtures = ["none"]
+cassette = "skills/manifest"
+
+[[case]]
+command = "setup skills discover"
+variant = "catalogue-query"
+args = ["setup", "skills", "discover", "--query", "rule"]
+fixtures = ["tide-corpus"]
+cassette = "skills/manifest"
+
+[[case]]
+command = "setup skills discover"
+variant = "catalogue-installed"
+args = ["setup", "skills", "discover", "--installed"]
+fixtures = ["tide-corpus"]
+cassette = "skills/manifest"
+
+[[case]]
+command = "setup skills show"
+variant = "catalogue"
+args = ["setup", "skills", "show", "opentide-detection-rule"]
+fixtures = ["tide-corpus"]
+cassette = "skills/manifest"
+
+[[case]]
+command = "setup skills show"
+variant = "catalogue-remote"
+args = ["setup", "skills", "show", "mitre-attack"]
+fixtures = ["none"]
+cassette = "skills/manifest"
+
+[[case]]
+command = "setup skills show"
+variant = "catalogue-unknown"
+args = ["setup", "skills", "show", "no-such-skill"]
+fixtures = ["none"]
+cassette = "skills/manifest"
+
+# Installing skills (UC-4.4d, #834): the starter skills ship with opentide;
+# since opentide 0.28.1 (#1015) an install or a plan of them reads the
+# catalogue, then the tree and files of each starter skill it lists, so those
+# cases replay the stand-in repository (skills/catalogue-first); --install of a
+# remote skill reads the stand-in repository of tests/cassettes/skills/tenant.py
+# (skills/install, skills/broken); --plugin with Claude Code alone reads
+# nothing. A case without a cassette has the network refused.
+
+[[case]]
+command = "setup skills"
+variant = "fresh"
+args = ["setup", "skills", "--cursor", "--claude-code", "--github-copilot", "--name", "Detections", "--yes"]
+fixtures = ["none"]
+cassette = "skills/catalogue-first"
+
+[[case]]
+command = "setup skills"
+variant = "merge"
+args = ["setup", "skills", "--cursor", "--claude-code", "--generic", "--github-copilot", "--yes"]
+fixtures = ["skills-merge"]
+cassette = "skills/catalogue-first"
+
+[[case]]
+command = "setup skills"
+variant = "merge-plan"
+args = ["setup", "skills", "--cursor", "--claude-code", "--plan"]
+fixtures = ["skills-merge"]
+cassette = "skills/catalogue-first"
+
+[[case]]
+command = "setup skills"
+variant = "plugin"
+args = ["setup", "skills", "--plugin", "--claude-code", "--yes"]
+fixtures = ["none", "skills-merge"]
+
+[[case]]
+command = "setup skills"
+variant = "plugin-offline"
+args = ["setup", "skills", "--plugin", "--generic", "--yes"]
+fixtures = ["none"]
+
+[[case]]
+command = "setup skills"
+variant = "remote"
+args = ["setup", "skills", "--generic", "--claude-code", "--install", "sample-skill", "--yes"]
+fixtures = ["none"]
+cassette = "skills/install"
+
+[[case]]
+command = "setup skills"
+variant = "remote-plan"
+args = ["setup", "skills", "--generic", "--install", "sample-skill", "--plan"]
+fixtures = ["none"]
+cassette = "skills/install"
+
+[[case]]
+command = "setup skills"
+variant = "broken"
+args = ["setup", "skills", "--generic", "--install", "broken-skill", "--yes"]
+fixtures = ["none"]
+cassette = "skills/broken"
+
+# opentide 0.28.1 (#1015): the catalogue lists detection-engineering, so the
+# starter skills install its copy; when a file of it cannot be downloaded,
+# the package's copy is written, or an installed copy (skills-merge) kept,
+# with a warning.
+[[case]]
+command = "setup skills"
+variant = "catalogue-first"
+args = ["setup", "skills", "--generic", "--yes"]
+fixtures = ["none"]
+cassette = "skills/catalogue-first"
+
+[[case]]
+command = "setup skills"
+variant = "catalogue-first-fallback"
+args = ["setup", "skills", "--generic", "--yes"]
+fixtures = ["none"]
+cassette = "skills/catalogue-first-missing"
+
+[[case]]
+command = "setup skills"
+variant = "catalogue-first-kept"
+args = ["setup", "skills", "--cursor", "--yes"]
+fixtures = ["skills-merge"]
+cassette = "skills/catalogue-first-missing"
+
+[[case]]
+command = "setup skills"
+variant = "unknown"
+args = ["setup", "skills", "--generic", "--install", "no-such-skill", "--yes"]
+fixtures = ["none"]
+cassette = "skills/manifest"
+
+[[case]]
+command = "setup skills"
+variant = "no-target"
+args = ["setup", "skills", "--yes"]
+fixtures = ["none"]
+
+[[case]]
+command = "setup"
+variant = "skills"
+args = ["setup", "--skills", "generic", "--skills", "cursor", "--yes"]
+fixtures = ["none"]
+cassette = "skills/catalogue-first"
+
+[[case]]
+command = "setup"
+variant = "skills-plan"
+args = ["setup", "--skills", "claude-code", "--plan"]
+fixtures = ["skills-merge"]
+cassette = "skills/catalogue-first"
+
+[[case]]
+command = "setup"
+variant = "plugin"
+args = ["setup", "--skills", "claude-code", "--plugin", "--yes"]
+fixtures = ["skills-merge"]
+
+[[case]]
+command = "setup"
+variant = "skills-offline"
+args = ["setup", "--skills", "generic", "--plugin", "--yes"]
+fixtures = ["none"]
+
+# ---- doctor, migrate, tui, explain, commands ----
+
+[[case]]
+command = "doctor"
+variant = "default"
+args = ["doctor"]
+normalise = ["host-git"]
+fixtures = ["tide-corpus", "vscode", "heavy-small", "fault", "empty", "none"]
+
+[[case]]
+command = "doctor"
+variant = "offline"
+args = ["doctor", "--offline"]
+normalise = ["host-git"]
+fixtures = ["tide-corpus", "vscode"]
+
+# `--live` on tenants whose credential variables are unset: each is reported
+# (`credentials`), none is reached (`connectivity` skips it), nothing is sent.
+# The exit code 1 is the harness's: every case runs with a dead proxy
+# (127.0.0.1:9), so the `proxy` check fails here as in the other doctor cases.
+# That missing credentials leave the exit code alone is asserted by
+# `missing_credentials_are_reported_and_not_a_failure` in
+# `crates/opentide-cli/tests/doctor_live.rs`.
+[[case]]
+command = "doctor"
+variant = "live-no-credentials"
+args = ["doctor", "--live"]
+normalise = ["host-git"]
+fixtures = ["tenants"]
+
+[[case]]
+command = "migrate vocab-scope"
+variant = "default"
+args = ["migrate", "vocab-scope"]
+fixtures = ["tide-corpus-folders", "vscode", "fault"]
+
+# Outside a workspace: workspace_not_found, not "0 files scanned" (#1659).
+[[case]]
+command = "migrate vocab-scope"
+variant = "no-workspace"
+args = ["migrate", "vocab-scope"]
+fixtures = ["none"]
+
+[[case]]
+command = "migrate vocab-scope"
+variant = "apply"
+args = ["migrate", "vocab-scope", "--apply"]
+fixtures = ["tide-corpus-folders"]
+
+# Values to rewrite: a dry run, the files --apply writes, and a value left
+# for a person (exit 2, --force to accept), so the rewrite path is recorded.
+[[case]]
+command = "migrate vocab-scope"
+variant = "rewrite"
+args = ["migrate", "vocab-scope"]
+fixtures = ["vscode-unscoped", "vscode-ambiguous"]
+
+[[case]]
+command = "migrate vocab-scope"
+variant = "rewrite-apply"
+args = ["migrate", "vocab-scope", "--apply"]
+fixtures = ["vscode-unscoped", "vscode-ambiguous"]
+
+[[case]]
+command = "migrate vocab-scope"
+variant = "rewrite-force"
+args = ["migrate", "vocab-scope", "--apply", "--force"]
+fixtures = ["vscode-ambiguous"]
+
+# Human mode starts the full-screen app, whose frames depend on timing: tui --help covers it.
+[[case]]
+command = "tui"
+variant = "default"
+args = ["tui"]
+fixtures = ["none", "tide-corpus"]
+
+[[case]]
+command = "explain"
+variant = "example"
+args = ["explain", "vocab_unknown"]
+fixtures = ["none"]
+
+[[case]]
+command = "explain"
+variant = "list"
+args = ["explain"]
+fixtures = ["none"]
+
+[[case]]
+command = "explain"
+variant = "typo"
+args = ["explain", "vocab_unknwn"]
+fixtures = ["none"]
+
+# #1015: a YARA code the engine only ever warns about, and a YARA error. The
+# page's text is what they test: human mode is the Markdown renderer's (the
+# example case's ledger entries, #827).
+[[case]]
+command = "explain"
+variant = "yara-warning"
+args = ["explain", "yara_module_unconfirmed"]
+fixtures = ["none"]
+
+[[case]]
+command = "explain"
+variant = "yara-error"
+args = ["explain", "yara_unknown_module"]
+fixtures = ["none"]
+
+[[case]]
+command = "commands"
+variant = "default"
+args = ["commands"]
+fixtures = ["none"]
+
+# ---- the CLI framework (UC-3.3, #825): hoisting, DEBUG, indentation, on the command it ports ----
+
+# --json after the command: hoisted to the root.
+[[case]]
+command = "commands"
+variant = "json-after"
+args = ["commands", "--json"]
+modes = ["plain"]
+fixtures = ["none"]
+same_as = "default"
+
+# The other hoisted flags after the command.
+[[case]]
+command = "commands"
+variant = "hoist-flags"
+args = ["commands", "--quiet", "--no-color"]
+fixtures = ["none"]
+same_as = "default"
+
+# DEBUG='*' (Node tooling) is not a boolean: ignored, not an error.
+[[case]]
+command = "commands"
+variant = "debug-star"
+args = ["commands"]
+fixtures = ["none"]
+env = { DEBUG = "*" }
+same_as = "default"
+
+# OPENTIDE_JSON_INDENT=2: the variable does not change the document (`same_as`
+# compares parsed JSON, so this case does not check the layout; the
+# indentation is `mode::json_indent`'s unit test in `src/mode.rs` and
+# `framework_json_indentation_and_one_trailing_newline` in `src/app.rs`).
+[[case]]
+command = "commands"
+variant = "indent-2"
+args = ["commands"]
+fixtures = ["none"]
+env = { OPENTIDE_JSON_INDENT = "2" }
+same_as = "default"
+
+# OPENTIDE_JSON_INDENT=0: as above, the document is the same (the one-line
+# layout on a terminal is held by the same two unit tests, not by this case).
+[[case]]
+command = "commands"
+variant = "indent-0"
+args = ["--json", "commands"]
+modes = ["human"]
+fixtures = ["none"]
+env = { OPENTIDE_JSON_INDENT = "0" }
+same_as = "default"
+
+# A typo in an option of the command, and an extra argument.
+[[case]]
+command = "commands"
+variant = "typo-option"
+args = ["commands", "--jsno"]
+fixtures = ["none"]
+
+[[case]]
+command = "commands"
+variant = "extra-argument"
+args = ["commands", "extra"]
+fixtures = ["none"]
+
+# ---- protocol commands (mcp mode in every mode): the MCP server is UC-3.7, the language server has its own tests ----
+
+# One JSON-RPC session: initialize, two runs, a refused run, protocol errors, shutdown, exit.
+[[case]]
+command = "serve"
+variant = "session"
+args = ["serve"]
+modes = ["plain"]
+fixtures = ["tide-corpus", "vscode"]
+input = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{}}\n{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"run\",\"params\":{\"argv\":[\"validate\"]}}\n{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"run\",\"params\":{\"argv\":[\"info\"]}}\n{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"run\",\"params\":{\"argv\":[\"tui\"]}}\nnot json\n{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"nope\"}\n{\"jsonrpc\":\"2.0\",\"id\":6,\"method\":\"shutdown\"}\n{\"jsonrpc\":\"2.0\",\"method\":\"exit\"}\n"
+
+# ---- a file changed in place: --fix repairs a typo ----
+
+# Changes a file in place (a recorded `modified`).
+[[case]]
+command = "validate"
+variant = "fix-typo"
+args = ["validate", "--fix"]
+fixtures = ["tide-corpus-typo"]
+
+[[case]]
+command = "validate"
+variant = "fix-typo-dry-run"
+args = ["validate", "--fix", "--dry-run"]
+fixtures = ["tide-corpus-typo"]
+
+# The typo found, with its safe fix offered.
+[[case]]
+command = "validate"
+variant = "typo"
+args = ["validate"]
+fixtures = ["tide-corpus-typo"]
+
+# A value the model does not take: the help writes what the field takes, in
+# YAML's spelling (`false`, not Python's `False`), and `--json` carries it as
+# `context.expected` (#1663 B2: CrowdStrike's `trigger`, deploy's values).
+[[case]]
+command = "validate"
+variant = "bad-values"
+args = ["validate"]
+fixtures = ["tide-corpus-bad-values"]
+
+# 0.24.0: a Splunk block's `advanced` table validates and deploys again
+# (refused as a splunk::2.x key from 0.21.0). The oracle's deploy crashes on
+# it: XDG_STATE_HOME names a folder no one can create, so it reports the crash
+# without writing a crash log, a file the ledger cannot approve (a presence
+# rule names the catalog cache alone); the candidate does not crash and writes
+# none either way. The crash is recorded in json mode alone: in plain mode the
+# oracle prints nothing on stdout, where the candidate prints its result, and
+# the ledger approves a block of the oracle's lines, not lines added to an
+# empty stream.
+[[case]]
+command = "validate"
+variant = "splunk-advanced"
+args = ["validate"]
+fixtures = ["tide-corpus-splunk-advanced"]
+
+[[case]]
+command = "deploy"
+variant = "splunk-advanced"
+args = ["deploy", "--platform", "splunk", "--dry-run", "--strategy", "PREVIEW", "--all"]
+fixtures = ["tide-corpus-splunk-advanced"]
+env = { XDG_STATE_HOME = "/dev/null/opentide-golden" }
+
+# #913: a legacy external-id key whose id is text is `external_id_in_rule`,
+# not a crash. The oracle crashes, recorded as the Splunk deploy above is: no
+# crash log written (XDG_STATE_HOME), json mode alone.
+[[case]]
+command = "validate"
+variant = "legacy-text-id"
+args = ["validate"]
+fixtures = ["tide-corpus-legacy-text-id"]
+env = { XDG_STATE_HOME = "/dev/null/opentide-golden" }
+
+# ---- more examples from docs/cli ----
+
+[[case]]
+command = "deploy"
+variant = "strategy-dry-run"
+args = ["deploy", "--strategy", "PREVIEW", "--dry-run"]
+fixtures = ["tide-corpus"]
+
+# Tenant-contacting: recorded as its failure without tenants.
+[[case]]
+command = "deploy"
+variant = "release-splunk"
+args = ["deploy", "--strategy", "RELEASE", "--platform", "splunk"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "generate"
+variant = "no-color"
+args = ["--no-color", "generate"]
+normalise = ["fresh-uuids"]
+fixtures = ["tide-corpus"]
+view = "streams"
+
+# `generate schemas` is newer than 0.23.0: recorded as the unknown command it is there.
+[[case]]
+command = "generate"
+variant = "schemas"
+args = ["generate", "schemas"]
+fixtures = ["tide-corpus"]
+
+# docs/cli/generate.md: several phases at once (unknown to 0.23.0 likewise).
+# On vscode too: every bare `generate` there fails in the docs phase, so this
+# is the run `cargo xtask codegen --check` compares on that fixture (#814).
+[[case]]
+command = "generate"
+variant = "schemas-templates-vocabs-snippets"
+args = ["generate", "schemas", "templates", "vocabs", "snippets"]
+fixtures = ["tide-corpus", "vscode"]
+
+[[case]]
+command = "generate docs"
+variant = "output"
+args = ["generate", "docs", "--output", "docs"]
+fixtures = ["tide-corpus"]
+
+# Legacy [paths.core] docs_folder with no documentation.toml output: both
+# engines refuse the configuration in the docs step (exit 1, no pages, #936).
+[[case]]
+command = "generate docs"
+variant = "docs-folder"
+args = ["generate", "docs"]
+fixtures = ["vscode-docs-folder"]
+
+# The same configuration, which neither engine loads, fails the step of
+# every other generate command (#946). `setup ci` writes its pipeline all
+# the same, with the default rules folder.
+[[case]]
+command = "generate exports"
+variant = "config-refused"
+args = ["generate", "exports"]
+fixtures = ["vscode-docs-folder"]
+
+[[case]]
+command = "generate explorer"
+variant = "config-refused"
+args = ["generate", "explorer"]
+fixtures = ["vscode-docs-folder"]
+
+[[case]]
+command = "generate inflight"
+variant = "config-refused"
+args = ["generate", "inflight"]
+fixtures = ["vscode-docs-folder"]
+
+[[case]]
+command = "generate inflight prune"
+variant = "config-refused"
+args = ["generate", "inflight", "prune"]
+fixtures = ["vscode-docs-folder"]
+
+[[case]]
+command = "setup ci"
+variant = "config-refused"
+args = ["setup", "ci", "github", "--yes"]
+fixtures = ["vscode-docs-folder"]
+
+[[case]]
+command = "info"
+variant = "technique-before-section"
+args = ["info", "--technique", "T1059", "coverage"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "lint"
+variant = "file-missing"
+args = ["lint", "--file", "objects/rules/example.yaml"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "validate"
+variant = "file-example-missing"
+args = ["validate", "--file", "objects/rules/example.yaml"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "validate"
+variant = "check-queries"
+args = ["validate", "--check", "queries"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "query"
+variant = "defender-file"
+args = ["query", "--platform", "microsoft_defender", "--file", "objects/rules/suspicious-lsass.yaml"]
+fixtures = ["vscode"]
+
+# Tenant-contacting: the corpus has an elastic tenant; the network is refused.
+[[case]]
+command = "query"
+variant = "elastic-eql"
+args = ["query", "--platform", "elastic", "--language", "eql", "--index", "logs-*", "process where process.name == \"cmd.exe\""]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "rules unreviewed"
+variant = "default"
+args = ["rules", "unreviewed"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "rules unreviewed"
+variant = "hours"
+args = ["rules", "unreviewed", "--older-than", "12h"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "setup"
+variant = "platform-ci"
+args = ["setup", "--yes", "--platform", "sentinel", "--ci", "github"]
+normalise = ["fresh-uuids"]
+fixtures = ["none"]
+
+[[case]]
+command = "share push"
+variant = "default"
+args = ["share", "push"]
+fixtures = ["tide-corpus"]
+
+# --changed outside a git repository.
+[[case]]
+command = "share push"
+variant = "changed"
+args = ["share", "push", "--changed"]
+fixtures = ["tide-corpus"]
+
+# docs/cli/share.md: --since names the start, so it runs outside CI; no git repository.
+[[case]]
+command = "share push"
+variant = "changed-since"
+args = ["share", "push", "--changed", "--since", "0123456789abcdef0123456789abcdef01234567"]
+fixtures = ["tide-corpus"]
+
+# Retract without --uuid may prompt: human mode is left out (interactive prompt).
+[[case]]
+command = "share retract"
+variant = "no-uuid"
+args = ["share", "retract"]
+fixtures = ["tide-corpus"]
+
+# ---- UC-4.4b (#834): share on the MISP stand-in ----
+# The `share-misp` fixture; the cases that reach the stand-in are served from
+# cassettes recorded from the oracle (tests/cassettes/golden/share-*.json). Not
+# in human mode: the catalogue's progress is drawn as often as it loads.
+
+[[case]]
+command = "share preview"
+variant = "misp"
+args = ["share", "preview"]
+fixtures = ["share-misp"]
+
+[[case]]
+command = "share"
+variant = "misp-dry-run"
+args = ["share", "--dry-run", "--target", "misp-prod", "--no-publish"]
+fixtures = ["share-misp"]
+
+[[case]]
+command = "share status"
+variant = "misp"
+args = ["share", "status"]
+fixtures = ["share-misp"]
+
+[[case]]
+command = "share status"
+variant = "misp-type"
+args = ["share", "status", "--type", "rule", "--target", "misp-locked"]
+fixtures = ["share-misp"]
+
+[[case]]
+command = "share targets"
+variant = "misp"
+args = ["share", "targets"]
+fixtures = ["share-misp"]
+
+[[case]]
+command = "share targets"
+variant = "misp-broken"
+args = ["share", "targets"]
+fixtures = ["share-misp-broken"]
+
+[[case]]
+command = "share push"
+variant = "misp-key-unset"
+args = ["share", "push"]
+fixtures = ["share-misp"]
+
+[[case]]
+command = "share push"
+variant = "misp-disabled"
+args = ["share", "push", "--target", "misp-lab"]
+fixtures = ["share-misp"]
+
+[[case]]
+command = "share push"
+variant = "misp-typo"
+args = ["share", "push", "--target", "misp-prd"]
+fixtures = ["share-misp"]
+
+[[case]]
+command = "share push"
+variant = "misp-unknown-type"
+args = ["share", "push", "--type", "rules"]
+fixtures = ["share-misp"]
+
+[[case]]
+command = "share push"
+variant = "misp-workers"
+args = ["share", "push", "--workers", "0"]
+fixtures = ["share-misp"]
+
+[[case]]
+command = "share push"
+variant = "misp-since-alone"
+args = ["share", "push", "--since", "HEAD~1"]
+fixtures = ["share-misp"]
+
+[[case]]
+command = "share status"
+variant = "misp-group-option"
+args = ["share", "--dry-run", "status"]
+fixtures = ["share-misp"]
+
+[[case]]
+command = "share retract"
+variant = "misp-unconfirmed"
+args = ["share", "retract", "--target", "misp-prod", "--delete"]
+fixtures = ["share-misp"]
+env = { MISP_API_KEY = "golden-stand-in-credential" }
+
+# UC-4.4 (#834): MISP instances that cannot be reached, the key set: no
+# cassette, so every call goes to the refusing proxy on 127.0.0.1:9.
+
+[[case]]
+command = "share push"
+variant = "misp-unreachable"
+args = ["share", "push"]
+fixtures = ["share-misp"]
+env = { MISP_API_KEY = "golden-stand-in-credential" }
+
+[[case]]
+command = "share retract"
+variant = "misp-unreachable"
+args = ["share", "retract", "--target", "misp-prod", "--uuid", "00000000-0000-4000-8048-000000000012"]
+fixtures = ["share-misp"]
+env = { MISP_API_KEY = "golden-stand-in-credential" }
+
+[[case]]
+command = "share push"
+variant = "misp"
+args = ["share", "push"]
+fixtures = ["share-misp"]
+env = { MISP_API_KEY = "golden-stand-in-credential" }
+cassette = "golden/share-push"
+
+[[case]]
+command = "share retract"
+variant = "misp"
+args = ["share", "retract", "--target", "misp-prod", "--uuid", "00000000-0000-4000-8048-000000000012", "--uuid", "00000000-0000-4000-8048-000000000020"]
+fixtures = ["share-misp"]
+env = { MISP_API_KEY = "golden-stand-in-credential" }
+cassette = "golden/share-retract"
+
+# ---- UC-4.4b (#834): generate extract on the stand-in tenants ----
+# The `tenants` fixture; each case is served from a cassette recorded from the
+# oracle (tests/cassettes/golden/extract-*.json) and writes `Imported/`.
+
+[[case]]
+command = "generate extract defender"
+variant = "tenant"
+args = ["generate", "extract", "defender"]
+fixtures = ["tenants"]
+env = { DEFENDER_CLIENT_SECRET = "golden-stand-in-credential" }
+cassette = "golden/extract-defender"
+
+[[case]]
+command = "generate extract elastic"
+variant = "tenant"
+args = ["generate", "extract", "elastic", "--space", "soc"]
+fixtures = ["tenants"]
+env = { ELASTIC_API_KEY = "golden-stand-in-credential" }
+cassette = "golden/extract-elastic"
+
+[[case]]
+command = "generate extract elastic"
+variant = "no-space"
+args = ["generate", "extract", "elastic", "--space", "default"]
+fixtures = ["tenants"]
+
+# UC-4.4 (#834): the import from a tenant whose credential is set but which
+# cannot be reached: no cassette, the refusing proxy on 127.0.0.1:9.
+
+[[case]]
+command = "generate extract defender"
+variant = "unreachable"
+args = ["generate", "extract", "defender"]
+fixtures = ["tenants"]
+env = { DEFENDER_CLIENT_SECRET = "golden-stand-in-credential" }
+
+[[case]]
+command = "generate extract elastic"
+variant = "unreachable"
+args = ["generate", "extract", "elastic", "--space", "soc"]
+fixtures = ["tenants"]
+env = { ELASTIC_API_KEY = "golden-stand-in-credential" }
+
+# ---- UC-4.4e (#834): share push --changed on a git diff ----
+# `share-misp-push` is a checkout whose last commit, a push, changed rule-b;
+# `share-misp-push-config` one whose push changed sharing.toml alone. The diff
+# reads from the push's base (the trigger's first parent, GitLab's before
+# SHA) or `--since` up to HEAD.
+
+[[case]]
+command = "share push"
+variant = "changed-github-push"
+args = ["share", "push", "--changed"]
+fixtures = ["share-misp-push"]
+env = { MISP_API_KEY = "golden-stand-in-credential", GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
+cassette = "golden/share-push-changed"
+
+# #1662: the first push of a new repository shares every object it holds.
+[[case]]
+command = "share push"
+variant = "changed-first-push"
+args = ["share", "push", "--changed", "--dry-run"]
+fixtures = ["share-misp-first-commit"]
+env = { MISP_API_KEY = "golden-stand-in-credential", GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
+
+[[case]]
+command = "share push"
+variant = "changed-key-unset"
+args = ["share", "push", "--changed"]
+fixtures = ["share-misp-push"]
+env = { GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
+
+[[case]]
+command = "share push"
+variant = "changed-no-object"
+args = ["share", "push", "--changed"]
+fixtures = ["share-misp-push-config"]
+env = { MISP_API_KEY = "golden-stand-in-credential", GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
+
+[[case]]
+command = "share push"
+variant = "changed-other-type"
+args = ["share", "push", "--changed", "--type", "threat"]
+fixtures = ["share-misp-push"]
+env = { MISP_API_KEY = "golden-stand-in-credential", GITLAB_CI = "true", CI = "true", CI_COMMIT_SHA = "HEAD", CI_COMMIT_BEFORE_SHA = "0000000000000000000000000000000000000000", CI_PROJECT_DIR = "<WS>" }
+
+[[case]]
+command = "share push"
+variant = "changed-no-trigger"
+args = ["share", "push", "--changed"]
+fixtures = ["share-misp-push"]
+env = { MISP_API_KEY = "golden-stand-in-credential", GITLAB_CI = "true", CI = "true", CI_PROJECT_DIR = "<WS>" }
+
+[[case]]
+command = "share push"
+variant = "changed-unknown-before"
+args = ["share", "push", "--changed"]
+fixtures = ["share-misp-push"]
+env = { MISP_API_KEY = "golden-stand-in-credential", GITLAB_CI = "true", CI = "true", CI_COMMIT_SHA = "HEAD", CI_COMMIT_BEFORE_SHA = "0123456789abcdef0123456789abcdef01234567", CI_PROJECT_DIR = "<WS>" }
+
+[[case]]
+command = "share push"
+variant = "changed-since-head"
+args = ["share", "push", "--changed", "--since", "HEAD"]
+fixtures = ["share-misp-push"]
+env = { MISP_API_KEY = "golden-stand-in-credential" }
+
+[[case]]
+command = "share push"
+variant = "changed-since-revision"
+args = ["share", "push", "--changed", "--since", "HEAD~1"]
+fixtures = ["share-misp-push"]
+env = { MISP_API_KEY = "golden-stand-in-credential" }
+
+[[case]]
+command = "share push"
+variant = "changed-since-branch"
+args = ["share", "push", "--changed", "--since", "main", "--dry-run"]
+fixtures = ["share-misp-push"]
+
+[[case]]
+command = "share push"
+variant = "changed-file-unchanged"
+args = ["share", "push", "--changed", "--file", "objects/rules/rule-a-create.yaml"]
+fixtures = ["share-misp-push"]
+env = { MISP_API_KEY = "golden-stand-in-credential", GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
+
+[[case]]
+command = "share push"
+variant = "changed-file-key-unset"
+args = ["share", "push", "--changed", "--file", "objects/rules/rule-b-update.yaml"]
+fixtures = ["share-misp-push"]
+env = { GITHUB_ACTIONS = "true", GITHUB_EVENT_NAME = "push", GITHUB_SHA = "HEAD", GITHUB_WORKSPACE = "<WS>" }
+
+[[case]]
+command = "share push"
+variant = "changed-uuid"
+args = ["share", "push", "--changed", "--uuid", "00000000-0000-4000-8048-000000000011", "--uuid", "00000000-0000-4000-8048-000000000012"]
+fixtures = ["share-misp-push"]
+env = { TF_BUILD = "True", BUILD_SOURCEVERSION = "HEAD", BUILD_SOURCESDIRECTORY = "<WS>" }
+
+# B16: a `//` line in a folded query comments out the rest of it.
+[[case]]
+command = "validate"
+variant = "folded-comment"
+args = ["validate", "--check", "queries", "--file", "detections/rules/custom-folder-rule.yaml"]
+fixtures = ["vscode-folded-comment"]
+
+[[case]]
+command = "lint"
+variant = "folded-comment"
+args = ["lint"]
+fixtures = ["vscode-folded-comment"]
+
+[[case]]
+command = "lint"
+variant = "folded-comment-strict"
+args = ["lint", "--strict"]
+fixtures = ["vscode-folded-comment"]
+
+# B22: a finding on a line longer than a frame shows.
+[[case]]
+command = "validate query"
+variant = "long-line"
+args = ["validate", "query", "--file", "long.lucene", "--platform", "elastic"]
+fixtures = ["vscode-long-query"]
+
+# ---------------------------------------------------------------------------
+# The text modes (#1723). Every case above runs in json mode alone (the
+# default): the `--json` contract, the files a command writes and its exit
+# code are what a script or a pipeline reads. The cases below run a case again
+# in a text mode, each for a reason: a small rendering set, which holds what
+# a person or an agent sees (colours, wrapping, code frames, the tally, the
+# checklist), and the behaviours that only a text mode has (a flag or a
+# variable that changes the text, a file only a text mode writes). The
+# wording of the rest is held by the renderers (`tests/render.rs`) and the
+# commands' own tests. A new case runs in json mode; add one here only for
+# a behaviour no other test holds.
+# ---------------------------------------------------------------------------
+
+# Rendering set: a report with code frames, colours and the tally, in each of
+# the three text modes.
+[[case]]
+command = "validate"
+variant = "default"
+args = ["validate"]
+modes = ["human", "plain", "agent"]
+fixtures = ["vscode"]
+
+# Rendering set: a long query line wraps inside its code frame (human).
+[[case]]
+command = "validate query"
+variant = "long-line"
+args = ["validate", "query", "--file", "long.lucene", "--platform", "elastic"]
+modes = ["human"]
+fixtures = ["vscode-long-query"]
+
+# Rendering set: lint's findings and tally in a terminal.
+[[case]]
+command = "lint"
+variant = "default"
+args = ["lint"]
+modes = ["human"]
+fixtures = ["tide-corpus"]
+
+# Rendering set: the checklist `setup --plan` prints, in each text mode.
+[[case]]
+command = "setup"
+variant = "plan"
+args = ["setup", "--plan", "--platform", "sentinel", "--ci", "github", "--mcp", "vscode", "--hooks", "--env"]
+env = { PATH = "<TMP>/bin:/usr/local/bin:/usr/bin:/bin" }
+modes = ["human", "plain", "agent"]
+fixtures = ["empty"]
+
+# Rendering set: the deploy plan's tally in a terminal.
+[[case]]
+command = "deploy"
+variant = "dry-run"
+args = ["deploy", "--strategy", "PREVIEW", "--all", "--dry-run"]
+modes = ["human"]
+fixtures = ["tide-corpus"]
+
+# Rendering set: an explain page as a person reads it (the JSON document holds the same text).
+[[case]]
+command = "explain"
+variant = "example"
+args = ["explain", "vocab_unknown"]
+modes = ["plain"]
+fixtures = ["none"]
+
+# Rendering set: the home screen of a bare `opentide` at a terminal (the brand
+# marks in colour).
+[[case]]
+command = ""
+variant = "bare"
+args = []
+modes = ["human"]
+fixtures = ["none"]
+
+# Only a text mode has this refusal: `--json` answers `usage_needs_input` in
+# its own words, and a script's `opentide setup` without a terminal prints this.
+[[case]]
+command = "setup"
+variant = "prompt"
+args = ["setup"]
+modes = ["plain"]
+fixtures = ["none"]
+
+# What a flag or a variable changes in the text: debug logging on stderr, the
+# foreign `DEBUG=*` and `DEBUG=1` that never start it or crash startup, --quiet
+# beside --verbose, --no-color in a terminal, and --verbose's extra lines.
+[[case]]
+command = ""
+variant = "debug-flag"
+args = ["--debug", "info"]
+modes = ["plain"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "validate"
+variant = "debug-star"
+args = ["validate"]
+env = { DEBUG = "*" }
+modes = ["plain"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "validate"
+variant = "debug-true"
+args = ["validate"]
+env = { DEBUG = "1" }
+modes = ["plain"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "lint"
+variant = "quiet-verbose"
+args = ["--quiet", "lint", "--verbose"]
+modes = ["human"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "commands"
+variant = "hoist-flags"
+args = ["commands", "--quiet", "--no-color"]
+modes = ["human"]
+fixtures = ["none"]
+
+[[case]]
+command = "generate"
+variant = "no-color"
+args = ["--no-color", "generate"]
+normalise = ["fresh-uuids"]
+modes = ["human"]
+fixtures = ["tide-corpus"]
+view = "streams"
+
+[[case]]
+command = "validate"
+variant = "verbose"
+args = ["validate", "--verbose"]
+modes = ["plain"]
+fixtures = ["tide-corpus"]
+
+[[case]]
+command = "lint"
+variant = "verbose"
+args = ["lint", "--verbose"]
+modes = ["plain"]
+fixtures = ["tide-corpus"]
+
+# The CI summaries are Markdown a pipeline publishes: the step summary, the GitLab
+# report and the Azure attachment each hold the report as a small workspace writes
+# it (the fault workspace's run above holds which files are written).
+[[case]]
+command = "validate"
+variant = "ci-sink-github"
+args = ["validate"]
+env = { GITHUB_ACTIONS = "true", GITHUB_WORKSPACE = "<WS>", GITHUB_STEP_SUMMARY = "<TMP>/tmp/github-step-summary.md" }
+modes = ["plain"]
+fixtures = ["vscode"]
+
+[[case]]
+command = "validate"
+variant = "ci-sink-gitlab"
+args = ["validate"]
+env = { GITLAB_CI = "true", CI_PROJECT_DIR = "<WS>" }
+modes = ["plain"]
+fixtures = ["vscode"]
+
+[[case]]
+command = "validate"
+variant = "ci-sink-azure"
+args = ["validate"]
+env = { TF_BUILD = "True", BUILD_SOURCESDIRECTORY = "<WS>", AGENT_TEMPDIRECTORY = "<TMP>/tmp/agent" }
+modes = ["plain"]
+fixtures = ["vscode"]
+
+# #1713: a rule deployed earlier whose file is gone. Without --prune the
+# run lists it under `retirable` and sends nothing; with --prune the plan
+# deletes it by the id deployment state records (`retired: true`).
+[[case]]
+command = "deploy"
+variant = "orphan-retirable"
+args = ["deploy", "--platform", "sentinel_one", "--strategy", "RELEASE", "--all", "--dry-run"]
+fixtures = ["deploy-orphan"]
+
+[[case]]
+command = "deploy"
+variant = "orphan-prune"
+args = ["deploy", "--platform", "sentinel_one", "--strategy", "RELEASE", "--all", "--dry-run", "--prune"]
+fixtures = ["deploy-orphan"]

@@ -5,7 +5,7 @@ description: Repository root, data root, debug logging, quiet, colour, JSON outp
 
 # Global options
 
-Set on the root `opentide` callback. The boolean flags (`--json`, `--no-color`, `--debug`, `--quiet`, `--verbose`) are accepted anywhere before `--`, after the command too; options that take a value (`--repo`, `--data`, `--proxy`) go before the command.
+Set on the root `opentide` command. The boolean flags (`--json`, `--no-color`, `--debug`, `--quiet`, `--verbose`) are accepted anywhere before `--`, after the command too; options that take a value (`--repo`, `--data`, `--proxy`) go before the command.
 
 ```bash
 opentide --repo /path/to/repo --json validate --strict
@@ -13,25 +13,27 @@ opentide validate --strict --json
 opentide --debug --no-color generate
 ```
 
-A flag that is the value of the option before it stays that option's value: in `opentide setup skills discover --query --json`, `--json` is the search text. There are no short forms (`-q` belongs to `--query`).
+A word that starts with `-` is an option, never the value of the option before it: `opentide setup skills discover --query --json` is a usage error (exit `2`, `a value is required for '--query <QUERY>' but none was supplied`). To give a value that starts with `-`, join it with `=`: `--query=--json` searches for `--json`. A negative number is a value (`--limit -1`). There are no short forms of the global flags (`-q` belongs to `--query`).
 
 ## Options
 
 | Flag | Environment variable | Default | Description |
 |------|---------------------|---------|-------------|
 | `--repo` | `OPENTIDE_REPO_ROOT` | Discovered from the current directory | Detection workspace root |
-| `--data` | `OPENTIDE_DATA_ROOT` | Package bundled data | Override vocabulary and default configs |
+| `--data` | `OPENTIDE_DATA_ROOT` | Package bundled data | Changes only [`--technique` completion](#shell-completion), which reads `<data>/vocabulary/att&ck.vocab.toml` when it is there: the commands read the vocabularies and default configurations compiled into opentide |
 | `--debug` | `OPENTIDE_DEBUG`, or `DEBUG` when it is a boolean | off | Enable debug logging, with timestamps |
 | `--quiet` | — | off | Print only the outcome line and errors |
-| `--verbose` | — | off | Also print notes: findings worth knowing that are not wrong, such as a missing optional field. `validate`, `lint` and `validate query` hide them by default, say how many, and suggest the same command with `--verbose`; `validate --watch` shows every finding. Cannot be combined with `--quiet` (exit `2`). `--json` and reports always include notes |
+| `--verbose` | — | off | Also print notes: findings worth knowing that are not wrong, such as a missing optional field. `validate`, `lint` and `validate query` hide them by default and say how many. Cannot be combined with `--quiet` (exit `2`). `--json` and reports always include notes |
 | `--no-color` | `NO_COLOR` / `FORCE_COLOR=0` | off | Disable colour |
 | `--json` | `OPENTIDE_OUTPUT=json` | off | Print one JSON document on stdout; see [JSON output](./json-output.md) |
 | `--proxy` | `OPENTIDE_PROXY` | none | HTTP(S) proxy for platform and lookup calls; see [Proxy](#proxy) |
 | `--version`, `-V` | — | — | Print `opentide <version>` and exit |
 
+An option given twice keeps its last value (`--repo a --repo b` uses `b`), except the single-value `--platform` of `deploy`, `deploy metadata`, `query`, `info` and `validate query`: it chooses where a command acts, so `deploy --platform elastic --platform splunk` exits `2` and names `--platform` rather than plan only `splunk`. `setup --platform` is repeatable. A repeatable option (`--strategy`, `--tenant`, `--file`) collects every value.
+
 ## Version
 
-`opentide --version` (or `-V`) prints the installed package version as `opentide <version>` and exits 0. It runs before the repository root is resolved and before any command, so it works outside a detection workspace and is cheap enough to log at the start of a pipeline job:
+`opentide --version` (or `-V`) prints the installed package version as `opentide <version>` and exits 0. On its own it checks nothing: it reads no file, looks for no workspace and touches no network, so it works anywhere and is cheap enough to log at the start of a pipeline job. Even when the analysis engine of a damaged install does not load, it prints the version (from the package's metadata); the first command reports the engine, and [`opentide doctor`](./doctor.md) checks the install.
 
 ```bash
 opentide --version
@@ -43,7 +45,7 @@ The output is plain text even with `--json`. For the version inside a JSON docum
 
 When `--repo` is omitted, opentide walks up from the current directory and stops at the first directory holding `.opentide/` or `objects/`. That is the detection workspace, so every command sees the same catalogue whether you start at its root, in `objects/rules`, or in `.opentide/configurations/platforms`.
 
-The walk never leaves the enclosing git checkout. A workspace kept in a subdirectory of a larger repository (`monorepo/detections/`) is found from anywhere inside `detections/`, while markers above the checkout are ignored. When nothing on the way up is marked, the root is the git top level, or the current directory outside git. Git's own `.git/objects` and a Python package named `objects/` (one with an `__init__.py`) are not markers.
+The walk never leaves the enclosing git checkout. A workspace kept in a subdirectory of a larger repository (`monorepo/detections/`) is found from anywhere inside `detections/`, while markers above the checkout are ignored. When nothing on the way up is marked, the root is the git top level, or the current directory outside git. Only opentide's own markers count: any `objects/` folder is one, whatever it holds, and nothing inside `.git` is (git keeps its object store in `.git/objects`).
 
 In order, the first of these wins:
 
@@ -53,6 +55,8 @@ In order, the first of these wins:
 4. The nearest `.opentide/` or `objects/` walking up from the current directory
 5. The git top level, or the current directory outside git
 
+`OPENTIDE_REPO_ROOT` or `OPENTIDE_TIDE_WORKSPACE` set to the empty string counts as unset: it names no folder.
+
 Git commands such as `generate docs --changed` and `generate inflight` still run against the whole checkout when the workspace sits below its top level: changed paths are reported relative to the git top level (`detections/objects/rules/…`).
 
 `opentide validate` prints the directory it checked when it finds no objects there. See [Which workspace was checked](./validate.md#which-workspace-was-checked).
@@ -61,11 +65,11 @@ A `--repo` typed on the command line also overrides an exported `OPENTIDE_TIDE_W
 
 Setup commands honour `--repo` when `--path` is `.` (default).
 
-A `--repo` typed on the command line must name an existing directory: anything else exits `2` with `usage_invalid_value` (`--repo ../detections does not exist`, then `→ opentide --help`), so a typo cannot read as an empty catalogue that passes. `setup` is the exception, since it may name the folder it is about to create.
+A `--repo` typed on the command line must name an existing directory: anything else exits `2` with `usage_invalid_value` (`--repo ../detections does not exist`, then `→ opentide --help`), so a typo cannot read as an empty catalogue that passes. `OPENTIDE_REPO_ROOT` and `OPENTIDE_TIDE_WORKSPACE` are held to the same test when no `--repo` is typed (`OPENTIDE_REPO_ROOT=/srv/detections does not exist`, `argument` the variable's name), as the MCP server holds them. `setup` is the exception, since it may name the folder it is about to create; the servers a host starts (`mcp start`, `lsp start`, `serve`) start anyway, and the MCP server's catalogue tools refuse with `workspace_not_found`; [`doctor`](./doctor.md) runs and reports the variable's folder as its failed `workspace` check (`Workspace /srv/detections does not exist` for `OPENTIDE_REPO_ROOT`, `OPENTIDE_TIDE_WORKSPACE=/srv/detections does not exist` for the Tide workspace).
 
 ## Proxy
 
-`--proxy http://[user:pass@]host:port`, or `OPENTIDE_PROXY` when the flag is omitted, sets `HTTP_PROXY`, `HTTPS_PROXY` and their lowercase spellings for the `opentide` process only, overriding any value it inherited. Platform clients and the CVE lookup then use the proxy. Without either, opentide uses whatever `HTTP_PROXY` and `HTTPS_PROXY` (or their lowercase spellings) the environment already holds.
+`--proxy http://[user:pass@]host:port`, or `OPENTIDE_PROXY` when the flag is omitted, sets `HTTP_PROXY`, `HTTPS_PROXY` and their lowercase spellings for the `opentide` process only, overriding any value it inherited. Platform clients, the CVE lookup and [`doctor --live`](./doctor.md#connectivity)'s tenant requests then use the proxy. Without either, opentide uses whatever `HTTP_PROXY` and `HTTPS_PROXY` (or their lowercase spellings) the environment already holds.
 
 Hosts listed in `NO_PROXY` (or `no_proxy`) are reached directly, with or without `--proxy`. That is how one command reaches a cloud tenant through the proxy and an internal tenant without it:
 
@@ -92,10 +96,12 @@ When opentide stops on an unexpected error, `--debug` also prints the traceback,
 |----------|--------|
 | `OPENTIDE_OUTPUT` | Output mode: `human`, `plain`, `agent` or `json`; see [Output modes](./json-output.md#output-modes) |
 | `OPENTIDE_DEBUG` | `1` for debug logging, like `--debug` |
-| `NO_COLOR` | Any value turns colour off, like `--no-color` |
+| `NO_COLOR` | Any non-empty value turns colour off, like `--no-color`; an empty one is ignored |
+| `FORCE_COLOR` | `0`, `false`, `no` or `off` turns colour off; any other non-blank value forces it on a pipe, in CI and under `TERM=dumb`, in `human` and `plain` modes and in `--help` (`--json`, MCP and coding-agent output never take colour) |
+| `CLICOLOR_FORCE` | Any non-blank value but `0` forces colour, like `FORCE_COLOR=1`: only `0` counts as off, so `false` and `no` force colour too; `FORCE_COLOR` wins over it, so `FORCE_COLOR=0` beats `CLICOLOR_FORCE=1` |
 | `OPENTIDE_JSON_INDENT` | `0` prints every `--json` document on one line, `2` indents it; default: indented at a terminal, one line otherwise |
 | `OPENTIDE_REPO_ROOT` | Repository root, like `--repo` |
-| `OPENTIDE_DATA_ROOT` | Bundled data root, like `--data` |
+| `OPENTIDE_DATA_ROOT` | Like `--data`: changes only `--technique` completion |
 | `OPENTIDE_PROXY` | HTTP(S) proxy, like `--proxy` |
 | `OPENTIDE_TIDE_WORKSPACE` | Folder whose objects are read, when it is not the repository root; see [Repository root resolution](#repository-root-resolution) |
 | `OPENTIDE_LINKS` | Link scheme of code-frame paths: `file`, `vscode`, `cursor` or `none`; default `vscode` inside VS Code, else `file` |
@@ -104,16 +110,18 @@ When opentide stops on an unexpected error, `--debug` also prints the traceback,
 | `OPENTIDE_VALIDATE_PARALLEL_THRESHOLD` | Fewest objects before `validate` runs in parallel (default 32) |
 | `OPENTIDE_QUERY_CHECK_TIMEOUT` | Seconds each `validate query --live` check may wait for a tenant's answer, like `--check-timeout` (default 120); see [Slow queries](./validate.md#slow-queries-and-timeouts) |
 | `OPENTIDE_PROGRESS` | `0` turns terminal progress (OSC 9;4) off; `1` sends it to any terminal in `human` mode. See [Progress in the tab and taskbar](#progress-in-the-tab-and-taskbar). `json` writes progress events on stderr instead, in every mode; see [Progress events](./json-output.md#progress-events) |
-| `OPENTIDE_CACHE_DIR` | Where opentide caches what it generates for the language server (`lsp-catalogs/`); default: the user cache directory |
 | `CLAUDECODE`, `AI_AGENT`, … | Set by a coding agent: selects `agent` output mode |
 
 ## Environment propagation
 
-The CLI context calls `apply_environment()` before engine work, pushing flags into `os.environ` so library code and platform plugins see consistent paths.
+The root options apply to the whole run, and reach the runs a long-lived command starts:
+
+- `opentide mcp start` hands them to the commands its tools run as variables: `--repo` as `OPENTIDE_REPO_ROOT` and `OPENTIDE_TIDE_WORKSPACE`, `--data` as `OPENTIDE_DATA_ROOT`, `--proxy` as `HTTP_PROXY`, `HTTPS_PROXY` and their lowercase spellings (as [Proxy](#proxy) sets them for any run), and `--debug` as `OPENTIDE_DEBUG`.
+- `opentide serve` hands each run the same `--repo`, `--data` and `--debug` variables, and `--proxy` as `OPENTIDE_PROXY`, which that run reads as its own `--proxy`.
 
 ## Terminal output
 
-Interactive terminals receive Rich colours. Redirected or captured streams, CI logs and coding agents get plain text that is never wrapped, so a path stays on one line. Set `NO_COLOR=1`, `FORCE_COLOR=0`, or pass `--no-color` to disable colour explicitly; set `FORCE_COLOR=1` to force it. `OPENTIDE_OUTPUT` (`human`, `plain`, `agent`, `json`) overrides the choice; see [Output modes](./json-output.md#output-modes).
+Interactive terminals receive colour. Redirected or captured streams, CI logs and coding agents get plain text that is never wrapped, so a path stays on one line. Set `NO_COLOR=1`, `FORCE_COLOR=0`, or pass `--no-color` to disable colour explicitly (at a terminal, bold and dim text stay); set `FORCE_COLOR=1` to force it, in `--help` too (`--no-color` and `NO_COLOR` win over it). `OPENTIDE_OUTPUT=human` is explicit and keeps colour at a terminal even with `--no-color` or `NO_COLOR`. `OPENTIDE_OUTPUT` (`human`, `plain`, `agent`, `json`) overrides the choice; see [Output modes](./json-output.md#output-modes).
 
 Routine commands do not print an ASCII banner. The interactive setup wizard uses a compact branded heading.
 
@@ -150,17 +158,20 @@ $ opentide --install-completion
 
 | Value | Completes with | Read from |
 |-------|----------------|-----------|
-| `--uuid` (`validate`, `validate query`, `share`) | Object UUIDs, with the object's name and kind | The `name` and `metadata.uuid` lines at the top of each object file |
-| `--file` (same commands) | Object file paths, relative to the current directory when inside it, otherwise to the workspace; a bare file name when no path matches | The object folders |
-| `--type` | `rule`, `threat`, `objective` | — |
-| `--technique` (`info`) | ATT&CK ids, with their titles | The bundled ATT&CK vocabulary (`--data` or `OPENTIDE_DATA_ROOT` when set) |
+| `--uuid` (`validate`, `validate query`, `deploy`, `share` and its subcommands) | Object UUIDs, with the object's name and kind | The `name` and `metadata.uuid` lines at the top of each object file |
+| `--file` (the same commands, `lint` and `query`) | Object file paths, relative to the current directory when inside it, otherwise to the workspace; a bare file name when no path matches | The object folders |
+| `--type` | `rule`, `threat`, `objective`, with their folders | — |
+| `--technique` (`info`) | ATT&CK ids, with their titles | `<data>/vocabulary/att&ck.vocab.toml` when `--data` or `OPENTIDE_DATA_ROOT` is set, else the ATT&CK vocabulary compiled into opentide |
 | `--platform` | The platforms enabled in the workspace first, marked `enabled`, then the others | `.opentide/configurations/platforms/*.toml` |
-| `--strategy` (`deploy`, `validate query`) | `PREVIEW`, `RELEASE` | — |
+| `--tenant` (`query`) | The tenants of the `--platform` on the command line (else of every enabled platform), with their descriptions, then `all` | `[[tenants]]` in the platform's configuration |
+| `--strategy` (`deploy`, `validate query`) | `PREVIEW`, `RELEASE`, with what each deploys | — |
 | `explain <code>` | Diagnostic codes, with what each one means | The pages bundled with [`opentide explain`](./explain.md) |
 
-`validate query` completes rules only, and a `--type` already on the command line narrows `--uuid` and `--file`. The workspace is the one the command would use: `--repo`, then `OPENTIDE_REPO_ROOT`, then the nearest one up from the current directory. Object folders follow `[paths.objects]` in `.opentide/configurations/paths.toml` when it sets them.
+`validate query`, `deploy` and `query` complete rules only, and a `--type` already on the command line narrows `--uuid` and `--file`. The workspace is the one the command would use: `--repo`, then `OPENTIDE_REPO_ROOT`, then the nearest one up from the current directory. Object folders follow `[paths.objects]` in `.opentide/configurations/paths.toml` when it sets them.
 
-Completing a value does not load the command's module or the engine, so it costs about what completing a command name does. Completing an option name (`opentide validate --<Tab>`), or a value after an option completion does not know, loads the command. Completion never loads the catalogue the way a command does: it reads only the first lines of each object file, and `--file` reads only those of the paths that match. That keeps it close to `--help` for a catalogue of hundreds of objects; with many thousands, `--uuid` takes about a second. In bash, spaces and shell characters in a completed path are escaped with a backslash. When nothing matches `--file`, the shell completes file names itself.
+The script each option writes is clap's registration for the shell: on each Tab press the shell runs `opentide` with `_OPENTIDE_COMPLETE` set to its name and the command line after `--`, and opentide prints the candidates, nothing else. Commands, option names and the choices an option takes come from the command tree, the values above from the workspace. `_OPENTIDE_COMPLETE=bash opentide` (or `zsh`, `fish`, `powershell`) prints the same script, for a shell start-up file that loads it each time (`source <(_OPENTIDE_COMPLETE=bash opentide)`). The script runs the `opentide` on your `PATH`, so it follows an upgrade; run `--install-completion` again after one all the same, since the way the script and opentide talk may change between releases. `--install-completion` writes it where earlier releases did (`~/.bash_completions/opentide.sh` loaded from `~/.bashrc`, `~/.zfunc/_opentide` loaded from `~/.zshrc`, `~/.config/fish/completions/opentide.fish`, or PowerShell's `$PROFILE`), adds the line that loads one only once, and leaves PowerShell's execution policy as it is. A script an earlier release installed asks the Python command line, which is gone: on a Tab press it prints that it is out of date, and running `opentide --install-completion` again replaces it.
+
+Completing a value never loads the catalogue the way a command does, nor the query engines: it reads the configuration and only the first lines of each object file, and `--file` reads only those of the paths that match. That takes a few milliseconds for a catalogue of hundreds of objects, and well under a second with several thousand. In bash, spaces and shell characters in a completed path or tenant name are escaped with a backslash. When nothing matches `--file`, the shell completes file names itself.
 
 ## Strategy
 

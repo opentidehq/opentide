@@ -1,0 +1,30 @@
+name: Elastic EQL
+
+metadata:
+  uuid: 00000000-0000-4000-8006-000000000004
+  schema: rule::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+  author: Detection Team
+  contributors:
+    - Analyst One
+    - Detection Team
+
+description: |
+  Elastic EQL for the compile corpus.
+  Second line.
+
+response:
+  alert_severity: High
+
+configurations:
+  elastic:
+    status: STAGING
+    type: eql
+    query: process where process.name == "cmd.exe"
+    eql:
+      timestamp_field: "@timestamp"
+      event_category_override: event.type
+      tiebreaker_field: event.sequence

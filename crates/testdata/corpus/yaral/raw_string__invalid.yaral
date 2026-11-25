@@ -1,0 +1,2 @@
+// prod:raw_string invalid
+$e.target.process.command_line = `C:\Windows\cmd.exe

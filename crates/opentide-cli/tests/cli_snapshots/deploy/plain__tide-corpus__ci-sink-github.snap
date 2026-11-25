@@ -1,0 +1,128 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: deploy/plain/tide-corpus/ci-sink-github
+---
+args: opentide deploy --strategy PREVIEW --all --dry-run
+exit: 0
+
+━━━ stdout
+Deploy plan · strategy PREVIEW · 9 platforms, 2 tenants · dry run, nothing is sent
+
+sentinel · 0 tenants
+  + create or update  Sentinel KQL Rule     …000000000001  status STAGING
+  + create or update  Staging Promote Rule  …000000000008  status STAGING
+
+microsoft_defender · 0 tenants
+  + create or update  Defender KQL Rule  …000000000002  status STAGING
+
+splunk · 0 tenants
+  + create or update  Splunk SPL Rule  …000000000003  status STAGING
+
+sentinel_one · 0 tenants
+  + create  SentinelOne S1QL Rule  …000000000004  status STAGING
+
+carbon_black_cloud · 0 tenants
+  + create or update  Carbon Black Lucene Rule  …000000000005  status STAGING
+
+crowdstrike · 0 tenants
+  + create  CrowdStrike Deploy Rule  …000000000006  status STAGING
+
+harfanglab · 0 tenants
+  + create or update  HarfangLab Deploy Rule  …000000000007  status STAGING
+
+elastic · 1 tenant
+  staging
+    + create or update  Elastic KQL Rule  …000000000009  status STAGING
+
+sysdig · 1 tenant
+  staging
+    + create  Sysdig Falco Rule  …0000005d1a90  status STAGING
+
+Plan: 3 to create, 0 to update, 7 to create or update, 0 to disable, 0 to delete
+  note: splunk: once a rule's saved search is written or deleted, any other saved search in the tenant's app whose description ends with the line `opentide rule <uuid>` for the rule (one an earlier name of the rule left) is deleted
+  help: add (or uncomment) a [[tenants]] entry in .opentide/configurations/platforms/sentinel.toml; add (or uncomment) a [[tenants]] entry in .opentide/configurations/platforms/microsoft_defender.toml; add (or uncomment) a [[tenants]] entry in .opentide/configurations/platforms/splunk.toml; add (or uncomment) a [[tenants]] entry in .opentide/configurations/platforms/sentinel_one.toml; add (or uncomment) a [[tenants]] entry in .opentide/configurations/platforms/carbon_black_cloud.toml; add (or uncomment) a [[tenants]] entry in .opentide/configurations/platforms/crowdstrike.toml; add (or uncomment) a [[tenants]] entry in .opentide/configurations/platforms/harfanglab.toml
+dry run, nothing sent
+
+━━━ stderr
+warning: a real deploy would need $ELASTIC_API_KEY and $SYSDIG_SECURE_API_TOKEN, which are unset
+warning: sentinel has no tenants configured in .opentide/configurations/platforms/sentinel.toml, so a real deploy would stop
+warning: microsoft_defender has no tenants configured in .opentide/configurations/platforms/microsoft_defender.toml, so a real deploy would stop
+warning: splunk has no tenants configured in .opentide/configurations/platforms/splunk.toml, so a real deploy would stop
+warning: sentinel_one has no tenants configured in .opentide/configurations/platforms/sentinel_one.toml, so a real deploy would stop
+warning: carbon_black_cloud has no tenants configured in .opentide/configurations/platforms/carbon_black_cloud.toml, so a real deploy would stop
+warning: crowdstrike has no tenants configured in .opentide/configurations/platforms/crowdstrike.toml, so a real deploy would stop
+warning: harfanglab has no tenants configured in .opentide/configurations/platforms/harfanglab.toml, so a real deploy would stop
+
+━━━ tmp/github-step-summary.md · created 0644
+### ! opentide deploy --dry-run
+
+Plan: 3 to create, 0 to update, 7 to create or update, 0 to disable, 0 to delete
+
+Strategies: `PREVIEW`
+
+| Platform | Tenant | Rules |
+|---|---|---|
+| `sentinel` | none | 2 |
+| `microsoft_defender` | none | 1 |
+| `splunk` | none | 1 |
+| `sentinel_one` | none | 1 |
+| `carbon_black_cloud` | none | 1 |
+| `crowdstrike` | none | 1 |
+| `harfanglab` | none | 1 |
+| `elastic` | staging | 1 |
+| `sysdig` | staging | 1 |
+
+<details><summary>sentinel: 2 rules</summary>
+
+- Sentinel KQL Rule (`00000000-0000-4000-8003-000000000001`)
+- Staging Promote Rule (`00000000-0000-4000-8003-000000000008`)
+
+</details>
+
+<details><summary>microsoft_defender: 1 rule</summary>
+
+- Defender KQL Rule (`00000000-0000-4000-8003-000000000002`)
+
+</details>
+
+<details><summary>splunk: 1 rule</summary>
+
+- Splunk SPL Rule (`00000000-0000-4000-8003-000000000003`)
+
+</details>
+
+<details><summary>sentinel_one: 1 rule</summary>
+
+- SentinelOne S1QL Rule (`00000000-0000-4000-8003-000000000004`)
+
+</details>
+
+<details><summary>carbon_black_cloud: 1 rule</summary>
+
+- Carbon Black Lucene Rule (`00000000-0000-4000-8003-000000000005`)
+
+</details>
+
+<details><summary>crowdstrike: 1 rule</summary>
+
+- CrowdStrike Deploy Rule (`00000000-0000-4000-8003-000000000006`)
+
+</details>
+
+<details><summary>harfanglab: 1 rule</summary>
+
+- HarfangLab Deploy Rule (`00000000-0000-4000-8003-000000000007`)
+
+</details>
+
+<details><summary>elastic: 1 rule</summary>
+
+- Elastic KQL Rule (`00000000-0000-4000-8003-000000000009`)
+
+</details>
+
+<details><summary>sysdig: 1 rule</summary>
+
+- Sysdig Falco Rule (`00000000-0000-4000-8003-0000005d1a90`)
+
+</details>

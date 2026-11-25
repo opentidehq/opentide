@@ -1,0 +1,1 @@
+SigninLogs | distinct CallerApp = AppId, Identity = tolower(UserPrincipalName)

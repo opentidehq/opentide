@@ -25,6 +25,10 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
+# cargo output of the crate placeholder (publishing/placeholders/): ignored
+# here, where maturin also reads it, so an sdist built after a dry run
+# leaves it out.
+publishing/placeholders/crates/*/target/
 
 # Virtual environments
 .venv/
@@ -87,7 +91,7 @@ output/
 generated/
 *.log
 
-# Hatch-VCS generated version file
+# The version file the hatch-vcs build wrote before maturin (an old checkout's): out of git and the packages
 src/opentide/_version.py
 
 # workshop
@@ -96,10 +100,67 @@ workshop/
 .claude/settings.local.json
 .claude/worktrees/
 
-# The engine (analysis/): cargo output, and the module an editable install
-# compiles into the package (hatch_build.py).
-analysis/target/
+# The module a development install (maturin develop, uv sync) compiles into the package.
 src/opentide/_native.*.so
 src/opentide/_native.pyd
 src/opentide/_native.*.pyd
 src/opentide/_native.so
+
+# The Cargo workspace (crates/, bindings/python/) and the engine's tooling.
+/target
+/node_modules
+/packages/*/node_modules
+/packages/*/dist
+# The Node binding's npm packages: their dependencies, and the addons `npm run
+# build` and the release copy in (bindings/node/index.js and index.d.ts are
+# generated and committed).
+/bindings/node/node_modules
+/bindings/node/alias/node_modules
+/bindings/node/*.node
+/bindings/node/npm/*/*.node
+/bindings/node/*.tgz
+**/*.wasm
+*.profraw
+/coverage
+lcov.info
+/tmp
+scripts/engine/oracles/kusto/bin
+scripts/engine/oracles/kusto/obj
+scripts/engine/oracles/elastic/node_modules
+scripts/engine/oracles/elastic/.cache
+highlights/test/node_modules
+
+# Generated, and source here: the engine's bundled Tide catalog and the
+# highlighting artifacts, which `generated/` above would hide (and keep out of
+# the sdist, whose build compiles them in), and their copies in a crate's assets/
+# (`scripts/engine/release.py vendor`), which `cargo package` would leave out.
+!/data/catalogs/tide/generated/
+!/highlights/generated/
+!/crates/*/assets/data/catalogs/tide/generated/
+!/crates/*/assets/highlights/generated/
+
+# The typed AST `cargo xtask codegen` writes from a language's .ungram
+# (src/generated/ast.rs), and the toolkit's test language's.
+!/crates/*/src/generated/
+/crates/*/src/generated/*
+!/crates/*/src/generated/ast.rs
+!/crates/opentide-parse/tests/ast_fixture/generated/
+/crates/opentide-parse/tests/ast_fixture/generated/*
+!/crates/opentide-parse/tests/ast_fixture/generated/ast.rs
+
+# insta writes a pending snapshot next to the committed one; `cargo insta review`
+# accepts or rejects it. Never commit one.
+*.snap.new
+*.pending-snap
+
+# cargo-mutants output (.cargo/mutants.toml)
+/mutants.out/
+/mutants.out.old/
+
+# The YARA module generator's own build (scripts/engine/yara-modules)
+/scripts/engine/yara-modules/target/
+# Its lock is not committed: an oracle-side tool, run by hand, never shipped.
+/scripts/engine/yara-modules/Cargo.lock
+
+# sccache's directory in CI (SCCACHE_DIR, .github/workflows/ci.yml)
+.sccache/

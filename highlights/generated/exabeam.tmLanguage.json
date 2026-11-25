@@ -1,0 +1,112 @@
+{
+  "name": "opentide exabeam",
+  "opentideHighlightSpec": "0.3.2",
+  "patterns": [
+    {
+      "comment": "capture:string",
+      "match": "\"(\\\\.|[^\"\\\\])*\"|'(\\\\.|[^'\\\\])*'",
+      "name": "string.quoted.opentide"
+    },
+    {
+      "comment": "capture:number",
+      "match": "\\b[0-9]+(\\.[0-9]+)?\\b",
+      "name": "constant.numeric.opentide"
+    },
+    {
+      "comment": "tm_extras:field",
+      "match": "(?<![\\w.$@#])[$@#]?[A-Za-z_][\\w.]*(?=\\s*(?i:==|!=|=~|!~|<=|>=|:=|=|<|>|:))",
+      "name": "variable.other.property.opentide"
+    },
+    {
+      "comment": "capture:keyword",
+      "match": "(?i)(?<![A-Za-z0-9_])(?:AND|AS|ASC|DESC|DISTINCT|FOREACH|FROM|GROUP\\-BY|IN|LIMIT|NOT|OR|ORDER\\-BY|SELECT|TO|WHERE)(?![A-Za-z0-9_])",
+      "name": "keyword.control.opentide"
+    },
+    {
+      "comment": "capture:operator",
+      "match": ":",
+      "name": "keyword.operator.opentide"
+    },
+    {
+      "comment": "capture:operator",
+      "match": "<",
+      "name": "keyword.operator.opentide"
+    },
+    {
+      "comment": "capture:operator",
+      "match": "<=",
+      "name": "keyword.operator.opentide"
+    },
+    {
+      "comment": "capture:operator",
+      "match": "=",
+      "name": "keyword.operator.opentide"
+    },
+    {
+      "comment": "capture:operator",
+      "match": "==",
+      "name": "keyword.operator.opentide"
+    },
+    {
+      "comment": "capture:operator",
+      "match": ">",
+      "name": "keyword.operator.opentide"
+    },
+    {
+      "comment": "capture:operator",
+      "match": ">=",
+      "name": "keyword.operator.opentide"
+    },
+    {
+      "comment": "capture:operator.pipe",
+      "match": "\\|",
+      "name": "keyword.operator.pipe.opentide"
+    },
+    {
+      "comment": "capture:punctuation.bracket",
+      "match": "\\(",
+      "name": "punctuation.bracket.opentide"
+    },
+    {
+      "comment": "capture:punctuation.bracket",
+      "match": "\\)",
+      "name": "punctuation.bracket.opentide"
+    },
+    {
+      "comment": "capture:punctuation.bracket",
+      "match": "\\[",
+      "name": "punctuation.bracket.opentide"
+    },
+    {
+      "comment": "capture:punctuation.bracket",
+      "match": "\\]",
+      "name": "punctuation.bracket.opentide"
+    },
+    {
+      "comment": "capture:punctuation.bracket",
+      "match": "\\{",
+      "name": "punctuation.bracket.opentide"
+    },
+    {
+      "comment": "capture:punctuation.bracket",
+      "match": "\\}",
+      "name": "punctuation.bracket.opentide"
+    },
+    {
+      "comment": "capture:punctuation.delimiter",
+      "match": ",",
+      "name": "punctuation.delimiter.opentide"
+    },
+    {
+      "comment": "capture:punctuation.delimiter",
+      "match": "\\.",
+      "name": "punctuation.delimiter.opentide"
+    },
+    {
+      "comment": "tm_extras:call",
+      "match": "(?<![\\w.$@#:])[A-Za-z_][\\w.]*(?=\\s*\\()",
+      "name": "entity.name.function.opentide"
+    }
+  ],
+  "scopeName": "source.exabeam"
+}

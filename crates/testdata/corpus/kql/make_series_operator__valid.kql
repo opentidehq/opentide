@@ -1,0 +1,2 @@
+// prod:make_series_operator valid
+SecurityEvent | make-series Logons = count() on TimeGenerated from ago(7d) to now() step 1h by Computer

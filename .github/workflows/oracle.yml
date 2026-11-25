@@ -1,0 +1,290 @@
+name: Oracle
+
+# CI-only differential oracles (scripts/engine/oracles/README.md). The engine is
+# compared with Microsoft Kusto.Language, Splunk's search parser, Falco's own
+# `falco --validate`, YARA-X (the yara-x wheel), and the Elastic and Lucene parsers (@elastic/esql,
+# EqlBase.g4, Kibana's kuery grammar, Lucene's QueryParser). A disagreement not
+# listed in crates/testdata/oracles/exceptions.toml is a red build, and so is a
+# listed one that is gone. The references never ship: release-build.yml's
+# `crate-packages` job runs scripts/engine/license-scan.sh on the packaged
+# crates, as the engine's release (engine-release-build.yml) does on every
+# asset.
+#
+# Imported from opentidehq/language-server (#800). Weekly and on Run workflow
+# (the nightly set): every reference runs on each run; none on a pull request.
+on:
+  # Part of the nightly: nightly.yml calls this workflow (ci.yml's `nightly` scope,
+  # .github/AGENTS.md); Run workflow runs it alone. Never on a pull request
+  # or a push, so it never blocks a merge.
+  workflow_call:
+    secrets:
+      OPENTIDE_CBC_URL:
+        description: "The Carbon Black Cloud tenant (oracle.yml's live check)."
+        required: false
+      OPENTIDE_CBC_ORG_KEY:
+        description: "The Carbon Black Cloud org key."
+        required: false
+      OPENTIDE_CBC_TOKEN:
+        description: "The Carbon Black Cloud API token."
+        required: false
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  OPENTIDE_ORACLE_REQUIRED: "1"
+
+jobs:
+
+  kql:
+    name: Kusto.Language
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Rust
+        run: rustup toolchain install --profile minimal --no-self-update
+      # Every oracle builds the same debug opentide-lsp: one cache, saved by
+      # this job by the nightly and on pushes to development (the default
+      # branch, whose caches every pull request reads), read by the others.
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          shared-key: oracle
+          save-if: ${{ github.event_name == 'schedule' || github.ref == 'refs/heads/development' }}
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          dotnet-version: "10.0.x"
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - run: pip install pyyaml==6.0.3
+      - run: bash scripts/engine/ci-oracle.sh kql
+
+  spl:
+    name: Splunk
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Rust
+        run: rustup toolchain install --profile minimal --no-self-update
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          shared-key: oracle
+          save-if: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - run: pip install pyyaml==6.0.3
+      # Not a service container: splunkd takes minutes to start and the runner's
+      # readiness check needs a health status, so start.sh runs it and
+      # oracle.py waits. Starting it accepts the Splunk General Terms for this
+      # throwaway instance, bound to 127.0.0.1, which only answers search/parser.
+      - name: Splunk oracle
+        run: |
+          eval "$(bash scripts/engine/oracles/splunk/start.sh)"
+          bash scripts/engine/ci-oracle.sh spl
+
+  falco:
+    # Every case of crates/testdata/oracles/falco/cases.yaml and every Falco default
+    # rule condition (with its broken twin) through the real Falco, one
+    # `falco --validate` per case, beside the engine's verdict. The pins are
+    # recorded in scripts/engine/oracles/README.md; bump them together.
+    name: Falco ${{ matrix.falco }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        falco: ["0.45.2"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: falcosecurity/rules
+          persist-credentials: false
+          ref: e7b066bfbc8d81226ca5fa3e95ffd4dee38a2428
+          path: falco-rules
+          sparse-checkout: rules
+      - name: Set up Rust
+        run: rustup toolchain install --profile minimal --no-self-update
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          shared-key: oracle
+          save-if: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - run: pip install pyyaml==6.0.3
+      - run: docker pull falcosecurity/falco:${{ matrix.falco }}
+      - name: Falco oracle
+        run: >
+          python3 scripts/engine/oracles/falco/oracle.py
+          --rules falco-rules
+          --docker falcosecurity/falco:${{ matrix.falco }}
+          --report falco-oracle-report.json
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: falco-oracle-report-${{ matrix.falco }}
+          path: falco-oracle-report.json
+
+  yara:
+    # Every recorded verdict of crates/testdata/conformance/yara/cases.json, and
+    # every YARA file of the repository through the engine and YARA-X 1.23.0
+    # (the yara-x wheel), the language (#1225). The pin is in
+    # scripts/engine/oracles/yara/oracle.py and scripts/engine/oracles/README.md.
+    name: YARA-X
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Rust
+        run: rustup toolchain install --profile minimal --no-self-update
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          shared-key: oracle
+          save-if: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - run: pip install yara-x==1.23.0
+      - run: bash scripts/engine/ci-oracle.sh --manifests-only
+      - run: cargo build -p opentide-lsp
+      - name: YARA oracle
+        run: python3 scripts/engine/oracles/yara/oracle.py --report yara-oracle-report.json
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: yara-oracle-report
+          path: yara-oracle-report.json
+
+  elastic:
+    name: Elastic and Lucene
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Elastic's public rules (ELv2), read at CI time and never vendored.
+      # Elasticsearch accepts every one, so they are queries the engine must
+      # not reject. Same pin as ci.yml's elastic-sweep job.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: elastic/detection-rules
+          persist-credentials: false
+          ref: 2b30453d7dede69f980472cff51a2ae9a6917bae
+          path: detection-rules
+          sparse-checkout: |
+            rules
+            rules_building_block
+            hunting
+      - name: Set up Rust
+        run: rustup toolchain install --profile minimal --no-self-update
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          shared-key: oracle
+          save-if: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+      - uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - run: pip install pyyaml==6.0.3
+      # The pinned references oracle.py fetches (Lucene's jars from Maven
+      # Central, Elasticsearch's EQL grammar and Kibana's kuery grammar):
+      # cached under their pins (oracle.py's FETCH), so a run does not depend
+      # on Maven answering (it rate-limits: HTTP 429 on #1041). oracle.py
+      # checks every file's SHA-256, a restored one too, and fetches again on a
+      # mismatch. Saved from pushes only, as every cache here.
+      - name: Restore the pinned references
+        id: references
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            scripts/engine/oracles/elastic/.cache/*.jar
+            scripts/engine/oracles/elastic/.cache/*.g4
+            scripts/engine/oracles/elastic/.cache/*.peggy
+          key: oracle-references-${{ hashFiles('scripts/engine/oracles/oracle.py') }}
+      - name: Elastic oracles
+        env:
+          OPENTIDE_DETECTION_RULES: ${{ github.workspace }}/detection-rules
+        run: bash scripts/engine/ci-oracle.sh esql eql kuery lucene
+      - name: Save the pinned references
+        if: github.event_name == 'schedule' && steps.references.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            scripts/engine/oracles/elastic/.cache/*.jar
+            scripts/engine/oracles/elastic/.cache/*.g4
+            scripts/engine/oracles/elastic/.cache/*.peggy
+          key: oracle-references-${{ hashFiles('scripts/engine/oracles/oracle.py') }}
+
+  elasticsearch:
+    # The oldest and newest recorded release lines. probes.py fails when a
+    # verdict in crates/testdata/oracles/elasticsearch/expected.tsv no longer holds;
+    # esql_catalog.py fails when a data/catalogs/esql `versions` list is wrong.
+    name: Live Elasticsearch ${{ matrix.version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        version: ["8.19.23", "9.5.5"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - name: Start Elasticsearch
+        shell: bash  # with pipefail, so a failed start fails the step
+        run: bash scripts/engine/oracles/elasticsearch/start.sh ${{ matrix.version }} | sed "s/^export //" >> "$GITHUB_ENV"
+      - name: Probes
+        run: python3 scripts/engine/oracles/elasticsearch/probes.py
+      - name: ES|QL catalog versions
+        run: python3 scripts/engine/oracles/elasticsearch/esql_catalog.py
+      - name: Stop Elasticsearch
+        if: always()
+        run: docker rm -f opentide-es-oracle-9200
+
+  # Carbon Black Cloud (#162): every Carbon Black query through a tenant's
+  # search_validation. It needs a tenant: OPENTIDE_CBC_URL, OPENTIDE_CBC_ORG_KEY
+  # and OPENTIDE_CBC_TOKEN (`<api secret>/<api id>`, org.search.events READ) as
+  # secrets. Weekly and on demand only, never on a pull request, so a fork
+  # never sees them; without them the job says so and passes.
+  carbon_black:
+    name: Carbon Black Cloud
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    env:
+      OPENTIDE_ORACLE_REQUIRED: "0"
+      OPENTIDE_CBC_URL: ${{ secrets.OPENTIDE_CBC_URL }}
+      OPENTIDE_CBC_ORG_KEY: ${{ secrets.OPENTIDE_CBC_ORG_KEY }}
+      OPENTIDE_CBC_TOKEN: ${{ secrets.OPENTIDE_CBC_TOKEN }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Rust
+        run: rustup toolchain install --profile minimal --no-self-update
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          shared-key: oracle
+          save-if: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - run: pip install pyyaml==6.0.3
+      - run: bash scripts/engine/ci-oracle.sh carbon_black

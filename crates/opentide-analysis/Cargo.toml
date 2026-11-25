@@ -1,0 +1,66 @@
+[package]
+name = "opentide-analysis"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+description = "opentide engine component: I/O-free analysis of KQL, SPL, ES|QL, EQL, Kibana KQL, Lucene, Falco, CQL, YARA, the Exabeam Query Language, YARA-L, and Tide YAML. Internal: depend on the opentide facade (its `analysis` feature)."
+readme = "README.md"
+keywords = ["kql", "spl", "esql", "detection", "siem"]
+categories = ["parser-implementations", "development-tools"]
+
+[lints]
+workspace = true
+
+[dependencies]
+opentide-core.workspace = true
+opentide-highlight.workspace = true
+opentide-kql.workspace = true
+opentide-spl.workspace = true
+opentide-esql.workspace = true
+opentide-eql.workspace = true
+opentide-kuery.workspace = true
+opentide-lucene.workspace = true
+opentide-falco.workspace = true
+opentide-cql.workspace = true
+opentide-exabeam.workspace = true
+opentide-yara.workspace = true
+opentide-yaral.workspace = true
+opentide-ecs.workspace = true
+opentide-tide.workspace = true
+serde_json.workspace = true
+regex.workspace = true
+toml_edit.workspace = true
+# `queries`: the queries checks of `validate` and `lint` on a Tide
+# workspace (`queries`, UC-2.5), which the command line and the facade's
+# `queries` feature run. Off for the language server and the browser build.
+opentide-schema = { workspace = true, optional = true }
+opentide-workspace = { workspace = true, optional = true }
+indexmap = { version = "2", optional = true }
+rayon = { workspace = true, optional = true }
+
+[features]
+# The queries checks on a workspace (`opentide_analysis::queries`).
+queries = ["dep:opentide-schema", "dep:opentide-workspace", "dep:indexmap", "dep:rayon"]
+
+[dev-dependencies]
+serde_json.workspace = true
+toml.workspace = true
+insta.workspace = true
+
+[[bench]]
+name = "analyze"
+harness = false
+
+[[bench]]
+name = "throughput"
+harness = false
+
+# The first use of each embedded dataset (#1743): `cargo xtask throughput` counts it.
+[[bench]]
+name = "datasets"
+harness = false
+required-features = ["queries"]

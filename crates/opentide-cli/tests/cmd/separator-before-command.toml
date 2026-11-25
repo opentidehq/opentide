@@ -1,0 +1,8 @@
+bin.name = "opentide"
+args = ["--json", "--", "commands"]
+env.inherit = false
+status.code = 2
+stdout = """
+{"error":"unexpected argument 'commands' found","ok":false,"status":"failed","message":"unexpected argument 'commands' found","schema_version":1,"command":"","duration_ms":[..],"exit_code":2,"summary":{},"next_actions":[],"failure":{"code":"usage_unknown_command","message":"unexpected argument 'commands' found","argument":"commands","suggestion":null,"crash_log":null}}
+"""
+stderr = ""

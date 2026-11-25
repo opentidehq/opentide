@@ -1,0 +1,1631 @@
+//! The `corpus` subcommands: argument parsing, files and processes.
+
+use super::configuration;
+use super::coverage;
+use super::faults::{self, Catalogue, Kind, Verdict};
+use super::generate::{self, Counts, Layout, Options};
+use super::queries;
+use super::structural;
+use super::workspace::Workspace;
+use anyhow::{Context, Result, bail};
+use serde_json::json;
+use std::collections::{BTreeMap, BTreeSet};
+use std::path::{Path, PathBuf};
+use std::process::Command;
+use std::time::Instant;
+
+/// `cargo xtask corpus <command>`: the corpora of UC-0.6 (#804).
+///
+/// The oracle is BIN, else $OPENTIDE_ORACLE, else `opentide` on PATH; it must
+/// print the version faults.toml names. `--engine rust` covers the object kinds
+/// (opentide-schema, UC-1.3), the platform kinds (UC-1.4), the configuration
+/// kinds (UC-1.5) and validate's query kinds (UC-2.5) today.
+#[derive(clap::Subcommand, Debug)]
+pub enum Cmd {
+    /// Write the heavy workspace for a seed (default counts 300/300/500,
+    /// --scale multiplies them); DIR must not exist or be empty
+    Generate(GenerateArgs),
+    /// Apply each fault kind of tests/corpora/faults.toml to its own copy of the
+    /// clean workspace and check what the oracle (or, with --engine rust, the
+    /// Rust engine) reports for it, or write one workspace with every kind
+    /// applied (--out)
+    Faults(FaultsArgs),
+    /// Print the codes the oracle can report (--write: tests/corpora/codes.toml)
+    Codes(CodesArgs),
+    /// Run the oracle's validate and lint on a workspace that must report
+    /// nothing
+    Clean(CleanArgs),
+    /// Report which of the oracle's codes the fault catalogue covers
+    Coverage(CoverageArgs),
+}
+
+/// The engine a check runs against.
+const ENGINES: [&str; 2] = ["python", "rust"];
+
+/// The arguments of `corpus generate`.
+#[derive(clap::Args, Debug)]
+pub struct GenerateArgs {
+    /// The seed
+    #[arg(long)]
+    seed: u64,
+    /// Multiply the default counts by this factor, in (0, 1000]
+    #[arg(long, value_name = "F", value_parser = parse_scale)]
+    scale: Option<Counts>,
+    /// The threats
+    #[arg(long, value_name = "N", conflicts_with = "scale")]
+    threats: Option<usize>,
+    /// The objectives
+    #[arg(long, value_name = "N", conflicts_with = "scale")]
+    objectives: Option<usize>,
+    /// The rules
+    #[arg(long, value_name = "N", conflicts_with = "scale")]
+    rules: Option<usize>,
+    /// How the files are laid out: standard, explicit or custom
+    #[arg(long, value_parser = parse_layout, default_value = "explicit")]
+    layout: Layout,
+    /// Write the workspace to DIR (required, or --digest)
+    #[arg(long, value_name = "DIR")]
+    out: Option<String>,
+    /// Print the digest instead of writing
+    #[arg(long)]
+    digest: bool,
+}
+
+/// `--scale` as clap reads it.
+fn parse_scale(text: &str) -> Result<Counts, String> {
+    let factor: f64 = text
+        .parse()
+        .map_err(|_| format!("`{text}` is not a number"))?;
+    Counts::scaled(factor).ok_or_else(|| format!("`{text}` is not in (0, 1000]"))
+}
+
+/// `--layout` as clap reads it.
+fn parse_layout(text: &str) -> Result<Layout, String> {
+    Layout::parse(text).ok_or_else(|| format!("`{text}` is not standard, explicit or custom"))
+}
+
+impl GenerateArgs {
+    /// The generator's options, the directory to write to and whether to print
+    /// the digest instead.
+    fn options(&self) -> (Options, Option<String>, bool) {
+        let base = self.scale.unwrap_or(generate::DEFAULT_COUNTS);
+        let counts = Counts {
+            threats: self.threats.unwrap_or(base.threats),
+            objectives: self.objectives.unwrap_or(base.objectives),
+            rules: self.rules.unwrap_or(base.rules),
+        };
+        (
+            Options {
+                platforms: crate::corpus::vocab::PLATFORMS,
+                seed: self.seed,
+                counts,
+                layout: self.layout,
+            },
+            self.out.clone(),
+            self.digest,
+        )
+    }
+}
+
+/// The arguments of `corpus faults`.
+#[derive(clap::Args, Debug)]
+pub struct FaultsArgs {
+    /// Check the oracle (or the Rust engine) reports exactly the expected codes
+    /// and severities for each kind
+    #[arg(long)]
+    check: bool,
+    /// The engine: python, the oracle the expectations name; rust, which covers
+    /// the object, platform, configuration and query kinds today
+    #[arg(long, value_parser = clap::builder::PossibleValuesParser::new(ENGINES))]
+    engine: Option<String>,
+    /// The oracle executable
+    #[arg(long, value_name = "BIN")]
+    oracle: Option<String>,
+    /// Only these fault kinds; with --engine rust, also a group: objects,
+    /// structural, platforms, configuration or queries
+    #[arg(long, value_name = "ID", value_delimiter = ',')]
+    only: Option<Vec<String>>,
+    /// Run this many kinds at once (default: the available parallelism)
+    #[arg(long, value_name = "N", value_parser = clap::value_parser!(usize))]
+    jobs: Option<usize>,
+    /// Keep the workspaces in DIR, which must not exist
+    #[arg(long, value_name = "DIR")]
+    keep: Option<PathBuf>,
+    /// Write the verdicts as JSON to FILE
+    #[arg(long, value_name = "FILE")]
+    report: Option<PathBuf>,
+    /// Write one workspace ([combined] counts) with every fault kind not marked
+    /// isolated applied once (twice if cross-file)
+    #[arg(long, value_name = "DIR")]
+    out: Option<PathBuf>,
+    /// The catalogue (default: tests/corpora/faults.toml)
+    #[arg(long, value_name = "FILE")]
+    catalogue: Option<PathBuf>,
+}
+
+/// The arguments of `corpus codes`.
+#[derive(clap::Args, Debug)]
+pub struct CodesArgs {
+    /// The engine: python, the oracle
+    #[arg(long, value_parser = clap::builder::PossibleValuesParser::new(ENGINES))]
+    engine: Option<String>,
+    /// The oracle executable
+    #[arg(long, value_name = "BIN")]
+    oracle: Option<String>,
+    /// Write tests/corpora/codes.toml instead of printing
+    #[arg(long)]
+    write: bool,
+}
+
+/// The arguments of `corpus coverage`.
+#[derive(clap::Args, Debug)]
+pub struct CoverageArgs {
+    /// Fail when COVERAGE.md is stale
+    #[arg(long, conflicts_with = "write")]
+    check: bool,
+    /// Write COVERAGE.md
+    #[arg(long)]
+    write: bool,
+    /// The corpora directory (default: tests/corpora)
+    #[arg(long, value_name = "DIR")]
+    dir: Option<PathBuf>,
+}
+
+/// The arguments of `corpus clean`.
+#[derive(clap::Args, Debug)]
+pub struct CleanArgs {
+    /// The engine: python, the oracle
+    #[arg(long, value_parser = clap::builder::PossibleValuesParser::new(ENGINES))]
+    engine: Option<String>,
+    /// The oracle executable
+    #[arg(long, value_name = "BIN")]
+    oracle: Option<String>,
+    /// The workspace to run on
+    #[arg(long, value_name = "DIR")]
+    repo: Option<PathBuf>,
+}
+
+/// Runs `corpus <args>` (the arguments after `corpus`, as a fixture's `argv`
+/// names them); the process exit status.
+pub fn run(args: &[String]) -> Result<u8> {
+    use clap::Parser;
+    #[derive(Parser)]
+    #[command(name = "corpus", bin_name = "cargo xtask corpus")]
+    struct Cli {
+        #[command(subcommand)]
+        command: Cmd,
+    }
+    match Cli::try_parse_from(std::iter::once(&"corpus".to_owned()).chain(args)) {
+        Ok(cli) => run_command(&cli.command),
+        // Help is printed and succeeds; a usage error is the caller's to report.
+        Err(error) if !error.use_stderr() => {
+            error.print()?;
+            Ok(0)
+        }
+        Err(error) => Err(error.into()),
+    }
+}
+
+/// Runs a parsed `corpus` command; the process exit status.
+pub fn run_command(command: &Cmd) -> Result<u8> {
+    match command {
+        Cmd::Generate(args) => generate_command(args),
+        Cmd::Faults(args) => faults_command(args),
+        Cmd::Codes(args) => codes_command(args),
+        Cmd::Clean(args) => clean_command(args),
+        Cmd::Coverage(args) => coverage_command(args),
+    }
+}
+
+fn generate_command(args: &GenerateArgs) -> Result<u8> {
+    let (options, out, digest) = args.options();
+    let started = Instant::now();
+    let workspace = generate::generate(&options);
+    if digest {
+        println!("{}", workspace.digest());
+        return Ok(0);
+    }
+    let out = out.context("--out is required (or --digest)")?;
+    write_workspace(&workspace, Path::new(&out))?;
+    eprintln!(
+        "corpus generate: seed {} ({}) into {out} in {} ms; digest {}",
+        options.seed,
+        workspace.summary(),
+        started.elapsed().as_millis(),
+        workspace.digest()
+    );
+    Ok(0)
+}
+
+/// Writes `workspace` under `root`, which must not exist or be empty: the
+/// generator never overwrites a file it did not write.
+pub fn write_workspace(workspace: &Workspace, root: &Path) -> Result<()> {
+    if root.exists() {
+        let mut entries =
+            std::fs::read_dir(root).with_context(|| format!("cannot read {}", root.display()))?;
+        if entries.next().is_some() {
+            bail!("{} exists and is not empty", root.display());
+        }
+    }
+    for (path, text) in workspace.rendered() {
+        if !super::faults::is_relative_inside(&path) {
+            bail!("{path} is not a path inside the workspace");
+        }
+        let target = root.join(&path);
+        if let Some(parent) = target.parent() {
+            std::fs::create_dir_all(parent)
+                .with_context(|| format!("cannot create {}", parent.display()))?;
+        }
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&target)
+            .with_context(|| format!("cannot create {}", target.display()))?;
+        std::io::Write::write_all(&mut file, text.as_bytes())
+            .with_context(|| format!("cannot write {}", target.display()))?;
+    }
+    Ok(())
+}
+
+/// The repository root: `CARGO_MANIFEST_DIR`'s parent as `cargo run` sets
+/// it at run time, else the working directory (never compiled in:
+/// xtask/AGENTS.md).
+pub fn repo_root() -> PathBuf {
+    std::env::var_os("CARGO_MANIFEST_DIR")
+        .map(PathBuf::from)
+        .and_then(|dir| dir.parent().map(Path::to_path_buf))
+        .unwrap_or_else(|| PathBuf::from("."))
+}
+
+/// `tests/corpora/` under the repository root.
+pub fn corpora_dir() -> PathBuf {
+    repo_root().join("tests").join("corpora")
+}
+
+/// The oracle executable: `--oracle`, `$OPENTIDE_ORACLE`, or `opentide`.
+pub(crate) fn oracle_bin(flag: Option<&str>) -> PathBuf {
+    flag.map(PathBuf::from)
+        .or_else(|| std::env::var_os("OPENTIDE_ORACLE").map(PathBuf::from))
+        .unwrap_or_else(|| PathBuf::from("opentide"))
+}
+
+/// Runs the oracle without the variables that would point it elsewhere.
+pub(crate) fn oracle_command(bin: &Path, env: &BTreeMap<String, String>) -> Command {
+    let mut command = Command::new(bin);
+    // A kind that sets a proxy gets only its own: Python's urllib lets an
+    // inherited lowercase variable win over an uppercase one. Every spelling
+    // the kind does not set itself is removed; on Windows, where `https_proxy`
+    // and `HTTPS_PROXY` are one variable, setting it replaces the inherited one.
+    if env
+        .keys()
+        .any(|k| k.to_ascii_lowercase().ends_with("_proxy"))
+    {
+        for name in ["http_proxy", "https_proxy", "all_proxy", "no_proxy"] {
+            for var in [name.to_string(), name.to_ascii_uppercase()] {
+                if !env.keys().any(|k| same_variable(k, &var)) {
+                    command.env_remove(&var);
+                }
+            }
+        }
+    }
+    for var in [
+        "OPENTIDE_REPO_ROOT",
+        "OPENTIDE_TIDE_WORKSPACE",
+        "OPENTIDE_DATA_ROOT",
+        "OPENTIDE_DEBUG",
+        "OPENTIDE_PROXY",
+    ] {
+        command.env_remove(var);
+    }
+    command.env("NO_COLOR", "1");
+    command.envs(env);
+    command
+}
+
+/// Whether two environment variable names name one variable: case-blind on
+/// Windows, exact elsewhere.
+fn same_variable(a: &str, b: &str) -> bool {
+    if cfg!(windows) {
+        a.eq_ignore_ascii_case(b)
+    } else {
+        a == b
+    }
+}
+
+/// How many objects (validate) or object files (lint) the run checked.
+fn checked(document: &serde_json::Value) -> Option<u64> {
+    let summary = document.get("summary")?;
+    summary
+        .get("objects")
+        .or_else(|| summary.get("files"))
+        .and_then(serde_json::Value::as_u64)
+}
+
+/// A run that checked nothing, or stopped, proves nothing: `failure` must
+/// be null and the run must have checked `expected` objects (at least one,
+/// when `None`).
+fn require_checked(
+    document: &serde_json::Value,
+    expected: Option<usize>,
+    what: &str,
+) -> Result<()> {
+    if let Some(failure) = document.get("failure").filter(|f| !f.is_null()) {
+        bail!("{what}: the oracle's run failed: {failure}");
+    }
+    let count = checked(document).unwrap_or(0);
+    let count = usize::try_from(count).unwrap_or(usize::MAX);
+    match expected {
+        Some(expected) if count != expected => {
+            bail!("{what}: the oracle checked {count} objects, not {expected}")
+        }
+        None if count == 0 => bail!("{what}: the oracle checked no object"),
+        _ => Ok(()),
+    }
+}
+
+/// `require_checked` for a run of `command`: a whole `validate` or `lint`
+/// must have checked every object; a run of one check (`--check cve`,
+/// `--check sharing-config`), which loads no object, must not have failed.
+fn require_run(
+    document: &serde_json::Value,
+    command: &[String],
+    objects: usize,
+    what: &str,
+) -> Result<()> {
+    if command.len() == 1 {
+        return require_checked(document, Some(objects), what);
+    }
+    match document.get("failure").filter(|f| !f.is_null()) {
+        Some(failure) => bail!("{what}: the oracle's run failed: {failure}"),
+        None => Ok(()),
+    }
+}
+
+/// The number of object files (threats, objectives, rules) in `workspace`.
+fn object_files(workspace: &Workspace) -> usize {
+    use super::workspace::Family;
+    workspace
+        .files
+        .iter()
+        .filter(|f| matches!(f.family, Family::Threat | Family::Objective | Family::Rule))
+        .count()
+}
+
+/// A command's working directory: a fresh temporary directory removed when
+/// this is dropped, however the run ends, or the directory `--keep` names,
+/// which stays.
+pub(crate) struct Scratch {
+    /// The directory, absolute.
+    pub(crate) path: PathBuf,
+    /// The temporary directory `path` is, removed on drop; `None` for `--keep`.
+    _temp: Option<tempfile::TempDir>,
+}
+
+impl Scratch {
+    /// A new directory named `prefix` and a unique suffix under the system's
+    /// temporary directory, or `keep`, which must not exist yet (a kept run
+    /// never writes over another).
+    pub(crate) fn new(prefix: &str, keep: Option<&Path>) -> Result<Scratch> {
+        let Some(dir) = keep else {
+            let temp = tempfile::Builder::new()
+                .prefix(prefix)
+                .tempdir()
+                .context("cannot create a temporary directory")?;
+            return Ok(Scratch {
+                path: temp.path().to_path_buf(),
+                _temp: Some(temp),
+            });
+        };
+        // Absolute, so that a path handed to the oracle (XDG_STATE_HOME) is one
+        // it honours.
+        let path = std::path::absolute(dir)
+            .with_context(|| format!("cannot resolve {}", dir.display()))?;
+        if path.exists() {
+            bail!(
+                "{} exists; remove it or name another --keep",
+                path.display()
+            );
+        }
+        std::fs::create_dir_all(&path)
+            .with_context(|| format!("cannot create {}", path.display()))?;
+        Ok(Scratch { path, _temp: None })
+    }
+}
+
+/// Checks that `bin` is the oracle version the catalogue names.
+pub(crate) fn check_oracle_version(bin: &Path, expected: &str) -> Result<()> {
+    let output = oracle_command(bin, &BTreeMap::new())
+        .arg("--version")
+        .output()
+        .with_context(|| format!("cannot run the oracle `{}`", bin.display()))?;
+    let version = String::from_utf8_lossy(&output.stdout);
+    let version = version.trim();
+    if version != format!("opentide {expected}") {
+        bail!(
+            "the oracle `{}` is `{version}`, not opentide {expected} (install opentide=={expected} \
+             in its own venv: tests/corpora/README.md)",
+            bin.display()
+        );
+    }
+    Ok(())
+}
+
+/// Runs `opentide --json --repo ROOT ARGS...` and parses its document.
+fn run_oracle(
+    bin: &Path,
+    root: &Path,
+    args: &[String],
+    env: &BTreeMap<String, String>,
+) -> Result<serde_json::Value> {
+    let output = oracle_command(bin, env)
+        .arg("--json")
+        .arg("--repo")
+        .arg(root)
+        .args(args)
+        .output()
+        .with_context(|| format!("cannot run the oracle `{}`", bin.display()))?;
+    serde_json::from_slice(&output.stdout).with_context(|| {
+        format!(
+            "the oracle printed no JSON document for {args:?} in {}; stderr: {}",
+            root.display(),
+            String::from_utf8_lossy(&output.stderr)
+        )
+    })
+}
+
+/// A `faults` command line, resolved.
+#[derive(Clone)]
+struct FaultArgs {
+    check: bool,
+    engine: Option<String>,
+    oracle: Option<String>,
+    only: Option<BTreeSet<String>>,
+    jobs: usize,
+    keep: Option<PathBuf>,
+    report: Option<PathBuf>,
+    out: Option<PathBuf>,
+    catalogue: PathBuf,
+}
+
+impl FaultsArgs {
+    /// The arguments with their defaults.
+    fn resolve(&self) -> FaultArgs {
+        FaultArgs {
+            check: self.check,
+            engine: self.engine.clone(),
+            oracle: self.oracle.clone(),
+            only: self.only.as_ref().map(|ids| ids.iter().cloned().collect()),
+            jobs: self
+                .jobs
+                .unwrap_or_else(|| std::thread::available_parallelism().map_or(2, |n| n.get()))
+                .max(1),
+            keep: self.keep.clone(),
+            report: self.report.clone(),
+            out: self.out.clone(),
+            catalogue: self
+                .catalogue
+                .clone()
+                .unwrap_or_else(|| corpora_dir().join("faults.toml")),
+        }
+    }
+}
+
+pub(crate) fn load_catalogue(path: &Path) -> Result<Catalogue> {
+    let text =
+        std::fs::read_to_string(path).with_context(|| format!("cannot read {}", path.display()))?;
+    Catalogue::parse(&text).with_context(|| format!("in {}", path.display()))
+}
+
+/// The engine a check runs against: only the oracle today.
+fn require_python(engine: Option<&str>) -> Result<Option<u8>> {
+    match engine {
+        Some("python") => Ok(None),
+        Some("rust") => {
+            eprintln!(
+                "xtask corpus: --engine rust is not implemented yet; the Rust engine's \
+                 validate (UC-2.x, https://github.com/opentidehq/opentide/issues/790) runs it"
+            );
+            Ok(Some(1))
+        }
+        Some(other) => bail!("--engine `{other}` is neither python nor rust"),
+        None => bail!("--engine python is required (the oracle the expectations name)"),
+    }
+}
+
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
+fn faults_command(args: &FaultsArgs) -> Result<u8> {
+    let parsed = args.resolve();
+    let catalogue = load_catalogue(&parsed.catalogue)?;
+    if let Some(out) = &parsed.out {
+        return materialise(&catalogue, out);
+    }
+    if !parsed.check {
+        bail!("faults needs --check or --out");
+    }
+    if parsed.engine.as_deref() == Some("rust") {
+        return rust_check(&parsed, &catalogue);
+    }
+    if let Some(code) = require_python(parsed.engine.as_deref())? {
+        return Ok(code);
+    }
+    let bin = oracle_bin(parsed.oracle.as_deref());
+    check_oracle_version(&bin, &catalogue.oracle)?;
+    let base = generate::generate(&catalogue.base.options()?);
+    let kinds: Vec<&Kind> = catalogue
+        .kinds
+        .iter()
+        .filter(|k| parsed.only.as_ref().is_none_or(|only| only.contains(&k.id)))
+        .collect();
+    if let Some(only) = &parsed.only {
+        for id in only {
+            if catalogue.kind(id).is_none() {
+                bail!("--only: no fault kind `{id}`");
+            }
+        }
+    }
+    let guard = Scratch::new("opentide-corpus-faults-", parsed.keep.as_deref())?;
+    let scratch = guard.path.clone();
+    let started = Instant::now();
+    // The clean base must be clean under every command the kinds use.
+    let commands: BTreeSet<(Vec<String>, BTreeMap<String, String>)> = kinds
+        .iter()
+        .filter(|k| k.baseline)
+        .map(|k| (k.command.clone(), k.env.clone()))
+        .collect();
+    let base_dir = scratch.join("_base");
+    write_workspace(&base, &base_dir)?;
+    for (command, env) in &commands {
+        let mut env = env.clone();
+        env.entry("XDG_STATE_HOME".to_string())
+            .or_insert_with(|| scratch.join("_state").to_string_lossy().into_owned());
+        let document = run_oracle(&bin, &base_dir, command, &env)?;
+        require_run(
+            &document,
+            command,
+            object_files(&base),
+            &format!("the clean base under {command:?}"),
+        )?;
+        let found = faults::findings(&document, &base_dir.to_string_lossy())?;
+        if !found.is_empty() {
+            bail!(
+                "the clean base workspace has {} finding(s) under {command:?}, first: {:?}",
+                found.len(),
+                found[0]
+            );
+        }
+    }
+    let mut verdicts: Vec<(Verdict, Vec<String>)> = Vec::new();
+    let mut errors: Vec<String> = Vec::new();
+    for outcome in crate::parallel::in_order_on(parsed.jobs, &kinds, |kind| {
+        run_kind(&bin, &base, kind, &scratch).map_err(|error| format!("{}: {error:#}", kind.id))
+    }) {
+        match outcome {
+            Ok(result) => verdicts.push(result),
+            Err(error) => errors.push(error),
+        }
+    }
+    verdicts.sort_by(|a, b| a.0.id.cmp(&b.0.id));
+    drop(guard);
+    if verdicts.len() + errors.len() != kinds.len() {
+        errors.push(format!(
+            "{} kinds ran, {} reported: a result was lost",
+            kinds.len(),
+            verdicts.len() + errors.len()
+        ));
+    }
+    let failed: Vec<&(Verdict, Vec<String>)> = verdicts
+        .iter()
+        .filter(|(v, _)| !v.problems.is_empty())
+        .collect();
+    for (verdict, _) in &verdicts {
+        let status = if verdict.problems.is_empty() {
+            "ok  "
+        } else {
+            "FAIL"
+        };
+        let reported: Vec<String> = verdict
+            .reported
+            .iter()
+            .map(|(code, n)| format!("{code}x{n}"))
+            .collect();
+        println!("{status} {:<48} {}", verdict.id, reported.join(" "));
+        for problem in &verdict.problems {
+            println!("       - {problem}");
+        }
+    }
+    for error in &errors {
+        println!("ERR  {error}");
+    }
+    if let Some(report) = &parsed.report {
+        let json: Vec<serde_json::Value> = verdicts
+            .iter()
+            .map(|(v, targets)| {
+                serde_json::json!({
+                    "id": v.id,
+                    "ok": v.problems.is_empty(),
+                    "problems": v.problems,
+                    "reported": v.reported,
+                    "targets": targets,
+                })
+            })
+            .collect();
+        std::fs::write(report, serde_json::to_string_pretty(&json)? + "\n")
+            .with_context(|| format!("cannot write {}", report.display()))?;
+    }
+    println!(
+        "corpus faults: {} kinds, {} passed, {} failed, {} could not run, in {:.1} s against {}",
+        kinds.len(),
+        verdicts.len() - failed.len(),
+        failed.len(),
+        errors.len(),
+        started.elapsed().as_secs_f64(),
+        catalogue.oracle
+    );
+    if !errors.is_empty() {
+        return Ok(2);
+    }
+    Ok(u8::from(!failed.is_empty()))
+}
+
+fn run_kind(
+    bin: &Path,
+    base: &Workspace,
+    kind: &Kind,
+    scratch: &Path,
+) -> Result<(Verdict, Vec<String>)> {
+    let mut workspace = base.clone();
+    let targets = faults::select(&workspace, kind, &BTreeSet::new())?;
+    let target_paths = faults::apply(&mut workspace, kind, &targets)?;
+    let dir = scratch.join(&kind.id);
+    write_workspace(&workspace, &dir)?;
+    // Crash logs of a crashing run stay in the scratch directory.
+    let mut env = kind.env.clone();
+    env.entry("XDG_STATE_HOME".to_string())
+        .or_insert_with(|| scratch.join("_state").to_string_lossy().into_owned());
+    let document = run_oracle(bin, &dir, &kind.command, &env)?;
+    let found = faults::findings(&document, &dir.to_string_lossy())?;
+    // A silence proves something only if the run checked every object.
+    if kind.codes.is_empty() {
+        require_run(&document, &kind.command, object_files(&workspace), &kind.id)?;
+    }
+    Ok((faults::judge(kind, &target_paths, &found), target_paths))
+}
+
+/// `faults --check --engine rust`: `--only` split between the object
+/// kinds and the configuration group; without it, both.
+fn rust_check(parsed: &FaultArgs, catalogue: &Catalogue) -> Result<u8> {
+    let config: BTreeSet<&str> = configuration::CONFIGURATION
+        .iter()
+        .map(|(id, _)| *id)
+        .collect();
+    let query_kinds: BTreeSet<String> = queries::kinds(catalogue).into_iter().collect();
+    let Some(only) = &parsed.only else {
+        let structural = structural_check(parsed, catalogue)?;
+        let all: BTreeSet<String> = config.iter().map(|id| (*id).to_string()).collect();
+        let configuration = configuration_check(parsed, catalogue, &all)?;
+        let queries = queries_check(parsed, catalogue, &query_kinds)?;
+        return Ok(structural.max(configuration).max(queries));
+    };
+    let mut config_ids = BTreeSet::new();
+    let mut query_ids = BTreeSet::new();
+    let mut rest = BTreeSet::new();
+    for id in only {
+        if id == queries::GROUP {
+            query_ids.extend(query_kinds.iter().cloned());
+        } else if query_kinds.contains(id) {
+            query_ids.insert(id.clone());
+        } else if id == configuration::GROUP {
+            config_ids.extend(config.iter().map(|id| (*id).to_string()));
+        } else if config.contains(id.as_str()) {
+            config_ids.insert(id.clone());
+        } else {
+            rest.insert(id.clone());
+        }
+    }
+    let mut status = 0;
+    if !rest.is_empty() {
+        let mut structural = parsed.clone();
+        structural.only = Some(rest);
+        status = structural_check(&structural, catalogue)?;
+    }
+    if !config_ids.is_empty() {
+        status = status.max(configuration_check(parsed, catalogue, &config_ids)?);
+    }
+    if !query_ids.is_empty() {
+        status = status.max(queries_check(parsed, catalogue, &query_ids)?);
+    }
+    Ok(status)
+}
+
+/// `faults --check --engine rust --only queries`: the kinds `validate`
+/// reports query findings for, the Rust `validate` with the query engines
+/// against the oracle, and the kinds lint's queries check reports, the Rust
+/// `lint` against the oracle's, finding for finding ([`queries`]).
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
+fn queries_check(parsed: &FaultArgs, catalogue: &Catalogue, ids: &BTreeSet<String>) -> Result<u8> {
+    let bin = oracle_bin(parsed.oracle.as_deref());
+    check_oracle_version(&bin, &catalogue.oracle)?;
+    let base = generate::generate(&catalogue.base.options()?);
+    let keep = parsed.keep.as_ref().map(|dir| dir.join("queries"));
+    let guard = Scratch::new("opentide-corpus-queries-", keep.as_deref())?;
+    let scratch = guard.path.clone();
+    let started = Instant::now();
+    let mut failed = 0usize;
+    let mut used = BTreeSet::new();
+    for id in ids {
+        let kind = catalogue
+            .kind(id)
+            .with_context(|| format!("no fault kind `{id}` in the catalogue"))?;
+        let mut workspace = base.clone();
+        let targets = faults::select(&workspace, kind, &BTreeSet::new())?;
+        faults::apply(&mut workspace, kind, &targets)?;
+        let dir = scratch.join(&kind.id);
+        write_workspace(&workspace, &dir)?;
+        let dir = std::fs::canonicalize(&dir)
+            .with_context(|| format!("cannot resolve {}", dir.display()))?;
+        let mut env = kind.env.clone();
+        env.entry("XDG_STATE_HOME".to_string())
+            .or_insert_with(|| scratch.join("_state").to_string_lossy().into_owned());
+        let document = run_oracle(&bin, &dir, &kind.command, &env)?;
+        let lint = queries::is_lint_kind(kind);
+        let (oracle, oracle_count, rust, rust_count, crowdstrike, yara) = if lint {
+            // lint counts no queries: its findings are compared, every key.
+            let oracle = queries::lint_findings(&document);
+            let rust = queries::rust_lint(&dir, &kind.command)?;
+            (oracle, json!(null), rust, json!(null), 0, 0)
+        } else {
+            let (oracle, oracle_count) = queries::engine_findings(&document["report"]);
+            let (rust_report, crowdstrike, yara) = queries::rust_report(&dir, &kind.command)?;
+            let (rust, rust_count) = queries::engine_findings(&rust_report);
+            (oracle, oracle_count, rust, rust_count, crowdstrike, yara)
+        };
+        let mut problems = Vec::new();
+        let mut approved = 0usize;
+        for difference in queries::differences(&oracle, &rust) {
+            let (oracle, rust) = (&difference["oracle"], &difference["rust"]);
+            let (oracle, rust) = (
+                (!oracle.is_null()).then_some(oracle),
+                (!rust.is_null()).then_some(rust),
+            );
+            if let Some(rule) = queries::approved(oracle, rust) {
+                used.insert(rule);
+                approved += 1;
+                continue;
+            }
+            problems.push(format!(
+                "finding differs:\n         oracle: {}\n         rust:   {}",
+                difference["oracle"], difference["rust"]
+            ));
+        }
+        if oracle_count != rust_count {
+            let (oracle, rust) =
+                super::approved::queries_checked(&oracle_count, &rust_count, crowdstrike, yara, 0);
+            let counted = super::approved::crowdstrike_cql(Some(&oracle), Some(&rust), &[]);
+            if counted {
+                approved += 1;
+            } else {
+                problems.push(format!(
+                    "queries checked: oracle {oracle_count}, rust {rust_count} \
+                     ({crowdstrike} CrowdStrike, {yara} YARA)"
+                ));
+            }
+        }
+        // Not vacuous: the kind's codes are among the findings compared.
+        for code in kind.codes.iter().filter(|code| {
+            if lint {
+                queries::is_lint_query_code(code)
+            } else {
+                queries::is_engine_code(code)
+            }
+        }) {
+            if !oracle.iter().any(|item| item["code"] == code.as_str()) {
+                problems.push(format!(
+                    "the oracle reports no `{code}` from the queries check"
+                ));
+            }
+        }
+        let status = if problems.is_empty() { "ok  " } else { "FAIL" };
+        let compared = if lint {
+            "lint".to_owned()
+        } else {
+            format!("{oracle_count} queries")
+        };
+        println!(
+            "{status} {id:<48} {} finding(s), {compared} compared{}",
+            oracle.len(),
+            if approved > 0 {
+                format!(", {approved} approved difference(s)")
+            } else {
+                String::new()
+            }
+        );
+        for problem in &problems {
+            println!("       - {problem}");
+        }
+        if !problems.is_empty() {
+            failed += 1;
+        }
+    }
+    drop(guard);
+    // On every kind, a rule only the kinds reach must explain something.
+    let mut stale = 0usize;
+    if queries::kinds(catalogue).len() == ids.len() {
+        for rule in queries::APPROVED {
+            if !used.contains(rule.id) {
+                println!(
+                    "FAIL the approved difference `{}` explains nothing: it is stale ({})",
+                    rule.id, rule.reason
+                );
+                stale += 1;
+            }
+        }
+    }
+    println!(
+        "corpus faults --engine rust: {} query kinds, {} passed, {failed} failed, in {:.1} s \
+         against {}",
+        ids.len(),
+        ids.len() - failed,
+        started.elapsed().as_secs_f64(),
+        catalogue.oracle
+    );
+    Ok(u8::from(failed > 0 || stale > 0))
+}
+
+/// A configuration folder as [`configuration::rust_findings`] reads it:
+/// every file directly in it or in a folder directly under it, `path` the
+/// name it carries in messages. `None` when it is not a folder.
+pub(crate) fn read_folder(
+    dir: &Path,
+    path: &str,
+) -> Result<Option<opentide_schema::configuration::resolve::Folder>> {
+    if !dir.is_dir() {
+        return Ok(None);
+    }
+    let mut folder = opentide_schema::configuration::resolve::Folder {
+        path: path.to_owned(),
+        ..Default::default()
+    };
+    for entry in std::fs::read_dir(dir).with_context(|| format!("cannot read {}", dir.display()))? {
+        let entry = entry?;
+        let name = entry.file_name().to_string_lossy().into_owned();
+        let kind = entry.file_type()?;
+        if kind.is_dir() {
+            folder.folders.push(name.clone());
+            for nested in std::fs::read_dir(entry.path())? {
+                let nested = nested?;
+                if nested.file_type()?.is_file() {
+                    let text = std::fs::read_to_string(nested.path())
+                        .with_context(|| format!("cannot read {}", nested.path().display()))?;
+                    folder.files.push((
+                        format!("{name}/{}", nested.file_name().to_string_lossy()),
+                        text,
+                    ));
+                }
+            }
+        } else if kind.is_file() {
+            let text = std::fs::read_to_string(entry.path())
+                .with_context(|| format!("cannot read {}", entry.path().display()))?;
+            folder.files.push((name, text));
+        }
+    }
+    Ok(Some(folder))
+}
+
+/// The configuration folders of the workspace at `dir`: its own, its
+/// parent instance's, and the `sharing.toml` layers (bundled first) by
+/// absolute folder.
+type Folders = (
+    Option<opentide_schema::configuration::resolve::Folder>,
+    Option<opentide_schema::configuration::resolve::Folder>,
+    Vec<(String, Option<String>, bool)>,
+);
+
+fn workspace_folders(dir: &Path) -> Result<Folders> {
+    let dir =
+        std::fs::canonicalize(dir).with_context(|| format!("cannot resolve {}", dir.display()))?;
+    let own_dir = dir.join(".opentide").join("configurations");
+    let own = read_folder(&own_dir, ".opentide/configurations")?;
+    let parent_dir = dir
+        .parent()
+        .map(|parent| parent.join(".opentide").join("configurations"));
+    let parent = match &parent_dir {
+        Some(parent_dir) if *parent_dir != own_dir => {
+            read_folder(parent_dir, "../.opentide/configurations")?
+        }
+        _ => None,
+    };
+    let mut sharing = vec![(
+        "<bundled>".to_owned(),
+        opentide_schema::configuration::bundled::text("sharing.toml").map(str::to_owned),
+        false,
+    )];
+    for (folder, path) in [(&own, Some(&own_dir)), (&parent, parent_dir.as_ref())] {
+        if let (Some(folder), Some(path)) = (folder, path) {
+            sharing.push((
+                path.to_string_lossy().into_owned(),
+                folder
+                    .files
+                    .iter()
+                    .find(|(name, _)| name == "sharing.toml")
+                    .map(|(_, text)| text.clone()),
+                folder.folders.iter().any(|name| name == "sharing"),
+            ));
+        }
+    }
+    Ok((own, parent, sharing))
+}
+
+/// `faults --check --engine rust --only configuration`: the configuration
+/// kinds, the Rust resolution and checks against the oracle
+/// ([`configuration`]).
+fn configuration_check(
+    parsed: &FaultArgs,
+    catalogue: &Catalogue,
+    ids: &BTreeSet<String>,
+) -> Result<u8> {
+    for id in ids {
+        if catalogue.kind(id).is_none() {
+            bail!("--only: no fault kind `{id}`");
+        }
+    }
+    let bin = oracle_bin(parsed.oracle.as_deref());
+    check_oracle_version(&bin, &catalogue.oracle)?;
+    let base = generate::generate(&catalogue.base.options()?);
+    let keep = parsed.keep.as_ref().map(|dir| dir.join("configuration"));
+    let guard = Scratch::new("opentide-corpus-configuration-", keep.as_deref())?;
+    let scratch = guard.path.clone();
+    let changelog = std::fs::read_to_string(repo_root().join("CHANGELOG.md"))
+        .context("reading CHANGELOG.md for the approved differences")?;
+    let started = Instant::now();
+    let mut failed = 0usize;
+    for id in ids {
+        let kind = catalogue
+            .kind(id)
+            .with_context(|| format!("no fault kind `{id}` in the catalogue"))?;
+        let mut workspace = base.clone();
+        let targets = faults::select(&workspace, kind, &BTreeSet::new())?;
+        faults::apply(&mut workspace, kind, &targets)?;
+        let dir = scratch.join(&kind.id);
+        write_workspace(&workspace, &dir)?;
+        let mut env = kind.env.clone();
+        env.entry("XDG_STATE_HOME".to_string())
+            .or_insert_with(|| scratch.join("_state").to_string_lossy().into_owned());
+        let document = run_oracle(&bin, &dir, &kind.command, &env)?;
+        let sharing = configuration::is_sharing(&kind.command);
+        let oracle = configuration::oracle_findings(&document, sharing);
+        let (own, parent, layers) = workspace_folders(&dir)?;
+        let rust =
+            configuration::rust_findings(&kind.command, own.as_ref(), parent.as_ref(), &layers);
+        let mut problems = Vec::new();
+        let approved = configuration::approved(id);
+        let equal = match approved {
+            Some(approved) => {
+                if rust == oracle {
+                    problems.push(format!(
+                        "the approved difference is stale: the findings are equal ({})",
+                        approved.reason
+                    ));
+                }
+                if !changelog.contains(approved.changelog) {
+                    problems.push(format!("CHANGELOG.md has no {:?}", approved.changelog));
+                }
+                configuration::codes_only(&rust) == configuration::codes_only(&oracle)
+            }
+            None if configuration::quoting_only(&oracle, &rust) => {
+                if !changelog.contains(configuration::QUOTING_CHANGELOG) {
+                    problems.push(format!(
+                        "CHANGELOG.md has no {:?}",
+                        configuration::QUOTING_CHANGELOG
+                    ));
+                }
+                true
+            }
+            None => rust == oracle,
+        };
+        if !equal {
+            problems.push(format!(
+                "findings differ:\n         oracle: {}\n         rust:   {}",
+                serde_json::to_string(&oracle)?,
+                serde_json::to_string(&rust)?
+            ));
+        }
+        // Not vacuous: a kind that expects codes has findings to compare.
+        if !kind.codes.is_empty() && oracle.is_empty() {
+            problems.push("the oracle reports no configuration finding".to_owned());
+        }
+        let status = if problems.is_empty() { "ok  " } else { "FAIL" };
+        println!(
+            "{status} {id:<48} {} finding(s) compared{}",
+            oracle.len(),
+            if approved.is_some() {
+                ", codes only (approved)"
+            } else {
+                ""
+            }
+        );
+        for problem in &problems {
+            println!("       - {problem}");
+        }
+        if !problems.is_empty() {
+            failed += 1;
+        }
+    }
+    drop(guard);
+    println!(
+        "corpus faults --engine rust: {} configuration kinds, {} passed, {failed} failed, in \
+         {:.1} s against {}",
+        ids.len(),
+        ids.len() - failed,
+        started.elapsed().as_secs_f64(),
+        catalogue.oracle
+    );
+    Ok(u8::from(failed > 0))
+}
+
+/// `faults --check --engine rust`: the object kinds, the Rust object models
+/// against the oracle, finding for finding ([`structural`]).
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
+fn structural_check(parsed: &FaultArgs, catalogue: &Catalogue) -> Result<u8> {
+    let objects: BTreeSet<&str> = structural::kinds().into_iter().collect();
+    let mut ids: BTreeSet<String> = BTreeSet::new();
+    match &parsed.only {
+        None => ids.extend(objects.iter().map(|id| (*id).to_string())),
+        Some(only) => {
+            for id in only {
+                if let Some(group) = structural::group(id) {
+                    ids.extend(group.into_iter().map(str::to_owned));
+                } else if objects.contains(id.as_str()) {
+                    ids.insert(id.clone());
+                } else if catalogue.kind(id).is_none() {
+                    bail!("--only: no fault kind `{id}`");
+                } else {
+                    bail!(
+                        "--engine rust checks the object kinds (UC-1.3; --only objects lists \
+                         them), the platform kinds (UC-1.4; --only platforms) and the \
+                         configuration kinds (UC-1.5; --only configuration): `{id}` comes with \
+                         the Rust engine's validate (UC-2.x)"
+                    );
+                }
+            }
+        }
+    }
+    let bin = oracle_bin(parsed.oracle.as_deref());
+    check_oracle_version(&bin, &catalogue.oracle)?;
+    let base = generate::generate(&catalogue.base.options()?);
+    let guard = Scratch::new("opentide-corpus-structural-", parsed.keep.as_deref())?;
+    let scratch = guard.path.clone();
+    let changelog = std::fs::read_to_string(repo_root().join("CHANGELOG.md"))
+        .context("reading CHANGELOG.md for the approved differences")?;
+    let started = Instant::now();
+    let mut failed = 0usize;
+    // The clean base: the object models report nothing on any object.
+    let mut checked = 0usize;
+    for file in &base.files {
+        if let Some(found) = structural::check_object(&file.path, file.render().as_bytes()) {
+            checked += 1;
+            if !found.is_empty() {
+                bail!(
+                    "the clean base: the Rust conversion reports {} finding(s) on {}, first: {}",
+                    found.len(),
+                    file.path,
+                    found[0]
+                );
+            }
+        }
+    }
+    println!(
+        "ok   {:<48} {checked} rules, threats and objectives, no finding",
+        "(clean base)"
+    );
+    for id in &ids {
+        let kind = catalogue
+            .kind(id)
+            .with_context(|| format!("no fault kind `{id}` in the catalogue"))?;
+        let mut workspace = base.clone();
+        let targets = faults::select(&workspace, kind, &BTreeSet::new())?;
+        let target_paths = faults::apply(&mut workspace, kind, &targets)?;
+        let dir = scratch.join(&kind.id);
+        write_workspace(&workspace, &dir)?;
+        let mut env = kind.env.clone();
+        env.entry("XDG_STATE_HOME".to_string())
+            .or_insert_with(|| scratch.join("_state").to_string_lossy().into_owned());
+        let document = run_oracle(&bin, &dir, &kind.command, &env)?;
+        let mut problems = Vec::new();
+        let mut compared = 0usize;
+        let approved = structural::approved(id);
+        let mut applied = 0usize;
+        let mut quoted = 0usize;
+        for file in &workspace.files {
+            let Some(rust) = structural::check_object(&file.path, file.render().as_bytes()) else {
+                continue;
+            };
+            let rust = structural::comparable(&rust);
+            let oracle = structural::oracle_findings(&document, &file.path);
+            compared += rust.len();
+            if rust != oracle
+                && let Some(approved) = approved
+                && approved.applies(&oracle, &rust)
+            {
+                applied += 1;
+                continue;
+            }
+            // `messages-quote-values`: Rust quotes a value as `"x"`, where
+            // the oracle printed Python's repr, `'x'`; nothing else differs.
+            if configuration::quoting_only(&oracle, &rust) {
+                quoted += 1;
+                continue;
+            }
+            if rust != oracle {
+                problems.push(format!(
+                    "{}:\n         oracle: {}\n         rust:   {}",
+                    file.path,
+                    serde_json::to_string(&oracle)?,
+                    serde_json::to_string(&rust)?
+                ));
+            }
+        }
+        if let Some(approved) = approved {
+            if applied == 0 {
+                problems.push(format!(
+                    "the approved difference applied to no file: it is stale ({})",
+                    approved.reason
+                ));
+            }
+            if !changelog.contains(approved.changelog) {
+                problems.push(format!("CHANGELOG.md has no {:?}", approved.changelog));
+            }
+        }
+        if quoted > 0 && !changelog.contains(configuration::QUOTING_CHANGELOG) {
+            problems.push(format!(
+                "CHANGELOG.md has no {:?}",
+                configuration::QUOTING_CHANGELOG
+            ));
+        }
+        // Not vacuous: each target carries a finding the two agree on, or the
+        // approved difference; a kind the oracle reports nothing for
+        // (`codes = []`) is checked on targets the model read.
+        for path in target_paths.iter().filter(|_| approved.is_none()) {
+            let file = workspace
+                .files
+                .iter()
+                .find(|file| &file.path == path)
+                .with_context(|| format!("{id}: no target {path}"))?;
+            let Some(rust) = structural::check_object(&file.path, file.render().as_bytes()) else {
+                problems.push(format!("{path}: a target no object model reads"));
+                continue;
+            };
+            if rust.is_empty() && !kind.codes.is_empty() {
+                problems.push(format!("{path}: no finding on a target"));
+            }
+        }
+        let status = if problems.is_empty() { "ok  " } else { "FAIL" };
+        println!(
+            "{status} {id:<48} {} target(s), {compared} finding(s) compared{}{}",
+            target_paths.len(),
+            if applied > 0 {
+                format!(", {applied} file(s) differ as approved")
+            } else {
+                String::new()
+            },
+            if quoted > 0 {
+                format!(", {quoted} file(s) differ only in quoting")
+            } else {
+                String::new()
+            }
+        );
+        for problem in &problems {
+            println!("       - {problem}");
+        }
+        if !problems.is_empty() {
+            failed += 1;
+        }
+    }
+    drop(guard);
+    println!(
+        "corpus faults --engine rust: {} object kinds, {} passed, {failed} failed, in {:.1} s \
+         against {}",
+        ids.len(),
+        ids.len() - failed,
+        started.elapsed().as_secs_f64(),
+        catalogue.oracle
+    );
+    Ok(u8::from(failed > 0))
+}
+
+/// `DIR.faults.json` beside `DIR` (also for `DIR/`), never inside it.
+fn manifest_path(out: &Path) -> Result<PathBuf> {
+    let name = out
+        .file_name()
+        .with_context(|| format!("--out {} names no directory", out.display()))?;
+    let mut manifest_name = name.to_os_string();
+    manifest_name.push(".faults.json");
+    Ok(out.with_file_name(manifest_name))
+}
+
+/// Writes the combined fault workspace and its manifest.
+pub(crate) fn materialise(catalogue: &Catalogue, out: &Path) -> Result<u8> {
+    let options = catalogue.combined_options()?;
+    let mut workspace = generate::generate(&options);
+    let mut taken = BTreeSet::new();
+    let mut manifest = Vec::new();
+    for kind in catalogue.kinds.iter().filter(|k| !k.isolated) {
+        let mut once = kind.clone();
+        once.count = kind.combined_count();
+        let kind = &once;
+        let targets = faults::select(&workspace, kind, &taken)?;
+        taken.extend(targets.iter().copied());
+        let before = workspace.files.len();
+        faults::apply(&mut workspace, kind, &targets)?;
+        if workspace.files.len() < before {
+            bail!("fault kind `{}` deletes files; mark it isolated", kind.id);
+        }
+        // The files the kind changed, and those it added (a state shard, a
+        // configuration file), where its findings are.
+        let files: Vec<String> = targets
+            .iter()
+            .copied()
+            .chain(before..workspace.files.len())
+            .map(|i| workspace.files[i].path.clone())
+            .collect();
+        // Files a kind adds are its own, never another kind's target.
+        taken.extend(before..workspace.files.len());
+        let severities: BTreeMap<&str, &str> = kind
+            .codes
+            .iter()
+            .filter_map(|c| kind.severity_of(c).ok().map(|s| (c.as_str(), s)))
+            .collect();
+        manifest.push(serde_json::json!({
+            "id": kind.id,
+            "class": kind.class,
+            "command": kind.command,
+            "env": kind.env,
+            "codes": severities,
+            "files": files,
+        }));
+    }
+    let manifest_path = manifest_path(out)?;
+    if manifest_path.exists() {
+        bail!(
+            "{} exists; the manifest is never overwritten",
+            manifest_path.display()
+        );
+    }
+    write_workspace(&workspace, out)?;
+    let document = serde_json::json!({
+        "oracle": catalogue.oracle,
+        "base": {
+            "seed": options.seed,
+            "threats": options.counts.threats,
+            "objectives": options.counts.objectives,
+            "rules": options.counts.rules,
+            "layout": options.layout.name(),
+        },
+        "note": "each kind is applied to files no other kind touches, once (twice for a \
+                 cross-file kind); kinds marked isolated are left out. The expectations are \
+                 checked per kind in isolation (faults --check), not on this workspace.",
+        "digest": workspace.digest(),
+        "kinds": manifest,
+    });
+    let mut manifest_file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&manifest_path)
+        .with_context(|| format!("cannot create {}", manifest_path.display()))?;
+    std::io::Write::write_all(
+        &mut manifest_file,
+        (serde_json::to_string_pretty(&document)? + "\n").as_bytes(),
+    )
+    .with_context(|| format!("cannot write {}", manifest_path.display()))?;
+    eprintln!(
+        "corpus faults: {} kinds into {} (digest {}); manifest {}",
+        manifest.len(),
+        out.display(),
+        workspace.digest(),
+        manifest_path.display()
+    );
+    Ok(0)
+}
+
+/// The Python the oracle runs on. The oracle is a venv's console script, so
+/// the venv's interpreter sits beside it (`bin/python` on Unix,
+/// `Scripts/python.exe` on Windows); failing that, the script's `#!` line
+/// names it (Unix only: a Windows console script is an `.exe` launcher).
+fn oracle_python(bin: &Path) -> Result<PathBuf> {
+    let resolved = if bin.components().count() > 1 {
+        bin.to_path_buf()
+    } else {
+        let mut names = vec![bin.to_path_buf()];
+        if cfg!(windows) {
+            names.push(bin.with_extension("exe"));
+        }
+        std::env::var_os("PATH")
+            .and_then(|paths| {
+                std::env::split_paths(&paths)
+                    .flat_map(|dir| names.iter().map(move |name| dir.join(name)))
+                    .find(|candidate| candidate.is_file())
+            })
+            .with_context(|| format!("`{}` is not on PATH", bin.display()))?
+    };
+    if let Some(dir) = resolved.parent() {
+        for name in ["python", "python3", "python.exe"] {
+            let candidate = dir.join(name);
+            if candidate.is_file() {
+                return Ok(candidate);
+            }
+        }
+    }
+    let text =
+        std::fs::read(&resolved).with_context(|| format!("cannot read {}", resolved.display()))?;
+    let first = text.split(|b| *b == b'\n').next().unwrap_or_default();
+    let line = String::from_utf8_lossy(first);
+    let python = line
+        .strip_prefix("#!")
+        .map(str::trim)
+        .filter(|p| !p.is_empty() && !p.contains(' '))
+        .with_context(|| format!("{} has no interpreter line", resolved.display()))?;
+    Ok(PathBuf::from(python))
+}
+
+fn codes_command(args: &CodesArgs) -> Result<u8> {
+    let CodesArgs {
+        engine,
+        oracle,
+        write,
+    } = args;
+    if let Some(code) = require_python(engine.as_deref())? {
+        return Ok(code);
+    }
+    let catalogue = load_catalogue(&corpora_dir().join("faults.toml"))?;
+    let bin = oracle_bin(oracle.as_deref());
+    check_oracle_version(&bin, &catalogue.oracle)?;
+    let python = oracle_python(&bin)?;
+    let output = Command::new(&python)
+        .arg("-I")
+        .arg("-c")
+        .arg(coverage::INVENTORY_SCRIPT)
+        .output()
+        .with_context(|| format!("cannot run {}", python.display()))?;
+    if !output.status.success() {
+        bail!(
+            "the inventory script failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    let inventory: coverage::Inventory = serde_json::from_slice(&output.stdout)
+        .context("the inventory script printed no inventory")?;
+    let text = coverage::render_codes(&inventory, &catalogue.oracle);
+    if *write {
+        let path = corpora_dir().join("codes.toml");
+        std::fs::write(&path, &text).with_context(|| format!("cannot write {}", path.display()))?;
+        eprintln!(
+            "corpus codes: {} codes into {}",
+            inventory.total(),
+            path.display()
+        );
+    } else {
+        print!("{text}");
+    }
+    Ok(0)
+}
+
+fn coverage_command(args: &CoverageArgs) -> Result<u8> {
+    let mode = if args.write {
+        "write"
+    } else if args.check {
+        "check"
+    } else {
+        "print"
+    };
+    let dir = args.dir.clone().unwrap_or_else(corpora_dir);
+    let catalogue = load_catalogue(&dir.join("faults.toml"))?;
+    let codes_path = dir.join("codes.toml");
+    let codes_text = std::fs::read_to_string(&codes_path)
+        .with_context(|| format!("cannot read {}", codes_path.display()))?;
+    let codes = coverage::Codes::parse(&codes_text)?;
+    let report = coverage::report(&codes, &catalogue);
+    let rendered = coverage::render(&report, &catalogue);
+    let path = dir.join("COVERAGE.md");
+    match mode {
+        "write" => {
+            std::fs::write(&path, &rendered)
+                .with_context(|| format!("cannot write {}", path.display()))?;
+            eprintln!("corpus coverage: wrote {}", path.display());
+        }
+        "check" => {
+            let recorded = std::fs::read_to_string(&path).unwrap_or_default();
+            if recorded != rendered {
+                eprintln!(
+                    "corpus coverage: {} is stale; run `cargo xtask corpus coverage --write`",
+                    path.display()
+                );
+                return Ok(1);
+            }
+        }
+        _ => print!("{rendered}"),
+    }
+    println!("{}", report.summary());
+    Ok(u8::from(
+        !report.missing.is_empty() || !report.problems.is_empty(),
+    ))
+}
+
+fn clean_command(args: &CleanArgs) -> Result<u8> {
+    let CleanArgs {
+        engine,
+        oracle,
+        repo,
+    } = args;
+    if let Some(code) = require_python(engine.as_deref())? {
+        return Ok(code);
+    }
+    let repo = repo.as_ref().context("--repo is required")?;
+    let catalogue = load_catalogue(&corpora_dir().join("faults.toml"))?;
+    let bin = oracle_bin(oracle.as_deref());
+    check_oracle_version(&bin, &catalogue.oracle)?;
+    let mut total = 0;
+    for command in ["validate", "lint"] {
+        let started = Instant::now();
+        let document = run_oracle(&bin, repo, &[command.to_string()], &BTreeMap::new())?;
+        let elapsed = started.elapsed().as_secs_f64();
+        let found = faults::findings(&document, &repo.to_string_lossy())?;
+        let summary = document.get("summary").cloned().unwrap_or_default();
+        if let Err(error) = require_checked(&document, None, command) {
+            println!("{error:#}; summary {summary}");
+            total += 1;
+            continue;
+        }
+        println!(
+            "{command}: {} finding(s) in {elapsed:.1} s; summary {summary}",
+            found.len()
+        );
+        for finding in found.iter().take(20) {
+            println!(
+                "  {} {} {}",
+                finding.severity,
+                finding.code,
+                finding.path.as_deref().unwrap_or("")
+            );
+        }
+        total += found.len();
+    }
+    Ok(u8::from(total > 0))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Scratch, manifest_path, oracle_command, require_checked, require_run};
+    use std::collections::BTreeMap;
+    use std::path::{Path, PathBuf};
+
+    #[test]
+    fn a_kind_that_sets_a_proxy_gets_only_its_own() {
+        /// What the child process sees for a variable.
+        #[derive(Debug, PartialEq)]
+        enum Seen {
+            Set(String),
+            Removed,
+            Inherited,
+        }
+        // Names compared as the OS does: on Windows `https_proxy` and
+        // `HTTPS_PROXY` are one variable.
+        fn sees(command: &std::process::Command, name: &str) -> Seen {
+            match command
+                .get_envs()
+                .filter(|(k, _)| super::same_variable(&k.to_string_lossy(), name))
+                .last()
+            {
+                Some((_, Some(value))) => Seen::Set(value.to_string_lossy().into_owned()),
+                Some((_, None)) => Seen::Removed,
+                None => Seen::Inherited,
+            }
+        }
+        let proxy = "http://127.0.0.1:9";
+        let mut env = BTreeMap::new();
+        env.insert("HTTPS_PROXY".to_string(), proxy.to_string());
+        let command = oracle_command(Path::new("opentide"), &env);
+        assert_eq!(sees(&command, "HTTPS_PROXY"), Seen::Set(proxy.to_string()));
+        for var in [
+            "https_proxy",
+            "http_proxy",
+            "HTTP_PROXY",
+            "no_proxy",
+            "NO_PROXY",
+            "all_proxy",
+        ] {
+            // Never inherited: removed or, on Windows where it is the same
+            // variable as the kind's, the kind's own value.
+            match sees(&command, var) {
+                Seen::Removed => {}
+                Seen::Set(value) => {
+                    assert!(var.eq_ignore_ascii_case("HTTPS_PROXY"), "{var} = {value}");
+                    assert_eq!(value, proxy);
+                }
+                Seen::Inherited => panic!("{var} is inherited"),
+            }
+        }
+        assert_eq!(sees(&command, "OPENTIDE_REPO_ROOT"), Seen::Removed);
+        let lowercase = if cfg!(windows) {
+            Seen::Set(proxy.to_string())
+        } else {
+            Seen::Removed
+        };
+        assert_eq!(sees(&command, "https_proxy"), lowercase);
+        // Without a proxy of its own a kind keeps the inherited ones.
+        let plain = oracle_command(Path::new("opentide"), &BTreeMap::new());
+        assert_eq!(sees(&plain, "https_proxy"), Seen::Inherited);
+        assert!(super::same_variable("PATH", "PATH"));
+        assert_eq!(super::same_variable("Path", "PATH"), cfg!(windows));
+    }
+
+    #[test]
+    fn the_oracles_python_is_the_venvs() {
+        let temp = tempfile::tempdir().unwrap();
+        let dir = temp.path().to_path_buf();
+        let bin = dir.join("opentide");
+        std::fs::write(&bin, "#!/opt/elsewhere/python3\n").unwrap();
+        // The shebang, when no interpreter sits beside the script.
+        assert_eq!(
+            super::oracle_python(&bin).unwrap(),
+            PathBuf::from("/opt/elsewhere/python3")
+        );
+        // The venv's own interpreter, beside the script, wins (Windows has
+        // no shebang to read).
+        std::fs::write(dir.join("python.exe"), "").unwrap();
+        assert_eq!(super::oracle_python(&bin).unwrap(), dir.join("python.exe"));
+        std::fs::write(&bin, "no interpreter line").unwrap();
+        assert_eq!(super::oracle_python(&bin).unwrap(), dir.join("python.exe"));
+    }
+
+    #[test]
+    fn scratch_is_removed_unless_kept() {
+        let base = tempfile::tempdir().unwrap();
+        let kept = base.path().join("kept");
+        let scratch = Scratch::new("xtask-scratch-test-", Some(&kept)).unwrap();
+        assert_eq!(scratch.path, kept);
+        drop(scratch);
+        assert!(kept.is_dir(), "--keep keeps it");
+        assert!(
+            Scratch::new("xtask-scratch-test-", Some(&kept)).is_err(),
+            "a kept run is never written over"
+        );
+        let scratch = Scratch::new("xtask-scratch-test-", None).unwrap();
+        let path = scratch.path.clone();
+        assert!(path.is_dir() && path.is_absolute());
+        drop(scratch);
+        assert!(!path.exists(), "a temporary directory goes with its guard");
+    }
+
+    #[test]
+    fn a_run_that_checked_nothing_is_no_pass() {
+        let validate = |objects: u64, failure: serde_json::Value| serde_json::json!({"summary": {"objects": objects, "files": 0}, "failure": failure});
+        let ok = serde_json::Value::Null;
+        assert!(require_checked(&validate(10, ok.clone()), Some(10), "x").is_ok());
+        assert!(require_checked(&validate(0, ok.clone()), None, "x").is_err());
+        assert!(require_checked(&validate(9, ok.clone()), Some(10), "x").is_err());
+        let failed = serde_json::json!({"code": "config_parse"});
+        assert!(require_checked(&validate(10, failed.clone()), Some(10), "x").is_err());
+        let lint = serde_json::json!({"summary": {"files": 0}, "failure": null});
+        assert!(require_checked(&lint, None, "lint").is_err());
+        let cve = vec![
+            "validate".to_string(),
+            "--check".to_string(),
+            "cve".to_string(),
+        ];
+        assert!(require_run(&validate(0, ok.clone()), &cve, 10, "x").is_ok());
+        assert!(require_run(&validate(0, failed), &cve, 10, "x").is_err());
+        assert!(require_run(&validate(0, ok), &["validate".to_string()], 10, "x").is_err());
+    }
+
+    #[test]
+    fn the_manifest_sits_beside_the_workspace() {
+        assert_eq!(
+            manifest_path(Path::new("/tmp/x/faults/")).unwrap(),
+            Path::new("/tmp/x/faults.faults.json")
+        );
+        assert_eq!(
+            manifest_path(Path::new("ws")).unwrap(),
+            Path::new("ws.faults.json")
+        );
+        assert!(manifest_path(Path::new("/")).is_err());
+    }
+}

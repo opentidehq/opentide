@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One step of the website sync guard (docs.yml's `website` job).
+# One step of the website sync guard (ci.yml's `website` job).
 #
 # opentidehq/website syncs this repository's docs/ every hour ("Sync docs and
 # deploy", its .github/workflows/sync-docs.yml). A change that passes this

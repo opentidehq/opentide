@@ -1,0 +1,148 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: deploy/json/deploy-tenants/unreachable-sentinel-one
+---
+args: opentide --json deploy --platform sentinel_one --strategy PREVIEW --strategy RELEASE --all --keep-deprecated
+exit: 1
+
+━━━ stdout · json, 1 lines
+{
+  "changes": [
+    {
+      "action": "create",
+      "name": "SentinelOne create rule",
+      "platform": "sentinel_one",
+      "status": "STAGING",
+      "tenant": "lab",
+      "uuid": "00000000-0000-4000-8047-000000000011"
+    },
+    {
+      "action": "delete",
+      "name": "SentinelOne retire rule",
+      "platform": "sentinel_one",
+      "status": "REMOVED",
+      "tenant": "lab",
+      "uuid": "00000000-0000-4000-8047-000000000012"
+    },
+    {
+      "action": "disable",
+      "name": "SentinelOne disable rule never deployed",
+      "platform": "sentinel_one",
+      "status": "DISABLED",
+      "tenant": "lab",
+      "uuid": "00000000-0000-4000-8047-000000000013"
+    },
+    {
+      "action": "update",
+      "name": "SentinelOne update rule",
+      "platform": "sentinel_one",
+      "status": "STAGING",
+      "tenant": "lab",
+      "uuid": "00000000-0000-4000-8047-000000000014"
+    }
+  ],
+  "command": "deploy",
+  "deployed": [],
+  "dry_run": false,
+  "duration_ms": 0,
+  "error": "Deployment to sentinel_one failed on tenant lab: Cannot reach sentinel_one tenant 'lab' at https://s1.invalid: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
+  "exit_code": 1,
+  "failure": {
+    "argument": null,
+    "code": "command_failed",
+    "crash_log": null,
+    "message": "Deployment to sentinel_one failed on tenant lab: Cannot reach sentinel_one tenant 'lab' at https://s1.invalid: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
+    "suggestion": null
+  },
+  "failures": [
+    {
+      "error": "Cannot reach sentinel_one tenant 'lab' at https://s1.invalid: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
+      "platform": "sentinel_one",
+      "tenant": "lab"
+    }
+  ],
+  "message": "Deployment to sentinel_one failed on tenant lab: Cannot reach sentinel_one tenant 'lab' at https://s1.invalid: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
+  "next_actions": [],
+  "ok": false,
+  "plan": {
+    "sentinel_one": [
+      "00000000-0000-4000-8047-000000000011",
+      "00000000-0000-4000-8047-000000000012",
+      "00000000-0000-4000-8047-000000000013",
+      "00000000-0000-4000-8047-000000000014"
+    ]
+  },
+  "results": [
+    {
+      "action": "disable",
+      "error": null,
+      "id": "00000000-0000-4000-8047-000000000013",
+      "name": "SentinelOne disable rule never deployed",
+      "platform": "sentinel_one",
+      "reason": "rule 00000000-0000-4000-8047-000000000013 has no sentinel_one id for tenant \"lab\" in <WS>/.opentide/states/deployment/00000000-0000-4000-8047-000000000013.json, so nothing is known to exist on that tenant and there is nothing to disablement. If a remote copy exists, it must be removed by hand.",
+      "seconds": 0.0,
+      "status": "skipped",
+      "tenant": "lab"
+    },
+    {
+      "action": "create",
+      "error": null,
+      "id": "00000000-0000-4000-8047-000000000011",
+      "name": "SentinelOne create rule",
+      "platform": "sentinel_one",
+      "reason": "not attempted: tenant lab failed",
+      "seconds": 0.0,
+      "status": "not_attempted",
+      "tenant": "lab"
+    },
+    {
+      "action": "delete",
+      "error": null,
+      "id": "00000000-0000-4000-8047-000000000012",
+      "name": "SentinelOne retire rule",
+      "platform": "sentinel_one",
+      "reason": "not attempted: tenant lab failed",
+      "seconds": 0.0,
+      "status": "not_attempted",
+      "tenant": "lab"
+    },
+    {
+      "action": "update",
+      "error": null,
+      "id": "00000000-0000-4000-8047-000000000014",
+      "name": "SentinelOne update rule",
+      "platform": "sentinel_one",
+      "reason": "not attempted: tenant lab failed",
+      "seconds": 0.0,
+      "status": "not_attempted",
+      "tenant": "lab"
+    }
+  ],
+  "schema_version": 1,
+  "status": "failed",
+  "strategies": [
+    "PREVIEW",
+    "RELEASE"
+  ],
+  "summary": {
+    "create": 0,
+    "delete": 0,
+    "disable": 0,
+    "failed": 0,
+    "not_attempted": 3,
+    "platforms": 1,
+    "seconds": 0.0,
+    "skipped": 1,
+    "tenants": 1,
+    "unchanged": 0,
+    "update": 0,
+    "upsert": 0
+  },
+  "warnings": [
+    "Some rules reported deployment warnings"
+  ]
+}
+
+━━━ stderr
+{"detail":"rule 00000000-0000-4000-8047-000000000013 has no sentinel_one id for tenant \"***\" in <WS>/.opentide/states/deployment/00000000-0000-4000-8047-000000000013.json, so nothing is known to exist on that tenant and there is nothing to disablement. If a remote copy exists, it must be removed by hand.","code":"external_id_missing","uuid":"00000000-0000-4000-8047-000000000013","platform":"sentinel_one","tenant":"***","event":"external_id_missing","level":"warning","timestamp":"0000-00-00 00:00:00"}
+{"platform":"sentinel_one","tenant":"***","error":"Cannot reach sentinel_one tenant '***' at ***: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)","event":"tenant_deployment_failed","level":"critical","timestamp":"0000-00-00 00:00:00"}

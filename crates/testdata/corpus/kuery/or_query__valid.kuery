@@ -1,0 +1,2 @@
+# prod:or_query valid
+process.name:cmd.exe or process.name:powershell.exe

@@ -1,0 +1,41 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: deploy/json/deploy-push/promote-skip
+---
+args: opentide --json deploy --platform splunk --strategy RELEASE --skip-promotion
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "advice": "set a platform block's status to PRODUCTION, DISABLED or REMOVED for RELEASE to deploy it",
+  "command": "deploy",
+  "deployed": [],
+  "dry_run": false,
+  "duration_ms": 0,
+  "exit_code": 0,
+  "failure": null,
+  "message": "No rules to deploy for this platform",
+  "next_actions": [],
+  "ok": true,
+  "plan": {},
+  "platform": "splunk",
+  "schema_version": 1,
+  "skipped": [
+    {
+      "platform": "splunk",
+      "rule": "Splunk create rule",
+      "status": "STAGING",
+      "strategy": "PREVIEW",
+      "uuid": "00000000-0000-4000-8047-000000000041"
+    }
+  ],
+  "status": "skipped",
+  "summary": {
+    "skipped": 1
+  },
+  "warnings": [
+    "This push's diff starts at its last commit's parent: the run names no push event with a `before` commit. Rules that earlier commits of the same push changed are not in it; pass --all to deploy every rule file"
+  ]
+}
+
+━━━ stderr · empty

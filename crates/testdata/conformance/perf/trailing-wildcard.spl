@@ -1,0 +1,2 @@
+index=main sourcetype=wineventlog process=fail*
+| stats count by host

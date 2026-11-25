@@ -1,0 +1,1 @@
+kevt and pod and kcreate and ka.req.pod.host_network intersects (true) and not ka.req.pod.containers.image.repository in (k8s_audit_hostnetwork_images)

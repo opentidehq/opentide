@@ -1,0 +1,16 @@
+[platform]
+enabled = true
+name = "Microsoft Sentinel"
+
+[[tenants]]
+name = "lab"
+strategies = ["PREVIEW"]
+[tenants.setup]
+ssl = true
+resource_group = "soc-rg"
+workspace_name = "soc"
+workspace_id = "11111111-2222-4333-8444-555555555555"
+azure_tenant_id = "contoso-tenant-id"
+azure_subscription_id = "sub-0001"
+azure_client_id = "opentide-app-id"
+azure_client_secret = "$AZURE_CLIENT_SECRET"

@@ -1,0 +1,4 @@
+((modify and proc.name in (oops and evt.arg.newpath contains "/.") or
+ (mkdir and evt.arg.path contains "/.") or
+ (open_write and evt.arg.flags contains "O_CREAT" and fd.name contains "/." and not fd.name pmatch (exclude_hidden_directories)))
+and not user_known_create_hidden_file_activities and not exe_running_docker_save

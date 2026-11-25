@@ -1,0 +1,2 @@
+``` prod:tstats_command invalid
+| tstats count where index=main sourcetype=>x by host

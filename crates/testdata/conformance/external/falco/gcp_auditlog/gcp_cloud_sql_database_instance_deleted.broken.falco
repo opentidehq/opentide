@@ -1,0 +1,1 @@
+is_cloudsql_service and proc.name in (oops and gcp.methodName="cloudsql.instances.delete"

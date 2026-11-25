@@ -146,7 +146,7 @@ opentide --json tui
 }
 ```
 
-At a terminal, `NO_COLOR`, `--no-color`, `TERM=dumb`, a CI environment and `OPENTIDE_OUTPUT=plain` select the `plain` mode too. The refusal then names the setting and how to open the UI anyway:
+At a terminal, `NO_COLOR`, `--no-color`, `FORCE_COLOR=0`, `TERM=dumb`, a CI environment and `OPENTIDE_OUTPUT=plain` select the `plain` mode too. The refusal then names the setting and how to open the UI anyway:
 
 ```text illustrative
 error: opentide tui runs only in the human output mode; this run is in plain mode because NO_COLOR is set
@@ -157,4 +157,4 @@ error: opentide tui runs only in the human output mode; this run is in plain mod
 
 ## Source
 
-`src/opentide/cli/commands/tui.py` (the command, and its refusals), `src/opentide/cli/tui_app.py` (the Textual app, the only module that imports Textual, when the UI opens: `opentide tui --help` does not load it), `src/opentide/cli/services/tui.py` (the catalogue, coverage and actions)
+`opentide tui` is the command line's UI, on ratatui (`crates/opentide-cli/src/tui/`); the Configuration tab is `crates/opentide-cli/src/tui/configuration.rs`, which redacts every credential and proves the raw view redacted. The Textual UI of opentide's Python releases is gone with the Python implementation.

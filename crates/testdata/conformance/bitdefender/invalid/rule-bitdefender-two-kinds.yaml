@@ -1,0 +1,31 @@
+# A block with both kinds.
+# Expected constraint code: bitdefender_rule_kind.
+name: Bitdefender block with two kinds
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000053
+  schema: rule::1.0
+  version: 1
+  created: "2026-01-01"
+  modified: "2026-01-02"
+  tlp: clear
+  author: Detection Engineering
+description: |
+  A Basic detection and a YARA rule in one block.
+status: STAGING
+severity: Medium
+configurations:
+  bitdefender:
+    enabled: true
+    schema: platform::bitdefender::1.0
+    status: STAGING
+    detection:
+      target: process
+      criteria:
+        - field: Process.Name
+          is: mshta.exe
+    yara:
+      signature: |
+        rule A {
+          condition:
+            filesize < 10
+        }

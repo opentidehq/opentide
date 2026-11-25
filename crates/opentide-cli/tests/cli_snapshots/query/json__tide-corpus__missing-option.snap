@@ -1,0 +1,29 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: query/json/tide-corpus/missing-option
+---
+args: opentide --json query 'SecurityEvent | take 10'
+exit: 2
+
+━━━ stdout · json, 1 lines
+{
+  "command": "query",
+  "duration_ms": 0,
+  "error": "the following required arguments were not provided: --platform <PLATFORM>. --platform: choose from sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops",
+  "exit_code": 2,
+  "failure": {
+    "argument": "--platform",
+    "code": "usage_missing_option",
+    "crash_log": null,
+    "message": "the following required arguments were not provided: --platform <PLATFORM>. --platform: choose from sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops",
+    "suggestion": null
+  },
+  "message": "the following required arguments were not provided: --platform <PLATFORM>. --platform: choose from sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops",
+  "next_actions": [],
+  "ok": false,
+  "schema_version": 1,
+  "status": "failed",
+  "summary": {}
+}
+
+━━━ stderr · empty

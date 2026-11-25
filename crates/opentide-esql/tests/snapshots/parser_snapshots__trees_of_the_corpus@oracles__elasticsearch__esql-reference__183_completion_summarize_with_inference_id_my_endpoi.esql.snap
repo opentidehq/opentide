@@ -1,0 +1,37 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/oracles/elasticsearch/esql-reference/183_completion_summarize_with_inference_id_my_endpoi.esql
+---
+SOURCE_FILE@0..72
+  QUERY@0..71
+    FROM_COMMAND@0..9
+      FROM_KW@0..4 "FROM"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..9
+        INDEX_NAME@5..9
+          SOURCE_TEXT@5..9 "logs"
+    WHITESPACE@9..10 " "
+    PIPE@10..11 "|"
+    WHITESPACE@11..12 " "
+    COMPLETION_COMMAND@12..71
+      COMPLETION_KW@12..22 "COMPLETION"
+      WHITESPACE@22..23 " "
+      STRING@23..34
+        STRING_LIT@23..34 "\"Summarize\""
+      WHITESPACE@34..35 " "
+      NAMED_PARAMETERS@35..71
+        WITH_KW@35..39 "WITH"
+        WHITESPACE@39..40 " "
+        MAP_EXPRESSION@40..71
+          L_BRACE@40..41 "{"
+          MAP_ENTRY@41..70
+            STRING@41..55
+              STRING_LIT@41..55 "\"inference_id\""
+            COLON@55..56 ":"
+            WHITESPACE@56..57 " "
+            STRING@57..70
+              STRING_LIT@57..70 "\"my-endpoint\""
+          R_BRACE@70..71 "}"
+  WHITESPACE@71..72 "\n"
+--- errors

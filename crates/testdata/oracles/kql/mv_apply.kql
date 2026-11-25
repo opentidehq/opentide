@@ -1,0 +1,1 @@
+AuditLogs | mv-apply TargetResource = TargetResources on (where TargetResource.type == "User")

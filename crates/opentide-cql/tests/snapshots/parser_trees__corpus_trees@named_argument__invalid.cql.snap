@@ -1,0 +1,28 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(query(&file))
+input_file: crates/testdata/corpus/cql/named_argument__invalid.cql
+---
+SOURCE_FILE@0..26
+  PIPELINE@0..25
+    FUNCTION_CALL@0..25
+      FUNCTION_NAME@0..4
+        FUNCTION_NAME_TOKEN@0..4 "rdns"
+      L_PAREN@4..5 "("
+      ARGUMENT_LIST@5..24
+        NAMED_ARGUMENT@5..11
+          ARGUMENT_NAME@5..10
+            WORD@5..10 "field"
+          EQ@10..11 "="
+        COMMA@11..12 ","
+        WHITESPACE@12..13 " "
+        NAMED_ARGUMENT@13..24
+          ARGUMENT_NAME@13..15
+            WORD@13..15 "as"
+          EQ@15..16 "="
+          FIELD_NAME@16..24
+            WORD@16..24 "hostname"
+      R_PAREN@24..25 ")"
+  WHITESPACE@25..26 "\n"
+
+11..11: expected an expression

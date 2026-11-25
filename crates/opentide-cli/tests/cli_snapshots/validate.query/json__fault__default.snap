@@ -1,0 +1,80 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: validate.query/json/fault/default
+---
+args: opentide --json validate query
+exit: 1
+view: diagnostics (code, severity, file, line, column and counts; a warning's text; log events by name; no other message text)
+
+━━━ stdout · json
+findings: 45
+  falco_output_syntax | error | objects/rules/covert-implant-rule-0165.yaml | 43 | 30
+  eql_unknown_function | error | objects/rules/covert-injection-rule-0262.yaml | 80 | 21
+  kuery_parse_error | error | objects/rules/covert-pivot-rule-0073.yaml | 48 | 19
+  spl_search_operator | error | objects/rules/elevated-dropper-rule-0068.yaml | 59 | 22
+  spl_command_without_pipe | error | objects/rules/elevated-exfiltration-rule-0043.yaml | 65 | 7
+  falco_unknown_field | error | objects/rules/elevated-harvest-rule-0259.yaml | 90 | 54
+  spl_unknown_datamodel | error | objects/rules/elevated-loader-rule-0081.yaml | 56 | 37
+  eql_parse_error | error | objects/rules/encoded-implant-rule-0216.yaml | 46 | 37
+  kql_parse_error | error | objects/rules/encoded-tunnel-rule-0049.yaml | 51 | 29
+  falco_append_condition | error | objects/rules/encoded-tunnel-rule-0077.yaml | 65 | 7
+  lucene_fuzzy | error | objects/rules/encoded-tunnel-rule-0080.yaml | 54 | 23
+  kql_control_command_unsupported | error | objects/rules/hidden-beacon-rule-0062.yaml | 63 | 7
+  spl_empty_command | error | objects/rules/hidden-dropper-rule-0055.yaml | 37 | 17
+  eql_argument_type | error | objects/rules/hidden-dropper-rule-0067.yaml | 65 | 28
+  eql_maxspan_unit | error | objects/rules/hidden-dropper-rule-0194.yaml | 100 | 29
+  kql_unknown_table | error | objects/rules/hidden-pivot-rule-0041.yaml | 41 | 7
+  falco_unknown_event | error | objects/rules/lateral-downgrade-rule-0139.yaml | 58 | 18
+  esql_parse_error | error | objects/rules/lateral-pivot-rule-0104.yaml | 76 | 41
+  falco_field_argument | error | objects/rules/persistent-beacon-rule-0087.yaml | 46 | 27
+  kql_unknown_function | error | objects/rules/persistent-beacon-rule-0088.yaml | 73 | 20
+  falco_transformer | error | objects/rules/persistent-downgrade-rule-0126.yaml | 35 | 27
+  falco_value_type | error | objects/rules/persistent-harvest-rule-0152.yaml | 52 | 38
+  falco_operator_type | error | objects/rules/rapid-dropper-rule-0103.yaml | 61 | 36
+  spl_unknown_datamodel_field | error | objects/rules/rapid-implant-rule-0082.yaml | 59 | 59
+  esql_unknown_type | error | objects/rules/rapid-pivot-rule-0223.yaml | 76 | 56
+  eql_not_boolean | error | objects/rules/remote-dropper-rule-0197.yaml | 58 | 21
+  ecs_type_mismatch | error | objects/rules/remote-spray-rule-0119.yaml | 68 | 20
+  kql_unknown_operator | error | objects/rules/rogue-exfiltration-rule-0092.yaml | 65 | 9
+  spl_parse_error | error | objects/rules/rogue-harvest-rule-0056.yaml | 70 | 27
+  kql_type_mismatch | error | objects/rules/rogue-harvest-rule-0066.yaml | 61 | 26
+  falco_parse_error | error | objects/rules/rogue-spray-rule-0113.yaml | 46 | 37
+  falco_rhs_field | error | objects/rules/scheduled-beacon-rule-0116.yaml | 67 | 39
+  lucene_parse_error | error | objects/rules/scheduled-harvest-rule-0099.yaml | 59 | 19
+  eql_function_arity | error | objects/rules/scheduled-relay-rule-0151.yaml | 57 | 21
+  kql_unknown_column | error | objects/rules/silent-beacon-rule-0079.yaml | 43 | 15
+  esql_unknown_command | error | objects/rules/silent-beacon-rule-0158.yaml | 72 | 34
+  esql_unknown_function | error | objects/rules/silent-dropper-rule-0177.yaml | 56 | 43
+  falco_unknown_field | error | objects/rules/silent-implant-rule-0142.yaml | 53 | 27
+  eql_field_comparison | error | objects/rules/silent-pivot-rule-0086.yaml | 50 | 21
+  kql_parse_error | error | objects/rules/staged-beacon-rule-0053.yaml | 62 | 15
+  falco_invalid_regex | error | objects/rules/staged-beacon-rule-0100.yaml | 51 | 43
+  esql_pattern | error | objects/rules/staged-dropper-rule-0112.yaml | 59 | 58
+  falco_misplaced_list | error | objects/rules/staged-harvest-rule-0155.yaml | 63 | 16
+  eql_unsupported | error | objects/rules/staged-injection-rule-0281.yaml | 55 | 28
+  issues_found | - | - | - | -
+exit_code: 1
+queries[].errors: 44
+queries_validated: 1162
+schema_version: 1
+summary.error_files: 44
+summary.errors: 44
+summary.files: 659
+summary.notes: 0
+summary.queries: 1162
+summary.warning_files: 0
+summary.warnings: 0
+diagnostics[]: 44 items
+next_actions[]: 2 items
+platforms[]: 11 items
+queries[]: 1162 items
+queries[].field_path[]: 3814 items
+ok: false x1
+status: failed x1
+
+━━━ stderr · json lines: 5
+  malformed_object_yaml | error | objects/threats/encoded-exfiltration-threat-0030.yaml
+  malformed_object_yaml | error | objects/rules/encoded-beacon-rule-0034.yaml
+  missing_identifier_from_model | error | <WS>/objects/rules/hidden-implant-rule-0006.yaml
+  malformed_object_yaml | error | objects/rules/hidden-loader-rule-0024.yaml
+  malformed_object_yaml | error | objects/rules/staged-exfiltration-rule-0021.yaml

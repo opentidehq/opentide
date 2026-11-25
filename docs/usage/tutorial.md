@@ -28,27 +28,33 @@ export OPENTIDE_REPO_ROOT="$PWD"
 
 You now have `objects/{threats,objectives,rules}/`, a `.opentide/` config directory, and platform scaffolding. See [Repository setup](./repository-setup.md) for what each piece is.
 
+`--org` also wrote `.opentide/configurations/organisation.toml`, the only place `opentide new` takes `metadata.organisation` from. The objects below name uuid `00000000-0000-4000-8000-000000000099`; to have `new` write the same, put it in that file's `uuid`.
+
 ## 2. Generate the framework artifacts
 
-Before validation can work, the schemas and templates must exist:
+Generate the editor's schemas and templates, the docs and the exports. Validation does not need them (`opentide validate` checks objects against the models compiled into opentide); the editor reads the schemas and snippets, and `opentide new` would generate what it needs on first use:
 
 ```bash
 opentide generate
 ```
 
-```text output-of="opentide generate"
-✓ docs · 7 files · 1.2s · docs/
+On the new, empty repository:
+
+```text illustrative
+✓ docs · 4 files · 0.1s · docs/
 ✓ exports · 3 files · 0.0s · .opentide/exports/
 ✓ vocabularies · 0 files · 0.0s
-✓ templates · 5 files · 1.9s · .opentide/templates/
-✓ schemas · 8 files · 2.6s · .opentide/
+✓ templates · 5 files · 0.0s · .opentide/templates/
+✓ schemas · 8 files · 0.5s · .opentide/
 ✓ snippets · 1 file · 0.0s · .vscode/
-✓ Generated 24 files in 5.8s · 6 phases
+✓ Generated 21 files in 0.6s · 6 phases
 ```
+
+Once the threat, objective and rule of the next steps exist, `docs` writes a page for each of them too (7 files, 24 in all).
 
 This is the output with `--no-color`, in a pipe or in CI: one line per finished phase, with the files it wrote, how long it took and where they went, then the outcome line. At a terminal the phases draw as a live checklist with a spinner on the running one. Phase lines go to stderr and the outcome line to stdout, so `opentide generate > log.txt` keeps the phases on your terminal. Artifacts land in `.opentide/templates/`, `.opentide/schemas/`, and the IDE router at `.opentide/schemas/opentide.schema.json`.
 
-`opentide setup vscode` recommends the opentide VS Code extension (`opentidehq.opentide`) in `.vscode/extensions.json`. With it, VS Code checks the YAML under `objects/` as you type, against the schema revision each object names in `metadata.schema`.
+Install the opentide VS Code extension (`opentidehq.opentide`, which bundles opentide) with `code --install-extension opentidehq.opentide`; `opentide setup vscode` recommends it to your team in `.vscode/extensions.json`. With it, VS Code checks the YAML under `objects/` as you type, against the schema revision each object names in `metadata.schema`.
 
 ## 3. Author the threat
 
@@ -90,7 +96,7 @@ threat:
 `threat.actors` is a list of **objects**. `name` is a scoped actors-vocabulary ID (`att&ck::G0006` is APT1). Optional `sighting` and `references` record why that actor is attributed. `opentide generate` enriches `name` when it writes the objects export.
 
 <Callout type="warn">
-Generate real UUIDs for your own content (`python -c "import uuid; print(uuid.uuid4())"`). The zero-padded UUIDs here match the fixtures so the tutorial is easy to follow — never hand-copy UUIDs into real objects.
+Generate real UUIDs for your own content (`uuidgen`; PowerShell `[guid]::NewGuid()`). The zero-padded UUIDs here match the fixtures so the tutorial is easy to follow — never hand-copy UUIDs into real objects.
 </Callout>
 
 ## 4. Author the objective
@@ -197,7 +203,8 @@ opentide --json validate
     "id-uniqueness": { "check": "id-uniqueness", "status": "passed" },
     "uuid-format": { "check": "uuid-format", "status": "passed" },
     "schema": { "check": "schema", "status": "passed" },
-    "configuration": { "check": "configuration", "status": "passed" }
+    "configuration": { "check": "configuration", "status": "passed" },
+    "queries": { "check": "queries", "status": "passed" }
   },
   "report": {
     "ok": true,
@@ -228,10 +235,10 @@ Re-run:
 opentide validate
 ```
 
-Each finding prints as a code frame: its code, the file, line and column, the line itself with the value underlined, and what to do. A dangling `detection_model` is an `invalid_ref` from the cross-object reference check (not the threat chaining check). The process exits `1`, and the last line counts the errors (`✗ 1 error in 1 file · 3 objects checked · 0.9s`):
+Each finding prints as a code frame: its code, the file, line and column, the line itself with the value underlined, and what to do. A dangling `detection_model` is an `invalid_ref` from the cross-object reference check (not the threat chaining check). The process exits `1`, and the last line counts the errors (`✗ 1 error in 1 file · 3 objects checked · 1 query · 0.9s`):
 
 ```text output-of="opentide validate" exit=1 state=dangling-reference
-error[invalid_ref]: Unknown objective or signal reference '00000000-0000-4000-8002-DEADBEEF0000'
+error[invalid_ref]: Unknown objective or signal reference "00000000-0000-4000-8002-DEADBEEF0000"
    ╭─▶ objects/rules/sentinel-kql-rule.yaml:17:18
    │
 16 │ techniques: [T1059]
@@ -279,7 +286,7 @@ opentide validate query --platform sentinel
 ✓ 1 query valid
 ```
 
-`--live` sends the catalogue queries to Azure Monitor. That needs tenant credentials; the Azure SDK ships with opentide. Then dry-run the deploy. The rule's status is `STAGING`, one of the default statuses, which maps to the `PREVIEW` strategy, so a `PREVIEW` run deploys it. `--all` reads every rule file instead of only the ones the last commit changed:
+`--live` sends the catalogue queries to Azure Monitor. That needs tenant credentials; the Sentinel connector is part of opentide, with no SDK to install. Then dry-run the deploy. The rule's status is `STAGING`, one of the default statuses, which maps to the `PREVIEW` strategy, so a `PREVIEW` run deploys it. `--all` reads every rule file instead of only the ones the last commit changed:
 
 ```bash
 opentide deploy --platform sentinel --dry-run --strategy PREVIEW --all
@@ -291,9 +298,9 @@ Deploy plan · strategy PREVIEW · 1 platform, 0 tenants · dry run, nothing is 
 sentinel · 0 tenants
   + create or update  Sentinel KQL Rule  …000000000001  status STAGING
 
-warning: sentinel has no tenants configured in .opentide/configurations/platforms/sentinel.toml, so a real deploy would stop
 Plan: 0 to create, 0 to update, 1 to create or update, 0 to disable, 0 to delete
   help: add (or uncomment) a [[tenants]] entry in .opentide/configurations/platforms/sentinel.toml
+warning: sentinel has no tenants configured in .opentide/configurations/platforms/sentinel.toml, so a real deploy would stop
 dry run, nothing sent
 ```
 

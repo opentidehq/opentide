@@ -1,0 +1,4 @@
+// prod:sequence valid
+sequence by host.id with maxspan=1m
+  [process where event.type == "start"]
+  [network where true]

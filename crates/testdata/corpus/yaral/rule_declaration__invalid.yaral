@@ -1,0 +1,5 @@
+// prod:rule_declaration invalid
+rule {
+  events:
+    $e.metadata.event_type = "A"
+}

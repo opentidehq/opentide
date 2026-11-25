@@ -1,0 +1,19 @@
+{
+  "contributes": {
+    "grammars": [
+      {
+        "embeddedLanguages": {
+          "meta.embedded.block.cql": "cql",
+          "meta.embedded.block.falco": "falco",
+          "meta.embedded.block.kql": "kql",
+          "meta.embedded.block.lucene": "lucene",
+          "meta.embedded.block.spl": "spl",
+          "meta.embedded.block.yaral": "yaral"
+        },
+        "language": "opentide-yaml",
+        "path": "./tide.tmLanguage.json",
+        "scopeName": "source.opentide-yaml"
+      }
+    ]
+  }
+}

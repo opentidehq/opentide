@@ -1,0 +1,803 @@
+//! The built-in platforms: one table, [`PLATFORMS`], that every crate reads
+//! its platform lists from.
+//!
+//! A row says what a platform is (its identifier, label and model), how a
+//! deployment state addresses its rules, what opentide does with it (deploy,
+//! check a query on a tenant, run a query) and which query languages and
+//! query-file suffixes it brings. Every list of platforms opentide prints or
+//! walks (`--platform`'s choices, `setup`, `info`, the checklists, the
+//! deploy plan, messages) is in the table's order.
+//!
+//! Adding a platform is one row here plus its modules (the model in
+//! `objects::platform`, its compiler, its connector). The dispatch that names
+//! a module per platform (a `match` on the identifier, a clap value) stays
+//! with that module; each consumer's tests check it covers every row.
+
+/// How a deployment state records the remote rule a platform's deployer
+/// created.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExternalId {
+    /// The deployer does not address rules by a vendor id: no state.
+    None,
+    /// A canonical decimal integer (no sign, no leading zero).
+    Int,
+    /// Text, matching `pattern` when the platform names one.
+    Text {
+        /// The shape a stored id has, if any (`_PATTERNED_IDS`): Bitdefender's,
+        /// Graylog's, Exabeam's and Google SecOps' ids have one; CrowdStrike's
+        /// are free text.
+        pattern: Option<IdPattern>,
+    },
+}
+
+/// The shape of a platform's text ids (`_PATTERNED_IDS`): a regular
+/// expression the whole id matches, and how messages name it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct IdPattern {
+    /// The regular expression, matched against the whole id.
+    pub regex: &'static str,
+    /// The shape in words, as a message says what the id is not
+    /// ("24 lower-case hex digits").
+    pub shape: &'static str,
+}
+
+impl ExternalId {
+    /// Whether the deployer addresses rules by a vendor id the deployment
+    /// state keeps ([`state_platforms`]).
+    pub const fn is_stored(self) -> bool {
+        !matches!(self, Self::None)
+    }
+
+    /// What a stored id `text` lacks to be one of these, or `None` when it is
+    /// one (or the platform stores none). An empty id is the caller's to
+    /// refuse first: each says so in its own words.
+    pub fn shape_problem(self, text: &str) -> Option<IdShape> {
+        match self {
+            Self::Int => (!is_canonical_decimal(text)).then_some(IdShape::CanonicalDecimal),
+            Self::Text {
+                pattern: Some(pattern),
+            } => (!matches_whole(pattern.regex, text)).then_some(IdShape::Pattern(pattern)),
+            Self::Text { pattern: None } | Self::None => None,
+        }
+    }
+
+    /// The shape a number given as an id is not, when the platform's ids are
+    /// patterned text (`"<id> is a number, not <shape>"`); `None` when a
+    /// number is stored as its decimal text.
+    pub const fn refuses_number(self) -> Option<IdPattern> {
+        match self {
+            Self::Text { pattern } => pattern,
+            Self::Int | Self::None => None,
+        }
+    }
+}
+
+/// The shape a stored external id lacks ([`ExternalId::shape_problem`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IdShape {
+    /// A canonical decimal integer: no sign, no leading zero.
+    CanonicalDecimal,
+    /// The whole id matches this pattern.
+    Pattern(IdPattern),
+}
+
+/// Whether `text` is a canonical decimal integer (no sign, no leading zero).
+pub fn is_canonical_decimal(text: &str) -> bool {
+    text == "0"
+        || (text.starts_with(|c: char| ('1'..='9').contains(&c))
+            && text.bytes().all(|byte| byte.is_ascii_digit()))
+}
+
+/// Whether the whole of `text` matches `pattern`. The table's patterns are
+/// compiled once; a pattern that does not compile matches nothing (the tests
+/// compile every row's).
+fn matches_whole(pattern: &'static str, text: &str) -> bool {
+    use std::collections::HashMap;
+    use std::sync::{LazyLock, Mutex};
+    static COMPILED: LazyLock<Mutex<HashMap<&'static str, Option<regex::Regex>>>> =
+        LazyLock::new(|| Mutex::new(HashMap::new()));
+    let Ok(mut compiled) = COMPILED.lock() else {
+        return anchored(pattern).is_some_and(|regex| regex.is_match(text));
+    };
+    compiled
+        .entry(pattern)
+        .or_insert_with(|| anchored(pattern))
+        .as_ref()
+        .is_some_and(|regex| regex.is_match(text))
+}
+
+/// `pattern`, anchored at both ends.
+fn anchored(pattern: &str) -> Option<regex::Regex> {
+    regex::Regex::new(&format!("^(?:{pattern})$")).ok()
+}
+
+/// One built-in platform.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "a row of capabilities, each one independent of the others"
+)]
+pub struct Platform {
+    /// The identifier: the key under a rule's `configurations` and the
+    /// configuration's `platforms`, and the `--platform` value.
+    pub id: &'static str,
+    /// The label the wizard and `info` show (`platform_label`).
+    pub label: &'static str,
+    /// The `[platform] name` of the bundled configuration file.
+    pub configuration_name: &'static str,
+    /// The block model's name in messages (`SentinelConfig`).
+    pub config_class: &'static str,
+    /// How the deployment state records its remote rules.
+    pub external_id: ExternalId,
+    /// Whether opentide deploys to it.
+    pub deploys: bool,
+    /// Whether its request body is built from the rule alone, with no tenant
+    /// (`OFFLINE_COMPILERS`).
+    pub compiles_offline: bool,
+    /// Whether a tenant checks its queries (`QUERY_VALIDATION_PLATFORMS`).
+    pub live_check: bool,
+    /// Whether `opentide query` runs on it.
+    pub query_runner: bool,
+    /// The languages its query runner takes, the default first
+    /// (`PLATFORM_LANGUAGES`).
+    pub runner_languages: &'static [&'static str],
+    /// The languages the engine parses for it offline
+    /// (`OFFLINE_QUERY_LANGUAGES`); empty when it parses none.
+    pub offline_languages: &'static [&'static str],
+    /// The extensions of a query file in its languages.
+    pub query_file_suffixes: &'static [&'static str],
+}
+
+/// Every built-in platform, in the one order every list of them takes.
+pub const PLATFORMS: &[Platform] = &[
+    Platform {
+        id: "sentinel",
+        label: "Microsoft Sentinel",
+        configuration_name: "Microsoft Sentinel",
+        config_class: "SentinelConfig",
+        external_id: ExternalId::None,
+        deploys: true,
+        compiles_offline: true,
+        live_check: true,
+        query_runner: true,
+        runner_languages: &["kql"],
+        offline_languages: &["kql"],
+        query_file_suffixes: &["kql"],
+    },
+    Platform {
+        id: "microsoft_defender",
+        label: "Microsoft Defender",
+        configuration_name: "Microsoft Defender",
+        config_class: "MicrosoftDefenderConfig",
+        external_id: ExternalId::None,
+        deploys: true,
+        compiles_offline: false,
+        live_check: true,
+        query_runner: true,
+        runner_languages: &["kql"],
+        offline_languages: &["kql"],
+        query_file_suffixes: &["kql"],
+    },
+    Platform {
+        id: "splunk",
+        label: "Splunk Enterprise Security",
+        configuration_name: "Splunk Enterprise",
+        config_class: "SplunkConfig",
+        external_id: ExternalId::None,
+        deploys: true,
+        compiles_offline: false,
+        live_check: true,
+        query_runner: true,
+        runner_languages: &["spl"],
+        offline_languages: &["spl"],
+        query_file_suffixes: &["spl"],
+    },
+    Platform {
+        id: "sentinel_one",
+        label: "SentinelOne",
+        configuration_name: "Sentinel One",
+        config_class: "SentinelOneConfig",
+        external_id: ExternalId::Int,
+        deploys: true,
+        compiles_offline: false,
+        live_check: true,
+        query_runner: true,
+        runner_languages: &["powerquery"],
+        offline_languages: &[],
+        query_file_suffixes: &[],
+    },
+    Platform {
+        id: "crowdstrike",
+        label: "CrowdStrike Falcon",
+        configuration_name: "Crowdstrike Falcon Correlation Rules",
+        config_class: "CrowdstrikeConfig",
+        external_id: ExternalId::Text { pattern: None },
+        deploys: true,
+        compiles_offline: false,
+        live_check: false,
+        query_runner: true,
+        runner_languages: &["cql"],
+        offline_languages: &["cql"],
+        query_file_suffixes: &["cql"],
+    },
+    Platform {
+        id: "harfanglab",
+        label: "HarfangLab",
+        configuration_name: "HarfangLab",
+        config_class: "HarfangLabConfig",
+        external_id: ExternalId::None,
+        deploys: true,
+        compiles_offline: false,
+        live_check: false,
+        query_runner: true,
+        runner_languages: &["telemetry"],
+        // harfanglab-1.0 1.2: its YARA (the HarfangLab profile), and `.yar`
+        // and `.yara` files, checked offline as YARA-X 1.x compiles them
+        // (#1225), YARA-X-only syntax refused under the profile.
+        offline_languages: &["yara"],
+        query_file_suffixes: &["yar", "yara"],
+    },
+    Platform {
+        id: "carbon_black_cloud",
+        label: "Carbon Black Cloud",
+        configuration_name: "Carbon Black Cloud Enterprise EDR",
+        config_class: "CarbonBlackConfig",
+        external_id: ExternalId::None,
+        deploys: true,
+        compiles_offline: false,
+        live_check: true,
+        query_runner: true,
+        runner_languages: &["lucene"],
+        offline_languages: &["lucene"],
+        query_file_suffixes: &["lucene"],
+    },
+    Platform {
+        id: "elastic",
+        label: "Elastic Security",
+        configuration_name: "Elastic Security",
+        config_class: "ElasticConfig",
+        external_id: ExternalId::None,
+        deploys: true,
+        compiles_offline: true,
+        live_check: true,
+        query_runner: true,
+        runner_languages: &["esql", "eql", "lucene", "kuery"],
+        offline_languages: &["esql", "eql", "kuery", "lucene"],
+        query_file_suffixes: &["esql", "eql", "kuery", "lucene"],
+    },
+    Platform {
+        id: "sysdig",
+        label: "Sysdig Secure",
+        configuration_name: "Sysdig Secure",
+        config_class: "SysdigConfig",
+        external_id: ExternalId::Int,
+        deploys: true,
+        compiles_offline: true,
+        live_check: false,
+        query_runner: false,
+        runner_languages: &[],
+        offline_languages: &["falco"],
+        query_file_suffixes: &["falco"],
+    },
+    Platform {
+        id: "bitdefender",
+        label: "Bitdefender GravityZone",
+        configuration_name: "Bitdefender GravityZone",
+        config_class: "BitdefenderConfig",
+        external_id: ExternalId::Text {
+            pattern: Some(IdPattern {
+                regex: "[0-9a-f]{24}",
+                shape: "24 lower-case hex digits",
+            }),
+        },
+        deploys: true,
+        // The createCustomRule request, without the tenant's targets.
+        compiles_offline: true,
+        live_check: false,
+        query_runner: false,
+        runner_languages: &[],
+        // A YARA signature, under the Bitdefender profile.
+        offline_languages: &["yara"],
+        query_file_suffixes: &["yar", "yara"],
+    },
+    Platform {
+        id: "graylog",
+        label: "Graylog",
+        configuration_name: "Graylog",
+        config_class: "GraylogConfig",
+        external_id: ExternalId::Text {
+            pattern: Some(IdPattern {
+                regex: "[0-9a-f]{24}",
+                shape: "24 lower-case hex digits",
+            }),
+        },
+        deploys: true,
+        compiles_offline: true,
+        live_check: true,
+        query_runner: true,
+        runner_languages: &["lucene"],
+        // Lucene in the engine's Graylog dialect (graylog-1.0, "Query
+        // dialect"): Elastic's checks and Graylog's own.
+        offline_languages: &["lucene"],
+        query_file_suffixes: &["lucene"],
+    },
+    Platform {
+        id: "exabeam",
+        label: "Exabeam New-Scale SIEM",
+        configuration_name: "Exabeam New-Scale SIEM",
+        config_class: "ExabeamConfig",
+        // The rule UUID Exabeam assigns, kept lower-case and canonical.
+        external_id: ExternalId::Text {
+            pattern: Some(IdPattern {
+                regex: "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
+                shape: "a canonical lower-case UUID (8-4-4-4-12 hex digits)",
+            }),
+        },
+        deploys: true,
+        compiles_offline: true,
+        live_check: true,
+        query_runner: true,
+        runner_languages: &["exabeam"],
+        // The sequence filters, profile `rule`, and a `.exabeam` file or an
+        // `system: exabeam` hunt, profile `search` (exabeam-1.0).
+        offline_languages: &["exabeam"],
+        query_file_suffixes: &["exabeam"],
+    },
+    Platform {
+        id: "google_secops",
+        label: "Google Security Operations",
+        configuration_name: "Google Security Operations",
+        config_class: "GoogleSecopsConfig",
+        // google-secops-1.0: the rule id, never a revision (`@v_…`) or a
+        // resource name.
+        external_id: ExternalId::Text {
+            pattern: Some(IdPattern {
+                regex: "ru_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
+                shape: "ru_ and a lower-case UUID (ru_cfc80c6b-f918-42ed-8d5c-9518c13586c1)",
+            }),
+        },
+        deploys: true,
+        compiles_offline: true,
+        live_check: true,
+        query_runner: true,
+        runner_languages: &["yaral"],
+        // The offline YARA-L check arrives with the engine import (E1).
+        offline_languages: &["yaral"],
+        query_file_suffixes: &["yaral", "yl2"],
+    },
+];
+
+/// How many platforms are built in.
+pub const COUNT: usize = PLATFORMS.len();
+
+impl Platform {
+    /// The languages the engine parses for it offline; `None` when it parses
+    /// none of its queries.
+    pub fn offline(&self) -> Option<&'static [&'static str]> {
+        (!self.offline_languages.is_empty()).then_some(self.offline_languages)
+    }
+}
+
+/// Every identifier, in the table's order.
+pub const IDS: [&str; COUNT] = {
+    let mut out = [""; COUNT];
+    let mut index = 0;
+    while index < COUNT {
+        out[index] = PLATFORMS[index].id;
+        index += 1;
+    }
+    out
+};
+
+/// A built-in platform, by name: what code matches on in place of its
+/// identifier's text. Its variants are [`PLATFORMS`]'s rows, in their order.
+/// A platform plugin's identifier is none of them (`PlatformId::parse` gives
+/// `None`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum PlatformId {
+    /// `sentinel`: Microsoft Sentinel.
+    Sentinel,
+    /// `microsoft_defender`: Microsoft Defender.
+    MicrosoftDefender,
+    /// `splunk`: Splunk Enterprise Security.
+    Splunk,
+    /// `sentinel_one`: SentinelOne.
+    SentinelOne,
+    /// `crowdstrike`: CrowdStrike Falcon.
+    Crowdstrike,
+    /// `harfanglab`: HarfangLab.
+    Harfanglab,
+    /// `carbon_black_cloud`: Carbon Black Cloud.
+    CarbonBlackCloud,
+    /// `elastic`: Elastic Security.
+    Elastic,
+    /// `sysdig`: Sysdig Secure.
+    Sysdig,
+    /// `bitdefender`: Bitdefender GravityZone.
+    Bitdefender,
+    /// `graylog`: Graylog.
+    Graylog,
+    /// `exabeam`: Exabeam New-Scale SIEM.
+    Exabeam,
+    /// `google_secops`: Google Security Operations.
+    GoogleSecops,
+}
+
+impl PlatformId {
+    /// Every built-in platform, in [`PLATFORMS`]'s order.
+    pub const ALL: [Self; COUNT] = [
+        Self::Sentinel,
+        Self::MicrosoftDefender,
+        Self::Splunk,
+        Self::SentinelOne,
+        Self::Crowdstrike,
+        Self::Harfanglab,
+        Self::CarbonBlackCloud,
+        Self::Elastic,
+        Self::Sysdig,
+        Self::Bitdefender,
+        Self::Graylog,
+        Self::Exabeam,
+        Self::GoogleSecops,
+    ];
+
+    /// Its row of [`PLATFORMS`].
+    pub const fn spec(self) -> &'static Platform {
+        &PLATFORMS[self as usize]
+    }
+
+    /// The identifier: the key under a rule's `configurations`, the
+    /// configuration's `platforms` and the `--platform` value.
+    pub const fn as_str(self) -> &'static str {
+        self.spec().id
+    }
+
+    /// The identifier the variant is written for; [`PLATFORMS`]' row must
+    /// hold it, which a compile-time check below makes sure of.
+    const fn written(self) -> &'static str {
+        match self {
+            Self::Sentinel => "sentinel",
+            Self::MicrosoftDefender => "microsoft_defender",
+            Self::Splunk => "splunk",
+            Self::SentinelOne => "sentinel_one",
+            Self::Crowdstrike => "crowdstrike",
+            Self::Harfanglab => "harfanglab",
+            Self::CarbonBlackCloud => "carbon_black_cloud",
+            Self::Elastic => "elastic",
+            Self::Sysdig => "sysdig",
+            Self::Bitdefender => "bitdefender",
+            Self::Graylog => "graylog",
+            Self::Exabeam => "exabeam",
+            Self::GoogleSecops => "google_secops",
+        }
+    }
+
+    /// The built-in platform `id` names; `None` for any other text, a
+    /// plugin's identifier included.
+    pub fn parse(id: &str) -> Option<Self> {
+        Self::ALL
+            .into_iter()
+            .find(|platform| platform.as_str() == id)
+    }
+}
+
+/// [`PlatformId::spec`] indexes [`PLATFORMS`] by the variant: a row moved,
+/// added or removed without the enum following fails the build here.
+const _: () = {
+    const fn same(a: &str, b: &str) -> bool {
+        let (a, b) = (a.as_bytes(), b.as_bytes());
+        if a.len() != b.len() {
+            return false;
+        }
+        let mut i = 0;
+        while i < a.len() {
+            if a[i] != b[i] {
+                return false;
+            }
+            i += 1;
+        }
+        true
+    }
+    let mut index = 0;
+    while index < COUNT {
+        let platform = PlatformId::ALL[index];
+        assert!(
+            platform as usize == index,
+            "PlatformId::ALL is out of the enum's order"
+        );
+        assert!(
+            same(PLATFORMS[index].id, platform.written()),
+            "PLATFORMS and PlatformId disagree on a row"
+        );
+        index += 1;
+    }
+};
+
+impl std::fmt::Display for PlatformId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// The platform `id` names, if it is built in.
+pub fn get(id: &str) -> Option<&'static Platform> {
+    PLATFORMS.iter().find(|platform| platform.id == id)
+}
+
+/// Whether `id` names a built-in platform.
+pub fn is_builtin(id: &str) -> bool {
+    get(id).is_some()
+}
+
+/// The platforms `keep` selects, in the table's order.
+pub fn select(keep: impl Fn(&Platform) -> bool) -> Vec<&'static Platform> {
+    PLATFORMS.iter().filter(|platform| keep(platform)).collect()
+}
+
+/// The identifiers of the platforms `keep` selects, in the table's order.
+pub fn ids_where(keep: impl Fn(&Platform) -> bool) -> Vec<&'static str> {
+    select(keep)
+        .into_iter()
+        .map(|platform| platform.id)
+        .collect()
+}
+
+/// Every identifier, in the table's order.
+pub fn ids() -> Vec<&'static str> {
+    IDS.to_vec()
+}
+
+/// The platforms whose deployer addresses the remote rule by a vendor id kept
+/// in the deployment state, in the table's order.
+pub fn state_platforms() -> Vec<&'static str> {
+    ids_where(|platform| platform.external_id.is_stored())
+}
+
+/// Whether `id`'s external id is a canonical decimal integer.
+pub fn has_integer_id(id: &str) -> bool {
+    get(id).is_some_and(|platform| platform.external_id == ExternalId::Int)
+}
+
+/// How platform `id` stores its external ids. A platform that is not built
+/// in (a plugin's) stores free text: its ids are its own.
+pub fn external_id_kind(id: &str) -> ExternalId {
+    get(id).map_or(ExternalId::Text { pattern: None }, |platform| {
+        platform.external_id
+    })
+}
+
+/// What the stored id `text` of built-in platform `id` lacks
+/// ([`ExternalId::shape_problem`]); `None` for a valid id or a platform that
+/// is not built in (a plugin's ids are its own).
+pub fn external_id_problem(id: &str, text: &str) -> Option<IdShape> {
+    external_id_kind(id).shape_problem(text)
+}
+
+/// The extensions of a query file, each one query in the language it names:
+/// every row's suffixes, the first time each appears.
+pub fn query_file_suffixes() -> Vec<&'static str> {
+    let mut suffixes: Vec<&'static str> = Vec::new();
+    for suffix in PLATFORMS
+        .iter()
+        .flat_map(|platform| platform.query_file_suffixes)
+    {
+        if !suffixes.contains(suffix) {
+            suffixes.push(suffix);
+        }
+    }
+    suffixes
+}
+
+#[cfg(test)]
+mod tests {
+    /// Each variant names its own row, in the table's order, and only the
+    /// table's identifiers parse.
+    #[test]
+    fn platform_ids_are_the_tables_rows() {
+        for (index, platform) in super::PlatformId::ALL.into_iter().enumerate() {
+            assert_eq!(platform.as_str(), super::PLATFORMS[index].id);
+            assert_eq!(
+                super::PlatformId::parse(super::PLATFORMS[index].id),
+                Some(platform)
+            );
+            assert_eq!(platform.to_string(), super::IDS[index]);
+        }
+        assert_eq!(super::PlatformId::parse("my_plugin"), None);
+        assert_eq!(super::PlatformId::parse("Sentinel"), None);
+    }
+
+    use super::{
+        COUNT, ExternalId, IDS, PLATFORMS, ids, ids_where, query_file_suffixes, state_platforms,
+    };
+
+    #[test]
+    fn every_platform_is_listed_once_in_the_tables_order() {
+        let mut distinct = ids();
+        distinct.sort_unstable();
+        distinct.dedup();
+        assert_eq!(distinct.len(), COUNT, "identifiers are distinct");
+        assert_eq!(IDS.to_vec(), ids());
+    }
+
+    #[test]
+    fn the_one_order_is_the_tables() {
+        assert_eq!(
+            ids(),
+            [
+                "sentinel",
+                "microsoft_defender",
+                "splunk",
+                "sentinel_one",
+                "crowdstrike",
+                "harfanglab",
+                "carbon_black_cloud",
+                "elastic",
+                "sysdig",
+                "bitdefender",
+                "graylog",
+                "exabeam",
+                "google_secops"
+            ]
+        );
+    }
+
+    #[test]
+    fn the_capability_lists_are_in_the_tables_order() {
+        // The platforms whose external ids the state stores (a message quotes them).
+        assert_eq!(
+            state_platforms(),
+            [
+                "sentinel_one",
+                "crowdstrike",
+                "sysdig",
+                "bitdefender",
+                "graylog",
+                "exabeam",
+                "google_secops"
+            ]
+        );
+        assert_eq!(
+            ids_where(|p| p.external_id == ExternalId::Int),
+            ["sentinel_one", "sysdig"]
+        );
+        assert_eq!(
+            ids_where(|p| p.live_check),
+            [
+                "sentinel",
+                "microsoft_defender",
+                "splunk",
+                "sentinel_one",
+                "carbon_black_cloud",
+                "elastic",
+                "graylog",
+                "exabeam",
+                "google_secops"
+            ]
+        );
+        assert_eq!(ids_where(|p| p.query_runner).len(), PLATFORMS.len() - 2);
+        assert_eq!(
+            ids_where(|p| p.compiles_offline),
+            [
+                "sentinel",
+                "elastic",
+                "sysdig",
+                "bitdefender",
+                "graylog",
+                "exabeam",
+                "google_secops"
+            ]
+        );
+        assert_eq!(
+            query_file_suffixes(),
+            [
+                "kql", "spl", "cql", "yar", "yara", "lucene", "esql", "eql", "kuery", "falco",
+                "exabeam", "yaral", "yl2"
+            ]
+        );
+    }
+
+    #[test]
+    fn a_graylog_id_is_24_lower_case_hex() {
+        use super::{IdShape, external_id_problem};
+        assert!(!super::has_integer_id("graylog"));
+        assert_eq!(
+            external_id_problem("graylog", "65f1c0ffee0123456789abcd"),
+            None
+        );
+        for bad in ["65F1C0FFEE0123456789ABCD", "65f1c0ffee0123456789abc", "12"] {
+            assert_eq!(
+                external_id_problem("graylog", bad),
+                Some(IdShape::Pattern(super::IdPattern {
+                    regex: "[0-9a-f]{24}",
+                    shape: "24 lower-case hex digits",
+                })),
+                "{bad}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_stored_id_has_its_platforms_shape() {
+        use super::{IdPattern, IdShape, anchored, external_id_kind, external_id_problem};
+        const HEX: IdPattern = IdPattern {
+            regex: "[0-9a-f]{24}",
+            shape: "24 lower-case hex digits",
+        };
+        let int = ExternalId::Int;
+        assert_eq!(int.shape_problem("17"), None);
+        assert_eq!(int.shape_problem("0"), None);
+        for bad in ["017", "-1", "+1", "1.0", "x"] {
+            assert_eq!(
+                int.shape_problem(bad),
+                Some(IdShape::CanonicalDecimal),
+                "{bad}"
+            );
+        }
+        let free = ExternalId::Text { pattern: None };
+        assert_eq!(free.shape_problem("anything at all"), None);
+        let hex = ExternalId::Text { pattern: Some(HEX) };
+        assert_eq!(hex.shape_problem("0123456789abcdef01234567"), None);
+        // The whole id matches, not a part of it.
+        for bad in [
+            "0123456789abcdef0123456",
+            "x0123456789abcdef01234567",
+            "0123456789ABCDEF01234567",
+        ] {
+            assert_eq!(hex.shape_problem(bad), Some(IdShape::Pattern(HEX)), "{bad}");
+        }
+        let a_or_b = IdPattern {
+            regex: "a|b",
+            shape: "a or b",
+        };
+        let either = ExternalId::Text {
+            pattern: Some(a_or_b),
+        };
+        assert_eq!(either.shape_problem("ab"), Some(IdShape::Pattern(a_or_b)));
+        assert_eq!(either.shape_problem("b"), None);
+        assert_eq!(ExternalId::None.shape_problem(""), None);
+        // Through the table: built-in rows only.
+        assert_eq!(
+            external_id_problem("sysdig", "012"),
+            Some(IdShape::CanonicalDecimal)
+        );
+        assert_eq!(external_id_problem("crowdstrike", "012"), None);
+        assert_eq!(external_id_problem("acme", "012"), None);
+        // A number is refused only where ids are patterned text.
+        assert_eq!(hex.refuses_number(), Some(HEX));
+        assert_eq!(free.refuses_number(), None);
+        assert_eq!(int.refuses_number(), None);
+        assert_eq!(external_id_kind("acme"), free);
+        for platform in PLATFORMS {
+            if let ExternalId::Text {
+                pattern: Some(pattern),
+            } = platform.external_id
+            {
+                assert!(
+                    anchored(pattern.regex).is_some(),
+                    "{}: {pattern:?}",
+                    platform.id
+                );
+                assert!(!pattern.shape.is_empty(), "{}", platform.id);
+            }
+        }
+    }
+
+    #[test]
+    fn every_platform_model_is_registered_under_its_class() {
+        let models = crate::objects::platform::PLATFORM_CONFIG_MODELS;
+        let registered: Vec<(&str, &str)> = models.iter().map(|m| (m.key, m.model)).collect();
+        let table: Vec<(&str, &str)> = PLATFORMS.iter().map(|p| (p.id, p.config_class)).collect();
+        assert_eq!(registered, table);
+    }
+
+    #[test]
+    fn every_bundled_configuration_names_its_platform() {
+        for platform in PLATFORMS {
+            let text =
+                crate::configuration::bundled::text(&format!("platforms/{}.toml", platform.id))
+                    .unwrap_or_else(|| panic!("{} has a bundled configuration", platform.id));
+            let name = format!("name = \"{}\"", platform.configuration_name);
+            assert!(text.contains(&name), "{}: {name}", platform.id);
+        }
+    }
+}

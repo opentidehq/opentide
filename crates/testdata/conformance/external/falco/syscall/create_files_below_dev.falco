@@ -1,0 +1,1 @@
+(evt.type = creat or (evt.type in (open,openat,openat2))) and evt.arg.flags contains O_CREAT and fd.directory = /dev and not proc.name in (dev_creation_binaries) and not fd.name in (allowed_dev_files) and not fd.name startswith /dev/tty and not user_known_create_files_below_dev_activities

@@ -1,0 +1,30 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/search_query__invalid.yaral
+---
+SOURCE_FILE@0..79
+  COMMENT@0..28 "// prod:search_query invalid"
+  WHITESPACE@28..29 "\n"
+  SEARCH_QUERY@29..78
+    EVENTS_SECTION@29..74
+      EVENTS_KW@29..35 "events"
+      COLON@35..36 ":"
+      WHITESPACE@36..39 "\n  "
+      COMPARISON@39..74
+        BARE_FIELD@39..58
+          IDENT@39..47 "metadata"
+          MEMBER@47..58
+            ACCESS_DOT@47..48 "."
+            FIELD_NAME@48..58 "event_type"
+        WHITESPACE@58..59 " "
+        EQ@59..60 "="
+        WHITESPACE@60..61 " "
+        LITERAL@61..74
+          STRING@61..74 "\"NETWORK_DNS\""
+    WHITESPACE@74..77 "\n  "
+    ERROR@77..78
+      R_PAREN@77..78 ")"
+  WHITESPACE@78..79 "\n"
+errors:
+74..77: expected a section such as `events:` (expected `nocase`)

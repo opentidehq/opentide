@@ -1,0 +1,2601 @@
+//! Shared I/O-free types for the opentide language server.
+//!
+//! Names use `opentide`, never `otide`.
+//!
+//! Internal to opentide, with no stability promise: depend on the
+//! [`opentide`](https://docs.rs/opentide) crate, its Rust SDK, instead.
+
+#![expect(
+    missing_docs,
+    reason = "imported from language-server with public items undocumented: crates/AGENTS.md, Lints"
+)]
+use serde::{Deserialize, Serialize};
+use std::fmt;
+use thiserror::Error;
+
+/// The version a build of opentide reports, in SemVer (`1.0.0`, `1.0.0-rc.1`):
+/// `OPENTIDE_BUILD_VERSION` when the build sets it, otherwise the crate's own.
+///
+/// A release candidate's crates on crates.io carry its version, but the
+/// binaries and the wheel are built from the branch, whose workspace keeps the
+/// release's `X.Y.Z`; the release train sets `OPENTIDE_BUILD_VERSION` for them (the
+/// binaries' environment, the wheel's `.cargo/config.toml`), so that every
+/// channel names the candidate. The analysis engine, the language
+/// server and their `--version` report this value.
+pub const VERSION: &str = reported_version(
+    option_env!("OPENTIDE_BUILD_VERSION"),
+    env!("CARGO_PKG_VERSION"),
+);
+
+/// `from_build` when the build set a version, else `package`; an empty value
+/// counts as not set.
+const fn reported_version(from_build: Option<&'static str>, package: &'static str) -> &'static str {
+    match from_build {
+        Some(version) if !version.is_empty() => version,
+        _ => package,
+    }
+}
+
+/// Language identifier advertised to editors and WASM hosts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum LanguageId {
+    #[serde(rename = "kql", alias = "opentide-kql")]
+    Kql,
+    #[serde(rename = "spl", alias = "opentide-spl")]
+    Spl,
+    #[serde(rename = "opentide-yaml", alias = "yaml", alias = "tide")]
+    TideYaml,
+    /// Elasticsearch ES|QL (Elastic Security `esql` rules).
+    #[serde(rename = "esql", alias = "opentide-esql")]
+    Esql,
+    /// Elasticsearch Event Query Language (Elastic Security `eql` rules).
+    #[serde(rename = "eql", alias = "opentide-eql")]
+    Eql,
+    /// Kibana Query Language. Kibana's API calls it `kuery`; `KQL` stays Kusto.
+    #[serde(rename = "kuery", alias = "opentide-kuery")]
+    Kuery,
+    /// Lucene query string syntax (Elastic `language: lucene`).
+    #[serde(rename = "lucene", alias = "opentide-lucene")]
+    Lucene,
+    /// A configuration TOML file under `.opentide/configurations/`. The host
+    /// checks it (opentide's models); the engine places the findings. Not an
+    /// alias of `toml`: only those files are this language.
+    #[serde(rename = "opentide-config")]
+    Config,
+    /// Falco rule conditions (Sysdig Secure `configurations.sysdig`).
+    #[serde(rename = "falco", alias = "opentide-falco")]
+    Falco,
+    /// CrowdStrike Query Language: Falcon LogScale and Next-Gen SIEM
+    /// (`configurations.crowdstrike`). Not Cassandra's CQL.
+    #[serde(rename = "cql", alias = "opentide-cql")]
+    Cql,
+    /// YARA signatures as YARA-X 1.x compiles them (yara-1.0; HarfangLab
+    /// and Bitdefender `yara` blocks).
+    #[serde(rename = "yara", alias = "opentide-yara")]
+    Yara,
+    /// The Exabeam Query Language of the New-Scale SIEM (exabeam-1.0;
+    /// `configurations.exabeam`, `system: exabeam` hunts). Exabeam's guides
+    /// call it "EQL"; opentide never does, because `eql` is Elastic's.
+    #[serde(rename = "exabeam", alias = "opentide-exabeam")]
+    Exabeam,
+    /// YARA-L 2.0, the detection and search language of Google Security
+    /// Operations (yara-l-1.0; `configurations.google_secops`, `.yaral` and
+    /// `.yl2` files). Not YARA: no code is shared.
+    #[serde(rename = "yaral", alias = "opentide-yaral", alias = "yara-l")]
+    Yaral,
+}
+
+impl LanguageId {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Kql => "kql",
+            Self::Spl => "spl",
+            Self::TideYaml => "opentide-yaml",
+            Self::Esql => "esql",
+            Self::Eql => "eql",
+            Self::Kuery => "kuery",
+            Self::Lucene => "lucene",
+            Self::Config => "opentide-config",
+            Self::Falco => "falco",
+            Self::Cql => "cql",
+            Self::Yara => "yara",
+            Self::Exabeam => "exabeam",
+            Self::Yaral => "yaral",
+        }
+    }
+
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "kql" | "opentide-kql" | "KQL" | "kusto" => Some(Self::Kql),
+            "spl" | "opentide-spl" | "SPL" => Some(Self::Spl),
+            "opentide-yaml" | "yaml" | "tide" | "tide-yaml" => Some(Self::TideYaml),
+            "esql" | "opentide-esql" | "ES|QL" | "es|ql" | "ESQL" => Some(Self::Esql),
+            "eql" | "opentide-eql" | "EQL" => Some(Self::Eql),
+            "kuery" | "opentide-kuery" | "kibana-kql" => Some(Self::Kuery),
+            "lucene" | "opentide-lucene" | "Lucene" => Some(Self::Lucene),
+            "opentide-config" => Some(Self::Config),
+            "falco" | "opentide-falco" | "Falco" => Some(Self::Falco),
+            "cql" | "opentide-cql" | "CQL" | "logscale" | "crowdstrike" => Some(Self::Cql),
+            "yara" | "opentide-yara" | "YARA" => Some(Self::Yara),
+            "exabeam" | "opentide-exabeam" | "Exabeam" => Some(Self::Exabeam),
+            "yaral" | "opentide-yaral" | "yara-l" | "YARA-L" => Some(Self::Yaral),
+            _ => None,
+        }
+    }
+
+    /// Language of a raw query file, from its extension. Anything else is
+    /// Tide YAML or unknown, which the caller decides.
+    pub fn from_extension(extension: &str) -> Option<Self> {
+        match extension {
+            "kql" => Some(Self::Kql),
+            "spl" => Some(Self::Spl),
+            "esql" => Some(Self::Esql),
+            "eql" => Some(Self::Eql),
+            "kuery" => Some(Self::Kuery),
+            "lucene" => Some(Self::Lucene),
+            "falco" => Some(Self::Falco),
+            "cql" => Some(Self::Cql),
+            "yar" | "yara" => Some(Self::Yara),
+            "exabeam" => Some(Self::Exabeam),
+            "yaral" | "yl2" => Some(Self::Yaral),
+            _ => None,
+        }
+    }
+
+    /// Query languages with a tree-sitter grammar and an engine.
+    pub const QUERY_LANGUAGES: [Self; 11] = [
+        Self::Kql,
+        Self::Spl,
+        Self::Esql,
+        Self::Eql,
+        Self::Kuery,
+        Self::Lucene,
+        Self::Falco,
+        Self::Cql,
+        Self::Yara,
+        Self::Exabeam,
+        Self::Yaral,
+    ];
+}
+
+impl fmt::Display for LanguageId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// Zero-based UTF-16-friendly line/character position (LSP).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+pub struct Position {
+    pub line: u32,
+    pub character: u32,
+}
+
+impl Position {
+    pub fn new(line: u32, character: u32) -> Self {
+        Self { line, character }
+    }
+}
+
+/// Half-open range in a document.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct Range {
+    pub start: Position,
+    pub end: Position,
+}
+
+impl Range {
+    pub fn new(start: Position, end: Position) -> Self {
+        Self { start, end }
+    }
+
+    pub fn point(line: u32, character: u32) -> Self {
+        let p = Position::new(line, character);
+        Self { start: p, end: p }
+    }
+
+    pub fn contains(&self, position: Position) -> bool {
+        (position.line > self.start.line
+            || (position.line == self.start.line && position.character >= self.start.character))
+            && (position.line < self.end.line
+                || (position.line == self.end.line && position.character <= self.end.character))
+    }
+}
+
+/// Byte span in the original source (UTF-8).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct ByteSpan {
+    pub start: usize,
+    pub end: usize,
+}
+
+impl ByteSpan {
+    pub fn new(start: usize, end: usize) -> Self {
+        Self { start, end }
+    }
+
+    pub fn is_empty(self) -> bool {
+        self.start >= self.end
+    }
+}
+
+/// The text of a document without its leading UTF-8 byte-order mark
+/// (U+FEFF, `EF BB BF`), if it has one. Some Windows editors save files with
+/// one; an editor neither shows it nor counts it as a column, so a document's
+/// offsets and positions are those of the text after it.
+pub fn strip_bom(text: &str) -> &str {
+    text.strip_prefix('\u{feff}').unwrap_or(text)
+}
+
+/// [`strip_bom`], with `offset` (a byte offset into `text`) moved onto the
+/// text it returns. An offset inside the mark is the start of the text.
+/// Where the run of characters `keep` accepts that ends `text` starts: the
+/// byte after the last character it rejects, or 0. Always a char boundary,
+/// whatever the rejected character's width (#182: `rfind(...) + 1` landed
+/// inside `é`).
+pub fn word_start(text: &str, keep: impl Fn(char) -> bool) -> usize {
+    text.char_indices()
+        .rev()
+        .find(|(_, c)| !keep(*c))
+        .map_or(0, |(i, c)| i + c.len_utf8())
+}
+
+pub fn strip_bom_at(text: &str, offset: usize) -> (&str, usize) {
+    let stripped = strip_bom(text);
+    let shift = text.len() - stripped.len();
+    (stripped, offset.saturating_sub(shift))
+}
+
+/// Convert a UTF-8 byte offset to an LSP position. An offset inside a
+/// multi-byte character counts from that character's start: a span that ends
+/// mid-character gives a slightly short range, never a panic.
+pub fn offset_to_position(source: &str, offset: usize) -> Position {
+    if let Some(position) = scoped::position(source, offset) {
+        return position;
+    }
+    let offset = source.floor_char_boundary(offset);
+    let mut line = 0u32;
+    let mut last_line_start = 0usize;
+    for (idx, ch) in source.char_indices() {
+        if idx >= offset {
+            break;
+        }
+        if ch == '\n' {
+            line += 1;
+            last_line_start = idx + 1;
+        }
+    }
+    let slice = &source[last_line_start..offset];
+    Position {
+        line,
+        character: utf16_len(slice),
+    }
+}
+
+/// Convert an LSP position (UTF-16 columns) to a UTF-8 byte offset, the
+/// inverse of [`offset_to_position`]. A column past the end of its line
+/// clamps to the line end; a line past the end of the text gives its length.
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "a char is one or two UTF-16 units"
+)]
+pub fn position_to_offset(source: &str, position: Position) -> usize {
+    scoped::SCANS.with(|scans| scans.set(scans.get() + 1));
+    let mut line = 0u32;
+    let mut col = 0u32;
+    for (idx, ch) in source.char_indices() {
+        if line == position.line && (col >= position.character || ch == '\n') {
+            return idx;
+        }
+        if ch == '\n' {
+            line += 1;
+            col = 0;
+        } else {
+            col += ch.len_utf16() as u32;
+        }
+    }
+    source.len()
+}
+
+/// The LSP range of `span` in `source`. Each call scans `source` from its
+/// start, unless [`with_line_index`] has installed the line table of this very
+/// `source`: an engine that reports many findings runs its analysis inside
+/// [`with_line_index`], so that converting them all stays linear.
+pub fn span_to_range(source: &str, span: ByteSpan) -> Range {
+    Range {
+        start: offset_to_position(source, span.start),
+        end: offset_to_position(source, span.end),
+    }
+}
+
+/// Line starts of a text, for many offset-to-position conversions: each is a
+/// binary search instead of [`offset_to_position`]'s scan from the start, so
+/// converting every token of a large query stays linear.
+pub struct LineIndex<'a> {
+    source: &'a str,
+    table: LineTable,
+}
+
+/// The line starts and UTF-16 corrections of a text, owned: what
+/// [`LineIndex`] and [`with_line_index`] search.
+struct LineTable {
+    starts: Vec<usize>,
+    /// Lines that are pure ASCII, where a column is a byte distance.
+    ascii: Vec<bool>,
+    /// Each non-ASCII character's byte offset and the running sum, up to and
+    /// including it, of its UTF-8 length minus its UTF-16 length: a column
+    /// is the byte distance less that sum over the characters before it, so
+    /// a long non-ASCII line needs no scan.
+    wide: Vec<(usize, usize)>,
+}
+
+impl LineTable {
+    fn new(source: &str) -> Self {
+        scoped::TABLES.with(|tables| tables.set(tables.get() + 1));
+        let mut starts = vec![0];
+        starts.extend(source.match_indices('\n').map(|(i, _)| i + 1));
+        let ascii = (0..starts.len())
+            .map(|line| {
+                let end = starts.get(line + 1).copied().unwrap_or(source.len());
+                source[starts[line]..end].is_ascii()
+            })
+            .collect();
+        let mut excess = 0;
+        let wide = source
+            .char_indices()
+            .filter(|(_, c)| !c.is_ascii())
+            .map(|(i, c)| {
+                excess += c.len_utf8() - c.len_utf16();
+                (i, excess)
+            })
+            .collect();
+        Self {
+            starts,
+            ascii,
+            wide,
+        }
+    }
+
+    /// The excess (UTF-8 minus UTF-16 length) of the characters before byte
+    /// `offset`, a char boundary.
+    fn excess_before(&self, offset: usize) -> usize {
+        match self.wide.partition_point(|&(at, _)| at < offset) {
+            0 => 0,
+            n => self.wide[n - 1].1,
+        }
+    }
+
+    /// The position of `offset` in `source`, the text the table was built
+    /// from: the same result as [`offset_to_position`].
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "LSP positions are u32 (lines, UTF-16 units); a document past 4 GiB is out of scope (#843)"
+    )]
+    fn position(&self, source: &str, offset: usize) -> Position {
+        let offset = source.floor_char_boundary(offset);
+        let line = self.starts.partition_point(|&start| start <= offset) - 1;
+        let start = self.starts[line];
+        let character = if self.ascii[line] {
+            (offset - start) as u32
+        } else {
+            (offset - start - (self.excess_before(offset) - self.excess_before(start))) as u32
+        };
+        Position {
+            line: line as u32,
+            character,
+        }
+    }
+}
+
+impl<'a> LineIndex<'a> {
+    pub fn new(source: &'a str) -> Self {
+        Self {
+            source,
+            table: LineTable::new(source),
+        }
+    }
+
+    /// Same result as [`offset_to_position`].
+    pub fn position(&self, offset: usize) -> Position {
+        self.table.position(self.source, offset)
+    }
+
+    /// Same result as [`position_to_offset`]: the byte offset of an LSP
+    /// position (UTF-16 columns), a column past its line's end clamping to
+    /// that end, a line past the text's end giving its length.
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "a char is one or two UTF-16 units"
+    )]
+    pub fn offset(&self, position: Position) -> usize {
+        let line = position.line as usize;
+        let Some(&start) = self.table.starts.get(line) else {
+            return self.source.len();
+        };
+        // The line's end: its `\n`, or the end of the text.
+        let end = self
+            .table
+            .starts
+            .get(line + 1)
+            .map_or(self.source.len(), |next| next - 1);
+        if self.table.ascii[line] {
+            return (start + position.character as usize).min(end);
+        }
+        let mut col = 0u32;
+        for (i, ch) in self.source[start..end].char_indices() {
+            if col >= position.character {
+                return start + i;
+            }
+            col += ch.len_utf16() as u32;
+        }
+        end
+    }
+
+    /// Same result as [`span_to_range`].
+    pub fn range(&self, span: ByteSpan) -> Range {
+        Range {
+            start: self.position(span.start),
+            end: self.position(span.end),
+        }
+    }
+}
+
+/// Runs `run` with the line table of `source` installed, so that
+/// [`span_to_range`] and [`offset_to_position`] on this very `source` (the same
+/// bytes: the same address and length) search the table instead of scanning
+/// from the start. An engine wraps the analysis of a query in it, so that a
+/// query with many findings converts them in linear time. The table built
+/// before is put back afterwards, even on a panic; when `source`'s is already
+/// installed, nothing is built.
+pub fn with_line_index<T>(source: &str, run: impl FnOnce() -> T) -> T {
+    scoped::with(source, run)
+}
+
+/// Whether [`with_line_index`] has installed the line table of this very
+/// `source`: then [`span_to_range`] searches it, and a caller that would build
+/// a [`LineIndex`] of its own for `source` need not (ADR 0014 §1).
+#[must_use]
+pub fn line_index_installed(source: &str) -> bool {
+    scoped::installed(source)
+}
+
+/// How many times [`span_to_range`] and [`offset_to_position`] scanned a text
+/// from its start on this thread (no [`with_line_index`] table was installed
+/// for it), and [`position_to_offset`], which always does ([`LineIndex::offset`]
+/// is its table's). Tests read it to prove an analysis converts its findings through
+/// one table (a work count, not a wall clock).
+#[doc(hidden)]
+pub fn scans_from_the_start() -> usize {
+    scoped::SCANS.with(std::cell::Cell::get)
+}
+
+/// How many line tables ([`LineIndex::new`], [`with_line_index`]) this thread
+/// has built. Tests read it to prove an analysis builds one table for a text
+/// and hands it to every pass (ADR 0014 §1, a work count).
+#[doc(hidden)]
+pub fn line_tables_built() -> usize {
+    scoped::TABLES.with(std::cell::Cell::get)
+}
+
+mod scoped {
+    use super::{LineTable, Position};
+    use std::cell::{Cell, RefCell};
+
+    /// The installed table and the text it is for, by address and length.
+    /// While [`with`] runs, that text is borrowed, so no other text can have
+    /// its address: a `&str` with the same address and length is the same
+    /// bytes.
+    struct Installed {
+        key: (usize, usize),
+        table: LineTable,
+    }
+
+    thread_local! {
+        static INSTALLED: RefCell<Option<Installed>> = const { RefCell::new(None) };
+        pub(super) static SCANS: Cell<usize> = const { Cell::new(0) };
+        pub(super) static TABLES: Cell<usize> = const { Cell::new(0) };
+    }
+
+    fn key(source: &str) -> (usize, usize) {
+        (source.as_ptr() as usize, source.len())
+    }
+
+    pub(super) fn with<T>(source: &str, run: impl FnOnce() -> T) -> T {
+        struct Restore(Option<Installed>);
+        impl Drop for Restore {
+            fn drop(&mut self) {
+                let previous = self.0.take();
+                INSTALLED.with(|installed| *installed.borrow_mut() = previous);
+            }
+        }
+        let current = INSTALLED.with(|installed| {
+            installed
+                .borrow()
+                .as_ref()
+                .is_some_and(|table| table.key == key(source))
+        });
+        if current {
+            return run();
+        }
+        let table = Installed {
+            key: key(source),
+            table: LineTable::new(source),
+        };
+        let previous = INSTALLED.with(|installed| installed.replace(Some(table)));
+        let _restore = Restore(previous);
+        run()
+    }
+
+    /// Whether the installed table is `source`'s.
+    pub(super) fn installed(source: &str) -> bool {
+        INSTALLED.with(|installed| {
+            installed
+                .borrow()
+                .as_ref()
+                .is_some_and(|table| table.key == key(source))
+        })
+    }
+
+    /// The position of `offset` from the installed table, if it is
+    /// `source`'s; otherwise `None`, counted as a scan from the start.
+    pub(super) fn position(source: &str, offset: usize) -> Option<Position> {
+        let found = INSTALLED.with(|installed| {
+            installed
+                .borrow()
+                .as_ref()
+                .filter(|table| table.key == key(source))
+                .map(|table| table.table.position(source, offset))
+        });
+        if found.is_none() {
+            SCANS.with(|scans| scans.set(scans.get() + 1));
+        }
+        found
+    }
+}
+
+/// The length of `text` in UTF-16 code units, the unit of an LSP column.
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "a char is one or two UTF-16 units"
+)]
+pub fn utf16_len(text: &str) -> u32 {
+    text.chars().map(|c| c.len_utf16() as u32).sum()
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Severity {
+    Error,
+    Warning,
+    Information,
+    Hint,
+}
+
+impl Severity {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Error => "error",
+            Self::Warning => "warning",
+            Self::Information => "information",
+            Self::Hint => "hint",
+        }
+    }
+
+    /// A severity named the way hosts name it (`error`, `warning`,
+    /// `information` or `info`, `hint`), case-insensitively.
+    pub fn parse(value: &str) -> Option<Self> {
+        match value.to_ascii_lowercase().as_str() {
+            "error" => Some(Self::Error),
+            "warning" | "warn" => Some(Self::Warning),
+            "information" | "info" => Some(Self::Information),
+            "hint" => Some(Self::Hint),
+            _ => None,
+        }
+    }
+}
+
+/// Machine-stable diagnostic. CLI Pydantic issues map onto `{code, field_path, severity}`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Diagnostic {
+    pub code: String,
+    pub severity: Severity,
+    pub message: String,
+    pub range: Range,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub field_path: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub suggestion: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub object_uuid: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub object_type: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CompletionItem {
+    pub label: String,
+    pub detail: Option<String>,
+    pub kind: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub documentation: Option<String>,
+    /// What an editor shows beside the label, in the list (LSP
+    /// `labelDetails.description`): a vocabulary value's name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label_detail: Option<String>,
+    /// The text an editor filters the item by, when it is more than the
+    /// label: a vocabulary value with its name and aliases.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub filter_text: Option<String>,
+}
+
+impl CompletionItem {
+    pub fn new(label: impl Into<String>, kind: impl Into<String>) -> Self {
+        Self {
+            label: label.into(),
+            detail: None,
+            kind: kind.into(),
+            documentation: None,
+            label_detail: None,
+            filter_text: None,
+        }
+    }
+
+    /// The item with `label_detail` shown beside its label.
+    pub fn with_label_detail(mut self, label_detail: impl Into<String>) -> Self {
+        self.label_detail = Some(label_detail.into());
+        self
+    }
+
+    /// The item with `filter_text` to filter it by.
+    pub fn with_filter_text(mut self, filter_text: impl Into<String>) -> Self {
+        self.filter_text = Some(filter_text.into());
+        self
+    }
+
+    pub fn with_detail(mut self, detail: impl Into<String>) -> Self {
+        self.detail = Some(detail.into());
+        self
+    }
+
+    pub fn with_docs(mut self, documentation: impl Into<String>) -> Self {
+        self.documentation = Some(documentation.into());
+        self
+    }
+}
+
+/// LSP `textDocument/signatureHelp` payload.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SignatureHelp {
+    pub signatures: Vec<SignatureInformation>,
+    pub active_signature: u32,
+    pub active_parameter: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SignatureInformation {
+    pub label: String,
+    pub documentation: Option<String>,
+    pub parameters: Vec<ParameterInformation>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ParameterInformation {
+    pub label: String,
+    pub documentation: Option<String>,
+}
+
+impl Diagnostic {
+    pub fn error(code: impl Into<String>, message: impl Into<String>, range: Range) -> Self {
+        Self {
+            code: code.into(),
+            severity: Severity::Error,
+            message: message.into(),
+            range,
+            field_path: None,
+            suggestion: None,
+            object_uuid: None,
+            object_type: None,
+        }
+    }
+
+    pub fn warning(code: impl Into<String>, message: impl Into<String>, range: Range) -> Self {
+        Self {
+            code: code.into(),
+            severity: Severity::Warning,
+            message: message.into(),
+            range,
+            field_path: None,
+            suggestion: None,
+            object_uuid: None,
+            object_type: None,
+        }
+    }
+
+    /// A finding that is worth knowing and never wrong: an optional field
+    /// left out, say. Hosts show it without counting it as a problem.
+    pub fn information(code: impl Into<String>, message: impl Into<String>, range: Range) -> Self {
+        Self {
+            severity: Severity::Information,
+            ..Self::warning(code, message, range)
+        }
+    }
+
+    pub fn with_severity(mut self, severity: Severity) -> Self {
+        self.severity = severity;
+        self
+    }
+
+    pub fn with_field_path(mut self, path: Vec<String>) -> Self {
+        self.field_path = Some(path);
+        self
+    }
+
+    pub fn with_suggestion(mut self, suggestion: impl Into<String>) -> Self {
+        self.suggestion = Some(suggestion.into());
+        self
+    }
+}
+
+pub mod catalog;
+pub mod datasets;
+pub mod duration;
+pub mod falco;
+pub mod json;
+pub mod node;
+pub mod suggest;
+
+/// Well-known diagnostic codes. Extra query diagnostics are allowed.
+pub mod codes {
+    pub const SCHEMA_VALIDATION: &str = "schema_validation";
+    pub const VOCAB_UNKNOWN: &str = "vocab_unknown";
+    pub const INVALID_UUID: &str = "invalid_uuid";
+    pub const DUPLICATE_ID: &str = "duplicate_id";
+    pub const INVALID_REF: &str = "invalid_ref";
+    pub const CHAINING_RELATION_UNKNOWN: &str = "chaining_relation_unknown";
+    pub const DEPRECATED_FIELD: &str = "deprecated_field";
+    pub const KQL_CONTROL_COMMAND_UNSUPPORTED: &str = "kql_control_command_unsupported";
+    pub const KQL_UNKNOWN_OPERATOR: &str = "kql_unknown_operator";
+    pub const KQL_UNKNOWN_FUNCTION: &str = "kql_unknown_function";
+    pub const KQL_DEPRECATED_FUNCTION: &str = "kql_deprecated_function";
+    pub const KQL_DEPRECATED_OPERATOR: &str = "kql_deprecated_operator";
+    pub const KQL_UNKNOWN_TABLE: &str = "kql_unknown_table";
+    pub const KQL_TABLE_MISSPELT: &str = "kql_table_misspelt";
+    pub const KQL_RENDER_NOT_VALID: &str = "kql_render_not_valid";
+    pub const KQL_PARSE_ERROR: &str = "kql_parse_error";
+    pub const KQL_WHERE_NOT_FIRST: &str = "kql_where_not_first";
+    pub const KQL_UNSCOPED_SEARCH: &str = "kql_unscoped_search";
+    pub const KQL_UNSCOPED_UNION: &str = "kql_unscoped_union";
+    pub const KQL_WILDCARD_TABLE: &str = "kql_wildcard_table";
+    pub const KQL_JOIN_SUMMARIZE_BEFORE_PROJECT: &str = "kql_join_summarize_before_project";
+    /// A `//` comment in a query that YAML folds into one line, so the
+    /// comment swallows the lines after it.
+    pub const QUERY_FOLDED_COMMENT: &str = "query_folded_comment";
+    pub const SPL_UNKNOWN_COMMAND: &str = "spl_unknown_command";
+    pub const SPL_PARSE_ERROR: &str = "spl_parse_error";
+    pub const SPL_WILDCARD: &str = "spl_wildcard";
+    pub const SPL_LEADING_NOT: &str = "spl_leading_not";
+    pub const SPL_SUBSEARCH_TRUNCATION: &str = "spl_subsearch_truncation";
+    /// `==`, `<>`, `=>`, `=<`, `!~` or `=~` in a search clause.
+    pub const SPL_SEARCH_OPERATOR: &str = "spl_search_operator";
+    /// A command Splunk parses with no arguments, where it does nothing,
+    /// returns no results or fails at run time.
+    pub const SPL_EMPTY_COMMAND: &str = "spl_empty_command";
+    /// A trailing `|` with no command, which Splunk ignores.
+    pub const SPL_EMPTY_STAGE: &str = "spl_empty_stage";
+    /// The query starts with a command name but no `|`, so Splunk searches
+    /// for the word.
+    pub const SPL_COMMAND_WITHOUT_PIPE: &str = "spl_command_without_pipe";
+    pub const ESQL_PARSE_ERROR: &str = "esql_parse_error";
+    pub const ESQL_UNKNOWN_COMMAND: &str = "esql_unknown_command";
+    pub const ESQL_UNKNOWN_FUNCTION: &str = "esql_unknown_function";
+    pub const ESQL_UNAVAILABLE: &str = "esql_unavailable";
+    pub const ESQL_METADATA_ID: &str = "esql_metadata_id";
+    pub const EQL_PARSE_ERROR: &str = "eql_parse_error";
+    pub const EQL_UNKNOWN_FUNCTION: &str = "eql_unknown_function";
+    pub const EQL_UNSUPPORTED: &str = "eql_unsupported";
+    pub const EQL_MAXSPAN_UNIT: &str = "eql_maxspan_unit";
+    pub const EQL_MAXSPAN_WINDOW: &str = "eql_maxspan_window";
+    pub const EQL_MAXSPAN_LOOKBACK: &str = "eql_maxspan_lookback";
+    pub const EQL_FUNCTION_ARITY: &str = "eql_function_arity";
+    pub const EQL_CASE_SENSITIVE: &str = "eql_case_sensitive";
+    pub const EQL_LITERAL_WILDCARD: &str = "eql_literal_wildcard";
+    pub const EQL_NESTED_COMMENT: &str = "eql_nested_comment";
+    pub const EQL_EXPRESSION_DEPTH: &str = "eql_expression_depth";
+    pub const EQL_ARGUMENT_TYPE: &str = "eql_argument_type";
+    pub const EQL_FIELD_COMPARISON: &str = "eql_field_comparison";
+    pub const EQL_RUNS_IGNORED: &str = "eql_runs_ignored";
+    pub const EQL_UNTIL_TERM: &str = "eql_until_term";
+    pub const EQL_REGEX: &str = "eql_regex";
+    pub const EQL_MAXSPAN_MISSING: &str = "eql_maxspan_missing";
+    pub const KUERY_PARSE_ERROR: &str = "kuery_parse_error";
+    pub const KUERY_LUCENE_SYNTAX: &str = "kuery_lucene_syntax";
+    pub const KUERY_ESCAPE: &str = "kuery_escape";
+    pub const KUERY_QUOTED_WILDCARD: &str = "kuery_quoted_wildcard";
+    pub const LUCENE_PARSE_ERROR: &str = "lucene_parse_error";
+    pub const LUCENE_LOWERCASE_OPERATOR: &str = "lucene_lowercase_operator";
+    pub const LUCENE_MIXED_OPERATORS: &str = "lucene_mixed_operators";
+    pub const LUCENE_ESCAPE: &str = "lucene_escape";
+    pub const LUCENE_KUERY_SYNTAX: &str = "lucene_kuery_syntax";
+    pub const LUCENE_REGEXP: &str = "lucene_regexp";
+    pub const LUCENE_FUZZY: &str = "lucene_fuzzy";
+    pub const LUCENE_RANGE_OPERATOR: &str = "lucene_range_operator";
+    pub const LUCENE_UNESCAPED_SLASH: &str = "lucene_unescaped_slash";
+    pub const LUCENE_BARE_TERM: &str = "lucene_bare_term";
+    pub const LUCENE_LOOKS_LIKE_KUERY: &str = "lucene_looks_like_kuery";
+    pub const LUCENE_ELASTICSEARCH_ONLY: &str = "lucene_elasticsearch_only";
+    // The Graylog dialect of Lucene (graylog-1.0, "Query diagnostics").
+    pub const GRAYLOG_LEADING_WILDCARD: &str = "graylog_leading_wildcard";
+    pub const GRAYLOG_REGEX_UNSUPPORTED: &str = "graylog_regex_unsupported";
+    pub const GRAYLOG_REGEX_OPERATOR: &str = "graylog_regex_operator";
+    pub const GRAYLOG_REGEX_QUOTE: &str = "graylog_regex_quote";
+    pub const GRAYLOG_OPEN_RANGE: &str = "graylog_open_range";
+    pub const GRAYLOG_DOUBLE_BACKSLASH: &str = "graylog_double_backslash";
+    pub const GRAYLOG_ANALYZED_FIELD: &str = "graylog_analyzed_field";
+    pub const KUERY_QUESTION_MARK: &str = "kuery_question_mark";
+    pub const KUERY_FREE_TEXT: &str = "kuery_free_text";
+    pub const KUERY_LOOKS_LIKE_LUCENE: &str = "kuery_looks_like_lucene";
+    pub const KUERY_RANGE_TYPE: &str = "kuery_range_type";
+    // elastic-1.0 Advisories on the block itself (specifications#57).
+    pub const LOOKBACK_ZERO: &str = "lookback_zero";
+    pub const LOOKBACK_LONG: &str = "lookback_long";
+    pub const THRESHOLD_LOOKBACK: &str = "threshold_lookback";
+    pub const RISK_BAND: &str = "risk_band";
+    pub const TECHNIQUE_NOT_ENTERPRISE: &str = "technique_not_enterprise";
+    pub const DEFENDER_OUTPUT_COLUMNS: &str = "defender_output_columns";
+    /// `::type` names no Elasticsearch release can cast to.
+    pub const ESQL_UNKNOWN_TYPE: &str = "esql_unknown_type";
+    pub const ESQL_GROUP_BY_COLUMN: &str = "esql_group_by_column";
+    pub const EQL_NOT_BOOLEAN: &str = "eql_not_boolean";
+    pub const ESQL_PATTERN: &str = "esql_pattern";
+    pub const ESQL_EXPRESSION_DEPTH: &str = "esql_expression_depth";
+    // Dataset knowledge (#110): known schemas, then visibility.toml, then warn.
+    pub const KQL_TABLE_NOT_DECLARED: &str = "kql_table_not_declared";
+    pub const KQL_UNKNOWN_COLUMN: &str = "kql_unknown_column";
+    pub const KQL_TYPE_MISMATCH: &str = "kql_type_mismatch";
+    pub const SPL_UNKNOWN_DATAMODEL: &str = "spl_unknown_datamodel";
+    pub const SPL_UNKNOWN_DATAMODEL_FIELD: &str = "spl_unknown_datamodel_field";
+    pub const SPL_DATASET_NOT_DECLARED: &str = "spl_dataset_not_declared";
+    pub const ECS_TYPE_MISMATCH: &str = "ecs_type_mismatch";
+    pub const ECS_UNKNOWN_FIELD: &str = "ecs_unknown_field";
+    pub const ELASTIC_DATASET_NOT_DECLARED: &str = "elastic_dataset_not_declared";
+    /// A Carbon Black Cloud query field one edit or two from a catalog field
+    /// (#162).
+    pub const CBC_UNKNOWN_FIELD: &str = "cbc_unknown_field";
+    /// The host's configuration checker failed on a configuration file.
+    pub const CONFIG_CHECK_FAILED: &str = "config_check_failed";
+    // Falco conditions (sysdig-1.0, "Falco language").
+    pub const FALCO_PARSE_ERROR: &str = "falco_parse_error";
+    pub const FALCO_UNKNOWN_FIELD: &str = "falco_unknown_field";
+    pub const FALCO_UNKNOWN_MACRO: &str = "falco_unknown_macro";
+    pub const FALCO_UNKNOWN_LIST: &str = "falco_unknown_list";
+    pub const FALCO_MISPLACED_LIST: &str = "falco_misplaced_list";
+    pub const FALCO_FIELD_ARGUMENT: &str = "falco_field_argument";
+    pub const FALCO_OPERATOR_TYPE: &str = "falco_operator_type";
+    pub const FALCO_VALUE_TYPE: &str = "falco_value_type";
+    pub const FALCO_TRANSFORMER: &str = "falco_transformer";
+    pub const FALCO_RHS_FIELD: &str = "falco_rhs_field";
+    pub const FALCO_INVALID_REGEX: &str = "falco_invalid_regex";
+    pub const FALCO_REGEX_SIMPLE: &str = "falco_regex_simple";
+    pub const FALCO_FIELD_AS_VALUE: &str = "falco_field_as_value";
+    pub const FALCO_TRANSFORMER_AS_VALUE: &str = "falco_transformer_as_value";
+    pub const FALCO_DEPRECATED_FIELD: &str = "falco_deprecated_field";
+    pub const FALCO_UNSAFE_NA_CHECK: &str = "falco_unsafe_na_check";
+    pub const FALCO_NO_EVTTYPE: &str = "falco_no_evttype";
+    pub const FALCO_OUTPUT_SYNTAX: &str = "falco_output_syntax";
+    pub const FALCO_NEWER_SYNTAX: &str = "falco_newer_syntax";
+    pub const FALCO_EXCEPTION: &str = "falco_exception";
+    pub const FALCO_UNKNOWN_EVENT: &str = "falco_unknown_event";
+    pub const FALCO_UNKNOWN_SOURCE: &str = "falco_unknown_source";
+    pub const FALCO_APPEND_CONDITION: &str = "falco_append_condition";
+    pub const FALCO_UNKNOWN_RULE: &str = "falco_unknown_rule";
+    // Sysdig block constraint codes (sysdig-1.0, Constraints), as opentide names them.
+    pub const SYSDIG_RULE_SHAPE: &str = "sysdig_rule_shape";
+    pub const SYSDIG_TUNING_KEYS: &str = "sysdig_tuning_keys";
+    pub const SYSDIG_PRIORITY: &str = "sysdig_priority";
+    pub const SYSDIG_SOURCE: &str = "sysdig_source";
+    pub const SYSDIG_EXCEPTION_SHAPE: &str = "sysdig_exception_shape";
+    pub const SYSDIG_DEFINITION_NAME: &str = "sysdig_definition_name";
+    pub const SYSDIG_DEFINITION_DUPLICATE: &str = "sysdig_definition_duplicate";
+    pub const SYSDIG_DEFINITION_ORDER: &str = "sysdig_definition_order";
+    pub const SYSDIG_LIST_IN_VALUE: &str = "sysdig_list_in_value";
+    pub const SYSDIG_LIST_SELF_REFERENCE: &str = "sysdig_list_self_reference";
+    // Bitdefender GravityZone block codes (bitdefender-1.0, Constraints and
+    // Advisories), as opentide names them.
+    pub const BITDEFENDER_RULE_KIND: &str = "bitdefender_rule_kind";
+    pub const BITDEFENDER_TARGET: &str = "bitdefender_target";
+    pub const BITDEFENDER_CRITERION_SHAPE: &str = "bitdefender_criterion_shape";
+    pub const BITDEFENDER_CRITERION_FIELD: &str = "bitdefender_criterion_field";
+    pub const BITDEFENDER_CRITERION_RELATION: &str = "bitdefender_criterion_relation";
+    pub const BITDEFENDER_CRITERION_VALUE: &str = "bitdefender_criterion_value";
+    pub const BITDEFENDER_CRITERIA_COMBINATION: &str = "bitdefender_criteria_combination";
+    pub const BITDEFENDER_ACTION_SCOPE: &str = "bitdefender_action_scope";
+    pub const BITDEFENDER_TARGETS_SHAPE: &str = "bitdefender_targets_shape";
+    pub const BITDEFENDER_SEVERITY: &str = "bitdefender_severity";
+    pub const BITDEFENDER_REGISTRY_FULL_HIVE: &str = "bitdefender_registry_full_hive";
+    pub const BITDEFENDER_CONTAINS_NO_WILDCARD: &str = "bitdefender_contains_no_wildcard";
+    pub const BITDEFENDER_SEVERITY_COLLAPSED: &str = "bitdefender_severity_collapsed";
+    // Graylog block codes (graylog-1.0, Constraints and Advisories), as
+    // opentide names them.
+    pub const GRAYLOG_QUERY_BLANK: &str = "graylog_query_blank";
+    pub const GRAYLOG_LIST_SHAPE: &str = "graylog_list_shape";
+    pub const GRAYLOG_SCHEDULE: &str = "graylog_schedule";
+    pub const GRAYLOG_EVENT_LIMIT: &str = "graylog_event_limit";
+    pub const GRAYLOG_AGGREGATION: &str = "graylog_aggregation";
+    pub const GRAYLOG_EVENT_FIELD: &str = "graylog_event_field";
+    pub const GRAYLOG_EVENT_KEY: &str = "graylog_event_key";
+    pub const GRAYLOG_PRIORITY: &str = "graylog_priority";
+    pub const GRAYLOG_FIELD_NAME: &str = "graylog_field_name";
+    pub const GRAYLOG_OVERLAPPING_WINDOW: &str = "graylog_overlapping_window";
+    pub const GRAYLOG_ALL_STREAMS: &str = "graylog_all_streams";
+
+    // CrowdStrike Query Language (Falcon LogScale, Next-Gen SIEM).
+    pub const CQL_PARSE_ERROR: &str = "cql_parse_error";
+    pub const CQL_UNKNOWN_FUNCTION: &str = "cql_unknown_function";
+    pub const CQL_REMOVED_FUNCTION: &str = "cql_removed_function";
+    pub const CQL_DEPRECATED_FUNCTION: &str = "cql_deprecated_function";
+    pub const CQL_UNKNOWN_PARAMETER: &str = "cql_unknown_parameter";
+    pub const CQL_DUPLICATE_PARAMETER: &str = "cql_duplicate_parameter";
+    pub const CQL_UNNAMED_ARGUMENT: &str = "cql_unnamed_argument";
+    pub const CQL_MISSING_PARAMETER: &str = "cql_missing_parameter";
+    pub const CQL_PARAMETER_VALUE: &str = "cql_parameter_value";
+    pub const CQL_REGEX_FLAG: &str = "cql_regex_flag";
+    pub const CQL_STRING_ESCAPE: &str = "cql_string_escape";
+    pub const CQL_FREE_TEXT_AFTER_AGGREGATE: &str = "cql_free_text_after_aggregate";
+    pub const CQL_ASSIGNMENT_AS: &str = "cql_assignment_as";
+    pub const CQL_LINK_OUTSIDE_CORRELATE: &str = "cql_link_outside_correlate";
+    pub const CQL_UNKNOWN_EVENT: &str = "cql_unknown_event";
+    pub const CQL_EVENT_FUNCTION_AFTER_AGGREGATE: &str = "cql_event_function_after_aggregate";
+    pub const CQL_CORRELATE_PLACEMENT: &str = "cql_correlate_placement";
+    pub const CQL_MATCH_GUARD: &str = "cql_match_guard";
+    pub const CQL_REGEX_GROUP_UNDER_OR: &str = "cql_regex_group_under_or";
+    pub const CQL_CORRELATE_AGGREGATE: &str = "cql_correlate_aggregate";
+
+    // YARA (yara-1.0, #165). Errors are what YARA-X 1.x refuses (#1225),
+    // and yara_x_only_syntax what a profile refuses; the warnings are
+    // yara_slow_pattern through yara_meta_missing. yara_x_incompatible is
+    // retired (opentide-cli's `explain::RETIRED`).
+    pub const YARA_PARSE_ERROR: &str = "yara_parse_error";
+    pub const YARA_INCLUDE: &str = "yara_include";
+    pub const YARA_SIGNATURE_ALIAS: &str = "yara_signature_alias";
+    pub const YARA_EMPTY_SIGNATURE: &str = "yara_empty_signature";
+    pub const YARA_DUPLICATE_RULE: &str = "yara_duplicate_rule";
+    pub const YARA_DUPLICATE_STRING: &str = "yara_duplicate_string";
+    pub const YARA_DUPLICATE_TAG: &str = "yara_duplicate_tag";
+    pub const YARA_UNDEFINED_STRING: &str = "yara_undefined_string";
+    pub const YARA_UNREFERENCED_STRING: &str = "yara_unreferenced_string";
+    pub const YARA_UNDEFINED_IDENTIFIER: &str = "yara_undefined_identifier";
+    pub const YARA_RULE_IDENTIFIER_CONFLICT: &str = "yara_rule_identifier_conflict";
+    pub const YARA_UNKNOWN_MODULE: &str = "yara_unknown_module";
+    pub const YARA_MODULE_NOT_IMPORTED: &str = "yara_module_not_imported";
+    pub const YARA_UNKNOWN_MODULE_MEMBER: &str = "yara_unknown_module_member";
+    pub const YARA_TYPE: &str = "yara_type";
+    pub const YARA_REGEXP: &str = "yara_regexp";
+    pub const YARA_HEX_STRING: &str = "yara_hex_string";
+    pub const YARA_STRING_MODIFIER: &str = "yara_string_modifier";
+    pub const YARA_NUMBER_OUT_OF_RANGE: &str = "yara_number_out_of_range";
+    pub const YARA_X_ONLY_SYNTAX: &str = "yara_x_only_syntax";
+    pub const YARA_SLOW_PATTERN: &str = "yara_slow_pattern";
+    pub const YARA_ENTRYPOINT_DEPRECATED: &str = "yara_entrypoint_deprecated";
+    pub const YARA_SUSPICIOUS_EXPRESSION: &str = "yara_suspicious_expression";
+    pub const YARA_MODULE_UNCONFIRMED: &str = "yara_module_unconfirmed";
+    pub const YARA_META_MISSING: &str = "yara_meta_missing";
+    // The YARA profiles of harfanglab-1.0 (1.2) and bitdefender-1.0.
+    pub const HARFANGLAB_RULE_KIND: &str = "harfanglab_rule_kind";
+    pub const HARFANGLAB_YARA_FORM: &str = "harfanglab_yara_form";
+    pub const HARFANGLAB_YARA_SECTION_HEADER: &str = "harfanglab_yara_section_header";
+    pub const HARFANGLAB_YARA_IMPORT: &str = "harfanglab_yara_import";
+    pub const HARFANGLAB_YARA_RULE_NAME: &str = "harfanglab_yara_rule_name";
+    pub const HARFANGLAB_YARA_CONTEXT: &str = "harfanglab_yara_context";
+    pub const BITDEFENDER_YARA_ASCII: &str = "bitdefender_yara_ascii";
+    pub const BITDEFENDER_YARA_SIZE: &str = "bitdefender_yara_size";
+    // YARA-L 2.0 (yara-l-1.0). Errors are what Google's compiler refuses;
+    // the warnings are yaral_string_escape and yaral_deprecated_field
+    // through yaral_reference_list_deprecated.
+    pub const YARAL_PARSE_ERROR: &str = "yaral_parse_error";
+    pub const YARAL_SECTION_HEADER: &str = "yaral_section_header";
+    pub const YARAL_SECTION_EMPTY: &str = "yaral_section_empty";
+    pub const YARAL_SECTION_ALIAS: &str = "yaral_section_alias";
+    pub const YARAL_SECTION_MISSING: &str = "yaral_section_missing";
+    pub const YARAL_SECTION_ORDER: &str = "yaral_section_order";
+    pub const YARAL_SECTION_UNAVAILABLE: &str = "yaral_section_unavailable";
+    pub const YARAL_META_DUPLICATE: &str = "yaral_meta_duplicate";
+    pub const YARAL_RESERVED_IDENTIFIER: &str = "yaral_reserved_identifier";
+    pub const YARAL_UNDEFINED_VARIABLE: &str = "yaral_undefined_variable";
+    pub const YARAL_MULTI_EVENT_MATCH: &str = "yaral_multi_event_match";
+    pub const YARAL_MATCH_SHAPE: &str = "yaral_match_shape";
+    pub const YARAL_MATCH_VARIABLE: &str = "yaral_match_variable";
+    pub const YARAL_MATCH_WINDOW: &str = "yaral_match_window";
+    pub const YARAL_CONDITION_SHAPE: &str = "yaral_condition_shape";
+    pub const YARAL_NOCASE_ON_ENUM: &str = "yaral_nocase_on_enum";
+    pub const YARAL_OUTCOME_LIMIT: &str = "yaral_outcome_limit";
+    pub const YARAL_OUTCOME_AGGREGATION: &str = "yaral_outcome_aggregation";
+    pub const YARAL_UNKNOWN_FUNCTION: &str = "yaral_unknown_function";
+    pub const YARAL_FUNCTION_UNAVAILABLE: &str = "yaral_function_unavailable";
+    pub const YARAL_UNKNOWN_UDM_FIELD: &str = "yaral_unknown_udm_field";
+    pub const YARAL_ENUM_VALUE: &str = "yaral_enum_value";
+    pub const YARAL_TYPE: &str = "yaral_type";
+    pub const YARAL_REGEX: &str = "yaral_regex";
+    pub const YARAL_STRING_ESCAPE: &str = "yaral_string_escape";
+    pub const YARAL_REFERENCE_LIST_LIMIT: &str = "yaral_reference_list_limit";
+    pub const YARAL_OPTION: &str = "yaral_option";
+    pub const YARAL_EXPORT_VALUE: &str = "yaral_export_value";
+    pub const YARAL_WINDOW_BOUND: &str = "yaral_window_bound";
+    pub const YARAL_DEPRECATED_FIELD: &str = "yaral_deprecated_field";
+    pub const YARAL_UNFILTERED_EVENT: &str = "yaral_unfiltered_event";
+    pub const YARAL_LEADING_WILDCARD_REGEX: &str = "yaral_leading_wildcard_regex";
+    pub const YARAL_REFERENCE_LIST_DEPRECATED: &str = "yaral_reference_list_deprecated";
+    // The constraints and advisories of google-secops-1.0.
+    pub const GOOGLE_SECOPS_RULE_NAME: &str = "google_secops_rule_name";
+    pub const GOOGLE_SECOPS_SEVERITY: &str = "google_secops_severity";
+    pub const GOOGLE_SECOPS_RUN_FREQUENCY: &str = "google_secops_run_frequency";
+    pub const GOOGLE_SECOPS_SCHEDULE: &str = "google_secops_schedule";
+    pub const GOOGLE_SECOPS_META_KEY: &str = "google_secops_meta_key";
+    pub const GOOGLE_SECOPS_RISK_SCORE_MISSING: &str = "google_secops_risk_score_missing";
+    pub const GOOGLE_SECOPS_RULE_ID_LITERAL: &str = "google_secops_rule_id_literal";
+    pub const GOOGLE_SECOPS_LIVE_FREQUENCY_UNAVAILABLE: &str =
+        "google_secops_live_frequency_unavailable";
+    // The constraints and advisory of microsoft-defender-1.0.
+    pub const MICROSOFT_DEFENDER_SCHEMA: &str = "microsoft_defender_schema";
+    pub const MICROSOFT_DEFENDER_FREQUENCY: &str = "microsoft_defender_frequency";
+    pub const MICROSOFT_DEFENDER_LOOKBACK: &str = "microsoft_defender_lookback";
+    pub const MICROSOFT_DEFENDER_SEVERITY: &str = "microsoft_defender_severity";
+    pub const MICROSOFT_DEFENDER_GROUPING: &str = "microsoft_defender_grouping";
+    pub const MICROSOFT_DEFENDER_CUSTOM_DETAILS: &str = "microsoft_defender_custom_details";
+    pub const MICROSOFT_DEFENDER_ENTITY_KIND: &str = "microsoft_defender_entity_kind";
+    pub const MICROSOFT_DEFENDER_ENTITY_MAPPING: &str = "microsoft_defender_entity_mapping";
+    pub const MICROSOFT_DEFENDER_ACTION_KIND: &str = "microsoft_defender_action_kind";
+    pub const MICROSOFT_DEFENDER_ACTION_TARGET: &str = "microsoft_defender_action_target";
+    pub const MICROSOFT_DEFENDER_ISOLATION_TYPE: &str = "microsoft_defender_isolation_type";
+    pub const MICROSOFT_DEFENDER_COLUMN: &str = "microsoft_defender_column";
+    pub const MICROSOFT_DEFENDER_SCOPE: &str = "microsoft_defender_scope";
+    pub const MICROSOFT_DEFENDER_INCIDENT: &str = "microsoft_defender_incident";
+    pub const MICROSOFT_DEFENDER_NO_ENTITIES: &str = "microsoft_defender_no_entities";
+
+    // The Exabeam Query Language (specifications exabeam-1.0, language).
+    pub const EXABEAM_PARSE_ERROR: &str = "exabeam_parse_error";
+    pub const EXABEAM_IMPLICIT_OPERATOR: &str = "exabeam_implicit_operator";
+    pub const EXABEAM_NOT_EQUAL: &str = "exabeam_not_equal";
+    pub const EXABEAM_BARE_WILDCARD: &str = "exabeam_bare_wildcard";
+    pub const EXABEAM_LEADING_SLASH: &str = "exabeam_leading_slash";
+    pub const EXABEAM_FREE_TEXT_SPECIAL: &str = "exabeam_free_text_special";
+    pub const EXABEAM_UNKNOWN_FUNCTION: &str = "exabeam_unknown_function";
+    pub const EXABEAM_FUNCTION_ARITY: &str = "exabeam_function_arity";
+    pub const EXABEAM_REGEX: &str = "exabeam_regex";
+    pub const EXABEAM_RANGE: &str = "exabeam_range";
+    pub const EXABEAM_IPV6_RANGE: &str = "exabeam_ipv6_range";
+    pub const EXABEAM_TIME_EXACT: &str = "exabeam_time_exact";
+    pub const EXABEAM_CONTEXT_TABLE_OR: &str = "exabeam_context_table_or";
+    pub const EXABEAM_CONTEXT_TABLE_LIMIT: &str = "exabeam_context_table_limit";
+    pub const EXABEAM_ADVANCED_IN_RULE: &str = "exabeam_advanced_in_rule";
+    pub const EXABEAM_KEYWORD_CASE: &str = "exabeam_keyword_case";
+    pub const EXABEAM_CLAUSE_ORDER: &str = "exabeam_clause_order";
+    pub const EXABEAM_PIPE_LIMIT: &str = "exabeam_pipe_limit";
+    pub const EXABEAM_RGX_EXTRACT_LIMIT: &str = "exabeam_rgx_extract_limit";
+    pub const EXABEAM_RESERVED_ALIAS: &str = "exabeam_reserved_alias";
+    pub const EXABEAM_GROUP_BY_SELECT_STAR: &str = "exabeam_group_by_select_star";
+    pub const EXABEAM_GROUP_BY_COLUMN: &str = "exabeam_group_by_column";
+    pub const EXABEAM_FOREACH_CLAUSE: &str = "exabeam_foreach_clause";
+    pub const EXABEAM_FOREACH_REFERENCE: &str = "exabeam_foreach_reference";
+    pub const EXABEAM_FOREACH_POSITION: &str = "exabeam_foreach_position";
+    pub const EXABEAM_MIXED_BOOLEAN: &str = "exabeam_mixed_boolean";
+    pub const EXABEAM_IMPLICIT_AND: &str = "exabeam_implicit_and";
+    pub const EXABEAM_SINGLE_GROUP: &str = "exabeam_single_group";
+    pub const EXABEAM_PIPE_MISUSE: &str = "exabeam_pipe_misuse";
+    pub const EXABEAM_WILDCARD_IN_PHRASE: &str = "exabeam_wildcard_in_phrase";
+    pub const EXABEAM_UNQUOTED_VALUE: &str = "exabeam_unquoted_value";
+    pub const EXABEAM_LEGACY_REGEX: &str = "exabeam_legacy_regex";
+    pub const EXABEAM_UNKNOWN_FIELD: &str = "exabeam_unknown_field";
+    pub const EXABEAM_STRING_FIELD_NUMBER: &str = "exabeam_string_field_number";
+    pub const EXABEAM_UNKNOWN_VALUE: &str = "exabeam_unknown_value";
+    // Exabeam block constraint codes and advisories (platform exabeam-1.0).
+    pub const EXABEAM_SEQUENCES: &str = "exabeam_sequences";
+    pub const EXABEAM_CORRELATION: &str = "exabeam_correlation";
+    pub const EXABEAM_THRESHOLD_FUNCTION: &str = "exabeam_threshold_function";
+    pub const EXABEAM_THRESHOLD_OPERATOR: &str = "exabeam_threshold_operator";
+    pub const EXABEAM_THRESHOLD_VALUE: &str = "exabeam_threshold_value";
+    pub const EXABEAM_GROUP_BY: &str = "exabeam_group_by";
+    pub const EXABEAM_DURATION: &str = "exabeam_duration";
+    pub const EXABEAM_SEVERITY: &str = "exabeam_severity";
+    pub const EXABEAM_OUTCOME: &str = "exabeam_outcome";
+    pub const EXABEAM_EMAIL: &str = "exabeam_email";
+    pub const EXABEAM_SCHEDULE: &str = "exabeam_schedule";
+    pub const EXABEAM_NAME_LENGTH: &str = "exabeam_name_length";
+    pub const EXABEAM_CONTEXT_TABLE_TRIGGER: &str = "exabeam_context_table_trigger";
+    pub const EXABEAM_NAME_DUPLICATE: &str = "exabeam_name_duplicate";
+    pub const EXABEAM_OUTCOME_SILENT: &str = "exabeam_outcome_silent";
+    pub const EXABEAM_CORRELATION_WINDOW: &str = "exabeam_correlation_window";
+
+    /// Every code above, in declaration order.
+    pub const ALL: &[&str] = &[
+        SCHEMA_VALIDATION,
+        VOCAB_UNKNOWN,
+        INVALID_UUID,
+        DUPLICATE_ID,
+        INVALID_REF,
+        CHAINING_RELATION_UNKNOWN,
+        DEPRECATED_FIELD,
+        KQL_CONTROL_COMMAND_UNSUPPORTED,
+        KQL_UNKNOWN_OPERATOR,
+        KQL_UNKNOWN_FUNCTION,
+        KQL_DEPRECATED_FUNCTION,
+        KQL_DEPRECATED_OPERATOR,
+        KQL_UNKNOWN_TABLE,
+        KQL_TABLE_MISSPELT,
+        KQL_RENDER_NOT_VALID,
+        KQL_PARSE_ERROR,
+        KQL_WHERE_NOT_FIRST,
+        KQL_UNSCOPED_SEARCH,
+        KQL_UNSCOPED_UNION,
+        KQL_WILDCARD_TABLE,
+        KQL_JOIN_SUMMARIZE_BEFORE_PROJECT,
+        QUERY_FOLDED_COMMENT,
+        SPL_UNKNOWN_COMMAND,
+        SPL_PARSE_ERROR,
+        SPL_WILDCARD,
+        SPL_LEADING_NOT,
+        SPL_SUBSEARCH_TRUNCATION,
+        SPL_SEARCH_OPERATOR,
+        SPL_EMPTY_COMMAND,
+        SPL_EMPTY_STAGE,
+        SPL_COMMAND_WITHOUT_PIPE,
+        ESQL_PARSE_ERROR,
+        ESQL_UNKNOWN_COMMAND,
+        ESQL_UNKNOWN_FUNCTION,
+        ESQL_UNAVAILABLE,
+        ESQL_METADATA_ID,
+        EQL_PARSE_ERROR,
+        EQL_UNKNOWN_FUNCTION,
+        EQL_UNSUPPORTED,
+        EQL_MAXSPAN_UNIT,
+        EQL_MAXSPAN_WINDOW,
+        EQL_MAXSPAN_LOOKBACK,
+        EQL_FUNCTION_ARITY,
+        EQL_CASE_SENSITIVE,
+        EQL_LITERAL_WILDCARD,
+        EQL_NESTED_COMMENT,
+        EQL_EXPRESSION_DEPTH,
+        EQL_ARGUMENT_TYPE,
+        EQL_FIELD_COMPARISON,
+        EQL_RUNS_IGNORED,
+        EQL_UNTIL_TERM,
+        EQL_REGEX,
+        EQL_MAXSPAN_MISSING,
+        KUERY_PARSE_ERROR,
+        KUERY_LUCENE_SYNTAX,
+        KUERY_ESCAPE,
+        KUERY_QUOTED_WILDCARD,
+        LUCENE_PARSE_ERROR,
+        LUCENE_LOWERCASE_OPERATOR,
+        LUCENE_MIXED_OPERATORS,
+        LUCENE_ESCAPE,
+        LUCENE_KUERY_SYNTAX,
+        LUCENE_REGEXP,
+        LUCENE_FUZZY,
+        LUCENE_RANGE_OPERATOR,
+        LUCENE_UNESCAPED_SLASH,
+        LUCENE_BARE_TERM,
+        LUCENE_LOOKS_LIKE_KUERY,
+        LUCENE_ELASTICSEARCH_ONLY,
+        GRAYLOG_LEADING_WILDCARD,
+        GRAYLOG_REGEX_UNSUPPORTED,
+        GRAYLOG_REGEX_OPERATOR,
+        GRAYLOG_REGEX_QUOTE,
+        GRAYLOG_OPEN_RANGE,
+        GRAYLOG_DOUBLE_BACKSLASH,
+        GRAYLOG_ANALYZED_FIELD,
+        KUERY_QUESTION_MARK,
+        KUERY_FREE_TEXT,
+        KUERY_LOOKS_LIKE_LUCENE,
+        KUERY_RANGE_TYPE,
+        LOOKBACK_ZERO,
+        LOOKBACK_LONG,
+        THRESHOLD_LOOKBACK,
+        RISK_BAND,
+        TECHNIQUE_NOT_ENTERPRISE,
+        DEFENDER_OUTPUT_COLUMNS,
+        ESQL_UNKNOWN_TYPE,
+        ESQL_GROUP_BY_COLUMN,
+        EQL_NOT_BOOLEAN,
+        ESQL_PATTERN,
+        ESQL_EXPRESSION_DEPTH,
+        KQL_TABLE_NOT_DECLARED,
+        KQL_UNKNOWN_COLUMN,
+        KQL_TYPE_MISMATCH,
+        SPL_UNKNOWN_DATAMODEL,
+        SPL_UNKNOWN_DATAMODEL_FIELD,
+        SPL_DATASET_NOT_DECLARED,
+        ECS_TYPE_MISMATCH,
+        ECS_UNKNOWN_FIELD,
+        ELASTIC_DATASET_NOT_DECLARED,
+        CBC_UNKNOWN_FIELD,
+        CONFIG_CHECK_FAILED,
+        FALCO_PARSE_ERROR,
+        FALCO_UNKNOWN_FIELD,
+        FALCO_UNKNOWN_MACRO,
+        FALCO_UNKNOWN_LIST,
+        FALCO_MISPLACED_LIST,
+        FALCO_FIELD_ARGUMENT,
+        FALCO_OPERATOR_TYPE,
+        FALCO_VALUE_TYPE,
+        FALCO_TRANSFORMER,
+        FALCO_RHS_FIELD,
+        FALCO_INVALID_REGEX,
+        FALCO_REGEX_SIMPLE,
+        FALCO_FIELD_AS_VALUE,
+        FALCO_TRANSFORMER_AS_VALUE,
+        FALCO_DEPRECATED_FIELD,
+        FALCO_UNSAFE_NA_CHECK,
+        FALCO_NO_EVTTYPE,
+        FALCO_OUTPUT_SYNTAX,
+        FALCO_NEWER_SYNTAX,
+        FALCO_EXCEPTION,
+        FALCO_UNKNOWN_EVENT,
+        FALCO_UNKNOWN_SOURCE,
+        FALCO_APPEND_CONDITION,
+        FALCO_UNKNOWN_RULE,
+        SYSDIG_RULE_SHAPE,
+        SYSDIG_TUNING_KEYS,
+        SYSDIG_PRIORITY,
+        SYSDIG_SOURCE,
+        SYSDIG_EXCEPTION_SHAPE,
+        SYSDIG_DEFINITION_NAME,
+        SYSDIG_DEFINITION_DUPLICATE,
+        SYSDIG_DEFINITION_ORDER,
+        SYSDIG_LIST_IN_VALUE,
+        SYSDIG_LIST_SELF_REFERENCE,
+        BITDEFENDER_RULE_KIND,
+        BITDEFENDER_TARGET,
+        BITDEFENDER_CRITERION_SHAPE,
+        BITDEFENDER_CRITERION_FIELD,
+        BITDEFENDER_CRITERION_RELATION,
+        BITDEFENDER_CRITERION_VALUE,
+        BITDEFENDER_CRITERIA_COMBINATION,
+        BITDEFENDER_ACTION_SCOPE,
+        BITDEFENDER_TARGETS_SHAPE,
+        BITDEFENDER_SEVERITY,
+        BITDEFENDER_REGISTRY_FULL_HIVE,
+        BITDEFENDER_CONTAINS_NO_WILDCARD,
+        BITDEFENDER_SEVERITY_COLLAPSED,
+        GRAYLOG_QUERY_BLANK,
+        GRAYLOG_LIST_SHAPE,
+        GRAYLOG_SCHEDULE,
+        GRAYLOG_EVENT_LIMIT,
+        GRAYLOG_AGGREGATION,
+        GRAYLOG_EVENT_FIELD,
+        GRAYLOG_EVENT_KEY,
+        GRAYLOG_PRIORITY,
+        GRAYLOG_FIELD_NAME,
+        GRAYLOG_OVERLAPPING_WINDOW,
+        GRAYLOG_ALL_STREAMS,
+        CQL_PARSE_ERROR,
+        CQL_UNKNOWN_FUNCTION,
+        CQL_REMOVED_FUNCTION,
+        CQL_DEPRECATED_FUNCTION,
+        CQL_UNKNOWN_PARAMETER,
+        CQL_DUPLICATE_PARAMETER,
+        CQL_UNNAMED_ARGUMENT,
+        CQL_MISSING_PARAMETER,
+        CQL_PARAMETER_VALUE,
+        CQL_REGEX_FLAG,
+        CQL_STRING_ESCAPE,
+        CQL_FREE_TEXT_AFTER_AGGREGATE,
+        CQL_ASSIGNMENT_AS,
+        CQL_LINK_OUTSIDE_CORRELATE,
+        CQL_UNKNOWN_EVENT,
+        CQL_EVENT_FUNCTION_AFTER_AGGREGATE,
+        CQL_CORRELATE_PLACEMENT,
+        CQL_MATCH_GUARD,
+        CQL_REGEX_GROUP_UNDER_OR,
+        CQL_CORRELATE_AGGREGATE,
+        YARA_PARSE_ERROR,
+        YARA_INCLUDE,
+        YARA_SIGNATURE_ALIAS,
+        YARA_EMPTY_SIGNATURE,
+        YARA_DUPLICATE_RULE,
+        YARA_DUPLICATE_STRING,
+        YARA_DUPLICATE_TAG,
+        YARA_UNDEFINED_STRING,
+        YARA_UNREFERENCED_STRING,
+        YARA_UNDEFINED_IDENTIFIER,
+        YARA_RULE_IDENTIFIER_CONFLICT,
+        YARA_UNKNOWN_MODULE,
+        YARA_MODULE_NOT_IMPORTED,
+        YARA_UNKNOWN_MODULE_MEMBER,
+        YARA_TYPE,
+        YARA_REGEXP,
+        YARA_HEX_STRING,
+        YARA_STRING_MODIFIER,
+        YARA_NUMBER_OUT_OF_RANGE,
+        YARA_X_ONLY_SYNTAX,
+        YARA_SLOW_PATTERN,
+        YARA_ENTRYPOINT_DEPRECATED,
+        YARA_SUSPICIOUS_EXPRESSION,
+        YARA_MODULE_UNCONFIRMED,
+        YARA_META_MISSING,
+        HARFANGLAB_RULE_KIND,
+        HARFANGLAB_YARA_FORM,
+        HARFANGLAB_YARA_SECTION_HEADER,
+        HARFANGLAB_YARA_IMPORT,
+        HARFANGLAB_YARA_RULE_NAME,
+        HARFANGLAB_YARA_CONTEXT,
+        BITDEFENDER_YARA_ASCII,
+        BITDEFENDER_YARA_SIZE,
+        EXABEAM_PARSE_ERROR,
+        EXABEAM_IMPLICIT_OPERATOR,
+        EXABEAM_NOT_EQUAL,
+        EXABEAM_BARE_WILDCARD,
+        EXABEAM_LEADING_SLASH,
+        EXABEAM_FREE_TEXT_SPECIAL,
+        EXABEAM_UNKNOWN_FUNCTION,
+        EXABEAM_FUNCTION_ARITY,
+        EXABEAM_REGEX,
+        EXABEAM_RANGE,
+        EXABEAM_IPV6_RANGE,
+        EXABEAM_TIME_EXACT,
+        EXABEAM_CONTEXT_TABLE_OR,
+        EXABEAM_CONTEXT_TABLE_LIMIT,
+        EXABEAM_ADVANCED_IN_RULE,
+        EXABEAM_KEYWORD_CASE,
+        EXABEAM_CLAUSE_ORDER,
+        EXABEAM_PIPE_LIMIT,
+        EXABEAM_RGX_EXTRACT_LIMIT,
+        EXABEAM_RESERVED_ALIAS,
+        EXABEAM_GROUP_BY_SELECT_STAR,
+        EXABEAM_GROUP_BY_COLUMN,
+        EXABEAM_FOREACH_CLAUSE,
+        EXABEAM_FOREACH_REFERENCE,
+        EXABEAM_FOREACH_POSITION,
+        EXABEAM_MIXED_BOOLEAN,
+        EXABEAM_IMPLICIT_AND,
+        EXABEAM_SINGLE_GROUP,
+        EXABEAM_PIPE_MISUSE,
+        EXABEAM_WILDCARD_IN_PHRASE,
+        EXABEAM_UNQUOTED_VALUE,
+        EXABEAM_LEGACY_REGEX,
+        EXABEAM_UNKNOWN_FIELD,
+        EXABEAM_STRING_FIELD_NUMBER,
+        EXABEAM_UNKNOWN_VALUE,
+        EXABEAM_SEQUENCES,
+        EXABEAM_CORRELATION,
+        EXABEAM_THRESHOLD_FUNCTION,
+        EXABEAM_THRESHOLD_OPERATOR,
+        EXABEAM_THRESHOLD_VALUE,
+        EXABEAM_GROUP_BY,
+        EXABEAM_DURATION,
+        EXABEAM_SEVERITY,
+        EXABEAM_OUTCOME,
+        EXABEAM_EMAIL,
+        EXABEAM_SCHEDULE,
+        EXABEAM_NAME_LENGTH,
+        EXABEAM_CONTEXT_TABLE_TRIGGER,
+        EXABEAM_NAME_DUPLICATE,
+        EXABEAM_OUTCOME_SILENT,
+        EXABEAM_CORRELATION_WINDOW,
+        YARAL_PARSE_ERROR,
+        YARAL_SECTION_HEADER,
+        YARAL_SECTION_EMPTY,
+        YARAL_SECTION_ALIAS,
+        YARAL_SECTION_MISSING,
+        YARAL_SECTION_ORDER,
+        YARAL_SECTION_UNAVAILABLE,
+        YARAL_META_DUPLICATE,
+        YARAL_RESERVED_IDENTIFIER,
+        YARAL_UNDEFINED_VARIABLE,
+        YARAL_MULTI_EVENT_MATCH,
+        YARAL_MATCH_SHAPE,
+        YARAL_MATCH_VARIABLE,
+        YARAL_MATCH_WINDOW,
+        YARAL_CONDITION_SHAPE,
+        YARAL_NOCASE_ON_ENUM,
+        YARAL_OUTCOME_LIMIT,
+        YARAL_OUTCOME_AGGREGATION,
+        YARAL_UNKNOWN_FUNCTION,
+        YARAL_FUNCTION_UNAVAILABLE,
+        YARAL_UNKNOWN_UDM_FIELD,
+        YARAL_ENUM_VALUE,
+        YARAL_TYPE,
+        YARAL_REGEX,
+        YARAL_STRING_ESCAPE,
+        YARAL_REFERENCE_LIST_LIMIT,
+        YARAL_OPTION,
+        YARAL_EXPORT_VALUE,
+        YARAL_WINDOW_BOUND,
+        YARAL_DEPRECATED_FIELD,
+        YARAL_UNFILTERED_EVENT,
+        YARAL_LEADING_WILDCARD_REGEX,
+        YARAL_REFERENCE_LIST_DEPRECATED,
+        GOOGLE_SECOPS_RULE_NAME,
+        GOOGLE_SECOPS_SEVERITY,
+        GOOGLE_SECOPS_RUN_FREQUENCY,
+        GOOGLE_SECOPS_SCHEDULE,
+        GOOGLE_SECOPS_META_KEY,
+        GOOGLE_SECOPS_RISK_SCORE_MISSING,
+        GOOGLE_SECOPS_RULE_ID_LITERAL,
+        GOOGLE_SECOPS_LIVE_FREQUENCY_UNAVAILABLE,
+        MICROSOFT_DEFENDER_SCHEMA,
+        MICROSOFT_DEFENDER_FREQUENCY,
+        MICROSOFT_DEFENDER_LOOKBACK,
+        MICROSOFT_DEFENDER_SEVERITY,
+        MICROSOFT_DEFENDER_GROUPING,
+        MICROSOFT_DEFENDER_CUSTOM_DETAILS,
+        MICROSOFT_DEFENDER_ENTITY_KIND,
+        MICROSOFT_DEFENDER_ENTITY_MAPPING,
+        MICROSOFT_DEFENDER_ACTION_KIND,
+        MICROSOFT_DEFENDER_ACTION_TARGET,
+        MICROSOFT_DEFENDER_ISOLATION_TYPE,
+        MICROSOFT_DEFENDER_COLUMN,
+        MICROSOFT_DEFENDER_SCOPE,
+        MICROSOFT_DEFENDER_INCIDENT,
+        MICROSOFT_DEFENDER_NO_ENTITIES,
+    ];
+
+    /// One sentence on what a code means, for hosts that explain a diagnostic
+    /// (`opentide explain <code>`). `None` for a code this engine does not emit.
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one match arm per diagnostic code: a code-to-sentence table"
+    )]
+    pub fn describe(code: &str) -> Option<&'static str> {
+        Some(match code {
+            SCHEMA_VALIDATION => {
+                "A Tide object does not match its schema: a required field is missing, or a value has the wrong shape."
+            }
+            VOCAB_UNKNOWN => "A value is not in the vocabulary its field draws from.",
+            INVALID_UUID => "An object id is not a version 4 UUID.",
+            DUPLICATE_ID => "Two object files carry the same UUID.",
+            INVALID_REF => "A reference names an object the workspace does not have.",
+            CHAINING_RELATION_UNKNOWN => {
+                "A threat chaining relation is not in the chaining_relations vocabulary."
+            }
+            DEPRECATED_FIELD => "The field is deprecated in its schema revision.",
+            KQL_CONTROL_COMMAND_UNSUPPORTED => {
+                "A KQL control command (.show, .create, ...) is not a detection query; rules cannot run it."
+            }
+            KQL_UNKNOWN_OPERATOR => "The KQL tabular operator is not one Kusto knows.",
+            KQL_UNKNOWN_FUNCTION => "The KQL function is not in the Kusto function catalog.",
+            KQL_DEPRECATED_FUNCTION => {
+                "The KQL function is a deprecated alias; Microsoft Learn names its replacement."
+            }
+            KQL_DEPRECATED_OPERATOR => {
+                "The KQL scalar operator is a legacy spelling (containscs); use the current name (contains_cs)."
+            }
+            KQL_UNKNOWN_TABLE => {
+                "The table is neither one the engine knows for the platform nor one the workspace declares in visibility.toml: a warning under Sentinel, whose workspaces hold tables no catalog lists; an error under Defender's advanced hunting schema. Declaring it in visibility.toml makes it known."
+            }
+            KQL_TABLE_MISSPELT => {
+                "A KQL table is not one the engine knows or the workspace declares, but is a near miss of one that is (one edit for a name of up to seven characters, two for a longer one, and not a custom `_CL` table): most likely a typo."
+            }
+            KQL_RENDER_NOT_VALID => "render draws a chart; it has no effect in a detection rule.",
+            KQL_PARSE_ERROR => "The KQL query does not parse.",
+            KQL_WHERE_NOT_FIRST => {
+                "A filter comes after a more expensive operator; filtering first scans fewer rows."
+            }
+            KQL_UNSCOPED_SEARCH => "search without a table scans every table in the workspace.",
+            KQL_UNSCOPED_UNION => "union * or an unscoped union reads every table.",
+            KQL_WILDCARD_TABLE => "A wildcard table name reads every matching table.",
+            KQL_JOIN_SUMMARIZE_BEFORE_PROJECT => {
+                "A `join` runs while the pipeline it sits in still carries every column, and a later `project` would have narrowed it."
+            }
+            QUERY_FOLDED_COMMENT => {
+                "A `//` comment in a query that YAML folds into one line comments out the lines after it."
+            }
+            SPL_UNKNOWN_COMMAND => {
+                "The SPL command is not in the Splunk Search Reference or a catalogued app such as MLTK: a warning, since an app on the search head can add commands, or an error when the name is one edit from a known command."
+            }
+            SPL_PARSE_ERROR => "The SPL search does not parse.",
+            SPL_WILDCARD => {
+                "A leading or mid-token wildcard in a base search that nothing else narrows (no index, sourcetype, source, host, TERM() or macro) cannot use the index and scans every event."
+            }
+            SPL_LEADING_NOT => {
+                "A base search that starts with NOT scans every event before excluding any."
+            }
+            SPL_SUBSEARCH_TRUNCATION => {
+                "A subsearch is silently truncated at its result or time limit."
+            }
+            SPL_EMPTY_COMMAND => {
+                "A command with no arguments: Splunk runs it, but it does nothing, returns no results, or fails at run time."
+            }
+            SPL_EMPTY_STAGE => "A trailing | with no command; Splunk ignores it.",
+            SPL_COMMAND_WITHOUT_PIPE => {
+                "The query starts with a command name but no |, so Splunk searches for the word instead of running the command."
+            }
+            SPL_SEARCH_OPERATOR => {
+                "A search clause compares with an operator search does not have (`==`, `<>`, `=>`, `=<`, `!~`): Splunk accepts it but the comparison never matches, or `=~`, which compares with a value that starts with `~`."
+            }
+            ESQL_PARSE_ERROR => "The ES|QL query does not parse.",
+            ESQL_UNKNOWN_COMMAND => "The ES|QL command is not one Elasticsearch knows.",
+            ESQL_UNKNOWN_FUNCTION => {
+                "The ES|QL function is not in the Elasticsearch function catalog."
+            }
+            ESQL_UNAVAILABLE => {
+                "The command, function or form is missing or in preview on a targeted stack version."
+            }
+            ESQL_METADATA_ID => {
+                "A non-aggregating ES|QL rule query has no METADATA _id, so alerts cannot be deduplicated."
+            }
+            EQL_PARSE_ERROR => "The EQL query does not parse.",
+            EQL_UNKNOWN_FUNCTION => {
+                "The EQL function is not in the Elasticsearch function catalog."
+            }
+            EQL_UNSUPPORTED => {
+                "Elasticsearch EQL does not support this construct (pipes, relationships, ...)."
+            }
+            EQL_MAXSPAN_UNIT => "A sequence maxspan uses a unit Elasticsearch does not accept.",
+            EQL_MAXSPAN_WINDOW => {
+                "A sequence maxspan is longer than the rule's interval plus lookback, so the rule cannot see whole sequences."
+            }
+            EQL_MAXSPAN_LOOKBACK => "A sequence maxspan is longer than the rule's lookback.",
+            EQL_FUNCTION_ARITY => "An EQL function is called with the wrong number of arguments.",
+            EQL_CASE_SENSITIVE => {
+                "The comparison is case-sensitive; the case-insensitive form may be meant."
+            }
+            EQL_LITERAL_WILDCARD => {
+                "A wildcard character is compared literally; use : or like for a pattern."
+            }
+            EQL_NESTED_COMMENT => {
+                "Elasticsearch nests /* */ comments; the comment ends later than it looks."
+            }
+            EQL_EXPRESSION_DEPTH => "The expression nests deeper than Elasticsearch accepts.",
+            EQL_ARGUMENT_TYPE => "A literal has a type the EQL verifier rejects in this position.",
+            EQL_FIELD_COMPARISON => {
+                "Both sides of a comparison read fields, which EQL does not support."
+            }
+            EQL_RUNS_IGNORED => "A decimal runs count is truncated by Elasticsearch.",
+            EQL_UNTIL_TERM => "runs or a missing-event term ![ ] is not allowed on until.",
+            EQL_REGEX => "The regular expression trips a Lucene RegExp pitfall.",
+            EQL_MAXSPAN_MISSING => {
+                "A sequence has no maxspan, so partial sequences are held until they expire."
+            }
+            KUERY_PARSE_ERROR => "The Kibana KQL (kuery) query does not parse.",
+            KUERY_LUCENE_SYNTAX => "Lucene syntax inside a Kibana KQL (kuery) query.",
+            KUERY_ESCAPE => "A character needs escaping in Kibana KQL (kuery).",
+            KUERY_QUOTED_WILDCARD => {
+                "A wildcard inside quotes is a literal * in Kibana KQL (kuery)."
+            }
+            LUCENE_PARSE_ERROR => "The Lucene query does not parse.",
+            LUCENE_LOWERCASE_OPERATOR => {
+                "Lucene operators are upper case; lowercase and/or/not are search terms."
+            }
+            LUCENE_MIXED_OPERATORS => {
+                "AND and OR mixed without parentheses do not bind as they read."
+            }
+            LUCENE_ESCAPE => "A character needs escaping in Lucene.",
+            LUCENE_KUERY_SYNTAX => "Kibana KQL (kuery) syntax inside a Lucene query.",
+            LUCENE_REGEXP => {
+                "The /regexp/ body is rejected by, or too costly for, Lucene's RegExp."
+            }
+            LUCENE_FUZZY => "Elasticsearch accepts only 0, 1, 2 or AUTO as a fuzziness.",
+            LUCENE_RANGE_OPERATOR => {
+                "f:> 10 searches f for the text >; the value must follow the operator."
+            }
+            LUCENE_UNESCAPED_SLASH => "An unescaped / starts a regular expression.",
+            LUCENE_BARE_TERM => "A term with no field searches every field.",
+            LUCENE_LOOKS_LIKE_KUERY => {
+                "The query reads like Kibana KQL (kuery); language: kuery may be meant."
+            }
+            LUCENE_ELASTICSEARCH_ONLY => {
+                "The syntax works in Elasticsearch but not in Carbon Black Cloud."
+            }
+            GRAYLOG_LEADING_WILDCARD => {
+                "A Graylog query term starts with `*` or `?`: Graylog refuses leading wildcards unless the server allows them; a regex with a leading `.*` is the portable form."
+            }
+            GRAYLOG_REGEX_UNSUPPORTED => {
+                "A Graylog regex uses an inline flag, a `(?…)` group, `\\b`, `\\B`, a lookaround, or a backreference, which Lucene's regex engine does not have: Graylog matches nothing or rejects the query."
+            }
+            GRAYLOG_REGEX_OPERATOR => {
+                "A Graylog regex holds an unescaped `#`, `&`, `@`, `~`, `<`, or `>`, which Lucene reads as a regex operator, not the character."
+            }
+            GRAYLOG_REGEX_QUOTE => {
+                "A Graylog regex holds an unescaped `\"`, which Lucene reads as a quoted literal, not the character: escape it as `\\\"`."
+            }
+            GRAYLOG_OPEN_RANGE => {
+                "A Graylog range has `*` as a bound (`[1 TO *]`, `{* TO 5}`). Graylog's query validator refuses it, so deploy cannot save the definition: write `field:>=1` or `field:<5`."
+            }
+            GRAYLOG_DOUBLE_BACKSLASH => {
+                "A Graylog query holds four backslashes in a row: `\\\\` is already one literal backslash, so `\\\\\\\\` matches two."
+            }
+            GRAYLOG_ANALYZED_FIELD => {
+                "A regex, wildcard, or range applies to Graylog's analysed `message` or `full_message` field, so it matches single lower-cased tokens, never the whole value."
+            }
+            KUERY_QUESTION_MARK => {
+                "? is a literal in Kibana KQL (kuery), not a single-character wildcard."
+            }
+            KUERY_FREE_TEXT => "A value with no field searches every field.",
+            KUERY_LOOKS_LIKE_LUCENE => {
+                "The query reads like Lucene; language: lucene may be meant."
+            }
+            KUERY_RANGE_TYPE => "A range compares a value of the wrong type.",
+            LOOKBACK_ZERO => {
+                "The Elastic rule's lookback is zero, so events that arrive late are missed."
+            }
+            LOOKBACK_LONG => {
+                "The Elastic rule's lookback exceeds an hour; it is added to the interval, not the whole window."
+            }
+            THRESHOLD_LOOKBACK => {
+                "A threshold rule's lookback exceeds its interval, so windows overlap and alerts repeat."
+            }
+            RISK_BAND => "The risk score is outside the band of the rule's severity.",
+            TECHNIQUE_NOT_ENTERPRISE => {
+                "The ATT&CK technique is not in the Enterprise matrix that Elastic maps."
+            }
+            DEFENDER_OUTPUT_COLUMNS => {
+                "A Defender custom detection must return the columns Defender requires."
+            }
+            ESQL_UNKNOWN_TYPE => {
+                "The ::type cast names a type no Elasticsearch release can cast to."
+            }
+            ESQL_GROUP_BY_COLUMN => {
+                "A suppression group_by field is not a column the ES|QL query returns."
+            }
+            EQL_NOT_BOOLEAN => "A string or number literal is used as a condition.",
+            ESQL_PATTERN => "A LIKE or RLIKE pattern escapes or matches differently than it reads.",
+            ESQL_EXPRESSION_DEPTH => "The expression nests deeper than Elasticsearch accepts.",
+            KQL_TABLE_NOT_DECLARED => {
+                "The engine knows the table, but the workspace, which declares its tables for the platform in visibility.toml, does not declare it."
+            }
+            KQL_UNKNOWN_COLUMN => {
+                "The column is not in the documented schema of the table or ASIM parser it comes from, or in the columns visibility.toml declares for the table."
+            }
+            KQL_TYPE_MISMATCH => {
+                "The operator cannot apply to the column's documented or declared type."
+            }
+            SPL_UNKNOWN_DATAMODEL => "The CIM data model or dataset is not one Splunk CIM defines.",
+            SPL_UNKNOWN_DATAMODEL_FIELD => {
+                "The field is not in the CIM data model the search reads."
+            }
+            SPL_DATASET_NOT_DECLARED => {
+                "The sourcetype is not one the workspace's Splunk log sources name in visibility.toml."
+            }
+            ECS_TYPE_MISMATCH => {
+                "The operation cannot apply to the field's type, from ECS or from the columns visibility.toml declares for the index."
+            }
+            ECS_UNKNOWN_FIELD => {
+                "The field is not in the Elastic Common Schema, on indices that use it, nor declared for the index in visibility.toml; ECS allows custom fields."
+            }
+            CBC_UNKNOWN_FIELD => {
+                "A field in a Carbon Black Cloud query is a near miss of a process search field."
+            }
+            ELASTIC_DATASET_NOT_DECLARED => {
+                "The index pattern is not one the workspace's elastic log sources name, or cover, in visibility.toml."
+            }
+            CONFIG_CHECK_FAILED => {
+                "opentide could not check this configuration file; the message says why. Its other findings are missing."
+            }
+            FALCO_PARSE_ERROR => "The Falco condition does not parse.",
+            FALCO_UNKNOWN_FIELD => {
+                "The field is not one Falco or its plugins define for the rule's event source; a plugin the engine does not know may add it."
+            }
+            FALCO_UNKNOWN_MACRO => {
+                "The name is not a macro of the block or of the Falco default rules; the tenant may define it, as Sysdig does for its managed macros."
+            }
+            FALCO_UNKNOWN_LIST => {
+                "The name after a list operator, without parentheses, is not a list of the block or of the Falco default rules, so it is compared as a single value."
+            }
+            FALCO_MISPLACED_LIST => {
+                "A list is used where its expansion breaks the condition: as a macro, or as a single value; a list belongs inside a value list, `in (name)`."
+            }
+            FALCO_FIELD_ARGUMENT => {
+                "A known Falco field is used with an argument it refuses, or without one it requires (libsinsp's field rules: `proc.aname[N]` takes an index, `evt.arg.NAME` an event argument)."
+            }
+            FALCO_OPERATOR_TYPE => {
+                "The operator does not apply to the field's type (libsinsp `flt_is_comparable`); Falco refuses to load the rule."
+            }
+            FALCO_VALUE_TYPE => {
+                "The value cannot be parsed as the field's type (a number, `true` or `false`, an IP address or network, a hex string for `bcontains`); Falco refuses to load the rule."
+            }
+            FALCO_TRANSFORMER => {
+                "A field transformer cannot apply here: the field's type, a field that refuses transformers, or the arguments of `join`, `concat`, or `getopt`."
+            }
+            FALCO_RHS_FIELD => {
+                "A field cannot be compared with another field here (`val(...)` or a transformer on the right): not with `pmatch` or `regex`, not on networks, not on fields that refuse it, and only between fields of the same type."
+            }
+            FALCO_INVALID_REGEX => "The `regex` pattern does not compile.",
+            FALCO_REGEX_SIMPLE => {
+                "A `regex` check a plain operator (`=`, `contains`, `startswith`, `endswith`) could make, which libsinsp warns about: regex is the slowest check."
+            }
+            FALCO_FIELD_AS_VALUE => {
+                "A constant value that is a field name: compare with `val(field)` to read the field."
+            }
+            FALCO_TRANSFORMER_AS_VALUE => {
+                "A constant value that looks like a transformer call, compared as text."
+            }
+            FALCO_DEPRECATED_FIELD => {
+                "A field Falco deprecates (`evt.dir`, `evt.latency`): it no longer carries the value it used to."
+            }
+            FALCO_UNSAFE_NA_CHECK => {
+                "A `ka.` or `jevt.` field compared with `<NA>`, which Falco warns about: the field may hold that text."
+            }
+            FALCO_NO_EVTTYPE => {
+                "The rule cannot be narrowed to a few event types (`evt.type`), so it runs on every event; Falco and Sysdig warn about the performance penalty."
+            }
+            FALCO_OUTPUT_SYNTAX => {
+                "The output template does not format: a `%` at the end, a length with no field, or a token that is no field or transformer."
+            }
+            FALCO_NEWER_SYNTAX => {
+                "Syntax that only recent libsinsp releases parse (operator modifiers, `join`, `concat`, `getopt`, transformer arguments); an older Falco or Sysdig agent refuses the rule."
+            }
+            FALCO_EXCEPTION => {
+                "A rule exception Falco refuses: comparison operators, field and value counts, or a value the field's type cannot hold."
+            }
+            FALCO_UNKNOWN_EVENT => {
+                "The event type is not in the driver's event table nor a syscall name; libsinsp refuses it."
+            }
+            FALCO_UNKNOWN_SOURCE => {
+                "The event source is not one Falco or its published plugins define, so its fields are not checked."
+            }
+            SYSDIG_RULE_SHAPE => {
+                "A Sysdig block is a new rule with a non-blank `condition`, or a tuning (`append_to_rule`) that appends a condition, exceptions, or both."
+            }
+            SYSDIG_TUNING_KEYS => {
+                "A tuning (`append_to_rule`) inherits `output`, `priority`, `policies`, `source`, and `name` from the rule it tunes, so it must not set them."
+            }
+            SYSDIG_PRIORITY => {
+                "`priority` is not one of Falco's eight priorities (or `INFO`), compared case-insensitively."
+            }
+            SYSDIG_SOURCE => "`source` is not an event source name (`[a-z][a-z0-9_]*`).",
+            SYSDIG_EXCEPTION_SHAPE => {
+                "An exception's fields, comps, and values do not have a shape Falco's rule loader accepts (`validate_exception_info`)."
+            }
+            SYSDIG_DEFINITION_NAME => {
+                "A block macro or list name is not `[A-Za-z_][A-Za-z0-9_]*`, or is a Falco operator or keyword."
+            }
+            SYSDIG_DEFINITION_DUPLICATE => {
+                "A name is defined more than once across the block's macros and lists."
+            }
+            SYSDIG_DEFINITION_ORDER => {
+                "A block macro uses itself or a macro defined after it: Falco gives a macro no view of itself or later macros, and refuses it as an undefined macro."
+            }
+            SYSDIG_LIST_SELF_REFERENCE => {
+                "A block list names itself: Falco keeps the name as a literal item, which on Sysdig resolves against a tenant list of that name, not this one."
+            }
+            BITDEFENDER_RULE_KIND => {
+                "A Bitdefender block sets exactly one of `detection` (a Basic rule) and `yara` (a YARA rule)."
+            }
+            BITDEFENDER_TARGET => {
+                "`detection.target` is not a GravityZone detection target; the exclusion-only targets `flow` and `bitbucket repository` are refused."
+            }
+            BITDEFENDER_CRITERION_SHAPE => {
+                "A criterion has a `field` and exactly one of `is`, `contains`, and `any`; `any` is a non-empty list, `is` and `contains` one value."
+            }
+            BITDEFENDER_CRITERION_FIELD => {
+                "The criterion's field is not a field of the rule's target in the GravityZone criteria catalogue (a warning for a target bitdefender-1.0 does not list)."
+            }
+            BITDEFENDER_CRITERION_RELATION => {
+                "The field does not take this relation: enumerated fields take `is` or `any` (some only `is`), and hashes take no `contains`."
+            }
+            BITDEFENDER_CRITERION_VALUE => {
+                "The value is not one of the field's enumerated values, or a port is not an integer from 0 to 65535."
+            }
+            BITDEFENDER_CRITERIA_COMBINATION => {
+                "The criteria break a GravityZone pairing rule: EDR-only and XDR-only criteria mixed, a field without the field it needs, two incompatible fields, or `alert` beside an operation criterion."
+            }
+            BITDEFENDER_ACTION_SCOPE => {
+                "An automatic action is unknown, has a value it does not take, or is not allowed for the rule's kind or target."
+            }
+            BITDEFENDER_TARGETS_SHAPE => {
+                "`targets` sets one of `endpoint_tags` and `companies`, as a non-empty list with no blank alias."
+            }
+            BITDEFENDER_SEVERITY => "`severity` is not `Low`, `Medium`, or `High`.",
+            BITDEFENDER_REGISTRY_FULL_HIVE => {
+                "A `Registry.Key` value starts with a full hive name: GravityZone accepts it, and the rule never triggers. Write `HKLM`, `HKCU`, `HKU`, `HKCR`, `HKCC`, or `HKLU`."
+            }
+            BITDEFENDER_CONTAINS_NO_WILDCARD => {
+                "A `contains` value has neither `*` nor `?`, so GravityZone matches it as written; the author most likely meant `*value*`."
+            }
+            BITDEFENDER_SEVERITY_COLLAPSED => {
+                "`response.alert_severity` is `Critical` or `Informational` and the block sets no `severity`: GravityZone has three levels, so it is sent as `High` or `Low`."
+            }
+            GRAYLOG_QUERY_BLANK => "A Graylog block's `query` is missing or blank.",
+            GRAYLOG_LIST_SHAPE => {
+                "A Graylog list field is not one string or a list of distinct non-blank strings."
+            }
+            GRAYLOG_SCHEDULE => {
+                "A Graylog `schedule` sets both `every` and `cron`, a duration that is not greater than zero, a cron that is not a 6- or 7-field Quartz expression, an unknown time zone, or `cron` without `window`."
+            }
+            GRAYLOG_EVENT_LIMIT => {
+                "A Graylog `event_limit` is not an integer from 1 to 1,000, or is set on an aggregation."
+            }
+            GRAYLOG_AGGREGATION => {
+                "A Graylog `aggregation.condition` is missing, does not parse under the condition grammar, or calls a function with the wrong arguments."
+            }
+            GRAYLOG_EVENT_FIELD => {
+                "A Graylog event field name is not `[A-Za-z0-9_.@-]+`, or its value is not a field name, a `${…}` template, `{template}`, or `{lookup}`."
+            }
+            GRAYLOG_EVENT_KEY => "A Graylog `event_key` item is not an `event_fields` name.",
+            GRAYLOG_PRIORITY => {
+                "A Graylog `priority` is not `Informational`, `Low`, `Medium`, `High`, or `Critical`."
+            }
+            GRAYLOG_FIELD_NAME => {
+                "A Graylog `aggregation.group_by` item is not a field name (`[A-Za-z0-9_.@-]+`)."
+            }
+            GRAYLOG_OVERLAPPING_WINDOW => {
+                "A Graylog filter searches a `window` longer than it runs `every`, so each message alerts once per overlapping run."
+            }
+            GRAYLOG_ALL_STREAMS => {
+                "A Graylog definition names no stream, so it searches every stream the token's user can read."
+            }
+            SYSDIG_LIST_IN_VALUE => {
+                "A block list name appears in an exception value where Falco's expansion would not produce a value list."
+            }
+            FALCO_UNKNOWN_RULE => {
+                "A tuning (`append_to_rule`) names a rule the Falco default rules do not define: Falco refuses the append, and on Sysdig the tenant must have that rule."
+            }
+            FALCO_APPEND_CONDITION => {
+                "A tuning's condition is appended to the tuned rule's condition and must start with `and` or `or`; a new rule's condition must not."
+            }
+            CQL_PARSE_ERROR => "The CrowdStrike Query Language (CQL) query does not parse.",
+            CQL_UNKNOWN_FUNCTION => {
+                "No CQL function has this name; function names are matched without regard to case."
+            }
+            CQL_REMOVED_FUNCTION => {
+                "The CQL function was removed from LogScale and Next-Gen SIEM no longer runs it."
+            }
+            CQL_DEPRECATED_FUNCTION => "CrowdStrike's reference marks the CQL function deprecated.",
+            CQL_UNKNOWN_PARAMETER => "The CQL function has no parameter with this name.",
+            CQL_DUPLICATE_PARAMETER => "A CQL function parameter is given more than once.",
+            CQL_UNNAMED_ARGUMENT => {
+                "A CQL function gets an argument without a name that it cannot take: a second one, or one when every parameter needs its name."
+            }
+            CQL_MISSING_PARAMETER => "A CQL function call leaves out a required parameter.",
+            CQL_PARAMETER_VALUE => {
+                "A literal CQL argument is not one of the parameter's allowed values, or is outside its bounds."
+            }
+            CQL_REGEX_FLAG => "A CQL regex literal has a flag other than d, g, i, m or F.",
+            CQL_STRING_ESCAPE => {
+                "A CQL string has an escape LogScale does not translate; it keeps the backslash and the character."
+            }
+            CQL_FREE_TEXT_AFTER_AGGREGATE => {
+                "A CQL free-text filter comes after the first aggregate function, which LogScale refuses since 1.190."
+            }
+            CQL_ASSIGNMENT_AS => {
+                "A CQL assignment names the output field and the function's as= parameter names it again."
+            }
+            CQL_LINK_OUTSIDE_CORRELATE => {
+                "The CQL link operator <=> appears outside the queries of correlate(), the only place it links fields."
+            }
+            CQL_UNKNOWN_EVENT => {
+                "The #event_simpleName value is not a Falcon sensor event the engine knows."
+            }
+            CQL_CORRELATE_AGGREGATE => {
+                "A Next-Gen SIEM correlation rule combines correlate() with another aggregate function, which CrowdStrike does not allow."
+            }
+            CQL_EVENT_FUNCTION_AFTER_AGGREGATE => {
+                "A CQL eventSize(), eventInternals() or eventFieldCount() call comes after the first aggregate function, which LogScale refuses since 1.190."
+            }
+            CQL_CORRELATE_PLACEMENT => {
+                "CQL correlate() stands where its reference forbids: after an aggregate or a source function, inside another function's arguments, or with an aggregate in its queries."
+            }
+            CQL_MATCH_GUARD => {
+                "A CQL match guard is an aggregate function; a guard must be a filter."
+            }
+            CQL_REGEX_GROUP_UNDER_OR => {
+                "A CQL regex with named groups is an operand of or, where LogScale extracts none of its fields."
+            }
+            EXABEAM_PARSE_ERROR => {
+                "The Exabeam query does not parse: an unterminated string, an unbalanced bracket, a missing operand, an empty sequence query, or a comparison with a non-number."
+            }
+            EXABEAM_IMPLICIT_OPERATOR => {
+                "An Exabeam NOT stands between two terms with no AND or OR before it, which Exabeam calls invalid; write AND NOT or OR NOT."
+            }
+            EXABEAM_NOT_EQUAL => "Exabeam filters have no != operator; write NOT field:value.",
+            EXABEAM_BARE_WILDCARD => "A * alone is not an Exabeam query term.",
+            EXABEAM_LEADING_SLASH => "An Exabeam query cannot start with /.",
+            EXABEAM_FREE_TEXT_SPECIAL => {
+                "Unquoted Exabeam free text holds a character other than letters, digits, _, * and ?; put it in double quotes."
+            }
+            EXABEAM_UNKNOWN_FUNCTION => {
+                "The call is not an Exabeam function: RGX, RGXi, WLD and WLDi in a filter, an aggregation or RGX_EXTRACT in SELECT."
+            }
+            EXABEAM_FUNCTION_ARITY => {
+                "An Exabeam function gets the wrong arguments: a filter function takes one string, an aggregation one field (* for COUNT only), RGX_EXTRACT an optional field and a pattern."
+            }
+            EXABEAM_REGEX => {
+                "The Exabeam regular expression is not valid RE2: a syntax error, a back-reference, look-around, an atomic group or a possessive quantifier."
+            }
+            EXABEAM_RANGE => {
+                "The Exabeam range or CIDR block is invalid: a bound that is not a number, IPv4 address, datetime or *, mixed kinds, low above high, two open bounds, mismatched brackets, or a bad network."
+            }
+            EXABEAM_IPV6_RANGE => {
+                "An Exabeam range or CIDR block holds an IPv6 address; Exabeam ranges are IPv4 only."
+            }
+            EXABEAM_TIME_EXACT => {
+                "An Exabeam time field (time, approxLogTime, ingest_time, raw_log_time) is matched with an exact value; Search matches time with a range only."
+            }
+            EXABEAM_CONTEXT_TABLE_OR => {
+                "An Exabeam context table lookup is under OR; lookups combine with AND or AND NOT only."
+            }
+            EXABEAM_CONTEXT_TABLE_LIMIT => {
+                "An Exabeam query has more than two context table lookups."
+            }
+            EXABEAM_ADVANCED_IN_RULE => {
+                "A correlation rule sequence query uses Exabeam's advanced operators (SELECT, WHERE, pipes and the rest), which are Search only."
+            }
+            EXABEAM_KEYWORD_CASE => {
+                "An Exabeam clause keyword, aggregation or RGX_EXTRACT is in mixed case; write it all upper or all lower case."
+            }
+            EXABEAM_CLAUSE_ORDER => {
+                "Exabeam clauses are out of order, or one appears twice in a statement: SELECT, FROM, WHERE, AS, GROUP-BY, ORDER-BY, LIMIT."
+            }
+            EXABEAM_PIPE_LIMIT => "An Exabeam query has more than five pipes.",
+            EXABEAM_RGX_EXTRACT_LIMIT => "An Exabeam query has more than three RGX_EXTRACT calls.",
+            EXABEAM_RESERVED_ALIAS => {
+                "An Exabeam AS name is one of the Search guide's reserved words."
+            }
+            EXABEAM_GROUP_BY_SELECT_STAR => "An Exabeam GROUP-BY is combined with SELECT *.",
+            EXABEAM_GROUP_BY_COLUMN => {
+                "An Exabeam selected column is neither in GROUP-BY nor aggregated."
+            }
+            EXABEAM_FOREACH_CLAUSE => "An Exabeam FOREACH sub-query has GROUP-BY or ORDER-BY.",
+            EXABEAM_FOREACH_REFERENCE => {
+                "An Exabeam @field reference is outside a FOREACH sub-query."
+            }
+            EXABEAM_FOREACH_POSITION => {
+                "An Exabeam FOREACH is the first statement; it runs on the result of a preceding query."
+            }
+            EXABEAM_MIXED_BOOLEAN => {
+                "Exabeam AND and OR are mixed at one level without parentheses; Exabeam does not document their precedence."
+            }
+            EXABEAM_IMPLICIT_AND => {
+                "Two Exabeam terms, not both free text, stand side by side and are read as AND; write AND."
+            }
+            EXABEAM_SINGLE_GROUP => {
+                "Parentheses hold a single Exabeam expression, which the Search guide calls an error; drop them."
+            }
+            EXABEAM_PIPE_MISUSE => {
+                "An Exabeam statement after a pipe follows no SELECT or uses none of its columns; write one query with AND or WHERE."
+            }
+            EXABEAM_WILDCARD_IN_PHRASE => {
+                "A quoted Exabeam value with a space holds * or ?, which Exabeam does not expand inside a phrase."
+            }
+            EXABEAM_UNQUOTED_VALUE => {
+                "An Exabeam field value is a bare word that is not a number, boolean, null, IP address or @field; Exabeam documents string values in double quotes."
+            }
+            EXABEAM_LEGACY_REGEX => {
+                "An Exabeam value between slashes may be read as a regular expression; write RGX(\"...\") for a pattern, or drop the slashes for a path."
+            }
+            EXABEAM_UNKNOWN_FIELD => {
+                "The field is not in Exabeam's Common Information Model, a platform field, a c_ or m_ field, or an AS name defined earlier in the query; a tenant's parsers may still define it."
+            }
+            EXABEAM_STRING_FIELD_NUMBER => {
+                "An unquoted number is matched against a field the Exabeam Common Information Model types as a string; Exabeam requires the number in double quotes."
+            }
+            EXABEAM_UNKNOWN_VALUE => {
+                "An Exabeam activity_type, subject or outcome value is not one the Common Information Model lists; a tenant's parsers may still emit it."
+            }
+            EXABEAM_SEQUENCES => {
+                "An Exabeam block's sequences is not a non-empty list of sequences, each with a non-blank query."
+            }
+            EXABEAM_CORRELATION => {
+                "An Exabeam block has two or more sequences without correlation, one sequence with it, or a correlation that is not within and group_by."
+            }
+            EXABEAM_THRESHOLD_FUNCTION => {
+                "An Exabeam threshold function is not count, unique_count, value, max, min, sum or average, or its field is blank or missing."
+            }
+            EXABEAM_THRESHOLD_OPERATOR => {
+                "An Exabeam threshold operator is not allowed with its function: more_than or less_than, in or not_in for value."
+            }
+            EXABEAM_THRESHOLD_VALUE => {
+                "An Exabeam threshold value does not have the shape its operator takes, or count and unique_count compare with a non-integer."
+            }
+            EXABEAM_GROUP_BY => {
+                "An Exabeam group_by is not a list of one to three distinct non-blank fields (correlation.group_by may be empty)."
+            }
+            EXABEAM_DURATION => {
+                "An Exabeam duration is not a whole number and a unit its field allows, or delay is outside 7 to 180 minutes."
+            }
+            EXABEAM_SEVERITY => "An Exabeam severity is not none, low, medium, high or critical.",
+            EXABEAM_OUTCOME => "An Exabeam outcome is not alert, case or none.",
+            EXABEAM_EMAIL => {
+                "An Exabeam email does not have a non-empty list of distinct addresses, or its subject is blank."
+            }
+            EXABEAM_SCHEDULE => {
+                "An Exabeam schedule recurrence has an unknown every, a from or to that is not HH:MMZ, or day keys its every does not take."
+            }
+            EXABEAM_NAME_LENGTH => "The Exabeam rule name is longer than 128 characters.",
+            EXABEAM_CONTEXT_TABLE_TRIGGER => {
+                "An Exabeam sequence whose query looks up a context table has a threshold; Exabeam requires trigger on first match."
+            }
+            EXABEAM_NAME_DUPLICATE => {
+                "Two enabled Exabeam blocks of the workspace resolve to the same rule name, compared without regard to case."
+            }
+            EXABEAM_OUTCOME_SILENT => {
+                "An Exabeam rule's outcome is none and it sends no email, so it only writes a rule-trigger event."
+            }
+            EXABEAM_CORRELATION_WINDOW => {
+                "An Exabeam correlation window is shorter than the longest sequence threshold window."
+            }
+            YARA_PARSE_ERROR => "The YARA signature does not parse as YARA-X 1.x reads it.",
+            YARA_INCLUDE => {
+                "A YARA signature uses an include directive, which no platform resolves: each API takes one text with no file system behind it."
+            }
+            YARA_SIGNATURE_ALIAS => {
+                "A YARA signature is a YAML alias instead of text written out in its own block."
+            }
+            YARA_EMPTY_SIGNATURE => {
+                "The YARA signature has no rule, or only private or global rules."
+            }
+            YARA_DUPLICATE_RULE => "Two YARA rules in one signature have the same name.",
+            YARA_DUPLICATE_STRING => "Two strings of one YARA rule have the same identifier.",
+            YARA_DUPLICATE_TAG => "A YARA rule repeats a tag.",
+            YARA_UNDEFINED_STRING => {
+                "A YARA condition names a string ($id, #id, @id, !id or $prefix*) that the rule does not define."
+            }
+            YARA_UNREFERENCED_STRING => {
+                "A YARA string is never used in the condition, which YARA-X refuses unless the condition uses them."
+            }
+            YARA_UNDEFINED_IDENTIFIER => {
+                "A YARA identifier is neither a rule defined earlier in the signature nor an imported module, or is used as YARA-X refuses: a module field called as a function, a module function named without a call, or `entrypoint`."
+            }
+            YARA_RULE_IDENTIFIER_CONFLICT => {
+                "A YARA rule is named like a keyword, a built-in or an imported module."
+            }
+            YARA_UNKNOWN_MODULE => {
+                "A YARA import names a module opentide does not know: it knows YARA-X's default modules except vt, and refuses magic, which YARA-X does not build by default."
+            }
+            YARA_MODULE_NOT_IMPORTED => {
+                "A YARA module field or function is used without importing its module."
+            }
+            YARA_UNKNOWN_MODULE_MEMBER => {
+                "The YARA module has no such field or function, or the function takes other arguments."
+            }
+            YARA_TYPE => "A YARA operator or function is applied to a value of the wrong type.",
+            YARA_REGEXP => "A YARA regular expression is invalid.",
+            YARA_HEX_STRING => {
+                "A YARA hex string is invalid: an odd number of nibbles, a bad jump, or unbalanced alternatives."
+            }
+            YARA_STRING_MODIFIER => {
+                "YARA-X refuses this combination of YARA string modifiers, or an xor or base64 argument is out of range."
+            }
+            YARA_NUMBER_OUT_OF_RANGE => {
+                "A YARA integer, size suffix, jump bound or string index is outside the range YARA-X accepts."
+            }
+            YARA_X_ONLY_SYNTAX => {
+                "This YARA uses syntax only YARA-X has, and the platform profile has yara_x_syntax refused: the platform may not accept it."
+            }
+            YARA_SLOW_PATTERN => {
+                "libyara warns that this YARA string or loop may slow scanning down."
+            }
+            YARA_ENTRYPOINT_DEPRECATED => {
+                "entrypoint is deprecated in libyara and refused by YARA-X (yara_undefined_identifier); use pe.entry_point or elf.entry_point."
+            }
+            YARA_SUSPICIOUS_EXPRESSION => {
+                "A YARA condition is invariant, unsatisfiable or not boolean, or compares an integer with a boolean."
+            }
+            YARA_MODULE_UNCONFIRMED => {
+                "The YARA module is known but not confirmed on the platform's agents."
+            }
+            YARA_META_MISSING => {
+                "A non-private YARA rule lacks a meta key the platform profile recommends."
+            }
+            HARFANGLAB_RULE_KIND => {
+                "A HarfangLab block sets both sigma and yara; a block is one kind."
+            }
+            HARFANGLAB_YARA_FORM => {
+                "A HarfangLab yara object sets signature together with decomposed keys (meta, strings, condition or imports)."
+            }
+            HARFANGLAB_YARA_SECTION_HEADER => {
+                "A decomposed HarfangLab YARA fragment contains a strings:, condition: or rule header, which deploy writes itself."
+            }
+            HARFANGLAB_YARA_IMPORT => {
+                "A decomposed HarfangLab YARA imports entry is not a module the YARA language knows."
+            }
+            HARFANGLAB_YARA_RULE_NAME => {
+                "The YARA rule name deploy derives from the rule name is a YARA keyword or keeps a character other than an ASCII letter, digit or underscore."
+            }
+            HARFANGLAB_YARA_CONTEXT => {
+                "A HarfangLab YARA rule's meta context is not a comma-joined list, without blanks, of file, memory, file.pe, file.elf and file.macho."
+            }
+            BITDEFENDER_YARA_ASCII => {
+                "A Bitdefender YARA signature holds a character that is not ASCII."
+            }
+            BITDEFENDER_YARA_SIZE => {
+                "A Bitdefender YARA signature is longer than 30,000 characters."
+            }
+            YARAL_PARSE_ERROR => "The YARA-L text does not parse, or a text holds a second rule.",
+            YARAL_SECTION_HEADER => {
+                "A `google_secops` section text holds a section label, a `rule` header, or braces around a rule: deploy writes those, so each key holds its section's body only."
+            }
+            YARAL_SECTION_EMPTY => {
+                "A YARA-L section key has no text. A plain YAML scalar that starts with `#` is a YAML comment, so it loads as null: write the text as a block scalar (`|`)."
+            }
+            YARAL_SECTION_ALIAS => {
+                "A YARA-L section key is a YAML alias: write the section out in the block, so the block shows what it deploys."
+            }
+            YARAL_SECTION_MISSING => {
+                "A required YARA-L section is absent: `meta` in a rule file, `events` and `condition` in every rule."
+            }
+            YARAL_SECTION_ORDER => {
+                "A YARA-L section is repeated or out of order (meta, setup, events, match, outcome, condition, options, export)."
+            }
+            YARAL_SECTION_UNAVAILABLE => {
+                "The section is not part of this profile: `dedup`, `order`, `limit`, `select` and `unselect` are search sections; `meta`, `setup` and `options` are rule sections."
+            }
+            YARAL_META_DUPLICATE => {
+                "A meta key appears twice, or a meta value is not a double-quoted string."
+            }
+            YARAL_RESERVED_IDENTIFIER => {
+                "A YARA-L keyword is used as a rule name, meta key or variable, or a variable is named `$window_start` or `$window_end`."
+            }
+            YARAL_UNDEFINED_VARIABLE => {
+                "A variable in `match`, `outcome` or `condition` is not defined by `events` or `outcome`, or an event variable of `events` is absent from `condition`."
+            }
+            YARAL_MULTI_EVENT_MATCH => {
+                "A rule with two or more event variables has no `match` section."
+            }
+            YARAL_MATCH_SHAPE => {
+                "The `match` block is not a YaraLMatch: `group_by` and `window`, and `pivot` and `direction` exactly when `type` is `sliding`."
+            }
+            YARAL_MATCH_VARIABLE => "A `match` name is not a placeholder bound in `events`.",
+            YARAL_MATCH_WINDOW => {
+                "The match window is outside its bounds (hop and sliding 1m to 14d in a rule, 1m to 48h in a search; tumbling 1m to 72h) or has a unit other than m, h or d."
+            }
+            YARAL_CONDITION_SHAPE => {
+                "The condition is not one Google compiles: `not` or a comma on event terms, `or` across too many event variables or in an unbounded condition, or non-existence without a window and a bounded event."
+            }
+            YARAL_NOCASE_ON_ENUM => {
+                "`nocase` is applied to a comparison with an enumerated UDM field."
+            }
+            YARAL_OUTCOME_LIMIT => "A rule or search assigns more than 20 outcome variables.",
+            YARAL_OUTCOME_AGGREGATION => {
+                "With `match`, an outcome reads an event field, or a placeholder that is not a `match` variable, outside an aggregation; or it aggregates an outcome variable."
+            }
+            YARAL_UNKNOWN_FUNCTION => {
+                "The function is not in Google's YARA-L function list, or it takes a different number of arguments."
+            }
+            YARAL_FUNCTION_UNAVAILABLE => {
+                "The function exists, but not in this profile (rules or search)."
+            }
+            YARAL_UNKNOWN_UDM_FIELD => "The field path is not in the Unified Data Model.",
+            YARAL_ENUM_VALUE => "The value is not one of the enumerated UDM field's values.",
+            YARAL_TYPE => {
+                "An operator or function is applied to a value of the wrong type: a count compared with a string, `any` or `all` on a map key, `nocase` on a number."
+            }
+            YARAL_REGEX => "The regular expression is not valid RE2.",
+            YARAL_STRING_ESCAPE => {
+                "A double-quoted string holds an escape Google does not document (only backslash, double quote, n, r and t); the tenant decides whether it compiles."
+            }
+            YARAL_REFERENCE_LIST_LIMIT => {
+                "More `in` statements than the profile allows (rules: 10, 5 with regex, 5 with cidr; search: 7, 4, 2)."
+            }
+            YARAL_OPTION => "An unknown option, or an option value of the wrong kind.",
+            YARAL_EXPORT_VALUE => {
+                "An `export` `write_row` value is not an outcome variable: Google exports outcome variables only."
+            }
+            YARAL_WINDOW_BOUND => {
+                "`window_start` or `window_end` is used in `events`, or in a rule or search with no `match` window."
+            }
+            YARAL_DEPRECATED_FIELD => "The UDM field is deprecated.",
+            YARAL_UNFILTERED_EVENT => {
+                "An event variable has no equality on `metadata.event_type`, `metadata.log_type` or `metadata.product_name`, so the rule scans every event."
+            }
+            YARAL_LEADING_WILDCARD_REGEX => {
+                "The regular expression starts with `.*` without an anchor: RE2 matches anywhere already, and the prefix only costs time."
+            }
+            YARAL_REFERENCE_LIST_DEPRECATED => {
+                "Reference lists are deprecated from May 2027 and migrate to data tables by July 2027: use a data table (`%table.column`)."
+            }
+            GOOGLE_SECOPS_RULE_NAME => {
+                "The Google SecOps rule `name` is not a YARA-L identifier, or is a keyword."
+            }
+            GOOGLE_SECOPS_SEVERITY => {
+                "`severity` or `priority` is not `Info`, `Low`, `Medium`, `High`, or `Critical`."
+            }
+            GOOGLE_SECOPS_RUN_FREQUENCY => {
+                "`run_frequency` is not `LIVE`, `LIVE_CUSTOMIZABLE`, `HOURLY_CUSTOMIZABLE`, or `DAILY`; Google's legacy `HOURLY` is refused."
+            }
+            GOOGLE_SECOPS_SCHEDULE => {
+                "`schedule` is set without a customizable `run_frequency`, or its `late_arriving_data_adjustment` is not a positive duration."
+            }
+            GOOGLE_SECOPS_META_KEY => {
+                "A block `meta` key is not an identifier, is a keyword or a key deploy derives, or its value is not a string."
+            }
+            GOOGLE_SECOPS_RISK_SCORE_MISSING => {
+                "`outcome` assigns no `$risk_score`, so every detection gets the instance's default score."
+            }
+            GOOGLE_SECOPS_RULE_ID_LITERAL => {
+                "The rule compares `detection.detection.rule_id` with a literal `ru_` id, which differs per tenant: match `detection.detection.rule_name` instead."
+            }
+            GOOGLE_SECOPS_LIVE_FREQUENCY_UNAVAILABLE => {
+                "`run_frequency` is `LIVE` on a multi-event rule: Google stores `LIVE_CUSTOMIZABLE`, so the block differs from the tenant on every deploy."
+            }
+            MICROSOFT_DEFENDER_SCHEMA => {
+                "`schema`, when set, is not `platform::microsoft_defender::1.0`."
+            }
+            MICROSOFT_DEFENDER_FREQUENCY => "`schedule.frequency` is not `NRT`, `<n>H` or `<n>D`.",
+            MICROSOFT_DEFENDER_LOOKBACK => {
+                "`schedule.lookback` is not `<n>H` or `<n>D`, is set with `frequency: NRT`, or is shorter than `frequency`."
+            }
+            MICROSOFT_DEFENDER_SEVERITY => {
+                "`alert.severity` is not `Informational`, `Low`, `Medium`, `High`, or `Critical`."
+            }
+            MICROSOFT_DEFENDER_GROUPING => {
+                "`alert.grouping` is not `alert_per_event` or `single_alert`."
+            }
+            MICROSOFT_DEFENDER_CUSTOM_DETAILS => {
+                "`alert.custom_details` is not a mapping of non-blank names to strings."
+            }
+            MICROSOFT_DEFENDER_ENTITY_KIND => {
+                "A key of `entities` is not one of the seventeen entity kinds."
+            }
+            MICROSOFT_DEFENDER_ENTITY_MAPPING => {
+                "An entity kind does not hold a list, or a mapping is empty or names a field its kind does not have."
+            }
+            MICROSOFT_DEFENDER_ACTION_KIND => {
+                "A key of `actions` is not one of the sixteen automated actions."
+            }
+            MICROSOFT_DEFENDER_ACTION_TARGET => {
+                "An action does not hold a non-empty list, a target is empty or names a field its action does not take, or `device_groups` is not a non-empty list of names."
+            }
+            MICROSOFT_DEFENDER_ISOLATION_TYPE => "`isolation_type` is not `full` or `selective`.",
+            MICROSOFT_DEFENDER_COLUMN => {
+                "A column name (an entity field, an action column, a custom detail's value) is blank or not a string."
+            }
+            MICROSOFT_DEFENDER_SCOPE => {
+                "`scope` is not `{device_groups: [...]}` with a non-empty list of non-blank names."
+            }
+            MICROSOFT_DEFENDER_INCIDENT => {
+                "`incident` is not a mapping whose `exclude_from_correlation` is `true` or `false`."
+            }
+            MICROSOFT_DEFENDER_NO_ENTITIES => {
+                "The block maps no entity, so the alert names no device, user, or mailbox to triage or act on."
+            }
+            _ => return None,
+        })
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum EngineError {
+    #[error("{0}")]
+    Message(String),
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn a_build_that_sets_the_version_reports_it_and_any_other_the_crates() {
+        // The candidate's binaries and wheel are built from a workspace at
+        // `1.0.0` with `OPENTIDE_BUILD_VERSION=1.0.0-rc.1`: they report the candidate.
+        assert_eq!(reported_version(Some("1.0.0-rc.1"), "1.0.0"), "1.0.0-rc.1");
+        assert_eq!(reported_version(None, "1.0.0"), "1.0.0");
+        assert_eq!(reported_version(Some(""), "1.0.0"), "1.0.0");
+    }
+
+    #[test]
+    fn the_reported_version_is_the_builds_or_the_crates() {
+        assert_eq!(
+            VERSION,
+            option_env!("OPENTIDE_BUILD_VERSION")
+                .filter(|version| !version.is_empty())
+                .unwrap_or(env!("CARGO_PKG_VERSION"))
+        );
+    }
+
+    use super::word_start;
+
+    /// #182: the character before the word may be wider than a byte.
+    #[test]
+    fn word_start_is_a_char_boundary_after_a_wide_character() {
+        let word = |c: char| c.is_ascii_alphanumeric() || c == '_';
+        assert_eq!(word_start("a b", word), 2);
+        assert_eq!(word_start("abc", word), 0);
+        let text = "wehrE\u{59a}ndsWith";
+        assert_eq!(&text[word_start(text, word)..], "ndsWith");
+        let text = "x 日本name";
+        assert_eq!(&text[word_start(text, word)..], "name");
+        assert_eq!(word_start("😀", word), "😀".len());
+    }
+    use super::*;
+
+    /// #180: a span that ends inside a multi-byte character gave a panic.
+    #[test]
+    fn an_offset_inside_a_character_counts_from_its_start() {
+        let src = "a\\é日😀";
+        for offset in 0..=src.len() + 2 {
+            let position = offset_to_position(src, offset);
+            assert_eq!(LineIndex::new(src).position(offset), position, "{offset}");
+        }
+        // Byte 3 is inside `é` (bytes 2..4): its column is `é`'s start, 2.
+        assert_eq!(offset_to_position(src, 3), Position::new(0, 2));
+        let _ = span_to_range(src, ByteSpan::new(1, 4));
+    }
+
+    #[test]
+    fn line_index_matches_offset_to_position() {
+        let text = "ab\n\u{1F600}c\r\n\nd é";
+        let index = LineIndex::new(text);
+        for (offset, _) in text
+            .char_indices()
+            .chain([(text.len(), ' '), (text.len() + 5, ' ')])
+        {
+            assert_eq!(
+                index.position(offset),
+                offset_to_position(text, offset),
+                "{offset}"
+            );
+        }
+    }
+
+    /// A long non-ASCII line converts each offset by binary search, not by a
+    /// scan from the line's start (8,000 kuery diagnostics on one line of
+    /// non-ASCII text took 9 s).
+    #[test]
+    fn a_long_non_ascii_line_converts_in_linear_time() {
+        let text = "\u{e9}:\"\u{fc} ".repeat(50_000);
+        let index = LineIndex::new(&text);
+        let started = std::time::Instant::now();
+        let mut last = Position::new(0, 0);
+        for offset in (0..text.len()).step_by(7) {
+            last = index.position(offset);
+        }
+        assert!(last.character > 0);
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(2),
+            "{:?}",
+            started.elapsed()
+        );
+        assert_eq!(
+            index.position(text.len()),
+            offset_to_position(&text, text.len())
+        );
+    }
+
+    /// `LineIndex` gives exactly what the scanning functions give, at every
+    /// offset and every position: multi-byte UTF-8 (2, 3 and 4 bytes, the
+    /// last two UTF-16 units), CRLF, tabs, empty lines, a text with and
+    /// without a final newline, and positions past a line's or the text's end.
+    #[test]
+    fn line_index_agrees_with_the_scans_everywhere() {
+        for text in [
+            "",
+            "\n",
+            "ascii only\nsecond line\n",
+            "ab\n\u{1F600}c\r\n\nd \u{e9}",
+            "\tkey:\t\u{65e5}\u{672c}\u{8a9e}\r\n\t- \u{e9}t\u{e9} \u{1F600}\u{1F600} x\r\n\r\nend",
+            "no final newline \u{e9}",
+            "\u{1F600}",
+        ] {
+            let index = LineIndex::new(text);
+            for offset in 0..=text.len() + 2 {
+                assert_eq!(
+                    index.position(offset),
+                    offset_to_position(text, offset),
+                    "{text:?} @ {offset}"
+                );
+            }
+            let lines = u32::try_from(text.split('\n').count()).unwrap();
+            for line in 0..=lines + 1 {
+                for character in 0..=40 {
+                    let p = Position::new(line, character);
+                    assert_eq!(
+                        index.offset(p),
+                        position_to_offset(text, p),
+                        "{text:?} @ {line}:{character}"
+                    );
+                }
+            }
+            for start in 0..=text.len() {
+                let span = ByteSpan::new(start, (start + 3).min(text.len()));
+                assert_eq!(
+                    index.range(span),
+                    span_to_range(text, span),
+                    "{text:?} {span:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn no_otide_in_crate_name() {
+        assert!(
+            !env!("CARGO_PKG_NAME").contains("otide")
+                || env!("CARGO_PKG_NAME").starts_with("opentide")
+        );
+        assert!(env!("CARGO_PKG_NAME").starts_with("opentide"));
+    }
+
+    #[test]
+    fn every_code_is_listed_and_described() {
+        let source = include_str!("lib.rs");
+        let module =
+            &source[source.find("pub mod codes").unwrap()..source.find("pub const ALL").unwrap()];
+        let declared = module.matches("pub const ").count();
+        assert_eq!(
+            declared,
+            codes::ALL.len(),
+            "codes::ALL must list every code"
+        );
+        let mut seen = std::collections::BTreeSet::new();
+        for code in codes::ALL {
+            assert!(seen.insert(*code), "{code} listed twice");
+            let text = codes::describe(code).unwrap_or_else(|| panic!("{code} has no description"));
+            assert!(
+                text.ends_with('.'),
+                "{code}: one sentence ending in a period"
+            );
+        }
+        assert_eq!(codes::describe("not_a_code"), None);
+    }
+
+    #[test]
+    fn language_id_roundtrip() {
+        for id in LanguageId::QUERY_LANGUAGES
+            .into_iter()
+            .chain([LanguageId::TideYaml])
+        {
+            assert_eq!(LanguageId::parse(id.as_str()), Some(id));
+        }
+        assert_eq!(LanguageId::parse("kusto"), Some(LanguageId::Kql));
+        // `KQL` is Kusto. Kibana's language is `kuery`.
+        assert_eq!(LanguageId::parse("KQL"), Some(LanguageId::Kql));
+        assert_eq!(LanguageId::parse("kibana-kql"), Some(LanguageId::Kuery));
+        assert_eq!(LanguageId::parse("sql"), None);
+        assert_eq!(LanguageId::parse("esql"), Some(LanguageId::Esql));
+        assert_eq!(LanguageId::from_extension("sql"), None);
+        assert_eq!(LanguageId::from_extension("eql"), Some(LanguageId::Eql));
+        assert_eq!(LanguageId::from_extension("falco"), Some(LanguageId::Falco));
+        assert_eq!(LanguageId::parse("falco"), Some(LanguageId::Falco));
+        assert_eq!(LanguageId::parse("cql"), Some(LanguageId::Cql));
+        assert_eq!(LanguageId::parse("yara"), Some(LanguageId::Yara));
+        assert_eq!(
+            LanguageId::parse(LanguageId::Yara.as_str()),
+            Some(LanguageId::Yara)
+        );
+        assert_eq!(LanguageId::from_extension("yar"), Some(LanguageId::Yara));
+        assert_eq!(LanguageId::from_extension("yara"), Some(LanguageId::Yara));
+        assert_eq!(LanguageId::parse("logscale"), Some(LanguageId::Cql));
+        assert_eq!(LanguageId::from_extension("cql"), Some(LanguageId::Cql));
+        // Exabeam's guides call it EQL; opentide's id is `exabeam`.
+        assert_eq!(LanguageId::parse("exabeam"), Some(LanguageId::Exabeam));
+        assert_eq!(
+            LanguageId::from_extension("exabeam"),
+            Some(LanguageId::Exabeam)
+        );
+        assert_eq!(LanguageId::parse("EQL"), Some(LanguageId::Eql));
+    }
+
+    #[test]
+    fn a_byte_order_mark_is_not_text() {
+        let src = "\u{feff}a: é😀";
+        assert_eq!(strip_bom(src), "a: é😀");
+        assert_eq!(strip_bom("a: 1"), "a: 1");
+        // Only one leading mark is a byte-order mark.
+        assert_eq!(strip_bom("\u{feff}\u{feff}a"), "\u{feff}a");
+        assert_eq!(strip_bom("a\u{feff}"), "a\u{feff}");
+        assert_eq!(strip_bom_at(src, 4), ("a: é😀", 1));
+        assert_eq!(strip_bom_at(src, 1), ("a: é😀", 0));
+        assert_eq!(strip_bom_at("a: 1", 2), ("a: 1", 2));
+        let stripped = strip_bom(src);
+        assert_eq!(
+            offset_to_position(stripped, stripped.len()),
+            Position::new(0, 6)
+        );
+    }
+
+    #[test]
+    fn offset_to_position_handles_newlines() {
+        let src = "abc\néé";
+        let pos = offset_to_position(src, src.len());
+        assert_eq!(pos.line, 1);
+        assert_eq!(pos.character, 2);
+    }
+
+    /// Diagnostic ranges leave the process as UTF-16 code units. `é` is one
+    /// unit (two UTF-8 bytes); an emoji outside the BMP is two units.
+    #[test]
+    fn offset_to_position_counts_utf16_for_accent_and_emoji() {
+        let src = "aé😀";
+        assert_eq!(offset_to_position(src, 0), Position::new(0, 0));
+        assert_eq!(offset_to_position(src, 1), Position::new(0, 1));
+        assert_eq!(offset_to_position(src, 1 + "é".len()), Position::new(0, 2));
+        assert_eq!(offset_to_position(src, src.len()), Position::new(0, 4));
+
+        let emoji_start = 1 + "é".len();
+        let range = span_to_range(src, ByteSpan::new(emoji_start, src.len()));
+        assert_eq!(range.start, Position::new(0, 2));
+        assert_eq!(range.end, Position::new(0, 4));
+        assert_eq!(range.end.character - range.start.character, 2);
+    }
+
+    #[test]
+    fn offset_to_position_emoji_on_the_next_line() {
+        let src = "a\n😀b";
+        let after_emoji = "a\n😀".len();
+        assert_eq!(offset_to_position(src, after_emoji), Position::new(1, 2));
+        assert_eq!(offset_to_position(src, src.len()), Position::new(1, 3));
+    }
+
+    #[test]
+    fn range_contains_inclusive_end() {
+        let range = Range::new(Position::new(0, 1), Position::new(0, 4));
+        assert!(range.contains(Position::new(0, 1)));
+        assert!(range.contains(Position::new(0, 4)));
+        assert!(!range.contains(Position::new(0, 0)));
+    }
+
+    /// Inside [`with_line_index`], `span_to_range` and `offset_to_position`
+    /// on the installed text give what the scans give, everywhere, without
+    /// scanning; on another text (even with the same content) they scan.
+    #[test]
+    fn the_installed_table_gives_what_the_scans_give() {
+        for text in [
+            "",
+            "ascii only\nsecond line\n",
+            "ab\n\u{1F600}c\r\n\nd \u{e9}",
+            "\tkey:\t\u{65e5}\u{672c}\r\n\t- \u{e9}t\u{e9} \u{1F600} x\r\n\r\nend",
+        ] {
+            let scanned: Vec<Range> = (0..=text.len() + 2)
+                .map(|start| span_to_range(text, ByteSpan::new(start, start + 2)))
+                .collect();
+            let before = scans_from_the_start();
+            let installed: Vec<Range> = with_line_index(text, || {
+                (0..=text.len() + 2)
+                    .map(|start| span_to_range(text, ByteSpan::new(start, start + 2)))
+                    .collect()
+            });
+            assert_eq!(installed, scanned, "{text:?}");
+            assert_eq!(
+                scans_from_the_start(),
+                before,
+                "{text:?}: scanned inside the scope"
+            );
+
+            // An empty text's address may be shared (a dangling pointer):
+            // the same key then means the same, empty, content.
+            if text.is_empty() {
+                continue;
+            }
+            let copy = text.to_string();
+            let before = scans_from_the_start();
+            let other = with_line_index(text, || offset_to_position(&copy, copy.len()));
+            assert_eq!(other, offset_to_position(text, text.len()));
+            assert_eq!(
+                scans_from_the_start(),
+                before + 2,
+                "another text is scanned"
+            );
+        }
+    }
+
+    /// A slice of the installed text is another text: its offsets count from
+    /// its own start.
+    #[test]
+    fn a_slice_of_the_installed_text_is_scanned() {
+        let text = "one\ntwo\nthree";
+        let tail = &text[4..];
+        let inside = with_line_index(text, || offset_to_position(tail, 4));
+        assert_eq!(inside, Position::new(1, 0));
+    }
+
+    /// Scopes nest: the inner text's table is installed for the inner run,
+    /// the outer's is back after it, also when the inner run panics, and
+    /// nothing is installed after the outer scope.
+    #[test]
+    fn scopes_nest_and_restore_even_on_a_panic() {
+        let outer = "a\nb";
+        let inner = "x\ny\nz";
+        with_line_index(outer, || {
+            let before = scans_from_the_start();
+            with_line_index(inner, || {
+                assert_eq!(offset_to_position(inner, 4), Position::new(2, 0));
+                // The same text again: nothing rebuilt, still installed.
+                with_line_index(inner, || {
+                    assert_eq!(offset_to_position(inner, 2), Position::new(1, 0));
+                });
+            });
+            assert_eq!(offset_to_position(outer, 2), Position::new(1, 0));
+            assert_eq!(scans_from_the_start(), before, "the tables were installed");
+            let panicked = std::panic::catch_unwind(|| {
+                with_line_index(inner, || panic!("inside"));
+            });
+            assert!(panicked.is_err());
+            let before = scans_from_the_start();
+            assert_eq!(offset_to_position(outer, 2), Position::new(1, 0));
+            assert_eq!(scans_from_the_start(), before, "the outer table is back");
+        });
+        let before = scans_from_the_start();
+        assert_eq!(offset_to_position(outer, 2), Position::new(1, 0));
+        assert_eq!(scans_from_the_start(), before + 1, "nothing is installed");
+    }
+}

@@ -1,0 +1,2 @@
+# prod:parenthesized_expression invalid
+(open_write and fd.name startswith /etc

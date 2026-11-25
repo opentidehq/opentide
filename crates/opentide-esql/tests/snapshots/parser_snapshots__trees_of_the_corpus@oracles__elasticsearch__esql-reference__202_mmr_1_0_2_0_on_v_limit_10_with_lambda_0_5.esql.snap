@@ -1,0 +1,55 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/oracles/elasticsearch/esql-reference/202_mmr_1_0_2_0_on_v_limit_10_with_lambda_0_5.esql
+---
+SOURCE_FILE@0..62
+  QUERY@0..61
+    FROM_COMMAND@0..9
+      FROM_KW@0..4 "FROM"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..9
+        INDEX_NAME@5..9
+          SOURCE_TEXT@5..9 "logs"
+    WHITESPACE@9..10 " "
+    PIPE@10..11 "|"
+    WHITESPACE@11..12 " "
+    MMR_COMMAND@12..61
+      MMR_KW@12..15 "MMR"
+      WHITESPACE@15..16 " "
+      ARRAY@16..26
+        L_BRACK@16..17 "["
+        NUMBER@17..20
+          NUMBER_LIT@17..20 "1.0"
+        COMMA@20..21 ","
+        WHITESPACE@21..22 " "
+        NUMBER@22..25
+          NUMBER_LIT@22..25 "2.0"
+        R_BRACK@25..26 "]"
+      WHITESPACE@26..27 " "
+      ON_KW@27..29 "ON"
+      WHITESPACE@29..30 " "
+      QUALIFIED_NAME@30..31
+        IDENTIFIER@30..31
+          IDENT@30..31 "v"
+      WHITESPACE@31..32 " "
+      LIMIT_KW@32..37 "LIMIT"
+      WHITESPACE@37..38 " "
+      NUMBER@38..40
+        NUMBER_LIT@38..40 "10"
+      WHITESPACE@40..41 " "
+      NAMED_PARAMETERS@41..61
+        WITH_KW@41..45 "WITH"
+        WHITESPACE@45..46 " "
+        MAP_EXPRESSION@46..61
+          L_BRACE@46..47 "{"
+          MAP_ENTRY@47..60
+            STRING@47..55
+              STRING_LIT@47..55 "\"lambda\""
+            COLON@55..56 ":"
+            WHITESPACE@56..57 " "
+            NUMBER@57..60
+              NUMBER_LIT@57..60 "0.5"
+          R_BRACE@60..61 "}"
+  WHITESPACE@61..62 "\n"
+--- errors

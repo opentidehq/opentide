@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "VocabularyExtensions": {
+      "additionalProperties": true,
+      "description": "`[vocabulary]`: CoreTIDE-era vocabulary extensions.\n\nVocabularies are canonical upstream and are not extended locally since\n0.13.0. The table stays open so a file that still carries one loads; its\ncontents are ignored.",
+      "properties": {},
+      "title": "VocabularyExtensions",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Merged `schema.toml`: defaults inserted into generated templates.",
+  "properties": {
+    "templates": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Template text keyed by scoped field path, for example \"rule::response::procedure::analysis\".",
+      "title": "Templates",
+      "type": "object"
+    },
+    "vocabulary": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/VocabularyExtensions"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Retired vocabulary extensions. Accepted and ignored."
+    }
+  },
+  "title": "schema.toml",
+  "type": "object"
+}

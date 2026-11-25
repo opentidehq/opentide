@@ -1,0 +1,93 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: validate/json/tide-corpus/sarif
+---
+args: opentide --json validate --strict --format sarif --output opentide-reports/validate.sarif
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "checks": {
+    "configuration": {
+      "check": "configuration",
+      "status": "passed"
+    },
+    "id-uniqueness": {
+      "check": "id-uniqueness",
+      "status": "passed"
+    },
+    "queries": {
+      "check": "queries",
+      "status": "passed"
+    },
+    "schema": {
+      "check": "schema",
+      "status": "passed"
+    },
+    "uuid-format": {
+      "check": "uuid-format",
+      "status": "passed"
+    }
+  },
+  "command": "validate",
+  "duration_ms": 0,
+  "exit_code": 0,
+  "failure": null,
+  "message": "Validation passed",
+  "next_actions": [],
+  "ok": true,
+  "report": {
+    "issues": [],
+    "ok": true,
+    "stats": {
+      "id_workers": "<CORES>",
+      "object_workers": "<CORES>",
+      "objects_checked": 12,
+      "parallel": "<CORES>",
+      "queries_checked": 8,
+      "wall_ms": 0.0,
+      "workers": "<CORES>"
+    },
+    "warnings": []
+  },
+  "schema_version": 1,
+  "status": "passed",
+  "summary": {
+    "errors": 0,
+    "files": 0,
+    "fixable": 0,
+    "objects": 12,
+    "queries": 8,
+    "warning_files": 0,
+    "warnings": 0
+  },
+  "workspace": "<WS>"
+}
+
+━━━ stderr · empty
+
+━━━ ws/opentide-reports/ · created 0755
+
+━━━ ws/opentide-reports/validate.sarif · created 0644
+(SARIF as a parsed value; the rules the results name, each as `id | level | name | helpUri`; a result's ruleIndex is checked, then dropped; descriptions and help are the explain pages)
+{
+  "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+  "runs": [
+    {
+      "automationDetails": {
+        "id": "opentide/validate/"
+      },
+      "columnKind": "unicodeCodePoints",
+      "results": [],
+      "tool": {
+        "driver": {
+          "informationUri": "https://opentide.org/docs/cli/diagnostics",
+          "name": "opentide",
+          "rules": [],
+          "version": "0.28.1"
+        }
+      }
+    }
+  ],
+  "version": "2.1.0"
+}

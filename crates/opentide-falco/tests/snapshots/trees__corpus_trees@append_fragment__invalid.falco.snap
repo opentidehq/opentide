@@ -1,0 +1,13 @@
+---
+source: crates/opentide-falco/tests/trees.rs
+expression: "debug_parse(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/falco/append_fragment__invalid.falco
+---
+source_file@0..7
+  append_fragment@0..7
+    and@0..3 "and"
+    whitespace@3..4 " "
+    not_expression@4..7
+      not@4..7 "not"
+errors:
+7..7: expected a condition

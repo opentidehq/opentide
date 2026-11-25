@@ -1,0 +1,1 @@
+index=main | foreach user* [| eval r<<MATCHSTR>>=lower('<<FIELD>>') ]

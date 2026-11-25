@@ -1,0 +1,32 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: validate/plain/empty/strict-sarif
+---
+args: opentide validate --strict --format sarif
+exit: 1
+
+━━━ stdout · json, 8036 lines
+{
+  "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+  "runs": [
+    {
+      "automationDetails": {
+        "id": "opentide/validate/"
+      },
+      "columnKind": "unicodeCodePoints",
+      "results": [],
+      "tool": {
+        "driver": {
+          "informationUri": "https://opentide.org/docs/cli/diagnostics",
+          "name": "opentide",
+          "rules": [],
+          "version": "0.28.1"
+        }
+      }
+    }
+  ],
+  "version": "2.1.0"
+}
+
+━━━ stderr
+Validation failed: no detection objects were found under ./, and --strict requires at least one

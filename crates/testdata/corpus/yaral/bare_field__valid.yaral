@@ -1,0 +1,4 @@
+// prod:bare_field valid
+principal.hostname = "web01"
+labels["env"] = "prod"
+ip = "10.0.0.1" AND raw = /mimikatz/ nocase

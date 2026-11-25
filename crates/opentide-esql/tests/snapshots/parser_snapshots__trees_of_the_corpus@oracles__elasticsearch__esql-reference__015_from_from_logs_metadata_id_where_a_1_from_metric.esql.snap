@@ -1,0 +1,59 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/oracles/elasticsearch/esql-reference/015_from_from_logs_metadata_id_where_a_1_from_metric.esql
+---
+SOURCE_FILE@0..77
+  QUERY@0..76
+    FROM_COMMAND@0..76
+      FROM_KW@0..4 "FROM"
+      WHITESPACE@4..5 " "
+      SOURCE_SUBQUERY@5..44
+        L_PAREN@5..6 "("
+        FROM_COMMAND@6..28
+          FROM_KW@6..10 "FROM"
+          WHITESPACE@10..11 " "
+          INDEX_PATTERN@11..15
+            INDEX_NAME@11..15
+              SOURCE_TEXT@11..15 "logs"
+          WHITESPACE@15..16 " "
+          METADATA@16..28
+            METADATA_KW@16..24 "METADATA"
+            WHITESPACE@24..25 " "
+            METADATA_FIELD@25..28
+              SOURCE_TEXT@25..28 "_id"
+        WHITESPACE@28..29 " "
+        PIPE@29..30 "|"
+        WHITESPACE@30..31 " "
+        WHERE_COMMAND@31..43
+          WHERE_KW@31..36 "WHERE"
+          WHITESPACE@36..37 " "
+          COMPARISON@37..43
+            QUALIFIED_NAME@37..38
+              IDENTIFIER@37..38
+                IDENT@37..38 "a"
+            WHITESPACE@38..39 " "
+            EQ_EQ@39..41 "=="
+            WHITESPACE@41..42 " "
+            NUMBER@42..43
+              NUMBER_LIT@42..43 "1"
+        R_PAREN@43..44 ")"
+      COMMA@44..45 ","
+      WHITESPACE@45..46 " "
+      SOURCE_SUBQUERY@46..60
+        L_PAREN@46..47 "("
+        FROM_COMMAND@47..59
+          FROM_KW@47..51 "FROM"
+          WHITESPACE@51..52 " "
+          INDEX_PATTERN@52..59
+            INDEX_NAME@52..59
+              SOURCE_TEXT@52..59 "metrics"
+        R_PAREN@59..60 ")"
+      WHITESPACE@60..61 " "
+      METADATA@61..76
+        METADATA_KW@61..69 "METADATA"
+        WHITESPACE@69..70 " "
+        METADATA_FIELD@70..76
+          SOURCE_TEXT@70..76 "_index"
+  WHITESPACE@76..77 "\n"
+--- errors

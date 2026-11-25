@@ -1,0 +1,5 @@
+{"jsonrpc":"2.0","id":1,"method":"run","params":{"argv":["validate"]}}
+{"jsonrpc":"2.0","id":2,"method":"run","params":{"argv":["explain","x"],"cwd":"/nowhere","env":{"OPENTIDE_ENGINE":"python"}}}
+{"jsonrpc":"2.0","method":"$/cancelRequest","params":{"id":2}}
+{"jsonrpc":"2.0","method":"$/cancelRequest","params":{"id":"never"}}
+{"jsonrpc":"2.0","id":2,"method":"run","params":{"argv":["tui"]}}

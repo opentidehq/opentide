@@ -1,0 +1,43 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: share.retract/json/none/help
+---
+args: opentide --json share retract --help
+exit: 0
+
+━━━ stdout
+Unpublish a shared event, or delete it when `--delete --yes` is set.
+
+Usage: opentide share retract [OPTIONS]
+
+Options:
+      --target <TARGET>
+          Destination block name. Repeatable.
+
+      --uuid <UUID>
+          Limit to these object UUIDs.
+
+      --type <OBJECT_TYPE>
+          Limit to threat, objective, or rule.
+
+      --file <FILE>
+          Limit to these object files.
+
+      --delete
+          Delete the remote event instead of unpublishing it.
+
+      --yes
+          Confirm --delete.
+
+      --workers <WORKERS>
+          Parallel object workers for one destination.
+          
+          [default: 1]
+
+      --help
+          Print help
+
+Examples:
+  $ opentide share retract --uuid <uuid>
+
+━━━ stderr · empty

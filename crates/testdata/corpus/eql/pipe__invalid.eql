@@ -1,0 +1,2 @@
+// prod:pipe invalid
+process where true | unique process.name

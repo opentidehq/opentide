@@ -1,0 +1,23 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: lsp.start/json/none/help
+---
+args: opentide --json lsp start --help
+exit: 0
+
+━━━ stdout
+Serve the language server protocol on stdio until the editor closes stdin.
+
+Usage: opentide lsp start [OPTIONS]
+
+Options:
+      --stdio
+          Speak on stdin and stdout: the only transport, accepted for editors that pass it
+
+      --help
+          Print help
+
+Examples:
+  $ opentide lsp start
+
+━━━ stderr · empty

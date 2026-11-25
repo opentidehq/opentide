@@ -1,0 +1,1 @@
+SELECT RGX_EXTRACT("a(b)") AS x1, RGX_EXTRACT("c(d)") AS x2, RGX_EXTRACT("e(f)") AS x3, RGX_EXTRACT("g(h)") AS x4 WHERE vendor:"Microsoft"

@@ -1,0 +1,2 @@
+``` prod:unknown_command valid
+index=main | bogus foo=bar

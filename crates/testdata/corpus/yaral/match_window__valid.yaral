@@ -1,0 +1,14 @@
+// prod:match_window valid
+rule r {
+  meta:
+    author = "a"
+  events:
+    $e.metadata.event_type = "USER_LOGIN"
+    $user = $e.target.user.userid
+    $t.metadata.event_type = "PROCESS_LAUNCH"
+    $t.principal.user.userid = $user
+  match:
+    $user over 5m after $e
+  condition:
+    $e and $t
+}

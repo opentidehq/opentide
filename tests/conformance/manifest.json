@@ -1,0 +1,122 @@
+{
+  "about": "The cross-SDK conformance suite (UC-5.4, #839): every operation on every corpus, run through the Rust SDK, the Python SDK and the Node SDK, must give byte-identical documents. tests/conformance/README.md describes the fields; `cargo xtask conformance` lays the corpora out and runs the runners.",
+  "corpora": [
+    {
+      "name": "tide_corpus",
+      "kind": "tide_corpus",
+      "about": "tests/fixtures/tide_corpus/current in today's layout: one threat, one objective, ten rules on the nine platforms"
+    },
+    {
+      "name": "heavy",
+      "kind": "heavy",
+      "seed": 20261107,
+      "about": "the heavy workspace (cargo xtask corpus generate --seed 20261107): 300 threats, 300 objectives, 500 rules"
+    },
+    {
+      "name": "faults",
+      "kind": "faults",
+      "about": "the combined fault workspace (cargo xtask corpus faults --out): every fault kind not marked isolated, applied once"
+    },
+    {
+      "name": "configuration",
+      "kind": "configuration_faults",
+      "about": "each configuration fault kind of tests/corpora/faults.toml applied alone to the base workspace: one corpus each, configuration/<kind>"
+    },
+    {
+      "name": "compile",
+      "kind": "compile_faults",
+      "about": "each compile fault kind of tests/corpora/faults.toml (compile-*) applied alone to the base workspace: one corpus each, compile/<kind>; validate reports what the platform compilers refuse (UC-2.2, #817)"
+    }
+  ],
+  "stand_ins": [
+    {
+      "name": "sentinel_one",
+      "environment": {
+        "S1_API_TOKEN": "s1-stand-in-token"
+      },
+      "about": "tests/cassettes/sentinel_one/tenant.py: PowerQuery (`slow` polled, `fails` FAILED, `| syntax` refused) and STAR rules"
+    },
+    {
+      "name": "harfanglab",
+      "environment": {
+        "HARFANGLAB_API_TOKEN": "hl-stand-in-token"
+      },
+      "about": "tests/cassettes/harfanglab/tenant.py: telemetry rows (nested, mixed keys, an integer), Sigma rules"
+    }
+  ],
+  "tenants": [
+    { "name": "soc", "platform": "sentinel_one", "setup": { "url": "{sentinel_one}", "api_token": "$S1_API_TOKEN", "account_id": "42" }, "environment": { "S1_API_TOKEN": "s1-stand-in-token" }, "about": "the SentinelOne stand-in" },
+    { "name": "lab", "platform": "harfanglab", "setup": { "url": "{harfanglab}", "api_token": "$HARFANGLAB_API_TOKEN" }, "environment": { "HARFANGLAB_API_TOKEN": "hl-stand-in-token" }, "about": "the HarfangLab stand-in: one tenant, Sigma rules and YARA files" },
+    { "name": "closed", "platform": "sentinel_one", "setup": { "url": "http://127.0.0.1:9", "api_token": "$S1_API_TOKEN", "account_id": "42" }, "environment": { "S1_API_TOKEN": "s1-stand-in-token" }, "about": "a loopback port nothing listens on: tenant_unreachable" },
+    { "name": "unset", "platform": "sentinel_one", "setup": { "url": "{sentinel_one}", "api_token": "$S1_API_TOKEN", "account_id": "42" }, "environment": {}, "about": "a credential the environment does not set: Connection.open fails with credential_unset" }
+  ],
+  "operations": [
+    { "name": "validate", "call": "validate" },
+    { "name": "validate-strict-warn", "call": "validate", "options": { "strict": true, "queries": "warn" } },
+    { "name": "validate-queries-off", "call": "validate", "options": { "queries": "off" } },
+    { "name": "validate-check-schema", "call": "validate", "options": { "check": "schema" } },
+    { "name": "validate-check-configuration", "call": "validate", "options": { "check": "configuration" } },
+    { "name": "validate-check-sharing-config", "call": "validate", "options": { "check": "sharing-config" } },
+    { "name": "validate-type-rule", "call": "validate", "options": { "types": ["rule"] } },
+    { "name": "lint", "call": "lint" },
+    { "name": "lint-metadata-filenames-strict", "call": "lint", "options": { "checks": ["metadata", "filenames"], "strict": true } },
+    { "name": "lint-placeholders", "call": "lint", "options": { "checks": ["placeholders"] } },
+    { "name": "info", "call": "info" },
+    { "name": "catalog", "call": "catalog" },
+    { "name": "rules", "call": "rules" },
+    { "name": "objectives", "call": "objectives" },
+    { "name": "threats", "call": "threats" },
+    { "name": "coverage-T1059", "call": "coverage", "technique": "T1059" },
+    { "name": "coverage-T1003.001", "call": "coverage", "technique": "T1003.001" },
+    { "name": "deploy_plan", "call": "deploy_plan" },
+    { "name": "deploy_plan-preview-release", "call": "deploy_plan", "options": { "strategies": ["PREVIEW", "RELEASE"] } },
+    { "name": "deploy_plan-sentinel-drop-deprecated", "call": "deploy_plan", "options": { "platform": "sentinel", "keep_deprecated": false } },
+    { "name": "from_files-validate", "call": "validate", "open": "files", "corpora": ["tide_corpus", "heavy"] },
+    { "name": "from_files-lint", "call": "lint", "open": "files", "corpora": ["tide_corpus", "heavy"] },
+    { "name": "from_files-info", "call": "info", "open": "files", "corpora": ["tide_corpus", "heavy"] },
+    { "name": "from_files-catalog", "call": "catalog", "open": "files", "corpora": ["tide_corpus", "heavy"] },
+    { "name": "run_json-commands", "call": "run_json", "argv": ["commands"], "repo": false, "corpora": ["tide_corpus"] },
+    { "name": "run_json-explain", "call": "run_json", "argv": ["explain", "invalid_uuid"], "repo": false, "corpora": ["tide_corpus"] },
+    { "name": "run_json-validate", "call": "run_json", "argv": ["validate"] },
+    { "name": "run_json-validate-strict-warn", "call": "run_json", "argv": ["validate", "--strict", "--queries", "warn"] },
+    { "name": "run_json-lint", "call": "run_json", "argv": ["lint"] },
+    { "name": "run_json-info", "call": "run_json", "argv": ["info"] },
+    { "name": "run_json-info-rules", "call": "run_json", "argv": ["info", "rules"] },
+    { "name": "run_json-info-threats", "call": "run_json", "argv": ["info", "threats"] },
+    { "name": "run_json-info-objectives", "call": "run_json", "argv": ["info", "objectives"] },
+    { "name": "run_json-info-coverage", "call": "run_json", "argv": ["info", "coverage"] },
+    { "name": "run_json-info-vocab", "call": "run_json", "argv": ["info", "vocab"] },
+    { "name": "run_json-info-catalog", "call": "run_json", "argv": ["info", "catalog"] },
+    { "name": "run_json-rules-unreviewed", "call": "run_json", "argv": ["rules", "unreviewed"] },
+    { "name": "run_json-deploy-dry-run", "call": "run_json", "argv": ["deploy", "--dry-run", "--all"] },
+    { "name": "tenants-elastic", "call": "tenants", "platform": "elastic" },
+    { "name": "tenants-sentinel_one", "call": "tenants", "platform": "sentinel_one", "corpora": ["tide_corpus"] },
+    { "name": "connectors", "call": "connectors", "corpora": ["tide_corpus"] },
+    { "name": "query-soc", "call": "query", "tenant": "soc", "text": "event.type = 'Process Creation'", "options": { "start": "2026-11-12T09:00:00Z", "end": "2026-11-12T10:00:00Z" }, "corpora": ["tide_corpus"] },
+    { "name": "query-soc-limit", "call": "query", "tenant": "soc", "text": "x", "options": { "start": "2026-11-12T09:00:00Z", "end": "2026-11-12T10:00:00Z", "limit": 1, "language": "s1ql" }, "corpora": ["tide_corpus"] },
+    { "name": "query-soc-slow", "call": "query", "tenant": "soc", "text": "slow", "options": { "start": "2026-11-12T09:00:00Z", "end": "2026-11-12T10:00:00Z", "timeout": 30 }, "corpora": ["tide_corpus"] },
+    { "name": "query-soc-refused", "call": "query", "tenant": "soc", "text": "x | syntax", "options": { "start": "2026-11-12T09:00:00Z", "end": "2026-11-12T10:00:00Z" }, "corpora": ["tide_corpus"] },
+    { "name": "query-soc-fails", "call": "query", "tenant": "soc", "text": "fails", "options": { "start": "2026-11-12T09:00:00Z", "end": "2026-11-12T10:00:00Z" }, "corpora": ["tide_corpus"] },
+    { "name": "validate_query-soc", "call": "validate_query", "tenant": "soc", "text": "event.type = 'Process Creation'", "options": { "language": "s1ql", "end": "2026-11-12T10:00:00Z" }, "corpora": ["tide_corpus"] },
+    { "name": "validate_query-soc-refused", "call": "validate_query", "tenant": "soc", "text": "x | syntax", "options": { "end": "2026-11-12T10:00:00Z" }, "corpora": ["tide_corpus"] },
+    { "name": "deploy-soc-create", "call": "deploy", "tenant": "soc", "rule_id": "11111111-1111-4111-8111-111111111111", "operation": "create", "body": "{\"data\": {\"name\": \"Example\", \"queryType\": \"events\"}}", "corpora": ["tide_corpus"] },
+    { "name": "deploy-soc-update", "call": "deploy", "tenant": "soc", "rule_id": "1900000000000000001", "operation": "update", "body": "{\"data\": {\"name\": \"Example\", \"queryType\": \"events\"}}", "corpora": ["tide_corpus"] },
+    { "name": "deploy-soc-update-missing", "call": "deploy", "tenant": "soc", "rule_id": "1900000000000000099", "operation": "update", "body": "{\"data\": {\"name\": \"Example\"}}", "corpora": ["tide_corpus"] },
+    { "name": "deploy-soc-disable", "call": "deploy", "tenant": "soc", "rule_id": "1900000000000000001", "operation": "disable", "body": "{\"data\": {\"name\": \"Example\", \"queryType\": \"events\"}}", "corpora": ["tide_corpus"] },
+    { "name": "deploy-soc-delete", "call": "deploy", "tenant": "soc", "rule_id": "1900000000000000001", "operation": "delete", "body": "", "corpora": ["tide_corpus"] },
+    { "name": "query-lab", "call": "query", "tenant": "lab", "text": "processes process_name=cmd.exe", "options": { "start": "2026-11-12T09:00:00Z", "end": "2026-11-12T10:00:00Z", "limit": 5 }, "corpora": ["tide_corpus"] },
+    { "name": "query-lab-limit", "call": "query", "tenant": "lab", "text": "processes process_name=cmd.exe", "options": { "start": "2026-11-12T09:00:00Z", "end": "2026-11-12T10:00:00Z", "limit": 1 }, "corpora": ["tide_corpus"] },
+    { "name": "query-lab-refused", "call": "query", "tenant": "lab", "text": "processes process_name=broken.exe", "options": { "start": "2026-11-12T09:00:00Z", "end": "2026-11-12T10:00:00Z" }, "corpora": ["tide_corpus"] },
+    { "name": "query-lab-gateway", "call": "query", "tenant": "lab", "text": "processes process_name=gateway.exe", "options": { "start": "2026-11-12T09:00:00Z", "end": "2026-11-12T10:00:00Z" }, "corpora": ["tide_corpus"] },
+    { "name": "query-lab-no-source", "call": "query", "tenant": "lab", "text": "process_name=cmd.exe", "options": { "start": "2026-11-12T09:00:00Z", "end": "2026-11-12T10:00:00Z" }, "corpora": ["tide_corpus"] },
+    { "name": "validate_query-lab", "call": "validate_query", "tenant": "lab", "text": "processes process_name=cmd.exe", "options": { "end": "2026-11-12T10:00:00Z" }, "corpora": ["tide_corpus"] },
+    { "name": "deploy-lab-create", "call": "deploy", "tenant": "lab", "rule_id": "22222222-2222-4222-8222-222222222222", "operation": "create", "body": "{\"kind\": \"Sigma\", \"rule\": {\"name\": \"Example Sigma\", \"content\": \"title: Example\", \"enabled\": true}}", "corpora": ["tide_corpus"] },
+    { "name": "deploy-lab-yara", "call": "deploy", "tenant": "lab", "rule_id": "44444444-4444-4444-8444-444444444444", "operation": "create", "body": "{\"kind\": \"YARA\", \"rule\": {\"name\": \"Example YARA\", \"content\": \"rule example { condition: true }\"}}", "corpora": ["tide_corpus"] },
+    { "name": "deploy-lab-refused", "call": "deploy", "tenant": "lab", "rule_id": "33333333-3333-4333-8333-333333333333", "operation": "create", "body": "{\"kind\": \"Sigma\", \"rule\": {\"name\": \"Rejected Sigma\", \"content\": \"title: Rejected\"}}", "corpora": ["tide_corpus"] },
+    { "name": "deploy-lab-delete", "call": "deploy", "tenant": "lab", "rule_id": "sigma-1", "operation": "delete", "body": "{\"kind\": \"Sigma\"}", "corpora": ["tide_corpus"] },
+    { "name": "deploy-lab-delete-yara", "call": "deploy", "tenant": "lab", "rule_id": "yara-1", "operation": "delete", "body": "{\"kind\": \"YARA\"}", "corpora": ["tide_corpus"] },
+    { "name": "query-closed", "call": "query", "tenant": "closed", "text": "x", "options": { "start": "2026-11-12T09:00:00Z", "end": "2026-11-12T10:00:00Z" }, "corpora": ["tide_corpus"] },
+    { "name": "query-unset", "call": "query", "tenant": "unset", "text": "x", "options": { "start": "2026-11-12T09:00:00Z", "end": "2026-11-12T10:00:00Z" }, "corpora": ["tide_corpus"] },
+    { "name": "deploy-unset", "call": "deploy", "tenant": "unset", "rule_id": "r", "operation": "create", "body": "{}", "corpora": ["tide_corpus"] }
+  ]
+}

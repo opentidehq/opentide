@@ -7,9 +7,10 @@ It regressed silently through 0.13.0, which shipped with four pages naming
 0.12.1 beside ``pip install 'opentide==0.14.0'``, because the release runbook
 tests cover the release *commands* and nothing covered the version *claims*.
 
-``CHANGELOG.md`` is the authoritative in-repo source: the package version is
-derived from the git tag by hatch-vcs, so at test time the newest released
-changelog heading is the only statement of record that exists in the tree.
+``CHANGELOG.md`` is the authoritative in-repo source for the released
+version: the newest released changelog heading is the statement of record
+(the Cargo workspace's version, which the package takes, is the next one's
+between releases).
 """
 
 from __future__ import annotations
@@ -28,7 +29,9 @@ _RELEASE_HEADING = re.compile(r"^##\s+\[(\d+\.\d+\.\d+)\]\s+[-\u2014]\s+(\d{4}-\
 #: ``The latest release is **0.14.0**`` and its linked ``**[0.14.0](...)**`` form.
 _LATEST_CLAIM = re.compile(r"latest release is \*\*\[?(\d+\.\d+\.\d+)")
 #: Any pinned install, in prose or a fenced block: ``pip install 'opentide==0.14.0'``.
-_PINNED_INSTALL = re.compile(r"opentide==(\d+\.\d+\.\d+)")
+#: A pre-release pin (``opentide==1.0.0rc1``, ``1.0.0-rc.1``, ``1.0.0.dev3``) names a
+#: candidate, which the installation page documents beside the release: it is not one.
+_PINNED_INSTALL = re.compile(r"opentide==(\d+\.\d+\.\d+)(?![0-9A-Za-z]|[.-][0-9A-Za-z])")
 #: ``[0.14.0 on PyPI](https://pypi.org/project/opentide/0.14.0/)``
 _PYPI_LINK = re.compile(r"pypi\.org/project/opentide/(\d+\.\d+\.\d+)")
 
@@ -130,3 +133,98 @@ def test_the_release_log_leads_with_the_current_release() -> None:
     assert day.zfill(2) == date[8:10], (
         f"{page.relative_to(ROOT)} dates {version} to {day} {month}, changelog says {date}"
     )
+
+
+@pytest.mark.parametrize(
+    ("text", "pins"),
+    [
+        ("pip install 'opentide==0.28.1'", ["0.28.1"]),
+        ("opentide==0.28.1.", ["0.28.1"]),
+        ("pip install opentide==1.0.0rc1", []),
+        ("pip install 'opentide==1.0.0-rc.1'", []),
+        ("opentide==1.0.0.dev3 and opentide==1.0.0a2", []),
+        ("opentide==1.0.0b4", []),
+    ],
+)
+def test_a_pre_release_pin_is_not_a_release_pin(text: str, pins: list[str]) -> None:
+    """The installation page documents the candidate's pins beside the release's."""
+    assert _PINNED_INSTALL.findall(text) == pins
+
+
+def test_the_installation_page_documents_the_binaries() -> None:
+    """RC1-4: the crates, the installer and how to verify it, for the documented version.
+
+    While a candidate is current, the page's Release candidates section installs it
+    (PyPI's ``--pre``, its ``-rc.N`` crates and Release); the final release removes that
+    section, and the page installs the release's crates and Release instead.
+    """
+    page = (DOCS / "usage" / "installation.md").read_text(encoding="utf-8")
+    for text in ("opentide-installer.sh", "SHA256SUMS", "gh attestation verify"):
+        assert text in page, text
+    candidate = _candidate()
+    if candidate is None:
+        version, _ = _current_release()
+        assert "--pre" not in page, "the installation page still installs with --pre"
+        assert "#release-candidates" not in page, "the installation page links the candidates"
+        assert "cargo install opentide --features cli" in page
+        assert f"releases/download/v{version}/opentide-installer.sh" in page
+        assert not re.findall(r"releases/(?:download|tag)/v(?!" + re.escape(version) + r"\b)", page)
+        return
+    # The current candidate's pins, whichever candidate that is: each candidate
+    # moves them (release-management skill, "Known locations").
+    assert "pip install --pre opentide" in page
+    assert f"cargo install opentide --version 1.0.0-rc.{candidate} --features cli" in page
+    assert f"releases/download/v1.0.0-rc.{candidate}/opentide-installer.sh" in page
+
+
+#: Pages that document the 1.0 API and the Rust core's behaviour. 0.28.1, which
+#: `pip install opentide` installs, has neither (no `opentide.Workspace`), so while 1.0 is
+#: a candidate each one says how to install the candidate (RC2-5).
+_PAGES_OF_THE_CANDIDATE = (
+    "index.md",
+    "cli/index.md",
+    "mcp/index.md",
+    "mcp/installation.md",
+    "sdk/installation.md",
+)
+
+
+def _candidate() -> str | None:
+    """The current candidate's number in `docs/usage/installation.md`, if it has one."""
+    page = (DOCS / "usage" / "installation.md").read_text(encoding="utf-8")
+    pin = re.search(r"opentide==1\.0\.0rc(\d+)", page)
+    return pin.group(1) if pin else None
+
+
+@pytest.mark.parametrize("name", _PAGES_OF_THE_CANDIDATE)
+def test_a_page_of_the_1_0_api_installs_the_candidate(name: str) -> None:
+    """RC2-5: no page of 1.0 sends a reader to a stable pin that lacks what it documents."""
+    candidate = _candidate()
+    page = (DOCS / name).read_text(encoding="utf-8")
+    if candidate is None:
+        # The final release: the page installs the release and names no candidate:
+        # no `--pre`, no candidate pin, no link to the Release candidates section,
+        # and none of the prose that says `pip install opentide` still gives 0.28.1
+        # (it has no pin, so only these words catch it).
+        assert "--pre" not in page, f"docs/{name} still installs with --pre"
+        assert "rc" not in "".join(re.findall(r"opentide==\S+", page)), f"docs/{name} pins a rc"
+        assert "#release-candidates" not in page, f"docs/{name} still links the candidates"
+        assert "0.28" not in page, f"docs/{name} still names 0.28"
+        return
+    assert "pip install --pre opentide" in page, f"docs/{name} does not install the candidate"
+    assert "usage/installation.md#release-candidates" in page, f"docs/{name} does not link it"
+    pins = re.findall(r"opentide==1\.0\.0rc(\d+)", page)
+    assert set(pins) <= {candidate}, f"docs/{name} pins rc{set(pins)}, not rc{candidate}"
+    assert "opentide==0.28" not in page
+
+
+def test_every_candidate_pin_names_the_current_candidate() -> None:
+    """Each candidate moves every `opentide==1.0.0rcN` pin together (release-management)."""
+    candidate = _candidate()
+    stale = [
+        f"{page.relative_to(ROOT)} pins rc{n}"
+        for page in _pages()
+        for n in re.findall(r"opentide==1\.0\.0rc(\d+)", page.read_text(encoding="utf-8"))
+        if n != candidate and page != DOCS / "usage" / "releases.md"
+    ]
+    assert not stale, f"docs pin a candidate other than rc{candidate}: {stale}"

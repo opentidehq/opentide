@@ -5,13 +5,14 @@ repositories.
 
 ## Vocabulary and pin sync
 
-`sync_vocabularies.py` mirrors canonical vocabulary files from
+`cargo xtask vocab sync` (`xtask/src/vocab/sync.rs`) mirrors canonical vocabulary files from
 `specifications/vocabularies/*.vocab.toml` into
 `src/opentide/data/vocabulary/` and schema pins from
 `specifications/schemas/pins/*.toml` into `src/opentide/data/pins/`, then
 refreshes `data/specifications.lock.json`.
-The wrapper generators under `scripts/vocabulary/` now call this sync step
-automatically after writing canonical vocabularies.
+The ingest (`cargo xtask vocab ingest --apply`,
+[`scripts/vocabulary/README.md`](../vocabulary/README.md)) runs this sync step
+after writing canonical vocabularies.
 
 Vocabularies must match byte for byte. Pins are compared table by table, the
 way opentide loads them: a missing or extra `[schema::M.m]` revision, a
@@ -36,11 +37,14 @@ export OPENTIDE_SPECIFICATIONS_ROOT="/absolute/path/to/specifications"
 
 ```bash
 # Synchronize bundled vocabularies and pins, and rewrite the lockfile
-uv run python scripts/build/sync_vocabularies.py
+cargo xtask vocab sync
 
-# Verification mode: report drift and exit 1
-uv run python scripts/build/sync_vocabularies.py --check
+# Verification mode: report drift and exit 1 (what CI runs)
+cargo xtask vocab sync --check
 ```
+
+It replaced the Python `sync_vocabularies.py`, which computed the same
+lockfile and was removed once nothing ran it (UC-6.3).
 
 If the specifications repository is not available locally, sync mode writes a
 baseline lockfile from the currently bundled vocabularies and pins, and
@@ -48,8 +52,8 @@ baseline lockfile from the currently bundled vocabularies and pins, and
 check cannot tell a synced bundle from a hand edit with a refreshed lockfile.
 
 CI therefore checks out `opentidehq/specifications` at `main` and runs
-`--check` against it whenever bundled vocabularies, pins, the lockfile or this
-script change. A bundle that differs from specifications fails, whatever the
+`cargo xtask vocab sync --check` against it whenever bundled vocabularies, pins,
+the lockfile or `xtask/src/vocab/sync.rs` change. A bundle that differs from specifications fails, whatever the
 lockfile says. Merge the specifications change first, then re-run the opentide
 PR's CI. A change made only in specifications reaches opentide through the
 weekly vocab-upstream workflow, which syncs from specifications `main` and opens
@@ -58,9 +62,43 @@ specifications commit was synced. It is provenance only and `--check` does not
 compare it, so the check still passes after specifications `main` moves on
 without a vocabulary or pin change.
 
+## Sentinel's ATT&CK v18 list
+
+`cargo xtask vocab sentinel-attack` writes `src/opentide/data/sentinel/attack-v18.json`
+from MITRE's STIX bundles of ATT&CK 18.1 and of the release the `att&ck`
+vocabulary was built from (its `source_version`); `--check` exits 1 when the
+file would change, and `--stix-dir DIR` reads an attack-stix-data checkout
+instead of downloading.
+
 ## Diagnostic code reference
 
-`render_diagnostics_docs.py` writes `docs/cli/diagnostics.md` from the
-`opentide explain` pages in `src/opentide/data/diagnostics/`. Edit a page
-there, then run it; `--check` exits 1 when the committed reference is stale.
-`tests/test_cli/test_explain.py` fails on drift too.
+`cargo xtask codegen` writes `docs/cli/diagnostics.md` from the
+`opentide explain` pages (`src/opentide/data/diagnostics/`, and the analysis
+engine's codes), through `opentide_cli::explain::reference_markdown`. Edit a
+page there, then run it; `cargo xtask codegen --check` (CI's lint job) exits 1
+when the committed reference is stale. A `<` in prose that cannot open a tag is
+written `&lt;`, so the page stays MDX that opentide.org can render.
+
+## MDX check of the docs
+
+`check_docs_mdx.py` fails on prose in `docs/` that MDX cannot parse: a `<`
+that cannot open a tag (`<=>`, `a < b`) or a bare `{` or `}`, outside code,
+tags, comments and frontmatter. opentide.org renders `docs/` as MDX, and one
+such page stops its docs sync. `scripts/validate-docs.sh` runs it, and
+`tests/test_docs/test_docs_mdx.py` runs it over `docs/`.
+
+```bash
+python3 scripts/build/check_docs_mdx.py [DOCS_DIR]
+```
+
+## The Rust the packages build with
+
+`scripts/build/install-rust.sh [TARGET ...]` installs `rust-toolchain.toml`'s release with the
+minimal profile (rustc, cargo, rust-std; no rustfmt, clippy or docs) and the targets named, then
+names it in `RUSTUP_TOOLCHAIN` (and, in GitHub Actions, in `GITHUB_ENV` for the later steps).
+`build-packages.yml` runs it before every npm native package; the wheels' PyO3/maturin-action
+installs the same release (in the manylinux container on Linux) and sets it as the directory's
+override. Without it, rustup read `rust-toolchain.toml` in the checkout
+and installed the release with its components in the middle of the build, which failed now and
+then (`detected conflict: 'bin/cargo-clippy'`, `'cargo' is not installed for the toolchain`).
+`tests/test_ci/test_workflows.py` holds the workflows and the script to this.

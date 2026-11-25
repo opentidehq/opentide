@@ -1,0 +1,67 @@
+{
+  "name": "opentide falco",
+  "opentideHighlightSpec": "0.3.2",
+  "patterns": [
+    {
+      "comment": "capture:string",
+      "match": "\"(\\\\.|[^\"\\\\])*\"|'(\\\\.|[^'\\\\])*'",
+      "name": "string.quoted.opentide"
+    },
+    {
+      "comment": "capture:number",
+      "match": "\\b[0-9]+(\\.[0-9]+)?\\b",
+      "name": "constant.numeric.opentide"
+    },
+    {
+      "comment": "tm_extras:field",
+      "match": "(?<![\\w.$@#])[$@#]?[A-Za-z_][\\w.]*(?=\\s*(?i:==|!=|=~|!~|<=|>=|:=|=|<|>|(?:i?contains|i?startswith|endswith|in|pmatch|glob|exists|intersects|bcontains|bstartswith)\\b))",
+      "name": "variable.other.property.opentide"
+    },
+    {
+      "comment": "capture:keyword",
+      "match": "(?i)(?<![A-Za-z0-9_])(?:and|not|or)(?![A-Za-z0-9_])",
+      "name": "keyword.control.opentide"
+    },
+    {
+      "comment": "capture:punctuation.bracket",
+      "match": "\\(",
+      "name": "punctuation.bracket.opentide"
+    },
+    {
+      "comment": "capture:punctuation.bracket",
+      "match": "\\)",
+      "name": "punctuation.bracket.opentide"
+    },
+    {
+      "comment": "capture:punctuation.bracket",
+      "match": "\\[",
+      "name": "punctuation.bracket.opentide"
+    },
+    {
+      "comment": "capture:punctuation.bracket",
+      "match": "\\]",
+      "name": "punctuation.bracket.opentide"
+    },
+    {
+      "comment": "capture:punctuation.delimiter",
+      "match": ",",
+      "name": "punctuation.delimiter.opentide"
+    },
+    {
+      "comment": "tm_extras:word-operator",
+      "match": "(?<![\\w.])(?:i?contains|bcontains|i?startswith|bstartswith|endswith|exists|intersects|pmatch|i?glob|in)(?![\\w.])",
+      "name": "keyword.operator.opentide"
+    },
+    {
+      "comment": "tm_extras:boolean",
+      "match": "(?i)(?<![\\w.$@#])(?:true|false)(?![\\w.])",
+      "name": "constant.language.boolean.opentide"
+    },
+    {
+      "comment": "tm_extras:identifier",
+      "match": "(?<![\\w.$@#])[A-Za-z_]\\w*(?![\\w(])",
+      "name": "variable.other.opentide"
+    }
+  ],
+  "scopeName": "source.falco"
+}

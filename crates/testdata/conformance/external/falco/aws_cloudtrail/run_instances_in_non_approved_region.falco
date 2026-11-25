@@ -1,0 +1,1 @@
+ct.name="RunInstances" and not ct.error exists and not ct.region in (approved_regions)

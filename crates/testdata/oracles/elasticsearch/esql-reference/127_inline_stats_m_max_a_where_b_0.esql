@@ -1,0 +1,1 @@
+FROM logs | INLINE STATS m = MAX(a) WHERE b > 0

@@ -1,0 +1,2 @@
+// prod:range_operator valid
+range Day from ago(7d) to now() step 1d

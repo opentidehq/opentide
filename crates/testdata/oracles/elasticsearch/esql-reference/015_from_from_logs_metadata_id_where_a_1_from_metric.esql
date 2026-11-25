@@ -1,0 +1,1 @@
+FROM (FROM logs METADATA _id | WHERE a == 1), (FROM metrics) METADATA _index

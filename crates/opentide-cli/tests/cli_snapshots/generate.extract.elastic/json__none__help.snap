@@ -1,0 +1,30 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: generate.extract.elastic/json/none/help
+---
+args: opentide --json generate extract elastic --help
+exit: 0
+
+━━━ stdout
+Import Elastic Security detection rules (needs tenant credentials).
+
+Usage: opentide generate extract elastic [OPTIONS]
+
+Options:
+      --space <SPACE>
+          Kibana space ID
+          
+          [default: default]
+
+      --include-prebuilt, --custom-only
+          Include prebuilt rules converted to custom rules with derived UUIDs
+          
+          [default: custom-only]
+
+      --help
+          Print help
+
+Examples:
+  $ opentide generate extract elastic --space default
+
+━━━ stderr · empty

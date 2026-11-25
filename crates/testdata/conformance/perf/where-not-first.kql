@@ -1,0 +1,3 @@
+SecurityEvent
+| extend Computer = tolower(Computer)
+| where EventID == 4688

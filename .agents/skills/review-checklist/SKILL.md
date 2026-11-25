@@ -1,6 +1,6 @@
 ---
 name: review-checklist
-description: opentide's correctness checklist for writing and reviewing code — the defect classes that have actually shipped here (HTTP timeouts and TLS, swallowed errors, exit codes and --json purity, file encodings and line endings, overwriting user files, YAML/KQL/Markdown built from strings, per-tenant settings, CI diff bases, stale caches) plus the definition of done for a change. Use before committing any fix or feature, when reviewing a diff or PR, and when touching platforms/, cli/, sharing/, extraction/ or deployment/.
+description: opentide's correctness checklist for writing and reviewing code — the defect classes that have actually shipped here (HTTP timeouts and TLS, swallowed errors, exit codes and --json purity, file encodings and line endings, overwriting user files, YAML/KQL/Markdown built from strings, per-tenant settings, CI diff bases, stale caches; in Rust, panics on user input, unsafe, suppressions and layering; snapshot rules (what a snapshot may hold, reviewed diffs, no loosened net)) plus the definition of done for a change. Use before committing any fix or feature, when reviewing a diff or PR, and when touching the connectors (crates/opentide-connectors), the command line (crates/opentide-cli), the Python package (src/opentide) or anything else in the Rust workspace.
 ---
 
 # Review checklist — opentide
@@ -9,25 +9,29 @@ Each item below is a bug class that reached `development` at least once. Check e
 against the sections it touches. A finding is real only if you can name the input that
 triggers it; drop anything you cannot tie to a trigger.
 
-## Network calls (platforms/, sharing/, extraction/, vulnerability_lookup)
+## Network calls (crates/opentide-connectors, platform plugins)
 
-- [ ] **Every request has a timeout.** `requests` and `urllib` wait forever by default, and
-      a silent tenant hangs a CI job until the runner kills it. Platform clients build their
-      session from `opentide.platforms.transport.TenantSession`; module-level
-      `requests.post(...)` token calls and `urlopen` need an explicit `timeout=`.
-- [ ] **TLS follows the tenant's `ssl` on every call**, token requests included. Never rely on
-      `session.verify` alone with a plain `requests.Session`: `REQUESTS_CA_BUNDLE` /
-      `CURL_CA_BUNDLE` replace it (psf/requests#3829). Use `TenantSession(verify=...)` and
-      `tenant_tls_verify(...)`.
+- [ ] **Every request has a timeout.** reqwest, `requests` and `urllib` wait forever by default,
+      and a silent tenant hangs a CI job until the runner kills it. Everything opentide sends goes
+      through the tenant's `opentide_connectors::HttpClient`, whose `HttpSettings` set the connect
+      and read timeout (`http::DEFAULT_TIMEOUT`, 120 s, when a platform names none); a request
+      that may wait longer sets its own (`RequestBuilder::timeout`). Never build a second client
+      beside it. A platform plugin's own requests pass `timeout=` (the `Tenant.timeout` it gets).
+- [ ] **TLS follows the tenant's `ssl` on every call**, token requests included: sign-ins go
+      through the same tenant's `HttpClient`, whose `TlsSettings` come from that tenant's `ssl`
+      (`tenant.rs`, `tls.rs`). With `ssl = false`, an exported `SSL_CERT_FILE`,
+      `REQUESTS_CA_BUNDLE` or `CURL_CA_BUNDLE` never turns verification back on
+      (psf/requests#3829). A plugin passes `Tenant.verify_tls` to its own client.
 - [ ] **A non-2xx answer is a failure.** Check the status before parsing; a 3xx the client
-      cannot follow (e.g. a gateway's 307) is not success. Don't call `.json()` on an error
-      body without guarding for non-JSON.
+      cannot follow (e.g. a gateway's 307) is not success. Don't parse an error body as the
+      API's JSON without guarding for non-JSON (`answer::Answer::not_json_detail`,
+      `describe_answer`).
 - [ ] **Read a response stream once.** `body.read()` twice returns `b""` the second time.
 - [ ] **Pagination is followed** (`nextLink`, `@odata.nextLink`, `page`), or the limit is
       stated in the docs.
-- [ ] **Right URL, right method.** Retries/fallbacks post to the same endpoint as the first
-      attempt; a custom urllib handler passes `method=` (a body-less DELETE otherwise
-      becomes a GET).
+- [ ] **Right URL, right method.** Retries are `HttpClient`'s (`retry.rs`'s `RetryPolicy`,
+      which re-sends the same request and never re-sends a non-idempotent one after an answer);
+      a fallback posts to the same endpoint, with the same method, as the first attempt.
 
 ## Errors and exit status
 
@@ -39,9 +43,9 @@ triggers it; drop anything you cannot tie to a trigger.
       `TypeError`); chain with `raise ... from exc`.
 - [ ] **`--json` stdout carries only the JSON document.** Logs go to stderr (structlog/Rich);
       no `print()` (`T20` enforces it).
-- [ ] **Options are never silently dropped.** A Typer group callback that returns early when
-      a subcommand is named discards group-level options; refuse or hand them down
-      (see `_hand_down` in `cli/setup_app.py`).
+- [ ] **Options are never silently dropped.** A group that returns early when a subcommand
+      is named discards group-level options; refuse or hand them down (`setup`'s options
+      reach its subcommands in `crates/opentide-cli`).
 - [ ] **Environment flags are strings.** `os.environ.get("X") == True` is never true; parse
       leniently (`1/true/yes/on`) and never let a foreign convention (`DEBUG=*`) crash startup.
 
@@ -58,7 +62,8 @@ triggers it; drop anything you cannot tie to a trigger.
 - [ ] **Names derived from titles collide**: two rules slug to the same filename, or differ
       only by case on macOS/Windows. Detect the collision (suffix with the UUID) and use
       `Path.samefile` for case-only renames.
-- [ ] **State writes are atomic** (temp file + `os.replace`, see `states/deployment.py`).
+- [ ] **State writes are atomic** (a temporary file beside it, then a rename: `write_durable` in
+      `crates/opentide-cli/src/commands/deploy_state.rs`).
 - [ ] **Paths from data stay inside the workspace** (no `..`, no absolute paths from YAML).
 
 ## Serialising data
@@ -101,11 +106,74 @@ triggers it; drop anything you cannot tie to a trigger.
 - [ ] **Caches have an invalidation story.** The MCP server lives for hours: tools that answer
       "is this valid now?" must not serve the index from start-up.
 
+## Rust (crates/, bindings/python/, xtask/)
+
+The workspace's lints catch most of these at compile time; review what they cannot see. The loop
+and the lint policy: [`rust`](../rust/SKILL.md), [`crates/AGENTS.md`](../../../crates/AGENTS.md).
+
+- [ ] **No panic on user input.** `unwrap`, `expect`, indexing (`v[i]`, `&s[a..b]`), `as` casts
+      that narrow, and arithmetic that overflows on a file, an argument, an environment variable or
+      a network answer. Return a diagnostic or a typed error. An `#[expect(clippy::expect_used)]`
+      is right only where the value cannot fail (a catalog compiled in, a regex literal), and its
+      `reason` says why.
+- [ ] **Byte offsets land on char boundaries.** Slicing a `&str` at a byte offset taken from an
+      LSP position, a column or a search panics inside a multi-byte character. Convert through
+      `opentide_core` ([`rust-engine`](../rust-engine/SKILL.md)), and test with `é`, a CJK and a
+      non-BMP character.
+- [ ] **No `unsafe`**: the workspace forbids it and no crate holds any. A change that adds it
+      (or a C dependency to the engine) fails review even if the crate's lints were changed to
+      accept it.
+- [ ] **Every suppression names its reason**: `#[expect(lint, reason = "...")]` on the narrowest
+      item, rather than `#[allow]`, and never a crate-wide allow to quiet one site. Growing the
+      workspace allow-list in `Cargo.toml` is a decision of its own, never part of a fix.
+- [ ] **Dependencies point down the layer table.** `cargo xtask check-layers` passes. A new crate
+      is placed in `xtask/layers.toml` in the same change, with its reason. Moving a crate between
+      layers to get green is a design change, not a fix.
+- [ ] **Engines stay I/O-free.** No `std::fs`, environment or network in the engine crates'
+      `src/`; the host passes text in (`scripts/engine/check-io-free.sh`).
+- [ ] **`Cargo.lock` changes only with a dependency change.** CI builds with `--locked`.
+- [ ] **No test was weakened to get green**: no new `#[ignore]`, no deleted test or loosened
+      assertion, no `pytest.skip` / `xfail`, no retry.
+- [ ] **Errors keep their meaning.** A public error is a typed enum mapped to a stable code, or in
+      an engine crate an `opentide_core::Diagnostic` with its code; `anyhow` stays in binaries. A
+      diagnostic code is a constant in `opentide_core::codes`, never a second string at the call
+      site.
+
+## Snapshots (the command line's behaviour)
+
+Behaviour is held by unit and end-to-end tests. The Rust-owned snapshots hold the `--json`
+contract, the files a command writes, exit codes and a small rendering set; the rules:
+[`golden`](../golden/SKILL.md).
+
+- [ ] **A behaviour change is deliberate and in `CHANGELOG.md`**, with a test at the level it is
+      used. A change to the `--json` document, a written file, an exit code or the rendering set
+      also has its snapshot diff (`crates/opentide-cli/tests/cli_snapshots/`) in the same pull
+      request, each changed line following from the change.
+- [ ] **No wording is pinned by a snapshot.** A new case runs in json mode; a text mode is added
+      only for a behaviour no other test holds, with the reason. A message, help or explain-page
+      edit that rewrites a lint, validate or generated-corpus snapshot is a defect of the case's
+      view.
+- [ ] **Snapshots are reviewed, never hand-edited**: `cargo insta review`, no `.snap.new`
+      committed. A changed snapshot has a cause in the same pull request: a code change, a new or
+      changed case in `cases.toml`, a fixture change, or a normalisation rule with its unit test.
+- [ ] **The net is not loosened.** A normalisation rule hides only a value that differs between
+      two runs of the same case or two hosts, and is code in
+      `crates/opentide-cli/tests/common/normalise.rs` with a unit test; no widened rule; no
+      skipped, deleted or `#[ignore]`d case.
+- [ ] **No plan §3 invariant moves** in a port: the CLI contract, the command tree, diagnostic
+      codes, cross-repository contracts, MCP, workspace formats, SDK import paths, platforms, the
+      security posture. A change to one is a separate decision with its own changelog entry.
+- [ ] **Secrets never reach a recording**: goldens, cassettes, compare reports and fixtures.
+
 ## Definition of done
 
 1. A regression test that **fails without the fix** (prove it: stash the fix, run the test)
    and passes with it, next to the existing tests for that module.
 2. `scripts/ci-local.sh` green (`--full` before pushing anything that touches `src/` or tests).
+   A Rust change also passes `cargo fmt --all --check`,
+   `cargo clippy --workspace --all-targets -- -D warnings`, `cargo xtask check-layers`,
+   `cargo nextest run --workspace` and `cargo test --workspace --doc` with the pinned toolchain
+   ([`rust`](../rust/SKILL.md)).
 3. No new `# noqa` / `# ty: ignore` without a reason on the same line; new and touched
    functions fully annotated.
 4. User-visible behaviour change → an entry under `## [Unreleased]` in `CHANGELOG.md`, in

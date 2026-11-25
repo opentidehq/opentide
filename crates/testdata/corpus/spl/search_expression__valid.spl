@@ -1,0 +1,2 @@
+``` prod:search_expression valid
+index=main (EventCode=4624 OR EventCode=4625) NOT user=SYSTEM app IN ("a" "b") earliest=-1h@h latest=now

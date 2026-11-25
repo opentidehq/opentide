@@ -1,0 +1,31 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: info/json/vscode/rules
+---
+args: opentide --json info rules
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "command": "info",
+  "duration_ms": 0,
+  "exit_code": 0,
+  "failure": null,
+  "message": "Completed successfully",
+  "next_actions": [],
+  "ok": true,
+  "rules": [
+    "ff8bf67e-64dc-460d-b5df-48db643f3560",
+    "6d1c3a52-8f0e-4b7a-9c21-5e4f3a2b1c0d"
+  ],
+  "schema_version": 1,
+  "status": "completed",
+  "summary": {
+    "load_errors": 0,
+    "objectives": 1,
+    "rules": 2,
+    "threats": 0
+  }
+}
+
+━━━ stderr · empty

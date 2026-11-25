@@ -1,0 +1,2 @@
+// prod:time_unit valid
+sequence with maxspan=500ms [a where true] [b where true]

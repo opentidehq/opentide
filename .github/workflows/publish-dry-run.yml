@@ -1,0 +1,140 @@
+# Rehearses the registry placeholders, without publishing anything: the
+# opentide crate placeholder (crates.io) and the @opentide/opentide and
+# opentide placeholders (npm). The wheels and the sdist PyPI receives are
+# release-build.yml's, which the same ci.yml run builds, smoke-tests and holds
+# to the PyPI dist's shape (scripts/build/smoke_release.sh sdist).
+# publish.yml's own `dry_run` input rehearses the whole release train (every
+# platform, every package, the smoke tests).
+#
+# Nothing here can publish. The token is read-only (contents: read), no job may
+# mint an OIDC token (no id-token: write), which trusted publishing on the
+# registries needs, no secret is read, and every publish command runs
+# with --dry-run. tests/test_ci/test_workflows.py keeps it so.
+#
+# What it leaves out on purpose: the release guard's checks on the state of
+# the repository (`release.py check`, the version not tagged yet, and
+# `check_engine_pin.py --release`). Between releases the newest version in
+# CHANGELOG.md is already tagged, and development may pin the engine to a git
+# revision, so those checks would fail most pull requests without saying
+# anything about the packages. publish.yml still runs them.
+#
+# docs/internal/publishing.md lists every name, owner and trusted publisher,
+# and the steps a maintainer takes to publish the placeholders.
+name: Publish dry run
+
+on:
+  # Part of the nightly and of a release pull request's checks: ci.yml calls
+  # this workflow (.github/AGENTS.md); Run workflow runs it alone.
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A dry run publishes nothing, so a newer push may cancel a stale run.
+concurrency:
+  # A pull request's new push cancels its stale run; every other run (a push
+  # to development, integration/unified-core or main, the nightly, Run
+  # workflow) has a group of its own, its run id, so none cancels another and
+  # each push to a base branch gets a complete run (tests/test_ci/test_workflows.py).
+  group: publish-dry-run-${{ github.event_name }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # Once UC-5.1 puts the real facade crate in the Cargo workspace, this becomes
+  # `cargo publish --dry-run -p opentide` and the placeholder goes.
+  crate:
+    name: crates.io (opentide)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      MANIFEST: publishing/placeholders/crates/opentide/Cargo.toml
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Rust
+        run: |
+          rustup toolchain install --profile minimal --no-self-update
+
+      # docs.rs renders the crate documentation from the published package.
+      - name: Format, lints and documentation
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: |
+          set -euo pipefail
+          cargo fmt --manifest-path "${MANIFEST}" -- --check
+          cargo clippy --manifest-path "${MANIFEST}" --locked --all-targets -- -D warnings
+          cargo doc --manifest-path "${MANIFEST}" --locked --no-deps
+
+      # Packages the crate, builds the package and stops before the upload. A
+      # version crates.io already has is a warning in a dry run, not an error.
+      - name: cargo publish --dry-run
+        run: |
+          set -euo pipefail
+          cargo package --manifest-path "${MANIFEST}" --locked --list
+          cargo publish --manifest-path "${MANIFEST}" --locked --dry-run
+
+  npm:
+    name: npm (@opentide/opentide, opentide)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Trusted publishing needs Node 22.14.0 or later and npm 11.5.1 or later.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          package-manager-cache: false
+
+      - name: npm 11.5.1 or later
+        run: |
+          set -euo pipefail
+          npm install --global npm@11.21.1
+          version="$(npm --version)"
+          echo "npm ${version}"
+          # JavaScript in single quotes: the shell expands nothing in it.
+          # shellcheck disable=SC2016
+          node -e '
+            const [major, minor, patch] = process.argv[1].split(".").map(Number);
+            const ok = major > 11 || (major === 11 && (minor > 5 || (minor === 5 && patch >= 1)));
+            if (!ok) {
+              console.error(`::error::npm ${process.argv[1]} is older than 11.5.1, which trusted publishing needs`);
+              process.exit(1);
+            }
+          ' "${version}"
+
+      - name: npm publish --dry-run
+        run: |
+          set -euo pipefail
+          for dir in publishing/placeholders/npm/opentide-scoped publishing/placeholders/npm/opentide; do
+            name="$(node -p "require('./${dir}/package.json').name")"
+            version="$(node -p "require('./${dir}/package.json').version")"
+            echo "::group::${name}@${version}"
+            # What npm would upload: the manifest, the README and the licence.
+            (cd "${dir}" && npm pack --dry-run --json) > "${RUNNER_TEMP}/pack.json"
+            # JavaScript in single quotes: the shell expands nothing in it.
+            # shellcheck disable=SC2016
+            node -e '
+              const files = require(process.argv[1])[0].files.map((file) => file.path).sort();
+              const expected = ["LICENSE", "README.md", "package.json"];
+              if (JSON.stringify(files) !== JSON.stringify(expected)) {
+                console.error(`::error::packs ${files.join(", ")}; expected ${expected.join(", ")}`);
+                process.exit(1);
+              }
+              console.log(`packs ${files.join(", ")}`);
+            ' "${RUNNER_TEMP}/pack.json"
+            # npm refuses a version it already has, in a dry run too: once a
+            # maintainer has published the placeholder, the name is reserved
+            # and the pack above is all there is left to check.
+            if [[ "$(npm view "${name}@${version}" version 2>/dev/null || true)" == "${version}" ]]; then
+              echo "::notice title=${name}@${version} is on npm::The name is reserved. npm publishes a version once, so only the pack is checked."
+            else
+              (cd "${dir}" && npm publish --dry-run)
+            fi
+            echo "::endgroup::"
+          done

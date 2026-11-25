@@ -1,0 +1,1134 @@
+//! I/O-free analysis orchestrator. Filesystem lives behind [`WorkspaceHost`].
+//!
+//! The engine's entry point inside opentide: the language server, the browser build, and
+//! bindings such as the `opentide` Python package depend on this crate alone. The
+//! types its functions take and return are re-exported here, so a host never needs
+//! the per-language crates behind it.
+//!
+//! Internal to opentide, with no stability promise: depend on the
+//! [`opentide`](https://docs.rs/opentide) crate, its Rust SDK, instead.
+
+#![expect(
+    missing_docs,
+    reason = "imported from language-server with public items undocumented: crates/AGENTS.md, Lints"
+)]
+pub use opentide_core::datasets::{
+    DatasetKind, Declaration, DeclaredColumn, DeclaredDatasets, DeclaredSource,
+};
+pub use visibility::{DatasetEdit, VISIBILITY_CONFIGURATION, declare_dataset};
+
+mod visibility;
+
+mod position;
+pub use position::LineStarts;
+
+pub mod config;
+#[cfg(feature = "queries")]
+pub mod queries;
+mod yara;
+pub use config::{
+    CONFIGURATIONS_DIRECTORY, ConfigIssue, ConfigurationSchemas, configuration_completions,
+    configuration_hover, configuration_path, is_configuration_path, place_configuration_issues,
+};
+pub use opentide_core::{
+    CompletionItem, Diagnostic, LanguageId, Position, Range, Severity, SignatureHelp, codes,
+};
+pub use opentide_highlight::{HighlightResult, HighlightToken, SemanticTokens};
+pub use opentide_tide::{DocumentSymbol, ElasticTenant, IndexedObject};
+
+use opentide_highlight::{HighlightSpec, encode_lsp_semantic_tokens};
+use opentide_kql::Profile;
+use opentide_tide::TideAnalyzeResult;
+
+// The README's example runs as a doctest, so the crates.io page cannot drift.
+#[doc = include_str!("../README.md")]
+#[cfg(doctest)]
+pub struct ReadmeDoctests;
+
+mod ecs;
+
+/// This engine's version: the one every `opentide-*` build reports
+/// ([`opentide_core::VERSION`]): the crate version, or the release
+/// candidate's when the build sets `OPENTIDE_BUILD_VERSION`.
+pub const VERSION: &str = opentide_core::VERSION;
+
+/// Host-supplied workspace snapshot. The analysis crate never calls `std::fs`.
+pub trait WorkspaceHost {
+    fn document(&self, uri: &str) -> Option<String>;
+    fn documents(&self) -> Vec<(String, String)>;
+
+    /// The workspace's objects, already indexed ([`index_object`] per file),
+    /// for a host that keeps an index between requests. With `None` (the
+    /// default), every Tide analysis, hover and completion re-indexes
+    /// [`documents`](Self::documents), which parses every object file. A host
+    /// that returns an index need not list object files in `documents`, but
+    /// [`document`](Self::document) still finds them by path.
+    fn indexed_objects(&self) -> Option<std::sync::Arc<[IndexedObject]>> {
+        None
+    }
+}
+
+pub use opentide_tide::index_object;
+
+#[derive(Debug, Clone, Default)]
+pub struct MemoryWorkspace {
+    pub files: Vec<(String, String)>,
+}
+
+impl WorkspaceHost for MemoryWorkspace {
+    fn document(&self, uri: &str) -> Option<String> {
+        self.files
+            .iter()
+            .find(|(p, _)| p == uri)
+            .map(|(_, s)| s.clone())
+    }
+
+    fn documents(&self) -> Vec<(String, String)> {
+        self.files.clone()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct AnalyzeRequest {
+    pub uri: String,
+    pub language: LanguageId,
+    pub text: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct AnalyzeResponse {
+    pub diagnostics: Vec<Diagnostic>,
+    pub tokens: Vec<HighlightToken>,
+    pub symbols: Vec<DocumentSymbol>,
+}
+
+pub fn index_workspace(host: &dyn WorkspaceHost) -> Vec<IndexedObject> {
+    workspace_index(host).to_vec()
+}
+
+/// The host's index when it keeps one, else one built from its documents:
+/// [`index_workspace`] without the copy, for a host that serves many
+/// requests from one index.
+pub fn workspace_index(host: &dyn WorkspaceHost) -> std::sync::Arc<[IndexedObject]> {
+    if let Some(index) = host.indexed_objects() {
+        return index;
+    }
+    host.documents()
+        .iter()
+        .filter_map(|(path, src)| opentide_tide::index_object(path, src))
+        .collect()
+}
+
+/// Workspace-relative path of the Elastic platform configuration (elastic-1.0
+/// Tenant setup). Hosts include it in [`WorkspaceHost::documents`] when it
+/// exists.
+pub const ELASTIC_CONFIGURATION: &str = ".opentide/configurations/platforms/elastic.toml";
+
+/// Elastic tenants declared in the workspace, if the host supplies the
+/// configuration file.
+pub fn elastic_tenants(host: &dyn WorkspaceHost) -> Vec<ElasticTenant> {
+    host.documents()
+        .iter()
+        .find(|(path, _)| path.replace('\\', "/").ends_with(ELASTIC_CONFIGURATION))
+        .map(|(_, text)| opentide_tide::elastic_tenants(text))
+        .unwrap_or_default()
+}
+
+/// The engine's analysis of one document: the queries a Tide object carries,
+/// its highlighting and its symbols. It reads no other object of the
+/// workspace, so a host checking many files of one workspace calls it file
+/// by file: the object's own checks are `validate`'s (UC-2.6, #821) and its
+/// platform blocks' are [`analyze_blocks`], which `lint` reads.
+#[expect(
+    clippy::too_many_lines,
+    reason = "one arm per language: kept whole; split when next touched"
+)]
+pub fn analyze(host: &dyn WorkspaceHost, request: AnalyzeRequest) -> AnalyzeResponse {
+    match request.language {
+        LanguageId::Kql => {
+            let r = opentide_kql::analyze(&request.text, Profile::Sentinel);
+            AnalyzeResponse {
+                diagnostics: r.diagnostics,
+                tokens: r.tokens,
+                symbols: Vec::new(),
+            }
+        }
+        LanguageId::Spl => {
+            let r = opentide_spl::analyze(&request.text);
+            AnalyzeResponse {
+                diagnostics: r.diagnostics,
+                tokens: r.tokens,
+                symbols: Vec::new(),
+            }
+        }
+        LanguageId::Esql => {
+            let r = opentide_esql::analyze(&request.text);
+            AnalyzeResponse {
+                diagnostics: r.diagnostics,
+                tokens: r.tokens,
+                symbols: Vec::new(),
+            }
+        }
+        LanguageId::Eql => {
+            let r = opentide_eql::analyze(&request.text);
+            AnalyzeResponse {
+                diagnostics: r.diagnostics,
+                tokens: r.tokens,
+                symbols: Vec::new(),
+            }
+        }
+        LanguageId::Kuery => {
+            let r = opentide_kuery::analyze(&request.text, opentide_lucene::parses);
+            AnalyzeResponse {
+                diagnostics: r.diagnostics,
+                tokens: r.tokens,
+                symbols: Vec::new(),
+            }
+        }
+        LanguageId::Lucene => {
+            let r = opentide_lucene::analyze(&request.text);
+            AnalyzeResponse {
+                diagnostics: r.diagnostics,
+                tokens: r.tokens,
+                symbols: Vec::new(),
+            }
+        }
+        // A configuration file's findings are the host's: it checks the
+        // buffer with opentide-schema's models and places them
+        // ([`place_configuration_issues`]).
+        LanguageId::Config => AnalyzeResponse {
+            diagnostics: Vec::new(),
+            tokens: Vec::new(),
+            symbols: Vec::new(),
+        },
+        LanguageId::Falco => {
+            let r = opentide_falco::analyze(&request.text);
+            AnalyzeResponse {
+                diagnostics: r.diagnostics,
+                tokens: r.tokens,
+                symbols: Vec::new(),
+            }
+        }
+        LanguageId::Cql => {
+            let r = opentide_cql::analyze(&request.text);
+            AnalyzeResponse {
+                diagnostics: r.diagnostics,
+                tokens: r.tokens,
+                symbols: Vec::new(),
+            }
+        }
+        LanguageId::Yara => {
+            // One parse for the diagnostics and the outline (ADR 0014).
+            let (r, symbols) = opentide_yara::analyze_document(&request.text);
+            AnalyzeResponse {
+                diagnostics: r.diagnostics,
+                tokens: r.tokens,
+                symbols: yara::outline(&request.text, symbols),
+            }
+        }
+        // A `.exabeam` file is a search (exabeam-1.0, "Defaults").
+        LanguageId::Exabeam => {
+            let r = opentide_exabeam::analyze(&request.text);
+            AnalyzeResponse {
+                diagnostics: r.diagnostics,
+                tokens: r.tokens,
+                symbols: Vec::new(),
+            }
+        }
+        LanguageId::Yaral => {
+            let r = opentide_yaral::analyze(&request.text);
+            AnalyzeResponse {
+                diagnostics: r.diagnostics,
+                tokens: r.tokens,
+                symbols: Vec::new(),
+            }
+        }
+        LanguageId::TideYaml => {
+            let r: TideAnalyzeResult = opentide_tide::analyze(opentide_tide::AnalyzeInput {
+                path: &request.uri,
+                source: &request.text,
+                elastic_tenants: &elastic_tenants(host),
+            });
+            AnalyzeResponse {
+                diagnostics: r.diagnostics,
+                tokens: r.tokens,
+                symbols: r.symbols,
+            }
+        }
+    }
+}
+
+/// One query a Tide object carries (`configurations.<platform>.query`, a hunt's
+/// `query`), analyzed in its own language.
+#[derive(Debug, Clone)]
+pub struct QueryReport {
+    pub language: LanguageId,
+    /// The platform the query runs on, as a `configurations` key
+    /// (`sentinel`, `splunk`, `elastic`): the block's key for a rule query,
+    /// the entry's `system` for a hunt
+    /// (`response.procedure.searches.<n>.query`), whose path does not name it.
+    pub platform: String,
+    /// YAML path of the query, list items by index
+    /// (`["configurations", "sentinel", "query"]`,
+    /// `["response", "procedure", "searches", "0", "query"]`).
+    pub field_path: Vec<String>,
+    /// The query text's range in the object file.
+    pub range: Range,
+    /// Ranges are in the object file, like [`AnalyzeResponse::diagnostics`].
+    pub diagnostics: Vec<Diagnostic>,
+    /// Whether the query is still the stand-in `opentide new` wrote (`...`
+    /// under `# opentide:placeholder`): it has no diagnostics, and
+    /// `opentide validate` does not count it as checked.
+    pub placeholder: bool,
+}
+
+/// Every query injected into the Tide object `text`, each analyzed in its
+/// language with the platform's profile (Sentinel or Defender KQL, Elastic or
+/// Carbon Black Lucene, the ES|QL stack of the block's Elastic tenants). A
+/// query with no finding is reported too, so a host can count what it
+/// checked. Only the queries are checked: for the object's own fields, use
+/// [`analyze`] with [`LanguageId::TideYaml`]. CrowdStrike queries are CQL,
+/// checked as correlation rules; Exabeam sequence queries are checked under
+/// the language's `rule` profile and `system: exabeam` hunts under `search`;
+/// HarfangLab queries are not injected, so they never appear.
+pub fn analyze_queries(host: &dyn WorkspaceHost, text: &str) -> Vec<QueryReport> {
+    // Ranges are those of the text after a byte-order mark, as an editor shows them.
+    let text = opentide_core::strip_bom(text);
+    let lines = opentide_core::LineIndex::new(text);
+    opentide_tide::analyze_queries(text, &elastic_tenants(host))
+        .into_iter()
+        .map(|query| QueryReport {
+            placeholder: opentide_tide::is_placeholder_query(text, &query.query),
+            language: query.query.language,
+            platform: query.query.platform,
+            field_path: query.query.field_path,
+            range: lines.range(query.query.host_span),
+            diagnostics: query.diagnostics,
+        })
+        .collect()
+}
+
+/// What the Tide object `text`'s platform blocks say, apart from the queries
+/// they carry: the Elastic block's advisories and declared datasets, and the
+/// Sysdig block's Falco and constraint checks
+/// ([`opentide_tide::block_diagnostics`]).
+///
+/// `opentide lint` reports these; `validate` reports the constraints as the
+/// object's schema check, so [`analyze`] leaves them out and the language
+/// server, which publishes `validate`'s and `lint`'s findings, does not
+/// report a block fault twice (UC-2.6, #821).
+pub fn analyze_blocks(host: &dyn WorkspaceHost, text: &str) -> Vec<Diagnostic> {
+    opentide_tide::block_diagnostics(text, &workspace_index(host))
+}
+
+/// [`analyze_blocks`] on `document`, the host's parse of `text` after its
+/// byte-order mark ([`opentide_core::node::load`]), which it reads instead
+/// of parsing the text again (#1233).
+pub fn analyze_blocks_parsed(
+    host: &dyn WorkspaceHost,
+    text: &str,
+    document: &opentide_core::node::Document,
+) -> Vec<Diagnostic> {
+    opentide_tide::block_diagnostics_parsed(text, document, &workspace_index(host))
+}
+
+/// [`analyze`] of the Tide object `text` ([`LanguageId::TideYaml`]) at
+/// `uri`, on `document`, the host's parse of `text` after its byte-order
+/// mark, which it reads instead of parsing the text again (#1233).
+pub fn analyze_tide_parsed(
+    host: &dyn WorkspaceHost,
+    uri: &str,
+    text: &str,
+    document: &opentide_core::node::Document,
+) -> AnalyzeResponse {
+    let r = opentide_tide::analyze_parsed(
+        opentide_tide::AnalyzeInput {
+            path: uri,
+            source: text,
+            elastic_tenants: &elastic_tenants(host),
+        },
+        document,
+    );
+    AnalyzeResponse {
+        diagnostics: r.diagnostics,
+        tokens: r.tokens,
+        symbols: r.symbols,
+    }
+}
+
+/// A query on its own, outside an object file.
+#[derive(Debug, Clone)]
+pub struct QueryRequest {
+    pub language: LanguageId,
+    /// The detection platform the query is for, as a `configurations` key
+    /// (`microsoft_defender` picks the Defender KQL schema,
+    /// `carbon_black_cloud` the Carbon Black Lucene dialect, `graylog` the
+    /// Graylog one, and `exabeam` the Exabeam `rule` profile of a
+    /// correlation-rule sequence). `None` for the language's default.
+    pub platform: Option<String>,
+    /// Elastic stack the query must run on (`"9.5"`, `"serverless"`), for
+    /// ES|QL. `None`, or a value that does not parse, checks every supported
+    /// stack.
+    pub stack: Option<String>,
+    pub text: String,
+}
+
+/// Diagnostics for one query, in the query's own coordinates.
+pub fn analyze_query(request: &QueryRequest) -> Vec<Diagnostic> {
+    let platform = request.platform.as_deref().unwrap_or("");
+    match request.language {
+        LanguageId::Kql => opentide_kql::analyze(&request.text, kql_profile(platform)).diagnostics,
+        // `platform: crowdstrike` is the query of a CrowdStrike rule block,
+        // which deploys as a Next-Gen SIEM correlation rule. A hunt search is
+        // not one: [`analyze_queries`] checks it without the correlation rules.
+        LanguageId::Cql if platform == "crowdstrike" => {
+            opentide_cql::analyze_with(&request.text, &opentide_cql::Context::CORRELATION_RULE)
+                .diagnostics
+        }
+        // `platform: exabeam` is a correlation-rule sequence query (the
+        // `rule` profile); without it, a search.
+        LanguageId::Exabeam => {
+            let ctx = if platform == "exabeam" {
+                opentide_exabeam::Context::RULE
+            } else {
+                opentide_exabeam::Context::SEARCH
+            };
+            opentide_exabeam::analyze_with(&request.text, &ctx).diagnostics
+        }
+        LanguageId::Lucene => {
+            let dialect = opentide_lucene::Dialect::for_platform(platform);
+            opentide_lucene::analyze_dialect(&request.text, dialect).diagnostics
+        }
+        // `platform: harfanglab` or `bitdefender`: the platform's YARA profile.
+        LanguageId::Yara => {
+            let ctx = opentide_yara::Profile::for_platform(platform)
+                .map(opentide_yara::Context::for_profile)
+                .unwrap_or_default();
+            opentide_yara::analyze_with(&request.text, &ctx).diagnostics
+        }
+        LanguageId::Esql => {
+            let target = request
+                .stack
+                .as_deref()
+                .and_then(opentide_esql::StackTarget::parse);
+            opentide_esql::analyze_for(&request.text, target).diagnostics
+        }
+        language => {
+            let host = MemoryWorkspace::default();
+            analyze(
+                &host,
+                AnalyzeRequest {
+                    uri: "query".into(),
+                    language,
+                    text: request.text.clone(),
+                },
+            )
+            .diagnostics
+        }
+    }
+}
+
+/// Workspace catalogs that replace the bundled ones, as `opentide generate
+/// schemas` writes them under `.opentide/lsp/catalogs/generated/`.
+#[derive(Debug, Clone, Default)]
+pub struct Catalog {
+    /// `fields.json`: the Tide field catalog (hover, completion, enum checks).
+    pub fields: Option<String>,
+    /// `deprecations.json`: checked to parse, and otherwise unused since
+    /// `deprecated_field` is `validate`'s finding (UC-2.6, #821).
+    pub deprecations: Option<String>,
+    /// The text of the workspace's `visibility.toml`: the table, index,
+    /// sourcetype, macro, index pattern or data view each of its log sources
+    /// declares (`table = "X"`, one per `[[logsources]]` entry), and the
+    /// columns it lists. The query checks know a declared name, and warn
+    /// about an undeclared one where the workspace declares names of that
+    /// kind; KQL and Elastic checks use declared columns.
+    pub visibility: Option<String>,
+}
+
+/// Declared datasets from the workspace ([`install_catalog`]) and from the
+/// host ([`set_default_catalog`]); the workspace's win.
+#[derive(Default)]
+struct DatasetLayers {
+    workspace: Option<DeclaredDatasets>,
+    default: Option<DeclaredDatasets>,
+}
+
+fn dataset_layers() -> &'static std::sync::RwLock<DatasetLayers> {
+    static LAYERS: std::sync::OnceLock<std::sync::RwLock<DatasetLayers>> =
+        std::sync::OnceLock::new();
+    LAYERS.get_or_init(Default::default)
+}
+
+fn parse_visibility(text: Option<&str>) -> Result<Option<DeclaredDatasets>, String> {
+    text.map(DeclaredDatasets::from_visibility)
+        .transpose()
+        .map_err(|err| format!("visibility.toml: {err}"))
+}
+
+/// Whether `visibility.toml` text parses, without installing it: a host
+/// whose buffer is mid-edit keeps the declarations in use and need not
+/// re-check what depends on them.
+pub fn check_visibility(text: &str) -> Result<(), String> {
+    parse_visibility(Some(text)).map(|_| ())
+}
+
+/// Install the datasets a workspace's `visibility.toml` declares, leaving the
+/// Tide catalogs as they are: what a host calls when the file changes, so an
+/// edit applies at once. `None` declares nothing. Text that is not TOML is an
+/// error and keeps the declarations in use.
+pub fn install_visibility(text: Option<&str>) -> Result<(), String> {
+    let datasets = parse_visibility(text)?;
+    set_dataset_layer(true, datasets);
+    Ok(())
+}
+
+/// The workspace's declared datasets as they were when [`save_visibility`]
+/// made it: dropping it installs them again, so a run that installs its own
+/// leaves the process as it found it, on an early return or a panic too.
+/// Drop it while the host still holds the lock it installs datasets under.
+#[must_use = "dropping it at once restores the datasets at once"]
+pub struct RestoreVisibility {
+    previous: Option<DeclaredDatasets>,
+}
+
+impl Drop for RestoreVisibility {
+    fn drop(&mut self) {
+        set_dataset_layer(true, self.previous.take());
+    }
+}
+
+/// Saves the workspace's declared datasets in use now; see
+/// [`RestoreVisibility`].
+pub fn save_visibility() -> RestoreVisibility {
+    let layers = dataset_layers()
+        .read()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    RestoreVisibility {
+        previous: layers.workspace.clone(),
+    }
+}
+
+fn set_dataset_layer(workspace: bool, datasets: Option<DeclaredDatasets>) {
+    let mut layers = dataset_layers()
+        .write()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    if workspace {
+        layers.workspace = datasets;
+    } else {
+        layers.default = datasets;
+    }
+    opentide_core::datasets::install(layers.workspace.clone().or(layers.default.clone()));
+}
+
+/// The declared datasets a query checked on its own uses on this thread
+/// until it is dropped: the host's ([`set_default_catalog`]), never a
+/// workspace's that a run on another thread, or one this thread is in the
+/// middle of, installed. It takes no lock.
+#[must_use = "dropping it at once ends the scope at once"]
+pub struct StandaloneDatasets {
+    _scope: opentide_core::datasets::ThreadScope,
+}
+
+/// Checks on this thread ignore a workspace's declared datasets until the
+/// returned scope drops; see [`StandaloneDatasets`].
+pub fn standalone_datasets() -> StandaloneDatasets {
+    let default = dataset_layers()
+        .read()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .default
+        .clone();
+    StandaloneDatasets {
+        _scope: opentide_core::datasets::scope_thread(default),
+    }
+}
+
+/// The declared datasets of one run, passed to the checks explicitly
+/// instead of installed for the whole process (#1142): runs on other threads,
+/// a language server's installation and nested thread pools neither see nor
+/// wait for each other's. Cheap to clone.
+#[derive(Debug, Clone, Default)]
+pub struct Datasets(std::sync::Arc<DeclaredDatasets>);
+
+impl Datasets {
+    /// The datasets a workspace whose `visibility.toml` holds `text`
+    /// declares, as [`install_visibility`] would make them current: with no
+    /// file, the host's ([`set_default_catalog`]), else none.
+    ///
+    /// # Errors
+    ///
+    /// The text is not a `visibility.toml`.
+    pub fn of_workspace(text: Option<&str>) -> Result<Self, String> {
+        let workspace = parse_visibility(text)?;
+        Ok(Self::of(workspace.or_else(|| {
+            dataset_layers()
+                .read()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .default
+                .clone()
+        })))
+    }
+
+    /// `datasets` as they are (`None` declares nothing).
+    pub fn of(datasets: Option<DeclaredDatasets>) -> Self {
+        Self(std::sync::Arc::new(datasets.unwrap_or_default()))
+    }
+
+    /// Runs `run` on this thread with these datasets in use, whatever is
+    /// installed; the thread's own come back after. A check that spreads
+    /// over a thread pool enters them on each job: a scope does not follow
+    /// work to another thread.
+    pub fn scope<T>(&self, run: impl FnOnce() -> T) -> T {
+        let _scope = self.enter();
+        run()
+    }
+
+    /// [`Datasets::scope`] until the returned guard drops, on this thread.
+    pub fn enter(&self) -> DatasetsScope {
+        DatasetsScope {
+            _scope: opentide_core::datasets::scope_shared(std::sync::Arc::clone(&self.0)),
+        }
+    }
+}
+
+/// The datasets of [`Datasets::enter`] in use on its thread while it lives.
+#[must_use = "dropping it at once ends the scope at once"]
+pub struct DatasetsScope {
+    _scope: opentide_core::datasets::ThreadScope,
+}
+
+/// Install workspace catalogs for the whole process. A `None` part goes back
+/// to the bundled catalog. A part that does not parse is an error and changes
+/// nothing.
+pub fn install_catalog(catalog: &Catalog) -> Result<(), String> {
+    check_deprecations(catalog)?;
+    let datasets = parse_visibility(catalog.visibility.as_deref())?;
+    opentide_highlight::install_tide_fields(catalog.fields.as_deref())
+        .map_err(|err| format!("fields.json: {err}"))?;
+    set_dataset_layer(true, datasets);
+    Ok(())
+}
+
+/// [`install_catalog`] on this thread only, until the returned scope drops
+/// (#1142): the catalog's Tide fields and declared datasets are the ones
+/// this thread's checks use, whatever is installed, and the process's stay
+/// as they are. A part that does not parse is an error and changes nothing.
+///
+/// # Errors
+///
+/// A part of the catalog does not parse.
+pub fn enter_catalog(catalog: &Catalog) -> Result<CatalogScope, String> {
+    check_deprecations(catalog)?;
+    let datasets = Datasets::of_workspace(catalog.visibility.as_deref())?;
+    let fields = opentide_highlight::scope_tide_fields(catalog.fields.as_deref())
+        .map_err(|err| format!("fields.json: {err}"))?;
+    Ok(CatalogScope {
+        _datasets: datasets.enter(),
+        _fields: fields,
+    })
+}
+
+/// The catalog of [`enter_catalog`] in use on its thread while it lives.
+#[must_use = "dropping it at once ends the scope at once"]
+pub struct CatalogScope {
+    _datasets: DatasetsScope,
+    _fields: opentide_highlight::TideFieldsScope,
+}
+
+/// Use `catalog` instead of the bundled catalogs whenever no workspace catalog
+/// is installed ([`install_catalog`]), for the whole process: a host that
+/// generates the catalogs from its own models (opentide, with
+/// `opentide.generation.lsp_catalog`) is then never behind the snapshot
+/// compiled into the engine, even after the language server's `initialize`
+/// finds no workspace catalog. A `None` part goes back to the bundled one. A
+/// part that does not parse is an error and changes nothing.
+pub fn set_default_catalog(catalog: &Catalog) -> Result<(), String> {
+    check_deprecations(catalog)?;
+    let datasets = parse_visibility(catalog.visibility.as_deref())?;
+    opentide_highlight::set_default_tide_fields(catalog.fields.as_deref())
+        .map_err(|err| format!("fields.json: {err}"))?;
+    set_dataset_layer(false, datasets);
+    Ok(())
+}
+
+/// A catalog's `deprecations.json` must parse, as it always had to.
+fn check_deprecations(catalog: &Catalog) -> Result<(), String> {
+    catalog
+        .deprecations
+        .as_deref()
+        .map(opentide_tide::parse_deprecation_overlay)
+        .transpose()
+        .map(|_| ())
+        .map_err(|err| format!("deprecations.json: {err}"))
+}
+
+/// The declared datasets the query checks use: the workspace's
+/// ([`install_catalog`]), else the host's ([`set_default_catalog`]), else none.
+pub fn declared_datasets() -> std::sync::Arc<DeclaredDatasets> {
+    opentide_core::datasets::current()
+}
+
+/// The Tide catalogs compiled into the engine, as their files hold them.
+///
+/// A host that generates its own catalogs (the `opentide` package, with
+/// `opentide.generation.lsp_catalog`) compares them with these to know
+/// whether the engine it bundles is current: labels such as the opentide
+/// version aside, the same models generate the same text.
+pub fn bundled_catalog() -> Catalog {
+    Catalog {
+        fields: Some(opentide_highlight::tide_fields_json().to_string()),
+        deprecations: Some(opentide_tide::deprecations_json().to_string()),
+        visibility: None,
+    }
+}
+
+/// The opentide version the Tide field catalog in use was generated from.
+pub fn catalog_version() -> &'static str {
+    opentide_highlight::tide_catalog_version()
+}
+
+/// Whether a workspace catalog ([`install_catalog`]) is in use.
+pub fn catalog_is_workspace() -> bool {
+    opentide_highlight::tide_catalog_is_workspace()
+}
+
+/// The semantic token legend: the HighlightSpec capture names, in the order
+/// the semantic tokens' type indices refer to.
+#[expect(
+    clippy::expect_used,
+    reason = "loads the HighlightSpec compiled in (highlights/spec.toml): a bad spec fails the tests, never a user's document"
+)]
+pub fn legend() -> Vec<String> {
+    HighlightSpec::shared().expect("spec").legend.clone()
+}
+
+pub fn highlight(language: LanguageId, text: &str) -> HighlightResult {
+    let host = MemoryWorkspace {
+        files: vec![("memory".into(), text.to_string())],
+    };
+    let response = analyze(
+        &host,
+        AnalyzeRequest {
+            uri: "memory".into(),
+            language,
+            text: text.to_string(),
+        },
+    );
+    HighlightResult {
+        language_id: language.as_str().to_string(),
+        tokens: response.tokens,
+        legend: legend(),
+    }
+}
+
+pub fn semantic_tokens(language: LanguageId, text: &str) -> SemanticTokens {
+    let result = highlight(language, text);
+    SemanticTokens {
+        data: encode_lsp_semantic_tokens(&result.tokens),
+        legend: result.legend,
+    }
+}
+
+/// The KQL profile of a platform: Defender's schema for
+/// `microsoft_defender`, else Sentinel's.
+fn kql_profile(platform: &str) -> Profile {
+    if platform == "microsoft_defender" {
+        Profile::Defender
+    } else {
+        Profile::Sentinel
+    }
+}
+
+/// Hover at byte `offset` of `text`. A host converts the editor's UTF-16
+/// position once (`opentide_core::position_to_offset`); a byte-order mark at
+/// the start counts as bytes, as in [`completions`].
+pub fn hover(
+    host: &dyn WorkspaceHost,
+    language: LanguageId,
+    text: &str,
+    offset: usize,
+) -> Option<String> {
+    match language {
+        LanguageId::TideYaml => {
+            let (text, offset) = opentide_core::strip_bom_at(text, offset);
+            if let Some((inj, inner)) = opentide_tide::injection_at_offset(text, offset) {
+                if inj.language == LanguageId::Falco {
+                    let ctx = opentide_tide::falco_context(text, &inj.field_path);
+                    return opentide_falco::hover(&inj.inner, inner, &ctx);
+                }
+                return query_hover(inj.language, &inj.inner, inner, &inj.platform);
+            }
+            let workspace = workspace_index(host);
+            opentide_tide::hover_tide(text, offset, &workspace)
+        }
+        query => query_hover(query, text, offset, ""),
+    }
+}
+
+/// Hover inside one query language. `platform` selects the KQL profile.
+fn query_hover(language: LanguageId, text: &str, offset: usize, platform: &str) -> Option<String> {
+    match language {
+        LanguageId::Kql => opentide_kql::hover(text, offset, kql_profile(platform)),
+        LanguageId::Spl => opentide_spl::hover(text, offset),
+        LanguageId::Esql => opentide_esql::hover(text, offset).or_else(|| ecs::hover(text, offset)),
+        LanguageId::Eql => opentide_eql::hover(text, offset).or_else(|| ecs::hover(text, offset)),
+        LanguageId::Kuery => {
+            opentide_kuery::hover(text, offset).or_else(|| ecs::hover(text, offset))
+        }
+        // Carbon Black has its own fields (#162), and Graylog its message
+        // fields: no ECS.
+        LanguageId::Lucene if matches!(platform, "carbon_black_cloud" | "graylog") => {
+            opentide_lucene::hover_dialect(
+                text,
+                offset,
+                opentide_lucene::Dialect::for_platform(platform),
+            )
+        }
+        LanguageId::Lucene => {
+            opentide_lucene::hover(text, offset).or_else(|| ecs::hover(text, offset))
+        }
+        LanguageId::Falco => {
+            opentide_falco::hover(text, offset, &opentide_falco::Context::default())
+        }
+        LanguageId::Cql => opentide_cql::hover(text, offset),
+        LanguageId::Yara => opentide_yara::editor::hover(text, offset),
+        LanguageId::Exabeam => opentide_exabeam::hover(text, offset),
+        LanguageId::Yaral => opentide_yaral::editor::hover(text, offset),
+        // Configuration hover needs the file's path: configuration_hover.
+        LanguageId::TideYaml | LanguageId::Config => None,
+    }
+}
+
+pub fn completions(
+    host: &dyn WorkspaceHost,
+    language: LanguageId,
+    text: &str,
+    offset: usize,
+) -> Vec<CompletionItem> {
+    match language {
+        LanguageId::TideYaml => {
+            let (text, offset) = opentide_core::strip_bom_at(text, offset);
+            if let Some((inj, inner, typed)) = opentide_tide::injection_typed_at(text, offset) {
+                if inj.language == LanguageId::Falco {
+                    let ctx = opentide_tide::falco_context(text, &inj.field_path);
+                    // Blanks typed after the scalar's end, which YAML drops:
+                    // they tell completion a new word starts.
+                    let mut query = inj.inner.clone();
+                    if inner >= inj.inner.len()
+                        && let Some(&last) = inj.host_map.last()
+                        && let Some(gap) = text.get(last + 1..offset)
+                    {
+                        query.push_str(gap);
+                    }
+                    let at = if inner >= inj.inner.len() {
+                        query.len()
+                    } else {
+                        inner
+                    };
+                    if inj.field_path.last().map(String::as_str) == Some("output") {
+                        return opentide_falco::output_completions(&query, at, &ctx);
+                    }
+                    return opentide_falco::completions(&query, at, &ctx);
+                }
+                // What is typed after a decomposed line and not in the
+                // assembled text: blanks start a new word, a new line a new
+                // expression (#1685).
+                let mut query = inj.inner.clone();
+                query.insert_str(inner, &typed);
+                let at = inner + typed.len();
+                return query_completions(inj.language, &query, at, &inj.platform);
+            }
+            let workspace = workspace_index(host);
+            opentide_tide::completions_tide(text, offset, &workspace)
+        }
+        query => query_completions(query, text, offset, ""),
+    }
+}
+
+fn query_completions(
+    language: LanguageId,
+    text: &str,
+    offset: usize,
+    platform: &str,
+) -> Vec<CompletionItem> {
+    match language {
+        LanguageId::Kql => opentide_kql::completions(text, offset, kql_profile(platform)),
+        LanguageId::Spl => opentide_spl::completions(text, offset),
+        LanguageId::Lucene if matches!(platform, "carbon_black_cloud" | "graylog") => {
+            opentide_lucene::completions_dialect(
+                text,
+                offset,
+                opentide_lucene::Dialect::for_platform(platform),
+            )
+        }
+        LanguageId::Esql | LanguageId::Eql | LanguageId::Kuery | LanguageId::Lucene => {
+            let mut items = match language {
+                LanguageId::Esql => opentide_esql::completions(text, offset),
+                LanguageId::Eql => opentide_eql::completions(text, offset),
+                LanguageId::Kuery => opentide_kuery::completions(text, offset),
+                _ => opentide_lucene::completions(text, offset),
+            };
+            ecs::complete(language, text, offset, &mut items);
+            items
+        }
+        LanguageId::Falco => {
+            opentide_falco::completions(text, offset, &opentide_falco::Context::default())
+        }
+        LanguageId::Cql => opentide_cql::completions(text, offset),
+        LanguageId::Yara => opentide_yara::editor::completions(text, offset),
+        LanguageId::Exabeam => opentide_exabeam::completions(text, offset),
+        LanguageId::Yaral => opentide_yaral::editor::completions(text, offset),
+        // Configuration completion needs the file's path: configuration_completions.
+        LanguageId::TideYaml | LanguageId::Config => Vec::new(),
+    }
+}
+
+pub use yara::{definition, folding, format, references, rename};
+
+pub fn compiled_kql(text: &str, tenant: &str) -> String {
+    opentide_kql::compile_kql_query(text, &[], tenant)
+}
+
+pub fn compiled_spl(text: &str) -> String {
+    // Authored text is the compiled form; implicit `| search` is not rewritten.
+    text.to_string()
+}
+
+/// Signature help at byte `offset` of `text`. A host converts the editor's
+/// UTF-16 position once (`opentide_core::position_to_offset`); a byte-order
+/// mark at the start counts as bytes, as in [`completions`].
+pub fn signature_help(
+    _host: &dyn WorkspaceHost,
+    language: LanguageId,
+    text: &str,
+    offset: usize,
+) -> Option<SignatureHelp> {
+    let (text, offset) = if language == LanguageId::TideYaml {
+        opentide_core::strip_bom_at(text, offset)
+    } else {
+        (text, offset)
+    };
+    match language {
+        LanguageId::TideYaml => {
+            let (inj, inner) = opentide_tide::injection_at_offset(text, offset)?;
+            query_signature_help(inj.language, &inj.inner, inner, &inj.platform)
+        }
+        query => query_signature_help(query, text, offset, ""),
+    }
+}
+
+fn query_signature_help(
+    language: LanguageId,
+    text: &str,
+    offset: usize,
+    platform: &str,
+) -> Option<SignatureHelp> {
+    match language {
+        LanguageId::Kql => opentide_kql::signature_help(text, offset, kql_profile(platform)),
+        LanguageId::Spl => opentide_spl::signature_help(text, offset),
+        LanguageId::Esql => opentide_esql::signature_help(text, offset),
+        LanguageId::Eql => opentide_eql::signature_help(text, offset),
+        LanguageId::Cql => opentide_cql::signature_help(text, offset),
+        LanguageId::Yara => opentide_yara::editor::signature_help(text, offset),
+        LanguageId::Yaral => opentide_yaral::editor::signature_help(text, offset),
+        LanguageId::Kuery
+        | LanguageId::Lucene
+        | LanguageId::Falco
+        | LanguageId::Exabeam
+        | LanguageId::TideYaml
+        | LanguageId::Config => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn memory_workspace_indexes_objects() {
+        let host = MemoryWorkspace {
+            files: vec![(
+                "objects/rules/a.yaml".into(),
+                "name: A\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000001\n  schema: rule::1.0\n".into(),
+            )],
+        };
+        let idx = index_workspace(&host);
+        assert_eq!(idx.len(), 1);
+        assert_eq!(idx[0].object_type, "rule");
+    }
+
+    #[test]
+    fn highlight_kql_returns_legend() {
+        let h = highlight(LanguageId::Kql, "SecurityEvent | take 1");
+        assert!(!h.legend.is_empty());
+        assert!(!h.tokens.is_empty());
+    }
+
+    /// Punctuation and Tide YAML's key colons and list dashes get no semantic
+    /// token (the TextMate scope colours them), and the pipe keeps its one.
+    #[test]
+    fn semantic_tokens_leave_gaps_for_punctuation() {
+        // (line, start column) of every token in an encoding.
+        fn starts(data: &[u32]) -> Vec<(u32, u32)> {
+            let (mut line, mut col) = (0, 0);
+            data.as_chunks::<5>()
+                .0
+                .iter()
+                .map(|t| {
+                    line += t[0];
+                    col = if t[0] == 0 { col + t[1] } else { t[1] };
+                    (line, col)
+                })
+                .collect()
+        }
+        let kql = "T | where x in (1, 2)";
+        let at = starts(&semantic_tokens(LanguageId::Kql, kql).data);
+        for punct in ["(", ",", ")"] {
+            let col = u32::try_from(kql.find(punct).unwrap_or_default()).unwrap_or_default();
+            assert!(!at.contains(&(0, col)), "`{punct}` has a token: {at:?}");
+        }
+        let pipe = u32::try_from(kql.find('|').unwrap_or_default()).unwrap_or_default();
+        assert!(at.contains(&(0, pipe)), "the pipe keeps its token: {at:?}");
+
+        let tide = "metadata:\n  tags:\n    - a\n";
+        let at = starts(&semantic_tokens(LanguageId::TideYaml, tide).data);
+        assert!(!at.contains(&(0, 8)), "key colon: {at:?}");
+        assert!(!at.contains(&(2, 4)), "list dash: {at:?}");
+        assert!(
+            at.contains(&(0, 0)),
+            "the key itself keeps its token: {at:?}"
+        );
+    }
+
+    #[test]
+    fn hover_and_completions_for_kql() {
+        let host = MemoryWorkspace { files: vec![] };
+        let items = completions(&host, LanguageId::Kql, "SecurityEvent | ", 16);
+        assert!(items.iter().any(|i| i.label == "where"));
+        let h = hover(
+            &host,
+            LanguageId::Kql,
+            "SecurityEvent | where EventID == 1",
+            16,
+        );
+        assert!(h.unwrap().contains("where"));
+    }
+
+    #[test]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "positions in a test document of a few lines"
+    )]
+    fn hover_and_completions_inside_tide_injected_kql() {
+        let src = r#"name: Sentinel KQL Rule
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000001
+  schema: rule::1.0
+configurations:
+  sentinel:
+    query: |
+      SecurityEvent
+      | where EventID == 4688
+"#;
+        let host = MemoryWorkspace {
+            files: vec![("objects/rules/rule.yaml".into(), src.to_string())],
+        };
+        let where_off = src.find("where").expect("where");
+        let line = src[..where_off].bytes().filter(|b| *b == b'\n').count() as u32;
+        let col = src[..where_off]
+            .rsplit_once('\n')
+            .map(|(_, rest)| rest.len())
+            .unwrap_or(where_off) as u32;
+        let h = hover(
+            &host,
+            LanguageId::TideYaml,
+            src,
+            opentide_core::position_to_offset(src, Position::new(line, col)),
+        );
+        assert!(
+            h.as_deref().unwrap_or("").contains("where"),
+            "hover at injected where, got {h:?}"
+        );
+        let pipe = src.find("| where").expect("pipe") + 2;
+        let items = completions(&host, LanguageId::TideYaml, src, pipe);
+        assert!(
+            items.iter().any(|i| i.label == "where"),
+            "{:?}",
+            items.iter().map(|i| &i.label).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "positions in a test document of a few lines"
+    )]
+    fn tide_field_hover_and_path_scoped_completions() {
+        let src = r#"name: Sentinel KQL Rule
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000001
+  schema: rule::1.0
+  tlp: clear
+description: |
+  hello
+detection_model: 00000000-0000-4000-8002-000000000001
+"#;
+        let host = MemoryWorkspace {
+            files: vec![
+                ("objects/rules/rule.yaml".into(), src.to_string()),
+                (
+                    "objects/objectives/o.yaml".into(),
+                    "name: Parent\nmetadata:\n  uuid: 00000000-0000-4000-8002-000000000001\n  schema: objective::1.0\n".into(),
+                ),
+            ],
+        };
+        let desc = src.find("description:").unwrap();
+        let line = src[..desc].bytes().filter(|b| *b == b'\n').count() as u32;
+        let h = hover(
+            &host,
+            LanguageId::TideYaml,
+            src,
+            opentide_core::position_to_offset(src, Position::new(line, 0)),
+        );
+        assert!(
+            h.as_deref().unwrap_or("").contains("Description"),
+            "key hover, got {h:?}"
+        );
+        let tlp_val = src.find("clear").unwrap();
+        let tlp_line = src[..tlp_val].bytes().filter(|b| *b == b'\n').count() as u32;
+        let col = src[..tlp_val]
+            .rsplit_once('\n')
+            .map(|(_, rest)| rest.len())
+            .unwrap_or(tlp_val) as u32;
+        let tlp = hover(
+            &host,
+            LanguageId::TideYaml,
+            src,
+            opentide_core::position_to_offset(src, Position::new(tlp_line, col)),
+        );
+        assert!(
+            tlp.as_deref()
+                .unwrap_or("")
+                .to_lowercase()
+                .contains("clear"),
+            "{tlp:?}"
+        );
+        let meta_off = src.find("  tlp:").unwrap();
+        let items = completions(&host, LanguageId::TideYaml, src, meta_off);
+        assert!(
+            items.iter().any(|i| i.label == "author"),
+            "{:?}",
+            items.iter().map(|i| &i.label).collect::<Vec<_>>()
+        );
+        assert!(items.iter().any(|i| i.documentation.is_some()));
+        assert!(!items.iter().any(|i| i.label == "High"));
+        let dm = src.find("detection_model:").unwrap() + "detection_model: ".len();
+        let refs = completions(&host, LanguageId::TideYaml, src, dm);
+        assert!(
+            refs.iter()
+                .any(|i| i.label == "00000000-0000-4000-8002-000000000001"),
+            "{:?}",
+            refs.iter().map(|i| &i.label).collect::<Vec<_>>()
+        );
+    }
+}

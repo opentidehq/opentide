@@ -1,0 +1,3 @@
+// prod:let_statement invalid
+let = 1;
+SecurityEvent | take 1

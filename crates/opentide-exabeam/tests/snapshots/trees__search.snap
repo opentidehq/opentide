@@ -1,0 +1,111 @@
+---
+source: crates/opentide-exabeam/tests/trees.rs
+expression: "debug_parse(\"SELECT count(*) AS n, user FROM logs WHERE a:rgx(\\\"x\\\") GROUP-BY user ORDER-BY n DESC LIMIT 10 | FOREACH user [a] LIMIT 2\")"
+---
+source_file@0..119
+  statement@0..92
+    select_clause@0..26
+      keyword@0..6
+        letters@0..6 "SELECT"
+      whitespace@6..7 " "
+      column@7..20
+        aggregate@7..15
+          identifier@7..12
+            letters@7..12 "count"
+          (@12..13 "("
+          *@13..14 "*"
+          )@14..15 ")"
+        whitespace@15..16 " "
+        keyword@16..18
+          letters@16..18 "AS"
+        whitespace@18..19 " "
+        alias@19..20
+          identifier@19..20
+            letters@19..20 "n"
+      ,@20..21 ","
+      whitespace@21..22 " "
+      column@22..26
+        field_name@22..26
+          identifier@22..26
+            letters@22..26 "user"
+    whitespace@26..27 " "
+    from_clause@27..36
+      keyword@27..31
+        letters@27..31 "FROM"
+      whitespace@31..32 " "
+      table_name@32..36
+        identifier@32..36
+          letters@32..36 "logs"
+    whitespace@36..37 " "
+    where_clause@37..53
+      keyword@37..42
+        letters@37..42 "WHERE"
+      whitespace@42..43 " "
+      filter@43..53
+        field_term@43..53
+          field_name@43..44
+            identifier@43..44
+              letters@43..44 "a"
+          :@44..45 ":"
+          call@45..53
+            identifier@45..48
+              letters@45..48 "rgx"
+            (@48..49 "("
+            string@49..52 "\"x\""
+            )@52..53 ")"
+    whitespace@53..54 " "
+    group_by_clause@54..67
+      keyword@54..62
+        letters@54..59 "GROUP"
+        -@59..60 "-"
+        letters@60..62 "BY"
+      whitespace@62..63 " "
+      field_name@63..67
+        identifier@63..67
+          letters@63..67 "user"
+    whitespace@67..68 " "
+    order_by_clause@68..83
+      keyword@68..76
+        letters@68..70 "OR"
+        letters@70..73 "DER"
+        -@73..74 "-"
+        letters@74..76 "BY"
+      whitespace@76..77 " "
+      field_name@77..78
+        identifier@77..78
+          letters@77..78 "n"
+      whitespace@78..79 " "
+      keyword@79..83
+        letters@79..83 "DESC"
+    whitespace@83..84 " "
+    limit_clause@84..92
+      keyword@84..89
+        letters@84..89 "LIMIT"
+      whitespace@89..90 " "
+      number@90..92
+        digits@90..92 "10"
+  whitespace@92..93 " "
+  |@93..94 "|"
+  whitespace@94..95 " "
+  foreach_statement@95..119
+    keyword@95..102
+      letters@95..102 "FOREACH"
+    whitespace@102..103 " "
+    field_name@103..107
+      identifier@103..107
+        letters@103..107 "user"
+    whitespace@107..108 " "
+    [@108..109 "["
+    statement@109..110
+      filter@109..110
+        free_text@109..110
+          identifier@109..110
+            letters@109..110 "a"
+    ]@110..111 "]"
+    whitespace@111..112 " "
+    limit_clause@112..119
+      keyword@112..117
+        letters@112..117 "LIMIT"
+      whitespace@117..118 " "
+      number@118..119
+        digits@118..119 "2"

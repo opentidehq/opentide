@@ -1,0 +1,45 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: generate.docs/json/deploy-push/changed-push
+---
+args: opentide --json generate docs --changed
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "changed_paths": [],
+  "changed_uuids": [],
+  "command": "generate docs",
+  "counts": {
+    "objectives": 0,
+    "rules": 0,
+    "threats": 0
+  },
+  "duration_ms": 0,
+  "exit_code": 0,
+  "failure": null,
+  "message": "No changed object documentation detected",
+  "next_actions": [],
+  "ok": true,
+  "output": "<WS>/docs",
+  "schema_version": 1,
+  "status": "completed",
+  "steps": [
+    {
+      "count": 0,
+      "name": "docs",
+      "seconds": 0.0,
+      "status": "ok",
+      "unit": "file",
+      "where": null
+    }
+  ],
+  "summary": {
+    "files": 0,
+    "phases": 1,
+    "removed": 0,
+    "seconds": 0.0
+  }
+}
+
+━━━ stderr · empty

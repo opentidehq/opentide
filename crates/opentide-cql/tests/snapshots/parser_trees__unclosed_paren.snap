@@ -1,0 +1,27 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(source)
+---
+SOURCE_FILE@0..11
+  PIPELINE@0..11
+    PARENTHESIZED_FILTER@0..11
+      L_PAREN@0..1 "("
+      OR_FILTER@1..11
+        FIELD_FILTER@1..4
+          FIELD_NAME@1..2
+            WORD@1..2 "a"
+          EQ@2..3 "="
+          UNQUOTED_PATTERN@3..4
+            WORD@3..4 "1"
+        WHITESPACE@4..5 " "
+        OR@5..7
+          OR_KW@5..7 "or"
+        WHITESPACE@7..8 " "
+        FIELD_FILTER@8..11
+          FIELD_NAME@8..9
+            WORD@8..9 "b"
+          EQ@9..10 "="
+          UNQUOTED_PATTERN@10..11
+            WORD@10..11 "2"
+
+11..11: missing `)` (expected R_PAREN)

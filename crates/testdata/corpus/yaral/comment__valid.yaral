@@ -1,0 +1,5 @@
+// prod:comment valid
+// a single-line comment
+/* and a
+   block comment */
+metadata.event_type = "USER_LOGIN"

@@ -24,9 +24,12 @@ permissions:
   pull-requests: write
 
 env:
-  PYTHON_VERSION: "3.12"
   UPSTREAM_BRANCH: chore/vocab-upstream
   OPENTIDE_SPECIFICATIONS_ROOT: ${{ github.workspace }}/specifications
+  # The ingest is `cargo xtask vocab ingest` (xtask/src/vocab/ingest/), the
+  # Rust port of the Python package's opentide.vocabulary (UC-6.3): it writes
+  # specifications' vocabularies, then syncs this checkout's bundle and
+  # lockfile from them (`cargo xtask vocab sync`).
 
 jobs:
   ingest:
@@ -66,7 +69,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-          ref: development
+          ref: integration/unified-core
 
       - name: Generate GitHub App token
         id: app
@@ -88,17 +91,13 @@ jobs:
           fetch-depth: 0
           token: ${{ steps.app.outputs.token || secrets.GITHUB_TOKEN }}
 
-      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
-        with:
-          enable-cache: true
+      # The release rust-toolchain.toml pins. No cache: the job runs weekly, and
+      # a cache it alone saved would hold a share of the repository's 10 GB.
+      - name: Set up Rust
+        run: rustup toolchain install --profile minimal --no-self-update
 
-      - name: Set up Python
-        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Install dependencies
-        run: uv sync --group dev
+      - name: Build xtask
+        run: cargo build --locked --package xtask
 
       - name: Skip when an ingest PR is already open
         id: skip
@@ -130,7 +129,7 @@ jobs:
           OPENTIDE_ATTACK_STIX_DIR: ${{ runner.temp }}/attack-stix
         run: |
           set -euo pipefail
-          uv run python scripts/vocabulary/sync_upstream.py --apply | tee "$RUNNER_TEMP/ingest-summary.txt"
+          cargo xtask vocab ingest --apply | tee "$RUNNER_TEMP/ingest-summary.txt"
 
       - name: Open specifications PR
         if: steps.skip.outputs.skip != 'true' && steps.app.outputs.token != ''
@@ -176,7 +175,7 @@ jobs:
 
       - name: Refresh lockfile against specifications HEAD
         if: steps.skip.outputs.skip != 'true'
-        run: uv run python scripts/build/sync_vocabularies.py
+        run: cargo xtask vocab sync
 
       - name: Open opentide PR
         # Same guard as the specifications PR above. The `|| secrets.GITHUB_TOKEN`
@@ -201,7 +200,7 @@ jobs:
           # Only skip create when an OPEN PR still exists for this head (merged cycles must open a new PR).
           open_count=$(gh pr list --head "$UPSTREAM_BRANCH" --state open --json number --jq 'length')
           if [[ "$open_count" -eq 0 ]]; then
-            gh pr create --base development --head "$UPSTREAM_BRANCH" \
+            gh pr create --base integration/unified-core --head "$UPSTREAM_BRANCH" \
               --title "chore(vocab): sync ATT&CK techniques and MISP actors" \
               --body "$(cat <<'EOF'
           Companion to the specifications ingest PR. Bundles the regenerated vocabularies and refreshes `data/specifications.lock.json`. Schema pins do not move: new keys open an unpinned contract that only a new schema revision adopts.

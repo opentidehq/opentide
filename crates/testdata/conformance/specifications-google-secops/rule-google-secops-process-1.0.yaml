@@ -1,0 +1,38 @@
+name: Office application spawns encoded PowerShell
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000061
+  schema: rule::1.0
+  version: 3
+  created: "2026-01-01"
+  modified: "2026-01-02"
+  tlp: clear
+  author: Detection Engineering
+description: |
+  Detects an Office application starting PowerShell with an
+  "-enc" (encoded) command line, a common macro dropper pattern.
+techniques:
+- T1059.001
+- T1566.001
+response:
+  alert_severity: High
+configurations:
+  google_secops:
+    enabled: true
+    schema: platform::google_secops::1.0
+    status: STAGING
+    contributors: [Threat Hunting]
+    run_frequency: LIVE
+    meta:
+      data_source: Microsoft Sysmon
+    events: |
+      $e.metadata.event_type = "PROCESS_LAUNCH"
+      // Office parent: Word, Excel, or PowerPoint.
+      $e.principal.process.file.full_path = /\\(winword|excel|powerpnt)\.exe$/ nocase
+      $e.target.process.file.full_path = /\\powershell\.exe$/ nocase
+      $e.target.process.command_line = /\s-e(nc|ncodedcommand)?\s/ nocase
+    outcome: |
+      $risk_score = 70
+      $host = $e.principal.hostname
+      $command_line = $e.target.process.command_line
+    condition: |
+      $e

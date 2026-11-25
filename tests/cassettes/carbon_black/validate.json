@@ -1,0 +1,74 @@
+{
+  "format": 1,
+  "scenario": "carbon_black/validate",
+  "recorded_from": [
+    "{python}",
+    "tests/cassettes/carbon_black/client.py",
+    "validate"
+  ],
+  "digest": "sha256:ba9768559e3c8711d5bcc4ba33c7a4ec49d4f957f26d7c2cd79c1ef14a809a92",
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://cbc.invalid/api/investigate/v2/orgs/ORGKEY01/processes/search_validation",
+        "headers": [
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "x-auth-token",
+            "REDACTED"
+          ]
+        ],
+        "body": "{\"query\": \"process_name:cmd.exe AND netconn_count:[1 TO *]\"}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "cbc-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"valid\": true, \"value_search_query\": true}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://cbc.invalid/api/investigate/v2/orgs/ORGKEY01/processes/search_validation",
+        "headers": [
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "x-auth-token",
+            "REDACTED"
+          ]
+        ],
+        "body": "{\"query\": \"process_name:(cmd.exe\"}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "cbc-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"valid\": false, \"invalid_message\": \"unbalanced parenthesis\", \"value_search_query\": false}"
+      }
+    }
+  ]
+}

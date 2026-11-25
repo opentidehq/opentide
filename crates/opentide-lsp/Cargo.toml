@@ -1,0 +1,65 @@
+[package]
+name = "opentide-lsp"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+description = "opentide engine component: the language server (stdio LSP, one message at a time, and the opentide-lsp binary). Internal: depend on the opentide facade (its `lsp` feature)."
+readme = "README.md"
+keywords = ["lsp", "kql", "spl", "esql", "detection"]
+categories = ["development-tools", "command-line-utilities"]
+default-run = "opentide-lsp"
+# Published by the release train (publish.yml, UC-5.5), with opentide-schema and
+# opentide-workspace, which its checks come from (ADR 0010's addendum).
+
+[lints]
+workspace = true
+
+# `cargo binstall opentide-lsp` downloads the binary each GitHub Release
+# carries for the target, instead of compiling the workspace. Linux and macOS
+# only: no Windows binary ships, so on Windows binstall falls back to building
+# from source (or `opentide lsp start` serves the same engine).
+[package.metadata.binstall]
+pkg-url = "{ repo }/releases/download/v{ version }/{ name }-v{ version }-{ target }{ binary-ext }"
+pkg-fmt = "bin"
+
+[lib]
+name = "opentide_lsp"
+path = "src/lib.rs"
+
+[[bin]]
+name = "opentide-lsp"
+path = "src/main.rs"
+
+[dependencies]
+opentide-core.workspace = true
+opentide-analysis.workspace = true
+opentide-highlight.workspace = true
+opentide-tide.workspace = true
+# Tide diagnostics are `validate`'s, and configuration checks the models' (UC-2.6).
+opentide-workspace.workspace = true
+opentide-schema.workspace = true
+# The object files of a root are indexed in parallel on start-up.
+rayon.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+clap.workspace = true
+anyhow.workspace = true
+regex.workspace = true
+lsp-server.workspace = true
+lsp-types.workspace = true
+url.workspace = true
+# A `file:` URI's path where `url` gives no file path (a UNC URI off
+# Windows, the browser build), decoded and encoded.
+percent-encoding.workspace = true
+
+# WASI's stdin, asked whether the client sent more without waiting for it
+# (`src/stdin.rs`): `poll` and `fcntl` with safe signatures.
+[target.'cfg(target_os = "wasi")'.dependencies]
+rustix = { workspace = true, features = ["std", "event", "fs"] }
+
+[dev-dependencies]
+trycmd.workspace = true

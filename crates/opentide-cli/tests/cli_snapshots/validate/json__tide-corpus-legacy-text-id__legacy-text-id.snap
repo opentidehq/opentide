@@ -1,0 +1,108 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: validate/json/tide-corpus-legacy-text-id/legacy-text-id
+---
+args: opentide --json validate
+exit: 1
+
+━━━ stdout · json, 1 lines
+{
+  "checks": {
+    "configuration": {
+      "check": "configuration",
+      "status": "passed"
+    },
+    "id-uniqueness": {
+      "check": "id-uniqueness",
+      "status": "passed"
+    },
+    "queries": {
+      "check": "queries",
+      "status": "passed"
+    },
+    "schema": {
+      "check": "schema",
+      "status": "failed"
+    },
+    "uuid-format": {
+      "check": "uuid-format",
+      "status": "passed"
+    }
+  },
+  "command": "validate",
+  "duration_ms": 0,
+  "error": "Validation failed",
+  "exit_code": 1,
+  "failure": {
+    "argument": null,
+    "code": "issues_found",
+    "crash_log": null,
+    "message": "Validation failed",
+    "suggestion": null
+  },
+  "message": "Validation failed",
+  "next_actions": [
+    {
+      "command": "opentide --json explain external_id_in_rule",
+      "reason": "how to fix it"
+    },
+    {
+      "command": "opentide --json validate",
+      "reason": "check again"
+    }
+  ],
+  "ok": false,
+  "report": {
+    "issues": [
+      {
+        "code": "external_id_in_rule",
+        "column": 21,
+        "context": {},
+        "end_column": 23,
+        "end_line": 25,
+        "explain": "opentide explain external_id_in_rule",
+        "field_path": [
+          "configurations",
+          "sysdig",
+          "rule_id::prod"
+        ],
+        "file_path": "<WS>/Objects/Detection Rules/rule-0013-sysdig-falco.yaml",
+        "fix": null,
+        "help": "Run 'opentide deploy migrate-state' and commit the rule together with .opentide/states/deployment/",
+        "line": 25,
+        "message": "Vendor rule id key \"rule_id::prod\" is not allowed on the sysdig block; external ids live in .opentide/states/deployment/<uuid>.json",
+        "object_type": "rule",
+        "object_uuid": "00000000-0000-4000-8003-0000005d1a90",
+        "path": "Objects/Detection Rules/rule-0013-sysdig-falco.yaml",
+        "severity": "error",
+        "suggestion": "Run 'opentide deploy migrate-state' and commit the rule together with .opentide/states/deployment/",
+        "yaml_line": 24
+      }
+    ],
+    "ok": false,
+    "stats": {
+      "id_workers": "<CORES>",
+      "object_workers": "<CORES>",
+      "objects_checked": 12,
+      "parallel": "<CORES>",
+      "queries_checked": 8,
+      "wall_ms": 0.0,
+      "workers": "<CORES>"
+    },
+    "warnings": []
+  },
+  "schema_version": 1,
+  "status": "failed",
+  "summary": {
+    "errors": 1,
+    "files": 1,
+    "fixable": 0,
+    "objects": 12,
+    "queries": 8,
+    "warning_files": 0,
+    "warnings": 0
+  },
+  "workspace": "<WS>"
+}
+
+━━━ stderr · empty

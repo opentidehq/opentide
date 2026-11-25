@@ -1,0 +1,5 @@
+SELECT user, src_ip, COUNT(*) AS failures
+WHERE activity_type:"app-login" AND outcome:"fail"
+GROUP-BY user, src_ip
+ORDER-BY failures DESC
+LIMIT 50

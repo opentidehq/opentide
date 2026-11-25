@@ -1,0 +1,2 @@
+// prod:join valid
+join [process where true] [file where true]

@@ -46,7 +46,7 @@ opentide --json commands
           "name": "platform",
           "flags": ["--platform"],
           "type": "choice",
-          "choices": ["sentinel", "splunk", "crowdstrike", "…"],
+          "choices": ["sentinel", "microsoft_defender", "splunk", "…"],
           "required": true,
           "…": "…"
         }
@@ -100,4 +100,4 @@ query            Run a read-only query on platform tenants and show rows
 
 ## Source
 
-`src/opentide/cli/commands/introspect.py`.
+`crates/opentide-cli/src/catalog.rs`.

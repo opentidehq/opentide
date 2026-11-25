@@ -1,0 +1,2235 @@
+//! `opentide query` on the connectors (UC-4.2c, #832): a read-only query on
+//! a platform's tenants, `cli/commands/query.py`, `cli/services/query.py` and
+//! `query/service.py` request for request.
+//!
+//! The query runs on the platforms with a Rust connector and a query runner
+//! ([`platforms`]: Carbon Black Cloud, CrowdStrike, Microsoft Defender,
+//! Elastic, HarfangLab, Sentinel, SentinelOne, Splunk; every platform with a
+//! runner since UC-4.3, #833). A rule's query (`--rule`, `--file`) runs
+//! here too since UC-4.4c (#834): the queries a deploy of the rule sends,
+//! each tenant's exclusions compiled in ([`super::query_rule`]).
+//!
+//! Each selected tenant runs the query in turn, over the window, through the
+//! connector's [`opentide_connectors::connector::QueryRunner`]; a tenant that
+//! refuses or cannot be reached fails the run (exit 1), and the others still
+//! run. Nothing is saved on a tenant.
+
+use std::path::Path;
+use std::time::{Duration, Instant};
+
+use super::interrupt::watched;
+use opentide_connectors::connector::{QueryOutcome, QueryRequest, TenantContext, TimeWindow};
+use opentide_connectors::credentials::Mode as Resolve;
+use opentide_connectors::{ConnectorError, Environment, HttpClient, HttpSettings, Tenant};
+use tokio_util::sync::CancellationToken;
+
+use super::query_rule::RuleQuery;
+use super::{Block, Report, Terminal, open, placement};
+use crate::env::Env;
+use crate::envelope::{Failure, Outcome, USAGE_EXIT_CODE, code};
+use crate::json::Json;
+use crate::render::progress::{Progress, TenantEvent};
+use crate::render::text::Text;
+use anstyle::{AnsiColor, Style};
+
+/// The command's name in the envelope.
+pub const COMMAND: &str = "query";
+
+/// The platforms whose queries run here: those with a connector and a query
+/// runner (`opentide.cli.engines.RUST_QUERY_PLATFORMS`), in the platform table's order.
+pub fn platforms() -> Vec<&'static str> {
+    query_platforms()
+}
+
+/// Every platform with a query runner (`QUERY_PLATFORMS`), in the platform table's order.
+pub fn query_platforms() -> Vec<&'static str> {
+    use opentide_schema::platforms::ids_where;
+    ids_where(|platform| platform.query_runner)
+}
+
+/// Rows per tenant when `--limit` names none (`DEFAULT_LIMIT`).
+pub const DEFAULT_LIMIT: i64 = 100;
+/// The most rows one query may return per tenant
+/// ([`opentide_connectors::connector::MAX_QUERY_LIMIT`]).
+#[expect(clippy::cast_possible_wrap, reason = "5000 fits an i64")]
+pub const MAX_LIMIT: i64 = opentide_connectors::connector::MAX_QUERY_LIMIT as i64;
+/// The window `--since` takes when no window is given (`DEFAULT_SINCE`).
+pub const DEFAULT_SINCE: &str = "24h";
+/// Columns the table shows when `--columns` names none (`TABLE_COLUMNS`).
+pub const TABLE_COLUMNS: usize = 8;
+/// Characters a table cell shows before it is cut (`CELL_WIDTH`).
+pub const CELL_WIDTH: usize = 60;
+
+/// The languages each platform's runner takes; the first is the default
+/// (`PLATFORM_LANGUAGES`).
+pub fn languages(platform: &str) -> &'static [&'static str] {
+    opentide_schema::platforms::get(platform).map_or(&[], |platform| platform.runner_languages)
+}
+
+/// The client a platform's runner names when its credentials are unset, and
+/// the setup keys it checks, in order (`reject_unsubstituted_placeholders`).
+pub(crate) fn credential_keys(platform: &str) -> (&'static str, &'static [&'static str]) {
+    match platform {
+        "microsoft_defender" => (
+            "Microsoft Graph",
+            &["tenant_id", "client_id", "client_secret"],
+        ),
+        "crowdstrike" => ("CrowdStrike", &["client_id", "client_secret"]),
+        "sentinel_one" => ("SentinelOne", &["url", "api_token"]),
+        "elastic" => ("Elastic", &["api_key"]),
+        "harfanglab" => ("HarfangLab", &["url", "api_token"]),
+        "splunk" => ("Splunk", &["url", "port", "token", "app", "ssl"]),
+        "carbon_black_cloud" => ("CBC", &["url", "org_key", "token"]),
+        "sentinel" => (
+            "Azure",
+            &["azure_tenant_id", "azure_client_id", "azure_client_secret"],
+        ),
+        "graylog" => ("Graylog", &["url", "token"]),
+        _ => ("", &[]),
+    }
+}
+
+/// The address a transport failure is reported at, for a tenant configured
+/// without a URL (`_DEFAULT_HOSTS`).
+pub(crate) fn default_host(platform: &str) -> &'static str {
+    match platform {
+        "microsoft_defender" => "https://graph.microsoft.com",
+        "crowdstrike" => "https://api.crowdstrike.com",
+        "sentinel" => "https://api.loganalytics.io",
+        _ => "",
+    }
+}
+
+/// How rows are written when `--json` is off: `--format`, as clap parses it.
+pub use crate::tree::RowFormat;
+
+/// `query`'s options.
+#[derive(Clone, Debug, Default)]
+pub struct Args {
+    /// The query (`-` reads stdin).
+    pub query: Option<String>,
+    /// `--platform`.
+    pub platform: String,
+    /// `--tenant`, repeatable.
+    pub tenants: Vec<String>,
+    /// `--rule`.
+    pub rule: Option<String>,
+    /// `--file`.
+    pub file: Option<String>,
+    /// `--query-file`.
+    pub query_file: Option<String>,
+    /// `--since`.
+    pub since: Option<String>,
+    /// `--from`.
+    pub start: Option<String>,
+    /// `--to`.
+    pub end: Option<String>,
+    /// `--limit`.
+    pub limit: i64,
+    /// `--language`.
+    pub language: Option<String>,
+    /// `--index`, repeatable.
+    pub index: Vec<String>,
+    /// `--timeout`, in seconds.
+    pub timeout: f64,
+    /// `--columns`.
+    pub columns: Option<String>,
+    /// `--format`.
+    pub format: RowFormat,
+}
+
+impl From<&crate::tree::QueryArgs> for Args {
+    fn from(args: &crate::tree::QueryArgs) -> Self {
+        Self {
+            query: args.query.clone(),
+            platform: args.platform.0.clone(),
+            tenants: args.tenant.clone(),
+            rule: args.rule.clone(),
+            file: args.file.clone(),
+            query_file: args.query_file.clone(),
+            since: args.since.clone(),
+            start: args.start.clone(),
+            end: args.end.clone(),
+            limit: args.limit,
+            language: args.language.clone(),
+            index: args.index.clone(),
+            timeout: args.timeout,
+            columns: args.columns.clone(),
+            format: args.row_format,
+        }
+    }
+}
+
+/// What a run reads besides its options.
+#[derive(Clone, Copy)]
+pub struct Context<'a> {
+    /// `--repo`.
+    pub repo: Option<&'a str>,
+    /// The environment.
+    pub env: &'a Env,
+    /// The working directory.
+    pub cwd: &'a Path,
+    /// `--proxy`.
+    pub proxy: Option<&'a str>,
+    /// The streams.
+    pub terminal: &'a Terminal,
+    /// Whether Ctrl-C was pressed.
+    pub interrupted: &'a (dyn Fn() -> bool + Sync),
+    /// stdin, read whole (`QUERY` of `-`).
+    pub stdin: &'a dyn Fn() -> String,
+    /// The current time, the end of a window without `--to`.
+    pub now: jiff::Timestamp,
+    /// Where log lines and `OPENTIDE_PROGRESS=json`'s events go: the host's
+    /// stderr.
+    pub log: &'a crate::logging::Sink,
+}
+
+impl std::fmt::Debug for Context<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Context")
+            .field("repo", &self.repo)
+            .field("cwd", &self.cwd)
+            .finish_non_exhaustive()
+    }
+}
+
+/// A rule's query on a platform plugin (`--rule`, `--file`): a usage error.
+/// The rule's block under `configurations.<plugin>` is the plugin's to read,
+/// and no plugin method hands opentide its query; the query is given as
+/// `QUERY` or `--query-file` instead.
+pub fn plugin_rule(platform: &str, source: &str) -> Report {
+    usage(
+        platform,
+        &format!(
+            "{source} reads a rule's query from a built-in platform's block; {platform} is a \
+             platform plugin: give its query as QUERY or --query-file"
+        ),
+        source,
+        &[],
+    )
+}
+
+/// A platform with no query runner (Sysdig): a usage error on `--platform`,
+/// the platforms with one as its choices (`run_query`).
+pub fn no_runner(platform: &str) -> Report {
+    let choices: Vec<String> = query_platforms()
+        .iter()
+        .map(|name| (*name).to_owned())
+        .collect();
+    usage_with(
+        platform,
+        &format!("{platform} has no query runner"),
+        "--platform",
+        suggest(platform, &choices),
+        &choices,
+    )
+}
+
+/// A call that cannot run as given (`_usage`): exit 2, `usage_invalid_value`.
+fn usage(platform: &str, message: &str, argument: &str, choices: &[String]) -> Report {
+    usage_with(platform, message, argument, None, choices)
+}
+
+fn usage_with(
+    platform: &str,
+    message: &str,
+    argument: &str,
+    suggestion: Option<String>,
+    choices: &[String],
+) -> Report {
+    let mut failure = Failure::new(code::USAGE_INVALID_VALUE, message);
+    failure.argument = Some(argument.to_owned());
+    failure.suggestion = suggestion;
+    let mut outcome = Outcome::failed(COMMAND, USAGE_EXIT_CODE, failure);
+    let mut data = vec![("platform".to_owned(), Json::str(platform))];
+    if !choices.is_empty() {
+        data.push((
+            "choices".to_owned(),
+            Json::Array(choices.iter().map(Json::str).collect()),
+        ));
+    }
+    // The envelope writes `error` after the message.
+    outcome.data = data;
+    let mut report = Report::failed(COMMAND, USAGE_EXIT_CODE, Failure::new("", ""));
+    report.outcome = outcome;
+    report
+}
+
+/// `did_you_mean`: the closest of *choices* to *value*, when one is close.
+fn suggest(value: &str, choices: &[String]) -> Option<String> {
+    let names: Vec<&str> = choices.iter().map(String::as_str).collect();
+    crate::suggest::did_you_mean(value, names)
+}
+
+/// The query text: `QUERY`, stdin for `-`, or `--query-file`; a refusal
+/// when they cannot be read (`_query_text`).
+fn query_text(args: &Args, cx: &Context<'_>) -> Result<Option<String>, Box<Report>> {
+    if args.query.is_some() && args.query_file.is_some() {
+        return Err(Box::new(usage(
+            &args.platform,
+            "QUERY and --query-file cannot be combined: give one query",
+            "QUERY",
+            &[],
+        )));
+    }
+    if let Some(file) = &args.query_file {
+        let path = cx.cwd.join(file);
+        return match std::fs::read(&path) {
+            Ok(bytes) => {
+                let text = String::from_utf8_lossy(&bytes);
+                Ok(Some(
+                    text.strip_prefix('\u{feff}').unwrap_or(&text).to_owned(),
+                ))
+            }
+            Err(error) => Err(Box::new(usage(
+                &args.platform,
+                &format!("cannot read --query-file {file}: {error}"),
+                "--query-file",
+                &[],
+            ))),
+        };
+    }
+    if args.query.as_deref() == Some("-") {
+        return Ok(Some((cx.stdin)()));
+    }
+    Ok(args.query.clone())
+}
+
+/// An ISO 8601 date or time as UTC; a time without an offset is UTC
+/// (`parse_instant`).
+fn parse_instant(value: &str, flag: &str) -> Result<jiff::Timestamp, String> {
+    let text = value.trim();
+    let text = match text.strip_suffix(['Z', 'z']) {
+        Some(rest) => format!("{rest}+00:00"),
+        None => text.to_owned(),
+    };
+    if let Ok(moment) = text.parse::<jiff::Timestamp>() {
+        return Ok(moment);
+    }
+    if let Ok(zoned) = text.parse::<jiff::Zoned>() {
+        return Ok(zoned.timestamp());
+    }
+    if let Ok(civil) = text.parse::<jiff::civil::DateTime>()
+        && let Ok(moment) = civil.to_zoned(jiff::tz::TimeZone::UTC)
+    {
+        return Ok(moment.timestamp());
+    }
+    if let Ok(date) = text.parse::<jiff::civil::Date>()
+        && let Ok(moment) = date.to_zoned(jiff::tz::TimeZone::UTC)
+    {
+        return Ok(moment.timestamp());
+    }
+    Err(format!(
+        "{flag} {value:?} is not an ISO-8601 time, such as 2026-10-27T08:00:00Z"
+    ))
+}
+
+/// The window `--since` or `--from`/`--to` name (`resolve_window`), or the
+/// refusal and the flag at fault.
+fn resolve_window(
+    since: Option<&str>,
+    start: Option<&str>,
+    end: Option<&str>,
+    now: jiff::Timestamp,
+) -> Result<TimeWindow, (String, &'static str)> {
+    let since = since.filter(|value| !value.is_empty());
+    let start = start.filter(|value| !value.is_empty());
+    if since.is_some() && start.is_some() {
+        return Err(("--since cannot be combined with --from".into(), "--since"));
+    }
+    let finish = match end.filter(|value| !value.is_empty()) {
+        Some(end) => parse_instant(end, "--to").map_err(|message| (message, "--to"))?,
+        None => now,
+    };
+    let begin = match start {
+        Some(start) => parse_instant(start, "--from").map_err(|message| (message, "--from"))?,
+        None => {
+            let lookback = since.unwrap_or(DEFAULT_SINCE);
+            let not_a_duration = || {
+                (
+                    format!("--since {lookback:?} is not a duration, such as 15m, 24h, 7d or PT1H"),
+                    "--since",
+                )
+            };
+            let seconds = opentide_compile::duration::elastic_seconds(lookback, false)
+                .map_err(|_| not_a_duration())?;
+            let seconds = i64::try_from(seconds).map_err(|_| not_a_duration())?;
+            jiff::SignedDuration::from_secs(seconds)
+                .checked_neg()
+                .and_then(|back| finish.checked_add(back).ok())
+                .ok_or_else(not_a_duration)?
+        }
+    };
+    if begin >= finish {
+        return Err(("--from must be earlier than --to".into(), "--from"));
+    }
+    Ok(TimeWindow {
+        start: begin,
+        end: finish,
+    })
+}
+
+/// A tenant's outcome for the query (`TenantOutcome`).
+#[derive(Clone, Debug)]
+struct TenantResult {
+    tenant: String,
+    /// Which of a rule's queries (a SentinelOne correlation's sub-query).
+    label: Option<String>,
+    /// What the rows are not, said before the tenant's own warnings.
+    warnings: Vec<String>,
+    result: Option<QueryOutcome>,
+    error: Option<String>,
+    detail: Option<String>,
+    elapsed_ms: i64,
+}
+
+impl TenantResult {
+    fn ok(&self) -> bool {
+        self.result.is_some()
+    }
+
+    /// The entry of the payload's `results` (`TenantOutcome.to_dict`).
+    fn to_json(&self) -> Json {
+        let mut members: Vec<(String, Json)> = vec![
+            ("tenant".into(), Json::str(&self.tenant)),
+            (
+                "status".into(),
+                Json::str(if self.ok() { "ok" } else { "failed" }),
+            ),
+        ];
+        if let Some(label) = &self.label {
+            members.push(("label".into(), Json::str(label)));
+        }
+        let mut warnings: Vec<Json> = self.warnings.iter().map(Json::str).collect();
+        if let Some(result) = &self.result {
+            warnings.extend(result.warnings.iter().map(Json::str));
+            members.push((
+                "columns".into(),
+                Json::Array(
+                    result
+                        .columns
+                        .iter()
+                        .map(|column| {
+                            Json::object([
+                                ("name", Json::str(&column.name)),
+                                ("type", Json::opt_str(column.kind.clone())),
+                            ])
+                        })
+                        .collect(),
+                ),
+            ));
+            members.push(("rows".into(), Json::Array(rows(result))));
+            members.push(("row_count".into(), Json::from(result.rows.len())));
+            members.push(("truncated".into(), Json::Bool(result.truncated)));
+            members.push(("partial".into(), Json::Bool(result.partial)));
+            if let Some(language) = &result.language {
+                members.push(("language".into(), Json::str(language)));
+            }
+            if let Some(sent) = &result.sent {
+                members.push(("sent".into(), Json::str(sent)));
+            }
+            if let Some(id) = &result.vendor_query_id {
+                members.push(("vendor_query_id".into(), Json::str(id)));
+            }
+        } else {
+            members.push(("error".into(), Json::opt_str(self.error.clone())));
+            if let Some(detail) = self.detail.as_ref().filter(|detail| !detail.is_empty()) {
+                members.push(("detail".into(), Json::str(detail)));
+            }
+        }
+        members.push(("warnings".into(), Json::Array(warnings)));
+        members.push(("elapsed_ms".into(), Json::Int(self.elapsed_ms)));
+        Json::object(members)
+    }
+}
+
+/// The rows of *result* as this crate's JSON.
+fn rows(result: &QueryOutcome) -> Vec<Json> {
+    result
+        .rows
+        .iter()
+        .map(|row| crate::commands::deploy::convert(&opentide_compile::Json::Object(row.clone())))
+        .collect()
+}
+
+/// A configured tenant: its name and its `setup` table, in file order.
+#[derive(Debug)]
+pub(crate) struct Configured {
+    pub(crate) name: String,
+    pub(crate) setup: opentide_compile::json::Object,
+}
+
+/// A platform's configured tenants, in file order, and its configuration
+/// file as advice names it.
+fn configured(cx: &Context<'_>, platform: &str) -> (Vec<Configured>, String) {
+    let shown = format!(".opentide/configurations/platforms/{platform}.toml");
+    let (_, options) = placement(cx.repo, cx.env, cx.cwd);
+    let Ok(workspace) = open(options) else {
+        return (Vec::new(), shown);
+    };
+    let config = opentide_compile::Json::from_node(&workspace.configuration().resolved.tree);
+    let tenants = opentide_compile::plan::tenants(&config, platform)
+        .into_iter()
+        .map(|tenant| Configured {
+            name: opentide_compile::deploy::tenant_name(tenant).to_owned(),
+            setup: tenant
+                .get("setup")
+                .and_then(opentide_compile::Json::as_object)
+                .cloned()
+                .unwrap_or_default(),
+        })
+        .collect();
+    crate::app::release(workspace);
+    (tenants, shown)
+}
+
+/// Why `--tenant` selects nothing: the message, the value at fault and the
+/// configured names (`TenantSelectionError`).
+type Refusal = (String, Option<String>, Vec<String>);
+
+/// The tenants *names* select, in configuration order (`select_tenants`),
+/// or the refusal with its value and choices.
+fn select<'t>(
+    platform: &str,
+    names: &[String],
+    available: &'t [Configured],
+    config_path: &str,
+) -> Result<Vec<&'t Configured>, Refusal> {
+    const ALL: &str = "all";
+    let known: Vec<String> = available.iter().map(|tenant| tenant.name.clone()).collect();
+    if available.is_empty() {
+        return Err((
+            format!(
+                "{platform} has no tenants configured: add a [[tenants]] entry in {config_path}"
+            ),
+            None,
+            Vec::new(),
+        ));
+    }
+    let mut wanted: Vec<String> = Vec::new();
+    for name in names {
+        let name = name.trim();
+        if !name.is_empty() && !wanted.iter().any(|seen| seen == name) {
+            wanted.push(name.to_owned());
+        }
+    }
+    let choices = || {
+        let mut choices = known.clone();
+        choices.push(ALL.to_owned());
+        choices
+    };
+    if wanted.is_empty() {
+        if available.len() == 1 {
+            return Ok(available.iter().collect());
+        }
+        return Err((
+            format!(
+                "{platform} has {} tenants ({}): name one with --tenant, or pass --tenant {ALL}",
+                available.len(),
+                known.join(", ")
+            ),
+            None,
+            choices(),
+        ));
+    }
+    if wanted.iter().any(|name| name == ALL) {
+        if wanted.len() > 1 {
+            return Err((
+                format!("--tenant {ALL} already selects every tenant; drop the other names"),
+                Some(ALL.to_owned()),
+                Vec::new(),
+            ));
+        }
+        return Ok(available.iter().collect());
+    }
+    if let Some(unknown) = wanted.iter().find(|name| !known.contains(name)) {
+        return Err((
+            format!(
+                "{platform} has no tenant named {unknown:?}; configured: {}",
+                known.join(", ")
+            ),
+            Some(unknown.clone()),
+            choices(),
+        ));
+    }
+    Ok(available
+        .iter()
+        .filter(|tenant| wanted.contains(&tenant.name))
+        .collect())
+}
+
+/// A setup value as `toml` holds it, for [`Tenant::from_setup`]: the
+/// connectors' own, so every command builds a tenant alike (a table such as
+/// Graylog's `stream_ids` kept).
+pub(crate) use opentide_connectors::tenant::toml_value;
+
+/// The `$NAME` (or `${NAME}`) a setup value names, when it is one.
+fn reference(value: &opentide_compile::Json) -> Option<&str> {
+    value
+        .as_str()
+        .and_then(opentide_workspace::info::env_reference)
+}
+
+/// Logs each tenant's unset `$NAME` credentials once, in file order, as the
+/// configuration loader does (`fetch_config_envvar`:
+/// `environment_variable_missing`, critical), the advice naming what the
+/// command is about to do (`before`: "a live check", "a deploy").
+pub(crate) fn log_unset(tenants: &[Configured], env: &Env, before: &str) {
+    let mut reported: Vec<String> = Vec::new();
+    for tenant in tenants {
+        let mut pending: Vec<String> = Vec::new();
+        for value in tenant.setup.values() {
+            let Some(name) = reference(value) else {
+                continue;
+            };
+            if env.get(name).is_some() || reported.iter().any(|seen| seen == name) {
+                continue;
+            }
+            reported.push(name.to_owned());
+            pending.push(name.to_owned());
+        }
+        if !pending.is_empty() {
+            let joined: Vec<String> = pending.iter().map(|name| format!("${name}")).collect();
+            let advice = format!("Set those environment variables before {before}.");
+            tracing::error!(
+                detail = format!("Unset configuration variables: {}", joined.join(", ")).as_str(),
+                advice = advice.as_str(),
+                critical = true,
+                "environment_variable_missing"
+            );
+        }
+    }
+}
+
+/// The runner's refusal of credentials still `$NAME` placeholders
+/// (`reject_unsubstituted_placeholders`), or `None`.
+pub(crate) fn unset_credentials(platform: &str, tenant: &Configured, env: &Env) -> Option<String> {
+    let (client, keys) = credential_keys(platform);
+    let missing: Vec<String> = keys
+        .iter()
+        .filter_map(|key| tenant.setup.get(*key))
+        .filter(|value| reference(value).is_some_and(|name| env.get(name).is_none()))
+        .filter_map(|value| value.as_str().map(str::to_owned))
+        .collect();
+    (!missing.is_empty()).then(|| {
+        format!(
+            "{client} credentials are unset ({}). Set those environment variables, then run \
+             the command again.",
+            missing.join(", ")
+        )
+    })
+}
+
+/// The HTTP settings a tenant's client mounts for `query`, `validate query
+/// --live` and `generate extract`, at `--timeout`: the connectors' own
+/// ([`opentide_connectors::http_settings`]), which `opentide::Connection`
+/// reads for its queries too.
+pub(crate) fn http_settings(platform: &str, timeout: Duration) -> HttpSettings {
+    opentide_connectors::http_settings(platform, timeout)
+}
+
+/// One tenant's run of the query (`run_on_tenant`).
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
+fn run_on_tenant(
+    platform: &str,
+    configured: &Configured,
+    request: &QueryRequest,
+    cx: &Context<'_>,
+    environment: &Environment,
+) -> TenantResult {
+    let began = Instant::now();
+    let mut outcome = TenantResult {
+        tenant: configured.name.clone(),
+        label: None,
+        warnings: Vec::new(),
+        result: None,
+        error: None,
+        detail: None,
+        elapsed_ms: 0,
+    };
+    let finish = |mut outcome: TenantResult| {
+        outcome.elapsed_ms = i64::try_from(began.elapsed().as_millis()).unwrap_or(i64::MAX);
+        outcome
+    };
+    if let Some(message) = unset_credentials(platform, configured, cx.env) {
+        outcome.error = Some(message);
+        return finish(outcome);
+    }
+    let setup: toml::Table = configured
+        .setup
+        .iter()
+        .filter_map(|(key, value)| toml_value(value).map(|value| (key.clone(), value)))
+        .collect();
+    let settings = http_settings(platform, request.timeout);
+    // A plugin reads its setup itself: an unset variable fails here, before
+    // the plugin is called, as no built-in pre-check names its keys.
+    let resolve = if crate::plugins::is_plugin(platform) {
+        Resolve::Required
+    } else {
+        Resolve::Counting
+    };
+    let tenant = match Tenant::from_setup(
+        platform,
+        &configured.name,
+        &setup,
+        environment,
+        resolve,
+        &settings,
+    ) {
+        Ok(tenant) => tenant,
+        Err(error) => {
+            outcome.error = Some(error.to_string());
+            return finish(outcome);
+        }
+    };
+    let http = match HttpClient::new(&tenant.label, &tenant.http, environment, cx.proxy) {
+        Ok(http) => http,
+        Err(error) => {
+            outcome.error = Some(error.to_string());
+            return finish(outcome);
+        }
+    };
+    let registry = crate::plugins::registry(environment);
+    // Google SecOps reads Application Default Credentials from the command's
+    // environment, not the process's.
+    let secops = opentide_connectors::google_secops::GoogleSecops::new(environment.clone());
+    let found = if platform == "google_secops" {
+        Some(&secops as &dyn opentide_connectors::connector::QueryRunner)
+    } else {
+        registry
+            .get(platform)
+            .and_then(opentide_connectors::Platform::query_runner)
+    };
+    let Some(runner) = found else {
+        outcome.error = Some(format!("{platform} has no query runner"));
+        return finish(outcome);
+    };
+    let interrupted = cx.interrupted;
+    let ran: std::thread::Result<Result<Result<QueryOutcome, ConnectorError>, String>> =
+        opentide_connectors::runtime::sync_call(|| {
+            opentide_connectors::runtime::block_on(async {
+                let cancel = CancellationToken::new();
+                let context = TenantContext {
+                    tenant: &tenant,
+                    http: &http,
+                    cancel: &cancel,
+                };
+                let work = runner.run(context, request);
+                // Ctrl-C stops the search, which the runner stops on the
+                // tenant where the API allows it.
+                watched(work, &cancel, interrupted).await
+            })
+        });
+    let result = match ran {
+        Ok(Ok(result)) => result,
+        Ok(Err(message)) => Err(ConnectorError::Crashed {
+            platform: platform.to_owned(),
+            tenant: configured.name.clone(),
+            message,
+        }),
+        Err(_) => Err(ConnectorError::Crashed {
+            platform: platform.to_owned(),
+            tenant: configured.name.clone(),
+            message: "the query stopped unexpectedly".into(),
+        }),
+    };
+    match result {
+        Ok(result) => outcome.result = Some(result),
+        Err(
+            ConnectorError::Refused {
+                message, detail, ..
+            }
+            | ConnectorError::QueryTimedOut {
+                message, detail, ..
+            },
+        ) => {
+            outcome.error = Some(message);
+            outcome.detail = detail;
+        }
+        Err(ConnectorError::Authentication { message, .. }) => {
+            outcome.error = Some(format!(
+                "cannot authenticate to {platform} tenant {:?}: {message}",
+                configured.name
+            ));
+        }
+        Err(ConnectorError::Gateway { message, .. }) => {
+            outcome.error = Some(format!(
+                "{platform} tenant {:?} did not answer the query within {}s: {message}",
+                configured.name,
+                request.timeout.as_secs_f64(),
+            ));
+            outcome.detail = Some("narrow the window or raise --timeout".into());
+        }
+        Err(ConnectorError::Timeout { address, .. }) => {
+            outcome.error = Some(format!(
+                "{platform} tenant {:?} did not answer the query within {}s (no answer from \
+                 {address})",
+                configured.name,
+                request.timeout.as_secs_f64(),
+            ));
+            outcome.detail = Some("narrow the window or raise --timeout".into());
+        }
+        Err(error) => outcome.error = Some(error.to_string()),
+    }
+    finish(outcome)
+}
+
+/// Runs `opentide query`.
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
+pub fn run(args: &Args, cx: &Context<'_>) -> Report {
+    let platform = args.platform.as_str();
+    let text = match query_text(args, cx) {
+        Ok(text) => text,
+        Err(report) => return *report,
+    };
+    let sources: Vec<&str> = [
+        (
+            "QUERY",
+            text.as_deref().is_some_and(|text| !text.is_empty()),
+        ),
+        (
+            "--rule",
+            args.rule.as_deref().is_some_and(|rule| !rule.is_empty()),
+        ),
+        (
+            "--file",
+            args.file.as_deref().is_some_and(|file| !file.is_empty()),
+        ),
+    ]
+    .iter()
+    .filter(|(_, given)| *given)
+    .map(|(name, _)| *name)
+    .collect();
+    if sources.len() != 1 {
+        let message = if sources.is_empty() {
+            "give exactly one query: QUERY (or - for stdin), --query-file, --rule or --file"
+                .to_owned()
+        } else {
+            format!(
+                "{} cannot be combined: give one query",
+                sources.join(" and ")
+            )
+        };
+        return usage(
+            platform,
+            &message,
+            sources.last().copied().unwrap_or("QUERY"),
+            &[],
+        );
+    }
+    // A platform plugin (UC-4.5) runs through the same runner trait; a rule's
+    // query on one cannot be read (the rule's block is the plugin's).
+    let plugin = crate::plugins::is_plugin(platform);
+    if plugin && (sources[0] == "--rule" || sources[0] == "--file") {
+        return plugin_rule(platform, sources[0]);
+    }
+    // A configuration file that does not parse is `config_parse`, its place
+    // and its diagnostic (#1659), not "no tenants configured" or "no rule":
+    // both read the configuration and used to take its error for absence.
+    {
+        let (_, options) = placement(cx.repo, cx.env, cx.cwd);
+        match super::open_for(COMMAND, options) {
+            Ok(workspace) => crate::app::release(workspace),
+            Err(mut refused) => {
+                // Every `query` document names its platform, as `usage_with` does.
+                refused
+                    .outcome
+                    .data
+                    .insert(0, ("platform".to_owned(), Json::str(platform)));
+                return *refused;
+            }
+        }
+    }
+    let rule = if sources[0] == "QUERY" {
+        None
+    } else {
+        let given = |value: &Option<String>| value.clone().filter(|value| !value.is_empty());
+        match super::query_rule::load(
+            given(&args.rule).as_deref(),
+            given(&args.file).as_deref(),
+            cx.repo,
+            cx.env,
+            cx.cwd,
+        ) {
+            Ok(rule) => Some(rule),
+            Err(refusal) => {
+                return usage_with(
+                    platform,
+                    &refusal.message,
+                    refusal.argument,
+                    refusal.suggestion,
+                    &[],
+                );
+            }
+        }
+    };
+    if !platforms().contains(&platform) && !plugin {
+        // Sysdig (`run_query`'s first check): no query runner, the platforms
+        // with one as the choices.
+        return no_runner(platform);
+    }
+    if !(1..=MAX_LIMIT).contains(&args.limit) {
+        let mut report = usage(
+            platform,
+            &format!("--limit must be between 1 and {MAX_LIMIT}"),
+            "--limit",
+            &[],
+        );
+        if let Some(failure) = report.outcome.failure.as_mut() {
+            failure.suggestion = None;
+        }
+        return report;
+    }
+    if !args.timeout.is_finite() || args.timeout <= 0.0 {
+        return usage(platform, "--timeout must be positive", "--timeout", &[]);
+    }
+    let languages = languages(platform);
+    if let Some(language) = &args.language
+        && !plugin
+        && !languages.contains(&language.as_str())
+    {
+        let choices: Vec<String> = languages.iter().map(|l| (*l).to_owned()).collect();
+        return usage_with(
+            platform,
+            &format!(
+                "{platform} queries are {}, not {language:?}",
+                languages.join(", ")
+            ),
+            "--language",
+            suggest(language, &choices),
+            &choices,
+        );
+    }
+    let window = match resolve_window(
+        args.since.as_deref(),
+        args.start.as_deref(),
+        args.end.as_deref(),
+        cx.now,
+    ) {
+        Ok(window) => window,
+        Err((message, flag)) => return usage(platform, &message, flag, &[]),
+    };
+    let query = text.unwrap_or_default();
+    let stripped = query.trim();
+    let queries =
+        match &rule {
+            Some(rule) => match rule_queries(rule, platform, args) {
+                Ok(queries) => queries,
+                Err(message) => return usage(platform, &message, "--rule", &[]),
+            },
+            None => {
+                if stripped.is_empty() {
+                    return usage(platform, "the query is empty", "QUERY", &[]);
+                }
+                vec![RuleQuery {
+                    text: stripped.to_owned(),
+                    language: Some(args.language.clone().unwrap_or_else(|| {
+                        languages.first().copied().unwrap_or_default().to_owned()
+                    })),
+                    index: args.index.clone(),
+                    ..RuleQuery::default()
+                }]
+            }
+        };
+    // No workspace is no tenants to choose from (E2E-7): say so as `new` and
+    // `doctor` do, not as a `--tenant` that names nothing.
+    if let Some(mut refused) = super::no_workspace(COMMAND, cx.repo, cx.env, cx.cwd) {
+        // Every `query` document names its platform, as `usage_with` does.
+        refused.outcome.data = vec![("platform".to_owned(), Json::str(platform))];
+        return refused;
+    }
+    let (available, config_path) = configured(cx, platform);
+    log_unset(&available, cx.env, "a query");
+    let selected = match select(platform, &args.tenants, &available, &config_path) {
+        Ok(selected) => selected,
+        Err((message, value, choices)) => {
+            let suggestion = value.as_deref().and_then(|value| suggest(value, &choices));
+            return usage_with(platform, &message, "--tenant", suggestion, &choices);
+        }
+    };
+    let default_language = languages.first().copied().unwrap_or_default();
+    let environment = Environment::from_pairs(cx.env.iter());
+    let progress = Progress::from_env_to_log(cx.env, cx.log);
+    let mut outcomes: Vec<TenantResult> = Vec::new();
+    'tenants: for tenant in &selected {
+        for item in &queries {
+            if (cx.interrupted)() {
+                break 'tenants;
+            }
+            let text = item.text_for(&tenant.name);
+            let language = item.language.as_deref().unwrap_or(default_language);
+            let mut request = QueryRequest::new(text.clone(), language, window);
+            request.limit = usize::try_from(args.limit).unwrap_or(1);
+            request.index.clone_from(&item.index);
+            request.data_view.clone_from(&item.data_view);
+            request.timeout = Duration::try_from_secs_f64(args.timeout).unwrap_or(Duration::MAX);
+            let mut outcome = run_on_tenant(platform, tenant, &request, cx, &environment);
+            outcome.label.clone_from(&item.label);
+            if let Some(result) = outcome.result.as_mut()
+                && result.sent.is_none()
+                && text != item.text
+            {
+                // The tenant's exclusions changed the query: show what was sent.
+                result.sent = Some(text);
+            }
+            if let Some(note) = &item.note {
+                outcome.warnings.insert(0, note.clone());
+            }
+            progress.tenant(&TenantEvent {
+                platform,
+                tenant: &outcome.tenant,
+                ok: outcome.ok(),
+                rows: outcome
+                    .result
+                    .as_ref()
+                    .map_or(0, |result| result.rows.len()),
+                elapsed_ms: u64::try_from(outcome.elapsed_ms).unwrap_or_default(),
+                label: outcome.label.as_deref(),
+            });
+            outcomes.push(outcome);
+        }
+    }
+    let names: Vec<String> = selected.iter().map(|tenant| tenant.name.clone()).collect();
+    let source = match &rule {
+        Some(rule) => Source::Rule {
+            uuid: &rule.uuid,
+            name: &rule.name,
+            queries: queries.iter().map(|item| item.text.as_str()).collect(),
+        },
+        None => Source::Query(stripped),
+    };
+    let mut report = payload(platform, &window, args.limit, &names, &outcomes, &source);
+    if cx.terminal.text() {
+        report.body = body(args, &outcomes, cx.terminal, &mut report);
+    }
+    report
+}
+
+/// What a run queried: a query, or a rule's queries.
+#[derive(Debug)]
+enum Source<'s> {
+    /// The query given.
+    Query(&'s str),
+    /// The rule, and the queries it sends (before any tenant's exclusions).
+    Rule {
+        uuid: &'s str,
+        name: &'s str,
+        queries: Vec<&'s str>,
+    },
+}
+
+/// The queries of `rule` for `platform`, with an explicit `--language` or
+/// `--index` winning over the rule's own (`_queries`).
+fn rule_queries(
+    rule: &opentide_compile::rule::Rule,
+    platform: &str,
+    args: &Args,
+) -> Result<Vec<RuleQuery>, String> {
+    let found = super::query_rule::rule_queries(rule, platform)?;
+    if args.language.is_none() && args.index.is_empty() {
+        return Ok(found);
+    }
+    Ok(found
+        .into_iter()
+        .map(|item| RuleQuery {
+            language: args.language.clone().or(item.language),
+            index: if args.index.is_empty() {
+                item.index
+            } else {
+                args.index.clone()
+            },
+            data_view: if args.index.is_empty() {
+                item.data_view
+            } else {
+                None
+            },
+            ..item
+        })
+        .collect())
+}
+
+/// The run's report (`run_payload`).
+#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
+fn payload(
+    platform: &str,
+    window: &TimeWindow,
+    limit: i64,
+    tenants: &[String],
+    outcomes: &[TenantResult],
+    source: &Source<'_>,
+) -> Report {
+    let rows: usize = outcomes
+        .iter()
+        .filter_map(|outcome| outcome.result.as_ref())
+        .map(|result| result.rows.len())
+        .sum();
+    let failed: Vec<&TenantResult> = outcomes.iter().filter(|outcome| !outcome.ok()).collect();
+    let count = tenants.len();
+    let place = format!(
+        "{count} {platform} tenant{}",
+        if count == 1 { "" } else { "s" }
+    );
+    let mut data: Vec<(String, Json)> = vec![
+        ("platform".into(), Json::str(platform)),
+        (
+            "source".into(),
+            Json::str(match source {
+                Source::Query(_) => "query",
+                Source::Rule { .. } => "rule",
+            }),
+        ),
+        (
+            "window".into(),
+            Json::object([
+                ("from", Json::str(TimeWindow::utc_z(window.start))),
+                ("to", Json::str(TimeWindow::utc_z(window.end))),
+            ]),
+        ),
+        ("limit".into(), Json::Int(limit)),
+        (
+            "tenants".into(),
+            Json::Array(tenants.iter().map(Json::str).collect()),
+        ),
+        (
+            "results".into(),
+            Json::Array(outcomes.iter().map(TenantResult::to_json).collect()),
+        ),
+        ("row_count".into(), Json::from(rows)),
+        match source {
+            Source::Query(query) => ("query".into(), Json::str(*query)),
+            Source::Rule {
+                uuid,
+                name,
+                queries,
+            } => (
+                "rule".into(),
+                Json::object([
+                    ("uuid", Json::str(*uuid)),
+                    ("name", Json::str(*name)),
+                    (
+                        "queries",
+                        Json::Array(queries.iter().map(|text| Json::str(*text)).collect()),
+                    ),
+                ]),
+            ),
+        },
+    ];
+    let summary = vec![
+        ("tenants".to_owned(), Json::from(count)),
+        ("rows".to_owned(), Json::from(rows)),
+        ("failed".to_owned(), Json::from(failed.len())),
+    ];
+    let outcome = if let Some(first) = failed.first() {
+        let message = format!(
+            "{} of {} queries failed on {place}: {}: {}",
+            failed.len(),
+            outcomes.len(),
+            first.tenant,
+            first.error.as_deref().unwrap_or("unknown error")
+        );
+        if let Some(detail) = first.detail.as_ref().filter(|detail| !detail.is_empty()) {
+            data.push(("detail".into(), Json::str(detail)));
+        }
+        Outcome {
+            command: COMMAND.into(),
+            status: "failed".into(),
+            message: message.clone(),
+            data,
+            exit_code: 1,
+            summary,
+            next_actions: Vec::new(),
+            failure: Some(Failure::new(super::COMMAND_FAILED, message)),
+        }
+    } else {
+        let truncated = outcomes.iter().any(|outcome| {
+            outcome
+                .result
+                .as_ref()
+                .is_some_and(|result| result.truncated)
+        });
+        let mut message = format!(
+            "{rows} row{} from {place}",
+            if rows == 1 { "" } else { "s" }
+        );
+        if truncated {
+            message.push_str(&format!(" (limited to {limit} per tenant)"));
+        }
+        Outcome {
+            command: COMMAND.into(),
+            status: "completed".into(),
+            message,
+            data,
+            exit_code: 0,
+            summary,
+            next_actions: Vec::new(),
+            failure: None,
+        }
+    };
+    let mut report = Report::failed(COMMAND, 1, Failure::new("", ""));
+    report.outcome = outcome;
+    report
+}
+
+/// A cell as the table shows it (`_cell`): whitespace collapsed, cut at
+/// [`CELL_WIDTH`] characters with an ellipsis.
+fn cell(value: Option<&Json>) -> String {
+    let text = match value {
+        None | Some(Json::Null) => return String::new(),
+        Some(value @ (Json::Object(_) | Json::Array(_))) => compact(value),
+        Some(value) => scalar_text(value),
+    };
+    let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    if text.chars().count() <= CELL_WIDTH {
+        text
+    } else {
+        let mut cut: String = text.chars().take(CELL_WIDTH - 1).collect();
+        cut.push('…');
+        cut
+    }
+}
+
+/// A row's value as text: a string as is, anything else as its JSON.
+fn scalar_text(value: &Json) -> String {
+    match value {
+        Json::Str(text) => text.clone(),
+        other => crate::json::document_text(other, false)
+            .trim_end()
+            .to_owned(),
+    }
+}
+
+/// *value* as compact JSON on one line, UTF-8 as is.
+fn compact(value: &Json) -> String {
+    crate::json::document_text(value, false)
+        .trim_end()
+        .to_owned()
+}
+
+/// A row with the tenant (and label) in front (`_labelled`).
+fn labelled(outcome: &TenantResult, row: &Json) -> Vec<(String, Json)> {
+    let mut members = vec![("_tenant".to_owned(), Json::str(&outcome.tenant))];
+    if let Some(label) = outcome.label.as_ref().filter(|label| !label.is_empty()) {
+        members.push(("_label".to_owned(), Json::str(label)));
+    }
+    if let Json::Object(fields) = row {
+        for (key, value) in fields {
+            match members.iter_mut().find(|(name, _)| name == key) {
+                Some(slot) => slot.1 = value.clone(),
+                None => members.push((key.clone(), value.clone())),
+            }
+        }
+    }
+    members
+}
+
+/// A CSV field as `csv.writer` quotes it (`QUOTE_MINIMAL`).
+fn csv_field(text: &str) -> String {
+    if text.contains([',', '"', '\n', '\r']) {
+        format!("\"{}\"", text.replace('"', "\"\""))
+    } else {
+        text.to_owned()
+    }
+}
+
+/// A CSV value (`_csv_value`).
+fn csv_value(value: Option<&Json>) -> String {
+    match value {
+        None | Some(Json::Null) => String::new(),
+        Some(value @ (Json::Object(_) | Json::Array(_))) => compact(value),
+        Some(value) => scalar_text(value),
+    }
+}
+
+/// What the text modes print: rows as `--format` asks, the failures and
+/// warnings on stderr (`query_cmd` after the payload).
+fn body(
+    args: &Args,
+    outcomes: &[TenantResult],
+    terminal: &Terminal,
+    report: &mut Report,
+) -> Vec<Block> {
+    match args.format {
+        RowFormat::Jsonl => {
+            let mut text = String::new();
+            for outcome in outcomes {
+                if let Some(result) = &outcome.result {
+                    for row in rows(result) {
+                        text.push_str(&compact(&Json::object(labelled(outcome, &row))));
+                        text.push('\n');
+                    }
+                }
+            }
+            if report.outcome.exit_code == 0 {
+                report.whole_stdout = Some(text);
+                return Vec::new();
+            }
+            vec![Block::Raw(text)]
+        }
+        RowFormat::Csv => {
+            let mut header: Vec<String> = vec!["_tenant".into()];
+            if outcomes.iter().any(|outcome| {
+                outcome
+                    .label
+                    .as_ref()
+                    .is_some_and(|label| !label.is_empty())
+            }) {
+                header.push("_label".into());
+            }
+            for outcome in outcomes {
+                if let Some(result) = &outcome.result {
+                    for column in &result.columns {
+                        if !header.contains(&column.name) {
+                            header.push(column.name.clone());
+                        }
+                    }
+                }
+            }
+            let mut text = header
+                .iter()
+                .map(|name| csv_field(name))
+                .collect::<Vec<_>>()
+                .join(",");
+            text.push('\n');
+            for outcome in outcomes {
+                if let Some(result) = &outcome.result {
+                    for row in rows(result) {
+                        let values = labelled(outcome, &row);
+                        let line: Vec<String> = header
+                            .iter()
+                            .map(|name| {
+                                csv_field(&csv_value(
+                                    values
+                                        .iter()
+                                        .find(|(key, _)| key == name)
+                                        .map(|(_, value)| value),
+                                ))
+                            })
+                            .collect();
+                        text.push_str(&line.join(","));
+                        text.push('\n');
+                    }
+                }
+            }
+            if report.outcome.exit_code == 0 {
+                report.whole_stdout = Some(text);
+                return Vec::new();
+            }
+            vec![Block::Raw(text)]
+        }
+        RowFormat::Table => tables(args, outcomes, terminal),
+    }
+}
+
+/// The tables of the text modes (`_print_tables`).
+fn tables(args: &Args, outcomes: &[TenantResult], terminal: &Terminal) -> Vec<Block> {
+    let wanted: Vec<String> = args
+        .columns
+        .as_deref()
+        .map(|columns| {
+            columns
+                .split(',')
+                .map(str::trim)
+                .filter(|name| !name.is_empty())
+                .map(str::to_owned)
+                .collect()
+        })
+        .unwrap_or_default();
+    let bold = Style::new().bold();
+    let dim = Style::new().dimmed();
+    let mut blocks: Vec<Block> = Vec::new();
+    for outcome in outcomes {
+        let mut title = outcome.tenant.clone();
+        if let Some(label) = outcome.label.as_ref().filter(|label| !label.is_empty()) {
+            title.push_str(&format!(" · {label}"));
+        }
+        let Some(result) = &outcome.result else {
+            if outcomes.len() > 1 {
+                let mut line = Text::styled(&title, &bold);
+                line.append(
+                    &format!(
+                        "  failed: {}",
+                        outcome.error.as_deref().unwrap_or("unknown error")
+                    ),
+                    &AnsiColor::Red.on_default(),
+                );
+                blocks.push(Block::Stderr(terminal.stderr.line(&line)));
+            }
+            continue;
+        };
+        let names: Vec<String> = result.columns.iter().map(|c| c.name.clone()).collect();
+        let shown: Vec<String> = if wanted.is_empty() {
+            names.iter().take(TABLE_COLUMNS).cloned().collect()
+        } else {
+            wanted
+                .iter()
+                .filter(|name| names.contains(name))
+                .cloned()
+                .collect()
+        };
+        let count = result.rows.len();
+        let mut counted = format!("{count} row{}", if count == 1 { "" } else { "s" });
+        if result.truncated {
+            counted.push_str(" (more matched; raise --limit)");
+        }
+        let mut heading = Text::styled(&title, &bold);
+        heading.push_str("  ");
+        heading.append(&counted, &dim);
+        let mut out = terminal.stdout.line(&heading);
+        if count > 0 && !shown.is_empty() {
+            let rows = rows(result);
+            let cells: Vec<Vec<String>> = rows
+                .iter()
+                .map(|row| shown.iter().map(|name| cell(row.get(name))).collect())
+                .collect();
+            for line in table(&shown, &cells, terminal.stdout.width) {
+                out.push_str(&terminal.stdout.line(&line));
+            }
+        }
+        let hidden = names.len().saturating_sub(shown.len());
+        if hidden > 0 && wanted.is_empty() {
+            out.push_str(&terminal.stdout.line(&Text::styled(
+                &format!("{hidden} more columns: name them with --columns, or use --format jsonl"),
+                &dim,
+            )));
+        }
+        blocks.push(Block::Raw(out));
+        if !terminal.quiet {
+            let mut warnings = String::new();
+            for warning in outcome.warnings.iter().chain(&result.warnings) {
+                let mut line = Text::styled("warning", &AnsiColor::Yellow.on_default().bold());
+                line.push_str(&format!(": {warning}"));
+                warnings.push_str(&terminal.stderr.line(&line));
+            }
+            if !warnings.is_empty() {
+                blocks.push(Block::Stderr(warnings));
+            }
+        }
+        blocks.push(Block::Raw("\n".into()));
+    }
+    blocks
+}
+
+/// The rows under their headers: each column as wide as its widest cell, at
+/// most [`CELL_WIDTH`] cells (a longer cell is cut with `…`), two spaces
+/// between columns, the header in bold over a rule. On a terminal (`width`),
+/// a line wider than it is cut at its edge with `…`.
+fn table(headers: &[String], rows: &[Vec<String>], width: Option<usize>) -> Vec<Text> {
+    use crate::render::text::cell_len;
+    let widths: Vec<usize> = headers
+        .iter()
+        .enumerate()
+        .map(|(at, header)| {
+            rows.iter()
+                .map(|row| cell_len(&row[at]))
+                .fold(cell_len(header), usize::max)
+                .min(CELL_WIDTH)
+        })
+        .collect();
+    let line = |cells: &[String], style: &Style| -> Text {
+        let mut line = Text::plain("");
+        for (at, value) in cells.iter().enumerate() {
+            if at > 0 {
+                line.push_str("  ");
+            }
+            let mut cell = Text::styled(value, style);
+            cell.truncate_ellipsis(widths[at]);
+            let pad = widths[at].saturating_sub(cell.cell_len());
+            line.append_text(&cell);
+            line.push_str(&" ".repeat(pad));
+        }
+        line.rstrip();
+        if let Some(width) = width {
+            line.truncate_ellipsis(width);
+        }
+        line
+    };
+    let plain = Style::new();
+    let rule: Vec<String> = widths.iter().map(|width| "-".repeat(*width)).collect();
+    let mut lines = vec![line(headers, &Style::new().bold()), line(&rule, &plain)];
+    lines.extend(rows.iter().map(|row| line(row, &plain)));
+    lines
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn an_integer_beyond_i64_is_the_nearest_float_in_a_setup_value() {
+        use opentide_compile::Json as J;
+        // TOML integers are signed 64-bit: u64::MAX is 2^64 as the nearest float.
+        let Some(toml::Value::Float(float)) = toml_value(&J::UInt(u64::MAX)) else {
+            panic!("a UInt is a TOML float");
+        };
+        assert_eq!(float.to_bits(), 2f64.powi(64).to_bits());
+        assert_eq!(
+            toml_value(&J::Int(i64::MAX)),
+            Some(toml::Value::Integer(i64::MAX))
+        );
+    }
+
+    #[test]
+    fn every_platform_mounts_the_connectors_http_settings() {
+        // A platform the command line listed apart drifted: Google SecOps
+        // left --timeout unread, Exabeam waited 120 s for 30 s.
+        for platform in opentide_schema::platforms::PLATFORMS.iter().map(|p| p.id) {
+            // The default --timeout, and one a user gives.
+            for timeout in [Duration::from_secs(120), Duration::from_secs(7)] {
+                assert_eq!(
+                    http_settings(platform, timeout),
+                    opentide_connectors::http_settings(platform, timeout),
+                    "{platform} at {timeout:?}"
+                );
+            }
+        }
+    }
+
+    fn at(text: &str) -> jiff::Timestamp {
+        text.parse().unwrap()
+    }
+
+    #[test]
+    fn windows_read_as_the_python_cli_reads_them() {
+        let now = at("2026-10-27T08:00:00Z");
+        let day = resolve_window(None, None, None, now).unwrap();
+        assert_eq!(TimeWindow::utc_z(day.start), "2026-10-26T08:00:00.000Z");
+        let hour = resolve_window(Some("PT1H"), None, Some("2026-10-27T10:00:00"), now).unwrap();
+        assert_eq!(TimeWindow::utc_z(hour.start), "2026-10-27T09:00:00.000Z");
+        let fixed = resolve_window(
+            None,
+            Some("2099-01-01T00:00:00Z"),
+            Some("2099-01-01T01:00:00+01:00"),
+            now,
+        );
+        assert_eq!(
+            fixed.unwrap_err(),
+            ("--from must be earlier than --to".to_owned(), "--from")
+        );
+        assert_eq!(
+            resolve_window(Some("1h"), Some("2026-10-27"), None, now)
+                .unwrap_err()
+                .1,
+            "--since"
+        );
+        assert_eq!(
+            resolve_window(Some("soon"), None, None, now).unwrap_err().0,
+            "--since \"soon\" is not a duration, such as 15m, 24h, 7d or PT1H"
+        );
+        assert_eq!(
+            resolve_window(None, Some("yesterday"), None, now)
+                .unwrap_err()
+                .0,
+            "--from \"yesterday\" is not an ISO-8601 time, such as 2026-10-27T08:00:00Z"
+        );
+    }
+
+    #[test]
+    fn tenants_are_selected_as_select_tenants_selects_them() {
+        let tenant = |name: &str| Configured {
+            name: name.to_owned(),
+            setup: opentide_compile::json::Object::new(),
+        };
+        let two = [tenant("prod"), tenant("lab")];
+        let names = |selected: Vec<&Configured>| -> Vec<String> {
+            selected.iter().map(|t| t.name.clone()).collect()
+        };
+        assert_eq!(
+            select("elastic", &[], &two, "x").unwrap_err().0,
+            "elastic has 2 tenants (prod, lab): name one with --tenant, or pass --tenant all"
+        );
+        assert_eq!(
+            names(select("elastic", &["lab".into(), "prod".into()], &two, "x").unwrap()),
+            ["prod", "lab"]
+        );
+        assert_eq!(
+            names(select("elastic", &["all".into()], &two, "x").unwrap()),
+            ["prod", "lab"]
+        );
+        let unknown = select("elastic", &["qa".into()], &two, "x").unwrap_err();
+        assert_eq!(
+            unknown.0,
+            "elastic has no tenant named \"qa\"; configured: prod, lab"
+        );
+        assert_eq!(unknown.2, ["prod", "lab", "all"]);
+        assert_eq!(
+            select("elastic", &[], &[], "p.toml").unwrap_err().0,
+            "elastic has no tenants configured: add a [[tenants]] entry in p.toml"
+        );
+    }
+
+    #[test]
+    fn rows_are_written_as_text_and_json() {
+        let row = Json::parse(r#"{"a": "x  y", "b": [1, "é"], "c": null, "d": 1.5}"#).unwrap();
+        let mut lab = failed("lab", "e", None);
+        assert_eq!(
+            compact(&Json::object(labelled(&lab, &row))),
+            r#"{"_tenant":"lab","a":"x  y","b":[1,"é"],"c":null,"d":1.5}"#
+        );
+        lab.label = Some("sub-query 1".into());
+        assert_eq!(
+            compact(&Json::object(labelled(&lab, &row)))[..40],
+            *r#"{"_tenant":"lab","_label":"sub-query 1","#
+        );
+        assert_eq!(cell(row.get("a")), "x y");
+        assert_eq!(cell(row.get("b")), r#"[1,"é"]"#);
+        assert_eq!(cell(row.get("c")), "");
+        assert_eq!(cell(Some(&Json::str("z".repeat(70)))).chars().count(), 60);
+        assert_eq!(csv_field("a,\"b\""), "\"a,\"\"b\"\"\"");
+        assert_eq!(csv_value(Some(&Json::Bool(true))), "true");
+        let table = |headers: &[&str], row: &[&str], width: Option<usize>| -> Vec<String> {
+            let headers: Vec<String> = headers.iter().map(|h| (*h).to_owned()).collect();
+            let row: Vec<String> = row.iter().map(|c| (*c).to_owned()).collect();
+            table(&headers, &[row], width)
+                .iter()
+                .map(Text::as_plain)
+                .collect()
+        };
+        // Each column as wide as its widest cell, two spaces between.
+        assert_eq!(
+            table(&["A", "Bee"], &["long", "b"], None),
+            ["A     Bee", "----  ---", "long  b"]
+        );
+        // A cell is cut at CELL_WIDTH cells, a wide character counted twice.
+        let wide = "一".repeat(40);
+        let lines = table(&["x", "y"], &[&wide, "1"], None);
+        assert_eq!(lines[1], format!("{}  -", "-".repeat(CELL_WIDTH)));
+        assert_eq!(lines[2], format!("{}…  1", "一".repeat(29) + " "));
+        // On a terminal, a line wider than it is cut at its edge; no width
+        // (a pipe or a file) keeps the whole line.
+        let row = ["c:\\windows\\cmd.exe", "4001", "ws-1", "ORGKEY01-0001"];
+        let headers = ["process_name", "pid", "device", "guid"];
+        assert_eq!(
+            table(&headers, &row, Some(20)),
+            [
+                "process_name       …",
+                "------------------ …",
+                "c:\\windows\\cmd.exe …"
+            ]
+        );
+        assert_eq!(
+            table(&headers, &row, None)[2],
+            "c:\\windows\\cmd.exe  4001  ws-1    ORGKEY01-0001"
+        );
+    }
+
+    #[test]
+    fn unset_credentials_are_named_as_the_runner_names_them() {
+        let mut setup = opentide_compile::json::Object::new();
+        setup.insert("url".into(), opentide_compile::Json::Str("$S1_URL".into()));
+        setup.insert(
+            "api_token".into(),
+            opentide_compile::Json::Str("${S1_TOKEN}".into()),
+        );
+        let tenant = Configured {
+            name: "lab".into(),
+            setup,
+        };
+        assert_eq!(
+            unset_credentials("sentinel_one", &tenant, &Env::from_pairs([("S1_URL", "x")])),
+            Some(
+                "SentinelOne credentials are unset (${S1_TOKEN}). Set those environment \
+                 variables, then run the command again."
+                    .to_owned()
+            )
+        );
+        assert_eq!(
+            unset_credentials(
+                "sentinel_one",
+                &tenant,
+                &Env::from_pairs([("S1_URL", "x"), ("S1_TOKEN", "y")])
+            ),
+            None
+        );
+    }
+
+    /// A row of `(column, value)` pairs, in order.
+    fn row(pairs: &[(&str, opentide_compile::Json)]) -> opentide_connectors::connector::Row {
+        pairs
+            .iter()
+            .map(|(key, value)| ((*key).to_owned(), value.clone()))
+            .collect()
+    }
+
+    /// A result with `columns` (untyped) and `rows`.
+    fn answered(columns: &[&str], rows: Vec<opentide_connectors::connector::Row>) -> QueryOutcome {
+        QueryOutcome {
+            columns: columns
+                .iter()
+                .map(|name| opentide_connectors::connector::QueryColumn::named(*name))
+                .collect(),
+            rows,
+            ..QueryOutcome::default()
+        }
+    }
+
+    fn ok(tenant: &str, result: QueryOutcome) -> TenantResult {
+        TenantResult {
+            tenant: tenant.into(),
+            label: None,
+            warnings: Vec::new(),
+            result: Some(result),
+            error: None,
+            detail: None,
+            elapsed_ms: 7,
+        }
+    }
+
+    fn failed(tenant: &str, error: &str, detail: Option<&str>) -> TenantResult {
+        TenantResult {
+            tenant: tenant.into(),
+            label: None,
+            warnings: Vec::new(),
+            result: None,
+            error: Some(error.into()),
+            detail: detail.map(str::to_owned),
+            elapsed_ms: 3,
+        }
+    }
+
+    fn window() -> TimeWindow {
+        TimeWindow {
+            start: at("2099-01-01T00:00:00Z"),
+            end: at("2099-01-01T01:00:00Z"),
+        }
+    }
+
+    fn compact_of(json: &Json) -> String {
+        crate::json::document_text(json, false)
+            .trim_end()
+            .to_owned()
+    }
+
+    fn text_of(blocks: &[Block]) -> (String, String) {
+        let (mut out, mut err) = (String::new(), String::new());
+        for block in blocks {
+            match block {
+                Block::Raw(text) => out.push_str(text),
+                Block::Stderr(text) => err.push_str(text),
+                other => panic!("query lays its text out itself: {other:?}"),
+            }
+        }
+        (out, err)
+    }
+
+    #[test]
+    fn a_tenants_entry_is_written_as_tenant_outcome_writes_it() {
+        use opentide_compile::Json as J;
+        let mut result = answered(&["n"], vec![row(&[("n", J::Int(1))])]);
+        result.columns[0].kind = Some("long".into());
+        result.truncated = true;
+        result.partial = true;
+        result.warnings = vec!["slow".into()];
+        result.language = Some("esql".into());
+        result.sent = Some("FROM x | LIMIT 2".into());
+        result.vendor_query_id = Some("job-1".into());
+        assert_eq!(
+            compact_of(&ok("soc", result).to_json()),
+            r#"{"tenant":"soc","status":"ok","columns":[{"name":"n","type":"long"}],"rows":[{"n":1}],"row_count":1,"truncated":true,"partial":true,"language":"esql","sent":"FROM x | LIMIT 2","vendor_query_id":"job-1","warnings":["slow"],"elapsed_ms":7}"#
+        );
+        assert_eq!(
+            compact_of(&failed("lab", "refused", Some("bad field")).to_json()),
+            r#"{"tenant":"lab","status":"failed","error":"refused","detail":"bad field","warnings":[],"elapsed_ms":3}"#
+        );
+        // An empty detail is left out, as `TenantOutcome.to_dict` leaves it.
+        assert_eq!(
+            compact_of(&failed("lab", "refused", Some("")).to_json()),
+            r#"{"tenant":"lab","status":"failed","error":"refused","warnings":[],"elapsed_ms":3}"#
+        );
+    }
+
+    #[test]
+    fn a_failed_tenant_fails_the_run_with_the_first_failure_and_its_detail() {
+        use opentide_compile::Json as J;
+        let outcomes = [
+            ok("prod", answered(&["n"], vec![row(&[("n", J::Int(1))])])),
+            failed(
+                "lab",
+                "Elastic refused the ES|QL query on lab (HTTP 400)",
+                Some("bad"),
+            ),
+            failed("qa", "unreachable", None),
+        ];
+        let names: Vec<String> = ["prod", "lab", "qa"].map(str::to_owned).to_vec();
+        let report = payload(
+            "elastic",
+            &window(),
+            100,
+            &names,
+            &outcomes,
+            &Source::Query("FROM x"),
+        );
+        let outcome = &report.outcome;
+        assert_eq!(outcome.exit_code, 1);
+        assert_eq!(outcome.status, "failed");
+        assert_eq!(
+            outcome.message,
+            "2 of 3 queries failed on 3 elastic tenants: lab: Elastic refused the ES|QL query \
+             on lab (HTTP 400)"
+        );
+        let failure = outcome.failure.as_ref().unwrap();
+        assert_eq!(failure.code, super::super::COMMAND_FAILED);
+        assert_eq!(failure.message, outcome.message);
+        let keys: Vec<&str> = outcome.data.iter().map(|(key, _)| key.as_str()).collect();
+        assert_eq!(
+            keys,
+            [
+                "platform",
+                "source",
+                "window",
+                "limit",
+                "tenants",
+                "results",
+                "row_count",
+                "query",
+                "detail"
+            ]
+        );
+        assert_eq!(outcome.data[8].1, Json::str("bad"));
+        assert_eq!(
+            compact_of(&outcome.data[2].1),
+            r#"{"from":"2099-01-01T00:00:00.000Z","to":"2099-01-01T01:00:00.000Z"}"#
+        );
+        assert_eq!(outcome.data[6].1, Json::Int(1));
+        let summary: Vec<String> = outcome
+            .summary
+            .iter()
+            .map(|(key, value)| format!("{key}={}", compact_of(value)))
+            .collect();
+        assert_eq!(summary, ["tenants=3", "rows=1", "failed=2"]);
+        // A failure without a detail adds none.
+        let report = payload(
+            "elastic",
+            &window(),
+            100,
+            &names[2..],
+            &outcomes[2..],
+            &Source::Query("q"),
+        );
+        assert_eq!(
+            report.outcome.message,
+            "1 of 1 queries failed on 1 elastic tenant: qa: unreachable"
+        );
+        assert!(report.outcome.data.iter().all(|(key, _)| key != "detail"));
+    }
+
+    #[test]
+    fn a_completed_run_counts_its_rows_and_says_when_a_tenant_was_limited() {
+        use opentide_compile::Json as J;
+        let one = answered(&["n"], vec![row(&[("n", J::Int(1))])]);
+        let names = vec!["soc".to_owned()];
+        let report = payload(
+            "elastic",
+            &window(),
+            5,
+            &names,
+            &[ok("soc", one)],
+            &Source::Query("q"),
+        );
+        assert_eq!(report.outcome.exit_code, 0);
+        assert_eq!(report.outcome.status, "completed");
+        assert!(report.outcome.failure.is_none());
+        assert_eq!(report.outcome.message, "1 row from 1 elastic tenant");
+        let mut two = answered(
+            &["n"],
+            vec![row(&[("n", J::Int(1))]), row(&[("n", J::Int(2))])],
+        );
+        two.truncated = true;
+        let names = vec!["a".to_owned(), "b".to_owned()];
+        let report = payload(
+            "crowdstrike",
+            &window(),
+            2,
+            &names,
+            &[ok("a", two), ok("b", answered(&[], Vec::new()))],
+            &Source::Query("q"),
+        );
+        assert_eq!(
+            report.outcome.message,
+            "2 rows from 2 crowdstrike tenants (limited to 2 per tenant)"
+        );
+    }
+
+    /// Two tenants' rows, one failed tenant, and a run's report.
+    fn two_tenants_and_a_failure() -> Vec<TenantResult> {
+        use opentide_compile::Json as J;
+        let mut first = answered(
+            &["host", "note"],
+            vec![
+                row(&[
+                    ("host", J::Str("pc-1".into())),
+                    ("note", J::Str("a, \"b\"".into())),
+                ]),
+                row(&[("host", J::Str("pc-2".into())), ("note", J::Null)]),
+            ],
+        );
+        first.warnings = vec!["the search was sampled".into()];
+        let second = answered(
+            &["host", "count"],
+            vec![row(&[
+                ("host", J::Str("pc-3".into())),
+                ("count", J::Int(4)),
+                ("_tenant", J::Str("shadowed".into())),
+            ])],
+        );
+        vec![
+            ok("prod", first),
+            ok("lab", second),
+            failed("qa", "unreachable", None),
+        ]
+    }
+
+    #[test]
+    fn json_lines_put_the_tenant_first_and_go_to_stdout_whole_on_success() {
+        let args = Args {
+            format: RowFormat::Jsonl,
+            ..Args::default()
+        };
+        let outcomes = two_tenants_and_a_failure();
+        let terminal = Terminal::plain(crate::mode::Mode::Plain);
+        let mut report = Report::failed(COMMAND, 0, Failure::new("", ""));
+        report.outcome.exit_code = 0;
+        let blocks = body(&args, &outcomes, &terminal, &mut report);
+        assert!(blocks.is_empty());
+        let expected = "{\"_tenant\":\"prod\",\"host\":\"pc-1\",\"note\":\"a, \\\"b\\\"\"}\n\
+                        {\"_tenant\":\"prod\",\"host\":\"pc-2\",\"note\":null}\n\
+                        {\"_tenant\":\"shadowed\",\"host\":\"pc-3\",\"count\":4}\n";
+        assert_eq!(report.whole_stdout.as_deref(), Some(expected));
+        // A failed run prints the rows it has in the body, before the outcome.
+        let mut report = Report::failed(COMMAND, 1, Failure::new("", ""));
+        let blocks = body(&args, &outcomes, &terminal, &mut report);
+        assert!(report.whole_stdout.is_none());
+        assert_eq!(text_of(&blocks), (expected.to_owned(), String::new()));
+    }
+
+    #[test]
+    fn csv_has_one_header_of_every_tenants_columns() {
+        let args = Args {
+            format: RowFormat::Csv,
+            ..Args::default()
+        };
+        let outcomes = two_tenants_and_a_failure();
+        let terminal = Terminal::plain(crate::mode::Mode::Plain);
+        let expected = "_tenant,host,note,count\n\
+                        prod,pc-1,\"a, \"\"b\"\"\",\n\
+                        prod,pc-2,,\n\
+                        shadowed,pc-3,,4\n";
+        let mut report = Report::failed(COMMAND, 0, Failure::new("", ""));
+        report.outcome.exit_code = 0;
+        assert!(body(&args, &outcomes, &terminal, &mut report).is_empty());
+        assert_eq!(report.whole_stdout.as_deref(), Some(expected));
+        let mut report = Report::failed(COMMAND, 1, Failure::new("", ""));
+        let blocks = body(&args, &outcomes, &terminal, &mut report);
+        assert_eq!(text_of(&blocks), (expected.to_owned(), String::new()));
+        // No tenant answered: the header alone.
+        let mut report = Report::failed(COMMAND, 1, Failure::new("", ""));
+        let blocks = body(&args, &outcomes[2..], &terminal, &mut report);
+        assert_eq!(text_of(&blocks).0, "_tenant\n");
+    }
+
+    #[test]
+    fn tables_show_each_tenant_its_failures_and_its_warnings() {
+        let outcomes = two_tenants_and_a_failure();
+        let terminal = Terminal::plain(crate::mode::Mode::Plain);
+        let (out, err) = text_of(&tables(&Args::default(), &outcomes, &terminal));
+        assert_eq!(
+            out,
+            "prod  2 rows\n\
+             host  note\n\
+             ----  ------\n\
+             pc-1  a, \"b\"\n\
+             pc-2\n\
+             \n\
+             lab  1 row\n\
+             host  count\n\
+             ----  -----\n\
+             pc-3  4\n\
+             \n"
+        );
+        assert_eq!(
+            err,
+            "warning: the search was sampled\nqa  failed: unreachable\n"
+        );
+        // --quiet drops the warnings, not the failures.
+        let quiet = Terminal {
+            quiet: true,
+            ..Terminal::plain(crate::mode::Mode::Plain)
+        };
+        let (_, err) = text_of(&tables(&Args::default(), &outcomes, &quiet));
+        assert_eq!(err, "qa  failed: unreachable\n");
+        // One tenant that failed: the outcome line says it, no table.
+        assert!(tables(&Args::default(), &outcomes[2..], &terminal).is_empty());
+    }
+
+    #[test]
+    fn tables_show_the_named_columns_or_the_first_eight() {
+        use opentide_compile::Json as J;
+        let names: Vec<String> = (0..10).map(|at| format!("c{at}")).collect();
+        let columns: Vec<&str> = names.iter().map(String::as_str).collect();
+        let pairs: Vec<(&str, J)> = columns
+            .iter()
+            .enumerate()
+            .map(|(at, name)| (*name, J::Int(i64::try_from(at).unwrap())))
+            .collect();
+        let mut result = answered(&columns, vec![row(&pairs)]);
+        result.truncated = true;
+        let outcomes = [ok("soc", result)];
+        let terminal = Terminal::plain(crate::mode::Mode::Plain);
+        let (out, _) = text_of(&tables(&Args::default(), &outcomes, &terminal));
+        let lines: Vec<&str> = out.lines().collect();
+        assert_eq!(lines[0], "soc  1 row (more matched; raise --limit)");
+        assert_eq!(lines[1], "c0  c1  c2  c3  c4  c5  c6  c7");
+        assert_eq!(
+            lines[4],
+            "2 more columns: name them with --columns, or use --format jsonl"
+        );
+        // --columns: those named that the result has, in the order named,
+        // and no hint about the others.
+        let args = Args {
+            columns: Some(" c9, nope ,,c1".into()),
+            ..Args::default()
+        };
+        let (out, _) = text_of(&tables(&args, &outcomes, &terminal));
+        assert_eq!(
+            out,
+            "soc  1 row (more matched; raise --limit)\n\
+             c9  c1\n\
+             --  --\n\
+             9   1\n\
+             \n"
+        );
+        // No rows: the heading alone.
+        let empty = [ok("soc", answered(&["a"], Vec::new()))];
+        let (out, _) = text_of(&tables(&Args::default(), &empty, &terminal));
+        assert_eq!(out, "soc  0 rows\n\n");
+    }
+
+    #[test]
+    fn the_query_is_read_from_its_argument_a_file_or_stdin() {
+        let scratch = tempfile::tempdir().unwrap();
+        std::fs::write(scratch.path().join("q.kql"), "\u{feff}FROM logs-*\n").unwrap();
+        let env = Env::from_pairs::<&str, &str>([]);
+        let terminal = Terminal::plain(crate::mode::Mode::Json);
+        let never = || false;
+        let stdin = || "from stdin".to_owned();
+        let log: crate::logging::Sink = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let cx = Context {
+            repo: None,
+            env: &env,
+            cwd: scratch.path(),
+            proxy: None,
+            terminal: &terminal,
+            interrupted: &never,
+            stdin: &stdin,
+            now: at("2026-10-27T08:00:00Z"),
+            log: &log,
+        };
+        assert!(format!("{cx:?}").starts_with("Context { repo: None, cwd: "));
+        let args = |query: Option<&str>, file: Option<&str>| Args {
+            query: query.map(str::to_owned),
+            query_file: file.map(str::to_owned),
+            platform: "elastic".into(),
+            ..Args::default()
+        };
+        assert_eq!(
+            query_text(&args(None, Some("q.kql")), &cx)
+                .unwrap()
+                .as_deref(),
+            Some("FROM logs-*\n")
+        );
+        assert_eq!(
+            query_text(&args(Some("-"), None), &cx).unwrap().as_deref(),
+            Some("from stdin")
+        );
+        assert_eq!(
+            query_text(&args(Some("x"), None), &cx).unwrap().as_deref(),
+            Some("x")
+        );
+        assert_eq!(query_text(&args(None, None), &cx).unwrap(), None);
+        let refused = |args: Args| {
+            let report = query_text(&args, &cx).unwrap_err();
+            let failure = report.outcome.failure.clone().unwrap();
+            (
+                report.outcome.exit_code,
+                failure.code,
+                failure.message,
+                failure.argument,
+            )
+        };
+        // The operating system's own words for a missing file (os error 2
+        // on Unix and on Windows).
+        let not_found = std::io::Error::from_raw_os_error(2);
+        assert_eq!(
+            refused(args(None, Some("nope.kql"))),
+            (
+                USAGE_EXIT_CODE,
+                code::USAGE_INVALID_VALUE.to_owned(),
+                format!("cannot read --query-file nope.kql: {not_found}"),
+                Some("--query-file".to_owned())
+            )
+        );
+        assert_eq!(
+            refused(args(Some("x"), Some("q.kql"))).2,
+            "QUERY and --query-file cannot be combined: give one query"
+        );
+    }
+
+    #[test]
+    fn a_usage_error_names_the_platform_and_its_choices() {
+        let choices = vec!["esql".to_owned(), "eql".to_owned()];
+        let report = usage_with("elastic", "no", "--language", Some("eql".into()), &choices);
+        assert_eq!(
+            compact_of(&Json::object(report.outcome.data.clone())),
+            r#"{"platform":"elastic","choices":["esql","eql"]}"#
+        );
+        let failure = report.outcome.failure.unwrap();
+        assert_eq!(failure.suggestion.as_deref(), Some("eql"));
+        assert_eq!(failure.argument.as_deref(), Some("--language"));
+        assert_eq!(suggest("esq", &choices).as_deref(), Some("esql"));
+        let refused = no_runner("sysdig");
+        assert_eq!(
+            compact_of(&Json::object(refused.outcome.data.clone())),
+            r#"{"platform":"sysdig","choices":["sentinel","microsoft_defender","splunk","sentinel_one","crowdstrike","harfanglab","carbon_black_cloud","elastic","graylog","exabeam","google_secops"]}"#
+        );
+        assert_eq!(refused.outcome.exit_code, 2);
+        let failure = refused.outcome.failure.unwrap();
+        assert_eq!(failure.code, code::USAGE_INVALID_VALUE);
+        assert_eq!(failure.argument.as_deref(), Some("--platform"));
+        assert_eq!(failure.message, "sysdig has no query runner");
+        assert_eq!(failure.suggestion, None);
+        let refused = plugin_rule("acme", "--rule");
+        assert_eq!(refused.outcome.exit_code, 2);
+        let failure = refused.outcome.failure.unwrap();
+        assert_eq!(failure.code, code::USAGE_INVALID_VALUE);
+        assert_eq!(failure.argument.as_deref(), Some("--rule"));
+        assert!(
+            failure.message.contains("acme is a platform plugin"),
+            "{}",
+            failure.message
+        );
+    }
+
+    #[test]
+    fn each_platform_has_its_languages_credentials_and_address() {
+        for platform in query_platforms() {
+            assert!(!languages(platform).is_empty(), "{platform}");
+        }
+        assert_eq!(languages("elastic"), ["esql", "eql", "lucene", "kuery"]);
+        assert_eq!(languages("sentinel"), ["kql"]);
+        assert_eq!(languages("splunk"), ["spl"]);
+        assert_eq!(languages("carbon_black_cloud"), ["lucene"]);
+        assert!(languages("sysdig").is_empty());
+        assert_eq!(
+            credential_keys("harfanglab"),
+            ("HarfangLab", &["url", "api_token"][..])
+        );
+        assert_eq!(credential_keys("elastic").1, ["api_key"]);
+        assert_eq!(credential_keys("crowdstrike").0, "CrowdStrike");
+        assert_eq!(credential_keys("microsoft_defender").1.len(), 3);
+        assert_eq!(
+            credential_keys("splunk"),
+            ("Splunk", &["url", "port", "token", "app", "ssl"][..])
+        );
+        assert_eq!(credential_keys("carbon_black_cloud").0, "CBC");
+        assert_eq!(credential_keys("sentinel").1.len(), 3);
+        assert_eq!(credential_keys("sysdig"), ("", &[][..]));
+        assert_eq!(
+            credential_keys("graylog"),
+            ("Graylog", &["url", "token"][..])
+        );
+        for platform in platforms() {
+            let settings = http_settings(platform, Duration::from_secs(30));
+            assert!(settings.timeout > Duration::ZERO, "{platform}");
+        }
+        // Splunk, Carbon Black Cloud and Google SecOps read for --timeout;
+        // Sentinel for azure-core's 300 s at least; Sysdig keeps its
+        // client's 30 s.
+        assert_eq!(
+            http_settings("splunk", Duration::from_secs(5)).timeout,
+            Duration::from_secs(5)
+        );
+        assert_eq!(
+            http_settings("carbon_black_cloud", Duration::from_secs(5)).timeout,
+            Duration::from_secs(5)
+        );
+        assert_eq!(
+            http_settings("sentinel", Duration::from_secs(5)).timeout,
+            Duration::from_secs(300)
+        );
+        assert_eq!(
+            http_settings("google_secops", Duration::from_secs(5)).timeout,
+            Duration::from_secs(5)
+        );
+        assert_eq!(
+            http_settings("sysdig", Duration::from_secs(5)).timeout,
+            Duration::from_secs(30)
+        );
+    }
+
+    #[test]
+    fn setup_values_become_toml_and_references_are_named() {
+        use opentide_compile::Json as J;
+        assert_eq!(
+            toml_value(&J::Str("x".into())),
+            Some(toml::Value::String("x".into()))
+        );
+        assert_eq!(toml_value(&J::Int(3)), Some(toml::Value::Integer(3)));
+        assert_eq!(toml_value(&J::Float(1.5)), Some(toml::Value::Float(1.5)));
+        assert_eq!(toml_value(&J::Bool(true)), Some(toml::Value::Boolean(true)));
+        assert_eq!(
+            toml_value(&J::Array(vec![J::Int(1), J::Null, J::Str("a".into())])),
+            Some(toml::Value::Array(vec![
+                toml::Value::Integer(1),
+                toml::Value::String("a".into())
+            ]))
+        );
+        assert_eq!(toml_value(&J::Null), None);
+        // A table is kept (Graylog's `stream_ids`), its nulls left out.
+        let mut ids = opentide_compile::json::Object::new();
+        ids.insert("endpoint".into(), J::Str("65f0c0ffee0123456789abcd".into()));
+        ids.insert("gone".into(), J::Null);
+        let mut expected = toml::Table::new();
+        expected.insert(
+            "endpoint".into(),
+            toml::Value::String("65f0c0ffee0123456789abcd".into()),
+        );
+        assert_eq!(
+            toml_value(&J::Object(ids)),
+            Some(toml::Value::Table(expected))
+        );
+        assert_eq!(reference(&J::Str("$TOKEN".into())), Some("TOKEN"));
+        assert_eq!(reference(&J::Str("${TOKEN}".into())), Some("TOKEN"));
+        assert_eq!(reference(&J::Str("plain".into())), None);
+        assert_eq!(reference(&J::Int(1)), None);
+    }
+
+    #[test]
+    fn instants_read_as_parse_instant_reads_them() {
+        let utc = |text: &str| TimeWindow::utc_z(parse_instant(text, "--from").unwrap());
+        assert_eq!(utc("2026-10-27"), "2026-10-27T00:00:00.000Z");
+        assert_eq!(utc(" 2026-10-27T08:00:00z "), "2026-10-27T08:00:00.000Z");
+        assert_eq!(utc("2026-10-27T10:00:00+02:00"), "2026-10-27T08:00:00.000Z");
+        assert_eq!(utc("2026-10-27T08:00:00"), "2026-10-27T08:00:00.000Z");
+        assert_eq!(
+            parse_instant("27/10/2026", "--to").unwrap_err(),
+            "--to \"27/10/2026\" is not an ISO-8601 time, such as 2026-10-27T08:00:00Z"
+        );
+    }
+
+    #[test]
+    fn credentials_of_a_platform_without_a_runner_are_never_unset() {
+        let mut setup = opentide_compile::json::Object::new();
+        setup.insert("api_key".into(), opentide_compile::Json::Str("$KEY".into()));
+        let tenant = Configured {
+            name: "soc".into(),
+            setup,
+        };
+        let env = Env::from_pairs::<&str, &str>([]);
+        assert_eq!(
+            unset_credentials("elastic", &tenant, &env).as_deref(),
+            Some(
+                "Elastic credentials are unset ($KEY). Set those environment variables, then run the command again."
+            )
+        );
+        assert_eq!(unset_credentials("splunk", &tenant, &env), None);
+    }
+}

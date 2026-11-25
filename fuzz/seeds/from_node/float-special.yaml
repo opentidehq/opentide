@@ -1,0 +1,11 @@
+a: .inf
+b: -.inf
+c: +.Inf
+d: .INF
+e: .nan
+f: .NaN
+g: .NAN
+h: inf
+i: nan
+j: -.nan
+k: .iNf

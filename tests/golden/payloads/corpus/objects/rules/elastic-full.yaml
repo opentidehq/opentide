@@ -1,0 +1,122 @@
+name: Elastic Full
+
+metadata:
+  uuid: 00000000-0000-4000-8006-000000000001
+  schema: rule::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+  author: Detection Team
+  contributors:
+    - Analyst One
+    - Detection Team
+
+description: |
+  Elastic Full for the compile corpus.
+  Second line.
+techniques:
+  - T1059.001
+  - T1003.001
+  - T1003
+detection_model: 00000000-0000-4000-8002-000000000001
+
+references:
+  public:
+    10: https://example.org/ten
+    2: https://example.org/two
+    1: https://example.org/one
+
+response:
+  alert_severity: Low
+  procedure:
+    analysis: |
+      Look at the parent process.
+
+configurations:
+  elastic:
+    status: STAGING
+    type: query
+    name: Elastic Full Override
+    language: lucene
+    query: |
+      process.name:cmd.exe
+    index:
+      - logs-endpoint.*
+    filters:
+      - field: host.os.type
+        value: windows
+        negate: true
+      - meta:
+          alias: custom
+        query:
+          match_all: {}
+    scheduling:
+      interval: 10m
+      lookback: 2m
+      max_alerts: 50
+    severity:
+      default: Medium
+      mapping:
+        - severity: high
+          value: admin
+          field: user.name
+    risk:
+      score: 50
+      mapping:
+        - field: event.risk_score
+    overrides:
+      name: rule.name
+      timestamp: event.ingested
+      disable_fallback: true
+    actions:
+      notify:
+        - action_type_id: .slack
+          id: slack-connector
+          params:
+            message: Alert
+      respond:
+        - endpoint: kill-process
+        - endpoint: isolate
+          comment: Isolated by OpenTide
+          field: host.id
+        - osquery:
+            query: select 1
+      timeline:
+        id: timeline-1
+        title: Investigation
+    suppression:
+      duration: 1h
+      group_by:
+        - host.name
+      missing_fields_strategy: doNotSuppress
+    highlighted_fields:
+      - process.name
+    required_fields:
+      - name: process.name
+        type: keyword
+      - name: host.name
+        type: keyword
+    integration:
+      - endpoint
+      - version: ^8.0.0
+        package: windows
+        integration: sysmon
+    guide:
+      investigation: |
+        Investigate the host.
+      setup: |
+        Install the endpoint integration.
+    false_positives:
+      - Admin tooling
+    tags:
+      - Block Tag
+      - OpenTide
+    exceptions:
+      endpoint: true
+      lists:
+        - type: detection
+          namespace_type: single
+          list_id: shared-list
+          id: shared-list-id
+    building_block: true

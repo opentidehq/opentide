@@ -1,0 +1,20 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: generate.extract.sentinel/json/none/help
+---
+args: opentide --json generate extract sentinel --help
+exit: 0
+
+━━━ stdout
+Import Sentinel analytics rules (needs Sentinel tenant credentials).
+
+Usage: opentide generate extract sentinel
+
+Options:
+      --help
+          Print help
+
+Examples:
+  $ opentide generate extract sentinel
+
+━━━ stderr · empty

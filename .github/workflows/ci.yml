@@ -1,31 +1,193 @@
 name: CI
+# A push's run names the commit's first line, which for a merge is "Merge pull
+# request #N from ...": a failure on a base branch names the pull request
+# that brought it.
+run-name: >-
+  ${{ github.event_name == 'push'
+  && format('CI on {0}: {1}', github.ref_name, github.event.head_commit.message)
+  || '' }}
+
+# One workflow, four tiers (.github/AGENTS.md, "What runs where";
+# tests/test_ci/test_workflows.py). `changes` decides which, and what each
+# run checks (scripts/ci/changes.py):
+#
+# - The PR gate, on a pull request into integration/unified-core,
+#   development or train/*: Linux only, and only what the change affects.
+#   The changed workspace crates and their reverse dependencies are built
+#   ONCE (`build`: their tests, which it runs), and the `_native` extension
+#   once (`native`), on which the Python suite and E2E run. Each
+#   specialised job (Node, WASI, TextMate, GitLab CI lint,
+#   the facade's semver checks, cargo deny, docs) runs only when its
+#   paths change. One required check, `PR gate`, passes when every job that
+#   was needed passed and every other was skipped.
+# - A push to a base branch, and Run workflow (scope `full`): the same jobs
+#   with every path filter on, Linux only. This keeps the trunk fully checked.
+# - A release pull request (into development from integration/unified-core
+#   or release/*, or labelled `release`), and Run workflow (scope `release`):
+#   the gate plus every package on every target, an install smoke test of
+#   each on its OS, the publish dry run and the docs.
+# - The nightly (schedule, and Run workflow with scope `nightly`): everything
+#   above, plus `nightly` (nightly.yml: macOS and Windows, SDK conformance,
+#   coverage, the benchmarks, the vendor-parser oracles, the fuzz targets,
+#   the Elastic sweep, the LSP clients) and the Windows CLI smoke on the
+#   release build's wheel. It never gates; a failure opens or updates one
+#   issue labelled `nightly-failure`. Python 3.10-3.13 and the full E2E set
+#   (`python-matrix`) run on release pull requests and the nightly.
+#
+# Byte-for-byte comparison with the frozen Python CLI is no requirement
+# anywhere: the command line's behaviour is held by Rust-owned snapshots
+# (tests/golden/README.md), and the oracle's recordings and their comparison
+# tooling were retired (#1142); `cargo xtask corpus` still runs by hand.
 
 on:
   push:
-    branches: [main, development]
+    # integration/unified-core: the Unified Core PRs merge there before development.
+    # train/*: a release train that pull requests target; its pushes save
+    # the caches those pull requests restore (a pull request reads only its base
+    # branch's caches and the default branch's).
+    branches: [main, development, integration/unified-core, "train/*"]
+  # Every base: integration/unified-core, development, a train/*, or the
+  # branch below a stacked pull request.
   pull_request:
-    # All base branches: a stacked PR targets the branch below it, not development.
+    # `labeled`: labelling a pull request `release` runs the release tier.
+    types: [opened, synchronize, reopened, labeled]
+  workflow_dispatch:
+    inputs:
+      scope:
+        description: "full: the push's jobs (Linux, everything); release: plus every package and smoke test; nightly: the nightly set"
+        type: choice
+        options: [full, release, nightly]
+        default: full
+  schedule:
+    # Nightly on the default branch (development).
+    - cron: "11 1 * * *"
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # A pull request's new push cancels its stale run; every other run (a push
+  # to a base branch, the nightly, Run workflow) has a group of its own, its
+  # run id, so none cancels another and each push to a base branch gets a
+  # complete run (tests/test_ci/test_workflows.py).
+  group: ci-${{ github.workflow }}-${{ github.event_name }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
-  code-quality: write
 
 env:
-  # Single matrix cell runs coverage (line hits are version-agnostic; use latest supported).
+  # The Python of the gate's Python jobs (and the coverage gate).
   COVERAGE_PYTHON: "3.14"
 
+# Compiler caches (tests/test_ci/test_workflows.py): sccache (RUSTC_WRAPPER)
+# in .sccache/, restored by .github/actions/rust-setup (`cache:`) and saved by
+# .github/actions/sccache-save, kept by actions/cache under
+# `sccache-<family>-<hash of rust-toolchain.toml>-<ISO week>`, restored with the
+# family and toolchain as restore-keys and saved by exactly one job when the
+# key missed (once a week): from a push or Run workflow (the nightly, for the
+# nightly's families), and from a pull request only when it found no copy of
+# the family at all (its base branch has none yet: a new family or
+# toolchain), so that its next push is warm. sccache is content-addressed, so a copy a few days old still
+# serves every crate that did not change. Linux only.
+#
+#   build           `build`: the tests, xtask and the language server
+#   native          `native`: the `_native` extension
+#   stubs           `stubs`: the extension with PyO3's introspection, xtask
+#   throughput      `throughput`: the throughput bench (bench profile), xtask
+#   wiring          `wiring`: xtask's language_wiring test
+#   engine-check    `engine-lint`: the workspace's clippy and rustdoc
+#   engine-variants `engine-lint-variants`: clippy without `terminal`, on
+#                   wasm32 and on opentide-schema's `stubs`
+#   wasm            `wasm`: the browser module, the WASI server and command line
+#   full-set-Linux  `node`, `facade` and the nightly's Linux Rust jobs:
+#                   `conformance` saves it, by the nightly and on pushes to
+#                   development and integration/unified-core
+#
+# The nightly's jobs live in nightly.yml, which restores full-set-Linux too.
+# macOS and Windows build without a compiler cache: theirs crowded the Linux
+# families out of the 10 GB (#841).
+
 jobs:
+
+  # What this run checks: the tier, the affected crates and the areas
+  # (scripts/ci/changes.py). Standard library and `cargo metadata --no-deps`
+  # only, so it takes seconds.
+  changes:
+    name: Changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      mode: ${{ steps.plan.outputs.mode }}
+      release: ${{ steps.plan.outputs.release }}
+      crates: ${{ steps.plan.outputs.crates }}
+      packages: ${{ steps.plan.outputs.packages }}
+      features: ${{ steps.plan.outputs.features }}
+      filter: ${{ steps.plan.outputs.filter }}
+      native: ${{ steps.plan.outputs.native }}
+      rust: ${{ steps.plan.outputs.rust }}
+      python: ${{ steps.plan.outputs.python }}
+      lint: ${{ steps.plan.outputs.lint }}
+      pylint: ${{ steps.plan.outputs.pylint }}
+      ci: ${{ steps.plan.outputs.ci }}
+      skills: ${{ steps.plan.outputs.skills }}
+      docs: ${{ steps.plan.outputs.docs }}
+      website: ${{ steps.plan.outputs.website }}
+      node: ${{ steps.plan.outputs.node }}
+      wasm: ${{ steps.plan.outputs.wasm }}
+      ts_packages: ${{ steps.plan.outputs.ts_packages }}
+      textmate: ${{ steps.plan.outputs.textmate }}
+      gitlab: ${{ steps.plan.outputs.gitlab }}
+      facade: ${{ steps.plan.outputs.facade }}
+      deny: ${{ steps.plan.outputs.deny }}
+      vocab: ${{ steps.plan.outputs.vocab }}
+      fields: ${{ steps.plan.outputs.fields }}
+      schema_ui: ${{ steps.plan.outputs.schema_ui }}
+      stubs: ${{ steps.plan.outputs.stubs }}
+      wiring: ${{ steps.plan.outputs.wiring }}
+      throughput: ${{ steps.plan.outputs.throughput }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # A pull request's head and base, for `git diff base...head`.
+          fetch-depth: 0
+          persist-credentials: false
+      - name: What this run checks
+        id: plan
+        env:
+          EVENT: ${{ github.event_name }}
+          SCOPE: ${{ inputs.scope }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_REF: ${{ github.head_ref }}
+          LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+          # The runner's stable cargo reads the manifests: no toolchain install.
+          RUSTUP_TOOLCHAIN: stable
+        run: python3 scripts/ci/changes.py
+
+  # Each step when its inputs change: ruff, ty (on the checked-in stubs of
+  # `_native`: no Rust build) when a Python file does (twine checks the sdist
+  # in the release tier);
+  # actionlint and the CI contracts (tests/test_ci) when a workflow or they do;
+  # the skills; the engine's invariant scripts when a crate does.
   lint:
     name: Lint
+    needs: changes
+    if: needs.changes.outputs.lint == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    env:
+      PYLINT: ${{ needs.changes.outputs.pylint }}
+      CI_CONTRACTS: ${{ needs.changes.outputs.ci }}
+      SKILLS: ${{ needs.changes.outputs.skills }}
+      RUST: ${{ needs.changes.outputs.rust }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
         with:
@@ -36,89 +198,533 @@ jobs:
         with:
           python-version: "3.12"
 
-      # `uv sync` compiles the analysis engine (analysis/, Rust) into opentide (hatch_build.py).
-      # The runner's rustup provides the toolchain; the cache keeps the
-      # compiled engine crates between runs.
-      - name: Set up Rust
-        run: rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
-
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-        with:
-          workspaces: analysis -> target
-
+      # The tools and the dependencies, not opentide itself: nothing compiles.
       - name: Install dependencies
-        run: uv sync --group dev
+        run: uv sync --group dev --no-install-project
 
       - name: Ruff check
-        run: uv run ruff check src/opentide tests scripts --output-format github
+        if: env.PYLINT == 'true'
+        run: uv run --no-sync ruff check src/opentide tests scripts --output-format github
 
       - name: Ruff format
-        run: uv run ruff format --check src/opentide tests scripts
+        if: env.PYLINT == 'true'
+        run: uv run --no-sync ruff format --check src/opentide tests scripts
 
+      # src/opentide/_native/*.pyi stand for the extension.
       - name: Ty type check
-        run: uv run ty check src/opentide --output-format github
+        if: env.PYLINT == 'true'
+        run: uv run --no-sync ty check src/opentide --output-format github
 
-      - name: Engine bindings (rustfmt, clippy, cargo test)
+      # The workflows themselves, with shellcheck over their scripts;
+      # .github/actionlint.yaml names what this version does not know.
+      - name: actionlint
+        if: env.CI_CONTRACTS == 'true'
         run: |
-          rustup component add rustfmt clippy
-          cargo fmt --manifest-path analysis/Cargo.toml -- --check
-          cargo clippy --manifest-path analysis/Cargo.toml --all-targets -- -D warnings
-          cargo test --manifest-path analysis/Cargo.toml
+          GOBIN="${RUNNER_TEMP}/bin" go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
+          "${RUNNER_TEMP}/bin/actionlint" -color
 
-      - name: The engine crates come from one source
-        run: uv run python scripts/build/check_engine_pin.py
-
-      - name: The Bitdefender criteria catalogue matches the pinned engine's
-        run: uv run python scripts/build/check_bitdefender_catalogue.py
-
-      # The engine ships a Tide catalog for editors that run opentide-lsp on
-      # its own; a model or vocabulary change makes it stale until
-      # language-server regenerates it and this pins that engine.
-      - name: The engine's bundled catalogs match the models
-        run: uv run python scripts/build/check_engine_catalog.py
-
-      - name: Build sdist and wheel
-        run: uv build
-
-      - name: Twine check
-        run: uvx twine check dist/*
-
-      - name: Detect vocabulary bundle, pin, lockfile or model changes
-        id: vocab_changes
+      - name: Engine invariants (I/O-free crates, names)
         run: |
-          set -euo pipefail
-          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            base_ref="${{ github.event.pull_request.base.sha }}"
-          else
-            base_ref="${{ github.event.before }}"
-          fi
+          bash scripts/engine/check-io-free.sh
+          bash scripts/engine/check-names.sh
 
-          if [[ -z "$base_ref" || "$base_ref" == "0000000000000000000000000000000000000000" ]]; then
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-            echo "fields=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
+      - name: The agent skills
+        if: env.SKILLS == 'true'
+        run: bash scripts/engine/validate-skills.sh
 
-          changed_files="$(git diff --name-only "$base_ref" "${{ github.sha }}")"
-          # grep, not rg: ripgrep is not installed on GitHub-hosted runners, and a
-          # missing command in an `if` reads as "no match" and skips the gate.
-          if grep -qE "^(src/opentide/data/vocabulary/.*\\.vocab\\.toml|src/opentide/data/pins/.*\\.toml|data/specifications\\.lock\\.json|scripts/build/sync_vocabularies\\.py)$" <<<"$changed_files"; then
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-          fi
-          # Model field docstrings are the editor hovers; they are checked against
-          # the field tables in the specifications repository.
-          if grep -qE "^(src/opentide/models/.*|tests/test_models/test_spec_field_descriptions\\.py|\\.github/workflows/ci\\.yml)$" <<<"$changed_files"; then
-            echo "fields=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "fields=false" >> "$GITHUB_OUTPUT"
-          fi
+      - name: The engine release script's tests
+        if: env.PYLINT == 'true'
+        run: python -m unittest discover -s scripts/engine -p "test_*.py"
 
-      # Without a specifications clone, --check only compares the lockfile with the
-      # bundle, so pins edited by hand and relocked would pass.
+      # The CI contracts (tests/test_ci): plain Python over the workflows and
+      # scripts/ci/changes.py, no extension.
+      - name: CI contracts
+        if: env.CI_CONTRACTS == 'true'
+        run: uv run --no-sync pytest tests/test_ci -q --no-cov -p no:cacheprovider
+
+  # rustfmt, clippy and rustdoc, workspace-wide whatever changed: with a warm
+  # cache, clippy re-checks only what changed.
+  engine-lint:
+    name: Engine lint (fmt, clippy, doc)
+    needs: changes
+    # The workspace's lints. The feature and target variants are
+    # engine-lint-variants', which runs beside it (this job was the PR gate's
+    # longest, 10 to 13.5 min, with both in it).
+    if: needs.changes.outputs.rust == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      RUSTFLAGS: "-Dwarnings"
+      CARGO_INCREMENTAL: "0"
+      CARGO_TERM_COLOR: always
+      RUSTC_WRAPPER: sccache
+      SCCACHE_DIR: ${{ github.workspace }}/.sccache
+      SCCACHE_CACHE_SIZE: 3G
+      SCCACHE_IDLE_TIMEOUT: "0"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The release rust-toolchain.toml pins, with the rustfmt and clippy it lists.
+      - name: Set up Rust
+        id: sccache
+        uses: ./.github/actions/rust-setup
+        with:
+          tools: sccache@0.19.0
+          cache: engine-check
+
+      - name: rustfmt
+        run: cargo fmt --all --check
+
+      - name: clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+      # Broken intra-doc links and the like fail the build.
+      - name: rustdoc
+        env:
+          RUSTDOCFLAGS: "-D warnings"
+        run: cargo doc --no-deps --workspace --locked
+
+      - name: Save the compiler cache
+        if: ${{ !cancelled() }}
+        uses: ./.github/actions/sccache-save
+        with:
+          key: ${{ steps.sccache.outputs.key }}
+          save: ${{ job.status == 'success' && steps.sccache.outputs.save == 'true' }}
+
+  engine-lint-variants:
+    name: Engine lint (features, WebAssembly targets)
+    needs: changes
+    # What engine-lint's workspace-wide run cannot see: opentide-cli without
+    # its `terminal` feature, the WebAssembly targets and opentide-schema's
+    # `stubs` feature and wasm32 build. Its own job and compiler cache family
+    # (`engine-variants`), beside engine-lint. The wasm32 clippy alone when
+    # only build-wasm.sh or what the `wasm` job reads changed (`wasm` without
+    # `rust`).
+    if: needs.changes.outputs.rust == 'true' || needs.changes.outputs.wasm == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      RUSTFLAGS: "-Dwarnings"
+      CARGO_INCREMENTAL: "0"
+      CARGO_TERM_COLOR: always
+      RUSTC_WRAPPER: sccache
+      SCCACHE_DIR: ${{ github.workspace }}/.sccache
+      SCCACHE_CACHE_SIZE: 3G
+      SCCACHE_IDLE_TIMEOUT: "0"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The release rust-toolchain.toml pins, with the rustfmt and clippy it lists.
+      - name: Set up Rust
+        id: sccache
+        uses: ./.github/actions/rust-setup
+        with:
+          tools: sccache@0.19.0
+          cache: engine-variants
+
+      # opentide-cli as xtask and the WASI build compile it, without its
+      # `terminal` feature: engine-lint's workspace-wide run unifies it on.
+      - name: clippy without the terminal feature
+        if: needs.changes.outputs.rust == 'true'
+        run: cargo clippy --package opentide-cli --no-default-features --locked -- -D warnings
+
+      # A build without the terminal prompts (the wheel's, the WASI module's) at a terminal
+      # behaves as with none: it asks nothing and refuses nothing for want of prompts (#1743).
+      - name: the build without the terminal feature, at a terminal
+        if: needs.changes.outputs.rust == 'true'
+        run: cargo test --package opentide-cli --no-default-features --test no_terminal_prompts --locked
+
+      # The code only wasm32 compiles (opentide-wasm's, the wasip1 paths of
+      # opentide-lsp and opentide-cli), which the native clippy never sees:
+      # when the `wasm` job runs (wasi-sdk only for the command line's ring).
+      - name: clippy on the WebAssembly targets
+        if: needs.changes.outputs.wasm == 'true'
+        run: bash scripts/engine/build-wasm.sh clippy
+
+      # opentide-schema for the hosts the workspace run does not lint
+      # (UC-1.1): its `stubs` feature (PyO3's introspection, as `native`'s
+      # stubs check builds it) and the browser target, when
+      # opentide-schema is affected. The workspace run already unifies its
+      # `python` feature on (the binding turns it on).
+      - name: clippy on opentide-schema (stubs, wasm32)
+        if: contains(format(' {0} ', needs.changes.outputs.crates), ' opentide-schema ')
+        run: |
+          rustup target add wasm32-unknown-unknown
+          cargo clippy --locked -p opentide-schema --all-targets --features stubs -- -D warnings
+          cargo clippy --locked -p opentide-schema --target wasm32-unknown-unknown -- -D warnings
+
+      - name: Save the compiler cache
+        if: ${{ !cancelled() }}
+        uses: ./.github/actions/sccache-save
+        with:
+          key: ${{ steps.sccache.outputs.key }}
+          save: ${{ job.status == 'success' && steps.sccache.outputs.save == 'true' }}
+
+  # opentide's wheel, built by maturin as a release's is (#1157), for the
+  # Python jobs, which install it without compiling: a job of its own, so they
+  # start after this short build instead of after the tests (a push's Python
+  # job waited 8.4 min for the build, its tests included). Its own compiler
+  # cache family: maturin's environment and the extension's features are not
+  # the tests'. A `linux` tag (no manylinux audit): it is installed on this
+  # runner image only.
+  native:
+    name: Build the opentide wheel
+    needs: changes
+    if: needs.changes.outputs.native == 'true' || needs.changes.outputs.mode == 'nightly'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      RUSTFLAGS: "-Dwarnings -Clink-arg=-fuse-ld=mold"
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_DEV_STRIP: debuginfo
+      CARGO_INCREMENTAL: "0"
+      CARGO_TERM_COLOR: always
+      # One interpreter for PyO3's configuration: the binding is abi3, so the
+      # extension serves every Python from 3.10.
+      PYO3_PYTHON: /usr/bin/python3
+      RUSTC_WRAPPER: sccache
+      SCCACHE_DIR: ${{ github.workspace }}/.sccache
+      SCCACHE_CACHE_SIZE: 2G
+      SCCACHE_IDLE_TIMEOUT: "0"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # maturin as a prebuilt binary: `pipx run` took 7 s to install it.
+      - name: Set up Rust
+        id: sccache
+        uses: ./.github/actions/rust-setup
+        with:
+          tools: sccache@0.19.0,maturin@1.16.0
+          cache: native-v2
+
+      - name: Install mold
+        run: sudo apt-get install -y -q --no-install-recommends mold || { sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends mold; }
+
+      # `v2`: maturin's compiles (its environment is in their sccache keys)
+      # replaced cargo's; bump it with the build's settings, or the week's
+      # copy, already saved, keeps the old compiles and none is saved: #1157's
+      # wheel took 94 s to compile against the week's copy of cargo's.
+      - name: Build the opentide wheel
+        run: maturin build --locked --profile dev --compatibility linux --out "${RUNNER_TEMP}/native"
+
+      - name: Upload the opentide wheel
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: native
+          path: ${{ runner.temp }}/native/opentide-*.whl
+          if-no-files-found: error
+          retention-days: 3
+
+
+      - name: Save the compiler cache
+        if: ${{ !cancelled() }}
+        uses: ./.github/actions/sccache-save
+        with:
+          key: ${{ steps.sccache.outputs.key }}
+          save: ${{ job.status == 'success' && steps.sccache.outputs.save == 'true' }}
+
+  # The stubs of opentide._native.models and opentide._native.sdk, which
+  # `lint`'s ty reads, are generated from the extension (UC-1.9, ADR 0011;
+  # UC-5.2b): xtask builds it with PyO3's introspection data, as Python 3.10
+  # (the abi3 floor) sees it, and fails when a committed stub differs. When
+  # the binding, opentide-schema, the facade, the stubs or the generator
+  # change (`stubs`: scripts/ci/changes.py), and on every push and nightly.
+  # A job of its own, not a step of `native`: the Python jobs wait for
+  # `native`, and this build (xtask, then the extension in the develop
+  # profile) took 8 minutes cold (#1141's regression). Its own compiler cache:
+  # neither the profile nor PYO3_PYTHON is another job's.
+  stubs:
+    name: Generated stubs (_native)
+    needs: changes
+    if: needs.changes.outputs.stubs == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      RUSTFLAGS: "-Dwarnings -Clink-arg=-fuse-ld=mold"
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_DEV_STRIP: debuginfo
+      CARGO_INCREMENTAL: "0"
+      CARGO_TERM_COLOR: always
+      RUSTC_WRAPPER: sccache
+      SCCACHE_DIR: ${{ github.workspace }}/.sccache
+      SCCACHE_CACHE_SIZE: 2G
+      SCCACHE_IDLE_TIMEOUT: "0"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Rust
+        id: sccache
+        uses: ./.github/actions/rust-setup
+        with:
+          tools: sccache@0.19.0
+          cache: stubs
+
+      - name: Install mold
+        run: sudo apt-get install -y -q --no-install-recommends mold || { sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends mold; }
+
+      - name: Python 3.10
+        id: python310
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.10"
+
+      - name: Generated stubs are up to date
+        env:
+          PYO3_PYTHON: ${{ steps.python310.outputs.python-path }}
+        run: cargo xtask stubs --check
+
+      - name: Save the compiler cache
+        if: ${{ !cancelled() }}
+        uses: ./.github/actions/sccache-save
+        with:
+          key: ${{ steps.sccache.outputs.key }}
+          save: ${{ job.status == 'success' && steps.sccache.outputs.save == 'true' }}
+
+  # Every query language in every table it must be in (xtask's
+  # language_wiring test, the add-language skill): when a file outside a crate
+  # that the test reads changes. A crate's change runs it in `build`.
+  wiring:
+    name: Language wiring
+    needs: changes
+    if: needs.changes.outputs.wiring == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      RUSTFLAGS: "-Dwarnings -Clink-arg=-fuse-ld=mold"
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_DEV_STRIP: debuginfo
+      CARGO_INCREMENTAL: "0"
+      CARGO_TERM_COLOR: always
+      RUSTC_WRAPPER: sccache
+      SCCACHE_DIR: ${{ github.workspace }}/.sccache
+      SCCACHE_CACHE_SIZE: 2G
+      SCCACHE_IDLE_TIMEOUT: "0"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Rust
+        id: sccache
+        uses: ./.github/actions/rust-setup
+        with:
+          tools: sccache@0.19.0,cargo-nextest@0.9.148
+          cache: wiring
+
+      - name: Install mold
+        run: sudo apt-get install -y -q --no-install-recommends mold || { sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends mold; }
+
+      - name: Every query language is wired, and the docs' platform tables are the registry's
+        run: cargo nextest run --locked -p xtask --test language_wiring --test platform_docs
+
+      - name: Save the compiler cache
+        if: ${{ !cancelled() }}
+        uses: ./.github/actions/sccache-save
+        with:
+          key: ${{ steps.sccache.outputs.key }}
+          save: ${{ job.status == 'success' && steps.sccache.outputs.save == 'true' }}
+
+  # Each language's parse and full analysis, counted with callgrind in the
+  # bench's own instructions (within 3%) and its allocator calls (within 2),
+  # and held to tests/bench/instructions.toml (#1571,
+  # ADR 0014, docs/engine/THROUGHPUT.md): when a crate the analysis depends on,
+  # the bench, the budgets or the command change. Instructions, not time: a
+  # shared runner's time varies by more than any regression worth catching.
+  throughput:
+    name: Throughput (instructions)
+    needs: changes
+    if: needs.changes.outputs.throughput == 'true'
+    # Pinned to the image the budgets are recorded on (glibc 2.39, valgrind
+    # 3.22): the count leaves glibc out, but valgrind runs the code, and
+    # ubuntu-latest (glibc 2.43, valgrind 3.26) moved every count 4-17% when
+    # glibc was in it. Moving the image is recording the budgets again.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    env:
+      RUSTFLAGS: "-Dwarnings -Clink-arg=-fuse-ld=mold"
+      # xtask's own dev build: no debuginfo (the bench builds in `bench`).
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_DEV_STRIP: debuginfo
+      CARGO_INCREMENTAL: "0"
+      CARGO_TERM_COLOR: always
+      RUSTC_WRAPPER: sccache
+      SCCACHE_DIR: ${{ github.workspace }}/.sccache
+      SCCACHE_CACHE_SIZE: 3G
+      SCCACHE_IDLE_TIMEOUT: "0"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Rust
+        id: sccache
+        uses: ./.github/actions/rust-setup
+        with:
+          tools: sccache@0.19.0
+          cache: throughput
+
+      - name: Install mold and valgrind
+        run: sudo apt-get install -y -q --no-install-recommends mold valgrind || { sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends mold valgrind; }
+
+      # The table goes to the step summary; budgets are recorded where this
+      # runs (its valgrind and glibc are counted: the file names them).
+      - name: Instruction counts within their budgets
+        run: cargo xtask throughput --check
+
+      # The callgrind profiles, to trace a count that moved to a function
+      # (`callgrind_annotate --inclusive=yes`).
+      - name: Upload the callgrind profiles
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: throughput-profiles
+          path: target/throughput/
+          retention-days: 7
+
+      - name: Save the compiler cache
+        if: ${{ !cancelled() }}
+        uses: ./.github/actions/sccache-save
+        with:
+          key: ${{ steps.sccache.outputs.key }}
+          save: ${{ job.status == 'success' && steps.sccache.outputs.save == 'true' }}
+
+  # The gate's one build of the tests, and the Rust tests run where they were
+  # built: the affected crates' tests, xtask and the language server with one
+  # compiler cache; the generated-artifact and layer checks; the tests
+  # (`cargo nextest run`), the doctests and opentide-schema's compile-fail
+  # cases. No test archive: moving one to test jobs cost more than the
+  # partitions saved (measured on a leaf change, 2026-11-14: a 1.5 GB archive,
+  # 18 s to pack, 15-33 s to download and 41 s to extract per partition,
+  # against 42-48 s of tests each).
+  build:
+    name: Build and Rust tests
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    env:
+      # mold links the test binaries, the build's longest step warm.
+      RUSTFLAGS: "-Dwarnings -Clink-arg=-fuse-ld=mold"
+      # No debuginfo, stripped at link: about 130 statically linked test
+      # binaries link and write faster without it. A panic still names its
+      # file:line; a backtrace names functions only (rerun locally for lines).
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_DEV_STRIP: debuginfo
+      CARGO_INCREMENTAL: "0"
+      CARGO_TERM_COLOR: always
+      INSTA_UPDATE: "no"
+      # One interpreter for PyO3's configuration: the binding is abi3, so the
+      # extension serves every Python from 3.10.
+      PYO3_PYTHON: /usr/bin/python3
+      # sccache without CARGO_PRIMARY_PACKAGE (the script says why).
+      RUSTC_WRAPPER: ${{ github.workspace }}/scripts/ci/rustc-wrapper/sccache
+      SCCACHE_DIR: ${{ github.workspace }}/.sccache
+      SCCACHE_CACHE_SIZE: 3G
+      SCCACHE_IDLE_TIMEOUT: "0"
+      PACKAGES: ${{ needs.changes.outputs.packages }}
+      FEATURES: ${{ needs.changes.outputs.features }}
+      # The affected crates' tests: the build also compiles the anchors
+      # (scripts/ci/changes.py, ANCHORS), whose tests run only when affected.
+      FILTER: ${{ needs.changes.outputs.filter }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # `v5`: the build's settings (RUSTFLAGS, the profile's debuginfo and
+      # strip, the wrapper) are in every compile's sccache key: bump it with them, or the
+      # week's copy, already saved, keeps the old compiles and none is saved.
+      - name: Set up Rust
+        id: sccache
+        uses: ./.github/actions/rust-setup
+        with:
+          tools: sccache@0.19.0,cargo-nextest@0.9.148
+          cache: build-v5
+
+      - name: Install mold and strace
+        run: sudo apt-get install -y -q --no-install-recommends mold strace || { sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends mold strace; }
+
+      - name: Runner CPU
+        run: grep -m1 "model name" /proc/cpuinfo
+
+      # The affected crates' test binaries, with the binaries their tests run
+      # (CARGO_BIN_EXE_*). `--timings`: the report is uploaded below.
+      - name: Build the Rust tests
+        run: |
+          read -ra pkg_args <<< "${PACKAGES}"
+          read -ra feature_args <<< "${FEATURES}"
+          cargo nextest run --no-run --locked "${pkg_args[@]}" "${feature_args[@]}" --timings
+
+      # The tests' build left the binaries its tests run in target/debug,
+      # with the tests' features: xtask and the language server when they are
+      # affected (a change that reaches neither changes nothing they check).
+      # Building them again without those features recompiled for minutes.
+      - name: Which checks the build can run
+        id: bins
+        env:
+          CRATES: ${{ needs.changes.outputs.crates }}
+        run: |
+          for bin in xtask opentide-lsp; do
+            if [[ -x "target/debug/${bin}" ]]; then found=true; else found=false; fi
+            # An affected crate's binary is always built: never skip its checks.
+            if [[ "${found}" == false && " ${CRATES} " == *" ${bin} "* ]]; then
+              echo "::error::${bin} is affected but the tests' build left no target/debug/${bin}."
+              exit 1
+            fi
+            echo "${bin}=${found}" >> "$GITHUB_OUTPUT"
+          done
+
+      # Every dependency between workspace crates points down the layer table
+      # (xtask/layers.toml).
+      - name: Crate layers
+        if: steps.bins.outputs.xtask == 'true'
+        run: target/debug/xtask check-layers
+
+      # The deploy cassettes (tests/cassettes): one per scenario of
+      # scenarios.toml, none edited by hand. It reads the files only.
+      - name: Deploy cassettes
+        if: steps.bins.outputs.xtask == 'true'
+        run: target/debug/xtask cassettes check
+
+      # The artifacts generated from the Rust model are the committed ones:
+      # the platform and editor templates, the editor schemas, the language
+      # server's catalogs and the diagnostics reference.
+      - name: Generated artifacts
+        if: steps.bins.outputs.xtask == 'true'
+        run: target/debug/xtask codegen --check
+
+      - name: Generated highlights
+        if: steps.bins.outputs.opentide-lsp == 'true'
+        run: target/debug/opentide-lsp generate-highlights --check
+
+      # The vocabulary bundle and pins against the specifications repository,
+      # and the models' field descriptions against its field tables: when
+      # their inputs change (`vocab`, `fields`: scripts/ci/changes.py), and on
+      # every push and nightly.
       - name: Checkout specifications
-        if: steps.vocab_changes.outputs.changed == 'true' || steps.vocab_changes.outputs.fields == 'true'
+        if: steps.bins.outputs.xtask == 'true' && (needs.changes.outputs.vocab == 'true' || needs.changes.outputs.fields == 'true')
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: opentidehq/specifications
@@ -126,44 +732,157 @@ jobs:
           path: specifications
           persist-credentials: false
 
-      - name: Check vocabulary and pin sync drift
-        if: steps.vocab_changes.outputs.changed == 'true'
+      # Without a specifications clone, --check would only compare the
+      # lockfile with the bundle.
+      - name: Vocabulary and pin sync drift
+        if: steps.bins.outputs.xtask == 'true' && needs.changes.outputs.vocab == 'true'
         env:
           OPENTIDE_SPECIFICATIONS_ROOT: ${{ github.workspace }}/specifications
-        run: uv run python scripts/build/sync_vocabularies.py --check
+        run: target/debug/xtask vocab sync --check
 
-      # OPENTIDE_REQUIRE_SPECIFICATIONS turns the test's "no checkout" skip into a
-      # failure, so this guard cannot pass by not running.
-      - name: Check model field descriptions against the specifications
-        if: steps.vocab_changes.outputs.fields == 'true'
+      # It exits 2 without a checkout and 1 when fewer than 100 rows match a
+      # field, so it cannot pass by not running.
+      - name: Model field descriptions against the specifications
+        if: steps.bins.outputs.xtask == 'true' && needs.changes.outputs.fields == 'true'
         env:
           OPENTIDE_SPECIFICATIONS_ROOT: ${{ github.workspace }}/specifications
-          OPENTIDE_REQUIRE_SPECIFICATIONS: "1"
-        run: uv run pytest tests/test_models/test_spec_field_descriptions.py --no-cov -q
+        run: target/debug/xtask spec-fields
 
-  test:
-    name: Test (${{ matrix.python-version }})
+      # uv for the tests that provision a tool with it (nothing is synced),
+      # and the Python the test that compares with difflib runs
+      # (OPENTIDE_PYTHON): after the build, which reads PYO3_PYTHON only.
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      # The tests, the doctests and the compile-fail cases write under a
+      # temporary folder, never in the checkout (#931); noted after the
+      # specifications' checkout.
+      - name: Note the checkout's state
+        run: git status --porcelain --untracked-files=all > "$RUNNER_TEMP/tree-before"
+
+      # The CLI's snapshot cases on the generated workspaces (`fault`,
+      # `heavy-small`, UC-0.6): xtask writes them, which the crate's tests
+      # cannot; the tests fail without them when the variable is set.
+      # A Linux gate by design: the nightly `engine-test-os` (macOS, Windows)
+      # runs `cli_snapshots` without these workspaces, so the 34 generated
+      # cases print "skipped" there. Writing them costs minutes
+      # of debug-build CPU per OS for output the snapshots (Linux's) already
+      # hold.
+      - name: Generated workspaces for the CLI snapshots
+        run: |
+          read -ra pkg_args <<< "${PACKAGES}"
+          if [[ " ${pkg_args[*]} " == *" opentide-cli "* || " ${pkg_args[*]} " == *" --workspace "* ]]; then
+            [[ -x target/debug/xtask ]] || cargo build --locked -p xtask
+            out="$RUNNER_TEMP/generated-workspaces"
+            target/debug/xtask corpus faults --out "$out/fault"
+            target/debug/xtask corpus generate --seed 1 --threats 30 --objectives 30 --rules 50 --out "$out/heavy-small"
+            echo "OPENTIDE_REPLAY_FIXTURES=fault=$out/fault,heavy-small=$out/heavy-small" >> "$GITHUB_ENV"
+            echo "OPENTIDE_SNAPSHOT_REQUIRE_GENERATED=1" >> "$GITHUB_ENV"
+          fi
+
+      # The compile-fail cases run below, when their inputs change.
+      - name: cargo nextest (profile ci)
+        env:
+          OPENTIDE_PYTHON: python
+          # Twice the runner's four cores: many tests wait on the processes and
+          # servers they start (#1141, a one-line opentide-yara change: 85 s at
+          # eight threads; 90-120 s at four, by the runner's CPU).
+          NEXTEST_TEST_THREADS: "8"
+        run: |
+          read -ra pkg_args <<< "${PACKAGES}"
+          read -ra feature_args <<< "${FEATURES}"
+          cargo nextest run --locked --profile ci "${pkg_args[@]}" "${feature_args[@]}" \
+            --no-tests=pass -E "(${FILTER}) and not binary_id(/^opentide-schema::ui\$/)"
+
+      # nextest runs no doctests.
+      - name: Doctests
+        run: |
+          read -ra pkg_args <<< "${PACKAGES}"
+          read -ra feature_args <<< "${FEATURES}"
+          cargo test --locked --doc "${pkg_args[@]}" "${feature_args[@]}"
+
+      # opentide-schema's compile-fail cases (trybuild) compile at test time,
+      # so they run here, where the dependencies are: when their inputs (the
+      # derive, the crate, the cases, the lockfile, the toolchain) change
+      # (`schema_ui`: scripts/ci/changes.py), and on every push and nightly.
+      - name: opentide-schema's compile-fail cases
+        if: needs.changes.outputs.schema_ui == 'true'
+        # The build's own packages and features (opentide-schema is among them
+        # whenever a case's input changed): nothing is built again.
+        run: |
+          read -ra pkg_args <<< "${PACKAGES}"
+          read -ra feature_args <<< "${FEATURES}"
+          cargo nextest run --locked --profile ci "${pkg_args[@]}" "${feature_args[@]}" -E 'binary_id(opentide-schema::ui)'
+
+      - name: The checks and tests left the checkout as they found it
+        run: |
+          git status --porcelain --untracked-files=all > "$RUNNER_TEMP/tree-after"
+          if ! diff -u "$RUNNER_TEMP/tree-before" "$RUNNER_TEMP/tree-after"; then
+            echo "::error::A check or test wrote into the checkout (lines starting with +): write under a temporary folder (tempfile::tempdir) instead."
+            exit 1
+          fi
+
+      - name: Upload the JUnit report
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        # A report for reading, not a gate.
+        continue-on-error: true
+        with:
+          name: nextest-junit
+          path: target/nextest/ci/junit.xml
+          retention-days: 14
+
+      - name: Upload the build's timings
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        continue-on-error: true
+        with:
+          name: cargo-timings
+          path: target/cargo-timings/cargo-timing.html
+          retention-days: 7
+
+      - name: Save the compiler cache
+        if: ${{ !cancelled() }}
+        uses: ./.github/actions/sccache-save
+        with:
+          key: ${{ steps.sccache.outputs.key }}
+          save: ${{ job.status == 'success' && steps.sccache.outputs.save == 'true' }}
+
+  # The Python package as a package (Python is the packaging layer): its
+  # surface (the SDK, the models, the plugin API, the console script) and the
+  # console script end to end (CLI, MCP and LSP over stdio), on the build's
+  # opentide wheel (abi3), in ONE pytest run with the coverage gate. On a pull
+  # request only when the Python surface changes (src/opentide, the binding,
+  # the facade's API, pyproject, uv.lock, tests/ but test_ci and
+  # the wheel-less docs tests): a Rust-only change builds no wheel and runs no
+  # pytest, the Rust tests cover it. Every push runs it; a release pull
+  # request and the nightly add Python 3.10-3.13 and the `full_set` E2E tests.
+  python:
+    name: Python (3.14, package and E2E, coverage)
+    needs: [changes, native]
+    if: needs.changes.outputs.python == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
       checks: write
       code-quality: write
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
-
+    env:
+      # opentide is the build's wheel: `uv run` builds nothing, and the
+      # tests that install opentide's wheel take it.
+      UV_NO_SYNC: "1"
+      OPENTIDE_TEST_WHEELHOUSE: ${{ github.workspace }}/.native
     steps:
-      # PR head commit (not merge commit) so coverage line numbers map to the diff.
+      # The pull request's head commit (not the merge commit), so coverage
+      # line numbers map to the diff.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: matrix.python-version == env.COVERAGE_PYTHON
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
-
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: matrix.python-version != env.COVERAGE_PYTHON
-        with:
-          fetch-depth: 0
+          persist-credentials: false
 
       - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
         with:
@@ -172,62 +891,51 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: ${{ env.COVERAGE_PYTHON }}
 
-      # `uv sync` compiles the analysis engine (analysis/, Rust) into opentide (hatch_build.py).
-      # The runner's rustup provides the toolchain; the cache keeps the
-      # compiled engine crates between runs.
+      # cargo for the tests that read the workspace's metadata (nothing is
+      # compiled): the pinned toolchain, which rustup no longer installs on
+      # first use.
       - name: Set up Rust
-        run: rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
+        uses: ./.github/actions/rust-setup
 
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          workspaces: analysis -> target
+          name: native
+          path: .native
 
-      - name: Install dependencies
-        run: uv sync --group dev
+      # The dependencies, then opentide from the build's wheel: nothing
+      # compiles (UV_NO_SYNC keeps `uv run` from building the project).
+      - name: Install dependencies and the build's wheel
+        run: |
+          uv sync --group dev --no-install-project
+          uv pip install --no-deps .native/opentide-*.whl
+          # The tests import opentide from src/ (tests/conftest.py), as from an
+          # editable install: the wheel's module goes beside the sources.
+          unzip -j -o .native/opentide-*.whl 'opentide/_native.abi3.so' -d src/opentide
 
-      # Sharded with xdist, like the E2E job below. This was serial until #530:
-      # a few tests left a partial index in `IndexManager._cache` and a mocked
-      # registry in `opentide.deployment.utils`, and the suite passed only
-      # because the serial file order happened to put the victims first.
-      # Reordering it across workers surfaced 11 failures in test_export and
-      # test_documentation. Both leaks are fixed, and the suite now produces the
-      # same result serially and at -n 2/4/8. `-n 4` is pinned for the same
-      # reason as the E2E job -- see the note there.
-      - name: Pytest
-        if: matrix.python-version != env.COVERAGE_PYTHON
-        run: uv run pytest tests/ --no-cov -q -n 4 -m "not cli_e2e and not cli_smoke and not gitlab_ci_lint"
-
-      - name: Pytest with coverage
-        if: matrix.python-version == env.COVERAGE_PYTHON
-        # sys.monitoring (PEP 669) instead of the C trace function. Same line
-        # data for a fraction of the overhead; 3.12+ only, which this cell is.
-        #
-        # Coverage is combined across xdist workers by pytest-cov, and the
-        # totals are identical to a serial run (17959 statements, 1646 missed,
-        # 90.8%), so the threshold gate below reads the same number it always
-        # did -- verified, because sharding a coverage run silently losing
-        # worker data would quietly lower the gate instead of failing it.
+      # `-n 6` on the runner's four cores: the E2E tests wait on the
+      # subprocesses they start (measured on one E2E shard: -n 4 62 s, -n 6
+      # 51 s; ten workers hit a memory cliff, 137 s).
+      # Coverage is combined across the xdist workers by pytest-cov, so the
+      # gate reads the same number as a serial run.
+      - name: Pytest with coverage (unit and E2E)
         env:
           COVERAGE_CORE: sysmon
         run: |
           uv run pytest tests/ \
-            -m "not cli_e2e and not cli_smoke and not gitlab_ci_lint" \
-            -n 4 \
+            --ignore=tests/test_ci \
+            -m "not full_set and not gitlab_ci_lint" \
+            -n 6 \
             --cov-report=xml:coverage.xml \
             --cov-report=html:htmlcov \
             --junitxml=pytest-results.xml
 
       - name: Enforce coverage threshold
-        if: matrix.python-version == env.COVERAGE_PYTHON
         run: uv run coverage report
 
       - name: Upload coverage to GitHub Code Quality
-        if: >-
-          matrix.python-version == env.COVERAGE_PYTHON &&
-          (github.event_name != 'pull_request' ||
-          github.event.pull_request.head.repo.full_name == github.repository)
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
         uses: actions/upload-code-coverage@2b21a77928be8d5168c2b9581a67f2adbebacc52 # v1.4.4
         with:
           file: coverage.xml
@@ -236,7 +944,7 @@ jobs:
           fail-on-error: false
 
       - name: Publish test report
-        if: always() && matrix.python-version == env.COVERAGE_PYTHON
+        if: always()
         uses: dorny/test-reporter@d1b5dff021aa968b288b02285a8bf47471c5928a # v3.2.0
         with:
           name: Pytest (${{ env.COVERAGE_PYTHON }})
@@ -245,92 +953,32 @@ jobs:
           fail-on-error: true
 
       - name: Upload HTML coverage report
-        if: matrix.python-version == env.COVERAGE_PYTHON
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        continue-on-error: true
         with:
           name: htmlcov
           path: htmlcov/
           retention-days: 14
 
-  cli-e2e:
-    name: E2E (3.14, shard ${{ matrix.shard }}/4)
-    runs-on: ubuntu-latest
-    # Deliberately NOT `needs: [test]`. This job is the longest in the
-    # workflow, and gating it on the matrix put the slowest unit cell in front
-    # of it: the two ran back to back for a ~22 min wall clock where the
-    # longest single job was ~16 min. They share no artifact, so running them
-    # concurrently costs the same runner minutes and returns the answer sooner.
-    strategy:
-      # Every shard reports, so a failure anywhere does not hide the others.
-      fail-fast: false
-      matrix:
-        # Keep the length of this list equal to `--splits` below;
-        # tests/test_ci/test_own_ci_workflow.py fails if they drift, because a
-        # short matrix would silently skip the tests in the groups that no
-        # longer have a runner.
-        shard: [1, 2, 3, 4]
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
-        with:
-          enable-cache: true
-
-      - name: Set up Python
-        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-        with:
-          python-version: ${{ env.COVERAGE_PYTHON }}
-
-      # `uv sync` compiles the analysis engine (analysis/, Rust) into opentide (hatch_build.py).
-      # The runner's rustup provides the toolchain; the cache keeps the
-      # compiled engine crates between runs.
-      - name: Set up Rust
-        run: rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
-
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-        with:
-          workspaces: analysis -> target
-
-      - name: Install dependencies
-        run: uv sync --group dev
-
-      # The longest step in the workflow by a wide margin: 722 tests, most of
-      # them a console-script subprocess or a scaffolded repo, so it is
-      # dominated by process startup rather than by any one slow test.
-      #
-      # Within a single runner the win is limited -- each worker re-pays import
-      # and scaffold cost -- so the suite is split across runners too. Measured
-      # locally: 561s serial for the whole suite, and 54/74/85/84s as 4 shards.
-      # Verified to produce an identical pass/fail set serially and sharded.
-      #
-      # `--splits` partitions the whole selection, so no test can fall outside
-      # a shard. Balance comes from .test_durations_e2e; a test missing from it
-      # is assigned the average, so adding tests is safe, and refreshing the
-      # file (scripts/ci-local.sh --store-e2e-durations) only improves packing.
-      #
-      # `-n 4` is pinned deliberately rather than `-n auto`. Measured on one
-      # shard (262 tests): serial 162s, -n 2 93s, -n 3 72s, -n 4 62s, -n 6 51s,
-      # but `auto` on a 10-core host 137s -- slower than 4 workers. Each worker
-      # holds an interpreter and the subprocess its test spawned, so the suite
-      # hits a memory cliff well before it runs out of cores. `auto` tracks
-      # whatever the runner reports, so it would sit on that cliff silently if
-      # the hosted spec changed; 4 matches today's ubuntu-latest (4 vCPU) and
-      # stays put. Raise it only with a measurement from a real run.
-      - name: E2E pytest (CLI + MCP stdio)
-        run: >-
-          uv run pytest tests/ -m "cli_e2e or cli_smoke" -q --no-cov -n 4
-          --splits 4
-          --group ${{ matrix.shard }}
-          --durations-path .test_durations_e2e
-
-  # Was two trailing steps on cli-e2e, which made a ~20 s check wait out the
-  # longest job in the workflow. It renders the pipeline from
-  # opentide.ci.render and lints that, consuming nothing the E2E run produces.
+  # The pipeline `opentide setup ci gitlab` renders, linted with glint and
+  # gitlab-ci-verify: when the renderer, the test or the linters change.
   gitlab-ci-lint:
     name: GitLab CI lint
+    needs: [changes, native]
+    if: needs.changes.outputs.gitlab == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    env:
+      # opentide is the build's wheel: `uv run` builds nothing, and the
+      # tests that install opentide's wheel take it.
+      UV_NO_SYNC: "1"
+      OPENTIDE_TEST_WHEELHOUSE: ${{ github.workspace }}/.native
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
         with:
@@ -341,18 +989,18 @@ jobs:
         with:
           python-version: ${{ env.COVERAGE_PYTHON }}
 
-      # `uv sync` compiles the analysis engine (analysis/, Rust) into opentide (hatch_build.py).
-      # The runner's rustup provides the toolchain; the cache keeps the
-      # compiled engine crates between runs.
-      - name: Set up Rust
-        run: rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
-
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          workspaces: analysis -> target
+          name: native
+          path: .native
 
-      - name: Install dependencies
-        run: uv sync --group dev
+      - name: Install dependencies and the build's wheel
+        run: |
+          uv sync --group dev --no-install-project
+          uv pip install --no-deps .native/opentide-*.whl
+          # The tests import opentide from src/ (tests/conftest.py), as from an
+          # editable install: the wheel's module goes beside the sources.
+          unzip -j -o .native/opentide-*.whl 'opentide/_native.abi3.so' -d src/opentide
 
       - name: Install GitLab CI linters
         run: |
@@ -364,14 +1012,22 @@ jobs:
         env:
           OPENTIDE_GITLAB_CI_LINT: "1"
 
-  cli-windows-smoke:
-    name: CLI Windows smoke
-    runs-on: windows-latest
-    # Also not gated on `test`: a 36 s job that waited ~5 min for a matrix it
-    # shares nothing with. Left serial — two small test files, so workers would
-    # only add startup cost.
+  # The documentation's structure (Fumadocs-ready content; the site builds in
+  # opentidehq/website). A docs-only pull request runs this job alone.
+  docs:
+    name: Docs
+    needs: changes
+    if: needs.changes.outputs.docs == 'true' || needs.changes.outputs.release == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Validate Fumadocs-ready content
+        run: scripts/validate-docs.sh
 
       - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
         with:
@@ -380,27 +1036,823 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
-          python-version: "3.14"
+          python-version: ${{ env.COVERAGE_PYTHON }}
 
-      # `uv sync` compiles the analysis engine (analysis/, Rust) into opentide (hatch_build.py).
-      # The runner's rustup provides the toolchain; the cache keeps the
-      # compiled engine crates between runs.
-      - name: Set up Rust
-        run: rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
+      # The docs tests that need no wheel (the pages' structure, links,
+      # snippets' syntax, the changelog); the two that run the command line
+      # and the SDK (test_docs_commands_golden.py, test_sdk_snippets.py) are
+      # the Python job's.
+      - name: Docs tests (no wheel)
+        run: |
+          uv sync --group dev --no-install-project
+          uv run --no-sync pytest tests/test_docs -q --no-cov -n 4 -p no:cacheprovider \
+            --ignore=tests/test_docs/test_docs_commands_golden.py \
+            --ignore=tests/test_docs/test_sdk_snippets.py
 
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+  # The website sync guard. opentidehq/website syncs docs/ every hour ("Sync
+  # docs and deploy", its sync-docs.yml); a page it refuses or cannot build
+  # stops the site updating, silently. This job runs the site's own sync and
+  # checks against this run's docs/, so the break fails the pull request
+  # that causes it (as opentidehq/specifications' website-sync.yml does for
+  # the specifications). The website's main, this tree's docs/ (not the
+  # branch the website's .gitmodules names: the check means something on a
+  # base branch the website does not sync yet) and the specifications' main.
+  # When docs/ changes (`website` in scripts/ci/changes.py), on every push
+  # and the nightly. Each step is scripts/ci/website-sync.sh, which puts the
+  # website's own error in an annotation and the job summary.
+  website:
+    name: Website docs sync
+    needs: changes
+    if: needs.changes.outputs.website == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      # The step script; the website goes under website/, which this
+      # checkout's clean would delete if it came second.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          workspaces: analysis -> target
+          persist-credentials: false
+          sparse-checkout: scripts/ci
 
-      - name: Install dependencies
-        run: uv sync --group dev
+      - name: Check out opentidehq/website (main)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: opentidehq/website
+          ref: main
+          path: website
+          submodules: false
+          persist-credentials: false
+
+      - name: Check out this tree's docs/ as vendor/opentide
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: website/vendor/opentide
+          sparse-checkout: docs
+          persist-credentials: false
+
+      - name: Check out opentidehq/specifications (main) as vendor/specifications
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: opentidehq/specifications
+          ref: main
+          path: website/vendor/specifications
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+
+      # pnpm at the version the website's packageManager names (corepack),
+      # and its store cached by the website's lockfile: restored always,
+      # saved by a push or the nightly when the key missed.
+      - name: Set up pnpm
+        id: pnpm
+        working-directory: website
+        run: |
+          corepack enable
+          pnpm --version
+          echo "store=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore the pnpm store
+        id: pnpm-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.pnpm.outputs.store }}
+          key: website-pnpm-${{ hashFiles('website/pnpm-lock.yaml') }}
+          restore-keys: website-pnpm-
+
+      - name: Install the website's dependencies
+        working-directory: website
+        run: pnpm install --frozen-lockfile
+
+      - name: Save the pnpm store
+        if: github.event_name != 'pull_request' && steps.pnpm-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.pnpm.outputs.store }}
+          key: website-pnpm-${{ hashFiles('website/pnpm-lock.yaml') }}
+
+      # The site's MDX safety check on every synced page.
+      - name: pnpm sync:content
+        run: scripts/ci/website-sync.sh sync website
+
+      # The site's unit suite but "workspace committed docs match vendor
+      # gitlinks", which compares the website's own committed content/docs
+      # with its gitlinks (this job replaces both on purpose).
+      - name: pnpm test
+        run: scripts/ci/website-sync.sh test website
+
+      # Every synced page through fumadocs-mdx (frontmatter, components) and
+      # the type check; `next build`, not `pnpm build`, whose prebuild
+      # downloads releases that do not depend on this tree.
+      - name: next build
+        run: scripts/ci/website-sync.sh build website
+
+      - name: pnpm verify:docs
+        run: scripts/ci/website-sync.sh verify website
+
+
+  # The opentide facade crate (UC-5.1, #836), when its public API changes
+  # (crates/opentide/): its docs with every feature, as docs.rs builds them,
+  # and its API against the branch it merges into (cargo-semver-checks). Its
+  # tests and doctests run in `build` with the tests'
+  # features (every feature but `stubs`, which `native`'s stubs check builds).
+  facade:
+    name: Facade crate (every feature's docs, semver checks)
+    needs: changes
+    if: needs.changes.outputs.facade == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      RUSTFLAGS: "-Dwarnings"
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
+      CARGO_TERM_COLOR: always
+      RUSTC_WRAPPER: sccache
+      SCCACHE_DIR: ${{ github.workspace }}/.sccache
+      SCCACHE_CACHE_SIZE: 2G
+      # The server stays up for the whole job: its statistics are the run's.
+      SCCACHE_IDLE_TIMEOUT: "0"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The merge commit and its first parent (a pull request's base
+          # branch, or the branch before a push): the semver baseline.
+          fetch-depth: 2
+          persist-credentials: false
+
+      # The full set's compiler cache for this OS; `conformance` saves it.
+      # By content: a stale one still serves every crate that did not change.
+      - name: Set up Rust
+        id: sccache
+        uses: ./.github/actions/rust-setup
+        with:
+          tools: sccache@0.19.0
+          cache: full-set-${{ runner.os }}
+
+      - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
+        with:
+          tool: cargo-semver-checks@0.51.0
+
+      # docs.rs builds every feature (`[package.metadata.docs.rs]`).
+      - name: rustdoc, every feature
+        env:
+          RUSTDOCFLAGS: "-D warnings"
+        run: cargo doc -p opentide --all-features --no-deps --locked
+
+      # Each feature with the command line in reach, built on its own: every
+      # other job unifies features, which hides a feature that leans on
+      # another for a dependency (`cli` once took opentide-cli from
+      # `queries`). `queries` brings the query engines from the domain layer
+      # and never the command line (#1142).
+      - name: The `cli` and `queries` features on their own
+        run: |
+          cargo check -p opentide --no-default-features --features cli --locked
+          cargo check -p opentide --no-default-features --features queries --locked
+          if cargo tree -p opentide --no-default-features --features queries -e normal \
+              --prefix none --locked | grep -q '^opentide-cli '; then
+            echo "::error::the facade's queries feature depends on opentide-cli (#1142)"
+            exit 1
+          fi
+
+      # `queries` is a default feature (a first program that validates with the
+      # default options needs the engines), so the build without them is the
+      # one that needs its own run: its tests (`cfg(not(feature = "queries"))`,
+      # the `engine_unavailable` message that names the feature) and, on the
+      # default features, the doctests that validate with the default options.
+      - name: The default features, and the facade without the query engines
+        run: |
+          cargo test -p opentide --doc --locked
+          cargo test -p opentide --no-default-features --features compile --locked
+
+      # Against the first parent until the crate is on crates.io; then the
+      # last published version is the baseline (docs/sdk/rust.md, Stability).
+      # A commit that adds the crate has no baseline to compare with. The
+      # baseline is checked out on its own and only its crates/opentide is
+      # handed over: --baseline-rev searches the whole tree for the package,
+      # and publishing/placeholders/crates/opentide is a second `opentide`.
+      - name: API against the base (cargo semver-checks)
+        run: |
+          baseline="$(git rev-parse HEAD^1)"
+          if git cat-file -e "${baseline}:crates/opentide/Cargo.toml" 2>/dev/null; then
+            git worktree add --detach "${RUNNER_TEMP}/opentide-baseline" "${baseline}"
+            # -p names the crate: semver-checks skips a `publish = false`
+            # crate it is not asked for by name, and still exits 0.
+            cargo semver-checks -p opentide --manifest-path crates/opentide/Cargo.toml --all-features \
+              --baseline-root "${RUNNER_TEMP}/opentide-baseline/crates/opentide"
+          else
+            echo "::notice::crates/opentide is new in this change: no baseline API to check against"
+          fi
+
+  # The Node binding (bindings/node, UC-5.3, #838): @opentide/opentide built
+  # with napi-rs for linux-x64-gnu (the other seven targets are declared, and
+  # built and installed in UC-5.3b); the loader and declarations napi-rs
+  # generates against the committed ones; the package's tests (the SDK, the
+  # bin, the packages, the TypeScript page's snippets and a `tsc --noEmit`
+  # consumer); and its command line against this repository's console
+  # script's: `--json commands` byte for byte. Nightly and on Run workflow.
+  node:
+    name: Node package (napi-rs build, tests)
+    needs: changes
+    if: needs.changes.outputs.node == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    env:
+      RUSTFLAGS: "-Dwarnings"
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
+      CARGO_TERM_COLOR: always
+      RUSTC_WRAPPER: sccache
+      SCCACHE_DIR: ${{ github.workspace }}/.sccache
+      SCCACHE_CACHE_SIZE: 2G
+      # The server stays up for the whole job: its statistics are the run's.
+      SCCACHE_IDLE_TIMEOUT: "0"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ env.COVERAGE_PYTHON }}
+
+      # The full set's compiler cache for this OS; `conformance` saves it.
+      # By content: a stale one still serves every crate that did not change.
+      - name: Set up Rust
+        id: sccache
+        uses: ./.github/actions/rust-setup
+        with:
+          tools: sccache@0.19.0
+          cache: full-set-${{ runner.os }}
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: bindings/node/package-lock.json
+
+      # The other side of the comparisons: this repository's PyPI CLI, whose
+      # version the addon is built to report, so that the two documents can
+      # be equal byte for byte.
+      # The workspace version, as the conformance suite builds the addon: Node
+      # compiles its own addon, so this job starts beside `build`, not after it.
+      - name: The workspace version
+        run: echo "OPENTIDE_BUILD_VERSION=$(python3 scripts/engine/release.py version)" >> "$GITHUB_ENV"
+
+      - name: npm ci
+        working-directory: bindings/node
+        run: npm ci
+
+      # The develop profile (optimised, without the release profile's
+      # link-time optimisation), as `uv sync` builds the Python binding.
+      - name: Build the addon (linux-x64-gnu)
+        working-directory: bindings/node
+        run: node build.mjs --profile develop
+
+      - name: The generated loader and declarations are the committed ones
+        run: |
+          if ! git diff --exit-code -- bindings/node/index.js bindings/node/index.d.ts; then
+            echo "::error::bindings/node/index.js or index.d.ts differs from what napi-rs generates: run \`npm run build\` in bindings/node and commit them."
+            exit 1
+          fi
+
+      - name: The package's tests
+        working-directory: bindings/node
+        run: npm test
+
+
+  # Every WebAssembly artifact in one job and one compiler cache:
+  # scripts/engine/build-wasm.sh builds the browser module (opentide-wasm,
+  # wasm-bindgen), the WASI language server and the WASI command line, the
+  # one module the VS Code extension runs (ADR 0007's amendment), whose
+  # deflated size is held to the .vsix's 15 MiB; then tenant commands through
+  # that module with @opentide/wasi-host performing their requests from the
+  # cassettes, and the npm packages build and pack. When the parser layer, a
+  # query-language crate, the WebAssembly crate, a WASI shim or the scripts
+  # change (the `wasm` area of changes.py: a C dependency gained and the
+  # stack a deep parse needs show only here), and on every push and
+  # nightly. The native language server and command line, and the TypeScript
+  # client's tests against the native, worker and WASI servers, only when
+  # packages/ or the browser module change (`ts_packages`) and on every push and nightly: they check
+  # the client, not the parser. The WebAssembly targets' clippy is
+  # `engine-lint-variants`'s.
+  wasm:
+    name: WebAssembly (browser, WASI, npm packages)
+    needs: changes
+    if: needs.changes.outputs.wasm == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    env:
+      # build-wasm.sh adds its link arguments to these flags.
+      RUSTFLAGS: "-Dwarnings"
+      CARGO_TERM_COLOR: always
+      RUSTC_WRAPPER: sccache
+      SCCACHE_DIR: ${{ github.workspace }}/.sccache
+      SCCACHE_CACHE_SIZE: 3G
+      # The server stays up for the whole job: its statistics are the run's.
+      SCCACHE_IDLE_TIMEOUT: "0"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The `wasm` family: the wasm32 compiles, which no other family holds
+      # (the full set's is native), saved from a push to a base branch.
+      # wasm-bindgen is the prebuilt release; its version must match the
+      # wasm-bindgen crate in Cargo.lock.
+      - name: Set up Rust
+        id: sccache
+        uses: ./.github/actions/rust-setup
+        with:
+          targets: wasm32-unknown-unknown wasm32-wasip1
+          tools: sccache@0.19.0,wasm-bindgen@0.2.128
+          cache: wasm
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+
+      # The browser module and the WASI language server (smoke-tested; pure
+      # Rust, no C toolchain), then the command line (wasi-sdk, for ring's C),
+      # which fails over its budget; the sizes go to the step summary.
+      - name: The WebAssembly modules (browser, WASI server, WASI command line)
+        run: bash scripts/engine/build-wasm.sh browser wasi cli
+
+      # Tenant commands under `opentide serve` in Node's WASI, every request
+      # made by @opentide/wasi-host's FetchHost and answered from the golden
+      # cassettes (no network in the module; the extension host performs the
+      # requests); and `opentide mcp start` answering a client that waits for
+      # each answer before its next request, and, with OPENTIDE_FETCH=stdio,
+      # making its tenant requests through McpFetchBridge; and `opentide lsp
+      # start` answering a workspace pull under Node's poll_oneoff and VS
+      # Code's (wasi-run.mjs --poll-oneoff=vscode).
+      - name: opentide serve, mcp start and lsp start, in the WASI module
+        env:
+          OPENTIDE_WASI_CLI: target/wasm32-wasip1/wasi/opentide.wasm
+        run: |
+          (cd packages/wasi-host && npm ci)
+          node --experimental-strip-types --test --test-name-pattern='^(serve|mcp|lsp) \(wasi\)' packages/wasi-host/src/index.test.ts
+
+      - name: npm packages build and pack
+        run: |
+          for p in lsp-client lsp-worker; do (cd "packages/$p" && npm ci); done
+          node scripts/engine/check-npm-packs.mjs
+
+      - name: Native language server and command line
+        if: needs.changes.outputs.ts_packages == 'true'
+        run: cargo build --locked -p opentide-lsp -p opentide-cli
+
+      # The extension host's half of `opentide/fetch` (W2): its HTTP stack on
+      # the loopback, the protocol, and `opentide serve` running tenant
+      # commands whose requests the host answers from the golden cassettes.
+      - name: wasi-host (opentide/fetch against opentide serve)
+        if: needs.changes.outputs.ts_packages == 'true'
+        env:
+          OPENTIDE_BIN: target/debug/opentide-cli
+        run: node --experimental-strip-types --test packages/wasi-host/src/index.test.ts
+
+      # node:wasi's path_open is a V8 fast API call whose allocation can start
+      # a GC inside the call, which segfaults node 22 once the WASI instances
+      # hold enough memory; plain calls do not.
+      - name: lsp-client (stdio, worker, wasi)
+        if: needs.changes.outputs.ts_packages == 'true'
+        env:
+          OPENTIDE_LSP_BIN: target/debug/opentide-lsp
+          OPENTIDE_WASI_BIN: target/wasm32-wasip1/wasi-lsp/opentide-lsp.wasm
+          OPENTIDE_WASM_GLUE: target/wasm-bindgen/opentide_wasm.js
+        run: >-
+          node --no-turbo-fast-api-calls --experimental-strip-types
+          --test packages/lsp-client/src/index.test.ts
+
+      - name: Save the compiler cache
+        if: ${{ !cancelled() }}
+        uses: ./.github/actions/sccache-save
+        with:
+          key: ${{ steps.sccache.outputs.key }}
+          save: ${{ job.status == 'success' && steps.sccache.outputs.save == 'true' }}
+
+  # The generated grammars as VS Code reads them (language-server#171).
+  textmate:
+    name: TextMate grammars (vscode-textmate)
+    needs: changes
+    if: needs.changes.outputs.textmate == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+      - name: TextMate grammars (vscode-textmate)
+        working-directory: highlights/test
+        run: npm ci && npm test
+
+  # The supply-chain gate (#843, deny.toml): licences of what we ship,
+  # RustSec advisories (vulnerable, unsound, unmaintained, yanked), a second
+  # version of a shipped crate, OpenSSL, and any source but crates.io. fuzz/
+  # (its own lock, never shipped) is checked for advisories, bans and
+  # sources with the same deny.toml; the publishing/ placeholder crate (its
+  # own lock, published) for everything. The advisory database is fetched fresh,
+  # so a new advisory fails the next pull request until it is fixed or
+  # excepted with a reason in deny.toml. cargo-deny is the prebuilt release,
+  # checksum-checked, at the version pinned here.
+  deny:
+    name: Supply chain (cargo deny)
+    needs: changes
+    if: needs.changes.outputs.deny == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    # cargo-deny only reads `cargo metadata`, but every cargo job here denies
+    # warnings (tests/test_ci/test_workflows.py).
+    env:
+      RUSTFLAGS: -Dwarnings
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The release rust-toolchain.toml pins: cargo-deny reads the graph with
+      # `cargo metadata`.
+      - name: Set up Rust
+        uses: ./.github/actions/rust-setup
+        with:
+          tools: cargo-deny@0.20.2
+          fallback: none
+      - name: cargo deny (workspace)
+        run: cargo deny --config deny.toml --locked check
+      - name: cargo deny (fuzz/)
+        run: cargo deny --config deny.toml --manifest-path fuzz/Cargo.toml --locked check advisories bans sources
+      # The crate that reserves `opentide` on crates.io: a workspace and lock of
+      # its own, published, so every check applies.
+      - name: cargo deny (publishing/ placeholder crate)
+        run: cargo deny --config deny.toml --manifest-path publishing/placeholders/crates/opentide/Cargo.toml --locked check
+
+  # ---------------------------------------------------------------------------
+  # The release tier: a release pull request, Run workflow with scope
+  # `release`, and the nightly (the packages only). Every package on every
+  # target, then each installed on its OS as a user installs it.
+  # ---------------------------------------------------------------------------
+
+  # Everything a release ships, built and smoke-tested as publish.yml builds
+  # it (release-build.yml, which publish.yml calls too): the wheels (each run
+  # on its own OS), the npm packages, the GitHub Release's assets (binaries
+  # for Linux and macOS, the installer, WebAssembly, SBOMs), the sdist and the crate packages, at a
+  # development version of the workspace's (PyPI X.Y.Z.devN, npm
+  # X.Y.Z-dev.N), kept 14 days as this run's artifacts
+  # (docs/internal/publishing.md, "Testing a build without publishing"); then
+  # one smoke matrix: the installer on Linux and macOS, `npm install` on each
+  # of the six platforms, a build from the sdist and `cargo install` from the crates.
+  release:
+    name: Release build
+    needs: changes
+    if: needs.changes.outputs.release == 'true' || needs.changes.outputs.mode == 'nightly'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/release-build.yml
+    with:
+      revision: ${{ github.sha }}
+      dry-run: true
+      retention-days: 14
+      # The antivirus gate (av-gate.yml: ClamAV, YARA, Microsoft Defender, the marker and size
+      # checks) is the release tier's: a release pull request, the `release` label, Run
+      # workflow with scope `release`; not an ordinary pull request, and not the nightly.
+      av-gate: ${{ needs.changes.outputs.release == 'true' }}
+
+  # Every publish this repository makes, rehearsed with --dry-run and no
+  # token (publish-dry-run.yml).
+  publish-dry-run:
+    name: Publish dry run
+    needs: changes
+    if: needs.changes.outputs.release == 'true' || needs.changes.outputs.mode == 'nightly'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/publish-dry-run.yml
+
+  # The other supported Pythons, the oldest (3.10) included, on `native`'s
+  # abi3 wheel (`python`'s run without coverage), one after another in one
+  # job, then the E2E tests too slow for every pull request, marked
+  # `full_set` (the platform plugin on opentide installed from its wheel,
+  # UC-4.5c, #835), on 3.14. Release pull requests and the nightly. Each
+  # Python's run is a log group of its own and a failed one an error
+  # annotation naming it; the job fails when any did.
+  python-matrix:
+    name: Python 3.10-3.13 and the full E2E set
+    needs: [changes, native]
+    if: needs.changes.outputs.mode == 'nightly' || needs.changes.outputs.release == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    env:
+      # opentide is the build's wheel: `uv run` builds nothing, and the
+      # tests that install opentide's wheel take it.
+      UV_NO_SYNC: "1"
+      OPENTIDE_TEST_WHEELHOUSE: ${{ github.workspace }}/.native
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+        with:
+          enable-cache: true
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: |
+            3.10
+            3.11
+            3.12
+            3.13
+            ${{ env.COVERAGE_PYTHON }}
+      # cargo for the tests that read the workspace's metadata; the full set's
+      # tests build wheels of their own.
+      - name: Set up Rust
+        uses: ./.github/actions/rust-setup
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: native
+          path: .native
+      # The tests import opentide from src/ (tests/conftest.py), as from an
+      # editable install: the wheel's module goes beside the sources. abi3:
+      # one module for every Python.
+      - name: The build's extension beside the sources
+        run: unzip -j -o .native/opentide-*.whl 'opentide/_native.abi3.so' -d src/opentide
+      # One environment per Python (UV_PROJECT_ENVIRONMENT), each with the
+      # dependencies and the build's wheel.
+      - name: Pytest on Python 3.10 to 3.13
+        run: |
+          set -uo pipefail
+          failed=()
+          for version in 3.10 3.11 3.12 3.13; do
+            echo "::group::Python ${version}"
+            export UV_PROJECT_ENVIRONMENT="${RUNNER_TEMP}/venv-${version}"
+            if uv sync --python "${version}" --group dev --no-install-project \
+              && uv pip install --python "${UV_PROJECT_ENVIRONMENT}/bin/python" --no-deps .native/opentide-*.whl \
+              && uv run --python "${version}" pytest tests/ --ignore=tests/test_ci --no-cov -q -n 4 \
+                -m "not full_set and not gitlab_ci_lint"; then
+              echo "::endgroup::"
+            else
+              echo "::endgroup::"
+              echo "::error title=Python ${version}::the suite failed on Python ${version} (its log group above)"
+              failed+=("${version}")
+            fi
+          done
+          if (( ${#failed[@]} )); then
+            echo "Failed on Python ${failed[*]}" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+      - name: E2E pytest (full set, ${{ env.COVERAGE_PYTHON }})
+        if: ${{ !cancelled() }}
+        env:
+          UV_PROJECT_ENVIRONMENT: ${{ runner.temp }}/venv-${{ env.COVERAGE_PYTHON }}
+        run: |
+          uv sync --python "${COVERAGE_PYTHON}" --group dev --no-install-project
+          uv pip install --python "${UV_PROJECT_ENVIRONMENT}/bin/python" --no-deps .native/opentide-*.whl
+          uv run --python "${COVERAGE_PYTHON}" pytest tests/ -m full_set -q --no-cov
+
+  # ---------------------------------------------------------------------------
+  # The nightly set: never on a pull request or a push, so it never gates.
+  # ---------------------------------------------------------------------------
+
+  # Every nightly job that needs nothing from this run (nightly.yml): the
+  # engine tests on macOS and Windows, SDK conformance on three OSes, the
+  # Elastic sweep, lsp parity, the LSP clients, coverage, the budgeted
+  # benchmarks, the vendor-parser oracles and the fuzz targets.
+  nightly:
+    name: Nightly
+    needs: changes
+    if: needs.changes.outputs.mode == 'nightly'
+    permissions:
+      contents: read
+      # bench.yml reads the base branch's last result (gh run list, download).
+      actions: read
+    uses: ./.github/workflows/nightly.yml
+    with:
+      features: ${{ needs.changes.outputs.features }}
+    # oracle.yml's Carbon Black Cloud tenant: those three only.
+    secrets:
+      OPENTIDE_CBC_URL: ${{ secrets.OPENTIDE_CBC_URL }}
+      OPENTIDE_CBC_ORG_KEY: ${{ secrets.OPENTIDE_CBC_ORG_KEY }}
+      OPENTIDE_CBC_TOKEN: ${{ secrets.OPENTIDE_CBC_TOKEN }}
+
+  # The console script on Windows (the only `spawn` platform): the launcher
+  # and redirect smoke and Ctrl-C (opentide._cli:main, UC-3.8b, #960: a
+  # CTRL_BREAK_EVENT to `serve` in a process group of its own; SIGTERM is
+  # POSIX's), on the windows-x64 wheel `release` built (build-packages.yml's
+  # `wheels-windows-x64`): nothing compiles here (`uv sync` built the engine
+  # cold, about 13 minutes). Whatever else in `release` failed: the download
+  # fails when the wheel was not built. Serial: two small test files.
+  cli-windows-smoke:
+    name: CLI Windows smoke
+    needs: [changes, release]
+    if: always() && needs.changes.outputs.mode == 'nightly'
+    runs-on: windows-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    env:
+      # opentide is the release build's wheel: `uv run` builds nothing.
+      UV_NO_SYNC: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ env.COVERAGE_PYTHON }}
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: wheels-windows-x64
+          path: .wheel
+
+      # The dependencies, then opentide from the release build's wheel; its
+      # extension also goes beside the sources, which the tests import
+      # (tests/conftest.py).
+      - name: Install dependencies and the release build's wheel
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv sync --python "${COVERAGE_PYTHON}" --group dev --no-install-project
+          uv pip install --no-deps .wheel/opentide-*.whl
+          uv run python - <<'PY'
+          import glob
+          import zipfile
+
+          (wheel,) = glob.glob(".wheel/opentide-*.whl")
+          with zipfile.ZipFile(wheel) as archive:
+              (module,) = (n for n in archive.namelist() if n.startswith("opentide/_native.") and n.endswith(".pyd"))
+              with open(f"src/{module}", "wb") as out:
+                  out.write(archive.read(module))
+              print(f"{wheel}: {module}")
+          PY
 
       - name: Console launcher and redirect smoke
         run: >-
           uv run pytest tests/test_cli/e2e/test_console_script_smoke.py
           -m cli_smoke -q --no-cov
 
-      # Promotion rewrites rule files in place: on Windows they are usually CRLF,
-      # and the replace of the temporary file must work on NTFS.
-      - name: Promotion keeps a rule file's line endings
-        run: uv run pytest tests/test_deployment/test_promotion_rewrite.py -q --no-cov
+      - name: Ctrl-C through the console script
+        run: >-
+          uv run pytest tests/test_cli/e2e/test_launcher_signals_e2e.py
+          -m cli_smoke -q --no-cov
+
+  # opentidehq/vscode-extension pins the highlights zip, the browser build and
+  # THIRD-PARTY-LICENSES.html of an engine release (pins.json): its own grammar
+  # and engine scripts, at a pinned commit, must accept this run's assets as
+  # they would a release of this repository.
+  engine-release-consumers:
+    name: Engine release assets in vscode-extension
+    needs: [changes, release]
+    # Whatever else in `release` failed (a smoke cell, the crates' licence
+    # scan): this needs only its engine assets, and the download fails when
+    # they were not built.
+    if: always() && needs.changes.outputs.mode == 'nightly'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: opentidehq/vscode-extension
+          ref: 3c12cfa24e6a1f5526c563789f1f54ece12e4b55
+          path: vscode-extension
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-assets
+          path: release-assets
+      - name: vscode-extension's grammar and engine scripts accept the assets
+        run: >-
+          node scripts/engine/check-vscode-extension.mjs
+          vscode-extension release-assets "$(python3 scripts/engine/release.py tag)"
+
+  # ---------------------------------------------------------------------------
+  # The one required check.
+  # ---------------------------------------------------------------------------
+
+  # Passes when `changes` succeeded and every other job it needs either
+  # succeeded or was skipped: a job is skipped exactly when `changes` found it
+  # not needed (or its build was), and a failed or cancelled job fails the
+  # gate. `always()`: a failed job must not skip this one, since a skipped
+  # required check passes. Branch protection requires this name alone
+  # (.github/AGENTS.md, "Required checks").
+  gate:
+    name: PR gate
+    needs:
+      - stubs
+      - wiring
+      - throughput
+      - changes
+      - lint
+      - engine-lint
+      - engine-lint-variants
+      - native
+      - build
+      - python
+      - gitlab-ci-lint
+      - docs
+      - website
+      - facade
+      - node
+      - wasm
+      - textmate
+      - deny
+      - release
+      - publish-dry-run
+      - python-matrix
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Every needed job passed
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          python3 - <<'PY'
+          import json, os, sys
+          needs = json.loads(os.environ["NEEDS"])
+          bad = {job: need["result"] for job, need in needs.items()
+                 if need["result"] not in ("success", "skipped")}
+          if needs["changes"]["result"] != "success":
+              bad["changes"] = needs["changes"]["result"]
+          for job, need in sorted(needs.items()):
+              print(f"{need['result']:>9}  {job}")
+          if bad:
+              print(f"::error::failed or cancelled: {', '.join(sorted(bad))}")
+              sys.exit(1)
+          PY
+
+  # The nightly's one issue: on a failure, open (or comment on) the issue
+  # labelled `nightly-failure`, with the failing jobs; nothing when it passed.
+  nightly-report:
+    name: Nightly report
+    needs:
+      - changes
+      - gate
+      - nightly
+      - cli-windows-smoke
+      - engine-release-consumers
+    if: always() && needs.changes.outputs.mode == 'nightly'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      issues: write
+    steps:
+      - name: Open or update the nightly-failure issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          REF: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          failed="$(gh api --paginate "repos/${GH_REPO}/actions/runs/${RUN_ID}/jobs?per_page=100" \
+            --jq '.jobs[] | select(.conclusion == "failure" or .conclusion == "timed_out" or .conclusion == "cancelled") | "- [\(.name)](\(.html_url)): \(.conclusion)"')"
+          if [[ -z "${failed}" ]]; then
+            echo "The nightly passed."
+            exit 0
+          fi
+          body="$(printf 'The nightly on %s (%s) failed: %s\n\n%s\n' "${REF}" "${SHA:0:12}" "${RUN_URL}" "${failed}")"
+          echo "${body}" >> "$GITHUB_STEP_SUMMARY"
+          gh label create nightly-failure --color B60205 --description "The nightly CI run failed" 2>/dev/null || true
+          issue="$(gh issue list --label nightly-failure --state open --limit 1 --json number --jq '.[0].number // empty')"
+          if [[ -n "${issue}" ]]; then
+            gh issue comment "${issue}" --body "${body}"
+          else
+            gh issue create --title "Nightly CI failure" --label nightly-failure --body "${body}"
+          fi

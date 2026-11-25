@@ -3,8 +3,8 @@ title: Diagnostic codes
 description: What each opentide diagnostic code means, an example, and how to fix it.
 ---
 
-<!-- Generated from src/opentide/data/diagnostics/ by
-     scripts/build/render_diagnostics_docs.py. Edit the pages there. -->
+<!-- Generated from src/opentide/data/diagnostics/ and the analysis engine's codes by
+     `cargo xtask codegen`. Edit the pages there. -->
 
 # Diagnostic codes
 
@@ -16,6 +16,7 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`api_key_literal`](#api_key_literal) | A `sharing.toml` block holds its API key as a literal. |
 | [`api_key_unset`](#api_key_unset) | An enabled sharing target has no API key. |
 | [`asset_unknown`](#asset_unknown) | A `visibility.toml` log source or detector names an asset that `[[assets]]` does not declare. |
+| [`authentication_failed`](#authentication_failed) | A tenant refused the check itself, not a query: its credentials, or the account's rights on it. |
 | [`bitdefender_action_scope`](#bitdefender_action_scope) | An automatic action is not allowed for the rule's kind or target. |
 | [`bitdefender_actions_unsupported`](#bitdefender_actions_unsupported) | The block sets `actions`, and the tenant's subscription has no automatic actions. |
 | [`bitdefender_contains_no_wildcard`](#bitdefender_contains_no_wildcard) | A `contains` criterion has neither `*` nor `?`, so GravityZone matches the value as written. |
@@ -79,7 +80,9 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`cql_unknown_function`](#cql_unknown_function) | No CQL function has this name; function names are matched without regard to case. |
 | [`cql_unknown_parameter`](#cql_unknown_parameter) | The CQL function has no parameter with this name. |
 | [`cql_unnamed_argument`](#cql_unnamed_argument) | A CQL function gets an argument without a name that it cannot take: a second one, or one when every parameter needs its name. |
+| [`credential_unset`](#credential_unset) | A tenant's setup names an environment variable that is not set, so the command stopped before it called the tenant. |
 | [`credentials`](#credentials) | Per configured tenant, whether every `$VARIABLE` its setup names is set. |
+| [`crowdstrike_unsupported`](#crowdstrike_unsupported) | Retired in engine 0.12.0; CrowdStrike queries are now checked as CQL: see the `cql_*` codes. |
 | [`cve_lookup_unavailable`](#cve_lookup_unavailable) | A threat lists CVE identifiers, but Vulnerability-Lookup could not be reached to check them. |
 | [`defender_output_columns`](#defender_output_columns) | A Defender custom detection must return the columns Defender requires. |
 | [`deployment_state_platform`](#deployment_state_platform) | A deployment state shard names a platform that stores no external ids. |
@@ -209,9 +212,10 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`falco_unknown_source`](#falco_unknown_source) | The event source is not one Falco or its published plugins define, so its fields are not checked. |
 | [`falco_unsafe_na_check`](#falco_unsafe_na_check) | A `ka.` or `jevt.` field compared with `<NA>`, which Falco warns about: the field may hold that text. |
 | [`falco_value_type`](#falco_value_type) | The value cannot be parsed as the field's type (a number, `true` or `false`, an IP address or network, a hex string for `bcontains`); Falco refuses to load the rule. |
+| [`file_not_found`](#file_not_found) | A `--file` path names a file that does not exist, so it was not validated. |
 | [`filename_mismatch`](#filename_mismatch) | An object file's name is not the stem `lint.toml` `[filenames].style` (or its kind's `[filenames.<kind>].style`) asks for: `slugify(name)` by default. |
 | [`filename_pattern`](#filename_pattern) | An object file's name does not match the regular expression `lint.toml` sets for it. |
-| [`filename_slug`](#filename_slug) | The file name is not the one lint.toml's [filenames] style derives from the object's name. |
+| [`filename_slug`](#filename_slug) | Retired in opentide 0.24.0; `opentide lint` reports a file name that is not the object's as `filename_mismatch`. |
 | [`git`](#git) | git is on `PATH`. |
 | [`git_repository`](#git_repository) | The workspace is in a git repository, and its default branch (`origin/HEAD`). |
 | [`google_secops_compile_error`](#google_secops_compile_error) | Google SecOps's compiler refuses a rule in a live query check. |
@@ -294,9 +298,10 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`kql_control_command_unsupported`](#kql_control_command_unsupported) | A KQL control command (.show, .create, ...) is not a detection query; rules cannot run it. |
 | [`kql_deprecated_function`](#kql_deprecated_function) | The KQL function is a deprecated alias; Microsoft Learn names its replacement. |
 | [`kql_deprecated_operator`](#kql_deprecated_operator) | The KQL scalar operator is a legacy spelling (containscs); use the current name (contains_cs). |
-| [`kql_join_summarize_before_project`](#kql_join_summarize_before_project) | join or summarize runs before project, so it carries every column. |
+| [`kql_join_summarize_before_project`](#kql_join_summarize_before_project) | A `join` runs while the pipeline it sits in still carries every column, and a later `project` would have narrowed it. |
 | [`kql_parse_error`](#kql_parse_error) | The KQL query does not parse. |
 | [`kql_render_not_valid`](#kql_render_not_valid) | render draws a chart; it has no effect in a detection rule. |
+| [`kql_table_misspelt`](#kql_table_misspelt) | A KQL table is not one the engine knows or the workspace declares, but is a near miss of one that is (one edit for a name of up to seven characters, two for a longer one, and not a custom `_CL` table): most likely a typo. |
 | [`kql_table_not_declared`](#kql_table_not_declared) | The table is one the engine knows for the platform, but no log source of the workspace declares it in visibility.toml. |
 | [`kql_type_mismatch`](#kql_type_mismatch) | The operator cannot apply to the column's documented or declared type. |
 | [`kql_unknown_column`](#kql_unknown_column) | The column is not in the documented schema of the table or ASIM parser it comes from, or in the columns visibility.toml declares for the table. |
@@ -333,9 +338,25 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`max_tlp_unknown`](#max_tlp_unknown) | A `sharing.toml` block's `max_tlp` is not a TLP value. |
 | [`mcp_config`](#mcp_config) | An MCP configuration from `opentide setup mcp` runs `opentide mcp start`. |
 | [`metadata_recommended`](#metadata_recommended) | An object has no `metadata.author` or `metadata.organisation`. |
-| [`missing_author`](#missing_author) | The optional metadata.author field is missing. Information, unless lint.toml's [metadata] severity raises it. |
+| [`microsoft_defender_action_kind`](#microsoft_defender_action_kind) | A key of a Microsoft Defender block's `actions` is not an automated action. |
+| [`microsoft_defender_action_target`](#microsoft_defender_action_target) | A Microsoft Defender automated action has no target, or a target is empty or names a field its action does not take. |
+| [`microsoft_defender_column`](#microsoft_defender_column) | A Microsoft Defender column name is blank or not a string. |
+| [`microsoft_defender_custom_details`](#microsoft_defender_custom_details) | A Microsoft Defender block's `alert.custom_details` is not a mapping of non-blank names to result columns. |
+| [`microsoft_defender_entity_kind`](#microsoft_defender_entity_kind) | A key of a Microsoft Defender block's `entities` is not an entity kind. |
+| [`microsoft_defender_entity_mapping`](#microsoft_defender_entity_mapping) | A Microsoft Defender entity mapping is empty, is not a mapping, or names a field its kind does not have. |
+| [`microsoft_defender_frequency`](#microsoft_defender_frequency) | A Microsoft Defender block's `schedule.frequency` is not `NRT`, `<n>H` or `<n>D`. |
+| [`microsoft_defender_grouping`](#microsoft_defender_grouping) | A Microsoft Defender block's `alert.grouping` is not `alert_per_event` or `single_alert`. |
+| [`microsoft_defender_incident`](#microsoft_defender_incident) | A Microsoft Defender block's `incident` is not a mapping whose `exclude_from_correlation` is `true` or `false`. |
+| [`microsoft_defender_isolation_type`](#microsoft_defender_isolation_type) | A Microsoft Defender `isolate_devices` target's `isolation_type` is not `full` or `selective`. |
+| [`microsoft_defender_lookback`](#microsoft_defender_lookback) | A Microsoft Defender block's `schedule.lookback` is not a duration, is set on a near-real-time rule, or is shorter than its frequency. |
+| [`microsoft_defender_no_entities`](#microsoft_defender_no_entities) | A Microsoft Defender block maps no entity. |
+| [`microsoft_defender_rule_absent`](#microsoft_defender_rule_absent) | A Microsoft Defender rule to disable is not on the tenant, so nothing was disabled or created. |
+| [`microsoft_defender_schema`](#microsoft_defender_schema) | A Microsoft Defender block's `schema` names another schema. |
+| [`microsoft_defender_scope`](#microsoft_defender_scope) | A Microsoft Defender block's `scope` is not a non-empty list of device group names. |
+| [`microsoft_defender_severity`](#microsoft_defender_severity) | A Microsoft Defender block's `alert.severity` is not one of opentide's five severities. |
+| [`missing_author`](#missing_author) | Retired in opentide 0.24.0; `opentide lint` reports a missing recommended metadata field as `metadata_recommended`. |
 | [`missing_field`](#missing_field) | A configuration file is missing a required key, once it is merged with the bundled file and the parent instance. |
-| [`missing_organisation`](#missing_organisation) | The optional metadata.organisation field is missing. Information, unless lint.toml's [metadata] severity raises it. |
+| [`missing_organisation`](#missing_organisation) | Retired in opentide 0.24.0; `opentide lint` reports a missing recommended metadata field as `metadata_recommended`. |
 | [`missing_uuid`](#missing_uuid) | An object file has no UUID, so it cannot be indexed. |
 | [`name_invalid`](#name_invalid) | A `sharing.toml` block name is not 1-64 lowercase letters, digits, `-` or `_`. |
 | [`name_missing`](#name_missing) | An object has no `name`, so lint cannot derive its file name. |
@@ -360,15 +381,18 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`proxy`](#proxy) | The proxy in `--proxy`, `OPENTIDE_PROXY` or `HTTPS_PROXY` accepts a connection. |
 | [`python_version`](#python_version) | The Python interpreter running opentide. |
 | [`query_check_timeout`](#query_check_timeout) | `validate query --live` failed because a tenant did not answer a query's check within the check timeout. |
+| [`query_folded_comment`](#query_folded_comment) | A `//` comment in a query that YAML folds into one line comments out the lines after it. |
+| [`query_rejected`](#query_rejected) | `validate query --live` failed because a tenant refused a rule's query as invalid. |
 | [`recommended_field_missing`](#recommended_field_missing) | A field the templates ask for is missing; `opentide validate` accepts the object without it. |
 | [`reference_not_found`](#reference_not_found) | `--objective` or `--threat` names a UUID that no object in the catalogue carries. |
 | [`retired_configuration_file`](#retired_configuration_file) | A file or folder under `.opentide/configurations/` that opentide does not read. |
 | [`retract_unconfirmed`](#retract_unconfirmed) | `share retract` would delete a remote event, and was not confirmed. |
+| [`reviewed_before_modified`](#reviewed_before_modified) | A rule's `metadata.reviewed` date is earlier than its `metadata.modified` date: the rule changed after its last review. |
 | [`risk_band`](#risk_band) | The risk score is outside the band of the rule's severity. |
 | [`rule_status_unknown`](#rule_status_unknown) | A `sharing.toml` block lists a rule status your configuration does not declare. |
 | [`schema_missing`](#schema_missing) | An object has no `metadata.schema`, so no schema can check it. |
 | [`schema_validation`](#schema_validation) | An object does not match the schema its `metadata.schema` names. |
-| [`schemas_fresh`](#schemas_fresh) | Every JSON schema this opentide version generates exists. |
+| [`schemas_fresh`](#schemas_fresh) | Every JSON schema this opentide version generates exists and matches what `opentide generate schemas` writes now. |
 | [`scope_no_match`](#scope_no_match) | A `--file`, `--uuid` or `--type` selection matched no object, so nothing was validated. |
 | [`share_failed`](#share_failed) | `share` reached the destination, and every object failed. |
 | [`share_partial`](#share_partial) | `share` shared some objects, and others failed. |
@@ -400,6 +424,7 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`technique_not_enterprise`](#technique_not_enterprise) | The ATT&CK technique is not in the Enterprise matrix that Elastic maps. |
 | [`template_missing`](#template_missing) | `opentide new` found no generated template or schema for the object type it was asked for. |
 | [`templates_fresh`](#templates_fresh) | Every template this opentide version generates exists and matches what it would write. |
+| [`tenant_unreachable`](#tenant_unreachable) | A tenant did not answer, so nothing was checked on it. |
 | [`threshold_lookback`](#threshold_lookback) | A threshold rule's lookback exceeds its interval, so windows overlap and alerts repeat. |
 | [`unknown_connector`](#unknown_connector) | `sharing.toml` has a top-level array that names a sharing connector opentide does not have; it was skipped. |
 | [`unknown_key`](#unknown_key) | A configuration file has a key opentide does not read, usually a misspelling. |
@@ -417,33 +442,34 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`vscode_settings`](#vscode_settings) | The workspace recommends the opentide VS Code extension (`opentidehq.opentide`) in `.vscode/extensions.json`, and `.vscode/settings.json` maps no object files to opentide's JSON schemas in `yaml.schemas`. |
 | [`vscode_snippets`](#vscode_snippets) | The editor snippet file `opentide generate snippets` writes exists. |
 | [`workspace`](#workspace) | Where the workspace is, and how it was found. |
-| [`workspace_not_found`](#workspace_not_found) | `opentide new` ran outside a workspace: neither `.opentide/` nor `objects/` is there. Or the MCP server was started in an Agent Plugin's directory, which is not a workspace, and nothing named one. |
+| [`workspace_not_found`](#workspace_not_found) | `opentide new`, `opentide generate` or `opentide migrate vocab-scope` ran outside a workspace: neither `.opentide/` nor `objects/` is there. Or the MCP server has no workspace to serve: it was started in an Agent Plugin's directory, or in any folder that is not in a workspace, and nothing named one, or `OPENTIDE_REPO_ROOT` names a folder that does not exist. |
 | [`yaml_parse`](#yaml_parse) | An object file is not valid YAML, or not one mapping, so it could not be loaded. |
 | [`yara_duplicate_rule`](#yara_duplicate_rule) | Two YARA rules in one signature have the same name. |
 | [`yara_duplicate_string`](#yara_duplicate_string) | Two strings of one YARA rule have the same identifier. |
 | [`yara_duplicate_tag`](#yara_duplicate_tag) | A YARA rule repeats a tag. |
 | [`yara_empty_signature`](#yara_empty_signature) | The YARA signature has no rule, or only private or global rules. |
-| [`yara_entrypoint_deprecated`](#yara_entrypoint_deprecated) | entrypoint is deprecated in libyara and refused by YARA-X; use pe.entry_point or elf.entry_point. |
+| [`yara_entrypoint_deprecated`](#yara_entrypoint_deprecated) | entrypoint is deprecated in libyara and refused by YARA-X (yara_undefined_identifier); use pe.entry_point or elf.entry_point. |
 | [`yara_hex_string`](#yara_hex_string) | A YARA hex string is invalid: an odd number of nibbles, a bad jump, or unbalanced alternatives. |
 | [`yara_include`](#yara_include) | A YARA signature uses an include directive, which no platform resolves: each API takes one text with no file system behind it. |
 | [`yara_meta_missing`](#yara_meta_missing) | A HarfangLab YARA rule has no meta `context`, which the HarfangLab profile recommends on every rule that is not private. |
 | [`yara_module_not_imported`](#yara_module_not_imported) | A YARA module field or function is used without importing its module. |
 | [`yara_module_unconfirmed`](#yara_module_unconfirmed) | The YARA module is known but not confirmed on the platform's agents. |
-| [`yara_number_out_of_range`](#yara_number_out_of_range) | A YARA integer, size suffix, jump bound or string index is outside the range libyara accepts. |
-| [`yara_parse_error`](#yara_parse_error) | The YARA signature does not parse as libyara 4.5 reads it. |
+| [`yara_number_out_of_range`](#yara_number_out_of_range) | A YARA integer, size suffix, jump bound or string index is outside the range YARA-X accepts. |
+| [`yara_parse_error`](#yara_parse_error) | The YARA signature does not parse as YARA-X 1.x reads it. |
 | [`yara_regexp`](#yara_regexp) | A YARA regular expression is invalid. |
-| [`yara_rule_identifier_conflict`](#yara_rule_identifier_conflict) | A YARA rule is named like a keyword, or matches a rule wildcard an earlier condition uses; a rule named like an imported module is yara_x_incompatible. |
+| [`yara_rule_identifier_conflict`](#yara_rule_identifier_conflict) | A YARA rule is named like a keyword, a built-in or an imported module. |
 | [`yara_signature_alias`](#yara_signature_alias) | A `yara.signature` is a YAML alias of text anchored elsewhere in the file instead of YARA written in the block. |
 | [`yara_slow_pattern`](#yara_slow_pattern) | libyara warns that this YARA string or loop may slow scanning down. |
-| [`yara_string_modifier`](#yara_string_modifier) | libyara refuses this combination of YARA string modifiers, or an xor or base64 argument is out of range. |
+| [`yara_string_modifier`](#yara_string_modifier) | YARA-X refuses this combination of YARA string modifiers, or an xor or base64 argument is out of range. |
 | [`yara_suspicious_expression`](#yara_suspicious_expression) | A YARA condition is invariant, unsatisfiable or not boolean, or compares an integer with a boolean. |
 | [`yara_type`](#yara_type) | A YARA operator or function is applied to a value of the wrong type. |
-| [`yara_undefined_identifier`](#yara_undefined_identifier) | A YARA identifier is neither a rule defined earlier in the signature nor an imported module, or is used as libyara refuses: a module field called as a function, a module function named without a call, or a loop variable a loop already binds. |
+| [`yara_undefined_identifier`](#yara_undefined_identifier) | A YARA identifier is neither a rule defined earlier in the signature nor an imported module, or is used as YARA-X refuses: a module field called as a function, a module function named without a call, or `entrypoint`. |
 | [`yara_undefined_string`](#yara_undefined_string) | A YARA condition names a string ($id, #id, @id, !id or $prefix*) that the rule does not define. |
-| [`yara_unknown_module`](#yara_unknown_module) | A YARA import names a module libyara does not ship. |
+| [`yara_unknown_module`](#yara_unknown_module) | A YARA import names a module opentide does not know: it knows YARA-X's default modules except vt, and refuses magic, which YARA-X does not build by default. |
 | [`yara_unknown_module_member`](#yara_unknown_module_member) | The YARA module has no such field or function, or the function takes other arguments. |
-| [`yara_unreferenced_string`](#yara_unreferenced_string) | A YARA string is never used in the condition, which libyara refuses unless the condition uses them. |
-| [`yara_x_incompatible`](#yara_x_incompatible) | libyara 4.5 compiles this YARA but YARA-X 1.x refuses it. |
+| [`yara_unreferenced_string`](#yara_unreferenced_string) | A YARA string is never used in the condition, which YARA-X refuses unless the condition uses them. |
+| [`yara_x_incompatible`](#yara_x_incompatible) | Retired in opentide 0.29.0; YARA-X is the YARA language: what it refuses is an error with its own code (`yara_regexp`, `yara_type`, `yara_parse_error`, ...), and syntax only YARA-X has is `yara_x_only_syntax` under a profile that refuses it. |
+| [`yara_x_only_syntax`](#yara_x_only_syntax) | This YARA uses syntax only YARA-X has, and the platform profile has yara_x_syntax refused: the platform may not accept it. |
 | [`yaral_condition_shape`](#yaral_condition_shape) | The condition is not one Google compiles: `not` or a comma on event terms, `or` across too many event variables or in an unbounded condition, or non-existence without a window and a bounded event. |
 | [`yaral_deprecated_field`](#yaral_deprecated_field) | The UDM field is deprecated. |
 | [`yaral_enum_value`](#yaral_enum_value) | The value is not one of the enumerated UDM field's values. |
@@ -552,6 +578,22 @@ assets = ["domain-controller"]   # declared as domain-controllers
 
 Correct the asset name, or declare the asset under `[[assets]]`.
 
+## authentication_failed
+
+A tenant refused the check itself, not a query: its credentials, or the account's rights on it.
+
+Exit 1, as `failure.code` of `validate query --live`. The run goes on: that tenant's remaining queries are not sent and the next tenant is checked; `refused_tenants` names every tenant that refused, and `rejected` lists every query any tenant refused as invalid. A query refused as invalid is `query_rejected`. Deploy failures, `doctor` and the SDKs use the same code for the same refusal.
+
+### Example
+
+```text
+opentide validate query --live --platform splunk
+```
+
+### How to fix
+
+Check the credentials of the tenant named in `tenant` (the environment variables its setup names) and the account's rights on the tenant.
+
 ## bitdefender_action_scope
 
 An automatic action is not allowed for the rule's kind or target.
@@ -635,7 +677,7 @@ Find the rule by name in the GravityZone console and record its id in the rule's
 
 A GravityZone create got no answer, and its retry found the name already taken.
 
-Severity: error. Reported by `opentide deploy` on a `bitdefender` tenant. The first `createCustomRule` got no answer (a timeout, a reset or a cut-off response), so deploy sent it once more; the retry got no answer either, or GravityZone refused it because a rule of that name exists. The first create may have succeeded, but its rule id never reached opentide, so nothing was recorded in `.opentide/states/deployment/`. Deploy never lists rules to find the id.
+Severity: error. Reported by `opentide deploy` on a `bitdefender` tenant. The first `createCustomRule` was sent and got no answer (a timeout, a reset or a cut-off response), so deploy sent it once more; the retry got no answer either, could not be sent (its connection refused), or GravityZone refused it because a rule of that name exists. The first create may have succeeded, but its rule id never reached opentide, so nothing was recorded in `.opentide/states/deployment/`. Deploy never lists rules to find the id. A first create that was never sent (its connection or the tenant's certificate refused) is `bitdefender_tenant_unreachable`, never this code.
 
 ### Example
 
@@ -1049,12 +1091,12 @@ Check the variable `api_key` names, and enable the Incidents API for the key in 
 
 A call to the GravityZone tenant got no answer, so no further rule deploys to it.
 
-Severity: error. Reported by `opentide deploy` on a `bitdefender` tenant (bitdefender-1.0). A timeout or a connection error on an update or a delete stops the tenant. A create with no answer is retried once instead; a retry with no answer, or one refused because the name is taken, is `bitdefender_create_unconfirmed` for that rule, and the tenant goes on.
+Severity: error. Reported by `opentide deploy` on a `bitdefender` tenant (bitdefender-1.0). A timeout or a connection error on an update or a delete stops the tenant, and so does a first create that was never sent (its connection refused, DNS, the connect timeout, a proxy that would not connect, or the tenant's certificate refused): nothing can have been created. A create sent with no answer is retried once instead; a retry with no answer, one that could not be sent, or one refused because the name is taken, is `bitdefender_create_unconfirmed` for that rule, and the tenant goes on.
 
 ### Example
 
 ```text illustrative
-bitdefender_tenant_unreachable: HTTPSConnectionPool(host='cloudgz.gravityzone.bitdefender.com', port=443): Read timed out
+bitdefender_tenant_unreachable: bitdefender tenant 'gz' at https://cloudgz.gravityzone.bitdefender.com sent no answer within 30s
 ```
 
 ### How to fix
@@ -1368,321 +1410,337 @@ Fix the TOML at the line it names. `opentide explain config_parse` shows the com
 
 A CQL assignment names the output field and the function's as= parameter names it again.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a CQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [CQL reference](https://library.humio.com/crowdstrike-query-language/) describes the syntax and the commands the engine checks against.
 
 ## cql_correlate_aggregate
 
 A Next-Gen SIEM correlation rule combines correlate() with another aggregate function, which CrowdStrike does not allow.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a CQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [CQL reference](https://library.humio.com/crowdstrike-query-language/) describes the syntax and the commands the engine checks against.
 
 ## cql_correlate_placement
 
 CQL correlate() stands where its reference forbids: after an aggregate or a source function, inside another function's arguments, or with an aggregate in its queries.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a CQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [CQL reference](https://library.humio.com/crowdstrike-query-language/) describes the syntax and the commands the engine checks against.
 
 ## cql_deprecated_function
 
 CrowdStrike's reference marks the CQL function deprecated.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a CQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [CQL reference](https://library.humio.com/crowdstrike-query-language/) describes the syntax and the commands the engine checks against.
 
 ## cql_duplicate_parameter
 
 A CQL function parameter is given more than once.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a CQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [CQL reference](https://library.humio.com/crowdstrike-query-language/) describes the syntax and the commands the engine checks against.
 
 ## cql_event_function_after_aggregate
 
 A CQL eventSize(), eventInternals() or eventFieldCount() call comes after the first aggregate function, which LogScale refuses since 1.190.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a CQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [CQL reference](https://library.humio.com/crowdstrike-query-language/) describes the syntax and the commands the engine checks against.
 
 ## cql_free_text_after_aggregate
 
 A CQL free-text filter comes after the first aggregate function, which LogScale refuses since 1.190.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a CQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [CQL reference](https://library.humio.com/crowdstrike-query-language/) describes the syntax and the commands the engine checks against.
 
 ## cql_link_outside_correlate
 
 The CQL link operator &lt;=> appears outside the queries of correlate(), the only place it links fields.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a CQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [CQL reference](https://library.humio.com/crowdstrike-query-language/) describes the syntax and the commands the engine checks against.
 
 ## cql_match_guard
 
 A CQL match guard is an aggregate function; a guard must be a filter.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a CQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [CQL reference](https://library.humio.com/crowdstrike-query-language/) describes the syntax and the commands the engine checks against.
 
 ## cql_missing_parameter
 
 A CQL function call leaves out a required parameter.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a CQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [CQL reference](https://library.humio.com/crowdstrike-query-language/) describes the syntax and the commands the engine checks against.
 
 ## cql_parameter_value
 
 A literal CQL argument is not one of the parameter's allowed values, or is outside its bounds.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a CQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [CQL reference](https://library.humio.com/crowdstrike-query-language/) describes the syntax and the commands the engine checks against.
 
 ## cql_parse_error
 
 The CrowdStrike Query Language (CQL) query does not parse.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a CQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [CQL reference](https://library.humio.com/crowdstrike-query-language/) describes the syntax and the commands the engine checks against.
 
 ## cql_regex_flag
 
 A CQL regex literal has a flag other than d, g, i, m or F.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a CQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [CQL reference](https://library.humio.com/crowdstrike-query-language/) describes the syntax and the commands the engine checks against.
 
 ## cql_regex_group_under_or
 
 A CQL regex with named groups is an operand of or, where LogScale extracts none of its fields.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a CQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [CQL reference](https://library.humio.com/crowdstrike-query-language/) describes the syntax and the commands the engine checks against.
 
 ## cql_removed_function
 
 The CQL function was removed from LogScale and Next-Gen SIEM no longer runs it.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a CQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [CQL reference](https://library.humio.com/crowdstrike-query-language/) describes the syntax and the commands the engine checks against.
 
 ## cql_string_escape
 
 A CQL string has an escape LogScale does not translate; it keeps the backslash and the character.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a CQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [CQL reference](https://library.humio.com/crowdstrike-query-language/) describes the syntax and the commands the engine checks against.
 
 ## cql_unknown_event
 
 The #event_simpleName value is not a Falcon sensor event the engine knows.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a CQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [CQL reference](https://library.humio.com/crowdstrike-query-language/) describes the syntax and the commands the engine checks against.
 
 ## cql_unknown_function
 
 No CQL function has this name; function names are matched without regard to case.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a CQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [CQL reference](https://library.humio.com/crowdstrike-query-language/) describes the syntax and the commands the engine checks against.
 
 ## cql_unknown_parameter
 
 The CQL function has no parameter with this name.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a CQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [CQL reference](https://library.humio.com/crowdstrike-query-language/) describes the syntax and the commands the engine checks against.
 
 ## cql_unnamed_argument
 
 A CQL function gets an argument without a name that it cannot take: a second one, or one when every parameter needs its name.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Reported by the analysis engine in a CQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
 ### Example
 
 ```text
-opentide validate
+opentide validate query
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [CQL reference](https://library.humio.com/crowdstrike-query-language/) describes the syntax and the commands the engine checks against.
+
+## credential_unset
+
+A tenant's setup names an environment variable that is not set, so the command stopped before it called the tenant.
+
+Exit 1, as `failure.code` of `validate query --live`. `message` names the variables (`Splunk credentials are unset ($SPLUNK_TOKEN)`). Nothing is sent to the tenant, and no value is printed.
+
+### Example
+
+```text
+opentide validate query --live --platform splunk
+```
+
+### How to fix
+
+Set the variables the message names in the environment the command runs in (a CI secret, or a `.env` file you load). Never write the value into the TOML. `opentide doctor` lists the unset variables of every tenant.
 
 ## credentials
 
@@ -1700,6 +1758,24 @@ Reported by `opentide doctor`. Warns when a variable is unset or empty, with `su
 ### How to fix
 
 Set the variables it names in the environment the deploy runs in (a CI secret, or a `.env` file you load). Never write the value into the TOML.
+
+## crowdstrike_unsupported
+
+Retired in engine 0.12.0; CrowdStrike queries are now checked as CQL: see the `cql_*` codes.
+
+Severity: warning, while it was reported. CrowdStrike queries were not validated, and the engine said so rather than fake it.
+
+Until engine 0.12.0, the analysis engine reported it as a warning on a CrowdStrike rule's `crowdstrike` block: an editor running `opentide lsp start` and `opentide tui` showed it. Engine 0.12.0 checks the query as the CrowdStrike Query Language (CQL) instead, and reports what it finds with the `cql_*` codes (`opentide explain` lists them). No command reports `crowdstrike_unsupported` now.
+
+### Example
+
+```text
+opentide explain cql_unknown_function
+```
+
+### How to fix
+
+Nothing to fix: no command reports this code any more. A suppression list or SARIF baseline that names it can drop it.
 
 ## cve_lookup_unavailable
 
@@ -1888,7 +1964,7 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 The index pattern is not one the workspace declares in visibility.toml.
 
-Severity: warning. Reported by the analysis engine on an Elastic rule (`elastic`): its `index`, a threat match's `index`, or an ES|QL `FROM`. `opentide lint` (its `queries` check) and an editor running `opentide lsp start` show it; `opentide validate` does not fail on it. It is opt-in: only a workspace whose `visibility.toml` has at least one `elastic` log source gets it, for an index pattern no log source names, whether or not the engine knows it otherwise. An Elastic log source's `name` is its index pattern or data stream; data views are not declared. A declared pattern covers the patterns inside it: `logs-*` covers `logs-azure.*`.
+Severity: warning. Reported by the analysis engine on an Elastic rule (`elastic`): its `index`, a threat match's `index`, or an ES|QL `FROM`. `opentide lint` (its `queries` check) and an editor running `opentide lsp start` show it, with the query's findings; `opentide validate` does not fail on it. It is opt-in: only a workspace whose `visibility.toml` has at least one `elastic` log source gets it, for an index pattern no log source names, whether or not the engine knows it otherwise. An Elastic log source's `name` is its index pattern or data stream; data views are not declared. A declared pattern covers the patterns inside it: `logs-*` covers `logs-azure.*`.
 
 ### Example
 
@@ -3267,7 +3343,7 @@ Severity: error. Reported by `opentide deploy` on an `exabeam` block (exabeam-1.
 ### Example
 
 ```text illustrative
-exabeam_tenant_deployment_failed: code=exabeam_tenant_unreachable tenant=exabeam-eu error=HTTPSConnectionPool(host='api.eu.exabeam.cloud', port=443): Read timed out
+exabeam_tenant_deployment_failed: code=exabeam_tenant_unreachable tenant=exabeam-eu error=exabeam tenant 'exabeam-eu' at https://api.eu.exabeam.cloud sent no answer within 30s
 ```
 
 ### How to fix
@@ -3461,7 +3537,7 @@ Severity: error. Reported by `opentide validate` (schema check).
 ### Example
 
 ```json
-{"object_uuid": "…", "platforms": {"defender_for_endpoint": {"prod": "-12"}}}
+{"object_uuid": "…", "platforms": {"microsoft_defender": {"prod": "-12"}}}
 ```
 
 ### How to fix
@@ -3504,7 +3580,7 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 A rule exception Falco refuses: comparison operators, field and value counts, or a value the field's type cannot hold.
 
-Reported by the analysis engine in a Falco condition query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+Reported by the analysis engine on the Sysdig block's `exceptions`, with the condition's findings, since Falco appends them to the condition when it loads the rule: as an error, an exception Falco would reject, by `opentide validate` (its `queries` check); as a warning, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both. An exception whose shape the model refuses (fields, comps and values that do not align) is `sysdig_exception_shape` instead, which `validate` names in its `schema_validation` finding: Falco's checks leave that exception to it.
 
 ### Example
 
@@ -3792,7 +3868,7 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 A tuning (`append_to_rule`) names a rule the Falco default rules do not define: Falco refuses the append, and on Sysdig the tenant must have that rule.
 
-Reported by the analysis engine in a Falco condition query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+Reported by the analysis engine on the Sysdig block's `append_to_rule`, as a warning: `opentide lint` (its `queries` check) shows it. Since UC-2.6 an editor running `opentide lsp start` does not: it publishes what `opentide validate` reports on the object, and the block's advisories are lint's.
 
 ### Example
 
@@ -3808,7 +3884,7 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 The event source is not one Falco or its published plugins define, so its fields are not checked.
 
-Reported by the analysis engine in a Falco condition query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+Reported by the analysis engine on the Sysdig block's `source`, as a warning, with the condition's findings (its fields go unchecked): `opentide lint` (its `queries` check) and an editor running `opentide lsp start` show it; `opentide validate` does not fail on it.
 
 ### Example
 
@@ -3852,6 +3928,22 @@ opentide validate query
 
 Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [Falco condition reference](https://falco.org/docs/concepts/rules/conditions/) describes the syntax and the commands the engine checks against.
 
+## file_not_found
+
+A `--file` path names a file that does not exist, so it was not validated.
+
+Severity: error. Reported by `opentide validate`, with the path in `context.targets`. It fails the `uuid-format`, `schema` and `queries` checks, as `scope_no_match` does; `scope_no_match` stays for a path that exists but matches no object.
+
+### Example
+
+```text
+opentide validate --file objects/rules/does-not-exist.yaml
+```
+
+### How to fix
+
+Fix the path: it is read relative to the working directory and to the workspace root, and whether its case matters depends on the filesystem. `--file` takes a path or a file name, not a glob: a quoted pattern such as `'objects/rules/*.yaml'` is reported here too, so let the shell expand it. Run `opentide validate` without `--file` to check every object.
+
 ## filename_mismatch
 
 An object file's name is not the stem `lint.toml` `[filenames].style` (or its kind's `[filenames.<kind>].style`) asks for: `slugify(name)` by default.
@@ -3868,6 +3960,12 @@ With `style = "name"` the stem is the name, less the characters a file name cann
 
 ```text illustrative
 objects/threats/actor.yaml   # name: Simulated Actor → Simulated Actor.yaml
+```
+
+A stem Windows reserves for a device (`CON`, `PRN`, `AUX`, `NUL`, `CONIN$`, `CONOUT$`, `COM0`-`COM9`, `LPT0`-`LPT9`, in any case and with any extension) gets a `_` before it under either style:
+
+```text illustrative
+objects/rules/con.yaml   # name: CON → _con.yaml
 ```
 
 ### How to fix
@@ -3903,19 +4001,21 @@ The pattern is matched against the whole file name without its extension (`re.fu
 
 ## filename_slug
 
-The file name is not the one lint.toml's [filenames] style derives from the object's name.
+Retired in opentide 0.24.0; `opentide lint` reports a file name that is not the object's as `filename_mismatch`.
 
-Reported by the analysis engine for a Tide object: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: warning, while it was reported. The file name was not the one `lint.toml`'s `[filenames]` style derives from the object's name.
+
+Until opentide 0.24.0, the language server reported it as a warning on an object's `name`, with a looser rule than `opentide lint` (any stem that started with the slug passed). The editor now reports what `opentide validate` reports, and `opentide lint` keeps the one file-name rule, `filename_mismatch` (KG-03).
 
 ### Example
 
 ```text
-opentide validate
+opentide lint --check filenames
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Nothing to fix: no command reports this code any more. A suppression list or SARIF baseline that names it can drop it.
 
 ## git
 
@@ -4127,7 +4227,7 @@ Give one of the blocks its own `configurations.google_secops.name`, or rename on
 
 A Chronicle API request for one Google SecOps rule failed.
 
-Severity: error. Reported by `opentide deploy` on a `google_secops` tenant (google-secops-1.0). Google answered an error other than the ones deploy handles itself, or stayed rate limited (`RESOURCE_EXHAUSTED` or HTTP 503) after three waits: `Retry-After` (at most 300 seconds), else the `RetryInfo` delay Google names, else 5, 15 and 60 seconds. The message carries Google's `error.status` and `error.message`. The other rules still deploy.
+Severity: error. Reported by `opentide deploy` on a `google_secops` tenant (google-secops-1.0). Google answered an error other than the ones deploy handles itself, or stayed rate limited (`RESOURCE_EXHAUSTED` or HTTP 503) after three waits: `Retry-After` (seconds or a date, at most 120 seconds), else the `RetryInfo` delay Google names (at most 120 seconds), else 5, 15 and 60 seconds. The message carries Google's `error.status` and `error.message`. The other rules still deploy.
 
 ### Example
 
@@ -4351,7 +4451,7 @@ Use `Info`, `Low`, `Medium`, `High` or `Critical`, or remove the key: `severity`
 
 A Google SecOps instance refused opentide's credentials.
 
-Severity: error. Reported by `opentide deploy` and `opentide validate query --live` on a `google_secops` tenant (google-secops-1.0). The instance answered HTTP 401 or 403, or no access token could be obtained (Google refused the credentials, or its token endpoint did not answer): no rule on that tenant is deployed or checked. A token failure happens before the request is sent, so it is never an unanswered create. User credentials from Application Default Credentials send their quota project (`x-goog-user-project`); Google refuses them without one.
+Severity: error. Reported by `opentide deploy` and `opentide validate query --live` on a `google_secops` tenant (google-secops-1.0). The instance answered HTTP 401 or 403, or no access token could be obtained (Google refused the credentials, or answered with no token): no rule on that tenant is deployed or checked. A token endpoint that cannot be reached, or that sends no answer in time, is `google_secops_tenant_unreachable`. A token failure happens before the request is sent, so it is never an unanswered create. User credentials from Application Default Credentials send their quota project (`x-goog-user-project`); Google refuses them without one.
 
 ### Example
 
@@ -4367,12 +4467,12 @@ Give the service account (or the Application Default Credentials principal) the 
 
 A Google SecOps instance did not answer, so no rule was deployed to it.
 
-Severity: error. Reported by `opentide deploy` on a `google_secops` tenant (google-secops-1.0). A request to the instance's endpoint failed in transit (DNS, TLS, a refused or reset connection, a timeout). The tenant stops; the others go on.
+Severity: error. Reported by `opentide deploy` on a `google_secops` tenant (google-secops-1.0). A request to the instance's endpoint, or to Google's token endpoint, failed in transit (DNS, TLS, a refused or reset connection, a timeout). The tenant stops; the others go on.
 
 ### Example
 
 ```text illustrative
-google_secops_tenant_unreachable: HTTPSConnectionPool(host='eu-chronicle.googleapis.com', port=443): Read timed out
+google_secops_tenant_unreachable: google_secops tenant 'eu' at https://eu-chronicle.googleapis.com sent no answer within 30s
 ```
 
 ### How to fix
@@ -4961,7 +5061,7 @@ Severity: error. Reported by `opentide deploy` on a `graylog` tenant (graylog-1.
 ### Example
 
 ```text illustrative
-graylog_tenant_unreachable: HTTPSConnectionPool(host='graylog.example.com', port=443): Max retries exceeded
+graylog_tenant_unreachable: Cannot reach graylog tenant 'lab' at https://graylog.example.com: connection refused
 ```
 
 ### How to fix
@@ -5269,7 +5369,7 @@ Use the type the message names: `true`/`false` for flags, a list of strings for 
 
 The command ran and failed on what it found.
 
-Exit 1, as `failure.code`. Set by `validate` (errors, or warnings under `--strict`), `lint --strict` (findings), `info --strict` (load errors) and `deploy` (a rule the platform refused). The findings are in the same document, each with its own code; a `deploy` lists every rule in `results` with its `status`, the platform's message in `error`, and the rules it never reached as `not_attempted`.
+Exit 1, as `failure.code`. Set by `validate` (errors, or under `--strict` warnings, or a full run that found no detection objects), `lint --strict` (findings), `info --strict` (load errors) and `deploy` (a rule the platform refused). The findings are in the same document, each with its own code; a `deploy` lists every rule in `results` with its `status`, the platform's message in `error`, and the rules it never reached as `not_attempted`.
 
 ### Example
 
@@ -5279,7 +5379,7 @@ opentide validate
 
 ### How to fix
 
-Fix the findings the command printed. Each one names its code: `opentide explain <code>` says how to fix it. After a failed `deploy`, fix the rule on the `✗ failed` line, or the tenant it names, then run the command again: the rules before it were deployed, and the ones marked `not attempted` were not sent.
+Fix the findings the command printed. Each one names its code: `opentide explain <code>` says how to fix it. When `validate --strict` failed because it found no detection objects, it printed no finding: check the folder it names (run it inside the workspace or pass `--repo`), or add a first object with `opentide new rule`. A commit hook written by an earlier release fails a new workspace this way: re-run `opentide setup hooks`, whose hook passes `--allow-empty`. After a failed `deploy`, fix the rule on the `✗ failed` line, or the tenant it names, then run the command again: the rules before it were deployed, and the ones marked `not attempted` were not sent.
 
 ## kql_control_command_unsupported
 
@@ -5331,19 +5431,40 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 ## kql_join_summarize_before_project
 
-join or summarize runs before project, so it carries every column.
+A `join` runs while the pipeline it sits in still carries every column, and a later `project` would have narrowed it.
 
-Reported by the analysis engine in a KQL query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
+Severity: warning, a cost hint and never an error. Reported by the analysis engine on a KQL query: `opentide lint` (its `queries` check), an editor running `opentide lsp start`, the MCP tool `validate_query` and the TUI show it; `opentide validate` and `opentide validate query` drop engine warnings, so they never report it. The query is legal and returns the same rows: only the amount of data the join moves changes.
+
+The warning is about the **left** side of the join, the pipeline the `join` operator sits in. It does not look at the right side: a `let` or sub-query on the right that ends in `project`, `summarize` or `distinct` is narrow already, and making it narrower changes nothing here. The right side's shape does not matter; to clear the warning, narrow the left side before the `join`.
+
+It fires when the `join` comes before any `project` / `project-keep` / `project-away`, `summarize`, `distinct`, `count` or `make-series` in that pipeline, and a `project` / `project-keep` / `project-away` comes after it. It stays quiet when no `project` follows the `join`, when the pipeline starts from a `let` (or a `union` of `let`s) that ends in one of those operators, and for `summarize` itself, which returns only the columns it names.
 
 ### Example
 
-```text
-opentide validate query
+```kusto
+let Admins = IdentityInfo
+| summarize by AccountUPN;               // the right side is already narrow
+AzureActivity                            // the left side carries every column
+| join kind=inner Admins on $left.Caller == $right.AccountUPN
+| project TimeGenerated, Caller, OperationNameValue
 ```
+
+The warning points at the `join`: `AzureActivity` carries every column into it, however small `Admins` is.
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [KQL reference](https://learn.microsoft.com/kusto/query/) describes the syntax and the commands the engine checks against.
+Project the columns the rest of the query needs on the left side, before the `join`:
+
+```kusto
+let Admins = IdentityInfo
+| summarize by AccountUPN;
+AzureActivity
+| project TimeGenerated, Caller, OperationNameValue
+| join kind=inner Admins on $left.Caller == $right.AccountUPN
+| project TimeGenerated, Caller, OperationNameValue
+```
+
+Keep every column the `join` key and the later operators read. If the query needs all columns, for instance `arg_max(TimeGenerated, *)`, leave it: the warning is a hint about cost, and a rule can accept it.
 
 ## kql_parse_error
 
@@ -5377,11 +5498,37 @@ opentide validate query
 
 Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [KQL reference](https://learn.microsoft.com/kusto/query/) describes the syntax and the commands the engine checks against.
 
+## kql_table_misspelt
+
+A KQL table is not one the engine knows or the workspace declares, but is a near miss of one that is (one edit for a name of up to seven characters, two for a longer one, and not a custom `_CL` table): most likely a typo.
+
+Severity: error. Reported by the analysis engine in a KQL query under `sentinel`, at the table's name: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; an editor running `opentide lsp start` shows it too. It never applies to a `_CL` table, to a `let` binding or a function the engine knows, or to a name further from every known table than the bound: those are `kql_unknown_table`, a warning, because a Sentinel workspace holds tables and functions no catalog lists (`Sysmon` is a parser function two edits from `Syslog`, so it is not reported here). A match that differs only in case, `_`, `-` or spaces counts as no edit at all, so `SIGNINLOGS` is reported. Under `microsoft_defender` an unknown table is already an error, `kql_unknown_table`, with the same suggestion.
+
+The nearest table comes from the tables the workspace declares in visibility.toml first, then from the engine's catalog. Only a name a query can write bare (`[A-Za-z_][A-Za-z0-9_]*`) is suggested: a declared display name such as `Azure Activity` is never offered.
+
+### Example
+
+```kusto
+SecurityEvnt   // one letter from SecurityEvent
+| where EventID == 4625
+```
+
+### How to fix
+
+Correct the name to the table in the message (`did you mean 'SecurityEvent'?`). If the workspace really holds a table or function by that name, declare it as a log source in `visibility.toml` so it is known (the editor offers this as a quick fix), or run `opentide validate --queries warn` to report it as a warning:
+
+```toml
+[[logsources]]
+name = "SecurityEvnt"
+description = "A workspace table whose name is this close to a known one."
+system = "sentinel"
+```
+
 ## kql_table_not_declared
 
 The table is one the engine knows for the platform, but no log source of the workspace declares it in visibility.toml.
 
-Severity: warning. Reported by the analysis engine on a KQL query (`sentinel`, `defender_for_endpoint`): `opentide lint` (its `queries` check) and an editor running `opentide lsp start` show it; `opentide validate` does not fail on it. It is opt-in per system: only a workspace whose `visibility.toml` has at least one log source for that platform gets it. It applies to a table the engine's catalog knows (a built-in table such as `SigninLogs`) that no log source names; a table the catalog does not know and no log source names is `kql_unknown_table` instead. Every name a query reads from counts (a pipeline's first source, a `union` leg, a `join` or `lookup` right side), whatever its case, except a `let` binding, a query parameter or a function the engine knows, so a workspace function is declared as a log source too. `*` in a declared name matches any run of characters.
+Severity: warning. Reported by the analysis engine on a KQL query (`sentinel`, `microsoft_defender`): `opentide lint` (its `queries` check) and an editor running `opentide lsp start` show it; `opentide validate` does not fail on it. It is opt-in per system: only a workspace whose `visibility.toml` has at least one log source for that platform gets it. It applies to a table the engine's catalog knows (a built-in table such as `SigninLogs`) that no log source names; a table the catalog does not know and no log source names is `kql_unknown_table` instead. Every name a query reads from counts (a pipeline's first source, a `union` leg, a `join` or `lookup` right side), whatever its case, except a `let` binding, a query parameter or a function the engine knows, so a workspace function is declared as a log source too. `*` in a declared name matches any run of characters.
 
 ### Example
 
@@ -5399,7 +5546,7 @@ NTAIpDetails   // known to the engine, not declared for sentinel
 
 ### How to fix
 
-Correct the table name, or declare it: add a log source whose `name` is the table (or a pattern such as `*_CL` that covers it) in `visibility.toml`. The editor applies the change as you type it; the CLI reads the file on its next run. See [The datasets a log source fills](../usage/configuration.md#the-datasets-a-log-source-fills).
+Declare the table: add a log source whose `name` is the table (or a pattern such as `*_CL` that covers it) in `visibility.toml`. The editor applies the change as you type it; the CLI reads the file on its next run. See [The datasets a log source fills](../usage/configuration.md#the-datasets-a-log-source-fills).
 
 ```toml
 [[logsources]]
@@ -5407,6 +5554,8 @@ name = "NTAIpDetails"
 description = "IP details from traffic analytics."
 system = "sentinel"
 ```
+
+opentide offers no rename for this code: the table is a real one, so a declared log source's name is never a correction. A declared name that is not a bare KQL identifier (a display name such as `Azure Activity`) is never suggested for any table.
 
 ## kql_type_mismatch
 
@@ -5684,7 +5833,7 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 The Elastic rule's lookback exceeds an hour; it is added to the interval, not the whole window.
 
-Reported by the analysis engine on an Elastic rule block (elastic-1.0): `opentide lint` (its `queries` check) and an editor running `opentide lsp start` show it, and `opentide validate query --platform elastic --live` checks the same settings.
+Reported by the analysis engine on an Elastic rule block (elastic-1.0): `opentide lint` (its `queries` check) shows it, and `opentide validate query --platform elastic --live` checks the same settings. Since UC-2.6 an editor running `opentide lsp start` does not: it publishes what `opentide validate` reports on the object, and the block's advisories are lint's.
 
 ### Example
 
@@ -5700,7 +5849,7 @@ Change the block's setting the frame points at, then run `opentide lint --check 
 
 The Elastic rule's lookback is zero, so events that arrive late are missed.
 
-Reported by the analysis engine on an Elastic rule block (elastic-1.0): `opentide lint` (its `queries` check) and an editor running `opentide lsp start` show it, and `opentide validate query --platform elastic --live` checks the same settings.
+Reported by the analysis engine on an Elastic rule block (elastic-1.0): `opentide lint` (its `queries` check) shows it, and `opentide validate query --platform elastic --live` checks the same settings. Since UC-2.6 an editor running `opentide lsp start` does not: it publishes what `opentide validate` reports on the object, and the block's advisories are lint's.
 
 ### Example
 
@@ -5716,18 +5865,18 @@ Change the block's setting the frame points at, then run `opentide lint --check 
 
 opentide can generate the language server's catalog for this workspace, and a committed copy is current.
 
-Reported by `opentide doctor`. `opentide lsp start` and `opentide tui` check objects with the catalog this opentide generates from its models and the workspace's configuration, cached under the user cache directory (`OPENTIDE_CACHE_DIR` overrides it). The copy `opentide generate schemas` writes to `.opentide/lsp/catalogs/generated/` is read only by editors that run the `opentide-lsp` binary on its own, and when generation fails. Warns when the catalog cannot be generated, or when a committed copy does not parse or comes from another opentide version.
+Reported by `opentide doctor`. `opentide lsp start`, the `opentide-lsp` binary on its own and `opentide tui` check objects with the catalog they generate in memory, each time they start, from the models they were built with and the workspace's configuration; nothing is cached. No program reads the copy `opentide generate schemas` writes to `.opentide/lsp/catalogs/generated/`: it is there for other tools. Warns when a committed copy does not parse, comes from another opentide version, is missing a file (`fields.json` or `deprecations.json`) or differs from what `opentide generate schemas` writes now. Line endings and a byte order mark are not compared.
 
 ### Example
 
 ```text illustrative
-! The language-server catalog committed in .opentide/lsp/catalogs/generated is from opentide 0.18.0, not 0.19.0: editors that run opentide-lsp on their own use it · lsp_catalog
+! The language-server catalog committed in .opentide/lsp/catalogs/generated is from opentide 0.18.0, not 0.19.0 · lsp_catalog
   → opentide generate schemas
 ```
 
 ### How to fix
 
-For a committed copy, run `opentide generate schemas` (or `opentide generate`) and commit the files it writes, so editors that run `opentide-lsp` on its own use the same catalog. When the catalog cannot be generated, `opentide doctor --debug` shows why; until then objects are checked with the committed or the bundled catalog.
+For a committed copy, run `opentide generate schemas` (or `opentide generate`) and commit the files it writes, so a tool that reads them sees this opentide's catalog, or delete the folder: opentide and its language server do not read it.
 
 ## lucene_bare_term
 
@@ -5958,7 +6107,7 @@ Run `opentide setup mcp` with your editor's flag.
 
 An object has no `metadata.author` or `metadata.organisation`.
 
-Severity: note. Reported by `opentide lint` (metadata check). The editor and `opentide tui` report the same finding as `missing_author` and `missing_organisation`.
+Severity: note. Reported by `opentide lint` (metadata check). The editor (`opentide lsp start`) and `opentide tui` report the same finding, at the severity `[metadata]` sets.
 
 ### Example
 
@@ -5972,21 +6121,334 @@ metadata:
 
 Add the missing keys under `metadata`. They are optional, so the note never fails a run, `lint --strict` included, and prints only with `--verbose`. To require them, set `severity = "warning"` or `"error"` under `[metadata]` in `.opentide/configurations/lint.toml`; to stop asking for them, set `required = []`.
 
-## missing_author
+## microsoft_defender_action_kind
 
-The optional metadata.author field is missing. Information, unless lint.toml's [metadata] severity raises it.
+A key of a Microsoft Defender block's `actions` is not an automated action.
 
-Reported by the analysis engine for a Tide object: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by `opentide validate` (its `schema` check) on a `microsoft_defender` block (microsoft-defender-1.0). The actions are Graph's sixteen, such as `isolate_devices`, `collect_investigation_packages`, `block_files`, `disable_users` and `soft_delete_emails`. The finding is on `actions.<action>`.
 
 ### Example
 
-```text
-opentide validate
+```yaml
+configurations:
+  microsoft_defender:
+    actions:
+      isolate_device:
+        - device_id: DeviceId
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Use the action's name (`isolate_devices`).
+
+## microsoft_defender_action_target
+
+A Microsoft Defender automated action has no target, or a target is empty or names a field its action does not take.
+
+Severity: error. Reported by `opentide validate` (its `schema` check) on a `microsoft_defender` block (microsoft-defender-1.0). Each action holds a non-empty list of targets; a target names at least one of its action's fields, and `device_groups`, when set, is a non-empty list of device group names. The finding is on `actions.<action>.<N>`, or on its `device_groups`.
+
+### Example
+
+```yaml
+configurations:
+  microsoft_defender:
+    actions:
+      block_files:
+        - sha256: SHA256
+          device_id: DeviceId
+```
+
+### How to fix
+
+Keep only the action's fields: `block_files` takes `sha1`, `sha256` and `device_groups`.
+
+## microsoft_defender_column
+
+A Microsoft Defender column name is blank or not a string.
+
+Severity: error. Reported by `opentide validate` (its `schema` check) on a `microsoft_defender` block (microsoft-defender-1.0). Entity fields, action columns and custom detail values name a column of the query's output, sent verbatim (`DeviceId`). Whether the column exists is Defender's to check at deploy. The finding is on the field.
+
+### Example
+
+```yaml
+configurations:
+  microsoft_defender:
+    entities:
+      hosts:
+        - device_id: ""
+```
+
+### How to fix
+
+Name the result column (`device_id: DeviceId`), or remove the field.
+
+## microsoft_defender_custom_details
+
+A Microsoft Defender block's `alert.custom_details` is not a mapping of non-blank names to result columns.
+
+Severity: error. Reported by `opentide validate` (its `schema` check) on a `microsoft_defender` block (microsoft-defender-1.0). Each key is the custom detail's name, and each value the result column it shows. The finding is on `alert.custom_details`, or on the detail whose value is not a string.
+
+### Example
+
+```yaml
+configurations:
+  microsoft_defender:
+    alert:
+      custom_details: [ProcessCommandLine]
+```
+
+### How to fix
+
+Write a mapping: `custom_details: {CommandLine: ProcessCommandLine}`.
+
+## microsoft_defender_entity_kind
+
+A key of a Microsoft Defender block's `entities` is not an entity kind.
+
+Severity: error. Reported by `opentide validate` (its `schema` check) on a `microsoft_defender` block (microsoft-defender-1.0). The kinds are Graph's seventeen: `hosts`, `accounts`, `mailboxes`, `files`, `processes`, `ips`, `urls`, `dns`, `registry_values`, `mail_messages`, `mail_clusters`, `cloud_applications`, `oauth_applications`, `security_groups`, `azure_resources`, `amazon_resources`, `google_cloud_resources`. The finding is on `entities.<kind>`.
+
+### Example
+
+```yaml
+configurations:
+  microsoft_defender:
+    entities:
+      devices:
+        - device_id: DeviceId
+```
+
+### How to fix
+
+Use the kind's name (`hosts`, not `devices`).
+
+## microsoft_defender_entity_mapping
+
+A Microsoft Defender entity mapping is empty, is not a mapping, or names a field its kind does not have.
+
+Severity: error. Reported by `opentide validate` (its `schema` check) on a `microsoft_defender` block (microsoft-defender-1.0). Each kind holds a list of mappings; a mapping names at least one of its kind's fields (`hosts`: `device_id`, `name`, `dns_domain`, `netbios_name`, `nt_domain`), each a result column. The finding is on `entities.<kind>.<N>`.
+
+### Example
+
+```yaml
+configurations:
+  microsoft_defender:
+    entities:
+      hosts:
+        - device_id: DeviceId
+          sid: AccountSid
+```
+
+### How to fix
+
+Move the field to the kind that has it (`sid` is an `accounts` field), or remove it.
+
+## microsoft_defender_frequency
+
+A Microsoft Defender block's `schedule.frequency` is not `NRT`, `<n>H` or `<n>D`.
+
+Severity: error. Reported by `opentide validate` (its `schema` check) on a `microsoft_defender` block (microsoft-defender-1.0). `n` is a positive whole number without a leading zero. Deploy sends it as an ISO 8601 duration: `NRT` as `PT0S`, `1H` as `PT1H`, `1D` as `P1D`. Which frequencies a tenant accepts is Defender's to say at deploy; the portal offers `NRT`, `1H`, `3H`, `12H` and `24H`. The finding is on `schedule.frequency`.
+
+### Example
+
+```yaml
+configurations:
+  microsoft_defender:
+    schedule:
+      frequency: PT1H
+```
+
+### How to fix
+
+Write the frequency as `NRT`, `1H`, `3H`, `12H`, `24H` (or another `<n>H` or `<n>D`).
+
+## microsoft_defender_grouping
+
+A Microsoft Defender block's `alert.grouping` is not `alert_per_event` or `single_alert`.
+
+Severity: error. Reported by `opentide validate` (its `schema` check) on a `microsoft_defender` block (microsoft-defender-1.0). `grouping` is beta-only and is sent as Graph's `eventGroupingKind` (`alertPerEvent`, `singleAlert`). The finding is on `alert.grouping`.
+
+### Example
+
+```yaml
+configurations:
+  microsoft_defender:
+    alert:
+      grouping: singleAlert
+```
+
+### How to fix
+
+Write `single_alert` or `alert_per_event`, or remove the key: Defender then creates one alert per event.
+
+## microsoft_defender_incident
+
+A Microsoft Defender block's `incident` is not a mapping whose `exclude_from_correlation` is `true` or `false`.
+
+Severity: error. Reported by `opentide validate` (its `schema` check) on a `microsoft_defender` block (microsoft-defender-1.0). `incident` is beta-only and is sent as Graph's `incidentConfiguration`. The finding is on `incident`.
+
+### Example
+
+```yaml
+configurations:
+  microsoft_defender:
+    incident:
+      exclude_from_correlation: yes please
+```
+
+### How to fix
+
+Write `exclude_from_correlation: true` (each alert opens its own incident) or `false`.
+
+## microsoft_defender_isolation_type
+
+A Microsoft Defender `isolate_devices` target's `isolation_type` is not `full` or `selective`.
+
+Severity: error. Reported by `opentide validate` (its `schema` check) on a `microsoft_defender` block (microsoft-defender-1.0). It is sent as Graph's `isolationType`. The finding is on `actions.isolate_devices.<N>.isolation_type`.
+
+### Example
+
+```yaml
+configurations:
+  microsoft_defender:
+    actions:
+      isolate_devices:
+        - device_id: DeviceId
+          isolation_type: Full
+```
+
+### How to fix
+
+Write `full` or `selective`, lower case.
+
+## microsoft_defender_lookback
+
+A Microsoft Defender block's `schedule.lookback` is not a duration, is set on a near-real-time rule, or is shorter than its frequency.
+
+Severity: error. Reported by `opentide validate` (its `schema` check) on a `microsoft_defender` block (microsoft-defender-1.0). `lookback` is beta-only and is `<n>H` or `<n>D`. Graph requires it to be at least `frequency` and does not take it with `frequency: NRT` (`1D` counts as `24H`). The finding is on `schedule.lookback`.
+
+### Example
+
+```yaml
+configurations:
+  microsoft_defender:
+    schedule:
+      frequency: NRT
+      lookback: 1H
+```
+
+### How to fix
+
+Remove `lookback` from a near-real-time rule, or make it at least the frequency (`frequency: 1H`, `lookback: 4H`).
+
+## microsoft_defender_no_entities
+
+A Microsoft Defender block maps no entity.
+
+Severity: warning. Reported by `opentide validate` and `opentide lint` (its `queries` check) on a `microsoft_defender` block (microsoft-defender-1.0) whose `entities` is unset, empty, or holds only empty kinds. The alert then names no device, user or mailbox, so it cannot be triaged or acted on by entity. It is an advisory: the rule validates and deploys.
+
+### Example
+
+```yaml
+configurations:
+  microsoft_defender:
+    query: DeviceProcessEvents | where FileName =~ "powershell.exe"
+    schedule:
+      frequency: 1H
+```
+
+### How to fix
+
+Map the columns the query returns: `entities: {hosts: [{device_id: DeviceId}]}`.
+
+## microsoft_defender_rule_absent
+
+A Microsoft Defender rule to disable is not on the tenant, so nothing was disabled or created.
+
+Severity: warning. Reported by `opentide deploy` on a `microsoft_defender` tenant (microsoft-defender-1.0). A `DISABLEMENT` status sends `PATCH {base}/{uuid}` with `status: disabled`; Graph answered `404`, so the tenant has no rule with the rule's `metadata.uuid`. Deploy does not create a rule only to disable it. The rule is reported as skipped.
+
+### Example
+
+```text illustrative
+microsoft_defender_rule_absent: rule 00000000-0000-4000-8003-0000000000d0 is not on tenant 'contoso': nothing to disable
+```
+
+### How to fix
+
+Nothing to do if the rule was never deployed to that tenant. If it was, it was deleted in the portal or deployed under another uuid: check the rule's `metadata.uuid`.
+
+## microsoft_defender_schema
+
+A Microsoft Defender block's `schema` names another schema.
+
+Severity: error. Reported by `opentide validate` (its `schema` check) on a `microsoft_defender` block (microsoft-defender-1.0). `schema` may be left out; when set it is `platform::microsoft_defender::1.0`. The finding is on `schema`.
+
+### Example
+
+```yaml
+configurations:
+  microsoft_defender:
+    schema: platform::microsoft_defender::2.0
+```
+
+### How to fix
+
+Write `schema: platform::microsoft_defender::1.0`, or remove the key.
+
+## microsoft_defender_scope
+
+A Microsoft Defender block's `scope` is not a non-empty list of device group names.
+
+Severity: error. Reported by `opentide validate` (its `schema` check) on a `microsoft_defender` block (microsoft-defender-1.0). `scope` is `{device_groups: [...]}`. With no `scope` the rule applies to every device; an empty list would apply to none. The finding is on `scope`.
+
+### Example
+
+```yaml
+configurations:
+  microsoft_defender:
+    scope:
+      device_groups: []
+```
+
+### How to fix
+
+List the device groups, or remove `scope` to cover every device.
+
+## microsoft_defender_severity
+
+A Microsoft Defender block's `alert.severity` is not one of opentide's five severities.
+
+Severity: error. Reported by `opentide validate` (its `schema` check) on a `microsoft_defender` block (microsoft-defender-1.0). `alert.severity` is `Informational`, `Low`, `Medium`, `High` or `Critical`, exact case. Deploy sends it lower-cased, and `Critical` as `high`, Graph's highest. The finding is on `alert.severity`.
+
+### Example
+
+```yaml
+configurations:
+  microsoft_defender:
+    alert:
+      severity: high
+```
+
+### How to fix
+
+Write the severity with its capital (`High`), or remove it: deploy then uses `response.alert_severity`, else `Medium`.
+
+## missing_author
+
+Retired in opentide 0.24.0; `opentide lint` reports a missing recommended metadata field as `metadata_recommended`.
+
+Severity: warning, while it was reported. The recommended `metadata.author` field was missing.
+
+Until opentide 0.24.0, the language server reported it as a warning on every object without an author, where `opentide validate` reported nothing and `opentide lint` reported `metadata_recommended` (KG-05).
+
+### Example
+
+```text
+opentide lint --check metadata
+```
+
+### How to fix
+
+Nothing to fix: no command reports this code any more. A suppression list or SARIF baseline that names it can drop it.
 
 ## missing_field
 
@@ -6008,19 +6470,21 @@ Add the key the message names. `context.file` names the file and `field_path` th
 
 ## missing_organisation
 
-The optional metadata.organisation field is missing. Information, unless lint.toml's [metadata] severity raises it.
+Retired in opentide 0.24.0; `opentide lint` reports a missing recommended metadata field as `metadata_recommended`.
 
-Reported by the analysis engine for a Tide object: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: warning, while it was reported. The recommended `metadata.organisation` field was missing.
+
+Until opentide 0.24.0, the language server reported it as a warning on every object without an organisation, where `opentide validate` reported nothing and `opentide lint` reported `metadata_recommended` (KG-05).
 
 ### Example
 
 ```text
-opentide validate
+opentide lint --check metadata
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Nothing to fix: no command reports this code any more. A suppression list or SARIF baseline that names it can drop it.
 
 ## missing_uuid
 
@@ -6039,7 +6503,7 @@ metadata:
 
 ### How to fix
 
-Add `metadata.uuid` with a fresh UUID v4 (`python -c "import uuid; print(uuid.uuid4())"`). Never reuse the UUID of another object: references and deployment state follow it.
+Add `metadata.uuid` with a fresh UUID v4 from any UUID v4 generator (`uuidgen`; PowerShell `[guid]::NewGuid()`). Never reuse the UUID of another object: references and deployment state follow it.
 
 ## name_invalid
 
@@ -6387,7 +6851,7 @@ Reported by `opentide doctor`. Fails when it does not (3-second timeout); skippe
 ### Example
 
 ```text illustrative
-✗ Cannot connect to proxy http://proxy.example:3128 (ConnectionRefusedError) · proxy
+✗ Cannot connect to proxy http://proxy.example:3128 (Connection refused (os error 111)) · proxy
   → check --proxy, OPENTIDE_PROXY or HTTPS_PROXY, and that the proxy is up
 ```
 
@@ -6431,11 +6895,63 @@ A live check of 403 Splunk rules where one parse took longer than 120 seconds, t
 
 Raise the timeout with `--check-timeout SECONDS` or `OPENTIDE_QUERY_CHECK_TIMEOUT`, or make the query cheaper. When a gateway answered (HTTP 504), its own timeout may be shorter than the check's: raise the gateway's timeout too.
 
+## query_folded_comment
+
+A `//` comment in a query that YAML folds into one line comments out the lines after it.
+
+Severity: error. Reported by the analysis engine on a rule or hunt query written as a `>` block, or as a plain or quoted value on several lines: YAML joins those lines with spaces, so the query the platform runs is one line, and a `//` comment on one of them runs to its end. The lines after the comment are then part of it: the filter you read is not the one deployed, and the rule can match every event. `opentide validate` (its `queries` check) and `opentide validate query` fail on it, and an editor running `opentide lsp start` shows it. It applies to the query languages opentide checks offline whose comments are `//`: KQL (Sentinel, Defender), ES|QL and EQL (Elastic), CQL (CrowdStrike), YARA (HarfangLab, Bitdefender, the HarfangLab rule assembled from its fields included) and YARA-L (Google SecOps). SentinelOne's PowerQuery has no offline engine, so its queries are not checked. A comment followed only by blank or comment lines loses nothing and is not reported, nor is a line that is more indented than the comment, which YAML keeps on a line of its own.
+
+### Example
+
+```yaml
+configurations:
+  sentinel:
+    query: >-
+      SecurityEvent
+      // only failed handles
+      | where EventID == 4656
+```
+
+The query that deploys is `SecurityEvent // only failed handles | where EventID == 4656`: every `SecurityEvent` matches.
+
+### How to fix
+
+Write the query as a literal block (`|` or `|-`), which keeps each line a line, so the comment ends where its line does:
+
+```yaml
+    query: |-
+      SecurityEvent
+      // only failed handles
+      | where EventID == 4656
+```
+
+Or remove the comment.
+
+## query_rejected
+
+`validate query --live` failed because a tenant refused a rule's query as invalid.
+
+Exit 1. As `failure.code` when at least one query was rejected and the run did not fail only on timeouts. When a tenant also fails the run, the code is that tenant's. A tenant that refuses the check itself (`authentication_failed`) does not stop the run: its remaining queries are not sent, the next tenant is checked, and `rejected` lists every query any tenant refused as invalid. A tenant that cannot be reached (`tenant_unreachable`) or whose credential is unset (`credential_unset`) stops it, and `rejected` lists the queries refused before it. Each rejected check is an entry of `rejected` in `--json`, with the rule's `file` and the `line` of its query, the `platform`, the `tenant` and the platform's own `message`. In CI the same rejections are annotations on the rule file (`::error file=…,line=…::` on GitHub Actions) and rows of the job summary. A check that got no answer is not a rejection: see `query_check_timeout`.
+
+The other rules are still checked, so one run lists every rejected query.
+
+### Example
+
+A Splunk rule whose search the tenant refused, trimmed to the keys that say so (illustrative: it needs a tenant):
+
+```json illustrative
+{"status": "failed", "exit_code": 1, "message": "Queries rejected on splunk · 1 checked on 1 tenant", "rejected": [{"rule": "…", "name": "…", "tenant": "prod", "platform": "splunk", "file": "rules/example.yaml", "line": 14, "message": "…", "errors": ["…"]}], "failure": {"code": "query_rejected", "message": "…"}}
+```
+
+### How to fix
+
+Read `message` for what the platform refused, edit the query at `file` and `line`, and run the check again. `opentide validate query --file <rule>` checks the query's syntax without a tenant.
+
 ## recommended_field_missing
 
 A field the templates ask for is missing; `opentide validate` accepts the object without it.
 
-Severity: note. Reported by `opentide lint` (recommended check). Today it is a rule's `configurations` or `response`. The editor and `opentide tui` report the same finding from the analysis engine, as information, and follow `[recommended]` too.
+Severity: note. Reported by `opentide lint` (recommended check). Today it is a rule's `configurations` or `response`. The editor (`opentide lsp start`) and `opentide tui` report the same finding, at the severity `[recommended]` sets.
 
 ### Example
 
@@ -6450,13 +6966,13 @@ metadata:
 
 ### How to fix
 
-Add the field when the rule is ready for it: `configurations` with a block per platform to deploy to, `response` with the alert guidance. The note never fails a run, `lint --strict` included, and prints only with `--verbose`. To require them, set `severity = "warning"` or `"error"` under `[recommended]` in `.opentide/configurations/lint.toml`; to stop reporting them, set `enabled = false`.
+Add the field when the rule is ready for it: `configurations` with a block per platform to deploy to, `response` with the alert guidance. The note never fails a run, `lint --strict` included, and prints only with `--verbose`. To require them in `opentide lint`, set `severity = "warning"` or `"error"` under `[recommended]` in `.opentide/configurations/lint.toml`; to stop reporting them, set `enabled = false`.
 
 ## reference_not_found
 
 `--objective` or `--threat` names a UUID that no object in the catalogue carries.
 
-Exit 2, as `failure.code`, with `failure.argument` naming the option. `opentide new` checks the reference before it writes anything; a malformed UUID is `usage_invalid_value` instead.
+Exit 2, as `failure.code`, with `failure.argument` naming the option. `opentide new` checks the reference before it writes anything; a malformed UUID is `usage_invalid_value` instead. `--objective` also accepts the UUID of a signal an objective defines (`objective.signals[].uuid`), and `detection_model` then names that signal.
 
 ### Example
 
@@ -6466,7 +6982,7 @@ opentide new rule --name "LSASS Access" --objective 00000000-0000-4000-8000-0000
 
 ### How to fix
 
-Copy the UUID from the object's `metadata.uuid`, or create that objective or threat first with `opentide new objective` or `opentide new threat`. `opentide info` lists the catalogue.
+Copy the UUID from the object's `metadata.uuid`, or the signal's `uuid` under `objective.signals`, or create that objective or threat first with `opentide new objective` or `opentide new threat`. `opentide info` lists the catalogue.
 
 ## retired_configuration_file
 
@@ -6511,11 +7027,29 @@ opentide share retract --uuid 00000000-0000-4000-8003-000000000001
 
 Pass `--yes` to delete the remote event.
 
+## reviewed_before_modified
+
+A rule's `metadata.reviewed` date is earlier than its `metadata.modified` date: the rule changed after its last review.
+
+Severity: warning. Reported by `opentide lint` (metadata check), and by the editor (`opentide lsp start`, `opentide tui`) at the severity `[metadata]` sets. `opentide validate` does not report it. Nothing is compared when either date is missing or is not a valid date (the `schema` check reports those), or when the object's schema has no `reviewed` (a `rule::1.0` rule, a threat, an objective).
+
+### Example
+
+```yaml
+metadata:
+  modified: 2026-11-20
+  reviewed: 2026-09-01   # earlier than modified
+```
+
+### How to fix
+
+Review the rule again, then set `metadata.reviewed` to the day of that review (the same day as `modified`, or later). The comparison is by calendar day, as written: an offset is not applied, and a rule reviewed and modified on one day is not reported. To change the severity, set `severity = "info"` or `"error"` under `[metadata]`, or `reviewed_before_modified = "info"` under `[metadata.codes]`; to stop the warning, set `reviewed_before_modified = "off"` there, or `enabled = false` under `[metadata]` to turn the whole check off.
+
 ## risk_band
 
 The risk score is outside the band of the rule's severity.
 
-Reported by the analysis engine on an Elastic rule block (elastic-1.0): `opentide lint` (its `queries` check) and an editor running `opentide lsp start` show it, and `opentide validate query --platform elastic --live` checks the same settings.
+Reported by the analysis engine on an Elastic rule block (elastic-1.0): `opentide lint` (its `queries` check) shows it, and `opentide validate query --platform elastic --live` checks the same settings. Since UC-2.6 an editor running `opentide lsp start` does not: it publishes what `opentide validate` reports on the object, and the block's advisories are lint's.
 
 ### Example
 
@@ -6577,18 +7111,18 @@ severity: 3          # must be one of the severity names
 
 ### How to fix
 
-The message is the schema's own (a missing required field, a wrong type, an unknown key). The location points at the field, or at the mapping it belongs in when the field is missing. Compare the object with the template under `.opentide/templates/`, or let the opentide VS Code extension check it as you type (`opentide setup vscode` recommends it). A `metadata.schema` that names no registered revision, or another object type, is reported with this code as well.
+The message is the schema's own (a missing required field, a wrong type, an unknown key). The location points at the field, or at the mapping it belongs in when the field is missing. Compare the object with the template under `.opentide/templates/`, or let the opentide VS Code extension check it as you type (install it with `code --install-extension opentidehq.opentide`; `opentide setup vscode` recommends it to the team). A `metadata.schema` that names no registered revision, or another object type, is reported with this code as well.
 
 ## schemas_fresh
 
-Every JSON schema this opentide version generates exists.
+Every JSON schema this opentide version generates exists and matches what `opentide generate schemas` writes now.
 
-Reported by `opentide doctor`. Warns when one is missing. Schemas carry no version stamp, so only presence is checked.
+Reported by `opentide doctor`. Warns when one is missing or its text differs from what the phase would write: the schemas are built from the workspace's objects (a rule's `detection_model` offers their names), its visibility, statuses and enabled platforms, so a changed object or configuration makes them stale, as does a schema another opentide version wrote. Line endings and a byte order mark are not compared. If the workspace does not open, only the presence of each schema is checked, and the message says so.
 
 ### Example
 
 ```text illustrative
-! 1 schema(s) this version generates are missing: rule · schemas_fresh
+! 1 schema(s) differ from what `generate schemas` writes now (objects or configuration changed, or another version wrote them): rule.1.0.schema.json · schemas_fresh
   → opentide generate schemas
 ```
 
@@ -6610,7 +7144,7 @@ opentide validate --file objects/rules/sentinel-kql-rul.yaml
 
 ### How to fix
 
-Fix the path, file name or UUID. A path matches only that file; a bare file name matches every object file with that name. Every `--file` target must match. For `share`, name a target `opentide share targets` lists, and enable it in `sharing.toml`.
+Fix the path, file name or UUID. A `--file` path that does not exist on disk is reported as `file_not_found` instead. A path matches only that file; a bare file name matches every object file with that name. Every `--file` target must match. For `share`, name a target `opentide share targets` lists, and enable it in `sharing.toml`.
 
 ## share_failed
 
@@ -6840,7 +7374,7 @@ The SPL command is not in the Splunk Search Reference or a catalogued app such a
 
 Reported by the analysis engine in an SPL query (`splunk`), at the place in the query. One edit from a known command (`stas` for `stats`), it is an error, a query the platform would reject: `opentide validate` (its `queries` check) and `opentide validate query` fail on it, and the help names the command. Further from every known command, it is a warning: a command an app on the search head provides (`decrypt`, `mispsearch`) looks the same, so `validate` passes and `opentide lint` (its `queries` check) reports it. An editor running `opentide lsp start` shows both.
 
-opentide has no setting that declares a search head's app commands yet: neither `visibility.toml` nor `platforms/splunk.toml` takes a list of them, so the warning stays for every query that uses one. Through 0.20.1 the CLI's message asked to declare the command, which nothing could do; an editor running `opentide lsp start` still shows the engine's own wording, which does.
+opentide has no setting that declares a search head's app commands yet: neither `visibility.toml` nor `platforms/splunk.toml` takes a list of them. What `lint.toml` can do is change the warning's severity, under [Severity per code](lint.md#severity-per-code). That reaches the warning only: `[queries.codes]` changes the engine's warnings and notes, never an error, so a typo's error stays whatever `lint.toml` says. It changes `opentide lint` and `lint --strict`; the editor shows the engine's own severity.
 
 ### Example
 
@@ -6850,7 +7384,15 @@ index=main sourcetype=misp | mispsearch value=evil.example | table value
 
 ### How to fix
 
-When the name is a typo, correct it. When an app on the search head provides the command, the warning is expected and the query deploys as written. `opentide lint --strict` fails on any finding, so a catalogue that gates on it and uses app commands narrows the gate to the files a change touches (`opentide lint --strict --changed`), or turns the `queries` check off in `lint.toml` (`[queries] enabled = false`), which drops every other query style finding too.
+When the name is a typo, correct it; the error cannot be lowered in `lint.toml`. When an app on the search head provides the command, the warning is expected and the query deploys as written. `opentide lint --strict` fails on a warning, so lower this one code and keep the check's other findings:
+
+```toml
+# .opentide/configurations/lint.toml
+[queries.codes]
+spl_unknown_command = "info"   # a note: --strict no longer fails on it ("off" drops it)
+```
+
+Or narrow the gate to the files a change touches (`opentide lint --strict --changed`).
 
 ## spl_unknown_datamodel
 
@@ -6904,7 +7446,7 @@ Change the query where the frame points, then run `opentide validate query` (`--
 
 A name is defined more than once across the block's macros and lists.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Named by `opentide validate`: the Sysdig block's model check reports a `schema_validation` finding on the object whose message lists the codes it broke (`SysdigConfig validation failed with code(s): ...`), and an editor running `opentide lsp start` shows that finding. The analysis engine reported it a second time until UC-2.6; `opentide validate` is the one authority for the block's constraints.
 
 ### Example
 
@@ -6920,7 +7462,7 @@ Change the file where the frame points, then run `opentide validate` again.
 
 A block macro or list name is not `[A-Za-z_][A-Za-z0-9_]*`, or is a Falco operator or keyword.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Named by `opentide validate`: the Sysdig block's model check reports a `schema_validation` finding on the object whose message lists the codes it broke (`SysdigConfig validation failed with code(s): ...`), and an editor running `opentide lsp start` shows that finding. The analysis engine reported it a second time until UC-2.6; `opentide validate` is the one authority for the block's constraints.
 
 ### Example
 
@@ -6936,7 +7478,7 @@ Change the file where the frame points, then run `opentide validate` again.
 
 A block macro uses itself or a macro defined after it: Falco gives a macro no view of itself or later macros, and refuses it as an undefined macro.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Named by `opentide validate`: the Sysdig block's model check reports a `schema_validation` finding on the object whose message lists the codes it broke (`SysdigConfig validation failed with code(s): ...`), and an editor running `opentide lsp start` shows that finding. The analysis engine reported it a second time until UC-2.6; `opentide validate` is the one authority for the block's constraints.
 
 ### Example
 
@@ -6952,7 +7494,7 @@ Change the file where the frame points, then run `opentide validate` again.
 
 An exception's fields, comps, and values do not have a shape Falco's rule loader accepts (`validate_exception_info`).
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Named by `opentide validate`: the Sysdig block's model check reports a `schema_validation` finding on the object whose message lists the codes it broke (`SysdigConfig validation failed with code(s): ...`), and an editor running `opentide lsp start` shows that finding. The analysis engine reported it a second time until UC-2.6; `opentide validate` is the one authority for the block's constraints.
 
 ### Example
 
@@ -6968,7 +7510,7 @@ Change the file where the frame points, then run `opentide validate` again.
 
 A block list name appears in an exception value where Falco's expansion would not produce a value list.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Named by `opentide validate`: the Sysdig block's model check reports a `schema_validation` finding on the object whose message lists the codes it broke (`SysdigConfig validation failed with code(s): ...`), and an editor running `opentide lsp start` shows that finding. The analysis engine reported it a second time until UC-2.6; `opentide validate` is the one authority for the block's constraints.
 
 ### Example
 
@@ -6984,7 +7526,7 @@ Change the file where the frame points, then run `opentide validate` again.
 
 A block list names itself as one of its items, so its own name stays in the expanded condition.
 
-Severity: warning. Reported by the analysis engine on a Sysdig rule (`sysdig`): an item of one of the block's `lists` is that list's own name. `opentide lint` (its `queries` check) and an editor running `opentide lsp start` show it; `opentide validate` does not fail on it. Falco loads the rule: it flattens a list with the lists defined before it only, and its `resolve_list` pass never re-scans the items it has just inserted, so the name is left in the text as a literal value. On Sysdig Secure that literal then resolves against any tenant list of the same name, or matches the bare string. A list naming a later block list is not this advisory: the later list's own pass expands it, as Falco does.
+Severity: warning. Reported by the analysis engine on a Sysdig rule (`sysdig`): an item of one of the block's `lists` is that list's own name. `opentide lint` (its `queries` check) shows it; `opentide validate` does not fail on it, and since UC-2.6 an editor running `opentide lsp start` does not show it either: the editor publishes what `opentide validate` reports on the object, and the block's advisories are lint's. Falco loads the rule: it flattens a list with the lists defined before it only, and its `resolve_list` pass never re-scans the items it has just inserted, so the name is left in the text as a literal value. On Sysdig Secure that literal then resolves against any tenant list of the same name, or matches the bare string. A list naming a later block list is not this advisory: the later list's own pass expands it, as Falco does.
 
 ### Example
 
@@ -7013,7 +7555,7 @@ Remove the item, or name the other list you meant. To extend a list with another
 
 `priority` is not one of Falco's eight priorities (or `INFO`), compared case-insensitively.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Named by `opentide validate`: the Sysdig block's model check reports a `schema_validation` finding on the object whose message lists the codes it broke (`SysdigConfig validation failed with code(s): ...`), and an editor running `opentide lsp start` shows that finding. The analysis engine reported it a second time until UC-2.6; `opentide validate` is the one authority for the block's constraints.
 
 ### Example
 
@@ -7029,7 +7571,7 @@ Change the file where the frame points, then run `opentide validate` again.
 
 A Sysdig block is a new rule with a non-blank `condition`, or a tuning (`append_to_rule`) that appends a condition, exceptions, or both.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Named by `opentide validate`: the Sysdig block's model check reports a `schema_validation` finding on the object whose message lists the codes it broke (`SysdigConfig validation failed with code(s): ...`), and an editor running `opentide lsp start` shows that finding. The analysis engine reported it a second time until UC-2.6; `opentide validate` is the one authority for the block's constraints.
 
 ### Example
 
@@ -7045,7 +7587,7 @@ Change the file where the frame points, then run `opentide validate` again.
 
 `source` is not an event source name (`[a-z][a-z0-9_]*`).
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Named by `opentide validate`: the Sysdig block's model check reports a `schema_validation` finding on the object whose message lists the codes it broke (`SysdigConfig validation failed with code(s): ...`), and an editor running `opentide lsp start` shows that finding. The analysis engine reported it a second time until UC-2.6; `opentide validate` is the one authority for the block's constraints.
 
 ### Example
 
@@ -7061,7 +7603,7 @@ Change the file where the frame points, then run `opentide validate` again.
 
 A tuning (`append_to_rule`) inherits `output`, `priority`, `policies`, `source`, and `name` from the rule it tunes, so it must not set them.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Named by `opentide validate`: the Sysdig block's model check reports a `schema_validation` finding on the object whose message lists the codes it broke (`SysdigConfig validation failed with code(s): ...`), and an editor running `opentide lsp start` shows that finding. The analysis engine reported it a second time until UC-2.6; `opentide validate` is the one authority for the block's constraints.
 
 ### Example
 
@@ -7077,7 +7619,7 @@ Change the file where the frame points, then run `opentide validate` again.
 
 The ATT&CK technique is not in the Enterprise matrix that Elastic maps.
 
-Reported by the analysis engine on an Elastic rule block (elastic-1.0): `opentide lint` (its `queries` check) and an editor running `opentide lsp start` show it, and `opentide validate query --platform elastic --live` checks the same settings.
+Reported by the analysis engine on an Elastic rule block (elastic-1.0): `opentide lint` (its `queries` check) shows it, and `opentide validate query --platform elastic --live` checks the same settings. Since UC-2.6 an editor running `opentide lsp start` does not: it publishes what `opentide validate` reports on the object, and the block's advisories are lint's.
 
 ### Example
 
@@ -7122,11 +7664,27 @@ Reported by `opentide doctor`. Warns when a template is missing or differs, usua
 
 Run `opentide generate templates`. When the warning names a `lint.toml` key, fix that key first: `generate` fails on the same file, so regenerating does not clear it. A `lint.toml` that is not valid TOML is reported by the `configuration` check instead, and this check is skipped.
 
+## tenant_unreachable
+
+A tenant did not answer, so nothing was checked on it.
+
+Exit 1, as `failure.code` of `validate query --live`, after three queries in a row get no answer or when the tenant answers none. `tenant` and `host` name it, `advice` says what to check, and `rejected` lists the queries refused as invalid before it. Deploy failures, `doctor` and the SDKs use the same code for the same failure.
+
+### Example
+
+```text
+opentide validate query --live --platform splunk
+```
+
+### How to fix
+
+Check the tenant's URL in `.opentide/configurations/platforms/<platform>.toml` and the network path to its host; behind a proxy, pass `opentide --proxy`. If the tenant is up and only slow, raise `--check-timeout` or `OPENTIDE_QUERY_CHECK_TIMEOUT`.
+
 ## threshold_lookback
 
 A threshold rule's lookback exceeds its interval, so windows overlap and alerts repeat.
 
-Reported by the analysis engine on an Elastic rule block (elastic-1.0): `opentide lint` (its `queries` check) and an editor running `opentide lsp start` show it, and `opentide validate query --platform elastic --live` checks the same settings.
+Reported by the analysis engine on an Elastic rule block (elastic-1.0): `opentide lint` (its `queries` check) shows it, and `opentide validate query --platform elastic --live` checks the same settings. Since UC-2.6 an editor running `opentide lsp start` does not: it publishes what `opentide validate` reports on the object, and the block's advisories are lint's.
 
 ### Example
 
@@ -7171,7 +7729,7 @@ enabeld = false        # the key is enabled
 
 ### How to fix
 
-Remove the key or correct its spelling. The JSON Schema of each file (`python -m opentide.generation.configuration_schemas <dir>`) lists the keys it takes.
+Remove the key or correct its spelling. The keys each configuration file accepts are in [Configuration](../usage/configuration.md); `opentide setup platforms` writes a template that shows the keys of the platform files, and an editor on `opentide lsp start` offers each file's keys as you type.
 
 ## url_invalid
 
@@ -7299,7 +7857,7 @@ opentide valdiate
 
 ### How to fix
 
-Run the command `did you mean` names, or `opentide --help` for the list. In an agent, `opentide commands --json` prints the whole command tree.
+Run the command named by the tip (`a similar subcommand exists`) or by `failure.suggestion`, or `opentide --help` for the list. In an agent, `opentide commands --json` prints the whole command tree.
 
 ## usage_unknown_option
 
@@ -7348,7 +7906,7 @@ metadata:
 
 ### How to fix
 
-Use a value from the vocabulary the label names. When a close value exists, `help` names it and `fix` carries the edit; the edit is marked `safe` only when the two spell the same word (they differ in case, spaces, `-` or `_`) and hold no digit, so an ATT&CK id is never replaced unreviewed. The opentide VS Code extension completes vocabulary values (`opentide setup vscode` recommends it).
+Use a value from the vocabulary the label names. When a close value exists, `help` names it and `fix` carries the edit; the edit is marked `safe` only when the two spell the same word (they differ in case, spaces, `-` or `_`) and hold no digit, so an ATT&CK id is never replaced unreviewed. The opentide VS Code extension completes vocabulary values (install it with `code --install-extension opentidehq.opentide`; `opentide setup vscode` recommends it to the team).
 
 ## vscode_settings
 
@@ -7367,7 +7925,7 @@ Reported by `opentide doctor`. Warns when `settings.json` maps objects to openti
 
 ### How to fix
 
-Run `opentide setup vscode`. It recommends the extension and removes opentide's `yaml.schemas` entries, keeping your other settings.
+Install the extension, the recommended way to use opentide in VS Code: `code --install-extension opentidehq.opentide` (it bundles opentide). To have `.vscode/extensions.json` recommend it to the team, and remove opentide's `yaml.schemas` entries earlier releases wrote, run `opentide setup vscode`; your other settings are kept.
 
 ## vscode_snippets
 
@@ -7404,9 +7962,9 @@ Run `opentide doctor` from inside your detection repository, or pass `--repo`. R
 
 ## workspace_not_found
 
-`opentide new` ran outside a workspace: neither `.opentide/` nor `objects/` is there. Or the MCP server was started in an Agent Plugin's directory, which is not a workspace, and nothing named one.
+`opentide new`, `opentide generate` or `opentide migrate vocab-scope` ran outside a workspace: neither `.opentide/` nor `objects/` is there. Or the MCP server has no workspace to serve: it was started in an Agent Plugin's directory, or in any folder that is not in a workspace, and nothing named one, or `OPENTIDE_REPO_ROOT` names a folder that does not exist.
 
-Exit 1, as `failure.code`. `new` writes only into a workspace, the folder `--repo` names or the one discovery finds, so a stray run in your home directory cannot make it a workspace that every folder below it would discover.
+Exit 1, as `failure.code`. `new`, `generate` and `migrate` write only into a workspace, the folder `--repo` names or the one discovery finds, so a stray run in your home directory cannot make it a workspace that every folder below it would discover.
 
 The MCP server reports it as an error from every tool and resource that reads the catalogue (`search`, `validation_report`, `deploy_rule`, `opentide://rules`, ...). An Agent Plugins client starts a plugin's server in the plugin's directory; the server never serves that directory, such as the opentidehq/skills package, as the catalogue. `explain` and offline `validate_query` still answer.
 
@@ -7454,7 +8012,7 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://virustotal.github.io/yara-x/) describes the syntax and the commands the engine checks against.
 
 ## yara_duplicate_string
 
@@ -7470,7 +8028,7 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://virustotal.github.io/yara-x/) describes the syntax and the commands the engine checks against.
 
 ## yara_duplicate_tag
 
@@ -7486,7 +8044,7 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://virustotal.github.io/yara-x/) describes the syntax and the commands the engine checks against.
 
 ## yara_empty_signature
 
@@ -7502,13 +8060,13 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://virustotal.github.io/yara-x/) describes the syntax and the commands the engine checks against.
 
 ## yara_entrypoint_deprecated
 
-entrypoint is deprecated in libyara and refused by YARA-X; use pe.entry_point or elf.entry_point.
+entrypoint is deprecated in libyara and refused by YARA-X (yara_undefined_identifier); use pe.entry_point or elf.entry_point.
 
-Reported by the analysis engine in a YARA rule query, at the place in the query, always as a warning: the platform takes the rule, so `opentide validate` does not fail on it, and `opentide lint` (its `queries` check) and an editor running `opentide lsp start` show it.
+Reported by the analysis engine in a YARA rule query, at the place in the query, as a warning that names the replacement, together with the error `yara_undefined_identifier` at the same place: YARA-X refuses `entrypoint`, so `opentide validate` (its `queries` check) and `opentide validate query` fail on the rule; `opentide lint` (its `queries` check) and an editor running `opentide lsp start` show both.
 
 ### Example
 
@@ -7518,7 +8076,7 @@ opentide lint --check queries
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://virustotal.github.io/yara-x/) describes the syntax and the commands the engine checks against.
 
 ## yara_hex_string
 
@@ -7534,7 +8092,7 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://virustotal.github.io/yara-x/) describes the syntax and the commands the engine checks against.
 
 ## yara_include
 
@@ -7550,7 +8108,7 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://virustotal.github.io/yara-x/) describes the syntax and the commands the engine checks against.
 
 ## yara_meta_missing
 
@@ -7602,7 +8160,7 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://virustotal.github.io/yara-x/) describes the syntax and the commands the engine checks against.
 
 ## yara_module_unconfirmed
 
@@ -7618,11 +8176,11 @@ opentide lint --check queries
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://virustotal.github.io/yara-x/) describes the syntax and the commands the engine checks against.
 
 ## yara_number_out_of_range
 
-A YARA integer, size suffix, jump bound or string index is outside the range libyara accepts.
+A YARA integer, size suffix, jump bound or string index is outside the range YARA-X accepts.
 
 Reported by the analysis engine in a YARA rule query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
@@ -7634,11 +8192,11 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://virustotal.github.io/yara-x/) describes the syntax and the commands the engine checks against.
 
 ## yara_parse_error
 
-The YARA signature does not parse as libyara 4.5 reads it.
+The YARA signature does not parse as YARA-X 1.x reads it.
 
 Reported by the analysis engine in a YARA rule query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
@@ -7650,7 +8208,7 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://virustotal.github.io/yara-x/) describes the syntax and the commands the engine checks against.
 
 ## yara_regexp
 
@@ -7666,11 +8224,11 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://virustotal.github.io/yara-x/) describes the syntax and the commands the engine checks against.
 
 ## yara_rule_identifier_conflict
 
-A YARA rule is named like a keyword, or matches a rule wildcard an earlier condition uses; a rule named like an imported module is yara_x_incompatible.
+A YARA rule is named like a keyword, a built-in or an imported module.
 
 Reported by the analysis engine in a YARA rule query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
@@ -7682,7 +8240,7 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://virustotal.github.io/yara-x/) describes the syntax and the commands the engine checks against.
 
 ## yara_signature_alias
 
@@ -7732,11 +8290,11 @@ opentide lint --check queries
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://virustotal.github.io/yara-x/) describes the syntax and the commands the engine checks against.
 
 ## yara_string_modifier
 
-libyara refuses this combination of YARA string modifiers, or an xor or base64 argument is out of range.
+YARA-X refuses this combination of YARA string modifiers, or an xor or base64 argument is out of range.
 
 Reported by the analysis engine in a YARA rule query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
@@ -7748,7 +8306,7 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://virustotal.github.io/yara-x/) describes the syntax and the commands the engine checks against.
 
 ## yara_suspicious_expression
 
@@ -7764,7 +8322,7 @@ opentide lint --check queries
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://virustotal.github.io/yara-x/) describes the syntax and the commands the engine checks against.
 
 ## yara_type
 
@@ -7780,11 +8338,11 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://virustotal.github.io/yara-x/) describes the syntax and the commands the engine checks against.
 
 ## yara_undefined_identifier
 
-A YARA identifier is neither a rule defined earlier in the signature nor an imported module, or is used as libyara refuses: a module field called as a function, a module function named without a call, or a loop variable a loop already binds.
+A YARA identifier is neither a rule defined earlier in the signature nor an imported module, or is used as YARA-X refuses: a module field called as a function, a module function named without a call, or `entrypoint`.
 
 Reported by the analysis engine in a YARA rule query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
@@ -7796,7 +8354,7 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://virustotal.github.io/yara-x/) describes the syntax and the commands the engine checks against.
 
 ## yara_undefined_string
 
@@ -7812,11 +8370,11 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://virustotal.github.io/yara-x/) describes the syntax and the commands the engine checks against.
 
 ## yara_unknown_module
 
-A YARA import names a module libyara does not ship.
+A YARA import names a module opentide does not know: it knows YARA-X's default modules except vt, and refuses magic, which YARA-X does not build by default.
 
 Reported by the analysis engine in a YARA rule query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
@@ -7828,7 +8386,7 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://virustotal.github.io/yara-x/) describes the syntax and the commands the engine checks against.
 
 ## yara_unknown_module_member
 
@@ -7844,11 +8402,11 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://virustotal.github.io/yara-x/) describes the syntax and the commands the engine checks against.
 
 ## yara_unreferenced_string
 
-A YARA string is never used in the condition, which libyara refuses unless the condition uses them.
+A YARA string is never used in the condition, which YARA-X refuses unless the condition uses them.
 
 Reported by the analysis engine in a YARA rule query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
@@ -7860,11 +8418,29 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://virustotal.github.io/yara-x/) describes the syntax and the commands the engine checks against.
 
 ## yara_x_incompatible
 
-libyara 4.5 compiles this YARA but YARA-X 1.x refuses it.
+Retired in opentide 0.29.0; YARA-X is the YARA language: what it refuses is an error with its own code (`yara_regexp`, `yara_type`, `yara_parse_error`, ...), and syntax only YARA-X has is `yara_x_only_syntax` under a profile that refuses it.
+
+Severity: warning, while it was reported. libyara 4.5 compiled the YARA signature, but YARA-X 1.x refused it.
+
+Until opentide 0.29.0, the analysis engine reported it as a warning on a YARA signature (a HarfangLab or Bitdefender `yara` block, a `.yar` file), where libyara 4.5 was the language and YARA-X a second opinion. YARA-X is the language now (#1225): the same signature gets an error with the code of what is wrong, and `opentide validate` fails on it. No command reports `yara_x_incompatible` now.
+
+### Example
+
+```text
+opentide explain yara_x_only_syntax
+```
+
+### How to fix
+
+Nothing to fix: no command reports this code any more. A suppression list or SARIF baseline that names it can drop it.
+
+## yara_x_only_syntax
+
+This YARA uses syntax only YARA-X has, and the platform profile has yara_x_syntax refused: the platform may not accept it.
 
 Reported by the analysis engine in a YARA rule query, at the place in the query: as an error, a query the platform would reject, by `opentide validate` (its `queries` check) and `opentide validate query`; as a warning or a note, style, by `opentide lint` (its `queries` check). An editor running `opentide lsp start` shows both.
 
@@ -7876,7 +8452,7 @@ opentide validate query
 
 ### How to fix
 
-Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://yara.readthedocs.io/en/v4.5.2/writingrules.html) describes the syntax and the commands the engine checks against.
+Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [YARA rule reference](https://virustotal.github.io/yara-x/) describes the syntax and the commands the engine checks against.
 
 ## yaral_condition_shape
 

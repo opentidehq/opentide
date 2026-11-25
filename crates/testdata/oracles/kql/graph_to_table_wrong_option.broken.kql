@@ -1,0 +1,1 @@
+SigninLogs | make-graph UserPrincipalName --> IPAddress | graph-to-table edges with_node_id=id

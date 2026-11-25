@@ -48,7 +48,7 @@ You write **objects** as YAML in `objects/`. A [threat](./concepts/object-model.
 
 ### Generate
 
-`opentide generate` compiles the specs and your objects into the scaffolding your repo needs: JSON Schemas per object family, authoring templates from Pydantic `FieldInfo`, an IDE schema router that validates YAML in your editor, and lookup indexes. Generated files are deterministic and safe to commit. See [`generate`](../cli/generate.md).
+`opentide generate` compiles the specs and your objects into the scaffolding your repo needs: JSON Schemas per object family, authoring templates from the Tide models' fields, an IDE schema router that validates YAML in your editor, and lookup indexes. Generated files are deterministic and safe to commit. See [`generate`](../cli/generate.md).
 
 </Step>
 
@@ -85,7 +85,7 @@ The same operations are available three ways. Pick per task — see [Choosing an
 | Interface | Best for | Reference |
 |-----------|----------|-----------|
 | **CLI** (`opentide`) | Humans, CI pipelines, scripts | [CLI](../cli/index.md) |
-| **SDK** (`from opentide import Opentide`) | Embedding in Python tools and tests | [SDK](../sdk/index.md) |
+| **SDK** (`from opentide import Workspace`) | Embedding in Python tools and tests | [SDK](../sdk/index.md) |
 | **MCP** (`opentide mcp start`) | AI agents in editors | [MCP](../mcp/index.md) |
 
 ## Where generation and deployment differ

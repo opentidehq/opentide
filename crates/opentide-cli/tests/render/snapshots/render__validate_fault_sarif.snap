@@ -1,0 +1,3019 @@
+---
+source: crates/opentide-cli/tests/render.rs
+---
+{
+  "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+  "runs": [
+    {
+      "automationDetails": {
+        "id": "opentide/validate/"
+      },
+      "columnKind": "unicodeCodePoints",
+      "results": [
+        {
+          "level": "error",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": ".opentide/states/deployment/1fe3b71b-24be-4604-9b91-72cb32381bfc.json",
+                  "uriBaseId": "%SRCROOT%"
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "<WS>/.opentide/states/deployment/1fe3b71b-24be-4604-9b91-72cb32381bfc.json records object_uuid '00000000-0000-4000-8000-000000000001', but its file name is '1fe3b71b-24be-4604-9b91-72cb32381bfc'"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "40d0bb1ae39155ea9af4065f7c7276e6cae75e51b49bfab5f6562cc318f4ec74"
+          },
+          "ruleId": "deployment_state_uuid_mismatch"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": ".opentide/states/deployment/8df3e0d3-8a3f-490c-9f31-b71df88f3562.json",
+                  "uriBaseId": "%SRCROOT%"
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "<WS>/.opentide/states/deployment/8df3e0d3-8a3f-490c-9f31-b71df88f3562.json has no platforms object"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "dac798f09a8c98825c530d9ea4e13fc128563ab54aaeda85b305c8458754ca6e"
+          },
+          "ruleId": "deployment_state_shape"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": ".opentide/states/deployment/f2f28c1d-8323-4b4e-acba-c53ed9cb5271.json",
+                  "uriBaseId": "%SRCROOT%"
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "<WS>/.opentide/states/deployment/f2f28c1d-8323-4b4e-acba-c53ed9cb5271.json names platform 'splunk'; only bitdefender, crowdstrike, microsoft_defender, graylog, exabeam, google_secops, sentinel_one, sysdig store external ids"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "1c2b4e4fe4a0c53a703576f832624aa36b0d1acc0623836ec771898827601bfb"
+          },
+          "ruleId": "deployment_state_platform"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "8a4781e7-4379-4cef-a82d-4d0a57189397"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/objectives/elevated-exfiltration-objective-0002.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 43,
+                  "startColumn": 7,
+                  "startLine": 54
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "Unknown threat reference '00000000-0000-4000-8000-00000000beef'\nhelp: opentide info threats lists the ones that exist"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "3b9aa491200a98c5ac86875046f6673cc9d28c17ba236c9691d3a2b3d4cfb919"
+          },
+          "ruleId": "invalid_ref"
+        },
+        {
+          "fixes": [
+            {
+              "artifactChanges": [
+                {
+                  "artifactLocation": {
+                    "uri": "objects/objectives/lateral-beacon-objective-0001.yaml",
+                    "uriBaseId": "%SRCROOT%"
+                  },
+                  "replacements": [
+                    {
+                      "deletedRegion": {
+                        "endColumn": 22,
+                        "endLine": 34,
+                        "startColumn": 11,
+                        "startLine": 34
+                      },
+                      "insertedContent": {
+                        "text": "Host::File"
+                      }
+                    }
+                  ]
+                }
+              ],
+              "description": {
+                "text": "Replace with \"Host::File\""
+              }
+            }
+          ],
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "e305cca1-c265-4ae9-a34e-2ffaee82a359"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/objectives/lateral-beacon-objective-0001.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 22,
+                  "startColumn": 11,
+                  "startLine": 34
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "'Host::Gizmo' is not a signal entities value\nhelp: did you mean 'Host::File'?"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "e73d761799768011d89e15e5fa92fea4a97bcfd06986fad06219b32606bfad52"
+          },
+          "ruleId": "vocab_unknown"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "3e920df0-fe0f-41dc-9cab-8cb9e0da24d1"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/objectives/rapid-tunnel-objective-0003.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 43,
+                  "startColumn": 7,
+                  "startLine": 77
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "Unknown threat reference '00000000-0000-4000-8000-00000000beef'\nhelp: opentide info threats lists the ones that exist"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "348dfe383cd7d29dd7086eb34dcd43a0816018215f7feea5b5bc3bf6e2298915"
+          },
+          "ruleId": "invalid_ref"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "0982e504-d1b0-4624-87de-5d03192f85d7"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/covert-exfiltration-rule-0083.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 23,
+                  "startColumn": 20,
+                  "startLine": 71
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`process.pid` is a `long` field in ECS v9.5.0: Elasticsearch rejects the value `abc`, which is not a number, on it\nhelp: the ECS field reference: https://www.elastic.co/docs/reference/ecs/ecs-field-reference"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "4fa4978919f10c4c8761e039df0a27d838a6a0b5fe8eedd19d4df035367554f0"
+          },
+          "ruleId": "ecs_type_mismatch"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "1f878e9d-294c-466e-9509-f9f6a2b29c3f"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/covert-implant-rule-0157.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 41,
+                  "startColumn": 38,
+                  "startLine": 92
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "abc is not a valid number: `proc.pid` is a number (INT64)\nhelp: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "75e84eadcaa6fec4c07f4c50798eda90859988659b3d2288f23a3e260fd50e90"
+          },
+          "ruleId": "falco_value_type"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "eb5f85df-0602-4803-ab51-4d9a7bd6e74e"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/covert-loader-rule-0261.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 9,
+                  "startColumn": 3,
+                  "startLine": 32
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "configurations.sysdig: Value error, SysdigConfig validation failed with code(s): sysdig_tuning_keys\nhelp: the template in .opentide/templates/ shows the field and its values"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "2b9d9fc0137eef6c611b55b171c124dee89c2781fdc35f2471fcc7cbcc628a94"
+          },
+          "ruleId": "schema_validation"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "42bb52d0-8cca-4e6f-b580-b73aed787af5"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/covert-tunnel-rule-0088.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 23,
+                  "startColumn": 7,
+                  "startLine": 62
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "KQL syntax error\nhelp: the KQL reference: https://learn.microsoft.com/kusto/query/"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "bdac965dfd374d0cc871564733e5987038d8df089f3f4c4cac47dcc443c000d7"
+          },
+          "ruleId": "kql_parse_error"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "7ffbb8be-e73c-499b-b215-fc4ef6d22ea4"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/elevated-downgrade-rule-0197.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 34,
+                  "startColumn": 28,
+                  "startLine": 53
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "Elasticsearch EQL does not support the `unique` pipe; only `head` and `tail`\nhelp: the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "69fb3ba07f577a4d165091b5b7204655b86cd37be542824b5288c477b5a03f2e"
+          },
+          "ruleId": "eql_unsupported"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "30ec2452-1972-4ea1-82f6-cf8e49e27956"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/elevated-dropper-rule-0066.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 46,
+                  "startColumn": 37,
+                  "startLine": 54
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`Endpointz` is not a CIM data model; did you mean `Endpoint`?\nhelp: try: Endpoint"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "0fce6d7d3b8e9651880faf1491bdde3ecc5cb919a969f35f843bc673b82b5918"
+          },
+          "ruleId": "spl_unknown_datamodel"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "e66674f4-fc84-476a-a2eb-410e0885f356"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/elevated-injection-rule-0075.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 80,
+                  "startColumn": 59,
+                  "startLine": 40
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`process_nam` is not a field of the CIM Endpoint.Processes dataset; did you mean `Processes.process_name`?\nhelp: try: Processes.process_name"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "cc9c9fb7a2d98fa59893e445192f25022a29f237c537c7677db2d6b05ffd479a"
+          },
+          "ruleId": "spl_unknown_datamodel_field"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "60a65881-0d7f-4e32-8141-a1c72628976d"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/elevated-pivot-rule-0038.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 25,
+                  "startColumn": 7,
+                  "startLine": 59
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "unknown table 'DeviceProcessEvnts'; if the workspace holds it, declare it for microsoft_defender in visibility.toml\nhelp: did you mean 'DeviceProcessEvents'?"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "465671b93b13b11c28942f5d44f4fbc74879db870e2c0bba5d9452d93eb58ed9"
+          },
+          "ruleId": "kql_unknown_table"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "83860296-6bb6-4537-a52d-20c465bac655"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/elevated-relay-rule-0034.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 15,
+                  "startColumn": 8,
+                  "startLine": 9
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "'whitish' is not a TLP value"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "2ff214567ffe75b04c815350362788741cb7c02f211b18208ba351728d6cbc7e"
+          },
+          "ruleId": "vocab_unknown"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "83860296-6bb6-4537-a52d-20c465bac655"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/elevated-relay-rule-0034.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 30,
+                  "startColumn": 21,
+                  "startLine": 64
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "KQL syntax error\nhelp: the KQL reference: https://learn.microsoft.com/kusto/query/"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "d66b4f4e2a9cc7be91fbee224915d9425764e41af7db180d2f016beb70d1a2b9"
+          },
+          "ruleId": "kql_parse_error"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "93d82383-9c09-422f-890b-673db62a0466"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/elevated-relay-rule-0055.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 26,
+                  "startColumn": 20,
+                  "startLine": 60
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "unknown function 'tolowr'\nhelp: did you mean 'tolower'?"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "7ff17021341c5600f569a7b85524d3325ee7d4c1d4d57de75911f384d09f0d35"
+          },
+          "ruleId": "kql_unknown_function"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "e219b1dc-db66-4537-806d-585314a9206a"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/elevated-relay-rule-0107.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 31,
+                  "startColumn": 29,
+                  "startLine": 54
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "unrecognized time unit [w] in `maxspan`; use one of ms, s, m, h, d\nhelp: the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "72cfdad39fcbb411f15999c0fd241c0e03e2ca55d391dc1a4e2401f754db4b21"
+          },
+          "ruleId": "eql_maxspan_unit"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "75f7e494-1a37-469d-8a64-55b7aff38e32"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/elevated-tunnel-rule-0053.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 22,
+                  "startColumn": 19,
+                  "startLine": 40
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "Kibana ends an unquoted value at `not ` and rejects the query; quote the value\nhelp: try: \"cannot run\""
+          },
+          "partialFingerprints": {
+            "opentide/v1": "821bab439e9d5359972814efa12dd41aa4d008758ce67f3949762aa3068215f8"
+          },
+          "ruleId": "kuery_parse_error"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "e575b299-e0cd-442d-90fa-6929aababc65"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/encoded-beacon-rule-0124.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 45,
+                  "startColumn": 36,
+                  "startLine": 68
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "'contains' operator not supported for numeric filters (`proc.pid` is a number (INT64))\nhelp: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "1ac73cae8af549af346bc1370e34c130e6f6d9925ecd8d84a0bb4f6d088eaeb3"
+          },
+          "ruleId": "falco_operator_type"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "1620b932-d1ec-4abe-a6f8-a353d4dfb8e7"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/encoded-downgrade-rule-0063.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 9,
+                  "startColumn": 3,
+                  "startLine": 50
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "configurations.sysdig: Value error, SysdigConfig validation failed with code(s): sysdig_definition_name\nhelp: the template in .opentide/templates/ shows the field and its values"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "3026938ec667575dc296c5eeb5f3152649b15f472d1dac03c95281aa881dd4b9"
+          },
+          "ruleId": "schema_validation"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "c0c093dd-d35c-4449-add8-c5d25811513f"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/encoded-downgrade-rule-0170.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 59,
+                  "startColumn": 56,
+                  "startLine": 53
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`foo` is not an ES|QL type Elasticsearch can cast to; use a type such as `keyword`, `long`, `double`, `ip`, or `datetime`\nhelp: try: bool"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "f5731c9bbbc42335833541aaa291359d06eba8bea04174d6c53c3524097dcdb4"
+          },
+          "ruleId": "esql_unknown_type"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "5f2d5d19-1cb3-43c2-852a-16e0af9cad5b"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/encoded-dropper-rule-0057.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 12,
+                  "startColumn": 7,
+                  "startLine": 55
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "SPL syntax error: unexpected 'index'\nhelp: the SPL reference: https://docs.splunk.com/Documentation/Splunk/latest/SearchReference"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "32a7ea4bbb4a4b709c653e039531e046b005107d8e141810c7f694fd0c06db27"
+          },
+          "ruleId": "spl_parse_error"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "6f83b9ba-c935-4169-859d-8c868908468c"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/encoded-harvest-rule-0032.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 9,
+                  "startColumn": 1,
+                  "startLine": 1
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "missing required field 'name'\nhelp: the template in .opentide/templates/ shows the field and its values"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "a31eb44b983a87258c0c4bd92b14c9100889b1aa70d2cfc202961720f2219dc8"
+          },
+          "ruleId": "schema_validation"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "c7a53612-66ef-49e1-b184-09a1c7c50802"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/encoded-loader-rule-0037.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 16,
+                  "startColumn": 7,
+                  "startLine": 50
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "KQL syntax error\nhelp: the KQL reference: https://learn.microsoft.com/kusto/query/"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "296c53e568d693301c5031cc90dae87654495cfd485c69af5894dbbbc2041c02"
+          },
+          "ruleId": "kql_parse_error"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "593beb91-948d-4357-85bc-e27cf674c0ed"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/encoded-pivot-rule-0008.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 5,
+                  "startColumn": 1,
+                  "startLine": 1
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "missing required field 'description'\nhelp: the template in .opentide/templates/ shows the field and its values"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "48fdd0fa0ea83638a1eb634c0b9d837c56c0360af18dd0e8cae5914fd0416c8a"
+          },
+          "ruleId": "schema_validation"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "1e8ee71f-fd51-4bdf-b842-966bb9c96f64"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/encoded-pivot-rule-0009.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 11,
+                  "startColumn": 3,
+                  "startLine": 14
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "metadata.reviewed: Extra inputs are not permitted\nhelp: the template in .opentide/templates/ shows the field and its values"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "b238b190042383295b5a00497e3131eb3eb3c36b890ec938a8506f394c3a4681"
+          },
+          "ruleId": "schema_validation"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/encoded-relay-rule-0014.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 23,
+                  "startColumn": 13,
+                  "startLine": 9
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "Could not parse object YAML: '2026-02-30' is not a valid date (day is out of range for month)\nhelp: write the date as YYYY-MM-DD, with a month from 01 to 12"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "b8ea5b47fcb18a6f1eedf456ed42facefff6f0035a0e5cea3a92d1e1d3d2659a"
+          },
+          "ruleId": "yaml_parse"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "942be89d-7795-43fa-bd94-5e62a4a044ff"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/encoded-relay-rule-0052.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 23,
+                  "startColumn": 15,
+                  "startLine": 50
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "'EventIDD' is not a column of SecurityEvent\nhelp: try: EventID"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "6dc22f7510936b91d26148abfac5005c1b82190ccc83753f63721ccc3102c306"
+          },
+          "ruleId": "kql_unknown_column"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/encoded-spray-rule-0023.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 2,
+                  "startColumn": 1,
+                  "startLine": 53
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "Could not parse object YAML: did not find expected ',' or ']'\nhelp: look at the indentation, a missing ':' or an unclosed quote at or just before this position"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "82367a03a4370a08b7de1c35afac4cb53218221a9418c1a0b9426f8fa2365580"
+          },
+          "ruleId": "yaml_parse"
+        },
+        {
+          "fixes": [
+            {
+              "artifactChanges": [
+                {
+                  "artifactLocation": {
+                    "uri": "objects/rules/encoded-tunnel-rule-0011.yaml",
+                    "uriBaseId": "%SRCROOT%"
+                  },
+                  "replacements": [
+                    {
+                      "deletedRegion": {
+                        "endColumn": 14,
+                        "endLine": 9,
+                        "startColumn": 8,
+                        "startLine": 9
+                      },
+                      "insertedContent": {
+                        "text": "clear"
+                      }
+                    }
+                  ]
+                }
+              ],
+              "description": {
+                "text": "Replace with \"clear\""
+              }
+            }
+          ],
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "2570b64f-7b27-44e3-aea1-b425fefbd7ce"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/encoded-tunnel-rule-0011.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 14,
+                  "startColumn": 8,
+                  "startLine": 9
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "'clearr' is not a TLP value\nhelp: did you mean 'clear'?"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "b82f460a2e8ffff824a771a706f45c3988024349486928e272825eaaf8d5c310"
+          },
+          "ruleId": "vocab_unknown"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "35b7d532-4612-4399-bd90-0ecc1123f880"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/hidden-beacon-rule-0090.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 9,
+                  "startColumn": 3,
+                  "startLine": 44
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "configurations.sysdig: Value error, SysdigConfig validation failed with code(s): sysdig_list_in_value\nhelp: the template in .opentide/templates/ shows the field and its values"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "573f061e1fd56cde940d6162d793b62756ef8f5db2ec2c272cd87e4e6d977af8"
+          },
+          "ruleId": "schema_validation"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "bad-1"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/hidden-harvest-rule-0026.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 5,
+                  "startColumn": 1,
+                  "startLine": 1
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "missing required field 'description'\nhelp: the template in .opentide/templates/ shows the field and its values"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "288414374243b0250874fb886e33f772853e2ee239033ebba956fbc7ac108b08"
+          },
+          "ruleId": "schema_validation"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "bad-1"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/hidden-harvest-rule-0026.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 14,
+                  "startColumn": 9,
+                  "startLine": 4
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "UUID 'bad-1' is not a valid UUIDv4\nhelp: replace it with a UUID v4: python -c \"import uuid; print(uuid.uuid4())\""
+          },
+          "partialFingerprints": {
+            "opentide/v1": "436706967d59d568ac60268c5b3dc8a334163b3914f618af97c499574cae0e89"
+          },
+          "ruleId": "invalid_uuid"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "ccd721f9-1c88-4cb6-8015-28decbb25223"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/hidden-injection-rule-0027.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 9,
+                  "startColumn": 3,
+                  "startLine": 32
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "configurations.sysdig: Value error, SysdigConfig validation failed with code(s): sysdig_source\nhelp: the template in .opentide/templates/ shows the field and its values"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "42683802637979fe369b2f2a3062064ca9f791fe3aa0886a5eedccda6d1a43c9"
+          },
+          "ruleId": "schema_validation"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "3e70a443-cf94-457c-a65b-661e517131bf"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/hidden-relay-rule-0054.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 9,
+                  "startColumn": 3,
+                  "startLine": 33
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "configurations.sysdig: Value error, SysdigConfig validation failed with code(s): sysdig_exception_shape\nhelp: the template in .opentide/templates/ shows the field and its values"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "e9609ec06fcb2d58b9395d0e68df374e07e2bb68d7f221e03c6724090570abdc"
+          },
+          "ruleId": "schema_validation"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "d1b2c94b-c0cf-42b2-a854-e46c5ada5440"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/lateral-dropper-rule-0046.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 27,
+                  "startColumn": 26,
+                  "startLine": 60
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`>` is not defined for `ResultType`, a string column; Kusto rejects the query\nhelp: the KQL reference: https://learn.microsoft.com/kusto/query/"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "b8aad2b088fca5505de733d4cb457e7eaaac02733a024dc06314567191ceacb3"
+          },
+          "ruleId": "kql_type_mismatch"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "d4f37131-4f67-47b7-8d43-782bb490b96b"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/lateral-dropper-rule-0108.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 39,
+                  "startColumn": 27,
+                  "startLine": 55
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`proc.name` takes no argument, but `[1]` is given\nhelp: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "6520efb873670de075cbd3598eaabe81985e819eb63ea71c0158e2f470431ed1"
+          },
+          "ruleId": "falco_field_argument"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "32fb4319-f625-49b9-8f16-2c05f1aa09d2"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/lateral-harvest-rule-0043.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 19,
+                  "startColumn": 7,
+                  "startLine": 55
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "KQL control command '.show' is not valid in detections\nhelp: the KQL reference: https://learn.microsoft.com/kusto/query/"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "b2bf70a6c6f92c518115c587e7560875a1df6f20c2948d4326f170c2a7bae77c"
+          },
+          "ruleId": "kql_control_command_unsupported"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "7662e5e2-a4ec-43a1-8454-90a82a05ce4d"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/lateral-harvest-rule-0151.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 22,
+                  "startColumn": 18,
+                  "startLine": 98
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "unknown event type opne\nhelp: did you mean 'open'?"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "1042a6544ff830f9bc60be49dddbf2618ecf77665a00448f96eda6bc4ff5c2b0"
+          },
+          "ruleId": "falco_unknown_event"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/lateral-injection-rule-0024.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 2,
+                  "startColumn": 1,
+                  "startLine": 68
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "Could not parse object YAML: found character that cannot start any token\nhelp: look at the indentation, a missing ':' or an unclosed quote at or just before this position"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "4842c63d7232883cca3fce9a2e972db170d7f72852c3e9b8ac5d29a73ff83a49"
+          },
+          "ruleId": "yaml_parse"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "47afee76-0199-4db5-ab5f-7b34a44ff4bd"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/lateral-injection-rule-0162.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 33,
+                  "startColumn": 16,
+                  "startLine": 54
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`corpus_shells_397` is a list, not a macro: use it in a value list, `in (corpus_shells_397)`\nhelp: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "cd37b6fcea554f5305b6707af90546b420a01f38f9f202f513d5ed2076543970"
+          },
+          "ruleId": "falco_misplaced_list"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "7975c9ea-03be-4bee-8d54-a0cbb5bcc1c2"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/lateral-loader-rule-0182.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 30,
+                  "startColumn": 21,
+                  "startLine": 78
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "unknown EQL function `startsWth`\nhelp: did you mean 'startsWith'?"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "35f0b183b6583c92324ef5322aac2ad15c523d7fb3f90ff1d983d4e4d99c1287"
+          },
+          "ruleId": "eql_unknown_function"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "not-a-uuid"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/persistent-beacon-rule-0004.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 19,
+                  "startColumn": 9,
+                  "startLine": 4
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "UUID not-a-uuid is also used by 'Encoded Exfiltration Rule 0005'\nhelp: give one of them a fresh UUID v4; keep the UUID on the object that is deployed or referenced"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "96e5ae37a40c1dd7372ee4966c005551aaccaf6487b7183cbb98702fe7490b56"
+          },
+          "ruleId": "duplicate_id"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "not-a-uuid"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/persistent-beacon-rule-0004.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 19,
+                  "startColumn": 9,
+                  "startLine": 4
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "UUID 'not-a-uuid' is not a valid UUIDv4\nhelp: replace it with a UUID v4: python -c \"import uuid; print(uuid.uuid4())\""
+          },
+          "partialFingerprints": {
+            "opentide/v1": "de49da99d52765147444fc283fe350397a2a2d917aefd7f8944165b6e6d86942"
+          },
+          "ruleId": "invalid_uuid"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "bc982260-e048-4f77-97a4-d47357b0c7a9"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/persistent-injection-rule-0155.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 53,
+                  "startColumn": 43,
+                  "startLine": 60
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "unknown ES|QL function `STARTSWITH`\nhelp: did you mean 'STARTS_WITH'?"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "6196b0af2a1e0f1170cd82f0315e2273bf8fd2dcbcc8d3faaff88a6fd80da5c3"
+          },
+          "ruleId": "esql_unknown_function"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "35ed7edf-ab5e-4950-8aec-47be3cd78601"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/persistent-pivot-rule-0092.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 54,
+                  "startColumn": 21,
+                  "startLine": 69
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`length` takes 1 arguments, found 2\nhelp: the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "027554350eb5bc9b47c09dec515f62c37911c19ccdaf192a43e37f6483b7d114"
+          },
+          "ruleId": "eql_function_arity"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "a49c46f9-6a6e-4e9f-82c1-a2977857b969"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/persistent-relay-rule-0013.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 54,
+                  "startColumn": 18,
+                  "startLine": 29
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "Unknown objective or signal reference '00000000-0000-4000-8000-0000deadbeef'\nhelp: opentide info objectives lists the ones that exist"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "667280da03965ea09b974be421290a177979837365702f47611dd7bc924f2f89"
+          },
+          "ruleId": "invalid_ref"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "1839e2f1-b0a8-4523-a64f-fc74ed261ad5"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/rapid-downgrade-rule-0007.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 9,
+                  "startColumn": 1,
+                  "startLine": 3
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "missing metadata.schema on object"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "7828a82015cb62be28a56f52f49b0c46815de40726e994162e946f392d2a76e3"
+          },
+          "ruleId": "schema_missing"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "f2dfd8a7-0f23-47a7-afcf-f16d1bf56360"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/rapid-dropper-rule-0137.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 22,
+                  "startColumn": 21,
+                  "startLine": 82
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "integer `1` is not a condition: EQL needs a boolean here (a comparison, a predicate, `true` or `false`)\nhelp: the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "2f7f80fd86089c0bcbf82a0e9c194a84eb7b9c1e8ba17fa99f4bc17c20e856c8"
+          },
+          "ruleId": "eql_not_boolean"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "08d32ab2-b79d-4d21-b5d0-d4448fffae33"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/rapid-dropper-rule-0144.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 44,
+                  "startColumn": 27,
+                  "startLine": 50
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "can't add field transformer: type 'INT64' is not supported by 'tolower' transformer applied on field 'proc.pid'\nhelp: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "007467b4be2179f3ec044ac559b6c615b496d06ee1a1be9ec653f291ffdd1f4e"
+          },
+          "ruleId": "falco_transformer"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "not-a-uuid-1"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/rapid-exfiltration-rule-0001.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 21,
+                  "startColumn": 9,
+                  "startLine": 4
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "UUID 'not-a-uuid-1' is not a valid UUIDv4\nhelp: replace it with a UUID v4: python -c \"import uuid; print(uuid.uuid4())\""
+          },
+          "partialFingerprints": {
+            "opentide/v1": "34a6a1cdf960ce56307f9244aaa483adf8b2b6e9481ff5037d67466933a31b0a"
+          },
+          "ruleId": "invalid_uuid"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "070a048a-6ea2-4c44-bf8b-646119a41018"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/rapid-implant-rule-0080.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 41,
+                  "startColumn": 32,
+                  "startLine": 37
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "ES|QL syntax error near `|`\nhelp: the ES|QL reference: https://www.elastic.co/docs/reference/query-languages/esql"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "69c08178f6f2bec96115f4a3fa05a65f988b3729d8904b2b30bc68d30521bcb1"
+          },
+          "ruleId": "esql_parse_error"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "2576591d-4b47-48de-8573-47e3568bdcb8"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/rapid-implant-rule-0279.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 63,
+                  "startColumn": 54,
+                  "startLine": 57
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`proc.name` is a field of the `syscall` source, not of `k8s_audit`\nhelp: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "3d4e331725e80ea95ff03e6abb262cef5d9f943575368c5be431c810c0c83a3f"
+          },
+          "ruleId": "falco_unknown_field"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "5cefff0b-41f6-4d36-ad53-23dc842534fd"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/rapid-injection-rule-0028.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 19,
+                  "startColumn": 14,
+                  "startLine": 75
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "Vendor rule id key 'rule_id' is not allowed on the sentinel block; external ids live in .opentide/states/deployment/<uuid>.json\nhelp: Run 'opentide deploy migrate-state' and commit the rule together with .opentide/states/deployment/"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "8d92f2fc0e998a10e0d225f86adf7c36598cfc18e2bba094495592d742a8b64c"
+          },
+          "ruleId": "external_id_in_rule"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "d337ae0d-31f1-442a-96ee-31a3ee70331d"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/rapid-injection-rule-0056.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 25,
+                  "startColumn": 23,
+                  "startLine": 68
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "Elasticsearch allows an edit distance of 0, 1, or 2, and rejects `~3`; use `~2` or `~AUTO`\nhelp: the Lucene query string reference: https://www.elastic.co/docs/reference/query-languages/query-dsl/query-dsl-query-string-query"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "c021f48db1993de189546d16a90f529a4804ec583d3941b640e5e99f58a02bda"
+          },
+          "ruleId": "lucene_fuzzy"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "78986732-a4e8-4b6f-971b-1a5933088565"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/rapid-injection-rule-0097.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 34,
+                  "startColumn": 31,
+                  "startLine": 75
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "KQL syntax error\nhelp: the KQL reference: https://learn.microsoft.com/kusto/query/"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "c8a0156d19476d2df4c857a8109cc0b702cce2a4b756d445e95e99671e03479c"
+          },
+          "ruleId": "kql_parse_error"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "49d2f738-cb8f-4ee3-912f-dcac1be5f6df"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/remote-beacon-rule-0018.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 9,
+                  "startColumn": 3,
+                  "startLine": 52
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "configurations.sysdig: Value error, SysdigConfig validation failed with code(s): sysdig_priority\nhelp: the template in .opentide/templates/ shows the field and its values"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "2da91f87c2b2a4ed2964c47167e94b4e99300730b84d9860650a5059bf01925a"
+          },
+          "ruleId": "schema_validation"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "f5a46c0a-ebb9-45e9-bf63-d93acbc2d3e8"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/remote-beacon-rule-0099.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 10,
+                  "startColumn": 7,
+                  "startLine": 37
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "a condition that starts with `and` or `or` only extends another rule's: set `append_to_rule`, or remove the leading operator\nhelp: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "791a4bcb450a7de5645e0cc674195ae9d61a64576bea3b5b596bb046681021cf"
+          },
+          "ruleId": "falco_append_condition"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "cb49ef7b-890b-4dba-bff5-a9876c0c1f25"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/remote-dropper-rule-0072.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 9,
+                  "startColumn": 3,
+                  "startLine": 53
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "configurations.sysdig: Value error, SysdigConfig validation failed with code(s): sysdig_definition_duplicate\nhelp: the template in .opentide/templates/ shows the field and its values"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "2c1087c0b3a32d68b2d84180a75b48248689fa0aed343da957755bb42a7f949b"
+          },
+          "ruleId": "schema_validation"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "2bfb06fe-7483-4c1f-94e3-5ea647615b0f"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/remote-relay-rule-0017.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 26,
+                  "startColumn": 15,
+                  "startLine": 34
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "'Night Shift' is not a configured responder"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "04b10f4219cb8b5c1ff0c66be4bcf2215264f82a7c679ce8dc2fa0ee1339fc20"
+          },
+          "ruleId": "config_enum_unknown"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "af93bc0f-8bd9-4fb5-8a49-862c231d0aac"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/remote-spray-rule-0117.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 46,
+                  "startColumn": 43,
+                  "startLine": 42
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "invalid regex pattern: error: unclosed group\nhelp: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "5dd05e08d520042fd9434e518294ff223e96d42a4685ae383ae04ee513808d5d"
+          },
+          "ruleId": "falco_invalid_regex"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "a8317819-a2c1-4bac-ae9a-2498b76bcb1c"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/rogue-dropper-rule-0152.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 46,
+                  "startColumn": 37,
+                  "startLine": 36
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "use double quotes [\"] for string literals, not single quotes [']\nhelp: the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "173f0bd1797016cbaad968c9ea52f1dc504ac84848b6462781999b734cba1ede"
+          },
+          "ruleId": "eql_parse_error"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "53651415-1c05-4cfb-b1b2-39c888ab0f06"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/rogue-harvest-rule-0003.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 45,
+                  "startColumn": 9,
+                  "startLine": 4
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "UUID 53651415-1c05-4cfb-b1b2-39c888ab0f06 is also used by 'Lateral Pivot Rule 0002'\nhelp: give one of them a fresh UUID v4; keep the UUID on the object that is deployed or referenced"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "3be1ff72f7eb58708b2a552f262e0d90b5a26a41d255fa9ea4caeb17674186bf"
+          },
+          "ruleId": "duplicate_id"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "9c776706-f0f3-4fbe-961f-f9c819c9293e"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/rogue-harvest-rule-0048.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 22,
+                  "startColumn": 17,
+                  "startLine": 50
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`stats` with no arguments returns no results\nhelp: the SPL reference: https://docs.splunk.com/Documentation/Splunk/latest/SearchReference"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "51acd30866a28696536e59e451cdc5616b83591ead329266c4e2572d42ee02b0"
+          },
+          "ruleId": "spl_empty_command"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "b8a8f7c5-7a7f-4077-8bc2-6704e074e736"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/rogue-implant-rule-0110.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 64,
+                  "startColumn": 58,
+                  "startLine": 54
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "LIKE escapes only `*`, `?`, and `\\`; a backslash before `b` fails. Write `\\\\` for a literal backslash\nhelp: the ES|QL reference: https://www.elastic.co/docs/reference/query-languages/esql"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "d52291fab9d9b2346a1c55bd296f5cf053d97b5a2bcee92bb3481eec1e4d0dee"
+          },
+          "ruleId": "esql_pattern"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "4a3d4bee-99e3-4a29-9d4b-a3ca1e78c856"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/rogue-injection-rule-0062.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 54,
+                  "startColumn": 21,
+                  "startLine": 43
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "Elasticsearch EQL cannot compare a field with another field (`==`); one side must be a constant\nhelp: the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "08c1a3e349964bfe93b22ac462711dd1ac82d7073df4913c80a5f26485ab9fa8"
+          },
+          "ruleId": "eql_field_comparison"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "848b1cdd-4ff5-44a4-b33a-6734df1a7455"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/rogue-loader-rule-0040.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 12,
+                  "startColumn": 7,
+                  "startLine": 95
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "the search starts with the command name `stats` but no `|`; Splunk searches for the word `stats` instead of running the command\nhelp: try: | stats"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "e5b4bbb3eb1c6233c95fe80a4951efca1cea5589adc02407f2c65cf6afc86ee1"
+          },
+          "ruleId": "spl_command_without_pipe"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "480fa0a6-88f2-4c7a-814c-24edeada71e1"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/rogue-loader-rule-0126.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 38,
+                  "startColumn": 37,
+                  "startLine": 58
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "expected a string value or a field with a valid transformer: 'val', 'tolower', 'toupper', 'b64', 'basename', 'len', 'join', 'concat', 'getopt' (libsinsp)\nhelp: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "25ecede2ba34eb53bcf41f3a16c0e77b5030f1d0b99e2eb78d4bfc7721fae1a0"
+          },
+          "ruleId": "falco_parse_error"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/rogue-relay-rule-0035.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 2,
+                  "startColumn": 1,
+                  "startLine": 59
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "Could not parse object YAML: did not find expected ',' or ']'\nhelp: look at the indentation, a missing ':' or an unclosed quote at or just before this position"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "3ffdeef200f6619426fdce614392bf2b7a1650aa760057c1832c3faaa70e243e"
+          },
+          "ruleId": "yaml_parse"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "335522b9-1cb1-4ff0-8228-c5db778981dc"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/scheduled-beacon-rule-0047.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 29,
+                  "startColumn": 28,
+                  "startLine": 76
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "the first argument of `length` must be a string, found integer `1`\nhelp: the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "51eb66389cbf24e06a20472754e7a8ceb514b930b2a62ba825eaabc4fd8d9078"
+          },
+          "ruleId": "eql_argument_type"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "e1ce8771-70ec-48da-a573-081ac28cdf33"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/scheduled-beacon-rule-0171.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 31,
+                  "startColumn": 30,
+                  "startLine": 59
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "invalid formatting syntax: formatting cannot end with a % (libsinsp)\nhelp: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "69695e1df2a7eaaaf816d6920fee32c7152de0426139b62c1a7dbf68b0db31f8"
+          },
+          "ruleId": "falco_output_syntax"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "c30bd2b4-e12c-44ad-a219-410cdb08245e"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/scheduled-exfiltration-rule-0081.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 9,
+                  "startColumn": 3,
+                  "startLine": 50
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "configurations.sysdig: Value error, SysdigConfig validation failed with code(s): sysdig_definition_order\nhelp: the template in .opentide/templates/ shows the field and its values"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "541b837c37dcbf233647cefd5da4eba7cbcc36c3b710ea99578d6ee8fca2cb99"
+          },
+          "ruleId": "schema_validation"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "adf15390-4094-413c-a82d-9c630f52ccc0"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/scheduled-implant-rule-0065.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 24,
+                  "startColumn": 22,
+                  "startLine": 85
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "'==' is not a search operator: Splunk accepts it but the comparison never matches; use '='\nhelp: try: ="
+          },
+          "partialFingerprints": {
+            "opentide/v1": "f2b193c87c22936f4d641bd829951102cd3dcacc47737bec2e3ea65446619d71"
+          },
+          "ruleId": "spl_search_operator"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "43ee5b6f-8b61-4d11-aae2-487347b5a660"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/scheduled-injection-rule-0061.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 19,
+                  "startColumn": 9,
+                  "startLine": 58
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "unknown tabular operator 'frobnicate'\nhelp: the KQL reference: https://learn.microsoft.com/kusto/query/"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "0dd78b324532de086fa1b99a2a0e0a5f8184312afcc7a2bfcc4895885ed32099"
+          },
+          "ruleId": "kql_unknown_operator"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "d9005f9e-749e-474a-91ea-94cf02b49ac2"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/scheduled-injection-rule-0125.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 39,
+                  "startColumn": 34,
+                  "startLine": 52
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "unknown ES|QL command `WEHRE`; Elasticsearch rejects it, and Kibana 9.4 and 9.5 run a non-aggregating rule without it\nhelp: did you mean 'WHERE'?"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "f29d9eca65f88b74937aef810342eb37e7aae72e665d69aaa0ac25d3ee63dff6"
+          },
+          "ruleId": "esql_unknown_command"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "9c9acc0b-1bb2-4614-8e33-c70e7ac6d1c1"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/scheduled-loader-rule-0153.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 36,
+                  "startColumn": 27,
+                  "startLine": 42
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`proc.nmae` is not a Falco field of the `syscall` source\nhelp: try: proc.name"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "e4a5afa4e4127a38d99af4de44ac7be60220b20a590d7f4842191a7c2c33dd7f"
+          },
+          "ruleId": "falco_unknown_field"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "be053763-0941-46a0-82bd-2b7944925b18"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/scheduled-tunnel-rule-0071.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 19,
+                  "startColumn": 7,
+                  "startLine": 48
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "Lucene syntax error: missing `)`\nhelp: the Lucene query string reference: https://www.elastic.co/docs/reference/query-languages/query-dsl/query-dsl-query-string-query"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "a217154735b5c3d7b5f79cd48aa08b6a233e46981d2fff0c269871c1019974bf"
+          },
+          "ruleId": "lucene_parse_error"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "0eb792b2-e4bc-4358-9aa4-97148807981d"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/silent-beacon-rule-0135.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 52,
+                  "startColumn": 39,
+                  "startLine": 57
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "field 'proc.name' has type 'a string (CHARBUF)' while the right-hand side field 'proc.pid' has incompatible type 'a number (INT64)'\nhelp: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "e00188fe09330b0b862818883f71efc332f59f3b1693a23d8f122bbf93e1d770"
+          },
+          "ruleId": "falco_rhs_field"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "fd099b6f-f6c9-437f-af73-f6c3f90430d0"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/silent-dropper-rule-0015.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 54,
+                  "startColumn": 18,
+                  "startLine": 22
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "Unknown objective or signal reference '00000000-0000-4000-8000-0000deadbeef'\nhelp: opentide info objectives lists the ones that exist"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "37513b2939ebf47c2cc4dffd162799e43606753ec53b67116d50d3079078de51"
+          },
+          "ruleId": "invalid_ref"
+        },
+        {
+          "fixes": [
+            {
+              "artifactChanges": [
+                {
+                  "artifactLocation": {
+                    "uri": "objects/rules/silent-dropper-rule-0039.yaml",
+                    "uriBaseId": "%SRCROOT%"
+                  },
+                  "replacements": [
+                    {
+                      "deletedRegion": {
+                        "endColumn": 12,
+                        "endLine": 9,
+                        "startColumn": 8,
+                        "startLine": 9
+                      },
+                      "insertedContent": {
+                        "text": "amber"
+                      }
+                    }
+                  ]
+                }
+              ],
+              "description": {
+                "text": "Replace with \"amber\""
+              }
+            }
+          ],
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "81aecf80-ca22-4c34-b422-4d4177d7bbcf"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/silent-dropper-rule-0039.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 12,
+                  "startColumn": 8,
+                  "startLine": 9
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "'ambr' is not a TLP value\nhelp: did you mean 'amber'?"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "a7e74814fdde04b5d6ac7b59576462b512474a06265b551e45a067b8be6e60b1"
+          },
+          "ruleId": "vocab_unknown"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "81aecf80-ca22-4c34-b422-4d4177d7bbcf"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/silent-dropper-rule-0039.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 17,
+                  "startColumn": 13,
+                  "startLine": 40
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "'LIVE' is not a configured status"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "63ba06d5d06d327ada8b4458e16a85b2940f9b8238a065aededa510052d38cfb"
+          },
+          "ruleId": "config_enum_unknown"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "48e0192b-7807-46fb-9a59-6e887cc0aa79"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/staged-dropper-rule-0045.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 9,
+                  "startColumn": 3,
+                  "startLine": 51
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "configurations.sysdig: Value error, SysdigConfig validation failed with code(s): sysdig_tuning_keys\nhelp: the template in .opentide/templates/ shows the field and its values"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "3ad8410f68c469f6db510a3acd054277d8406a3f35dd61bbb2888762996f2b28"
+          },
+          "ruleId": "schema_validation"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "6ec3963c-5c4b-4de4-8043-cfdb3a37d971"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/staged-harvest-rule-0010.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 22,
+                  "startColumn": 13,
+                  "startLine": 9
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "metadata.reviewed: Value error, metadata.reviewed must be an ISO 8601 date (YYYY-MM-DD) or datetime\nhelp: the template in .opentide/templates/ shows the field and its values"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "a7429d5d4adf96ef4abb974e4c46f0542b975af45600f732f378104d3e7bd20e"
+          },
+          "ruleId": "schema_validation"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/staged-implant-rule-0006.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "Object YAML has no uuid: staged-implant-rule-0006.yaml\nhelp: add metadata.uuid with a fresh UUID v4"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "bd6fedb670f8ec351df934228e544e5bf933fea3121ebc10c2c1a55b9bc36fbc"
+          },
+          "ruleId": "missing_uuid"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "da5e8fa7-4cad-4a35-8a26-d777ec75bb11"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/staged-implant-rule-0036.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 9,
+                  "startColumn": 3,
+                  "startLine": 41
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "configurations.sysdig: Value error, SysdigConfig validation failed with code(s): sysdig_rule_shape\nhelp: the template in .opentide/templates/ shows the field and its values"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "fe331da41577ab6be2040789314357e904661247bc01a066564fe32cd1c1ebba"
+          },
+          "ruleId": "schema_validation"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "f01f9959-9d79-49ed-bfa1-5a9edf6cb2e0"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/staged-injection-rule-0019.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 17,
+                  "startColumn": 13,
+                  "startLine": 51
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "'NOPE' is not a configured status"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "d8608135cd4ded476733c460427de6ccb45e8831b64a3c08d906ac4aed019f58"
+          },
+          "ruleId": "config_enum_unknown"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "d3f34507-e6be-4c31-bbd5-2904239530d8"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/staged-injection-rule-0106.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 23,
+                  "startColumn": 7,
+                  "startLine": 58
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "KQL syntax error\nhelp: the KQL reference: https://learn.microsoft.com/kusto/query/"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "3ee94bcd0d56d967ee2bf68afd7a6d8810f79d789b2a669da30d7ca4fdf403ed"
+          },
+          "ruleId": "kql_parse_error"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "7a45f974-1bd6-44f6-9dd4-2e1cad8b17b3"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/threats/elevated-tunnel-threat-0003.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 34,
+                  "startColumn": 17,
+                  "startLine": 44
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "Unknown chaining relation 'sequence::succeds'\nhelp: did you mean 'sequence::succeeds'?"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "e534b690703f539168bd03023a156f8de046756ca6bdb8df6868aa658a0dbb07"
+          },
+          "ruleId": "chaining_relation_unknown"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/threats/encoded-exfiltration-threat-0030.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "Could not parse object YAML: expected a mapping at the top of the file, found an empty file\nhelp: fill it in from a template with opentide new, or delete it"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "cdef39e30945b36b8f63aa0d0002fde952f335a548878b1b9392a913579dc3b6"
+          },
+          "ruleId": "yaml_parse"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "dcc7149a-f1a1-44d4-94a4-6cb6f7010e28"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/threats/remote-dropper-threat-0001.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 22,
+                  "startColumn": 11,
+                  "startLine": 21
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "threat.impact: must be a YAML list of impact vocabulary names, not a single string\nhelp: the template in .opentide/templates/ shows the field and its values"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "df5e92e84f29c82e5a7b53e5f5595656520bdd2c5fbdd1ff49e6b869fbd69735"
+          },
+          "ruleId": "schema_validation"
+        },
+        {
+          "fixes": [
+            {
+              "artifactChanges": [
+                {
+                  "artifactLocation": {
+                    "uri": "objects/threats/rogue-downgrade-threat-0002.yaml",
+                    "uriBaseId": "%SRCROOT%"
+                  },
+                  "replacements": [
+                    {
+                      "deletedRegion": {
+                        "endColumn": 25,
+                        "endLine": 22,
+                        "startColumn": 13,
+                        "startLine": 22
+                      },
+                      "insertedContent": {
+                        "text": "Substantial incident"
+                      }
+                    }
+                  ]
+                }
+              ],
+              "description": {
+                "text": "Replace with \"Substantial incident\""
+              }
+            }
+          ],
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "7b8864a9-890e-4e58-8a56-ae78cd82796b"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/threats/rogue-downgrade-threat-0002.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 25,
+                  "startColumn": 13,
+                  "startLine": 22
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "'Big incident' is not a severity value\nhelp: did you mean 'Substantial incident'?"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "67d55bb97c1e353b9f14ab59e7aaa28809a61a0071fef529f63fba50eb0b753f"
+          },
+          "ruleId": "vocab_unknown"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "1-not-a-uuid"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/threats/scheduled-loader-threat-0010.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 22,
+                  "startColumn": 10,
+                  "startLine": 5
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "UUID '1-not-a-uuid' is not a valid UUIDv4\nhelp: replace it with a UUID v4: python -c \"import uuid; print(uuid.uuid4())\""
+          },
+          "partialFingerprints": {
+            "opentide/v1": "e7f0068a88c125976fb541e0edc1d3c175e59aff7f09eb42697414b6523e6063"
+          },
+          "ruleId": "invalid_uuid"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/nested/hidden-harvest-rule-0020.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "objects/rules/nested/hidden-harvest-rule-0020.yaml is in a subfolder of objects/rules and is not an object instance: it is not indexed, validated, shared, documented or deployed (opentide reads only files directly in objects/rules; see https://github.com/opentidehq/opentide/issues/584)"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "e774cf1903a1b00ca0797e6b3675826700fd3075846ab02af4da2a4374010ae5"
+          },
+          "ruleId": "nested_object_file"
+        }
+      ],
+      "tool": {
+        "driver": {
+          "informationUri": "https://opentide.org/docs/cli/diagnostics",
+          "name": "opentide",
+          "rules": [
+            "chaining_relation_unknown | error | ChainingRelationUnknown | https://opentide.org/docs/cli/diagnostics#chaining_relation_unknown",
+            "config_enum_unknown | error | ConfigEnumUnknown | https://opentide.org/docs/cli/diagnostics#config_enum_unknown",
+            "deployment_state_platform | error | DeploymentStatePlatform | https://opentide.org/docs/cli/diagnostics#deployment_state_platform",
+            "deployment_state_shape | error | DeploymentStateShape | https://opentide.org/docs/cli/diagnostics#deployment_state_shape",
+            "deployment_state_uuid_mismatch | error | DeploymentStateUuidMismatch | https://opentide.org/docs/cli/diagnostics#deployment_state_uuid_mismatch",
+            "duplicate_id | error | DuplicateId | https://opentide.org/docs/cli/diagnostics#duplicate_id",
+            "ecs_type_mismatch | - | EcsTypeMismatch | https://opentide.org/docs/cli/diagnostics#ecs_type_mismatch",
+            "eql_argument_type | - | EqlArgumentType | https://opentide.org/docs/cli/diagnostics#eql_argument_type",
+            "eql_field_comparison | - | EqlFieldComparison | https://opentide.org/docs/cli/diagnostics#eql_field_comparison",
+            "eql_function_arity | - | EqlFunctionArity | https://opentide.org/docs/cli/diagnostics#eql_function_arity",
+            "eql_maxspan_unit | - | EqlMaxspanUnit | https://opentide.org/docs/cli/diagnostics#eql_maxspan_unit",
+            "eql_not_boolean | - | EqlNotBoolean | https://opentide.org/docs/cli/diagnostics#eql_not_boolean",
+            "eql_parse_error | - | EqlParseError | https://opentide.org/docs/cli/diagnostics#eql_parse_error",
+            "eql_unknown_function | - | EqlUnknownFunction | https://opentide.org/docs/cli/diagnostics#eql_unknown_function",
+            "eql_unsupported | - | EqlUnsupported | https://opentide.org/docs/cli/diagnostics#eql_unsupported",
+            "esql_parse_error | - | EsqlParseError | https://opentide.org/docs/cli/diagnostics#esql_parse_error",
+            "esql_pattern | - | EsqlPattern | https://opentide.org/docs/cli/diagnostics#esql_pattern",
+            "esql_unknown_command | - | EsqlUnknownCommand | https://opentide.org/docs/cli/diagnostics#esql_unknown_command",
+            "esql_unknown_function | - | EsqlUnknownFunction | https://opentide.org/docs/cli/diagnostics#esql_unknown_function",
+            "esql_unknown_type | - | EsqlUnknownType | https://opentide.org/docs/cli/diagnostics#esql_unknown_type",
+            "external_id_in_rule | error | ExternalIdInRule | https://opentide.org/docs/cli/diagnostics#external_id_in_rule",
+            "falco_append_condition | - | FalcoAppendCondition | https://opentide.org/docs/cli/diagnostics#falco_append_condition",
+            "falco_field_argument | - | FalcoFieldArgument | https://opentide.org/docs/cli/diagnostics#falco_field_argument",
+            "falco_invalid_regex | - | FalcoInvalidRegex | https://opentide.org/docs/cli/diagnostics#falco_invalid_regex",
+            "falco_misplaced_list | - | FalcoMisplacedList | https://opentide.org/docs/cli/diagnostics#falco_misplaced_list",
+            "falco_operator_type | - | FalcoOperatorType | https://opentide.org/docs/cli/diagnostics#falco_operator_type",
+            "falco_output_syntax | - | FalcoOutputSyntax | https://opentide.org/docs/cli/diagnostics#falco_output_syntax",
+            "falco_parse_error | - | FalcoParseError | https://opentide.org/docs/cli/diagnostics#falco_parse_error",
+            "falco_rhs_field | - | FalcoRhsField | https://opentide.org/docs/cli/diagnostics#falco_rhs_field",
+            "falco_transformer | - | FalcoTransformer | https://opentide.org/docs/cli/diagnostics#falco_transformer",
+            "falco_unknown_event | - | FalcoUnknownEvent | https://opentide.org/docs/cli/diagnostics#falco_unknown_event",
+            "falco_unknown_field | - | FalcoUnknownField | https://opentide.org/docs/cli/diagnostics#falco_unknown_field",
+            "falco_value_type | - | FalcoValueType | https://opentide.org/docs/cli/diagnostics#falco_value_type",
+            "invalid_ref | error | InvalidRef | https://opentide.org/docs/cli/diagnostics#invalid_ref",
+            "invalid_uuid | error | InvalidUuid | https://opentide.org/docs/cli/diagnostics#invalid_uuid",
+            "kql_control_command_unsupported | - | KqlControlCommandUnsupported | https://opentide.org/docs/cli/diagnostics#kql_control_command_unsupported",
+            "kql_parse_error | - | KqlParseError | https://opentide.org/docs/cli/diagnostics#kql_parse_error",
+            "kql_type_mismatch | - | KqlTypeMismatch | https://opentide.org/docs/cli/diagnostics#kql_type_mismatch",
+            "kql_unknown_column | - | KqlUnknownColumn | https://opentide.org/docs/cli/diagnostics#kql_unknown_column",
+            "kql_unknown_function | - | KqlUnknownFunction | https://opentide.org/docs/cli/diagnostics#kql_unknown_function",
+            "kql_unknown_operator | - | KqlUnknownOperator | https://opentide.org/docs/cli/diagnostics#kql_unknown_operator",
+            "kql_unknown_table | - | KqlUnknownTable | https://opentide.org/docs/cli/diagnostics#kql_unknown_table",
+            "kuery_parse_error | - | KueryParseError | https://opentide.org/docs/cli/diagnostics#kuery_parse_error",
+            "lucene_fuzzy | - | LuceneFuzzy | https://opentide.org/docs/cli/diagnostics#lucene_fuzzy",
+            "lucene_parse_error | - | LuceneParseError | https://opentide.org/docs/cli/diagnostics#lucene_parse_error",
+            "missing_uuid | error | MissingUuid | https://opentide.org/docs/cli/diagnostics#missing_uuid",
+            "nested_object_file | warning | NestedObjectFile | https://opentide.org/docs/cli/diagnostics#nested_object_file",
+            "schema_missing | error | SchemaMissing | https://opentide.org/docs/cli/diagnostics#schema_missing",
+            "schema_validation | error | SchemaValidation | https://opentide.org/docs/cli/diagnostics#schema_validation",
+            "spl_command_without_pipe | - | SplCommandWithoutPipe | https://opentide.org/docs/cli/diagnostics#spl_command_without_pipe",
+            "spl_empty_command | - | SplEmptyCommand | https://opentide.org/docs/cli/diagnostics#spl_empty_command",
+            "spl_parse_error | - | SplParseError | https://opentide.org/docs/cli/diagnostics#spl_parse_error",
+            "spl_search_operator | - | SplSearchOperator | https://opentide.org/docs/cli/diagnostics#spl_search_operator",
+            "spl_unknown_datamodel | - | SplUnknownDatamodel | https://opentide.org/docs/cli/diagnostics#spl_unknown_datamodel",
+            "spl_unknown_datamodel_field | - | SplUnknownDatamodelField | https://opentide.org/docs/cli/diagnostics#spl_unknown_datamodel_field",
+            "vocab_unknown | error | VocabUnknown | https://opentide.org/docs/cli/diagnostics#vocab_unknown",
+            "yaml_parse | error | YamlParse | https://opentide.org/docs/cli/diagnostics#yaml_parse"
+          ],
+          "version": "0.28.1"
+        }
+      }
+    }
+  ],
+  "version": "2.1.0"
+}

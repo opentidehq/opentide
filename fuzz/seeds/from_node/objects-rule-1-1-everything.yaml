@@ -1,0 +1,41 @@
+name: Rule
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000001
+  schema: rule::1.1
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+  author: A
+  contributors: [B, C]
+  organisation:
+    uuid: 00000000-0000-4000-8000-0000000000aa
+    name: Org
+  reviewed: 2026-09-01
+description: d
+status: STAGING
+severity: High
+techniques: [T1059, T1003.001]
+platforms:
+  legacy: {key: value, n: 1}
+references:
+  public:
+    1: https://example.org/a
+    "2": https://example.org/b
+  internal: {wiki: https://wiki.example.org}
+  reports: [https://example.org/report]
+detection_model: 00000000-0000-4000-8000-000000000099
+response:
+  alert_severity: High
+  playbook: https://example.org/playbook
+  responders: soc
+  procedure:
+    analysis: |
+      Look.
+    searches:
+      - purpose: p
+        system: sentinel
+        query: |
+          SecurityEvent
+    containment: isolate
+configurations: {}

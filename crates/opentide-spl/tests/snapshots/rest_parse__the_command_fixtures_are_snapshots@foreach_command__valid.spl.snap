@@ -1,0 +1,47 @@
+---
+source: crates/opentide-spl/tests/rest_parse.rs
+expression: render(&body(path))
+input_file: crates/testdata/corpus/spl/foreach_command__valid.spl
+---
+SOURCE_FILE@0..67
+  PIPELINE@0..67
+    BARE_SEARCH@0..10
+      FIELD_VALUE@0..10
+        FIELD_REF@0..5
+          IDENTIFIER@0..5
+            IDENT@0..5 "index"
+        EQ@5..6 "="
+        FIELD_VALUE_RHS@6..10
+          IDENTIFIER@6..10
+            IDENT@6..10 "main"
+    WHITESPACE@10..11 " "
+    PIPE@11..12 "|"
+    WHITESPACE@12..13 " "
+    FOREACH_COMMAND@13..67
+      FOREACH_KW@13..20 "foreach"
+      WHITESPACE@20..21 " "
+      GLOB@21..26
+        GLOB_TOKEN@21..26 "user*"
+      WHITESPACE@26..27 " "
+      SUBSEARCH@27..67
+        L_BRACKET@27..28 "["
+        PIPELINE@28..65
+          PIPE@28..29 "|"
+          WHITESPACE@29..30 " "
+          EVAL_COMMAND@30..65
+            EVAL_KW@30..34 "eval"
+            WHITESPACE@34..35 " "
+            ASSIGNMENT@35..65
+              IDENTIFIER@35..48
+                TEMPLATE_NAME@35..48 "r<<MATCHSTR>>"
+              EQ@48..49 "="
+              FUNCTION_CALL@49..65
+                IDENTIFIER@49..54
+                  IDENT@49..54 "lower"
+                L_PAREN@54..55 "("
+                IDENTIFIER@55..64
+                  TEMPLATE_NAME@55..64 "<<FIELD>>"
+                R_PAREN@64..65 ")"
+        WHITESPACE@65..66 " "
+        R_BRACKET@66..67 "]"
+--

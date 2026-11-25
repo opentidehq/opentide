@@ -5,7 +5,7 @@ description: opentide:// resource URIs for catalogue indexes, objects, schemas, 
 
 # MCP resources
 
-Read-only JSON resources registered on the opentide MCP server.
+Read-only resources registered on the opentide MCP server. Each is a JSON document served as `application/json`, except an object template (`templates/{type}`), which is its YAML as it is, served as `application/yaml`. `templates/systems` is JSON: an object of each platform's block template, a YAML string each.
 
 ## URI catalogue
 
@@ -19,7 +19,7 @@ Read-only JSON resources registered on the opentide MCP server.
 | `opentide://objectives` | All objectives |
 | `opentide://objectives/{uuid}` | Single objective body |
 | `opentide://schemas/{object_type}` | JSON Schema for `rule`, `threat`, or `objective` |
-| `opentide://templates/{object_type}` | Template metadata for object type |
+| `opentide://templates/{object_type}` | The YAML template of an object family or revision (`rule`, `rule::1.0`); `systems`, every configured platform's block template |
 | `opentide://vocabularies` | Vocabulary index: `{name: {metadata, entry_count, uri}}` — entries are **not** inlined |
 | `opentide://vocabularies/{+name}` | Named vocabulary: `{metadata, entries}`. `{+name}` keeps the `&` in `att&ck` literal |
 | `opentide://platforms` | Platform capability list |
@@ -52,7 +52,7 @@ Missing objects return:
 
 - Collection resources (`opentide://rules`, `opentide://threats`, `opentide://objectives`, `opentide://index`) dump every object and grow with the repo. On large catalogues they can be big — read a single-object URI, or use the `search` tool to narrow, before pulling a full collection into context.
 - There is no pagination; resources return the full payload. If a collection is too large for your context window, use `search` (tool) and then fetch specific objects by UUID.
-- Resources reflect the runtime index built at `Opentide.initialise()`. If they look empty or stale, regenerate schemas (`opentide generate schemas`) and restart the server.
+- Resources reflect the workspace the server read. If they look empty or stale, regenerate schemas (`opentide generate schemas`) and restart the server.
 
 ## platforms resource shape
 
@@ -86,20 +86,21 @@ When nothing matches, the resource returns a diagnostic rather than an empty obj
 
 ```json
 {
-  "error": "No JSON Schema generated for 'rule'",
+  "error": "No JSON Schema generated for \"rule\"",
   "available": [],
   "hint": "run 'opentide generate schemas'"
 }
 ```
 
-Resources reflect the runtime index after `Opentide.initialise()` — run `opentide generate schemas` in the client repo if schemas are empty.
+Resources reflect the workspace the server read — run `opentide generate schemas` in the client repo if schemas are empty.
 
-`opentide://templates/{object_type}` accepts the same forms. Templates are
-rendered from the current model, so a versioned id resolves only when it names
-the current schema version: `rule::1.1` returns the rule template, `rule::1.0`
-and `rule::9.9` return an `error` with the `available` templates. Run
-`opentide generate templates` if the template list is empty. Generated files
-still include `rule.1.0.template.yaml` for objects that stay on `rule::1.0`.
+`opentide://templates/{object_type}` accepts the same forms. A family (`rule`,
+`rules`) is the template of its newest revision, the one `opentide new rule`
+starts from (`rule::1.1`); a revision (`rule::1.0`, `rule.1.1`) is that
+revision's generated template (`.opentide/templates/rule.1.0.template.yaml`).
+A revision with no generated template, such as `rule::9.9`, returns an `error`
+with the `available` templates. Run `opentide generate templates` if the
+template list is empty.
 
 ## Vocabulary resources
 
@@ -114,22 +115,20 @@ Vocabularies are `model_dump()`-ed to JSON objects, not `repr()` strings:
 }
 ```
 
-An unknown name returns `{ "error": "Unknown vocabulary '…'", "available": [...] }`.
+An unknown name returns `{ "error": "Unknown vocabulary \"…\"", "available": [...] }`.
 
 ## SDK equivalent
 
 ```python
-from opentide import Opentide
+from opentide import Workspace
 
-Opentide.initialise()
-Opentide.Index
-Opentide.JsonSchemas.Index
-Opentide.Vocabularies.Index
-Opentide.Platforms.items()
+ws = Workspace.open(".")
+ws.info()       # the index: counts, platforms and their capabilities
+ws.catalog()    # every object, with its path and references
 ```
 
-See [SDK registry](../sdk/registry.md).
+See the [SDK's Workspace](../sdk/workspace.md).
 
 ## Source
 
-`src/opentide/mcp_server/resources.py`
+`crates/opentide-cli/src/mcp/resources.rs`

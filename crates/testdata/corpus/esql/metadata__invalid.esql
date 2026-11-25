@@ -1,0 +1,3 @@
+// prod:metadata invalid
+FROM logs-* METADATA
+| LIMIT 1

@@ -1,0 +1,12 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: query/plain/tenants/tenant-defender-csv
+---
+args: opentide query --platform microsoft_defender --from 2099-01-01T00:00:00Z --to 2099-01-01T01:00:00Z --limit 1 --format csv 'DeviceProcessEvents | project Timestamp, DeviceName'
+exit: 0
+
+━━━ stdout
+_tenant,Timestamp,DeviceName
+lab,2026-10-27T07:51:00.0000000Z,ws-1.contoso.example
+
+━━━ stderr · empty

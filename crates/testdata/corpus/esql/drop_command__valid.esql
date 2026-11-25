@@ -1,0 +1,3 @@
+// prod:drop_command valid
+FROM logs-* METADATA _id
+| DROP event.original, *.raw

@@ -1,0 +1,2 @@
+``` prod:search_group valid
+index=main (EventCode=4624 OR EventCode=4625) NOT user=SYSTEM

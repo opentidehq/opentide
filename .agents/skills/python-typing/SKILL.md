@@ -1,6 +1,6 @@
 ---
 name: python-typing
-description: Keep opentide typed — ty over the whole src/opentide package with no exclude list, annotation expectations, the shared typed helpers for optional rule blocks and platform tenants, and the policy for casts and ignores. Use when ty reports a diagnostic (CI, pre-commit, ci-local.sh), when adding or changing typed code, or after a ty version bump.
+description: Keep opentide typed — ty over the whole src/opentide package with no exclude list, annotation expectations, the typed boundaries (the `_native` stubs, the plugin API, the SDK), and the policy for casts and ignores. Use when ty reports a diagnostic (CI, pre-commit, ci-local.sh), when adding or changing typed code, or after a ty version bump.
 ---
 
 # Python typing — opentide
@@ -23,22 +23,27 @@ for `src/`, annotating new and touched functions is a review requirement.
 - `Any` is allowed (`ANN401` is off) where the value really is arbitrary: parsed YAML/JSON
   payloads, vendor SDK objects without stubs. Narrow it at the boundary with `isinstance`
   rather than passing `Any` deeper.
-- `from __future__ import annotations` is the norm, but pydantic models and Typer commands
-  evaluate annotations at runtime: names used there must be importable at runtime, not only
+- `from __future__ import annotations` is the norm, but pydantic models (a plugin's
+  `configuration_model`) evaluate annotations at runtime: names used there must be importable at runtime, not only
   under `TYPE_CHECKING`.
 - Python 3.10 is the floor: no `Self` from `typing` (use `typing_extensions`), no PEP 695
   `type X = ...` / `def f[T]()` syntax.
 
-## Typed helpers for recurring shapes
+## Typed boundaries
 
-- `rule.platform_configs()` — a rule's `configurations`, or a `ValueError` naming the rule
-  when it has none (instead of `'NoneType' object has no attribute 'sentinel'`).
-- `rule.alert_severity` — `response.alert_severity`, or its default without a response.
-- `batch_tenant(batch, ConfigurationModels.Systems.<Platform>.Tenant)` — a deployment
-  batch's tenant as the platform's own class (checked at runtime). Tests build real tenant
-  objects, not `SimpleNamespace`.
-- `ExternalIdAction.known_id()` — the recorded platform id an update or delete acts on.
-- `opentide.platforms.plugins.resolve_rules(...)` — rules given as objects or UUIDs.
+The package is a thin layer over the Rust core; what ty sees of it comes from three places.
+
+- **The compiled module's stubs** (`src/opentide/_native/`): `__init__.pyi` is written by
+  hand, updated with every change to the binding; `models.pyi` and `sdk.pyi` are generated
+  from the extension by `cargo xtask stubs` (`--check` in ci.yml's `stubs` job), never edited.
+  A diagnostic about `opentide._native` is fixed in the stub (or by regenerating it), not
+  ignored at the call site.
+- **The plugin API** (`opentide.plugins`): frozen dataclasses (`Tenant`, `DeployRequest`,
+  `DeployResult`, `QueryRequest`, `QueryResult`, `LiveCheck`, `ConfigurationFinding`) and the
+  `Operation` literal. Tests build real `Tenant` objects, not `SimpleNamespace`.
+- **The SDK** (`opentide.sdk`): every native call goes through `_call` (or `_document` for
+  an awaitable), which turns the binding's `SdkError` into `OpentideError`; a new method
+  keeps that shape and its annotations match the generated `sdk.pyi`.
 
 ## Fixing a diagnostic
 
@@ -55,20 +60,14 @@ for `src/`, annotating new and touched functions is a review requirement.
 
 ## Project-wide rule settings
 
-`[tool.ty.rules]` in `pyproject.toml`, each with its reason in a comment there:
-
-- `invalid-method-override = "warn"` — Tide domain models deliberately shadow pydantic's
-  `BaseModel.validate`.
-- `invalid-property-type-override`, `invalid-attribute-override`, `invalid-mutable-override`
-  = `"ignore"` — per-platform system configs narrow the nested `SystemConfig.Tenant` types;
-  ty reports the same sites under all three names.
-- `redundant-cast = "ignore"`.
+`pyproject.toml` has no `[tool.ty.rules]`: every rule runs at ty's default level. Adding an
+override is a decision of its own, with its reason in a comment there, never part of a fix.
 
 ## After a ty upgrade
 
-ty is pre-1.0 and renames rules between patch releases. When a bump reds the lint job, compare
-the reported sites with the ones above before changing code — a rename is fixed in
-`[tool.ty.rules]`, a genuinely new finding in code. `uvx ty@<version> check src/opentide`
+ty is pre-1.0 and renames rules between patch releases. When a bump reds the lint job, read each
+new diagnostic as in "Fixing a diagnostic" above: a renamed rule only matters where a
+`# ty: ignore[<rule>]` names it (rename it there), a genuinely new finding is fixed in code. `uvx ty@<version> check src/opentide`
 tries a version without touching the lockfile.
 
 ## Related

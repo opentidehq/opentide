@@ -1,0 +1,4 @@
+// prod:select_section invalid
+metadata.event_type = "USER_LOGIN"
+select:
+  principal.ip,,

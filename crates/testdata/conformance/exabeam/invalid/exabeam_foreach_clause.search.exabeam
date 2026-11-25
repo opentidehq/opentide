@@ -1,0 +1,1 @@
+subject:"endpoint" | FOREACH dest_host [ SELECT src_host WHERE src_host: @dest_host ORDER-BY src_host ]

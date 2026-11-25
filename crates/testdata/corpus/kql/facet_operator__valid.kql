@@ -1,0 +1,3 @@
+// prod:facet_operator valid
+SecurityEvent
+| facet by Account, Computer with (where EventID == 4625 | take 5)

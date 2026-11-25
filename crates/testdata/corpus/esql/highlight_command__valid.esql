@@ -1,0 +1,3 @@
+// prod:highlight_command valid
+FROM docs METADATA _id
+| HIGHLIGHT "breach" ON title, body

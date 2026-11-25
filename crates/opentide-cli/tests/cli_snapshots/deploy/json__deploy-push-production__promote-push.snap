@@ -1,0 +1,29 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: deploy/json/deploy-push-production/promote-push
+---
+args: opentide --json deploy --platform splunk --strategy RELEASE
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "command": "deploy",
+  "deployed": [],
+  "dry_run": false,
+  "duration_ms": 0,
+  "exit_code": 0,
+  "failure": null,
+  "message": "No rules to deploy for this platform",
+  "next_actions": [],
+  "ok": true,
+  "plan": {},
+  "platform": "splunk",
+  "schema_version": 1,
+  "status": "skipped",
+  "summary": {},
+  "warnings": [
+    "This push's diff starts at its last commit's parent: the run names no push event with a `before` commit. Rules that earlier commits of the same push changed are not in it; pass --all to deploy every rule file"
+  ]
+}
+
+━━━ stderr · empty

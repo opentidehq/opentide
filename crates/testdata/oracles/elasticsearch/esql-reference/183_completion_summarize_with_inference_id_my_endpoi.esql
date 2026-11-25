@@ -1,0 +1,1 @@
+FROM logs | COMPLETION "Summarize" WITH {"inference_id": "my-endpoint"}

@@ -1,0 +1,31 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: generate.extract.defender/json/tenants/unreachable
+---
+args: opentide --json generate extract defender
+exit: 1
+
+━━━ stdout · json, 1 lines
+{
+  "command": "generate extract defender",
+  "duration_ms": 0,
+  "error": "Cannot reach microsoft_defender tenant 'lab' at https://login.microsoftonline.com: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
+  "exit_code": 1,
+  "failure": {
+    "argument": null,
+    "code": "command_failed",
+    "crash_log": null,
+    "message": "Cannot reach microsoft_defender tenant 'lab' at https://login.microsoftonline.com: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
+    "suggestion": null
+  },
+  "message": "Cannot reach microsoft_defender tenant 'lab' at https://login.microsoftonline.com: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
+  "next_actions": [],
+  "ok": false,
+  "schema_version": 1,
+  "status": "failed",
+  "summary": {}
+}
+
+━━━ stderr · empty
+
+━━━ ws/Imported/ · created 0755

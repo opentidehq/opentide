@@ -1,0 +1,54 @@
+//! The opentide command line (plan D-3, ADR 0003): one `main(argv)` for the
+//! standalone binary and the Python and npm launchers.
+//!
+//! This crate is the framework every command runs on (UC-3.3, #825): the
+//! command tree in clap ([`tree`]), `opentide --json commands` generated from
+//! it ([`catalog`]), the output modes ([`mode`]), the JSON envelope and
+//! exit codes ([`envelope`]), usage errors
+//! and "did you mean" ([`usage`], [`suggest`]), logging on `tracing`
+//! ([`logging`]), the crash handler and its redaction ([`crash`],
+//! [`redact`]) and Ctrl-C ([`app::install_interrupt_handler`]); and the
+//! renderers of every result ([`render`], UC-3.4, #826): code frames, outcome
+//! lines, SARIF and Code Quality, CI sinks and progress. Every command runs
+//! on it: it is opentide's one command line (UC-6.2, #841).
+//!
+//! Internal to opentide, with no stability promise: depend on the
+//! [`opentide`](https://docs.rs/opentide) crate, its Rust SDK, instead (its
+//! `cli` feature).
+
+pub mod app;
+pub mod catalog;
+pub mod commands;
+pub mod crash;
+pub mod digest;
+pub mod embed;
+pub mod env;
+pub mod envelope;
+pub mod explain;
+pub mod git_baseline;
+pub mod help;
+pub mod json;
+pub mod logging;
+pub mod mcp;
+pub mod mode;
+pub mod plugins;
+/// The queries checks of `validate` and `lint` on the query engines: the
+/// domain layer's (`opentide_analysis::queries`), named here as before.
+pub use opentide_analysis::queries;
+pub mod redact;
+pub mod render;
+pub mod schemas;
+pub mod serve;
+pub mod suggest;
+pub mod threads;
+pub mod tree;
+mod tree_meta;
+#[cfg(feature = "terminal")]
+pub mod tui;
+pub mod usage;
+
+pub use app::{Host, exit, main, run};
+
+/// The version the command line reports (`opentide --version`): the one every
+/// opentide build reports, [`opentide_core::VERSION`].
+pub const VERSION: &str = opentide_core::VERSION;

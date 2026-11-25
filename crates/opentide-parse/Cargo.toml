@@ -1,0 +1,22 @@
+[package]
+name = "opentide-parse"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+description = "opentide engine component: the language-agnostic parsing toolkit of the pure-Rust parsers (logos token source, event parser, lossless rowan trees). Internal: depend on the opentide crate."
+readme = "../COMPONENT.md"
+
+[lints]
+workspace = true
+
+[dependencies]
+foldhash.workspace = true
+logos.workspace = true
+rowan.workspace = true
+
+[dev-dependencies]
+insta.workspace = true

@@ -1,0 +1,3 @@
+// prod:ts_info_command invalid
+TS metrics-*
+| TS_INFO (

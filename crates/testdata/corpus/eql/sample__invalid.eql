@@ -1,0 +1,4 @@
+// prod:sample invalid
+sample
+  [process where true]
+  [file where true] | head 1

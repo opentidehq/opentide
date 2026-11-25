@@ -1,0 +1,2 @@
+// prod:binary_expression valid
+$e.network.sent_bytes + $e.network.received_bytes > 1000 * 1024 / 2

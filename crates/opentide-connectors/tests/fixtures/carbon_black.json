@@ -1,0 +1,115 @@
+{
+  "now": 1793088000,
+  "deploy": [
+    {
+      "label": "create",
+      "status": "STAGING",
+      "uuid": "00000000-0000-4000-8003-000000000005",
+      "name": "Carbon Black Lucene Rule",
+      "description": "Simulated Carbon Black rule for CLI E2E corpus.\n",
+      "query": "process_name:cmd.exe",
+      "report": null,
+      "watchlist": "opentide",
+      "tags": null,
+      "alert_severity": "High"
+    },
+    {
+      "label": "update",
+      "status": "STAGING",
+      "uuid": "00000000-0000-4000-8003-000000000005",
+      "name": "Carbon Black Lucene Rule",
+      "description": "Simulated Carbon Black rule for CLI E2E corpus.\n",
+      "query": "process_name:cmd.exe",
+      "report": null,
+      "watchlist": "opentide",
+      "tags": null,
+      "alert_severity": "High"
+    },
+    {
+      "label": "shared",
+      "status": "PRODUCTION",
+      "uuid": "00000000-0000-4000-8003-0000000000c5",
+      "name": "Carbon Black shared — Ünïcode",
+      "description": "Simulated Carbon Black rule for CLI E2E corpus.\n",
+      "query": "process_name:cmd.exe",
+      "report": "Another rule",
+      "watchlist": "opentide",
+      "tags": [
+        "shared"
+      ],
+      "alert_severity": "High"
+    },
+    {
+      "label": "retire-shared",
+      "status": "REMOVED",
+      "uuid": "00000000-0000-4000-8003-0000000000c5",
+      "name": "Carbon Black shared — Ünïcode",
+      "description": "Simulated Carbon Black rule for CLI E2E corpus.\n",
+      "query": "process_name:cmd.exe",
+      "report": "Another rule",
+      "watchlist": "opentide",
+      "tags": [
+        "shared"
+      ],
+      "alert_severity": "High"
+    },
+    {
+      "label": "retire",
+      "status": "DISABLED",
+      "uuid": "00000000-0000-4000-8003-000000000005",
+      "name": "Carbon Black Lucene Rule",
+      "description": "Simulated Carbon Black rule for CLI E2E corpus.\n",
+      "query": "process_name:cmd.exe",
+      "report": null,
+      "watchlist": "opentide",
+      "tags": null,
+      "alert_severity": "High"
+    },
+    {
+      "label": "missing-watchlist",
+      "status": "STAGING",
+      "uuid": "00000000-0000-4000-8003-000000000005",
+      "name": "Carbon Black Lucene Rule",
+      "description": "Simulated Carbon Black rule for CLI E2E corpus.\n",
+      "query": "process_name:cmd.exe",
+      "report": null,
+      "watchlist": "absent",
+      "tags": null,
+      "alert_severity": "High"
+    }
+  ],
+  "query": {
+    "window": [
+      "2026-10-26T08:00:00+00:00",
+      "2026-10-27T08:00:00+00:00"
+    ],
+    "queries": [
+      {
+        "text": "process_name:cmd.exe AND device_name:ws-*",
+        "limit": 2
+      },
+      {
+        "text": "process_name:x",
+        "limit": 100
+      },
+      {
+        "text": "process_name:(cmd.exe",
+        "limit": 100
+      },
+      {
+        "text": "process_name:denied.exe",
+        "limit": 100
+      }
+    ]
+  },
+  "validate": {
+    "window": [
+      "2026-10-27T07:59:00+00:00",
+      "2026-10-27T08:00:00+00:00"
+    ],
+    "queries": [
+      "process_name:cmd.exe AND netconn_count:[1 TO *]",
+      "process_name:(cmd.exe"
+    ]
+  }
+}

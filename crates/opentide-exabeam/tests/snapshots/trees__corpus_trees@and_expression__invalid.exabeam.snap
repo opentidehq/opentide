@@ -1,0 +1,20 @@
+---
+source: crates/opentide-exabeam/tests/trees.rs
+expression: "debug_parse(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/exabeam/and_expression__invalid.exabeam
+---
+source_file@0..34
+  statement@0..34
+    filter@0..34
+      and_expression@0..34
+        field_term@0..30
+          field_name@0..13
+            identifier@0..13
+              letters@0..13 "activity_type"
+          :@13..14 ":"
+          string@14..30 "\"process-create\""
+        whitespace@30..31 " "
+        keyword@31..34
+          letters@31..34 "AND"
+errors:
+34..34: expected a term

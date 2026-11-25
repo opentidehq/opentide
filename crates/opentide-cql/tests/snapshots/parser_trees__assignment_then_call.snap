@@ -1,0 +1,29 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(source)
+---
+SOURCE_FILE@0..21
+  PIPELINE@0..21
+    ASSIGNMENT@0..6
+      FIELD_NAME@0..1
+        WORD@0..1 "x"
+      WHITESPACE@1..2 " "
+      COLON_EQ@2..4 ":="
+      WHITESPACE@4..5 " "
+      NUMBER@5..6
+        NUMBER_TOKEN@5..6 "1"
+    WHITESPACE@6..7 " "
+    ASSIGNMENT@7..13
+      FIELD_NAME@7..8
+        WORD@7..8 "y"
+      WHITESPACE@8..9 " "
+      COLON_EQ@9..11 ":="
+      WHITESPACE@11..12 " "
+      NUMBER@12..13
+        NUMBER_TOKEN@12..13 "2"
+    WHITESPACE@13..14 " "
+    FUNCTION_CALL@14..21
+      FUNCTION_NAME@14..19
+        FUNCTION_NAME_TOKEN@14..19 "count"
+      L_PAREN@19..20 "("
+      R_PAREN@20..21 ")"

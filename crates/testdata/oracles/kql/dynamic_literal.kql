@@ -1,0 +1,2 @@
+let Servers = dynamic(["ADFS01", "ADFS02"]);
+SecurityEvent | where Computer in (Servers)

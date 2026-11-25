@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 39b3ee9f7256fe12613e801b92bcd3c02060070982773a5de4e9caa7f14600e5 # shrinks to seed = [], ops = [Write { folder: 1, name: 2, kind: 0, uuid: 0, other: 0 }, Write { folder: 1, name: 2, kind: 0, uuid: 1, other: 0 }]

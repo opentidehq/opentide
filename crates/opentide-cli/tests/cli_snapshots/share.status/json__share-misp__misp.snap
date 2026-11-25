@@ -1,0 +1,129 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: share.status/json/share-misp/misp
+---
+args: opentide --json share status
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "command": "share status",
+  "duration_ms": 0,
+  "exit_code": 0,
+  "failure": null,
+  "message": "Status of 7 objects for misp-locked, misp-prod · 6 to create, 1 to update, 1 unchanged, 6 skipped",
+  "next_actions": [],
+  "ok": true,
+  "records": [
+    {
+      "action": "skipped_status",
+      "integration": "misp",
+      "object_uuid": "00000000-0000-4000-8048-000000000014",
+      "reason": "rule_status",
+      "target": "misp-prod"
+    },
+    {
+      "action": "skipped_tlp",
+      "integration": "misp",
+      "object_uuid": "00000000-0000-4000-8048-000000000015",
+      "reason": "max_tlp",
+      "target": "misp-prod"
+    },
+    {
+      "action": "created",
+      "integration": "misp",
+      "object_uuid": "00000000-0000-4000-8048-000000000001",
+      "target": "misp-prod"
+    },
+    {
+      "action": "created",
+      "integration": "misp",
+      "object_uuid": "00000000-0000-4000-8048-000000000002",
+      "target": "misp-prod"
+    },
+    {
+      "action": "created",
+      "integration": "misp",
+      "object_uuid": "00000000-0000-4000-8048-000000000011",
+      "target": "misp-prod"
+    },
+    {
+      "action": "updated",
+      "integration": "misp",
+      "object_uuid": "00000000-0000-4000-8048-000000000012",
+      "remote_event_id": 7,
+      "remote_event_uuid": "e0000000-0000-4000-8048-000000000012",
+      "target": "misp-prod"
+    },
+    {
+      "action": "unchanged",
+      "integration": "misp",
+      "object_uuid": "00000000-0000-4000-8048-000000000013",
+      "remote_event_id": 8,
+      "remote_event_uuid": "e0000000-0000-4000-8048-000000000013",
+      "target": "misp-prod"
+    },
+    {
+      "action": "skipped_type",
+      "integration": "misp",
+      "object_uuid": "00000000-0000-4000-8048-000000000001",
+      "reason": "object_type",
+      "target": "misp-locked"
+    },
+    {
+      "action": "skipped_type",
+      "integration": "misp",
+      "object_uuid": "00000000-0000-4000-8048-000000000002",
+      "reason": "object_type",
+      "target": "misp-locked"
+    },
+    {
+      "action": "skipped_status",
+      "integration": "misp",
+      "object_uuid": "00000000-0000-4000-8048-000000000014",
+      "reason": "rule_status",
+      "target": "misp-locked"
+    },
+    {
+      "action": "skipped_tlp",
+      "integration": "misp",
+      "object_uuid": "00000000-0000-4000-8048-000000000015",
+      "reason": "max_tlp",
+      "target": "misp-locked"
+    },
+    {
+      "action": "created",
+      "integration": "misp",
+      "object_uuid": "00000000-0000-4000-8048-000000000011",
+      "target": "misp-locked"
+    },
+    {
+      "action": "created",
+      "integration": "misp",
+      "object_uuid": "00000000-0000-4000-8048-000000000012",
+      "target": "misp-locked"
+    },
+    {
+      "action": "created",
+      "integration": "misp",
+      "object_uuid": "00000000-0000-4000-8048-000000000013",
+      "target": "misp-locked"
+    }
+  ],
+  "schema_version": 1,
+  "status": "completed",
+  "summary": {
+    "failed": 0,
+    "new": 6,
+    "objects": 5,
+    "retracted": 0,
+    "skipped": 6,
+    "unchanged": 1,
+    "updated": 1
+  },
+  "warnings": [
+    "[[misp]] block \"misp-lab\" api_key is a literal. Use ${ENV_VAR}. The value was replaced with [REDACTED]."
+  ]
+}
+
+━━━ stderr · empty

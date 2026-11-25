@@ -1,0 +1,2 @@
+text: &t 5
+items: [*t]

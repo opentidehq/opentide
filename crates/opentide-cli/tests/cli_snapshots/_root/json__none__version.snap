@@ -1,0 +1,11 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: _root/json/none/version
+---
+args: opentide --json --version
+exit: 0
+
+━━━ stdout
+opentide 0.28.1
+
+━━━ stderr · empty

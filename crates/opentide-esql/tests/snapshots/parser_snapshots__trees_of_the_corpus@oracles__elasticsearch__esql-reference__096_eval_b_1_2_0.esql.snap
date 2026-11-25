@@ -1,0 +1,42 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/oracles/elasticsearch/esql-reference/096_eval_b_1_2_0.esql
+---
+SOURCE_FILE@0..31
+  QUERY@0..30
+    FROM_COMMAND@0..9
+      FROM_KW@0..4 "FROM"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..9
+        INDEX_NAME@5..9
+          SOURCE_TEXT@5..9 "logs"
+    WHITESPACE@9..10 " "
+    PIPE@10..11 "|"
+    WHITESPACE@11..12 " "
+    EVAL_COMMAND@12..27
+      EVAL_KW@12..16 "EVAL"
+      WHITESPACE@16..17 " "
+      FIELD_ASSIGNMENT_OR_EXPRESSION@17..27
+        QUALIFIED_NAME@17..18
+          IDENTIFIER@17..18
+            IDENT@17..18 "b"
+        WHITESPACE@18..19 " "
+        EQ@19..20 "="
+        WHITESPACE@20..21 " "
+        ARRAY@21..27
+          L_BRACK@21..22 "["
+          NUMBER@22..23
+            NUMBER_LIT@22..23 "1"
+          COMMA@23..24 ","
+          WHITESPACE@24..25 " "
+          NUMBER@25..26
+            NUMBER_LIT@25..26 "2"
+          R_BRACK@26..27 "]"
+    ERROR@27..30
+      L_BRACK@27..28 "["
+      NUMBER_LIT@28..29 "0"
+      R_BRACK@29..30 "]"
+  WHITESPACE@30..31 "\n"
+--- errors
+27..27: expected `|` or the end of the query (expected AND_KW, OR_KW, PIPE, COMMA, R_PAREN)

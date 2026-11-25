@@ -1,0 +1,414 @@
+{
+  "language_id": "lucene",
+  "tokens": [
+    {
+      "span": {
+        "start": 0,
+        "end": 14
+      },
+      "range": {
+        "start": {
+          "line": 0,
+          "character": 0
+        },
+        "end": {
+          "line": 0,
+          "character": 14
+        }
+      },
+      "capture": "property",
+      "token_type": 8
+    },
+    {
+      "span": {
+        "start": 14,
+        "end": 15
+      },
+      "range": {
+        "start": {
+          "line": 0,
+          "character": 14
+        },
+        "end": {
+          "line": 0,
+          "character": 15
+        }
+      },
+      "capture": "operator",
+      "token_type": 2
+    },
+    {
+      "span": {
+        "start": 15,
+        "end": 22
+      },
+      "range": {
+        "start": {
+          "line": 0,
+          "character": 15
+        },
+        "end": {
+          "line": 0,
+          "character": 22
+        }
+      },
+      "capture": "string",
+      "token_type": 9
+    },
+    {
+      "span": {
+        "start": 23,
+        "end": 26
+      },
+      "range": {
+        "start": {
+          "line": 0,
+          "character": 23
+        },
+        "end": {
+          "line": 0,
+          "character": 26
+        }
+      },
+      "capture": "keyword",
+      "token_type": 1
+    },
+    {
+      "span": {
+        "start": 27,
+        "end": 30
+      },
+      "range": {
+        "start": {
+          "line": 0,
+          "character": 27
+        },
+        "end": {
+          "line": 0,
+          "character": 30
+        }
+      },
+      "capture": "keyword",
+      "token_type": 1
+    },
+    {
+      "span": {
+        "start": 31,
+        "end": 43
+      },
+      "range": {
+        "start": {
+          "line": 0,
+          "character": 31
+        },
+        "end": {
+          "line": 0,
+          "character": 43
+        }
+      },
+      "capture": "property",
+      "token_type": 8
+    },
+    {
+      "span": {
+        "start": 43,
+        "end": 44
+      },
+      "range": {
+        "start": {
+          "line": 0,
+          "character": 43
+        },
+        "end": {
+          "line": 0,
+          "character": 44
+        }
+      },
+      "capture": "operator",
+      "token_type": 2
+    },
+    {
+      "span": {
+        "start": 44,
+        "end": 45
+      },
+      "range": {
+        "start": {
+          "line": 0,
+          "character": 44
+        },
+        "end": {
+          "line": 0,
+          "character": 45
+        }
+      },
+      "capture": "punctuation.bracket",
+      "token_type": 14
+    },
+    {
+      "span": {
+        "start": 45,
+        "end": 52
+      },
+      "range": {
+        "start": {
+          "line": 0,
+          "character": 45
+        },
+        "end": {
+          "line": 0,
+          "character": 52
+        }
+      },
+      "capture": "string",
+      "token_type": 9
+    },
+    {
+      "span": {
+        "start": 53,
+        "end": 55
+      },
+      "range": {
+        "start": {
+          "line": 0,
+          "character": 53
+        },
+        "end": {
+          "line": 0,
+          "character": 55
+        }
+      },
+      "capture": "keyword",
+      "token_type": 1
+    },
+    {
+      "span": {
+        "start": 56,
+        "end": 65
+      },
+      "range": {
+        "start": {
+          "line": 0,
+          "character": 56
+        },
+        "end": {
+          "line": 0,
+          "character": 65
+        }
+      },
+      "capture": "string",
+      "token_type": 9
+    },
+    {
+      "span": {
+        "start": 65,
+        "end": 66
+      },
+      "range": {
+        "start": {
+          "line": 0,
+          "character": 65
+        },
+        "end": {
+          "line": 0,
+          "character": 66
+        }
+      },
+      "capture": "punctuation.bracket",
+      "token_type": 14
+    },
+    {
+      "span": {
+        "start": 67,
+        "end": 70
+      },
+      "range": {
+        "start": {
+          "line": 0,
+          "character": 67
+        },
+        "end": {
+          "line": 0,
+          "character": 70
+        }
+      },
+      "capture": "keyword",
+      "token_type": 1
+    },
+    {
+      "span": {
+        "start": 71,
+        "end": 82
+      },
+      "range": {
+        "start": {
+          "line": 0,
+          "character": 71
+        },
+        "end": {
+          "line": 0,
+          "character": 82
+        }
+      },
+      "capture": "property",
+      "token_type": 8
+    },
+    {
+      "span": {
+        "start": 82,
+        "end": 83
+      },
+      "range": {
+        "start": {
+          "line": 0,
+          "character": 82
+        },
+        "end": {
+          "line": 0,
+          "character": 83
+        }
+      },
+      "capture": "operator",
+      "token_type": 2
+    },
+    {
+      "span": {
+        "start": 83,
+        "end": 84
+      },
+      "range": {
+        "start": {
+          "line": 0,
+          "character": 83
+        },
+        "end": {
+          "line": 0,
+          "character": 84
+        }
+      },
+      "capture": "punctuation.bracket",
+      "token_type": 14
+    },
+    {
+      "span": {
+        "start": 84,
+        "end": 88
+      },
+      "range": {
+        "start": {
+          "line": 0,
+          "character": 84
+        },
+        "end": {
+          "line": 0,
+          "character": 88
+        }
+      },
+      "capture": "number",
+      "token_type": 10
+    },
+    {
+      "span": {
+        "start": 89,
+        "end": 91
+      },
+      "range": {
+        "start": {
+          "line": 0,
+          "character": 89
+        },
+        "end": {
+          "line": 0,
+          "character": 91
+        }
+      },
+      "capture": "keyword",
+      "token_type": 1
+    },
+    {
+      "span": {
+        "start": 92,
+        "end": 93
+      },
+      "range": {
+        "start": {
+          "line": 0,
+          "character": 92
+        },
+        "end": {
+          "line": 0,
+          "character": 93
+        }
+      },
+      "capture": "number",
+      "token_type": 10
+    },
+    {
+      "span": {
+        "start": 93,
+        "end": 94
+      },
+      "range": {
+        "start": {
+          "line": 0,
+          "character": 93
+        },
+        "end": {
+          "line": 0,
+          "character": 94
+        }
+      },
+      "capture": "punctuation.bracket",
+      "token_type": 14
+    },
+    {
+      "span": {
+        "start": 94,
+        "end": 96
+      },
+      "range": {
+        "start": {
+          "line": 0,
+          "character": 94
+        },
+        "end": {
+          "line": 0,
+          "character": 96
+        }
+      },
+      "capture": "number",
+      "token_type": 10
+    }
+  ],
+  "legend": [
+    "comment",
+    "keyword",
+    "operator",
+    "operator.pipe",
+    "function",
+    "function.builtin",
+    "type",
+    "variable",
+    "property",
+    "string",
+    "number",
+    "boolean",
+    "constant",
+    "punctuation",
+    "punctuation.bracket",
+    "punctuation.delimiter",
+    "error",
+    "tide.keyword",
+    "tide.property",
+    "tide.uuid",
+    "tide.schema",
+    "markdown.heading",
+    "markdown.emphasis",
+    "markdown.strong",
+    "markdown.code",
+    "markdown.link",
+    "markdown.list",
+    "markdown.quote",
+    "macro"
+  ]
+}

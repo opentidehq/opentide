@@ -7,10 +7,11 @@ stopped accepting: ``--path`` where the CLI wanted a positional, ``--json``
 after the subcommand instead of before it, ``opentide explorer build`` which
 was never registered at all (#247, #270).
 
-Resolution here mirrors Click's own parse order rather than shelling out:
-options bind to the command whose token span they appear in. The boolean root
-flags (``--json``, ``--no-color``, ``--debug``, ``--quiet``) are the exception:
-the root group hoists them from anywhere before ``--``, so
+Resolution reads the command tree the command line describes itself
+(``opentide --json commands``, read once) and parses as it does: options bind to
+the command whose token span they appear in. The boolean root flags
+(``--json``, ``--no-color``, ``--debug``, ``--quiet``) are the exception: the
+command line hoists them from anywhere before ``--``, so
 ``opentide validate --json`` resolves like ``opentide --json validate``.
 
 Output samples had the same gap: a ``text`` block under a command was never
@@ -22,22 +23,61 @@ like CLI output and does not opt in has to say it is ``illustrative``.
 
 from __future__ import annotations
 
+import json
 import re
 import shlex
+import subprocess
+import sys
 from collections.abc import Iterator
 from dataclasses import dataclass
+from functools import cache
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import Any
 
-from typer.main import get_command
+#: The phases a bare ``opentide generate`` takes as words (``generate schemas templates``).
+GENERATE_PHASES = frozenset({"schemas", "templates", "vocabs", "snippets"})
+#: The shells ``--show-completion`` and ``--install-completion`` read after them.
+SHELLS = frozenset({"bash", "zsh", "fish", "powershell", "pwsh"})
 
-from opentide.cli import app
-from opentide.cli.commands.generate import _NAMED_GENERATE_PHASES
-from opentide.cli.completion import SHELLS
-from opentide.cli.lazy import HOISTED_FLAGS
 
-if TYPE_CHECKING:  # pragma: no cover - import only for annotations
-    import click
+@cache
+def catalogue() -> dict[str, Any]:
+    """``opentide --json commands``: the command tree, its options and arguments."""
+    done = subprocess.run(
+        [sys.executable, "-m", "opentide", "--json", "commands"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=True,
+        timeout=120,
+    )
+    return json.loads(done.stdout)
+
+
+@cache
+def _hidden_command(path: str) -> bool:
+    """Whether *path* is a command the catalogue leaves out: its ``--help`` exits 0."""
+    done = subprocess.run(
+        [sys.executable, "-m", "opentide", *path.split(" "), "--help"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+        timeout=120,
+    )
+    return done.returncode == 0
+
+
+def hoisted_flags() -> frozenset[str]:
+    """The root's boolean flags, which the command line reads anywhere before ``--``."""
+    return frozenset(
+        flag
+        for option in catalogue()["global_options"]
+        if option["is_flag"]
+        for flag in option["flags"]
+        if flag not in ("--version", "-V")
+    )
+
 
 ROOT = Path(__file__).resolve().parents[1]
 DOCS = ROOT / "docs"
@@ -393,20 +433,6 @@ def unchecked_output_fences(text: str) -> list[CodeFence]:
     ]
 
 
-def _is_group(command: click.Command) -> bool:
-    """Whether *command* dispatches to subcommands.
-
-    Checked structurally, not with ``isinstance``: Typer bundles its own Click
-    copy, so the app's classes do not descend from the ``click`` package on
-    ``sys.path`` — and that copy has folded ``Group`` into ``Command``.
-    """
-    return callable(getattr(command, "get_command", None))
-
-
-def _is_argument(param: click.Parameter) -> bool:
-    return getattr(param, "param_type_name", "") == "argument"
-
-
 def fenced_blocks(page: Path, language: str) -> list[str]:
     """Every fenced block in *page* tagged with *language*, in document order."""
     blocks: list[list[str]] = []
@@ -422,56 +448,47 @@ def fenced_blocks(page: Path, language: str) -> list[str]:
     return ["\n".join(block) for block in blocks if block]
 
 
-def _option_lookup(command: click.Command) -> dict[str, click.Parameter]:
-    lookup: dict[str, click.Parameter] = {}
-    for param in command.params:
-        for opt in (*param.opts, *param.secondary_opts):
-            if opt.startswith("-"):
-                lookup[opt] = param
+#: One command of the catalogue: ``path``, ``options``, ``arguments``, ``subcommands``.
+Command = dict[str, Any]
+
+
+def _commands() -> dict[str, Command]:
+    commands: dict[str, Command] = {command["path"]: command for command in catalogue()["commands"]}
+    root_children = sorted({path.split(" ")[0] for path in commands})
+    commands[""] = {
+        "path": "",
+        "options": catalogue()["global_options"],
+        "arguments": [],
+        "subcommands": root_children,
+        "group": True,
+    }
+    return commands
+
+
+def _option_lookup(command: Command) -> dict[str, dict[str, Any]]:
+    lookup: dict[str, dict[str, Any]] = {}
+    for option in command["options"]:
+        for flag in (*option["flags"], *option["secondary_flags"]):
+            lookup[flag] = option
     return lookup
-
-
-def _takes_value(param: click.Parameter) -> bool:
-    if getattr(param, "is_flag", False) or getattr(param, "count", False):
-        return False
-    return param.nargs != 0
-
-
-def _arguments(command: click.Command) -> list[click.Parameter]:
-    return [param for param in command.params if _is_argument(param)]
-
-
-def _positional_limit(command: click.Command) -> int | None:
-    """Maximum positional arguments, or ``None`` when unbounded."""
-    total = 0
-    for param in _arguments(command):
-        if param.nargs == -1:
-            return None
-        total += param.nargs
-    return total
 
 
 def _is_placeholder(value: str) -> bool:
     return any(marker in value for marker in ("<", "$", "...", "/path/to/"))
 
 
-def _choice_problem(param: click.Parameter, value: str, where: str) -> str | None:
-    """Explain why *value* is not one of *param*'s choices, if it has any.
-
-    Typer renders enum options as a Choice; checked structurally for the same
-    vendored-Click reason as ``_is_group``.
-    """
-    choices = getattr(param.type, "choices", None)
-    if not choices or _is_placeholder(value):
+def _choice_problem(param: dict[str, Any], value: str, where: str) -> str | None:
+    """Explain why *value* is not one of *param*'s choices, if it has any."""
+    choices = param.get("choices")
+    # Only a `choice` parameter refuses other values while parsing; a string the
+    # command checks itself (`info rulez`) is the command's usage error.
+    if not choices or param.get("type") != "choice" or _is_placeholder(value):
         return None
-    names = [str(getattr(choice, "value", choice)) for choice in choices]
-    if getattr(param.type, "case_sensitive", True):
-        accepted = value in names
-    else:
-        accepted = value.lower() in {name.lower() for name in names}
-    if accepted:
+    names = [str(choice) for choice in choices]
+    if value in names:
         return None
-    label = param.opts[0] if param.opts and param.opts[0].startswith("-") else param.name
+    flags = param.get("flags") or []
+    label = flags[0] if flags else param["name"]
     return f"{where!r} {label} does not accept {value!r} (choose from {', '.join(names)})"
 
 
@@ -481,13 +498,13 @@ _SHELL_FLAGS = frozenset({"--install-completion", "--show-completion"})
 def resolve(argv: tuple[str, ...]) -> list[str]:
     """Return the reasons *argv* would not parse, empty when it is valid.
 
-    Checks what Click would reject before running anything: unknown commands
-    and options, an option missing its value, a flag given ``=value``, a value
-    outside an enum's choices, and too few or too many positional arguments.
+    Checks what the command line would reject before running anything: unknown
+    commands and options, an option missing its value, a flag given ``=value``,
+    a value outside its choices, and too few or too many positional arguments.
     """
-    root = get_command(app)
-    context = root.context_class(root, info_name="opentide")
-    command: click.Command = root
+    commands = _commands()
+    hoisted = hoisted_flags()
+    command = commands[""]
     path = ["opentide"]
     problems: list[str] = []
     positionals: list[str] = []
@@ -502,22 +519,23 @@ def resolve(argv: tuple[str, ...]) -> list[str]:
             positionals.extend(tokens[index:])
             break
         if token.startswith("-") and token != "-":
-            if token in {"--help", "-h"}:
+            if token == "--help":
                 asked_for_help = True
                 continue
             name, separator, inline = token.partition("=")
             param = _option_lookup(command).get(name)
-            if param is None and token in HOISTED_FLAGS:
+            if param is None and token in hoisted:
+                continue
+            if param is None and name in _SHELL_FLAGS and path == ["opentide"]:
+                if index < len(tokens) and tokens[index] in SHELLS:
+                    index += 1
                 continue
             if param is None:
                 problems.append(f"{where!r} has no option {name!r}")
                 continue
-            if not _takes_value(param):
+            if param["is_flag"]:
                 if separator:
                     problems.append(f"{where!r} {name} is a flag and takes no value")
-                # `--show-completion zsh`: these two root flags read a shell after them.
-                if name in _SHELL_FLAGS and index < len(tokens) and tokens[index] in SHELLS:
-                    index += 1
                 continue
             if separator:
                 value = inline
@@ -530,16 +548,21 @@ def resolve(argv: tuple[str, ...]) -> list[str]:
             if problem := _choice_problem(param, value, where):
                 problems.append(problem)
             continue
-        if _is_group(command):
-            sub = command.get_command(context, token)
+        if command.get("subcommands"):
+            child = " ".join([*path[1:], token])
+            sub = commands.get(child)
             if sub is None and path == ["opentide", "generate"]:
                 phase_tokens = [
                     token,
                     *[item for item in tokens[index:] if not item.startswith("-")],
                 ]
-                unknown = [name for name in phase_tokens if name not in _NAMED_GENERATE_PHASES]
+                unknown = [name for name in phase_tokens if name not in GENERATE_PHASES]
                 if unknown:
                     problems.append(f"{where!r} has no subcommand {unknown[0]!r}")
+                return problems
+            if sub is None and _hidden_command(child):
+                # A hidden command (a deprecated shim, `deploy metadata`) is not
+                # in the catalogue: it exists, and its own options go unchecked.
                 return problems
             if sub is None:
                 problems.append(f"{where!r} has no subcommand {token!r}")
@@ -550,17 +573,18 @@ def resolve(argv: tuple[str, ...]) -> list[str]:
         positionals.append(token)
 
     where = " ".join(path)
-    arguments = _arguments(command)
-    limit = _positional_limit(command)
-    if limit is not None and len(positionals) > limit:
-        problems.append(f"{where!r} takes {limit} argument(s), documented with {len(positionals)}")
-    for param, value in zip(arguments, positionals, strict=False):
-        if param.nargs == 1 and (problem := _choice_problem(param, value, where)):
-            problems.append(problem)
-    required = sum(1 for param in arguments if param.required and param.nargs > 0)
-    if not asked_for_help and len(positionals) < required:
-        missing = [param.name for param in arguments if param.required][len(positionals) :]
+    arguments = command["arguments"]
+    if not any(argument.get("multiple") for argument in arguments) and len(positionals) > len(
+        arguments
+    ):
         problems.append(
-            f"{where!r} is missing required argument(s): {', '.join(map(str, missing))}"
+            f"{where!r} takes {len(arguments)} argument(s), documented with {len(positionals)}"
         )
+    for param, value in zip(arguments, positionals, strict=False):
+        if not param.get("multiple") and (problem := _choice_problem(param, value, where)):
+            problems.append(problem)
+    required = [param for param in arguments if param.get("required")]
+    if not asked_for_help and len(positionals) < len(required):
+        missing = [param["name"] for param in required][len(positionals) :]
+        problems.append(f"{where!r} is missing required argument(s): {', '.join(missing)}")
     return problems

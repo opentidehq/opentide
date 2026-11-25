@@ -2,7 +2,7 @@
 
 An object has no `metadata.author` or `metadata.organisation`.
 
-Severity: note. Reported by `opentide lint` (metadata check). The editor and `opentide tui` report the same finding as `missing_author` and `missing_organisation`.
+Severity: note. Reported by `opentide lint` (metadata check). The editor (`opentide lsp start`) and `opentide tui` report the same finding, at the severity `[metadata]` sets.
 
 ## Example
 

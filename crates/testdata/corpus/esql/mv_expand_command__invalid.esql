@@ -1,0 +1,3 @@
+// prod:mv_expand_command invalid
+FROM logs-* METADATA _id
+| MV_EXPAND

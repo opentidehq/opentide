@@ -1,0 +1,306 @@
+{
+  "format": 1,
+  "scenario": "golden/deploy-defender-continues",
+  "recorded_from": [
+    "/bin/sh",
+    "-c",
+    "cp -R tests/golden/fixtures/deploy-tenants \"$HOME/ws\" && exec {oracle}/opentide --repo \"$HOME/ws\" --json deploy --platform microsoft_defender --strategy PREVIEW --strategy RELEASE --all --keep-deprecated"
+  ],
+  "digest": "sha256:2c9828555674e2e0651ea78516298991a0d0ca3638c6d93c0e20f3850c07a189",
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://login.microsoftonline.com/00000000-0000-4000-8000-00000000de1d/oauth2/v2.0/token",
+        "headers": [
+          [
+            "content-type",
+            "application/x-www-form-urlencoded"
+          ]
+        ],
+        "body": "grant_type=client_credentials&client_id=00000000-0000-4000-8000-00000000c11d&client_secret=REDACTED&scope=https%3A%2F%2Fgraph.microsoft.com%2F.default"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "defender-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"token_type\": \"REDACTED\", \"expires_in\": 3599, \"ext_expires_in\": 3599, \"access_token\": \"REDACTED\"}"
+      }
+    },
+    {
+      "request": {
+        "method": "PATCH",
+        "url": "https://graph.microsoft.com/beta/security/rules/detectionRules/00000000-0000-4000-8047-0000000000d1",
+        "headers": [
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"displayName\":\"Defender create rule\",\"description\":\"A rule the Microsoft Defender stand-in tenant receives in a deploy that sends; the tenant does not hold it yet: PATCH answers 404, then POST creates it with its uuid as id.\\n\",\"status\":\"enabled\",\"queryCondition\":{\"queryText\":\"DeviceProcessEvents\\n| take 1\\n\"},\"schedule\":{\"frequency\":\"PT1H\"},\"detectionAction\":{\"alertTemplate\":{\"title\":\"Defender create rule\",\"description\":\"A rule the Microsoft Defender stand-in tenant receives in a deploy that sends; the tenant does not hold it yet: PATCH answers 404, then POST creates it with its uuid as id.\\n\",\"severity\":\"high\",\"entityMappings\":{\"hosts\":[{\"deviceIdColumn\":\"DeviceId\"}]}}}}"
+      },
+      "response": {
+        "status": 404,
+        "headers": [
+          [
+            "server",
+            "defender-tenant"
+          ]
+        ],
+        "body": ""
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://graph.microsoft.com/beta/security/rules/detectionRules",
+        "headers": [
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"id\":\"00000000-0000-4000-8047-0000000000d1\",\"displayName\":\"Defender create rule\",\"description\":\"A rule the Microsoft Defender stand-in tenant receives in a deploy that sends; the tenant does not hold it yet: PATCH answers 404, then POST creates it with its uuid as id.\\n\",\"status\":\"enabled\",\"queryCondition\":{\"queryText\":\"DeviceProcessEvents\\n| take 1\\n\"},\"schedule\":{\"frequency\":\"PT1H\"},\"detectionAction\":{\"alertTemplate\":{\"title\":\"Defender create rule\",\"description\":\"A rule the Microsoft Defender stand-in tenant receives in a deploy that sends; the tenant does not hold it yet: PATCH answers 404, then POST creates it with its uuid as id.\\n\",\"severity\":\"high\",\"entityMappings\":{\"hosts\":[{\"deviceIdColumn\":\"DeviceId\"}]}}}}"
+      },
+      "response": {
+        "status": 201,
+        "headers": [
+          [
+            "server",
+            "defender-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"id\": \"00000000-0000-4000-8047-0000000000d1\", \"displayName\": \"Defender create rule\", \"description\": \"A rule the Microsoft Defender stand-in tenant receives in a deploy that sends; the tenant does not hold it yet: PATCH answers 404, then POST creates it with its uuid as id.\\n\", \"status\": \"enabled\", \"queryCondition\": {\"queryText\": \"DeviceProcessEvents\\n| take 1\\n\"}, \"schedule\": {\"frequency\": \"PT1H\"}, \"detectionAction\": {\"alertTemplate\": {\"title\": \"Defender create rule\", \"description\": \"A rule the Microsoft Defender stand-in tenant receives in a deploy that sends; the tenant does not hold it yet: PATCH answers 404, then POST creates it with its uuid as id.\\n\", \"severity\": \"high\", \"entityMappings\": {\"hosts\": [{\"deviceIdColumn\": \"DeviceId\"}]}}}}"
+      }
+    },
+    {
+      "request": {
+        "method": "PATCH",
+        "url": "https://graph.microsoft.com/beta/security/rules/detectionRules/00000000-0000-4000-8047-0000000000d2",
+        "headers": [
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"displayName\":\"Defender update rule\",\"description\":\"A rule the Microsoft Defender stand-in tenant receives in a deploy that sends; the tenant holds it: one PATCH updates it.\\n\",\"status\":\"enabled\",\"queryCondition\":{\"queryText\":\"DeviceProcessEvents\\n| take 1\\n\"},\"schedule\":{\"frequency\":\"PT1H\"},\"detectionAction\":{\"alertTemplate\":{\"title\":\"Defender update rule\",\"description\":\"A rule the Microsoft Defender stand-in tenant receives in a deploy that sends; the tenant holds it: one PATCH updates it.\\n\",\"severity\":\"high\",\"entityMappings\":{\"hosts\":[{\"deviceIdColumn\":\"DeviceId\"}]}}}}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "defender-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"id\": \"00000000-0000-4000-8047-0000000000d2\", \"displayName\": \"Defender update rule\", \"description\": \"A rule the Microsoft Defender stand-in tenant receives in a deploy that sends; the tenant holds it: one PATCH updates it.\\n\", \"status\": \"enabled\", \"queryCondition\": {\"queryText\": \"DeviceProcessEvents\\n| take 1\\n\"}, \"schedule\": {\"frequency\": \"PT1H\"}, \"detectionAction\": {\"alertTemplate\": {\"title\": \"Defender update rule\", \"description\": \"A rule the Microsoft Defender stand-in tenant receives in a deploy that sends; the tenant holds it: one PATCH updates it.\\n\", \"severity\": \"high\", \"entityMappings\": {\"hosts\": [{\"deviceIdColumn\": \"DeviceId\"}]}}}}"
+      }
+    },
+    {
+      "request": {
+        "method": "PATCH",
+        "url": "https://graph.microsoft.com/beta/security/rules/detectionRules/00000000-0000-4000-8047-0000000000d3",
+        "headers": [
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"displayName\":\"Defender concurrent create rule\",\"description\":\"A rule the Microsoft Defender stand-in tenant receives in a deploy that sends; another run creates it between this run's PATCH (404) and POST (409): one more PATCH updates it.\\n\",\"status\":\"enabled\",\"queryCondition\":{\"queryText\":\"DeviceProcessEvents\\n| take 1\\n\"},\"schedule\":{\"frequency\":\"PT1H\"},\"detectionAction\":{\"alertTemplate\":{\"title\":\"Defender concurrent create rule\",\"description\":\"A rule the Microsoft Defender stand-in tenant receives in a deploy that sends; another run creates it between this run's PATCH (404) and POST (409): one more PATCH updates it.\\n\",\"severity\":\"high\",\"entityMappings\":{\"hosts\":[{\"deviceIdColumn\":\"DeviceId\"}]}}}}"
+      },
+      "response": {
+        "status": 404,
+        "headers": [
+          [
+            "server",
+            "defender-tenant"
+          ]
+        ],
+        "body": ""
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://graph.microsoft.com/beta/security/rules/detectionRules",
+        "headers": [
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"id\":\"00000000-0000-4000-8047-0000000000d3\",\"displayName\":\"Defender concurrent create rule\",\"description\":\"A rule the Microsoft Defender stand-in tenant receives in a deploy that sends; another run creates it between this run's PATCH (404) and POST (409): one more PATCH updates it.\\n\",\"status\":\"enabled\",\"queryCondition\":{\"queryText\":\"DeviceProcessEvents\\n| take 1\\n\"},\"schedule\":{\"frequency\":\"PT1H\"},\"detectionAction\":{\"alertTemplate\":{\"title\":\"Defender concurrent create rule\",\"description\":\"A rule the Microsoft Defender stand-in tenant receives in a deploy that sends; another run creates it between this run's PATCH (404) and POST (409): one more PATCH updates it.\\n\",\"severity\":\"high\",\"entityMappings\":{\"hosts\":[{\"deviceIdColumn\":\"DeviceId\"}]}}}}"
+      },
+      "response": {
+        "status": 409,
+        "headers": [
+          [
+            "server",
+            "defender-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"error\": {\"code\": \"REDACTED\", \"message\": \"A rule with id 00000000-0000-4000-8047-0000000000d3 already exists.\"}}"
+      }
+    },
+    {
+      "request": {
+        "method": "PATCH",
+        "url": "https://graph.microsoft.com/beta/security/rules/detectionRules/00000000-0000-4000-8047-0000000000d3",
+        "headers": [
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"displayName\":\"Defender concurrent create rule\",\"description\":\"A rule the Microsoft Defender stand-in tenant receives in a deploy that sends; another run creates it between this run's PATCH (404) and POST (409): one more PATCH updates it.\\n\",\"status\":\"enabled\",\"queryCondition\":{\"queryText\":\"DeviceProcessEvents\\n| take 1\\n\"},\"schedule\":{\"frequency\":\"PT1H\"},\"detectionAction\":{\"alertTemplate\":{\"title\":\"Defender concurrent create rule\",\"description\":\"A rule the Microsoft Defender stand-in tenant receives in a deploy that sends; another run creates it between this run's PATCH (404) and POST (409): one more PATCH updates it.\\n\",\"severity\":\"high\",\"entityMappings\":{\"hosts\":[{\"deviceIdColumn\":\"DeviceId\"}]}}}}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "defender-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"id\": \"00000000-0000-4000-8047-0000000000d3\", \"displayName\": \"Defender concurrent create rule\", \"description\": \"A rule the Microsoft Defender stand-in tenant receives in a deploy that sends; another run creates it between this run's PATCH (404) and POST (409): one more PATCH updates it.\\n\", \"status\": \"enabled\", \"queryCondition\": {\"queryText\": \"DeviceProcessEvents\\n| take 1\\n\"}, \"schedule\": {\"frequency\": \"PT1H\"}, \"detectionAction\": {\"alertTemplate\": {\"title\": \"Defender concurrent create rule\", \"description\": \"A rule the Microsoft Defender stand-in tenant receives in a deploy that sends; another run creates it between this run's PATCH (404) and POST (409): one more PATCH updates it.\\n\", \"severity\": \"high\", \"entityMappings\": {\"hosts\": [{\"deviceIdColumn\": \"DeviceId\"}]}}}}"
+      }
+    },
+    {
+      "request": {
+        "method": "PATCH",
+        "url": "https://graph.microsoft.com/beta/security/rules/detectionRules/00000000-0000-4000-8047-0000000000d4",
+        "headers": [
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"displayName\":\"Defender disable absent rule\",\"description\":\"A rule the Microsoft Defender stand-in tenant receives in a deploy that sends; to disable, but the tenant has no rule with its uuid: microsoft_defender_rule_absent, nothing created.\\n\",\"status\":\"disabled\",\"queryCondition\":{\"queryText\":\"DeviceProcessEvents\\n| take 1\\n\"},\"schedule\":{\"frequency\":\"PT1H\"},\"detectionAction\":{\"alertTemplate\":{\"title\":\"Defender disable absent rule\",\"description\":\"A rule the Microsoft Defender stand-in tenant receives in a deploy that sends; to disable, but the tenant has no rule with its uuid: microsoft_defender_rule_absent, nothing created.\\n\",\"severity\":\"high\",\"entityMappings\":{\"hosts\":[{\"deviceIdColumn\":\"DeviceId\"}]}}}}"
+      },
+      "response": {
+        "status": 404,
+        "headers": [
+          [
+            "server",
+            "defender-tenant"
+          ]
+        ],
+        "body": ""
+      }
+    },
+    {
+      "request": {
+        "method": "DELETE",
+        "url": "https://graph.microsoft.com/beta/security/rules/detectionRules/00000000-0000-4000-8047-0000000000d5",
+        "headers": [
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 404,
+        "headers": [
+          [
+            "server",
+            "defender-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"error\": {\"code\": \"REDACTED\", \"message\": \"rule 00000000-0000-4000-8047-0000000000d5 not found\"}}"
+      }
+    },
+    {
+      "request": {
+        "method": "PATCH",
+        "url": "https://graph.microsoft.com/beta/security/rules/detectionRules/00000000-0000-4000-8047-0000000000d6",
+        "headers": [
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"displayName\":\"Defender refused rule\",\"description\":\"A rule the Microsoft Defender stand-in tenant receives in a deploy that sends; the tenant refuses its update (400): the rule fails and the run goes on.\\n\",\"status\":\"enabled\",\"queryCondition\":{\"queryText\":\"DeviceProcessEvents\\n// refused\\n| take 1\\n\"},\"schedule\":{\"frequency\":\"PT1H\"},\"detectionAction\":{\"alertTemplate\":{\"title\":\"Defender refused rule\",\"description\":\"A rule the Microsoft Defender stand-in tenant receives in a deploy that sends; the tenant refuses its update (400): the rule fails and the run goes on.\\n\",\"severity\":\"high\",\"entityMappings\":{\"hosts\":[{\"deviceIdColumn\":\"DeviceId\"}]}}}}"
+      },
+      "response": {
+        "status": 400,
+        "headers": [
+          [
+            "server",
+            "defender-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"error\": {\"code\": \"REDACTED\", \"message\": \"The query is not valid for a custom detection.\"}}"
+      }
+    }
+  ]
+}

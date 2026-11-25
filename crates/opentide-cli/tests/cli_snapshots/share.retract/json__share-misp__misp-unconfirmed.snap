@@ -1,0 +1,34 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: share.retract/json/share-misp/misp-unconfirmed
+---
+args: opentide --json share retract --target misp-prod --delete
+exit: 1
+
+━━━ stdout · json, 1 lines
+{
+  "command": "share retract",
+  "duration_ms": 0,
+  "error": "Pass --yes to delete the remote event",
+  "exit_code": 1,
+  "failure": {
+    "argument": null,
+    "code": "retract_unconfirmed",
+    "crash_log": null,
+    "message": "Pass --yes to delete the remote event",
+    "suggestion": null
+  },
+  "message": "Pass --yes to delete the remote event",
+  "next_actions": [],
+  "ok": false,
+  "preflight": "retract_unconfirmed",
+  "records": [],
+  "schema_version": 1,
+  "status": "failed",
+  "summary": {},
+  "warnings": [
+    "[[misp]] block \"misp-lab\" api_key is a literal. Use ${ENV_VAR}. The value was replaced with [REDACTED]."
+  ]
+}
+
+━━━ stderr · empty

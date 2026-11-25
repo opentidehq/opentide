@@ -1,0 +1,29 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: validate/json/tide-corpus/output-without-format
+---
+args: opentide --json validate --output report.sarif
+exit: 2
+
+━━━ stdout · json, 1 lines
+{
+  "command": "validate",
+  "duration_ms": 0,
+  "error": "--output needs --format sarif or --format codequality",
+  "exit_code": 2,
+  "failure": {
+    "argument": "--output",
+    "code": "usage_invalid_value",
+    "crash_log": null,
+    "message": "--output needs --format sarif or --format codequality",
+    "suggestion": null
+  },
+  "message": "--output needs --format sarif or --format codequality",
+  "next_actions": [],
+  "ok": false,
+  "schema_version": 1,
+  "status": "failed",
+  "summary": {}
+}
+
+━━━ stderr · empty

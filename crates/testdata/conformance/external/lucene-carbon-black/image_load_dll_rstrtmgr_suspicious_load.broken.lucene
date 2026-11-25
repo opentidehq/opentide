@@ -1,0 +1,1 @@
+(device_os:WINDOWS ((modload_name:\\RstrtMgr.dll OR process_original_filename:RstrtMgr.dll) ((process_name:\:\\Perflogs\\* OR process_name:\:\\Users\\Public\\* OR process_name:\\Temporary\ Internet*) OR ((process_name:\:\\Users\\* process_name:\\Favorites\\*) OR (process_name:\:\\Users\\* process_name:\\Favourites\\*) OR (process_name:\:\\Users\\* process_name:\\Contacts\\*))))

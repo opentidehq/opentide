@@ -1,0 +1,26 @@
+---
+source: crates/opentide-exabeam/tests/trees.rs
+expression: "debug_parse(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/exabeam/field_term__invalid.exabeam
+---
+source_file@0..20
+  statement@0..20
+    filter@0..20
+      and_expression@0..20
+        field_term@0..14
+          field_name@0..8
+            identifier@0..8
+              letters@0..8 "bytes_in"
+          whitespace@8..9 " "
+          >@9..10 ">"
+          whitespace@10..11 " "
+          identifier@11..14
+            letters@11..14 "AND"
+        whitespace@14..15 " "
+        field_term@15..20
+          field_name@15..19
+            identifier@15..19
+              letters@15..19 "user"
+          :@19..20 ":"
+errors:
+20..20: expected a value

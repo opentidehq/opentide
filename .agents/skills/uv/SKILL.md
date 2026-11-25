@@ -30,17 +30,23 @@ scripts/ci-local.sh              # lint + pytest (no coverage gate)
 scripts/ci-local.sh --full       # lint + pytest + coverage gate — pre-push parity
 ```
 
-CI (`.github/workflows/ci.yml`) runs `uv sync --group dev` on every job.
+CI (`.github/workflows/ci.yml`) runs `uv sync --group dev` in its Python jobs (the gate's with `--no-install-project`, then the build's wheel: below).
 
 ## The engine workspace member
 
-opentide compiles its analysis engine (`analysis/`, Rust with PyO3) into the package: `hatch_build.py`, a hatchling build hook, runs cargo and adds `opentide/_native`. `uv sync` builds the editable install with the `develop` cargo profile and puts the module in `src/opentide/`, so a Rust toolchain (stable, 1.95+) must be on `PATH`; the root `cache-keys` rebuild it when a file under `analysis/` changes. To force a rebuild: `uv sync --reinstall-package opentide`. `uv build` builds the sdist (with `analysis/`) and a `cp310-abi3-<platform>` wheel from it with the `release` profile (`OPENTIDE_ENGINE_PROFILE=develop` for a faster local one).
+opentide compiles its analysis engine (`bindings/python/`, PyO3 bindings of the engine crates in `crates/`, one Cargo workspace at the root) into the package: the build backend is maturin (`[build-system]` and `[tool.maturin]` in `pyproject.toml`, a mixed layout: `python-source = "src"`, the extension at `opentide/_native`). The package's version is the Cargo workspace's (`bindings/python/` takes it; `opentide.__version__` reads the installed metadata, `opentide._native.__version__` the compiled one); there is no `_version.py`.
+
+- `uv sync` builds the editable install with the `develop` cargo profile (`[tool.uv] config-settings-package`: `build-args = "--profile develop"`) and puts the module in `src/opentide/`, so rustup must be on `PATH` (cargo runs the release `rust-toolchain.toml` pins; the declared `rust-version`, 1.95, which `yara-x-parser` and `yara-x-fmt` need, is not checked by any job). The root `cache-keys` rebuild it when the workspace's manifests, lock, sources or embedded data (`data/catalogs/`, `highlights/`) change. To force a rebuild: `uv sync --reinstall-package opentide`.
+- `maturin develop --uv --profile develop` (with `maturin` from `uvx maturin@1.16.0` or `pipx`) rebuilds the module in place, the same editable install, without a full `uv sync`.
+- `uv build` builds the sdist (`maturin sdist`: the workspace's build inputs, not its test data) and a `cp310-abi3-<platform>` wheel with the same `develop` profile. The published wheels are `release` builds by `.github/workflows/build-packages.yml` (PyO3/maturin-action); `uvx maturin@1.16.0 build --release --locked` builds one locally.
+- CI's gate builds the wheel once (`maturin build --profile dev` in `build`); the Python jobs run `uv sync --group dev --no-install-project`, `uv pip install` that wheel, copy its `_native` module into `src/opentide/` (the tests import from `src/`) and set `UV_NO_SYNC=1`, so `uv run` never builds the project again, and `OPENTIDE_TEST_WHEELHOUSE`, so the wheel E2E tests install that wheel instead of building one.
 
 ## Dependency groups
 
 | Group | Purpose |
 |-------|---------|
 | `dev` | Tests, ruff, ty, pre-commit |
+| `clients` | pytest-lsp for `scripts/engine/clients` (the nightly `clients` job): `uv run --isolated --only-group clients pytest scripts/engine/clients`, after `cargo build -p opentide-lsp`; isolated, so the dev environment stays and no wheel is built |
 
 Docs build/deploy: [opentidehq/website](https://github.com/opentidehq/website). This repo validates with `scripts/validate-docs.sh`.
 
@@ -80,7 +86,7 @@ the resolver back to boto3 0.0.3. `mcp>=2.3,<3` since the MCPServer migration (#
 
 - **Always** `uv run …` — do not activate `.venv` manually or call bare `python` / `pip`.
 - Lockfile: `uv.lock` — commit when dependencies change.
-- Python: `requires-python = ">=3.10"`; CI matrix 3.10–3.14.
+- Python: `requires-python = ">=3.10"`; CI runs 3.14 on every pull request, 3.10–3.13 in the nightly set (`.github/AGENTS.md`).
 - There are no optional extras: `pip install opentide` ships every platform SDK. Day-to-day dev uses `--group dev`. Never add an extra; a new runtime dependency goes in `[project] dependencies`.
 
 ## Hooks

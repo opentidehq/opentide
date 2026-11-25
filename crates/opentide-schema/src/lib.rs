@@ -1,0 +1,53 @@
+//! The Tide model as Rust code (plan D-2; ADR
+//! `docs/internal/adr/0001-tide-model-as-rust-code.md`).
+//!
+//! Each model is a plain struct with one derive per concern:
+//!
+//! - `serde::{Deserialize, Serialize}`: the shape, the field order (which is
+//!   also the template and serialisation order) and `deny_unknown_fields`
+//!   where Pydantic has `extra="forbid"`;
+//! - `garde::Validate`, with the [`Pins`] context: constraints and custom
+//!   validators;
+//! - `schemars::JsonSchema` (JSON Schema 2020-12): the schema, with the
+//!   `tide.*` metadata keys ([`keys`]) as `#[schemars(extend(...))]`;
+//! - `#[pyclass(frozen, get_all)]` behind the `python` feature: the Python
+//!   class.
+//!
+//! Errors are [`SchemaError`]s, mapped to the CLI's diagnostic codes.
+//!
+//! The skeleton (UC-1.1, #807) set the conventions, the context and the
+//! error type, with [`sample`] as their worked example. The Tide object
+//! models are in [`objects`] (UC-1.3, #809); the platform blocks and the
+//! configuration models follow (UC-1.4, UC-1.5). The revision registry, the
+//! dispatch on `metadata.schema` and the forward migrations are [`revisions`]
+//! and [`migration`] (UC-1.7, #813). The crate is I/O-free and internal: the
+//! `opentide` facade (UC-5.1, #836) is the public API.
+//!
+//! Internal to opentide, with no stability promise: depend on the
+//! [`opentide`](https://docs.rs/opentide) crate, its Rust SDK, instead.
+
+// The derive's expansion names `::opentide_schema::…`, here as in every crate
+// that uses it.
+extern crate self as opentide_schema;
+
+pub mod configuration;
+pub mod error;
+pub mod from_node;
+pub mod generate;
+pub mod keys;
+pub mod migration;
+pub mod node;
+pub mod objects;
+pub mod pins;
+pub mod platforms;
+#[cfg(feature = "python")]
+pub mod python;
+mod revision;
+pub mod revisions;
+pub mod sample;
+pub mod vocab;
+
+pub use error::{ErrorKind, PathSegment, SchemaError, Surface};
+pub use from_node::FromNode;
+pub use opentide_schema_derive::FromNode;
+pub use pins::{PinTable, Pins};

@@ -1,0 +1,1 @@
+inbound_outbound and proc.name in (oops and container and k8s.ns.name in (namespace_scope_network_only_subnet) and not network_local_subnet

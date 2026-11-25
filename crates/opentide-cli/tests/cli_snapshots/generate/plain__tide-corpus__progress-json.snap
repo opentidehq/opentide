@@ -1,0 +1,123 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: generate/plain/tide-corpus/progress-json
+---
+args: opentide generate
+exit: 0
+
+━━━ stdout
+✓ Generated 41 files in <SECONDS> · 6 phases
+
+━━━ stderr
+{"event":"progress","step":"docs","done":1,"total":6}
+✓ docs · 16 files · <SECONDS> · docs/
+{"event":"progress","step":"exports","done":2,"total":6}
+✓ exports · 3 files · <SECONDS> · .opentide/exports/
+{"event":"progress","step":"vocabularies","done":3,"total":6}
+✓ vocabularies · 0 files · <SECONDS>
+{"event":"progress","step":"templates","done":4,"total":6}
+✓ templates · 13 files · <SECONDS> · .opentide/templates/
+{"event":"progress","step":"schemas","done":5,"total":6}
+✓ schemas · 8 files · <SECONDS> · .opentide/
+{"event":"progress","step":"snippets","done":6,"total":6}
+✓ snippets · 1 file · <SECONDS> · .vscode/
+
+━━━ ws/.opentide/exports/attack-navigator.json · created 0644
+
+━━━ ws/.opentide/exports/objects.export.json · created 0644
+
+━━━ ws/.opentide/exports/revisions.export.json · created 0644
+
+━━━ ws/.opentide/lsp/ · created 0755
+
+━━━ ws/.opentide/lsp/catalogs/ · created 0755
+
+━━━ ws/.opentide/lsp/catalogs/generated/ · created 0755
+
+━━━ ws/.opentide/lsp/catalogs/generated/deprecations.json · created 0644
+
+━━━ ws/.opentide/lsp/catalogs/generated/fields.json · created 0644
+
+━━━ ws/.opentide/schemas/objective.1.0.schema.json · created 0644
+
+━━━ ws/.opentide/schemas/opentide.schema.json · created 0644
+
+━━━ ws/.opentide/schemas/rule.1.0.schema.json · created 0644
+
+━━━ ws/.opentide/schemas/rule.1.1.schema.json · created 0644
+
+━━━ ws/.opentide/schemas/threat.1.0.schema.json · created 0644
+
+━━━ ws/.opentide/schemas/visibility.1.0.schema.json · created 0644
+
+━━━ ws/.opentide/templates/objective.1.0.template.yaml · created 0644
+
+━━━ ws/.opentide/templates/platforms/ · created 0755
+
+━━━ ws/.opentide/templates/platforms/carbon_black_cloud.template.yaml · created 0644
+
+━━━ ws/.opentide/templates/platforms/crowdstrike.template.yaml · created 0644
+
+━━━ ws/.opentide/templates/platforms/elastic.template.yaml · created 0644
+
+━━━ ws/.opentide/templates/platforms/harfanglab.template.yaml · created 0644
+
+━━━ ws/.opentide/templates/platforms/microsoft_defender.template.yaml · created 0644
+
+━━━ ws/.opentide/templates/platforms/sentinel.template.yaml · created 0644
+
+━━━ ws/.opentide/templates/platforms/sentinel_one.template.yaml · created 0644
+
+━━━ ws/.opentide/templates/platforms/splunk.template.yaml · created 0644
+
+━━━ ws/.opentide/templates/platforms/sysdig.template.yaml · created 0644
+
+━━━ ws/.opentide/templates/rule.1.0.template.yaml · created 0644
+
+━━━ ws/.opentide/templates/rule.1.1.template.yaml · created 0644
+
+━━━ ws/.opentide/templates/threat.1.0.template.yaml · created 0644
+
+━━━ ws/.vscode/ · created 0755
+
+━━━ ws/.vscode/model-templates.code-snippets · created 0644
+
+━━━ ws/docs/ · created 0755
+
+━━━ ws/docs/README.md · created 0644
+
+━━━ ws/docs/objectives/ · created 0755
+
+━━━ ws/docs/objectives/README.md · created 0644
+
+━━━ ws/docs/objectives/credential-access-objective.md · created 0644
+
+━━━ ws/docs/rules/ · created 0755
+
+━━━ ws/docs/rules/README.md · created 0644
+
+━━━ ws/docs/rules/carbon-black-lucene-rule.md · created 0644
+
+━━━ ws/docs/rules/crowdstrike-deploy-rule.md · created 0644
+
+━━━ ws/docs/rules/defender-kql-rule.md · created 0644
+
+━━━ ws/docs/rules/elastic-kql-rule.md · created 0644
+
+━━━ ws/docs/rules/harfanglab-deploy-rule.md · created 0644
+
+━━━ ws/docs/rules/sentinel-kql-rule.md · created 0644
+
+━━━ ws/docs/rules/sentinelone-s1ql-rule.md · created 0644
+
+━━━ ws/docs/rules/splunk-spl-rule.md · created 0644
+
+━━━ ws/docs/rules/staging-promote-rule.md · created 0644
+
+━━━ ws/docs/rules/sysdig-falco-rule.md · created 0644
+
+━━━ ws/docs/threats/ · created 0755
+
+━━━ ws/docs/threats/README.md · created 0644
+
+━━━ ws/docs/threats/simulated-actor.md · created 0644

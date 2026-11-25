@@ -1,0 +1,3 @@
+// prod:like_expression valid
+FROM logs-* METADATA _id
+| WHERE process.name LIKE "*.exe" OR process.name RLIKE "cmd.*"

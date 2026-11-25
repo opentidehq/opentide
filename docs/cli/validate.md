@@ -33,7 +33,8 @@ opentide validate --check queries
 | `--file` | Validate one YAML file — repo-relative path, absolute path, or bare file name (see [Selecting a file](#selecting-a-file)). Repeatable: each `--file` adds a file to the scope |
 | `--uuid` | Validate specific UUIDs (repeatable) |
 | `--type` | Filter by object type (repeatable) |
-| `--strict` | Treat warnings as failures (exit `1`), except `platform_not_enabled` |
+| `--strict` | Treat warnings as failures (exit `1`), except `platform_not_enabled`, and fail a full run that finds no detection objects ([Which workspace was checked](#which-workspace-was-checked)) |
+| `--allow-empty` | With `--strict` (refused without it): pass a full run that finds no detection objects in a workspace. A folder that is not a workspace still fails. The commit hook `opentide setup hooks` writes passes it, so a new repository commits before its first object |
 | `--fix` | Apply every safe fix, then validate again (see [Fixing typos](#fixing-typos---fix)) |
 | `--dry-run` | With `--fix`: print the edits as a unified diff and change nothing |
 | `--watch` | Validate again each time an object file is saved, until Ctrl-C (see [Watching](#watching---watch)) |
@@ -46,17 +47,17 @@ opentide validate --check queries
 
 `sharing-config` is off unless you pass `--check sharing-config`. It checks the merged `sharing.toml`: required MISP fields, block names, unknown keys, `max_tlp`, organisation UUIDs, object types, and a `sharing/` configuration directory. `opentide share push` runs the same check. A literal API key is a warning and is never printed.
 
-Without `--json`, each issue and warning prints as a code frame, grouped by file and ordered by line: `severity[code]: message`, the path with `:line:column`, the line from the file with the value underlined, and `help` and `note` lines. One line then counts them: `✓ 3 objects valid · 0.9s`, or `✗ 2 errors in 1 file · 3 objects checked · 0.9s` on stderr. A note (a finding worth knowing that is not wrong) prints only with the global [`--verbose`](./global-options.md): without it the line still counts the notes and is followed by the same command with `--verbose`. `--json` and the reports always include notes, `validate query` prints them the same way, and `--watch` shows every finding. A typo in a vocabulary value:
+Without `--json`, each issue and warning prints as a code frame, grouped by file and ordered by line: `severity[code]: message`, the path with `:line:column`, the line from the file with the value underlined (a line longer than 400 characters is shown in part around the value, with `…` where it goes on and without colours), and `help` and `note` lines. One line then counts them: `✓ 3 objects valid · 0.9s`, or `✗ 2 errors in 1 file · 3 objects checked · 0.9s` on stderr. A note (a finding worth knowing that is not wrong) prints only with the global [`--verbose`](./global-options.md): without it the line still counts the notes and is followed by the same command with `--verbose`. `--json` and the reports always include notes, `validate query` prints them the same way, and `--watch` shows every finding. A typo in a vocabulary value:
 
 ```text illustrative
-error[vocab_unknown]: 'clearr' is not a TLP value
+error[vocab_unknown]: "clearr" is not a TLP value
   ╭─▶ objects/rules/sentinel-kql-rule.yaml:8:8
   │
 7 │   modified: 2026-01-02
 8 │   tlp: clearr
   │        ━━━━━━ not in tlp::1.0
   │
-  ╰─ help: did you mean 'clear'?
+  ╰─ help: did you mean "clear"?
 
 ✗ 1 error in 1 file · 3 objects checked · 0.9s
 → opentide explain vocab_unknown · how to fix it
@@ -88,7 +89,7 @@ Each entry of `report.issues` and `report.warnings` keeps its keys (`yaml_line` 
 | `line` | One-based line of what the frame points at. `null` when unknown. Not always `yaml_line + 1`: for a block value (a mapping or a list) it is the line of the key, where `yaml_line` is the block's first child; for a missing field it is the key of the mapping the field belongs in |
 | `column`, `end_column` | One-based columns of the value (of the key, for a block, a missing field or an unknown key); `end_column` is just past the last character, on `end_line`. Columns count Unicode code points (`🔥` is one column), not UTF-16 code units. Best effort, `null` when unknown |
 | `end_line` | One-based line of the span's last character: the span runs from (`line`, `column`) up to (`end_line`, `end_column`). Equal to `line` for a span on one line, which is every finding but a `queries` finding over several lines of a query (a block scalar). A span whose last character is a line break (a KQL bracket left open at the end of a line) ends on that line. `null` when `line` is |
-| `help` | What to do, in prose (`did you mean 'clear'?`), or `null` |
+| `help` | What to do, in prose (`did you mean "clear"?`), or `null` |
 | `fix` | `null`, or `{ "safe": bool, "edits": [{ "line", "column", "end_line", "end_column", "replacement" }] }`: replace the text from (`line`, `column`) up to (`end_line`, `end_column`). Every suggested value gets a fix. `safe` is `true` only when the two values spell the same word (they differ in case, spaces, `-` or `_`) and neither has a digit, so an ATT&CK id, a UUID or `clearr` → `clear` is left for a person or an agent to confirm. A reference fix is never safe |
 | `explain` | `opentide explain <code>` |
 
@@ -123,10 +124,10 @@ opentide validate --fix
 `--fix` writes the safe fixes, validates again and prints a `fixed:` line per value, then the findings that are left. Only the replaced value changes in each file: comments, quoting, key order, indentation and line endings stay as they were. Each edit is checked against the file as it is now, not as validation read it. The text it replaces must still be one the fix is safe for, so a value you saved over the typo in the meantime is kept. The file must still parse and differ in that value alone. Otherwise the edit is left out and its finding stays. Each file is written to a temporary file beside it and moved into place, so a write that fails (a full disk, a quota) leaves the original whole. A file that changed between the check and the write is left alone, with a warning. A second run has nothing to apply. The outcome line says what it fixed and what is left:
 
 ```text illustrative
-fixed: objects/rules/sentinel-kql-rule.yaml:8:8 'Clear' → 'clear'
-fixed: objects/threats/simulated-actor.yaml:9:8 'Clear' → 'clear'
+fixed: objects/rules/sentinel-kql-rule.yaml:8:8 "Clear" → "clear"
+fixed: objects/threats/simulated-actor.yaml:9:8 "Clear" → "clear"
 
-error[invalid_ref]: Unknown objective or signal reference '00000000-0000-4000-8002-DEADBEEF0000'
+error[invalid_ref]: Unknown objective or signal reference "00000000-0000-4000-8002-DEADBEEF0000"
    ╭─▶ objects/rules/sentinel-kql-rule.yaml:17:18
    │
 16 │ techniques: [T1059]
@@ -226,11 +227,19 @@ opentide --json validate --check schema   | jq '.report.issues'
 
 Run from anywhere inside the detection workspace: the CLI walks up to it (see [Repository root resolution](./global-options.md#repository-root-resolution)). The JSON payload names the directory it read objects from under `workspace`.
 
-An empty catalogue is not an error. A full run that checked no objects still passes with exit `0`, `--strict` included, but says where it looked:
+An empty catalogue is not an error by default. A full run that checked no objects still passes with exit `0`, but says where it looked:
 
 ```text illustrative
 ✓ Validation passed, but no detection objects were found under ./
 ```
+
+With `--strict` it fails, with exit `1` and `failure.code` `issues_found`, so a CI job or hook pointed at the wrong folder, or run outside the workspace, does not pass every commit:
+
+```text illustrative
+✗ Validation failed: no detection objects were found under ./, and --strict requires at least one
+```
+
+A run narrowed by `--check` is not an empty catalogue, and keeps exit `0`; one narrowed by `--file`, `--uuid` or `--type` that matches nothing fails with `scope_no_match` (`file_not_found` for a `--file` path that does not exist), with or without `--strict`. The failed run's next step is `opentide new rule`, or `opentide setup` where there is no workspace. `--watch --strict` shows such a pass as failed, and `--format` without `--output` prints the reason on stderr. A repository just scaffolded by `opentide setup` has no object yet. The commit hook setup writes runs `validate --strict --allow-empty`, so the scaffold commits; the CI pipelines it writes run `validate --strict`, so their validate jobs fail until the first object is added, which is the point: an empty workspace in CI is a misconfigured job. The SDKs' `validate(strict=True)` report findings only, and an empty workspace has none.
 
 The directory is relative to the one you run in (`./`, `./detections`, `../`), or absolute when it is elsewhere.
 
@@ -256,9 +265,9 @@ Move the file up into its object folder to make it an object. `--strict` fails o
 | Absolute path | That file only. |
 | Bare file name (`rule.yaml`) | Every object file with that name, in any object folder. |
 
-A path never falls back to its file name, and a path that names no object file fails with `scope_no_match`. A path to a file in a subfolder names no object: it fails with `scope_no_match` and the file's `nested_object_file` warning.
+A path never falls back to its file name. A path with no file on disk fails with `file_not_found` (the path is in `context.targets`); a path that exists but names no object file fails with `scope_no_match`. A path to a file in a subfolder names no object: it fails with `scope_no_match` and the file's `nested_object_file` warning.
 
-Every `--file` target must select at least one object. A target that matches nothing fails the run with a `scope_no_match` issue naming that target (`context.targets`), even when the other targets matched and validated cleanly. Through 0.14.2 the run failed only when no target matched at all, so a mistyped or quoted path beside a valid one passed without being validated.
+Every `--file` target must select at least one object. A target that matches nothing fails the run with a `scope_no_match` issue (`file_not_found` when the path does not exist) naming that target (`context.targets`), even when the other targets matched and validated cleanly. Through 0.14.2 the run failed only when no target matched at all, so a mistyped or quoted path beside a valid one passed without being validated.
 
 Every issue reports the `file_path` of the object it concerns, so issues from two files that share a name stay apart when a bare file name selects both.
 
@@ -268,7 +277,7 @@ An object file that is not valid YAML is reported as a `yaml_parse` issue agains
 
 ### Schema identifier
 
-The `schema` check validates each object against the revision its `metadata.schema` names, so `rule::1.0` and `rule::1.1` rules validate side by side. An object without `metadata.schema` fails with `schema_missing` at that field. An identifier that is not registered, or that names another object type (a rule declaring `threat::1.0`), fails with `schema_validation` at that field. Neither case is checked against the newest revision instead. Through 0.15.0 an object without `metadata.schema` was checked against the newest revision of its type, and a rule declaring another type's identifier was checked as that type.
+The `schema` check validates each object against the revision its `metadata.schema` names, so `rule::1.0` and `rule::1.1` rules validate side by side. An object without `metadata.schema` fails with `schema_missing` at that field. An identifier that names another object type (a rule declaring `threat::1.0`) fails with `schema_validation` at that field. So does an identifier that is not registered (`rule::9.9`, `RULE::1.1`), and the object is then also checked against the newest revision of its type, without the unknown-key check, so its other findings still show: `metadata.schema: unknown schema identifier: "rule::9.9"; checked against rule::1.1, the newest rule revision, without the unknown-key check`. Through 0.15.0 an object without `metadata.schema` was checked against the newest revision of its type, and a rule declaring another type's identifier was checked as that type.
 
 ### Vendor rule ids
 
@@ -279,22 +288,23 @@ The `schema` check validates each object against the revision its `metadata.sche
 A rule may carry a block for a platform this workspace has not enabled, for example a rule imported from a repository that deploys to Splunk. The block is still validated against that platform's model: an empty `query`, an unknown key, or a missing required field fails, and so does a key that is not a platform (`configurations.splnk`). A well-formed block passes with one `platform_not_enabled` warning per disabled platform, at `configurations.<platform>`:
 
 ```text illustrative
-warning[platform_not_enabled]: this block will not deploy while splunk is disabled in this workspace; enable splunk with 'opentide setup platforms --splunk'
+warning[platform_not_enabled]: this block will not deploy while splunk is disabled in this workspace
    ╭─▶ objects/rules/imported.yaml:24:3
    │
 23 │ configurations:
 24 │   splunk:
    │   ━━━━━━
    │
+   ╰─ help: enable splunk with 'opentide setup platforms --splunk'
 
-✓ 3 objects valid · 1 warning · 0.9s
+✓ 3 objects valid · 1 query · 1 warning · 0.9s
 ```
 
 In `--json` mode a line naming it is in `warnings`, and the structured finding (with `context.platform`) is in `report.warnings`. The warning does not fail `--strict`, which the generated commit hook and CI run, so an imported rule can be committed before its platform is enabled. [Deploy](./deploy.md) and live `validate query` skip a disabled platform until `opentide setup platforms` enables it, whatever the block's own `enabled` says.
 
 ### What a platform compiler needs
 
-A rule that validates must deploy. Some of a platform's requirements are not in its schema: Sentinel builds no alert rule without `grouping.alert`, without `scheduling.frequency` and `scheduling.lookback` unless `scheduling.nrt` is true, or with `alert.suppression: true`. The `schema` check therefore compiles each rule for every enabled platform that opentide compiles offline (Sentinel and Elastic), exactly as `deploy --dry-run` does, and fails a rule the compiler rejects with the dry run's code, message and help (`compile_missing_field`, `compile_invalid_value`, `compile_empty_block`, ...):
+A rule that validates must deploy. Some of a platform's requirements are not in its schema: Sentinel builds no alert rule without `grouping.alert`, without `scheduling.frequency` and `scheduling.lookback` unless `scheduling.nrt` is true, or with `alert.suppression: true`. The `schema` check therefore compiles each rule for every enabled platform that opentide compiles offline (Sentinel, Elastic and Sysdig), exactly as `deploy --dry-run` does, and fails a rule the compiler rejects with the dry run's code, message and help (`compile_missing_field`, `compile_invalid_value`, `compile_empty_block`, ...):
 
 ```text illustrative
 error[compile_missing_field]: configurations.sentinel.grouping.alert is missing
@@ -318,7 +328,7 @@ Accepted identifiers:
 - GitHub Security Advisories (`GHSA-rxwq-x6h5-x525`)
 - GCVE, including GNA 0 which maps to CVE (`GCVE-0-2024-3094` is stored as `CVE-2024-3094`)
 
-The check no longer scrapes NVD through `mitrecve`. If Vulnerability-Lookup is unreachable, those identifiers are skipped (logged) rather than reported as invalid.
+The check no longer scrapes NVD through `mitrecve`. If Vulnerability-Lookup is unreachable, those identifiers are reported in one `cve_lookup_unavailable` warning per threat rather than as invalid (a warning, which fails `--strict`). Each identifier is asked once per run; `[cve] base_url` and `timeout` in `documentation.toml` choose the instance and how long to wait (a positive number of seconds), and `--proxy` the proxy. A `[cve]` setting of the wrong type fails the run with exit `1`, naming it.
 
 ### Queries
 
@@ -331,7 +341,7 @@ opentide validate --check queries --file objects/rules/example.yaml
 
 The `queries` check is one of the default checks. It reads every query the selected objects carry (each platform block's `query`, and hunts) and checks it offline with the analysis engine, in its own language: the check [`validate query`](#offline-the-analysis-engine) runs, inside `validate`. `--check queries` runs it alone. It honours `--file`, `--uuid`, `--type`, `--strict`, `--watch` and `--fix` (no query finding has a safe fix).
 
-It reports the engine's errors: a query the platform would reject (`kql_parse_error`, `spl_unknown_command`, `esql_unavailable`, ...). They join `report.issues` at their place in the file and print as code frames with the rest; `context` names the `language`, the `platform` and the engine's `position`. The engine's warnings and notes (slow query shapes, deprecated commands) are style, which [`opentide lint`](./lint.md#queries) reports. `summary.queries` counts the queries checked, and the outcome line says it: `✓ 6 objects valid · 4 queries · 1.2s`.
+It reports the engine's errors: a query the platform would reject (`kql_parse_error`, `spl_unknown_command`, `esql_unavailable`, ...), or one that deploys other than it reads, as a `//` comment in a folded (`>`) query that comments out the lines after it (`query_folded_comment`). They join `report.issues` at their place in the file and print as code frames with the rest; `context` names the `language`, the `platform` and the engine's `position`. The engine's warnings and notes (slow query shapes, deprecated commands) are style, which [`opentide lint`](./lint.md#queries) reports. `summary.queries` counts the queries checked, and the outcome line says it: `✓ 6 objects valid · 4 queries · 1.2s`.
 
 `--queries` sets how a rejected query is reported:
 
@@ -343,7 +353,7 @@ It reports the engine's errors: a query the platform would reject (`kql_parse_er
 
 `warn` is for a catalogue that has to keep validating while its queries are fixed; `off` validates everything but the queries. `--queries` with `--check` other than `queries` exits `2`, as does `--check queries --queries off`: the run would ignore the one or contradict the other. A failed run's `validate · check again` step keeps the mode.
 
-A query `opentide new` wrote as a placeholder (`...`, marked `# opentide:placeholder`) is an error too, since no platform accepts it; its frame says so and its help asks for the rule's query.
+A query `opentide new` wrote as a placeholder (`...`, marked `# opentide:placeholder`) is not sent to the engine, so the file validates as [`opentide new`](./new.md) promises; [`opentide lint`](./lint.md#placeholders) reports each placeholder, and `lint --strict` in CI fails until it is replaced.
 
 When the engine does not load, the check reports one `engine_unavailable` error and the run fails, whatever `--queries` says but `off`: the check never skips. The engine ships with `pip install opentide`; there is no extra to install.
 
@@ -379,7 +389,7 @@ opentide validate query --platform splunk --live --strategy RELEASE --wide
 | `--platform` | The platform whose queries to check. Offline, default: every platform the engine parses. Required with `--live` (exit `2`, `failure.argument` `--platform`, without it) |
 | `--live` | Check the queries on the platform's tenants (needs credentials) |
 | `--changed` | Check only the rule files this run changed: the pull or merge request, the push, or outside CI the last commit (see [Which rules are checked](#which-rules-are-checked)) |
-| `--file` | Check only this rule file: a path or a bare file name, matched as in [object validation](#selecting-a-file). A file with a query extension (`.kql`, `.spl`, `.esql`, `.eql`, `.kuery`, `.lucene`, `.falco`, `.yar`, `.yara`, `.yaral`, `.yl2`) is one query in that language, checked offline. Repeatable |
+| `--file` | Check only this rule file: a path or a bare file name, matched as in [object validation](#selecting-a-file). A file with a query extension (`.kql`, `.spl`, `.esql`, `.eql`, `.kuery`, `.lucene`, `.falco`, `.cql`, `.yar`, `.yara`, `.exabeam`, `.yaral`, `.yl2`) is one query in that language, checked offline. Repeatable |
 | `--uuid` | Check only the rule with this UUID. Repeatable |
 | `--queries` | Offline: how a rejected query is reported, `error` (the default) or `warn`, as in [`validate`](#queries). `off` exits `2`: it would check nothing. Refused with `--live` |
 | `--strict` | Offline: fail on warnings too (with `--queries warn`). Refused with `--live` |
@@ -396,20 +406,21 @@ The engine is [opentidehq/language-server](https://github.com/opentidehq/languag
 | Platform | Language and profile |
 |----------|----------------------|
 | `sentinel` | KQL, Sentinel tables |
-| `defender_for_endpoint` | KQL, Defender tables |
+| `microsoft_defender` | KQL, Defender tables |
 | `splunk` | SPL |
 | `elastic` | ES\|QL, EQL, Kibana KQL or Lucene, by the block's `type` and `language`; ES\|QL against the lowest `setup.version` of the block's tenants |
 | `carbon_black_cloud` | Lucene, Carbon Black dialect |
 | `sysdig` | Falco: the block's `condition`, its `exceptions`, and the macros and lists of the block (and of the Falco default rules) it names |
-| `harfanglab` | YARA, HarfangLab profile: `yara.signature`, and the rule the decomposed form assembles |
-| `bitdefender` | YARA, Bitdefender profile: `yara.signature`, ASCII only, at most 30,000 characters, the modules GravityZone confirms |
-| `graylog` | Lucene, Graylog dialect: the block's `query`, and `.lucene` query files |
-| `exabeam` | Exabeam Query Language: each `sequences[].query` under the `rule` profile (a filter; the advanced `SELECT` form is `exabeam_advanced_in_rule`), a `system: exabeam` hunt and a `.exabeam` file under `search`. |
+| `crowdstrike` | CQL, with the Next-Gen SIEM correlation-rule checks (`cql_correlate_aggregate`): the block's `query` |
+| `harfanglab` | YARA, HarfangLab profile: the block's `yara.signature` or the rule its decomposed form assembles, and `.yar` and `.yara` files |
+| `bitdefender` | YARA, Bitdefender profile: the block's `yara.signature`, and `.yar` and `.yara` files |
+| `graylog` | Lucene, Graylog dialect: the block's query |
+| `exabeam` | The Exabeam Query Language: each sequence's filter under the `rule` profile, where Search's advanced operators (SELECT, GROUP-BY, pipes) are refused (`exabeam_advanced_in_rule`); a `system: exabeam` hunt and a `.exabeam` file under the `search` profile |
 | `google_secops` | YARA-L 2.0: the block's sections as the one rule deploy assembles, and `.yaral` and `.yl2` files |
 
 Google SecOps's YARA-L is checked offline by the analysis engine, the block's sections as the one rule deploy assembles (yara-l-1.0's `yaral_*` codes), and a `.yaral` or `.yl2` file with `--file`. `--live` sends each rule's assembled text to `verifyRuleText`, Google's compiler, which resolves the instance's reference lists and data tables and creates nothing. An `ERROR` diagnostic fails the rule as `google_secops_compile_error`, a `WARNING` is `google_secops_compile_warning`, each placed on the section key and line it falls in (`configurations.google_secops.events line 3, column 5`), and a block `run_frequency` Google does not allow for the rule is `google_secops_run_frequency_not_allowed`.
 
-SentinelOne's S1QL has no offline parser: `--platform sentinel_one` exits `2` (`failure.code` `usage_missing_option`, `failure.argument` `--live`) and names `--live`. CrowdStrike is never validated by `validate query`, and Sysdig, HarfangLab and Bitdefender only offline: `--platform sysdig --live`, `--platform harfanglab --live` and `--platform bitdefender --live` report `supported: false`, because none has a rule preview or a YARA dry run (see [Supported platforms](#supported-platforms)). `--platform bitdefender` checks YARA under the Bitdefender profile: ASCII only (`bitdefender_yara_ascii`), at most 30,000 characters (`bitdefender_yara_size`), and a module GravityZone has not confirmed is a warning (`yara_module_unconfirmed`).
+SentinelOne's S1QL has no offline parser: `--platform sentinel_one` exits `2` (`failure.code` `usage_missing_option`, `failure.argument` `--live`) and names `--live`. Sysdig, CrowdStrike, HarfangLab and Bitdefender are validated only offline: `--platform sysdig --live`, `--platform crowdstrike --live`, `--platform harfanglab --live` and `--platform bitdefender --live` report `supported: false`, because Sysdig Secure has no rule preview, opentide calls no CrowdStrike query check, HarfangLab has no YARA dry run and GravityZone has no rule check (see [Supported platforms](#supported-platforms)). `--platform harfanglab` checks YARA as YARA-X 1.x compiles it, under the HarfangLab profile, which also refuses syntax only YARA-X has (`yara_x_only_syntax`): `yara.signature`, the rule the decomposed form assembles, and a `.yar` or `.yara` file. The offline CQL check never reads the tenant: a field, saved search, lookup file or repository is never reported unknown.
 
 ```bash
 opentide --json validate query --platform sentinel_one
@@ -426,7 +437,7 @@ opentide --json validate query --platform sentinel_one
 }
 ```
 
-Each finding prints as a code frame at its place in the rule file, with the query coloured as your editor colours it when you run it at a terminal, then one outcome line. A rule file that is not UTF-8 or not YAML is an error (`yaml_parse`), never a file silently passed over. A finding's code (`kql_unknown_table`, `spl_parse_error`, `esql_unavailable`, ...) has an `opentide explain` page and its help line links the language's reference. The sample is illustrative, because it needs a rule with a broken query:
+Each finding prints as a code frame at its place in the rule file, with the query coloured as your editor colours it when you run it at a terminal, then one outcome line. On a line longer than 400 characters (a query written on one line), the frame shows 400 characters around the finding, with `…` where the line goes on and no colours, and a message longer than 500 characters is cut the same way. A rule file that is not UTF-8 or not YAML is an error (`yaml_parse`), never a file silently passed over. A finding's code (`kql_unknown_table`, `spl_parse_error`, `esql_unavailable`, ...) has an `opentide explain` page and its help line links the language's reference. The sample is illustrative, because it needs a rule with a broken query:
 
 ```text illustrative
 error[kql_unknown_operator]: unknown tabular operator 'wher'
@@ -445,7 +456,7 @@ error[kql_unknown_operator]: unknown tabular operator 'wher'
 
 It reports the engine's errors, as `validate` does: they fail the run with exit `1` (`failure.code` `issues_found`), or, with `--queries warn`, print as warnings and exit `0` unless `--strict`. The engine's warnings and notes, such as a slow query shape (`kql_where_not_first`, `spl_wildcard`), are style: [`opentide lint`](./lint.md#queries) reports them. A passing run ends `✓ 3 queries valid`; one under `--queries warn` with rejected queries `! 2 warnings in 1 file · 3 queries checked`. With no query to check, the result is `skipped` with exit `0`. When the engine does not load, the run fails with exit `1` and `failure.code` `engine_unavailable`: it never skips.
 
-A query file (`--file hunting/lsass.kql`) holds one query in the language its extension names, in any case (`.KQL` too). With `--platform` it is checked with that platform's profile (`--platform defender_for_endpoint` knows Defender's tables) and `platform` names it; without, with the language alone, and `platform` is empty. `field_path` is empty for it, and given alone it checks no rule. A query file that does not exist, or whose language the `--platform` does not use (a `.kql` file with `--platform splunk`), exits `2`; one that is not UTF-8 or holds no query fails with exit `1`.
+A query file (`--file hunting/lsass.kql`) holds one query in the language its extension names, in any case (`.KQL` too). With `--platform` it is checked with that platform's profile (`--platform microsoft_defender` knows Defender's tables) and `platform` names it; without, with the language alone, and `platform` is empty. `field_path` is empty for it, and given alone it checks no rule. A query file that does not exist, or whose language the `--platform` does not use (a `.kql` file with `--platform splunk`), exits `2`; one that is not UTF-8 or holds no query fails with exit `1`.
 
 `--json` reports `mode` `offline`, `queries_validated`, one entry per query under `queries` (`path`, `platform`, `language`, `field_path`, `line`, `column`, `errors`), every finding under `diagnostics` with the [diagnostic fields](#diagnostic-fields), `engine` (the engine version), and `summary` (`queries`, `files`, `errors`, `warnings`, `notes`, `error_files`, `warning_files`).
 
@@ -461,7 +472,7 @@ sub-query on its own), and is checked one way per platform:
 
 | Platform | Live check |
 |----------|------------|
-| `sentinel`, `defender_for_endpoint`, `sentinel_one` | A search for one row over the last minute. Defender also fails a query whose output lacks the columns a custom detection needs |
+| `sentinel`, `microsoft_defender`, `sentinel_one` | A search for one row over the last minute. Defender also fails a query whose output lacks the columns a custom detection needs |
 | `splunk` | Splunk's `search/parser`, with macros and lookups: no search job runs |
 | `carbon_black_cloud` | Carbon Black's `search_validation`: no process search runs |
 | `elastic` | A Kibana preview of the compiled rule (see [below](#elastic-live-validation-and-deploy)) |
@@ -480,8 +491,8 @@ client is built, and names the file to edit.
 A tenant the check cannot reach (a refused connection, a DNS or TLS failure, a
 connect timeout, a proxy that will not connect, or three queries in a row with no
 answer; see [Slow queries and timeouts](#slow-queries-and-timeouts)) fails the check with exit `1`, not a
-traceback. On Splunk, SentinelOne, Elastic, Carbon Black Cloud and Defender for
-Endpoint, `--json` names the `tenant` and the `host` that failed, and `message`
+traceback. On Splunk, SentinelOne, Elastic, Carbon Black Cloud and Microsoft
+Defender, `--json` names the `tenant` and the `host` that failed, and `message`
 carries the network error; Sentinel does too, where it used to report only a rejected query. The human output prints the same message as an `error:` line,
 with the `advice` as a `help:` line under it. The platform's remaining tenants are not checked after the
 first one that cannot be reached. The sample is illustrative, because it needs a
@@ -500,6 +511,42 @@ configured tenant:
   "message": "Cannot reach splunk tenant 'Production' at splunk.example.com:8089: <urlopen error [Errno 111] Connection refused>"
 }
 ```
+
+A tenant that refuses the check itself fails as the tenant's failure, not as rejected queries: Elastic's `401` or `403` (or a missing preview privilege), Splunk's parser `401`, SentinelOne's PowerQuery `401`, Defender's `403` (the app registration lacks ThreatHunting.Read.All), Carbon Black Cloud's `401`, Exabeam's `401` or `403`, Graylog's `401`, a Google SecOps instance that refuses or cannot load the credentials, and a sign-in the platform refuses (Entra ID's, for Sentinel and Defender). Its other rules are not sent, and the platform's next tenant is still checked. `--json` names the first such `tenant` and its `host` (`refused_tenants` lists them all when there are several, and names them beside a later tenant that cannot be reached); `message` says `<platform> tenant '<name>' refused the check: <reason>`, and `advice` names the tenant's credentials in its configuration file. Every refusal is also logged on stderr as it comes. `queries_validated` and `queries_rejected` count every query checked, on any tenant (a refused tenant's queries before its refusal included), and are absent when none was; `check_timeout`, `timed_out` and `warnings` are reported as for a run every tenant answered. A refusal Log Analytics or Graylog answers with `403` still fails only that query, as `Queries rejected`: it can be scoped to one table or stream. Through 0.28.1 every refusal was reported as `Queries rejected`, with every query counted as checked.
+
+### Rejected queries
+
+A tenant that refuses a query as invalid (a Splunk parser error, a Log Analytics syntax error) fails that query's check, and the other rules are still checked. The reason is logged on stderr as `query_rejected`, and the run exits `1` with `failure.code` `query_rejected` ([`opentide explain query_rejected`](./diagnostics.md#query_rejected)). `--json` lists each rejected check under `rejected`: the `rule` uuid and `name`, the `platform` and `tenant`, the rule's `file` and the `line` of its `query` key (`null` when the rule has no file), and the platform's own `message` (`errors` holds the same text as a list). A check that got no answer is under `timed_out` instead, and when every failed check is one, `failure.code` is `query_check_timeout`.
+
+In CI each rejected query is also an annotation on its rule file, `::error file=rules/example.yaml,line=14::` on GitHub Actions and the equivalent on Azure Pipelines, and a row of the job summary (`Rule`, `Tenant`, `Reason`). The annotation carries the platform's message, not the tenant's name. The sample is illustrative:
+
+```json illustrative
+{
+  "platform": "splunk",
+  "mode": "live",
+  "status": "failed",
+  "message": "Queries rejected on splunk · 3 checked on 1 tenant",
+  "rejected": [
+    {
+      "rule": "00000000-0000-4000-8046-000000000002",
+      "name": "Splunk unknown command rule",
+      "tenant": "lab",
+      "platform": "splunk",
+      "file": "rules/unknown-command.yaml",
+      "line": 14,
+      "status": "failed",
+      "errors": ["Splunk refused the query: Unknown search command 'badcommand'."],
+      "warnings": [],
+      "message": "Splunk refused the query: Unknown search command 'badcommand'."
+    }
+  ],
+  "failure": { "code": "query_rejected" }
+}
+```
+
+A tenant whose credential variable is not set fails before any query is sent, with `failure.code` `credential_unset`; one that cannot be reached is `tenant_unreachable`, and one that refuses the check itself, `authentication_failed` (above). A run that stops on a tenant keeps the queries it rejected before: `rejected` lists them, with the tenant's code in `failure.code`. Through 1.0.0-rc.3 all of them were `command_failed`; that code remains for a setup that cannot be used, a cancelled run and a crash.
+
+A run whose tenants rejected a query, or that stopped on a tenant, ends its step without a tick: the checklist row is `✗`, never `✓`, above the `error:` line.
 
 ### Slow queries and timeouts
 
@@ -530,7 +577,7 @@ A query that gets no answer in that time fails its own check, and the other rule
 }
 ```
 
-A tenant that answers none of three queries in a row is reported unreachable, and the run stops there as for any unreachable tenant (above): `message` says `3 queries in a row got no answer within the 120s check timeout`, and `advice` names `--check-timeout` first, in case the tenant is up and only slow. A connect timeout, a DNS, TLS or proxy failure is reported unreachable at once. A tenant reached through `requests` (every platform but Splunk) that answered none of its requests is reported unreachable after its last rule even with fewer than three timeouts, because urllib3 reports a TLS handshake that never completes as a read timeout. Through 0.20.1 one read timeout reported the tenant unreachable (`Cannot reach splunk tenant … The read operation timed out`) and left every later rule unchecked.
+A tenant that answers none of three queries in a row is reported unreachable, and the run stops there as for any unreachable tenant (above): `message` says `3 queries in a row got no answer within the 120s check timeout`, and `advice` names `--check-timeout` first, in case the tenant is up and only slow. A connect timeout, a DNS, TLS or proxy failure is reported unreachable at once. A tenant that answered none of its requests, every one timing out, is reported unreachable after its last rule even with fewer than three timeouts: a connection that opens but never completes its TLS handshake, behind a proxy or a load balancer, looks like a read timeout. Through 0.20.1 one read timeout reported the tenant unreachable (`Cannot reach splunk tenant … The read operation timed out`) and left every later rule unchecked.
 
 Splunk's gateway page names its status: `Splunk at https://splunk.example.com:443 answered with an HTML page (HTTP 504), not its REST API (page title: '504 Gateway Time-out'). HTTP 504 Gateway Timeout is what a gateway or proxy in front of the tenant answers when the tenant does not answer it in time, …`. Only an HTML page answered with another status, quickly, still points at the tenant's `url` and `port`. Every platform reports the status and the page title of an answer that is not JSON, instead of a JSON parse error.
 
@@ -542,7 +589,7 @@ A live check sends each rule's query to the tenants a deploy would send the rule
 
 Three flags narrow the rule files and leave the rest alone:
 
-- `--changed` reads the rule files a deploy of the same run reads. On a pull or merge request: the diff from the request's merge base. On any other GitHub Actions, GitLab CI or Azure Pipelines run: the pushed commit's diff. Outside CI: the last commit. The [generated pipelines](../usage/workflows/ci-cd.md) pass `--changed`, so a pull request that edits one rule sends that rule's queries, not the whole catalogue's. A changed rule in `PRODUCTION` status is checked on the pull request, on the tenants that accept `RELEASE`, before it merges. When no changed rule has a block for the platform, the result is `skipped` with exit `0`. Outside CI, a repository with no commit yet has no last commit, so no rule changed: the result is `skipped` too, with a warning saying so.
+- `--changed` reads the rule files a deploy of the same run reads. On a pull or merge request: the diff from the request's merge base. On any other GitHub Actions, GitLab CI or Azure Pipelines run: the pushed commit's diff. Outside CI: the last commit. A repository's first commit has no parent, so every file it holds counts as added. The [generated pipelines](../usage/workflows/ci-cd.md) pass `--changed`, so a pull request that edits one rule sends that rule's queries, not the whole catalogue's. A changed rule in `PRODUCTION` status is checked on the pull request, on the tenants that accept `RELEASE`, before it merges. When no changed rule has a block for the platform, the result is `skipped` with exit `0`. Outside CI, a repository with no commit yet has no last commit, so no rule changed: the result is `skipped` too, with a warning saying so. Outside CI the scope is the rule files the last commit changed, read from disk as they are now: a rule file in the rules folder that you edited or created, and that commit did not touch, is not read, and the run warns `N uncommitted object files are not in scope (…); commit them or pass --file`. On a push, `OPENTIDE_PUSH_BASE` names the commit the diff starts at ([CI/CD](../usage/workflows/ci-cd.md#which-commits-an-azure-push-deploys)); a wrong value exits `2`.
 - `--file` and `--uuid` select rules by file or UUID. Each target must select a rule file directly in the rules folder. A target that selects none fails the run with exit `1` before any query is sent, and `--json` lists it under `unmatched`. `--changed` cannot be combined with either (exit `2`).
 
 `--json` names the narrowing in `scope`: `changed` or `selected`.
@@ -555,7 +602,7 @@ A rule is checked on the tenants a deploy sends it to: those whose `strategies` 
 
 When an explicit `--strategy` leaves every rule without a tenant (for example, only `PREVIEW` rules under `--strategy RELEASE`), nothing needed checking: the result is `skipped` with exit `0`. Exit `2` is kept for rules that reach no configured tenant at all, where the check could never run.
 
-Through 0.16.1 a live check without `--plan` reached every tenant a rule could reach, whatever the tenant's `deployment` class. Since 0.17.0 it follows deploy: a `PREVIEW` rule is not checked on a tenant that only accepts `RELEASE`. The pull request that moves the rule to a `RELEASE` status checks it there, before that change merges.
+Through 0.16.1 a live check without `--plan` reached every tenant a rule could reach, whatever the tenant's `deployment` class. Since 0.17.0 it follows deploy: a `PREVIEW` rule is not checked on a tenant that only accepts `RELEASE`. The pull request that moves the rule to a `RELEASE` status checks it there, before that change merges. On a push in CI that the production deploy will promote (a run with `RELEASE` among its strategies, `--changed`, promotion enabled in `deployment.toml`), each changed rule the promotion rewrites is checked with its promoted status, so on the tenants accepting `RELEASE`, as the deploy will send it. With `--debug` or `OPENTIDE_DEBUG=1`, as for the deploy, the preview promotes the whole rules folder. The `promotion_previewed` log line counts them; nothing is written.
 
 A passing run ends with `✓ 4 queries valid on 2 tenants`; a failing one with `error: Queries rejected on sentinel · 4 checked on 2 tenants`, below the rejections the validator logged. `--json` reports the run's strategies and how many queries each tenant received, and the totals in `summary`. The sample is illustrative, because a live run needs tenant credentials:
 
@@ -585,23 +632,23 @@ there is nothing to check.
 
 ### Supported platforms
 
-Live query validation works on **eight platforms**; the offline engine on ten, seven of them the same:
+Live query validation works on **nine platforms**; the offline engine on twelve, eight of them the same:
 
 | Platform | `--live` | Offline |
 |----------|:--------:|:-------:|
 | `sentinel` (KQL) | ✅ | ✅ |
-| `defender_for_endpoint` (KQL) | ✅ | ✅ |
+| `microsoft_defender` (KQL) | ✅ | ✅ |
 | `elastic` (Kuery, Lucene, EQL, ES\|QL) | ✅ | ✅ |
 | `splunk` (SPL) | ✅ | ✅ |
 | `sentinel_one` (S1QL) | ✅ | ❌ |
 | `carbon_black_cloud` (Lucene) | ✅ | ✅ |
 | `sysdig` (Falco) | ❌ `supported: false` | ✅ |
+| `crowdstrike` (CQL) | ❌ `supported: false` | ✅ |
 | `harfanglab` (YARA) | ❌ `supported: false` | ✅ |
-| `bitdefender` (YARA; criteria by `validate`) | ❌ `supported: false` | ✅ YARA |
-| `graylog` (Lucene, Graylog dialect) | ✅ `/api/search/validate` | ✅ |
+| `bitdefender` (YARA) | ❌ `supported: false` | ✅ YARA |
+| `graylog` (Lucene, Graylog dialect) | ✅ | ✅ |
 | `exabeam` (Exabeam Query Language) | ✅ the filter, through Search | ✅ |
 | `google_secops` (YARA-L 2.0) | ✅ `verifyRuleText` | ✅ YARA-L |
-| `crowdstrike` | ❌ `supported: false` | ❌ |
 
 ### Exabeam live validation
 
@@ -638,23 +685,23 @@ The same Elasticsearch and Kibana checks run before every `opentide deploy` to E
 
 A rule that fails is not created or updated, and the command exits `1`. Later rules are still checked. An index pattern that matches nothing still deploys, with a warning.
 
-CrowdStrike (correlation filter), HarfangLab (Sigma, or YARA checked offline), Sysdig (Falco, which has no rule preview) and Bitdefender (GravityZone has no dry run; its YARA is checked offline) return unsupported for `--live` — never fake validation. The fields on each `configurations` block, required and optional, are the [platform specs](/docs/specifications/specs/platforms/). [Platforms](../usage/concepts/platforms.md#platform-block-schemas) links each one.
+HarfangLab (YARA, checked offline only), Bitdefender (GravityZone has no dry run; its YARA is checked offline), CrowdStrike (CQL, checked offline only) and Sysdig (Falco, which has no rule preview) return unsupported for `--live` — never fake validation. The fields on each `configurations` block, required and optional, are the [platform specs](/docs/specifications/specs/platforms/). [Platforms](../usage/concepts/platforms.md#platform-block-schemas) links each one.
 
 The result is a normal failure envelope, so `--json` shape does not change between
-supported and unsupported platforms:
+supported and unsupported platforms (an illustration: the docs check never runs `--live`):
 
 ```bash
-opentide --json validate query --platform crowdstrike
+opentide --json validate query --platform harfanglab --live
 ```
 
-```json output-of="opentide --json validate query --platform crowdstrike" exit=1
+```json illustrative
 {
-  "platform": "crowdstrike",
+  "platform": "harfanglab",
   "valid": null,
   "supported": false,
   "ok": false,
   "status": "failed",
-  "message": "query validation not supported for crowdstrike"
+  "message": "query validation not supported for harfanglab"
 }
 ```
 
@@ -663,15 +710,14 @@ The process exits `1`.
 ## SDK equivalent
 
 ```python
-from opentide.validation.session import run_validation
-from opentide.validation.scope import ValidationScope
+from opentide import Workspace
 
-report = run_validation(scope=ValidationScope.full())
-print(report.ok, len(report.errors))
+validation = Workspace.open(".").validate()
+print(not validation.failed, len(validation.report["issues"]))
 ```
 
-See [SDK validation](../sdk/validation.md).
+See [SDK workspace](../sdk/workspace.md#validate).
 
 ## Source
 
-`src/opentide/cli/commands/validate.py`, `src/opentide/cli/services/validation.py`
+`crates/opentide-cli/src/commands/validate.rs`, `crates/opentide-cli/src/commands/validate_query.rs`, `crates/opentide-cli/src/commands/validate_live.rs`, `crates/opentide-workspace/` (the checks)

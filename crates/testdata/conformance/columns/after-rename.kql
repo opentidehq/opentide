@@ -1,0 +1,3 @@
+SigninLogs
+| project-rename User = UserPrincipalName
+| where UserPrincipalName == "x"

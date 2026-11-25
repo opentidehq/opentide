@@ -1,0 +1,20 @@
+---
+source: crates/opentide-exabeam/tests/trees.rs
+expression: "debug_parse(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/exabeam/call__invalid.exabeam
+---
+source_file@0..38
+  statement@0..38
+    filter@0..38
+      field_term@0..38
+        field_name@0..20
+          identifier@0..20
+            letters@0..20 "process_command_line"
+        :@20..21 ":"
+        call@21..38
+          identifier@21..25
+            letters@21..25 "RGXi"
+          (@25..26 "("
+          string@26..38 "\"\\\\s-enc\\\\s\""
+errors:
+38..38: missing `)`

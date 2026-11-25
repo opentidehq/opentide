@@ -1,0 +1,32 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/unselect_section__valid.yaral
+---
+SOURCE_FILE@0..90
+  COMMENT@0..30 "// prod:unselect_section valid"
+  WHITESPACE@30..31 "\n"
+  SEARCH_QUERY@31..89
+    SEARCH_EVENTS@31..65
+      COMPARISON@31..65
+        BARE_FIELD@31..50
+          IDENT@31..39 "metadata"
+          MEMBER@39..50
+            ACCESS_DOT@39..40 "."
+            FIELD_NAME@40..50 "event_type"
+        WHITESPACE@50..51 " "
+        EQ@51..52 "="
+        WHITESPACE@52..53 " "
+        LITERAL@53..65
+          STRING@53..65 "\"USER_LOGIN\""
+    WHITESPACE@65..66 "\n"
+    UNSELECT_SECTION@66..89
+      UNSELECT_KW@66..74 "unselect"
+      COLON@74..75 ":"
+      WHITESPACE@75..78 "\n  "
+      BARE_FIELD@78..89
+        IDENT@78..86 "metadata"
+        MEMBER@86..89
+          ACCESS_DOT@86..87 "."
+          FIELD_NAME@87..89 "id"
+  WHITESPACE@89..90 "\n"

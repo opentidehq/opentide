@@ -1,0 +1,27 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: lint/json/heavy-small/default
+---
+args: opentide --json lint
+exit: 0
+view: diagnostics (code, severity, file, line, column and counts; a warning's text; log events by name; no other message text)
+
+━━━ stdout · json
+findings: 0
+count: 0
+exit_code: 0
+fixed: 0
+schema_version: 1
+summary.errors: 0
+summary.files: 110
+summary.findings: 0
+summary.fixed: 0
+summary.notes: 0
+summary.warnings: 0
+checks[]: 5 items
+findings[]: 0 items
+next_actions[]: 0 items
+ok: true x1
+status: completed x1
+
+━━━ stderr · empty

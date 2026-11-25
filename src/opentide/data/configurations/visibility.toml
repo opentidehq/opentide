@@ -3,7 +3,7 @@
 logsources = []
 
 # A log source is one dataset, and its `name` is that dataset: the KQL table
-# (or workspace function) for `sentinel` and `defender_for_endpoint`, the
+# (or workspace function) for `sentinel` and `microsoft_defender`, the
 # sourcetype for `splunk`, the index pattern or data stream for `elastic`.
 # `*` matches any run of characters. Signals name a log source in
 # `data.logsources`, and names are unique per `system`.
@@ -18,7 +18,7 @@ logsources = []
 # [[logsources]]
 # name = "Contoso_Audit_CL"
 # description = "Administrative audit events from the Contoso connector."
-# system = "sentinel"                  # or "defender_for_endpoint"
+# system = "sentinel"                  # or "microsoft_defender"
 #
 # [logsources.columns]
 # TimeGenerated = { type = "datetime" }

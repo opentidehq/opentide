@@ -1,0 +1,115 @@
+name: "Encoded PowerShell — Ünïcode - soc"
+
+#references:
+  #public:
+    #1: 
+  #internal:
+    #a: 
+
+metadata:
+  uuid: 00000000-0000-4000-8044-000000000001
+  schema: rule::1.0
+  version: 
+  created: 2026-03-04
+  modified: 2026-03-04
+  tlp: amber
+  author: opentide Sentinel Importer 
+  #contributors:
+    #-
+
+description: |
+  A process ran PowerShell with an encoded command.
+  See the runbook: step 1.
+#detection_model: 
+
+response:
+  alert_severity: High
+  #playbook: https://
+  #responders: 
+  #procedure:
+    #analysis: |
+      #...
+    #searches:
+      #- purpose: |
+          #...
+        #system: 
+        #query: |
+          #...
+    #containment: |
+      #...
+
+configurations:
+  sentinel: 
+    schema: platform::sentinel::1.0
+    status: PRODUCTION
+    tenants:
+      - soc
+    #contributors:
+      #-
+   
+    trigger:
+      operator: GreaterThan
+      threshold: 0
+    
+    scheduling:
+      #nrt: false
+      frequency: 1h 
+      lookback: 1d
+    
+    alert:
+      create_incident: True
+      suppression: 5h
+      title: '{{Computer}} ran PowerShell: encoded' 
+      description: |
+        PowerShell ran on {{Computer}}.
+        Check the parent.
+      custom_details:
+        - key: Host 
+          column: Computer
+        - key: CommandLine 
+          column: CommandLine
+      dynamic_properties:
+  
+        - property: AlertLink 
+          column: Link
+      tactics:
+        - Execution
+        - DefenseEvasion
+      techniques:
+        - T1059.001
+        - T1027
+        - T1564.003
+  
+    grouping:
+      event: AlertPerResult
+    
+      alert:
+        enabled: true
+        reopen_closed_incidents: False
+        grouping_lookback: 5h
+        matching: Selected
+        group_by_entities:
+          - Host
+          - Account
+        group_by_alert_details:
+          - DisplayName
+        group_by_custom_details:
+          - Host
+  
+    entities:
+      - entity: Host 
+        mappings:
+          - identifier: HostName 
+            column: Computer
+      - entity: Account 
+        mappings:
+          - identifier: Name 
+            column: Account
+          - identifier: NTDomain 
+            column: Domain
+    
+    query: |
+      SecurityEvent
+      | where CommandLine has "-enc"
+      | extend Host = Computer
+  

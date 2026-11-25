@@ -1,0 +1,29 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: info/json/tide-corpus/typo-section
+---
+args: opentide --json info rulez
+exit: 2
+
+━━━ stdout · json, 1 lines
+{
+  "command": "info",
+  "duration_ms": 0,
+  "error": "Unknown info section: rulez. Choose rules, threats, objectives, coverage, vocab, catalog.",
+  "exit_code": 2,
+  "failure": {
+    "argument": "section",
+    "code": "usage_invalid_choice",
+    "crash_log": null,
+    "message": "Unknown info section: rulez. Choose rules, threats, objectives, coverage, vocab, catalog.",
+    "suggestion": "rules"
+  },
+  "message": "Unknown info section: rulez. Choose rules, threats, objectives, coverage, vocab, catalog.",
+  "next_actions": [],
+  "ok": false,
+  "schema_version": 1,
+  "status": "failed",
+  "summary": {}
+}
+
+━━━ stderr · empty

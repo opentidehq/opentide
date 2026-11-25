@@ -1,0 +1,2 @@
+// prod:search_events invalid
+metadata.event_type = "NETWORK_DNS" =

@@ -1,0 +1,1 @@
+(OperationName:"Authentication Methods Policy Update" AND TargetResources.modifiedProperties:*AuthenticationMethodsPolicy*

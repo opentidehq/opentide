@@ -1,0 +1,100 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(query(&file))
+input_file: crates/testdata/corpus/cql/function_call__valid.cql
+---
+SOURCE_FILE@0..191
+  PIPELINE@0..190
+    FUNCTION_CALL@0..93
+      FUNCTION_NAME@0..7
+        FUNCTION_NAME_TOKEN@0..7 "groupby"
+      L_PAREN@7..8 "("
+      ARGUMENT_LIST@8..92
+        ARGUMENT@8..37
+          ARRAY@8..37
+            L_BRACK@8..9 "["
+            FIELD_NAME@9..25
+              WORD@9..25 "ioc[0].indicator"
+            COMMA@25..26 ","
+            WHITESPACE@26..27 " "
+            FIELD_NAME@27..36
+              WORD@27..36 "source.ip"
+            R_BRACK@36..37 "]"
+        COMMA@37..38 ","
+        WHITESPACE@38..39 " "
+        NAMED_ARGUMENT@39..81
+          ARGUMENT_NAME@39..47
+            WORD@39..47 "function"
+          EQ@47..48 "="
+          ARRAY@48..81
+            L_BRACK@48..49 "["
+            FUNCTION_CALL@49..71
+              FUNCTION_NAME@49..59
+                FUNCTION_NAME_TOKEN@49..59 "selectlast"
+              L_PAREN@59..60 "("
+              ARGUMENT_LIST@60..70
+                ARGUMENT@60..70
+                  FIELD_NAME@60..70
+                    WORD@60..70 "@timestamp"
+              R_PAREN@70..71 ")"
+            COMMA@71..72 ","
+            WHITESPACE@72..73 " "
+            FUNCTION_CALL@73..80
+              FUNCTION_NAME@73..78
+                FUNCTION_NAME_TOKEN@73..78 "count"
+              L_PAREN@78..79 "("
+              R_PAREN@79..80 ")"
+            R_BRACK@80..81 "]"
+        COMMA@81..82 ","
+        WHITESPACE@82..83 " "
+        NAMED_ARGUMENT@83..92
+          ARGUMENT_NAME@83..88
+            WORD@83..88 "limit"
+          EQ@88..89 "="
+          FIELD_NAME@89..92
+            WORD@89..92 "max"
+      R_PAREN@92..93 ")"
+    WHITESPACE@93..94 "\n"
+    PIPE@94..95 "|"
+    WHITESPACE@95..96 " "
+    FUNCTION_CALL@96..162
+      FUNCTION_NAME@96..110
+        FUNCTION_NAME_TOKEN@96..110 "array:contains"
+      L_PAREN@110..111 "("
+      ARGUMENT_LIST@111..161
+        NAMED_ARGUMENT@111..141
+          ARGUMENT_NAME@111..116
+            WORD@111..116 "array"
+          EQ@116..117 "="
+          STRING@117..141
+            STRING_TOKEN@117..141 "\"`filters.not-values`[]\""
+        COMMA@141..142 ","
+        WHITESPACE@142..143 " "
+        NAMED_ARGUMENT@143..161
+          ARGUMENT_NAME@143..148
+            WORD@143..148 "value"
+          EQ@148..149 "="
+          STRING@149..161
+            STRING_TOKEN@149..161 "\"9847598475\""
+      R_PAREN@161..162 ")"
+    WHITESPACE@162..163 "\n"
+    PIPE@163..164 "|"
+    WHITESPACE@164..165 " "
+    FUNCTION_CALL@165..190
+      FUNCTION_NAME@165..169
+        FUNCTION_NAME_TOKEN@165..169 "sort"
+      L_PAREN@169..170 "("
+      ARGUMENT_LIST@170..189
+        ARGUMENT@170..178
+          FIELD_NAME@170..178
+            WORD@170..178 "hostname"
+        COMMA@178..179 ","
+        WHITESPACE@179..180 " "
+        NAMED_ARGUMENT@180..189
+          ARGUMENT_NAME@180..185
+            WORD@180..185 "order"
+          EQ@185..186 "="
+          FIELD_NAME@186..189
+            WORD@186..189 "asc"
+      R_PAREN@189..190 ")"
+  WHITESPACE@190..191 "\n"

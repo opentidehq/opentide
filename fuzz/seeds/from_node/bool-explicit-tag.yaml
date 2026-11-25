@@ -1,0 +1,2 @@
+a: !!bool yes
+b: !!bool false

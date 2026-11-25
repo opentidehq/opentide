@@ -1,0 +1,37 @@
+name: Elastic Threshold
+
+metadata:
+  uuid: 00000000-0000-4000-8006-000000000002
+  schema: rule::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+  author: Detection Team
+  contributors:
+    - Analyst One
+    - Detection Team
+
+description: |
+  Elastic Threshold for the compile corpus.
+  Second line.
+
+response:
+  alert_severity: Informational
+
+configurations:
+  elastic:
+    status: PRODUCTION
+    type: threshold
+    query: event.category:authentication
+    threshold:
+      field:
+        - user.name
+      value: 5
+      cardinality:
+        value: 2
+        field: source.ip
+    suppression:
+      duration: 90m
+    risk: 30
+    severity: critical

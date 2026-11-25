@@ -1,0 +1,3 @@
+// prod:metadata valid (the bracketed form only 8.19 accepts)
+FROM logs-* [METADATA _id, _version]
+| LIMIT 1

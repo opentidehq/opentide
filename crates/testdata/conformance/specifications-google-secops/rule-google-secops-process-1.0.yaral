@@ -1,0 +1,26 @@
+rule office_application_spawns_encoded_powershell {
+  meta:
+    author = "Detection Engineering, Threat Hunting"
+    description = "Detects an Office application starting PowerShell with an \"-enc\" (encoded) command line, a common macro dropper pattern."
+    severity = "High"
+    priority = "High"
+    technique = "T1059.001,T1566.001"
+    opentide_uuid = "00000000-0000-4000-8003-000000000061"
+    opentide_version = "3"
+    data_source = "Microsoft Sysmon"
+
+  events:
+    $e.metadata.event_type = "PROCESS_LAUNCH"
+    // Office parent: Word, Excel, or PowerPoint.
+    $e.principal.process.file.full_path = /\\(winword|excel|powerpnt)\.exe$/ nocase
+    $e.target.process.file.full_path = /\\powershell\.exe$/ nocase
+    $e.target.process.command_line = /\s-e(nc|ncodedcommand)?\s/ nocase
+
+  outcome:
+    $risk_score = 70
+    $host = $e.principal.hostname
+    $command_line = $e.target.process.command_line
+
+  condition:
+    $e
+}

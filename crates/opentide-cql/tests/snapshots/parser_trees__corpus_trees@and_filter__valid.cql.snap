@@ -1,0 +1,37 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(query(&file))
+input_file: crates/testdata/corpus/cql/and_filter__valid.cql
+---
+SOURCE_FILE@0..85
+  PIPELINE@0..84
+    AND_FILTER@0..84
+      FIELD_FILTER@0..32
+        TAG@0..17
+          TAG_TOKEN@0..17 "#event_simpleName"
+        EQ@17..18 "="
+        UNQUOTED_PATTERN@18..32
+          WORD@18..32 "ProcessRollup2"
+      WHITESPACE@32..33 " "
+      FIELD_FILTER@33..51
+        FIELD_NAME@33..47
+          WORD@33..47 "event_platform"
+        EQ@47..48 "="
+        UNQUOTED_PATTERN@48..51
+          WORD@48..51 "Win"
+      WHITESPACE@51..52 " "
+      AND@52..55
+        AND_KW@52..55 "AND"
+      WHITESPACE@55..56 " "
+      FIELD_FILTER@56..84
+        FIELD_NAME@56..69
+          WORD@56..69 "ImageFileName"
+        EQ@69..70 "="
+        REGEX@70..84
+          SLASH@70..71 "/"
+          REGEX_PATTERN@71..82
+            REGEX_PATTERN_TOKEN@71..82 "\\\\cmd\\.exe$"
+          SLASH@82..83 "/"
+          REGEX_FLAGS@83..84
+            REGEX_FLAGS_TOKEN@83..84 "i"
+  WHITESPACE@84..85 "\n"

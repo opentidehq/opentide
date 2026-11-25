@@ -1,0 +1,32 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: validate.query/json/tide-corpus/live-unsupported-sysdig
+---
+args: opentide --json validate query --live --platform sysdig --check-timeout 5
+exit: 1
+
+━━━ stdout · json, 1 lines
+{
+  "command": "validate query",
+  "duration_ms": 0,
+  "error": "query validation not supported for sysdig",
+  "exit_code": 1,
+  "failure": {
+    "argument": null,
+    "code": "command_failed",
+    "crash_log": null,
+    "message": "query validation not supported for sysdig",
+    "suggestion": null
+  },
+  "message": "query validation not supported for sysdig",
+  "next_actions": [],
+  "ok": false,
+  "platform": "sysdig",
+  "schema_version": 1,
+  "status": "failed",
+  "summary": {},
+  "supported": false,
+  "valid": null
+}
+
+━━━ stderr · empty

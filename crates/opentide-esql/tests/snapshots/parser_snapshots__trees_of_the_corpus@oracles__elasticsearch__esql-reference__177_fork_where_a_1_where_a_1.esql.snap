@@ -1,0 +1,52 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/oracles/elasticsearch/esql-reference/177_fork_where_a_1_where_a_1.esql
+---
+SOURCE_FILE@0..46
+  QUERY@0..45
+    FROM_COMMAND@0..9
+      FROM_KW@0..4 "FROM"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..9
+        INDEX_NAME@5..9
+          SOURCE_TEXT@5..9 "logs"
+    WHITESPACE@9..10 " "
+    PIPE@10..11 "|"
+    WHITESPACE@11..12 " "
+    FORK_COMMAND@12..45
+      FORK_KW@12..16 "FORK"
+      WHITESPACE@16..17 " "
+      FORK_BRANCH@17..30
+        L_PAREN@17..18 "("
+        WHERE_COMMAND@18..29
+          WHERE_KW@18..23 "WHERE"
+          WHITESPACE@23..24 " "
+          COMPARISON@24..29
+            QUALIFIED_NAME@24..25
+              IDENTIFIER@24..25
+                IDENT@24..25 "a"
+            WHITESPACE@25..26 " "
+            GT@26..27 ">"
+            WHITESPACE@27..28 " "
+            NUMBER@28..29
+              NUMBER_LIT@28..29 "1"
+        R_PAREN@29..30 ")"
+      WHITESPACE@30..31 " "
+      FORK_BRANCH@31..45
+        L_PAREN@31..32 "("
+        WHERE_COMMAND@32..44
+          WHERE_KW@32..37 "WHERE"
+          WHITESPACE@37..38 " "
+          COMPARISON@38..44
+            QUALIFIED_NAME@38..39
+              IDENTIFIER@38..39
+                IDENT@38..39 "a"
+            WHITESPACE@39..40 " "
+            LT_EQ@40..42 "<="
+            WHITESPACE@42..43 " "
+            NUMBER@43..44
+              NUMBER_LIT@43..44 "1"
+        R_PAREN@44..45 ")"
+  WHITESPACE@45..46 "\n"
+--- errors

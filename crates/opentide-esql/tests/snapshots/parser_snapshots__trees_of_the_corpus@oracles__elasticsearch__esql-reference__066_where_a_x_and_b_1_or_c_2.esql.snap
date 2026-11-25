@@ -1,0 +1,59 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/oracles/elasticsearch/esql-reference/066_where_a_x_and_b_1_or_c_2.esql
+---
+SOURCE_FILE@0..50
+  QUERY@0..49
+    FROM_COMMAND@0..9
+      FROM_KW@0..4 "FROM"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..9
+        INDEX_NAME@5..9
+          SOURCE_TEXT@5..9 "logs"
+    WHITESPACE@9..10 " "
+    PIPE@10..11 "|"
+    WHITESPACE@11..12 " "
+    WHERE_COMMAND@12..49
+      WHERE_KW@12..17 "WHERE"
+      WHITESPACE@17..18 " "
+      AND_EXPRESSION@18..49
+        COMPARISON@18..26
+          QUALIFIED_NAME@18..19
+            IDENTIFIER@18..19
+              IDENT@18..19 "a"
+          WHITESPACE@19..20 " "
+          EQ_EQ@20..22 "=="
+          WHITESPACE@22..23 " "
+          STRING@23..26
+            STRING_LIT@23..26 "\"x\""
+        WHITESPACE@26..27 " "
+        AND_KW@27..30 "AND"
+        WHITESPACE@30..31 " "
+        PARENTHESIZED_EXPRESSION@31..49
+          L_PAREN@31..32 "("
+          OR_EXPRESSION@32..48
+            COMPARISON@32..38
+              QUALIFIED_NAME@32..33
+                IDENTIFIER@32..33
+                  IDENT@32..33 "b"
+              WHITESPACE@33..34 " "
+              EQ_EQ@34..36 "=="
+              WHITESPACE@36..37 " "
+              NUMBER@37..38
+                NUMBER_LIT@37..38 "1"
+            WHITESPACE@38..39 " "
+            OR_KW@39..41 "OR"
+            WHITESPACE@41..42 " "
+            COMPARISON@42..48
+              QUALIFIED_NAME@42..43
+                IDENTIFIER@42..43
+                  IDENT@42..43 "c"
+              WHITESPACE@43..44 " "
+              EQ_EQ@44..46 "=="
+              WHITESPACE@46..47 " "
+              NUMBER@47..48
+                NUMBER_LIT@47..48 "2"
+          R_PAREN@48..49 ")"
+  WHITESPACE@49..50 "\n"
+--- errors

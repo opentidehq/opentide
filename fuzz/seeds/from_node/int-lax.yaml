@@ -1,0 +1,10 @@
+text: t
+number: '42'
+inners:
+  - {label: a, count: true}
+  - {label: b, count: 3.0}
+  - {label: c, count: ' 7 '}
+  - {label: d, count: '3.0'}
+  - {label: e, count: '-0'}
+  - {label: f, count: '+5'}
+  - {label: g, count: '1_000'}

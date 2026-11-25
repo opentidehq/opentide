@@ -1,0 +1,53 @@
+`cargo xtask vocab`: the usage, and its usage errors (exit 2).
+
+```console
+$ xtask vocab help
+The vocabularies: sync, generate and ingest (UC-1.6, #812); `vocab --help` lists the commands
+...
+
+$ xtask vocab
+? 2
+The vocabularies: sync, generate and ingest (UC-1.6, #812); `vocab --help` lists the commands
+...
+
+$ xtask vocab frobnicate
+? 2
+error: unrecognized subcommand 'frobnicate'
+...
+
+$ xtask vocab sync --bogus
+? 2
+error: unexpected argument '--bogus' found
+...
+
+$ xtask vocab sentinel-attack --stix-dir
+? 2
+error: a value is required for '--stix-dir <DIR>' but none was supplied
+
+For more information, try '--help'.
+
+$ xtask vocab ingest --check --apply
+? 2
+error: the argument '--check' cannot be used with '--apply'
+
+Usage: cargo xtask vocab ingest --check
+
+For more information, try '--help'.
+
+$ xtask vocab ingest --misp-url
+? 2
+error: a value is required for '--misp-url <URL>' but none was supplied
+
+For more information, try '--help'.
+
+$ xtask vocab ingest --bogus
+? 2
+error: unexpected argument '--bogus' found
+...
+
+$ xtask vocab malapi --check
+? 2
+error: unrecognized subcommand 'malapi'
+...
+
+```

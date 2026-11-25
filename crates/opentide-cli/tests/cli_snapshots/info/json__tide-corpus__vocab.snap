@@ -1,0 +1,293 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: info/json/tide-corpus/vocab
+---
+args: opentide --json info vocab
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "command": "info",
+  "duration_ms": 0,
+  "exit_code": 0,
+  "failure": null,
+  "message": "Completed successfully",
+  "next_actions": [],
+  "ok": true,
+  "schema_version": 1,
+  "status": "completed",
+  "summary": {
+    "load_errors": 0,
+    "objectives": 1,
+    "rules": 10,
+    "threats": 1
+  },
+  "vocabularies": [
+    {
+      "entries": 1323,
+      "latest_revision": "1.3",
+      "name": "actors",
+      "removed": 0,
+      "staged": true,
+      "title": "Threat Actors"
+    },
+    {
+      "entries": 5,
+      "latest_revision": "1.0",
+      "name": "alert_severity",
+      "removed": 0,
+      "staged": false,
+      "title": "Alert Severity"
+    },
+    {
+      "entries": 962,
+      "latest_revision": "2.0",
+      "name": "att&ck",
+      "removed": 27,
+      "staged": true,
+      "title": "MITRE ATT&CK"
+    },
+    {
+      "entries": 191,
+      "latest_revision": "1.2",
+      "name": "att&ck.groups",
+      "removed": 0,
+      "staged": false,
+      "title": "MITRE ATT&CK Groups"
+    },
+    {
+      "entries": 7,
+      "latest_revision": "1.0",
+      "name": "chaining_relations",
+      "removed": 0,
+      "staged": true,
+      "title": "Vector Chaining Relationship"
+    },
+    {
+      "entries": 75,
+      "latest_revision": "1.0",
+      "name": "collection",
+      "removed": 0,
+      "staged": false,
+      "title": "Data Collection"
+    },
+    {
+      "entries": 7,
+      "latest_revision": "1.0",
+      "name": "criticality",
+      "removed": 0,
+      "staged": false,
+      "title": "Criticality"
+    },
+    {
+      "entries": 147,
+      "latest_revision": "1.1",
+      "name": "datasources",
+      "removed": 0,
+      "staged": false,
+      "title": "MITRE ATT&CK Data Sources"
+    },
+    {
+      "entries": 6,
+      "latest_revision": "1.0",
+      "name": "detection.composition",
+      "removed": 0,
+      "staged": false,
+      "title": "Detection Composition Strategy"
+    },
+    {
+      "entries": 10,
+      "latest_revision": "1.0",
+      "name": "detection.methodology",
+      "removed": 0,
+      "staged": false,
+      "title": "Detection Methodology"
+    },
+    {
+      "entries": 4,
+      "latest_revision": "1.0",
+      "name": "detection.types",
+      "removed": 0,
+      "staged": false,
+      "title": "Detection Types"
+    },
+    {
+      "entries": 4,
+      "latest_revision": "1.0",
+      "name": "efforts",
+      "removed": 0,
+      "staged": false,
+      "title": "NIST 800-61 Recoverability Efforts"
+    },
+    {
+      "entries": 7,
+      "latest_revision": "1.0",
+      "name": "feasibility",
+      "removed": 0,
+      "staged": false,
+      "title": "Difficulty to Detect"
+    },
+    {
+      "entries": 19,
+      "latest_revision": "1.0",
+      "name": "impact",
+      "removed": 0,
+      "staged": false,
+      "title": "Impact"
+    },
+    {
+      "entries": 18,
+      "latest_revision": "1.0",
+      "name": "killchain",
+      "removed": 0,
+      "staged": true,
+      "title": "Unified Kill Chain"
+    },
+    {
+      "entries": 6,
+      "latest_revision": "1.0",
+      "name": "level",
+      "removed": 0,
+      "staged": false,
+      "title": "Threat Level to Organization"
+    },
+    {
+      "entries": 20,
+      "latest_revision": "1.0",
+      "name": "leverage",
+      "removed": 0,
+      "staged": false,
+      "title": "Leverage"
+    },
+    {
+      "entries": 9,
+      "latest_revision": "1.0",
+      "name": "maturity",
+      "removed": 0,
+      "staged": false,
+      "title": "Detection Maturity Level (DML-8)"
+    },
+    {
+      "entries": 110,
+      "latest_revision": "1.1",
+      "name": "mitigations",
+      "removed": 0,
+      "staged": false,
+      "title": "MITRE ATT&CK Mitigations"
+    },
+    {
+      "entries": 14,
+      "latest_revision": "1.0",
+      "name": "objectives",
+      "removed": 0,
+      "staged": false,
+      "title": "Strategic Objectives"
+    },
+    {
+      "entries": 4,
+      "latest_revision": "1.0",
+      "name": "pap",
+      "removed": 0,
+      "staged": false,
+      "title": "Permissible Action Protocol"
+    },
+    {
+      "entries": 7,
+      "latest_revision": "1.0",
+      "name": "resources",
+      "removed": 0,
+      "staged": false,
+      "title": "Adversary Resource Level"
+    },
+    {
+      "entries": 39,
+      "latest_revision": "1.0",
+      "name": "rsit",
+      "removed": 0,
+      "staged": false,
+      "title": "Reference Security Incident Classification Taxonomy"
+    },
+    {
+      "entries": 22,
+      "latest_revision": "1.0",
+      "name": "scheduling",
+      "removed": 0,
+      "staged": false,
+      "title": "Rule Scheduling"
+    },
+    {
+      "entries": 36,
+      "latest_revision": "1.0",
+      "name": "sectors",
+      "removed": 0,
+      "staged": false,
+      "title": "Victim Industry Sector"
+    },
+    {
+      "entries": 6,
+      "latest_revision": "1.0",
+      "name": "severity",
+      "removed": 0,
+      "staged": false,
+      "title": "Threat Severity"
+    },
+    {
+      "entries": 28,
+      "latest_revision": "1.0",
+      "name": "signal.entities",
+      "removed": 0,
+      "staged": true,
+      "title": "Signal Entities"
+    },
+    {
+      "entries": 7,
+      "latest_revision": "1.0",
+      "name": "sophistication",
+      "removed": 0,
+      "staged": false,
+      "title": "Adversary Sophistication"
+    },
+    {
+      "entries": 895,
+      "latest_revision": "1.0",
+      "name": "surface",
+      "removed": 0,
+      "staged": true,
+      "title": "Threat Surface"
+    },
+    {
+      "entries": 7,
+      "latest_revision": "1.0",
+      "name": "tier",
+      "removed": 0,
+      "staged": false,
+      "title": "Threat Actor Tier"
+    },
+    {
+      "entries": 5,
+      "latest_revision": "1.0",
+      "name": "tlp",
+      "removed": 0,
+      "staged": false,
+      "title": "Traffic Light Protocol"
+    },
+    {
+      "entries": 8,
+      "latest_revision": "1.0",
+      "name": "viability",
+      "removed": 0,
+      "staged": false,
+      "title": "Vector Viability"
+    },
+    {
+      "entries": 9,
+      "latest_revision": "1.0",
+      "name": "violation",
+      "removed": 0,
+      "staged": false,
+      "title": "Policy, mandate or governance violations"
+    }
+  ]
+}
+
+━━━ stderr · empty

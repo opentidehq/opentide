@@ -1,0 +1,88 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: new.threat/json/heavy-small/example
+---
+args: opentide --json new threat --name 'Credential Dumping'
+exit: 0
+view: diagnostics (code, severity, file, line, column and counts; a warning's text; log events by name; no other message text)
+
+━━━ stdout · json
+findings: 0
+exit_code: 0
+schema_version: 1
+summary.created: 1
+summary.placeholders: 9
+generated[]: 2 items
+next_actions[]: 1 items
+placeholders[]: 9 items
+platforms[]: 0 items
+warnings[]: 1 items
+warnings[]: metadata.author and metadata.organisation left out: no git user.name is set; no organisation is configured; run 'opentide setup --org "<name>"'
+ok: true x1
+status: completed x1
+
+━━━ stderr · empty
+
+━━━ ws/.opentide/lsp/ · created 0755
+
+━━━ ws/.opentide/lsp/catalogs/ · created 0755
+
+━━━ ws/.opentide/lsp/catalogs/generated/ · created 0755
+
+━━━ ws/.opentide/lsp/catalogs/generated/deprecations.json · created 0644
+
+━━━ ws/.opentide/lsp/catalogs/generated/fields.json · created 0644
+
+━━━ ws/.opentide/schemas/ · created 0755
+
+━━━ ws/.opentide/schemas/objective.1.0.schema.json · created 0644
+
+━━━ ws/.opentide/schemas/opentide.schema.json · created 0644
+
+━━━ ws/.opentide/schemas/rule.1.0.schema.json · created 0644
+
+━━━ ws/.opentide/schemas/rule.1.1.schema.json · created 0644
+
+━━━ ws/.opentide/schemas/threat.1.0.schema.json · created 0644
+
+━━━ ws/.opentide/schemas/visibility.1.0.schema.json · created 0644
+
+━━━ ws/.opentide/templates/ · created 0755
+
+━━━ ws/.opentide/templates/objective.1.0.template.yaml · created 0644
+
+━━━ ws/.opentide/templates/platforms/ · created 0755
+
+━━━ ws/.opentide/templates/platforms/bitdefender.template.yaml · created 0644
+
+━━━ ws/.opentide/templates/platforms/carbon_black_cloud.template.yaml · created 0644
+
+━━━ ws/.opentide/templates/platforms/crowdstrike.template.yaml · created 0644
+
+━━━ ws/.opentide/templates/platforms/elastic.template.yaml · created 0644
+
+━━━ ws/.opentide/templates/platforms/exabeam.template.yaml · created 0644
+
+━━━ ws/.opentide/templates/platforms/google_secops.template.yaml · created 0644
+
+━━━ ws/.opentide/templates/platforms/graylog.template.yaml · created 0644
+
+━━━ ws/.opentide/templates/platforms/harfanglab.template.yaml · created 0644
+
+━━━ ws/.opentide/templates/platforms/microsoft_defender.template.yaml · created 0644
+
+━━━ ws/.opentide/templates/platforms/sentinel.template.yaml · created 0644
+
+━━━ ws/.opentide/templates/platforms/sentinel_one.template.yaml · created 0644
+
+━━━ ws/.opentide/templates/platforms/splunk.template.yaml · created 0644
+
+━━━ ws/.opentide/templates/platforms/sysdig.template.yaml · created 0644
+
+━━━ ws/.opentide/templates/rule.1.0.template.yaml · created 0644
+
+━━━ ws/.opentide/templates/rule.1.1.template.yaml · created 0644
+
+━━━ ws/.opentide/templates/threat.1.0.template.yaml · created 0644
+
+━━━ ws/objects/threats/credential-dumping.yaml · created 0644

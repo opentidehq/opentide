@@ -1,0 +1,2 @@
+subject:"network" AND dest_port:(139, 445) AND bytes:>0
+AND NOT dest_ip:[192.168.10.0 TO 192.168.10.255]

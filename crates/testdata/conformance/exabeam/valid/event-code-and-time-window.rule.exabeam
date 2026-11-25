@@ -1,0 +1,2 @@
+vendor:"Microsoft" AND event_code:("4625", "4771")
+AND time:[2026-11-01T00:00:00Z TO 2026-11-08T00:00:00Z]

@@ -1,0 +1,98 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: share/json/share-misp/misp-dry-run
+---
+args: opentide --json share --dry-run --target misp-prod --no-publish
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "command": "share",
+  "duration_ms": 0,
+  "exit_code": 0,
+  "failure": null,
+  "message": "Would share 4 objects to misp-prod · 3 new, 1 updated, 1 unchanged, 2 skipped",
+  "next_actions": [],
+  "ok": true,
+  "records": [
+    {
+      "action": "skipped_status",
+      "integration": "misp",
+      "object_uuid": "00000000-0000-4000-8048-000000000014",
+      "reason": "rule_status",
+      "target": "misp-prod"
+    },
+    {
+      "action": "skipped_tlp",
+      "integration": "misp",
+      "object_uuid": "00000000-0000-4000-8048-000000000015",
+      "reason": "max_tlp",
+      "target": "misp-prod"
+    },
+    {
+      "action": "created",
+      "integration": "misp",
+      "notes": [
+        "organisation_unverified",
+        "cluster_not_resolved"
+      ],
+      "object_uuid": "00000000-0000-4000-8048-000000000001",
+      "target": "misp-prod"
+    },
+    {
+      "action": "created",
+      "integration": "misp",
+      "notes": [
+        "organisation_unverified"
+      ],
+      "object_uuid": "00000000-0000-4000-8048-000000000002",
+      "target": "misp-prod"
+    },
+    {
+      "action": "created",
+      "integration": "misp",
+      "notes": [
+        "organisation_unverified",
+        "cluster_not_resolved"
+      ],
+      "object_uuid": "00000000-0000-4000-8048-000000000011",
+      "target": "misp-prod"
+    },
+    {
+      "action": "updated",
+      "integration": "misp",
+      "notes": [
+        "organisation_unverified",
+        "cluster_not_resolved"
+      ],
+      "object_uuid": "00000000-0000-4000-8048-000000000012",
+      "target": "misp-prod"
+    },
+    {
+      "action": "unchanged",
+      "integration": "misp",
+      "notes": [
+        "organisation_unverified",
+        "cluster_not_resolved"
+      ],
+      "object_uuid": "00000000-0000-4000-8048-000000000013",
+      "target": "misp-prod"
+    }
+  ],
+  "schema_version": 1,
+  "status": "completed",
+  "summary": {
+    "failed": 0,
+    "new": 3,
+    "objects": 4,
+    "retracted": 0,
+    "skipped": 2,
+    "unchanged": 1,
+    "updated": 1
+  },
+  "warnings": [
+    "[[misp]] block \"misp-lab\" api_key is a literal. Use ${ENV_VAR}. The value was replaced with [REDACTED]."
+  ]
+}
+
+━━━ stderr · empty

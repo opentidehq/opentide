@@ -1,0 +1,2 @@
+// prod:datatable_expression valid
+datatable(Account: string, Count: long) ["admin", 1, "guest", 2]

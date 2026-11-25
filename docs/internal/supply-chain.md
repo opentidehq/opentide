@@ -1,0 +1,108 @@
+---
+title: Supply chain
+description: The Rust workspace's supply-chain and safety gates — cargo-deny, cargo audit, fuzzing and SBOMs — and why each says what it says.
+---
+
+# Supply chain
+
+The Rust workspace is safe by policy, not by review (UC-X.1, [#843](https://github.com/opentidehq/opentide/issues/843)).
+Each gate below runs in CI; the required ones are in `.github/AGENTS.md` ("Required checks").
+
+| Gate | Where | When | Fails on |
+|------|-------|------|----------|
+| `cargo deny check` | ci.yml `deny` (Supply chain (cargo deny)) | every pull request and push | a licence not on the list, a RustSec advisory, a second version of a shipped crate, OpenSSL, a source other than crates.io |
+| `cargo audit` (every `Cargo.lock`) | `rust-audit.yml` | daily | an advisory published since the last change; opens or comments on one issue |
+| Nightly fuzz | `engine-fuzz.yml` (ci.yml's nightly calls it through `nightly.yml`) | the nightly set (nightly and Run workflow) | a panic or a timeout in 10 minutes of any target; the input is uploaded |
+| Unsafe policy | clippy, `xtask/tests/lint_policy.rs`, `xtask/tests/unsafe_listing.rs` | every pull request | `unsafe` outside two crates, a block without `// SAFETY:` or with two operations, a site missing from [Unsafe code](./unsafe.md) |
+| SBOMs | `engine-release-build.yml` `sbom` (Engine release (dry run) / SBOMs) | the dry run in the nightly set (nightly and Run workflow); every release | an SBOM that does not validate against CycloneDX 1.5 |
+
+## deny.toml
+
+**Licences.** The allow-list is `about.toml`'s, which cargo-about uses to render
+`THIRD-PARTY-LICENSES.html` for each release: permissive licences and EUPL-1.2 itself,
+every one compatible with distributing the engine under EUPL-1.2. `tests/test_ci/test_workflows.py` keeps
+the two lists equal, and keeps both free of per-crate exceptions.
+
+*Policy (maintainer decision, #952).* A permissive open-source licence (MIT, MIT-0, Apache-2.0,
+BSD-2/3-Clause, ISC, Zlib, CC0-1.0, CDLA-Permissive-2.0, Unicode-3.0, BSL-1.0 and the like) goes on
+the global list in both files when a new dependency brings it, for every crate, never as a
+`[licenses] exceptions` entry or an `about.toml` crate table, and needs no maintainer. A copyleft
+licence (GPL, LGPL, MPL, AGPL, EPL) or one that restricts the field of use needs a maintainer's
+decision before it is added anywhere. Only what ships is checked: dev-dependencies (test tools) never leave a
+checkout, and build dependencies (`cc`) run at build time and link nothing in, as `about.toml`'s
+`ignore-build-dependencies` says.
+
+**Advisories.** Vulnerable, unsound, unmaintained and yanked crates all fail. An exception is an
+`[advisories] ignore` entry with its reason and its follow-up issue; `cargo audit` reads the same
+list (`scripts/engine/audit.py ignores`). Today there are two:
+
+- Two are unmaintained, with no safe upgrade and no vulnerability: RUSTSEC-2026-0543 (`chrono`,
+  through `rmcp` and `schemars`) and RUSTSEC-2026-0542 (`humantime`, dev-only through `trycmd`).
+  [#1513](https://github.com/opentidehq/opentide/issues/1513) removes them.
+
+Nine more, RUSTSEC-2026-0574 to RUSTSEC-2026-0582 (`heapless` 0.8, unsound), went with the move to
+the gix 0.29 generation, whose `gix-hash` uses `faster-hex` 2.0, where `heapless` is optional
+([#1675](https://github.com/opentidehq/opentide/issues/1675)). That generation reads dates with
+`jiff` 1 and locks with `parking_lot` 0.13, so `[bans] skip` names the second versions (see Bans).
+
+An earlier one, RUSTSEC-2024-0449
+(`unsafe-libyaml`, unmaintained, through `serde_yaml` 0.9), went when the engine moved its Tide
+YAML onto the node tree every crate reads YAML with, `opentide_core::node` (saphyr, YAML 1.2)
+([#850](https://github.com/opentidehq/opentide/issues/850)).
+
+**Bans.** A second version of a crate we ship fails, unless `[bans] skip` lists it with its reason. There is `syn` 2, which `garde_derive` 0.23 needs (`opentide-schema`'s validation derive, plan D-2; no garde release uses `syn` 3 yet), beside the `syn` 3 of every other proc macro. The gix 0.29 generation (#1675) also brings `jiff` 1 (with `jiff-core` 1), `parking_lot` 0.13 (with `parking_lot_core` 0.10, `lock_api` 0.5 and `redox_syscall` 0.9) beside `jiff` 0.2 and `parking_lot` 0.12: `skip` names each. We stay on `jiff` 0.2 because the `opentide` facade re-exports `jiff::Timestamp`, so `jiff` 1 is a facade major; `crossterm`, `prodash` and `jsonschema` are still on `parking_lot` 0.12. Dev-dependencies are
+left out, as cargo-deny leaves them out by default. These test tools duplicate a shipped crate,
+reviewed and harmless because none of them ships: `trycmd`'s `toml_edit` 0.25 (with `winnow` 1,
+`toml_datetime` 1 and `serde_spanned` 1) beside the engine's `toml` 0.8 and `toml_edit` 0.22;
+`trycmd`'s `shlex` 1 beside `cc`'s `shlex` 2; `insta`'s `similar` 2 beside `snapbox`'s `similar` 3
+(the shipped `opentide-workspace`, for `validate --fix --dry-run`'s diff, and xtask use `similar` 2,
+so the shipped graph holds one `similar`);
+`tempfile`'s `bitflags` 2 beside `lsp-types`'s `bitflags` 1. `trybuild`'s `toml` 1 (with its `toml_*` crates) beside the engine's `toml` 0.8, for `opentide-schema`'s compile-fail tests. xtask (tooling, never shipped) uses `rustix` (the golden runner's pseudo-terminals) and `tempfile` at run time, and `opentide-workspace` uses `tempfile` (`validate --fix`'s writes) and `notify` (`--watch`), whose `inotify` and `kqueue-sys` bring `bitflags` 2 (`bitflags` 1 comes only from `lsp-types` 0.97, directly and through `fluent-uri` 0.1, and from the dev-dependency `portable-pty` 0.9), and `opentide-cli`'s setup wizard prompts with `inquire` on `crossterm`, both on `bitflags` 2: `skip` names `bitflags@2.13.2` with that reason. The wizard's pseudo-terminal test drives the CLI with wezterm's `portable-pty` (a dev-dependency), which brings `nix` 0.28 beside the shipped `nix` 0.31. xtask's schema comparison (`cargo xtask codegen --check`, UC-1.8b) validates with the `jsonschema` crate, which brings `fluent-uri` 0.4, `getrandom` 0.3 and `r-efi` 5 beside the shipped crates' versions (its `fancy-regex` 0.20 is `opentide-schema`'s too): `skip` names each, with that reason; and `borrow-or-share` under MIT-0, which the global list allows. The connectors' HTTP client (UC-4.1, #831: reqwest 0.13 on rustls with ring, the one HTTP client of the workspace) brings ring's `getrandom` 0.2 and, on Windows, `windows-sys` 0.52, and `skip` names each with that reason. `base64` 0.22 comes with `jsonwebtoken` 9 (below) and wiremock 0.6 (the recorded-HTTP harness, `opentide-cassette`, never shipped), beside the 0.23 of opentide's crates and reqwest's `hyper-util`: `skip` names it. `jsonwebtoken` 10 and later are on 0.23, but offer only aws-lc-rs or RustCrypto's `rsa` as backends, not ring. The Google SecOps connector (UC-4) signs a service-account JWT with `jsonwebtoken` 9 on ring, which ships `pem` 3, while `opentide-cassette`'s `rcgen` (its test certificates, never shipped) brings `pem` 4: `skip` names `pem@4.0.0` with that reason. reqwest's rustls backend requires `rustls-platform-verifier`, which brings `webpki-root-certs` (Mozilla's root certificates as data, CDLA-Permissive-2.0, on the global list). Two proc macros convert identifiers' case at compile time with different `convert_case` versions, crossterm's `derive_more-impl` (0.10) and `napi-derive` (0.12, the Node binding, UC-5.3): `skip` names 0.10 with that reason; neither links into an artifact. `openssl-sys`, `openssl` and
+`native-tls` are banned: TLS is rustls (plan D-8; per-tenant TLS settings are a §3 invariant), with
+no system library to link on every wheel target. Wildcard version requirements fail.
+
+**Sources.** crates.io only. A git dependency, or another registry's, fails until it is added to
+`allow-git` or `allow-registry` with a comment saying why.
+
+**fuzz/.** The fuzz targets are a workspace of their own with their own lock file, built on
+nightly and never distributed. The `deny` job checks them for advisories, bans and sources with the
+same `deny.toml`, and `--locked` keeps `fuzz/Cargo.lock` current. Their licences are not checked:
+nothing in `fuzz/` ships.
+
+**publishing/.** The crate that reserves the name `opentide` on crates.io
+(`publishing/placeholders/crates/opentide`) has its own workspace and lock file and no
+dependencies. It is published, so the `deny` job runs every check on it, licences included.
+
+**Versions.** CI pins cargo-deny 0.20.2 (older releases cannot parse the advisory database's CVSS
+4.0 entries) and cargo-audit 0.22.2. A newer release comes in a change of its own.
+
+## Fuzzing
+
+Eleven targets, one per input the engine reads from a user: the seven query languages, Tide YAML,
+configuration TOML (`config`), the language server's sessions (`protocol`) and its raw input stream
+(`framing`). `fuzz/README.md` lists their seeds and the targets later items add (`from_node`, the
+CLI's argument parser, `opentide serve`'s reader). A crash becomes a regression test that fails
+without the fix, and its input goes under `fuzz/regressions/<target>/`, where the normal test run
+replays it on stable Rust.
+
+## SBOMs
+
+`scripts/engine/sbom.py generate` writes a CycloneDX 1.5 SBOM for each artifact, and `validate`
+checks each against the schema (cyclonedx-python-lib, pinned) and for references that resolve:
+
+| SBOM | Artifact | Made from |
+|------|----------|-----------|
+| `opentide-wheel.cdx.json` | the PyPI wheel this commit builds (its version the release's, or the Cargo workspace's; no wheel is built for the SBOM, and maturin also writes the Rust crates' SBOM into the wheel's `.dist-info/sboms/`) | `uv export` (the Python dependencies, no dev group) and the crates compiled into `opentide._native` |
+| `opentide-lsp.cdx.json` | the `opentide-lsp` binaries and the WASI build | cargo-cyclonedx, every target |
+| `opentide-wasm.cdx.json` | the browser build | cargo-cyclonedx for wasm32-unknown-unknown (pure Rust: it links no libc) |
+| `opentide-lsp-client.cdx.json`, `opentide-lsp-worker.cdx.json`, `opentide-wasi-host.cdx.json` | the npm packages | `npm sbom`, no dev dependencies |
+| `opentide.cdx.json` | the `opentide` binaries and crate (`cargo install opentide --features cli`) | cargo-cyclonedx for the facade with `cli`, every target |
+| `opentide-node.cdx.json` | the npm package `@opentide/opentide` and its native packages | `npm sbom`, no dev dependencies, with the facade's crates |
+
+All seven are assets of every release of the release train (`publish.yml`, UC-5.5, #840), listed
+in `SHA256SUMS` and covered by its provenance attestations, and are generated and validated in
+every dry run (CI's nightly set). The engine's four are scanned for oracle references like every
+engine asset, and the product's three (`opentide.cdx.json`, `opentide-node.cdx.json` and
+`opentide-wheel.cdx.json`, which lists pydantic, the wheel's `plugins` extra) with `--product`.
+Rust SBOMs leave out build dependencies and name workspace crates by their path in
+the repository, never the build machine's.

@@ -1,0 +1,28 @@
+name: Query Extraction Quoted
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000105
+  schema: rule::1.0
+  version: 1
+  created: "2026-10-29"
+  modified: "2026-10-29"
+  tlp: clear
+description: |
+  A quoted query, double-quoted as `yaml.safe_dump` writes a multi-line
+  string or single-quoted over two lines, is analysed as its value (#105).
+response:
+  alert_severity: Low
+configurations:
+  sentinel:
+    enabled: true
+    status: STAGING
+    scheduling:
+      frequency: PT1H
+      lookback: PT2H
+    alert:
+      title: Query Extraction Quoted
+    query: "SecurityEvent\n| where EventID == 4688\n| take 1\n"
+  splunk:
+    enabled: true
+    status: STAGING
+    query: 'index=a
+      | stats count by user'

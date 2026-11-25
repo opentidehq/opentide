@@ -1,0 +1,3 @@
+// prod:comment invalid (a stray close after a block comment)
+FROM logs-* METADATA _id /* one */ */
+| LIMIT 1

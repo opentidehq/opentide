@@ -1,0 +1,1 @@
+| tstats count as c, values(tag) as tag where index=main earliest=-1h by _time span=1h

@@ -1,0 +1,2 @@
+# prod:foreach_statement invalid
+vendor:"Microsoft" | FOREACH [ SELECT src_host ]

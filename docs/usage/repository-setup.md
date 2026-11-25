@@ -29,14 +29,14 @@ opentide setup --yes \
   --org "Example Corp" \
   --description "Enterprise detection content" \
   --platform sentinel \
-  --platform defender_for_endpoint \
+  --platform microsoft_defender \
   --ci github
 ```
 
 Or step-by-step:
 
 ```bash
-opentide setup platforms --sentinel --defender-for-endpoint --yes
+opentide setup platforms --sentinel --microsoft-defender --yes
 opentide setup ci github --yes
 opentide setup env --yes
 opentide setup hooks --yes
@@ -50,13 +50,13 @@ In non-interactive environments, `--yes` confirms only the flags shown in the co
 
 | Subcommand | Output |
 |------------|--------|
-| `setup repo` | `objects/{threats,objectives,rules}/`, README, `.gitignore`; `--platform` also writes enabled platform TOML |
+| `setup repo` | `objects/{threats,objectives,rules}/`, README, `.gitignore`; `--platform` also writes enabled platform TOML; `--org` also writes `.opentide/configurations/organisation.toml` |
 | `setup platforms` | Enabled `.opentide/configurations/platforms/*.toml` |
 | `setup ci` | GitHub / GitLab / Azure workflow files (discovers enabled platforms; sets `OPENTIDE_REPO_ROOT`). A share stage is written only with `--sharing` |
 | `setup env` | `.env.example` with `OPENTIDE_REPO_ROOT`; ignores `.env` |
 | `setup hooks` | `.pre-commit-config.yaml` plus validate-on-commit Git hook |
 | `setup mcp` | Editor MCP config that runs `opentide mcp start` |
-| `setup skills` | Agent skills: three authoring skills from the package and `detection-engineering` from the catalogue (the package's copy when it cannot be downloaded), other slugs as the full opentidehq/skills tree (`discover`, `show`, install) |
+| `setup skills` | Agent skills: by default `opentide-detection-rule`, from the package, and `detection-engineering`, from the catalogue (the package's copy when it cannot be downloaded); `--install <slug>` or `--all` for others, each the full opentidehq/skills tree (`discover`, `show`, install) |
 
 ### Expected layout after setup + generate
 
@@ -69,20 +69,25 @@ detection-repo/
 ├── docs/                         # opentide generate docs output
 ├── .opentide/
 │   ├── configurations/
+│   │   ├── organisation.toml     # only with `setup --org`
 │   │   └── platforms/
 │   ├── schemas/                  # opentide generate schemas
-│   ├── templates/
-│   ├── exports/
-│   └── states/
-│       ├── deployment/           # vendor rule ids, committed (written by deploy)
-│       └── sharing.jsonl         # sharing cache, gitignored
+│   ├── templates/                # opentide generate templates
+│   ├── exports/                  # opentide generate exports
+│   ├── inflight/                 # opentide generate inflight
+│   ├── lsp/                      # the language server's catalogs
+│   └── hooks/                    # when setup hooks
+├── .vscode/                      # the editor snippets (generate)
 ├── .github/workflows/            # when --ci github
-├── .env.example                 # when setup env
+├── .pre-commit-config.yaml       # when setup hooks
+├── .env.example                  # when setup env
 ├── README.md
 └── AGENTS.md                     # when --skills generic
 ```
 
-Client configuration overrides live under `.opentide/configurations/`. Package defaults ship in the PyPI wheel.
+`.opentide/states/` is not created by setup or generate: `opentide deploy` writes `states/deployment/` (vendor rule ids, committed) the first time a platform returns one, and `opentide share` writes `states/sharing.jsonl` (gitignored).
+
+Client configuration overrides live under `.opentide/configurations/`. The defaults are compiled into opentide.
 
 ## Scoped subcommands
 
@@ -110,16 +115,16 @@ opentide setup skills --yes --generic --name SOC --org "Example Corp"
 
 | Skills target | Output |
 |---------------|--------|
-| `--cursor` | `.cursor/skills/<slug>/` |
+| `--cursor` | `.cursor/skills/<slug>/`, and `.agents/skills/<slug>/` |
 | `--claude-code` | `CLAUDE.md`, `.claude/skills/` |
 | `--generic` | `AGENTS.md`, `.agents/skills/` |
-| `--github-copilot` | `.github/copilot-instructions.md` |
+| `--github-copilot` | `.github/copilot-instructions.md`, and `AGENTS.md` and `.agents/skills/` as `--generic` |
 
 See [Agentic setup](./workflows/agentic-setup.md) for details.
 
-## VS Code settings (deprecated)
+## VS Code
 
-`opentide setup vscode` generates templates and JSON schemas, recommends the opentide VS Code extension (`opentidehq.opentide`) in `.vscode/extensions.json`, and writes snippets. It writes no `yaml.schemas`, and removes the router mapping earlier releases wrote to `.vscode/settings.json`: the extension's language server checks object files. Pass `--mcp` to also write `.vscode/mcp.json` via the same helper as `opentide setup mcp --vscode`. Both paths are valid; parent `--vscode-setup` does not imply MCP. A missing target directory is created before generate. Pass `--no-generate` to skip generation when artifacts already exist. The command fails if snippets were requested but could not be written.
+The recommended way to use opentide in VS Code is the opentide extension (`opentidehq.opentide`, on the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=opentidehq.opentide) and Open VSX), which bundles opentide: `code --install-extension opentidehq.opentide`. `opentide setup vscode` is an alternative that recommends the extension to the team. It generates templates and JSON schemas, recommends the opentide VS Code extension (`opentidehq.opentide`) in `.vscode/extensions.json`, and writes snippets. It writes no `yaml.schemas`, and removes the router mapping earlier releases wrote to `.vscode/settings.json`: the extension's language server checks object files. Pass `--mcp` to also write `.vscode/mcp.json` via the same helper as `opentide setup mcp --vscode`. Both paths are valid; parent `--vscode-setup` does not imply MCP. A missing target directory is created before generate. Pass `--no-generate` to skip generation when artifacts already exist. The command fails if snippets were requested but could not be written.
 
 ## CLI reference
 
@@ -133,4 +138,4 @@ opentide validate --strict
 opentide setup mcp --cursor --yes   # if not done during setup
 ```
 
-`generate` writes `.opentide/templates/*.template.yaml` from Pydantic models (required keys live, optional fields commented with `#` hugging each key, no YAML `null`). The `metadata` keys that [`opentide lint`](../cli/lint.md#configuration) requires, `author` and `organisation` by default, are live too. Copy a template into `objects/` or use the `tide-threat` / `tide-objective` / `tide-rule` VS Code snippets.
+`generate` writes `.opentide/templates/*.template.yaml` from the Tide models compiled into opentide (required keys live, optional fields commented with `#` hugging each key, no YAML `null`). The `metadata` keys that [`opentide lint`](../cli/lint.md#configuration) requires, `author` and `organisation` by default, are live too. Copy a template into `objects/` or use the `tide-threat` / `tide-objective` / `tide-rule` VS Code snippets.

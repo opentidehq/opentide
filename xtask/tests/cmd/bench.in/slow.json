@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "engine": "python",
+  "scale": 1,
+  "seed": 20261107,
+  "runs": 5,
+  "warmup": 1,
+  "oracle": "opentide 0.23.0",
+  "host": {
+    "os": "linux",
+    "arch": "x86_64",
+    "cpus": 4,
+    "cpu_model": "AMD EPYC 7763 64-Core Processor",
+    "memory_bytes": 16772177920,
+    "runner_image": "ubuntu24 20261102.1"
+  },
+  "workspace_digest": "5978a2ab7c093587",
+  "git_sha": "3333333333333333333333333333333333333333",
+  "created_unix": 1794268800,
+  "results": [
+    {
+      "id": "validate_clean",
+      "command": "opentide --json validate",
+      "status": "measured",
+      "median_s": 3.6,
+      "peak_rss_bytes": 180355072,
+      "samples_s": [
+        3.6,
+        3.6,
+        3.6,
+        3.6,
+        3.6
+      ],
+      "samples_rss_bytes": [
+        180355072,
+        180355072,
+        180355072,
+        180355072,
+        180355072
+      ]
+    },
+    {
+      "id": "explain",
+      "command": "opentide --json explain vocab_unknown",
+      "status": "measured",
+      "median_s": 0.21,
+      "peak_rss_bytes": 41943040,
+      "samples_s": [
+        0.21,
+        0.21,
+        0.21,
+        0.21,
+        0.21
+      ],
+      "samples_rss_bytes": [
+        41943040,
+        41943040,
+        41943040,
+        41943040,
+        41943040
+      ]
+    }
+  ]
+}

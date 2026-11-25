@@ -1,0 +1,2 @@
+# prod:from_clause valid
+SELECT user FROM logins WHERE outcome:"fail"

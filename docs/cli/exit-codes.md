@@ -14,7 +14,7 @@ opentide uses the same result semantics in human and JSON modes: presentation fo
 | Code | Meaning | Emitted when |
 |-----:|---------|--------------|
 | `0` | Success | The command completed or intentionally skipped without an operational failure. Success JSON includes `"ok": true`. |
-| `1` | Error | Validation/deployment errors, a [`generate` phase](./generate.md#when-a-phase-fails) that raised or logged an error, network/runtime failure, an unexpected error (`failure.code` `internal`, see [JSON output](./json-output.md#an-unexpected-error)), or `--strict` with a warning other than `platform_not_enabled`. |
+| `1` | Error | Validation/deployment errors, a [`generate` phase](./generate.md#when-a-phase-fails) that raised or logged an error, network/runtime failure, an unexpected error (`failure.code` `internal`, see [JSON output](./json-output.md#an-unexpected-error)), or `--strict` with a warning other than `platform_not_enabled`. Also stdout closed before the output was written (`opentide --json commands | head -c 1`), with no message: the reader is gone. |
 | `2` | Usage error | An unknown command or option, a value outside the accepted ones (an `info` section, an `info vocab` name, a `generate` phase, `--type`, `--platform`, `share --target`), a missing required flag, a prompt nobody can answer (`setup` without a terminal, under `--json` or under a coding agent), or an explicitly unsupported command. Also the `validate query --live`, `migrate vocab-scope` and `share` cases below. |
 | `3` | Partial success | `share` only: see [Share](#share). |
 | `130` | Interrupted | Ctrl-C. One `error: interrupted` line on stderr, no traceback. |
@@ -22,6 +22,8 @@ opentide uses the same result semantics in human and JSON modes: presentation fo
 With `--json`, `failure.code` tells the cases of one exit code apart: `usage_unknown_command`, `usage_invalid_choice`, `no_tenant_reached`, `share_unreachable` and so on. `failure` is `null` exactly when the exit code is `0`. The codes are listed in [JSON output](./json-output.md#failure-codes).
 
 Usage errors the command itself detects (an unknown `info` section, `info coverage` without `--technique`, an unknown `generate` phase, `generate docs --changed` with a scope, an invalid `--type`, an unknown `share --target`, a `setup` prompt with no terminal, `validate query` without `--live`, a `rules unreviewed --older-than` that is not a window) exited `1` before this release. They exit `2` now, like the usage errors Click detects.
+
+[`opentide doctor`](./doctor.md#exit-codes) exits `1` when a check fails. With `--live`, that includes a tenant whose credentials are set but which refuses them or does not answer (`connectivity`); a tenant whose credentials are not set is skipped and never fails the run. `--live` with `--offline` exits `2`.
 
 There is no soft-failure exit code. Warnings are listed under `warnings` in JSON (and printed in human mode) and only fail the process when `--strict` is set. Even then, [`platform_not_enabled`](./validate.md#platforms-this-workspace-has-not-enabled) is reported without failing.
 

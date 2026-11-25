@@ -1,0 +1,5 @@
+default_lines = 80
+
+[[gate]]
+crate = "core"
+lines = 70

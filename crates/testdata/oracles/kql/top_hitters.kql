@@ -1,0 +1,1 @@
+SigninLogs | extend Failed = toint(ResultType != "0") | top-hitters 10 of UserPrincipalName by Failed

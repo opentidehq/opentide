@@ -6,11 +6,14 @@ icon: Terminal
 
 # CLI reference
 
-The `opentide` command is a [Typer](https://typer.tiangolo.com/) application included in the core package:
+The `opentide` command is opentide's Rust core, compiled into the package and run in process by its console script:
 
 ```bash
-pip install 'opentide==0.28.1'
+pip install opentide              # the latest release
+pip install 'opentide==1.0.0'     # or pin it
 ```
+
+See [Installation](../usage/installation.md) for uv, pipx, crates.io, npm and the binaries.
 
 Run `opentide --help` for the live command tree.
 
@@ -50,7 +53,7 @@ All commands inherit [global options](./global-options.md):
 | Flag | Env var | Purpose |
 |------|---------|---------|
 | `--repo` | `OPENTIDE_REPO_ROOT` | Detection repository root |
-| `--data` | `OPENTIDE_DATA_ROOT` | Bundled data root override |
+| `--data` | `OPENTIDE_DATA_ROOT` | Changes only `--technique` completion (the data the commands read is compiled in) |
 | `--debug` | `OPENTIDE_DEBUG` | Debug logging |
 | `--quiet` | — | Only the outcome line and errors |
 | `--no-color` | `NO_COLOR` | Disable colour |
@@ -107,4 +110,4 @@ Completion also fills in object UUIDs, object files, ATT&CK techniques, platform
 
 ## Source
 
-Command definitions: `src/opentide/cli/commands/` (the root list is `src/opentide/cli/commands/__init__.py`; global options are in `src/opentide/cli/root.py`), `src/opentide/cli/setup_app.py`, `src/opentide/cli/share_app.py`.
+Command definitions: `crates/opentide-cli/src/tree.rs` (the command tree and the global options, in clap), `crates/opentide-cli/src/app.rs` (the dispatch) and `crates/opentide-cli/src/commands/`.

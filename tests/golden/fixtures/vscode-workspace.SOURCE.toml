@@ -1,0 +1,9 @@
+# Vendored, unchanged, from opentidehq/vscode-extension (MIT, see
+# vscode-workspace.LICENSE): the extension's fixture workspace.
+# Its Cargo.toml (`name = "not-opentide"`) is upstream's, kept so the copy
+# stays unchanged. It is not a member of this repository's Cargo workspace
+# (Cargo.toml, `members`), so no cargo command here builds or reads it.
+repository = "https://github.com/opentidehq/vscode-extension"
+commit = "9888813d5484dffe663c9a57c07aad80a0897181"
+path = "test/fixtures/workspace"
+licence = "MIT"

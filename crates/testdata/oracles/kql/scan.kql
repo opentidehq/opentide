@@ -1,0 +1,1 @@
+range x from 1 to 3 step 1 | scan with (step s: x == 1;)

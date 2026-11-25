@@ -1,0 +1,32 @@
+[package]
+name = "opentide-highlight"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+description = "opentide engine component: HighlightSpec loader, semantic tokens, and generated editor maps. Internal: depend on the opentide crate."
+readme = "../COMPONENT.md"
+
+[lints]
+workspace = true
+
+[dependencies]
+opentide-dataset.workspace = true
+opentide-core.workspace = true
+serde = { workspace = true, features = ["rc"] }
+serde_json.workspace = true
+toml.workspace = true
+thiserror.workspace = true
+regex.workspace = true
+
+[dev-dependencies]
+insta.workspace = true
+
+[build-dependencies]
+opentide-dataset = { workspace = true, features = ["encode"] }
+# The Tide field catalog is parsed once at build time (`build.rs`, #1743).
+serde = { workspace = true, features = ["rc"] }
+serde_json.workspace = true

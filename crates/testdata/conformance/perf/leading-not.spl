@@ -1,0 +1,2 @@
+search NOT status=200
+| stats count by host

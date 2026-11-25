@@ -1,0 +1,27 @@
+# Google's legacy HOURLY run frequency, with a schedule it cannot take.
+# Expected codes: google_secops_run_frequency, google_secops_schedule.
+name: Google SecOps rule with a legacy run frequency
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000066
+  schema: rule::1.0
+  version: 1
+  created: "2026-01-01"
+  modified: "2026-01-02"
+  tlp: clear
+  author: Detection Engineering
+description: |
+  A rule set to the legacy HOURLY frequency.
+status: STAGING
+severity: Medium
+configurations:
+  google_secops:
+    enabled: true
+    schema: platform::google_secops::1.0
+    status: STAGING
+    run_frequency: HOURLY
+    schedule:
+      ensure_enrichment_completeness: true
+    events: |
+      $e.metadata.event_type = "USER_LOGIN"
+    condition: |
+      $e

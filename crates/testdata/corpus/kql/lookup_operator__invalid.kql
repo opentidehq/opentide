@@ -1,0 +1,2 @@
+// prod:lookup_operator invalid
+SecurityEvent | lookup

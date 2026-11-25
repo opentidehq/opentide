@@ -1,0 +1,23 @@
+---
+source: crates/opentide-kql/src/parser/tests.rs
+expression: "show(\"T | top by a\")"
+---
+SOURCE_FILE@0..12
+  QUERY@0..12
+    TABULAR_EXPRESSION@0..12
+      TABULAR_SOURCE@0..1
+        TABLE_REF@0..1
+          IDENT@0..1 "T"
+      WHITESPACE@1..2 " "
+      PIPE@2..3 "|"
+      WHITESPACE@3..4 " "
+      TOP_OPERATOR@4..12
+        TOP_KW@4..7 "top"
+        WHITESPACE@7..8 " "
+        BY_KW@8..10 "by"
+        WHITESPACE@10..11 " "
+        SORT_ITEM@11..12
+          NAME_REF@11..12
+            IDENT@11..12 "a"
+errors:
+7..8: expected a number (expected a number)

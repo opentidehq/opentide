@@ -1,0 +1,154 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: deploy/json/deploy-tenants/send-elastic-unchanged
+---
+args: opentide --json deploy --platform elastic --strategy PREVIEW --strategy RELEASE --all --keep-deprecated
+exit: 1
+
+━━━ stdout · json, 1 lines
+{
+  "changes": [
+    {
+      "action": "upsert",
+      "name": "Elastic create rule",
+      "platform": "elastic",
+      "status": "STAGING",
+      "tenant": "soc",
+      "uuid": "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0001"
+    },
+    {
+      "action": "upsert",
+      "name": "Elastic update rule",
+      "platform": "elastic",
+      "status": "PRODUCTION",
+      "tenant": "soc",
+      "uuid": "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0002"
+    },
+    {
+      "action": "upsert",
+      "name": "Elastic prebuilt rule",
+      "platform": "elastic",
+      "status": "STAGING",
+      "tenant": "soc",
+      "uuid": "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0004"
+    },
+    {
+      "action": "delete",
+      "name": "Elastic retire rule",
+      "platform": "elastic",
+      "status": "REMOVED",
+      "tenant": "soc",
+      "uuid": "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0005"
+    }
+  ],
+  "command": "deploy",
+  "deployed": [
+    "elastic"
+  ],
+  "dry_run": false,
+  "duration_ms": 0,
+  "error": "Deployment to elastic failed on Elastic prebuilt rule: refusing to modify prebuilt rule",
+  "exit_code": 1,
+  "failure": {
+    "argument": null,
+    "code": "issues_found",
+    "crash_log": null,
+    "message": "Deployment to elastic failed on Elastic prebuilt rule: refusing to modify prebuilt rule",
+    "suggestion": null
+  },
+  "failures": [
+    {
+      "error": "refusing to modify prebuilt rule",
+      "id": "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0004",
+      "name": "Elastic prebuilt rule",
+      "platform": "elastic",
+      "tenant": "soc"
+    }
+  ],
+  "message": "Deployment failed · 1 deleted, 2 unchanged, 1 failed, 0 not attempted · <SECONDS>",
+  "next_actions": [],
+  "ok": false,
+  "plan": {
+    "elastic": [
+      "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0001",
+      "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0002",
+      "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0004",
+      "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0005"
+    ]
+  },
+  "results": [
+    {
+      "action": "unchanged",
+      "error": null,
+      "id": "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0001",
+      "name": "Elastic create rule",
+      "platform": "elastic",
+      "reason": null,
+      "seconds": 0.0,
+      "status": "deployed",
+      "tenant": "soc"
+    },
+    {
+      "action": "unchanged",
+      "error": null,
+      "id": "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0002",
+      "name": "Elastic update rule",
+      "platform": "elastic",
+      "reason": null,
+      "seconds": 0.0,
+      "status": "deployed",
+      "tenant": "soc"
+    },
+    {
+      "action": "upsert",
+      "error": "refusing to modify prebuilt rule",
+      "id": "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0004",
+      "name": "Elastic prebuilt rule",
+      "platform": "elastic",
+      "reason": null,
+      "seconds": 0.0,
+      "status": "failed",
+      "tenant": "soc"
+    },
+    {
+      "action": "delete",
+      "error": null,
+      "id": "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0005",
+      "name": "Elastic retire rule",
+      "platform": "elastic",
+      "reason": null,
+      "seconds": 0.0,
+      "status": "deployed",
+      "tenant": "soc"
+    }
+  ],
+  "schema_version": 1,
+  "status": "failed",
+  "strategies": [
+    "PREVIEW",
+    "RELEASE"
+  ],
+  "summary": {
+    "create": 0,
+    "delete": 1,
+    "disable": 0,
+    "failed": 1,
+    "not_attempted": 0,
+    "platforms": 1,
+    "seconds": 0.0,
+    "skipped": 0,
+    "tenants": 1,
+    "unchanged": 2,
+    "update": 0,
+    "upsert": 0
+  }
+}
+
+━━━ stderr · json, 1 lines
+{
+  "event": "refusing_to_modify_prebuilt_rule",
+  "level": "error",
+  "name": "Elastic prebuilt rule",
+  "rule_id": "6b2e9c14-7a31-4f58-9d0c-1e8a4b7c0004",
+  "timestamp": "0000-00-00 00:00:00"
+}

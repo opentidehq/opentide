@@ -1,0 +1,23 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(query(&file))
+input_file: crates/testdata/corpus/cql/block_comment__invalid.cql
+---
+SOURCE_FILE@0..42
+  PIPELINE@0..41
+    AND_FILTER@0..41
+      FREE_TEXT@0..23
+        REGEX@0..23
+          SLASH@0..1 "/"
+          REGEX_PATTERN@1..23
+            REGEX_PATTERN_TOKEN@1..23 "* unterminated comment"
+      WHITESPACE@23..24 "\n"
+      FIELD_FILTER@24..41
+        TAG@24..29
+          TAG_TOKEN@24..29 "#repo"
+        EQ@29..30 "="
+        UNQUOTED_PATTERN@30..41
+          WORD@30..41 "base_sensor"
+  WHITESPACE@41..42 "\n"
+
+23..24: the block comment is never closed (expected SLASH)

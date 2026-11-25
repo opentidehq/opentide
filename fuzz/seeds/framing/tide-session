@@ -1,0 +1,23 @@
+Content-Length: 75
+
+{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"capabilities":{}}}Content-Length: 52
+
+{"jsonrpc":"2.0","method":"initialized","params":{}}Content-Length: 418
+
+{"jsonrpc": "2.0", "method": "textDocument/didOpen", "params": {"textDocument": {"uri": "file:///w/objects/rules/r.yaml", "languageId": "opentide-yaml", "version": 1, "text": "name: R\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000001\n  schema: rule::1.0\ndetection_model: 00000000-0000-4000-8002-000000000001\nconfigurations:\n  sentinel:\n    query: |\n      SecurityEvent\n      | where EventID == 4688\n"}}}Content-Length: 139
+
+{"jsonrpc": "2.0", "id": 1, "method": "textDocument/documentSymbol", "params": {"textDocument": {"uri": "file:///w/objects/rules/r.yaml"}}}Content-Length: 137
+
+{"jsonrpc": "2.0", "id": 2, "method": "textDocument/documentLink", "params": {"textDocument": {"uri": "file:///w/objects/rules/r.yaml"}}}Content-Length: 220
+
+{"jsonrpc": "2.0", "id": 3, "method": "textDocument/inlayHint", "params": {"textDocument": {"uri": "file:///w/objects/rules/r.yaml"}, "range": {"start": {"line": 0, "character": 0}, "end": {"line": 99, "character": 0}}}}Content-Length: 177
+
+{"jsonrpc": "2.0", "id": 4, "method": "textDocument/definition", "params": {"textDocument": {"uri": "file:///w/objects/rules/r.yaml"}, "position": {"line": 4, "character": 20}}}Content-Length: 133
+
+{"jsonrpc": "2.0", "id": 5, "method": "textDocument/codeLens", "params": {"textDocument": {"uri": "file:///w/objects/rules/r.yaml"}}}Content-Length: 124
+
+{"jsonrpc": "2.0", "method": "textDocument/didClose", "params": {"textDocument": {"uri": "file:///w/objects/rules/r.yaml"}}}Content-Length: 49
+
+{"jsonrpc":"2.0","id":999999,"method":"shutdown"}Content-Length: 33
+
+{"jsonrpc":"2.0","method":"exit"}

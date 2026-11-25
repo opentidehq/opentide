@@ -14,14 +14,14 @@ description: Spec-driven development for agentic detection engineering — valid
 | [Usage](./usage/index.md) | Detection engineers setting up and operating repos | [Installation](./usage/installation.md) |
 | [CLI](./cli/index.md) | Operators and CI pipelines | [Global options](./cli/global-options.md) |
 | [MCP](./mcp/index.md) | AI agents and editor integrations | [Installation](./mcp/installation.md) |
-| [SDK](./sdk/index.md) | Python developers embedding opentide | [Registry API](./sdk/registry.md) |
+| [SDK](./sdk/index.md) | Python developers embedding opentide | [Workspace](./sdk/workspace.md) |
 
 ## Quick start
 
-The latest release is **[0.28.1](./usage/releases.md)** (13 November 2026). The first public release was **0.1.0**.
+The latest release is **[1.0.0](./usage/releases.md)** (25 November 2026). The first public release was **0.1.0**.
 
 ```bash
-pip install 'opentide==0.28.1'
+pip install 'opentide==1.0.0'
 export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 
 opentide setup --yes --platform sentinel --ci github
@@ -32,7 +32,7 @@ opentide deploy --platform sentinel --dry-run --strategy PREVIEW --all
 
 ## Platform coverage
 
-opentide supports **thirteen deployment platforms** and **nine query validators**. CrowdStrike, HarfangLab, Sysdig and Bitdefender deploy but do not support live query validation — opentide never fakes validation for those platforms.
+opentide deploys to **thirteen platforms**, checks queries on the tenant on **nine** of them and offline, with no tenant, on **twelve**. CrowdStrike, HarfangLab, Sysdig and Bitdefender deploy but have no live query check — opentide never fakes validation for those platforms; the offline engine checks their queries (CQL, YARA and Falco conditions) without a tenant. SentinelOne's queries are checked on the tenant only.
 
 See [Platforms](./usage/concepts/platforms.md) for the capability matrix.
 
@@ -42,8 +42,8 @@ See [Platforms](./usage/concepts/platforms.md) for the capability matrix.
 |---------|-------|------------|
 | CLI | `opentide` | `pip install opentide` |
 | MCP server | `opentide mcp start` | `pip install opentide` |
-| Python SDK | `from opentide import Opentide` | `pip install opentide` |
-| Platform adapters | entry points under `opentide.platforms` | `pip install opentide` |
+| Python SDK | `from opentide import Workspace` | `pip install opentide` |
+| Platform plugins | `opentide.plugins`, entry points under `opentide.platforms` | your plugin's package |
 
 ## For doc site maintainers
 

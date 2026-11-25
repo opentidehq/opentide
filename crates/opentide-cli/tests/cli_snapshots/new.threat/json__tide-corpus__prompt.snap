@@ -1,0 +1,29 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: new.threat/json/tide-corpus/prompt
+---
+args: opentide --json new threat
+exit: 2
+
+━━━ stdout · json, 1 lines
+{
+  "command": "new threat",
+  "duration_ms": 0,
+  "error": "opentide new threat needs --name; it prompts only at an interactive terminal",
+  "exit_code": 2,
+  "failure": {
+    "argument": "--name",
+    "code": "usage_needs_input",
+    "crash_log": null,
+    "message": "opentide new threat needs --name; it prompts only at an interactive terminal",
+    "suggestion": null
+  },
+  "message": "opentide new threat needs --name; it prompts only at an interactive terminal",
+  "next_actions": [],
+  "ok": false,
+  "schema_version": 1,
+  "status": "failed",
+  "summary": {}
+}
+
+━━━ stderr · empty

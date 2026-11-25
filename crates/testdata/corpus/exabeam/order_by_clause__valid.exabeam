@@ -1,0 +1,2 @@
+# prod:order_by_clause valid
+SELECT user, COUNT(*) AS n GROUP-BY user ORDER-BY n DESC, user ASC

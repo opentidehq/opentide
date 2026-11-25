@@ -1,0 +1,31 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(query(&file))
+input_file: crates/testdata/corpus/cql/field_filter__invalid.cql
+---
+SOURCE_FILE@0..20
+  PIPELINE@0..19
+    FIELD_FILTER@0..13
+      FIELD_NAME@0..10
+        WORD@0..10 "statuscode"
+      WHITESPACE@10..11 " "
+      GT_EQ@11..13 ">="
+    WHITESPACE@13..14 " "
+    ERROR@14..15
+      ERROR_TOKEN@14..15 "e"
+    ERROR@15..16
+      ERROR_TOKEN@15..16 "r"
+    ERROR@16..17
+      ERROR_TOKEN@16..17 "r"
+    ERROR@17..18
+      ERROR_TOKEN@17..18 "o"
+    ERROR@18..19
+      ERROR_TOKEN@18..19 "r"
+  WHITESPACE@19..20 "\n"
+
+13..14: expected a value
+13..14: unexpected
+15..15: unexpected
+16..16: unexpected
+17..17: unexpected
+18..18: unexpected

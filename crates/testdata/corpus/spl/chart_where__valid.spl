@@ -1,0 +1,2 @@
+``` prod:chart_where valid
+index=main | timechart span=1h count by host where count > 10

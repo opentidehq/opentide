@@ -1,0 +1,1 @@
+from * metadata _id, _index, _version | where (ends_with(Image, "/apt") or ends_with(Image, "/apt-get")) and CommandLine like "*APT::Update::Pre-Invoke::=*"

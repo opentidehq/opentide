@@ -1,0 +1,2 @@
+# prod:not_expression invalid
+vendor:"Microsoft" AND NOT

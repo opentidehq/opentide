@@ -1,0 +1,48 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: share.targets/json/share-misp/misp
+---
+args: opentide --json share targets
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "command": "share targets",
+  "duration_ms": 0,
+  "exit_code": 0,
+  "failure": null,
+  "message": "3 sharing targets",
+  "next_actions": [],
+  "ok": true,
+  "schema_version": 1,
+  "status": "completed",
+  "summary": {},
+  "targets": [
+    {
+      "enabled": true,
+      "integration": "misp",
+      "max_tlp": "amber",
+      "name": "misp-prod",
+      "url": "https://misp.invalid"
+    },
+    {
+      "enabled": true,
+      "integration": "misp",
+      "max_tlp": "green",
+      "name": "misp-locked",
+      "url": "https://misp.invalid/locked"
+    },
+    {
+      "enabled": false,
+      "integration": "misp",
+      "max_tlp": "clear",
+      "name": "misp-lab",
+      "url": "https://misp-lab.invalid"
+    }
+  ],
+  "warnings": [
+    "[[misp]] block \"misp-lab\" api_key is a literal. Use ${ENV_VAR}. The value was replaced with [REDACTED]."
+  ]
+}
+
+━━━ stderr · empty

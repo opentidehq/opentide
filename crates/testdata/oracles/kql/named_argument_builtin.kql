@@ -1,0 +1,1 @@
+SigninLogs | summarize by tostring(Key=UserPrincipalName)

@@ -1,0 +1,1 @@
+index=main | tojson fill_null=true a, b* output_field=j

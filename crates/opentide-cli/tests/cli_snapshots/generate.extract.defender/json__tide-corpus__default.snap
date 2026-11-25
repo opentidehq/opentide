@@ -1,0 +1,36 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: generate.extract.defender/json/tide-corpus/default
+---
+args: opentide --json generate extract defender
+exit: 1
+
+━━━ stdout · json, 1 lines
+{
+  "command": "generate extract defender",
+  "duration_ms": 0,
+  "error": "No Microsoft Defender tenants are configured",
+  "exit_code": 1,
+  "failure": {
+    "argument": null,
+    "code": "command_failed",
+    "crash_log": null,
+    "message": "No Microsoft Defender tenants are configured",
+    "suggestion": null
+  },
+  "message": "No Microsoft Defender tenants are configured",
+  "next_actions": [],
+  "ok": false,
+  "schema_version": 1,
+  "status": "failed",
+  "summary": {}
+}
+
+━━━ stderr · json, 1 lines
+{
+  "advice": "run 'opentide setup platforms --microsoft-defender'",
+  "detail": "You must first have Microsoft Defender tenants configured to initiate the import",
+  "event": "defender_tenants_not_configured",
+  "level": "critical",
+  "timestamp": "0000-00-00 00:00:00"
+}

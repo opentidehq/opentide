@@ -1,0 +1,65 @@
+[package]
+name = "xtask"
+# The repository's tooling, run with `cargo xtask` (.cargo/config.toml); never
+# published, so it keeps no version of the engine's.
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "The repository's Rust tooling: cargo xtask check-layers, codegen, corpus, conformance, bench and the rest (cargo xtask help)"
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+# `parallel::in_order`: a run's cases on every core, in order.
+rayon.workspace = true
+# Workspace paths without Windows' verbatim prefix (`\\?\`): a path joined
+# with `/` does not resolve under it, and the oracle names no such path.
+dunce = "1"
+# `vocab ingest`'s UTC time stamps (no time zone database).
+jiff.workspace = true
+# `files::sha256_hex`: the vocabulary bundle's and its sources' digests.
+sha2 = "0.11"
+# `cargo xtask cassettes` (UC-4.1, #831): the recording proxy and the cassettes.
+opentide-cassette.workspace = true
+# The object models' oracle comparisons (`corpus faults --engine rust`), the
+# rules' platform blocks included (UC-1.4), and `codegen`.
+opentide-schema = { workspace = true }
+# The `load` benchmark (UC-2.1, #816) and `lsp parity`.
+opentide-workspace.workspace = true
+# `corpus faults --only queries` (UC-2.5): the queries check on the query
+# engines, `opentide_analysis::queries` (as `opentide_cli::queries`).
+opentide-cli.workspace = true
+# `lsp parity` (UC-2.6): the language server in this process, and the
+# engine's own analysis it adds to validate's findings.
+opentide-lsp.workspace = true
+opentide-analysis = { workspace = true, features = ["queries"] }
+opentide-core.workspace = true
+schemars.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+toml.workspace = true
+ungrammar.workspace = true
+wait4.workspace = true
+regex.workspace = true
+# Only the tooling uses these, at the versions Cargo.lock already holds for
+# the engine's dev-dependencies.
+glob = "0.3"
+similar = "2.7"
+tempfile = "3"
+# xtask vocab (src/vocab/) also reads opentide-schema's vocabularies.
+indexmap = { version = "2", features = ["serde"] }
+# xtask stubs (UC-1.9, #815): the stubs of opentide._native.models, read from
+# the introspection data PyO3 compiles into the extension (`maturin
+# generate-stubs` uses the same crate). Its version is PyO3's.
+pyo3-introspection = "0.30.1"
+
+[dev-dependencies]
+# codegen's probe test (src/verdict.rs): the verdict of a generated schema.
+jsonschema = { version = "0.61.1", default-features = false }
+trycmd.workspace = true

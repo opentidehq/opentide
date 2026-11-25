@@ -1,0 +1,34 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: new.rule/json/none/help
+---
+args: opentide --json new rule --help
+exit: 0
+
+━━━ stdout
+Scaffold a detection rule.
+
+Usage: opentide new rule [OPTIONS]
+
+Options:
+      --name <NAME>
+          Object name; the filename is its slug
+
+      --platform <PLATFORM>
+          Add a configuration block for this platform (repeatable): sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops
+          
+          [possible values: sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops]
+
+      --objective <OBJECTIVE>
+          UUID of the objective or signal this rule implements (detection_model)
+
+      --path <PATH>
+          File to write, or a folder to write it in (default: the family's objects folder)
+
+      --help
+          Print help
+
+Examples:
+  $ opentide new rule --name "Suspicious LSASS Access" --platform sentinel --objective <objective-uuid>
+
+━━━ stderr · empty

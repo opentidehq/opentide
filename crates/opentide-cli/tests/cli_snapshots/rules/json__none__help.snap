@@ -1,0 +1,23 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: rules/json/none/help
+---
+args: opentide --json rules --help
+exit: 0
+
+━━━ stdout
+Detection rule maintenance
+
+Usage: opentide rules <COMMAND>
+
+Commands:
+  unreviewed  List rules not reviewed within a window
+
+Options:
+      --help
+          Print help
+
+Examples:
+  $ opentide rules unreviewed --older-than 90d
+
+━━━ stderr · empty

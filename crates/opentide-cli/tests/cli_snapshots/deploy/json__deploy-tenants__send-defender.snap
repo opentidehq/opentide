@@ -1,0 +1,196 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: deploy/json/deploy-tenants/send-defender
+---
+args: opentide --json deploy --platform microsoft_defender --strategy PREVIEW --strategy RELEASE --all --keep-deprecated
+exit: 1
+
+━━━ stdout · json, 1 lines
+{
+  "changes": [
+    {
+      "action": "upsert",
+      "name": "Defender create rule",
+      "platform": "microsoft_defender",
+      "status": "STAGING",
+      "tenant": "lab",
+      "uuid": "00000000-0000-4000-8047-0000000000d1"
+    },
+    {
+      "action": "upsert",
+      "name": "Defender update rule",
+      "platform": "microsoft_defender",
+      "status": "STAGING",
+      "tenant": "lab",
+      "uuid": "00000000-0000-4000-8047-0000000000d2"
+    },
+    {
+      "action": "upsert",
+      "name": "Defender concurrent create rule",
+      "platform": "microsoft_defender",
+      "status": "STAGING",
+      "tenant": "lab",
+      "uuid": "00000000-0000-4000-8047-0000000000d3"
+    },
+    {
+      "action": "disable",
+      "name": "Defender disable absent rule",
+      "platform": "microsoft_defender",
+      "status": "DISABLED",
+      "tenant": "lab",
+      "uuid": "00000000-0000-4000-8047-0000000000d4"
+    },
+    {
+      "action": "delete",
+      "name": "Defender delete absent rule",
+      "platform": "microsoft_defender",
+      "status": "REMOVED",
+      "tenant": "lab",
+      "uuid": "00000000-0000-4000-8047-0000000000d5"
+    },
+    {
+      "action": "upsert",
+      "name": "Defender refused rule",
+      "platform": "microsoft_defender",
+      "status": "STAGING",
+      "tenant": "lab",
+      "uuid": "00000000-0000-4000-8047-0000000000d6"
+    }
+  ],
+  "command": "deploy",
+  "deployed": [
+    "microsoft_defender"
+  ],
+  "dry_run": false,
+  "duration_ms": 0,
+  "error": "Deployment to microsoft_defender failed on Defender refused rule: Graph refused to update detection rule 00000000-0000-4000-8047-0000000000d6 on tenant lab: HTTP 400 (The query is not valid for a custom detection.): {\"error\":{\"code\":\"***\",\"message\":\"The query is not valid for a custom detection.\"}}",
+  "exit_code": 1,
+  "failure": {
+    "argument": null,
+    "code": "issues_found",
+    "crash_log": null,
+    "message": "Deployment to microsoft_defender failed on Defender refused rule: Graph refused to update detection rule 00000000-0000-4000-8047-0000000000d6 on tenant lab: HTTP 400 (The query is not valid for a custom detection.): {\"error\":{\"code\":\"***\",\"message\":\"The query is not valid for a custom detection.\"}}",
+    "suggestion": null
+  },
+  "failures": [
+    {
+      "error": "Graph refused to update detection rule 00000000-0000-4000-8047-0000000000d6 on tenant lab: HTTP 400 (The query is not valid for a custom detection.): {\"error\":{\"code\":\"***\",\"message\":\"The query is not valid for a custom detection.\"}}",
+      "id": "00000000-0000-4000-8047-0000000000d6",
+      "name": "Defender refused rule",
+      "platform": "microsoft_defender",
+      "tenant": "lab"
+    }
+  ],
+  "message": "Deployment failed · 1 created, 2 updated, 2 skipped, 1 failed, 0 not attempted · <SECONDS>",
+  "next_actions": [],
+  "ok": false,
+  "plan": {
+    "microsoft_defender": [
+      "00000000-0000-4000-8047-0000000000d1",
+      "00000000-0000-4000-8047-0000000000d2",
+      "00000000-0000-4000-8047-0000000000d3",
+      "00000000-0000-4000-8047-0000000000d4",
+      "00000000-0000-4000-8047-0000000000d5",
+      "00000000-0000-4000-8047-0000000000d6"
+    ]
+  },
+  "results": [
+    {
+      "action": "create",
+      "error": null,
+      "id": "00000000-0000-4000-8047-0000000000d1",
+      "name": "Defender create rule",
+      "platform": "microsoft_defender",
+      "reason": null,
+      "seconds": 0.0,
+      "status": "deployed",
+      "tenant": "lab"
+    },
+    {
+      "action": "update",
+      "error": null,
+      "id": "00000000-0000-4000-8047-0000000000d2",
+      "name": "Defender update rule",
+      "platform": "microsoft_defender",
+      "reason": null,
+      "seconds": 0.0,
+      "status": "deployed",
+      "tenant": "lab"
+    },
+    {
+      "action": "update",
+      "error": null,
+      "id": "00000000-0000-4000-8047-0000000000d3",
+      "name": "Defender concurrent create rule",
+      "platform": "microsoft_defender",
+      "reason": null,
+      "seconds": 0.0,
+      "status": "deployed",
+      "tenant": "lab"
+    },
+    {
+      "action": "disable",
+      "error": null,
+      "id": "00000000-0000-4000-8047-0000000000d4",
+      "name": "Defender disable absent rule",
+      "platform": "microsoft_defender",
+      "reason": "not on the tenant: nothing to disable",
+      "seconds": 0.0,
+      "status": "skipped",
+      "tenant": "lab"
+    },
+    {
+      "action": "delete",
+      "error": null,
+      "id": "00000000-0000-4000-8047-0000000000d5",
+      "name": "Defender delete absent rule",
+      "platform": "microsoft_defender",
+      "reason": "already gone from the tenant",
+      "seconds": 0.0,
+      "status": "skipped",
+      "tenant": "lab"
+    },
+    {
+      "action": "upsert",
+      "error": "Graph refused to update detection rule 00000000-0000-4000-8047-0000000000d6 on tenant lab: HTTP 400 (The query is not valid for a custom detection.): {\"error\":{\"code\":\"***\",\"message\":\"The query is not valid for a custom detection.\"}}",
+      "id": "00000000-0000-4000-8047-0000000000d6",
+      "name": "Defender refused rule",
+      "platform": "microsoft_defender",
+      "reason": null,
+      "seconds": 0.0,
+      "status": "failed",
+      "tenant": "lab"
+    }
+  ],
+  "schema_version": 1,
+  "status": "failed",
+  "strategies": [
+    "PREVIEW",
+    "RELEASE"
+  ],
+  "summary": {
+    "create": 1,
+    "delete": 0,
+    "disable": 0,
+    "failed": 1,
+    "not_attempted": 0,
+    "platforms": 1,
+    "seconds": 0.0,
+    "skipped": 2,
+    "tenants": 1,
+    "unchanged": 0,
+    "update": 2,
+    "upsert": 0
+  },
+  "warnings": [
+    "Some rules reported deployment warnings"
+  ]
+}
+
+━━━ stderr · json, 1 lines
+{
+  "detail": "rule 00000000-0000-4000-8047-0000000000d4 is not on tenant '***': nothing to disable",
+  "event": "microsoft_defender_rule_absent",
+  "level": "warning",
+  "timestamp": "0000-00-00 00:00:00"
+}

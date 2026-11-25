@@ -1,0 +1,93 @@
+---
+source: crates/opentide-kql/src/parser/tests.rs
+expression: "show(\"let x = materialize(T | take 1);\\nlet y = (U | take 2);\\n(x | take 1) | union y, (print 1)\")"
+---
+SOURCE_FILE@0..88
+  LET_STATEMENT@0..32
+    LET_KW@0..3 "let"
+    WHITESPACE@3..4 " "
+    IDENT@4..5 "x"
+    WHITESPACE@5..6 " "
+    EQ@6..7 "="
+    WHITESPACE@7..8 " "
+    TABULAR_EXPRESSION@8..31
+      TABULAR_SOURCE@8..31
+        MATERIALIZE_EXPRESSION@8..31
+          MATERIALIZE_KW@8..19 "materialize"
+          L_PAREN@19..20 "("
+          TABULAR_EXPRESSION@20..30
+            TABULAR_SOURCE@20..21
+              TABLE_REF@20..21
+                IDENT@20..21 "T"
+            WHITESPACE@21..22 " "
+            PIPE@22..23 "|"
+            WHITESPACE@23..24 " "
+            TAKE_OPERATOR@24..30
+              TAKE_KW@24..28 "take"
+              WHITESPACE@28..29 " "
+              NUMBER@29..30 "1"
+          R_PAREN@30..31 ")"
+    SEMICOLON@31..32 ";"
+  WHITESPACE@32..33 "\n"
+  LET_STATEMENT@33..54
+    LET_KW@33..36 "let"
+    WHITESPACE@36..37 " "
+    IDENT@37..38 "y"
+    WHITESPACE@38..39 " "
+    EQ@39..40 "="
+    WHITESPACE@40..41 " "
+    TABULAR_EXPRESSION@41..53
+      TABULAR_SOURCE@41..53
+        PAREN_TABULAR@41..53
+          L_PAREN@41..42 "("
+          TABULAR_EXPRESSION@42..52
+            TABULAR_SOURCE@42..43
+              TABLE_REF@42..43
+                IDENT@42..43 "U"
+            WHITESPACE@43..44 " "
+            PIPE@44..45 "|"
+            WHITESPACE@45..46 " "
+            TAKE_OPERATOR@46..52
+              TAKE_KW@46..50 "take"
+              WHITESPACE@50..51 " "
+              NUMBER@51..52 "2"
+          R_PAREN@52..53 ")"
+    SEMICOLON@53..54 ";"
+  WHITESPACE@54..55 "\n"
+  QUERY@55..88
+    TABULAR_EXPRESSION@55..88
+      TABULAR_SOURCE@55..67
+        PAREN_TABULAR@55..67
+          L_PAREN@55..56 "("
+          TABULAR_EXPRESSION@56..66
+            TABULAR_SOURCE@56..57
+              TABLE_REF@56..57
+                IDENT@56..57 "x"
+            WHITESPACE@57..58 " "
+            PIPE@58..59 "|"
+            WHITESPACE@59..60 " "
+            TAKE_OPERATOR@60..66
+              TAKE_KW@60..64 "take"
+              WHITESPACE@64..65 " "
+              NUMBER@65..66 "1"
+          R_PAREN@66..67 ")"
+      WHITESPACE@67..68 " "
+      PIPE@68..69 "|"
+      WHITESPACE@69..70 " "
+      UNION_OPERATOR@70..88
+        UNION_KW@70..75 "union"
+        WHITESPACE@75..76 " "
+        TABLE_REF@76..77
+          IDENT@76..77 "y"
+        COMMA@77..78 ","
+        WHITESPACE@78..79 " "
+        PAREN_TABULAR@79..88
+          L_PAREN@79..80 "("
+          TABULAR_EXPRESSION@80..87
+            TABULAR_SOURCE@80..87
+              PRINT_OPERATOR@80..87
+                PRINT_KW@80..85 "print"
+                WHITESPACE@85..86 " "
+                LITERAL@86..87
+                  NUMBER@86..87 "1"
+          R_PAREN@87..88 ")"

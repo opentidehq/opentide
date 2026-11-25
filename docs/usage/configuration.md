@@ -27,6 +27,7 @@ You only ever edit **layer 3** — your workspace. You override just the keys yo
 ├── visibility.toml         # what is exposed/deployed
 ├── documentation.toml      # `opentide generate docs` settings
 ├── lint.toml               # `opentide lint` checks and required metadata
+├── organisation.toml       # the organisation `opentide new` writes (from `setup --org`)
 └── platforms/
     ├── sentinel.toml
     └── splunk.toml
@@ -86,10 +87,12 @@ azure_client_secret = "$AZURE_CLIENT_SECRET"
 A `setup` value that is `$NAME` or `${NAME}` as a whole, `NAME` being letters, digits and underscores, is read from that environment variable. Any other value is used as written, one that starts with `$` (a secret such as `$uP3r-S3cret!`) included. Releases through 0.21.0 read any value that starts with `$` from the variable named by the rest; when a variable of exactly that name is set (`$AZ-SECRET` and a variable `AZ-SECRET`), it is still read, with a warning to rename it: a later release will use the value as written.
 
 <Callout type="info">
-Exact connection keys differ per platform. Use `opentide info --platform <name>` to see what a platform expects, and never commit real secrets — see [CI/CD](./workflows/ci-cd.md#secrets) for injecting them in pipelines.
+Exact connection keys differ per platform. The commented `[[tenants]]` template that `opentide setup platforms` writes into `.opentide/configurations/platforms/<name>.toml` lists the keys a platform expects; `opentide info --platform <name>` shows the tenants it configures. Never commit real secrets — see [CI/CD](./workflows/ci-cd.md#secrets) for injecting them in pipelines.
 </Callout>
 
-If you sit behind an outbound proxy, pass it on the command, or set `OPENTIDE_PROXY`. Either wins over `HTTP_PROXY` and `HTTPS_PROXY`; omitting both leaves those variables as they are. Hosts listed in `NO_PROXY` are still reached directly, so an internal tenant can bypass the proxy that a cloud tenant needs ([global options](../cli/global-options.md#proxy)). The same retirement covers platform tenant config, not only `[cve].proxy`: a `proxy` key under `[tenants.setup]` or in `deployment.toml` `[proxy]` fails the command and names `opentide --proxy`.
+If you sit behind an outbound proxy, pass it on the command, or set `OPENTIDE_PROXY`. Either wins over `HTTP_PROXY` and `HTTPS_PROXY`; omitting both leaves those variables as they are. Hosts listed in `NO_PROXY` are still reached directly, so an internal tenant can bypass the proxy that a cloud tenant needs ([global options](../cli/global-options.md#proxy)).
+
+The proxy of a request is, in this order: `--proxy`, `OPENTIDE_PROXY`, the variable of the request's scheme (`https_proxy` for an `https://` tenant, `http_proxy` for an `http://` one), then `all_proxy`. Of each variable the lower-case spelling is read first, then the upper-case one (`https_proxy`, then `HTTPS_PROXY`), as curl reads them. `no_proxy`, else `NO_PROXY`, is a comma-separated list of hosts reached directly: `*` for every host, a host name or an IP address, an address range in CIDR notation (`10.0.0.0/8` covers `10.1.2.3`), or a domain (`example.com` and `.example.com` both cover `api.example.com`). An entry with a port (`splunk.internal:8089`, `[fd00::7]:8089`) covers that host on that port only, as curl and Go read it; a URL without a port has its scheme's (443 for `https://`, 80 for `http://`). A proxy written without a scheme (`proxy.internal:8080`) is an HTTP proxy. Requests use HTTP/2 when the tenant or its gateway offers it during the TLS handshake, else HTTP/1.1. The same retirement covers platform tenant config, not only `[cve].proxy`: a `proxy` key under `[tenants.setup]` or in `deployment.toml` `[proxy]` fails the command and names `opentide --proxy`.
 
 ```bash
 opentide --proxy http://user:pass@proxy.internal:8080 validate --strict
@@ -112,9 +115,13 @@ token = "$SPLUNK_TOKEN"
 
 `ssl` takes `true` or `false`; from an environment variable, `true`/`false`, `yes`/`no`, `on`/`off` or `1`/`0` in any case. Any other value fails to load and names the tenant. An `ssl = "$VAR"` whose variable is unset fails before the first request, naming the tenant and the variable.
 
+### Retries
+
+Every platform retries a request the same way, and only when sending it twice is safe. A request whose connection could not be made (DNS, refused, the proxy, the connect timeout) never reached the tenant and is sent again whatever its method. A certificate the tenant's TLS settings refuse (untrusted, expired, for another host) is reported at once: it would be refused again. A `GET`, `HEAD`, `OPTIONS`, `PUT` or `DELETE` is also sent again after an HTTP 408, 429, 502, 503 or 504, except Sysdig's `PUT`, which updates a rule with the version the tenant held and is sent once. A request the tenant did not answer within its timeout is not sent again. A `POST` or `PATCH`, which creates rules and starts searches, is sent once: the tenant may have acted on a request its gateway answered with an error, so deploy never creates a rule twice. Up to three retries, waiting 0.5, 1 and 2 seconds, or what a 429 or 503 asks in `Retry-After` (seconds or a date, at most 120 seconds). When the retries run out, the last answer is reported. Bitdefender GravityZone, Exabeam and Google Security Operations wait out their own rate limits instead ([Platforms](./concepts/platforms.md)). There is no setting for it.
+
 ## Deployment statuses and strategies
 
-Every rule's `status` must match a status defined in the merged `deployment.toml`. That is the only constraint — statuses are a configurable set, not a fixed lifecycle, and opentide does not enforce an order between them. Each status maps to a **strategy**, and the strategy alone decides what deploy does. opentide ships this default set; none of these names is special:
+Every rule's platform block `status` must match a status defined in the merged `deployment.toml` (the rule's root `status` is informational: deploy and promotion read each platform block's `status`). That is the only constraint — statuses are a configurable set, not a fixed lifecycle, and opentide does not enforce an order between them. Each status maps to a **strategy**, and the strategy alone decides what deploy does. opentide ships this default set; none of these names is special:
 
 | Default status | Strategy | What it does |
 |--------|----------|--------------|
@@ -188,11 +195,11 @@ Each file is checked against its model when a command reads it, after your file 
 
 ### The datasets a log source fills
 
-A log source is **one dataset**, and its `name` is that dataset: the KQL table (or workspace function) for `sentinel` and `defender_for_endpoint`, the sourcetype for `splunk`, the index pattern or data stream for `elastic`. The query checks (`opentide validate`, `opentide validate query`, `opentide lint`, `opentide lsp start` and `opentide tui`) then know that name, so a custom table is not reported as unknown, and a log source can list the dataset's columns so the checks know them too.
+A log source is **one dataset**, and its `name` is that dataset: the KQL table (or workspace function) for `sentinel` and `microsoft_defender`, the sourcetype for `splunk`, the index pattern or data stream for `elastic`. The query checks (`opentide validate`, `opentide validate query`, `opentide lint`, `opentide lsp start` and `opentide tui`) then know that name, so a custom table is not reported as unknown, and a log source can list the dataset's columns so the checks know them too.
 
 | `system` | `name` declares | What it matches in a query |
 |----------|-----------------|----------------------------|
-| `sentinel`, `defender_for_endpoint` | a KQL table or workspace function | The names a KQL query reads: a pipeline's first source, a `union` leg, a `join` or `lookup` right side |
+| `sentinel`, `microsoft_defender` | a KQL table or workspace function | The names a KQL query reads: a pipeline's first source, a `union` leg, a `join` or `lookup` right side |
 | `splunk` | a sourcetype | `sourcetype=` |
 | `elastic` | an index pattern or data stream | A rule's `index`, a threat match's `index`, ES\|QL `FROM` |
 | any other | nothing | — |
@@ -228,7 +235,7 @@ system = "elastic"
 "process.name" = { type = "keyword" }
 ```
 
-- **Keys.** A log source takes `name`, `description` and `system` (required), and `tenants`, `assets`, `references` and `columns`. Any other key fails validation. `name` cannot be empty and is unique per `system`; the same name may appear under two systems (`DeviceEvents` under `sentinel` and `defender_for_endpoint`).
+- **Keys.** A log source takes `name`, `description` and `system` (required), and `tenants`, `assets`, `references` and `columns`. Any other key fails validation. `name` cannot be empty and is unique per `system`; the same name may appear under two systems (`DeviceEvents` under `sentinel` and `microsoft_defender`).
 - **Signals** name a log source in `data.logsources` as `<name>`, `<system>::<name>` or `<system>::<tenant>::<name>`; a bare name two systems declare refers to both.
 - **Patterns.** `*` matches any run of characters (`*_CL`, `logs-azure.*`). KQL and Elastic names match case-sensitively, Splunk names regardless of case. Splunk indexes and macros and Elastic data views are not declarable.
 - **Opt-in per system.** A system with at least one log source is checked against its names; a system with none is checked as if nothing were declared. The bundled `visibility.toml` declares no log source.
@@ -241,9 +248,10 @@ How a KQL source name is reported:
 | declared | yes | nothing |
 | known to the engine's catalog, not declared | yes | [`kql_table_not_declared`](../cli/diagnostics.md#kql_table_not_declared), warning |
 | known to the engine's catalog | no | nothing |
-| unknown to the catalog, not declared | either | [`kql_unknown_table`](../cli/diagnostics.md#kql_unknown_table): a warning under `sentinel`, an error under `defender_for_endpoint` |
+| unknown to the catalog, not declared, a near miss of a known or declared table (one edit for a name of up to seven characters, two for a longer one; a match that differs only in case, `_`, `-` or spaces counts) and not a `_CL` table | either | [`kql_table_misspelt`](../cli/diagnostics.md#kql_table_misspelt), an error under `sentinel`, with the table to use; `microsoft_defender` reports [`kql_unknown_table`](../cli/diagnostics.md#kql_unknown_table), also an error, with the same suggestion |
+| any other name unknown to the catalog, not declared | either | [`kql_unknown_table`](../cli/diagnostics.md#kql_unknown_table): a warning under `sentinel`, an error under `microsoft_defender` |
 
-Under opt-in a name is checked whatever its case; without, a name that starts with a lowercase letter is checked only when it ends in `_CL`, as it may be a workspace function. Under opt-in, a Splunk sourcetype that is not declared is [`spl_dataset_not_declared`](../cli/diagnostics.md#spl_dataset_not_declared), and an Elastic index pattern that is not declared is [`elastic_dataset_not_declared`](../cli/diagnostics.md#elastic_dataset_not_declared), both warnings; neither has an unknown-dataset error.
+A typo that passed `validate` as a warning before (`SecurityEvnt`) therefore fails it under `sentinel`. Correct the name; if the workspace really holds that table or function, declare it as a log source, or run `opentide validate --queries warn` to report it as a warning. Under opt-in a name is checked whatever its case; without, a name that starts with a lowercase letter is checked only when it ends in `_CL`, as it may be a workspace function. Under opt-in, a Splunk sourcetype that is not declared is [`spl_dataset_not_declared`](../cli/diagnostics.md#spl_dataset_not_declared), and an Elastic index pattern that is not declared is [`elastic_dataset_not_declared`](../cli/diagnostics.md#elastic_dataset_not_declared), both warnings; neither has an unknown-dataset error.
 
 #### Columns
 
@@ -251,13 +259,36 @@ Under opt-in a name is checked whatever its case; without, a name that starts wi
 
 | `system` | Types |
 |----------|-------|
-| `sentinel`, `defender_for_endpoint` | KQL scalar types: `bool`, `datetime`, `decimal`, `dynamic`, `guid`, `int`, `long`, `real`, `string`, `timespan` |
+| `sentinel`, `microsoft_defender` | KQL scalar types: `bool`, `datetime`, `decimal`, `dynamic`, `guid`, `int`, `long`, `real`, `string`, `timespan` |
 | `splunk` | `string`, `number`, `boolean` |
 | `elastic` | Elasticsearch field types: `binary`, `boolean`, `byte`, `constant_keyword`, `date`, `date_nanos`, `double`, `flattened`, `float`, `geo_point`, `half_float`, `integer`, `ip`, `keyword`, `long`, `match_only_text`, `nested`, `object`, `scaled_float`, `short`, `text`, `unsigned_long`, `version`, `wildcard` |
 
 - KQL: a declared table with `columns` is checked like a documented table: a near miss of a declared column is `kql_unknown_column`, an operator the declared type does not support is `kql_type_mismatch`, and hover and completion show the declared columns. On a table the engine's catalog also knows, the declared columns extend the catalog's, and a declared column with a catalog column's name replaces its type and description. A table declared without `columns` is known by name only.
 - Elastic: declared columns are fields the index pattern maps, so `ecs_unknown_field` is not reported for them and `ecs_type_mismatch` uses their declared type.
 - Splunk: declared columns are offered in hover and completion where the engine has them, and are not checked.
+
+#### One source, several tables
+
+A log source is one dataset, so a source such as "Windows Security" that fills two tables is two `[[logsources]]` entries, each with its own `columns`. A signal's `data.logsources` names both:
+
+```toml
+[[logsources]]
+name = "SecurityEvent"
+description = "Windows Security events"
+system = "sentinel"
+
+[[logsources]]
+name = "WindowsEvent"
+description = "Windows Security events"
+system = "sentinel"
+```
+
+```yaml
+data:
+  logsources:
+    - SecurityEvent
+    - WindowsEvent
+```
 
 #### Upgrading from 0.20.0
 
@@ -300,11 +331,27 @@ style = "slug"          # the file stem is slugify(name) (default); "name" or "n
 [filenames.rules]       # rules only; also [filenames.threats] and [filenames.objectives]
 style = "name"          # the file stem is the rule's name
 pattern = '^\[(SEN|XDR)\]\[.+'   # the whole stem must match this regular expression
+
+[queries.codes]         # one code's severity, over the check's: error, warning, info or off
+kql_join_summarize_before_project = "info"   # a note: `lint --strict` no longer fails on it
+kql_unknown_table = "error"
 ```
 
-A `[filenames.<kind>]` table sets `style` and `pattern` for one kind of object; a key it leaves unset comes from `[filenames]`. See [A convention per object kind](../cli/lint.md#a-convention-per-object-kind).
+A `codes` table under any check sets one finding code's severity (or `off`), so one inherited warning can be tamed without silencing its neighbours: see [Severity per code](../cli/lint.md#severity-per-code). A `[filenames.<kind>]` table sets `style` and `pattern` for one kind of object; a key it leaves unset comes from `[filenames]`. See [A convention per object kind](../cli/lint.md#a-convention-per-object-kind).
 
-The editor (`opentide lsp start`) and `opentide tui` read the same file: their `filename_slug`, `filename_pattern`, `missing_author`, `missing_organisation` and `recommended_field_missing` findings follow `[filenames]`, `[metadata]` and `[recommended]` as `opentide lint` does. A missing optional field is information there, as it is a note in `opentide lint`. A file that is not TOML leaves them at the defaults, and `opentide validate` reports it.
+The editor (`opentide lsp start`) reports what `opentide validate` reports; the file-name and metadata recommendations are `opentide lint`'s alone.
+
+## Organisation
+
+`opentide setup --org "Example Corp"` writes `organisation.toml`, the `{uuid, name}` that `opentide new` puts in `metadata.organisation`. The organisation is configured once per repository, in this file, and `new` carries it. The uuid is a fresh UUID v4: replace it with your organisation's own, which `opentide share push` uses as the MISP organisation when a target sets no `organisation_uuid`.
+
+```toml
+# .opentide/configurations/organisation.toml
+uuid = "6f0a3d6e-52a1-4c43-9a3e-0d8f1c2b7e11"
+name = "Example Corp"
+```
+
+`new` takes the organisation from this file only, never from objects already written. Edit the file, or run `setup --org` again, and every later `new` uses the result; objects already written keep what they were written with. With no file, or one without a valid `uuid` and `name`, `new` leaves `metadata.organisation` out and warns, saying to run `opentide setup --org "<name>"` or what is wrong with the file. Running `setup` without `--org` leaves the file alone; with `--org` it changes the `name` and keeps the `uuid`, and a `uuid` that is not a UUID is left as written, with a warning.
 
 ## Paths
 

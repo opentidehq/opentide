@@ -20,14 +20,14 @@ opentide validate --file objects/rules/suspicious-lsass-access.yaml
 |------------|---------|
 | `threat` | `--name`, `--path` |
 | `objective` | `--name`, `--threat UUID` (repeatable: fills `objective.threats`), `--path` |
-| `rule` | `--name`, `--platform` (repeatable: one configuration block each), `--objective UUID` (fills `detection_model`), `--path` |
+| `rule` | `--name`, `--platform` (repeatable: one configuration block each), `--objective UUID` (an objective or a signal UUID: fills `detection_model`), `--path` |
 
 | Option | Purpose |
 |--------|---------|
 | `--name` | The object's `name`. The filename is its slug, or follows the `style` set in `lint.toml` (see below) |
-| `--path` | A file to write, or a folder to write it in. A file name without `.yaml` or `.yml` gets `.yaml`, the only files the catalogue loads. Default: the family's folder from the workspace configuration (`objects/threats/`, `objects/objectives/`, `objects/rules/`) |
-| `--platform` | `sentinel`, `defender_for_endpoint`, `splunk`, `sentinel_one`, `crowdstrike`, `harfanglab`, `carbon_black_cloud`, `elastic`, `sysdig`, `bitdefender`, `graylog`, `exabeam` or `google_secops` |
-| `--objective`, `--threat` | The UUID of an object already in the catalogue. A malformed UUID exits `2` with `usage_invalid_value`; one no object carries exits `2` with `reference_not_found` |
+| `--path` | A file to write, or a folder to write it in. A file name without `.yaml` or `.yml` gets `.yaml`, the only files the catalogue loads. Default: the family's folder from the workspace configuration (`objects/threats/`, `objects/objectives/`, `objects/rules/`). opentide reads a family's objects from that folder only: a file written anywhere else (a folder below it, or outside the workspace) gets a warning that opentide will not index, validate, share, document or deploy it, and no `opentide validate --file` next step |
+| `--platform` | `sentinel`, `microsoft_defender`, `splunk`, `sentinel_one`, `crowdstrike`, `harfanglab`, `carbon_black_cloud`, `elastic`, `sysdig`, `bitdefender`, `graylog`, `exabeam` or `google_secops` |
+| `--objective`, `--threat` | The UUID of an object already in the catalogue; `--objective` also takes the UUID of a signal an objective defines (`objective.signals[].uuid`), which `detection_model` then names as written. A malformed UUID exits `2` with `usage_invalid_value`; one no object carries exits `2` with `reference_not_found` |
 
 ## What the new file holds
 
@@ -41,14 +41,15 @@ opentide validate --file objects/rules/suspicious-lsass-access.yaml
 | `metadata.version` | `1` |
 | `metadata.tlp` | `amber`, so a new object is never cleared for sharing by accident |
 | `metadata.author` | `git config user.name`, read from the workspace. Left out, with a warning, when git has none |
-| `metadata.organisation` | The `{uuid, name}` most objects in the catalogue carry. Left out, with a warning, when none does |
+| `metadata.organisation` | The `{uuid, name}` in `.opentide/configurations/organisation.toml`, which `opentide setup --org` writes ([setup](./setup.md#default-callback-flags)). It is configured once per repository: `new` never takes it from objects already written. Left out, with a warning, when no organisation is configured (run `opentide setup --org "<name>"`) or the file has no usable `uuid` and `name` (the warning says which is wrong) |
 | Each `--platform` block | `enabled: true` and the first deployment status whose strategy is `INERT` (`DESIGN` by default), so the block deploys nothing until you move its status on. When no status has strategy `INERT`, the block is `enabled: false` and its status is a placeholder, with a warning |
-| Detection logic in each block | Placeholders for what the platform needs to deploy: the `query`, Defender's `scope`, SentinelOne's `condition.single_event.query`, HarfangLab's `sigma` block, Sentinel's `scheduling.frequency` and `lookback` (`1h`) |
+| Detection logic in each block | Placeholders for what the platform needs to deploy: the `query`, Defender's `schedule.frequency` (`1H`), SentinelOne's `condition.single_event.query`, HarfangLab's `sigma` block, Sentinel's `scheduling.frequency` and `lookback` (`1h`) |
 | Sentinel grouping | `grouping.event: SingleAlert` and `grouping.alert.enabled: false`, Sentinel's own defaults, which its deploy requires |
 | `response` | The template's defaults (`alert_severity: Informational`), so a deploy never reads an empty block |
+| CrowdStrike's `details.trigger` and `details.outcome` | Placeholders: `verbose` and `detection`, the first value each takes (`validate` holds both to a closed set, which the generated schema does not list) |
 | Any other required value | A placeholder: the first value the generated schema allows, or `...` for free text. A required block whose keys are all optional keeps the defaults the template shows, or else gets its first key as a placeholder, so uncommenting another key keeps the YAML valid |
 
-The filename follows the convention [`opentide lint`](./lint.md#filename-convention) checks, set by `style` under `[filenames]` in `lint.toml`, or under the object kind's own table (`[filenames.rules]`, for instance) when it sets one: `slugify(name)` by default (and under `style = "none"`), or the name itself, less the characters a file name cannot hold, under `style = "name"`. `-{uuid[:8]}` is appended when that stem is already taken in the folder. A file that misses its kind's `pattern` is still written, with a warning, since no name derives from a pattern. An invalid `lint.toml` exits `2` before anything is written. `new` never overwrites a file: a `--path` that exists, or a file that appears there while `new` runs, exits `1` with `path_exists`. A folder or file it cannot write (a read-only checkout, another user's folder) exits `1` with `path_not_writable`, naming the file and the system's reason, then `→ opentide explain path_not_writable`.
+The filename follows the convention [`opentide lint`](./lint.md#filename-convention) checks, set by `style` under `[filenames]` in `lint.toml`, or under the object kind's own table (`[filenames.rules]`, for instance) when it sets one: `slugify(name)` by default (and under `style = "none"`), or the name itself, less the characters a file name cannot hold, under `style = "name"`. A stem Windows reserves for a device (`CON`, `PRN`, `AUX`, `NUL`, `CONIN$`, `CONOUT$`, `COM0`-`COM9`, `LPT0`-`LPT9`, `COM¹`-`COM³`, `LPT¹`-`LPT³`, in any case and with any extension) gets a `_` before it: `--name CON` writes `_con.yaml`. `-{uuid[:8]}` is appended when that stem is already taken in the folder. A file that misses its kind's `pattern` is still written, with a warning, since no name derives from a pattern. An invalid `lint.toml` exits `2` before anything is written. `new` never overwrites a file: a `--path` that exists, or a file that appears there while `new` runs, exits `1` with `path_exists`. A folder or file it cannot write (a read-only checkout, another user's folder) exits `1` with `path_not_writable`, naming the file and the system's reason, then `→ opentide explain path_not_writable`.
 
 ### Placeholders
 
@@ -60,7 +61,7 @@ Every line holding a placeholder ends in `# opentide:placeholder`. The file vali
 
 ## Prompts
 
-At an interactive terminal in `human` mode, `new` asks for a missing `--name`, and for `new rule`, which enabled platforms to add blocks for. Everywhere else it never prompts: with `--json`, without a terminal, or under a coding agent, a missing `--name` exits `2` with `failure.code` `usage_needs_input` and `failure.argument` `--name`. `--platform`, `--objective` and `--threat` are optional and never block.
+At an interactive terminal in `human` mode, `new` asks for a missing `--name` (`Threat name`, `Objective name`, `Rule name`), and for `new rule`, which enabled platforms to add blocks for (`Platform blocks`; space selects, enter for none). An empty answer is refused and the question asked again; Ctrl-C at a question stops the run (exit `130`). Everywhere else it never prompts: with `--json`, without a terminal, or under a coding agent, a missing `--name` exits `2` with `failure.code` `usage_needs_input` and `failure.argument` `--name`. A `--name` that is empty or only spaces is never asked for again: it exits `2` with `usage_invalid_value` (`--name cannot be empty`). `--platform`, `--objective` and `--threat` are optional and never block.
 
 ## Output
 
@@ -93,4 +94,4 @@ A rule block for a platform the workspace has not enabled is written anyway, wit
 
 ## Source
 
-`src/opentide/cli/commands/new.py`, `src/opentide/cli/services/new.py`
+`crates/opentide-cli/src/commands/new.rs`, `crates/opentide-cli/src/commands/new/`

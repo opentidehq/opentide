@@ -1,0 +1,3 @@
+// prod:let_statement valid
+let x = 1;
+SecurityEvent | take 1

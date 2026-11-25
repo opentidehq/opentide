@@ -1,0 +1,19 @@
+name: Splunk Real Time
+
+metadata:
+  uuid: 00000000-0000-4000-8005-000000000302
+  schema: rule::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+
+description: Splunk Real Time for the compile corpus.
+
+configurations:
+  splunk:
+    status: DISABLED
+    query: index=main error
+    correlation_search: false
+    scheduling:
+      type: Real Time

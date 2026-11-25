@@ -1,0 +1,25 @@
+# A host mapping with a field hosts do not have. Expected constraint code: defender_entity_mapping.
+name: Microsoft Defender invalid block (rule-microsoft-defender-entity-field.yaml)
+metadata:
+  uuid: 00000000-0000-4000-8003-0000000000d2
+  schema: rule::1.0
+  version: 1
+  created: "2026-11-24"
+  modified: "2026-11-24"
+  tlp: clear
+description: |
+  Invalid Microsoft Defender block fixture.
+response:
+  alert_severity: Medium
+configurations:
+  microsoft_defender:
+    enabled: true
+    schema: platform::microsoft_defender::1.0
+    status: STAGING
+    query: DeviceProcessEvents | take 1
+    schedule:
+      frequency: 1H
+    entities:
+      hosts:
+        - device_id: DeviceId
+          sid: AccountSid

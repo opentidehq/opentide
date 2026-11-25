@@ -1,0 +1,1 @@
+index=main | eventstats min(eval(if(action=="a", _time, null()))) as e

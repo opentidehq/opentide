@@ -1,0 +1,43 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/oracles/elasticsearch/esql-reference/067_where_timestamp_now_1_day.esql
+---
+SOURCE_FILE@0..45
+  QUERY@0..44
+    FROM_COMMAND@0..9
+      FROM_KW@0..4 "FROM"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..9
+        INDEX_NAME@5..9
+          SOURCE_TEXT@5..9 "logs"
+    WHITESPACE@9..10 " "
+    PIPE@10..11 "|"
+    WHITESPACE@11..12 " "
+    WHERE_COMMAND@12..44
+      WHERE_KW@12..17 "WHERE"
+      WHITESPACE@17..18 " "
+      COMPARISON@18..44
+        QUALIFIED_NAME@18..28
+          IDENTIFIER@18..28
+            IDENT@18..28 "@timestamp"
+        WHITESPACE@28..29 " "
+        GT@29..30 ">"
+        WHITESPACE@30..31 " "
+        BINARY_EXPRESSION@31..44
+          FUNCTION_CALL@31..36
+            IDENTIFIER@31..34
+              IDENT@31..34 "NOW"
+            L_PAREN@34..35 "("
+            R_PAREN@35..36 ")"
+          WHITESPACE@36..37 " "
+          MINUS@37..38 "-"
+          WHITESPACE@38..39 " "
+          QUALIFIED_INTERVAL@39..44
+            NUMBER@39..40
+              NUMBER_LIT@39..40 "1"
+            WHITESPACE@40..41 " "
+            TIME_UNIT@41..44
+              IDENT@41..44 "day"
+  WHITESPACE@44..45 "\n"
+--- errors

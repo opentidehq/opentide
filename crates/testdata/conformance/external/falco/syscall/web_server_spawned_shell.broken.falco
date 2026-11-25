@@ -1,0 +1,1 @@
+spawned_process and proc.name in (oops and spawned_by_web_server and proc.name in (shell_binaries) and not proc.cmdline startswith "sh -c /usr/bin" and not proc.cmdline contains "healthcheck" and not user_known_web_server_shell_activities

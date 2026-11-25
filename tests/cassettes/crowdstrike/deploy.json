@@ -1,0 +1,284 @@
+{
+  "format": 1,
+  "scenario": "crowdstrike/deploy",
+  "recorded_from": [
+    "{python}",
+    "tests/cassettes/crowdstrike/client.py",
+    "deploy"
+  ],
+  "digest": "sha256:b0023220cc1d074bedc7f4a7e385935c9df8aa9839a69c2e70346e39013934ce",
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://api.eu-1.crowdstrike.com/oauth2/token",
+        "headers": [
+          [
+            "content-type",
+            "application/x-www-form-urlencoded"
+          ]
+        ],
+        "body": "client_id=opentide-client&client_secret=REDACTED"
+      },
+      "response": {
+        "status": 201,
+        "headers": [
+          [
+            "server",
+            "falcon-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"access_token\": \"REDACTED\", \"token_type\": \"REDACTED\", \"expires_in\": 1799}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://api.eu-1.crowdstrike.com/correlation-rules/entities/rules/v1",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"name\": \"Encoded PowerShell\", \"description\": \"Encoded PowerShell \\u2014 \\u00dcn\\u00efcode \\\"quoted\\\"\", \"customer_id\": \"0123456789abcdef\", \"severity\": 70, \"search\": {\"outcome\": \"detection\", \"filter\": \"#event_simpleName=ProcessRollup2 CommandLine=/-enc/i\\n| groupBy([aid])\", \"lookback\": \"1h0m\", \"trigger_mode\": \"summary\"}, \"operation\": {\"schedule\": {\"definition\": \"@every 1h0m\"}, \"start_on\": \"2025-04-15T19:00:00Z\"}, \"status\": \"active\", \"tactic\": \"TA0002\", \"comment\": \"Updated by opentide Crowdstrike Deployer - Author(s) : Amine, Zo\\u00e9\"}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "falcon-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"meta\": {\"query_time\": 0.012, \"trace_id\": \"00000000-0000-4000-8000-0000000000aa\"}, \"resources\": [{\"id\": \"cs-rule-1\", \"name\": \"Encoded PowerShell\", \"status\": \"active\"}], \"errors\": []}"
+      }
+    },
+    {
+      "request": {
+        "method": "PATCH",
+        "url": "https://api.eu-1.crowdstrike.com/correlation-rules/entities/rules/v1",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "[{\"name\": \"Encoded PowerShell (tuned)\", \"description\": \"Encoded PowerShell \\u2014 \\u00dcn\\u00efcode \\\"quoted\\\"\", \"customer_id\": \"0123456789abcdef\", \"severity\": 70, \"search\": {\"outcome\": \"detection\", \"filter\": \"#event_simpleName=ProcessRollup2 CommandLine=/-enc/i\\n| groupBy([aid])\", \"lookback\": \"1h0m\", \"trigger_mode\": \"summary\"}, \"operation\": {\"schedule\": {\"definition\": \"@every 1h0m\"}, \"start_on\": \"2025-04-15T19:00:00Z\"}, \"status\": \"active\", \"tactic\": \"TA0002\", \"comment\": \"Updated by opentide Crowdstrike Deployer - Author(s) : Amine, Zo\\u00e9\", \"id\": \"cs-rule-1\"}]"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "falcon-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"meta\": {\"query_time\": 0.012, \"trace_id\": \"00000000-0000-4000-8000-0000000000aa\"}, \"resources\": [{\"id\": \"cs-rule-1\", \"status\": \"active\"}], \"errors\": []}"
+      }
+    },
+    {
+      "request": {
+        "method": "PATCH",
+        "url": "https://api.eu-1.crowdstrike.com/correlation-rules/entities/rules/v1",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "[{\"name\": \"Encoded PowerShell (tuned)\", \"description\": \"Encoded PowerShell \\u2014 \\u00dcn\\u00efcode \\\"quoted\\\"\", \"customer_id\": \"0123456789abcdef\", \"severity\": 70, \"search\": {\"outcome\": \"detection\", \"filter\": \"#event_simpleName=ProcessRollup2 CommandLine=/-enc/i\\n| groupBy([aid])\", \"lookback\": \"1h0m\", \"trigger_mode\": \"summary\"}, \"operation\": {\"schedule\": {\"definition\": \"@every 1h0m\"}, \"start_on\": \"2025-04-15T19:00:00Z\"}, \"status\": \"inactive\", \"tactic\": \"TA0002\", \"comment\": \"Updated by opentide Crowdstrike Deployer - Author(s) : Amine, Zo\\u00e9\", \"id\": \"cs-rule-1\"}]"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "falcon-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"meta\": {\"query_time\": 0.012, \"trace_id\": \"00000000-0000-4000-8000-0000000000aa\"}, \"resources\": [{\"id\": \"cs-rule-1\", \"status\": \"inactive\"}], \"errors\": []}"
+      }
+    },
+    {
+      "request": {
+        "method": "DELETE",
+        "url": "https://api.eu-1.crowdstrike.com/correlation-rules/entities/rules/v1?ids=cs-rule-1",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "falcon-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"meta\": {\"query_time\": 0.012, \"trace_id\": \"00000000-0000-4000-8000-0000000000aa\"}, \"resources\": [\"cs-rule-1\"], \"errors\": []}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://api.eu-1.crowdstrike.com/correlation-rules/entities/rules/v1",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"name\": \"Rejected rule\", \"description\": \"Encoded PowerShell \\u2014 \\u00dcn\\u00efcode \\\"quoted\\\"\", \"customer_id\": \"0123456789abcdef\", \"severity\": 70, \"search\": {\"outcome\": \"detection\", \"filter\": \"#event_simpleName=ProcessRollup2 CommandLine=/-enc/i\\n| groupBy([aid])\", \"lookback\": \"1h0m\", \"trigger_mode\": \"summary\"}, \"operation\": {\"schedule\": {\"definition\": \"@every 1h0m\"}, \"start_on\": \"2025-04-15T19:00:00Z\"}, \"status\": \"active\", \"tactic\": \"TA0002\", \"comment\": \"Updated by opentide Crowdstrike Deployer - Author(s) : Amine, Zo\\u00e9\"}"
+      },
+      "response": {
+        "status": 400,
+        "headers": [
+          [
+            "server",
+            "falcon-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"meta\": {\"query_time\": 0.012, \"trace_id\": \"00000000-0000-4000-8000-0000000000aa\"}, \"resources\": [], \"errors\": [{\"code\": 400, \"message\": \"search.filter: invalid query\"}]}"
+      }
+    },
+    {
+      "request": {
+        "method": "PATCH",
+        "url": "https://api.eu-1.crowdstrike.com/correlation-rules/entities/rules/v1",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "[{\"name\": \"Rejected rule\", \"description\": \"Encoded PowerShell \\u2014 \\u00dcn\\u00efcode \\\"quoted\\\"\", \"customer_id\": \"0123456789abcdef\", \"severity\": 70, \"search\": {\"outcome\": \"detection\", \"filter\": \"#event_simpleName=ProcessRollup2 CommandLine=/-enc/i\\n| groupBy([aid])\", \"lookback\": \"1h0m\", \"trigger_mode\": \"summary\"}, \"operation\": {\"schedule\": {\"definition\": \"@every 1h0m\"}, \"start_on\": \"2025-04-15T19:00:00Z\"}, \"status\": \"active\", \"tactic\": \"TA0002\", \"comment\": \"Updated by opentide Crowdstrike Deployer - Author(s) : Amine, Zo\\u00e9\", \"id\": \"cs-rule-1\"}]"
+      },
+      "response": {
+        "status": 400,
+        "headers": [
+          [
+            "server",
+            "falcon-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"meta\": {\"query_time\": 0.012, \"trace_id\": \"00000000-0000-4000-8000-0000000000aa\"}, \"resources\": [], \"errors\": [{\"code\": 400, \"message\": \"bad rule\"}]}"
+      }
+    },
+    {
+      "request": {
+        "method": "DELETE",
+        "url": "https://api.eu-1.crowdstrike.com/correlation-rules/entities/rules/v1?ids=cs-rule-missing",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 404,
+        "headers": [
+          [
+            "server",
+            "falcon-stand-in"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"meta\": {\"query_time\": 0.012, \"trace_id\": \"00000000-0000-4000-8000-0000000000aa\"}, \"resources\": [], \"errors\": [{\"code\": 404, \"message\": \"rule not found\"}]}"
+      }
+    }
+  ]
+}

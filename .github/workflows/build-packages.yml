@@ -1,0 +1,458 @@
+# The installable packages: the PyPI wheels and the npm tarballs (UC-5.5,
+# #840). release-build.yml calls it, for both of its callers:
+#
+#   - publish.yml, the release train: at the release's version (or a
+#     candidate's), then smoke-tested, attested and published;
+#   - ci.yml's `release` job (a release pull request, `scope: release`, the
+#     nightly): a development build of the workspace version (PyPI X.Y.Z.devN,
+#     npm X.Y.Z-dev.N, N the run number), uploaded as run artifacts for a
+#     maintainer to install and test without publishing anything
+#     (docs/internal/publishing.md, "Testing a build without publishing").
+#
+# Artifacts:
+#
+#   - wheels-<platform>: one cp310-abi3 wheel, built by maturin (linux-x64,
+#     linux-arm64, macos-x64, macos-arm64, windows-x64, windows-arm64), each
+#     installed and run on its own OS before the build passes (`wheel-smoke`);
+#   - npm-packages: every npm tarball in publishing order (1-native, 2-package,
+#     3-alias, 4-lsp), which release-build.yml smoke-tests and publish.yml
+#     attests and publishes; a tester installs
+#     `npm install ./2-package/opentide-opentide-*.tgz ./1-native/<platform>.tgz`;
+#   - npm-native-<platform>: each addon with the loader napi-rs wrote (an
+#     intermediate of npm-pack).
+#
+# It builds one commit, `revision`, a 40-hex SHA it checks before any
+# checkout: publish.yml's guard resolves the run's ref (or the tag it resumes)
+# to that SHA, and ci.yml passes github.sha. A branch or tag name, which could
+# move or name code nobody checked, is refused.
+#
+# Nothing here publishes or holds a token: `contents: read`, no OIDC token, no
+# secret, and no compiler cache for a release (a release builds from
+# nothing): only a development build (`sccache`) compiles through sccache.
+name: Build packages
+
+on:
+  workflow_call:
+    inputs:
+      revision:
+        description: "The commit to build, as its 40-hex SHA: publish.yml's guard resolves and checks it; ci.yml passes github.sha. Nothing else is accepted."
+        required: true
+        type: string
+      pypi-version:
+        description: "The wheels' version (PEP 440). Empty: the workspace version as a development build, X.Y.Z.devN."
+        required: false
+        default: ""
+        type: string
+      npm-version:
+        description: "The npm packages' version. Empty: the workspace version as a development build, X.Y.Z-dev.N."
+        required: false
+        default: ""
+        type: string
+      sccache:
+        description: "Compile the wheels through sccache: a development build only (a release builds from nothing)."
+        required: false
+        default: false
+        type: boolean
+      retention-days:
+        description: "How long the artifacts are kept; 0 is the repository's default."
+        required: false
+        default: 0
+        type: number
+    outputs:
+      crates:
+        description: "The crates' version (the workspace's)."
+        value: ${{ jobs.versions.outputs.crates }}
+      pypi:
+        description: "The wheels' version."
+        value: ${{ jobs.versions.outputs.pypi }}
+      npm:
+        description: "The npm packages' version."
+        value: ${{ jobs.versions.outputs.npm }}
+
+permissions:
+  contents: read
+
+jobs:
+  # The versions this build carries: the caller's, or a development build of
+  # the workspace version, which no release ever takes (`.devN`, `-dev.N`).
+  versions:
+    name: Versions
+    runs-on: ubuntu-latest
+    outputs:
+      crates: ${{ steps.versions.outputs.crates }}
+      pypi: ${{ steps.versions.outputs.pypi }}
+      npm: ${{ steps.versions.outputs.npm }}
+    steps:
+      # Before any checkout: the revision is a commit SHA, never a branch or
+      # tag name that could move. Every other job needs this one.
+      - name: The revision is a commit SHA
+        env:
+          REVISION: ${{ inputs.revision }}
+        run: |
+          set -euo pipefail
+          if [[ ! "${REVISION}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::revision must be a 40-hex commit SHA, not '${REVISION}'." >&2
+            exit 1
+          fi
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.revision }}
+      - name: The versions
+        id: versions
+        env:
+          PYPI_VERSION: ${{ inputs.pypi-version }}
+          NPM_VERSION: ${{ inputs.npm-version }}
+          RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          set -euo pipefail
+          crates="$(python3 scripts/engine/release.py version)"
+          pypi="${PYPI_VERSION:-${crates}.dev${RUN_NUMBER}}"
+          npm="${NPM_VERSION:-${crates}-dev.${RUN_NUMBER}}"
+          {
+            echo "crates=${crates}"
+            echo "pypi=${pypi}"
+            echo "npm=${npm}"
+          } >> "$GITHUB_OUTPUT"
+          echo "### wheels ${pypi}, npm ${npm} (the crates: ${crates})" >> "$GITHUB_STEP_SUMMARY"
+
+  # One cp310-abi3 wheel per platform, built by maturin (PyO3/maturin-action;
+  # pyproject.toml's [tool.maturin]) with cargo's release profile, at the
+  # build's version. Linux builds in the manylinux_2_28 images, aarch64
+  # cross-compiled (rust-cross's image: no QEMU); macOS and Windows build on
+  # the runner, x86_64-apple-darwin and aarch64-pc-windows-msvc
+  # cross-compiled. Each wheel is then installed and run on its own OS
+  # (`wheel-smoke`). manylinux_2_28 only: no musllinux (the maintainer's
+  # decision; docs/internal/publishing.md).
+  wheels:
+    name: Wheel (${{ matrix.platform }})
+    needs: versions
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux-x64
+            target: x86_64-unknown-linux-gnu
+            tag: manylinux_2_28_x86_64
+          - os: ubuntu-latest
+            platform: linux-arm64
+            target: aarch64-unknown-linux-gnu
+            tag: manylinux_2_28_aarch64
+          # rustc's floor for x86_64-apple-darwin is 10.12, maturin's default.
+          - os: macos-latest
+            platform: macos-x64
+            target: x86_64-apple-darwin
+            tag: macosx_10_12_x86_64
+          - os: macos-latest
+            platform: macos-arm64
+            target: aarch64-apple-darwin
+            tag: macosx_11_0_arm64
+          - os: windows-latest
+            platform: windows-x64
+            target: x86_64-pc-windows-msvc
+            tag: win_amd64
+          - os: windows-latest
+            platform: windows-arm64
+            target: aarch64-pc-windows-msvc
+            tag: win_arm64
+    env:
+      PYPI_VERSION: ${{ needs.versions.outputs.pypi }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.revision }}
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      # maturin takes the wheel's version from bindings/python/'s crate: a
+      # candidate's (X.Y.ZrcN) or a development build's (X.Y.Z.devN) is
+      # written there and in the lock, in this checkout only
+      # (scripts/engine/release.py pypi-version).
+      #
+      # The engine and the language server report that version too, not the
+      # workspace's: scripts/build/report_version.py sets OPENTIDE_BUILD_VERSION in
+      # .cargo/config.toml, which cargo reads in maturin's container as well.
+      - name: The wheel at the build's version
+        shell: bash
+        run: |
+          python scripts/engine/release.py pypi-version "${PYPI_VERSION}"
+          python scripts/build/report_version.py "${PYPI_VERSION}"
+
+      # rust-toolchain.toml's release, which maturin-action installs (in the
+      # manylinux container on Linux) and sets as the directory's override,
+      # so rustup installs nothing mid-build. The compiler cache only for a
+      # development build (`sccache`, ci.yml's): a release (publish.yml)
+      # builds from nothing.
+      - name: Build the wheel
+        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
+        with:
+          maturin-version: v1.16.0
+          command: build
+          target: ${{ matrix.target }}
+          manylinux: "2_28"
+          sccache: ${{ inputs.sccache }}
+          args: --locked --out wheelhouse
+
+      # One wheel, tagged cp310-abi3 for the platform, at the build's version.
+      - name: The wheel's name
+        shell: bash
+        env:
+          TAG: ${{ matrix.tag }}
+        run: |
+          set -euo pipefail
+          ls -l wheelhouse
+          expected="wheelhouse/opentide-${PYPI_VERSION}-cp310-abi3-${TAG}.whl"
+          found=(wheelhouse/*.whl)
+          if [[ "${#found[@]}" -ne 1 || "${found[0]}" != "${expected}" ]]; then
+            echo "::error::expected ${expected}, found ${found[*]}" >&2
+            exit 1
+          fi
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: wheels-${{ matrix.platform }}
+          path: wheelhouse/*.whl
+          if-no-files-found: error
+          retention-days: ${{ inputs.retention-days }}
+
+  # Each wheel installed the way a user installs it, on its own OS and
+  # architecture (the build cross-compiles three of them): the module's
+  # version, the engine (check_query), the package's smoke
+  # (scripts/build/smoke_package.py: `opentide --version`, its requirements,
+  # validate on the tide corpus, the SDK) and doctor.
+  wheel-smoke:
+    name: Wheel smoke (${{ matrix.platform }})
+    needs: [versions, wheels]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux-x64
+          - os: ubuntu-24.04-arm
+            platform: linux-arm64
+          - os: macos-15-intel
+            platform: macos-x64
+          - os: macos-latest
+            platform: macos-arm64
+          - os: windows-latest
+            platform: windows-x64
+          - os: windows-11-arm
+            platform: windows-arm64
+    env:
+      PYPI_VERSION: ${{ needs.versions.outputs.pypi }}
+    steps:
+      # scripts/build/smoke_package.py and the tide corpus, at the commit built.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.revision }}
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: wheels-${{ matrix.platform }}
+          path: ${{ runner.temp }}/wheels
+      - name: pip install the wheel, then the engine, the package's smoke and doctor
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m venv "${RUNNER_TEMP}/venv"
+          if [[ -x "${RUNNER_TEMP}/venv/Scripts/python.exe" ]]; then bin="${RUNNER_TEMP}/venv/Scripts"; else bin="${RUNNER_TEMP}/venv/bin"; fi
+          "${bin}/python" -m pip install --quiet --find-links "${RUNNER_TEMP}/wheels" --only-binary opentide "opentide==${PYPI_VERSION}"
+          "${bin}/opentide" --version
+          "${bin}/python" -c "import sys, opentide._native as n; assert n.__version__ == sys.argv[1], n.__version__" "${PYPI_VERSION}"
+          "${bin}/python" -c "from opentide.analysis import check_query; assert [f.code for f in check_query('SecurityEvent | wher x', language='kql')] == ['kql_unknown_operator']"
+          # The tide corpus (tests/fixtures/tide_corpus) validates, and Workspace.open reads it.
+          "${bin}/python" -I scripts/build/smoke_package.py "${PYPI_VERSION}"
+          workspace="${RUNNER_TEMP}/smoke-workspace"
+          "${bin}/opentide" --json setup --path "${workspace}" --yes > /dev/null
+          cd "${workspace}"
+          "${bin}/opentide" --json doctor --offline
+
+  # @opentide/opentide's native packages (napi-rs, UC-5.3): the facade with
+  # `cli` for each target, as `opentide.<platform>.node`, built with the npm
+  # packages at the build's version (the loader napi-rs writes names it).
+  npm-native:
+    name: npm native (${{ matrix.platform }})
+    needs: versions
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: true
+      matrix:
+        # scripts/engine/release.py TARGETS, and bindings/node/package.json's
+        # napi targets: no musl.
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            platform: linux-x64-gnu
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            platform: linux-arm64-gnu
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            platform: darwin-arm64
+          # GitHub retired the Intel macOS runners; cross-compile on Apple silicon.
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            platform: darwin-x64
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            platform: win32-x64-msvc
+          - os: windows-11-arm
+            target: aarch64-pc-windows-msvc
+            platform: win32-arm64-msvc
+    env:
+      NPM_VERSION: ${{ needs.versions.outputs.npm }}
+      TARGET: ${{ matrix.target }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.revision }}
+      # The other images carry rustup; this one may not.
+      - name: Rust on Windows on Arm
+        if: matrix.os == 'windows-11-arm'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          if (-not (Get-Command rustup -ErrorAction SilentlyContinue)) {
+            $installer = Join-Path $env:RUNNER_TEMP 'rustup-init.exe'
+            Invoke-WebRequest -Uri 'https://static.rust-lang.org/rustup/dist/aarch64-pc-windows-msvc/rustup-init.exe' -OutFile $installer
+            & $installer -y --profile minimal --default-toolchain none
+            Join-Path $env:USERPROFILE '.cargo\bin' | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+          }
+      # rust-toolchain.toml's release, minimal, with the target, named in
+      # RUSTUP_TOOLCHAIN for the build (scripts/build/install-rust.sh): rustup
+      # installs nothing mid-build.
+      - name: Set up Rust
+        shell: bash
+        run: scripts/build/install-rust.sh "${TARGET}"
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          package-manager-cache: false
+      # `npm ci` first: it refuses a package.json whose dependencies the lock
+      # does not name, and npm-version moves the optional ones.
+      - name: npm ci
+        shell: bash
+        working-directory: bindings/node
+        run: npm ci
+      - name: The npm packages at the build's version
+        shell: bash
+        run: python scripts/engine/release.py npm-version "${NPM_VERSION}"
+      - name: Build the addon
+        shell: bash
+        working-directory: bindings/node
+        run: OPENTIDE_BUILD_VERSION="${NPM_VERSION}" node build.mjs --release --target "${TARGET}"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: npm-native-${{ matrix.platform }}
+          path: |
+            bindings/node/opentide.${{ matrix.platform }}.node
+            bindings/node/index.js
+            bindings/node/index.d.ts
+          if-no-files-found: error
+          retention-days: ${{ inputs.retention-days }}
+
+  # Every npm package as the tarball `npm publish` uploads, at the build's
+  # version, in the order they publish: the native packages, the package,
+  # its alias, then the language server's two. No token here.
+  npm-pack:
+    name: npm packages
+    needs: [versions, npm-native]
+    runs-on: ubuntu-latest
+    env:
+      NPM_VERSION: ${{ needs.versions.outputs.npm }}
+      CRATES_VERSION: ${{ needs.versions.outputs.crates }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.revision }}
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          package-manager-cache: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: native
+          pattern: npm-native-*
+      # Before npm-version, which `npm ci` would find out of step with the lock.
+      - name: Build the TypeScript packages (the language server's and the WASI host)
+        run: |
+          set -euo pipefail
+          for p in lsp-client lsp-worker wasi-host; do (cd "packages/$p" && npm ci); done
+      - name: The packages at the build's version, each with its addon
+        run: |
+          set -euo pipefail
+          python3 scripts/engine/release.py npm-version "${NPM_VERSION}"
+          python3 scripts/engine/release.py lockstep "${CRATES_VERSION}" --npm "${NPM_VERSION}"
+          for dir in bindings/node/npm/*/; do
+            platform="$(basename "${dir}")"
+            cp "native/npm-native-${platform}/opentide.${platform}.node" "${dir}"
+          done
+          # Every package that carries the engine ships the licence, NOTICE (the
+          # third-party data the engine embeds) and the licence files NOTICE cites.
+          python3 scripts/engine/release.py legal bindings/node bindings/node/npm/*/
+          # The loader and declarations napi-rs wrote at this version.
+          cp native/npm-native-linux-x64-gnu/index.js native/npm-native-linux-x64-gnu/index.d.ts bindings/node/
+          node scripts/engine/check-npm-packs.mjs
+      - name: Pack
+        run: |
+          set -euo pipefail
+          mkdir -p npm/1-native npm/2-package npm/3-alias npm/4-lsp
+          for dir in bindings/node/npm/*/; do
+            (cd "${dir}" && npm pack --pack-destination "${GITHUB_WORKSPACE}/npm/1-native")
+          done
+          (cd bindings/node && npm pack --pack-destination "${GITHUB_WORKSPACE}/npm/2-package")
+          (cd bindings/node/alias && npm pack --pack-destination "${GITHUB_WORKSPACE}/npm/3-alias")
+          for p in lsp-client lsp-worker wasi-host; do
+            (cd "packages/$p" && npm pack --pack-destination "${GITHUB_WORKSPACE}/npm/4-lsp")
+          done
+          # Each native package holds its addon and the licence; it and the package
+          # hold NOTICE and every licence file NOTICE cites.
+          # Each listing is read whole first: `tar | grep -q` stops reading at the
+          # first match, and under pipefail tar's broken pipe fails the step.
+          for tarball in npm/1-native/*.tgz; do
+            listing="$(tar -tzf "${tarball}")"
+            grep -q '^package/opentide\..*\.node$' <<<"${listing}"
+          done
+          legal="$(python3 -c 'import sys; sys.path.insert(0, "scripts/engine"); import release; print("\n".join(release.legal_files()))')"
+          for tarball in npm/1-native/*.tgz npm/2-package/*.tgz; do
+            listing="$(tar -tzf "${tarball}")"
+            while IFS= read -r file; do
+              grep -qxF "package/${file}" <<<"${listing}" || { echo "::error::${tarball} has no ${file}"; exit 1; }
+            done <<<"${legal}"
+          done
+          ls -lR npm
+      # The language server's packages are engine assets; @opentide/opentide
+      # carries opentide's package data (license-scan.sh --product).
+      - name: license scan (no oracle references)
+        run: |
+          set -euo pipefail
+          bash scripts/engine/license-scan.sh npm/4-lsp
+          bash scripts/engine/license-scan.sh --product npm/1-native npm/2-package npm/3-alias
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: npm-packages
+          path: npm
+          if-no-files-found: error
+          retention-days: ${{ inputs.retention-days }}

@@ -1,0 +1,3 @@
+// prod:where_command invalid
+FROM logs-* METADATA _id
+| WHERE

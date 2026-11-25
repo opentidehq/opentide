@@ -1,0 +1,167 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: deploy/json/deploy-tenants-sysdig/send-enabled-platforms
+---
+args: opentide --json deploy --strategy PREVIEW --strategy RELEASE --all --keep-deprecated
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "changes": [
+    {
+      "action": "create",
+      "name": "Sysdig create rule",
+      "platform": "sysdig",
+      "status": "STAGING",
+      "tenant": "lab",
+      "uuid": "00000000-0000-4000-8047-000000000031"
+    },
+    {
+      "action": "update",
+      "name": "Sysdig rule the tenant lost",
+      "platform": "sysdig",
+      "status": "STAGING",
+      "tenant": "lab",
+      "uuid": "00000000-0000-4000-8047-000000000032"
+    },
+    {
+      "action": "disable",
+      "name": "Sysdig rule to disable the tenant lost",
+      "platform": "sysdig",
+      "status": "DISABLED",
+      "tenant": "lab",
+      "uuid": "00000000-0000-4000-8047-000000000033"
+    }
+  ],
+  "command": "deploy",
+  "deployed": [
+    "sysdig"
+  ],
+  "dry_run": false,
+  "duration_ms": 0,
+  "exit_code": 0,
+  "failure": null,
+  "message": "Deployed 3 rules to 1 tenant · 1 created, 1 updated, 1 disabled · 0 failed, 0 not attempted · <SECONDS>",
+  "next_actions": [],
+  "ok": true,
+  "plan": {
+    "sysdig": [
+      "00000000-0000-4000-8047-000000000031",
+      "00000000-0000-4000-8047-000000000032",
+      "00000000-0000-4000-8047-000000000033"
+    ]
+  },
+  "results": [
+    {
+      "action": "create",
+      "error": null,
+      "id": "00000000-0000-4000-8047-000000000031",
+      "name": "Sysdig create rule",
+      "platform": "sysdig",
+      "reason": null,
+      "seconds": 0.0,
+      "status": "deployed",
+      "tenant": "lab"
+    },
+    {
+      "action": "update",
+      "error": null,
+      "id": "00000000-0000-4000-8047-000000000032",
+      "name": "Sysdig rule the tenant lost",
+      "platform": "sysdig",
+      "reason": null,
+      "seconds": 0.0,
+      "status": "deployed",
+      "tenant": "lab"
+    },
+    {
+      "action": "disable",
+      "error": null,
+      "id": "00000000-0000-4000-8047-000000000033",
+      "name": "Sysdig rule to disable the tenant lost",
+      "platform": "sysdig",
+      "reason": null,
+      "seconds": 0.0,
+      "status": "deployed",
+      "tenant": "lab"
+    }
+  ],
+  "schema_version": 1,
+  "status": "completed",
+  "strategies": [
+    "PREVIEW",
+    "RELEASE"
+  ],
+  "summary": {
+    "create": 1,
+    "delete": 0,
+    "disable": 1,
+    "failed": 0,
+    "not_attempted": 0,
+    "platforms": 1,
+    "seconds": 0.0,
+    "skipped": 0,
+    "tenants": 1,
+    "unchanged": 0,
+    "update": 1,
+    "upsert": 0
+  },
+  "warnings": [
+    "Some rules reported deployment warnings"
+  ]
+}
+
+━━━ stderr
+{"system":"CARBON_BLACK_CLOUD","rule":"Carbon Black retire rule","advice":"enable it with 'opentide setup platforms --carbon-black-cloud'","event":"system_disabled_for_deploy","level":"warning","timestamp":"0000-00-00 00:00:00"}
+{"system":"CARBON_BLACK_CLOUD","rule":"Carbon Black rule in a missing watchlist","advice":"enable it with 'opentide setup platforms --carbon-black-cloud'","event":"system_disabled_for_deploy","level":"warning","timestamp":"0000-00-00 00:00:00"}
+{"system":"CROWDSTRIKE","rule":"CrowdStrike create rule","advice":"enable it with 'opentide setup platforms --crowdstrike'","event":"system_disabled_for_deploy","level":"warning","timestamp":"0000-00-00 00:00:00"}
+{"system":"CROWDSTRIKE","rule":"CrowdStrike update rule","advice":"enable it with 'opentide setup platforms --crowdstrike'","event":"system_disabled_for_deploy","level":"warning","timestamp":"0000-00-00 00:00:00"}
+{"system":"CROWDSTRIKE","rule":"CrowdStrike retire rule","advice":"enable it with 'opentide setup platforms --crowdstrike'","event":"system_disabled_for_deploy","level":"warning","timestamp":"0000-00-00 00:00:00"}
+{"system":"ELASTIC","rule":"Elastic create rule","advice":"enable it with 'opentide setup platforms --elastic'","event":"system_disabled_for_deploy","level":"warning","timestamp":"0000-00-00 00:00:00"}
+{"system":"ELASTIC","rule":"Elastic update rule","advice":"enable it with 'opentide setup platforms --elastic'","event":"system_disabled_for_deploy","level":"warning","timestamp":"0000-00-00 00:00:00"}
+{"system":"ELASTIC","rule":"Elastic prebuilt rule","advice":"enable it with 'opentide setup platforms --elastic'","event":"system_disabled_for_deploy","level":"warning","timestamp":"0000-00-00 00:00:00"}
+{"system":"ELASTIC","rule":"Elastic retire rule","advice":"enable it with 'opentide setup platforms --elastic'","event":"system_disabled_for_deploy","level":"warning","timestamp":"0000-00-00 00:00:00"}
+{"system":"HARFANGLAB","rule":"HarfangLab Sigma rule","advice":"enable it with 'opentide setup platforms --harfanglab'","event":"system_disabled_for_deploy","level":"warning","timestamp":"0000-00-00 00:00:00"}
+{"system":"HARFANGLAB","rule":"HarfangLab YARA rule","advice":"enable it with 'opentide setup platforms --harfanglab'","event":"system_disabled_for_deploy","level":"warning","timestamp":"0000-00-00 00:00:00"}
+{"system":"MICROSOFT_DEFENDER","rule":"Defender create rule","advice":"enable it with 'opentide setup platforms --microsoft-defender'","event":"system_disabled_for_deploy","level":"warning","timestamp":"0000-00-00 00:00:00"}
+{"system":"MICROSOFT_DEFENDER","rule":"Defender update rule","advice":"enable it with 'opentide setup platforms --microsoft-defender'","event":"system_disabled_for_deploy","level":"warning","timestamp":"0000-00-00 00:00:00"}
+{"system":"MICROSOFT_DEFENDER","rule":"Defender concurrent create rule","advice":"enable it with 'opentide setup platforms --microsoft-defender'","event":"system_disabled_for_deploy","level":"warning","timestamp":"0000-00-00 00:00:00"}
+{"system":"MICROSOFT_DEFENDER","rule":"Defender disable absent rule","advice":"enable it with 'opentide setup platforms --microsoft-defender'","event":"system_disabled_for_deploy","level":"warning","timestamp":"0000-00-00 00:00:00"}
+{"system":"MICROSOFT_DEFENDER","rule":"Defender delete absent rule","advice":"enable it with 'opentide setup platforms --microsoft-defender'","event":"system_disabled_for_deploy","level":"warning","timestamp":"0000-00-00 00:00:00"}
+{"system":"MICROSOFT_DEFENDER","rule":"Defender refused rule","advice":"enable it with 'opentide setup platforms --microsoft-defender'","event":"system_disabled_for_deploy","level":"warning","timestamp":"0000-00-00 00:00:00"}
+{"system":"SENTINEL","rule":"Sentinel deploy rule","advice":"enable it with 'opentide setup platforms --sentinel'","event":"system_disabled_for_deploy","level":"warning","timestamp":"0000-00-00 00:00:00"}
+{"system":"SENTINEL","rule":"Sentinel retire rule","advice":"enable it with 'opentide setup platforms --sentinel'","event":"system_disabled_for_deploy","level":"warning","timestamp":"0000-00-00 00:00:00"}
+{"system":"SENTINEL_ONE","rule":"SentinelOne create rule","advice":"enable it with 'opentide setup platforms --sentinel-one'","event":"system_disabled_for_deploy","level":"warning","timestamp":"0000-00-00 00:00:00"}
+{"system":"SENTINEL_ONE","rule":"SentinelOne retire rule","advice":"enable it with 'opentide setup platforms --sentinel-one'","event":"system_disabled_for_deploy","level":"warning","timestamp":"0000-00-00 00:00:00"}
+{"system":"SENTINEL_ONE","rule":"SentinelOne disable rule never deployed","advice":"enable it with 'opentide setup platforms --sentinel-one'","event":"system_disabled_for_deploy","level":"warning","timestamp":"0000-00-00 00:00:00"}
+{"system":"SENTINEL_ONE","rule":"SentinelOne update rule","advice":"enable it with 'opentide setup platforms --sentinel-one'","event":"system_disabled_for_deploy","level":"warning","timestamp":"0000-00-00 00:00:00"}
+{"system":"SPLUNK","rule":"Splunk create rule","advice":"enable it with 'opentide setup platforms --splunk'","event":"system_disabled_for_deploy","level":"warning","timestamp":"0000-00-00 00:00:00"}
+{"system":"SPLUNK","rule":"Splunk retire rule","advice":"enable it with 'opentide setup platforms --splunk'","event":"system_disabled_for_deploy","level":"warning","timestamp":"0000-00-00 00:00:00"}
+{"uuid":"00000000-0000-4000-8047-000000000031","platform":"sysdig","tenant":"***","external_id":"42","event":"external_id_recorded","level":"warning","timestamp":"0000-00-00 00:00:00"}
+{"uuid":"00000000-0000-4000-8047-000000000032","tenant":"***","detail":"the recorded rule no longer exists on the tenant; creating it again","event":"sysdig_rule_recreated","level":"warning","timestamp":"0000-00-00 00:00:00"}
+{"uuid":"00000000-0000-4000-8047-000000000032","platform":"sysdig","tenant":"***","external_id":"43","event":"external_id_recorded","level":"warning","timestamp":"0000-00-00 00:00:00"}
+{"uuid":"00000000-0000-4000-8047-000000000033","tenant":"***","detail":"the recorded rule no longer exists on the tenant; its id is removed","event":"sysdig_rule_missing","level":"warning","timestamp":"0000-00-00 00:00:00"}
+
+━━━ ws/.opentide/states/deployment/00000000-0000-4000-8047-000000000031.json · created 0644
+{
+  "object_uuid": "00000000-0000-4000-8047-000000000031",
+  "platforms": {
+    "sysdig": {
+      "lab": "42"
+    }
+  },
+  "schema": "deployment.state::1.0"
+}
+
+━━━ ws/.opentide/states/deployment/00000000-0000-4000-8047-000000000032.json · modified 0644
+{
+  "object_uuid": "00000000-0000-4000-8047-000000000032",
+  "platforms": {
+    "sysdig": {
+      "lab": "43"
+    }
+  },
+  "schema": "deployment.state::1.0"
+}
+
+━━━ ws/.opentide/states/deployment/00000000-0000-4000-8047-000000000033.json · deleted
