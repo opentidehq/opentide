@@ -797,7 +797,7 @@ configurations:
     #query: |
       #...
     #schedule:
-      #frequency: 
+      #frequency: 1H
       #lookback: 
     #alert:
       #title: 
@@ -1589,7 +1589,7 @@ configurations:
     #query: |
       #...
     #schedule:
-      #frequency: 
+      #frequency: 1H
       #lookback: 
     #alert:
       #title: 
@@ -2567,7 +2567,7 @@ threat:
             "    #query: |",
             "      #...",
             "    #schedule:",
-            "      #frequency: ",
+            "      #frequency: 1H",
             "      #lookback: ",
             "    #alert:",
             "      #title: ",
