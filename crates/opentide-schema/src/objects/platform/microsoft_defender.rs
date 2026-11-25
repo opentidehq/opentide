@@ -838,6 +838,7 @@ pub struct DefenderFileTarget {
 )]
 pub struct DefenderSchedule {
     /// `NRT`, `<n>H`, or `<n>D`, `n` a positive integer without a leading zero.
+    #[schemars(extend("examples" = ["1H", "NRT", "1D"]))]
     pub frequency: String,
     /// **Beta-only.** `<n>H` or `<n>D`. Omitted, Defender derives the lookback from the frequency.
     #[serde(default, skip_serializing_if = "Option::is_none")]

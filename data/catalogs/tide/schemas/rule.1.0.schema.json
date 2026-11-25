@@ -1698,6 +1698,11 @@
       "properties": {
         "frequency": {
           "description": "NRT, <n>H, or <n>D, n a positive integer without a leading zero.",
+          "examples": [
+            "1H",
+            "NRT",
+            "1D"
+          ],
           "markdownDescription": "`NRT`, `<n>H`, or `<n>D`, `n` a positive integer without a leading zero.",
           "type": "string"
         },

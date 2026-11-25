@@ -227,7 +227,14 @@ fn alert(value: &Node, found: &mut Vec<Finding>) {
             continue;
         }
         match entry.key.value.as_str() {
-            Some("severity") if !node.value.as_str().is_some_and(|s| SEVERITIES.contains(&s)) => {
+            // An empty severity is unset, as `null` is: deploy uses the
+            // rule's `response.alert_severity`, else Medium.
+            Some("severity")
+                if !node
+                    .value
+                    .as_str()
+                    .is_some_and(|s| s.is_empty() || SEVERITIES.contains(&s)) =>
+            {
                 let meant = node
                     .value
                     .as_str()
