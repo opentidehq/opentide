@@ -68,7 +68,13 @@ fn run_phase(
 ) -> Phase {
     let mut changes = Changes::default();
     let started = Instant::now();
-    let result = work(&mut changes);
+    // The phase's files are written only when it succeeds: a phase that fails
+    // leaves the previous run's output as it was.
+    let result = work(&mut changes).and_then(|()| {
+        changes
+            .commit()
+            .map_err(|(path, error)| format!("{}: {error}", path.display()))
+    });
     let mut step = Step::new(name);
     step.seconds = started.elapsed().as_secs_f64();
     match result {
@@ -463,6 +469,8 @@ struct DocsRun {
     message: Option<String>,
     /// `--changed` outside a checkout: the run's own failure.
     failure: Option<String>,
+    /// The inflight previews left out, one warning each.
+    warnings: Vec<String>,
 }
 
 /// The CVE details `generate docs` writes with `[cve] retrieve_details` on
@@ -587,7 +595,8 @@ pub fn docs(args: &DocsArgs, cx: &Context<'_>) -> Report {
         let raised = docs_phase(args, &workspace, cx, &mut run, changes);
         with_logged(raised, &workspace)
     });
-    let warnings: Vec<String> = nested_warning(&workspace).into_iter().collect();
+    let mut warnings: Vec<String> = nested_warning(&workspace).into_iter().collect();
+    warnings.append(&mut run.warnings);
     if let Some(detail) = phase.error {
         let mut report = phase_failed(&command, "docs", &detail, Vec::new(), vec![phase.step]);
         report.warnings = warnings;
@@ -646,7 +655,12 @@ fn docs_phase(
     }
     // Documentation previews open pull requests: their inflight shards are
     // overlaid on the index for the run (`inflight_preview`).
-    let overlaid = docs_inflight::overlay(workspace.index(), &root.join(".opentide/inflight"));
+    // A preview that does not hold up is left out with a warning, never
+    // failing the run: one pull request's typo must not stop everyone's docs.
+    let (overlaid, skipped) =
+        docs_inflight::overlay(workspace.index(), &root.join(".opentide/inflight"));
+    run.warnings
+        .extend(skipped.iter().map(|skipped| skipped.warning(root)));
     let index = overlaid
         .as_ref()
         .unwrap_or_else(|| workspace.index().as_ref());
@@ -999,18 +1013,29 @@ pub fn explorer(options: &ExplorerOptions, cx: &Context<'_>) -> Report {
     let dir = Settings::new(workspace.configuration(), &root).dir;
     // Like a phase of `generate`, the explorer fails on an object file the
     // index could not load, after its own error if it has one (D1).
+    let mut warnings = Vec::new();
     let phase = run_phase("explorer", cx.cwd, &root, |changes| {
-        let raised = explorer_phase(changes, &workspace, &root, &dir, options, &tlp);
+        let raised = explorer_phase(
+            changes,
+            &workspace,
+            &root,
+            &dir,
+            options,
+            &tlp,
+            &mut warnings,
+        );
         with_logged(raised, &workspace)
     });
-    match phase.error {
+    let mut report = match phase.error {
         Some(detail) => phase_failed(COMMAND, "explorer", &detail, Vec::new(), vec![phase.step]),
         None => generated(
             COMMAND,
             vec![("phase".to_owned(), Json::str("explorer"))],
             vec![phase.step],
         ),
-    }
+    };
+    report.warnings = warnings;
+    report
 }
 
 /// The explorer's files under `dir`, and its visibility inventory when
@@ -1022,11 +1047,14 @@ fn explorer_phase(
     dir: &Path,
     options: &ExplorerOptions,
     tlp: &str,
+    warnings: &mut Vec<String>,
 ) -> Result<(), String> {
     std::fs::create_dir_all(dir).map_err(|error| format!("{}: {error}", dir.display()))?;
-    // Open pull requests' objects, previewed (`inflight_preview`).
+    // Open pull requests' objects, previewed (`inflight_preview`); one that
+    // does not hold up is left out with a warning.
     let shards = inflight::load(&root.join(".opentide").join("inflight"));
-    let index = inflight::overlay(workspace.index(), &shards);
+    let (index, skipped) = inflight::overlay(workspace.index(), &shards);
+    warnings.extend(skipped.iter().map(|skipped| skipped.warning(root)));
     let generated_at = now_iso();
     let outputs =
         explorer::outputs(&index, dir, &generated_at).map_err(|PhaseError { detail }| detail)?;
@@ -1199,6 +1227,7 @@ pub fn inflight_shards(cx: &Context<'_>) -> Report {
             .filter(|path| !path.is_empty())
             .and_then(|path| std::fs::read_to_string(path).ok());
         let mut shards: indexmap::IndexMap<PathBuf, Output> = indexmap::IndexMap::new();
+        let mut invalid = Vec::new();
         for path in changed_object_files(&root, cx) {
             let text = std::fs::read(&path)
                 .map_err(|error| format!("{}: {error}", path.display()))
@@ -1216,6 +1245,22 @@ pub fn inflight_shards(cx: &Context<'_>) -> Report {
                 tracing::warn!(path = %path.display(), "inflight_skip_missing_uuid");
                 continue;
             };
+            // A shard is checked as `generate docs` reads it: an object that
+            // fails its model fails this run, the pull request's own, and
+            // gets no shard to break the default branch's docs with.
+            let family = inflight::object_family(body).unwrap_or_default();
+            if let Err(error) =
+                opentide_compile::generate::docs::catalog::check_model(&family, &document)
+            {
+                tracing::error!(
+                    path = %path.display(),
+                    uuid = uuid.as_str(),
+                    error = error.as_str(),
+                    "inflight_object_invalid"
+                );
+                invalid.push(format!("{} ({uuid}): {error}", source_path(&root, &path)));
+                continue;
+            }
             let now = now_iso();
             let change =
                 inflight::change(&env, ci, &source_path(&root, &path), event.as_deref(), &now);
@@ -1229,6 +1274,14 @@ pub fn inflight_shards(cx: &Context<'_>) -> Report {
                     opentide_compile::generate::json_text::pretty(&shard, 2),
                 ),
             );
+        }
+        if let Some(first) = invalid.first() {
+            return Err(match invalid.len() {
+                1 => format!("no shard written: {first}"),
+                count => format!(
+                    "no shard written: {count} object files do not validate, first: {first}"
+                ),
+            });
         }
         write(changes, &shards.into_values().collect::<Vec<_>>())
     });
@@ -1439,8 +1492,11 @@ fn pipeline(cx: &Context<'_>, version: &str) -> Report {
         with_logged(raised, &workspace)
     });
     steps.push(docs.step);
+    let warnings = run.warnings;
     if let Some(detail) = docs.error {
-        return phase_failed(command, "docs", &detail, Vec::new(), steps);
+        let mut report = phase_failed(command, "docs", &detail, Vec::new(), steps);
+        report.warnings = warnings;
+        return report;
     }
     let settings = Settings::new(workspace.configuration(), &root);
     let vocabularies = Vocabularies::bundled();
@@ -1462,6 +1518,7 @@ fn pipeline(cx: &Context<'_>, version: &str) -> Report {
         return phase_failed(command, &phase, &detail, Vec::new(), steps);
     }
     let mut report = generated(command, leading(), steps);
+    report.warnings = warnings;
     if let Some(detail) = nested_warning(&workspace) {
         let files = workspace
             .index()

@@ -988,6 +988,24 @@ fn records(scope: Scope, mut objects: Vec<(String, String, Model)>) -> Vec<Recor
         .collect()
 }
 
+/// Whether the object `document` of `family` reads into its model, as
+/// [`Catalog::build`] reads it: the check an inflight preview passes before
+/// it is laid over the index, and before its shard is written. Families
+/// without a model here pass.
+///
+/// # Errors
+///
+/// The first error, worded as [`Catalog::build`] words it.
+pub fn check_model(family: &str, document: &opentide_schema::node::Document) -> Result<(), String> {
+    let checked = match family {
+        "rule" => rule_model(document).map(drop),
+        "threat" => typed::<ThreatVector>(document).map(drop),
+        "objective" => typed::<ObjectiveV1_0>(document).map(drop),
+        _ => Ok(()),
+    };
+    checked.map_err(|PhaseError { detail }| detail)
+}
+
 /// The rule's model, by the revision `metadata.schema` names.
 fn rule_model(document: &opentide_schema::node::Document) -> Result<RuleModel, PhaseError> {
     let schema = document

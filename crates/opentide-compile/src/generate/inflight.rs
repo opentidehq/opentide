@@ -9,12 +9,14 @@
 //! committed object when its `metadata.version` is higher, or equal and the
 //! shard is an envelope.
 
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use indexmap::IndexMap;
 use opentide_schema::node::{Document, Node, Value};
 use opentide_workspace::Index;
+use opentide_workspace::index::ReferenceKind;
 
 use super::relations::node_text;
 use crate::json::Json;
@@ -174,21 +176,33 @@ fn replaces(existing: &Node, shard: &Shard, object: &Node) -> bool {
 /// `index` with `shards` laid over it (`apply_inflight_overlay`): a shard of
 /// a family the index has replaces the committed object or adds one; the
 /// signals of every objective a shard replaced are indexed again once all are
-/// in place.
-pub fn overlay(index: &Index, shards: &IndexMap<String, Shard>) -> Index {
-    let mut overlaid = index.clone();
-    let mut objectives = Vec::new();
+/// in place. A preview that fails its model check, or whose references do not
+/// resolve once the others are laid over, is left out ([`vet`]): what it
+/// would have replaced stays as committed.
+pub fn overlay(index: &Index, shards: &IndexMap<String, Shard>) -> (Index, Vec<Skipped>) {
+    vet(
+        index,
+        previews(index, shards),
+        &super::docs::catalog::check_model,
+    )
+}
+
+/// The objects of `shards` that would replace or add one in `index`.
+fn previews(index: &Index, shards: &IndexMap<String, Shard>) -> Vec<Preview> {
+    let mut previews = Vec::new();
     for (uuid, shard) in shards {
         let Some(object) = shard.object() else {
             continue;
         };
-        let Some(family) = object_family(object).filter(|f| overlaid.objects.contains_key(f))
-        else {
+        let Some(family) = object_family(object).filter(|f| index.objects.contains_key(f)) else {
             tracing::warn!(uuid, "inflight_skip_unknown_family");
             continue;
         };
-        let bucket = overlaid.objects.entry(family.clone()).or_default();
-        if let Some(existing) = bucket.get(uuid).and_then(opentide_workspace::Object::root)
+        if let Some(existing) = index
+            .objects
+            .get(&family)
+            .and_then(|bucket| bucket.get(uuid))
+            .and_then(opentide_workspace::Object::root)
             && !replaces(existing, shard, object)
         {
             continue;
@@ -198,23 +212,254 @@ pub fn overlay(index: &Index, shards: &IndexMap<String, Shard>) -> Index {
         else {
             continue;
         };
-        bucket.insert(
-            uuid.clone(),
-            opentide_workspace::Object {
-                uuid: uuid.clone(),
-                family: family.clone(),
-                path: shard.path.clone(),
-                document: Arc::new(document),
-            },
-        );
-        if family == "objective" {
-            objectives.push(uuid.clone());
+        previews.push(Preview {
+            family,
+            uuid: uuid.clone(),
+            path: shard.path.clone(),
+            document: Arc::new(document),
+            change: shard
+                .root()
+                .filter(|_| shard.is_wrapped())
+                .and_then(|root| root.get("change"))
+                .map(|change| Json::from_node(change)),
+        });
+    }
+    previews
+}
+
+/// An object an inflight shard previews, read and ready to lay over the
+/// index.
+#[derive(Debug, Clone)]
+pub struct Preview {
+    /// Its family (`rule`, `threat`, `objective`).
+    pub family: String,
+    /// Its UUID.
+    pub uuid: String,
+    /// The shard file.
+    pub path: PathBuf,
+    /// The object.
+    pub document: Arc<Document>,
+    /// The shard's `change`: the pull or merge request it comes from.
+    pub change: Option<Json>,
+}
+
+/// A preview left out of the overlay, and why.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Skipped {
+    /// The shard file.
+    pub path: PathBuf,
+    /// The object's UUID.
+    pub uuid: String,
+    /// The object's `name`, when it has one.
+    pub name: Option<String>,
+    /// The pull or merge request, as its forge names it (`PR #12`, `MR !7`),
+    /// with its link when the shard has one.
+    pub change: Option<String>,
+    /// The first error.
+    pub error: String,
+}
+
+impl Skipped {
+    /// The warning a run shows for it: the shard file (from `root` when
+    /// inside it), the object, its pull or merge request, the error.
+    pub fn warning(&self, root: &Path) -> String {
+        let file = self
+            .path
+            .strip_prefix(root)
+            .unwrap_or(&self.path)
+            .to_string_lossy()
+            .replace('\\', "/");
+        let mut object = self.uuid.clone();
+        if let Some(name) = &self.name {
+            object.push_str(&format!(" {name:?}"));
+        }
+        if let Some(change) = &self.change {
+            object.push_str(&format!(" from {change}"));
+        }
+        format!(
+            "inflight preview {file} skipped: {object}: {}; the committed object is shown instead",
+            self.error
+        )
+    }
+}
+
+/// `change` as a reader names it: `PR #12`, `MR !7`, with its URL.
+fn change_label(change: &Json) -> Option<String> {
+    let number = match change.get("number") {
+        Some(Json::Int(number)) => Some(number.to_string()),
+        Some(Json::Str(text)) if !text.is_empty() => Some(text.clone()),
+        _ => None,
+    };
+    let url = change
+        .get("url")
+        .and_then(Json::as_str)
+        .filter(|url| !url.is_empty());
+    let platform = change.get("platform").and_then(Json::as_str);
+    let label = number.map(|number| match platform {
+        Some("gitlab") => format!("MR !{number}"),
+        _ => format!("PR #{number}"),
+    });
+    match (label, url) {
+        (Some(label), Some(url)) => Some(format!("{label} ({url})")),
+        (Some(label), None) => Some(label),
+        (None, Some(url)) => Some(url.to_owned()),
+        (None, None) => change
+            .get("source_path")
+            .and_then(Json::as_str)
+            .map(|path| format!("a change to {path}")),
+    }
+}
+
+/// `index` with the `previews` that hold up laid over it, and those that do
+/// not. A preview is left out when its object fails `check`, its model check
+/// ([`check_model`](super::docs::catalog::check_model)), or when, laid over
+/// with the others, a reference that has to resolve (a rule's
+/// `detection_model`, an objective's `threats`) no longer does: its own, or a
+/// committed object's that named a signal the preview drops. The check runs
+/// again after each round that leaves one out, so a preview that only held
+/// up through a left-out one is left out too. A reference already broken in
+/// `index` is not a preview's doing.
+pub fn vet(
+    index: &Index,
+    previews: Vec<Preview>,
+    check: &dyn Fn(&str, &Document) -> Result<(), String>,
+) -> (Index, Vec<Skipped>) {
+    let mut skipped = Vec::new();
+    let mut kept = Vec::new();
+    for preview in previews {
+        match check(&preview.family, &preview.document) {
+            Ok(()) => kept.push(preview),
+            Err(error) => skipped.push(skip(preview, error)),
+        }
+    }
+    let committed = broken_references(index);
+    loop {
+        let overlaid = apply(index, &kept);
+        let mut blamed: IndexMap<String, String> = IndexMap::new();
+        for reference in &overlaid.references {
+            if !must_resolve(&reference.kind)
+                || reference.target.is_empty()
+                || resolves(&overlaid, &reference.target)
+                || committed.contains(&(reference.from.clone(), reference.target.clone()))
+            {
+                continue;
+            }
+            let field = reference.field_path.join(".");
+            let (culprit, error) = if kept.iter().any(|p| p.uuid == reference.from) {
+                (
+                    reference.from.clone(),
+                    format!(
+                        "{field}: {} does not exist in the catalogue",
+                        reference.target
+                    ),
+                )
+            } else if let Some(owner) = index
+                .signals
+                .get(&reference.target)
+                .map(|signal| signal.owner.clone())
+                .filter(|owner| kept.iter().any(|p| &p.uuid == owner))
+            {
+                (
+                    owner,
+                    format!(
+                        "it drops the signal {}, which {} names in {field}",
+                        reference.target, reference.from
+                    ),
+                )
+            } else {
+                continue;
+            };
+            blamed.entry(culprit).or_insert(error);
+        }
+        if blamed.is_empty() {
+            for preview in &skipped {
+                tracing::warn!(
+                    path = %preview.path.display(),
+                    uuid = preview.uuid.as_str(),
+                    change = preview.change.as_deref().unwrap_or_default(),
+                    error = preview.error.as_str(),
+                    "inflight_preview_skipped"
+                );
+            }
+            return (overlaid, skipped);
+        }
+        let mut still = Vec::new();
+        for preview in kept {
+            match blamed.get(&preview.uuid) {
+                Some(error) => {
+                    let error = error.clone();
+                    skipped.push(skip(preview, error));
+                }
+                None => still.push(preview),
+            }
+        }
+        kept = still;
+    }
+}
+
+fn skip(preview: Preview, error: String) -> Skipped {
+    let name = preview
+        .document
+        .root()
+        .and_then(|root| root.get("name"))
+        .and_then(|name| name.value.as_str())
+        .filter(|name| !name.is_empty())
+        .map(str::to_owned);
+    Skipped {
+        path: preview.path,
+        uuid: preview.uuid,
+        name,
+        change: preview.change.as_ref().and_then(change_label),
+        error,
+    }
+}
+
+/// `index` with `previews` laid over it, its signals and references read
+/// again.
+fn apply(index: &Index, previews: &[Preview]) -> Index {
+    let mut overlaid = index.clone();
+    let mut objectives = Vec::new();
+    for preview in previews {
+        if overlaid.overlay(
+            &preview.family,
+            &preview.uuid,
+            preview.path.clone(),
+            Arc::clone(&preview.document),
+        ) && preview.family == "objective"
+        {
+            objectives.push(preview.uuid.clone());
         }
     }
     if !objectives.is_empty() {
         overlaid.reindex_signals(&objectives);
     }
+    overlaid.refresh_references();
     overlaid
+}
+
+/// The references the documentation cannot render without: a rule's
+/// `detection_model`, an objective's `threats`.
+fn must_resolve(kind: &ReferenceKind) -> bool {
+    matches!(kind, ReferenceKind::DetectionModel | ReferenceKind::Threat)
+}
+
+/// Whether `index` holds `uuid`, as an object of any family or a signal.
+fn resolves(index: &Index, uuid: &str) -> bool {
+    index
+        .objects
+        .values()
+        .any(|bucket| bucket.contains_key(uuid))
+        || index.signals.contains_key(uuid)
+}
+
+/// The references of `index` that already do not resolve, as (from, target).
+fn broken_references(index: &Index) -> HashSet<(String, String)> {
+    index
+        .references
+        .iter()
+        .filter(|reference| must_resolve(&reference.kind) && !resolves(index, &reference.target))
+        .map(|reference| (reference.from.clone(), reference.target.clone()))
+        .collect()
 }
 
 /// Whether `path`, relative to the workspace with `/`, is an object file
@@ -636,7 +881,9 @@ mod tests {
             shards.keys().collect::<Vec<_>>(),
             ["o2", "o1", "r1", "r2", "x1"]
         );
-        let overlaid = overlay(&index, &shards);
+        // The models are not this test's: every preview passes.
+        let (overlaid, skipped) = vet(&index, previews(&index, &shards), &|_, _| Ok(()));
+        assert!(skipped.is_empty());
         assert_eq!(overlaid.signals.get("s1").unwrap().owner, "o2");
         let rules: Vec<&String> = overlaid.objects["rule"].keys().collect();
         assert_eq!(rules, ["r1", "r2"]);
@@ -650,5 +897,110 @@ mod tests {
                 .is_some()
         );
         assert!(!overlaid.objects.contains_key("widget"));
+    }
+
+    /// A model check for these tests: an object with `bad` fails it.
+    fn bad_fails(_family: &str, document: &Document) -> Result<(), String> {
+        match document.root().and_then(|root| root.get("bad")) {
+            Some(_) => Err("metadata.created: input is not a valid date".to_owned()),
+            None => Ok(()),
+        }
+    }
+
+    #[test]
+    fn previews_that_do_not_hold_up_are_left_out_and_named() {
+        let dir = tempfile::tempdir().unwrap();
+        let index = index_of(&[
+            (
+                "threat",
+                "t1",
+                "metadata: {uuid: t1, version: 1}\nthreat: {a: 1}\n",
+            ),
+            (
+                "objective",
+                "o1",
+                "metadata: {uuid: o1, version: 1}\nobjective: {threats: [t1], signals: [{uuid: s1}]}\n",
+            ),
+            (
+                "rule",
+                "r1",
+                "name: Committed\nmetadata: {uuid: r1, version: 1}\ndetection_model: s1\nconfigurations: {a: {}}\n",
+            ),
+            // Broken before any preview: not a preview's doing.
+            (
+                "rule",
+                "r0",
+                "metadata: {uuid: r0, version: 1}\ndetection_model: gone\nconfigurations: {a: {}}\n",
+            ),
+        ]);
+        // A new objective with a typo'd date, defining s9 …
+        write(
+            dir.path(),
+            "a.json",
+            r#"{"schema": "inflight.shard::1.0", "object": {"name": "Typo", "bad": 1, "metadata": {"uuid": "o9", "schema": "objective::1.0", "version": 1}, "objective": {"threats": ["t1"], "signals": [{"uuid": "s9"}]}}, "change": {"platform": "gitlab", "number": 7, "url": "https://g/p/-/merge_requests/7"}}"#,
+        );
+        // … a new rule on s9, fine alone, left out with it …
+        write(
+            dir.path(),
+            "b.json",
+            r#"{"schema": "inflight.shard::1.0", "object": {"name": "On s9", "metadata": {"uuid": "r9", "schema": "rule::1.1", "version": 1}, "detection_model": "s9", "configurations": {"a": {}}}, "change": {"platform": "github", "number": 12}}"#,
+        );
+        // … an objective that drops s1, which the committed r1 needs …
+        write(
+            dir.path(),
+            "c.json",
+            r#"{"schema": "inflight.shard::1.0", "object": {"metadata": {"uuid": "o1", "schema": "objective::1.0", "version": 2}, "objective": {"threats": ["t1"], "signals": []}}}"#,
+        );
+        // … and a valid newer threat, kept.
+        write(
+            dir.path(),
+            "d.json",
+            r#"{"schema": "inflight.shard::1.0", "object": {"name": "Newer", "metadata": {"uuid": "t1", "schema": "threat::1.0", "version": 2}, "threat": {"a": 2}}}"#,
+        );
+        let shards = load(dir.path());
+        let (overlaid, skipped) = vet(&index, previews(&index, &shards), &bad_fails);
+        let left: Vec<(&str, &str)> = skipped
+            .iter()
+            .map(|s| (s.uuid.as_str(), s.error.as_str()))
+            .collect();
+        assert_eq!(
+            left,
+            [
+                ("o9", "metadata.created: input is not a valid date"),
+                ("r9", "detection_model: s9 does not exist in the catalogue"),
+                (
+                    "o1",
+                    "it drops the signal s1, which r1 names in detection_model"
+                ),
+            ]
+        );
+        // What was committed stays; the valid preview is laid over.
+        assert!(!overlaid.objects["objective"].contains_key("o9"));
+        assert!(!overlaid.objects["rule"].contains_key("r9"));
+        assert_eq!(overlaid.signals.get("s1").unwrap().owner, "o1");
+        assert_eq!(
+            object_version(overlaid.objects["objective"]["o1"].root().unwrap()),
+            1
+        );
+        assert_eq!(
+            object_version(overlaid.objects["threat"]["t1"].root().unwrap()),
+            2
+        );
+        let root = dir.path();
+        assert_eq!(
+            skipped[0].warning(root),
+            "inflight preview a.json skipped: o9 \"Typo\" from MR !7 (https://g/p/-/merge_requests/7): \
+             metadata.created: input is not a valid date; the committed object is shown instead"
+        );
+        assert_eq!(
+            skipped[1].warning(root),
+            "inflight preview b.json skipped: r9 \"On s9\" from PR #12: detection_model: s9 does \
+             not exist in the catalogue; the committed object is shown instead"
+        );
+        assert_eq!(
+            skipped[2].warning(root),
+            "inflight preview c.json skipped: o1: it drops the signal s1, which r1 names in \
+             detection_model; the committed object is shown instead"
+        );
     }
 }
