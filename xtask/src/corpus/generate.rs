@@ -913,7 +913,13 @@ fn defender(
     };
     kv(vec![
         ("query", Yaml::s(query)),
-        ("scheduling", Yaml::s(rng.pick(&["1H", "3H", "12H", "24H"]))),
+        (
+            "schedule",
+            Yaml::map(vec![(
+                "frequency",
+                Yaml::s(rng.pick(&["1H", "3H", "12H", "24H"])),
+            )]),
+        ),
         (
             "alert",
             Yaml::map(vec![(
@@ -922,10 +928,12 @@ fn defender(
             )]),
         ),
         (
-            "impacted_entities",
-            Yaml::map(vec![("device", Yaml::s("DeviceId"))]),
+            "entities",
+            Yaml::map(vec![(
+                "hosts",
+                Yaml::Seq(vec![Yaml::map(vec![("device_id", Yaml::s("DeviceId"))])]),
+            )]),
         ),
-        ("scope", Yaml::map(vec![("selection", Yaml::s("All"))])),
     ])
 }
 

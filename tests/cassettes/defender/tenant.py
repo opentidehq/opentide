@@ -1,12 +1,18 @@
-"""A stand-in Defender for Endpoint tenant: Entra ID's token endpoint and Microsoft Graph (UC-4.2).
+"""A stand-in Microsoft Defender tenant: Entra ID's token endpoint and Microsoft Graph's beta
+custom detection API (RFC 0021, microsoft-defender-1.0).
 
-``cargo xtask cassettes record defender/<scenario>`` starts it on a free loopback port
-(printed on the first line of stdout) and routes ``login.microsoftonline.com`` and
-``graph.microsoft.com`` to it. Its answers are the ones the Python suite mocks
-(``tests/test_platforms/test_defender_client.py``, ``test_query_runners.py``):
+The recorder starts it on a free loopback port (printed on the first line of stdout) and
+routes ``login.microsoftonline.com`` and ``graph.microsoft.com`` to it. It holds custom
+detection rules by their client-provided ``id`` (the rule's uuid):
 
-- a create whose alert names a user asset is refused (400), so the client retries
-  with the safer configuration;
+- ``PATCH {base}/{id}`` refuses a query holding ``// refused`` (400), updates a rule it
+  holds (200), and answers 404 with no body for an id it does not hold;
+- ``POST {base}`` creates the rule under its ``id`` (201), or answers 409 when that id
+  exists; the id ``...0000d3`` is created by "another run" when its first ``PATCH``
+  answers 404, so its ``POST`` meets the 409;
+- ``DELETE {base}/{id}`` deletes a rule (204), or answers 404;
+- ``GET {base}`` lists the rules ``generate extract`` imports, in the beta shape, over two
+  pages;
 - a hunting query returns the columns its ``| project`` names (the default schema
   otherwise); ``whre`` is a syntax error (400), a ``// forbidden`` query a missing
   permission (403), a ``// gateway`` query a proxy's HTML page (502).
@@ -33,7 +39,10 @@ DEFAULT_SCHEMA = [
     ("DeviceName", "String"),
     ("ReportId", "Int64"),
 ]
-CREATED: dict[str, dict[str, Any]] = {}
+# The rules the tenant holds, by id: the golden deploy's update target.
+CREATED: dict[str, dict[str, Any]] = {"00000000-0000-4000-8047-0000000000d2": {}}
+# Ids another run creates as soon as this run's PATCH has found none.
+RACING = {"00000000-0000-4000-8047-0000000000d3"}
 
 
 def _row(names: list[str], number: int) -> dict[str, Any]:
@@ -46,20 +55,20 @@ def _row(names: list[str], number: int) -> dict[str, Any]:
     return {name: values.get(name, f"{name.lower()}-{number}") for name in names}
 
 
-def _listed(number: int, detector: str, name: str, **changes: Any) -> dict[str, Any]:
+def _listed(rule_id: str, name: str, **changes: Any) -> dict[str, Any]:
     rule: dict[str, Any] = {
-        "id": str(number),
+        "id": rule_id,
         "displayName": name,
-        "isEnabled": True,
+        "description": "PowerShell started by an Office application.",
+        "status": "enabled",
         "createdBy": "alice@contoso.example",
         "createdDateTime": "2026-01-02T03:04:05.123Z",
         "lastModifiedBy": "alice@contoso.example",
         "lastModifiedDateTime": "2026-02-03T04:05:06Z",
-        "detectorId": detector,
         "queryCondition": {
             "queryText": 'DeviceProcessEvents\n  | where FileName == "powershell.exe"\n'
         },
-        "schedule": {"period": "1H"},
+        "schedule": {"frequency": "PT1H"},
         "detectionAction": {
             "alertTemplate": {
                 "title": name,
@@ -67,17 +76,10 @@ def _listed(number: int, detector: str, name: str, **changes: Any) -> dict[str, 
                     "PowerShell started by an Office application.\nInvestigate the parent."
                 ),
                 "severity": "high",
-                "category": "SuspiciousActivity",
                 "recommendedActions": None,
-                "mitreTechniques": [],
-                "impactedAssets": [
-                    {
-                        "@odata.type": "#microsoft.graph.security.impactedDeviceAsset",
-                        "identifier": "deviceId",
-                    }
-                ],
+                "tactics": [],
+                "entityMappings": {"hosts": [{"deviceIdColumn": "DeviceId"}]},
             },
-            "responseActions": [],
         },
     }
     rule.update(changes)
@@ -86,41 +88,44 @@ def _listed(number: int, detector: str, name: str, **changes: Any) -> dict[str, 
 
 LISTED: list[dict[str, Any]] = [
     _listed(
-        201,
         "8d7c6b5a-0000-4000-8000-000000000201",
         'Suspicious PowerShell: "encoded" command',
         lastModifiedBy="bob@contoso.example",
+        schedule={"frequency": "PT1H", "lookback": "PT4H"},
         detectionAction={
             "alertTemplate": {
                 "title": "Encoded PowerShell",
                 "description": "An encoded command line.",
                 "severity": "medium",
-                "category": "Execution",
                 "recommendedActions": "Isolate the device.\n  Collect the investigation package.",
-                "mitreTechniques": ["T1059.001", "T1027"],
-                "impactedAssets": [
+                "tactics": [
                     {
-                        "@odata.type": "#microsoft.graph.security.impactedDeviceAsset",
-                        "identifier": "deviceId",
+                        "tactic": "Execution",
+                        "techniques": [{"technique": "T1059", "subTechniques": ["T1059.001"]}],
                     },
-                    {
-                        "@odata.type": "#microsoft.graph.security.impactedUserAsset",
-                        "identifier": "accountUpn",
-                    },
+                    {"tactic": "DefenseEvasion", "techniques": [{"technique": "T1027"}]},
                 ],
+                "entityMappings": {
+                    "hosts": [{"deviceIdColumn": "DeviceId", "nameColumn": "DeviceName"}],
+                    "accounts": [{"upnColumn": "AccountUpn"}],
+                },
+                "customDetails": {"CommandLine": "ProcessCommandLine"},
+                "eventGroupingKind": "singleAlert",
             },
-            "responseActions": [],
+            "automatedActions": {
+                "isolateDevices": [{"deviceIdColumn": "DeviceId", "isolationType": "full"}]
+            },
+            "organizationalScope": {"deviceGroups": ["Tier 0"]},
+            "incidentConfiguration": {"isExcludedFromIncidentCorrelation": True},
         },
     ),
     _listed(
-        202,
         "8d7c6b5a-0000-4000-8000-000000000202",
         "Office spawns PowerShell",
-        isEnabled=False,
-        schedule={"period": "0"},
+        status="disabled",
+        schedule={"frequency": "PT0S"},
     ),
     _listed(
-        203,
         "8d7c6b5a-0000-4000-8000-000000000203",
         "office spawns powershell",
     ),
@@ -200,14 +205,12 @@ class Handler(BaseHTTPRequestHandler):
             return
         body = json.loads(self._read() or b"{}")
         if self.path == RULES:
-            template = body["detectionAction"]["alertTemplate"]
-            assets = [asset["@odata.type"] for asset in template.get("impactedAssets") or []]
-            if "#microsoft.graph.security.impactedUserAsset" in assets:
-                self._error(400, "BadRequest", "accountUpn is not a column of the query")
+            remote = body.get("id", "")
+            if remote in CREATED:
+                self._error(409, "Conflict", f"A rule with id {remote} already exists.")
                 return
-            remote = str(41 + len(CREATED) + 1)
             CREATED[remote] = body
-            self._json(201, {"id": remote, "displayName": body["displayName"]})
+            self._json(201, body)
             return
         if self.path == HUNTING:
             query = body["Query"]
@@ -237,12 +240,19 @@ class Handler(BaseHTTPRequestHandler):
             return
         body = json.loads(self._read() or b"{}")
         remote = self.path.removeprefix(RULES + "/")
+        if "// refused" in body.get("queryCondition", {}).get("queryText", ""):
+            self._error(400, "BadRequest", "The query is not valid for a custom detection.")
+            return
         if remote not in CREATED:
+            if remote in RACING:
+                # Another run creates it now: this run's POST meets a 409.
+                RACING.discard(remote)
+                CREATED[remote] = {}
             # Graph's answer to an id it does not know: no body at all.
             self._send(404, b"")
             return
         CREATED[remote] = body
-        self._json(200, {"id": remote, "displayName": body["displayName"]})
+        self._json(200, {"id": remote, **body})
 
     def do_DELETE(self) -> None:
         if not self._authorised():

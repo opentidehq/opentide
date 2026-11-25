@@ -21,7 +21,8 @@ use opentide_connectors::transport::{
     TransportSpec,
 };
 use opentide_connectors::{
-    Environment, HttpClient, HttpSettings, Tenant, carbon_black, defender, elastic, sentinel,
+    Environment, HttpClient, HttpSettings, Tenant, carbon_black, elastic, microsoft_defender,
+    sentinel,
 };
 use tokio_util::sync::CancellationToken;
 
@@ -187,8 +188,8 @@ fn sentinel_platform() -> sentinel::Sentinel {
     sentinel::Sentinel::new()
 }
 
-fn defender_platform() -> defender::Defender {
-    defender::Defender::new()
+fn defender_platform() -> microsoft_defender::MicrosoftDefender {
+    microsoft_defender::MicrosoftDefender::new()
 }
 
 #[test]

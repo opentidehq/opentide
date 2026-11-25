@@ -50,6 +50,8 @@ fn sentinel_block(status: &str) -> String {
 
 const SPLUNK_SETUP: &str = "url = \"splunk.invalid\"\ntoken = \"$SPLUNK_TOKEN\"\n";
 const ELASTIC_SETUP: &str = "url = \"https://elastic.invalid\"\napi_key = \"$ELASTIC_API_KEY\"\n";
+const S1_SETUP: &str = "ssl = true\nurl = \"https://s1.invalid\"\naccount_id = 1001\napi_token = \
+     \"$S1_API_TOKEN\"\n";
 const DEFENDER_SETUP: &str = "tenant_id = \"contoso-tenant-id\"\nclient_id = \
      \"opentide-app-id\"\nclient_secret = \"$DEFENDER_CLIENT_SECRET\"\n";
 const CBC_SETUP: &str = "ssl = true\nurl = \"https://cbc.invalid\"\norg_key = \"ORGKEY01\"\ntoken \
@@ -62,6 +64,7 @@ fn env() -> Env {
             "AZURE_CLIENT_SECRET",
             "SPLUNK_TOKEN",
             "ELASTIC_API_KEY",
+            "S1_API_TOKEN",
             "DEFENDER_CLIENT_SECRET",
             "CBC_TOKEN",
         ]
@@ -536,6 +539,32 @@ fn a_deleted_elastic_rule_is_retired_by_its_uuid() {
     assert_eq!(rows(&sent)[0].2.as_deref(), Some("delete"));
 }
 
+/// Microsoft Defender keeps no deployment state: a deleted rule is retired
+/// by its uuid, which is the Defender rule id
+/// (`platform::microsoft_defender::1.0`).
+#[test]
+fn a_deleted_microsoft_defender_rule_is_retired_by_its_uuid() {
+    let block = "  microsoft_defender:\n    status: PRODUCTION\n    query: DeviceEvents\n    \
+                 schedule:\n      frequency: 1H\n";
+    let ws = workspace(
+        "microsoft_defender",
+        DEFENDER_SETUP,
+        &[("gone.yaml", rule("Gone defender", GONE, block))],
+    );
+    deleted_in_last_commit(ws.path(), "gone.yaml");
+    let (registry, recorder) = recorder("microsoft_defender", Vec::new());
+    let (sent, _) = deploy(ws.path(), &release("microsoft_defender", true), &registry);
+    assert_eq!(
+        *recorder.seen.lock().unwrap(),
+        [Seen {
+            rule_id: GONE.into(),
+            operation: Operation::Delete,
+            body: String::new(),
+        }]
+    );
+    assert_eq!(rows(&sent)[0].2.as_deref(), Some("delete"));
+}
+
 #[test]
 fn carbon_black_says_it_cannot_retire_a_deleted_rule() {
     let block = "  carbon_black_cloud:\n    status: PRODUCTION\n    query: process_name:cmd.exe\n";
@@ -560,26 +589,26 @@ fn carbon_black_says_it_cannot_retire_a_deleted_rule() {
     );
 }
 
-/// A Defender workspace that holds `KEPT` and records both rules on
-/// Defender. `KEPT`'s file now has a block for another platform only, so
-/// the run sends Defender nothing of its own: what it sends is retirement.
-fn defender_state() -> tempfile::TempDir {
+/// A SentinelOne workspace that holds `KEPT` and records both rules on
+/// SentinelOne. `KEPT`'s file now has a block for another platform only, so
+/// the run sends SentinelOne nothing of its own: what it sends is retirement.
+fn s1_state() -> tempfile::TempDir {
     let block = "  sentinel:\n    status: DRAFT\n";
     let ws = workspace(
-        "microsoft_defender",
-        DEFENDER_SETUP,
+        "sentinel_one",
+        S1_SETUP,
         &[("kept.yaml", rule("Kept rule", KEPT, block))],
     );
-    record(ws.path(), "microsoft_defender", GONE, "42");
-    record(ws.path(), "microsoft_defender", KEPT, "43");
+    record(ws.path(), "sentinel_one", GONE, "42");
+    record(ws.path(), "sentinel_one", KEPT, "43");
     ws
 }
 
 #[test]
 fn an_all_run_retires_what_deployment_state_records_and_forgets_it() {
-    let ws = defender_state();
-    let (registry, recorder) = recorder("microsoft_defender", Vec::new());
-    let mut args = release("microsoft_defender", true);
+    let ws = s1_state();
+    let (registry, recorder) = recorder("sentinel_one", Vec::new());
+    let mut args = release("sentinel_one", true);
     args.all = true;
     let (sent, _) = deploy(ws.path(), &args, &registry);
     // The orphan is deleted by its recorded id; the kept rule, whose file
@@ -617,7 +646,7 @@ fn an_all_run_retires_what_deployment_state_records_and_forgets_it() {
 
 #[test]
 fn a_retirement_the_tenant_no_longer_has_is_skipped_and_forgotten() {
-    let ws = defender_state();
+    let ws = s1_state();
     std::fs::remove_file(
         ws.path()
             .join(format!(".opentide/states/deployment/{KEPT}.json")),
@@ -625,8 +654,8 @@ fn a_retirement_the_tenant_no_longer_has_is_skipped_and_forgotten() {
     .unwrap();
     let gone =
         DeployError::rule(DeployFailure::new("tenant_refused", "no such rule").with_status(404));
-    let (registry, _) = recorder("microsoft_defender", vec![Err(gone)]);
-    let mut args = release("microsoft_defender", true);
+    let (registry, _) = recorder("sentinel_one", vec![Err(gone)]);
+    let mut args = release("sentinel_one", true);
     args.all = true;
     let (sent, _) = deploy(ws.path(), &args, &registry);
     let Some(Json::Array(results)) = get(&sent, "results") else {
@@ -647,10 +676,10 @@ fn a_retirement_the_tenant_no_longer_has_is_skipped_and_forgotten() {
 
 #[test]
 fn an_all_run_of_a_workspace_with_no_rule_retires_nothing() {
-    let ws = defender_state();
+    let ws = s1_state();
     std::fs::remove_file(ws.path().join("objects/rules/kept.yaml")).unwrap();
-    let (registry, recorder) = recorder("microsoft_defender", Vec::new());
-    let mut args = release("microsoft_defender", true);
+    let (registry, recorder) = recorder("sentinel_one", Vec::new());
+    let mut args = release("sentinel_one", true);
     args.all = true;
     let (sent, _) = deploy(ws.path(), &args, &registry);
     assert!(recorder.seen.lock().unwrap().is_empty());
@@ -669,19 +698,19 @@ fn an_all_run_of_a_workspace_with_no_rule_retires_nothing() {
 
 #[test]
 fn a_change_detection_run_retires_a_deleted_rule_by_its_recorded_id() {
-    let ws = defender_state();
+    let ws = s1_state();
     std::fs::write(
         ws.path().join("objects/rules/gone.yaml"),
         rule(
             "Gone rule",
             GONE,
-            "  microsoft_defender:\n    status: PRODUCTION\n",
+            "  sentinel_one:\n    status: PRODUCTION\n",
         ),
     )
     .unwrap();
     deleted_in_last_commit(ws.path(), "gone.yaml");
-    let (registry, recorder) = recorder("microsoft_defender", Vec::new());
-    let (sent, _) = deploy(ws.path(), &release("microsoft_defender", true), &registry);
+    let (registry, recorder) = recorder("sentinel_one", Vec::new());
+    let (sent, _) = deploy(ws.path(), &release("sentinel_one", true), &registry);
     assert_eq!(
         *recorder.seen.lock().unwrap(),
         [Seen {

@@ -1,0 +1,25 @@
+name: Defender delete absent rule
+metadata:
+  uuid: 00000000-0000-4000-8047-0000000000d5
+  schema: rule::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: |
+  A rule the Microsoft Defender stand-in tenant receives in a deploy that sends; to delete, but the tenant has no rule with its uuid: already gone.
+response:
+  alert_severity: High
+configurations:
+  microsoft_defender:
+    status: REMOVED
+    query: |
+      DeviceProcessEvents
+      | take 1
+    schedule:
+      frequency: 1H
+    alert:
+      title: Defender delete absent rule
+    entities:
+      hosts:
+        - device_id: DeviceId

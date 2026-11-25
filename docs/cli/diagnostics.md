@@ -338,6 +338,22 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`max_tlp_unknown`](#max_tlp_unknown) | A `sharing.toml` block's `max_tlp` is not a TLP value. |
 | [`mcp_config`](#mcp_config) | An MCP configuration from `opentide setup mcp` runs `opentide mcp start`. |
 | [`metadata_recommended`](#metadata_recommended) | An object has no `metadata.author` or `metadata.organisation`. |
+| [`microsoft_defender_action_kind`](#microsoft_defender_action_kind) | A key of a Microsoft Defender block's `actions` is not an automated action. |
+| [`microsoft_defender_action_target`](#microsoft_defender_action_target) | A Microsoft Defender automated action has no target, or a target is empty or names a field its action does not take. |
+| [`microsoft_defender_column`](#microsoft_defender_column) | A Microsoft Defender column name is blank or not a string. |
+| [`microsoft_defender_custom_details`](#microsoft_defender_custom_details) | A Microsoft Defender block's `alert.custom_details` is not a mapping of non-blank names to result columns. |
+| [`microsoft_defender_entity_kind`](#microsoft_defender_entity_kind) | A key of a Microsoft Defender block's `entities` is not an entity kind. |
+| [`microsoft_defender_entity_mapping`](#microsoft_defender_entity_mapping) | A Microsoft Defender entity mapping is empty, is not a mapping, or names a field its kind does not have. |
+| [`microsoft_defender_frequency`](#microsoft_defender_frequency) | A Microsoft Defender block's `schedule.frequency` is not `NRT`, `<n>H` or `<n>D`. |
+| [`microsoft_defender_grouping`](#microsoft_defender_grouping) | A Microsoft Defender block's `alert.grouping` is not `alert_per_event` or `single_alert`. |
+| [`microsoft_defender_incident`](#microsoft_defender_incident) | A Microsoft Defender block's `incident` is not a mapping whose `exclude_from_correlation` is `true` or `false`. |
+| [`microsoft_defender_isolation_type`](#microsoft_defender_isolation_type) | A Microsoft Defender `isolate_devices` target's `isolation_type` is not `full` or `selective`. |
+| [`microsoft_defender_lookback`](#microsoft_defender_lookback) | A Microsoft Defender block's `schedule.lookback` is not a duration, is set on a near-real-time rule, or is shorter than its frequency. |
+| [`microsoft_defender_no_entities`](#microsoft_defender_no_entities) | A Microsoft Defender block maps no entity. |
+| [`microsoft_defender_rule_absent`](#microsoft_defender_rule_absent) | A Microsoft Defender rule to disable is not on the tenant, so nothing was disabled or created. |
+| [`microsoft_defender_schema`](#microsoft_defender_schema) | A Microsoft Defender block's `schema` names another schema. |
+| [`microsoft_defender_scope`](#microsoft_defender_scope) | A Microsoft Defender block's `scope` is not a non-empty list of device group names. |
+| [`microsoft_defender_severity`](#microsoft_defender_severity) | A Microsoft Defender block's `alert.severity` is not one of opentide's five severities. |
 | [`missing_author`](#missing_author) | Retired in opentide 0.24.0; `opentide lint` reports a missing recommended metadata field as `metadata_recommended`. |
 | [`missing_field`](#missing_field) | A configuration file is missing a required key, once it is merged with the bundled file and the parent instance. |
 | [`missing_organisation`](#missing_organisation) | Retired in opentide 0.24.0; `opentide lint` reports a missing recommended metadata field as `metadata_recommended`. |
@@ -6104,6 +6120,317 @@ metadata:
 ### How to fix
 
 Add the missing keys under `metadata`. They are optional, so the note never fails a run, `lint --strict` included, and prints only with `--verbose`. To require them, set `severity = "warning"` or `"error"` under `[metadata]` in `.opentide/configurations/lint.toml`; to stop asking for them, set `required = []`.
+
+## microsoft_defender_action_kind
+
+A key of a Microsoft Defender block's `actions` is not an automated action.
+
+Severity: error. Reported by `opentide validate` (its `schema` check) on a `microsoft_defender` block (microsoft-defender-1.0). The actions are Graph's sixteen, such as `isolate_devices`, `collect_investigation_packages`, `block_files`, `disable_users` and `soft_delete_emails`. The finding is on `actions.<action>`.
+
+### Example
+
+```yaml
+configurations:
+  microsoft_defender:
+    actions:
+      isolate_device:
+        - device_id: DeviceId
+```
+
+### How to fix
+
+Use the action's name (`isolate_devices`).
+
+## microsoft_defender_action_target
+
+A Microsoft Defender automated action has no target, or a target is empty or names a field its action does not take.
+
+Severity: error. Reported by `opentide validate` (its `schema` check) on a `microsoft_defender` block (microsoft-defender-1.0). Each action holds a non-empty list of targets; a target names at least one of its action's fields, and `device_groups`, when set, is a non-empty list of device group names. The finding is on `actions.<action>.<N>`, or on its `device_groups`.
+
+### Example
+
+```yaml
+configurations:
+  microsoft_defender:
+    actions:
+      block_files:
+        - sha256: SHA256
+          device_id: DeviceId
+```
+
+### How to fix
+
+Keep only the action's fields: `block_files` takes `sha1`, `sha256` and `device_groups`.
+
+## microsoft_defender_column
+
+A Microsoft Defender column name is blank or not a string.
+
+Severity: error. Reported by `opentide validate` (its `schema` check) on a `microsoft_defender` block (microsoft-defender-1.0). Entity fields, action columns and custom detail values name a column of the query's output, sent verbatim (`DeviceId`). Whether the column exists is Defender's to check at deploy. The finding is on the field.
+
+### Example
+
+```yaml
+configurations:
+  microsoft_defender:
+    entities:
+      hosts:
+        - device_id: ""
+```
+
+### How to fix
+
+Name the result column (`device_id: DeviceId`), or remove the field.
+
+## microsoft_defender_custom_details
+
+A Microsoft Defender block's `alert.custom_details` is not a mapping of non-blank names to result columns.
+
+Severity: error. Reported by `opentide validate` (its `schema` check) on a `microsoft_defender` block (microsoft-defender-1.0). Each key is the custom detail's name, and each value the result column it shows. The finding is on `alert.custom_details`, or on the detail whose value is not a string.
+
+### Example
+
+```yaml
+configurations:
+  microsoft_defender:
+    alert:
+      custom_details: [ProcessCommandLine]
+```
+
+### How to fix
+
+Write a mapping: `custom_details: {CommandLine: ProcessCommandLine}`.
+
+## microsoft_defender_entity_kind
+
+A key of a Microsoft Defender block's `entities` is not an entity kind.
+
+Severity: error. Reported by `opentide validate` (its `schema` check) on a `microsoft_defender` block (microsoft-defender-1.0). The kinds are Graph's seventeen: `hosts`, `accounts`, `mailboxes`, `files`, `processes`, `ips`, `urls`, `dns`, `registry_values`, `mail_messages`, `mail_clusters`, `cloud_applications`, `oauth_applications`, `security_groups`, `azure_resources`, `amazon_resources`, `google_cloud_resources`. The finding is on `entities.<kind>`.
+
+### Example
+
+```yaml
+configurations:
+  microsoft_defender:
+    entities:
+      devices:
+        - device_id: DeviceId
+```
+
+### How to fix
+
+Use the kind's name (`hosts`, not `devices`).
+
+## microsoft_defender_entity_mapping
+
+A Microsoft Defender entity mapping is empty, is not a mapping, or names a field its kind does not have.
+
+Severity: error. Reported by `opentide validate` (its `schema` check) on a `microsoft_defender` block (microsoft-defender-1.0). Each kind holds a list of mappings; a mapping names at least one of its kind's fields (`hosts`: `device_id`, `name`, `dns_domain`, `netbios_name`, `nt_domain`), each a result column. The finding is on `entities.<kind>.<N>`.
+
+### Example
+
+```yaml
+configurations:
+  microsoft_defender:
+    entities:
+      hosts:
+        - device_id: DeviceId
+          sid: AccountSid
+```
+
+### How to fix
+
+Move the field to the kind that has it (`sid` is an `accounts` field), or remove it.
+
+## microsoft_defender_frequency
+
+A Microsoft Defender block's `schedule.frequency` is not `NRT`, `<n>H` or `<n>D`.
+
+Severity: error. Reported by `opentide validate` (its `schema` check) on a `microsoft_defender` block (microsoft-defender-1.0). `n` is a positive whole number without a leading zero. Deploy sends it as an ISO 8601 duration: `NRT` as `PT0S`, `1H` as `PT1H`, `1D` as `P1D`. Which frequencies a tenant accepts is Defender's to say at deploy; the portal offers `NRT`, `1H`, `3H`, `12H` and `24H`. The finding is on `schedule.frequency`.
+
+### Example
+
+```yaml
+configurations:
+  microsoft_defender:
+    schedule:
+      frequency: PT1H
+```
+
+### How to fix
+
+Write the frequency as `NRT`, `1H`, `3H`, `12H`, `24H` (or another `<n>H` or `<n>D`).
+
+## microsoft_defender_grouping
+
+A Microsoft Defender block's `alert.grouping` is not `alert_per_event` or `single_alert`.
+
+Severity: error. Reported by `opentide validate` (its `schema` check) on a `microsoft_defender` block (microsoft-defender-1.0). `grouping` is beta-only and is sent as Graph's `eventGroupingKind` (`alertPerEvent`, `singleAlert`). The finding is on `alert.grouping`.
+
+### Example
+
+```yaml
+configurations:
+  microsoft_defender:
+    alert:
+      grouping: singleAlert
+```
+
+### How to fix
+
+Write `single_alert` or `alert_per_event`, or remove the key: Defender then creates one alert per event.
+
+## microsoft_defender_incident
+
+A Microsoft Defender block's `incident` is not a mapping whose `exclude_from_correlation` is `true` or `false`.
+
+Severity: error. Reported by `opentide validate` (its `schema` check) on a `microsoft_defender` block (microsoft-defender-1.0). `incident` is beta-only and is sent as Graph's `incidentConfiguration`. The finding is on `incident`.
+
+### Example
+
+```yaml
+configurations:
+  microsoft_defender:
+    incident:
+      exclude_from_correlation: yes please
+```
+
+### How to fix
+
+Write `exclude_from_correlation: true` (each alert opens its own incident) or `false`.
+
+## microsoft_defender_isolation_type
+
+A Microsoft Defender `isolate_devices` target's `isolation_type` is not `full` or `selective`.
+
+Severity: error. Reported by `opentide validate` (its `schema` check) on a `microsoft_defender` block (microsoft-defender-1.0). It is sent as Graph's `isolationType`. The finding is on `actions.isolate_devices.<N>.isolation_type`.
+
+### Example
+
+```yaml
+configurations:
+  microsoft_defender:
+    actions:
+      isolate_devices:
+        - device_id: DeviceId
+          isolation_type: Full
+```
+
+### How to fix
+
+Write `full` or `selective`, lower case.
+
+## microsoft_defender_lookback
+
+A Microsoft Defender block's `schedule.lookback` is not a duration, is set on a near-real-time rule, or is shorter than its frequency.
+
+Severity: error. Reported by `opentide validate` (its `schema` check) on a `microsoft_defender` block (microsoft-defender-1.0). `lookback` is beta-only and is `<n>H` or `<n>D`. Graph requires it to be at least `frequency` and does not take it with `frequency: NRT` (`1D` counts as `24H`). The finding is on `schedule.lookback`.
+
+### Example
+
+```yaml
+configurations:
+  microsoft_defender:
+    schedule:
+      frequency: NRT
+      lookback: 1H
+```
+
+### How to fix
+
+Remove `lookback` from a near-real-time rule, or make it at least the frequency (`frequency: 1H`, `lookback: 4H`).
+
+## microsoft_defender_no_entities
+
+A Microsoft Defender block maps no entity.
+
+Severity: warning. Reported by `opentide validate` and `opentide lint` (its `queries` check) on a `microsoft_defender` block (microsoft-defender-1.0) whose `entities` is unset, empty, or holds only empty kinds. The alert then names no device, user or mailbox, so it cannot be triaged or acted on by entity. It is an advisory: the rule validates and deploys.
+
+### Example
+
+```yaml
+configurations:
+  microsoft_defender:
+    query: DeviceProcessEvents | where FileName =~ "powershell.exe"
+    schedule:
+      frequency: 1H
+```
+
+### How to fix
+
+Map the columns the query returns: `entities: {hosts: [{device_id: DeviceId}]}`.
+
+## microsoft_defender_rule_absent
+
+A Microsoft Defender rule to disable is not on the tenant, so nothing was disabled or created.
+
+Severity: warning. Reported by `opentide deploy` on a `microsoft_defender` tenant (microsoft-defender-1.0). A `DISABLEMENT` status sends `PATCH {base}/{uuid}` with `status: disabled`; Graph answered `404`, so the tenant has no rule with the rule's `metadata.uuid`. Deploy does not create a rule only to disable it. The rule is reported as skipped.
+
+### Example
+
+```text illustrative
+microsoft_defender_rule_absent: rule 00000000-0000-4000-8003-0000000000d0 is not on tenant 'contoso': nothing to disable
+```
+
+### How to fix
+
+Nothing to do if the rule was never deployed to that tenant. If it was, it was deleted in the portal or deployed under another uuid: check the rule's `metadata.uuid`.
+
+## microsoft_defender_schema
+
+A Microsoft Defender block's `schema` names another schema.
+
+Severity: error. Reported by `opentide validate` (its `schema` check) on a `microsoft_defender` block (microsoft-defender-1.0). `schema` may be left out; when set it is `platform::microsoft_defender::1.0`. The finding is on `schema`.
+
+### Example
+
+```yaml
+configurations:
+  microsoft_defender:
+    schema: platform::microsoft_defender::2.0
+```
+
+### How to fix
+
+Write `schema: platform::microsoft_defender::1.0`, or remove the key.
+
+## microsoft_defender_scope
+
+A Microsoft Defender block's `scope` is not a non-empty list of device group names.
+
+Severity: error. Reported by `opentide validate` (its `schema` check) on a `microsoft_defender` block (microsoft-defender-1.0). `scope` is `{device_groups: [...]}`. With no `scope` the rule applies to every device; an empty list would apply to none. The finding is on `scope`.
+
+### Example
+
+```yaml
+configurations:
+  microsoft_defender:
+    scope:
+      device_groups: []
+```
+
+### How to fix
+
+List the device groups, or remove `scope` to cover every device.
+
+## microsoft_defender_severity
+
+A Microsoft Defender block's `alert.severity` is not one of opentide's five severities.
+
+Severity: error. Reported by `opentide validate` (its `schema` check) on a `microsoft_defender` block (microsoft-defender-1.0). `alert.severity` is `Informational`, `Low`, `Medium`, `High` or `Critical`, exact case. Deploy sends it lower-cased, and `Critical` as `high`, Graph's highest. The finding is on `alert.severity`.
+
+### Example
+
+```yaml
+configurations:
+  microsoft_defender:
+    alert:
+      severity: high
+```
+
+### How to fix
+
+Write the severity with its capital (`High`), or remove it: deploy then uses `response.alert_severity`, else `Medium`.
 
 ## missing_author
 

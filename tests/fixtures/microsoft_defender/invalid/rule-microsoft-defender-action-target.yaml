@@ -1,0 +1,28 @@
+# A block_files target with a device column, which file actions do not take. Expected constraint code: microsoft_defender_action_target.
+name: Microsoft Defender invalid block (rule-microsoft-defender-action-target.yaml)
+metadata:
+  uuid: 00000000-0000-4000-8003-0000000000d3
+  schema: rule::1.0
+  version: 1
+  created: "2026-11-24"
+  modified: "2026-11-24"
+  tlp: clear
+description: |
+  Invalid Microsoft Defender block fixture.
+response:
+  alert_severity: Medium
+configurations:
+  microsoft_defender:
+    enabled: true
+    schema: platform::microsoft_defender::1.0
+    status: STAGING
+    query: DeviceFileEvents | take 1
+    schedule:
+      frequency: 1H
+    entities:
+      files:
+        - sha256: SHA256
+    actions:
+      block_files:
+        - sha256: SHA256
+          device_id: DeviceId

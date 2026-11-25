@@ -100,7 +100,7 @@ warmup = 1
 # #1704 moved it from 3b65f46efbfcf566: the generator no longer writes the Defender block's
 # `alert.category`, which Microsoft removed and the model no longer has. The medians stand: the
 # oracle's model still reads it, but the generated rules are otherwise the same.
-digest = "b3aa5ae8060ba13c"
+digest = "1ffecfc7bbf7e39c"
 # The platforms the heavy workspace holds: the ones opentide 0.23.0 knows, in the connector
 # order (xtask's bench::oracle::ORACLE_PLATFORMS). Bitdefender, Graylog, Exabeam and Google
 # SecOps join when the oracle pin moves past 0.28.

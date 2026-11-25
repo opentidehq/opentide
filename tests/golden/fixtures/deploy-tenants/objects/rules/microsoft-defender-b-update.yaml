@@ -1,12 +1,13 @@
 name: Defender update rule
 metadata:
-  uuid: 00000000-0000-4000-8047-000000000002
+  uuid: 00000000-0000-4000-8047-0000000000d2
   schema: rule::1.0
   version: 1
   created: 2026-01-01
   modified: 2026-01-02
   tlp: clear
-description: A rule the defender stand-in tenant receives in a deploy that sends.
+description: |
+  A rule the Microsoft Defender stand-in tenant receives in a deploy that sends; the tenant holds it: one PATCH updates it.
 response:
   alert_severity: High
 configurations:
@@ -15,8 +16,10 @@ configurations:
     query: |
       DeviceProcessEvents
       | take 1
-    scheduling: 1H
+    schedule:
+      frequency: 1H
     alert:
       title: Defender update rule
-    impacted_entities:
-      device: device_id
+    entities:
+      hosts:
+        - device_id: DeviceId

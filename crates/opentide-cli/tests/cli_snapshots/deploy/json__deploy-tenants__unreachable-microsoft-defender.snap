@@ -9,28 +9,52 @@ exit: 1
 {
   "changes": [
     {
-      "action": "create",
+      "action": "upsert",
       "name": "Defender create rule",
       "platform": "microsoft_defender",
       "status": "STAGING",
       "tenant": "lab",
-      "uuid": "00000000-0000-4000-8047-000000000001"
+      "uuid": "00000000-0000-4000-8047-0000000000d1"
     },
     {
-      "action": "update",
+      "action": "upsert",
       "name": "Defender update rule",
       "platform": "microsoft_defender",
       "status": "STAGING",
       "tenant": "lab",
-      "uuid": "00000000-0000-4000-8047-000000000002"
+      "uuid": "00000000-0000-4000-8047-0000000000d2"
+    },
+    {
+      "action": "upsert",
+      "name": "Defender concurrent create rule",
+      "platform": "microsoft_defender",
+      "status": "STAGING",
+      "tenant": "lab",
+      "uuid": "00000000-0000-4000-8047-0000000000d3"
+    },
+    {
+      "action": "disable",
+      "name": "Defender disable absent rule",
+      "platform": "microsoft_defender",
+      "status": "DISABLED",
+      "tenant": "lab",
+      "uuid": "00000000-0000-4000-8047-0000000000d4"
     },
     {
       "action": "delete",
-      "name": "Defender retire rule",
+      "name": "Defender delete absent rule",
       "platform": "microsoft_defender",
       "status": "REMOVED",
       "tenant": "lab",
-      "uuid": "00000000-0000-4000-8047-000000000003"
+      "uuid": "00000000-0000-4000-8047-0000000000d5"
+    },
+    {
+      "action": "upsert",
+      "name": "Defender refused rule",
+      "platform": "microsoft_defender",
+      "status": "STAGING",
+      "tenant": "lab",
+      "uuid": "00000000-0000-4000-8047-0000000000d6"
     }
   ],
   "command": "deploy",
@@ -58,16 +82,19 @@ exit: 1
   "ok": false,
   "plan": {
     "microsoft_defender": [
-      "00000000-0000-4000-8047-000000000001",
-      "00000000-0000-4000-8047-000000000002",
-      "00000000-0000-4000-8047-000000000003"
+      "00000000-0000-4000-8047-0000000000d1",
+      "00000000-0000-4000-8047-0000000000d2",
+      "00000000-0000-4000-8047-0000000000d3",
+      "00000000-0000-4000-8047-0000000000d4",
+      "00000000-0000-4000-8047-0000000000d5",
+      "00000000-0000-4000-8047-0000000000d6"
     ]
   },
   "results": [
     {
-      "action": "create",
+      "action": "upsert",
       "error": null,
-      "id": "00000000-0000-4000-8047-000000000001",
+      "id": "00000000-0000-4000-8047-0000000000d1",
       "name": "Defender create rule",
       "platform": "microsoft_defender",
       "reason": "not attempted: tenant lab failed",
@@ -76,10 +103,32 @@ exit: 1
       "tenant": "lab"
     },
     {
-      "action": "update",
+      "action": "upsert",
       "error": null,
-      "id": "00000000-0000-4000-8047-000000000002",
+      "id": "00000000-0000-4000-8047-0000000000d2",
       "name": "Defender update rule",
+      "platform": "microsoft_defender",
+      "reason": "not attempted: tenant lab failed",
+      "seconds": 0.0,
+      "status": "not_attempted",
+      "tenant": "lab"
+    },
+    {
+      "action": "upsert",
+      "error": null,
+      "id": "00000000-0000-4000-8047-0000000000d3",
+      "name": "Defender concurrent create rule",
+      "platform": "microsoft_defender",
+      "reason": "not attempted: tenant lab failed",
+      "seconds": 0.0,
+      "status": "not_attempted",
+      "tenant": "lab"
+    },
+    {
+      "action": "disable",
+      "error": null,
+      "id": "00000000-0000-4000-8047-0000000000d4",
+      "name": "Defender disable absent rule",
       "platform": "microsoft_defender",
       "reason": "not attempted: tenant lab failed",
       "seconds": 0.0,
@@ -89,8 +138,19 @@ exit: 1
     {
       "action": "delete",
       "error": null,
-      "id": "00000000-0000-4000-8047-000000000003",
-      "name": "Defender retire rule",
+      "id": "00000000-0000-4000-8047-0000000000d5",
+      "name": "Defender delete absent rule",
+      "platform": "microsoft_defender",
+      "reason": "not attempted: tenant lab failed",
+      "seconds": 0.0,
+      "status": "not_attempted",
+      "tenant": "lab"
+    },
+    {
+      "action": "upsert",
+      "error": null,
+      "id": "00000000-0000-4000-8047-0000000000d6",
+      "name": "Defender refused rule",
       "platform": "microsoft_defender",
       "reason": "not attempted: tenant lab failed",
       "seconds": 0.0,
@@ -109,7 +169,7 @@ exit: 1
     "delete": 0,
     "disable": 0,
     "failed": 0,
-    "not_attempted": 3,
+    "not_attempted": 6,
     "platforms": 1,
     "seconds": 0.0,
     "skipped": 0,

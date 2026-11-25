@@ -1,8 +1,11 @@
-//! Microsoft Defender against the cassettes recorded from the Python
-//! client (`tests/cassettes/defender/`, `cargo xtask cassettes record
-//! defender/<scenario>`): every request the connector sends must be the
-//! Python client's, in order (a JSON body as the same data), and the answers must read as
-//! Python reads them.
+//! Microsoft Defender against recorded cassettes: advanced hunting
+//! (`defender/query`, `defender/validate`, recorded from the Python client),
+//! whose every request must be the Python client's, in order; and the Graph
+//! beta deploy (`golden/deploy-defender-continues`, recorded from the Rust
+//! command line against `tests/cassettes/defender/tenant.py`), replayed
+//! through the connector: `PATCH` then `POST` on a `404`, one more `PATCH`
+//! after a `409`, a DISABLEMENT's `404` creating nothing, a DELETE's `404`
+//! and a refusal.
 
 #![expect(clippy::unwrap_used, reason = "a test: a failed set-up is a failure")]
 
@@ -12,7 +15,7 @@ use opentide_cassette::cassette::Body;
 use opentide_compile::json::Json;
 use opentide_connectors::ConnectorError;
 use opentide_connectors::connector::QueryRequest;
-use opentide_connectors::defender::{self, Defender, DefenderError};
+use opentide_connectors::microsoft_defender::{self, DefenderError, MicrosoftDefender};
 use opentide_connectors::runtime::block_on;
 use support::{Replayed, fixture, items, text, window};
 
@@ -25,159 +28,11 @@ client_secret = "$DEFENDER_CLIENT_SECRET"
 fn replay(scenario: &str) -> Replayed {
     Replayed::start(
         scenario,
-        defender::PLATFORM,
+        microsoft_defender::PLATFORM,
         SETUP,
         "DEFENDER_CLIENT_SECRET",
-        &defender::http_settings(),
+        &microsoft_defender::http_settings(),
     )
-}
-
-fn deploy(tenant: &Replayed, rule: &Json) -> Vec<String> {
-    let connector = Defender::new();
-    let cx = tenant.cx();
-    block_on(async {
-        let mut seen = Vec::new();
-        let created = connector.create_rule(cx, rule).await.unwrap();
-        seen.push(format!(
-            "created {} partial {}",
-            created.id, created.partial
-        ));
-        let id = created.id.to_string();
-        connector.update_rule(cx, rule, &id).await.unwrap();
-        seen.push(format!("updated {id}"));
-        match connector.update_rule(cx, rule, "99").await {
-            Err(DefenderError::Refused { message, context }) => {
-                seen.push(format!("{message} | {}", context.unwrap_or_default()));
-            }
-            other => panic!("{other:?}"),
-        }
-        connector.delete_rule(cx, &id).await.unwrap();
-        seen.push(format!("deleted {id}"));
-        seen
-    })
-    .unwrap()
-}
-
-#[test]
-fn defender_deploy_sends_what_the_python_client_sent() {
-    let inputs = fixture("defender");
-    let rule = inputs.get("deploy").unwrap().get("rule").unwrap();
-    assert_eq!(
-        &defender::safer_configuration(rule),
-        inputs.get("deploy").unwrap().get("safer").unwrap()
-    );
-    let tenant = replay("defender/deploy");
-    let seen = deploy(&tenant, rule);
-    assert_eq!(tenant.verify(), Vec::new());
-    assert_eq!(
-        seen,
-        [
-            "created 42 partial true",
-            "updated 42",
-            "Failed to update detection rule with id 99 in tenant replayed \
-             (https://graph.microsoft.com/beta/security/rules/detectionRules/99) - Error Code 404 \
-             | (empty body, HTTP 404)",
-            "deleted 42",
-        ]
-    );
-}
-
-/// The same steps through the `Deployer`, as `opentide deploy` sends them:
-/// the compiled rule as the body, the stored id addressing an update or a
-/// delete. The requests are the recording's; the safer configuration is a
-/// raised warning; Graph's refusal keeps its answer as the detail and fails
-/// the rule, never the tenant.
-#[test]
-fn defender_the_deployer_sends_what_the_python_client_sent() {
-    use opentide_connectors::connector::{DeployRequest, DeployScope, Deployer, Operation};
-    let inputs = fixture("defender");
-    let rule = inputs.get("deploy").unwrap().get("rule").unwrap();
-    let body = rule.to_compact().into_bytes();
-    let tenant = replay("defender/deploy");
-    let connector = Defender::new();
-    let cx = tenant.cx();
-    let (created, updated, refused, deleted) = block_on(async {
-        let created = connector
-            .deploy(
-                cx,
-                &DeployRequest::new("u1", Operation::Create, body.clone()),
-            )
-            .await
-            .unwrap();
-        let id = created.remote_id.clone().unwrap();
-        let updated = connector
-            .deploy(
-                cx,
-                &DeployRequest::new(id.clone(), Operation::Update, body.clone()),
-            )
-            .await
-            .unwrap();
-        let refused = connector
-            .deploy(
-                cx,
-                &DeployRequest::new("99", Operation::Update, body.clone()),
-            )
-            .await
-            .unwrap_err();
-        let deleted = connector
-            .deploy(cx, &DeployRequest::delete(id))
-            .await
-            .unwrap();
-        (created, updated, refused, deleted)
-    })
-    .unwrap();
-    assert_eq!(tenant.verify(), Vec::new());
-    assert_eq!(created.remote_id.as_deref(), Some("42"));
-    assert_eq!(created.warnings.len(), 1);
-    assert_eq!(created.warnings[0].code, defender::PARTIAL_DEPLOYMENT);
-    assert!(created.warnings[0].raised);
-    assert_eq!(updated.remote_id.as_deref(), Some("42"));
-    assert_eq!(deleted.remote_id, None);
-    assert_eq!(refused.scope, DeployScope::Rule);
-    assert_eq!(refused.failure.code, "tenant_refused");
-    assert_eq!(
-        refused.failure.field("detail"),
-        Some("(empty body, HTTP 404)")
-    );
-}
-
-#[test]
-fn defender_a_single_byte_off_fails() {
-    // The same rule, its title one character longer: the create's body differs.
-    let inputs = fixture("defender");
-    let mut rule = inputs.get("deploy").unwrap().get("rule").unwrap().clone();
-    if let Json::Object(top) = &mut rule {
-        top.insert(
-            "displayName".into(),
-            Json::Str("Encoded PowerShell — Ünïcodé".into()),
-        );
-    }
-    let tenant = replay("defender/deploy");
-    let connector = Defender::new();
-    let _ = block_on(async { connector.create_rule(tenant.cx(), &rule).await });
-    let mismatches = tenant.verify();
-    assert_eq!(
-        mismatches.first().map(|m| m.index),
-        Some(1),
-        "{mismatches:?}"
-    );
-    assert!(mismatches[0].detail.starts_with("bodies differ at byte "));
-
-    // A recorded body one byte off is refused too.
-    let mut altered = support::cassette("defender/deploy");
-    let Body::Text(body) = &mut altered.interactions[0].request.body else {
-        panic!("the token request has a text body")
-    };
-    *body = body.replace("grant_type", "grant_typf");
-    let tenant = Replayed::start_with(
-        altered,
-        defender::PLATFORM,
-        SETUP,
-        "DEFENDER_CLIENT_SECRET",
-        &defender::http_settings(),
-    );
-    let _ = block_on(async { Defender::new().token(tenant.cx()).await });
-    assert_eq!(tenant.verify()[0].index, 0);
 }
 
 #[test]
@@ -186,7 +41,7 @@ fn defender_query_sends_what_the_python_runner_sent() {
     let query = inputs.get("query").unwrap();
     let window = window(query.get("window").unwrap());
     let tenant = replay("defender/query");
-    let connector = Defender::new();
+    let connector = MicrosoftDefender::new();
     let outcomes = block_on(async {
         let mut outcomes = Vec::new();
         for item in items(query.get("queries").unwrap()) {
@@ -257,7 +112,7 @@ fn defender_query_refuses_a_window_past_retention_without_a_request() {
         .checked_add(jiff::SignedDuration::from_hours(24 * 40))
         .unwrap();
     let outcome = block_on(async {
-        Defender::new()
+        MicrosoftDefender::new()
             .run(tenant.cx(), &QueryRequest::new("T", "kql", window), now)
             .await
     })
@@ -284,7 +139,7 @@ fn defender_validate_checks_one_row_and_the_custom_detection_columns() {
     let validate = inputs.get("validate").unwrap();
     let window = window(validate.get("window").unwrap());
     let tenant = replay("defender/validate");
-    let connector = Defender::new();
+    let connector = MicrosoftDefender::new();
     let errors = block_on(async {
         let mut errors = Vec::new();
         for query in items(validate.get("queries").unwrap()) {
@@ -312,13 +167,14 @@ fn defender_validate_checks_one_row_and_the_custom_detection_columns() {
     );
 }
 
-/// The cassette `defender/deploy`'s sign-in, then one page of the rules
+/// The cassette `defender/query`'s sign-in, then one page of the rules
 /// whose `@odata.nextLink` is *link*.
 fn listing_linking_to(link: &str) -> opentide_cassette::Cassette {
-    let full = support::cassette("defender/deploy");
-    let mut page = full.interactions[5].clone();
+    let full = support::cassette("defender/query");
+    let mut page = full.interactions[1].clone();
     page.request.method = "GET".into();
-    page.request.url = defender::DETECTION_RULES_ENDPOINT.into();
+    page.request.url = microsoft_defender::DETECTION_RULES_ENDPOINT.into();
+    page.request.body = Body::Text(String::new());
     page.response.status = 200;
     page.response.headers = vec![("content-type".into(), "application/json".into())];
     page.response.body = Body::Text(
@@ -334,12 +190,13 @@ fn listing_linking_to(link: &str) -> opentide_cassette::Cassette {
 fn list_through(link: &str) -> (Result<Vec<Json>, DefenderError>, Replayed) {
     let tenant = Replayed::start_with(
         listing_linking_to(link),
-        defender::PLATFORM,
+        microsoft_defender::PLATFORM,
         SETUP,
         "DEFENDER_CLIENT_SECRET",
-        &defender::http_settings(),
+        &microsoft_defender::http_settings(),
     );
-    let listed = block_on(async { Defender::new().list_rules(tenant.cx()).await }).unwrap();
+    let listed =
+        block_on(async { MicrosoftDefender::new().list_rules(tenant.cx()).await }).unwrap();
     (listed, tenant)
 }
 
@@ -369,7 +226,7 @@ fn defender_a_next_link_to_another_host_receives_no_token() {
 /// with an error, never an endless loop.
 #[test]
 fn defender_a_next_link_that_loops_is_not_followed() {
-    let (listed, tenant) = list_through(defender::DETECTION_RULES_ENDPOINT);
+    let (listed, tenant) = list_through(microsoft_defender::DETECTION_RULES_ENDPOINT);
     let error = listed.unwrap_err().to_string();
     assert!(error.contains("repeats one already followed"), "{error}");
     assert_eq!(tenant.verify(), Vec::new());
@@ -379,10 +236,11 @@ fn defender_a_next_link_that_loops_is_not_followed() {
 /// content type, never an empty listing.
 #[test]
 fn defender_a_list_page_that_is_not_json_is_an_error() {
-    let full = support::cassette("defender/deploy");
-    let mut page = full.interactions[5].clone();
+    let full = support::cassette("defender/query");
+    let mut page = full.interactions[1].clone();
     page.request.method = "GET".into();
-    page.request.url = defender::DETECTION_RULES_ENDPOINT.into();
+    page.request.url = microsoft_defender::DETECTION_RULES_ENDPOINT.into();
+    page.request.body = Body::Text(String::new());
     page.response.status = 200;
     page.response.headers = vec![("content-type".into(), "text/plain".into())];
     page.response.body = Body::Text("maintenance".into());
@@ -392,12 +250,13 @@ fn defender_a_list_page_that_is_not_json_is_an_error() {
             full.recorded_from,
             vec![full.interactions[0].clone(), page],
         ),
-        defender::PLATFORM,
+        microsoft_defender::PLATFORM,
         SETUP,
         "DEFENDER_CLIENT_SECRET",
-        &defender::http_settings(),
+        &microsoft_defender::http_settings(),
     );
-    let listed = block_on(async { Defender::new().list_rules(tenant.cx()).await }).unwrap();
+    let listed =
+        block_on(async { MicrosoftDefender::new().list_rules(tenant.cx()).await }).unwrap();
     let error = listed.unwrap_err().to_string();
     assert!(
         error.ends_with(
@@ -434,20 +293,20 @@ fn defender_a_refused_sign_in_fails_the_tenant() {
 #[test]
 fn defender_a_sign_in_without_a_token_fails_the_tenant() {
     use opentide_connectors::connector::{DeployRequest, DeployScope, Deployer};
-    let mut cassette = support::cassette("defender/deploy");
+    let mut cassette = support::cassette("defender/query");
     let mut signed = cassette.interactions[0].clone();
     signed.response.status = 403;
     signed.response.body = Body::Text("<html><title>Forbidden</title></html>".into());
     cassette.interactions = vec![signed];
     let tenant = Replayed::start_with(
         cassette,
-        defender::PLATFORM,
+        microsoft_defender::PLATFORM,
         SETUP,
         "DEFENDER_CLIENT_SECRET",
-        &defender::http_settings(),
+        &microsoft_defender::http_settings(),
     );
     let request = DeployRequest::delete("42");
-    let error = block_on(async { Defender::new().deploy(tenant.cx(), &request).await })
+    let error = block_on(async { MicrosoftDefender::new().deploy(tenant.cx(), &request).await })
         .unwrap()
         .unwrap_err();
     assert_eq!(error.scope, DeployScope::Tenant, "{error:?}");
@@ -456,4 +315,130 @@ fn defender_a_sign_in_without_a_token_fails_the_tenant() {
         "{error:?}"
     );
     assert_eq!(tenant.verify(), Vec::new());
+}
+
+/// The tenant of the golden deploy (`deploy-tenants`' `lab`).
+const GOLDEN_SETUP: &str = r#"
+tenant_id = "00000000-0000-4000-8000-00000000de1d"
+client_id = "00000000-0000-4000-8000-00000000c11d"
+client_secret = "$DEFENDER_CLIENT_SECRET"
+"#;
+
+/// The body the golden deploy sent in its `PATCH` of rule `id` (its
+/// first), read back from the cassette.
+fn recorded_body(cassette: &opentide_cassette::Cassette, id: &str) -> Json {
+    let patch = cassette
+        .interactions
+        .iter()
+        .find(|interaction| {
+            interaction.request.method == "PATCH" && interaction.request.url.ends_with(id)
+        })
+        .unwrap();
+    serde_json::from_slice(&patch.request.body.bytes()).unwrap()
+}
+
+fn rule(number: &str) -> String {
+    format!("00000000-0000-4000-8047-0000000000{number}")
+}
+
+/// RFC 0021's deploy, replayed through the connector from the golden
+/// deploy's cassette: every call is the one the command line made, and
+/// each answer reads as microsoft-defender-1.0 says.
+#[test]
+fn microsoft_defender_deploy_follows_the_spec_through_every_answer() {
+    use opentide_connectors::connector::{DeployRequest, Deployer, Operation};
+    use opentide_connectors::microsoft_defender::{RULE_ABSENT, Sent};
+    let cassette = support::cassette("golden/deploy-defender-continues");
+    let bodies: Vec<Json> = ["d1", "d2", "d3", "d4", "d6"]
+        .iter()
+        .map(|number| recorded_body(&cassette, &rule(number)))
+        .collect();
+    let tenant = Replayed::start_with(
+        cassette,
+        microsoft_defender::PLATFORM,
+        GOLDEN_SETUP,
+        "DEFENDER_CLIENT_SECRET",
+        &microsoft_defender::http_settings(),
+    );
+    let connector = MicrosoftDefender::new();
+    let cx = tenant.cx();
+    let request = |id: &str, operation: Operation, body: &Json| {
+        // An upper-case uuid addresses the same rule.
+        DeployRequest::new(id.to_uppercase(), operation, body.to_compact().into_bytes())
+    };
+    block_on(async {
+        // PATCH 404, then POST with the uuid as id: created.
+        let created = connector
+            .deploy(cx, &request(&rule("d1"), Operation::Update, &bodies[0]))
+            .await
+            .unwrap();
+        assert_eq!(created.operation, Operation::Create);
+        assert_eq!(created.remote_id.as_deref(), Some(rule("d1").as_str()));
+        assert_eq!(created.events[0].name, "microsoft_defender_rule_created");
+        // PATCH 200: updated, in one call.
+        assert_eq!(
+            connector.upsert(cx, &rule("d2"), &bodies[1]).await.unwrap(),
+            Sent::Updated
+        );
+        // PATCH 404, POST 409 (created meanwhile), PATCH 200: updated.
+        assert_eq!(
+            connector.upsert(cx, &rule("d3"), &bodies[2]).await.unwrap(),
+            Sent::Updated
+        );
+        // A DISABLEMENT's PATCH 404: nothing created, a warning.
+        let absent = connector
+            .deploy(cx, &request(&rule("d4"), Operation::Disable, &bodies[3]))
+            .await
+            .unwrap();
+        assert_eq!(absent.remote_id, None);
+        assert_eq!(absent.warnings[0].code, RULE_ABSENT);
+        assert!(absent.warnings[0].raised);
+        // A DELETE's 404: a failure whose status says the rule is gone.
+        let gone = connector
+            .deploy(cx, &DeployRequest::delete(rule("d5")))
+            .await
+            .unwrap_err();
+        assert_eq!(gone.failure.status, Some(404));
+        // A refusal fails the rule, with Graph's message.
+        let refused = connector
+            .upsert(cx, &rule("d6"), &bodies[4])
+            .await
+            .unwrap_err();
+        assert_eq!(refused.failure.status, Some(400));
+        assert_eq!(refused.failure.code, "tenant_refused");
+        assert!(
+            refused
+                .failure
+                .message
+                .contains("The query is not valid for a custom detection."),
+            "{refused:?}"
+        );
+    })
+    .unwrap();
+    assert_eq!(tenant.verify(), Vec::new());
+}
+
+/// The create body is the update body with `id` first: the `POST` the
+/// golden deploy recorded is the `PATCH` before it, plus the id.
+#[test]
+fn microsoft_defender_creates_with_the_uuid_as_id() {
+    let cassette = support::cassette("golden/deploy-defender-continues");
+    let patch = recorded_body(&cassette, &rule("d1"));
+    let post = cassette
+        .interactions
+        .iter()
+        .find(|interaction| {
+            interaction.request.method == "POST"
+                && interaction.request.url.ends_with("detectionRules")
+        })
+        .unwrap();
+    let post: Json = serde_json::from_slice(&post.request.body.bytes()).unwrap();
+    assert_eq!(
+        post,
+        opentide_compile::microsoft_defender::create_body(&rule("d1"), &patch)
+    );
+    assert_eq!(
+        post.as_object().unwrap().keys().next().map(String::as_str),
+        Some("id")
+    );
 }

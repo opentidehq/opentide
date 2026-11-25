@@ -126,7 +126,7 @@ fn value<'a>(live: &'a Live, key: &str) -> &'a Json {
 
 /// Microsoft Defender whose check counts its data's retention from the
 /// recording's time, not today's.
-struct DefenderAt(opentide_connectors::defender::Defender);
+struct DefenderAt(opentide_connectors::microsoft_defender::MicrosoftDefender);
 
 impl LiveValidator for DefenderAt {
     fn validate<'a>(
@@ -178,7 +178,7 @@ fn defender_rules_are_checked_with_their_custom_detection_columns() {
     let mut registry = Registry::new();
     registry
         .register(Box::new(DefenderAt(
-            opentide_connectors::defender::Defender::new(),
+            opentide_connectors::microsoft_defender::MicrosoftDefender::new(),
         )))
         .unwrap();
     let (live, mismatches) = live(

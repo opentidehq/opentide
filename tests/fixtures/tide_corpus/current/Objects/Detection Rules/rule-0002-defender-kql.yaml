@@ -27,10 +27,10 @@ configurations:
     query: |
       DeviceProcessEvents
       | take 1
-    scheduling: 1H
+    schedule:
+      frequency: 1H
     alert:
       title: Defender KQL Rule
-    impacted_entities:
-      device: device_id
-    scope:
-      selection: All
+    entities:
+      hosts:
+        - device_id: device_id

@@ -286,50 +286,6 @@ mod validate {
     }
 
     #[test]
-    fn a_defender_alert_category_is_an_unknown_key_that_says_microsoft_removed_it() {
-        // Microsoft Graph removed `category` from the custom detection's alert template
-        // (2026-10-01), so it is reported like any unknown key, with a hint that names why;
-        // another unknown key in the same block gets no such hint.
-        let fs = workspace();
-        fs.write(
-            "/ws/objects/rules/a.yaml",
-            format!(
-                "{}configurations:\n  microsoft_defender:\n    status: STAGING\n    alert:\n      \
-                 category: Execution\n      colour: red\n",
-                rule(U1, "A")
-            ),
-        );
-        let validation = run(&fs, &Options::default());
-        let finding = |key: &str| {
-            with_code(&validation, "schema_validation")
-                .into_iter()
-                .find(|d| {
-                    d.field_path.join(".")
-                        == format!("configurations.microsoft_defender.alert.{key}")
-                })
-                .unwrap_or_else(|| panic!("{key}: {:?}", validation.report.issues))
-        };
-        let category = finding("category");
-        assert!(
-            category
-                .message
-                .starts_with(opentide_schema::from_node::messages::EXTRA_FORBIDDEN)
-        );
-        let help = category.help.as_deref().unwrap_or_default();
-        assert!(help.contains("Microsoft removed `category`"), "{help}");
-        let other = finding("colour");
-        assert!(
-            !other
-                .help
-                .as_deref()
-                .unwrap_or_default()
-                .contains("Microsoft"),
-            "{:?}",
-            other.help
-        );
-    }
-
-    #[test]
     fn a_file_that_does_not_exist_is_file_not_found() {
         let fs = workspace();
         fs.write("/ws/objects/rules/a.yaml", rule(U1, "A"));
@@ -858,8 +814,7 @@ mod validate {
         fs.write(
             "/ws/objects/rules/a.yaml",
             format!(
-                "{}configurations:\n  microsoft_defender:\n    status: X\n    scheduling: weekly\n  \
-                 crowdstrike:\n    status: X\n    details:\n      trigger: sometimes\n  \
+                "{}configurations:\n  crowdstrike:\n    status: X\n    details:\n      trigger: sometimes\n  \
                  sentinel_one:\n    status: X\n    response:\n      treat_as_threat: maybe\n",
                 rule(U1, "A")
             ),
@@ -881,13 +836,6 @@ mod validate {
         };
         let expect =
             |help: &str, expected: &str| (Some(help.to_owned()), Some(expected.to_owned()));
-        assert_eq!(
-            at("configurations.microsoft_defender.scheduling"),
-            expect(
-                "write \"NRT\", \"1H\", \"3H\", \"12H\" or \"24H\"",
-                "\"NRT\", \"1H\", \"3H\", \"12H\" or \"24H\""
-            )
-        );
         assert_eq!(
             at("configurations.crowdstrike.details.trigger"),
             expect("write verbose or summary", "verbose or summary")

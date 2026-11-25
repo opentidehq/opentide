@@ -9,7 +9,7 @@
 //! production.**
 //!
 //! ```text
-//! OPENTIDE_LIVE_DEFENDER_FOR_ENDPOINT=defender.toml \
+//! OPENTIDE_LIVE_MICROSOFT_DEFENDER=defender.toml \
 //! OPENTIDE_LIVE_ELASTIC=elastic.toml OPENTIDE_LIVE_SENTINEL_ONE=s1.toml \
 //! OPENTIDE_LIVE_SPLUNK=splunk.toml OPENTIDE_LIVE_CARBON_BLACK_CLOUD=cbc.toml \
 //! OPENTIDE_LIVE_SENTINEL=sentinel.toml \
@@ -25,8 +25,8 @@ use opentide_connectors::carbon_black::{self, CarbonBlack, ReportDeploy};
 use opentide_connectors::connector::TenantContext;
 use opentide_connectors::connector::{QueryRequest, TimeWindow};
 use opentide_connectors::credentials::Mode as Resolve;
-use opentide_connectors::defender::{self, Defender};
 use opentide_connectors::elastic::{self, Elastic, ElasticRule, Strategy};
+use opentide_connectors::microsoft_defender::{self, MicrosoftDefender};
 use opentide_connectors::runtime::block_on;
 use opentide_connectors::sentinel::{self, Sentinel};
 use opentide_connectors::sentinel_one::{self, SentinelOne};
@@ -59,10 +59,17 @@ fn last_hour() -> TimeWindow {
     }
 }
 
+/// The Graph beta lifecycle on a test tenant (microsoft-defender-1.0,
+/// Deploy; docs/internal/microsoft-defender-tenant-test.md): the spec's
+/// update body under a fresh uuid, sent as `PATCH` (404) then `POST`, then
+/// `PATCH` again, disabled, deleted, and deleted again (404).
 #[test]
-#[ignore = "reaches a live test tenant: OPENTIDE_LIVE_DEFENDER_FOR_ENDPOINT"]
-fn live_defender_deploy_validate_query_disable() {
-    let Some((tenant, http, _)) = tenant(defender::PLATFORM, &defender::http_settings()) else {
+#[ignore = "reaches a live test tenant: OPENTIDE_LIVE_MICROSOFT_DEFENDER"]
+fn live_microsoft_defender_deploy_validate_query_disable() {
+    let Some((tenant, http, _)) = tenant(
+        microsoft_defender::PLATFORM,
+        &microsoft_defender::http_settings(),
+    ) else {
         return;
     };
     let cancel = CancellationToken::new();
@@ -71,13 +78,19 @@ fn live_defender_deploy_validate_query_disable() {
         http: &http,
         cancel: &cancel,
     };
-    let inputs = support::fixture("defender");
-    let rule = inputs.get("deploy").unwrap().get("rule").unwrap().clone();
-    let connector = Defender::new();
+    let golden: Json = serde_json::from_str(
+        &std::fs::read_to_string(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(
+            "../../tests/fixtures/microsoft_defender/rule-microsoft-defender.update.api.json",
+        ))
+        .unwrap(),
+    )
+    .unwrap();
+    let rule = golden.get("body").unwrap().clone();
+    let id = uuid::Uuid::new_v4().hyphenated().to_string();
+    let connector = MicrosoftDefender::new();
     block_on(async {
-        let created = connector.create_rule(cx, &rule).await.unwrap();
-        println!("created {created:?}");
-        let id = created.id.to_string();
+        println!("upsert {id}: {:?}", connector.upsert(cx, &id, &rule).await);
+        println!("upsert {id}: {:?}", connector.upsert(cx, &id, &rule).await);
         let query = "DeviceProcessEvents | project Timestamp, DeviceId, ReportId";
         let now = jiff::Timestamp::now();
         let check = connector
@@ -94,12 +107,14 @@ fn live_defender_deploy_validate_query_disable() {
         println!("query {rows:?}");
         let mut disabled = rule.clone();
         if let Json::Object(top) = &mut disabled {
-            top.insert("isEnabled".into(), Json::Bool(false));
+            top.insert("status".into(), Json::Str("disabled".into()));
         }
-        connector.update_rule(cx, &disabled, &id).await.unwrap();
-        println!("disabled {id}");
-        connector.delete_rule(cx, &id).await.unwrap();
-        println!("deleted {id}");
+        println!(
+            "disable {id}: {:?}",
+            connector.disable(cx, &id, &disabled).await
+        );
+        println!("delete {id}: {:?}", connector.delete(cx, &id).await);
+        println!("delete again {id}: {:?}", connector.delete(cx, &id).await);
     })
     .unwrap();
 }

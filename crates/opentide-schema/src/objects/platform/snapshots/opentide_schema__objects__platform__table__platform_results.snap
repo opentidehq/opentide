@@ -61,12 +61,18 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
             "title": "t"
           },
           "enabled": false,
-          "impacted_entities": {
-            "device": "DeviceId"
+          "entities": {
+            "hosts": [
+              {
+                "device_id": "DeviceId"
+              }
+            ]
           },
           "name": "",
           "query": "DeviceProcessEvents | take 1",
-          "scheduling": "1H",
+          "schedule": {
+            "frequency": "1H"
+          },
           "status": "STAGING"
         },
         "sentinel": {
@@ -490,35 +496,61 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
       "configurations": {
         "microsoft_defender": {
           "actions": {
-            "devices": {
-              "collect_investigation_package": true,
-              "initiate_investigation": false,
-              "isolate_device": "Full",
-              "restrict_app_execution": false,
-              "run_antivirus_scan": true
-            },
-            "files": {
-              "allow_block": {
-                "action": "Block",
-                "groups": {
-                  "device_groups": [
-                    "g"
-                  ],
-                  "selection": "Specific"
-                },
-                "identifier": "SHA1"
-              },
-              "quarantine_file": "SHA1"
-            },
-            "users": {
-              "disable_user": "AccountSid",
-              "mark_as_compromised": "AccountSid"
-            }
+            "block_files": [
+              {
+                "device_groups": [
+                  "g"
+                ],
+                "sha1": "SHA1"
+              }
+            ],
+            "collect_investigation_packages": [
+              {
+                "device_id": "DeviceId"
+              }
+            ],
+            "disable_users": [
+              {
+                "account_sid": "AccountSid"
+              }
+            ],
+            "isolate_devices": [
+              {
+                "device_id": "DeviceId",
+                "isolation_type": "full"
+              }
+            ],
+            "stop_and_quarantine_files": [
+              {
+                "device_id": "DeviceId",
+                "sha1": "SHA1"
+              }
+            ]
           },
           "alert": {
+            "custom_details": {
+              "C": "ProcessCommandLine"
+            },
+            "grouping": "single_alert",
+            "severity": "Critical",
+            "techniques": [
+              "T1059.001"
+            ],
             "title": "t"
           },
           "enabled": false,
+          "entities": {
+            "accounts": [
+              {
+                "sid": "AccountSid"
+              }
+            ],
+            "hosts": [
+              {
+                "device_id": "DeviceId"
+              }
+            ]
+          },
           "exclusions": [
             {
               "let": {
@@ -528,14 +560,19 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
               "reason": "r"
             }
           ],
-          "impacted_entities": {
-            "device": "DeviceId"
+          "incident": {
+            "exclude_from_correlation": true
           },
           "name": "",
           "query": "DeviceProcessEvents | take 1",
-          "scheduling": "1H",
+          "schedule": {
+            "frequency": "1H",
+            "lookback": "4H"
+          },
           "scope": {
-            "selection": "All"
+            "device_groups": [
+              "g"
+            ]
           },
           "status": "STAGING"
         }
@@ -561,64 +598,77 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
         "field_path": [
           "configurations",
           "microsoft_defender",
-          "actions",
-          "devices",
-          "run_antivirus_scan"
+          "alert",
+          "grouping"
         ],
-        "input": "maybe",
-        "msg": "Input should be a valid boolean",
+        "input": null,
+        "msg": "alert.grouping \"singleAlert\" is not alert_per_event or single_alert",
         "span": [
-          18,
-          99,
-          104,
+          14,
+          33,
+          44,
           true
         ],
-        "type": "bool_type",
-        "yaml_line": 17
+        "type": "microsoft_defender_grouping",
+        "yaml_line": 13
       },
       {
-        "ctx": {
-          "expected": "\"Allow\" or \"Block\""
-        },
+        "ctx": {},
         "field_path": [
           "configurations",
           "microsoft_defender",
-          "actions",
-          "files",
-          "allow_block",
-          "action"
+          "scope"
         ],
-        "input": "allow",
-        "msg": "Input should be \"Allow\" or \"Block\"",
-        "span": [
-          18,
-          45,
-          50,
-          true
-        ],
-        "type": "literal_error",
-        "yaml_line": 17
-      },
-      {
-        "ctx": {
-          "expected": "\"All\" or \"Specific\""
-        },
-        "field_path": [
-          "configurations",
-          "microsoft_defender",
-          "scope",
-          "selection"
-        ],
-        "input": "Some",
-        "msg": "Input should be \"All\" or \"Specific\"",
+        "input": null,
+        "msg": "scope is {device_groups: [...]}, a non-empty list of device group names, not {\"device_groups\": []}",
         "span": [
           17,
-          24,
-          28,
+          5,
+          10,
           true
         ],
-        "type": "literal_error",
+        "type": "microsoft_defender_scope",
         "yaml_line": 16
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "microsoft_defender",
+          "actions",
+          "isolate_devices",
+          "0",
+          "isolation_type"
+        ],
+        "input": null,
+        "msg": "actions.isolate_devices[0].isolation_type \"Full\" is not full or selective",
+        "span": [
+          18,
+          71,
+          75,
+          true
+        ],
+        "type": "microsoft_defender_isolation_type",
+        "yaml_line": 17
+      },
+      {
+        "ctx": {},
+        "field_path": [
+          "configurations",
+          "microsoft_defender",
+          "actions",
+          "run_antivirus_scans"
+        ],
+        "input": null,
+        "msg": "actions.run_antivirus_scans is a non-empty list of targets, not \"maybe\"",
+        "span": [
+          18,
+          100,
+          105,
+          true
+        ],
+        "type": "microsoft_defender_action_target",
+        "yaml_line": 17
       }
     ]
   },
@@ -629,25 +679,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
         "field_path": [
           "configurations",
           "microsoft_defender",
-          "impacted_entities"
-        ],
-        "input": null,
-        "msg": "Field required",
-        "span": [
-          11,
-          3,
-          21,
-          false
-        ],
-        "type": "missing",
-        "yaml_line": null
-      },
-      {
-        "ctx": {},
-        "field_path": [
-          "configurations",
-          "microsoft_defender",
-          "scheduling"
+          "schedule"
         ],
         "input": null,
         "msg": "Field required",
@@ -665,23 +697,22 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
   "platform-defender-schedule": {
     "errors": [
       {
-        "ctx": {
-          "expected": "\"NRT\", \"1H\", \"3H\", \"12H\" or \"24H\""
-        },
+        "ctx": {},
         "field_path": [
           "configurations",
           "microsoft_defender",
-          "scheduling"
+          "schedule",
+          "frequency"
         ],
-        "input": "2H",
-        "msg": "Input should be \"NRT\", \"1H\", \"3H\", \"12H\" or \"24H\"",
+        "input": null,
+        "msg": "schedule.frequency \"PT2H\" is not NRT, <n>H or <n>D (n a positive whole number without a leading zero: 1H, 24H, 1D)",
         "span": [
           16,
-          17,
-          19,
+          27,
+          31,
           true
         ],
-        "type": "literal_error",
+        "type": "microsoft_defender_frequency",
         "yaml_line": 15
       }
     ]
@@ -689,23 +720,22 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
   "platform-defender-schedule-int": {
     "errors": [
       {
-        "ctx": {
-          "expected": "\"NRT\", \"1H\", \"3H\", \"12H\" or \"24H\""
-        },
+        "ctx": {},
         "field_path": [
           "configurations",
           "microsoft_defender",
-          "scheduling"
+          "schedule",
+          "frequency"
         ],
         "input": null,
-        "msg": "Input should be \"NRT\", \"1H\", \"3H\", \"12H\" or \"24H\"",
+        "msg": "schedule.frequency 1 is not NRT, <n>H or <n>D (n a positive whole number without a leading zero: 1H, 24H, 1D)",
         "span": [
           16,
-          17,
-          18,
+          27,
+          28,
           true
         ],
-        "type": "literal_error",
+        "type": "microsoft_defender_frequency",
         "yaml_line": 15
       }
     ]

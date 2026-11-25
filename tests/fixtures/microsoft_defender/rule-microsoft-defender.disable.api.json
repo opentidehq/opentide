@@ -1,0 +1,134 @@
+{
+  "method": "PATCH",
+  "url": "https://graph.microsoft.com/beta/security/rules/detectionRules/00000000-0000-4000-8003-0000000000d0",
+  "body": {
+    "displayName": "Microsoft Defender block",
+    "description": "Encoded PowerShell started by a valid cloud account, on the Graph beta custom detection contract.\n",
+    "status": "disabled",
+    "queryCondition": {
+      "queryText": "DeviceProcessEvents\n| where FileName =~ \"powershell.exe\" and ProcessCommandLine has \"-enc\"\n"
+    },
+    "schedule": {
+      "frequency": "PT1H",
+      "lookback": "PT4H"
+    },
+    "detectionAction": {
+      "alertTemplate": {
+        "title": "Encoded PowerShell",
+        "description": "Encoded PowerShell started by a valid cloud account, on the Graph beta custom detection contract.\n",
+        "severity": "high",
+        "recommendedActions": "Review the command line and isolate the device if it is malicious.",
+        "tactics": [
+          {
+            "tactic": "InitialAccess",
+            "techniques": [
+              {
+                "technique": "T1078",
+                "subTechniques": [
+                  "T1078.004"
+                ]
+              }
+            ]
+          },
+          {
+            "tactic": "Execution",
+            "techniques": [
+              {
+                "technique": "T1059",
+                "subTechniques": [
+                  "T1059.001"
+                ]
+              }
+            ]
+          },
+          {
+            "tactic": "Persistence",
+            "techniques": [
+              {
+                "technique": "T1078",
+                "subTechniques": [
+                  "T1078.004"
+                ]
+              }
+            ]
+          },
+          {
+            "tactic": "PrivilegeEscalation",
+            "techniques": [
+              {
+                "technique": "T1078",
+                "subTechniques": [
+                  "T1078.004"
+                ]
+              }
+            ]
+          },
+          {
+            "tactic": "DefenseEvasion",
+            "techniques": [
+              {
+                "technique": "T1078",
+                "subTechniques": [
+                  "T1078.004"
+                ]
+              }
+            ]
+          }
+        ],
+        "entityMappings": {
+          "hosts": [
+            {
+              "deviceIdColumn": "DeviceId",
+              "nameColumn": "DeviceName"
+            }
+          ],
+          "accounts": [
+            {
+              "sidColumn": "AccountSid",
+              "nameColumn": "AccountName",
+              "ntDomainColumn": "AccountDomain"
+            }
+          ],
+          "processes": [
+            {
+              "sha256Column": "SHA256"
+            }
+          ]
+        },
+        "customDetails": {
+          "CommandLine": "ProcessCommandLine"
+        },
+        "eventGroupingKind": "singleAlert"
+      },
+      "automatedActions": {
+        "isolateDevices": [
+          {
+            "deviceIdColumn": "DeviceId",
+            "isolationType": "full"
+          }
+        ],
+        "collectInvestigationPackages": [
+          {
+            "deviceIdColumn": "DeviceId"
+          }
+        ],
+        "blockFiles": [
+          {
+            "sha256Column": "SHA256",
+            "deviceGroupNames": [
+              "Tier 0"
+            ]
+          }
+        ]
+      },
+      "organizationalScope": {
+        "deviceGroups": [
+          "Tier 0"
+        ]
+      },
+      "incidentConfiguration": {
+        "isExcludedFromIncidentCorrelation": true
+      }
+    }
+  }
+}

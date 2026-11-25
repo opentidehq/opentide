@@ -2345,8 +2345,8 @@ configurations:
       title: Hello
       recommendation: |-
         Isolate the `host`
-    scheduling:
-      frequency: PT1H
+    schedule:
+      frequency: 1H
 "#;
         let r = analyze(AnalyzeInput {
             path: "objects/rules/markdown-rule.yaml",
@@ -2389,7 +2389,7 @@ configurations:
         assert!(
             pairs
                 .iter()
-                .any(|(c, t)| *c == "tide.property" && *t == "scheduling"),
+                .any(|(c, t)| *c == "tide.property" && *t == "schedule"),
             "{pairs:?}"
         );
         assert!(

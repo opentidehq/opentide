@@ -323,45 +323,130 @@ objective:
   #contributors:
     #- 
 
+  # KQL (advanced hunting). A real rule's query returns exactly the columns its
+  # entities, actions and custom details name.
   query: |
     ...
-  alert:
+  schedule:
+    frequency: 1H
+    #lookback: 4H  # beta-only
+  #alert:
     #title: 
-    #description: |
-      #...
-    #severity: 
+    #description: 
+    #severity: High
     #recommendation: 
     #techniques:
-      #- 
-  impacted_entities:
-    #device: 
-    #mailbox: 
-    #user: 
-  scheduling: NRT
-  #actions:
-    #devices:
-      #isolate_device: 
-      #collect_investigation_package: false
-      #run_antivirus_scan: false
-      #initiate_investigation: false
-      #restrict_app_execution: false
+      #- T1059.001
+    #custom_details:
+      #CommandLine: ProcessCommandLine
+    #grouping: single_alert  # beta-only
+  #entities:
+    #hosts:
+      #- device_id: DeviceId
+        #name: DeviceName
+        #dns_domain: DeviceDnsDomain
+        #netbios_name: DeviceNetBiosName
+        #nt_domain: DeviceNtDomain
+    #accounts:
+      #- aad_user_id: AccountObjectId
+        #sid: AccountSid
+        #upn: AccountUpn
+        #upn_suffix: AccountUpnSuffix
+        #name: AccountName
+        #nt_domain: AccountDomain
+        #dns_domain: AccountDnsDomain
+    #mailboxes:
+      #- primary_address: RecipientEmailAddress
     #files:
-      #allow_block:
-        #action: Allow
-        #identifier: 
-        #groups:
-          #selection: All
-          #device_groups:
-            #- 
-      #quarantine_file: 
-    #users:
-      #mark_as_compromised: 
-      #disable_user: 
-      #force_password_reset: 
+      #- name: FileName
+        #sha1: SHA1
+        #sha256: SHA256
+    #processes:
+      #- sha1: InitiatingProcessSHA1
+        #sha256: InitiatingProcessSHA256
+    #ips:
+      #- address: RemoteIP
+        #scope: RemoteIPType
+    #urls:
+      #- address: RemoteUrl
+    #dns:
+      #- domain_name: DnsQuery
+        #host_ip_address: LocalIP
+        #server_ip: DnsServerIP
+    #registry_values:
+      #- key: RegistryKey
+        #value_name: RegistryValueName
+    #mail_messages:
+      #- network_message_id: NetworkMessageId
+        #recipient: RecipientEmailAddress
+        #sender: SenderFromAddress
+        #subject: Subject
+    #mail_clusters:
+      #- query: MailClusterQuery
+        #source: MailClusterSource
+    #cloud_applications:
+      #- app_id: ApplicationId
+        #name: Application
+    #oauth_applications:
+      #- oauth_app_id: OAuthApplicationId
+    #security_groups:
+      #- object_id: GroupObjectId
+        #sid: GroupSid
+        #distinguished_name: GroupDistinguishedName
+    #azure_resources:
+      #- resource_id: AzureResourceId
+    #amazon_resources:
+      #- amazon_resource_id: AmazonResourceName
+    #google_cloud_resources:
+      #- full_resource_name: GcpFullResourceName
+  #actions:
+    #isolate_devices:
+      #- device_id: DeviceId
+        #isolation_type: selective
+    #collect_investigation_packages:
+      #- device_id: DeviceId
+    #run_antivirus_scans:
+      #- device_id: DeviceId
+    #initiate_investigations:
+      #- device_id: DeviceId
+    #restrict_app_executions:
+      #- device_id: DeviceId
+    #allow_files:
+      #- sha1: SHA1
+        #sha256: SHA256
+        #device_groups: [Developer workstations]
+    #block_files:
+      #- sha1: SHA1
+        #sha256: SHA256
+        #device_groups: [Tier 0, Servers]
+    #stop_and_quarantine_files:
+      #- device_id: DeviceId
+        #sha1: SHA1
+    #disable_users:
+      #- account_sid: AccountSid
+    #force_user_password_resets:
+      #- account_sid: AccountSid
+    #mark_users_as_compromised:
+      #- account_object_id: AccountObjectId
+    #soft_delete_emails:
+      #- network_message_id: NetworkMessageId
+        #recipient: RecipientEmailAddress
+    #hard_delete_emails:
+      #- network_message_id: NetworkMessageId
+        #recipient: RecipientEmailAddress
+    #move_emails_to_deleted_items:
+      #- network_message_id: NetworkMessageId
+        #recipient: RecipientEmailAddress
+    #move_emails_to_inbox:
+      #- network_message_id: NetworkMessageId
+        #recipient: RecipientEmailAddress
+    #move_emails_to_junk:
+      #- network_message_id: NetworkMessageId
+        #recipient: RecipientEmailAddress
   #scope:
-    #selection: All
-    #device_groups:
-      #- 
+    #device_groups: [Tier 0, Servers]
+  #incident:  # beta-only
+    #exclude_from_correlation: true
   #exclusions:
     #- query: |
         #...
@@ -711,6 +796,9 @@ configurations:
 
     #query: |
       #...
+    #schedule:
+      #frequency: 1H
+      #lookback: 
     #alert:
       #title: 
       #description: |
@@ -719,35 +807,119 @@ configurations:
       #recommendation: 
       #techniques:
         #- 
-    #impacted_entities:
-      #device: 
-      #mailbox: 
-      #user: 
-    #scheduling: NRT
-    #actions:
-      #devices:
-        #isolate_device: 
-        #collect_investigation_package: false
-        #run_antivirus_scan: false
-        #initiate_investigation: false
-        #restrict_app_execution: false
+      #custom_details:
+        #key: 
+      #grouping: alert_per_event
+    #entities:
+      #hosts:
+        #- device_id: 
+          #name: 
+          #dns_domain: 
+          #netbios_name: 
+          #nt_domain: 
+      #accounts:
+        #- aad_user_id: 
+          #sid: 
+          #upn: 
+          #upn_suffix: 
+          #name: 
+          #nt_domain: 
+          #dns_domain: 
+      #mailboxes:
+        #- primary_address: 
       #files:
-        #allow_block:
-          #action: Allow
-          #identifier: 
-          #groups:
-            #selection: All
-            #device_groups:
-              #- 
-        #quarantine_file: 
-      #users:
-        #mark_as_compromised: 
-        #disable_user: 
-        #force_password_reset: 
+        #- name: 
+          #sha1: 
+          #sha256: 
+      #processes:
+        #- sha1: 
+          #sha256: 
+      #ips:
+        #- address: 
+          #scope: 
+      #urls:
+        #- address: 
+      #dns:
+        #- domain_name: 
+          #host_ip_address: 
+          #server_ip: 
+      #registry_values:
+        #- key: 
+          #value_name: 
+      #mail_messages:
+        #- network_message_id: 
+          #recipient: 
+          #sender: 
+          #subject: 
+      #mail_clusters:
+        #- query: 
+          #source: 
+      #cloud_applications:
+        #- app_id: 
+          #name: 
+      #oauth_applications:
+        #- oauth_app_id: 
+      #security_groups:
+        #- object_id: 
+          #sid: 
+          #distinguished_name: 
+      #azure_resources:
+        #- resource_id: 
+      #amazon_resources:
+        #- amazon_resource_id: 
+      #google_cloud_resources:
+        #- full_resource_name: 
+    #actions:
+      #isolate_devices:
+        #- device_id: 
+          #isolation_type: full
+      #collect_investigation_packages:
+        #- device_id: 
+      #run_antivirus_scans:
+        #- device_id: 
+      #initiate_investigations:
+        #- device_id: 
+      #restrict_app_executions:
+        #- device_id: 
+      #allow_files:
+        #- sha1: 
+          #sha256: 
+          #device_groups:
+            #- 
+      #block_files:
+        #- sha1: 
+          #sha256: 
+          #device_groups:
+            #- 
+      #stop_and_quarantine_files:
+        #- device_id: 
+          #sha1: 
+      #disable_users:
+        #- account_sid: 
+      #force_user_password_resets:
+        #- account_sid: 
+      #mark_users_as_compromised:
+        #- account_object_id: 
+      #soft_delete_emails:
+        #- network_message_id: 
+          #recipient: 
+      #hard_delete_emails:
+        #- network_message_id: 
+          #recipient: 
+      #move_emails_to_deleted_items:
+        #- network_message_id: 
+          #recipient: 
+      #move_emails_to_inbox:
+        #- network_message_id: 
+          #recipient: 
+      #move_emails_to_junk:
+        #- network_message_id: 
+          #recipient: 
     #scope:
-      #selection: All
       #device_groups:
         #- 
+    #incident:
+      #exclude_from_correlation: false
     #exclusions:
       #- query: |
           #...
@@ -1416,6 +1588,9 @@ configurations:
 
     #query: |
       #...
+    #schedule:
+      #frequency: 1H
+      #lookback: 
     #alert:
       #title: 
       #description: |
@@ -1424,35 +1599,119 @@ configurations:
       #recommendation: 
       #techniques:
         #- 
-    #impacted_entities:
-      #device: 
-      #mailbox: 
-      #user: 
-    #scheduling: NRT
-    #actions:
-      #devices:
-        #isolate_device: 
-        #collect_investigation_package: false
-        #run_antivirus_scan: false
-        #initiate_investigation: false
-        #restrict_app_execution: false
+      #custom_details:
+        #key: 
+      #grouping: alert_per_event
+    #entities:
+      #hosts:
+        #- device_id: 
+          #name: 
+          #dns_domain: 
+          #netbios_name: 
+          #nt_domain: 
+      #accounts:
+        #- aad_user_id: 
+          #sid: 
+          #upn: 
+          #upn_suffix: 
+          #name: 
+          #nt_domain: 
+          #dns_domain: 
+      #mailboxes:
+        #- primary_address: 
       #files:
-        #allow_block:
-          #action: Allow
-          #identifier: 
-          #groups:
-            #selection: All
-            #device_groups:
-              #- 
-        #quarantine_file: 
-      #users:
-        #mark_as_compromised: 
-        #disable_user: 
-        #force_password_reset: 
+        #- name: 
+          #sha1: 
+          #sha256: 
+      #processes:
+        #- sha1: 
+          #sha256: 
+      #ips:
+        #- address: 
+          #scope: 
+      #urls:
+        #- address: 
+      #dns:
+        #- domain_name: 
+          #host_ip_address: 
+          #server_ip: 
+      #registry_values:
+        #- key: 
+          #value_name: 
+      #mail_messages:
+        #- network_message_id: 
+          #recipient: 
+          #sender: 
+          #subject: 
+      #mail_clusters:
+        #- query: 
+          #source: 
+      #cloud_applications:
+        #- app_id: 
+          #name: 
+      #oauth_applications:
+        #- oauth_app_id: 
+      #security_groups:
+        #- object_id: 
+          #sid: 
+          #distinguished_name: 
+      #azure_resources:
+        #- resource_id: 
+      #amazon_resources:
+        #- amazon_resource_id: 
+      #google_cloud_resources:
+        #- full_resource_name: 
+    #actions:
+      #isolate_devices:
+        #- device_id: 
+          #isolation_type: full
+      #collect_investigation_packages:
+        #- device_id: 
+      #run_antivirus_scans:
+        #- device_id: 
+      #initiate_investigations:
+        #- device_id: 
+      #restrict_app_executions:
+        #- device_id: 
+      #allow_files:
+        #- sha1: 
+          #sha256: 
+          #device_groups:
+            #- 
+      #block_files:
+        #- sha1: 
+          #sha256: 
+          #device_groups:
+            #- 
+      #stop_and_quarantine_files:
+        #- device_id: 
+          #sha1: 
+      #disable_users:
+        #- account_sid: 
+      #force_user_password_resets:
+        #- account_sid: 
+      #mark_users_as_compromised:
+        #- account_object_id: 
+      #soft_delete_emails:
+        #- network_message_id: 
+          #recipient: 
+      #hard_delete_emails:
+        #- network_message_id: 
+          #recipient: 
+      #move_emails_to_deleted_items:
+        #- network_message_id: 
+          #recipient: 
+      #move_emails_to_inbox:
+        #- network_message_id: 
+          #recipient: 
+      #move_emails_to_junk:
+        #- network_message_id: 
+          #recipient: 
     #scope:
-      #selection: All
       #device_groups:
         #- 
+    #incident:
+      #exclude_from_correlation: false
     #exclusions:
       #- query: |
           #...
@@ -2307,6 +2566,9 @@ threat:
             "",
             "    #query: |",
             "      #...",
+            "    #schedule:",
+            "      #frequency: 1H",
+            "      #lookback: ",
             "    #alert:",
             "      #title: ",
             "      #description: |",
@@ -2315,35 +2577,119 @@ threat:
             "      #recommendation: ",
             "      #techniques:",
             "        #- ",
-            "    #impacted_entities:",
-            "      #device: ",
-            "      #mailbox: ",
-            "      #user: ",
-            "    #scheduling: NRT",
-            "    #actions:",
-            "      #devices:",
-            "        #isolate_device: ",
-            "        #collect_investigation_package: false",
-            "        #run_antivirus_scan: false",
-            "        #initiate_investigation: false",
-            "        #restrict_app_execution: false",
+            "      #custom_details:",
+            "        #key: ",
+            "      #grouping: alert_per_event",
+            "    #entities:",
+            "      #hosts:",
+            "        #- device_id: ",
+            "          #name: ",
+            "          #dns_domain: ",
+            "          #netbios_name: ",
+            "          #nt_domain: ",
+            "      #accounts:",
+            "        #- aad_user_id: ",
+            "          #sid: ",
+            "          #upn: ",
+            "          #upn_suffix: ",
+            "          #name: ",
+            "          #nt_domain: ",
+            "          #dns_domain: ",
+            "      #mailboxes:",
+            "        #- primary_address: ",
             "      #files:",
-            "        #allow_block:",
-            "          #action: Allow",
-            "          #identifier: ",
-            "          #groups:",
-            "            #selection: All",
-            "            #device_groups:",
-            "              #- ",
-            "        #quarantine_file: ",
-            "      #users:",
-            "        #mark_as_compromised: ",
-            "        #disable_user: ",
-            "        #force_password_reset: ",
+            "        #- name: ",
+            "          #sha1: ",
+            "          #sha256: ",
+            "      #processes:",
+            "        #- sha1: ",
+            "          #sha256: ",
+            "      #ips:",
+            "        #- address: ",
+            "          #scope: ",
+            "      #urls:",
+            "        #- address: ",
+            "      #dns:",
+            "        #- domain_name: ",
+            "          #host_ip_address: ",
+            "          #server_ip: ",
+            "      #registry_values:",
+            "        #- key: ",
+            "          #value_name: ",
+            "      #mail_messages:",
+            "        #- network_message_id: ",
+            "          #recipient: ",
+            "          #sender: ",
+            "          #subject: ",
+            "      #mail_clusters:",
+            "        #- query: ",
+            "          #source: ",
+            "      #cloud_applications:",
+            "        #- app_id: ",
+            "          #name: ",
+            "      #oauth_applications:",
+            "        #- oauth_app_id: ",
+            "      #security_groups:",
+            "        #- object_id: ",
+            "          #sid: ",
+            "          #distinguished_name: ",
+            "      #azure_resources:",
+            "        #- resource_id: ",
+            "      #amazon_resources:",
+            "        #- amazon_resource_id: ",
+            "      #google_cloud_resources:",
+            "        #- full_resource_name: ",
+            "    #actions:",
+            "      #isolate_devices:",
+            "        #- device_id: ",
+            "          #isolation_type: full",
+            "      #collect_investigation_packages:",
+            "        #- device_id: ",
+            "      #run_antivirus_scans:",
+            "        #- device_id: ",
+            "      #initiate_investigations:",
+            "        #- device_id: ",
+            "      #restrict_app_executions:",
+            "        #- device_id: ",
+            "      #allow_files:",
+            "        #- sha1: ",
+            "          #sha256: ",
+            "          #device_groups:",
+            "            #- ",
+            "      #block_files:",
+            "        #- sha1: ",
+            "          #sha256: ",
+            "          #device_groups:",
+            "            #- ",
+            "      #stop_and_quarantine_files:",
+            "        #- device_id: ",
+            "          #sha1: ",
+            "      #disable_users:",
+            "        #- account_sid: ",
+            "      #force_user_password_resets:",
+            "        #- account_sid: ",
+            "      #mark_users_as_compromised:",
+            "        #- account_object_id: ",
+            "      #soft_delete_emails:",
+            "        #- network_message_id: ",
+            "          #recipient: ",
+            "      #hard_delete_emails:",
+            "        #- network_message_id: ",
+            "          #recipient: ",
+            "      #move_emails_to_deleted_items:",
+            "        #- network_message_id: ",
+            "          #recipient: ",
+            "      #move_emails_to_inbox:",
+            "        #- network_message_id: ",
+            "          #recipient: ",
+            "      #move_emails_to_junk:",
+            "        #- network_message_id: ",
+            "          #recipient: ",
             "    #scope:",
-            "      #selection: All",
             "      #device_groups:",
             "        #- ",
+            "    #incident:",
+            "      #exclude_from_correlation: false",
             "    #exclusions:",
             "      #- query: |",
             "          #...",
@@ -3143,45 +3489,130 @@ threat:
             "  #contributors:",
             "    #- ",
             "",
+            "  # KQL (advanced hunting). A real rule's query returns exactly the columns its",
+            "  # entities, actions and custom details name.",
             "  query: |",
             "    ${2:...}",
-            "  alert:",
+            "  schedule:",
+            "    frequency: 1H",
+            "    #lookback: 4H  # beta-only",
+            "  #alert:",
             "    #title: ",
-            "    #description: |",
-            "      #...",
-            "    #severity: ",
+            "    #description: ",
+            "    #severity: High",
             "    #recommendation: ",
             "    #techniques:",
-            "      #- ",
-            "  impacted_entities:",
-            "    #device: ",
-            "    #mailbox: ",
-            "    #user: ",
-            "  scheduling: NRT",
-            "  #actions:",
-            "    #devices:",
-            "      #isolate_device: ",
-            "      #collect_investigation_package: false",
-            "      #run_antivirus_scan: false",
-            "      #initiate_investigation: false",
-            "      #restrict_app_execution: false",
+            "      #- T1059.001",
+            "    #custom_details:",
+            "      #CommandLine: ProcessCommandLine",
+            "    #grouping: single_alert  # beta-only",
+            "  #entities:",
+            "    #hosts:",
+            "      #- device_id: DeviceId",
+            "        #name: DeviceName",
+            "        #dns_domain: DeviceDnsDomain",
+            "        #netbios_name: DeviceNetBiosName",
+            "        #nt_domain: DeviceNtDomain",
+            "    #accounts:",
+            "      #- aad_user_id: AccountObjectId",
+            "        #sid: AccountSid",
+            "        #upn: AccountUpn",
+            "        #upn_suffix: AccountUpnSuffix",
+            "        #name: AccountName",
+            "        #nt_domain: AccountDomain",
+            "        #dns_domain: AccountDnsDomain",
+            "    #mailboxes:",
+            "      #- primary_address: RecipientEmailAddress",
             "    #files:",
-            "      #allow_block:",
-            "        #action: Allow",
-            "        #identifier: ",
-            "        #groups:",
-            "          #selection: All",
-            "          #device_groups:",
-            "            #- ",
-            "      #quarantine_file: ",
-            "    #users:",
-            "      #mark_as_compromised: ",
-            "      #disable_user: ",
-            "      #force_password_reset: ",
+            "      #- name: FileName",
+            "        #sha1: SHA1",
+            "        #sha256: SHA256",
+            "    #processes:",
+            "      #- sha1: InitiatingProcessSHA1",
+            "        #sha256: InitiatingProcessSHA256",
+            "    #ips:",
+            "      #- address: RemoteIP",
+            "        #scope: RemoteIPType",
+            "    #urls:",
+            "      #- address: RemoteUrl",
+            "    #dns:",
+            "      #- domain_name: DnsQuery",
+            "        #host_ip_address: LocalIP",
+            "        #server_ip: DnsServerIP",
+            "    #registry_values:",
+            "      #- key: RegistryKey",
+            "        #value_name: RegistryValueName",
+            "    #mail_messages:",
+            "      #- network_message_id: NetworkMessageId",
+            "        #recipient: RecipientEmailAddress",
+            "        #sender: SenderFromAddress",
+            "        #subject: Subject",
+            "    #mail_clusters:",
+            "      #- query: MailClusterQuery",
+            "        #source: MailClusterSource",
+            "    #cloud_applications:",
+            "      #- app_id: ApplicationId",
+            "        #name: Application",
+            "    #oauth_applications:",
+            "      #- oauth_app_id: OAuthApplicationId",
+            "    #security_groups:",
+            "      #- object_id: GroupObjectId",
+            "        #sid: GroupSid",
+            "        #distinguished_name: GroupDistinguishedName",
+            "    #azure_resources:",
+            "      #- resource_id: AzureResourceId",
+            "    #amazon_resources:",
+            "      #- amazon_resource_id: AmazonResourceName",
+            "    #google_cloud_resources:",
+            "      #- full_resource_name: GcpFullResourceName",
+            "  #actions:",
+            "    #isolate_devices:",
+            "      #- device_id: DeviceId",
+            "        #isolation_type: selective",
+            "    #collect_investigation_packages:",
+            "      #- device_id: DeviceId",
+            "    #run_antivirus_scans:",
+            "      #- device_id: DeviceId",
+            "    #initiate_investigations:",
+            "      #- device_id: DeviceId",
+            "    #restrict_app_executions:",
+            "      #- device_id: DeviceId",
+            "    #allow_files:",
+            "      #- sha1: SHA1",
+            "        #sha256: SHA256",
+            "        #device_groups: [Developer workstations]",
+            "    #block_files:",
+            "      #- sha1: SHA1",
+            "        #sha256: SHA256",
+            "        #device_groups: [Tier 0, Servers]",
+            "    #stop_and_quarantine_files:",
+            "      #- device_id: DeviceId",
+            "        #sha1: SHA1",
+            "    #disable_users:",
+            "      #- account_sid: AccountSid",
+            "    #force_user_password_resets:",
+            "      #- account_sid: AccountSid",
+            "    #mark_users_as_compromised:",
+            "      #- account_object_id: AccountObjectId",
+            "    #soft_delete_emails:",
+            "      #- network_message_id: NetworkMessageId",
+            "        #recipient: RecipientEmailAddress",
+            "    #hard_delete_emails:",
+            "      #- network_message_id: NetworkMessageId",
+            "        #recipient: RecipientEmailAddress",
+            "    #move_emails_to_deleted_items:",
+            "      #- network_message_id: NetworkMessageId",
+            "        #recipient: RecipientEmailAddress",
+            "    #move_emails_to_inbox:",
+            "      #- network_message_id: NetworkMessageId",
+            "        #recipient: RecipientEmailAddress",
+            "    #move_emails_to_junk:",
+            "      #- network_message_id: NetworkMessageId",
+            "        #recipient: RecipientEmailAddress",
             "  #scope:",
-            "    #selection: All",
-            "    #device_groups:",
-            "      #- ",
+            "    #device_groups: [Tier 0, Servers]",
+            "  #incident:  # beta-only",
+            "    #exclude_from_correlation: true",
             "  #exclusions:",
             "    #- query: |",
             "        #...",

@@ -15,7 +15,7 @@
 //! A UUID that any rule of the workspace still holds (a file moved or
 //! renamed) is never retired. A platform that keeps ids retires only the
 //! tenants and ids its shard records, and forgets them once retired; the
-//! others (Sentinel, Splunk, Elastic, HarfangLab) retire from the deleted
+//! others (Sentinel, Microsoft Defender, Splunk, Elastic, HarfangLab) retire from the deleted
 //! file alone, on the tenants its blocks reached, as the same blocks would
 //! retire with a status that maps to `DELETION`. Carbon Black Cloud cannot
 //! retire a report without the rule, so its rows say so.
@@ -575,9 +575,9 @@ mod tests {
     }
 
     #[test]
-    fn sentinel_and_elastic_delete_by_the_rules_uuid() {
+    fn sentinel_defender_and_elastic_delete_by_the_rules_uuid() {
         let block = json(r#"{"status": "PRODUCTION"}"#);
-        for platform in ["sentinel", "elastic"] {
+        for platform in ["sentinel", "microsoft_defender", "elastic"] {
             assert_eq!(
                 stateless_request(platform, &orphan("Gone", ""), &block, None),
                 Request::Delete {

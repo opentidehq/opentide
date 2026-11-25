@@ -28,9 +28,11 @@ configurations:
     status: STAGING
     alert:
       title: Query Extraction Block Scalars
-    impacted_entities:
-      device: DeviceName
-    scheduling: 1H
+    entities:
+      hosts:
+        - device_id: DeviceName
+    schedule:
+      frequency: 1H
     query: >
       DeviceProcessEvents
       | where FileName == "cmd.exe"

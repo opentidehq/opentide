@@ -18,7 +18,7 @@ use opentide_cassette::{Body, Cassette, Interaction};
 use opentide_compile::json::Json;
 use opentide_connectors::ConnectorError;
 use opentide_connectors::connector::QueryRequest;
-use opentide_connectors::defender::{self, Defender, DefenderError};
+use opentide_connectors::microsoft_defender::{self, MicrosoftDefender};
 use opentide_connectors::runtime::block_on;
 use opentide_connectors::sentinel::{self, Sentinel};
 use opentide_connectors::token::{Clock, TokenCache};
@@ -35,9 +35,10 @@ azure_client_id = "opentide-app-id"
 azure_client_secret = "$AZURE_CLIENT_SECRET"
 "#;
 
+/// The tenant of the golden Defender deploy (`deploy-tenants`' `lab`).
 const DEFENDER: &str = r#"
-tenant_id = "contoso-tenant-id"
-client_id = "opentide-app-id"
+tenant_id = "00000000-0000-4000-8000-00000000de1d"
+client_id = "00000000-0000-4000-8000-00000000c11d"
 client_secret = "$DEFENDER_CLIENT_SECRET"
 "#;
 
@@ -108,10 +109,10 @@ fn sentinel_tenant(replay: Cassette) -> Replayed {
 fn defender_tenant(replay: Cassette) -> Replayed {
     Replayed::start_with(
         replay,
-        defender::PLATFORM,
+        microsoft_defender::PLATFORM,
         DEFENDER,
         "DEFENDER_CLIENT_SECRET",
-        &defender::http_settings(),
+        &microsoft_defender::http_settings(),
     )
 }
 
@@ -248,37 +249,63 @@ fn sentinel_log_analytics_signs_in_again_once_after_a_401() {
     assert_eq!(sent(&tenant).len(), 4, "no third sign-in, no loop");
 }
 
-fn defender_rule() -> Json {
-    let inputs = fixture("defender");
-    inputs.get("deploy").unwrap().get("rule").unwrap().clone()
+/// The golden deploy's cassette, and the index of its update of rule
+/// `...0000d2`: a `PATCH` the stand-in answered 200.
+const DEFENDER_DEPLOY: &str = "golden/deploy-defender-continues";
+const DEFENDER_RULE: &str = "00000000-0000-4000-8047-0000000000d2";
+
+fn defender_update() -> (usize, Json) {
+    let recorded = cassette(DEFENDER_DEPLOY);
+    let index = recorded
+        .interactions
+        .iter()
+        .position(|interaction| {
+            interaction.request.method == "PATCH"
+                && interaction.request.url.ends_with(DEFENDER_RULE)
+                && interaction.response.status == 200
+        })
+        .unwrap();
+    let body = serde_json::from_slice(&recorded.interactions[index].request.body.bytes()).unwrap();
+    (index, body)
 }
 
-/// Defender's Graph `PATCH` of rule 42 (interaction 3 of
-/// `defender/deploy`; 0 is the sign-in).
+/// Defender's Graph `PATCH` of a rule it holds (the golden deploy's update;
+/// interaction 0 is the sign-in).
 #[test]
 fn defender_graph_signs_in_again_once_after_a_401() {
-    let rule = defender_rule();
-    let tenant = defender_tenant(refused_once("defender/deploy", 0, 3, false));
-    let updated =
-        block_on(async { Defender::new().update_rule(tenant.cx(), &rule, "42").await }).unwrap();
-    assert!(updated.is_ok(), "{updated:?}");
+    let (index, rule) = defender_update();
+    let tenant = defender_tenant(refused_once(DEFENDER_DEPLOY, 0, index, false));
+    let updated = block_on(async {
+        MicrosoftDefender::new()
+            .upsert(tenant.cx(), DEFENDER_RULE, &rule)
+            .await
+    })
+    .unwrap();
+    assert_eq!(updated.unwrap(), microsoft_defender::Sent::Updated);
     assert_signed_in_twice_and_resent_once(&tenant);
 
-    let tenant = defender_tenant(refused_once("defender/deploy", 0, 3, true));
-    let updated =
-        block_on(async { Defender::new().update_rule(tenant.cx(), &rule, "42").await }).unwrap();
-    let Err(DefenderError::Authentication { detail }) = &updated else {
-        panic!("not an authentication failure: {updated:?}");
+    let tenant = defender_tenant(refused_once(DEFENDER_DEPLOY, 0, index, true));
+    let updated = block_on(async {
+        MicrosoftDefender::new()
+            .upsert(tenant.cx(), DEFENDER_RULE, &rule)
+            .await
+    })
+    .unwrap();
+    let error = updated.unwrap_err();
+    let Some(ConnectorError::Authentication {
+        tenant: name,
+        detail,
+        ..
+    }) = error.connector.as_deref()
+    else {
+        panic!("not an authentication failure: {error:?}");
     };
+    assert_eq!(name, "replayed");
+    let detail = detail.as_deref().unwrap_or_default();
     assert!(
         detail.contains("tenant replayed refused a new token too (HTTP 401)")
             && detail.contains("InvalidAuthenticationToken"),
         "{detail}"
-    );
-    let error = updated.unwrap_err().into_connector("replayed");
-    assert!(
-        matches!(&error, ConnectorError::Authentication { tenant, .. } if tenant == "replayed"),
-        "{error:?}"
     );
     assert_eq!(tenant.verify(), Vec::new());
     assert_eq!(sent(&tenant).len(), 4, "no third sign-in, no loop");
@@ -299,10 +326,11 @@ fn clock() -> (Clock, Arc<Mutex<Instant>>) {
 /// whole run, as it was before the shared cache.
 #[test]
 fn defender_renews_its_token_five_minutes_before_it_expires() {
-    let recorded = cassette("defender/deploy");
+    let (index, rule) = defender_update();
+    let recorded = cassette(DEFENDER_DEPLOY);
     let (token, patch) = (
         recorded.interactions[0].clone(),
-        recorded.interactions[3].clone(),
+        recorded.interactions[index].clone(),
     );
     assert!(
         token
@@ -314,32 +342,31 @@ fn defender_renews_its_token_five_minutes_before_it_expires() {
         "the recorded lifetime"
     );
     let replay = Cassette::new(
-        "defender/deploy",
+        DEFENDER_DEPLOY,
         vec![],
         vec![token.clone(), patch.clone(), patch.clone(), token, patch],
     );
     let tenant = defender_tenant(replay);
     let (now, at) = clock();
-    let connector = Defender::with_tokens(Arc::new(TokenCache::with_clock(now)));
-    let rule = defender_rule();
+    let connector = MicrosoftDefender::with_tokens(Arc::new(TokenCache::with_clock(now)));
     let advance = |seconds: u64| {
         *at.lock().unwrap_or_else(PoisonError::into_inner) += Duration::from_secs(seconds);
     };
     block_on(async {
         connector
-            .update_rule(tenant.cx(), &rule, "42")
+            .upsert(tenant.cx(), DEFENDER_RULE, &rule)
             .await
             .unwrap();
         // One second before the token is due: no sign-in.
         advance(3599 - 300 - 1);
         connector
-            .update_rule(tenant.cx(), &rule, "42")
+            .upsert(tenant.cx(), DEFENDER_RULE, &rule)
             .await
             .unwrap();
         // Due: a new sign-in before the call.
         advance(1);
         connector
-            .update_rule(tenant.cx(), &rule, "42")
+            .upsert(tenant.cx(), DEFENDER_RULE, &rule)
             .await
             .unwrap();
     })
