@@ -121,7 +121,7 @@ Create a `docs:` (or `chore:`) PR against `development`.
 - **Cloud agents:** branch `cursor/prepare-0.x.y-…`, Conventional Commit, PR to `development`.
 - **Local agents:** branch `docs/prepare-0.x.y` from `origin/development`, `gh pr create --base development`.
 
-What the three notes files say, and how, is the [`release-notes`](../release-notes/SKILL.md) skill:
+What the three notes files say, and how, is the [`release-notes`](../release-notes/SKILL.md) skill (`crates/CHANGELOG.md`, the fourth, is [`engine-release-notes`](../engine-release-notes/SKILL.md)'s):
 the parts of a version (headline, Upgrade, Breaking, Added, Changed, Deprecated, Removed, Fixed,
 Security, in that order) and how to write each entry. This step is where they go.
 
@@ -142,11 +142,22 @@ Footer compare links (bottom of `CHANGELOG.md`):
 
 Keep existing `[0.x.(y-1)]:` (etc.) rows.
 
-#### 2. `docs/usage/releases.md`
+#### 2. `crates/CHANGELOG.md` (the language server's notes)
+
+The engine and the language server ship in lockstep with opentide (one version, one tag), and [opentide.org/releases/language-server](https://opentide.org/releases/language-server/) reads this file. Cut it as `CHANGELOG.md`, following the [`engine-release-notes`](../engine-release-notes/SKILL.md) skill:
+
+- Keep a blank `## [Unreleased]` above the new version
+- `## [0.x.y] - YYYY-MM-DD` (a hyphen, as its earlier sections), then its headline paragraph (at most 25 words)
+- The entries the pull requests added, in their parts, in the order of that skill
+- Footer: `[Unreleased]: https://github.com/opentidehq/opentide/compare/v0.x.y...HEAD` and `[0.x.y]: https://github.com/opentidehq/opentide/releases/tag/v0.x.y` above the existing rows
+
+`release.py check` refuses a release whose version has no dated section here: 1.0.0 shipped with this file un-cut, and the website showed the language server at 0.16.1 until it was cut afterwards. A candidate leaves it alone.
+
+#### 3. `docs/usage/releases.md`
 
 Add a **new top section**: the page [opentide.org/releases](https://opentide.org/releases/) renders. Its shape is in the release-notes skill: heading, headline, **Install** (three lines), **Upgrade**, the change parts as bold lines, the CHANGELOG line with the version's anchor, **Links** (PyPI / GitHub Release / CHANGELOG).
 
-#### 3. `.github/release-notes/v0.x.y.md`
+#### 4. `.github/release-notes/v0.x.y.md`
 
 GitHub Release body, in the order of the release-notes skill:
 
@@ -156,7 +167,7 @@ GitHub Release body, in the order of the release-notes skill:
 - Verify (commands; expect `0.x.y`)
 - Links (PyPI, GitHub Release, CHANGELOG, Usage → Releases)
 
-#### 4. User-facing install pins
+#### 5. User-facing install pins
 
 Search the repo for the old pin (`opentide==0.1.3` or whatever the previous version is). Update **every** hit to the new version. A release candidate changes none of the release pins: `README.md` (the PyPI page) keeps the newest stable pin in the prose below its install block, and while a candidate is current its first install command is `pip install --pre opentide` (no exact candidate pin: `tests/test_docs/test_readme_on_pypi.py` refuses one, and `--pre` needs no edit per candidate; an exact `opentide==1.0.0rcN` is a pre-release pin, which `scripts/build/release.py`'s `_PIN` and `tests/test_docs/test_docs_version_claims.py` do not read as a release pin); the pins move at the final release's notes PR, which also puts the stable pin back first in the README's install block. The pages that document the 1.0 API (`docs/index.md`, `docs/cli/index.md`, `docs/mcp/index.md`, `docs/mcp/installation.md`, `docs/sdk/installation.md`) do not pin the stable release while 1.0 is a candidate: 0.28.1 has no `opentide.Workspace`, so each shows `pip install --pre opentide` and the candidate's `opentide==1.0.0rcN`, linking `docs/usage/installation.md#release-candidates`. Each candidate moves their `rcN` with the installation page's (`tests/test_docs/test_docs_version_claims.py` checks that every `opentide==1.0.0rcN` in `docs/` agrees); the final release gives them the release pin. A candidate does update the candidate's own text: the **Release candidates** section of `docs/usage/installation.md` (the `1.0.0rcN` and `1.0.0-rc.N` pins, the tag in the GitHub Release URLs, the installer and `SHA256SUMS` commands) and the `=1.0.0-rc.N` pins in `docs/sdk/rust.md`'s Install section; the final release removes both, with the section's pointers from the PyPI install paragraph and the Rust page. `README.md`'s links stay absolute (`https://github.com/opentidehq/opentide/blob/development/...`): PyPI renders it away from the repository (`tests/test_docs/test_readme_on_pypi.py`). Known locations from 0.1.3:
 
@@ -191,7 +202,7 @@ that `setup ci --explorer-pages` builds the site from (#1693). When this release
 (`OPENTIDE_CI_RENDERED`, `crates/opentide-compile/tests/setup_ci.rs`) and the `setup ci`
 snapshots.
 
-#### 5. The version is the workspace's
+#### 6. The version is the workspace's
 
 The wheel's version is the Cargo workspace's (`bindings/python/` takes it; maturin writes it into
 the wheel), so `scripts/engine/release.py bump X.Y.Z` in the notes PR sets the Python package's
@@ -199,7 +210,7 @@ version too. Never give `bindings/python/Cargo.toml` a version of its own: a can
 (`X.Y.ZrcN`) and a CI build's (`X.Y.Z.devN`) are written there by `release.py pypi-version` in the
 workflow's checkout only.
 
-#### 6. Local check
+#### 7. Local check
 
 ```bash
 scripts/ci-local.sh --quick
@@ -253,7 +264,7 @@ Run **Publish** on `development` with no inputs:
 
 The run:
 
-1. **Release guard** reads the version from the newest dated `CHANGELOG.md` heading, runs `scripts/build/release.py check v0.x.y` (changelog section and links, `.github/release-notes/v0.x.y.md`, top of `docs/usage/releases.md`, README pin) and `scripts/engine/release.py lockstep 0.x.y`. It refuses a tag or Release that already exists and a run from another branch. For a release or a public candidate it also checks, **before anything is built or published**, that every one of the eleven npm packages exists on registry.npmjs.org (the registry's package document, no authentication): a missing one fails the run with its name and a pointer to publishing.md step 10.5, so PyPI and crates.io never publish for a run npm would then fail. It cannot see npm's trusted-publisher configuration (a signed-in maintainer's, `npm trust list <package>`, expiring after two days without a publish): the step says so.
+1. **Release guard** reads the version from the newest dated `CHANGELOG.md` heading, runs `scripts/build/release.py check v0.x.y` (changelog section and links, `crates/CHANGELOG.md`'s section, `.github/release-notes/v0.x.y.md`, top of `docs/usage/releases.md`, README pin) and `scripts/engine/release.py lockstep 0.x.y`. It refuses a tag or Release that already exists and a run from another branch. For a release or a public candidate it also checks, **before anything is built or published**, that every one of the eleven npm packages exists on registry.npmjs.org (the registry's package document, no authentication): a missing one fails the run with its name and a pointer to publishing.md step 10.5, so PyPI and crates.io never publish for a run npm would then fail. It cannot see npm's trusted-publisher configuration (a signed-in maintainer's, `npm trust list <package>`, expiring after two days without a publish): the step says so.
 2. **Checks**: every crate built from its package (`cargo package`), the licence scan.
 3. **Builds**: the wheels, the sdist, the npm native packages and tarballs, the GitHub Release's assets (binaries, installers, engine assets, the command line's WASI module `opentide-wasm32-wasip1.wasm` (smoke-tested under wasmtime: `--version` is the release's), SBOMs, `SHA256SUMS`).
 4. **Smoke tests**: `pip install` the wheel and `opentide --version` (Linux, macOS, Windows); a build from the sdist; the npm tarballs published to a throwaway local registry and `npm install @opentide/opentide` in a clean project, which must pick the host's native package, run `npx opentide --version`, load the SDK and type-check (`scripts/engine/npm-local-registry/test.mjs`; Linux, macOS, Windows); `cargo install opentide --features cli` from the crates' packages; the binary installers.
@@ -358,7 +369,7 @@ Link that pull request from the tracking issue in Step 4.
 | Symptom | Cause / fix |
 |--------|-------------|
 | Guard: `v0.x.y is already tagged` | That version is out. Merge the next version's notes PR; to finish publishing the existing tag, run with `checkout_ref=v0.x.y` |
-| Guard: `CHANGELOG.md's newest version is …` / `… is missing` | The notes PR has not merged, or misses a piece (`release.py check` names it). Fix it on `development` and run again |
+| Guard: `CHANGELOG.md's newest version is …` / `… is missing` / `crates/CHANGELOG.md has no ## [X.Y.Z] …` | The notes PR has not merged, or misses a piece (`release.py check` names it). Fix it on `development` and run again |
 | Guard: `the workspace version in Cargo.toml is …, not 0.x.y` | Step 0: `release.py bump 0.x.y` in a pull request, merged |
 | Guard: `… is not newer than …, the last release` (a candidate) | Bump the workspace past the last release first (Step 0) |
 | Guard: `Run the release from development` | Run workflow was started on another branch. Pick `development` (a `dry_run` runs anywhere) |

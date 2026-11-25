@@ -38,6 +38,11 @@ def repo(tmp_path: Path) -> Path:
         f"[1.2.0]: {REPOSITORY}/releases/tag/v1.2.0\n"
         f"[1.1.0]: {REPOSITORY}/releases/tag/v1.1.0\n",
     )
+    _write(
+        tmp_path / "crates" / "CHANGELOG.md",
+        "# Changelog\n\n## [Unreleased]\n\n## [1.2.0] - 2026-11-02\n\nIn lockstep.\n\n"
+        "## [0.16.1] - 2026-10-01\n\nThe last engine-v release.\n",
+    )
     _write(tmp_path / ".github" / "release-notes" / "v1.2.0.md", "# 1.2.0\n")
     _write(
         tmp_path / "docs" / "usage" / "releases.md",
@@ -107,6 +112,34 @@ def test_each_missing_piece_of_the_notes_pr_is_named(repo: Path) -> None:
         ".github/release-notes/v1.2.0.md is missing or empty: the Release body",
         "README.md pins opentide==1.1.0, not 1.2.0",
     ]
+
+
+def test_a_release_needs_the_language_servers_changelog_cut(repo: Path) -> None:
+    # 1.0.0 shipped with crates/CHANGELOG.md still at 0.16.1 under [Unreleased],
+    # so opentide.org's language-server page showed 0.16.1.
+    _edit(repo / "crates" / "CHANGELOG.md", "## [1.2.0] - 2026-11-02\n\n", "")
+    assert _script().problems(repo, "v1.2.0") == [
+        "crates/CHANGELOG.md has no ## [1.2.0] - YYYY-MM-DD section: "
+        "cut its [Unreleased] in the notes PR (the engine-release-notes skill)"
+    ]
+
+
+def test_the_language_servers_section_may_use_an_em_dash(repo: Path) -> None:
+    _edit(repo / "crates" / "CHANGELOG.md", "## [1.2.0] - 2026", "## [1.2.0] — 2026")
+    assert _script().problems(repo, "v1.2.0") == []
+
+
+def test_a_release_without_the_language_servers_changelog_is_refused(repo: Path) -> None:
+    (repo / "crates" / "CHANGELOG.md").unlink()
+    assert _script().problems(repo, "v1.2.0") == [
+        "crates/CHANGELOG.md is missing: the language server's notes"
+    ]
+
+
+def test_a_candidate_needs_no_language_server_section(repo: Path) -> None:
+    # A candidate's notes quote [Unreleased]; the cut waits for the final release.
+    _edit(repo / "crates" / "CHANGELOG.md", "## [1.2.0] - 2026-11-02\n\n", "")
+    assert _script().candidate_problems(repo, "v1.3.0-rc.1") == []
 
 
 def test_a_readme_with_two_pins_is_refused(repo: Path) -> None:

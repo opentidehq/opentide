@@ -13,18 +13,17 @@ How to write what integrators read about a release of the engine crates. opentid
 itself (version bump, crates.io) is `.agents/skills/release-management/SKILL.md`.
 
 **Since the release train (UC-5.5, #840)** the engine releases with opentide, at one product
-version, from `.github/workflows/publish.yml`: the GitHub Release body is opentide's
-(`.github/release-notes/vX.Y.Z.md`), and an engine change integrators see is an entry in
-`CHANGELOG.md`, written with the rules below (a bold lead naming the method, setting or code).
-`crates/CHANGELOG.md` holds the engine's releases before the train.
+version, from `.github/workflows/publish.yml`: from 1.0.0 the language server and engine ship in
+lockstep with opentide (one version, one tag, `vX.Y.Z`), and the `engine-v*` series ended at
+0.16.1. The GitHub Release body is opentide's (`.github/release-notes/vX.Y.Z.md`).
 
 ## Where they are read
 
-- `crates/CHANGELOG.md` is the only source. Its version section is the GitHub Release body
-  (`scripts/engine/release.py notes X.Y.Z`, run by `engine-release.yml`), and
+- `crates/CHANGELOG.md` is the language server's notes:
   [opentide.org/releases/language-server](https://opentide.org/releases/language-server/) renders
-  it. The site still syncs language-server's own `CHANGELOG.md`, frozen at the import (#800),
-  until it reads this file.
+  it. Each release cuts it at opentide's version in the notes pull request
+  (`.agents/skills/release-management/SKILL.md`, Step 1), and `scripts/build/release.py check`
+  refuses a release without its dated section.
 - opentide compiles the engine from `crates/`, so an engine change its users see ships in
   opentide's next release and also gets an entry in opentide's `CHANGELOG.md`
   (`.agents/skills/release-notes/SKILL.md`).
@@ -33,9 +32,9 @@ version, from `.github/workflows/publish.yml`: the GitHub Release body is openti
 
 - Each pull request with a user-visible change adds its entries under `## [Unreleased]`, in the
   right part.
-- The release pull request renames the section `## [X.Y.Z] - YYYY-MM-DD`, keeps an empty
-  `## [Unreleased]` above it, and writes the summary (before the release train; since then the
-  release pull request is the release train's, `.agents/skills/release-management/SKILL.md`).
+- The release's notes pull request (`.agents/skills/release-management/SKILL.md`, Step 1)
+  renames the section `## [X.Y.Z] - YYYY-MM-DD` at opentide's version, keeps an empty
+  `## [Unreleased]` above it, writes the summary and updates the footer's compare links.
 - One line per list item and per paragraph, no hard wraps; nested items are indented two spaces.
 
 ## Write it like an announcement

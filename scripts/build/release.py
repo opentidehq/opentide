@@ -15,9 +15,10 @@ lockstep``)::
     uv run python scripts/build/release.py notes --internal v1.0.0-rc.1
 
 ``check`` refuses a release whose Step 1 (the release-management skill) is
-missing: the changelog section and its links, the GitHub Release notes file,
-the Usage → Releases section and the README install pin. That every docs page
-pins the same version is ``tests/test_docs/test_docs_version_claims.py``'s job.
+missing: the changelog section and its links, ``crates/CHANGELOG.md``'s
+section (the language server's notes, which opentide.org reads), the GitHub
+Release notes file, the Usage → Releases section and the README install pin.
+That every docs page pins the same version is ``tests/test_docs/test_docs_version_claims.py``'s job.
 The crates and npm packages carry the same version: ``scripts/engine/release.py
 lockstep`` checks them, and the workflow runs both.
 
@@ -97,6 +98,7 @@ def problems(root: Path, tag: str) -> list[str]:
     for link in sorted(links):
         if not re.search(rf"^{re.escape(link)}\s*$", changelog, re.MULTILINE):
             found.append(f"CHANGELOG.md lacks the link {link}")
+    found.extend(_engine_changelog_problems(root, release))
     notes = root / ".github" / "release-notes" / f"{tag}.md"
     if not notes.is_file() or not notes.read_text(encoding="utf-8").strip():
         found.append(f"{notes.relative_to(root).as_posix()} is missing or empty: the Release body")
@@ -125,6 +127,29 @@ def problems(root: Path, tag: str) -> list[str]:
             "put the stable pin back first (the final release's notes PR)"
         )
     return found
+
+
+def _engine_changelog_problems(root: Path, release: str) -> list[str]:
+    """``crates/CHANGELOG.md``, the language server's notes, cut at ``release`` too.
+
+    The engine ships in lockstep with opentide (one version, one tag), and
+    opentide.org's language-server page reads this file: a release that leaves
+    it un-cut shows the previous version there (1.0.0 shipped so, at 0.16.1).
+    """
+    path = root / "crates" / "CHANGELOG.md"
+    if not path.is_file():
+        return ["crates/CHANGELOG.md is missing: the language server's notes"]
+    dated = {
+        match.group(1)
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if (match := _RELEASE_HEADING.match(line))
+    }
+    if release not in dated:
+        return [
+            f"crates/CHANGELOG.md has no ## [{release}] - YYYY-MM-DD section: "
+            "cut its [Unreleased] in the notes PR (the engine-release-notes skill)"
+        ]
+    return []
 
 
 def _leads_with_pre(readme: str) -> bool:
