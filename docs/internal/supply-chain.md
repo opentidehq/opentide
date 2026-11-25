@@ -14,7 +14,7 @@ Each gate below runs in CI; the required ones are in `.github/AGENTS.md` ("Requi
 | `cargo audit` (every `Cargo.lock`) | `rust-audit.yml` | daily | an advisory published since the last change; opens or comments on one issue |
 | Nightly fuzz | `engine-fuzz.yml` (ci.yml's nightly calls it through `nightly.yml`) | the nightly set (nightly and Run workflow) | a panic or a timeout in 10 minutes of any target; the input is uploaded |
 | Unsafe policy | clippy, `xtask/tests/lint_policy.rs`, `xtask/tests/unsafe_listing.rs` | every pull request | `unsafe` outside two crates, a block without `// SAFETY:` or with two operations, a site missing from [Unsafe code](./unsafe.md) |
-| SBOMs | `engine-release-build.yml` `sbom` (Engine release (dry run) / SBOMs) | the dry run in the nightly set (nightly and Run workflow); every release | an SBOM that does not validate against CycloneDX 1.5 |
+| SBOMs | `release-pipeline.yml` `sources` (Release pipeline / Sources) | the release pull request, the nightly, every release | an SBOM that does not validate against CycloneDX 1.5 |
 
 ## deny.toml
 

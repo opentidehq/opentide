@@ -14,7 +14,7 @@
 #     PyPI or npm), the engine assets editors pin
 #     (highlights-<v>.zip, the WebAssembly builds, THIRD-PARTY-LICENSES.html,
 #     NOTICE, WASI-LIBC-LICENSES.txt, THIRD-PARTY-DATA-LICENSES.txt), the CycloneDX SBOMs and SHA256SUMS
-#     (engine-release-build.yml), with the notes the notes PR wrote.
+#     (release-pipeline.yml), with the notes the notes PR wrote.
 #
 # Run workflow on development (Actions > Publish > Run workflow, or
 # workflow_dispatch through the API) with:
@@ -55,11 +55,10 @@
 #     the same, for GitHub App tokens without actions: write; GitHub runs it
 #     from development's copy of this file.
 #
-# Jobs: the guard; `build` (release-build.yml: every crate built from its
-# package with the licence scan, the Release's assets, the wheels and npm
-# packages of build-packages.yml, the sdist, a smoke test of each artifact
-# on its platform, and the antivirus gate over all of them: av-gate.yml, so no
-# job below runs on an artifact a scanner flags); then for an internal candidate
+# Jobs: the guard; `build` (release-pipeline.yml, the one release pipeline:
+# every artifact built once per platform, assembled, smoke-tested on its
+# platform and scanned by the antivirus gate, so no job below runs on an
+# artifact a smoke test or a scanner failed; `dry_run` stops here); then for an internal candidate
 # `internal-release` (the tag and the draft, nothing else), and for a release
 # (or a public candidate) `attest`
 # (GitHub artifact attestations of every artifact), `release` (the tag and the
@@ -373,32 +372,26 @@ jobs:
           sys.exit(1 if (missing or unreachable) and level == "error" else 0)
           PY
 
-  # Everything this run ships, built and smoke-tested from the guard's commit
-  # (release-build.yml, which ci.yml also runs on a release pull request and
-  # the nightly): the crate packages and the licence scan; the GitHub
-  # Release's assets (engine-release-build.yml: the binaries, the installer,
-  # WebAssembly builds, SBOMs, SHA256SUMS); the wheels (one cp310-abi3 per
-  # platform, manylinux_2_28, no musllinux: the maintainer's decision), each
-  # run on its own OS; the npm packages; the sdist; then one smoke matrix
-  # (scripts/build/smoke_release.sh): the installer on Linux and macOS,
-  # `npm install` from a local registry on each of the six platforms, a build
-  # from the sdist with the PyPI dist's shape, and `cargo install` from the
-  # crate packages. No
-  # token, no cache: a release builds from nothing.
+  # Everything this run ships, from the guard's commit, through the one
+  # release pipeline ci.yml's release tier and the nightly run too
+  # (release-pipeline.yml): built once per platform, assembled (the GitHub
+  # Release's assets with SHA256SUMS, the npm packages, the PyPI dist's shape),
+  # smoke-tested on each platform and from source, and scanned by the
+  # antivirus gate before any job below tags, attests or publishes. No token,
+  # no cache: a release builds from nothing.
   build:
     name: Build and smoke-test
     needs: guard
     permissions:
       contents: read
-    uses: ./.github/workflows/release-build.yml
+    uses: ./.github/workflows/release-pipeline.yml
     with:
       revision: ${{ needs.guard.outputs.revision }}
       tag: ${{ needs.guard.outputs.tag }}
       pypi-version: ${{ needs.guard.outputs.pypi_version }}
       npm-version: ${{ needs.guard.outputs.version }}
       crates-version: ${{ needs.guard.outputs.version }}
-      dry-run: false
-      # The antivirus gate (av-gate.yml): ClamAV, YARA, Microsoft Defender and the marker and
+      # The antivirus gate (release-pipeline.yml's av-scan and av-defender): ClamAV, YARA, Microsoft Defender and the marker and
       # size checks over every artifact, before any job below tags, attests or publishes.
       av-gate: true
 
@@ -898,7 +891,7 @@ jobs:
   # version; a crate already published is skipped, so a resumed run picks up
   # where it stopped. `cargo publish --no-verify` builds nothing here, where
   # the OIDC token and the registry tokens are: a build runs every
-  # dependency's build script. `build` (release-build.yml's `crate-packages`) built each package, without them.
+  # dependency's build script. `build` (release-pipeline.yml's `sources`) built each package, without them.
   #
   # Trusted publishing: `release.py trust publish.yml` registers this workflow
   # as each crate's trusted publisher (with CARGO_REGISTRY_TOKEN, which needs
@@ -984,7 +977,7 @@ jobs:
           fi
 
   # npm, with trusted publishing (the workflow's OIDC identity, no token) and
-  # provenance: the tarballs build-packages.yml packed and release-build.yml's smoke installed, in
+  # provenance: the tarballs release-pipeline.yml packed and smoke-installed, in
   # order. A release goes under the dist-tag `latest`; a public candidate
   # (X.Y.Z-rc.N) under `next`, never `latest`: the tag is chosen from the
   # channel and checked against the version of each tarball. The guard has

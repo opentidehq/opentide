@@ -95,7 +95,7 @@ checked before the next pull request builds on it.
 | `python` | Python is the packaging layer: **one** job, one pytest run (`-n 4`) of the package's surface (the SDK, the models, the plugin API, the console script) and the E2E suite (CLI, MCP and LSP over stdio), Python **3.14** with the coverage gate, on `native`'s wheel (`uv sync --no-install-project`, then `uv pip install` of the wheel, its `_native` module copied into `src/opentide/` for the tests, which import from `src/`; `UV_NO_SYNC=1`: nothing compiles). No shards; the tests marked `full_set` run nightly; `tests/test_ci` runs in `lint` |
 | `gitlab-ci-lint` | The pipeline `opentide setup ci gitlab` renders, linted (glint, gitlab-ci-verify) |
 | `docs` | `scripts/validate-docs.sh` (the site builds in opentidehq/website) and the docs tests that need no wheel (`tests/test_docs` but `test_docs_commands_golden.py` and `test_sdk_snippets.py`, the Python job's) |
-| `website` | **The website sync guard**: opentidehq/website's `main` with this run's own `docs/` at `vendor/opentide` (sparse; this tree, not the branch the website's `.gitmodules` names, so the check holds on `integration/unified-core` too) and opentidehq/specifications' `main` at `vendor/specifications`; then the site's own `pnpm install --frozen-lockfile` (the pnpm store cached by its lockfile, saved by pushes), `pnpm sync:content` (its MDX safety check), `pnpm test` (all but "workspace committed docs match vendor gitlinks", which compares the site's own committed content), `next build` (fumadocs-mdx: frontmatter, components, types) and `pnpm verify:docs`, each through [`scripts/ci/website-sync.sh`](../scripts/ci/website-sync.sh), which puts the website's error in an annotation and the job summary. A page the site refuses or cannot build stops its hourly "Sync docs and deploy" silently; this fails the pull request instead. When `docs/` changes (`website` in `changes.py`'s `CHECKS`) and on every push and nightly. Run it locally: check out the website, put `docs/` at `vendor/opentide/docs` and the specifications at `vendor/specifications`, `pnpm install`, then `scripts/ci/website-sync.sh <sync|test|build|verify> <website-dir>`. opentidehq/specifications has the same guard (`website-sync.yml`) |
+| `website` | **The website sync guard**: opentidehq/website's `main` with this run's own `docs/` at `vendor/opentide` (a sparse git checkout, whose `HEAD` the site stamps; this tree, not the branch the website's `.gitmodules` names, so the check holds on `integration/unified-core` too) and opentidehq/specifications' `main` at `vendor/specifications`; then the site's `pnpm install --frozen-lockfile` (pnpm by `pnpm/action-setup` from the website's `packageManager`, its store cached by `setup-node` on the website's lockfile) and **`pnpm check:upstream`**, the one command the site's hourly "Sync docs and deploy" uses to decide whether it takes a tree. The checks it runs are listed in the website's `AGENTS.md` ("Upstream checks") and nowhere here: the job follows when the website changes them, and `tests/test_ci` holds that it lists none. A tree the site would hold back fails the pull request instead of stopping the site's sync. When `docs/` changes (`website` in `changes.py`'s `CHECKS`) and on every push and nightly. Run it locally: check out the website, put this checkout's `docs/` (a git checkout) at `vendor/opentide` and the specifications at `vendor/specifications`, then `pnpm install` and `pnpm check:upstream` (`--report <file.json>` names the check that failed). opentidehq/specifications has the same guard (`website-sync.yml`) |
 | `facade` | The `opentide` facade with every feature: tests and doctests, rustdoc as docs.rs builds it, `cargo semver-checks` (0.51.0) against the first parent |
 | `node` | `@opentide/opentide` (`bindings/node`): the napi-rs addon for linux-x64-gnu, the generated `index.js` and `index.d.ts` against the committed ones, and `npm test`; it compiles its own addon, so it starts beside `build`. Node's parity with the Python and Rust SDKs, byte for byte, is the conformance suite's (nightly and release pull requests) |
 | `wasm` | Every WebAssembly artifact, one compiler cache (`wasm`): `build-wasm.sh browser wasi cli` (the browser module and the WASI language server, pure Rust, smoke-tested; wasi-sdk only for the command line's C, `ring`; the WASI command line the VS Code extension runs, its size held to the .vsix's 15 MiB), tenant commands through `@opentide/wasi-host` in the WASI module, the npm packs; when `packages/` changes (`ts_packages`) and on every push and nightly also the native language server and command line and the TypeScript client against the native, worker and WASI servers. The WebAssembly targets' clippy is `engine-lint-variants`'s |
@@ -105,30 +105,32 @@ checked before the next pull request builds on it.
 | `gate` (**`PR gate`**) | The one required check (below) |
 
 **The release tier** (a release pull request, `scope: release`, and the nightly): one job,
-`release` ([`release-build.yml`](workflows/release-build.yml), which publish.yml calls too, so
-each build and smoke test exists once): `packages` ([`build-packages.yml`](workflows/build-packages.yml):
-every wheel, built by maturin (PyO3/maturin-action), each installed and run on its own platform
-(`wheel-smoke`), and every npm tarball, one `npm-packages` artifact), `engine-assets`
-([`engine-release-build.yml`](workflows/engine-release-build.yml): every binary (Linux and macOS:
-no standalone Windows executable ships), the installer, every WebAssembly build, SBOM and
-SHA256SUMS), `sdist` (`maturin sdist`, twine's check) and
-`crate-packages` (every crate packaged and built as crates.io builds it, and the licence scan),
-at `X.Y.Z.devN` / `X.Y.Z-dev.N`, kept 14 days
-([`docs/internal/publishing.md`](../docs/internal/publishing.md#testing-a-build-without-publishing));
-then two smoke jobs running [`scripts/build/smoke_release.sh`](../scripts/build/smoke_release.sh):
-`smoke`, the binary installer on Linux and macOS, `npm install` from a throwaway local registry on
-each of the six platforms (Linux x64 and arm64, macOS arm64 and x64, Windows x64 and arm64) and the
-PyPI dist's shape (one version, six cp310-abi3 wheels, one sdist); and `smoke-sources`, which starts
-as soon as its packages exist (not after the slowest binary): a build from the sdist with the
-runner's stable Rust, and `cargo install opentide --features cli` from the crate packages. In a release pull request or
-`scope: release` run (not the nightly), the **antivirus gate** ([`av-gate.yml`](workflows/av-gate.yml),
-#1743) scans every artifact with ClamAV, YARA (signature-base and protections-artifacts at pinned
-commits, a reviewed allow-list) and Microsoft Defender (`windows-latest`), checks that no marker
-string sits in plain text in any of them, and holds each to its size budget: `release-build.yml`'s
-`av-gate` job the wheels, npm packages, sdist and crates, `engine-release-build.yml`'s the Release's
-assets ([`docs/internal/publishing.md`](../docs/internal/publishing.md#the-antivirus-gate)). It
-is off for every other pull request. Also `publish-dry-run`
-([`publish-dry-run.yml`](workflows/publish-dry-run.yml): the registry placeholders) and `docs`.
+`release`, which calls **the one release pipeline**,
+[`release-pipeline.yml`](workflows/release-pipeline.yml), the same workflow publish.yml's `build`
+calls, on every OS, at `X.Y.Z.devN` / `X.Y.Z-dev.N`, kept 14 days
+([`docs/internal/publishing.md`](../docs/internal/publishing.md#testing-a-build-without-publishing)).
+Each stage exists once, in that file:
+
+```text
+plan ─┬─ native (12 legs) ────┐
+      ├─ wasm ────────────────┼─ assemble ─┬─ smoke (6 platforms)
+      └─ sources ─────────────┘            └─ av-scan, av-defender (release tier and publish only)
+            └─ smoke-sources (sdist, cargo install)
+```
+
+| Job | What it does |
+|-----|--------------|
+| `plan` | The commit (a 40-hex SHA), the versions and the tag |
+| `native` (`Build (<platform>, <part>)`) | Two jobs per platform (Linux x64 and arm64, macOS arm64 and x64, Windows x64 and arm64) build everything it ships, grouped where the builds share their compilation and split where one job would lengthen the run (Linux and macOS: binaries + npm, and the wheel; Windows: npm, and the wheel; the measurements are in the workflow): the `opentide` and `opentide-lsp` binaries (Linux and macOS: no standalone Windows executable ships) with their size budgets, the npm addon (napi-rs) and the `cp310-abi3` wheel (maturin, manylinux_2_28 on Linux); Linux x64 also writes the highlights zip with the release `opentide-lsp` it built |
+| `wasm` | Every WebAssembly build; the WASI command line run under wasmtime |
+| `sources` | The sdist (`twine check`), THIRD-PARTY-LICENSES (cargo-about), the SBOMs (cargo-cyclonedx), the registry placeholders' publishes rehearsed with `--dry-run` (no token), then every crate built from its package and the licence scan |
+| `assemble` | The GitHub Release's assets (the installer, SHA256SUMS, the asset set, the licence scan), the npm tarballs, the PyPI dist's shape |
+| `smoke` | Each platform's wheel, binaries (installer) and npm packages (a throwaway local registry) installed on that platform ([`scripts/build/smoke_release.sh`](../scripts/build/smoke_release.sh)) |
+| `smoke-sources` | `pip install` from the sdist and `cargo install opentide --features cli` from the crate packages, as soon as `sources` packed them |
+| `av-scan`, `av-defender` | **The antivirus gate** (#1743), once over every artifact: marker strings, size budgets, PE imports and entropy, ClamAV and YARA (signature-base and protections-artifacts at pinned commits, a reviewed allow-list) on Linux, Microsoft Defender on `windows-latest`. In a release pull request, `scope: release` and publish.yml; not the nightly or any other pull request ([`docs/internal/publishing.md`](../docs/internal/publishing.md#the-antivirus-gate)) |
+
+Nothing in it publishes, holds a token or restores a compiler cache: the release tier builds as a
+release does.
 
 **Python 3.10 to 3.13 and the full E2E set** (a release pull request and the nightly):
 `python-matrix`, one job in `PR gate`'s needs, runs the suite on each of 3.10 to 3.13, one after
@@ -153,7 +155,7 @@ compiles) and `engine-release-consumers` (the engine assets in vscode-extension)
 every artifact is smoke-tested nightly (`release`'s `smoke` runs the npm local-registry test on
 the real tarballs). `nightly-report` waits for all of them and opens or comments on the one open
 issue labelled `nightly-failure` with the run's failing jobs, nested ones included (`Nightly /
-...`). nightly.yml, coverage.yml, bench.yml, oracle.yml, engine-fuzz.yml and publish-dry-run.yml
+...`). nightly.yml, coverage.yml, bench.yml, oracle.yml and engine-fuzz.yml
 have `workflow_call` and `workflow_dispatch` only: ci.yml runs them (ci.yml → nightly.yml →
 coverage.yml is three levels, within GitHub's limit; the `nightly` job's permissions, `contents`
 and `actions: read`, cap every job below it). The schedule runs `development`'s copy of the
@@ -175,7 +177,7 @@ Every Rust job in `ci.yml` sets Rust up with one composite action,
 `tools` (taiki-e/install-action) and, given a `cache` family, the compiler cache restored (below). `changes` alone
 uses the runner's stable cargo, for `cargo metadata --no-deps`. Only the fuzz jobs name a
 toolchain, the dated nightly `fuzz/NIGHTLY` pins. The npm addons are stricter
-(`build-packages.yml`): `scripts/build/install-rust.sh` installs the pinned release by name with
+(`release-pipeline.yml`'s `native`): `scripts/build/install-rust.sh` installs the pinned release by name with
 the minimal profile and names it in `RUSTUP_TOOLCHAIN`; the wheels' maturin-action installs
 `rust-toolchain.toml`'s release (in the manylinux container on Linux) and sets it as the
 directory's override, so rustup installs nothing mid-build either. Every job that runs cargo sets
@@ -198,8 +200,8 @@ from a push to each base branch and from Run workflow (a pull request reads its 
 caches and `development`'s), and from a pull request only when it restored no copy of the family
 at all (`cache-matched-key` empty: its base has none yet, after a new family or a toolchain bump),
 so its next push is warm; `wasm` (the `wasm` job's wasm32 compiles) under the same rule; `full-set-Linux` (`conformance` saves it, by the nightly; `node`,
-`facade` and the nightly's Linux Rust jobs restore it); the release dry run's own
-(`release-Linux-<arch>-<binary>`, one per binary, and `release-wasm`). **Linux only**: macOS and Windows build cold (their
+`facade` and the nightly's Linux Rust jobs restore it). The release pipeline restores none: it
+builds as a release does, and its critical path is macOS and Windows anyway. **Linux only**: macOS and Windows build cold (their
 caches crowded the Linux families out of the 10 GB GitHub keeps). **A pull request saves no
 cache** but that bootstrap copy. The one rust-cache left: `fuzz` (engine-fuzz.yml, saved by one cell of the scheduled run), plus coverage.yml's and
 oracle.yml's own. uv's cache (setup-uv) is keyed on `uv.lock`.
@@ -243,9 +245,8 @@ merging** → add `PR gate`, remove the others → **Save changes**.
 ## The other workflows
 
 - [`publish.yml`](workflows/publish.yml): the release train (below).
-- [`build-packages.yml`](workflows/build-packages.yml) and [`engine-release-build.yml`](workflows/engine-release-build.yml):
-  the packages and the release assets, reusable workflows that `publish.yml` and ci.yml's release
-  tier call.
+- [`release-pipeline.yml`](workflows/release-pipeline.yml): the one release pipeline (above), which
+  ci.yml's release tier and publish.yml's `build` call.
 - [`nightly.yml`](workflows/nightly.yml): the nightly set (above), which ci.yml's `nightly` job
   calls; Run workflow runs it alone (its `features` input is changes.py's, which ci.yml passes).
 - [`engine-fuzz.yml`](workflows/engine-fuzz.yml) fuzzes every target (`seconds`, ten minutes by
@@ -281,15 +282,8 @@ merging** → add `PR gate`, remove the others → **Save changes**.
   references (Lucene's jars from Maven Central, the EQL and kuery grammars) are cached under
   `oracle.py`'s pins and saved by the scheduled run; `oracle.py` checks each file's SHA-256, a
   restored one too.
-- [`publish-dry-run.yml`](workflows/publish-dry-run.yml) (the registry placeholders rehearsed,
-  nothing published): in a release pull request's checks and the nightly (ci.yml calls it), and on
-  demand. The PyPI dist's shape is `release-build.yml`'s (`smoke_release.sh sdist`).
-- [`release-build.yml`](workflows/release-build.yml): every artifact a release ships, built and
-  smoke-tested once; ci.yml's `release` and publish.yml's `build` call it (above).
-- [`av-gate.yml`](workflows/av-gate.yml): the antivirus gate (ClamAV, YARA, Microsoft Defender, the
-  marker and size checks), a reusable workflow that `release-build.yml` and
-  `engine-release-build.yml` call with `av-gate: true` from the release tier and the release train
-  (its scripts are [`scripts/av/`](../scripts/av/)). It holds no token and uploads nothing to a scanner.
+- Folded into `release-pipeline.yml` (2026-11): `release-build.yml`, `build-packages.yml`,
+  `engine-release-build.yml`, `av-gate.yml` and `publish-dry-run.yml`.
 - Deleted (2026-11-14): `docs.yml` (now ci.yml's `docs` job), `stack-comment.yml`, `golden.yml`
   and `golden-preview.yml` (their `cargo xtask golden` commands were deleted too, #1142).
 - [`codeql.yml`](workflows/codeql.yml) (below) and [`vocab-upstream.yml`](workflows/vocab-upstream.yml)
@@ -311,11 +305,9 @@ Where each of language-server's workflow jobs went (or why it was dropped):
 ## Releases
 
 **One release train** ([`publish.yml`](workflows/publish.yml), UC-5.5): merge the notes PR, then
-Run workflow on `development` with no inputs. It checks (every crate built from its package, the
-licence scan), builds (the wheels and npm packages of
-[`build-packages.yml`](workflows/build-packages.yml), the sdist, the binaries and engine assets of
-[`engine-release-build.yml`](workflows/engine-release-build.yml)), smoke-tests each artifact as a
-user installs it, scans every artifact with the antivirus gate ([`av-gate.yml`](workflows/av-gate.yml)),
+Run workflow on `development` with no inputs. It runs the one release pipeline
+([`release-pipeline.yml`](workflows/release-pipeline.yml): every artifact built once per platform,
+assembled, smoke-tested as a user installs it and scanned by the antivirus gate), then
 attests every artifact, tags `vX.Y.Z` with the GitHub Release, verifies the
 published assets, and publishes to PyPI, crates.io and npm with trusted publishing, so a cloud
 session can release. **Release candidates are internal**: `internal_candidate: N`, from
@@ -334,7 +326,7 @@ resume of a candidate before `v1.0.0-rc.3`. The `npm` job never moves `next` bac
 package's dist-tags, and names the packages a maintainer must move with `npm dist-tag add` after a
 final release (trusted publishing covers `npm publish` only). The
 GitHub Release carries `opentide-wasm32-wasip1.wasm`, the command line as one WASI module for the VS
-Code extension (built by `engine-release-build.yml`'s `wasm` job with the release's
+Code extension (built by `release-pipeline.yml`'s `wasm` job with the release's
 `OPENTIDE_BUILD_VERSION`, run under wasmtime before it is an asset, a *product* asset for the licence scan). `dry_run` publishes nothing;
 A failure after `build` is fixed with **Re-run failed jobs** on the same run (its artifacts: nothing
 rebuilds); `checkout_ref: vX.Y.Z` resumes a release that a re-run cannot (a fix to `publish.yml`,

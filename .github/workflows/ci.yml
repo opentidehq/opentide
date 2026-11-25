@@ -1050,16 +1050,16 @@ jobs:
             --ignore=tests/test_docs/test_sdk_snippets.py
 
   # The website sync guard. opentidehq/website syncs docs/ every hour ("Sync
-  # docs and deploy", its sync-docs.yml); a page it refuses or cannot build
-  # stops the site updating, silently. This job runs the site's own sync and
-  # checks against this run's docs/, so the break fails the pull request
-  # that causes it (as opentidehq/specifications' website-sync.yml does for
-  # the specifications). The website's main, this tree's docs/ (not the
-  # branch the website's .gitmodules names: the check means something on a
-  # base branch the website does not sync yet) and the specifications' main.
-  # When docs/ changes (`website` in scripts/ci/changes.py), on every push
-  # and the nightly. Each step is scripts/ci/website-sync.sh, which puts the
-  # website's own error in an annotation and the job summary.
+  # docs and deploy"); whether it takes a tree is decided by one command, its
+  # `pnpm check:upstream` (scripts/check-upstream.mjs). This job runs that
+  # command on the website's main with this run's own docs/ at
+  # vendor/opentide (a git checkout: the site stamps its HEAD; not the branch
+  # the website's .gitmodules names, so the check means something on a base
+  # branch the website does not sync yet) and the specifications' main, so a
+  # tree the site would hold back fails the pull request that brings it. The
+  # steps are the website AGENTS.md's ("Upstream checks"); the checks are
+  # listed there and nowhere here. When docs/ changes (`website` in
+  # scripts/ci/changes.py), on every push and the nightly.
   website:
     name: Website docs sync
     needs: changes
@@ -1071,13 +1071,6 @@ jobs:
     env:
       NEXT_TELEMETRY_DISABLED: "1"
     steps:
-      # The step script; the website goes under website/, which this
-      # checkout's clean would delete if it came second.
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          sparse-checkout: scripts/ci
-
       - name: Check out opentidehq/website (main)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -1102,59 +1095,25 @@ jobs:
           path: website/vendor/specifications
           persist-credentials: false
 
+      - name: Set up pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+        with:
+          package_json_file: website/package.json
+
       - name: Set up Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
-
-      # pnpm at the version the website's packageManager names (corepack),
-      # and its store cached by the website's lockfile: restored always,
-      # saved by a push or the nightly when the key missed.
-      - name: Set up pnpm
-        id: pnpm
-        working-directory: website
-        run: |
-          corepack enable
-          pnpm --version
-          echo "store=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
-
-      - name: Restore the pnpm store
-        id: pnpm-cache
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ${{ steps.pnpm.outputs.store }}
-          key: website-pnpm-${{ hashFiles('website/pnpm-lock.yaml') }}
-          restore-keys: website-pnpm-
+          cache: pnpm
+          cache-dependency-path: website/pnpm-lock.yaml
 
       - name: Install the website's dependencies
         working-directory: website
         run: pnpm install --frozen-lockfile
 
-      - name: Save the pnpm store
-        if: github.event_name != 'pull_request' && steps.pnpm-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ${{ steps.pnpm.outputs.store }}
-          key: website-pnpm-${{ hashFiles('website/pnpm-lock.yaml') }}
-
-      # The site's MDX safety check on every synced page.
-      - name: pnpm sync:content
-        run: scripts/ci/website-sync.sh sync website
-
-      # The site's unit suite but "workspace committed docs match vendor
-      # gitlinks", which compares the website's own committed content/docs
-      # with its gitlinks (this job replaces both on purpose).
-      - name: pnpm test
-        run: scripts/ci/website-sync.sh test website
-
-      # Every synced page through fumadocs-mdx (frontmatter, components) and
-      # the type check; `next build`, not `pnpm build`, whose prebuild
-      # downloads releases that do not depend on this tree.
-      - name: next build
-        run: scripts/ci/website-sync.sh build website
-
-      - name: pnpm verify:docs
-        run: scripts/ci/website-sync.sh verify website
+      - name: pnpm check:upstream
+        working-directory: website
+        run: pnpm check:upstream
 
 
   # The opentide facade crate (UC-5.1, #836), when its public API changes
@@ -1510,40 +1469,25 @@ jobs:
   # target, then each installed on its OS as a user installs it.
   # ---------------------------------------------------------------------------
 
-  # Everything a release ships, built and smoke-tested as publish.yml builds
-  # it (release-build.yml, which publish.yml calls too): the wheels (each run
-  # on its own OS), the npm packages, the GitHub Release's assets (binaries
-  # for Linux and macOS, the installer, WebAssembly, SBOMs), the sdist and the crate packages, at a
-  # development version of the workspace's (PyPI X.Y.Z.devN, npm
-  # X.Y.Z-dev.N), kept 14 days as this run's artifacts
-  # (docs/internal/publishing.md, "Testing a build without publishing"); then
-  # one smoke matrix: the installer on Linux and macOS, `npm install` on each
-  # of the six platforms, a build from the sdist and `cargo install` from the crates.
+  # Everything a release ships, through the one release pipeline publish.yml
+  # runs too (release-pipeline.yml: build, assemble, smoke, the antivirus
+  # gate, the registry placeholders rehearsed), on every OS, at a development
+  # version of the workspace's (PyPI X.Y.Z.devN, npm X.Y.Z-dev.N), kept 14
+  # days as this run's artifacts (docs/internal/publishing.md, "Testing a
+  # build without publishing").
   release:
-    name: Release build
+    name: Release pipeline
     needs: changes
     if: needs.changes.outputs.release == 'true' || needs.changes.outputs.mode == 'nightly'
     permissions:
       contents: read
-    uses: ./.github/workflows/release-build.yml
+    uses: ./.github/workflows/release-pipeline.yml
     with:
       revision: ${{ github.sha }}
-      dry-run: true
       retention-days: 14
-      # The antivirus gate (av-gate.yml: ClamAV, YARA, Microsoft Defender, the marker and size
-      # checks) is the release tier's: a release pull request, the `release` label, Run
-      # workflow with scope `release`; not an ordinary pull request, and not the nightly.
+      # The antivirus gate is the release tier's (a release pull request, the
+      # `release` label, Run workflow with scope `release`), not the nightly's.
       av-gate: ${{ needs.changes.outputs.release == 'true' }}
-
-  # Every publish this repository makes, rehearsed with --dry-run and no
-  # token (publish-dry-run.yml).
-  publish-dry-run:
-    name: Publish dry run
-    needs: changes
-    if: needs.changes.outputs.release == 'true' || needs.changes.outputs.mode == 'nightly'
-    permissions:
-      contents: read
-    uses: ./.github/workflows/publish-dry-run.yml
 
   # The other supported Pythons, the oldest (3.10) included, on `native`'s
   # abi3 wheel (`python`'s run without coverage), one after another in one
@@ -1656,7 +1600,7 @@ jobs:
   # The console script on Windows (the only `spawn` platform): the launcher
   # and redirect smoke and Ctrl-C (opentide._cli:main, UC-3.8b, #960: a
   # CTRL_BREAK_EVENT to `serve` in a process group of its own; SIGTERM is
-  # POSIX's), on the windows-x64 wheel `release` built (build-packages.yml's
+  # POSIX's), on the windows-x64 wheel `release` built (release-pipeline.yml's
   # `wheels-windows-x64`): nothing compiles here (`uv sync` built the engine
   # cold, about 13 minutes). Whatever else in `release` failed: the download
   # fails when the wheel was not built. Serial: two small test files.
@@ -1789,7 +1733,6 @@ jobs:
       - textmate
       - deny
       - release
-      - publish-dry-run
       - python-matrix
     if: always()
     runs-on: ubuntu-latest

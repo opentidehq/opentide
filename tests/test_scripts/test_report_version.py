@@ -118,8 +118,8 @@ def test_the_script_writes_a_config_cargo_reads(
 
 def test_the_wheel_and_the_sdist_builds_set_the_version_they_report() -> None:
     for workflow, job, build in [
-        ("build-packages.yml", "wheels", "Build the wheel"),
-        ("release-build.yml", "sdist", "Build sdist"),
+        ("release-pipeline.yml", "native", "Build the wheel"),
+        ("release-pipeline.yml", "sources", "Build sdist"),
     ]:
         steps = _steps(workflow, job)
         names = [step.get("name") for step in steps]
@@ -136,13 +136,13 @@ def test_the_sdist_carries_the_config_that_sets_it() -> None:
 
 
 def test_the_binaries_are_built_with_the_releases_version() -> None:
-    jobs = yaml.safe_load((WORKFLOWS / "engine-release-build.yml").read_text(encoding="utf-8"))[
-        "jobs"
-    ]
-    native = jobs["native"]
+    jobs = yaml.safe_load((WORKFLOWS / "release-pipeline.yml").read_text(encoding="utf-8"))["jobs"]
     # SemVer, the tag without its v (`1.0.0-rc.1`), for both cargo builds.
-    assert native["env"]["OPENTIDE_BUILD_VERSION"] == "${{ needs.meta.outputs.semver }}"
-    runs = "\n".join(step.get("run", "") for step in native["steps"])
+    builds = [step for step in jobs["native"]["steps"] if "cargo build" in step.get("run", "")]
+    assert len(builds) == 2
+    for step in builds:
+        assert step["env"]["OPENTIDE_BUILD_VERSION"] == "${{ needs.plan.outputs.semver }}"
+    runs = "\n".join(step["run"] for step in builds)
     assert "-p opentide-lsp" in runs
     assert "--bin opentide " in runs
 

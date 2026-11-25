@@ -159,7 +159,7 @@ SUMS = "SHA256SUMS"
 DATA_LICENSES = "THIRD-PARTY-DATA-LICENSES.txt"
 TAG = re.compile(r"v(?P<version>\d+\.\d+\.\d+)(?:-rc\.(?P<rc>[1-9]\d*))?")
 # The targets the release builds its native packages for: the wheels and the
-# npm packages of @opentide/opentide (build-packages.yml, job `npm-native`). No
+# npm packages of @opentide/opentide (release-pipeline.yml, job `native`). No
 # musl target: the maintainer decided against musl builds (docs/internal/
 # publishing.md, "The release train"), so neither the binaries, the wheels (no
 # musllinux) nor the npm packages ship one.
@@ -172,7 +172,7 @@ TARGETS = [
     "aarch64-pc-windows-msvc",
 ]
 # The targets of the standalone binaries on the GitHub Release
-# (engine-release-build.yml, job `native`): one `opentide` and one
+# (release-pipeline.yml, job `native`): one `opentide` and one
 # `opentide-lsp` each. No Windows target: a downloaded Windows executable
 # would need Authenticode signing, so Windows installs opentide from PyPI
 # (`uv tool install opentide`, pip, pipx) or npm, and runs the language server

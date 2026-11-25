@@ -5,7 +5,7 @@
 
 Run it with the interpreter of the environment opentide was just installed
 into (`pip install` of a wheel or the sdist), from a checkout: publish.yml's
-smoke jobs and the Windows on Arm wheel check (build-packages.yml) do, on
+smoke jobs and the Windows on Arm wheel check (release-pipeline.yml) do, on
 Linux, macOS and Windows. Since UC-6.2 the package is the Rust core and a thin
 Python layer over it, with no dependency; the `plugins` extra adds pydantic. It checks:
 

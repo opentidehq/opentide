@@ -199,7 +199,7 @@ def test_only_the_release_train_publishes() -> None:
     workflow's triggers). The engine's own engine-release.yml retired into it.
 
     Any other `cargo publish` or `npm publish` (in any spelling npm accepts) in an
-    active workflow is a dry run: publish-dry-run.yml rehearses the publishes, and
+    active workflow is a dry run: release-pipeline.yml's `sources` rehearses the publishes, and
     tests/test_ci/test_workflows.py keeps it unable to publish."""
     rules = _publish_dry_run_rules()
     seen = 0

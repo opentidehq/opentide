@@ -91,7 +91,7 @@ clients = [
 # What uv builds of opentide (`uv sync`'s editable install, `uv build`) compile
 # the engine with cargo's `develop` profile: optimised, so the engine runs at
 # full speed in the test suite, without the release profile's slow link-time
-# optimisation. The published wheels are release builds (build-packages.yml).
+# optimisation. The published wheels are release builds (release-pipeline.yml).
 config-settings-package = { opentide = { build-args = "--profile develop" } }
 # Rebuild opentide, which compiles the engine (maturin), when the Rust sources
 # or what they compile in change.

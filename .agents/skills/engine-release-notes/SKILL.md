@@ -150,11 +150,28 @@ Each entry is one change, as one list item:
   no visible effect, contributor docs. A release with nothing users see has no notes, and is
   usually not a release.
 
-## Groups
+## Groups: one per crate
 
-A category with more than about eight entries may be split into groups users recognise
-("Problems", "Graph and search"), one `####` heading each. Never nest deeper, and never group a
-short category.
+opentide.org renders each opentide version's `crates/CHANGELOG.md` section under that release
+(opentidehq/website#79) and groups it per crate by its `####` headings, so in this file every
+entry sits under the crate it is about:
+
+- Under each `###` part (Upgrade, Breaking and each category), group the entries under
+  `` #### `<crate>` `` headings. The heading is exactly the crates.io name in backticks:
+  `` #### `opentide-lsp` ``, `` #### `opentide` ``.
+- A part whose entries all touch one crate still gets that one heading.
+- An entry that changes several crates goes under the crate whose users must act (the one they
+  call, build or configure), or under `#### Across crates` when none comes first. An entry that
+  names no published crate (a release asset, the toolchain, an unpublished binding) goes under
+  `#### Across crates` too.
+- Order the headings from the most user-facing: `opentide` (the facade), `opentide-lsp`,
+  `opentide-cli`, `opentide-connectors`, then the engine's layers downwards, and
+  `#### Across crates` last. Within a heading, keep the entries in the part's order.
+- Only crates that publish (no `publish = false` in their `Cargo.toml`) have a heading. Never
+  nest deeper, and no group is named by theme here: the crate is the group.
+
+`tests/test_docs/test_engine_changelog_crates.py` holds every dated section from 1.0.0 on to
+this. opentide's own `CHANGELOG.md` keeps the release-notes skill's theme groups.
 
 ## Before and after
 
@@ -198,4 +215,5 @@ website's `lib/releases.ts` parses them). A change to the standard goes to all f
 - [ ] Sentences are short and plain: no stacked clauses, no internal names.
 - [ ] No entry is about tests, CI, refactors or contributor docs.
 - [ ] The parts are in the order above, under no other names.
+- [ ] Every entry is under a `` #### `<crate>` `` heading, or `#### Across crates`.
 - [ ] Links point at the issue or pull request, and at other products' releases.
