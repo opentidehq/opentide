@@ -69,7 +69,7 @@ fn expected(doc: &Node, source: &str) -> BTreeSet<Query> {
     let configurations = doc.get("configurations");
     for (platform, fields, language) in [
         ("sentinel", &["query"][..], LanguageId::Kql),
-        ("defender_for_endpoint", &["query"][..], LanguageId::Kql),
+        ("microsoft_defender", &["query"][..], LanguageId::Kql),
         ("splunk", &["query", "search"][..], LanguageId::Spl),
         ("carbon_black_cloud", &["query"][..], LanguageId::Lucene),
         ("crowdstrike", &["query"][..], LanguageId::Cql),

@@ -566,20 +566,20 @@ fn carbon_black_says_it_cannot_retire_a_deleted_rule() {
 fn defender_state() -> tempfile::TempDir {
     let block = "  sentinel:\n    status: DRAFT\n";
     let ws = workspace(
-        "defender_for_endpoint",
+        "microsoft_defender",
         DEFENDER_SETUP,
         &[("kept.yaml", rule("Kept rule", KEPT, block))],
     );
-    record(ws.path(), "defender_for_endpoint", GONE, "42");
-    record(ws.path(), "defender_for_endpoint", KEPT, "43");
+    record(ws.path(), "microsoft_defender", GONE, "42");
+    record(ws.path(), "microsoft_defender", KEPT, "43");
     ws
 }
 
 #[test]
 fn an_all_run_retires_what_deployment_state_records_and_forgets_it() {
     let ws = defender_state();
-    let (registry, recorder) = recorder("defender_for_endpoint", Vec::new());
-    let mut args = release("defender_for_endpoint", true);
+    let (registry, recorder) = recorder("microsoft_defender", Vec::new());
+    let mut args = release("microsoft_defender", true);
     args.all = true;
     let (sent, _) = deploy(ws.path(), &args, &registry);
     // The orphan is deleted by its recorded id; the kept rule, whose file
@@ -625,8 +625,8 @@ fn a_retirement_the_tenant_no_longer_has_is_skipped_and_forgotten() {
     .unwrap();
     let gone =
         DeployError::rule(DeployFailure::new("tenant_refused", "no such rule").with_status(404));
-    let (registry, _) = recorder("defender_for_endpoint", vec![Err(gone)]);
-    let mut args = release("defender_for_endpoint", true);
+    let (registry, _) = recorder("microsoft_defender", vec![Err(gone)]);
+    let mut args = release("microsoft_defender", true);
     args.all = true;
     let (sent, _) = deploy(ws.path(), &args, &registry);
     let Some(Json::Array(results)) = get(&sent, "results") else {
@@ -649,8 +649,8 @@ fn a_retirement_the_tenant_no_longer_has_is_skipped_and_forgotten() {
 fn an_all_run_of_a_workspace_with_no_rule_retires_nothing() {
     let ws = defender_state();
     std::fs::remove_file(ws.path().join("objects/rules/kept.yaml")).unwrap();
-    let (registry, recorder) = recorder("defender_for_endpoint", Vec::new());
-    let mut args = release("defender_for_endpoint", true);
+    let (registry, recorder) = recorder("microsoft_defender", Vec::new());
+    let mut args = release("microsoft_defender", true);
     args.all = true;
     let (sent, _) = deploy(ws.path(), &args, &registry);
     assert!(recorder.seen.lock().unwrap().is_empty());
@@ -675,17 +675,13 @@ fn a_change_detection_run_retires_a_deleted_rule_by_its_recorded_id() {
         rule(
             "Gone rule",
             GONE,
-            "  defender_for_endpoint:\n    status: PRODUCTION\n",
+            "  microsoft_defender:\n    status: PRODUCTION\n",
         ),
     )
     .unwrap();
     deleted_in_last_commit(ws.path(), "gone.yaml");
-    let (registry, recorder) = recorder("defender_for_endpoint", Vec::new());
-    let (sent, _) = deploy(
-        ws.path(),
-        &release("defender_for_endpoint", true),
-        &registry,
-    );
+    let (registry, recorder) = recorder("microsoft_defender", Vec::new());
+    let (sent, _) = deploy(ws.path(), &release("microsoft_defender", true), &registry);
     assert_eq!(
         *recorder.seen.lock().unwrap(),
         [Seen {

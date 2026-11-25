@@ -94,7 +94,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
   "file:tests/fixtures/tide_corpus/current/Objects/Detection Rules/rule-0002-defender-kql.yaml": {
     "value": {
       "configurations": {
-        "defender_for_endpoint": {
+        "microsoft_defender": {
           "alert": {
             "title": "Defender KQL Rule"
           },

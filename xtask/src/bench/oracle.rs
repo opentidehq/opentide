@@ -23,7 +23,7 @@ pub const ORACLE_REQUIREMENTS: &str = "tests/bench/oracle-requirements.txt";
 /// benchmarks when their oracle pin moves past 0.28.
 pub const ORACLE_PLATFORMS: &[&str] = &[
     "sentinel",
-    "defender_for_endpoint",
+    "microsoft_defender",
     "splunk",
     "sentinel_one",
     "carbon_black_cloud",

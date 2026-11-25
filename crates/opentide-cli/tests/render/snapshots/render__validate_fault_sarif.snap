@@ -63,10 +63,10 @@ source: crates/opentide-cli/tests/render.rs
             }
           ],
           "message": {
-            "text": "<WS>/.opentide/states/deployment/f2f28c1d-8323-4b4e-acba-c53ed9cb5271.json names platform 'splunk'; only bitdefender, crowdstrike, defender_for_endpoint, graylog, exabeam, google_secops, sentinel_one, sysdig store external ids"
+            "text": "<WS>/.opentide/states/deployment/f2f28c1d-8323-4b4e-acba-c53ed9cb5271.json names platform 'splunk'; only bitdefender, crowdstrike, microsoft_defender, graylog, exabeam, google_secops, sentinel_one, sysdig store external ids"
           },
           "partialFingerprints": {
-            "opentide/v1": "871038283c9f1c9c8ed6089fe2034b6eb7586ee2e2bdac0d3382d13bfcccd040"
+            "opentide/v1": "1c2b4e4fe4a0c53a703576f832624aa36b0d1acc0623836ec771898827601bfb"
           },
           "ruleId": "deployment_state_platform"
         },
@@ -432,10 +432,10 @@ source: crates/opentide-cli/tests/render.rs
             }
           ],
           "message": {
-            "text": "unknown table 'DeviceProcessEvnts'; if the workspace holds it, declare it for defender_for_endpoint in visibility.toml\nhelp: did you mean 'DeviceProcessEvents'?"
+            "text": "unknown table 'DeviceProcessEvnts'; if the workspace holds it, declare it for microsoft_defender in visibility.toml\nhelp: did you mean 'DeviceProcessEvents'?"
           },
           "partialFingerprints": {
-            "opentide/v1": "26dffb0928c576cc258fde6c650189495f649f7990987b43db21d75564323f45"
+            "opentide/v1": "465671b93b13b11c28942f5d44f4fbc74879db870e2c0bba5d9452d93eb58ed9"
           },
           "ruleId": "kql_unknown_table"
         },

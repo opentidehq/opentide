@@ -12,7 +12,7 @@ opentide integrates with **thirteen detection platforms** through connectors bui
 | Platform | CLI `--platform` | Deploy | Query validate (live) | Offline query check | [Query](../../cli/query.md) | Query language |
 |----------|------------------|:------:|:--------------:|:------------:|:-----:|----------------|
 | Microsoft Sentinel | `sentinel` | yes | yes | yes | yes | KQL |
-| Defender for Endpoint | `defender_for_endpoint` | yes | yes | yes | yes | KQL |
+| Microsoft Defender | `microsoft_defender` | yes | yes | yes | yes | KQL |
 | Elastic Security | `elastic` | yes | yes | yes | yes | Kuery / Lucene / EQL / ES\|QL |
 | Splunk Enterprise Security | `splunk` | yes | yes | yes | yes | SPL |
 | SentinelOne | `sentinel_one` | yes | yes | no | yes | S1QL |
@@ -27,7 +27,7 @@ opentide integrates with **thirteen detection platforms** through connectors bui
 
 The offline check is the analysis engine that ships with `pip install opentide` (`opentide validate`, `opentide validate query`, `opentide lint`, [`opentide lsp`](../../cli/lsp.md)): it parses each query in its language, with the platform's tables or dialect, and needs no tenant.
 
-CLI `--platform` uses **registry keys** (`defender_for_endpoint`, `carbon_black_cloud`, `sentinel_one`). These are runtime identifiers; every platform ships with `pip install opentide`.
+CLI `--platform` uses **registry keys** (`microsoft_defender`, `carbon_black_cloud`, `sentinel_one`). These are runtime identifiers; every platform ships with `pip install opentide`.
 
 A Sentinel deploy reads each analytics rule before it writes it, so a rule the workspace already holds reads `unchanged` and is not written; see [`opentide deploy`](../../cli/deploy.md#unchanged-rules).
 
@@ -141,7 +141,7 @@ Every key on `configurations.<platform>`, required and optional, is specified un
 <Cards>
   <Card title="Platforms" href="/docs/specifications/specs/platforms/" description="Shared fields, external rule ids, and the three checks: validate, load, deploy." />
   <Card title="Sentinel" href="/docs/specifications/specs/platforms/sentinel-1.0/" description="KQL analytics rule. Grouping is optional at validate and required at deploy." />
-  <Card title="Defender for Endpoint" href="/docs/specifications/specs/platforms/defender-for-endpoint-1.0/" description="KQL custom detection, response actions, and the scope the loader requires." />
+  <Card title="Microsoft Defender" href="/docs/specifications/specs/platforms/microsoft-defender-1.0/" description="KQL custom detection, response actions, and the scope the loader requires." />
   <Card title="Splunk" href="/docs/specifications/specs/platforms/splunk-1.0/" description="SPL saved search." />
   <Card title="SentinelOne" href="/docs/specifications/specs/platforms/sentinel-one-1.0/" description="STAR rule: one S1QL query or a correlation of sub-queries." />
   <Card title="Carbon Black Cloud" href="/docs/specifications/specs/platforms/carbon-black-cloud-1.0/" description="Lucene IOC on an existing watchlist report." />
@@ -170,7 +170,7 @@ for platform in ws.info()["platforms"]:
 
 ## ATT&CK techniques
 
-On every platform whose block holds a technique list, the block's list wins; otherwise the rule's objective supplies the techniques. Sentinel (`alert.techniques`, `alert.tactics`) and Defender for Endpoint (`alert.techniques`) have such lists: when the block sets one (an empty list counts as unset), deploy sends it, and only when it does not are the techniques resolved from the rule's `detection_model` sent. The two lists are never merged. Sentinel holds what it sends to ATT&CK v18 and warns about each id it changes. CrowdStrike is the exception: its `details.tactic` and `details.technique` hold one value each, so they are sent only when set and never inherited. The platforms with no block field send the rule's own `techniques` with the objective's (Carbon Black the objective's only; SentinelOne and HarfangLab none). See [ATT&CK techniques](../../cli/deploy.md#attck-techniques) for each platform.
+On every platform whose block holds a technique list, the block's list wins; otherwise the rule's objective supplies the techniques. Sentinel (`alert.techniques`, `alert.tactics`) and Microsoft Defender (`alert.techniques`) have such lists: when the block sets one (an empty list counts as unset), deploy sends it, and only when it does not are the techniques resolved from the rule's `detection_model` sent. The two lists are never merged. Sentinel holds what it sends to ATT&CK v18 and warns about each id it changes. CrowdStrike is the exception: its `details.tactic` and `details.technique` hold one value each, so they are sent only when set and never inherited. The platforms with no block field send the rule's own `techniques` with the objective's (Carbon Black the objective's only; SentinelOne and HarfangLab none). See [ATT&CK techniques](../../cli/deploy.md#attck-techniques) for each platform.
 
 ## Query validation policy
 

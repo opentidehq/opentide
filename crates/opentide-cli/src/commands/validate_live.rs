@@ -1653,7 +1653,7 @@ fn rule_queries(rule: &opentide_compile::Rule, platform: &str) -> Result<Vec<Rul
         return Err(format!("rule {name:?} has no {platform} configuration"));
     };
     match platform {
-        "sentinel" | "defender_for_endpoint" => {
+        "sentinel" | "microsoft_defender" => {
             let text = required(block, "query", name, platform)?;
             let exclusions = block
                 .get("exclusions")
@@ -2053,7 +2053,7 @@ fn answered(
     text: &str,
     found: LiveCheck,
 ) -> RuleCheck {
-    if platform == "defender_for_endpoint" && !found.errors.is_empty() {
+    if platform == "microsoft_defender" && !found.errors.is_empty() {
         let mut tables = opentide_connectors::defender::defender_xdr_tables_in_query(text);
         tables.sort();
         tables.dedup();
@@ -2891,7 +2891,7 @@ mod tests {
             "name: R\nmetadata: {uuid: 00000000-0000-4000-8000-000000000001}\nconfigurations:\n  \
              carbon_black_cloud: {query: \"a\n  b   c \"}\n  sentinel_one:\n    condition:\n      \
              type: Correlation\n      correlation:\n        sub_queries: [{query: x}, {query: ' y '}]\n  \
-             sentinel: {query: '  '}\n  defender_for_endpoint:\n    query: T\n    exclusions: [{query: '| where a', tenant: lab}]\n",
+             sentinel: {query: '  '}\n  microsoft_defender:\n    query: T\n    exclusions: [{query: '| where a', tenant: lab}]\n",
         );
         let cb = rule_queries(&r, "carbon_black_cloud").unwrap();
         assert_eq!(cb[0].text, "a b c");
@@ -2907,7 +2907,7 @@ mod tests {
             rule_queries(&r, "splunk").unwrap_err(),
             "rule \"R\" has no splunk configuration"
         );
-        let defender = rule_queries(&r, "defender_for_endpoint").unwrap();
+        let defender = rule_queries(&r, "microsoft_defender").unwrap();
         assert_eq!(defender[0].text_for("lab"), "T\n| where a");
         assert_eq!(defender[0].text_for("prod"), "T");
         let graylog = rule(

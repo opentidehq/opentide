@@ -1453,7 +1453,7 @@ class DefenderAllowBlockGroupScoping:
 @final
 class DefenderConfig:
     """
-    Microsoft Defender for Endpoint custom detection (`DefenderConfig`).
+    Microsoft Defender custom detection (`DefenderConfig`).
     """
     __schema_identifier__: Final[str]
     __tide_fields__: Final[list[tuple[str, str]]]
@@ -8254,11 +8254,6 @@ class RuleConfigurations:
         CrowdStrike Falcon correlation rule (`platform::crowdstrike::1.0`).
         """
     @property
-    def defender_for_endpoint(self, /) -> DefenderConfig | None:
-        """
-        Microsoft Defender for Endpoint custom detection (`platform::defender_for_endpoint::1.0`).
-        """
-    @property
     def elastic(self, /) -> ElasticConfig | None:
         """
         Elastic Security detection rule (`platform::elastic::1.0`).
@@ -8282,6 +8277,11 @@ class RuleConfigurations:
     def harfanglab(self, /) -> HarfangLabConfig | None:
         """
         HarfangLab Sigma or YARA rule (`platform::harfanglab::1.0`).
+        """
+    @property
+    def microsoft_defender(self, /) -> DefenderConfig | None:
+        """
+        Microsoft Defender custom detection (`platform::microsoft_defender::1.0`).
         """
     @classmethod
     def model_construct(cls, /, _fields_set: Any | None = None, **values) -> RuleConfigurations:

@@ -9,7 +9,7 @@ expression: validate_fault_ci_github
 ::error title=unknown_key::deployment.toml.colour5: unknown key
 ::error title=unknown_key::platforms/sentinel.toml.platform.colour: unknown key
 ::error title=schema_validation::platform.name: platforms/splunk.toml.platform.name: Input should be a valid string%0Ahelp: the template in .opentide/templates/ shows the field and its values
-::error title=missing_field::platforms/defender_for_endpoint.toml.tenants.0.name: required key is missing
+::error title=missing_field::platforms/microsoft_defender.toml.tenants.0.name: required key is missing
 ::error file=.opentide/states/deployment/1fe3b71b-24be-4604-9b91-72cb32381bfc.json,title=deployment_state_uuid_mismatch::<WS>/.opentide/states/deployment/1fe3b71b-24be-4604-9b91-72cb32381bfc.json records object_uuid '00000000-0000-4000-8000-000000000001', but its file name is '1fe3b71b-24be-4604-9b91-72cb32381bfc'
 ::error file=.opentide/states/deployment/8df3e0d3-8a3f-490c-9f31-b71df88f3562.json,title=deployment_state_shape::<WS>/.opentide/states/deployment/8df3e0d3-8a3f-490c-9f31-b71df88f3562.json has no platforms object
 ::warning file=objects/rules/nested/hidden-harvest-rule-0020.yaml,title=nested_object_file::objects/rules/nested/hidden-harvest-rule-0020.yaml is in a subfolder of objects/rules and is not an object instance: it is not indexed, validated, shared, documented or deployed (opentide reads only files directly in objects/rules; see https://github.com/opentidehq/opentide/issues/584)

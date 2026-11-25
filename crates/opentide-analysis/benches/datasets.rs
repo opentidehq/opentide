@@ -136,7 +136,7 @@ const CASES: &[Case] = &[
         run: || {
             query(
                 LanguageId::Kql,
-                Some("defender_for_endpoint"),
+                Some("microsoft_defender"),
                 "DeviceProcessEvents | take 1",
             );
         },

@@ -126,11 +126,11 @@ exit: 0
 
 ━━━ ws/.opentide/templates/platforms/crowdstrike.template.yaml · created 0644
 
-━━━ ws/.opentide/templates/platforms/defender_for_endpoint.template.yaml · created 0644
-
 ━━━ ws/.opentide/templates/platforms/elastic.template.yaml · created 0644
 
 ━━━ ws/.opentide/templates/platforms/harfanglab.template.yaml · created 0644
+
+━━━ ws/.opentide/templates/platforms/microsoft_defender.template.yaml · created 0644
 
 ━━━ ws/.opentide/templates/platforms/sentinel.template.yaml · created 0644
 

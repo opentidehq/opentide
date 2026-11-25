@@ -361,7 +361,7 @@ pub fn analyze_tide_parsed(
 pub struct QueryRequest {
     pub language: LanguageId,
     /// The detection platform the query is for, as a `configurations` key
-    /// (`defender_for_endpoint` picks the Defender KQL schema,
+    /// (`microsoft_defender` picks the Defender KQL schema,
     /// `carbon_black_cloud` the Carbon Black Lucene dialect, `graylog` the
     /// Graylog one, and `exabeam` the Exabeam `rule` profile of a
     /// correlation-rule sequence). `None` for the language's default.
@@ -730,9 +730,9 @@ pub fn semantic_tokens(language: LanguageId, text: &str) -> SemanticTokens {
 }
 
 /// The KQL profile of a platform: Defender's schema for
-/// `defender_for_endpoint`, else Sentinel's.
+/// `microsoft_defender`, else Sentinel's.
 fn kql_profile(platform: &str) -> Profile {
-    if platform == "defender_for_endpoint" {
+    if platform == "microsoft_defender" {
         Profile::Defender
     } else {
         Profile::Sentinel

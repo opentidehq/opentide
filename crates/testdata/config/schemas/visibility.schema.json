@@ -162,7 +162,7 @@
       "description": "One `[[logsources]]` entry: one dataset a rule's signals can name.",
       "properties": {
         "name": {
-          "description": "The dataset: the KQL table or workspace function (`sentinel`, `defender_for_endpoint`), the\nsourcetype (`splunk`), the index pattern or data stream (`elastic`). Unique per `system`.\nSignals reference it.",
+          "description": "The dataset: the KQL table or workspace function (`sentinel`, `microsoft_defender`), the\nsourcetype (`splunk`), the index pattern or data stream (`elastic`). Unique per `system`.\nSignals reference it.",
           "title": "Name",
           "type": "string"
         },

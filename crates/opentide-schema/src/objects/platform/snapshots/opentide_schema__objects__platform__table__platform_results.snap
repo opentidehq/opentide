@@ -26,19 +26,6 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
           },
           "status": "STAGING"
         },
-        "defender_for_endpoint": {
-          "alert": {
-            "title": "t"
-          },
-          "enabled": false,
-          "impacted_entities": {
-            "device": "DeviceId"
-          },
-          "name": "",
-          "query": "DeviceProcessEvents | take 1",
-          "scheduling": "1H",
-          "status": "STAGING"
-        },
         "elastic": {
           "building_block": false,
           "enabled": false,
@@ -67,6 +54,19 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
               }
             ]
           },
+          "status": "STAGING"
+        },
+        "microsoft_defender": {
+          "alert": {
+            "title": "t"
+          },
+          "enabled": false,
+          "impacted_entities": {
+            "device": "DeviceId"
+          },
+          "name": "",
+          "query": "DeviceProcessEvents | take 1",
+          "scheduling": "1H",
           "status": "STAGING"
         },
         "sentinel": {
@@ -488,7 +488,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
   "platform-defender-full": {
     "value": {
       "configurations": {
-        "defender_for_endpoint": {
+        "microsoft_defender": {
           "actions": {
             "devices": {
               "collect_investigation_package": true,
@@ -560,7 +560,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
         "ctx": {},
         "field_path": [
           "configurations",
-          "defender_for_endpoint",
+          "microsoft_defender",
           "actions",
           "devices",
           "run_antivirus_scan"
@@ -582,7 +582,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
         },
         "field_path": [
           "configurations",
-          "defender_for_endpoint",
+          "microsoft_defender",
           "actions",
           "files",
           "allow_block",
@@ -605,7 +605,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
         },
         "field_path": [
           "configurations",
-          "defender_for_endpoint",
+          "microsoft_defender",
           "scope",
           "selection"
         ],
@@ -628,7 +628,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
         "ctx": {},
         "field_path": [
           "configurations",
-          "defender_for_endpoint",
+          "microsoft_defender",
           "impacted_entities"
         ],
         "input": null,
@@ -636,7 +636,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
         "span": [
           11,
           3,
-          24,
+          21,
           false
         ],
         "type": "missing",
@@ -646,7 +646,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
         "ctx": {},
         "field_path": [
           "configurations",
-          "defender_for_endpoint",
+          "microsoft_defender",
           "scheduling"
         ],
         "input": null,
@@ -654,7 +654,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
         "span": [
           11,
           3,
-          24,
+          21,
           false
         ],
         "type": "missing",
@@ -670,7 +670,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
         },
         "field_path": [
           "configurations",
-          "defender_for_endpoint",
+          "microsoft_defender",
           "scheduling"
         ],
         "input": "2H",
@@ -694,7 +694,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
         },
         "field_path": [
           "configurations",
-          "defender_for_endpoint",
+          "microsoft_defender",
           "scheduling"
         ],
         "input": null,
@@ -3125,7 +3125,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
         "ctx": {},
         "field_path": [
           "configurations",
-          "defender_for_endpoint",
+          "microsoft_defender",
           "query"
         ],
         "input": null,
@@ -3133,7 +3133,7 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
         "span": [
           11,
           3,
-          24,
+          21,
           false
         ],
         "type": "missing",

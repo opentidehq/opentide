@@ -1,6 +1,6 @@
 [platform]
 enabled = true
-name = "Microsoft Defender for Endpoint"
+name = "Microsoft Defender"
 
 [[tenants]]
 name = "lab"

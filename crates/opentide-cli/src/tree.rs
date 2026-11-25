@@ -25,7 +25,7 @@
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
-/// The word the command line spells `value` with (`defender_for_endpoint`).
+/// The word the command line spells `value` with (`microsoft_defender`).
 pub fn spelled<T: ValueEnum>(value: &T) -> String {
     value
         .to_possible_value()
@@ -587,7 +587,7 @@ pub struct SetupRepoFields {
         help = "One-line description, used in the README"
     )]
     pub description: Option<String>,
-    #[arg(long = "platform", help = "Enable a detection platform (repeatable): sentinel, defender_for_endpoint, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops", action = clap::ArgAction::Append, value_name = "PLATFORM")]
+    #[arg(long = "platform", help = "Enable a detection platform (repeatable): sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops", action = clap::ArgAction::Append, value_name = "PLATFORM")]
     pub platform: Vec<Platform>,
 }
 
@@ -979,11 +979,8 @@ pub struct SetupPlatformsArgs {
     pub target: SetupTarget,
     #[arg(long = "sentinel", help = "Enable Microsoft Sentinel")]
     pub sentinel: bool,
-    #[arg(
-        long = "defender-for-endpoint",
-        help = "Enable Microsoft Defender for Endpoint"
-    )]
-    pub defender_for_endpoint: bool,
+    #[arg(long = "microsoft-defender", help = "Enable Microsoft Defender")]
+    pub microsoft_defender: bool,
     #[arg(long = "splunk", help = "Enable Splunk Enterprise Security")]
     pub splunk: bool,
     #[arg(long = "sentinel-one", help = "Enable SentinelOne")]
@@ -1136,7 +1133,7 @@ pub struct SharePushArgs {
 pub struct DeployArgs {
     #[arg(
         long = "platform",
-        help = "Detection platform: sentinel, defender_for_endpoint, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops",
+        help = "Detection platform: sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops",
         value_name = "PLATFORM",
         value_parser = PlatformName
     )]
@@ -1205,7 +1202,7 @@ pub struct DeployArgs {
 pub struct DeployMetadataArgs {
     #[arg(
         long = "platform",
-        help = "Detection platform: sentinel, defender_for_endpoint, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops",
+        help = "Detection platform: sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops",
         value_name = "PLATFORM"
     )]
     pub platform: Platform,
@@ -1425,7 +1422,7 @@ pub struct NewArgs {
 pub struct NewRuleArgs {
     #[arg(long = "name", help = "Object name; the filename is its slug")]
     pub name: Option<String>,
-    #[arg(long = "platform", help = "Add a configuration block for this platform (repeatable): sentinel, defender_for_endpoint, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops", action = clap::ArgAction::Append, value_name = "PLATFORM")]
+    #[arg(long = "platform", help = "Add a configuration block for this platform (repeatable): sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops", action = clap::ArgAction::Append, value_name = "PLATFORM")]
     pub platform: Vec<Platform>,
     #[arg(
         long = "objective",
@@ -1470,7 +1467,7 @@ pub struct NewThreatArgs {
 pub struct InfoArgs {
     #[arg(
         long = "platform",
-        help = "Detection platform: sentinel, defender_for_endpoint, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops",
+        help = "Detection platform: sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops",
         value_name = "PLATFORM"
     )]
     pub platform: Option<Platform>,
@@ -1534,7 +1531,7 @@ pub struct QueryArgs {
     pub query: Option<String>,
     #[arg(
         long = "platform",
-        help = "Detection platform: sentinel, defender_for_endpoint, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops",
+        help = "Detection platform: sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops",
         value_name = "PLATFORM",
         value_parser = PlatformName
     )]

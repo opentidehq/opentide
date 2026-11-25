@@ -261,7 +261,7 @@ pub struct Registered {
 /// as an extra key).
 pub const PLATFORM_CONFIG_MODELS: [Registered; crate::platforms::COUNT] = [
     registered::<SentinelConfig>("sentinel", "SentinelConfig"),
-    registered::<DefenderConfig>("defender_for_endpoint", "DefenderConfig"),
+    registered::<DefenderConfig>("microsoft_defender", "DefenderConfig"),
     registered::<SplunkConfig>("splunk", "SplunkConfig"),
     registered::<SentinelOneConfig>("sentinel_one", "SentinelOneConfig"),
     registered::<CrowdstrikeConfig>("crowdstrike", "CrowdstrikeConfig"),
@@ -696,7 +696,7 @@ pub fn garde_optional_query_text(value: &Option<String>, pins: &crate::Pins) -> 
 }
 
 /// The severities a block's own `severity` takes where deploy maps it
-/// (CrowdStrike's `details.severity`, Defender for Endpoint's
+/// (CrowdStrike's `details.severity`, Microsoft Defender's
 /// `alert.severity`): the `alert_severity` vocabulary's names, in this case.
 /// The compilers map these five and refuse anything else (`map_severity`,
 /// `SeverityMapping`), so a value outside them passed `validate` and failed
@@ -805,7 +805,7 @@ pub fn garde_platform_schema(
 pub enum PlatformConfig {
     /// `sentinel`.
     Sentinel(SentinelConfig),
-    /// `defender_for_endpoint`.
+    /// `microsoft_defender`.
     Defender(DefenderConfig),
     /// `splunk`.
     Splunk(SplunkConfig),
@@ -857,7 +857,7 @@ pub fn parse_platform_config(platform: &str, node: &Node) -> Result<PlatformConf
     }
     match platform {
         "sentinel" => read(node, PlatformConfig::Sentinel),
-        "defender_for_endpoint" => read(node, PlatformConfig::Defender),
+        "microsoft_defender" => read(node, PlatformConfig::Defender),
         "splunk" => read(node, PlatformConfig::Splunk),
         "sentinel_one" => read(node, PlatformConfig::SentinelOne),
         "crowdstrike" => read(node, PlatformConfig::Crowdstrike),

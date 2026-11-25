@@ -1,9 +1,9 @@
 [platform]
-enabled = true
-name = "Microsoft Defender for Endpoint"
-description = """Defender for Endpoint is a comprehensive, cloud-native endpoint
-security solution that delivers visibility and AI-powered cyberthreat protection
-to help stop cyberattacks across Windows, macOS, Linux, Android, iOS, and IoT devices.
+enabled = false
+name = "Microsoft Defender"
+description = """Microsoft Defender XDR custom detection rules, deployed through the
+Microsoft Graph beta custom detection API. The rules query advanced hunting across
+Defender for Endpoint, Office 365, Identity and Cloud Apps.
 """
 
 #[[modifiers]]

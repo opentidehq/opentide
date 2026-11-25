@@ -1,5 +1,5 @@
-//! Microsoft Defender for Endpoint: the custom detection rule a deploy sends
-//! to one tenant through Microsoft Graph (`platforms/defender_for_endpoint/
+//! Microsoft Defender: the custom detection rule a deploy sends
+//! to one tenant through Microsoft Graph (`platforms/microsoft_defender/
 //! deployer.py`'s deploy, the client's `create_detection_rule`,
 //! `update_detection_rule`, `delete_detection_rule`).
 
@@ -12,10 +12,10 @@ use crate::rule::{CompileError, Rule};
 use crate::strategy::StatusStrategy;
 
 /// The platform's key under `configurations`.
-pub const PLATFORM: &str = "defender_for_endpoint";
+pub const PLATFORM: &str = "microsoft_defender";
 
 /// The platform's display name, in messages.
-pub const DISPLAY: &str = "Defender for Endpoint";
+pub const DISPLAY: &str = "Microsoft Defender";
 
 /// The detection rules collection of Microsoft Graph.
 pub const ENDPOINT: &str = "https://graph.microsoft.com/beta/security/rules/detectionRules";
@@ -236,7 +236,7 @@ pub fn body_with_warnings(
                 warnings.push((
                     TECHNIQUE_NOT_ENTERPRISE_CODE,
                     format!(
-                        "Rule {} ({}): leaving out {id}, which the rule's objective maps but is not an Enterprise ATT&CK technique, so Defender for Endpoint does not take it",
+                        "Rule {} ({}): leaving out {id}, which the rule's objective maps but is not an Enterprise ATT&CK technique, so Microsoft Defender does not take it",
                         rule.uuid, rule.name
                     ),
                 ));
@@ -341,7 +341,7 @@ mod tests {
         assert_eq!(severity("Informational").unwrap(), "informational");
         assert_eq!(
             severity("Severe").unwrap_err().reason,
-            "Defender for Endpoint cannot compile this rule: \"Severe\""
+            "Microsoft Defender cannot compile this rule: \"Severe\""
         );
     }
 

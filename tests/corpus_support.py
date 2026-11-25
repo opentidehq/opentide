@@ -26,7 +26,7 @@ TIDE_CORPUS_MANIFEST = ROOT / "tests/fixtures/tide_corpus/manifest.toml"
 
 CORPUS_RULE_UUIDS = {
     "sentinel": "00000000-0000-4000-8003-000000000001",
-    "defender_for_endpoint": "00000000-0000-4000-8003-000000000002",
+    "microsoft_defender": "00000000-0000-4000-8003-000000000002",
     "splunk": "00000000-0000-4000-8003-000000000003",
     "sentinel_one": "00000000-0000-4000-8003-000000000004",
     "carbon_black_cloud": "00000000-0000-4000-8003-000000000005",

@@ -29,11 +29,6 @@ pub const FILES: [(&str, opentide_dataset::TextFn); 20] = [
     ("platforms/crowdstrike.toml", || {
         opentide_dataset::text!("src/opentide/data/configurations/platforms/crowdstrike.toml")
     }),
-    ("platforms/defender_for_endpoint.toml", || {
-        opentide_dataset::text!(
-            "src/opentide/data/configurations/platforms/defender_for_endpoint.toml"
-        )
-    }),
     ("platforms/elastic.toml", || {
         opentide_dataset::text!("src/opentide/data/configurations/platforms/elastic.toml")
     }),
@@ -48,6 +43,11 @@ pub const FILES: [(&str, opentide_dataset::TextFn); 20] = [
     }),
     ("platforms/harfanglab.toml", || {
         opentide_dataset::text!("src/opentide/data/configurations/platforms/harfanglab.toml")
+    }),
+    ("platforms/microsoft_defender.toml", || {
+        opentide_dataset::text!(
+            "src/opentide/data/configurations/platforms/microsoft_defender.toml"
+        )
     }),
     ("platforms/sentinel.toml", || {
         opentide_dataset::text!("src/opentide/data/configurations/platforms/sentinel.toml")

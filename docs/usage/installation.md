@@ -222,7 +222,7 @@ These `--platform` values are built into the package:
 | `--platform` | Product |
 |--------------|---------|
 | `sentinel` | Microsoft Sentinel |
-| `defender_for_endpoint` | Defender for Endpoint |
+| `microsoft_defender` | Microsoft Defender |
 | `elastic` | Elastic Security |
 | `splunk` | Splunk Enterprise Security |
 | `sentinel_one` | SentinelOne |

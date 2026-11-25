@@ -131,7 +131,7 @@ impl SetupPlatformsArgs {
     pub fn enabled(&self) -> Vec<String> {
         let flags = [
             ("sentinel", self.sentinel),
-            ("defender_for_endpoint", self.defender_for_endpoint),
+            ("microsoft_defender", self.microsoft_defender),
             ("splunk", self.splunk),
             ("sentinel_one", self.sentinel_one),
             ("crowdstrike", self.crowdstrike),

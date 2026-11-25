@@ -193,9 +193,9 @@ fn under(path: &Path, root: &Path) -> bool {
 
 // ---------------------------------------------------------------- Defender
 
-const DEFENDER: &str = "defender_for_endpoint";
+const DEFENDER: &str = "microsoft_defender";
 
-const TEMPLATE: &str = "\nname: {name}\n#references:\n  #public:\n    #1: \n  #internal:\n    #a: \n\nmetadata:\n  uuid: {uuid}\n  schema: rule::1.0\n  version: 1\n  created: {created}\n  modified: {modified}\n  tlp: amber+strict\n  author: {author}\n  #contributors:\n    #-\n\ndescription: |\n{description}\n#detection_model: \n\nresponse:\n  alert_severity: {alert_severity}\n  #playbook: https://\n  #responders: \n  #procedure:\n\nconfigurations:\n  defender_for_endpoint: \n    schema: platform::defender_for_endpoint::1.0\n    status: {status}\n    {contributors}\n    tenants:\n      - {tenants}\n    #flags:\n      #-\n    \n    scheduling: {schedule}\n    \n    alert:\n      title: {title}{techniques}\n      #severity: \n      {alert_recommendation}\n    \n    {impacted_entities_flag}impacted_entities:\n      {impacted_device}\n      #mailbox: \n      {impacted_user} \n    \n    #actions:\n    \n      #devices:\n        #isolate_device: \n        #collect_investigation_package: true\n        #run_antivirus_scan: true\n        #initiate_investigation: true\n        #restrict_app_execution: true\n    \n      #files:\n        #allow_block:\n          #action: \n          #column: \n          #groups:\n            #selection: \n            #device_groups:\n              #-\n        #quarantine_file: \n    \n    scope:\n      selection: All\n      #device_groups:\n        #-\n    \n    query: |\n{query}\n";
+const TEMPLATE: &str = "\nname: {name}\n#references:\n  #public:\n    #1: \n  #internal:\n    #a: \n\nmetadata:\n  uuid: {uuid}\n  schema: rule::1.0\n  version: 1\n  created: {created}\n  modified: {modified}\n  tlp: amber+strict\n  author: {author}\n  #contributors:\n    #-\n\ndescription: |\n{description}\n#detection_model: \n\nresponse:\n  alert_severity: {alert_severity}\n  #playbook: https://\n  #responders: \n  #procedure:\n\nconfigurations:\n  microsoft_defender: \n    schema: platform::microsoft_defender::1.0\n    status: {status}\n    {contributors}\n    tenants:\n      - {tenants}\n    #flags:\n      #-\n    \n    scheduling: {schedule}\n    \n    alert:\n      title: {title}{techniques}\n      #severity: \n      {alert_recommendation}\n    \n    {impacted_entities_flag}impacted_entities:\n      {impacted_device}\n      #mailbox: \n      {impacted_user} \n    \n    #actions:\n    \n      #devices:\n        #isolate_device: \n        #collect_investigation_package: true\n        #run_antivirus_scan: true\n        #initiate_investigation: true\n        #restrict_app_execution: true\n    \n      #files:\n        #allow_block:\n          #action: \n          #column: \n          #groups:\n            #selection: \n            #device_groups:\n              #-\n        #quarantine_file: \n    \n    scope:\n      selection: All\n      #device_groups:\n        #-\n    \n    query: |\n{query}\n";
 const NO_CONTRIBUTORS_TEMPLATE: &str = "\n    #contributors:\n      #-\n";
 const CONTRIBUTORS_TEMPLATE: &str = "\n    contributors:\n      - {contributor}\n";
 const NO_RECOMMENDATION_TEMPLATE: &str = "\n      #recommendation: |\n        #Type Here\n";
@@ -526,12 +526,13 @@ fn defender_run(cx: &Context<'_>, written_count: &mut usize) -> Outcome {
     super::query::log_unset(&tenants, cx.env, "an extract");
     if tenants.is_empty() {
         tracing::error!(
-            detail = "You must first have Defender for Endpoint tenants configured to initiate the import",
-            advice = "run 'opentide setup platforms --defender-for-endpoint'",
+            detail =
+                "You must first have Microsoft Defender tenants configured to initiate the import",
+            advice = "run 'opentide setup platforms --microsoft-defender'",
             critical = true,
             "defender_tenants_not_configured"
         );
-        return Err("No Defender for Endpoint tenants are configured".into());
+        return Err("No Microsoft Defender tenants are configured".into());
     }
     let environment = Environment::from_pairs(cx.env.iter());
     let destination = cx.cwd.join("Imported");
@@ -565,7 +566,7 @@ fn defender_run(cx: &Context<'_>, written_count: &mut usize) -> Outcome {
                     "fatal_error"
                 );
                 format!(
-                    "cannot authenticate against Defender for Endpoint tenant '{}' with its configuration",
+                    "cannot authenticate against Microsoft Defender tenant '{}' with its configuration",
                     configured.name
                 )
             }
@@ -873,7 +874,7 @@ mod tests {
             Some("High: #1"),
             "{body}"
         );
-        let block = ["configurations", "defender_for_endpoint"];
+        let block = ["configurations", "microsoft_defender"];
         let block_at = |rest: &[&str]| at(&[block.as_slice(), rest].concat());
         assert_eq!(
             block_at(&["scheduling"]).as_deref(),
@@ -893,7 +894,7 @@ mod tests {
         let configuration = root
             .get("configurations")
             .unwrap()
-            .get("defender_for_endpoint")
+            .get("microsoft_defender")
             .unwrap();
         let strings = |node: &opentide_schema::node::Node| -> Vec<String> {
             match &node.value {
@@ -970,7 +971,7 @@ mod tests {
         assert!(description.contains("status: INJECTED"), "{body}");
         let query = root
             .get("configurations")
-            .and_then(|block| block.get("defender_for_endpoint"))
+            .and_then(|block| block.get("microsoft_defender"))
             .and_then(|block| block.get("query"))
             .unwrap();
         assert_eq!(query.value.as_str(), Some("T\nname: INJECTED"), "{body}");

@@ -90,7 +90,7 @@ response:
   procedure:
     searches:
       - query: NTANetAnalytics | take 1
-        system: defender_for_endpoint
+        system: microsoft_defender
       - system: sentinel
         query: NTANetAnalytics | take 1
 "#;
@@ -112,7 +112,7 @@ response:
         vec![
             (
                 "response.procedure.searches.0.query".into(),
-                "defender_for_endpoint",
+                "microsoft_defender",
                 true
             ),
             (
@@ -135,7 +135,7 @@ fn a_file_that_is_not_yaml_has_no_queries() {
 fn a_single_query_takes_the_platform_profile() {
     let defender = QueryRequest {
         language: LanguageId::Kql,
-        platform: Some("defender_for_endpoint".into()),
+        platform: Some("microsoft_defender".into()),
         stack: None,
         text: "DeviceProcessEvents | take 1".into(),
     };
@@ -157,7 +157,7 @@ fn a_single_query_takes_the_platform_profile() {
         text: "NTANetAnalytics | take 1".into(),
         ..defender.clone()
     };
-    assert!(unknown_table(&log_analytics("defender_for_endpoint")));
+    assert!(unknown_table(&log_analytics("microsoft_defender")));
     assert!(!unknown_table(&log_analytics("sentinel")));
 
     let broken = QueryRequest {

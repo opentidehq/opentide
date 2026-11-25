@@ -71,7 +71,7 @@ pub fn platform_template(platform: &str) -> Result<Option<String>, TemplateError
     };
     Ok(Some(match platform {
         "sentinel" => render::<SentinelConfig>(&options)?,
-        "defender_for_endpoint" => render::<DefenderConfig>(&options)?,
+        "microsoft_defender" => render::<DefenderConfig>(&options)?,
         "splunk" => render::<SplunkConfig>(&options)?,
         "sentinel_one" => render::<SentinelOneConfig>(&options)?,
         "crowdstrike" => render::<CrowdstrikeConfig>(&options)?,

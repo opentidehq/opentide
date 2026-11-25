@@ -5889,7 +5889,7 @@ exit: 0
               "type": "null"
             }
           ],
-          "description": "The request a deploy sends. For Defender for Endpoint, SentinelOne, CrowdStrike, HarfangLab, Splunk and Carbon Black Cloud, a list of {method, url, body} requests; for the other platforms an object in the platform's own shape (Elastic {payload, block}, Graylog and Exabeam {method, path, body}, Bitdefender a JSON-RPC body); null when the rule could not be compiled",
+          "description": "The request a deploy sends. For Microsoft Defender, SentinelOne, CrowdStrike, HarfangLab, Splunk and Carbon Black Cloud, a list of {method, url, body} requests; for the other platforms an object in the platform's own shape (Elastic {payload, block}, Graylog and Exabeam {method, path, body}, Bitdefender a JSON-RPC body); null when the rule could not be compiled",
           "title": "Api Request"
         },
         "code": {
@@ -10724,7 +10724,7 @@ exit: 0
         {
           "choices": [
             "sentinel",
-            "defender_for_endpoint",
+            "microsoft_defender",
             "splunk",
             "sentinel_one",
             "crowdstrike",
@@ -10742,7 +10742,7 @@ exit: 0
           "flags": [
             "--platform"
           ],
-          "help": "Check this platform's queries. Offline, default every platform the engine parses: sentinel, defender_for_endpoint, splunk, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops. --live needs one of: sentinel, defender_for_endpoint, splunk, sentinel_one, carbon_black_cloud, elastic, graylog, exabeam, google_secops",
+          "help": "Check this platform's queries. Offline, default every platform the engine parses: sentinel, microsoft_defender, splunk, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops. --live needs one of: sentinel, microsoft_defender, splunk, sentinel_one, carbon_black_cloud, elastic, graylog, exabeam, google_secops",
           "is_flag": false,
           "multiple": false,
           "name": "platform",
@@ -10927,7 +10927,7 @@ exit: 0
         {
           "choices": [
             "sentinel",
-            "defender_for_endpoint",
+            "microsoft_defender",
             "splunk",
             "sentinel_one",
             "crowdstrike",
@@ -10945,7 +10945,7 @@ exit: 0
           "flags": [
             "--platform"
           ],
-          "help": "Detection platform: sentinel, defender_for_endpoint, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops",
+          "help": "Detection platform: sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops",
           "is_flag": false,
           "multiple": false,
           "name": "platform",
@@ -11346,7 +11346,7 @@ exit: 0
         {
           "choices": [
             "sentinel",
-            "defender_for_endpoint",
+            "microsoft_defender",
             "splunk",
             "sentinel_one",
             "crowdstrike",
@@ -11364,7 +11364,7 @@ exit: 0
           "flags": [
             "--platform"
           ],
-          "help": "Detection platform: sentinel, defender_for_endpoint, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops",
+          "help": "Detection platform: sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops",
           "is_flag": false,
           "multiple": false,
           "name": "platform",
@@ -11587,7 +11587,7 @@ exit: 0
         {
           "choices": [
             "sentinel",
-            "defender_for_endpoint",
+            "microsoft_defender",
             "splunk",
             "sentinel_one",
             "crowdstrike",
@@ -11605,7 +11605,7 @@ exit: 0
           "flags": [
             "--platform"
           ],
-          "help": "Add a configuration block for this platform (repeatable): sentinel, defender_for_endpoint, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops",
+          "help": "Add a configuration block for this platform (repeatable): sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops",
           "is_flag": false,
           "multiple": true,
           "name": "platform",
@@ -12422,7 +12422,7 @@ exit: 0
         {
           "choices": [
             "sentinel",
-            "defender_for_endpoint",
+            "microsoft_defender",
             "splunk",
             "sentinel_one",
             "crowdstrike",
@@ -12440,7 +12440,7 @@ exit: 0
           "flags": [
             "--platform"
           ],
-          "help": "Detection platform: sentinel, defender_for_endpoint, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops",
+          "help": "Detection platform: sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops",
           "is_flag": false,
           "multiple": false,
           "name": "platform",
@@ -13394,7 +13394,7 @@ exit: 0
         {
           "choices": [
             "sentinel",
-            "defender_for_endpoint",
+            "microsoft_defender",
             "splunk",
             "sentinel_one",
             "crowdstrike",
@@ -13412,7 +13412,7 @@ exit: 0
           "flags": [
             "--platform"
           ],
-          "help": "Enable a detection platform (repeatable): sentinel, defender_for_endpoint, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops",
+          "help": "Enable a detection platform (repeatable): sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops",
           "is_flag": false,
           "multiple": true,
           "name": "platform",
@@ -13864,7 +13864,7 @@ exit: 0
         {
           "choices": [
             "sentinel",
-            "defender_for_endpoint",
+            "microsoft_defender",
             "splunk",
             "sentinel_one",
             "crowdstrike",
@@ -13882,7 +13882,7 @@ exit: 0
           "flags": [
             "--platform"
           ],
-          "help": "Enable a detection platform (repeatable): sentinel, defender_for_endpoint, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops",
+          "help": "Enable a detection platform (repeatable): sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops",
           "is_flag": false,
           "multiple": true,
           "name": "platform",
@@ -13981,12 +13981,12 @@ exit: 0
           "default": false,
           "envvars": [],
           "flags": [
-            "--defender-for-endpoint"
+            "--microsoft-defender"
           ],
-          "help": "Enable Microsoft Defender for Endpoint",
+          "help": "Enable Microsoft Defender",
           "is_flag": true,
           "multiple": false,
-          "name": "defender_for_endpoint",
+          "name": "microsoft_defender",
           "required": false,
           "secondary_flags": [],
           "type": "boolean"

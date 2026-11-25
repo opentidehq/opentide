@@ -125,8 +125,8 @@ stages:
               CBC_ORG_KEY: $(CBC_ORG_KEY)
               CBC_TOKEN: $(CBC_TOKEN)
               CBC_URL: $(CBC_URL)
-      - job: validate_query_defender-for-endpoint
-        displayName: Validate query (defender_for_endpoint)
+      - job: validate_query_microsoft-defender
+        displayName: Validate query (microsoft_defender)
         steps:
           - checkout: self
             persistCredentials: true
@@ -167,7 +167,7 @@ stages:
               if [ "$(git rev-parse --is-shallow-repository)" = true ]; then git fetch --depth=1 origin main; else git fetch origin main; fi
               if ! git cat-file -e FETCH_HEAD:.opentide/configurations 2>/dev/null; then echo "The default branch has no .opentide/configurations yet, so no tenant is reviewed. Skipped without using platform credentials."; exit 0; fi
               git checkout FETCH_HEAD -- .opentide/configurations
-              if grep -qs '^[^#]*tenants' .opentide/configurations/platforms/defender_for_endpoint.toml; then opentide validate query --platform defender_for_endpoint --live --changed; else echo "The default branch has no defender_for_endpoint tenant yet, so no tenant is reviewed. Skipped defender_for_endpoint live query validation without using platform credentials."; fi
+              if grep -qs '^[^#]*tenants' .opentide/configurations/platforms/microsoft_defender.toml; then opentide validate query --platform microsoft_defender --live --changed; else echo "The default branch has no microsoft_defender tenant yet, so no tenant is reviewed. Skipped microsoft_defender live query validation without using platform credentials."; fi
             env:
               MDE_CLIENT_ID: $(MDE_CLIENT_ID)
               MDE_CLIENT_SECRET: $(MDE_CLIENT_SECRET)

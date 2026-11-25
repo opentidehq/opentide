@@ -100,11 +100,6 @@ pub const REVISIONS: &[Revision] = &[
         Kind::Platform,
         "CrowdstrikeConfig",
     ),
-    revision(
-        "platform::defender_for_endpoint::1.0",
-        Kind::Platform,
-        "DefenderConfig",
-    ),
     revision("platform::elastic::1.0", Kind::Platform, "ElasticConfig"),
     revision("platform::exabeam::1.0", Kind::Platform, "ExabeamConfig"),
     revision(
@@ -117,6 +112,11 @@ pub const REVISIONS: &[Revision] = &[
         "platform::harfanglab::1.0",
         Kind::Platform,
         "HarfangLabConfig",
+    ),
+    revision(
+        "platform::microsoft_defender::1.0",
+        Kind::Platform,
+        "DefenderConfig",
     ),
     revision("platform::sentinel::1.0", Kind::Platform, "SentinelConfig"),
     revision(

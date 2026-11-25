@@ -11,7 +11,7 @@ Runs a read-only query on a platform's tenants and prints the rows. Use it to tr
 opentide query --platform sentinel 'SecurityEvent | where EventID == 4688 | take 20'
 opentide query --platform splunk --rule <rule-uuid> --tenant all --since 7d
 opentide query --platform elastic --language eql --index 'logs-*' 'process where process.name == "cmd.exe"'
-opentide --json query --platform defender_for_endpoint --file objects/rules/suspicious-lsass.yaml
+opentide --json query --platform microsoft_defender --file objects/rules/suspicious-lsass.yaml
 ```
 
 `opentide validate query --live` checks that a query runs; `opentide query` returns what it finds.
@@ -21,7 +21,7 @@ opentide --json query --platform defender_for_endpoint --file objects/rules/susp
 | Input | Purpose |
 |-------|---------|
 | `[QUERY]` | The query, in the platform's language. `-` reads it from stdin |
-| `--platform` | Required. `sentinel`, `defender_for_endpoint`, `splunk`, `sentinel_one`, `crowdstrike`, `harfanglab`, `carbon_black_cloud`, `elastic`, `graylog`, `exabeam` or `google_secops` (a YARA-L search through `udmSearch`; `--rule` is not supported). `sysdig` has no query runner, and `bitdefender` has no query runner either: each exits `2` (`usage_invalid_value`) |
+| `--platform` | Required. `sentinel`, `microsoft_defender`, `splunk`, `sentinel_one`, `crowdstrike`, `harfanglab`, `carbon_black_cloud`, `elastic`, `graylog`, `exabeam` or `google_secops` (a YARA-L search through `udmSearch`; `--rule` is not supported). `sysdig` has no query runner, and `bitdefender` has no query runner either: each exits `2` (`usage_invalid_value`) |
 | `--tenant` | A configured tenant name (repeatable), or `all`. Default: the only tenant configured |
 | `--rule` | Run the query this rule (by UUID) deploys to the platform |
 | `--file` | Run the query of the rule in this YAML file, saved or not: a path from the current directory or the repository root |

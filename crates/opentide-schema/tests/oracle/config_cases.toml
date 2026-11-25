@@ -386,7 +386,7 @@ text = "[[tenants]]\nname = \"t\"\n[tenants.setup]\nurl = \"u\"\naccount_id = 1.
 [[case]]
 id = "defender-parameters"
 kind = "text"
-path = "/w/.opentide/configurations/platforms/defender_for_endpoint.toml"
+path = "/w/.opentide/configurations/platforms/microsoft_defender.toml"
 text = "[[tenants]]\nname = \"t\"\nparameters = {device_groups = \"g\", x = 1}\n[tenants.setup]\ntenant_id = \"a\"\nclient_id = \"b\"\nclient_secret = \"$S\"\n"
 
 [[case]]

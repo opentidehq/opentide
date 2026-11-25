@@ -34,7 +34,7 @@ exit: 0
       "can_query": true,
       "can_validate": true,
       "enabled": true,
-      "name": "defender_for_endpoint",
+      "name": "microsoft_defender",
       "tenants": []
     },
     {

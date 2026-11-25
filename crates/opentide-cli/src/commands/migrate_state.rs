@@ -1,7 +1,7 @@
 //! `deploy migrate-state` (UC-4.4, #834; `cli/services/migrate_state.py`):
 //! move vendor rule ids off rules into deployment state (RFC 0010 §3).
 //!
-//! Defender for Endpoint, SentinelOne and CrowdStrike ids found on a rule are
+//! Microsoft Defender, SentinelOne and CrowdStrike ids found on a rule are
 //! written to `.opentide/states/deployment/<uuid>.json` first, durably
 //! ([`deploy_state`]), and only then removed from the YAML. A crash between
 //! the two leaves both copies; they agree, so the next run strips the YAML
@@ -36,7 +36,7 @@ use crate::json::Json;
 /// The command's path.
 pub const COMMAND: &str = "deploy migrate-state";
 /// Platforms whose ids move into shards (`MIGRATED_PLATFORMS`).
-const MIGRATED_PLATFORMS: [&str; 3] = ["crowdstrike", "defender_for_endpoint", "sentinel_one"];
+const MIGRATED_PLATFORMS: [&str; 3] = ["crowdstrike", "microsoft_defender", "sentinel_one"];
 /// Platform-block keys that used to carry the vendor id on the rule.
 const LEGACY_MAP_KEYS: [&str; 2] = ["rule_id", "rule_id_bundle"];
 /// The prefix of a one-tenant id key (`rule_id::<tenant>`).
@@ -848,7 +848,7 @@ mod tests {
     #[test]
     fn ids_move_into_the_shard_and_off_the_rule() {
         let text = rule(
-            "  defender_for_endpoint:\n    rule_id::prod: 12345\n    rule_id_bundle:\n      lab: '678'\n    query: q\n  sentinel:\n    rule_id::soc: abc\n    query: |\n      x\n",
+            "  microsoft_defender:\n    rule_id::prod: 12345\n    rule_id_bundle:\n      lab: '678'\n    query: q\n  sentinel:\n    rule_id::soc: abc\n    query: |\n      x\n",
         );
         let dir = workspace(&[("objects/rules/r.yaml", &text)]);
         let report = migrate(dir.path(), &rules(&dir));
@@ -867,11 +867,11 @@ mod tests {
         let edited = std::fs::read_to_string(dir.path().join("objects/rules/r.yaml")).unwrap();
         assert_eq!(
             edited,
-            rule("  defender_for_endpoint:\n    query: q\n  sentinel:\n    query: |\n      x\n")
+            rule("  microsoft_defender:\n    query: q\n  sentinel:\n    query: |\n      x\n")
         );
         let shard = Shard::load(dir.path(), UUID).unwrap();
-        assert_eq!(shard.get("defender_for_endpoint", "prod"), Some("12345"));
-        assert_eq!(shard.get("defender_for_endpoint", "lab"), Some("678"));
+        assert_eq!(shard.get("microsoft_defender", "prod"), Some("12345"));
+        assert_eq!(shard.get("microsoft_defender", "lab"), Some("678"));
         assert_eq!(data(&report, "shards_written"), &Json::Int(1));
         // A second run finds nothing left.
         let again = migrate(dir.path(), &rules(&dir));

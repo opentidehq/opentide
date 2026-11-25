@@ -1,7 +1,7 @@
 //! Signing in to Microsoft Entra ID (Azure AD) with an app registration's
 //! client secret: the OAuth 2.0 client-credentials grant of the Microsoft
 //! identity platform's v2.0 token endpoint, the one sign-in Sentinel and
-//! Defender for Endpoint use.
+//! Microsoft Defender use.
 //!
 //! One form `POST` to `https://login.microsoftonline.com/<tenant id>/oauth2/v2.0/token`
 //! with exactly `grant_type=client_credentials`, `client_id`,

@@ -270,7 +270,7 @@ fn sentinel_with_an_unset_credential_fails_before_sending_anything() {
     assert!(wire.seen().is_empty(), "{:?}", wire.seen());
 }
 
-// ---- Defender for Endpoint (Entra ID sign-in, then Graph) ----
+// ---- Microsoft Defender (Entra ID sign-in, then Graph) ----
 
 #[test]
 fn defender_signs_in_then_reads_the_first_page_of_detection_rules_and_nothing_else() {

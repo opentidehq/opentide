@@ -27,7 +27,7 @@ use serde_json::Value;
 
 /// The platforms whose `api_request` is a list of requests.
 const LISTS: [&str; 6] = [
-    "defender_for_endpoint",
+    "microsoft_defender",
     "sentinel_one",
     "crowdstrike",
     "harfanglab",

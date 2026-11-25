@@ -81,14 +81,14 @@ const DEFENDER: &str = "[platform]\nenabled = true\n\n[[tenants]]\nname = \"one\
 fn a_preview_run_plans_creates_and_updates_from_the_deployment_state() {
     let ws = workspace(&[
         (
-            ".opentide/configurations/platforms/defender_for_endpoint.toml",
+            ".opentide/configurations/platforms/microsoft_defender.toml",
             DEFENDER,
         ),
         (
             "objects/rules/a.yaml",
             &rule(
                 "00000000-0000-4000-8000-00000000000a",
-                "defender_for_endpoint",
+                "microsoft_defender",
                 "STAGING",
                 "",
             ),
@@ -97,7 +97,7 @@ fn a_preview_run_plans_creates_and_updates_from_the_deployment_state() {
             "objects/rules/b.yaml",
             &rule(
                 "00000000-0000-4000-8000-00000000000b",
-                "defender_for_endpoint",
+                "microsoft_defender",
                 "STAGING",
                 "",
             ),
@@ -106,7 +106,7 @@ fn a_preview_run_plans_creates_and_updates_from_the_deployment_state() {
             ".opentide/states/deployment/00000000-0000-4000-8000-00000000000b.json",
             "{\"schema\": \"deployment.state::1.0\", \"object_uuid\": \
              \"00000000-0000-4000-8000-00000000000b\", \"platforms\": \
-             {\"defender_for_endpoint\": {\"one\": \"42\"}}}",
+             {\"microsoft_defender\": {\"one\": \"42\"}}}",
         ),
     ]);
     let outcome = run(&ws, all(&["preview"]), &["DEFENDER_CLIENT"]);
@@ -117,7 +117,7 @@ fn a_preview_run_plans_creates_and_updates_from_the_deployment_state() {
     );
     assert_eq!(
         text(&outcome, "tenants"),
-        r#"{"defender_for_endpoint":{"one":["00000000-0000-4000-8000-00000000000a","00000000-0000-4000-8000-00000000000b"]}}"#
+        r#"{"microsoft_defender":{"one":["00000000-0000-4000-8000-00000000000a","00000000-0000-4000-8000-00000000000b"]}}"#
     );
     assert_eq!(
         text(&outcome, "warnings"),
@@ -140,7 +140,7 @@ fn a_preview_run_plans_creates_and_updates_from_the_deployment_state() {
     assert_eq!(
         text(&outcome, "payloads"),
         format!(
-            r#"{{"defender_for_endpoint":[{{"uuid":"{a}","name":"Rule {a}","api_request":[{{"method":"POST","url":"{endpoint}","body":{}}}],"tenant":"one"}},{{"uuid":"{b}","name":"Rule {b}","api_request":[{{"method":"PATCH","url":"{endpoint}/42","body":{}}}],"tenant":"one"}}]}}"#,
+            r#"{{"microsoft_defender":[{{"uuid":"{a}","name":"Rule {a}","api_request":[{{"method":"POST","url":"{endpoint}","body":{}}}],"tenant":"one"}},{{"uuid":"{b}","name":"Rule {b}","api_request":[{{"method":"PATCH","url":"{endpoint}/42","body":{}}}],"tenant":"one"}}]}}"#,
             body(a),
             body(b)
         )
@@ -157,14 +157,14 @@ const TWO_STRATEGIES: &str = "[platform]\nenabled = true\n\n[[tenants]]\nname = 
 fn the_unset_variable_warning_counts_only_the_tenants_the_plan_reaches() {
     let ws = workspace(&[
         (
-            ".opentide/configurations/platforms/defender_for_endpoint.toml",
+            ".opentide/configurations/platforms/microsoft_defender.toml",
             TWO_STRATEGIES,
         ),
         (
             "objects/rules/a.yaml",
             &rule(
                 "00000000-0000-4000-8000-00000000000a",
-                "defender_for_endpoint",
+                "microsoft_defender",
                 "STAGING",
                 "",
             ),
@@ -174,7 +174,7 @@ fn the_unset_variable_warning_counts_only_the_tenants_the_plan_reaches() {
     let outcome = run(&ws, all(&["preview"]), &[]);
     assert_eq!(
         text(&outcome, "tenants"),
-        r#"{"defender_for_endpoint":{"lab":["00000000-0000-4000-8000-00000000000a"]}}"#
+        r#"{"microsoft_defender":{"lab":["00000000-0000-4000-8000-00000000000a"]}}"#
     );
     assert_eq!(
         text(&outcome, "warnings"),
@@ -193,14 +193,14 @@ fn the_unset_variable_warning_counts_only_the_tenants_the_plan_reaches() {
 fn a_defender_rules_alert_techniques_are_in_the_dry_runs_request() {
     let ws = workspace(&[
         (
-            ".opentide/configurations/platforms/defender_for_endpoint.toml",
+            ".opentide/configurations/platforms/microsoft_defender.toml",
             DEFENDER,
         ),
         (
             "objects/rules/a.yaml",
             &rule(
                 "00000000-0000-4000-8000-00000000000a",
-                "defender_for_endpoint",
+                "microsoft_defender",
                 "STAGING",
                 "    alert:\n      techniques: [T1528, T1059.001]\n",
             ),
@@ -219,14 +219,14 @@ fn a_defender_rules_alert_techniques_are_in_the_dry_runs_request() {
 fn blocks_no_run_deploys_are_counted_and_a_release_run_retires() {
     let ws = workspace(&[
         (
-            ".opentide/configurations/platforms/defender_for_endpoint.toml",
+            ".opentide/configurations/platforms/microsoft_defender.toml",
             DEFENDER,
         ),
         (
             "objects/rules/a.yaml",
             &rule(
                 "00000000-0000-4000-8000-00000000000a",
-                "defender_for_endpoint",
+                "microsoft_defender",
                 "PRODUCTION",
                 "",
             ),
@@ -235,7 +235,7 @@ fn blocks_no_run_deploys_are_counted_and_a_release_run_retires() {
             "objects/rules/b.yaml",
             &rule(
                 "00000000-0000-4000-8000-00000000000b",
-                "defender_for_endpoint",
+                "microsoft_defender",
                 "DISABLED",
                 "",
             ),
@@ -268,7 +268,7 @@ fn blocks_no_run_deploys_are_counted_and_a_release_run_retires() {
 fn a_platform_run_counts_only_its_own_blocks_as_left_out() {
     let ws = workspace(&[
         (
-            ".opentide/configurations/platforms/defender_for_endpoint.toml",
+            ".opentide/configurations/platforms/microsoft_defender.toml",
             DEFENDER,
         ),
         (
@@ -279,7 +279,7 @@ fn a_platform_run_counts_only_its_own_blocks_as_left_out() {
             "objects/rules/a.yaml",
             &rule(
                 "00000000-0000-4000-8000-00000000000a",
-                "defender_for_endpoint",
+                "microsoft_defender",
                 "STAGING",
                 "",
             ),
@@ -303,7 +303,7 @@ fn a_platform_run_counts_only_its_own_blocks_as_left_out() {
     let defender = run(
         &ws,
         Request {
-            platform: Some("defender_for_endpoint".to_owned()),
+            platform: Some("microsoft_defender".to_owned()),
             ..all(&["PREVIEW"])
         },
         &[],
@@ -316,14 +316,14 @@ fn a_platform_run_counts_only_its_own_blocks_as_left_out() {
 fn a_rule_with_a_vendor_id_is_refused_and_fails_the_run() {
     let ws = workspace(&[
         (
-            ".opentide/configurations/platforms/defender_for_endpoint.toml",
+            ".opentide/configurations/platforms/microsoft_defender.toml",
             DEFENDER,
         ),
         (
             "objects/rules/a.yaml",
             &rule(
                 "00000000-0000-4000-8000-00000000000a",
-                "defender_for_endpoint",
+                "microsoft_defender",
                 "STAGING",
                 "    rule_id: 7\n",
             ),
@@ -485,7 +485,7 @@ fn a_scope_failure_stops_the_run_with_its_own_exit_code() {
         "objects/rules/a.yaml",
         &rule(
             "00000000-0000-4000-8000-00000000000a",
-            "defender_for_endpoint",
+            "microsoft_defender",
             "STAGING",
             "",
         ),

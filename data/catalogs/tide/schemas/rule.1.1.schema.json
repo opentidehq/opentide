@@ -3777,18 +3777,6 @@
           "description": "CrowdStrike Falcon correlation rule (platform::crowdstrike::1.0).",
           "markdownDescription": "CrowdStrike Falcon correlation rule (`platform::crowdstrike::1.0`)."
         },
-        "defender_for_endpoint": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/DefenderConfig"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Microsoft Defender for Endpoint custom detection (platform::defender_for_endpoint::1.0).",
-          "markdownDescription": "Microsoft Defender for Endpoint custom detection (`platform::defender_for_endpoint::1.0`)."
-        },
         "elastic": {
           "anyOf": [
             {
@@ -3848,6 +3836,18 @@
           ],
           "description": "HarfangLab Sigma or YARA rule (platform::harfanglab::1.0).",
           "markdownDescription": "HarfangLab Sigma or YARA rule (`platform::harfanglab::1.0`)."
+        },
+        "microsoft_defender": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DefenderConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Microsoft Defender custom detection (platform::microsoft_defender::1.0).",
+          "markdownDescription": "Microsoft Defender custom detection (`platform::microsoft_defender::1.0`)."
         },
         "sentinel": {
           "anyOf": [

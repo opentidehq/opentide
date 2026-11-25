@@ -145,12 +145,12 @@ opentide --json deploy --dry-run --all --strategy PREVIEW --strategy RELEASE --p
 ```
 
 The deploy is expected to exit 0 with `"dry_run": true`; `payloads` is keyed by platform, and each
-rule's entry under it has an `api_request`. Read one payload per platform: it is the request a live deploy would send, on every platform ([`deploy`](../cli/deploy.md#payloads)). For Defender for Endpoint, SentinelOne, CrowdStrike, HarfangLab, Splunk and Carbon Black Cloud it is the list of requests the entry's `tenant` receives, each `{method, url, body}`: a Defender create is a `POST` whose body carries `displayName`, `queryCondition` and `isEnabled: true`, and a rule the deployment state records is a `PATCH` of its id. A value a deploy learns only as it sends is a placeholder: Splunk's `<send-time:minute>` in a `frequency` schedule of a `frequency_scheduling = "current"` tenant, Carbon Black's `<send-time:timestamp>` and `<tenant-read:watchlist>`.
+rule's entry under it has an `api_request`. Read one payload per platform: it is the request a live deploy would send, on every platform ([`deploy`](../cli/deploy.md#payloads)). For Microsoft Defender, SentinelOne, CrowdStrike, HarfangLab, Splunk and Carbon Black Cloud it is the list of requests the entry's `tenant` receives, each `{method, url, body}`: a Defender create is a `POST` whose body carries `displayName`, `queryCondition` and `isEnabled: true`, and a rule the deployment state records is a `PATCH` of its id. A value a deploy learns only as it sends is a placeholder: Splunk's `<send-time:minute>` in a `frequency` schedule of a `frequency_scheduling = "current"` tenant, Carbon Black's `<send-time:timestamp>` and `<tenant-read:watchlist>`.
 
 | Platform | Offline engine (`validate query`) | Dry-run deploy (`summary`) | `--live` (optional, needs a tenant) |
 |---|---|---|---|
 | [ ] `sentinel` | passed, 2 queries | upsert 1 | [ ] passed |
-| [ ] `defender_for_endpoint` | passed, 3 | create 1, update 1 | [ ] passed |
+| [ ] `microsoft_defender` | passed, 3 | create 1, update 1 | [ ] passed |
 | [ ] `splunk` | passed, 2 | upsert 1 | [ ] passed |
 | [ ] `sentinel_one` | exit 2, `usage_missing_option`: no offline engine, `--live` required | create 1, update 1 | [ ] passed |
 | [ ] `crowdstrike` | passed, 3 | create 1, update 1 | `supported: false`, exit 1 |

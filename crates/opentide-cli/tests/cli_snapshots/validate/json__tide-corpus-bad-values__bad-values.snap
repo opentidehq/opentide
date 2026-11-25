@@ -65,7 +65,7 @@ exit: 1
         "explain": "opentide explain schema_validation",
         "field_path": [
           "configurations",
-          "defender_for_endpoint",
+          "microsoft_defender",
           "alert",
           "severity"
         ],

@@ -33,7 +33,7 @@ const FILES: &[&str] = &[
     "platforms/splunk.toml",
     "platforms/carbon_black_cloud.toml",
     "platforms/sentinel_one.toml",
-    "platforms/defender_for_endpoint.toml",
+    "platforms/microsoft_defender.toml",
     "platforms/crowdstrike.toml",
     "platforms/harfanglab.toml",
     "platforms/elastic.toml",

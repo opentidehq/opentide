@@ -1,4 +1,4 @@
-//! The Defender for Endpoint body: the technique policy sends the block's
+//! The Microsoft Defender body: the technique policy sends the block's
 //! `alert.techniques` as the alert template's `mitreTechniques` when it sets
 //! any, else the rule's objective's (a redeploy that sent `[]` wiped the
 //! tenant's).
@@ -34,7 +34,7 @@ fn rule_text(alert: &str, model: bool) -> String {
     format!(
         "name: Defender rule\nmetadata:\n  uuid: {UUID}\n  schema: rule::1.0\n  version: 1\n  \
          created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\ndescription: A rule.\n{model}\
-         response:\n  alert_severity: High\nconfigurations:\n  defender_for_endpoint:\n    \
+         response:\n  alert_severity: High\nconfigurations:\n  microsoft_defender:\n    \
          status: STAGING\n    query: |\n      DeviceProcessEvents\n      | take 1\n    \
          scheduling: 1H\n    alert:\n      description: Alert.\n{alert}    \
          impacted_entities:\n      device: device_id\n"

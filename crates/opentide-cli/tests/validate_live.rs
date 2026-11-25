@@ -1,5 +1,5 @@
 //! `validate query --live`'s flow on the platforms whose checks search the
-//! last minute (UC-4.6, #979): Defender for Endpoint, SentinelOne and
+//! last minute (UC-4.6, #979): Microsoft Defender, SentinelOne and
 //! Sentinel. A golden case cannot replay them (a run's window ends now), so
 //! each runs here with the time fixed, against its connector's cassette
 //! recorded from the Python client (`tests/cassettes/<platform>/validate.json`):
@@ -124,7 +124,7 @@ fn value<'a>(live: &'a Live, key: &str) -> &'a Json {
         .1
 }
 
-/// Defender for Endpoint whose check counts its data's retention from the
+/// Microsoft Defender whose check counts its data's retention from the
 /// recording's time, not today's.
 struct DefenderAt(opentide_connectors::defender::Defender);
 
@@ -140,7 +140,7 @@ impl LiveValidator for DefenderAt {
 
 impl Platform for DefenderAt {
     fn id(&self) -> &'static str {
-        "defender_for_endpoint"
+        "microsoft_defender"
     }
 
     fn live_validator(&self) -> Option<&dyn LiveValidator> {
@@ -151,7 +151,7 @@ impl Platform for DefenderAt {
 #[test]
 fn defender_rules_are_checked_with_their_custom_detection_columns() {
     let ws = workspace(
-        "defender_for_endpoint",
+        "microsoft_defender",
         "tenant_id = \"contoso-tenant-id\"\nclient_id = \"opentide-app-id\"\nclient_secret = \
          \"$DEFENDER_CLIENT_SECRET\"\n",
         &[
@@ -160,7 +160,7 @@ fn defender_rules_are_checked_with_their_custom_detection_columns() {
                 rule(
                     "Defender columns rule",
                     "00000000-0000-4000-8046-000000000101",
-                    "  defender_for_endpoint:\n    status: STAGING\n    query: |\n      \
+                    "  microsoft_defender:\n    status: STAGING\n    query: |\n      \
                      DeviceProcessEvents\n      | project Timestamp, DeviceId, ReportId\n",
                 ),
             ),
@@ -169,7 +169,7 @@ fn defender_rules_are_checked_with_their_custom_detection_columns() {
                 rule(
                     "Defender rule without columns",
                     "00000000-0000-4000-8046-000000000102",
-                    "  defender_for_endpoint:\n    status: STAGING\n    query: |\n      \
+                    "  microsoft_defender:\n    status: STAGING\n    query: |\n      \
                      DeviceProcessEvents\n      | project Timestamp, DeviceName\n",
                 ),
             ),
@@ -183,7 +183,7 @@ fn defender_rules_are_checked_with_their_custom_detection_columns() {
         .unwrap();
     let (live, mismatches) = live(
         ws.path(),
-        "defender_for_endpoint",
+        "microsoft_defender",
         "defender/validate",
         "DEFENDER_CLIENT_SECRET",
         &registry,
@@ -192,7 +192,7 @@ fn defender_rules_are_checked_with_their_custom_detection_columns() {
     assert_eq!(value(&live, "status"), &Json::str("failed"));
     assert_eq!(
         value(&live, "message"),
-        &Json::str("Queries rejected on defender_for_endpoint · 2 checked on 1 tenant")
+        &Json::str("Queries rejected on microsoft_defender · 2 checked on 1 tenant")
     );
     assert_eq!(value(&live, "_exit_code"), &Json::Int(1));
     let report = live.report(&Env::from_pairs::<&str, &str>([]));

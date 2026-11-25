@@ -20,7 +20,7 @@ response:
   alert_severity: High
 
 configurations:
-  defender_for_endpoint:
+  microsoft_defender:
     enabled: true
     name: Defender KQL Rule
     status: STAGING

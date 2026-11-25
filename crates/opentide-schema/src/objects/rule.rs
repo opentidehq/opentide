@@ -49,10 +49,10 @@ pub struct RuleConfigurations {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[garde(dive)]
     pub sentinel: Option<SentinelConfig>,
-    /// Microsoft Defender for Endpoint custom detection (`platform::defender_for_endpoint::1.0`).
+    /// Microsoft Defender custom detection (`platform::microsoft_defender::1.0`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[garde(dive)]
-    pub defender_for_endpoint: Option<DefenderConfig>,
+    pub microsoft_defender: Option<DefenderConfig>,
     /// Splunk saved search (`platform::splunk::1.0`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[garde(dive)]
@@ -109,9 +109,7 @@ impl RuleConfigurations {
     pub fn platform_statuses(&self) -> Vec<(&'static str, &str)> {
         let statuses = [
             self.sentinel.as_ref().map(PlatformBlock::status),
-            self.defender_for_endpoint
-                .as_ref()
-                .map(PlatformBlock::status),
+            self.microsoft_defender.as_ref().map(PlatformBlock::status),
             self.splunk.as_ref().map(PlatformBlock::status),
             self.sentinel_one.as_ref().map(PlatformBlock::status),
             self.crowdstrike.as_ref().map(PlatformBlock::status),

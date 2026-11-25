@@ -2591,9 +2591,9 @@ fn undeclared_dataset(finding: &Finding) -> Option<(&'static str, String)> {
     let in_defender = finding
         .field_path
         .as_ref()
-        .is_some_and(|p| p.iter().any(|s| s == "defender_for_endpoint"));
+        .is_some_and(|p| p.iter().any(|s| s == "microsoft_defender"));
     let kql = if in_defender {
-        "defender_for_endpoint"
+        "microsoft_defender"
     } else {
         "sentinel"
     };

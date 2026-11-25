@@ -20,7 +20,7 @@ pie showData title Platform blocks by status
 | CrowdStrike Falcon | 1 | 1 |
 | Elastic Security | 1 | 1 |
 | HarfangLab | 1 | 1 |
-| Microsoft Defender for Endpoint | 1 | 1 |
+| Microsoft Defender | 1 | 1 |
 | Microsoft Sentinel | 2 | 2 |
 | SentinelOne | 1 | 1 |
 | Splunk Enterprise Security | 1 | 1 |

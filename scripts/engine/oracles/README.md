@@ -31,7 +31,7 @@ Tide YAML's oracle is the Pydantic models of `opentide-schema`'s table tests (th
 - `crates/testdata/conformance/perf/*`
 - `crates/testdata/conformance/columns/*` (KQL: one column or type error each)
 - `crates/testdata/oracles/<lang>/*`, one probe per form real detections use
-- every `configurations.{sentinel,defender_for_endpoint,splunk}` query in a Tide rule under `crates/testdata/` (and the legacy `configurations.splunk.search`), and every `response.procedure.searches[]` query whose `system` is one of those platforms, as YAML loads them (folded, quoted). A drilldown search is not a query
+- every `configurations.{sentinel,microsoft_defender,splunk}` query in a Tide rule under `crates/testdata/` (and the legacy `configurations.splunk.search`), and every `response.procedure.searches[]` query whose `system` is one of those platforms, as YAML loads them (folded, quoted). A drilldown search is not a query
 - Elastic: `configurations.elastic.query` and `threat.query` in the language their `type` and `language` select, `response.procedure.searches[]` entries with `system: elastic` and a `language`, the verdict tables `crates/testdata/conformance/external/{lucene-queryparser,kuery-opensearch-dashboards}/cases.tsv`, and, when `OPENTIDE_DETECTION_RULES` names an `elastic/detection-rules` checkout (CI pins one), every rule and single-language hunt in it
 
 Each query runs through `opentide-lsp analyze` and through the reference.

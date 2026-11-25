@@ -62,7 +62,7 @@ ENTRY_POINT_GROUP = "opentide.platforms"
 BUILTIN_PLATFORMS = frozenset(
     {
         "sentinel",
-        "defender_for_endpoint",
+        "microsoft_defender",
         "splunk",
         "sentinel_one",
         "crowdstrike",

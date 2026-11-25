@@ -4358,7 +4358,7 @@ mod tests {
         let scratch = tempfile::tempdir().unwrap();
         let path = scratch.path().join("w");
         let line = format!(
-            "setup --yes --path {} --name X --platform sentinel --platform defender_for_endpoint",
+            "setup --yes --path {} --name X --platform sentinel --platform microsoft_defender",
             path.display()
         );
         let ran = dispatched_at(&line, &[("OPENTIDE_OUTPUT", "agent")], 60);
@@ -4366,7 +4366,7 @@ mod tests {
         let row = ran
             .stdout
             .lines()
-            .find(|row| row.contains("platforms/defender_for_endpoint.toml"))
+            .find(|row| row.contains("platforms/microsoft_defender.toml"))
             .unwrap_or_else(|| panic!("{}", ran.stdout));
         assert!(
             row.trim_end().ends_with("platform configuration"),
@@ -4485,7 +4485,7 @@ mod tests {
         let scratch = tempfile::tempdir().unwrap();
         let path = scratch.path().join("w");
         let line = format!(
-            "setup --yes --path {} --name X --platform sentinel --platform defender_for_endpoint",
+            "setup --yes --path {} --name X --platform sentinel --platform microsoft_defender",
             path.display()
         );
         for (pairs, mode) in [
@@ -4500,7 +4500,7 @@ mod tests {
             let row = ran
                 .stdout
                 .lines()
-                .find(|row| row.contains("platforms/defender_for_endpoint.toml"))
+                .find(|row| row.contains("platforms/microsoft_defender.toml"))
                 .unwrap_or_else(|| panic!("{mode}: {}", ran.stdout));
             assert!(row.len() > 80, "{mode}: {row:?}");
             assert!(

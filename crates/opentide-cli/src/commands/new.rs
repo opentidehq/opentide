@@ -60,10 +60,7 @@ pub const USAGE_NEEDS_INPUT: &str = super::setup::USAGE_NEEDS_INPUT;
 /// Keys a platform block needs beyond its model's required fields, so it
 /// holds detection logic and deploys (`PLATFORM_EXTRA_KEYS`).
 const PLATFORM_EXTRA_KEYS: [(&str, &[&[&str]]); 8] = [
-    (
-        "defender_for_endpoint",
-        &[&["scope"], &["scope", "selection"]],
-    ),
+    ("microsoft_defender", &[&["scope"], &["scope", "selection"]]),
     ("elastic", &[&["query"]]),
     (
         "sentinel",

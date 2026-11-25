@@ -150,7 +150,7 @@ Create and enable platform configuration templates under `.opentide/configuratio
 A platform file that already exists is kept: your values, comments and tenants stay, and only `enabled` is set to `true`. When the bundled template has keys your file lacks, or your file has keys the template no longer has, the step warns (in the text output, and in `--json` `warnings`) naming them as dotted paths, for example `.opentide/configurations/platforms/sentinel.toml was kept with your values: the new template removes platform.legacy_mode. Add or delete those keys by hand.` Nothing is added or deleted for you. A key the model gives a default (`platform.enabled`, `platform.name`, `platform.description`) is never reported as added, so a file without one gets no warning. `tenants` and `modifiers` are your entries, in either TOML form (`[[tenants]]` or `tenants = [...]`), and are not compared. `setup repo --platform` reports the same warnings.
 
 ```bash
-opentide setup platforms --sentinel --defender-for-endpoint --yes
+opentide setup platforms --sentinel --microsoft-defender --yes
 ```
 
 | Flag | Platform |
@@ -158,7 +158,7 @@ opentide setup platforms --sentinel --defender-for-endpoint --yes
 | `--sentinel` | Microsoft Sentinel |
 | `--splunk` | Splunk |
 | `--crowdstrike` | CrowdStrike |
-| `--defender-for-endpoint` | Microsoft Defender for Endpoint |
+| `--microsoft-defender` | Microsoft Defender |
 | `--sentinel-one` | SentinelOne |
 | `--carbon-black-cloud` | Carbon Black Cloud |
 | `--harfanglab` | HarfangLab |

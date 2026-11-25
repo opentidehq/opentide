@@ -55,8 +55,8 @@ fn a_comment_folding_carries_over_is_an_error_in_every_language() {
         ),
         (
             "defender",
-            "  defender_for_endpoint:\n    query: >-\n      DeviceProcessEvents\n      // note\n      | take 1\n",
-            "configurations.defender_for_endpoint.query",
+            "  microsoft_defender:\n    query: >-\n      DeviceProcessEvents\n      // note\n      | take 1\n",
+            "configurations.microsoft_defender.query",
             8,
         ),
         (

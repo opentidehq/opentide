@@ -50,7 +50,7 @@ enum Command {
         language: Option<String>,
         /// The detection platform a query file is for, as a `configurations`
         /// key: `carbon_black_cloud` and `graylog` check Lucene in their
-        /// dialects, `defender_for_endpoint` KQL against the Defender schema.
+        /// dialects, `microsoft_defender` KQL against the Defender schema.
         #[arg(long)]
         platform: Option<String>,
         /// Add a Tide object's platform-block findings, which `opentide lint`

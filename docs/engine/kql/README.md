@@ -3,7 +3,7 @@
 This directory is a **query-language inventory** of Microsoft Kusto Query Language (KQL) as used in:
 
 - Microsoft Sentinel scheduled analytics rules, NRT analytics rules, hunting queries
-- Microsoft Defender XDR / Microsoft Defender for Endpoint (MDE) advanced hunting and custom detections
+- Microsoft Defender XDR / Microsoft Defender (MDE) advanced hunting and custom detections
 
 It is **not** a catalog of Azure Data Explorer management (control) commands. Control commands (`.show`, `.create`, `.alter`, `.drop`, `.ingest`, `.set`, …) are listed only as **unsupported** in detections — see [`control-commands.md`](control-commands.md).
 

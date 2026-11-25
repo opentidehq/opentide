@@ -57,7 +57,7 @@ pub const TEXT: CodeLanguage = language("Text", "text");
 /// removed: `exclusions.query`).
 fn languages(platform: &str) -> &'static [(&'static str, CodeLanguage)] {
     match platform {
-        "sentinel" | "defender_for_endpoint" => &[("query", KQL), ("exclusions.query", KQL)],
+        "sentinel" | "microsoft_defender" => &[("query", KQL), ("exclusions.query", KQL)],
         "splunk" => &[("query", SPL), ("actions.notable.drilldown.search", SPL)],
         "sentinel_one" => &[
             ("condition.single_event.query", S1QL),

@@ -195,11 +195,11 @@ Each file is checked against its model when a command reads it, after your file 
 
 ### The datasets a log source fills
 
-A log source is **one dataset**, and its `name` is that dataset: the KQL table (or workspace function) for `sentinel` and `defender_for_endpoint`, the sourcetype for `splunk`, the index pattern or data stream for `elastic`. The query checks (`opentide validate`, `opentide validate query`, `opentide lint`, `opentide lsp start` and `opentide tui`) then know that name, so a custom table is not reported as unknown, and a log source can list the dataset's columns so the checks know them too.
+A log source is **one dataset**, and its `name` is that dataset: the KQL table (or workspace function) for `sentinel` and `microsoft_defender`, the sourcetype for `splunk`, the index pattern or data stream for `elastic`. The query checks (`opentide validate`, `opentide validate query`, `opentide lint`, `opentide lsp start` and `opentide tui`) then know that name, so a custom table is not reported as unknown, and a log source can list the dataset's columns so the checks know them too.
 
 | `system` | `name` declares | What it matches in a query |
 |----------|-----------------|----------------------------|
-| `sentinel`, `defender_for_endpoint` | a KQL table or workspace function | The names a KQL query reads: a pipeline's first source, a `union` leg, a `join` or `lookup` right side |
+| `sentinel`, `microsoft_defender` | a KQL table or workspace function | The names a KQL query reads: a pipeline's first source, a `union` leg, a `join` or `lookup` right side |
 | `splunk` | a sourcetype | `sourcetype=` |
 | `elastic` | an index pattern or data stream | A rule's `index`, a threat match's `index`, ES\|QL `FROM` |
 | any other | nothing | — |
@@ -235,7 +235,7 @@ system = "elastic"
 "process.name" = { type = "keyword" }
 ```
 
-- **Keys.** A log source takes `name`, `description` and `system` (required), and `tenants`, `assets`, `references` and `columns`. Any other key fails validation. `name` cannot be empty and is unique per `system`; the same name may appear under two systems (`DeviceEvents` under `sentinel` and `defender_for_endpoint`).
+- **Keys.** A log source takes `name`, `description` and `system` (required), and `tenants`, `assets`, `references` and `columns`. Any other key fails validation. `name` cannot be empty and is unique per `system`; the same name may appear under two systems (`DeviceEvents` under `sentinel` and `microsoft_defender`).
 - **Signals** name a log source in `data.logsources` as `<name>`, `<system>::<name>` or `<system>::<tenant>::<name>`; a bare name two systems declare refers to both.
 - **Patterns.** `*` matches any run of characters (`*_CL`, `logs-azure.*`). KQL and Elastic names match case-sensitively, Splunk names regardless of case. Splunk indexes and macros and Elastic data views are not declarable.
 - **Opt-in per system.** A system with at least one log source is checked against its names; a system with none is checked as if nothing were declared. The bundled `visibility.toml` declares no log source.
@@ -248,8 +248,8 @@ How a KQL source name is reported:
 | declared | yes | nothing |
 | known to the engine's catalog, not declared | yes | [`kql_table_not_declared`](../cli/diagnostics.md#kql_table_not_declared), warning |
 | known to the engine's catalog | no | nothing |
-| unknown to the catalog, not declared, a near miss of a known or declared table (one edit for a name of up to seven characters, two for a longer one; a match that differs only in case, `_`, `-` or spaces counts) and not a `_CL` table | either | [`kql_table_misspelt`](../cli/diagnostics.md#kql_table_misspelt), an error under `sentinel`, with the table to use; `defender_for_endpoint` reports [`kql_unknown_table`](../cli/diagnostics.md#kql_unknown_table), also an error, with the same suggestion |
-| any other name unknown to the catalog, not declared | either | [`kql_unknown_table`](../cli/diagnostics.md#kql_unknown_table): a warning under `sentinel`, an error under `defender_for_endpoint` |
+| unknown to the catalog, not declared, a near miss of a known or declared table (one edit for a name of up to seven characters, two for a longer one; a match that differs only in case, `_`, `-` or spaces counts) and not a `_CL` table | either | [`kql_table_misspelt`](../cli/diagnostics.md#kql_table_misspelt), an error under `sentinel`, with the table to use; `microsoft_defender` reports [`kql_unknown_table`](../cli/diagnostics.md#kql_unknown_table), also an error, with the same suggestion |
+| any other name unknown to the catalog, not declared | either | [`kql_unknown_table`](../cli/diagnostics.md#kql_unknown_table): a warning under `sentinel`, an error under `microsoft_defender` |
 
 A typo that passed `validate` as a warning before (`SecurityEvnt`) therefore fails it under `sentinel`. Correct the name; if the workspace really holds that table or function, declare it as a log source, or run `opentide validate --queries warn` to report it as a warning. Under opt-in a name is checked whatever its case; without, a name that starts with a lowercase letter is checked only when it ends in `_CL`, as it may be a workspace function. Under opt-in, a Splunk sourcetype that is not declared is [`spl_dataset_not_declared`](../cli/diagnostics.md#spl_dataset_not_declared), and an Elastic index pattern that is not declared is [`elastic_dataset_not_declared`](../cli/diagnostics.md#elastic_dataset_not_declared), both warnings; neither has an unknown-dataset error.
 
@@ -259,7 +259,7 @@ A typo that passed `validate` as a warning before (`SecurityEvnt`) therefore fai
 
 | `system` | Types |
 |----------|-------|
-| `sentinel`, `defender_for_endpoint` | KQL scalar types: `bool`, `datetime`, `decimal`, `dynamic`, `guid`, `int`, `long`, `real`, `string`, `timespan` |
+| `sentinel`, `microsoft_defender` | KQL scalar types: `bool`, `datetime`, `decimal`, `dynamic`, `guid`, `int`, `long`, `real`, `string`, `timespan` |
 | `splunk` | `string`, `number`, `boolean` |
 | `elastic` | Elasticsearch field types: `binary`, `boolean`, `byte`, `constant_keyword`, `date`, `date_nanos`, `double`, `flattened`, `float`, `geo_point`, `half_float`, `integer`, `ip`, `keyword`, `long`, `match_only_text`, `nested`, `object`, `scaled_float`, `short`, `text`, `unsigned_long`, `version`, `wildcard` |
 

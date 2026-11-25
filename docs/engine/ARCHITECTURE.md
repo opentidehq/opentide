@@ -33,7 +33,7 @@ editors / @opentide/lsp-client / WASM worker
 | Field path | Language |
 | --- | --- |
 | `configurations.sentinel.query` | KQL |
-| `configurations.defender_for_endpoint.query` | KQL |
+| `configurations.microsoft_defender.query` | KQL |
 | `configurations.splunk.query` | SPL |
 | `configurations.splunk.search` (legacy) | SPL |
 | `configurations.elastic.query` with `type: esql` | ES\|QL |
@@ -48,7 +48,7 @@ editors / @opentide/lsp-client / WASM worker
 | `configurations.sysdig.output` | Falco output template, read as libsinsp's formatter reads it: `%field` and `%transformer(...)` tokens compiled for the `source` |
 | `configurations.sysdig.exceptions` | Not a query: Falco's exception rules (operators, counts, fields) and the text Falco writes from them, compiled with the condition (`opentide_falco::exceptions`, reported on the YAML keys) |
 | `response.procedure.searches[].query` with `system: elastic` | `language` on the entry (`esql`, `eql`, `kuery`, `lucene`); none when omitted (specifications#58) |
-| `response.procedure.searches[].query` with `system: sentinel`, `defender_for_endpoint`, `splunk`, `carbon_black_cloud`, `graylog` or `crowdstrike` | that platform's language and profile, whatever the order of the entry's keys; any other `system` (`Sentinel`, `Splunk ES`) is free text and is not analysed |
+| `response.procedure.searches[].query` with `system: sentinel`, `microsoft_defender`, `splunk`, `carbon_black_cloud`, `graylog` or `crowdstrike` | that platform's language and profile, whatever the order of the entry's keys; any other `system` (`Sentinel`, `Splunk ES`) is free text and is not analysed |
 | `configurations.splunk.actions.notable.drilldown.search` | none: a `$token$` template, not the rule's query |
 | `configurations.crowdstrike.query` | CQL, with the Next-Gen SIEM correlation-rule checks ([CQL.md](CQL.md)) |
 | `configurations.exabeam.sequences[].query` | Exabeam Query Language, profile `rule` (the filter only); the block's constraint codes come from `crates/opentide-tide/src/exabeam.rs` ([EXABEAM.md](EXABEAM.md)) |

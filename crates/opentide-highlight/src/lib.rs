@@ -1107,7 +1107,7 @@ fn generate_tm_language_from(
 /// semantic tokens only.
 pub const EMBEDDED_QUERIES: &[(&[&str], &[&str], LanguageId)] = &[
     (
-        &["sentinel", "defender_for_endpoint"],
+        &["sentinel", "microsoft_defender"],
         &["query"],
         LanguageId::Kql,
     ),

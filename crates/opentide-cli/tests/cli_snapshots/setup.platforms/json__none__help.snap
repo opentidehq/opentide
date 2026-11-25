@@ -19,8 +19,8 @@ Options:
       --sentinel
           Enable Microsoft Sentinel
 
-      --defender-for-endpoint
-          Enable Microsoft Defender for Endpoint
+      --microsoft-defender
+          Enable Microsoft Defender
 
       --splunk
           Enable Splunk Enterprise Security

@@ -6395,7 +6395,7 @@
               "type": "null"
             }
           ],
-          "description": "The request a deploy sends. For Defender for Endpoint, SentinelOne, CrowdStrike, HarfangLab, Splunk and Carbon Black Cloud, a list of {method, url, body} requests; for the other platforms an object in the platform's own shape (Elastic {payload, block}, Graylog and Exabeam {method, path, body}, Bitdefender a JSON-RPC body); null when the rule could not be compiled",
+          "description": "The request a deploy sends. For Microsoft Defender, SentinelOne, CrowdStrike, HarfangLab, Splunk and Carbon Black Cloud, a list of {method, url, body} requests; for the other platforms an object in the platform's own shape (Elastic {payload, block}, Graylog and Exabeam {method, path, body}, Bitdefender a JSON-RPC body); null when the rule could not be compiled",
           "title": "Api Request"
         },
         "status": {

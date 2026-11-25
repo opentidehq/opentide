@@ -88,7 +88,7 @@ fn response() -> impl Strategy<Value = RuleResponse> {
 fn empty_configurations() -> RuleConfigurations {
     RuleConfigurations {
         sentinel: None,
-        defender_for_endpoint: None,
+        microsoft_defender: None,
         splunk: None,
         sentinel_one: None,
         crowdstrike: None,

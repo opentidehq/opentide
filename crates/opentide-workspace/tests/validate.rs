@@ -294,7 +294,7 @@ mod validate {
         fs.write(
             "/ws/objects/rules/a.yaml",
             format!(
-                "{}configurations:\n  defender_for_endpoint:\n    status: STAGING\n    alert:\n      \
+                "{}configurations:\n  microsoft_defender:\n    status: STAGING\n    alert:\n      \
                  category: Execution\n      colour: red\n",
                 rule(U1, "A")
             ),
@@ -305,7 +305,7 @@ mod validate {
                 .into_iter()
                 .find(|d| {
                     d.field_path.join(".")
-                        == format!("configurations.defender_for_endpoint.alert.{key}")
+                        == format!("configurations.microsoft_defender.alert.{key}")
                 })
                 .unwrap_or_else(|| panic!("{key}: {:?}", validation.report.issues))
         };
@@ -858,7 +858,7 @@ mod validate {
         fs.write(
             "/ws/objects/rules/a.yaml",
             format!(
-                "{}configurations:\n  defender_for_endpoint:\n    status: X\n    scheduling: weekly\n  \
+                "{}configurations:\n  microsoft_defender:\n    status: X\n    scheduling: weekly\n  \
                  crowdstrike:\n    status: X\n    details:\n      trigger: sometimes\n  \
                  sentinel_one:\n    status: X\n    response:\n      treat_as_threat: maybe\n",
                 rule(U1, "A")
@@ -882,7 +882,7 @@ mod validate {
         let expect =
             |help: &str, expected: &str| (Some(help.to_owned()), Some(expected.to_owned()));
         assert_eq!(
-            at("configurations.defender_for_endpoint.scheduling"),
+            at("configurations.microsoft_defender.scheduling"),
             expect(
                 "write \"NRT\", \"1H\", \"3H\", \"12H\" or \"24H\"",
                 "\"NRT\", \"1H\", \"3H\", \"12H\" or \"24H\""

@@ -14,7 +14,7 @@ response:
   alert_severity: Medium
 
 configurations:
-  defender_for_endpoint:
+  microsoft_defender:
     status: STAGING
     query: |
       CloudAppEvents
