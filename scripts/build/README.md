@@ -96,7 +96,7 @@ python3 scripts/build/check_docs_mdx.py [DOCS_DIR]
 `scripts/build/install-rust.sh [TARGET ...]` installs `rust-toolchain.toml`'s release with the
 minimal profile (rustc, cargo, rust-std; no rustfmt, clippy or docs) and the targets named, then
 names it in `RUSTUP_TOOLCHAIN` (and, in GitHub Actions, in `GITHUB_ENV` for the later steps).
-`build-packages.yml` runs it before every npm native package; the wheels' PyO3/maturin-action
+`release-pipeline.yml`'s `native` job runs it before every platform's builds; the wheels' PyO3/maturin-action
 installs the same release (in the manylinux container on Linux) and sets it as the directory's
 override. Without it, rustup read `rust-toolchain.toml` in the checkout
 and installed the release with its components in the middle of the build, which failed now and
