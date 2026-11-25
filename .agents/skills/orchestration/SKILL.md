@@ -103,24 +103,33 @@ ownership across free sessions, and say what moves the finish line.
 ## 8. A brief carries its precedent
 
 A worker meets the bar it is shown. A brief that states only what to change gets a change that is
-correct and thin: RFC 0021 (Microsoft Defender) shipped with its decisions right but without the
-full YAML shape, the field table or the Graph mapping that every earlier platform RFC carries,
-and the owner sent it back.
+correct and thin. RFC 0021 (Microsoft Defender) was merged in opentidehq/specifications#102 with
+its decisions right, and the owner then judged it too thin: it had no complete YAML example and
+no field-by-field table of block keys to Graph properties, which the closest platform RFCs carry
+(opentidehq/specifications `rfcs/0016-bitdefender-gravityzone-platform.md`, `rfcs/0017-graylog-platform.md`,
+`rfcs/0007-elastic-security-platform.md`). The brief had named no precedent, and the review checked only that CI was
+green.
 
 - **Name the precedent.** Every brief for a spec, RFC, platform, connector, docs page or skill names
-  the two or three closest existing ones by path ("as detailed as `rfcs/00NN-exabeam...`") and
-  says to match their sections and depth, not only their format.
-- **State the artefacts, not only the decisions.** For a platform RFC or spec: the complete and the
-  minimal YAML block, a field table (type, required, default, allowed values, vendor property), the
-  exact request the connector sends for the complete example, the deploy lifecycle per status, every
-  validation code with an example, the upgrade path, alternatives and risks. Other kinds of work
-  list theirs the same way.
-- **Review against the precedent.** Before merging, put the result beside the precedent it named:
-  a section the precedent has and the result lacks is a finding, however correct the rest is. CI
-  checks that a document builds; only this comparison checks that it is complete.
-- When the repository has its own authoring guide or template (opentidehq/specifications' RFC
-  guidance), the brief points to it and the review checks it was followed; a gap found in review
-  goes back into that guide too.
+  the two or three closest existing ones by repository and path ("as detailed as
+  opentidehq/specifications `rfcs/0017-graylog-platform.md`"), and says to match their sections
+  and depth, not only their format. Precedents are uneven (Sysdig's 0014 and Exabeam's 0018 have no
+  YAML block); pick the fullest.
+- **State the artefacts, not only the decisions.** The target for a platform RFC or spec is what
+  the best precedents carry together: the complete and the minimal YAML block, a field table
+  (type, required, default, allowed values, the vendor property), the request the connector sends
+  for the complete example, the deploy lifecycle per status, the validation codes with examples,
+  the upgrade path, alternatives and risks. This list wins over a thinner precedent. Other kinds of
+  work list their artefacts the same way.
+- **Review against the precedent.** Before merging, put the result beside the precedents the brief
+  named: a section they have that applies to this work, and the result lacks, is a finding however
+  correct the rest is. CI checks a document's form, not its depth. The comparison is part of
+  whichever review section 4 assigns; for work in another repository, part of that repository's
+  review.
+- **Use the repository's own guide.** For opentidehq/specifications that is
+  `.agents/skills/publish-rfc/SKILL.md` and `rfcs/0000-template.md`; the brief points to them. A
+  gap found in review goes back into that guide through an issue or PR on that repository, which
+  the orchestrator decides on (section 6), not the worker on its own.
 
 ## Anti-patterns
 
