@@ -112,7 +112,7 @@ calls, on every OS, at `X.Y.Z.devN` / `X.Y.Z-dev.N`, kept 14 days
 Each stage exists once, in that file:
 
 ```text
-plan ─┬─ native (6 platforms) ┐
+plan ─┬─ native (12 legs) ────┐
       ├─ wasm ────────────────┼─ assemble ─┬─ smoke (6 platforms)
       └─ sources ─────────────┘            └─ av-scan, av-defender (release tier and publish only)
             └─ smoke-sources (sdist, cargo install)
@@ -121,7 +121,7 @@ plan ─┬─ native (6 platforms) ┐
 | Job | What it does |
 |-----|--------------|
 | `plan` | The commit (a 40-hex SHA), the versions and the tag |
-| `native` (`Build (<platform>)`) | One job per platform (Linux x64 and arm64, macOS arm64 and x64, Windows x64 and arm64) builds everything it ships with one toolchain and one target directory: the `opentide` and `opentide-lsp` binaries (Linux and macOS: no standalone Windows executable ships) with their size budgets, the npm addon (napi-rs) and the `cp310-abi3` wheel (maturin, manylinux_2_28 on Linux); Linux x64 also writes the highlights zip with the release `opentide-lsp` it built |
+| `native` (`Build (<platform>, <part>)`) | Two jobs per platform (Linux x64 and arm64, macOS arm64 and x64, Windows x64 and arm64) build everything it ships, grouped where the builds share their compilation and split where one job would lengthen the run (Linux: binaries + npm, wheel; macOS: binaries, npm + wheel; Windows: npm, wheel; the measurements are in the workflow): the `opentide` and `opentide-lsp` binaries (Linux and macOS: no standalone Windows executable ships) with their size budgets, the npm addon (napi-rs) and the `cp310-abi3` wheel (maturin, manylinux_2_28 on Linux); Linux x64 also writes the highlights zip with the release `opentide-lsp` it built |
 | `wasm` | Every WebAssembly build; the WASI command line run under wasmtime |
 | `sources` | The sdist (`twine check`), THIRD-PARTY-LICENSES (cargo-about), the SBOMs (cargo-cyclonedx), the registry placeholders' publishes rehearsed with `--dry-run` (no token), then every crate built from its package and the licence scan |
 | `assemble` | The GitHub Release's assets (the installer, SHA256SUMS, the asset set, the licence scan), the npm tarballs, the PyPI dist's shape |

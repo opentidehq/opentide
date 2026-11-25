@@ -7,16 +7,16 @@
 #     tag; its own jobs then attest, tag and publish exactly these files
 #     (`dry_run` stops after this workflow).
 #
-#   plan ─┬─ native (6 platforms) ┐
+#   plan ─┬─ native (12 legs) ────┐
 #         ├─ wasm ────────────────┼─ assemble ─┬─ smoke (6 platforms)
 #         └─ sources ─────────────┘            └─ av-scan, av-defender
 #               └─ smoke-sources (sdist, cargo install)
 #
 #   - `plan`: the commit (a 40-hex SHA), the versions and the tag;
-#   - `native`: one job per platform builds everything that platform ships:
-#     the `opentide` and `opentide-lsp` binaries (Linux and macOS; no
-#     standalone Windows executable ships), the npm addon and the cp310-abi3
-#     wheel, one toolchain and one target directory;
+#   - `native`: two jobs per platform build everything it ships: the
+#     `opentide` and `opentide-lsp` binaries (Linux and macOS; no standalone
+#     Windows executable ships), the npm addon and the cp310-abi3 wheel,
+#     grouped where they share their compilation;
 #   - `wasm`: every WebAssembly build, the WASI command line run under wasmtime;
 #   - `sources`: the sdist, every publishable crate built from its package,
 #     the licence scan, THIRD-PARTY-LICENSES (cargo-about), the SBOMs
@@ -148,34 +148,48 @@ jobs:
             echo "semver=${version#v}"
           } | tee -a "$GITHUB_OUTPUT" >> "$GITHUB_STEP_SUMMARY"
 
-  # Everything one platform ships, built by one job with one toolchain (the
-  # release rust-toolchain.toml pins, installed by name: scripts/build/install-rust.sh)
-  # and one target directory: the binaries, then the npm addon (the facade
-  # with `cli`, the binaries' own crate graph), then the wheel (maturin; on
-  # Linux in the manylinux_2_28 image, so last: the container owns what it
-  # writes). Each reports the version its users see: the binaries the tag's
+  # Everything a platform ships, in at most two jobs per platform with one
+  # toolchain (the release rust-toolchain.toml pins, installed by name:
+  # scripts/build/install-rust.sh) and one target directory each. Grouped
+  # where the builds share their compilation and the job stays off the
+  # critical path, split where the numbers say so (publish.yml dry run
+  # 45689884299, one job per platform: macos-arm64 39 min, windows-x64 32,
+  # against about 22 for the longest leg below):
+  #   - the binaries (`opentide-lsp`, then `opentide`, which reuses its crates:
+  #     11 min after it on macOS, 17 alone) and, on Linux, the npm addon (the
+  #     facade with `cli`, the binaries' own crate graph);
+  #   - the wheel (maturin), and on macOS the npm addon before it; on Linux in
+  #     the manylinux_2_28 image, which shares nothing with the host's builds;
+  #   - on Windows (no binary ships) the addon and the wheel apart: together
+  #     32 min, the run's longest.
+  # Each artifact reports the version its users see: the binaries the tag's
   # (OPENTIDE_BUILD_VERSION), the addon npm's, the wheel the one
   # report_version.py writes into .cargo/config.toml. x86_64 macOS is
-  # cross-compiled on Apple silicon (GitHub retired the Intel builders);
-  # every other platform builds on its own architecture. No musllinux, no
-  # Windows binary (docs/internal/publishing.md).
+  # cross-compiled on Apple silicon; every other platform builds on its own
+  # architecture. No musllinux, no Windows binary (docs/internal/publishing.md).
   native:
-    name: Build (${{ matrix.name }})
+    name: Build (${{ matrix.platform }}, ${{ matrix.part }})
     needs: plan
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 150
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
         # scripts/engine/release.py lists the same targets (TARGETS,
         # BINARY_TARGETS) and npm platforms (scripts/engine/test_release.py).
         include:
-          - { name: linux-x64, os: ubuntu-latest, target: x86_64-unknown-linux-gnu, wheel: manylinux_2_28_x86_64, npm: linux-x64-gnu, binaries: true }
-          - { name: linux-arm64, os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu, wheel: manylinux_2_28_aarch64, npm: linux-arm64-gnu, binaries: true }
-          - { name: macos-arm64, os: macos-latest, target: aarch64-apple-darwin, wheel: macosx_11_0_arm64, npm: darwin-arm64, binaries: true }
-          - { name: macos-x64, os: macos-latest, target: x86_64-apple-darwin, wheel: macosx_10_12_x86_64, npm: darwin-x64, binaries: true }
-          - { name: windows-x64, os: windows-latest, target: x86_64-pc-windows-msvc, wheel: win_amd64, npm: win32-x64-msvc, binaries: false }
-          - { name: windows-arm64, os: windows-11-arm, target: aarch64-pc-windows-msvc, wheel: win_arm64, npm: win32-arm64-msvc, binaries: false }
+          - { platform: linux-x64, part: binaries + npm, os: ubuntu-latest, target: x86_64-unknown-linux-gnu, binaries: true, addon: true, wheel: false, npm: linux-x64-gnu, tag: manylinux_2_28_x86_64 }
+          - { platform: linux-x64, part: wheel, os: ubuntu-latest, target: x86_64-unknown-linux-gnu, binaries: false, addon: false, wheel: true, npm: linux-x64-gnu, tag: manylinux_2_28_x86_64 }
+          - { platform: linux-arm64, part: binaries + npm, os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu, binaries: true, addon: true, wheel: false, npm: linux-arm64-gnu, tag: manylinux_2_28_aarch64 }
+          - { platform: linux-arm64, part: wheel, os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu, binaries: false, addon: false, wheel: true, npm: linux-arm64-gnu, tag: manylinux_2_28_aarch64 }
+          - { platform: macos-arm64, part: binaries, os: macos-latest, target: aarch64-apple-darwin, binaries: true, addon: false, wheel: false, npm: darwin-arm64, tag: macosx_11_0_arm64 }
+          - { platform: macos-arm64, part: npm + wheel, os: macos-latest, target: aarch64-apple-darwin, binaries: false, addon: true, wheel: true, npm: darwin-arm64, tag: macosx_11_0_arm64 }
+          - { platform: macos-x64, part: binaries, os: macos-latest, target: x86_64-apple-darwin, binaries: true, addon: false, wheel: false, npm: darwin-x64, tag: macosx_10_12_x86_64 }
+          - { platform: macos-x64, part: npm + wheel, os: macos-latest, target: x86_64-apple-darwin, binaries: false, addon: true, wheel: true, npm: darwin-x64, tag: macosx_10_12_x86_64 }
+          - { platform: windows-x64, part: npm, os: windows-latest, target: x86_64-pc-windows-msvc, binaries: false, addon: true, wheel: false, npm: win32-x64-msvc, tag: win_amd64 }
+          - { platform: windows-x64, part: wheel, os: windows-latest, target: x86_64-pc-windows-msvc, binaries: false, addon: false, wheel: true, npm: win32-x64-msvc, tag: win_amd64 }
+          - { platform: windows-arm64, part: npm, os: windows-11-arm, target: aarch64-pc-windows-msvc, binaries: false, addon: true, wheel: false, npm: win32-arm64-msvc, tag: win_arm64 }
+          - { platform: windows-arm64, part: wheel, os: windows-11-arm, target: aarch64-pc-windows-msvc, binaries: false, addon: false, wheel: true, npm: win32-arm64-msvc, tag: win_arm64 }
     env:
       TARGET: ${{ matrix.target }}
       VERSION: ${{ needs.plan.outputs.version }}
@@ -216,9 +230,11 @@ jobs:
       # from bindings/node's manifests (after `npm ci`, which reads the lock as
       # committed). This checkout only.
       - name: The packages at the build's versions
+        env:
+          ADDON: ${{ matrix.addon }}
         run: |
           set -euo pipefail
-          (cd bindings/node && npm ci)
+          if [[ "${ADDON}" == true ]]; then (cd bindings/node && npm ci); fi
           python scripts/engine/release.py pypi-version "${PYPI_VERSION}"
           python scripts/build/report_version.py "${PYPI_VERSION}"
           python scripts/engine/release.py npm-version "${NPM_VERSION}"
@@ -253,7 +269,7 @@ jobs:
       # highlights-<v>.zip, written by the release opentide-lsp just built:
       # its path to highlights/generated is this checkout's, compiled in.
       - name: The highlights zip
-        if: matrix.name == 'linux-x64'
+        if: matrix.platform == 'linux-x64' && matrix.binaries
         run: |
           set -euo pipefail
           "target/${TARGET}/release/opentide-lsp" generate-highlights
@@ -262,10 +278,12 @@ jobs:
           zip -j "highlights-dist/highlights-${VERSION}.zip" LICENSE NOTICE
 
       - name: Build the npm addon
+        if: matrix.addon
         working-directory: bindings/node
         run: OPENTIDE_BUILD_VERSION="${NPM_VERSION}" node build.mjs --release --target "${TARGET}"
 
       - name: Build the wheel
+        if: matrix.wheel
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
         with:
           maturin-version: v1.16.0
@@ -274,8 +292,9 @@ jobs:
           manylinux: "2_28"
           args: --locked --out wheelhouse
       - name: The wheel's name
+        if: matrix.wheel
         env:
-          TAG: ${{ matrix.wheel }}
+          TAG: ${{ matrix.tag }}
         run: |
           set -euo pipefail
           ls -l wheelhouse
@@ -286,13 +305,15 @@ jobs:
             exit 1
           fi
 
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      - if: matrix.wheel
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: wheels-${{ matrix.name }}
+          name: wheels-${{ matrix.platform }}
           path: wheelhouse/*.whl
           if-no-files-found: error
           retention-days: ${{ inputs.retention-days }}
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      - if: matrix.addon
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: npm-native-${{ matrix.npm }}
           path: |
@@ -317,7 +338,7 @@ jobs:
           path: out/opentide-v*
           if-no-files-found: error
           retention-days: ${{ inputs.retention-days }}
-      - if: matrix.name == 'linux-x64'
+      - if: matrix.platform == 'linux-x64' && matrix.binaries
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: engine-asset-highlights

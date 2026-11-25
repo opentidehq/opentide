@@ -904,15 +904,24 @@ class TagTest(unittest.TestCase):
         self.assertIn("missing asset: NOTICE", missing.stderr)
 
     def test_the_native_matrix_builds_every_target(self) -> None:
-        # One build job per platform: its target, its npm platform, and whether
-        # it ships the binaries (not on Windows).
+        # The platform builds, at most two jobs per platform: between them each
+        # target builds its wheel and its npm addon once, and the binaries once
+        # (not on Windows).
         native = workflow_jobs(PIPELINE)["native"]
-        cells = re.findall(r"target: (\S+), wheel: \S+, npm: (\S+), binaries: (\w+) \}", native)
-        self.assertEqual(sorted(t for t, _, _ in cells), sorted(release.TARGETS))
-        built = [t for t, _, binaries in cells if binaries == "true"]
-        self.assertEqual(built, release.BINARY_TARGETS)
-        self.assertFalse([t for t in built if "windows" in t])
-        platforms = [p for _, p, _ in cells]
+        cells = re.findall(
+            r"target: (\S+), binaries: (\w+), addon: (\w+), wheel: (\w+), npm: (\S+), tag:", native
+        )
+
+        def built(flag: int) -> list[str]:
+            return [cell[0] for cell in cells if cell[flag] == "true"]
+
+        self.assertEqual(sorted(built(3)), sorted(release.TARGETS))
+        self.assertEqual(sorted(built(2)), sorted(release.TARGETS))
+        self.assertEqual(built(1), release.BINARY_TARGETS)
+        self.assertFalse([t for t in built(1) if "windows" in t])
+        self.assertEqual(len({t for t, *_ in cells}), len(release.TARGETS))
+        self.assertLessEqual(max(sum(1 for c in cells if c[0] == t) for t, *_ in cells), 2)
+        platforms = [cell[4] for cell in cells if cell[2] == "true"]
         self.assertEqual(sorted(platforms), [d.name for d in release.npm_native_dirs()])
 
 
