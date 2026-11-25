@@ -108,7 +108,7 @@ The `Cargo.lock` diff is only the workspace crates' `version` lines; anything el
 | crates.io | Every crate at `1.0.0-rc.N`, in dependency order (the workflow runs `release.py bump 1.0.0-rc.N` in its own checkout; the branch keeps `1.0.0`). **Yankable, never deletable**; the first candidate **claims the new crate names** |
 | npm | All eleven packages at `1.0.0-rc.N` under the dist-tag **`next`** (it only moves forward: the job refuses a candidate older than the current `next`, and the guard refuses resuming a candidate before `v1.0.0-rc.3`), never `latest` (`npm publish --provenance --tag next`, OIDC): `npm install @opentide/opentide@next` or the exact version. **Every package must already exist on npm with `publish.yml` as its trusted publisher** (publishing.md, step 10.5; the guard checks the first, not the second). Before `1.0.0-rc.3` a candidate published nothing to npm. Test the tarballs without publishing from ci.yml's `release` artifacts (`npm-packages`) |
 
-Its notes are `.github/release-notes/v1.0.0-rc.N.md` when that file exists (a short summary: what changed, what breaks, how to upgrade; the granular entries stay in `CHANGELOG.md`), else they quote `## [Unreleased]`. Every job must be green, `Smoke the registries` included. A candidate needs no notes PR; the guard (`release.py check-candidate`) refuses one whose version is not above the newest dated `CHANGELOG.md` heading. **GitHub dispatches `publish.yml` only once a file of that name is on the default branch, `development`:** to run a candidate from `integration/unified-core` before it merges, a `publish.yml` stub must be on `development` first (`docs/internal/publishing.md`, "Release candidates"). The stub has no `repository_dispatch` trigger either: resume a candidate with a Run workflow **on `integration/unified-core`** (Step 2).
+Its notes are `.github/release-notes/v1.0.0-rc.N.md` when that file exists (a short summary: what changed, what breaks, how to upgrade; the granular entries stay in `CHANGELOG.md`), else they quote `## [Unreleased]`. Every job must be green, `Smoke the registries` included. A candidate needs no notes PR; the guard (`release.py check-candidate`) refuses one whose version is not above the newest dated `CHANGELOG.md` heading. **GitHub dispatches `publish.yml` only once a file of that name is on the default branch, `development`:** before `integration/unified-core` merged, a stub stood there so candidates could run from the integration branch (`docs/internal/publishing.md`, "Release candidates"); the integration merge replaced it with the release train, so a candidate is resumed on `development` too (Step 2).
 
 **Dry run.** `dry_run: true` builds and smoke-tests every artifact and publishes nothing (no tag, no release, no attestation): any branch, any time.
 
@@ -274,11 +274,10 @@ gh api "repos/opentidehq/opentide/actions/workflows/publish.yml/runs?per_page=1"
 
 | When | Resume with |
 |------|-------------|
-| **While `integration/unified-core` has not merged** (`development`'s `publish.yml` is a stub with no `repository_dispatch`) | Run **on `integration/unified-core`**: `gh workflow run publish.yml --repo opentidehq/opentide --ref integration/unified-core -f checkout_ref=v1.0.0-rc.N`; cloud: `actions_run_trigger` with `method: run_workflow`, `workflow_id: publish.yml`, `ref: integration/unified-core`, `inputs: {checkout_ref: "v1.0.0-rc.N"}`. The `repository_dispatch` below does nothing here: GitHub runs it from the stub on `development` |
-| **After the merge** | Run on `development` with `checkout_ref: v0.x.y` (cloud: `actions_run_trigger`, `ref: development`, `inputs: {checkout_ref: v0.x.y}`); an App token without `actions: write`: the `repository_dispatch` below |
+| Any release or candidate (since `integration/unified-core` merged into `development`) | Run on `development` with `checkout_ref: v0.x.y` (cloud: `actions_run_trigger`, `ref: development`, `inputs: {checkout_ref: v0.x.y}`); an App token without `actions: write`: the `repository_dispatch` below |
 
 ```bash
-# After the merge only: development's publish.yml has the repository_dispatch trigger.
+# development's publish.yml has the repository_dispatch trigger.
 gh api repos/opentidehq/opentide/dispatches \
   -f event_type=publish \
   -f client_payload[checkout_ref]=v0.x.y
@@ -370,7 +369,7 @@ Link that pull request from the tracking issue in Step 4.
 | Run workflow does not list Publish, or the API cannot find `publish.yml` | `publish.yml` is not on `development`, the default branch, yet: land the stub (`docs/internal/publishing.md`, "Release candidates") |
 | A smoke test failed | Nothing was tagged or published. Fix on `development`, run again |
 | `AV gate` failed (markers, sizes, ClamAV, YARA or Defender) | Nothing was tagged or published. The job's log names the engine, the signature or rule and the file ([Step 1a](#step-1a--the-antivirus-gate)); fix the build, or report a false positive to the vendor and add a reviewed YARA allow-list entry. Never upload the artifact to a public scanner |
-| A registry job failed after the **GitHub Release** job created the tag | Run workflow with `checkout_ref=v0.x.y`, on `integration/unified-core` while `development`'s `publish.yml` is the stub, else on `development` (cloud: `actions_run_trigger` with `ref` and `inputs: {checkout_ref: v0.x.y}`). Do not delete the tag or the Release |
+| A registry job failed after the **GitHub Release** job created the tag | Run workflow on `development` with `checkout_ref=v0.x.y` (cloud: `actions_run_trigger` with `ref: development` and `inputs: {checkout_ref: v0.x.y}`). Do not delete the tag or the Release |
 | `Verify the published assets` failed | It is the published assets that failed (sums, set, attestation): fix the cause, then resume with `checkout_ref`, or cut a patch release |
 | 403 `invalid-publisher` on PyPI | OIDC fields: owner `opentidehq` (lowercase), workflow `publish.yml`, environment `pypi` (a candidate's too). Re-run; do not retag |
 | crates.io: `trusted publishing tokens do not support creating new crates` with no `CARGO_REGISTRY_TOKEN` | A crate's first version needs the stored token (docs/internal/publishing.md, step 10). Add the secret, resume, then **delete** it again. The trust step runs only when the trusted login failed or a crate was created with the token; a failure there is a warning |
@@ -383,7 +382,7 @@ Link that pull request from the tracking issue in Step 4.
 | npm: `npm's next is already …, newer than …` | The candidate would move `next` backwards (an older candidate resumed, or an older branch). Nothing was published to npm; cut the next candidate instead |
 | Guard: `… is older than v1.0.0-rc.3, the first candidate that publishes to npm` | A `checkout_ref` resume of `v1.0.0-rc.1` or `rc.2` would publish an old version under `next`. Cut the next candidate |
 | npm: `::warning::next trails latest …` (after a release) | Trusted publishing cannot move a dist-tag. As a maintainer signed in to npm run `npm dist-tag add <pkg>@X.Y.Z next` for each of the eleven packages (`docs/internal/publishing.md`, "After the final release") |
-| `502` / 5xx on PyPI upload, some files already there (0.4.0) | Resume with `checkout_ref=v0.x.y` on the ref that has the full `publish.yml` (`integration/unified-core` until it merges); `skip-existing` uploads only the missing files. The step log prints the command for the ref the run was on |
+| `502` / 5xx on PyPI upload, some files already there (0.4.0) | Resume with `checkout_ref=v0.x.y` on `development`; `skip-existing` uploads only the missing files. The step log prints the command |
 | Verify PyPI lists every built file fails | Wait out the CDN delay (Step 3), then resume |
 | New tag not shown as Latest | `gh release edit v0.x.y --repo opentidehq/opentide --latest` |
 | Core Metadata 2.5 | Already pinned to `2.4` in pyproject sdist/wheel. `uvx twine check dist/*` before tag |

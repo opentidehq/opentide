@@ -49,13 +49,11 @@
 #     publishing failed partway. It builds from that tag, uploads nothing to
 #     its GitHub Release (consumers pinned those digests), checks the
 #     published assets, and publishes only what each registry lacks.
+#     Run it on development (`gh workflow run publish.yml --ref development
+#     -f checkout_ref=vX.Y.Z`, or the API's `actions_run_trigger`).
 #     repository_dispatch (event `publish`, client_payload.checkout_ref) is
-#     the same, for GitHub App tokens without actions: write, but GitHub runs
-#     it from the default branch's copy of this file: until
-#     integration/unified-core merges, development holds a stub without that
-#     trigger, so resume with Run workflow on integration/unified-core
-#     (`gh workflow run publish.yml --ref integration/unified-core -f
-#     checkout_ref=vX.Y.Z-rc.N`, or the API's `actions_run_trigger`).
+#     the same, for GitHub App tokens without actions: write; GitHub runs it
+#     from development's copy of this file.
 #
 # Jobs: the guard; `build` (release-build.yml: every crate built from its
 # package with the licence scan, the Release's assets, the wheels and npm
@@ -778,17 +776,16 @@ jobs:
                   sys.exit(0)
               if time.monotonic() >= deadline:
                   print(f"::error::The index is missing {missing} for {project} {version} ({status}).")
-                  # The ref this run is on: the one whose publish.yml resumes it.
-                  # While integration/unified-core has not merged, development's
-                  # publish.yml is a stub that has no repository_dispatch, so
-                  # only a Run workflow on the integration branch resumes.
-                  ref = os.environ["GITHUB_REF_NAME"]
+                  # A resume runs development's publish.yml: Run workflow, or the
+                  # repository_dispatch trigger for a token without actions: write.
                   print(
                       "Resume without retagging; skip-existing uploads only the missing files:\n"
-                      f"  gh workflow run publish.yml --repo opentidehq/opentide --ref {ref} \\\n"
+                      "  gh workflow run publish.yml --repo opentidehq/opentide --ref development \\\n"
                       f"    -f checkout_ref=v{version}\n"
-                      f"or Actions > Publish > Run workflow on {ref} with checkout_ref=v{version}"
-                      " (a candidate's tag is vX.Y.Z-rc.N)"
+                      f"or Actions > Publish > Run workflow on development with checkout_ref=v{version}"
+                      " (a candidate's tag is vX.Y.Z-rc.N),\n"
+                      "or gh api repos/opentidehq/opentide/dispatches -f event_type=publish \\\n"
+                      f"    -f client_payload[checkout_ref]=v{version}"
                   )
                   sys.exit(1)
               print(f"Waiting for {missing}; {status}")

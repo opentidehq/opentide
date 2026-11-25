@@ -1296,24 +1296,22 @@ class ReleaseWorkflowTest(unittest.TestCase):
         # The log keeps its order.
         self.assertIn('PYTHONUNBUFFERED: "1"', publish)
 
-    def test_every_resume_message_names_a_ref_that_has_the_trigger(self) -> None:
-        """While development's publish.yml is a stub with no repository_dispatch,
-        a resume is a Run workflow on the ref the run is on (the integration
-        branch), never a `dispatches` call or a run on development."""
+    def test_every_resume_message_names_development(self) -> None:
+        """development holds this publish.yml (the integration merge replaced the stub),
+        so a resume is a Run workflow on development or its repository_dispatch."""
         text = WORKFLOW.read_text(encoding="utf-8")
         pypi = workflow_jobs()["pypi"]
-        self.assertNotIn("repos/opentidehq/opentide/dispatches", pypi)
-        self.assertNotIn("event_type=publish", pypi)
-        self.assertIn("gh workflow run publish.yml --repo opentidehq/opentide --ref {ref}", pypi)
-        self.assertIn('ref = os.environ["GITHUB_REF_NAME"]', pypi)
+        resume = "gh workflow run publish.yml --repo opentidehq/opentide --ref development"
+        self.assertIn(resume, pypi)
+        self.assertIn("Run workflow on development with checkout_ref=v{version}", pypi)
+        self.assertIn("event_type=publish", pypi)
         self.assertIn("-f checkout_ref=v{version}", pypi)
+        self.assertNotIn("GITHUB_REF_NAME", pypi)
         header = workflow_header()
-        self.assertIn("--ref integration/unified-core", header)
-        self.assertIn("a stub without that\n#     trigger", header)
-        # No printed message tells the reader to resume on development.
-        for line in text.splitlines():
-            if "::error::" in line and "checkout_ref" in line:
-                self.assertNotIn("from development", line.split("checkout_ref")[1], line)
+        self.assertIn("--ref development", header)
+        self.assertNotIn("--ref integration/unified-core", header)
+        self.assertNotIn("stub", header)
+        self.assertRegex(text, r"(?m)^  repository_dispatch:")
 
     def test_the_release_ships_the_set_the_asset_build_checked(self) -> None:
         assets = workflow_jobs(BUILD)["assets"]
