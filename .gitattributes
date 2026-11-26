@@ -14,6 +14,11 @@ tests/fixtures/google_secops/** -text
 # the rule fixtures by search and replace on `\n`: the bytes as committed, LF,
 # on a Windows checkout too.
 tests/fixtures/graylog/** -text
+# Microsoft Defender: the compiler's tests (crates/opentide-compile/tests/microsoft_defender.rs)
+# compare the requests with the `.api.json` goldens byte for byte and edit the
+# rule fixtures by search and replace on `\n`: the bytes as committed, LF, on a
+# Windows checkout too.
+tests/fixtures/microsoft_defender/** -text
 # The minijinja templates compiled in with include_str! (setup ci's pipelines,
 # generate docs' pages) and setup ci's oracle pipelines: files a user commits,
 # compared byte for byte, so a Windows checkout holds the LF bytes too.
