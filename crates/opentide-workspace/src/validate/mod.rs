@@ -2033,6 +2033,81 @@ mod tests {
         }
     }
 
+    /// The platform codes no `schema` finding carries under its own name,
+    /// each with where it comes from ([`every_platform_code_is_placed`]).
+    const ELSEWHERE: &[(&str, &str)] = &[
+        // The query engines' codes: the `queries` check's (`source: engine`).
+        ("elastic_dataset_not_declared", "engine"),
+        // A Defender block against its query's output (#1885): the KQL
+        // engine's errors and lint's advisories.
+        ("microsoft_defender_column_not_in_output", "engine"),
+        ("microsoft_defender_required_columns", "engine"),
+        ("microsoft_defender_column_type", "engine"),
+        ("microsoft_defender_unprojected_output", "engine"),
+        ("graylog_leading_wildcard", "engine"),
+        ("graylog_regex_unsupported", "engine"),
+        ("graylog_regex_operator", "engine"),
+        ("graylog_regex_quote", "engine"),
+        ("graylog_open_range", "engine"),
+        ("graylog_double_backslash", "engine"),
+        ("graylog_analyzed_field", "engine"),
+        ("bitdefender_yara_ascii", "engine"),
+        ("bitdefender_yara_size", "engine"),
+        ("exabeam_parse_error", "engine"),
+        ("exabeam_implicit_operator", "engine"),
+        ("exabeam_not_equal", "engine"),
+        ("exabeam_bare_wildcard", "engine"),
+        ("exabeam_leading_slash", "engine"),
+        ("exabeam_free_text_special", "engine"),
+        ("exabeam_unknown_function", "engine"),
+        ("exabeam_function_arity", "engine"),
+        ("exabeam_regex", "engine"),
+        ("exabeam_range", "engine"),
+        ("exabeam_ipv6_range", "engine"),
+        ("exabeam_time_exact", "engine"),
+        ("exabeam_context_table_or", "engine"),
+        ("exabeam_context_table_limit", "engine"),
+        ("exabeam_advanced_in_rule", "engine"),
+        ("exabeam_keyword_case", "engine"),
+        ("exabeam_clause_order", "engine"),
+        ("exabeam_pipe_limit", "engine"),
+        ("exabeam_rgx_extract_limit", "engine"),
+        ("exabeam_reserved_alias", "engine"),
+        ("exabeam_group_by_select_star", "engine"),
+        ("exabeam_group_by_column", "engine"),
+        ("exabeam_foreach_clause", "engine"),
+        ("exabeam_foreach_reference", "engine"),
+        ("exabeam_foreach_position", "engine"),
+        ("exabeam_mixed_boolean", "engine"),
+        ("exabeam_implicit_and", "engine"),
+        ("exabeam_single_group", "engine"),
+        ("exabeam_pipe_misuse", "engine"),
+        ("exabeam_wildcard_in_phrase", "engine"),
+        ("exabeam_unquoted_value", "engine"),
+        ("exabeam_legacy_regex", "engine"),
+        ("exabeam_unknown_field", "engine"),
+        ("exabeam_string_field_number", "engine"),
+        ("exabeam_unknown_value", "engine"),
+        // Named checks that report their codes inside one
+        // `schema_validation` finding (`<Model> validation failed with
+        // code(s): ...`), which the `schema` check fails on.
+        ("sysdig_rule_shape", "schema_validation"),
+        ("sysdig_tuning_keys", "schema_validation"),
+        ("sysdig_priority", "schema_validation"),
+        ("sysdig_source", "schema_validation"),
+        ("sysdig_exception_shape", "schema_validation"),
+        ("sysdig_definition_name", "schema_validation"),
+        ("sysdig_definition_duplicate", "schema_validation"),
+        ("sysdig_definition_order", "schema_validation"),
+        ("sysdig_list_in_value", "schema_validation"),
+        ("sysdig_list_self_reference", "schema_validation"),
+        ("harfanglab_rule_kind", "schema_validation"),
+        ("harfanglab_yara_form", "schema_validation"),
+        ("harfanglab_yara_section_header", "schema_validation"),
+        ("harfanglab_yara_import", "schema_validation"),
+        ("harfanglab_yara_rule_name", "schema_validation"),
+    ];
+
     /// Every platform's code in `opentide_core::codes::ALL` (named
     /// `<platform>_...` after a platform of the registry) has its place: a
     /// finding the `schema` check fails on (a model's constraint code, or
@@ -2043,73 +2118,6 @@ mod tests {
     #[test]
     fn every_platform_code_is_placed() {
         use opentide_schema::objects::platform as models;
-        // Each code no `schema` finding carries under its own name.
-        const ELSEWHERE: &[(&str, &str)] = &[
-            // The query engines' codes: the `queries` check's (`source: engine`).
-            ("elastic_dataset_not_declared", "engine"),
-            ("graylog_leading_wildcard", "engine"),
-            ("graylog_regex_unsupported", "engine"),
-            ("graylog_regex_operator", "engine"),
-            ("graylog_regex_quote", "engine"),
-            ("graylog_open_range", "engine"),
-            ("graylog_double_backslash", "engine"),
-            ("graylog_analyzed_field", "engine"),
-            ("bitdefender_yara_ascii", "engine"),
-            ("bitdefender_yara_size", "engine"),
-            ("exabeam_parse_error", "engine"),
-            ("exabeam_implicit_operator", "engine"),
-            ("exabeam_not_equal", "engine"),
-            ("exabeam_bare_wildcard", "engine"),
-            ("exabeam_leading_slash", "engine"),
-            ("exabeam_free_text_special", "engine"),
-            ("exabeam_unknown_function", "engine"),
-            ("exabeam_function_arity", "engine"),
-            ("exabeam_regex", "engine"),
-            ("exabeam_range", "engine"),
-            ("exabeam_ipv6_range", "engine"),
-            ("exabeam_time_exact", "engine"),
-            ("exabeam_context_table_or", "engine"),
-            ("exabeam_context_table_limit", "engine"),
-            ("exabeam_advanced_in_rule", "engine"),
-            ("exabeam_keyword_case", "engine"),
-            ("exabeam_clause_order", "engine"),
-            ("exabeam_pipe_limit", "engine"),
-            ("exabeam_rgx_extract_limit", "engine"),
-            ("exabeam_reserved_alias", "engine"),
-            ("exabeam_group_by_select_star", "engine"),
-            ("exabeam_group_by_column", "engine"),
-            ("exabeam_foreach_clause", "engine"),
-            ("exabeam_foreach_reference", "engine"),
-            ("exabeam_foreach_position", "engine"),
-            ("exabeam_mixed_boolean", "engine"),
-            ("exabeam_implicit_and", "engine"),
-            ("exabeam_single_group", "engine"),
-            ("exabeam_pipe_misuse", "engine"),
-            ("exabeam_wildcard_in_phrase", "engine"),
-            ("exabeam_unquoted_value", "engine"),
-            ("exabeam_legacy_regex", "engine"),
-            ("exabeam_unknown_field", "engine"),
-            ("exabeam_string_field_number", "engine"),
-            ("exabeam_unknown_value", "engine"),
-            // Named checks that report their codes inside one
-            // `schema_validation` finding (`<Model> validation failed with
-            // code(s): ...`), which the `schema` check fails on.
-            ("sysdig_rule_shape", "schema_validation"),
-            ("sysdig_tuning_keys", "schema_validation"),
-            ("sysdig_priority", "schema_validation"),
-            ("sysdig_source", "schema_validation"),
-            ("sysdig_exception_shape", "schema_validation"),
-            ("sysdig_definition_name", "schema_validation"),
-            ("sysdig_definition_duplicate", "schema_validation"),
-            ("sysdig_definition_order", "schema_validation"),
-            ("sysdig_list_in_value", "schema_validation"),
-            ("sysdig_list_self_reference", "schema_validation"),
-            ("harfanglab_rule_kind", "schema_validation"),
-            ("harfanglab_yara_form", "schema_validation"),
-            ("harfanglab_yara_section_header", "schema_validation"),
-            ("harfanglab_yara_import", "schema_validation"),
-            ("harfanglab_yara_rule_name", "schema_validation"),
-        ];
         let prefixes: Vec<String> = opentide_schema::platforms::PLATFORMS
             .iter()
             .map(|platform| format!("{}_", platform.id))
