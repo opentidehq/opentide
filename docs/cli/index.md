@@ -10,7 +10,7 @@ The `opentide` command is opentide's Rust core, compiled into the package and ru
 
 ```bash
 pip install opentide              # the latest release
-pip install 'opentide==1.0.0'     # or pin it
+pip install 'opentide==1.1.0'     # or pin it
 ```
 
 See [Installation](../usage/installation.md) for uv, pipx, crates.io, npm and the binaries.
