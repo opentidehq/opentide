@@ -406,7 +406,7 @@ The engine is [opentidehq/language-server](https://github.com/opentidehq/languag
 | Platform | Language and profile |
 |----------|----------------------|
 | `sentinel` | KQL, Sentinel tables |
-| `microsoft_defender` | KQL, Defender tables |
+| `microsoft_defender` | KQL, Defender tables; the block's entities, actions, custom details and alert `{{Column}}` placeholders against the columns the query returns (`microsoft_defender_column_not_in_output`, `microsoft_defender_required_columns`; `microsoft_defender_column_type` is a lint warning and `microsoft_defender_unprojected_output` a lint note), when the engine can infer them |
 | `splunk` | SPL |
 | `elastic` | ES\|QL, EQL, Kibana KQL or Lucene, by the block's `type` and `language`; ES\|QL against the lowest `setup.version` of the block's tenants |
 | `carbon_black_cloud` | Lucene, Carbon Black dialect |

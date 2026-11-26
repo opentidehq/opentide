@@ -11,7 +11,7 @@ exit: 0
   "diagnostics": [],
   "duration_ms": 0,
   "engine": {
-    "engine": "1.0.0"
+    "engine": "1.1.0"
   },
   "exit_code": 0,
   "failure": null,

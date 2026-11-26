@@ -41,6 +41,20 @@ jobs:
       # insta compares snapshots and never writes one in CI (crates/AGENTS.md).
       INSTA_UPDATE: "no"
     steps:
+      # The instrumented build is three dependency trees in one target
+      # (nextest's, maturin's and the Node addon's, target/<triple>/debug),
+      # kept until the report maps the profiles to them, plus the profiles:
+      # the runner's free disk ran out while the Node addon built (#1896).
+      # The image's toolchains this job never uses (.NET, Android, GHC,
+      # CodeQL's bundle) go first; Python and Node come from the setup
+      # actions below, after this step.
+      - name: Free disk space
+        run: |
+          df -h /
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+            /usr/local/.ghcup /opt/hostedtoolcache/CodeQL
+          df -h /
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false

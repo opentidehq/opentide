@@ -1389,6 +1389,14 @@ exit: 0
       "meaning": "A Microsoft Defender column name is blank or not a string."
     },
     {
+      "code": "microsoft_defender_column_not_in_output",
+      "meaning": "A column a Microsoft Defender block names is not a column of its query's output."
+    },
+    {
+      "code": "microsoft_defender_column_type",
+      "meaning": "A Microsoft Defender entity or action is mapped from a column that holds no identifier, name or address."
+    },
+    {
       "code": "microsoft_defender_custom_details",
       "meaning": "A Microsoft Defender block's `alert.custom_details` is not a mapping of non-blank names to result columns."
     },
@@ -1433,6 +1441,10 @@ exit: 0
       "meaning": "A Microsoft Defender block maps no entity."
     },
     {
+      "code": "microsoft_defender_required_columns",
+      "meaning": "A Microsoft Defender query's output lacks a column a custom detection needs."
+    },
+    {
       "code": "microsoft_defender_rule_absent",
       "meaning": "A Microsoft Defender rule to disable is not on the tenant, so nothing was disabled or created."
     },
@@ -1451,6 +1463,10 @@ exit: 0
     {
       "code": "microsoft_defender_severity",
       "meaning": "A Microsoft Defender block's `alert.severity` is not one of opentide's five severities."
+    },
+    {
+      "code": "microsoft_defender_unprojected_output",
+      "meaning": "A Microsoft Defender query returns columns nothing in its block uses."
     },
     {
       "code": "missing_author",
@@ -2053,13 +2069,13 @@ exit: 0
   "duration_ms": 0,
   "exit_code": 0,
   "failure": null,
-  "message": "510 diagnostic codes",
+  "message": "514 diagnostic codes",
   "next_actions": [],
   "ok": true,
   "schema_version": 1,
   "status": "completed",
   "summary": {
-    "codes": 510
+    "codes": 514
   }
 }
 

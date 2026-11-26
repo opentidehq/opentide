@@ -300,7 +300,8 @@ Where each of language-server's workflow jobs went (or why it was dropped):
 
 - [`coverage.yml`](workflows/coverage.yml), in the nightly (nightly.yml calls it) and on demand: job **Rust coverage gates**. One cargo-llvm-cov build measured by the workspace's Rust tests and by the whole Python
   suite, which drives `opentide._native`; `cargo xtask coverage gate` checks each crate against
-  `xtask/coverage.toml`. Read-only.
+  `xtask/coverage.toml`. Read-only. Its first step frees the runner's disk (the image's .NET, Android,
+  GHC and CodeQL toolchains): the instrumented target holds three dependency trees (#1896).
 - The parity dashboard (`parity.yml`) was retired with the Python implementation (UC-6.2, #841): every command runs on Rust.
 
 ## Releases
