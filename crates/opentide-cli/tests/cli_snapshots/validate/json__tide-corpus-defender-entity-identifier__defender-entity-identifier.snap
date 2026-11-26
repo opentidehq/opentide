@@ -22,7 +22,7 @@ exit: 1
     },
     "schema": {
       "check": "schema",
-      "status": "passed"
+      "status": "failed"
     },
     "uuid-format": {
       "check": "uuid-format",

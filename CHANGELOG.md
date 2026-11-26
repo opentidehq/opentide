@@ -24,6 +24,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Eac
   - HarfangLab: `harfanglab_request_invalid`
   - SentinelOne: a refusal under its own code (`sentinel_one_rule_invalid: could not create the rule on tenant …`, `sentinel_one_rule_not_found`, `sentinel_one_unauthorized`, `sentinel_one_request_failed`), and the run's `error` that quotes it
   - a `--prune` retirement on any platform; when it stops the tenant, the run's `error` (`Deployment to <platform> failed on tenant <tenant>: <code>: …`) carries the code too
+- **`validate` fails its `schema` check on a platform block's constraint codes.** A run whose only errors were codes such as `microsoft_defender_severity`, `graylog_priority` or `exabeam_name_duplicate` reported `checks.schema.status: "passed"` beside `ok: false`. Every code a platform model reports under its own name, and `exabeam_name_duplicate`, now fail the check ([#1893](https://github.com/opentidehq/opentide/issues/1893)).
 
 ## [1.1.0] — 2026-11-26
 
