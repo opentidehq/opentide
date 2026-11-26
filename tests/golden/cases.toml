@@ -103,6 +103,12 @@ source = "tests/fixtures/tide_corpus/current"
 about = "tide-corpus with values the models do not take: CrowdStrike `trigger: sometimes` and `severity: low`, SentinelOne `treat_as_threat: maybe`, Microsoft Defender `alert.severity: Severe` (#1751: deploy refuses both severities)"
 edits = [{ path = "Objects/Detection Rules/rule-0006-crowdstrike-deploy-only.yaml", find = "      trigger: verbose\n", replace = "      trigger: sometimes\n" }, { path = "Objects/Detection Rules/rule-0006-crowdstrike-deploy-only.yaml", find = "      outcome: detection\n", replace = "      outcome: detection\n      severity: low\n" }, { path = "Objects/Detection Rules/rule-0002-defender-kql.yaml", find = "      title: Defender KQL Rule\n", replace = "      title: Defender KQL Rule\n      severity: Severe\n" }, { path = "Objects/Detection Rules/rule-0004-sentinel-one-s1ql.yaml", find = "      treat_as_threat: Malicious\n", replace = "      treat_as_threat: maybe\n" }]
 
+[fixtures.tide-corpus-defender-entity-identifier]
+kind = "tide-corpus"
+source = "tests/fixtures/tide_corpus/current"
+about = "tide-corpus whose Defender rule maps #1884's entities: a registry value without its `key`, which Graph refuses at deploy (`microsoft_defender_entity_identifier`, an error at `entities.registry_values.0`), and beside the issue's account by UPN an account by name alone (`microsoft_defender_impacted_asset_identifier`, a warning)"
+edits = [{ path = "Objects/Detection Rules/rule-0002-defender-kql.yaml", find = "    entities:\n      hosts:\n        - device_id: device_id\n", replace = "    entities:\n      accounts:\n        - upn: InitiatingProcessAccountUpn\n        - name: AccountName\n      registry_values:\n        - value_name: RegistryValueName   # no key\n" }]
+
 [fixtures.tide-corpus-splunk-advanced]
 kind = "tide-corpus"
 source = "tests/fixtures/tide_corpus/current"
@@ -3060,6 +3066,16 @@ command = "validate"
 variant = "bad-values"
 args = ["validate"]
 fixtures = ["tide-corpus-bad-values"]
+
+# #1884: a Defender entity mapping that passes the shape checks and that
+# Graph refuses at deploy fails `validate --strict` with
+# `microsoft_defender_entity_identifier` on the mapping; an impacted asset with
+# no identifier is a warning beside it.
+[[case]]
+command = "validate"
+variant = "defender-entity-identifier"
+args = ["validate", "--strict"]
+fixtures = ["tide-corpus-defender-entity-identifier"]
 
 # 0.24.0: a Splunk block's `advanced` table validates and deploys again
 # (refused as a splunk::2.x key from 0.21.0). The oracle's deploy crashes on

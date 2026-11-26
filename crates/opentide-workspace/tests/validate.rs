@@ -417,6 +417,55 @@ mod validate {
         );
     }
 
+    /// #1884: an account mapped by name alone is a warning `--strict` reports
+    /// without failing, as `platform_not_enabled` is: Microsoft advises a
+    /// strong identifier, and nothing says Graph refuses the mapping.
+    #[test]
+    fn a_defender_asset_without_a_strong_identifier_warns_without_failing_strict() {
+        let fs = workspace();
+        fs.write(
+            "/ws/objects/rules/a.yaml",
+            format!(
+                "{}configurations:\n  microsoft_defender:\n    status: X\n    query: Q\n    \
+                 schedule:\n      frequency: 1H\n    entities:\n      accounts:\n        - \
+                 name: AccountName\n",
+                rule(U1, "A")
+            ),
+        );
+        let validation = run(
+            &fs,
+            &Options {
+                strict: true,
+                ..Options::default()
+            },
+        );
+        let warnings = with_code(&validation, "microsoft_defender_impacted_asset_identifier");
+        assert_eq!(warnings.len(), 1, "{:?}", all(&validation));
+        assert_eq!(warnings[0].severity, Severity::Warning);
+        assert_eq!(
+            warnings[0].field_path,
+            [
+                "configurations",
+                "microsoft_defender",
+                "entities",
+                "accounts",
+                "0"
+            ]
+        );
+        assert!(
+            validation.report.warnings.iter().all(|warning| {
+                opentide_workspace::validate::STRICT_EXEMPT_WARNINGS
+                    .contains(&warning.code.as_str())
+            }),
+            "{:?}",
+            validation.report.warnings
+        );
+        assert!(
+            !validation.warned,
+            "microsoft_defender_impacted_asset_identifier is exempt from --strict"
+        );
+    }
+
     #[test]
     fn google_secops_advisories_warn_and_shared_rule_names_fail() {
         let fs = workspace();
