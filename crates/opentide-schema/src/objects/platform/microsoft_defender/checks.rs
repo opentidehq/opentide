@@ -12,8 +12,8 @@ use crate::error::PathSegment;
 use crate::node::{Node, Value};
 
 use super::{
-    ACTIONS, DEVICE_GROUPS, Duration, ENTITY_KINDS, GROUPINGS, ISOLATION_TYPE, ISOLATION_TYPES,
-    Kind, SCHEMA, SEVERITIES,
+    ACTIONS, DEVICE_GROUPS, Duration, ENTITY_KINDS, Evidence, GROUPINGS, ISOLATION_TYPE,
+    ISOLATION_TYPES, Kind, SCHEMA, SEVERITIES, entity_identifiers,
 };
 
 /// `schema`, when set, is `platform::microsoft_defender::1.0`.
@@ -34,6 +34,9 @@ pub const ENTITY_KIND: &str = opentide_core::codes::MICROSOFT_DEFENDER_ENTITY_KI
 /// Every kind holds a list of mappings, each with at least one field and
 /// only its kind's fields.
 pub const ENTITY_MAPPING: &str = opentide_core::codes::MICROSOFT_DEFENDER_ENTITY_MAPPING;
+/// Every mapping sets the identifiers Graph requires of its kind
+/// ([`super::ENTITY_IDENTIFIERS`]).
+pub const ENTITY_IDENTIFIER: &str = opentide_core::codes::MICROSOFT_DEFENDER_ENTITY_IDENTIFIER;
 /// Every key of `actions` is an automated action.
 pub const ACTION_KIND: &str = opentide_core::codes::MICROSOFT_DEFENDER_ACTION_KIND;
 /// Every action holds a non-empty list of targets, each with at least one
@@ -49,7 +52,7 @@ pub const SCOPE: &str = opentide_core::codes::MICROSOFT_DEFENDER_SCOPE;
 pub const INCIDENT: &str = opentide_core::codes::MICROSOFT_DEFENDER_INCIDENT;
 
 /// Every code [`block_findings`] reports, in the specification's order.
-pub const CONSTRAINT_CODES: [&str; 14] = [
+pub const CONSTRAINT_CODES: [&str; 15] = [
     SCHEMA_CODE,
     FREQUENCY,
     LOOKBACK,
@@ -58,6 +61,7 @@ pub const CONSTRAINT_CODES: [&str; 14] = [
     CUSTOM_DETAILS,
     ENTITY_KIND,
     ENTITY_MAPPING,
+    ENTITY_IDENTIFIER,
     ACTION_KIND,
     ACTION_TARGET,
     ISOLATION,
@@ -417,9 +421,11 @@ fn entities(value: &Node, found: &mut Vec<Finding>) {
                     continue;
                 }
             };
+            let mut shaped = true;
             for field in fields {
                 let field_name = key_text(field);
                 if kind.graph_field(&field_name).is_none() {
+                    shaped = false;
                     found.push(Finding {
                         code: ENTITY_MAPPING,
                         path: path.clone(),
@@ -437,7 +443,55 @@ fn entities(value: &Node, found: &mut Vec<Finding>) {
                     found,
                 );
             }
+            // A mapping that names a field its kind lacks is the shape's
+            // finding: its author meant another field, or another kind.
+            if shaped {
+                identifiers(kind, fields, &label, &path, found);
+            }
         }
+    }
+}
+
+/// `microsoft_defender_entity_identifier`: each field Graph requires of the
+/// kind's mappings ([`super::ENTITY_IDENTIFIERS`]) that the mapping `fields`
+/// does not set. A field set to a blank column is
+/// `microsoft_defender_column`'s, not a missing one.
+fn identifiers(
+    kind: &Kind,
+    fields: &[crate::node::Entry],
+    label: &str,
+    path: &[PathSegment],
+    found: &mut Vec<Finding>,
+) {
+    let Some(rules) = entity_identifiers(kind.key) else {
+        return;
+    };
+    if !matches!(
+        rules.source.evidence,
+        Evidence::Observed | Evidence::Documented
+    ) {
+        return;
+    }
+    let set = |name: &str| {
+        fields
+            .iter()
+            .any(|field| field.key.value.as_str() == Some(name))
+    };
+    for (required, identifier) in rules.required {
+        if set(required) {
+            continue;
+        }
+        let graph = kind.graph_field(required).unwrap_or(required);
+        found.push(Finding {
+            code: ENTITY_IDENTIFIER,
+            path: path.to_vec(),
+            message: format!(
+                "{label} does not set {required}: Graph refuses a {} mapping without it \
+                 (identifier {identifier}, sent as {graph}); map {required} to the result \
+                 column that holds it",
+                kind.key
+            ),
+        });
     }
 }
 
