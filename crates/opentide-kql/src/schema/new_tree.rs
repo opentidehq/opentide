@@ -83,14 +83,20 @@ fn run<'a>(
             K::QUERY => {
                 if let Some(body) = child_of(&child, K::TABULAR_EXPRESSION) {
                     let schema = pass.tabular(&body, &scope);
-                    // The last operator, else the source.
-                    let last = body
-                        .children()
-                        .filter(|c| c.kind() != K::ERROR)
-                        .last()
-                        .map_or_else(|| span(&body), |node| span(&node));
-                    pass.queries.push((schema, last));
-                } else {
+                    // Only [`output`] (the pass without the comma quirk)
+                    // reads what each statement returns: the diagnostics
+                    // pass neither walks to its last operator nor keeps its
+                    // schema (ADR 0014's allocation budget).
+                    if !pass.quirk {
+                        // The last operator, else the source.
+                        let last = body
+                            .children()
+                            .filter(|c| c.kind() != K::ERROR)
+                            .last()
+                            .map_or_else(|| span(&body), |node| span(&node));
+                        pass.queries.push((schema, last));
+                    }
+                } else if !pass.quirk {
                     // A statement the pass does not read: what the query
                     // returns is not known.
                     pass.queries.push((Schema::open(), span(&child)));
@@ -238,17 +244,11 @@ fn comma_quirk(quirk: bool, out: &mut Schema, items: usize) {
     }
 }
 
-/// Whether an aggregate item (`arg_max(T, *)`, `L = arg_min(T, *)`) has a
-/// `*` argument.
-fn has_star_arg(item: &SyntaxNode) -> bool {
-    item.descendants().any(|n| n.kind() == K::STAR_ARG)
-}
-
 /// The columns of an `arg_max(T, *)` but the `by` keys the `*` leaves out;
 /// the first, `T`'s, stays.
-fn drop_by_keys(columns: &mut Vec<Column>, by: &HashSet<String>) {
+fn drop_by_keys(columns: &mut Vec<Column>, by: &[Column]) {
     let mut first = true;
-    columns.retain(|c| std::mem::take(&mut first) || !by.contains(&c.name));
+    columns.retain(|c| std::mem::take(&mut first) || !by.iter().any(|k| k.name == c.name));
 }
 
 /// The child nodes of an operator that are not one of `skip`.
@@ -716,17 +716,13 @@ impl<'a> Pass<'a> {
                         // A kept name the input does not list is still a
                         // column of the output (a table outgrows its
                         // reference): the columns are exactly the names.
-                        if input.known != Known::Closed {
-                            let have: HashSet<&str> =
-                                out.columns.iter().map(|c| c.name.as_str()).collect();
-                            let missing: Vec<String> = kept
-                                .iter()
-                                .filter(|name| !have.contains(*name))
-                                .map(|name| (*name).to_owned())
-                                .collect();
-                            drop(have);
-                            for name in missing {
-                                out.set(Column::new(name, None));
+                        // Only documented columns can lack one; an open
+                        // input stays open.
+                        if input.known == Known::Typos {
+                            for name in &kept {
+                                if out.column(name).is_none() {
+                                    out.set(Column::new((*name).to_owned(), None));
+                                }
                             }
                         }
                         out.known = reshaped(input.known);
@@ -1072,20 +1068,22 @@ impl<'a> Pass<'a> {
         // the `*` leaves out the `by` keys (Kusto's arg_max example, `by
         // Fruit` gives `Fruit, Version, Color`), and the columns it copies
         // are only as sure as the input's.
-        let by_names: HashSet<String> = by_columns.iter().map(|c| c.name.clone()).collect();
+        // The `by` keys are `made[..by_len]`; whether an item has a `*` is
+        // read with its arguments, which [`Self::aggregate_columns`] walks
+        // anyway: no walk or set of names for every summarize.
+        let by_len = by_columns.len();
         let mut starred = false;
         let mut made = by_columns;
         for item in &aggregates {
-            let star = has_star_arg(item);
-            starred |= star;
             match self.column_item(item, &ctx_input, scope, op_span, None) {
                 Item::Named(names, _) if names.len() == 1 && self.is_arg_extreme(item) => {
-                    let Some(mut columns) = self.aggregate_columns(item, &ctx_input) else {
+                    let Some((mut columns, star)) = self.aggregate_columns(item, &ctx_input) else {
                         out.make_open();
                         continue;
                     };
                     if star {
-                        drop_by_keys(&mut columns, &by_names);
+                        starred = true;
+                        drop_by_keys(&mut columns, &made[..by_len]);
                     }
                     if let Some(first) = columns.first_mut() {
                         first.name.clone_from(&names[0]);
@@ -1121,9 +1119,10 @@ impl<'a> Pass<'a> {
                     }
                 }
                 Item::Unnamed(_) => match self.aggregate_columns(item, &ctx_input) {
-                    Some(mut columns) => {
+                    Some((mut columns, star)) => {
                         if star {
-                            drop_by_keys(&mut columns, &by_names);
+                            starred = true;
+                            drop_by_keys(&mut columns, &made[..by_len]);
                         }
                         made.extend(columns.into_iter().map(|column| Column {
                             made_by: Some(made_by),
@@ -1147,7 +1146,9 @@ impl<'a> Pass<'a> {
             .is_some_and(|n| matches!(n.text(), "arg_max" | "arg_min"))
     }
 
-    fn aggregate_columns(&self, item: &SyntaxNode, input: &Schema) -> Option<Vec<Column>> {
+    /// The columns an unnamed aggregate item makes, and whether one of its
+    /// arguments is `*`.
+    fn aggregate_columns(&self, item: &SyntaxNode, input: &Schema) -> Option<(Vec<Column>, bool)> {
         let call = aggregate_call(item)?;
         let name = ident(&call)?.text().to_ascii_lowercase();
         let args: Vec<AggArg> = call
@@ -1161,7 +1162,10 @@ impl<'a> Pass<'a> {
                 }
             })
             .collect();
-        aggregate_columns_for(&name, &args, input)
+        // Only `arg_max(T, *)` and `arg_min(T, *)` copy the input's columns.
+        let star = matches!(name.as_str(), "arg_max" | "arg_min")
+            && args.iter().any(|a| matches!(a, AggArg::Star));
+        aggregate_columns_for(&name, &args, input).map(|columns| (columns, star))
     }
 
     fn join(&mut self, op: &SyntaxNode, left: Schema, scope: &Scope, made_by: MadeBy) -> Schema {
