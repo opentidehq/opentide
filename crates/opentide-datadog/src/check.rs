@@ -366,9 +366,13 @@ impl Walker<'_> {
     /// pipelines'. The first argument of `CIDR` must be an `@attribute`.
     fn tag_key(&mut self, node: &SyntaxNode, parent: Option<K>) {
         let range = trimmed(node);
-        let dotted = has_unescaped_dot(self.text(range));
-        let text = shorten(self.text(range));
+        // The key is read in place; a message's copy is made only when there is a finding.
+        let source = self.source;
+        let key = source
+            .get(usize::from(range.start())..usize::from(range.end()))
+            .unwrap_or("");
         if parent == Some(K::CIDR_CALL) {
+            let text = shorten(key);
             self.push(
                 codes::DATADOG_CIDR,
                 Severity::Error,
@@ -377,7 +381,8 @@ impl Walker<'_> {
             );
             return;
         }
-        if matches!(text.as_str(), "_exists_" | "_missing_") {
+        if matches!(key, "_exists_" | "_missing_") {
+            let text = key;
             let hint = if text == "_exists_" {
                 "`@attribute:*`"
             } else {
@@ -391,7 +396,8 @@ impl Walker<'_> {
             );
             return;
         }
-        if dotted {
+        if has_unescaped_dot(key) {
+            let text = shorten(key);
             self.push(
                 codes::DATADOG_UNKNOWN_ATTRIBUTE,
                 Severity::Hint,

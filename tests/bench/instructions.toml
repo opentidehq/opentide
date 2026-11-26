@@ -20,13 +20,13 @@ parse_external = 16050818
 parse_external_allocations = 10316
 
 [datadog]
-analyze_corpus = 1691637
-analyze_corpus_allocations = 5779
-analyze_external = 74347823
-analyze_external_allocations = 237111
-parse_corpus = 1010970
+analyze_corpus = 1670334
+analyze_corpus_allocations = 5715
+analyze_external = 73597495
+analyze_external_allocations = 235468
+parse_corpus = 1006776
 parse_corpus_allocations = 2286
-parse_external = 47844404
+parse_external = 47549109
 parse_external_allocations = 105003
 
 [datasets]
