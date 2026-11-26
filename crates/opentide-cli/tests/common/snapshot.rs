@@ -399,23 +399,6 @@ fn change<'a>(
     })
 }
 
-/// Stops a run whose case root folds case (macOS's default volume): the
-/// `tide-corpus` fixtures hold `Objects/` and `objects/` side by side, which
-/// would be one folder there, so a snapshot recorded on it is not Linux's.
-fn assert_case_sensitive(root: &Path) {
-    let probe = root.join("Case-Probe");
-    std::fs::write(&probe, "").unwrap();
-    let folds = root.join("case-probe").exists();
-    std::fs::remove_file(&probe).unwrap();
-    assert!(
-        !folds,
-        "{} is on a case-insensitive volume, where `Objects/` and `objects/` are one folder: \
-         set OPENTIDE_CASE_ROOT to a folder on a case-sensitive volume \
-         (tests/golden/README.md, \"Snapshots\")",
-        root.display()
-    );
-}
-
 /// An executable `name` in `folder` that exits 0.
 fn stub_program(folder: &Path, name: &str) {
     use std::os::unix::fs::PermissionsExt as _;
@@ -440,7 +423,7 @@ pub fn run_case(case: &Case) -> String {
     // for it); `<TMP>/empty`, a PATH that has no program.
     stub_program(&root.join("bin"), "opentide");
     if case.fixture.starts_with("tide-corpus") {
-        assert_case_sensitive(&root);
+        replay::assert_case_sensitive(&root);
     }
     replay::fixture(&case.fixture, &ws);
     replay::fix_modes(&ws);

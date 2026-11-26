@@ -47,18 +47,18 @@ exit: 1
   ],
   "dry_run": false,
   "duration_ms": 0,
-  "error": "Deployment to sentinel_one failed on SentinelOne update rule: could not update the rule on tenant 'lab': SentinelOne has no such rule (HTTP 404): {\"errors\": [{\"code\": 4040010, \"title\": \"Not Found\", \"detail\": \"Rule 1800000000000000014 not found\"}]}. Check in the SentinelOne console whether the rule still exists. If not, remove its sentinel_one entry from the rule's deployment state in .opentide/states/deployment/",
+  "error": "Deployment to sentinel_one failed on SentinelOne update rule: sentinel_one_rule_not_found: could not update the rule on tenant 'lab': SentinelOne has no such rule (HTTP 404): {\"errors\": [{\"code\": 4040010, \"title\": \"Not Found\", \"detail\": \"Rule 1800000000000000014 not found\"}]}. Check in the SentinelOne console whether the rule still exists. If not, remove its sentinel_one entry from the rule's deployment state in .opentide/states/deployment/",
   "exit_code": 1,
   "failure": {
     "argument": null,
     "code": "issues_found",
     "crash_log": null,
-    "message": "Deployment to sentinel_one failed on SentinelOne update rule: could not update the rule on tenant 'lab': SentinelOne has no such rule (HTTP 404): {\"errors\": [{\"code\": 4040010, \"title\": \"Not Found\", \"detail\": \"Rule 1800000000000000014 not found\"}]}. Check in the SentinelOne console whether the rule still exists. If not, remove its sentinel_one entry from the rule's deployment state in .opentide/states/deployment/",
+    "message": "Deployment to sentinel_one failed on SentinelOne update rule: sentinel_one_rule_not_found: could not update the rule on tenant 'lab': SentinelOne has no such rule (HTTP 404): {\"errors\": [{\"code\": 4040010, \"title\": \"Not Found\", \"detail\": \"Rule 1800000000000000014 not found\"}]}. Check in the SentinelOne console whether the rule still exists. If not, remove its sentinel_one entry from the rule's deployment state in .opentide/states/deployment/",
     "suggestion": null
   },
   "failures": [
     {
-      "error": "could not update the rule on tenant 'lab': SentinelOne has no such rule (HTTP 404): {\"errors\": [{\"code\": 4040010, \"title\": \"Not Found\", \"detail\": \"Rule 1800000000000000014 not found\"}]}. Check in the SentinelOne console whether the rule still exists. If not, remove its sentinel_one entry from the rule's deployment state in .opentide/states/deployment/",
+      "error": "sentinel_one_rule_not_found: could not update the rule on tenant 'lab': SentinelOne has no such rule (HTTP 404): {\"errors\": [{\"code\": 4040010, \"title\": \"Not Found\", \"detail\": \"Rule 1800000000000000014 not found\"}]}. Check in the SentinelOne console whether the rule still exists. If not, remove its sentinel_one entry from the rule's deployment state in .opentide/states/deployment/",
       "id": "00000000-0000-4000-8047-000000000014",
       "name": "SentinelOne update rule",
       "platform": "sentinel_one",
@@ -112,7 +112,7 @@ exit: 1
     },
     {
       "action": "update",
-      "error": "could not update the rule on tenant 'lab': SentinelOne has no such rule (HTTP 404): {\"errors\": [{\"code\": 4040010, \"title\": \"Not Found\", \"detail\": \"Rule 1800000000000000014 not found\"}]}. Check in the SentinelOne console whether the rule still exists. If not, remove its sentinel_one entry from the rule's deployment state in .opentide/states/deployment/",
+      "error": "sentinel_one_rule_not_found: could not update the rule on tenant 'lab': SentinelOne has no such rule (HTTP 404): {\"errors\": [{\"code\": 4040010, \"title\": \"Not Found\", \"detail\": \"Rule 1800000000000000014 not found\"}]}. Check in the SentinelOne console whether the rule still exists. If not, remove its sentinel_one entry from the rule's deployment state in .opentide/states/deployment/",
       "id": "00000000-0000-4000-8047-000000000014",
       "name": "SentinelOne update rule",
       "platform": "sentinel_one",

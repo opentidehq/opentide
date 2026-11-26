@@ -128,6 +128,10 @@ OPENTIDE_CASE_ROOT=/Volumes/cs INSTA_UPDATE=always cargo nextest run -p opentide
 git status --short   # nothing changed: a diff here is a real change, or a host difference to mask
 ```
 
+The inflight tests of `crates/opentide-cli/tests/generate_goldens.rs` lay out the same
+`Objects/` and `objects/` (the `tide-corpus-folders` fixture) and stop the same way on macOS:
+run them with `OPENTIDE_CASE_ROOT` set too.
+
 A date that a case's own cassette or fixture holds (`2026-10-27` in the query cassettes) is
 content, so it is never masked as the clock: no snapshot depends on the day it is run.
 

@@ -51,6 +51,25 @@ pub fn case_root() -> tempfile::TempDir {
         .unwrap()
 }
 
+/// Stops a run whose case root folds case (macOS's default volume): the
+/// `tide-corpus` fixtures hold `Objects/` and `objects/` side by side, which
+/// would be one folder there, so a snapshot recorded on it is not Linux's,
+/// and git, which records `Objects/rules/...`, and the workspace, which reads
+/// `objects/rules/...`, no longer name the same file.
+pub fn assert_case_sensitive(root: &Path) {
+    let probe = root.join("Case-Probe");
+    std::fs::write(&probe, "").unwrap();
+    let folds = root.join("case-probe").exists();
+    std::fs::remove_file(&probe).unwrap();
+    assert!(
+        !folds,
+        "{} is on a case-insensitive volume, where `Objects/` and `objects/` are one folder: \
+         set OPENTIDE_CASE_ROOT to a folder on a case-sensitive volume \
+         (tests/golden/README.md, \"Snapshots\")",
+        root.display()
+    );
+}
+
 /// The folder the case roots are made in: `OPENTIDE_CASE_ROOT`, else `/tmp`
 /// (the recordings' place), else the host's temporary directory.
 pub fn case_root_parent() -> PathBuf {
