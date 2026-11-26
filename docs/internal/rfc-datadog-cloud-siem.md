@@ -1,47 +1,62 @@
 ---
-title: "RFC: Datadog Cloud SIEM platform (draft)"
-description: "Research and proposal for a fourteenth platform, datadog: Datadog Cloud SIEM detection rules as a Tide block, the Datadog search syntax as an engine language, deploy and live validation through the v2 Security Monitoring API, and the open-source content to start from."
+title: "RFC: Datadog Cloud SIEM platform"
+description: "Proposal for a fourteenth platform, datadog: Datadog Cloud SIEM detection rules as a Tide block, the Datadog search syntax as a new engine language held to Datadog's own published queries, deploy and live validation through the v2 Security Monitoring API, and the content to start from."
 ---
 
 # RFC: Datadog Cloud SIEM platform
 
-> **Status: draft, for review.** Research done on 2026-11-26 against Datadog's online documentation,
-> its public OpenAPI v2 specification and its open-source code. RFCs normally live in
-> opentidehq/specifications `rfcs/`; this draft sits here until it is given a number there. The
-> normative documents it calls for are a platform spec `specs/platforms/datadog-1.0.md` and a
-> language spec `specs/languages/datadog-1.0.md` (sections 4 and 5 are their first drafts).
-> Facts that the public sources did not settle are marked **(unverified)** and are listed in
-> [Open questions](#11-open-questions). A companion explainer page, published separately, shows the
-> YAML shape, the highlighting and a working prototype of the lexer and checks of sections 4.6 and
-> 5.3 to 5.6; section 9.1 has what that prototype found in real queries.
+| | |
+|---|---|
+| **Status** | Proposed |
+| **Date** | 2026-11-26 |
+| **Platform** | `datadog`, Datadog Cloud SIEM, model `platform::datadog::1.0` |
+| **Language** | `datadog`, the Datadog search syntax, crate `opentide-datadog` |
+| **Specs it calls for** | opentidehq/specifications `specs/platforms/datadog-1.0.md` (sections 5 and 8 are its draft) and `specs/languages/datadog-1.0.md` (section 6) |
+| **Related** | The language-versus-dialect review (a proposed ADR, 0015) decides the general rule section 6.2 applies to Datadog |
+
+RFCs normally live in opentidehq/specifications `rfcs/`. This one is written here, beside the code
+it plans, and moves there with a number when the specifications are drafted (phase 0).
+
+Research was done on 2026-11-26 against these sources:
+
+- Datadog's online documentation;
+- its public OpenAPI v2 specification;
+- its open-source code;
+- 3,229 log-search queries that Datadog itself publishes.
+
+A fact the public sources did not settle is marked **(unverified)** and listed in
+[Open questions](#16-open-questions).
 
 ## 1. Summary
 
-Add **`datadog`, Datadog Cloud SIEM**, as the fourteenth built-in platform:
+Add **`datadog`, Datadog Cloud SIEM**, as the fourteenth built-in platform.
 
-- **The block.** A `configurations.datadog` block (`platform::datadog::1.0`) describes one Cloud SIEM
-  detection rule: real-time `log_detection` rules with the threshold, new value, anomaly and
-  impossible travel methods; `signal_correlation` rules that can name other Tide rules; and, later,
-  sequence and scheduled rules.
-- **The language.** The Datadog search syntax (the "log search syntax" that Datadog's API calls
-  `event_query`) becomes an engine language, id `datadog`, in a new pure-Rust crate
-  `opentide-datadog`. It has a lossless tree, the existing HighlightSpec captures, catalogs and
-  diagnostics. The case-condition expressions (`failed > 10 && success > 0`) get a small parser in
-  the platform model, as Graylog's conditions do.
-- **The connector.** Deploy (create, update, disable, delete) goes through
-  `/api/v2/security_monitoring/rules`. `validate query --live` uses the vendor's own
-  `POST /rules/validation`. `opentide query` uses the Logs Search API.
-- **The language model is held to Datadog's own content.** The grammar is written from Datadog's
-  docs, then checked against two references, and every difference is explained:
-  - 3,318 queries that Datadog itself publishes, in its docs, integrations, Terraform provider, API
-    clients, blog and Security Labs;
-  - the parser in Datadog's open-source VRL.
+- **The block.** A `configurations.datadog` block describes one Cloud SIEM detection rule. In 1.0
+  that covers:
+  - real-time `log_detection` rules, with the threshold, new value, anomaly and impossible travel
+    methods;
+  - `signal_correlation` rules, which may name other Tide rules.
 
-  No converted third-party content is used.
-  Section 5.5 lists the model construct by construct; section 9 lists the sources and their
-  licences; section 9.1 has the measurements.
+  The block groups its keys by meaning rather than by the API's layout:
+  - `queries`: what to look at;
+  - `detection`: how the queries become a match;
+  - `cases`: when a match becomes a signal;
+  - `signal`: what happens to that signal.
+- **The language.** The Datadog search syntax becomes an engine language, id `datadog`. It is
+  implemented in a new pure-Rust crate, `opentide-datadog`, not as a fourth Lucene dialect: its
+  operator precedence differs from Lucene's, so the difference reaches the parse tree. The case
+  conditions (`failed > 10 && success > 0`) get a small parser in the platform model, as Graylog's
+  conditions do.
+- **The connector.** Deploy goes through `/api/v2/security_monitoring/rules`.
+  `validate query --live` calls Datadog's own `POST /rules/validation`, and `opentide query` uses
+  the Logs Search API.
+- **The evidence.** The grammar is written from Datadog's docs and held to two references, and
+  every difference is explained (section 11):
+  - the 3,229 log-search queries Datadog publishes;
+  - VRL, Datadog's open-source parser for the same syntax.
 
-Capability row as proposed (for the registry in `crates/opentide-schema/src/platforms.rs`):
+  A prototype of the checks already finds three real mistakes in Datadog's own content. No
+  converted third-party content is used.
 
 | `--platform` | Product | Deploy | Compiled without a tenant | Tenant check (`--live`) | Offline engine | `opentide query` |
 |---|---|:-:|:-:|:-:|---|---|
@@ -49,52 +64,80 @@ Capability row as proposed (for the registry in `crates/opentide-schema/src/plat
 
 ## 2. Motivation
 
-Datadog Cloud SIEM is a common SIEM for cloud-native teams that already send their logs to
-Datadog. Its detection rules are JSON documents behind a REST API. Datadog itself recommends
-managing them as code, through Terraform (`datadog_security_monitoring_rule`) and the
-validate, test, backtest and convert endpoints described in its "Detection as code for Cloud SIEM"
-post (2025-06-11). There is no portable, vendor-neutral way to write those rules beside the
-same detection for Sentinel, Splunk or Elastic. opentide exists to provide that.
+Datadog Cloud SIEM is a common SIEM for teams that already send their logs to Datadog.
 
-The language is not well served today:
+- **Its rules are JSON documents behind a REST API.**
+- **Datadog recommends detection as code.** It promotes Terraform
+  (`datadog_security_monitoring_rule`) and its own validate, test, backtest and convert endpoints
+  ("Detection as code for Cloud SIEM", 2025-06-11).
+- **No portable format exists.** There is no vendor-neutral way to write those rules beside the
+  same detection for Sentinel, Splunk or Elastic, which is what opentide exists to provide.
 
-- **No grammar.** Datadog publishes no grammar, parser or TextMate grammar for the search syntax.
-  Its VS Code extension has no `syntaxes/` folder. The closest thing to a reference
-  implementation is the pest grammar in Datadog-owned [`vectordotdev/vrl`](https://github.com/vectordotdev/vrl)
-  (`src/datadog/search/grammar.pest`, MPL-2.0), and it lacks `CIDR()`, `**`, escaped-space runs
-  and calculated fields.
-- **Silent traps in hand-written rules.** Several mistakes change what a rule matches without any
-  error: a lower-case `and` becomes a search term, curly quotes are ignored, `*` inside quotes is
-  punctuation, and an unescaped `:` in a value is misread. These are exactly the class of
-  mistake opentide's offline checks exist to catch.
+The language is not well served today either:
 
-## 3. Scope
+- **There is no grammar.** Datadog publishes no grammar, parser or editor grammar for the search
+  syntax. Its open-source VRL parser is the closest reference, but it lacks `CIDR()`, full-text
+  `*:term`, `**` and calculated fields (section 6.6).
+- **Silent traps change what a rule matches without an error.** A lower-case `and` becomes a search
+  term, curly quotes are ignored, `*` inside quotes is not a wildcard, and `a OR b c` means
+  `a OR (b AND c)`. Section 11.3 shows all of these in Datadog's own published queries.
 
-| In scope for `datadog-1.0` | Later (`datadog-1.x`) | Out of scope |
+## 3. Terminology
+
+| Term | Meaning |
+|---|---|
+| **Detection rule** | A Datadog object (`/api/v2/security_monitoring/rules/{id}`) that runs queries over incoming events and creates signals. One `configurations.datadog` block is one detection rule |
+| **Default rule** | A rule Datadog ships and maintains (`isDefault: true`). It can be enabled, re-tagged and given notifications, but not deleted or rewritten; opentide never changes one |
+| **Query** | One search over a data source (`queries[]`). Each query has a name that conditions refer to |
+| **Search syntax** | The language of a query's `query` string: Datadog's log search syntax, which the API calls `event_query`. Language id `datadog` |
+| **Detection method** | How queries become a match: `threshold` (count against a condition), `new_value` (a value not seen during learning), `anomaly` (a count above a learned baseline), `impossible_travel` (two logins too far apart for the time between them) |
+| **Evaluation window** | The sliding period the cases are tested over (`detection.window`) |
+| **Case** | A condition over the queries, with a severity and notification targets. Cases are tested in order, and the first that matches creates or updates the signal |
+| **Condition** | A case's expression over query names: `failed > 10 && success > 0` |
+| **Signal** | What a rule creates when a case matches: Datadog's alert object, shown in the Signals Explorer |
+| **Keep alive** | How long a signal stays open while matches keep arriving; once that long passes without a match, it closes |
+| **Maximum signal duration** | How long after its first match a signal closes, whatever still matches |
+| **Correlation rule** | A rule whose queries count other rules' signals (`type: signal_correlation`) |
+| **Site** | The Datadog region of an organisation (`datadoghq.com`, `datadoghq.eu`, …); its API is `https://api.<site>` |
+| **Dialect, profile** | As the language review defines them. A dialect is the same grammar with diagnostics that differ by product, as Lucene has for Elastic, Carbon Black and Graylog. A profile is the same language with fewer constructs allowed in one context; this RFC's profiles are `rule` and `search` |
+
+## 4. Scope
+
+| In `datadog-1.0` | Later (`datadog-1.x`) | Out of scope |
 |---|---|---|
-| `type: log_detection`, real time | `sequence_detection` (steps and transitions) | `workload_security` / `workload_activity`: Agent rules in SECL, a different language, the Datadog Agent's runtime policies |
-| Detection methods `threshold`, `new_value`, `anomaly`, `impossible_travel` | Scheduled rules (`schedulingOptions`, an RFC 5545 RRULE), `calculatedFields` (a formula language) | `application_security`, `api_security` (App and API Protection, ASM actions) |
-| `type: signal_correlation`, referencing Tide rules or Datadog rule ids | `third_party` (`thirdPartyCases`, `rootQueries`) | `cloud_configuration`, `infrastructure_configuration` (CSPM, Rego) |
-| Queries `from` `logs` (default), `audit`, `events`, `signals` | Reference tables (`referenceTables`) | `queryLanguage: sql` (DDSQL): SQL stays unsupported in opentide; a block that asks for it is refused with `datadog_sql_unsupported` |
-| Live validation, deploy, disable, delete, drift by `version` | Tuning a Datadog default rule (`customQueryExtension`, `customStatus`, notifications), like Sysdig's `append_to_rule` | `hardcoded` (one value, `log4shell`, Datadog-owned) |
-| `opentide query` over the Logs Search API | Rule tests through `POST /rules/test`; backtests through historical jobs (preview) | Suppression rules and security filters as their own Tide objects (a separate RFC) |
+| `type: log_detection`, real time | `sequence` detection (steps and transitions) | `workload_security`, `workload_activity`: Agent rules written in SECL, a different language |
+| Detection methods `threshold`, `new_value`, `anomaly`, `impossible_travel` | Scheduled rules (`schedulingOptions`, an RFC 5545 RRULE) and `calculatedFields` (a formula language) | `application_security`, `api_security` (App and API Protection) |
+| `type: signal_correlation`, naming Tide rules or Datadog rule ids | `third_party` rules (`thirdPartyCases`, `rootQueries`) | `cloud_configuration`, `infrastructure_configuration` (posture rules in Rego) |
+| Queries `from` `logs` (the default), `audit`, `events`, `signals` | Reference tables (`referenceTables`) | `queryLanguage: sql` (DDSQL): SQL stays unsupported in opentide, and a block that asks for it is refused (`datadog_sql_unsupported`) |
+| Live validation, deploy, disable, delete, drift by `version` | Tuning a default rule (`customQueryExtension`, `customStatus`, notifications), like Sysdig's `append_to_rule` | `hardcoded` (one Datadog-owned value, `log4shell`) |
+| `opentide query` over the Logs Search API | Rule tests (`POST /rules/test`); backtests (historical jobs, in preview) | Suppression rules and security filters as Tide objects (open question 8) |
 
-## 4. The Tide block: `platform::datadog::1.0`
+## 5. The Tide block: `platform::datadog::1.0`
 
-### 4.1 Shape
+### 5.1 Minimal block
 
-Keys are snake_case, as in every other block. Durations are strings (`5m`, `1h`, `1d`), checked
-against the values Datadog accepts. The compiler writes the camelCase API body (section 6).
+The smallest block that deploys is a threshold rule with one query and one case:
 
-The block does not copy the API's layout. It groups keys by what they mean to the person writing
-the rule, as Datadog's own rule editor does:
+```yaml
+configurations:
+  datadog:
+    schema: platform::datadog::1.0
+    status: STAGING
+    queries:
+      - query: source:cloudtrail @evt.name:ConsoleLogin @evt.outcome:Failure
+    cases:
+      - condition: a > 5
+```
 
-- `queries` are what to look at.
-- `detection` is how the queries become a match: the method, the sliding window the cases are
-  tested over, and the method's own settings.
-- `cases` are when a match becomes a signal, and at what severity.
-- `signal` is what happens to a signal once it exists: how signals are grouped, how long one stays
-  open, and how its severity is adjusted.
+Defaults fill the rest:
+
+- `type` is `log_detection` and `detection.method` is `threshold`;
+- the window is `5m`;
+- the query is named `a` and counts events;
+- the severity comes from `response.alert_severity`;
+- the signal stays open for `1h` without new matches and at most `1d`.
+
+### 5.2 Complete block
 
 ```yaml
 name: Okta brute force followed by a successful login
@@ -118,173 +161,187 @@ configurations:
     schema: platform::datadog::1.0
     enabled: true
     status: STAGING
-    type: log_detection              # | signal_correlation
+    type: log_detection
     queries:
       - name: failed
         query: |
           source:okta @evt.name:user.session.start @evt.outcome:FAILURE
+        from: logs
         group_by: ["@usr.email"]
       - name: success
         query: |
           source:okta @evt.name:user.session.start @evt.outcome:SUCCESS
         group_by: ["@usr.email"]
     detection:
-      method: threshold              # default
+      method: threshold
       window: 5m                     # the cases are tested over the last 5 minutes
     cases:
       - name: brute force then success
         condition: failed > 10 && success > 0
-        # severity: high             # default: response.alert_severity
+        severity: high               # default: response.alert_severity
         notify: [soc]                # tenant aliases or raw @handles
     signal:
       group_by: ["@usr.email"]       # one signal per user
-      keep_alive: 1h                 # stays open while matches keep arriving within 1h
-      max_duration: 1d               # and closes after 1d regardless
+      keep_alive: 1h                 # open while matches keep arriving within an hour
+      max_duration: 1d               # closed a day after the first match regardless
       downgrade_non_production: true # one level lower when env starts with staging, test or dev
-    #message: |                      # default: derived from the rule (6.3)
-    #tags: ["team:identity"]
+      group_in_title: true           # the title shows the user
+    message: |
+      {{@usr.email}} failed to log in {{events_matched_per_query.failed}} times, then succeeded.
+    tags: ["team:identity"]
 ```
 
-The same rule written to the API's layout would put `evaluationWindow`, `keepAlive`,
-`maxSignalDuration` and `decreaseCriticalityBasedOnEnv` side by side in `options`, beside
-`newValueOptions` and `impossibleTravelOptions`, and `groupSignalsBy` at the top level. They
-answer different questions. In Datadog's docs, the evaluation window is "a sliding period in which
-at least one case evaluates as true", while keep alive and maximum signal duration decide when a
-signal "remains open" and when it "closes". The block separates them along that line.
+### 5.3 Why the block is grouped this way
 
-### 4.2 Keys
+The API puts `evaluationWindow`, `keepAlive`, `maxSignalDuration`,
+`decreaseCriticalityBasedOnEnv`, `newValueOptions` and `impossibleTravelOptions` side by side in
+one `options` object, and `groupSignalsBy` and `hasExtendedTitle` at the top level. These answer
+different questions:
 
-#### Queries
+- **The evaluation window is part of detecting.** Datadog's docs call it "a sliding period in which
+  at least one case evaluates as true". So it sits in `detection`, beside the method and the
+  method's own settings.
+- **Keep alive, maximum duration, signal grouping, the non-production downgrade and the title are
+  about the signal once it exists.** In Datadog's docs they decide when a signal "remains open"
+  and when it "closes", which matches merge into it, and how it reads. So they sit in `signal`.
+- **The measure belongs to its query.** The API spreads it over three properties: an
+  `aggregation` enum, `distinctFields` and `metrics`, whose valid combinations depend on each
+  other. The block uses one key that names both the measure and its field (`count_distinct:
+  "@usr.email"`). With no measure key, a query counts events.
 
-| Key | Type | Default | API field | Notes |
-|---|---|---|---|---|
-| `queries[]` | list, 1 to 10 **(unverified upper bound)** | required | `queries` | |
-| `name` | `[a-z][a-z0-9_]*` | `a`, `b`, … by position | `name` | What conditions call the query; not allowed with `new_value` (Terraform: "not compatible") |
-| `query` | Datadog search syntax, profile `rule` | required for `log_detection` | `query` | |
-| `from` | `logs` \| `audit` \| `events` \| `signals` | `logs` | `dataSource` (`signals` is `security_signals`) | `spans`, `network`, `security_runtime` later |
-| `group_by[]` | field paths | `[]` | `groupByFields` | Each group is counted on its own |
-| `keep_missing_groups` | bool | `false` | `hasOptionalGroupByFields` | Events missing a `group_by` value are kept, grouped as `N/A`, instead of dropped |
-| `count_distinct` | a field path | — | `aggregation: cardinality`, `distinctFields` | The case counts distinct values instead of events |
-| `sum`, `max` | a field path | — | `aggregation: sum` or `max`, `metrics: [field]` | The case compares the sum or the maximum of a numeric field |
-| `new_value` | 1 to 5 field paths | — | `aggregation: new_value`, `metrics` | Only with `detection.method: new_value`, where it is required |
-| `rule` | a Tide rule UUID or a Datadog rule id | — | `ruleId` (a UUID is resolved, 4.4) | `signal_correlation` only |
-| `correlate_by[]` | field paths | — | `correlatedByFields` | `signal_correlation` only |
+Datadog's own rule editor makes the same split, between its "detection method", "set rule cases"
+and "other parameters" steps.
 
-A query sets at most one of `count_distinct`, `sum`, `max` and `new_value`; with none it counts
-events. That replaces the API's `aggregation` enum plus its `distinctFields` and `metrics` lists,
-whose valid combinations depend on each other: the measure is named once, with its field.
-`geo_data` (impossible travel) and `event_count` (correlation) follow from the rule and are never
-written.
+### 5.4 Keys
 
-#### Detection
+A key marked *required* must be present. Every other key may be left out and takes its default.
 
-| Key | Type | Default | API field | Notes |
-|---|---|---|---|---|
-| `method` | `threshold` \| `new_value` \| `anomaly` \| `impossible_travel` | `threshold` | `options.detectionMethod` (`anomaly` is `anomaly_detection`) | `sequence`, `third_party` and `content_anomaly` later |
-| `window` | one of `0`, `1m`, `5m`, `10m`, `15m`, `30m`, `1h`, `2h`, `3h`, `6h`, `12h`, `1d` | `5m` | `options.evaluationWindow` (seconds) | The sliding window the cases are tested over |
-| `learning` | a duration | per method | `newValueOptions.learningDuration` (days, 0 to 30); `anomalyDetectionOptions.learningDuration` (hours: 1h, 6h, 12h, 1d, 2d, 7d, 14d); `impossibleTravelOptions.baselineUserLocationsDuration` (1d to 30d) | How long Datadog learns what is normal before it creates signals. On impossible travel, setting it turns on `baselineUserLocations` |
-| `forget_after` | `1d` to `30d` | `7d` | `newValueOptions.forgetAfter` | `new_value`: a learned value is forgotten when it is not seen for this long |
-| `bucket` | `5m` \| `10m` \| `15m` \| `30m` \| `1h` \| `3h` | `5m` | `anomalyDetectionOptions.bucketDuration` | `anomaly`: the time bucket the baseline is computed on |
-| `tolerance` | 1 to 5 | `3` **(unverified default)** | `anomalyDetectionOptions.detectionTolerance` | `anomaly`: how far above the baseline counts as anomalous |
-| `ignore_known_transitions` | bool | `false` | `impossibleTravelOptions.detectIpTransition` | `impossible_travel`: no signal for a move between two locations this user has made before |
+#### Block
 
-`learning` is one key for one idea across three methods; the compiler converts it to the unit each
-API field takes, and `datadog_duration` names the values a method accepts.
+| Key | Type and allowed values | Required | Default | API property | Meaning |
+|---|---|:-:|---|---|---|
+| `schema` | `platform::datadog::1.0` | ✅ | | | |
+| `status` | a status of the merged `deployment.toml` | ✅ | | | Drives the deploy strategy (8.3) |
+| `enabled`, `name`, `flags`, `tenants`, `contributors` | as every block | | | | |
+| `type` | `log_detection` \| `signal_correlation` | | `log_detection` | `type` | Any other type is refused (`datadog_type_unsupported`) |
+| `queries` | list of 1 to 10 queries **(the upper bound is unverified)** | ✅ | | `queries` | |
+| `detection` | map | | `{method: threshold, window: 5m}` | `options` | |
+| `cases` | list of at least one case | ✅ | | `cases` | |
+| `signal` | map | | see below | `options`, `groupSignalsBy`, `hasExtendedTitle` | |
+| `message` | Markdown with Datadog template variables | | derived (7.3) | `message` | |
+| `tags` | list of Datadog tags | | `[]` | `tags` | Added to the derived tags (7.4) |
 
-#### Cases
+#### `queries[]`
 
-| Key | Type | Default | API field | Notes |
-|---|---|---|---|---|
-| `cases[]` | list, at least one | required | `cases` | Tested in order; the first that matches creates the signal |
-| `name` | text | — | `name` | |
-| `condition` | condition grammar (4.6) | required for `threshold` and `anomaly` | `condition` | |
-| `severity` | `info` \| `low` \| `medium` \| `high` \| `critical` | from `response.alert_severity` | `status` | |
-| `notify[]` | tenant alias or `@handle` | `[]` | `notifications` | |
+| Key | Type and allowed values | Required | Default | API property | Meaning |
+|---|---|:-:|---|---|---|
+| `name` | `[a-z][a-z0-9_]*`, unique in the block | | `a`, `b`, … by position | `name` | What conditions call the query. Not allowed on a `new_value` query (Terraform: "not compatible") |
+| `query` | Datadog search syntax, profile `rule` | for `log_detection` | | `query` | |
+| `from` | `logs` \| `audit` \| `events` \| `signals` | | `logs` | `dataSource` (`signals` is `security_signals`) | The data the query searches |
+| `group_by` | list of field paths | | `[]` | `groupByFields` | Matches are counted per distinct combination of these values |
+| `keep_missing_groups` | bool | | `false` | `hasOptionalGroupByFields` | Keep an event that lacks a `group_by` value, grouped as `N/A`, instead of dropping it |
+| `count_distinct` | one field path | | | `aggregation: cardinality`, `distinctFields` | The case compares the number of distinct values instead of events |
+| `sum` | one numeric field path | | | `aggregation: sum`, `metrics` | The case compares the sum of the field |
+| `max` | one numeric field path | | | `aggregation: max`, `metrics` | The case compares the field's maximum |
+| `new_value` | 1 to 5 field paths | with `method: new_value` | | `aggregation: new_value`, `metrics` | The fields whose unseen values trigger |
+| `rule` | a Tide rule UUID, or a Datadog rule id | for `signal_correlation` | | `ruleId` | The rule whose signals this query counts (5.6) |
+| `correlate_by` | list of field paths | | `[]` | `correlatedByFields` | Signals are correlated when these values match |
 
-#### Signal
+A query sets at most one of `count_distinct`, `sum`, `max` and `new_value`. Two aggregations
+follow from the rule and are never written:
 
-| Key | Type | Default | API field | Notes |
-|---|---|---|---|---|
-| `group_by[]` | field paths | — | `groupSignalsBy` | Matches with the same values update one signal; a subset of the queries' `group_by` |
-| `keep_alive` | `window`'s set of durations | `1h` | `options.keepAlive` | The signal stays open while a case matches again within this time; at least `detection.window` |
-| `max_duration` | `window`'s set of durations | `1d` | `options.maxSignalDuration` | The signal closes this long after it was first seen, whatever still matches; at least `detection.window` |
-| `downgrade_non_production` | bool | `false` | `options.decreaseCriticalityBasedOnEnv` | One severity level lower when the `env` tag starts with `staging`, `test` or `dev`; `log_detection` only |
-| `group_in_title` | bool | `false` | `hasExtendedTitle` | The signal's title shows the group-by values |
+- `geo_data` on `@network.client.geoip`, for impossible travel;
+- `event_count`, for a correlation rule.
 
-#### The rest
+#### `detection`
 
-| Key | Type | Default | API field | Notes |
-|---|---|---|---|---|
-| `schema` | `platform::datadog::1.0` | required | — | |
-| `enabled`, `status`, `name`, `flags`, `tenants`, `contributors` | as every block | | | `status` drives the modifiers and strategies as elsewhere |
-| `type` | `log_detection` \| `signal_correlation` | `log_detection` | `type` | Other API types are refused (`datadog_type_unsupported`) |
-| `message` | Markdown with Datadog template variables | derived (6.3) | `message` | |
-| `tags[]` | Datadog tags | `[]` | `tags` | Added to the derived tags (6.4) |
+| Key | Type and allowed values | Required | Default | API property | Meaning |
+|---|---|:-:|---|---|---|
+| `method` | `threshold` \| `new_value` \| `anomaly` \| `impossible_travel` | | `threshold` | `options.detectionMethod` (`anomaly` is `anomaly_detection`) | |
+| `window` | `0`, `1m`, `5m`, `10m`, `15m`, `30m`, `1h`, `2h`, `3h`, `6h`, `12h` or `1d` | | `5m` | `options.evaluationWindow` (seconds) | The sliding window the cases are tested over |
+| `learning` | a duration; the values depend on the method (below) | | per method | see below | How long Datadog learns what is normal before it creates signals |
+| `forget_after` | `1d` to `30d`, whole days | `new_value` | `7d` | `newValueOptions.forgetAfter` (days) | A learned value is forgotten after this long unseen, and is new again |
+| `bucket` | `5m`, `10m`, `15m`, `30m`, `1h` or `3h` | | `5m` | `anomalyDetectionOptions.bucketDuration` (seconds) | The time bucket the baseline is computed on |
+| `tolerance` | integer, 1 to 5 | | `3` **(unverified default)** | `anomalyDetectionOptions.detectionTolerance` | How far above the baseline counts as anomalous |
+| `ignore_known_transitions` | bool | | `false` | `impossibleTravelOptions.detectIpTransition` | No signal for a move between two locations this user has made before |
 
-#### Naming
+`learning` is one key for one idea across three methods. The compiler converts it to the unit each
+API property takes:
 
-The names were chosen for the person reading a rule, not for the API:
+| Method | Allowed `learning` | Default | API property |
+|---|---|---|---|
+| `new_value` | `0d` to `30d`, whole days | `1d` | `newValueOptions.learningDuration` (days) |
+| `anomaly` | `1h`, `6h`, `12h`, `1d`, `2d`, `7d` or `14d` | `7d` | `anomalyDetectionOptions.learningDuration` (hours) |
+| `impossible_travel` | `1d` to `30d`, whole days; setting it also sets `baselineUserLocations: true` | unset: no baseline | `impossibleTravelOptions.baselineUserLocationsDuration` (days) |
+
+A key the method does not take (`bucket` with `threshold`, for example) is refused
+(`datadog_detection_option`).
+
+#### `cases[]`
+
+| Key | Type and allowed values | Required | Default | API property | Meaning |
+|---|---|:-:|---|---|---|
+| `name` | text | | `""` | `name` | |
+| `condition` | the condition grammar (5.8) | for `threshold` and `anomaly` | | `condition` | |
+| `severity` | `info` \| `low` \| `medium` \| `high` \| `critical` | | from `response.alert_severity`, else `info` | `status` | |
+| `notify` | list of tenant aliases or `@handles` | | `[]` | `notifications` | Left out in a `PREVIEW` deploy (8.3) |
+
+#### `signal`
+
+| Key | Type and allowed values | Required | Default | API property | Meaning |
+|---|---|:-:|---|---|---|
+| `group_by` | list of field paths, a subset of every query's `group_by` | | all of `group_by` | `groupSignalsBy` | Matches with the same values update one signal |
+| `keep_alive` | a `detection.window` value, at least `detection.window` | | `1h` | `options.keepAlive` (seconds) | The signal stays open while a case matches again within this time |
+| `max_duration` | a `detection.window` value, at least `detection.window` | | `1d` | `options.maxSignalDuration` (seconds) | The signal closes this long after its first match, whatever still matches |
+| `downgrade_non_production` | bool, `log_detection` only | | `false` | `options.decreaseCriticalityBasedOnEnv` | One severity level lower when the `env` tag starts with `staging`, `test` or `dev` |
+| `group_in_title` | bool | | `false` | `hasExtendedTitle` | The signal's title shows the group-by values |
+
+### 5.5 Names
+
+The names were chosen for the person reading a rule, and do not copy the API:
 
 | API | Block | Why |
 |---|---|---|
 | `options.detectionMethod` | `detection.method` | |
-| `options.evaluationWindow` | `detection.window` | The only window in `detection`, so no qualifier |
-| `options.keepAlive` | `signal.keep_alive` | Datadog's own term, and the one its users know; `signal.` says what is kept alive |
+| `options.evaluationWindow` | `detection.window` | The only window in `detection`, so it needs no qualifier |
+| `options.keepAlive` | `signal.keep_alive` | Datadog's own term, which its users know; `signal.` says what is kept alive |
 | `options.maxSignalDuration` | `signal.max_duration` | `signal.` already says whose duration |
-| `options.decreaseCriticalityBasedOnEnv` | `signal.downgrade_non_production` | Says what happens and to which signals; "criticality" is not a word the rest of Tide uses |
+| `options.decreaseCriticalityBasedOnEnv` | `signal.downgrade_non_production` | Says what happens, and to which signals; "criticality" is not a word the rest of Tide uses |
 | `groupSignalsBy` | `signal.group_by` | The same word as `queries[].group_by`, in the scope it applies to |
 | `hasExtendedTitle` | `signal.group_in_title` | Says what the title gains |
 | `hasOptionalGroupByFields` | `queries[].keep_missing_groups` | Says what the switch keeps |
-| `aggregation` + `distinctFields` / `metrics` | `count_distinct`, `sum`, `max`, `new_value` | One key that names the measure and its field |
+| `aggregation`, `distinctFields`, `metrics` | `count_distinct`, `sum`, `max`, `new_value` | One key names the measure and its field |
+| `newValueOptions`, `anomalyDetectionOptions`, `impossibleTravelOptions` | `detection.learning`, `forget_after`, `bucket`, `tolerance`, `ignore_known_transitions` | Beside the method they belong to |
 | `dataSource` | `from` | Reads as the query's source: `from: audit` |
-| `notifications` | `notify` | |
+| `notifications`, `status` (of a case) | `notify`, `severity` | `status` already means a Tide status |
 | `ruleId` | `rule` | One key: a UUID is a Tide rule, anything else a Datadog id |
 
-### 4.3 Constraint codes (the block)
+### 5.6 Signal correlation across Tide rules
 
-Each is its own finding at its own field path, as `graylog_constraints` reports them.
-
-| Code | Finding |
-|---|---|
-| `datadog_type_unsupported` | `type` or `detection.method` outside the 1.0 scope |
-| `datadog_sql_unsupported` | A query asks for SQL (`queryLanguage: sql`) |
-| `datadog_duration` | A duration outside the values its key accepts (`detection.window`, `learning`, `forget_after`, `bucket`, `signal.keep_alive`, `signal.max_duration`) |
-| `datadog_window_order` | `detection.window` longer than `signal.keep_alive` or `signal.max_duration` |
-| `datadog_query_name` | A query name that is not `[a-z][a-z0-9_]*`, a duplicate, or a name on a `new_value` query |
-| `datadog_measure` | More than one of `count_distinct`, `sum`, `max` and `new_value`; `new_value` without `method: new_value` or the reverse; more than five `new_value` fields |
-| `datadog_detection_option` | A `detection` key that the method does not take (`bucket` on `threshold`), or a value it does not accept |
-| `datadog_signal_group_by` | `signal.group_by` not a subset of the queries' `group_by` |
-| `datadog_correlation` | A `signal_correlation` query without `rule` or with `query`; a `log_detection` query with `rule`; a `rule` that is neither a UUID nor a Datadog rule id |
-| `datadog_condition` | A case condition that does not parse, names an unknown query, puts the number first (`3 < a`), or uses an operator the method does not allow (anomaly: `>`, `>=`, `&&`, `\|\|` only) |
-| `datadog_severity` | A case severity outside the five Datadog statuses |
-| `datadog_notification_alias` | A notification alias the tenant does not define (deploy time) |
-| `datadog_tag` | A tag Datadog would refuse or rewrite: more than 200 characters, upper case, or a character outside `[a-z0-9_\-:./]` |
-
-### 4.4 Signal correlation across Tide rules
-
-A `signal_correlation` query names the rule whose signals it counts with `rule`:
+A `signal_correlation` query names, with `rule`, the rule whose signals it counts:
 
 - **A UUID is a Tide rule.** Deploy resolves it to the Datadog rule id that
   `.opentide/states/deployment/` holds for the same tenant, and deploys the referenced rule first.
   A reference to a rule that is not deployed to that tenant fails the correlation rule
   (`datadog_correlation_unresolved`), never the whole run.
-- **Anything else is a Datadog rule id**, for rules opentide does not own, such as Datadog's own
-  default rules.
+- **Anything else is a Datadog rule id**, for a rule opentide does not own, such as one of
+  Datadog's default rules.
 
-The two never collide: a Tide UUID is 8-4-4-4-12 hex digits, a Datadog rule id three groups of
-three (7.3).
+The two cannot be confused. A UUID is 8-4-4-4-12 hex digits; every Datadog rule id seen is three
+groups of three characters (8.5).
 
 ```yaml
 configurations:
   datadog:
     schema: platform::datadog::1.0
+    status: STAGING
     type: signal_correlation
     queries:
       - name: bruteforce
         rule: 2b0d7c1e-0b55-4f0e-9d0b-3c0f2a8f9a11   # a Tide rule
         correlate_by: ["@usr.email"]
       - name: mfa_reset
-        rule: def-000-xyz                              # a Datadog rule (illustrative id)
+        rule: def-000-xyz                              # a Datadog rule (an illustrative id)
         correlate_by: ["@usr.email"]
     detection:
       window: 15m
@@ -293,12 +350,12 @@ configurations:
         severity: critical
 ```
 
-### 4.5 Other methods, for comparison
+### 5.7 The other methods
 
-The method's settings sit beside it, so a reader sees all of a method in one place:
+Each method's settings sit beside it, so a reader sees all of a method in one place:
 
 ```yaml
-    # A user logs in from a country they have not used in the last 30 days.
+    # New value: a user logs in from a country not seen for them in the last 30 days.
     queries:
       - query: source:okta @evt.name:user.session.start @evt.outcome:SUCCESS
         group_by: ["@usr.email"]
@@ -321,7 +378,20 @@ The method's settings sit beside it, so a reader sees all of a method in one pla
     cases:
       - severity: high
 
-    # Many distinct users fail to log in from one address.
+    # Anomaly: far more denied API calls than this role's baseline.
+    queries:
+      - name: denied
+        query: source:cloudtrail @error.kind:AccessDenied
+        group_by: ["@userIdentity.arn"]
+    detection:
+      method: anomaly
+      bucket: 10m
+      learning: 7d
+      tolerance: 4
+    cases:
+      - condition: denied > 0
+
+    # A threshold on distinct values: many users fail to log in from one address.
     queries:
       - name: failures
         query: source:okta @evt.outcome:FAILURE
@@ -333,7 +403,7 @@ The method's settings sit beside it, so a reader sees all of a method in one pla
       - condition: failures > 20
 ```
 
-### 4.6 The condition grammar
+### 5.8 The condition grammar
 
 ```text
 condition  = or_expr
@@ -344,59 +414,83 @@ query_name = [a-z][a-z0-9_]*
 number     = [0-9]+ ( "." [0-9]+ )?
 ```
 
-The query name comes first: Datadog's docs say `a > 3` is allowed and `3 < a` is not. `<` and `<=`
-are documented for threshold rules only. Whether `&&` binds tighter than `||`, and whether
-parentheses are accepted, is **unverified**. Until a tenant settles it, the checker refuses a
-condition that mixes `&&` and `||` without the clauses being one kind. This is the same
-conservative choice Exabeam's `exabeam_mixed_boolean` makes.
+- **The query name comes first.** Datadog's docs say "`a > 3` is allowed; `3 < a` is not".
+- **`<` and `<=` are documented for threshold rules only.**
+- **`&&` with `||` is refused until settled.** Whether `&&` binds tighter than `||`, and whether
+  parentheses are accepted, is **unverified**. Until a tenant settles it, the checker refuses a
+  condition that mixes the two (`datadog_condition`), the same conservative choice Exabeam's
+  `exabeam_mixed_boolean` makes. Two cases express the same thing.
 
-## 5. The language: Datadog search syntax (`datadog`)
+### 5.9 Block constraint codes
 
-### 5.1 Name and profiles
+Each is its own finding at its own field path, as `graylog_constraints` reports them.
+
+| Code | Finding | Example |
+|---|---|---|
+| `datadog_type_unsupported` | `type` or `detection.method` outside the 1.0 scope | `type: workload_security`; `method: sequence` |
+| `datadog_sql_unsupported` | A query asks for SQL | `query_language: sql` |
+| `datadog_duration` | A duration outside the values its key accepts | `window: 7m`; `learning: 3h` with `new_value` |
+| `datadog_window_order` | `detection.window` longer than `signal.keep_alive` or `signal.max_duration` | `window: 1h` with `keep_alive: 30m` |
+| `datadog_query_name` | Not `[a-z][a-z0-9_]*`, a duplicate, or a name on a `new_value` query | `name: Failed-Logins` |
+| `datadog_measure` | More than one measure; `new_value` without `method: new_value` or the reverse; more than five `new_value` fields | `count_distinct` and `sum` on one query |
+| `datadog_detection_option` | A `detection` key the method does not take | `bucket: 5m` with `method: threshold` |
+| `datadog_signal_group_by` | `signal.group_by` not a subset of every query's `group_by` | `signal.group_by: ["@usr.id"]` while a query groups by `@usr.email` |
+| `datadog_correlation` | A correlation query without `rule` or with `query`; a detection query with `rule`; a `rule` that is neither a UUID nor a Datadog rule id | `rule: my-rule` |
+| `datadog_condition` | A condition that does not parse, names an unknown query, puts the number first, mixes `&&` and `\|\|`, or uses an operator the method does not allow | `3 < failed`; `fail > 1` with no query `fail`; `a < 1` with `anomaly` |
+| `datadog_severity` | A case severity outside the five Datadog statuses | `severity: urgent` |
+| `datadog_notification_alias` | A notification alias the tenant does not define (deploy time) | `notify: [secops]` with no `secops` alias |
+| `datadog_tag` | A tag Datadog would refuse or rewrite: longer than 200 characters, upper case, or a character outside `[a-z0-9_\-:./]` | `tags: ["Team:Identity"]` |
+
+## 6. The language: Datadog search syntax (`datadog`)
+
+### 6.1 Identity
 
 | Item | Value |
 |---|---|
-| Language id | `datadog` (`LanguageId::Datadog`); open question 1 weighs `ddsearch` instead |
+| Language id | `datadog` (`LanguageId::Datadog`); open question 1 weighs `ddsearch` |
 | Crate | `opentide-datadog`, foundation tier 2, beside `opentide-cql` |
 | File suffix | `.datadog` |
-| Code prefix | `datadog_` |
-| Profile `rule` | `queries[].query` of a block: no `*:` full-text search (Datadog lists the contexts that refuse it; SIEM is not listed, so this is a warning until verified) |
-| Profile `search` | `.datadog` files, hunts with `system: datadog`, `opentide query`: `*:` allowed |
+| Diagnostic code prefix | `datadog_` |
+| Profile `rule` | A block's `queries[].query`. `*:term` full-text search is a warning: Datadog lists the contexts that refuse it, and SIEM rules are not on that list, so it is unverified rather than wrong |
+| Profile `search` | `.datadog` files, hunts with `system: datadog`, and `opentide query`. `*:term` is allowed |
 
-### 5.2 Why a new crate, not a Lucene dialect
+### 6.2 A new crate, not a Lucene dialect
 
-`opentide-lucene` already serves three dialects (Elastic, Carbon Black, Graylog), and the
-Datadog syntax looks like Lucene. But the differences reach the tree, not just the diagnostics:
+`opentide-lucene` already serves three dialects: Elastic, Carbon Black and Graylog. The Datadog
+syntax looks like Lucene, but it differs in ways that reach the tree, not only the diagnostics:
 
 | | Lucene classic (`opentide-lucene`) | Datadog search syntax |
 |---|---|---|
-| Precedence | None: `a OR b AND c` is `a +b +c` | `AND` (explicit or implied) binds tighter than `OR` (the precedence of VRL, Datadog's open-source implementation; **unverified** on Cloud SIEM itself, open question 2) |
-| Fields | `field:value` | `@attribute.path:value` for attributes; bare `key:value` for tags and the reserved attributes (`host`, `source`, `status`, `service`, `trace_id`, `message`); `#name` for calculated fields |
-| Negation | `NOT`, `-`, `!` | `-` and `NOT` (`!`, `&&`, `\|\|` are escaped characters; their status as operators is unverified) |
+| Precedence | None: `a OR b AND c` is `a +b +c` | AND, written or implied, binds tighter than OR (VRL's precedence; **unverified** on Cloud SIEM itself, open question 2) |
+| Fields | `field:value` | `@attribute.path:value` for attributes; bare `key:value` for tags and reserved attributes; `#name` for calculated fields |
 | Functions | none | `CIDR(@attr, block, …)` |
-| Wildcards | `*`, `?` within a term | `*` within a word, `**` across words, `\ ` to join words, `?` for one special character or space; ignored inside quotes |
-| Regex, fuzzy, boost | `/re/`, `~`, `^` | none |
-| Free text | the default field | `message`, `@title`, `@error.message`, `@error.stack` only; `*:term` searches every attribute |
-| Tokenising | analyser dependent | Unicode word boundaries (`version.2` is two words, `my.friend` one) |
+| Wildcards | `*`, `?` | `*` within a word, `**` across words, `\ ` to join words, `?` for one character; none inside quotes |
+| Regex, fuzzy, boost | `/re/`, `~`, `^` | none; `/` is an ordinary character |
+| Free text | the default field | `message`, `@title`, `@error.message` and `@error.stack` only; `*:term` searches every attribute |
+| Values | analyser dependent | Numbers may carry duration units (`@duration:>=100ms`) |
 
-A dialect flag would make the walk branch on the dialect at every node, and the precedence
-difference changes the tree's shape. The rule set in the [add-language
-skill](../../.agents/skills/add-language/SKILL.md) applies unchanged: a logos lexer, a hand-written
-Pratt grammar on `opentide-parse`, a lossless rowan tree, `src/datadog.ungram` and the depth
-contract.
+A dialect flag would make the single walk branch on the dialect at almost every node, and the
+precedence difference changes the tree's shape. That is the line the language review draws
+between a language and a dialect.
 
-### 5.3 Grammar (first draft of `datadog-1.0`)
+The crate follows the [add-language skill](../../.agents/skills/add-language/SKILL.md) unchanged:
 
-Written from Datadog's Log Search Syntax page first, then checked against VRL's grammar (Datadog's
-open-source parser for the same syntax) and against the queries Datadog itself publishes (5.5,
-9.1). Where VRL and the docs differ, the docs win and the difference is a diagnostic or an open
-question, never a silent choice.
+- a logos lexer and a hand-written Pratt grammar on `opentide-parse`;
+- a lossless rowan tree, with `src/datadog.ungram`;
+- the depth contract;
+- one walk for the checks and the highlight.
+
+### 6.3 Grammar
+
+The grammar is written from Datadog's Log Search Syntax page first, then checked against VRL and
+against Datadog's published queries (6.6, 11). Where VRL and the docs differ, the docs win, and
+the difference becomes a diagnostic or an open question, never a silent choice.
 
 ```text
 query       = or_expr?
 or_expr     = and_expr ( OR and_expr )*
 and_expr    = unary ( AND? unary )*                   // juxtaposition is AND
-unary       = ( "-" | "+" | "NOT" ) unary | primary   // "-" and "+" written attached
+unary       = ( "-" | "+" | "NOT" ) unary | primary   // "-" and "+" are written attached
 primary     = "(" or_expr ")"
             | "*:*"                                   // every event
             | cidr_call
@@ -413,162 +507,178 @@ comparison  = ( ">=" | "<=" | ">" | "<" ) ( NUMBER | TERM )
 range       = ( "[" | "{" ) BOUND "TO" BOUND ( "]" | "}" )
 value_expr  = value_and ( OR value_and )*
 value_and   = value_unary ( AND? value_unary )*
-value_unary = ( "-" | "NOT" ) value_unary | "(" value_expr ")" | value
-AND         = "AND"                                   // "&&" also, in VRL (datadog_symbol_operator)
-OR          = "OR"                                    // "||" also, in VRL
+value_unary = ( "-" | "NOT" ) value_unary | "(" value_expr ")" | comparison | range | value
+AND         = "AND"                                   // VRL also reads "&&" (datadog_symbol_operator)
+OR          = "OR"                                    // VRL also reads "||"
 ```
 
-Lexing rules:
+Whitespace may separate a field's `:` from its value (`env: prod`). VRL allows this, and
+Datadog's pipelines and docs write it 15 times.
 
-- **Phrases.** Straight double quotes, `\X` escapes. Curly quotes are not quotes.
-- **Terms.** A term may not start with `( ) [ ] { } " : - + ! ~ ^ ? * \ > = <` or whitespace, and
-  may not contain an unescaped `: ! ~ ^ < >` anywhere (VRL's `TERM_CHAR`). Inside a term, `-`,
-  `+` and `=` are ordinary. `*` and `?` are wildcards, `**` matches across words, and `\ ` joins
-  two words.
-- **Escapes.** A backslash escapes any one character. The set Datadog says to escape is
-  ``- ! && || > >= < <= ( ) { } [ ] " * ? : \ #`` and space; `/` is not special. A value starting
-  with `-` must escape it (`@x:\-1`), since `-` there would be read as exclusion; a comparison may
-  take a negative number (`@x:>-1`).
-- **Numbers** follow VRL's `-?\d+(\.\d+)?(E-?\d+(\.\d+)?)?`.
+### 6.4 Lexical rules
+
+- **Phrases** are in straight double quotes and take `\X` escapes. Curly quotes are not quotes.
+- **Terms.**
+  - A term may not start with `( ) [ ] { } " : - + ! ~ ^ ? * \ > = <` or whitespace.
+  - A term may not contain an unescaped `! ~ ^ < >` anywhere (VRL's `TERM_CHAR`), or an
+    unescaped `:` after its field (6.7).
+  - Inside a term, `-`, `+`, `=`, `/`, `$` and `,` are ordinary.
+- **Wildcards.** `*` and `?` are wildcards in a term, `**` matches across words, and `\ ` joins two
+  words.
+- **Escapes.** A backslash escapes any one character. Datadog's list of characters to escape is
+  ``- ! && || > >= < <= ( ) { } [ ] " * ? : \ #`` and space; `/` is not special.
+  - A value that starts with `-` must escape it (`@x:\-1`), since `-` there means exclusion.
+  - A comparison may take a negative number (`@x:>-1`).
+- **Numbers** follow VRL's `-?\d+(\.\d+)?(E-?\d+(\.\d+)?)?`, optionally followed by a duration unit
+  (`ns`, `us`, `µs`, `ms`, `s`, `m`, `min`, `h`, `d`, `day`, `days`, `w`).
 - **Operators.** `AND`, `OR`, `NOT` and `TO` are operators only in upper case. `NOT(` needs no
   space.
-- **Range bounds** are any run without whitespace or a closing bracket, `*` for an open end.
+- **Range bounds** are any run without whitespace or a closing bracket, with `*` for an open end.
+- **Commas** separate the arguments of `CIDR(…)` and are ordinary characters everywhere else.
 - **Fields.** A field is everything before the first unescaped `:` of a term.
-  - `@` starts an attribute path, `#` a calculated field, and a bare name is a tag or one of the
-    reserved attributes (`host`, `source`, `status`, `service`, `trace_id`, `message`).
-  - A tag that is not `key:value` is searched as `tags:<tag>`.
-  - Dots separate path segments. A dot or space inside a key is escaped.
+  - `@` starts an attribute path, `#` a calculated field.
+  - A bare name is a tag or a reserved attribute: `host`, `source`, `status`, `service`,
+    `trace_id` or `message`.
+  - Dots separate path segments, and a dot or space inside a key is escaped (`@user.first\ name`).
 
-Not part of the language, so refused or flagged:
+### 6.5 Semantics the checker relies on
 
-- **Regex, fuzzy and boost** (`/re/`, `~`, `^`). Datadog has none; `/` is an ordinary character.
-- **Lower-case operators.** They are terms.
-- **`_exists_:` and `_missing_:`.** These are documented only for Observability Pipelines; the
-  `search` profile accepts them with a warning, and the `rule` profile does not.
+- **Precedence.** `-`/`NOT` bind tightest, then AND (written or implied), then OR, the same inside
+  a value group. This is **unverified** on Cloud SIEM; the model follows VRL and says so in every
+  diagnostic it affects.
+- **Value groups.** In `field:(a b)`, juxtaposition is AND: Datadog's example `@user_perms:(4 6)`
+  matches an array that holds both. Comparisons and ranges apply to the group's field
+  (`@http.status_code:(>=400 <500)`).
+- **Case.** Operators are case-sensitive. Attribute values are case-sensitive; free-text search is
+  not.
+- **Wildcards inside quotes** are punctuation: `"*test*"` searches for the word `test`.
+- **Free text** searches `message`, `@title`, `@error.message` and `@error.stack`. It splits words
+  on Unicode boundaries, so `version.2` is two words and `my.friend` one.
 
-### 5.4 Diagnostics (first draft)
+### 6.6 The model, construct by construct
 
-| Code | Severity | Fires on |
-|---|---|---|
-| `datadog_parse_error` | error | Unbalanced parentheses or brackets, a dangling operator, an empty group, `field:` without a value, a comma outside `CIDR(…)` |
-| `datadog_lowercase_operator` | warning | `and`, `or`, `not` or `to` between clauses: they are search terms |
-| `datadog_curly_quote` | warning | `“…”`: Datadog ignores curly quotes, so the phrase becomes separate terms |
-| `datadog_wildcard_in_phrase` | warning | `"*test*"`: wildcards inside quotes are punctuation in Log Explorer |
-| `datadog_unescaped_special` | error | An unescaped `: ! < >` inside a term (`@a:b:c`, `foo!bar`), or a value that starts with an unescaped `-` (`@x:-1`) |
-| `datadog_symbol_operator` | warning | `&&` or `\|\|` between clauses: VRL reads them as `AND` and `OR`, but Datadog's docs list them only among the characters to escape |
-| `datadog_detached_operator` | warning | `- term` with a space: VRL still applies it, but the docs never write it so |
-| `datadog_cidr` | error | `CIDR` with no attribute, a tag instead of an `@attribute`, or a block that is not an IPv4 or IPv6 CIDR |
-| `datadog_range` | error / warning | A lower-case `to` or a malformed range (error); mixed bounds `[a TO b}` (warning: VRL accepts them, the docs never show them) |
-| `datadog_mixed_boolean` | warning | `a OR b c`, where the implied AND binds tighter than the OR beside it; suggest parentheses |
-| `datadog_full_text_in_rule` | warning | `*:term` in profile `rule` |
-| `datadog_pipelines_only` | warning | `_exists_:` or `_missing_:` (Observability Pipelines syntax) |
-| `datadog_regex` | error | `~` or `^` in a term: Datadog has no fuzzy or boost operators, and no regex (`/` is an ordinary character, so `@http.url:/api` is a path, not a regex) |
-| `datadog_unknown_attribute` | hint | A dotted bare key (`evt.name:x`), searched as a tag where an attribute was likely meant; with catalogs, an `@attribute` that neither the standard attributes nor the source's pipeline catalog knows (5.7) |
+Each construct is held to three references:
 
-### 5.5 The model, construct by construct
-
-Each construct is held to three references: Datadog's docs; VRL, Datadog's open-source parser for
-the same syntax; and how often Datadog's own published queries use it (9.1, 3,318 queries).
+- **Docs:** whether Datadog's documentation describes it.
+- **VRL:** whether Datadog's open-source parser accepts it.
+- **Published uses:** how many of the 3,229 queries Datadog publishes use it (section 11).
 
 | Construct | Example | Docs | VRL | Published uses | Model |
 |---|---|:-:|:-:|--:|---|
-| Free-text term | `authentication` | ✅ | ✅ | 778 | Searches `message`, `@title`, `@error.message`, `@error.stack` |
-| Phrase | `"hello world"`, `""` | ✅ | ✅ | 301 | `\X` escapes; curly quotes are not quotes (`datadog_curly_quote`) |
-| Attribute | `@evt.outcome:FAILURE` | ✅ | ✅ | 2,042 | `@` path; `\ ` and `\.` inside a key |
-| Tag or reserved attribute | `source:okta`, `env:prod` | ✅ | ✅ | 1,528 | A dotted bare key is a hint (`datadog_unknown_attribute`, 58 uses, mostly APM-style dashboards) |
-| Calculated field | `#duration_ms:>500` | ✅ | ✅ | 0 | Documented only; parsed like an attribute |
-| `AND`, `OR`, implicit AND | `a OR b c` | ✅ | ✅ | 77 / 626 / most | AND binds tighter than OR (VRL); unverified on Cloud SIEM (`datadog_mixed_boolean`) |
+| Free-text term | `authentication` | ✅ | ✅ | 757 | |
+| Phrase | `"hello world"`, `""` | ✅ | ✅ | 300 | Curly quotes are not quotes (`datadog_curly_quote`) |
+| Attribute | `@evt.outcome:FAILURE` | ✅ | ✅ | 2,042 | |
+| Tag or reserved attribute | `source:okta` | ✅ | ✅ | 1,458 | A dotted bare key is a hint (`datadog_unknown_attribute`, 58 uses, mostly APM-style dashboard queries) |
+| Calculated field | `#duration_ms:>500` | ✅ | ✅ | 0 | Documented only |
+| `AND`, `OR`, implicit AND | `a OR b c` | ✅ | ✅ | 70 / 625 / most | AND binds tighter than OR (`datadog_mixed_boolean`) |
 | `NOT`, `NOT(` | `NOT(CIDR(…))` | ✅ | ✅ | 6 | |
-| `-` exclusion | `-@level:Error`, `-(…)`, `-"…"` | ✅ | ✅ | 143 | A space after it is a warning (`datadog_detached_operator`; 2 uses) |
-| `+` prefix | `+@a:1` | — | ✅ | 0 | Parsed; never used. `@data.message:+*` (docs) is a value starting with `+`, which the docs accept and VRL does not |
+| `-` exclusion | `-@level:Error`, `-(…)`, `-"…"` | ✅ | ✅ | 142 | A space after it is a warning (`datadog_detached_operator`) |
+| `+` prefix | `+@a:1` | | ✅ | 0 | Parsed; never used |
 | Grouping | `(a OR b)` | ✅ | ✅ | 71 | |
-| Value group | `env:(prod OR test)`, `@perms:(4 6)` | ✅ | ✅ | 577 | Takes comparisons (`(>=400 <500)`), ranges, `-*` and nested `key:value` (`tag:(integration:dcgm)`), as Datadog's pipelines write them |
-| Wildcards | `web*`, `hello?world`, `waiting**time` | ✅ | ✅ (not `**`) | 496 / 8 / 4 | Not wildcards inside quotes (`datadog_wildcard_in_phrase` when one touches a word, `"*test*"`) |
+| Value group | `env:(prod OR test)`, `@code:(>=400 <500)` | ✅ | ✅ | 546 | Takes comparisons, ranges and `-*` |
+| Wildcards | `web*`, `a?b`, `a**b` | ✅ | ✅, but not `**` | 490 / 8 / 4 | Literal inside quotes (`datadog_wildcard_in_phrase`) |
 | Escaped space | `waiting\ un*` | ✅ | ✅ | 11 | |
-| Existence | `@attr:*`, `-@attr:*` | ✅ | ✅ | 245 | `_exists_:` / `_missing_:` are Observability Pipelines only (`datadog_pipelines_only`) |
-| Comparison | `@duration:>=100ms` | ✅ | ✅ | 48 | Numbers may carry a duration unit (`100ms`, `1s`, `7days`), as Datadog's RUM, CI and database queries do |
-| Range | `[400 TO 499]`, `{200 TO 299}` | ✅ | ✅ | 112 / 2 | `TO` upper case; `[* TO 5]` parses but is never used; mixed bounds a warning |
-| `CIDR()` | `CIDR(@network.client.ip, 10.0.0.0/8, fc00::/7)` | ✅ | ❌ | 8 | Log Explorer only; IPv4 and IPv6 blocks; a comma has meaning only here |
-| Full text, match all | `*:hello`, `*:*` | ✅ | ❌ / ✅ | 4 / 1 | `*:term` is a warning in rule queries (`datadog_full_text_in_rule`) |
-| Space after `:` | `env: prod`, `@severity: "."` | — | ✅ | 16 | Accepted: VRL allows it and Datadog publishes it |
-| Unescaped `:` in a value | `@http.url:https:\/\/*`, `tag:integration:airflow` | ❌ (escape it) | ❌ | 31 | A warning (`datadog_unescaped_colon`), none for `tag` and `tags`, whose values are `key:value`. Datadog's own docs and dashboards write it, so it is not an error |
-| `&&`, `\|\|`, `!` as operators | `a && b` | ❌ (escape them) | ✅ | 0 | A warning (`datadog_symbol_operator`); `!` inside a term is an error |
-| Lower-case operators | `k OR n or E` | ❌ | ❌ | 1 (a bug) | A term (`datadog_lowercase_operator`) |
-| Regex, fuzzy, boost | `/re/`, `foo~2` | ❌ | ❌ | 0 | `/` is ordinary; `~` and `^` are errors (`datadog_regex`) |
+| Existence | `@attr:*`, `-@attr:*` | ✅ | ✅ | 244 | `_exists_:` is Observability Pipelines only (`datadog_pipelines_only`) |
+| Comparison | `@duration:>=100ms` | ✅ | ✅ | 48 | Duration units are numbers |
+| Range | `[400 TO 499]`, `{200 TO 299}` | ✅ | ✅ | 112 / 2 | `TO` in upper case; mixed bounds are a warning |
+| `CIDR()` | `CIDR(@network.client.ip, 10.0.0.0/8, fc00::/7)` | ✅ | ❌ | 8 | IPv4 and IPv6 blocks |
+| Full text, match all | `*:hello`, `*:*` | ✅ | ❌ / ✅ | 4 / 1 | `*:term` is a warning in rule queries |
+| Space after `:` | `env: prod` | | ✅ | 15 | Accepted |
+| Unescaped `:` in a value | `@usr.id:system:serviceaccount:x` | ❌ (escape it) | ❌ | 3 | A warning (`datadog_unescaped_colon`) |
+| `&&`, `\|\|` as operators | `a && b` | ❌ (escape them) | ✅ | 0 | A warning (`datadog_symbol_operator`) |
+| Lower-case operators | `k OR n or E` | ❌ | ❌ | 1, a bug | A term (`datadog_lowercase_operator`) |
+| Regex, fuzzy, boost | `foo~2` | ❌ | ❌ | 0 | An error (`datadog_regex`) |
 
-Two differences from VRL are deliberate, and both follow Datadog's docs and its published queries
-rather than VRL:
+The model differs from VRL in two directions, and both follow Datadog's docs and published
+queries:
 
-- **What the model accepts and VRL refuses:** `CIDR()`, `*:term`, an unescaped `:` in a value,
-  and a value starting with `+`.
-- **What VRL accepts and the model warns about:** `&&` and `||` between clauses.
+- **The model accepts what VRL refuses:** `CIDR()`, `*:term`, and a value starting with `+`.
+- **The model warns where VRL accepts:** `&&` and `||` between clauses.
 
-The probes on a trial tenant (open question 2) settle the cases where neither reference does.
+### 6.7 Diagnostics
 
-### 5.6 Highlighting (existing captures only)
+| Code | Severity | Fires on | Example |
+|---|---|---|---|
+| `datadog_parse_error` | error | Unbalanced brackets, a dangling operator, an empty group, `field:` with no value | `service:(web OR api`; `@user:` |
+| `datadog_unescaped_special` | error | An unescaped `! < >` in a term, or a value starting with an unescaped `-` | `foo!bar`; `@x:-1` |
+| `datadog_regex` | error | `~` or `^` in a term | `@msg:foo~2` |
+| `datadog_cidr` | error | `CIDR` without an `@attribute` first, or with an argument that is not an IPv4 or IPv6 CIDR block | `CIDR(network.client.ip, 10.0.0.0/8)`; `CIDR(@ip, 10.0.0.300)` |
+| `datadog_range` | error, or warning for mixed bounds | A malformed range or a lower-case `to`; mixed bounds | `@x:[1 to 5]`; `@x:[1 TO 5}` |
+| `datadog_mixed_boolean` | warning | An OR beside an implied or written AND, without parentheses | `status:error OR warning` with another clause |
+| `datadog_lowercase_operator` | warning | `and`, `or`, `not` between clauses | `@a:1 and @b:2` |
+| `datadog_curly_quote` | warning | `“…”` | `@evt.name:“Console Login”` |
+| `datadog_wildcard_in_phrase` | warning | `*` or `?` touching a word inside quotes | `"*mimikatz*"` |
+| `datadog_unescaped_colon` | warning | An unescaped `:` in a value; the docs say to escape it, and Datadog's own content sometimes does not | `@usr.id:system:serviceaccount:x` |
+| `datadog_symbol_operator` | warning | `&&` or `\|\|` between clauses | `a && b` |
+| `datadog_detached_operator` | warning | `-` followed by a space | `- @login_type:k` |
+| `datadog_full_text_in_rule` | warning | `*:term` in profile `rule` | `*:mimikatz` |
+| `datadog_pipelines_only` | warning | Observability Pipelines syntax: `_exists_:`, `_missing_:`, a quoted field name | `_exists_:service`; `"service.status":disabled` |
+| `datadog_unknown_attribute` | hint | A dotted bare key, which is searched as a tag where an attribute was probably meant; with catalogs, an unknown `@attribute` | `evt.name:ConsoleLogin` |
+
+### 6.8 Highlighting
 
 No capture is added to `highlights/spec.toml`.
 
 | Token | Example | Capture |
 |---|---|---|
-| Attribute path | `@evt.outcome` | `property` |
-| Tag key or reserved attribute | `source`, `env`, `service` | `property` |
+| Attribute path, tag key, reserved attribute | `@evt.outcome`, `source` | `property` |
 | Calculated field | `#duration_ms` | `variable` |
-| Field separator | `:` | `operator` |
-| Comparison | `>`, `>=`, `<`, `<=` | `operator` |
-| Exclusion | `-` (prefix) | `operator` |
+| Field separator, comparison, exclusion, wildcard | `:`, `>=`, `-`, `*` | `operator` |
 | Boolean | `AND`, `OR`, `NOT` | `keyword` (TextMate: `keyword.operator.logical`, as Lucene's `tm_extras:logical`) |
 | Range keyword | `TO` | `keyword` |
 | `CIDR` | `CIDR(` | `function.builtin` |
-| CIDR block, IP | `10.0.0.0/8` | `constant` |
+| CIDR block, escape | `10.0.0.0/8`, `\:` | `constant` |
 | Phrase | `"hello world"` | `string` |
-| Number | `400`, `0.95` | `number` |
-| Wildcard | `*`, `**`, `?` | `operator` |
-| Escape | `\:` | `constant` |
-| Brackets | `( ) [ ] { }` | `punctuation.bracket` |
-| Comma | `,` | `punctuation.delimiter` |
+| Number, with or without a unit | `400`, `100ms` | `number` |
+| Brackets, comma | `( ) [ ] { }`, `,` | `punctuation.bracket`, `punctuation.delimiter` |
 | Error node | | `error` |
 
 In conditions, query names are `variable`, comparisons and `&&`/`||` are `operator`, and numbers
-are `number`. In `message`, the Markdown stays Markdown and `{{…}}` template variables are
-`macro` (an existing capture). The YAML wiring to add:
+are `number`. In `message`, `{{…}}` template variables are `macro`.
 
-- `platform_field_language` (`crates/opentide-tide/src/lib.rs`): `PlatformId::Datadog` answers
-  `["queries", <index>, "query"]`, exactly as Exabeam answers `["sequences", <index>, "query"]`.
-  Validation, the language server and semantic tokens then cover every rule query.
-- `EMBEDDED_QUERIES` (the TextMate injection, `crates/opentide-highlight/src/lib.rs`) lists only
-  fixed key paths, and Exabeam's list-item queries are not in it. Datadog starts the same way:
-  semantic tokens colour the queries, and a list-item TextMate injection for both platforms is a
+The YAML wiring:
+
+- **`platform_field_language`** (`crates/opentide-tide/src/lib.rs`). `PlatformId::Datadog`
+  answers `["queries", <index>, "query"]`, as Exabeam answers `["sequences", <index>, "query"]`.
+- **`EMBEDDED_QUERIES`** (`crates/opentide-highlight/src/lib.rs`). This TextMate table lists only
+  fixed key paths, and Exabeam's list-item queries are not in it. Datadog starts the same way, with
+  semantic tokens colouring its queries; a list-item TextMate injection for both platforms is a
   follow-up.
 
-### 5.7 Catalogs
+### 6.9 Catalogs
 
 | Catalog | Source | Licence | Holds |
 |---|---|---|---|
-| Reserved and standard attributes | docs.datadoghq.com/standard-attributes (default list) | facts only; summaries written here (ADR 0013) | `@network.client.ip`, `@usr.email`, `@evt.name`, `@evt.outcome`, `@http.status_code`, … with types |
-| Source pipelines | DataDog/integrations-core `*/assets/logs/*.yaml` (the Datadog log pipelines and their test samples, 408 files) | BSD-3-Clause | `source:` values, and each source's remapped attribute paths, for completion and `datadog_unknown_attribute` |
-| Template variables | docs.datadoghq.com/security/notifications/variables | facts only | `{{severity}}`, `{{rule_name}}`, `{{events_matched}}`, `{{@attr}}`, `{{#is_match}}`, … |
+| Reserved and standard attributes | docs.datadoghq.com/standard-attributes | Facts only; summaries written here (ADR 0013) | `@network.client.ip`, `@usr.email`, `@evt.name`, `@evt.outcome`, `@http.status_code`, … with their types |
+| Source pipelines | DataDog/integrations-core `*/assets/logs/*.yaml` (408 pipeline files with test samples) | BSD-3-Clause | `source:` values and each source's attribute paths, for completion and `datadog_unknown_attribute` |
+| Template variables | docs.datadoghq.com/security/notifications/variables | Facts only | `{{severity}}`, `{{rule_name}}`, `{{events_matched}}`, `{{@attr}}`, `{{#is_match}}`, … |
 
-## 6. Compiling a block (deploy body)
+## 7. Compiling a block
 
-### 6.1 Mapping
+### 7.1 Mapping
 
-| Tide | Datadog body |
+| Tide | Datadog rule body |
 |---|---|
 | `name` | `name` |
-| block `enabled` and the status strategy | `isEnabled` |
+| `enabled`, and the strategy (8.3) | `isEnabled` |
 | `type` | `type` |
-| `queries[]` | `queries[]`: `query`, `name`, `from` → `dataSource`, `group_by` → `groupByFields`, `keep_missing_groups` → `hasOptionalGroupByFields`. The measure becomes `aggregation` with its field: none → `count`; `count_distinct` → `cardinality` + `distinctFields`; `sum`/`max` → `metrics: [field]`; `new_value` → `metrics`. Impossible travel → `geo_data` + `metrics: ["@network.client.geoip"]`; correlation → `event_count`, `rule` resolved to `ruleId` (4.4), `correlate_by` → `correlatedByFields` |
-| `detection` | `options.detectionMethod`, `options.evaluationWindow`, and the method's settings into `newValueOptions`, `anomalyDetectionOptions` or `impossibleTravelOptions`, each in the unit that field takes |
-| `cases[]` | `cases[]`. `severity` (or `response.alert_severity` mapped Informational→`info`, Low→`low`, Medium→`medium`, High→`high`, Critical→`critical`) becomes `status`; `notify` aliases are resolved into `notifications` |
+| `queries[]` | Each query compiles as follows: <ul><li>`query`, `name`; `from` → `dataSource`; `group_by` → `groupByFields`; `keep_missing_groups` → `hasOptionalGroupByFields`.</li><li>The measure becomes `aggregation` and its field: none → `count`; `count_distinct` → `cardinality` + `distinctFields`; `sum` or `max` → `metrics: [field]`; `new_value` → `new_value` + `metrics`.</li><li>Impossible travel → `geo_data` + `metrics: ["@network.client.geoip"]`.</li><li>Correlation → `event_count`; `rule` → `ruleId` (5.6); `correlate_by` → `correlatedByFields`.</li></ul> |
+| `detection` | `options.detectionMethod` and `options.evaluationWindow`; the method's settings go into `newValueOptions`, `anomalyDetectionOptions` or `impossibleTravelOptions`, each in the unit that property takes |
+| `cases[]` | `cases[]`. `severity`, or `response.alert_severity` mapped (Informational → `info`, Low → `low`, Medium → `medium`, High → `high`, Critical → `critical`), becomes `status`. `notify` aliases resolve into `notifications` |
 | `signal` | `groupSignalsBy`, `options.keepAlive`, `options.maxSignalDuration`, `options.decreaseCriticalityBasedOnEnv`, `hasExtendedTitle` |
-| durations | seconds |
-| `message` | the block's, else derived (6.3) |
-| tags | derived (6.4), plus the block's and the tenant's |
+| `message` | The block's, else derived (7.3) |
+| tags | Derived (7.4), plus the block's and the tenant's |
 
-### 6.2 Example body
+### 7.2 The request for the complete block
 
-The example in 4.1 compiles to:
+The complete block (5.2) deploys to a tenant whose `soc` alias is `@slack-soc-alerts` as:
+
+```http
+POST https://api.datadoghq.eu/api/v2/security_monitoring/rules
+DD-API-KEY: …
+DD-APPLICATION-KEY: …
+Content-Type: application/json
+```
 
 ```json
 {
@@ -589,38 +699,41 @@ The example in 4.1 compiles to:
               "maxSignalDuration": 86400, "decreaseCriticalityBasedOnEnv": true},
   "groupSignalsBy": ["@usr.email"],
   "hasExtendedTitle": true,
-  "message": "## Goal\nOne user fails to log in to Okta more than ten times in five minutes, then logs in successfully.\n\n## Strategy\n…",
-  "tags": ["source:okta", "tactic:TA0006-credential-access", "technique:T1110-brute-force",
-           "security:attack", "opentide_uuid:2b0d7c1e-0b55-4f0e-9d0b-3c0f2a8f9a11"]
+  "message": "{{@usr.email}} failed to log in {{events_matched_per_query.failed}} times, then succeeded.",
+  "tags": ["team:identity", "source:okta", "tactic:ta0006-credential-access",
+           "technique:t1110-brute-force", "security:attack",
+           "opentide_uuid:2b0d7c1e-0b55-4f0e-9d0b-3c0f2a8f9a11"]
 }
 ```
 
-### 6.3 The derived message
+In a `PREVIEW` deploy, the same body has `"notifications": []` and the tag
+`opentide_strategy:preview` (8.3).
 
-Datadog's own rules use `## Goal`, `## Strategy` and `## Triage and response` sections. The
-derived message follows them:
+### 7.3 The derived message
 
-- `## Goal` from `description`.
-- `## Strategy` from the queries and cases, in words.
-- `## Triage and response` from `response.procedure`.
+When the block has no `message`, the compiler writes one in the sections Datadog's own rules use:
 
-Text from the rule is escaped so that `{{` in a description is not read as a template.
+- `## Goal`, from `description`;
+- `## Strategy`, from the queries and cases, in words;
+- `## Triage and response`, from `response.procedure`.
 
-### 6.4 Derived tags
+Text taken from the rule is escaped, so a `{{` in a description is not read as a template.
 
-The derived tags follow Datadog's own conventions:
+### 7.4 Derived tags
 
-- `source:<x>` for each distinct `source:` the queries name.
-- `tactic:<TA id>-<slug>` and `technique:<T id>-<slug>` from `techniques`, taking the parent
-  technique for a sub-technique, as Datadog's default rules do.
-- `security:attack`.
-- `opentide_uuid:<uuid>`, which lets deploy and `doctor` find the rules opentide owns.
+Derived tags follow Datadog's own conventions:
 
-All are lower-cased and checked against `datadog_tag`.
+- `source:<x>`, for each distinct `source:` the queries name;
+- `tactic:<ta id>-<slug>` and `technique:<t id>-<slug>`, from `techniques`, taking the parent
+  technique for a sub-technique, as Datadog's default rules do;
+- `security:attack`;
+- `opentide_uuid:<uuid>`, by which deploy and `doctor` find the rules opentide owns.
 
-## 7. The connector
+Every tag is lower-cased and checked against `datadog_tag`.
 
-### 7.1 Tenant (`platforms/datadog.toml`)
+## 8. The connector
+
+### 8.1 Tenant (`platforms/datadog.toml`)
 
 ```toml
 [platform]
@@ -633,7 +746,7 @@ description = "Datadog Cloud SIEM detection rules (log detection and signal corr
 # ap2.datadoghq.com, uk1.datadoghq.com, ddog-gov.com, us2.ddog-gov.com); calls go to
 # https://api.<site>. api_key and app_key are sent as DD-API-KEY and DD-APPLICATION-KEY.
 # The application key needs security_monitoring_rules_read and security_monitoring_rules_write
-# (validate needs write), and logs_read_data for opentide query. Use a service account's
+# (validation needs write), and logs_read_data for opentide query. Use a service account's
 # scoped key. The rule id is kept in .opentide/states/deployment/ (commit it).
 #[[tenants]]
 #name = "datadog-eu"
@@ -647,188 +760,281 @@ description = "Datadog Cloud SIEM detection rules (log detection and signal corr
 #soc = "@slack-soc-alerts"
 ```
 
-### 7.2 Calls
+### 8.2 Calls
 
-Every path is under `https://api.<site>/api/v2/security_monitoring`. All are GA.
+Every path is under `https://api.<site>/api/v2/security_monitoring`, and every call here is
+generally available.
 
-| opentide | Call | Scope | Result handling |
+| opentide | Call | Application-key scope | Result |
 |---|---|---|---|
-| `validate query --live`, `deploy` pre-check | `POST /rules/validation` with the compiled body | `security_monitoring_rules_write` | 204 means valid; 400 gives `datadog_rule_invalid` with Datadog's `errors[]` |
-| deploy, new rule | `POST /rules` | `…_rules_write` | 200 with the rule; `id` and `version` go to the deployment state |
-| deploy, existing rule | `PUT /rules/{id}`, sending `queries`, `cases` and `options` whole | `…_rules_write` | The spec maps a concurrent modification to **401**: report `datadog_concurrent_modification` and do not treat it as an authentication failure |
+| `validate query --live`, and before each deploy | `POST /rules/validation` with the compiled body | `security_monitoring_rules_write` | 204: valid. 400: `datadog_rule_invalid`, with Datadog's `errors[]` |
+| Deploy, no stored id | `POST /rules` | `…_rules_write` | 200 with the rule; its `id` and `version` go to the deployment state |
+| Deploy, stored id | `GET /rules/{id}`, then `PUT /rules/{id}` only if a field opentide owns differs | `…_rules_read`, `…_rules_write` | `queries`, `cases` and `options` are sent whole. The spec maps a concurrent modification to **401**, so a 401 on a `PUT` is reported as `datadog_concurrent_modification`, not as an authentication failure |
 | `DISABLEMENT` | `PUT /rules/{id}` with `isEnabled: false` | `…_rules_write` | |
-| `DELETION` | `DELETE /rules/{id}` | `…_rules_write` | 204; a 404 is `datadog_rule_missing` (already gone) |
-| drift, `doctor` | `GET /rules/{id}` | `…_rules_read` | Compare `version` with the stored one; `GET /rules/{id}/version_history` names who changed what |
-| `opentide query` | `POST /api/v2/logs/events/search` with `filter.query`, `from`, `to`, `indexes`, `storage_tier` | `logs_read_data` | Cursor paging through `meta.page.after`, up to 5,000 events a page |
-| later: rule tests | `POST /rules/test` with `ruleQueryPayloads` | `…_rules_write` | `results[]`, one bool per sample |
+| `DELETION` | `DELETE /rules/{id}` | `…_rules_write` | 204. A 404 is `datadog_rule_missing`: already gone |
+| Drift, `doctor` | `GET /rules/{id}`, and `GET /rules/{id}/version_history` | `…_rules_read` | `version` compared with the stored one; the history names who changed what |
+| `opentide query` | `POST /api/v2/logs/events/search` with `filter.query`, `from`, `to`, `indexes` and `storage_tier` | `logs_read_data` | Paged by the cursor in `meta.page.after`, up to 5,000 events a page |
+| Later: rule tests | `POST /rules/test` with `ruleQueryPayloads` | `…_rules_write` | `results[]`, one boolean per sample |
 
-### 7.3 Failure codes
+### 8.3 Deploy lifecycle, by strategy
+
+The block's `status` maps to a strategy through `deployment.toml`, as on every platform.
+
+| Strategy | What deploy does on Datadog |
+|---|---|
+| `INERT` | Nothing |
+| `PREVIEW` | Creates or updates the rule **enabled, with no notifications**, and tags it `opentide_strategy:preview`. Datadog has no mode that runs a rule without creating signals, so a preview rule's signals appear in the Signals Explorer, but nobody is paged |
+| `RELEASE`, `UNIVERSAL` | Creates or updates the rule enabled, with its notifications |
+| `DISABLEMENT` | Sets `isEnabled: false`. The rule and its history stay |
+| `DELETION` | Deletes the rule. Deploy never deletes a default rule, or a rule whose id it does not hold |
+
+Every create and update is validated first (`POST /rules/validation`), so an invalid body is
+reported before anything changes. A `POST` is sent once, as on every platform: a create that gets
+no answer is reported, `datadog_create_unconfirmed`, never sent again. A 429 is waited out as
+`X-RateLimit-Reset` asks, up to three times. A stored id whose rule is gone (404 on `GET`) is
+recreated and reported (`datadog_rule_recreated`).
+
+### 8.4 Failure codes
 
 | Code | When |
 |---|---|
 | `datadog_tenant_unauthorized` | A 403, or a 401 that is not a concurrent modification |
 | `datadog_tenant_unreachable` | DNS, TLS or a timeout |
 | `datadog_site` | A `site` outside the known list |
-| `datadog_rate_limited` | A 429; retried after `X-RateLimit-Reset` |
+| `datadog_rate_limited` | A 429 after the retries |
 | `datadog_rule_invalid` | A 400 from `/rules/validation` or a write |
-| `datadog_rule_missing` | The stored id is gone |
-| `datadog_rule_recreated` | The stored id was gone and deploy created a new one |
-| `datadog_rule_default` | The stored id is a default rule (`isDefault: true`): opentide never overwrites or deletes one |
-| `datadog_correlation_unresolved` | A correlation `rule` not deployed to the tenant |
+| `datadog_create_unconfirmed` | A create that got no answer; it is not resent |
+| `datadog_concurrent_modification` | A 401 on a `PUT`: someone else changed the rule |
+| `datadog_rule_missing` | The stored id is gone (on `DELETION`) |
+| `datadog_rule_recreated` | The stored id was gone, and deploy created a new rule |
+| `datadog_rule_default` | The stored id is a default rule (`isDefault: true`): opentide never changes one |
+| `datadog_correlation_unresolved` | A correlation `rule` that is not deployed to the tenant |
 
-The external id is Datadog's rule id. Every example seen is three groups of three lower-case
-alphanumerics (`m0o-hto-lkb`, `def-000-u7q`), so the registry's `IdPattern` is proposed as
+### 8.5 External id
+
+The deployment state keeps Datadog's rule id. Every id seen is three groups of three lower-case
+alphanumerics (`m0o-hto-lkb`, `def-000-u7q`). The registry's `IdPattern` is therefore proposed as
 `[a-z0-9]{3}-[a-z0-9]{3}-[a-z0-9]{3}` **(unverified: no source states the format)**.
 
-## 8. Wiring (where the implementation lands)
+## 9. Wiring
 
 | Area | Files |
 |---|---|
-| Registry row | `crates/opentide-schema/src/platforms.rs` (`id: "datadog"`, `deploys`, `compiles_offline`, `live_check`, `query_runner`, `runner_languages: &["datadog"]`, `offline_languages: &["datadog"]`, `query_file_suffixes: &["datadog"]`) |
-| Model and constraints | `crates/opentide-schema/src/objects/platform/datadog.rs`, `datadog/condition.rs`; `platform/mod.rs` registration; `schema.rs` required keys |
-| Template | `src/opentide/schemas/data/platform_templates/datadog.template.yaml`; `src/opentide/data/configurations/platforms/datadog.toml` |
+| Registry row | `crates/opentide-schema/src/platforms.rs` (`id: "datadog"`, `deploys`, `compiles_offline`, `live_check`, `query_runner`, `runner_languages`, `offline_languages`, `query_file_suffixes`) |
+| Model and constraints | `crates/opentide-schema/src/objects/platform/datadog.rs` and `datadog/condition.rs`; the registration in `platform/mod.rs`; the required keys in `schema.rs` |
+| Templates | `src/opentide/schemas/data/platform_templates/datadog.template.yaml`; `src/opentide/data/configurations/platforms/datadog.toml` |
 | Compiler | `crates/opentide-compile/src/datadog.rs`, `modifiers.rs`, `preview.rs`, the platform docs generator |
-| Connector | `crates/opentide-connectors/src/datadog.rs` (+ the fake-API tests and cassettes) |
-| Engine | `crates/opentide-datadog/`; `opentide-core` `LanguageId::Datadog` and codes; `opentide-highlight` keywords and `EMBEDDED_QUERIES`; `opentide-tide` `platform_field_language` and hunt `system: datadog`; `opentide-analysis` queries; fuzz target; corpus |
-| Command line and MCP | `new`, `setup --datadog`, `doctor`, `query`, `validate_live`, MCP `validate_query`/`run_query` lists |
+| Connector | `crates/opentide-connectors/src/datadog.rs`, with fake-API tests and cassettes |
+| Engine | The new `crates/opentide-datadog/`; `LanguageId::Datadog` and the codes in `opentide-core`; the keywords and `EMBEDDED_QUERIES` in `opentide-highlight`; `platform_field_language` and hunts with `system: datadog` in `opentide-tide`; `opentide-analysis`; a fuzz target; the corpus |
+| Command line and MCP | `new`, `setup --datadog`, `doctor`, `query`, `validate_live`, MCP `validate_query` and `run_query` |
 | Diagnostics pages | `src/opentide/data/diagnostics/datadog_*.md` |
-| Docs | the seven pages named in `AGENTS.md` "Platforms", plus `docs/engine/DATADOG.md` |
+| Docs | The seven pages `AGENTS.md` lists under "Platforms", and `docs/engine/DATADOG.md` |
 | Companion | opentidehq/skills: a Datadog platform skill and `coverage.json` |
 
 `cargo test -p xtask --test language_wiring` and `xtask/tests/platform_docs.rs` list whatever is
 missing.
 
-## 9. Open-source content to start from
+## 10. Content to start from
 
-There is **no sizeable open corpus of Datadog Cloud SIEM rules in Datadog's own format**.
+There is **no sizeable open corpus of Datadog Cloud SIEM rules in Datadog's own format**:
 
-- **Datadog's built-in rules.** The catalog (docs.datadoghq.com/security/default_rules, about 970
-  Cloud SIEM rules) publishes each rule's Goal, Strategy and Triage text, but not its queries. The
-  site's source data is private. A machine-readable copy needs an account: the API (`isDefault:
-  true`) or Terraform's `datadog_security_monitoring_default_rule`.
-- **Datadog's own detection-as-code repository** is internal (per its 2024 blog post).
+- **Datadog's default rules** (about 970 Cloud SIEM rules) are published as Goal, Strategy and
+  Triage text without their queries. A machine-readable copy needs an account.
+- **Datadog's own detection-as-code repository** is internal (its 2024 blog post).
 
-What exists, ranked by use:
+What exists:
 
 | Source | Licence | What it gives | Use |
 |---|---|---|---|
-| **The Datadog-published query corpus**: 3,318 distinct literal queries from Datadog's docs (Log Search Syntax, Cloud SIEM, RUM, CI, Audit, Events, Observability Pipelines pages and the API reference), [integrations-core](https://github.com/DataDog/integrations-core) and [integrations-extras](https://github.com/DataDog/integrations-extras) (pipeline filters, dashboards, saved views, monitors, security rules), the Terraform provider's docs and tests, the datadog-api-client examples, the Datadog blog and Security Labs. Each query keeps its source and licence. Templated queries (`$var`, `{{…}}`, `<PLACEHOLDER>`: 2,659) are kept apart | BSD-3-Clause (docs and integrations: 2,888), MPL-2.0 (Terraform: 95), Apache-2.0 (API clients and two DataDog repos: 95), Datadog's site terms (blog and Security Labs: 240) | Real queries in every context: SIEM rules 42, pipeline filters 1,650, dashboards 643, saved views 96, monitors 48, docs 398, API 104, blog 240, suppressions 10 | **(a) The conformance corpus.** BSD-3 and Apache-2.0 queries are vendored with their notices; MPL-2.0 files kept apart, unmodified; blog and Security Labs queries measured, not vendored |
-| integrations-core `*/assets/logs/` (408 pipeline files with test samples) | BSD-3-Clause | Sources, attribute remaps and sample logs | Catalogs (5.7); sample events for `POST /rules/test` |
-| integrations-extras `*/assets/security/*.json` (AppOmni, Bottomline, Contrast: 11 rules) | BSD-3-Clause | The only permissively licensed rules already in Datadog's export format: threshold, impossible travel, anomaly and third party | **API body fixtures** and **(b) seed rules** |
-| [terraform-provider-datadog](https://github.com/DataDog/terraform-provider-datadog) test cassettes `TestAccDatadogSecurityMonitoringDefaultRule_*.yaml` | MPL-2.0 files, recording Datadog's proprietary rule content | 199 recorded built-in rules: 82 `log_detection` with 122 unique queries (67 CloudTrail, Microsoft 365, 1Password, Kubernetes audit), every detection method | **Measured, not vendored**, as Exabeam's content hub: an ignored test reads a local checkout |
-| [DataDog/documentation](https://github.com/DataDog/documentation) `hugo/content/en/api/v2/security-monitoring/request.*Rule*.json`, and the [datadog-api-client-*](https://github.com/DataDog/datadog-api-client-python) `examples/v2/security-monitoring` | BSD-3-Clause `LICENSE` (GitHub reports NOASSERTION); Apache-2.0 | 42 synthetic API request bodies covering every rule type and detection method | API body fixtures |
-| [vectordotdev/vrl](https://github.com/vectordotdev/vrl) `src/datadog/search/` | MPL-2.0 | Datadog's own pest grammar for the search syntax, with its tests | The grammar reference and a **differential oracle** (`scripts/engine/oracles/datadog/`): run VRL over the corpus and compare accept and reject verdicts. Not vendored |
-| [DataDog/stratus-red-team](https://github.com/DataDog/stratus-red-team) (103 techniques, 36 detonation logs), [grimoire](https://github.com/DataDog/grimoire), [threatest](https://github.com/DataDog/threatest) | Apache-2.0 | Attack, recorded logs, and an assertion that the Datadog signal fired | Seed rules written against Stratus techniques, with the detonation logs as their `POST /rules/test` samples; a manual tenant run like `microsoft-defender-tenant-test.md` |
-| [DataDog/security-agent-policies](https://github.com/DataDog/security-agent-policies) | Apache-2.0 | 331 Workload Protection rules in SECL | Out of scope (a different language) |
-| Community Terraform (139 files contain `resource "datadog_security_monitoring_rule"`, nearly all docs, forks or tooling; for example grcengineering/how-to-harden, MIT, 7 rules on `source:audit`) | mixed; several have no licence | Tiny sets | Only MIT or Apache-2.0 ones, as examples; never an unlicensed repository |
-| panther-analysis (Apache-2.0), splunk/security_content (Apache-2.0), Azure-Sentinel (MIT), elastic/detection-rules (Elastic License 2.0) | as listed | Rules in other languages | Ideas for coverage, not content; nothing from ELv2 |
+| **The Datadog-published query corpus** (section 11) | BSD-3-Clause (docs and integrations, 2,800 queries); MPL-2.0 (Terraform provider, 95); Apache-2.0 (API clients and two DataDog repositories, 95); Datadog's site terms (blog and Security Labs, 239) | 3,229 literal log-search queries in every context, each with its source and licence | **The conformance corpus.** BSD-3 and Apache-2.0 queries are vendored with their notices. MPL-2.0 files are kept apart, unmodified. Blog and Security Labs queries are measured, not vendored |
+| integrations-core `*/assets/logs/` | BSD-3-Clause | 408 pipeline files: sources, attribute remaps, sample logs | Catalogs (6.9); samples for rule tests |
+| integrations-extras `*/assets/security/*.json` | BSD-3-Clause | 11 rules in Datadog's export format (AppOmni, Bottomline, Contrast) | API body fixtures and seed rules |
+| DataDog/documentation `request.*Rule*.json`; datadog-api-client `examples/v2/security-monitoring` | BSD-3-Clause; Apache-2.0 | 42 synthetic request bodies covering every rule type and method | API body fixtures |
+| terraform-provider-datadog test cassettes (`TestAccDatadogSecurityMonitoringDefaultRule_*`) | MPL-2.0 files recording Datadog's proprietary rules | 199 default rules, 153 distinct queries | **Measured, not vendored**, as Exabeam's content hub: an ignored test reads a local checkout |
+| vectordotdev/vrl `src/datadog/search/` | MPL-2.0 | Datadog's open-source grammar for the syntax | A differential oracle (`scripts/engine/oracles/datadog/`), not vendored |
+| DataDog/stratus-red-team, grimoire, threatest | Apache-2.0 | 103 cloud attack techniques, 36 recorded detonation logs, signal assertions | Seed rules written against them, with their logs as test samples; a manual tenant run |
 
-Seed rules for opentide's examples come from three places, none of them converted from
-another format:
+Seed rules for opentide's examples come from three places, none of them converted from another
+format:
 
 - the 11 BSD-3 rules in Datadog's own format;
-- rules written here for Stratus Red Team's cloud techniques, each with its detonation log as a
-  test sample;
-- the Cloud SIEM rule examples in Datadog's docs.
+- rules written here for Stratus Red Team's techniques;
+- the Cloud SIEM examples in Datadog's docs.
 
-### 9.1 What the prototype checker already shows
+## 11. Evidence: the model against Datadog's own queries
 
-The prototype in the technical artifact implements sections 4.6 and 5.3 to 5.6. It was run on
-2026-11-26 over three corpora, next to VRL's grammar compiled as an accept or reject oracle (a
-local tool, not vendored).
+### 11.1 The corpus
 
-| Corpus | Queries | Agree with VRL | Prototype errors | Every difference explained |
-|---|--:|--:|--:|---|
-| The Log Search Syntax page's examples | 28 | 27 | 0 | `*:hello*`: documented full-text search VRL does not know |
-| The Datadog-published corpus | 3,318 | 3,289 | 6 | Yes, below |
-| The recorded built-in rules (measured only) | 153 | 153 | 0 | One warning, a real bug (below) |
+The corpus gathers every literal log-search query Datadog publishes, from:
 
-**All 29 disagreements on the published corpus are queries Datadog publishes that VRL refuses:**
+- the documentation repository (search syntax, Cloud SIEM, RUM, CI, Audit, Events and Observability
+  Pipelines pages, and the API reference);
+- integrations-core and integrations-extras (pipeline filters, dashboards, saved views, monitors,
+  security rules);
+- the Terraform provider's docs and tests;
+- the five API clients' examples;
+- the Datadog blog (all 2,005 posts) and Security Labs.
 
-- `tag:integration:<name>` in 13 integration dashboards;
-- `CIDR(…)` lists with IPv6 blocks in 3 pipeline filters;
-- the docs' own `*:term` examples (4) and `@http.url:https:\/\/*`;
-- values starting with `+` (2 doc examples);
-- 2 Observability Pipelines forms;
-- 3 blog queries with unescaped colons.
+Each query keeps its source, pinned to a commit, and its licence. Three kinds of query were set
+aside:
 
-The prototype accepts them, with a warning where the docs say otherwise. The six queries it calls
-errors are not queries a rule could hold:
+- **Templated queries**, 2,659 of them (`$var`, `{{…}}`, `<PLACEHOLDER>`).
+- **88 dashboard queries that are not log search**: 74 Monitor Summary searches and 14
+  event-stream filters, which use the legacy events syntax.
+- **One legacy events query** from a blog post.
 
-- a dashboard title (`[Prefect]`);
+By context, the corpus holds:
+
+| Context | Queries |
+|---|--:|
+| Pipeline filters | 1,650 |
+| Dashboards | 555 |
+| Docs examples | 398 |
+| Blog | 239 |
+| API examples | 104 |
+| Saved views | 96 |
+| Observability Pipelines | 86 |
+| Monitors | 48 |
+| SIEM rules | 42 |
+| Suppressions | 10 |
+| Signal searches | 1 |
+
+### 11.2 Agreement
+
+The prototype implements sections 5.8 and 6.3 to 6.8. It was run next to VRL's grammar, compiled
+as an accept-or-reject oracle:
+
+| Corpus | Queries | Agree with VRL | Prototype errors |
+|---|--:|--:|--:|
+| The Log Search Syntax page's examples | 28 | 27 | 0 |
+| The Datadog-published corpus | 3,229 | 3,215 (99.6%) | 5 |
+| The recorded default rules (measured only) | 153 | 153 | 0 |
+
+**Every one of the 14 disagreements is a query Datadog publishes and VRL refuses:**
+
+| Disagreement | Queries | Why |
+|---|--:|---|
+| `CIDR(…)` lists in pipeline filters, with IPv6 blocks | 3 | VRL has no `CIDR` |
+| The docs' own `*:term` examples | 4 | VRL has only `*:*` |
+| Values starting with `+` (`@process.args:+x`, `@data.message:+*`) | 2 | VRL refuses a leading `+`; the docs use it |
+| An unescaped `:` in a value (a RUM docs example, two blog posts) | 3 | Both refuse it in principle; the model warns (`datadog_unescaped_colon`) rather than errs, since Datadog's own content does it |
+| Observability Pipelines syntax (a quoted field name, a term glued to a phrase) | 2 | Pipelines-only forms (`datadog_pipelines_only`) |
+
+**The five queries the prototype rejects are not queries a rule could hold:**
+
 - a deliberately invalid query from Datadog's API tests (`rule:[A-Invalid`);
 - two Observability Pipelines-only forms (`message:*!*`);
 - a RUM retention filter written `@session.view.count :> 3`;
 - indicators a Security Labs article wrote as `models.litellm[.]cloud` on purpose, so they cannot
   be clicked.
 
-Building the model against this corpus changed it in five places, each now in 5.3 and 5.5:
+**Building against the corpus changed the model in five places:**
 
-1. A space after `:` is allowed.
+1. A space may follow `:`.
 2. Value groups take comparisons and ranges.
-3. Duration units are part of numbers.
-4. An unescaped `:` in a value is a warning, not an error, and nothing for tag values.
+3. Numbers carry duration units.
+4. An unescaped `:` in a value is a warning, not an error.
 5. A comma has meaning only inside `CIDR()`.
 
-**The warnings find real mistakes in Datadog's own content:**
+**The corpus review also corrected the corpus itself.** The 88 Monitor Summary and event-stream
+queries had first been counted as log search, and had briefly made `tag:integration:x` look like
+valid log syntax.
 
-- **A built-in Microsoft 365 rule** (recorded by the Terraform provider) lists file types as
-  `@SourceFileName:(*.exe OR … OR *.zip OR *.rar *.7z *.cab OR *.tar …)`. Datadog documents a
-  space inside a value group as AND (`@user_perms:(4 6)` means both). `*.rar *.7z *.cab` therefore
-  asks for a file name ending in all three at once, which never happens, so `.rar`, `.7z` and
-  `.cab` uploads go undetected (`datadog_mixed_boolean`).
-- **A Datadog blog post** queries `service:azure-service-bus status:error OR warning` (twice, also
-  with `throttled OR quota_exceeded`). That is "(this service and error) or any log containing the
-  word warning", where `status:(error OR warning)` was meant (`datadog_mixed_boolean`).
-- **A Security Labs Salesforce guide** queries `- @login_type:(k OR n or E)`. The lower-case `or`
-  is a search term, so the group asks for `k`, or for `n`, `or` and `E` at once
-  (`datadog_lowercase_operator`; the detached `-` is `datadog_detached_operator`).
+### 11.3 Mistakes found in Datadog's own content
 
-These three are also why open question 2, whether Cloud SIEM binds AND tighter than OR, is the
-first thing to settle on a tenant.
+| Where | Query | What it does instead | Code |
+|---|---|---|---|
+| A Microsoft 365 default rule (recorded by the Terraform provider) | `@SourceFileName:(*.exe OR … OR *.zip OR *.rar *.7z *.cab OR *.tar …)` | In a value group, a space is AND, so `*.rar *.7z *.cab` asks for a name ending in all three at once: `.rar`, `.7z` and `.cab` uploads are never detected | `datadog_mixed_boolean` |
+| A Datadog blog post | `service:azure-service-bus status:error OR warning` (and `throttled OR quota_exceeded`) | Reads as "(this service and error) or any log containing the word warning"; `status:(error OR warning)` was meant | `datadog_mixed_boolean` |
+| A Security Labs Salesforce guide | `- @login_type:(k OR n or E)` | Lower-case `or` is a term, so the group asks for `k`, or for `n`, `or` and `E` at once | `datadog_lowercase_operator`, `datadog_detached_operator` |
 
-## 10. Plan
+The first two depend on AND binding tighter than OR, which is why open question 2 is the first
+thing to settle on a tenant.
+
+## 12. Upgrade path
+
+- **Within `datadog-1.x`, every addition is optional.** New keys follow their own minor versions:
+  sequence, scheduled and third-party rules, reference tables, default-rule tuning. A 1.0 block
+  stays valid and compiles to the same body.
+- **A change of meaning is a new major version.** That includes a default or a renamed key. Both
+  versions are registered side by side in the revision registry (ADR 0009) for at least a
+  release, and the change ships with a migration (`docs/cli/migrate.md`).
+- **Adopting existing Datadog rules.** Teams that manage rules in the Datadog UI or in Terraform
+  need a way in. A later `opentide` import reads `GET /rules/{id}`, or the JSON that
+  `POST /rules/bulk_export` writes, and produces a Tide rule with a `datadog` block. It keeps the
+  rule id in the deployment state, so the first deploy updates the rule rather than creating a
+  second one. Until then, a team writes the block and adds the existing id to the rule's shard,
+  `.opentide/states/deployment/<uuid>.json` (`deployment.state::1.0`), before its first deploy.
+- **Leaving Terraform.** A rule managed by both Terraform and opentide is changed back and forth on
+  every run. The docs page says to remove a rule from Terraform state (`terraform state rm`) before
+  opentide takes it over.
+
+## 13. Alternatives considered
+
+| Alternative | Why not |
+|---|---|
+| **A fourth Lucene dialect** for the search syntax | The precedence difference changes the tree; `@`, `CIDR()`, `**` and the escape rules differ. A dialect would branch the shared walk at almost every node (6.2) |
+| **A block that mirrors the API**, as the Terraform resource does (`options.evaluation_window`, `aggregation`, `distinct_fields`) | It keeps the API's mixed `options` object and its interdependent aggregation fields, which the block's constraints would then have to police. Tide blocks are read by people writing detections, so they group by meaning (5.3) |
+| **Deploy through Terraform**: generate HCL and let Terraform apply it | It adds a second tool and state file, and loses opentide's per-rule state, strategies and diagnostics. Datadog's own convert endpoints remain available to users who want HCL |
+| **VRL as the engine**, through the `vrl` crate | VRL is a log-processing runtime with a large dependency tree. It lacks `CIDR()`, `*:term` and `**`, and has no lossless tree for highlighting or diagnostics positions. It stays as an oracle |
+| **Convert community rule sets** (Sigma and its Datadog backend) | The conversions inherit the converters' bugs, and the language should be modelled from Datadog's own definition. Datadog's published queries are enough to hold the model to |
+
+## 14. Risks
+
+| Risk | Mitigation |
+|---|---|
+| **The precedence is unverified** on Cloud SIEM. If Datadog evaluated `a OR b c` differently, `datadog_mixed_boolean` would be wrong | It is a warning, and its message names the assumption. Open question 2 is phase 0's first probe |
+| **Validation needs a write-scoped key.** A key that can validate can also delete | `setup` recommends a service-account key scoped to the security-monitoring rules. `doctor` warns that the key can write (open question 7) |
+| **Default rules** look like ordinary rules through the API | Deploy checks `isDefault` before any write and refuses (`datadog_rule_default`) |
+| **The API changes.** Datadog adds detection methods and fields often, some in preview | The block refuses anything outside its scope instead of passing it through. The fake-API tests pin the request bodies, and a nightly tenant run (once a tenant exists) catches drift |
+| **Rate limits are undocumented** for these endpoints | Deploy reads `X-RateLimit-*` and waits; it never runs parallel writes against one tenant |
+| **A team's own pipelines remap attributes**, so the attribute catalog cannot know every field | An unknown attribute is a hint, never an error |
+
+## 15. Plan
 
 | Phase | Delivers | Exit criteria |
 |---|---|---|
-| 0. Specs | This RFC numbered in opentidehq/specifications; `datadog-1.0` language and platform specs with fixtures; an issue per phase | Specs reviewed; open questions 2 to 6 answered on a trial tenant |
-| 1. Engine | `opentide-datadog`: lexer, Pratt grammar, `.ungram`, profiles, diagnostics, highlight, catalogs, corpus gate, VRL differential, fuzz target, throughput budget | `language_wiring` green; the Datadog-published corpus parses with every error and every VRL disagreement explained, as in 9.1; the recorded built-in rules measured |
-| 2. Platform | Model, constraints, compiler, connector (validate, deploy, disable, delete, drift), registry row, `setup --datadog`, docs, explain pages, snapshots | `scripts/ci-local.sh --full`; a tenant run recorded like the Defender one; the skills companion |
-| 3. Depth | `opentide query`; rule tests through `/rules/test`; sequence, scheduled and third-party rules; default-rule tuning; message template checks | Each behind its own spec minor version |
+| 0. Specs and probes | This RFC numbered in opentidehq/specifications; the `datadog-1.0` language and platform specs with fixtures; a trial tenant and the probe set for open questions 2 to 6 | Specs reviewed; the probes recorded |
+| 1. Engine | `opentide-datadog`: lexer, Pratt grammar, `.ungram`, profiles, diagnostics, highlighting, catalogs, the corpus gate, the VRL differential, a fuzz target, a throughput budget | `language_wiring` green. On the published corpus, every error and every VRL disagreement explained, as in 11.2. The recorded default rules measured |
+| 2. Platform | Model, constraints, compiler, connector (validate, deploy, disable, delete, drift), the registry row, `setup --datadog`, docs, explain pages, snapshots | `scripts/ci-local.sh --full`; a tenant run recorded like the Defender one; the skills companion |
+| 3. Depth | `opentide query`; rule tests; sequence, scheduled and third-party rules; default-rule tuning; the importer; message template checks | Each behind its own spec minor version |
 
-## 11. Open questions
+## 16. Open questions
 
-1. **The language id.** `datadog`, which follows Exabeam's precedent and is what users search for,
-   or `ddsearch`, which leaves room if DDSQL or SECL ever become engine languages? The draft
-   picks `datadog`, since SQL is out of scope and SECL belongs to a different product.
-2. **Precedence and operators.** Whether Log Explorer and Cloud SIEM bind `AND` tighter than `OR`
-   (as VRL does), and whether `&&`, `||` and `!` are operators. To be settled with
-   `POST /rules/validation` and `POST /rules/test` on a trial tenant, and recorded as a probe set
-   like Graylog's oracle.
-3. **Condition grammar.** Whether conditions accept parentheses, `==`, and both `&&` and `||`
-   together, and how the UI's "then" condition is serialised.
-4. **Rule id format** (7.3) and whether `def-000-` always marks a default rule. Deploy relies on
-   `isDefault` either way.
+1. **The language id.** `datadog` follows Exabeam's precedent and is what users search for.
+   `ddsearch` leaves room if DDSQL or SECL ever become engine languages. The draft picks `datadog`:
+   SQL is out of scope, and SECL belongs to another product.
+2. **Precedence and operators.** Do Log Explorer and Cloud SIEM bind AND tighter than OR, as VRL
+   does? Are `&&`, `||` and `!` operators? This is settled with `POST /rules/test` on a trial
+   tenant, and recorded as a probe set like Graylog's oracle.
+3. **The condition grammar.** Do conditions accept parentheses or `==`, or `&&` and `||` together?
+   How is the rule editor's "then" condition serialised?
+4. **The rule id format** (8.5), and whether `def-000-` always marks a default rule. Deploy relies
+   on `isDefault` either way.
 5. **Limits.** The maximum number of queries and cases per rule (historical jobs cap both at 10),
-   the query length, and the numeric rate limits for the rules and logs-search endpoints.
-6. **`*:` full text, `_exists_`, open and mixed range bounds** in rule queries. And three forms Datadog's own content uses that its docs do not describe: an unescaped `:` in a value (`tag:integration:airflow`, 31 uses), a space after `:` (`env: prod`, 16 uses), and duration units in comparisons (`@duration:>=100ms`). The model accepts all three; a tenant probe confirms what each matches.
-7. **A write-scoped key for validation.** `validate --live` needs
-   `security_monitoring_rules_write`. Should `setup` recommend a separate validation key, and should
-   `doctor` warn when the key that only validates could also delete?
+   the maximum query length, and the rate limits.
+6. **What each accepted-but-undocumented form matches:**
+   - `*:term`, `_exists_`, and open or mixed range bounds, in rule queries;
+   - an unescaped `:` in a value;
+   - a space after `:`;
+   - duration units in comparisons.
+7. **A write-scoped key for validation.** Should `setup` recommend a separate validation key? And
+   should `doctor` warn when a key that only needs to validate could also delete?
 8. **Suppressions.** Model suppression rules (`/configuration/suppressions`) as part of the block
-   (`suppressions[]`, deployed with the rule and tagged `ruleId:<id>`, as Datadog's own team does)
-   or as their own Tide object.
+   (`suppressions[]`, deployed with the rule, as Datadog's own team does), or as their own Tide
+   object?
 
-## 12. References
+## 17. References
 
 - API reference: https://docs.datadoghq.com/api/latest/security-monitoring/
 - OpenAPI v2 (the `x-unstable` marker means preview): https://github.com/DataDog/datadog-api-client-python/blob/master/.generator/schemas/v2/openapi.yaml
 - Log search syntax: https://docs.datadoghq.com/logs/explorer/search_syntax/
-- Creating rules, conditions: https://docs.datadoghq.com/security/cloud_siem/detect_and_monitor/custom_detection_rules/create_rule/
+- Creating rules and conditions: https://docs.datadoghq.com/security/cloud_siem/detect_and_monitor/custom_detection_rules/create_rule/
 - Sequence rules: https://docs.datadoghq.com/security/cloud_siem/detect_and_monitor/custom_detection_rules/sequence/
 - Suppressions: https://docs.datadoghq.com/security/cloud_siem/detect_and_monitor/suppressions/
 - Notification variables: https://docs.datadoghq.com/security/notifications/variables/
 - Calculated-field formulas: https://docs.datadoghq.com/logs/explorer/calculated_fields/formulas/
+- Observability Pipelines search syntax: https://docs.datadoghq.com/observability_pipelines/search_syntax/logs/
 - DDSQL: https://docs.datadoghq.com/ddsql_reference/
 - Sites: https://docs.datadoghq.com/getting_started/site/
 - API and application keys: https://docs.datadoghq.com/account_management/api-app-keys/
@@ -837,4 +1043,4 @@ first thing to settle on a tenant.
 - Terraform: https://registry.terraform.io/providers/DataDog/datadog/latest/docs/resources/security_monitoring_rule
 - Detection as code for Cloud SIEM (2025-06-11): https://www.datadoghq.com/blog/detection-as-code-cloud-siem/
 - How Datadog uses detection as code (2024-10-11): https://www.datadoghq.com/blog/datadog-detection-as-code/
-- VRL Datadog search grammar: https://github.com/vectordotdev/vrl/tree/main/src/datadog/search
+- VRL's Datadog search grammar: https://github.com/vectordotdev/vrl/tree/main/src/datadog/search
