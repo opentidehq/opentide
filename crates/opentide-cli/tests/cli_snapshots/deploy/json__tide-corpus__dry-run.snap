@@ -330,7 +330,7 @@ exit: 0
               "status": "enabled"
             },
             "method": "PATCH",
-            "url": "https://graph.microsoft.com/beta/security/rules/detectionRules/00000000-0000-4000-8003-000000000002"
+            "url": "https://graph.microsoft.com/beta/security/rules/detectionRules/opentide-00000000-0000-4000-8003-000000000002"
           }
         ],
         "name": "Defender KQL Rule",

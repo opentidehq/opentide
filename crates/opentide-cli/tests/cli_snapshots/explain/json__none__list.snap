@@ -1373,6 +1373,10 @@ exit: 0
       "meaning": "A Microsoft Defender rule to disable is not on the tenant, so nothing was disabled or created."
     },
     {
+      "code": "microsoft_defender_rule_conflict",
+      "meaning": "Graph refused to create a Microsoft Defender rule because another rule most likely holds its display name or alert title."
+    },
+    {
       "code": "microsoft_defender_schema",
       "meaning": "A Microsoft Defender block's `schema` names another schema."
     },
@@ -1985,13 +1989,13 @@ exit: 0
   "duration_ms": 0,
   "exit_code": 0,
   "failure": null,
-  "message": "493 diagnostic codes",
+  "message": "494 diagnostic codes",
   "next_actions": [],
   "ok": true,
   "schema_version": 1,
   "status": "completed",
   "summary": {
-    "codes": 493
+    "codes": 494
   }
 }
 

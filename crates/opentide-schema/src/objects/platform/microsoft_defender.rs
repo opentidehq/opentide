@@ -203,7 +203,7 @@ pub enum Evidence {
     OneField,
     /// Nothing published or observed says Graph requires more than one of the
     /// kind's fields: no rule until a tenant probe records one
-    /// (`docs/internal/microsoft-defender-tenant-test.md`, check 10).
+    /// (`docs/internal/microsoft-defender-tenant-test.md`, check 11).
     Unprobed,
     /// Microsoft's documentation recommends it without saying Graph refuses
     /// anything else: a warning at most, never an error.

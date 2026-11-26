@@ -1,6 +1,6 @@
 {
   "method": "PATCH",
-  "url": "https://graph.microsoft.com/beta/security/rules/detectionRules/00000000-0000-4000-8003-0000000000d0",
+  "url": "https://graph.microsoft.com/beta/security/rules/detectionRules/opentide-00000000-0000-4000-8003-0000000000d0",
   "body": {
     "displayName": "Microsoft Defender block",
     "description": "Encoded PowerShell started by a valid cloud account, on the Graph beta custom detection contract.\n",

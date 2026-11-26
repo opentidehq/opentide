@@ -2364,6 +2364,39 @@ fn scoped(failed: DeployError, raise: impl FnOnce(ConnectorError) -> Raised) -> 
     }
 }
 
+/// A by-uuid rule's failure, raised: a Defender failure with a code of its
+/// own (`microsoft_defender_rule_conflict`) keeps it in the row's error, as
+/// Bitdefender's do, since the refusal's `ConnectorError` has no code (#1886).
+fn by_uuid_failure(id: Option<PlatformId>, failed: DeployError) -> Raised {
+    if id == Some(PlatformId::MicrosoftDefender)
+        && failed.connector.is_none()
+        && failed.failure.code != "tenant_refused"
+    {
+        let code = failed.failure.code;
+        return scoped(failed, |error| raised(&coded(code, error)));
+    }
+    scoped(failed, |error| raised(&error))
+}
+
+/// *error* with *code* before its message (`code: message`), as the row's
+/// error shows a coded failure; an error of another kind is kept.
+fn coded(code: &str, error: ConnectorError) -> ConnectorError {
+    match error {
+        ConnectorError::Refused {
+            platform,
+            tenant,
+            detail,
+            message,
+        } => ConnectorError::Refused {
+            platform,
+            tenant,
+            detail,
+            message: format!("{code}: {message}"),
+        },
+        other => other,
+    }
+}
+
 /// A connector error's words: its own message, the tenant's reason after a
 /// refusal, and the tenant that refused the credentials.
 fn described(error: &ConnectorError) -> Raised {
@@ -3074,9 +3107,18 @@ impl Sender<'_, '_> {
                     }
                 }
             }
-            // Gone already: nothing to retire, and nothing to keep.
+            // Gone already: nothing to retire, and nothing to keep. A
+            // Defender rule opentide 1.0.0 deployed under the bare uuid may
+            // still run, so the row names the id asked for (#1886).
             Err(failed) if failed.failure.status == Some(404) => {
-                result.skip("already gone from the tenant");
+                if PlatformId::parse(platform) == Some(PlatformId::MicrosoftDefender) {
+                    result.skip(&format!(
+                        "no rule {} on the tenant",
+                        opentide_compile::microsoft_defender::rule_id_of(&request.rule_id)
+                    ));
+                } else {
+                    result.skip("already gone from the tenant");
+                }
             }
             Err(failed) => return Err(scoped(failed, |error| raised(&error))),
         }
@@ -3155,8 +3197,9 @@ impl Sender<'_, '_> {
     }
 
     /// The request a Microsoft Defender rule sends (microsoft-defender-1.0,
-    /// Deploy): addressed by its lowercase canonical uuid, with the compiled
-    /// update body; a DELETION carries none. The objective's techniques
+    /// Deploy): addressed by its Defender rule id, `opentide-` and its
+    /// lowercase canonical uuid (#1886), with the compiled update body; a
+    /// DELETION carries none. The objective's techniques
     /// left out of the alert's tactics are warned about once per rule.
     fn microsoft_defender_request(
         &mut self,
@@ -3379,13 +3422,18 @@ impl Sender<'_, '_> {
             .block(async { Ok(deployer.deploy(context, &request).await) })
             .map_err(|error| raised(&error))?;
         let answer = match answer {
-            // A DELETION whose rule the tenant no longer has: already gone.
+            // A DELETION whose rule id the tenant does not have. Not "already
+            // gone": a rule opentide 1.0.0 deployed under the bare uuid may
+            // still run there (#1886).
             Err(failed)
                 if id == Some(PlatformId::MicrosoftDefender)
                     && deletion
                     && failed.failure.status == Some(404) =>
             {
-                result.skip("already gone from the tenant");
+                result.skip(&format!(
+                    "no rule {} on the tenant",
+                    opentide_compile::microsoft_defender::rule_id_of(&rule.uuid)
+                ));
                 return Ok(());
             }
             other => other,
@@ -3419,7 +3467,7 @@ impl Sender<'_, '_> {
                     tracing::warn!(report = warning.message.as_str(), "{}", warning.code);
                 }
                 // `microsoft_defender_rule_absent`: a DISABLEMENT found no
-                // rule with the uuid; nothing was created.
+                // rule with the rule id; nothing was created.
                 Some(PlatformId::MicrosoftDefender) => {
                     self.warned |= warning.raised;
                     tracing::warn!(detail = warning.message.as_str(), "{}", warning.code);
@@ -3466,10 +3514,7 @@ impl Sender<'_, '_> {
                 result.action = Some(action.to_owned());
             }
         }
-        match failed {
-            Some(failed) => Err(scoped(failed, |error| raised(&error))),
-            None => Ok(()),
-        }
+        failed.map_or(Ok(()), |failed| Err(by_uuid_failure(id, failed)))
     }
 
     /// `report_failure`: a coded refusal of one rule on one tenant.

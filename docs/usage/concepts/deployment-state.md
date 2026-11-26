@@ -1,11 +1,11 @@
 ---
 title: Deployment state
-description: Where opentide keeps the vendor rule ids that Microsoft Defender, SentinelOne, CrowdStrike, Sysdig, Bitdefender, Graylog, Exabeam and Google SecOps, and platform plugins, assign, and why the files must be committed.
+description: Where opentide keeps the vendor rule ids that SentinelOne, CrowdStrike, Sysdig, Bitdefender, Graylog, Exabeam and Google SecOps, and platform plugins, assign, and why the files must be committed.
 ---
 
 # Deployment state
 
-Microsoft Defender, SentinelOne, CrowdStrike, Sysdig, Bitdefender, Graylog, Exabeam and Google SecOps give every rule
+SentinelOne, CrowdStrike, Sysdig, Bitdefender, Graylog, Exabeam and Google SecOps give every rule
 opentide creates an id of their own, and so do platform plugins. The next deploy has to update or delete the
 remote rule by that id. opentide keeps it in a per-rule JSON file under
 `.opentide/states/`, not in the rule YAML.
@@ -31,7 +31,8 @@ directory: change that line before you deploy (see [0.15.0](../releases.md#0150-
 file's `object_uuid` is exactly that string. A rule that has never been
 deployed to one of the seven platforms that keep ids (SentinelOne, CrowdStrike, Sysdig, Bitdefender, Graylog, Exabeam and Google SecOps), or to a [platform plugin](../../sdk/platforms.md#platform-plugins)'s
 platform, has no file. Sentinel, Splunk, HarfangLab, Carbon Black Cloud and
-Elastic address rules by `metadata.uuid` or by title and never get one. Splunk
+Elastic address rules by `metadata.uuid` or by title and never get one, and
+Microsoft Defender by `opentide-<uuid>`, an id derived from it. Splunk
 names a saved search after the rule's `name` and keeps no state for it: the
 last line of the saved search's description, `opentide rule <uuid>`, names the
 rule. After writing or retiring a rule, a deploy deletes the other saved

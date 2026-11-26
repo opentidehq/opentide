@@ -486,7 +486,7 @@ pub struct Summary {
 /// `platform_not_enabled`, and `microsoft_defender_impacted_asset_identifier`,
 /// whose rule is Microsoft's advice rather than something Graph is known to
 /// refuse, until a tenant probe settles it
-/// (`docs/internal/microsoft-defender-tenant-test.md`, check 10).
+/// (`docs/internal/microsoft-defender-tenant-test.md`, check 11).
 pub const STRICT_EXEMPT_WARNINGS: [&str; 2] = [
     "platform_not_enabled",
     opentide_core::codes::MICROSOFT_DEFENDER_IMPACTED_ASSET_IDENTIFIER,

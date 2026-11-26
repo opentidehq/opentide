@@ -641,19 +641,74 @@ fn defender_block(rule: &CJson, tenant_names: &[String]) -> Result<Object, Field
     Ok(block)
 }
 
-/// The rule's `metadata.uuid`: the Defender rule id when it is a UUID, as
-/// deploy addresses the rule by it; otherwise a UUID derived from the id,
-/// and `false`: a deploy of the file creates a new rule beside it.
-fn defender_uuid(id: &str) -> (String, bool) {
-    match uuid::Uuid::try_parse(id) {
-        Ok(parsed) => (parsed.hyphenated().to_string(), true),
+/// How deploy addresses the rule a Defender rule id names.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Addressed {
+    /// `opentide-<uuid>`, exactly: the id deploy gives the rule (#1886).
+    Yes,
+    /// A UUID in any other form (a bare one, a rule opentide 1.0.0 deployed;
+    /// `OPENTIDE-<UUID>`): the file keeps it, and deploying it creates
+    /// `opentide-<uuid>` beside the original.
+    BareUuid,
+    /// Any other id (a rule created in the portal): the file gets a UUID
+    /// derived from it, and deploying it creates a new rule.
+    Derived,
+}
+
+/// The rule's `metadata.uuid`: the uuid after `opentide-` in the Defender
+/// rule id, as deploy addresses the rule by `opentide-<uuid>`; the uuid the
+/// id holds in any other form (bare, or after `opentide-` in another case);
+/// otherwise a UUID derived from the id.
+fn defender_uuid(id: &str) -> (String, Addressed) {
+    if let Some(uuid) = opentide_compile::microsoft_defender::uuid_of_rule_id(id) {
+        return (uuid, Addressed::Yes);
+    }
+    let prefix = opentide_compile::microsoft_defender::RULE_ID_PREFIX;
+    let held = id
+        .get(..prefix.len())
+        .filter(|head| head.eq_ignore_ascii_case(prefix))
+        .map_or(id, |_| &id[prefix.len()..]);
+    match uuid::Uuid::try_parse(held.trim()) {
+        Ok(parsed) => (parsed.hyphenated().to_string(), Addressed::BareUuid),
         Err(_) => (
             uuid::Uuid::new_v5(&defender_namespace(), id.as_bytes())
                 .hyphenated()
                 .to_string(),
-            false,
+            Addressed::Derived,
         ),
     }
+}
+
+/// One rule file per uuid (#1886): of the listed rules (`(uuid, addressed)`
+/// of each rule id, in order) that share a uuid, the one deploy addresses
+/// (`opentide-<uuid>`) is kept, or else the first. Returns the kept rules'
+/// positions, in order, and each left-out rule's position with the position
+/// of the one kept in its place, so a rule opentide 1.0.0 left under the
+/// bare uuid beside its `opentide-<uuid>` copy writes no second file.
+fn one_per_uuid(resolved: &[(String, Addressed)]) -> (Vec<usize>, Vec<(usize, usize)>) {
+    let mut kept: Vec<usize> = Vec::new();
+    let mut left_out: Vec<usize> = Vec::new();
+    for (index, (uuid, addressed)) in resolved.iter().enumerate() {
+        match kept.iter_mut().find(|slot| resolved[**slot].0 == *uuid) {
+            None => kept.push(index),
+            Some(slot) if *addressed == Addressed::Yes && resolved[*slot].1 != Addressed::Yes => {
+                left_out.push(*slot);
+                *slot = index;
+            }
+            Some(_) => left_out.push(index),
+        }
+    }
+    left_out.sort_unstable();
+    let pairs = left_out
+        .into_iter()
+        .filter_map(|out| {
+            kept.iter()
+                .find(|slot| resolved[**slot].0 == resolved[out].0)
+                .map(|slot| (out, *slot))
+        })
+        .collect();
+    kept.sort_unstable();
+    (kept, pairs)
 }
 
 /// The rule document of one custom detection, listed in Graph's beta shape,
@@ -842,15 +897,35 @@ fn defender_run(cx: &Context<'_>, written_count: &mut usize) -> Outcome {
             }
         }
     }
-    let mut written: Vec<String> = Vec::new();
-    for (id, copies) in &listed {
-        let names: Vec<String> = copies.iter().map(|(name, _)| name.clone()).collect();
-        let first = &copies[0].1;
-        let shown = first
+    let resolved: Vec<(String, Addressed)> =
+        listed.iter().map(|(id, _)| defender_uuid(id)).collect();
+    let (kept, left_out) = one_per_uuid(&resolved);
+    let shown_of = |index: usize| -> &str {
+        let (id, copies) = &listed[index];
+        copies[0]
+            .1
             .get("displayName")
             .and_then(CJson::as_str)
-            .unwrap_or(id);
-        let (uuid, addressed) = defender_uuid(id);
+            .unwrap_or(id)
+    };
+    for (out, kept_in_place) in left_out {
+        let (id, kept_id) = (&listed[out].0, &listed[kept_in_place].0);
+        skipped.push(
+            shown_of(out),
+            &format!(
+                "rule {id} names the same uuid as rule {kept_id}, which the file holds: it \
+                 is most likely the copy an earlier opentide release left; delete it in the \
+                 portal, or rename both its name and its alert title"
+            ),
+        );
+    }
+    let mut written: Vec<String> = Vec::new();
+    for index in kept {
+        let (id, copies) = &listed[index];
+        let names: Vec<String> = copies.iter().map(|(name, _)| name.clone()).collect();
+        let first = &copies[0].1;
+        let shown = shown_of(index);
+        let (uuid, addressed) = resolved[index].clone();
         if copies[1..]
             .iter()
             .any(|(_, rule)| content(rule) != content(first))
@@ -867,18 +942,29 @@ fn defender_run(cx: &Context<'_>, written_count: &mut usize) -> Outcome {
                 "defender_import_tenants_differ"
             );
         }
-        if !addressed {
-            // Deploy addresses a Defender rule by its uuid
-            // (microsoft-defender-1.0): this file deploys as a new rule.
+        // Deploy addresses a Defender rule by `opentide-<uuid>` (#1886):
+        // any other id deploys as a new rule, and Graph refuses its create
+        // while the original holds the display name, even disabled.
+        let unaddressed = match addressed {
+            Addressed::Yes => None,
+            Addressed::BareUuid => Some(format!(
+                "the tenant's rule id {id} is not the id deploy addresses a rule by \
+                 (opentide-<uuid>): deploying the file creates opentide-{uuid}; first \
+                 delete the original in the portal, or rename both its name and its \
+                 alert title"
+            )),
+            Addressed::Derived => Some(format!(
+                "the tenant's rule id {id} is not a UUID, so deploy cannot address it: \
+                 the file was given the UUID {uuid}, and deploying it creates a new rule; \
+                 first delete the original in the portal, or rename both its name and \
+                 its alert title"
+            )),
+        };
+        if let Some(detail) = unaddressed {
             tracing::warn!(
                 rule = shown,
                 uuid = uuid.as_str(),
-                detail = format!(
-                    "the tenant's rule id {id} is not a UUID, so deploy cannot address it: \
-                     the file was given the UUID {uuid}, and deploying it creates a new rule; \
-                     disable or delete the original in the portal"
-                )
-                .as_str(),
+                detail = detail.as_str(),
                 "defender_import_new_uuid"
             );
         }
@@ -976,18 +1062,61 @@ mod tests {
 
     #[test]
     fn a_uuid_id_is_kept_and_another_id_gets_a_derived_uuid() {
+        // #1886: deploy's own id names the rule's uuid; the uuid in another
+        // form of it is kept, but deploy does not address that rule.
+        assert_eq!(
+            defender_uuid("opentide-2594bf5e-0000-4000-8000-000000000201"),
+            (
+                "2594bf5e-0000-4000-8000-000000000201".to_owned(),
+                Addressed::Yes
+            )
+        );
+        assert_eq!(
+            defender_uuid("OPENTIDE-2594BF5E-0000-4000-8000-000000000201"),
+            (
+                "2594bf5e-0000-4000-8000-000000000201".to_owned(),
+                Addressed::BareUuid
+            )
+        );
         assert_eq!(
             defender_uuid("8D7C6B5A-0000-4000-8000-000000000201"),
-            ("8d7c6b5a-0000-4000-8000-000000000201".to_owned(), true)
+            (
+                "8d7c6b5a-0000-4000-8000-000000000201".to_owned(),
+                Addressed::BareUuid
+            )
         );
         let (derived, addressed) = defender_uuid("7506");
-        assert!(!addressed);
+        assert_eq!(addressed, Addressed::Derived);
         assert_eq!(
             derived,
             defender_uuid("7506").0,
             "the same id, the same uuid"
         );
         assert!(uuid::Uuid::try_parse(&derived).is_ok());
+    }
+
+    #[test]
+    fn a_bare_uuid_beside_its_opentide_copy_writes_one_file() {
+        // #1886: a 1.0.0 rule renamed in the portal beside the one deploy
+        // now creates: one file, from `opentide-<uuid>`, wherever it is listed.
+        let ids = [
+            "8d7c6b5a-0000-4000-8000-000000000201",
+            "7506",
+            "opentide-8d7c6b5a-0000-4000-8000-000000000201",
+            "OPENTIDE-8D7C6B5A-0000-4000-8000-000000000201",
+            "8d7c6b5a-0000-4000-8000-000000000202",
+        ];
+        let resolved: Vec<(String, Addressed)> = ids.iter().map(|id| defender_uuid(id)).collect();
+        assert_eq!(
+            one_per_uuid(&resolved),
+            (vec![1, 2, 4], vec![(0, 2), (3, 2)])
+        );
+        // No `opentide-` copy: the first listed is kept.
+        let resolved: Vec<(String, Addressed)> = [ids[3], ids[0], ids[1]]
+            .iter()
+            .map(|id| defender_uuid(id))
+            .collect();
+        assert_eq!(one_per_uuid(&resolved), (vec![0, 2], vec![(1, 0)]));
     }
 
     fn rule() -> CJson {
