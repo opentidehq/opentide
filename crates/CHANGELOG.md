@@ -6,6 +6,19 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ## [Unreleased]
 
+### Added
+
+#### `opentide-schema`
+
+- **`constraint_codes` lists every platform model's own error codes** ([opentide#1893](https://github.com/opentidehq/opentide/issues/1893)). It reads Bitdefender's, Graylog's, Exabeam's, Microsoft Defender's and Google SecOps' lists, so a host can tell a model's finding from the query engine's.
+  - API: `opentide_schema::objects::platform::constraint_codes`
+
+### Fixed
+
+#### `opentide-workspace`
+
+- **`validate`'s `schema` check fails on a platform block's constraint codes** ([opentide#1893](https://github.com/opentidehq/opentide/issues/1893)). A report whose only errors were codes such as `microsoft_defender_severity`, `graylog_priority` or `exabeam_name_duplicate` had `checks.schema.status` `passed`; it is `failed`, and `VALIDATION_CODES` holds `exabeam_name_duplicate`.
+
 ## [1.1.0] - 2026-11-26
 
 The KQL engine infers the columns a query returns, and Microsoft Defender blocks are checked against them, with quick fixes in the editor.
