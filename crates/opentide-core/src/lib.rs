@@ -2248,7 +2248,7 @@ pub mod codes {
                 "The query's output lacks a column a custom detection needs for the tables it reads (`Timestamp`, and `DeviceId` and `ReportId` for a device table)."
             }
             MICROSOFT_DEFENDER_COLUMN_TYPE => {
-                "An entity field or action column is mapped from an output column whose type is not `string` or `guid`."
+                "An entity field or action column is mapped from an output column whose type is `dynamic`, `datetime`, `bool` or `timespan`."
             }
             MICROSOFT_DEFENDER_UNPROJECTED_OUTPUT => {
                 "The query returns columns no entity, action, custom detail or alert placeholder uses, from which Defender derives entity mappings of its own."

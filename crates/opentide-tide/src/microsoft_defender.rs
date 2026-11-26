@@ -13,16 +13,19 @@
 //!   `kql_unknown_column` reports one.
 //! - `microsoft_defender_required_columns` (error), on the query's last
 //!   operator: a complete output lacks a column a custom detection needs for
-//!   the tables the query reads (the table `validate query --live` checks a
-//!   run's columns against, opentide-schema's `required_columns`).
+//!   the Defender XDR tables the query names (the table `validate query
+//!   --live` checks a run's columns against, opentide-schema's
+//!   `required_columns`). Offline, only when the query names one of those
+//!   tables: without one the table family, and so the columns, are unknown.
 //! - `microsoft_defender_column_type` (warning), on the field: an entity
 //!   field or action column mapped from an output column whose type the
-//!   engine knows and is neither `string` nor `guid` (Graph's entity
-//!   columns hold identifiers, names and addresses as text).
-//! - `microsoft_defender_unprojected_output` (warning), on the query's last
+//!   engine knows is `dynamic`, `datetime`, `bool` or `timespan`, none of
+//!   which holds an identifier, a name or an address.
+//! - `microsoft_defender_unprojected_output` (note), on the query's last
 //!   operator: the output has columns nothing in the block uses, from which
 //!   Defender derives entity mappings of its own. Its suggestion is the
-//!   `| project` to append after that operator.
+//!   `| project` to append after that operator (none after a `render`, or in
+//!   a single-quoted YAML scalar it would need escaping in).
 //!
 //! Column names compare as KQL's do: case-sensitively.
 //!
@@ -37,7 +40,7 @@ use opentide_core::{ByteSpan, Diagnostic, LineIndex, codes, suggest};
 use opentide_kql::Profile;
 use opentide_kql::output::Output;
 use opentide_schema::objects::platform::microsoft_defender::required_columns::{
-    missing_required_column_groups, required_column_groups,
+    defender_xdr_tables_in_query, missing_required_column_groups, required_column_groups,
 };
 use opentide_schema::objects::platform::microsoft_defender::{
     DEVICE_GROUPS, ISOLATION_TYPE, action, entity_kind,
@@ -54,6 +57,10 @@ pub(crate) const QUERY: [&str; 3] = ["configurations", PLATFORM, "query"];
 
 /// How many unused columns a message names before "and N more".
 const NAMED: usize = 5;
+
+/// The types `microsoft_defender_column_type` reports: none holds an
+/// identifier, a name or an address. A number may (`ApplicationId`).
+const NOT_AN_ENTITY: [&str; 5] = ["dynamic", "datetime", "bool", "boolean", "timespan"];
 
 /// A column the block names.
 #[derive(Debug)]
@@ -89,21 +96,23 @@ pub(crate) fn output_findings(
     let lines = LineIndex::new(source);
     let named = named_columns(source, block);
     let mut out = Vec::new();
-    let mut missing: Vec<&str> = Vec::new();
+    // Each column the output lacks, with the one it most likely means.
+    let mut missing: Vec<(&str, Option<&str>)> = Vec::new();
     for name in &named {
         if let Some(column) = output.column(&name.column) {
             if let Some(type_name) = column
                 .type_name
                 .as_deref()
-                .filter(|t| !matches!(*t, "string" | "guid"))
+                .filter(|t| NOT_AN_ENTITY.contains(t))
                 && name.textual
             {
                 out.push(
                     Diagnostic::warning(
                         codes::MICROSOFT_DEFENDER_COLUMN_TYPE,
                         format!(
-                            "{} maps '{}', a {type_name} column: Defender reads an entity's or \
-                             action's column as text; convert it with tostring() in the query",
+                            "{} maps '{}', a {type_name} column, which holds no identifier, \
+                             name or address: map the column that does, or extract it as text \
+                             in the query (tostring(...))",
                             name.label, name.column
                         ),
                         lines.range(name.span),
@@ -119,7 +128,7 @@ pub(crate) fn output_findings(
         if !output.complete && meant.is_none() {
             continue;
         }
-        missing.push(&name.column);
+        missing.push((&name.column, meant));
         let mut message = format!(
             "{} names the unknown column '{}': the query's output has no such column",
             name.label, name.column
@@ -140,8 +149,12 @@ pub(crate) fn output_findings(
     }
     let at = lines.range(crate::remap_span(query, output.last_operator));
     let returned: Vec<&str> = output.columns.iter().map(|c| c.name.as_str()).collect();
+    // The family of the tables the query reads, which the required columns
+    // follow; unknown (no Defender XDR table named), nothing is required
+    // offline. `validate query --live` checks what the tenant returns.
+    let family_known = !defender_xdr_tables_in_query(&query.inner).is_empty();
     let required = missing_required_column_groups(&query.inner, &returned);
-    if output.complete && !required.is_empty() {
+    if family_known && output.complete && !required.is_empty() {
         out.push(
             Diagnostic::error(
                 codes::MICROSOFT_DEFENDER_REQUIRED_COLUMNS,
@@ -154,10 +167,32 @@ pub(crate) fn output_findings(
             .with_field_path(QUERY.iter().map(ToString::to_string).collect()),
         );
     }
-    if let Some(diagnostic) = unprojected(query, &output, &named, &missing, at) {
+    let quoted = source
+        .get(..query.host_span.start)
+        .is_some_and(|before| before.ends_with('\''));
+    let found = Found {
+        named: &named,
+        missing: &missing,
+        family_known,
+        single_quoted: quoted,
+    };
+    if let Some(diagnostic) = unprojected(query, &output, &found, at) {
         out.push(diagnostic);
     }
     out
+}
+
+/// What the block's columns came to, for the `| project` suggestion.
+struct Found<'f> {
+    named: &'f [Named],
+    /// Each column the output lacks, with the one it most likely means.
+    missing: &'f [(&'f str, Option<&'f str>)],
+    /// Whether the query names a Defender XDR table, so its required
+    /// columns are known.
+    family_known: bool,
+    /// The query is a single-quoted YAML scalar, where a `'` the suggestion
+    /// writes would need doubling.
+    single_quoted: bool,
 }
 
 /// `microsoft_defender_unprojected_output` when the output has columns no
@@ -166,13 +201,17 @@ pub(crate) fn output_findings(
 fn unprojected(
     query: &InjectedQuery,
     output: &Output,
-    named: &[Named],
-    missing: &[&str],
+    found: &Found<'_>,
     at: opentide_core::Range,
 ) -> Option<Diagnostic> {
+    let named = found.named;
     let groups = required_column_groups(&query.inner);
     let used = |column: &str| {
         named.iter().any(|n| n.column == column)
+            || found
+                .missing
+                .iter()
+                .any(|(_, meant)| *meant == Some(column))
             || groups.iter().any(|group| group.contains(&column))
     };
     let unused: Vec<&str> = output
@@ -206,7 +245,7 @@ fn unprojected(
             unused.len()
         )
     };
-    let mut diagnostic = Diagnostic::warning(
+    let mut diagnostic = Diagnostic::information(
         codes::MICROSOFT_DEFENDER_UNPROJECTED_OUTPUT,
         format!(
             "{lead}: Defender derives entity mappings from result columns, beyond the ones the \
@@ -215,33 +254,56 @@ fn unprojected(
         at,
     )
     .with_field_path(QUERY.iter().map(ToString::to_string).collect());
-    if let Some(project) = project_clause(output, named, missing, &groups) {
+    // After a `render`, a project would change what is drawn, not what the
+    // rule returns: no edit is offered there.
+    let ends_in_render = query
+        .inner
+        .get(output.last_operator.start..output.last_operator.end)
+        .is_some_and(|op| op.trim_start().starts_with("render"));
+    if !ends_in_render
+        && let Some(project) = project_clause(output, found, &groups)
+        && !(found.single_quoted && project.contains('\''))
+    {
         diagnostic = diagnostic.with_suggestion(project);
     }
     Some(diagnostic)
 }
 
-/// `| project` of the required columns the output has (the first of each
-/// group), then the columns the block names, each once; `None` when there is
-/// none, or a name cannot be written as a KQL column name.
+/// `| project` of the required columns (of each group, the first the
+/// output has; when the output is a table's documented columns and has none
+/// of a one-column group, that column, which the table has undocumented),
+/// then the columns the block names, a misspelt one as the column it most
+/// likely means, each once; `None` when there is none, or a name cannot be
+/// written as a KQL column name.
 fn project_clause(
     output: &Output,
-    named: &[Named],
-    missing: &[&str],
+    found: &Found<'_>,
     groups: &[Vec<&'static str>],
 ) -> Option<String> {
     let mut columns: Vec<&str> = Vec::new();
     for group in groups {
-        if let Some(column) = group.iter().find(|c| output.column(c).is_some()) {
-            columns.push(column);
+        match group.iter().find(|c| output.column(c).is_some()) {
+            Some(column) => columns.push(column),
+            None if found.family_known && !output.complete && group.len() == 1 => {
+                columns.extend(group.first().copied());
+            }
+            None => {}
         }
     }
-    for name in named {
-        // A column the output lacks would be an unknown column of the project.
-        if missing.contains(&name.column.as_str()) || output.lacks(&name.column) {
-            continue;
+    for name in found.named {
+        match found
+            .missing
+            .iter()
+            .find(|(column, _)| *column == name.column)
+        {
+            // The column it most likely means, which the output has.
+            Some((_, Some(meant))) => columns.push(meant),
+            // A column the output lacks would be an unknown column of the
+            // project.
+            Some((_, None)) => {}
+            None if output.lacks(&name.column) => {}
+            None => columns.push(&name.column),
         }
-        columns.push(&name.column);
     }
     let mut seen = std::collections::BTreeSet::new();
     let mut written = Vec::new();
@@ -626,7 +688,7 @@ mod tests {
             [codes::MICROSOFT_DEFENDER_UNPROJECTED_OUTPUT]
         );
         let d = &found[0];
-        assert_eq!(d.severity, opentide_core::Severity::Warning);
+        assert_eq!(d.severity, opentide_core::Severity::Information);
         assert_eq!(covered(&yaml, d), "where ActionType == 'x'");
         assert_eq!(
             d.suggestion.as_deref(),
@@ -698,6 +760,177 @@ mod tests {
             "{}",
             found[0].message
         );
+    }
+
+    /// `yaml` with the unprojected finding's suggestion appended after the
+    /// query's last operator, as the editor's quick fix does.
+    fn with_project(yaml: &str) -> String {
+        let found = findings(yaml);
+        let d = found
+            .iter()
+            .find(|d| d.code == codes::MICROSOFT_DEFENDER_UNPROJECTED_OUTPUT)
+            .unwrap_or_else(|| panic!("{found:?}"));
+        let suggestion = d.suggestion.clone().unwrap_or_else(|| panic!("{d:?}"));
+        let at = LineIndex::new(yaml).offset(d.range.end);
+        format!("{} {suggestion}{}", &yaml[..at], &yaml[at..])
+    }
+
+    #[test]
+    fn applying_the_project_leaves_the_rule_clean() {
+        // #1885 review: the suggestion skipped a required column the
+        // documented columns lacked, and turned a passing rule red.
+        for (query, block) in [
+            (
+                "EmailAttachmentInfo | where FileType == \"html\"",
+                "    entities:\n      mailboxes:\n        - primary_address: RecipientEmailAddress\n",
+            ),
+            (
+                "DeviceEvents\n| where ActionType == 'x' // keep",
+                "    entities:\n      accounts:\n        - upn: InitiatingProcessAccountUpn\n    \
+                 alert:\n      title: \"On {{DeviceName}}\"\n",
+            ),
+            (
+                "DeviceNetworkInfo | where NetworkAdapterStatus == \"Up\"",
+                "    entities:\n      hosts:\n        - device_id: DeviceId\n",
+            ),
+        ] {
+            let fixed = with_project(&rule(query, block));
+            assert_eq!(findings(&fixed), [], "{fixed}");
+        }
+    }
+
+    #[test]
+    fn the_project_names_a_misspelt_column_as_the_one_it_means() {
+        let yaml = rule(
+            "DeviceEvents | where ActionType == 'x'",
+            "    entities:\n      hosts:\n        - device_id: DevicId\n",
+        );
+        let found = findings(&yaml);
+        let project = found
+            .iter()
+            .find_map(|d| d.suggestion.as_deref().filter(|s| s.starts_with('|')))
+            .unwrap_or_else(|| panic!("{found:?}"));
+        assert_eq!(project, "| project Timestamp, DeviceId, ReportId");
+    }
+
+    #[test]
+    fn no_project_is_offered_after_a_render_or_where_quoting_would_need_escapes() {
+        let yaml = rule(
+            "DeviceEvents | where ActionType == 'x' | render table",
+            "    entities:\n      hosts:\n        - device_id: DeviceId\n",
+        );
+        let found = findings(&yaml);
+        assert_eq!(
+            codes_of(&found),
+            [codes::MICROSOFT_DEFENDER_UNPROJECTED_OUTPUT]
+        );
+        assert_eq!(found[0].suggestion, None);
+        // A bracketed name in a single-quoted YAML scalar.
+        let yaml = "name: Rule\nconfigurations:\n  microsoft_defender:\n    \
+                    query: 'DeviceEvents | where ActionType == \"x\"'\n    entities:\n      \
+                    hosts:\n        - name: Analyst Tag\n";
+        let found = findings(yaml);
+        assert_eq!(
+            codes_of(&found),
+            [codes::MICROSOFT_DEFENDER_UNPROJECTED_OUTPUT]
+        );
+        assert_eq!(found[0].suggestion, None, "{found:?}");
+    }
+
+    #[test]
+    fn no_required_columns_without_a_defender_xdr_table() {
+        let yaml = rule(
+            "datatable(Account: string) ['a'] | project Account",
+            "    entities:\n      accounts:\n        - name: Account\n",
+        );
+        assert_eq!(findings(&yaml), []);
+    }
+
+    #[test]
+    fn a_numeric_id_is_an_entity_column() {
+        let yaml = rule(
+            "CloudAppEvents | project Timestamp, ReportId, ApplicationId, AccountObjectId",
+            "    entities:\n      cloud_applications:\n        - app_id: ApplicationId\n      \
+             accounts:\n        - aad_user_id: AccountObjectId\n",
+        );
+        assert_eq!(findings(&yaml), []);
+    }
+
+    #[test]
+    fn a_project_keep_of_the_issue_s_columns_is_clean() {
+        // #1885 review: project-keep only removed columns, so a kept one the
+        // reference lacks was reported missing.
+        let yaml = rule(
+            "DeviceNetworkInfo | where NetworkAdapterStatus == \"Up\" \
+             | project-keep Timestamp, ReportId, DeviceId, IPAddresses",
+            "    entities:\n      hosts:\n        - device_id: DeviceId\n    \
+             alert:\n      custom_details:\n        Addresses: IPAddresses\n",
+        );
+        assert_eq!(findings(&yaml), []);
+    }
+
+    #[test]
+    fn applying_the_project_to_a_table_outside_the_families_leaves_it_clean() {
+        // BehaviorEntities is not among the Defender XDR tables the
+        // required columns know: nothing is required offline, and the
+        // project names no Log Analytics column.
+        let yaml = rule(
+            "BehaviorEntities | where EntityType == \"User\"",
+            "    entities:\n      accounts:\n        - upn: AccountUpn\n",
+        );
+        let found = findings(&yaml);
+        let project = found
+            .iter()
+            .find_map(|d| d.suggestion.as_deref())
+            .unwrap_or_else(|| panic!("{found:?}"));
+        assert!(!project.contains("TimeGenerated"), "{project}");
+        let fixed = with_project(&yaml);
+        assert_eq!(findings(&fixed), [], "{fixed}");
+    }
+
+    #[test]
+    fn an_arg_max_star_by_a_key_is_only_as_sure_as_its_table() {
+        // Whether `*` repeats the `by` key (`DeviceId1`) is not something
+        // to fail a rule on: from a table, the output is its documented
+        // columns, so nothing beyond a near miss is reported.
+        let yaml = rule(
+            "DeviceProcessEvents | summarize arg_max(Timestamp, *) by DeviceId",
+            "    entities:\n      hosts:\n        - device_id: DeviceId1\n      \
+             accounts:\n        - upn: AccountUpn\n",
+        );
+        let found = findings(&yaml);
+        assert!(
+            !found
+                .iter()
+                .any(|d| matches!(d.code.as_str(), codes::MICROSOFT_DEFENDER_REQUIRED_COLUMNS)),
+            "{found:?}"
+        );
+    }
+
+    #[test]
+    fn no_message_names_a_log_analytics_column() {
+        for query in [
+            "DeviceNetworkInfo | where NetworkAdapterStatus == \"Up\"",
+            "EmailAttachmentInfo | where FileType == \"html\"",
+            "IdentityLogonEvents | where ActionType == \"LogonFailed\"",
+        ] {
+            let yaml = rule(
+                query,
+                "    entities:\n      accounts:\n        - upn: AccountUpn\n",
+            );
+            for d in findings(&yaml) {
+                let text = format!("{} {:?}", d.message, d.suggestion);
+                for column in [
+                    "TimeGenerated",
+                    "TenantId",
+                    "SourceSystem",
+                    "_BilledSize",
+                    "_IsBillable",
+                ] {
+                    assert!(!text.contains(column), "{query}: {text}");
+                }
+            }
+        }
     }
 
     #[test]

@@ -8,15 +8,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Eac
 
 ### Upgrade
 
-- If you deploy to Microsoft Defender, run `opentide validate --check queries` and correct each column it reports as `microsoft_defender_column_not_in_output` or `microsoft_defender_required_columns`: Defender refused these rules at deploy, and `validate` now fails on them offline.
+1. If you deploy to Microsoft Defender, run `opentide validate --check queries` and fix each `microsoft_defender_column_not_in_output` and `microsoft_defender_required_columns` it reports: correct the column the block names, or add it to the query's final `project`.
+2. If you deploy to Microsoft Defender, run `opentide lint --verbose --check queries` and end each query it reports as `microsoft_defender_unprojected_output` with the `| project` it suggests.
+
+### Breaking
+
+- **`validate` fails a Defender block whose columns its query does not return.** The engine works out the columns a `microsoft_defender` query returns, offline, and reports what Defender would refuse or leave unmapped at deploy. Nothing is reported when it cannot tell what the query returns ([#1885](https://github.com/opentidehq/opentide/issues/1885)).
+  - `microsoft_defender_column_not_in_output`: an entity, action, custom detail or alert `{{Column}}` the output lacks, with the column it most likely means
+  - `microsoft_defender_required_columns`: the output lacks `Timestamp`, `DeviceId`, `ReportId` or another column a custom detection needs for the Defender XDR tables the query reads
 
 ### Added
 
-- **Defender blocks are checked against their query's output.** `validate`, `lint` and the editor infer the columns a `microsoft_defender` query returns, offline, and check the block against them; nothing is reported when the output cannot be inferred. Editor quick fixes apply the suggested column and append the `project` ([#1885](https://github.com/opentidehq/opentide/issues/1885)).
-  - `microsoft_defender_column_not_in_output`: an entity, action, custom detail or alert `{{Column}}` the output lacks, with a suggestion
-  - `microsoft_defender_required_columns`: the output lacks `Timestamp`, `DeviceId`, `ReportId` or another column a custom detection needs
-  - `microsoft_defender_column_type` (warning): an entity or action mapped from a column that is not text
-  - `microsoft_defender_unprojected_output` (warning): the query returns columns the block does not use, from which Defender derives entity mappings
+- **`lint` flags Defender queries that return columns the rule does not use.** Defender derives entity mappings of its own from extra result columns; the note `microsoft_defender_unprojected_output` suggests the `| project` to end the query with, and the warning `microsoft_defender_column_type` reports an entity mapped from a `dynamic`, `datetime`, `bool` or `timespan` column ([#1885](https://github.com/opentidehq/opentide/issues/1885)).
+- **Editor quick fixes for Defender columns.** The language server replaces a misspelt column with the one the query returns, and appends the suggested `| project` after the query's last operator ([#1885](https://github.com/opentidehq/opentide/issues/1885)).
 
 ## [1.0.0] — 2026-11-25
 

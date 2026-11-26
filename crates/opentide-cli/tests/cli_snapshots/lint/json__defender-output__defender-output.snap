@@ -33,7 +33,7 @@ exit: 0
       "line": 18,
       "message": "the query returns 1 column nothing in the block uses (FileName): Defender derives entity mappings from result columns, beyond the ones the block declares; project the columns the rule uses",
       "path": "objects/rules/defender-columns-not-returned.yaml",
-      "severity": "warning",
+      "severity": "info",
       "uuid": "00000000-0000-4000-8185-000000000001",
       "yaml_line": 17
     },
@@ -52,9 +52,9 @@ exit: 0
       "fix": null,
       "help": "try: | project Timestamp, DeviceId, ReportId, InitiatingProcessAccountUpn",
       "line": 17,
-      "message": "the query ends without a project, so it returns every column of its tables, 68 of which nothing in the block uses (DeviceName, ActionType, AccountName, AccountDomain, AccountSid and 63 more): Defender derives entity mappings from result columns, beyond the ones the block declares; project the columns the rule uses",
+      "message": "the query ends without a project, so it returns every column of its tables, 62 of which nothing in the block uses (DeviceName, ActionType, AccountName, AccountDomain, AccountSid and 57 more): Defender derives entity mappings from result columns, beyond the ones the block declares; project the columns the rule uses",
       "path": "objects/rules/defender-columns-unprojected.yaml",
-      "severity": "warning",
+      "severity": "info",
       "uuid": "00000000-0000-4000-8185-000000000002",
       "yaml_line": 16
     }
@@ -71,8 +71,8 @@ exit: 0
     "files": 3,
     "findings": 2,
     "fixed": 0,
-    "notes": 0,
-    "warnings": 2
+    "notes": 2,
+    "warnings": 0
   }
 }
 
