@@ -33,7 +33,7 @@ opentide validate --check queries
 | `--file` | Validate one YAML file — repo-relative path, absolute path, or bare file name (see [Selecting a file](#selecting-a-file)). Repeatable: each `--file` adds a file to the scope |
 | `--uuid` | Validate specific UUIDs (repeatable) |
 | `--type` | Filter by object type (repeatable) |
-| `--strict` | Treat warnings as failures (exit `1`), except `platform_not_enabled`, and fail a full run that finds no detection objects ([Which workspace was checked](#which-workspace-was-checked)) |
+| `--strict` | Treat warnings as failures (exit `1`), except `platform_not_enabled` and `microsoft_defender_impacted_asset_identifier`, and fail a full run that finds no detection objects ([Which workspace was checked](#which-workspace-was-checked)) |
 | `--allow-empty` | With `--strict` (refused without it): pass a full run that finds no detection objects in a workspace. A folder that is not a workspace still fails. The commit hook `opentide setup hooks` writes passes it, so a new repository commits before its first object |
 | `--fix` | Apply every safe fix, then validate again (see [Fixing typos](#fixing-typos---fix)) |
 | `--dry-run` | With `--fix`: print the edits as a unified diff and change nothing |
@@ -41,7 +41,7 @@ opentide validate --check queries
 | `--format` | `text` (code frames, the default), `sarif` (SARIF 2.1.0 for code scanning) or `codequality` (GitLab Code Quality). See [Reports and CI annotations](#reports-and-ci-annotations) |
 | `--output` | Write the `--format` report to this file and still print the code frames. Without it the report is all of stdout. Required with `--json`. Needs `--format sarif` or `codequality`: with `text` it exits `2` |
 
-`--strict` fails warning runs with exit `1`. Without it, warnings are reported in output and the process still exits `0`. The one exception is `platform_not_enabled` (see [Platforms this workspace has not enabled](#platforms-this-workspace-has-not-enabled)), which `--strict` reports without failing. Validation failures in `--json` mode include the complete report before the process exits.
+`--strict` fails warning runs with exit `1`. Without it, warnings are reported in output and the process still exits `0`. Two warnings are exceptions, which `--strict` reports without failing: `platform_not_enabled` (see [Platforms this workspace has not enabled](#platforms-this-workspace-has-not-enabled)), and `microsoft_defender_impacted_asset_identifier`, Microsoft's advice on identifying a device or user, until a tenant check confirms what Defender does without it. Validation failures in `--json` mode include the complete report before the process exits.
 
 `configuration` runs by default on a full run. It checks every merged configuration file the CLI reads (`paths.toml`, `deployment.toml`, `visibility.toml`, `documentation.toml`, and each built-in `platforms/<id>.toml`) against its [model](../sdk/configuration.md), so a misspelt key fails `validate` instead of the next `deploy` or `generate docs`. Each issue's `context.file` names the file and `field_path` the key, for example `unknown_key` at `promotion.enabeld` in `deployment.toml`. A `visibility.toml` log source is one dataset, named by its `name`; a 0.20.0 dataset key (`tables = [...]`, `ecs`) fails with a message that says what to do instead ([upgrading from 0.20.0](../usage/configuration.md#upgrading-from-0200)). A malformed `[[responders]]` entry and an undeclared visibility asset are warnings, as the loaders skip them; a run narrowed with `--file`, `--uuid` or `--type` skips this check unless `--check configuration` asks for it. Values are never printed.
 
@@ -406,7 +406,7 @@ The engine is [opentidehq/language-server](https://github.com/opentidehq/languag
 | Platform | Language and profile |
 |----------|----------------------|
 | `sentinel` | KQL, Sentinel tables |
-| `microsoft_defender` | KQL, Defender tables |
+| `microsoft_defender` | KQL, Defender tables; the block's entities, actions, custom details and alert `{{Column}}` placeholders against the columns the query returns (`microsoft_defender_column_not_in_output`, `microsoft_defender_required_columns`; `microsoft_defender_column_type` is a lint warning and `microsoft_defender_unprojected_output` a lint note), when the engine can infer them |
 | `splunk` | SPL |
 | `elastic` | ES\|QL, EQL, Kibana KQL or Lucene, by the block's `type` and `language`; ES\|QL against the lowest `setup.version` of the block's tenants |
 | `carbon_black_cloud` | Lucene, Carbon Black dialect |

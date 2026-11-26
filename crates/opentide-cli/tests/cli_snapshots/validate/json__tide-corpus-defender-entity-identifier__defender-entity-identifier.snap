@@ -1,0 +1,140 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: validate/json/tide-corpus-defender-entity-identifier/defender-entity-identifier
+---
+args: opentide --json validate --strict
+exit: 1
+
+━━━ stdout · json, 1 lines
+{
+  "checks": {
+    "configuration": {
+      "check": "configuration",
+      "status": "passed"
+    },
+    "id-uniqueness": {
+      "check": "id-uniqueness",
+      "status": "passed"
+    },
+    "queries": {
+      "check": "queries",
+      "status": "passed"
+    },
+    "schema": {
+      "check": "schema",
+      "status": "passed"
+    },
+    "uuid-format": {
+      "check": "uuid-format",
+      "status": "passed"
+    }
+  },
+  "command": "validate",
+  "duration_ms": 0,
+  "error": "Validation failed",
+  "exit_code": 1,
+  "failure": {
+    "argument": null,
+    "code": "issues_found",
+    "crash_log": null,
+    "message": "Validation failed",
+    "suggestion": null
+  },
+  "message": "Validation failed",
+  "next_actions": [
+    {
+      "command": "opentide --json explain microsoft_defender_entity_identifier",
+      "reason": "how to fix it"
+    },
+    {
+      "command": "opentide --json validate --strict",
+      "reason": "check again"
+    }
+  ],
+  "ok": false,
+  "report": {
+    "issues": [
+      {
+        "code": "microsoft_defender_entity_identifier",
+        "column": 11,
+        "context": {},
+        "end_column": 12,
+        "end_line": 39,
+        "explain": "opentide explain microsoft_defender_entity_identifier",
+        "field_path": [
+          "configurations",
+          "microsoft_defender",
+          "entities",
+          "registry_values",
+          "0"
+        ],
+        "file_path": "<WS>/Objects/Detection Rules/rule-0002-defender-kql.yaml",
+        "fix": null,
+        "help": null,
+        "line": 39,
+        "message": "entities.registry_values[0] does not set key: Graph refuses a registry_values mapping without it (identifier RegKey, sent as keyColumn); map key to the result column that holds it",
+        "object_type": "rule",
+        "object_uuid": "00000000-0000-4000-8003-000000000002",
+        "path": "Objects/Detection Rules/rule-0002-defender-kql.yaml",
+        "severity": "error",
+        "suggestion": null,
+        "yaml_line": 38
+      }
+    ],
+    "ok": false,
+    "stats": {
+      "id_workers": "<CORES>",
+      "object_workers": "<CORES>",
+      "objects_checked": 12,
+      "parallel": "<CORES>",
+      "queries_checked": 8,
+      "wall_ms": 0.0,
+      "workers": "<CORES>"
+    },
+    "warnings": [
+      {
+        "code": "microsoft_defender_impacted_asset_identifier",
+        "column": 11,
+        "context": {},
+        "end_column": 12,
+        "end_line": 37,
+        "explain": "opentide explain microsoft_defender_impacted_asset_identifier",
+        "field_path": [
+          "configurations",
+          "microsoft_defender",
+          "entities",
+          "accounts",
+          "1"
+        ],
+        "file_path": "<WS>/Objects/Detection Rules/rule-0002-defender-kql.yaml",
+        "fix": null,
+        "help": null,
+        "line": 37,
+        "message": "entities.accounts[1] sets no strong identifier of an impacted user: map one of aad_user_id (AccountObjectId), sid (AccountSid, InitiatingProcessAccountSid), upn (AccountUpn, InitiatingProcessAccountUpn), name + upn_suffix, name + nt_domain, name + dns_domain, so Defender can tell which user the alert is about",
+        "object_type": "rule",
+        "object_uuid": "00000000-0000-4000-8003-000000000002",
+        "path": "Objects/Detection Rules/rule-0002-defender-kql.yaml",
+        "severity": "warning",
+        "suggestion": null,
+        "yaml_line": 36
+      }
+    ]
+  },
+  "schema_version": 1,
+  "status": "failed",
+  "summary": {
+    "errors": 1,
+    "files": 1,
+    "fixable": 0,
+    "objects": 12,
+    "queries": 8,
+    "warning_files": 1,
+    "warnings": 1
+  },
+  "warnings": [
+    "<WS>/Objects/Detection Rules/rule-0002-defender-kql.yaml:37: configurations.microsoft_defender.entities.accounts.1: entities.accounts[1] sets no strong identifier of an impacted user: map one of aad_user_id (AccountObjectId), sid (AccountSid, InitiatingProcessAccountSid), upn (AccountUpn, InitiatingProcessAccountUpn), name + upn_suffix, name + nt_domain, name + dns_domain, so Defender can tell which user the alert is about"
+  ],
+  "workspace": "<WS>"
+}
+
+━━━ stderr · empty
