@@ -158,8 +158,9 @@ impl Check {
 }
 
 /// Every code a `validate` finding can carry (`VALIDATION_CODES`): each
-/// check's issue and warning codes, `scope_no_match`, `file_not_found` and
-/// `nested_object_file`, sorted. The engine's own query codes are not here.
+/// check's issue and warning codes, `scope_no_match`, `file_not_found`,
+/// `nested_object_file` and the [`STRICT_EXEMPT_WARNINGS`], sorted. The
+/// engine's own query codes are not here.
 pub const VALIDATION_CODES: &[&str] = &[
     "api_key_literal",
     "asset_unknown",
@@ -183,6 +184,7 @@ pub const VALIDATION_CODES: &[&str] = &[
     "invalid_uuid",
     "invalid_value",
     "max_tlp_unknown",
+    "microsoft_defender_impacted_asset_identifier",
     "missing_field",
     "missing_uuid",
     "name_invalid",
@@ -480,8 +482,15 @@ pub struct Summary {
     pub fixable: usize,
 }
 
-/// Warning codes `--strict` reports without failing.
-pub const STRICT_EXEMPT_WARNINGS: [&str; 1] = ["platform_not_enabled"];
+/// Warning codes `--strict` reports without failing:
+/// `platform_not_enabled`, and `microsoft_defender_impacted_asset_identifier`,
+/// whose rule is Microsoft's advice rather than something Graph is known to
+/// refuse, until a tenant probe settles it
+/// (`docs/internal/microsoft-defender-tenant-test.md`, check 11).
+pub const STRICT_EXEMPT_WARNINGS: [&str; 2] = [
+    "platform_not_enabled",
+    opentide_core::codes::MICROSOFT_DEFENDER_IMPACTED_ASSET_IDENTIFIER,
+];
 
 /// The object families `validate --type` takes.
 pub const OBJECT_TYPES: [&str; 3] = ["rule", "threat", "objective"];
