@@ -1,6 +1,6 @@
 ---
 title: Microsoft Defender tenant test plan
-description: Step-by-step checks a person with a Microsoft Defender XDR tenant runs to confirm or correct the nine positions microsoft-defender-1.0 takes where the Graph beta docs are silent.
+description: Step-by-step checks a person with a Microsoft Defender XDR tenant runs to confirm or correct the ten positions microsoft-defender-1.0 takes where the Graph beta docs are silent.
 ---
 
 # Microsoft Defender tenant test plan
@@ -9,7 +9,7 @@ description: Step-by-step checks a person with a Microsoft Defender XDR tenant r
 detection API, `https://graph.microsoft.com/beta/security/rules/detectionRules`
 ([microsoft-defender-1.0](https://github.com/opentidehq/specifications/blob/main/specs/platforms/microsoft-defender-1.0.md),
 [RFC 0021](https://github.com/opentidehq/specifications/blob/main/rfcs/0021-defender-graph-beta-detection-rules.md)).
-The Graph documentation leaves nine questions open. opentide 1.0 implements the position the
+The Graph documentation leaves ten questions open. opentide 1.0 implements the position the
 specification takes for each; this page is how someone with a tenant confirms each position, or
 records what Graph does instead, before 1.0.0 GA.
 
@@ -251,6 +251,36 @@ the identity model (RFC 0021, Identity).
 **If not / to record:** limits found become `microsoft_defender_custom_details` constraints in the
 spec and in `checks.rs` (`custom_details`).
 
+## 10. Which identifiers each entity kind requires
+
+Graph's entity mapping types list their columns, not which are required, and Graph checks a
+rule's mappings when it creates or enables the rule, not while the rule is disabled. One rule is
+known from production: a `registryValues` mapping with `valueNameColumn` and no `keyColumn` is
+refused with `HTTP 400 · Entity mapping for type 'RegistryValue' does not include a required
+identifier. Supported identifiers: RegKey | Name` (#1884). opentide enforces it
+(`microsoft_defender_entity_identifier`, the table `ENTITY_IDENTIFIERS` in
+`crates/opentide-schema/src/objects/platform/microsoft_defender.rs`); every other kind needs one
+of its fields.
+
+1. For each kind with more than one field (`hosts`, `accounts`, `files`, `processes`, `ips`,
+   `dns`, `registryValues`, `mailMessages`, `mailClusters`, `cloudApplications`,
+   `securityGroups`), create a **disabled** rule whose only mapping sets one column, once per
+   column (`entityMappings: {"ips": [{"scopeColumn": "RemoteIPType"}]}`), with a query that
+   projects it.
+2. Enable each rule Graph created (`PATCH {"status": "enabled"}`), then disable it again.
+3. For `registryValues`, also try `keyColumn` alone.
+
+**Expected:** every single-column mapping is accepted at create and at enable, except
+`registryValues` with `valueNameColumn` alone (refused, as above).
+
+**If not:** record each refused combination with Graph's message (its "Supported identifiers"
+list names the kind's identifiers). Each becomes a row of `ENTITY_IDENTIFIERS` with
+`Evidence::Observed`, the message as its reference and the date, and a case in
+`crates/opentide-schema/tests/microsoft_defender.rs`; and a spec change (microsoft-defender-1.0,
+Constraints). Note which identifiers made the alert show an impacted device, user or mailbox: the
+warning `microsoft_defender_impacted_asset_identifier` relies on Defender's documented strong
+identifiers (`DeviceId`, `DeviceName`; `AccountObjectId`, `AccountSid`, `AccountUpn`).
+
 ## End to end with opentide
 
 After the curl checks, run the platform the way users will:
@@ -286,3 +316,4 @@ After the curl checks, run the platform the way users will:
 | 7 | Frequencies, largest lookback | | | |
 | 8 | The uuid as client id, compared exactly | | | |
 | 9 | Custom detail count and names | | | |
+| 10 | Required identifiers per entity kind | | | |
