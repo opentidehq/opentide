@@ -1684,8 +1684,8 @@ static PLACEHOLDER: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new
     regex::Regex::new(r"\{\{([A-Za-z_][A-Za-z0-9_]*)\}\}").expect("valid regex")
 });
 
-/// The distinct columns `text` references as `{{Column}}` ([`PLACEHOLDER`]'s
-/// form), in order of first use.
+/// The distinct columns `text` references as `{{Column}}` (an identifier, no
+/// space inside the braces), in order of first use.
 #[must_use]
 pub fn placeholder_columns(text: &str) -> Vec<&str> {
     let mut columns: Vec<&str> = Vec::new();
