@@ -763,7 +763,7 @@ description = "Datadog Cloud SIEM detection rules."
 # https://api.<site>, or to api_url when set (a new site, a proxy). api_key and app_key are sent
 # as DD-API-KEY and DD-APPLICATION-KEY. The application key needs
 # security_monitoring_rules_read and security_monitoring_rules_write (validation needs write),
-# and logs_read_data for opentide query. Use a service account's scoped key. The rule id is kept
+# and logs_read_data for opentide query and for checking searches live. Use a service account's scoped key. The rule id is kept
 # in .opentide/states/deployment/ (commit it).
 #[[tenants]]
 #name = "datadog-eu"
@@ -840,7 +840,7 @@ What `PREVIEW` means on Datadog, and what it does not:
   tags, which may restart a `new_value` or `impossible_travel` rule's learning just as it goes
   live (open question 10; section 14).
 
-Every create and update is validated first (`POST /rules/validation`), so an invalid body is
+Every create and update is validated first (`POST /security_monitoring/rules/validation`), so an invalid body is
 reported before anything changes.
 
 **Retries.** Datadog waits out its own rate limits, as Bitdefender, Exabeam and Google SecOps do:
@@ -1117,7 +1117,9 @@ Each is settled by a probe on a trial tenant in phase 0, unless noted.
    - the `new_value` editor options "for all new values" and "after the first seen value", in terms
      of `learningMethod`, `learningDuration` and `learningThreshold`;
    - the anomaly `bucket`, `learning` and `tolerance` defaults, and whether `window` may be shorter
-     than `bucket`.
+     than `bucket`;
+   - that Logs Search answers a malformed query with a 400 that names the error, which the live
+     check of searches relies on.
 7. **A write-scoped key for validation.** Should `setup` recommend a separate validation key, and
    should `doctor` warn when a key that only needs to validate could also delete? A product
    decision, not a probe.
