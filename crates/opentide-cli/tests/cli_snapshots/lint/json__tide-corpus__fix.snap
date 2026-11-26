@@ -636,13 +636,14 @@ configurations:
     query: |
       DeviceProcessEvents
       | take 1
+      | project Timestamp, DeviceId, ReportId
     schedule:
       frequency: 1H
     alert:
       title: Defender KQL Rule
     entities:
       hosts:
-        - device_id: device_id
+        - device_id: DeviceId
 
 ━━━ ws/Objects/Detection Rules/elastic-kql-rule.yaml · created 0644
 name: Elastic KQL Rule

@@ -1,0 +1,79 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: lint/json/defender-output/defender-output
+---
+args: opentide --json lint --check queries
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "checks": [
+    "queries"
+  ],
+  "command": "lint",
+  "count": 2,
+  "duration_ms": 0,
+  "exit_code": 0,
+  "failure": null,
+  "findings": [
+    {
+      "check": "queries",
+      "code": "microsoft_defender_unprojected_output",
+      "column": 9,
+      "end_column": 65,
+      "end_line": 18,
+      "explain": "opentide explain microsoft_defender_unprojected_output",
+      "field_path": [
+        "configurations",
+        "microsoft_defender",
+        "query"
+      ],
+      "fix": null,
+      "help": "try: | project Timestamp, InitiatingProcessAccountUpn",
+      "line": 18,
+      "message": "the query returns 1 column nothing in the block uses (FileName): Defender derives entity mappings from result columns, beyond the ones the block declares; project the columns the rule uses",
+      "path": "objects/rules/defender-columns-not-returned.yaml",
+      "severity": "warning",
+      "uuid": "00000000-0000-4000-8185-000000000001",
+      "yaml_line": 17
+    },
+    {
+      "check": "queries",
+      "code": "microsoft_defender_unprojected_output",
+      "column": 9,
+      "end_column": 48,
+      "end_line": 17,
+      "explain": "opentide explain microsoft_defender_unprojected_output",
+      "field_path": [
+        "configurations",
+        "microsoft_defender",
+        "query"
+      ],
+      "fix": null,
+      "help": "try: | project Timestamp, DeviceId, ReportId, InitiatingProcessAccountUpn",
+      "line": 17,
+      "message": "the query ends without a project, so it returns every column of its tables, 68 of which nothing in the block uses (DeviceName, ActionType, AccountName, AccountDomain, AccountSid and 63 more): Defender derives entity mappings from result columns, beyond the ones the block declares; project the columns the rule uses",
+      "path": "objects/rules/defender-columns-unprojected.yaml",
+      "severity": "warning",
+      "uuid": "00000000-0000-4000-8185-000000000002",
+      "yaml_line": 16
+    }
+  ],
+  "fixed": 0,
+  "message": "Catalogue lint found issues",
+  "next_actions": [],
+  "ok": true,
+  "path": "<WS>",
+  "schema_version": 1,
+  "status": "issues",
+  "summary": {
+    "errors": 0,
+    "files": 3,
+    "findings": 2,
+    "fixed": 0,
+    "notes": 0,
+    "warnings": 2
+  }
+}
+
+━━━ stderr · empty

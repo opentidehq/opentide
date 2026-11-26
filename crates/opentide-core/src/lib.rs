@@ -1048,6 +1048,12 @@ pub mod codes {
     pub const MICROSOFT_DEFENDER_ACTION_TARGET: &str = "microsoft_defender_action_target";
     pub const MICROSOFT_DEFENDER_ISOLATION_TYPE: &str = "microsoft_defender_isolation_type";
     pub const MICROSOFT_DEFENDER_COLUMN: &str = "microsoft_defender_column";
+    // A block against its query's inferred output (#1885).
+    pub const MICROSOFT_DEFENDER_COLUMN_NOT_IN_OUTPUT: &str =
+        "microsoft_defender_column_not_in_output";
+    pub const MICROSOFT_DEFENDER_REQUIRED_COLUMNS: &str = "microsoft_defender_required_columns";
+    pub const MICROSOFT_DEFENDER_COLUMN_TYPE: &str = "microsoft_defender_column_type";
+    pub const MICROSOFT_DEFENDER_UNPROJECTED_OUTPUT: &str = "microsoft_defender_unprojected_output";
     pub const MICROSOFT_DEFENDER_SCOPE: &str = "microsoft_defender_scope";
     pub const MICROSOFT_DEFENDER_INCIDENT: &str = "microsoft_defender_incident";
     pub const MICROSOFT_DEFENDER_NO_ENTITIES: &str = "microsoft_defender_no_entities";
@@ -1425,6 +1431,10 @@ pub mod codes {
         MICROSOFT_DEFENDER_ACTION_TARGET,
         MICROSOFT_DEFENDER_ISOLATION_TYPE,
         MICROSOFT_DEFENDER_COLUMN,
+        MICROSOFT_DEFENDER_COLUMN_NOT_IN_OUTPUT,
+        MICROSOFT_DEFENDER_REQUIRED_COLUMNS,
+        MICROSOFT_DEFENDER_COLUMN_TYPE,
+        MICROSOFT_DEFENDER_UNPROJECTED_OUTPUT,
         MICROSOFT_DEFENDER_SCOPE,
         MICROSOFT_DEFENDER_INCIDENT,
         MICROSOFT_DEFENDER_NO_ENTITIES,
@@ -2230,6 +2240,18 @@ pub mod codes {
             MICROSOFT_DEFENDER_ISOLATION_TYPE => "`isolation_type` is not `full` or `selective`.",
             MICROSOFT_DEFENDER_COLUMN => {
                 "A column name (an entity field, an action column, a custom detail's value) is blank or not a string."
+            }
+            MICROSOFT_DEFENDER_COLUMN_NOT_IN_OUTPUT => {
+                "A column the block names (an entity field, an action column, a custom detail's value, an alert `{{placeholder}}`) is not a column of the query's output."
+            }
+            MICROSOFT_DEFENDER_REQUIRED_COLUMNS => {
+                "The query's output lacks a column a custom detection needs for the tables it reads (`Timestamp`, and `DeviceId` and `ReportId` for a device table)."
+            }
+            MICROSOFT_DEFENDER_COLUMN_TYPE => {
+                "An entity field or action column is mapped from an output column whose type is not `string` or `guid`."
+            }
+            MICROSOFT_DEFENDER_UNPROJECTED_OUTPUT => {
+                "The query returns columns no entity, action, custom detail or alert placeholder uses, from which Defender derives entity mappings of its own."
             }
             MICROSOFT_DEFENDER_SCOPE => {
                 "`scope` is not `{device_groups: [...]}` with a non-empty list of non-blank names."

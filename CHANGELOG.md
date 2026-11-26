@@ -6,6 +6,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Eac
 
 ## [Unreleased]
 
+### Upgrade
+
+- If you deploy to Microsoft Defender, run `opentide validate --check queries` and correct each column it reports as `microsoft_defender_column_not_in_output` or `microsoft_defender_required_columns`: Defender refused these rules at deploy, and `validate` now fails on them offline.
+
+### Added
+
+- **Defender blocks are checked against their query's output.** `validate`, `lint` and the editor infer the columns a `microsoft_defender` query returns, offline, and check the block against them; nothing is reported when the output cannot be inferred. Editor quick fixes apply the suggested column and append the `project` ([#1885](https://github.com/opentidehq/opentide/issues/1885)).
+  - `microsoft_defender_column_not_in_output`: an entity, action, custom detail or alert `{{Column}}` the output lacks, with a suggestion
+  - `microsoft_defender_required_columns`: the output lacks `Timestamp`, `DeviceId`, `ReportId` or another column a custom detection needs
+  - `microsoft_defender_column_type` (warning): an entity or action mapped from a column that is not text
+  - `microsoft_defender_unprojected_output` (warning): the query returns columns the block does not use, from which Defender derives entity mappings
+
 ## [1.0.0] — 2026-11-25
 
 opentide runs on one Rust core: a far smaller install, commands that start in about 20 ms, and SDKs for Python, Rust and Node.js.
