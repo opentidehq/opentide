@@ -82,9 +82,10 @@ jobs:
         uses: ./.github/actions/rust-setup
         with:
           tools: cargo-nextest@0.9.148
-      # The cli_snapshots cases hold `Objects/` and `objects/` side by side,
-      # which are one folder on macOS's default (case-insensitive) volume, and
-      # the harness stops there. A small case-sensitive volume, at a short
+      # The cli_snapshots cases, and generate_goldens' inflight tests on the
+      # `tide-corpus-folders` fixture, hold `Objects/` and `objects/` side by
+      # side, which are one folder on macOS's default (case-insensitive)
+      # volume, and both stop there. A small case-sensitive volume, at a short
       # mount point (tests/golden/README.md, "Snapshots"), holds their roots.
       - name: Case-sensitive volume for the snapshot cases
         if: runner.os == 'macOS'

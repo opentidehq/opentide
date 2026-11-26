@@ -275,6 +275,16 @@ fn an_invalid_inflight_preview_is_left_out_with_a_warning() {
     assert_eq!(bundle()["models"], models_before);
 }
 
+/// A case root for the `tide-corpus-folders` fixture, which holds
+/// `Objects/` and `objects/` side by side: on a case-sensitive volume
+/// (`OPENTIDE_CASE_ROOT` on macOS, whose default volume folds case and makes
+/// them one folder, as the snapshot cases need too).
+fn folders_root() -> tempfile::TempDir {
+    let root = replay::case_root();
+    replay::assert_case_sensitive(root.path());
+    root
+}
+
 /// `generate inflight` refuses an object that fails its model check: the run,
 /// its own pull request's, exits 1 naming the file and the error, and writes
 /// no shard for the default branch's docs to trip on.
@@ -283,7 +293,7 @@ fn inflight_shards_refuse_an_invalid_object() {
     if !has_git() {
         return;
     }
-    let scratch = tempfile::tempdir().unwrap();
+    let scratch = folders_root();
     let ws = std::fs::canonicalize(scratch.path()).unwrap().join("ws");
     fixture("tide-corpus-folders", &ws);
     git(&ws, &["init", "-q", "-b", "main"]);
@@ -397,7 +407,7 @@ fn inflight_shards_follow_the_branch() {
     {
         return;
     }
-    let scratch = tempfile::tempdir().unwrap();
+    let scratch = folders_root();
     let ws = std::fs::canonicalize(scratch.path()).unwrap().join("ws");
     fixture("tide-corpus-folders", &ws);
     git(&ws, &["init", "-q", "-b", "main"]);
@@ -774,7 +784,7 @@ fn inflight_skips_deleted_object_files() {
     if !has_git() {
         return;
     }
-    let scratch = tempfile::tempdir().unwrap();
+    let scratch = folders_root();
     let ws = std::fs::canonicalize(scratch.path()).unwrap().join("ws");
     let rules = feature_branch(&ws);
     std::fs::remove_file(ws.join("objects/objectives/objective-0001-credential-access.yaml"))
