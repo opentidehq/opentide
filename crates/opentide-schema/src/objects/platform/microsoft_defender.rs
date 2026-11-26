@@ -42,8 +42,44 @@ pub const NO_ENTITIES: &str = opentide_core::codes::MICROSOFT_DEFENDER_NO_ENTITI
 pub const IMPACTED_ASSET_IDENTIFIER: &str =
     opentide_core::codes::MICROSOFT_DEFENDER_IMPACTED_ASSET_IDENTIFIER;
 
+/// The advisory of `alert.custom_details` past Defender's documented limits
+/// ([`MAX_CUSTOM_DETAILS`], [`MAX_CUSTOM_DETAILS_BYTES`]).
+pub const CUSTOM_DETAILS_LIMIT: &str =
+    opentide_core::codes::MICROSOFT_DEFENDER_CUSTOM_DETAILS_LIMIT;
+
+/// The advisory of an alert title or description that references more
+/// columns than Defender documents ([`MAX_PLACEHOLDER_COLUMNS`]).
+pub const PLACEHOLDER_LIMIT: &str = opentide_core::codes::MICROSOFT_DEFENDER_PLACEHOLDER_LIMIT;
+
 /// Every advisory [`advisories`] reports.
-pub const ADVISORY_CODES: [&str; 2] = [NO_ENTITIES, IMPACTED_ASSET_IDENTIFIER];
+pub const ADVISORY_CODES: [&str; 4] = [
+    NO_ENTITIES,
+    IMPACTED_ASSET_IDENTIFIER,
+    CUSTOM_DETAILS_LIMIT,
+    PLACEHOLDER_LIMIT,
+];
+
+/// The most custom details a rule takes. Microsoft's custom detection docs
+/// (<https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules>,
+/// "Add custom details", read 2026-11-26): "Each rule is limited to up to 20
+/// key-value pairs of custom details." Whether Graph refuses a 21st is not
+/// documented (microsoft-defender-tenant-test.md, step 9), so it is an
+/// advisory.
+pub const MAX_CUSTOM_DETAILS: usize = 20;
+
+/// The most bytes an alert's custom details may hold, names and values
+/// together. The same docs: "The combined size limit for all custom details
+/// and their values in a single alert is 4 KB. If the custom details array
+/// exceeds this limit, the whole custom details array is dropped from the
+/// alert." The values are the query's results, known only when the rule
+/// runs, so only names that fill the limit on their own are certain to
+/// exceed it; 4 KB is read as 4096 bytes, the larger reading.
+pub const MAX_CUSTOM_DETAILS_BYTES: usize = 4096;
+
+/// The most columns `alert.title` or `alert.description` may reference as
+/// `{{Column}}`. The same docs ("Create a dynamic alert title and
+/// description"): "You can reference up to three columns in each field."
+pub const MAX_PLACEHOLDER_COLUMNS: usize = 3;
 
 /// One entity kind or automated action: its key in the block, its Graph
 /// name, and its fields, each the block's key and the Graph property it is
@@ -1428,7 +1464,8 @@ platform_block! {
 /// mapping that sets none of its asset's identifiers. A block whose
 /// `entities` breaks a constraint earns no `no_entities`, and a mapping that
 /// is not a mapping of its kind's fields no asset advisory: the constraint's
-/// finding says more.
+/// finding says more. Then the limits of Microsoft's custom detection docs
+/// (`limit_advisories`).
 pub fn advisories(rule: &Node) -> Vec<super::Advisory> {
     let Some(block) = rule
         .get("configurations")
@@ -1439,6 +1476,7 @@ pub fn advisories(rule: &Node) -> Vec<super::Advisory> {
     };
     let mut found = no_entities(block);
     found.extend(impacted_assets(block));
+    found.extend(limit_advisories(block));
     found
 }
 
@@ -1556,6 +1594,106 @@ fn no_entities(block: &Node) -> Vec<super::Advisory> {
                   cannot be triaged or acted on by entity"
             .to_owned(),
     }]
+}
+
+/// The limits Microsoft's custom detection docs set on the alert, each a
+/// warning: Graph's reaction past them is not documented, and the rule
+/// may deploy.
+///
+/// - `microsoft_defender_custom_details_limit` on `alert.custom_details`
+///   with more than [`MAX_CUSTOM_DETAILS`] details, or whose names alone
+///   exceed [`MAX_CUSTOM_DETAILS_BYTES`]: Defender drops every detail from
+///   the alert.
+/// - `microsoft_defender_placeholder_limit` on `alert.title` or
+///   `alert.description` referencing more than [`MAX_PLACEHOLDER_COLUMNS`]
+///   distinct columns as `{{Column}}`.
+///
+/// A value of the wrong shape earns none: a constraint reports it.
+fn limit_advisories(block: &Node) -> Vec<super::Advisory> {
+    let mut found = Vec::new();
+    let Some(alert) = block.get("alert") else {
+        return found;
+    };
+    let at = |field: &str| -> Vec<String> {
+        ["configurations", PLATFORM, "alert", field]
+            .into_iter()
+            .map(str::to_owned)
+            .collect()
+    };
+    if let Some(Value::Map(details)) = alert.get("custom_details").map(|node| &node.value) {
+        let names: usize = details
+            .iter()
+            .filter_map(|entry| entry.key.value.as_str())
+            .map(str::len)
+            .sum();
+        let message = if details.len() > MAX_CUSTOM_DETAILS {
+            Some(format!(
+                "alert.custom_details has {} details; Defender documents at most \
+                 {MAX_CUSTOM_DETAILS} per rule",
+                details.len()
+            ))
+        } else if names > MAX_CUSTOM_DETAILS_BYTES {
+            Some(format!(
+                "alert.custom_details' names alone are {names} bytes; Defender drops every \
+                 custom detail from an alert whose details and values exceed 4 KB"
+            ))
+        } else {
+            None
+        };
+        if let Some(message) = message {
+            found.push(super::Advisory {
+                code: CUSTOM_DETAILS_LIMIT,
+                field_path: at("custom_details"),
+                message,
+            });
+        }
+    }
+    for field in ["title", "description"] {
+        let Some(text) = alert.get(field).and_then(|node| node.value.as_str()) else {
+            continue;
+        };
+        let columns = placeholder_columns(text);
+        if columns.len() > MAX_PLACEHOLDER_COLUMNS {
+            found.push(super::Advisory {
+                code: PLACEHOLDER_LIMIT,
+                field_path: at(field),
+                message: format!(
+                    "alert.{field} references {} columns ({}); Defender documents at most \
+                     {MAX_PLACEHOLDER_COLUMNS} per field",
+                    columns.len(),
+                    columns
+                        .iter()
+                        .map(|column| format!("{{{{{column}}}}}"))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ),
+            });
+        }
+    }
+    found
+}
+
+/// The distinct columns `text` references as `{{Column}}`, in order of
+/// first use: the text between `{{` and the next `}}`, trimmed, when it is
+/// not empty and holds no brace.
+#[must_use]
+pub fn placeholder_columns(text: &str) -> Vec<&str> {
+    let mut columns: Vec<&str> = Vec::new();
+    // Seen columns, so a text of many placeholders is read in linear time.
+    let mut seen: std::collections::HashSet<&str> = std::collections::HashSet::new();
+    let mut rest = text;
+    while let Some(open) = rest.find("{{") {
+        let inner = &rest[open + 2..];
+        let Some(close) = inner.find("}}") else {
+            break;
+        };
+        let column = inner[..close].trim();
+        rest = &inner[close + 2..];
+        if !column.is_empty() && !column.contains(['{', '}']) && seen.insert(column) {
+            columns.push(column);
+        }
+    }
+    columns
 }
 
 /// The bundled rule template's `microsoft_defender` block: every key of the

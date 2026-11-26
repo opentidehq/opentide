@@ -23,6 +23,7 @@ mod folded;
 mod google_secops;
 mod injection;
 mod intel;
+mod microsoft_defender_nrt;
 mod outline;
 mod placeholder;
 mod refs;
@@ -802,6 +803,14 @@ fn attach_to_queries(source: &str, configurations: Option<&Arc<Node>>, out: &mut
         out[at]
             .diagnostics
             .extend(elastic::dataset_declarations(source, block));
+    }
+    // A continuous Defender block's NRT findings are its query's
+    // ([`microsoft_defender_nrt`], #1890).
+    if let Some(block) = configurations.and_then(|c| c.get("microsoft_defender"))
+        && let Some(at) = carrier(out, microsoft_defender_nrt::QUERY)
+    {
+        let found = microsoft_defender_nrt::nrt_findings(source, block, &out[at].query);
+        out[at].diagnostics.extend(found);
     }
     if let Some(block) = configurations.and_then(|c| c.get("sysdig"))
         && let Some(at) = carrier(out, SYSDIG_CONDITION)

@@ -1,0 +1,96 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: validate/json/tide-corpus-defender-limits/defender-limits
+---
+args: opentide --json validate --strict
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "checks": {
+    "configuration": {
+      "check": "configuration",
+      "status": "passed"
+    },
+    "id-uniqueness": {
+      "check": "id-uniqueness",
+      "status": "passed"
+    },
+    "queries": {
+      "check": "queries",
+      "status": "passed"
+    },
+    "schema": {
+      "check": "schema",
+      "status": "passed"
+    },
+    "uuid-format": {
+      "check": "uuid-format",
+      "status": "passed"
+    }
+  },
+  "command": "validate",
+  "duration_ms": 0,
+  "exit_code": 0,
+  "failure": null,
+  "message": "Validation passed",
+  "next_actions": [],
+  "ok": true,
+  "report": {
+    "issues": [],
+    "ok": true,
+    "stats": {
+      "id_workers": "<CORES>",
+      "object_workers": "<CORES>",
+      "objects_checked": 12,
+      "parallel": "<CORES>",
+      "queries_checked": 8,
+      "wall_ms": 0.0,
+      "workers": "<CORES>"
+    },
+    "warnings": [
+      {
+        "code": "microsoft_defender_placeholder_limit",
+        "column": 15,
+        "context": {},
+        "end_column": 85,
+        "end_line": 34,
+        "explain": "opentide explain microsoft_defender_placeholder_limit",
+        "field_path": [
+          "configurations",
+          "microsoft_defender",
+          "alert",
+          "title"
+        ],
+        "file_path": "<WS>/Objects/Detection Rules/rule-0002-defender-kql.yaml",
+        "fix": null,
+        "help": null,
+        "line": 34,
+        "message": "alert.title references 4 columns ({{DeviceName}}, {{FileName}}, {{AccountName}}, {{FolderPath}}); Defender documents at most 3 per field",
+        "object_type": "rule",
+        "object_uuid": "00000000-0000-4000-8003-000000000002",
+        "path": "Objects/Detection Rules/rule-0002-defender-kql.yaml",
+        "severity": "warning",
+        "suggestion": null,
+        "yaml_line": 33
+      }
+    ]
+  },
+  "schema_version": 1,
+  "status": "passed",
+  "summary": {
+    "errors": 0,
+    "files": 0,
+    "fixable": 0,
+    "objects": 12,
+    "queries": 8,
+    "warning_files": 1,
+    "warnings": 1
+  },
+  "warnings": [
+    "<WS>/Objects/Detection Rules/rule-0002-defender-kql.yaml:34: configurations.microsoft_defender.alert.title: alert.title references 4 columns ({{DeviceName}}, {{FileName}}, {{AccountName}}, {{FolderPath}}); Defender documents at most 3 per field"
+  ],
+  "workspace": "<WS>"
+}
+
+━━━ stderr · empty

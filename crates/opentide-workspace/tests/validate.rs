@@ -466,6 +466,57 @@ mod validate {
         );
     }
 
+    /// #1890: the limits Microsoft's custom detection docs set on an alert
+    /// are warnings `--strict` reports without failing until a tenant
+    /// check says what Graph does past them.
+    #[test]
+    fn defender_documented_limits_warn_without_failing_strict() {
+        let fs = workspace();
+        let details = (1..=21)
+            .map(|n| format!("        Detail{n}: Column{n}\n"))
+            .collect::<Vec<_>>()
+            .concat();
+        fs.write(
+            "/ws/objects/rules/a.yaml",
+            format!(
+                "{}configurations:\n  microsoft_defender:\n    status: X\n    query: Q\n    \
+                 schedule:\n      frequency: 1H\n    entities:\n      hosts:\n        - \
+                 device_id: DeviceId\n    alert:\n      title: '{{{{A}}}} {{{{B}}}} {{{{C}}}} \
+                 {{{{D}}}}'\n      custom_details:\n{details}",
+                rule(U1, "A")
+            ),
+        );
+        let validation = run(
+            &fs,
+            &Options {
+                strict: true,
+                ..Options::default()
+            },
+        );
+        let path = |warning: &Diagnostic| warning.field_path.join(".");
+        let details = with_code(&validation, "microsoft_defender_custom_details_limit");
+        assert_eq!(details.len(), 1, "{:?}", all(&validation));
+        assert_eq!(
+            path(details[0]),
+            "configurations.microsoft_defender.alert.custom_details"
+        );
+        let columns = with_code(&validation, "microsoft_defender_placeholder_limit");
+        assert_eq!(columns.len(), 1, "{:?}", all(&validation));
+        assert_eq!(
+            path(columns[0]),
+            "configurations.microsoft_defender.alert.title"
+        );
+        assert!(
+            validation.report.warnings.iter().all(|warning| {
+                opentide_workspace::validate::STRICT_EXEMPT_WARNINGS
+                    .contains(&warning.code.as_str())
+            }),
+            "{:?}",
+            validation.report.warnings
+        );
+        assert!(!validation.warned, "the limits are exempt from --strict");
+    }
+
     #[test]
     fn google_secops_advisories_warn_and_shared_rule_names_fail() {
         let fs = workspace();

@@ -20,6 +20,7 @@ use opentide_schema::objects::platform::microsoft_defender::{
     ACTIONS, ADVISORY_CODES, CONSTRAINT_CODES, Duration, ENTITY_IDENTIFIERS, ENTITY_KINDS,
     Evidence, IDENTIFIERS_CHECKED, IMPACTED_ASSET_COLUMNS, MicrosoftDefenderConfig, NOT_MODELLED,
     NotModelled, TEMPLATE, advisories, block_codes, block_findings, entity_kind,
+    placeholder_columns,
 };
 
 fn fixtures() -> PathBuf {
@@ -635,6 +636,83 @@ fn an_impacted_asset_without_a_strong_identifier_earns_the_advisory() {
     ] {
         assert!(message.contains(needle), "{needle}: {message}");
     }
+}
+
+/// The advisories of a block that maps a host, with `alert` (YAML at the
+/// block's indentation plus two), as `(code, dotted path)`.
+fn alert_advisories(alert: &str) -> Vec<(String, String)> {
+    let rule = load(&format!(
+        "configurations:\n  microsoft_defender:\n    status: STAGING\n    query: Q\n    \
+         entities:\n      hosts: [{{device_id: DeviceId}}]\n    alert:\n{alert}"
+    ));
+    advisories(&rule)
+        .into_iter()
+        .map(|advisory| (advisory.code.to_owned(), advisory.field_path.join(".")))
+        .collect()
+}
+
+#[test]
+fn custom_details_past_the_documented_limits_earn_the_advisory() {
+    let details = |count: usize| -> String {
+        let mut out = "      custom_details:\n".to_owned();
+        for n in 1..=count {
+            out.push_str(&format!("        Detail{n}: Column{n}\n"));
+        }
+        out
+    };
+    // Twenty is the documented limit.
+    assert_eq!(alert_advisories(&details(20)), []);
+    assert_eq!(
+        alert_advisories(&details(21)),
+        [(
+            "microsoft_defender_custom_details_limit".to_owned(),
+            "configurations.microsoft_defender.alert.custom_details".to_owned()
+        )]
+    );
+    // Names that fill 4 KB on their own leave no room for a value (written
+    // as explicit keys: YAML caps an implicit key at 1024 characters).
+    let long = |length: usize| {
+        format!(
+            "      custom_details:\n        ? {}\n        : A\n        ? {}\n        : B\n",
+            "a".repeat(length),
+            "b".repeat(length)
+        )
+    };
+    assert_eq!(alert_advisories(&long(2048)), []);
+    assert_eq!(
+        alert_advisories(&long(2049))
+            .into_iter()
+            .map(|(code, _)| code)
+            .collect::<Vec<_>>(),
+        ["microsoft_defender_custom_details_limit"]
+    );
+    // Not a mapping: the constraint's, not the advisory's.
+    assert_eq!(alert_advisories("      custom_details: [A]\n"), []);
+}
+
+#[test]
+fn more_than_three_columns_in_a_title_or_description_earn_the_advisory() {
+    let three = "      title: \"{{A}} on {{ B }} by {{C}}, {{A}} again\"\n";
+    assert_eq!(alert_advisories(three), []);
+    let four = "      title: \"{{A}} {{B}} {{C}} {{D}}\"\n      description: \"{{A}} {{B}} {{C}} \
+                {{D}}\"\n";
+    assert_eq!(
+        alert_advisories(four),
+        [
+            (
+                "microsoft_defender_placeholder_limit".to_owned(),
+                "configurations.microsoft_defender.alert.title".to_owned()
+            ),
+            (
+                "microsoft_defender_placeholder_limit".to_owned(),
+                "configurations.microsoft_defender.alert.description".to_owned()
+            ),
+        ]
+    );
+    assert_eq!(
+        placeholder_columns("{{A}} {{ A }} {{}} {{ {x} }} {{B}} {{C"),
+        ["A", "B"]
+    );
 }
 
 /// The keys of a YAML block, as dotted paths, list items read through.

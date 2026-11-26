@@ -92,6 +92,11 @@ change `Duration::iso8601` in `crates/opentide-schema/src/objects/platform/micro
 (the `NearRealTime` arm) and the spec's `schedule` table. If none does, Graph cannot create an NRT
 rule through this API: report it, and the spec makes `NRT` a `microsoft_defender_frequency` error.
 
+3. Create an NRT rule whose query starts with a `//` comment line, then one that joins
+   `DeviceInfo`. Microsoft documents neither as runnable continuously; `lint` reports both as
+   `microsoft_defender_nrt_query` (#1890). Record whether Graph refuses each (and its message) or
+   creates it. A refusal makes the warning an error `validate` reports.
+
 ## 2. 404 and 409
 
 The specification assumes `404` for an id the tenant does not have, on `PATCH` and on `DELETE`,
@@ -249,14 +254,21 @@ the identity model (RFC 0021, Identity).
 
 ## 9. Custom detail limits
 
-1. Create a rule with 20 custom details (`Detail1` … `Detail20`, each a projected column).
+1. Create a rule with 20 custom details (`Detail1` … `Detail20`, each a projected column), then one
+   with 21.
 2. Create rules with a detail name holding a space, a dot, a non-ASCII letter, and a 100-character
    name.
+3. Create a rule whose `alert.title` references four columns (`{{A}} {{B}} {{C}} {{D}}`), let it
+   alert, and read the alert's title.
 
 **Expected:** record the largest count accepted, and which names are refused, with Graph's message.
+Microsoft documents 20 details per rule and three columns per field (#1890), which `validate`
+reports as the warnings `microsoft_defender_custom_details_limit` and
+`microsoft_defender_placeholder_limit`.
 
 **If not / to record:** limits found become `microsoft_defender_custom_details` constraints in the
-spec and in `checks.rs` (`custom_details`).
+spec and in `checks.rs` (`custom_details`). If Graph refuses the 21st detail or the fourth column,
+the warning becomes an error.
 
 ## 10. Name and alert title conflicts
 

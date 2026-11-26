@@ -109,6 +109,12 @@ source = "tests/fixtures/tide_corpus/current"
 about = "tide-corpus whose Defender rule maps #1884's entities: a registry value without its `key`, which Graph refuses at deploy (`microsoft_defender_entity_identifier`, an error at `entities.registry_values.0`), and beside the issue's account by UPN an account by name alone (`microsoft_defender_impacted_asset_identifier`, a warning)"
 edits = [{ path = "Objects/Detection Rules/rule-0002-defender-kql.yaml", find = "    entities:\n      hosts:\n        - device_id: device_id\n", replace = "    entities:\n      accounts:\n        - upn: InitiatingProcessAccountUpn\n        - name: AccountName\n      registry_values:\n        - value_name: RegistryValueName   # no key\n" }]
 
+[fixtures.tide-corpus-defender-limits]
+kind = "tide-corpus"
+source = "tests/fixtures/tide_corpus/current"
+about = "tide-corpus with its Microsoft Defender rule past limits Microsoft's custom detection docs set (#1890): four `{{Column}}` columns in `alert.title` (`microsoft_defender_placeholder_limit`, validate's and lint's) and `frequency: NRT` on a query with a comment (`microsoft_defender_nrt_query`, lint's)"
+edits = [{ path = "Objects/Detection Rules/rule-0002-defender-kql.yaml", find = "      title: Defender KQL Rule\n", replace = "      title: '{{DeviceName}} ran {{FileName}} as {{AccountName}} from {{FolderPath}}'\n" }, { path = "Objects/Detection Rules/rule-0002-defender-kql.yaml", find = "      frequency: 1H\n", replace = "      frequency: NRT\n" }, { path = "Objects/Detection Rules/rule-0002-defender-kql.yaml", find = "    query: |\n      DeviceProcessEvents\n", replace = "    query: |\n      // one device\n      DeviceProcessEvents\n" }]
+
 [fixtures.tide-corpus-splunk-advanced]
 kind = "tide-corpus"
 source = "tests/fixtures/tide_corpus/current"
@@ -1525,6 +1531,14 @@ command = "lint"
 variant = "default"
 args = ["lint"]
 fixtures = ["tide-corpus", "vscode", "heavy-small", "fault-lint", "empty", "none"]
+
+# Limits Microsoft's custom detection docs set (#1890): the alert's block
+# advisories and a continuous rule's NRT query finding.
+[[case]]
+command = "lint"
+variant = "defender-limits"
+args = ["lint"]
+fixtures = ["tide-corpus-defender-limits"]
 
 # A platform TOML that does not parse: config_parse, its place (#1659).
 [[case]]
@@ -3076,6 +3090,15 @@ command = "validate"
 variant = "defender-entity-identifier"
 args = ["validate", "--strict"]
 fixtures = ["tide-corpus-defender-entity-identifier"]
+
+# Limits Microsoft's custom detection docs set (#1890): the alert's are
+# block advisories, warnings `--strict` reports without failing; the NRT
+# query finding is lint's alone.
+[[case]]
+command = "validate"
+variant = "defender-limits"
+args = ["validate", "--strict"]
+fixtures = ["tide-corpus-defender-limits"]
 
 # 0.24.0: a Splunk block's `advanced` table validates and deploys again
 # (refused as a splunk::2.x key from 0.21.0). The oracle's deploy crashes on

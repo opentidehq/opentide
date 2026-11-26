@@ -911,6 +911,43 @@ fn lint_reports_the_exabeam_block_advisories() {
     );
 }
 
+/// Microsoft's documented custom detection limits (#1890): the alert's are
+/// block advisories, which lint reports like `validate`; a continuous rule's
+/// query is the engine's warning, lint's and not `validate`'s.
+#[test]
+fn lint_reports_the_microsoft_defender_documented_limits() {
+    let details = (1..=21)
+        .map(|n| format!("        Detail{n}: Column{n}\n"))
+        .collect::<Vec<_>>()
+        .concat();
+    let text = rule(&format!(
+        "  microsoft_defender:\n    status: STAGING\n    schedule:\n      frequency: NRT\n    \
+         query: |\n      DeviceEvents\n      | join (DeviceInfo) on DeviceId\n    entities:\n      \
+         hosts: [{{device_id: DeviceId}}]\n    alert:\n      title: \"{{{{A}}}} {{{{B}}}} {{{{C}}}} \
+         {{{{D}}}}\"\n      custom_details:\n{details}"
+    ));
+    let found: Vec<(String, String, usize)> = lint_check(&text)
+        .into_iter()
+        .filter(|(code, _, _)| code.starts_with("microsoft_defender_"))
+        .collect();
+    let warning = |code: &str, line: usize| (code.to_owned(), "warning".to_owned(), line);
+    assert_eq!(
+        found,
+        [
+            warning("microsoft_defender_nrt_query", 12),
+            warning("microsoft_defender_nrt_query", 12),
+            warning("microsoft_defender_custom_details_limit", 17),
+            warning("microsoft_defender_placeholder_limit", 16),
+        ]
+    );
+    // `validate`'s queries check reports the engine's errors only.
+    let (errors, warnings, _) = check(&text, false);
+    assert!(
+        errors.is_empty() && warnings.is_empty(),
+        "{errors:#?} {warnings:#?}"
+    );
+}
+
 /// `opentide --json lint` with `words` after it, in-process, in a workspace
 /// on disk holding `text` as its one rule: the JSON document.
 fn lint_run(text: &str, words: &[&str]) -> Value {

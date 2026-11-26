@@ -23,6 +23,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Eac
 ### Added
 
 - **`validate` warns when a Defender device or user has no strong identifier.** A `hosts` or `accounts` mapping with neither a column Defender maps to an impacted asset (`device_id`, `name`; `aad_user_id`, `sid`, `upn`) nor a strong combination such as an account's `name` with `nt_domain` gets `microsoft_defender_impacted_asset_identifier`, in `validate`, `lint` and the editor. `validate --strict` reports it without failing ([#1884](https://github.com/opentidehq/opentide/issues/1884)).
+- **Defender rules are checked against Microsoft's documented limits.** Each is a warning: the rule validates and deploys, and `validate --strict` reports it without failing ([#1890](https://github.com/opentidehq/opentide/issues/1890)).
+  - `microsoft_defender_custom_details_limit`: more than 20 custom details, or names past 4 KB, beyond which Defender drops them all from the alert
+  - `microsoft_defender_placeholder_limit`: more than three `{{Column}}` columns in the alert title or description
+  - `microsoft_defender_nrt_query` (`lint` and the editor): a `frequency: NRT` query that reads two tables or one off the NRT list, joins, unions, uses `externaldata` or has a comment
 
 ## [1.0.0] — 2026-11-25
 
