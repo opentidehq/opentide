@@ -970,22 +970,34 @@ mod validate {
                 "graylog_priority",
             ),
         ];
-        for (path, find, replace, code) in cases {
-            let text = fixture(path);
-            assert_eq!(text.matches(find).count(), 1, "{path}");
-            let fs = workspace();
-            fs.write("/ws/objects/rules/a.yaml", text.replace(find, replace));
-            let validation = run(&fs, &Options::default());
-            let codes: Vec<&str> = validation
+        let only = |fs: &Arc<MemoryFs>, code: &str, label: &str| {
+            let validation = run(fs, &Options::default());
+            let codes: std::collections::BTreeSet<&str> = validation
                 .report
                 .issues
                 .iter()
                 .map(|issue| issue.code.as_str())
                 .collect();
-            assert_eq!(codes, [code], "{path}");
-            assert!(validation.failed, "{path}");
-            assert_eq!(status(&validation, Check::Schema), "failed", "{path}");
+            assert_eq!(codes, [code].into(), "{label}");
+            assert!(validation.failed, "{label}");
+            assert_eq!(status(&validation, Check::Schema), "failed", "{label}");
+        };
+        for (path, find, replace, code) in cases {
+            let text = fixture(path);
+            assert_eq!(text.matches(find).count(), 1, "{path}");
+            let fs = workspace();
+            fs.write("/ws/objects/rules/a.yaml", text.replace(find, replace));
+            only(&fs, code, path);
         }
+        // Two enabled Exabeam blocks that resolve to one name: the run's
+        // check on the workspace, not a model's, and the `schema` check's.
+        let text = fixture("exabeam/rule-exabeam-threshold-1.0.yaml");
+        let uuid = "00000000-0000-4000-8003-000000000071";
+        assert_eq!(text.matches(uuid).count(), 1);
+        let fs = workspace();
+        fs.write("/ws/objects/rules/a.yaml", text.replace(uuid, U1));
+        fs.write("/ws/objects/rules/b.yaml", text.replace(uuid, U2));
+        only(&fs, "exabeam_name_duplicate", "exabeam");
     }
 
     #[test]

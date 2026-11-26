@@ -7,7 +7,7 @@
 //! | --- | --- |
 //! | `id-uniqueness` | `duplicate_id` |
 //! | `uuid-format` | `invalid_uuid` |
-//! | `schema` | `schema_validation`, `schema_missing`, `yaml_parse`, `missing_uuid`, `invalid_ref`, `vocab_unknown`, `config_enum_unknown`, `chaining_relation_unknown`, `external_id_in_rule`, `deployment_state_*`; warnings `deprecated_field`, `platform_not_enabled` |
+//! | `schema` | `schema_validation`, `schema_missing`, `yaml_parse`, `missing_uuid`, `invalid_ref`, `vocab_unknown`, `config_enum_unknown`, `chaining_relation_unknown`, `external_id_in_rule`, `exabeam_name_duplicate`, `google_secops_name_duplicate`, `deployment_state_*`, and every platform model's constraint code (`opentide_schema::objects::platform::constraint_codes`); warnings `deprecated_field`, `platform_not_enabled` |
 //! | `configuration` | `missing_field`, `unknown_key`, `schema_validation`, `promotion_target_unknown`; warnings `asset_unknown` |
 //! | `sharing-config` | `sharing.toml`'s codes |
 //! | `queries` | the query engines' codes, from the host's [`QueryCheck`] (UC-2.5, #820) |
@@ -119,6 +119,7 @@ impl Check {
                 "chaining_relation_unknown",
                 "external_id_in_rule",
                 "external_id_shape",
+                "exabeam_name_duplicate",
                 "google_secops_name_duplicate",
                 "deployment_state_uuid_mismatch",
                 "deployment_state_platform",
@@ -175,6 +176,7 @@ pub const VALIDATION_CODES: &[&str] = &[
     "duplicate_id",
     "duplicate_name",
     "engine_unavailable",
+    "exabeam_name_duplicate",
     "external_id_in_rule",
     "external_id_shape",
     "file_not_found",
@@ -2029,6 +2031,143 @@ mod tests {
             let expected = if cores < 2 { 0 } else { items.min(cores) };
             assert_eq!(workers(items), expected, "{items} items on {cores} cores");
         }
+    }
+
+    /// Every platform's code in `opentide_core::codes::ALL` (named
+    /// `<platform>_...` after a platform of the registry) has its place: a
+    /// finding the `schema` check fails on (a model's constraint code, or
+    /// one of its own codes), a block advisory (a warning), or a code no
+    /// `schema` finding carries, named below with where it comes from. A new
+    /// platform code fails here until it is placed, so the `schema` check's
+    /// status cannot miss it (#1893).
+    #[test]
+    fn every_platform_code_is_placed() {
+        use opentide_schema::objects::platform as models;
+        // Each code no `schema` finding carries under its own name.
+        const ELSEWHERE: &[(&str, &str)] = &[
+            // The query engines' codes: the `queries` check's (`source: engine`).
+            ("elastic_dataset_not_declared", "engine"),
+            ("graylog_leading_wildcard", "engine"),
+            ("graylog_regex_unsupported", "engine"),
+            ("graylog_regex_operator", "engine"),
+            ("graylog_regex_quote", "engine"),
+            ("graylog_open_range", "engine"),
+            ("graylog_double_backslash", "engine"),
+            ("graylog_analyzed_field", "engine"),
+            ("bitdefender_yara_ascii", "engine"),
+            ("bitdefender_yara_size", "engine"),
+            ("exabeam_parse_error", "engine"),
+            ("exabeam_implicit_operator", "engine"),
+            ("exabeam_not_equal", "engine"),
+            ("exabeam_bare_wildcard", "engine"),
+            ("exabeam_leading_slash", "engine"),
+            ("exabeam_free_text_special", "engine"),
+            ("exabeam_unknown_function", "engine"),
+            ("exabeam_function_arity", "engine"),
+            ("exabeam_regex", "engine"),
+            ("exabeam_range", "engine"),
+            ("exabeam_ipv6_range", "engine"),
+            ("exabeam_time_exact", "engine"),
+            ("exabeam_context_table_or", "engine"),
+            ("exabeam_context_table_limit", "engine"),
+            ("exabeam_advanced_in_rule", "engine"),
+            ("exabeam_keyword_case", "engine"),
+            ("exabeam_clause_order", "engine"),
+            ("exabeam_pipe_limit", "engine"),
+            ("exabeam_rgx_extract_limit", "engine"),
+            ("exabeam_reserved_alias", "engine"),
+            ("exabeam_group_by_select_star", "engine"),
+            ("exabeam_group_by_column", "engine"),
+            ("exabeam_foreach_clause", "engine"),
+            ("exabeam_foreach_reference", "engine"),
+            ("exabeam_foreach_position", "engine"),
+            ("exabeam_mixed_boolean", "engine"),
+            ("exabeam_implicit_and", "engine"),
+            ("exabeam_single_group", "engine"),
+            ("exabeam_pipe_misuse", "engine"),
+            ("exabeam_wildcard_in_phrase", "engine"),
+            ("exabeam_unquoted_value", "engine"),
+            ("exabeam_legacy_regex", "engine"),
+            ("exabeam_unknown_field", "engine"),
+            ("exabeam_string_field_number", "engine"),
+            ("exabeam_unknown_value", "engine"),
+            // Named checks that report their codes inside one
+            // `schema_validation` finding (`<Model> validation failed with
+            // code(s): ...`), which the `schema` check fails on.
+            ("sysdig_rule_shape", "schema_validation"),
+            ("sysdig_tuning_keys", "schema_validation"),
+            ("sysdig_priority", "schema_validation"),
+            ("sysdig_source", "schema_validation"),
+            ("sysdig_exception_shape", "schema_validation"),
+            ("sysdig_definition_name", "schema_validation"),
+            ("sysdig_definition_duplicate", "schema_validation"),
+            ("sysdig_definition_order", "schema_validation"),
+            ("sysdig_list_in_value", "schema_validation"),
+            ("sysdig_list_self_reference", "schema_validation"),
+            ("harfanglab_rule_kind", "schema_validation"),
+            ("harfanglab_yara_form", "schema_validation"),
+            ("harfanglab_yara_section_header", "schema_validation"),
+            ("harfanglab_yara_import", "schema_validation"),
+            ("harfanglab_yara_rule_name", "schema_validation"),
+        ];
+        let prefixes: Vec<String> = opentide_schema::platforms::PLATFORMS
+            .iter()
+            .map(|platform| format!("{}_", platform.id))
+            .collect();
+        let schema: BTreeSet<&str> = models::constraint_codes()
+            .chain(Check::Schema.issue_codes().iter().copied())
+            .collect();
+        let advisories: BTreeSet<&str> = models::bitdefender::advisories::ADVISORY_CODES
+            .into_iter()
+            .chain(models::graylog::ADVISORY_CODES)
+            .chain(models::exabeam::ADVISORY_CODES)
+            .chain(models::microsoft_defender::ADVISORY_CODES)
+            .chain(models::google_secops::advisories::ADVISORY_CODES)
+            .chain(models::harfanglab::yara::ADVISORY_CODES)
+            .collect();
+        let elsewhere: BTreeSet<&str> = ELSEWHERE.iter().map(|(code, _)| *code).collect();
+        let mut unplaced = Vec::new();
+        for code in opentide_core::codes::ALL {
+            if !prefixes
+                .iter()
+                .any(|prefix| code.starts_with(prefix.as_str()))
+            {
+                continue;
+            }
+            // A code may be both (Bitdefender's `bitdefender_criterion_field`
+            // is an error on an EDR target and a warning on another), but a
+            // code named below is neither.
+            let checked = schema.contains(code) || advisories.contains(code);
+            if elsewhere.contains(code) {
+                assert!(!checked, "{code} is named below and placed too");
+            } else if !checked {
+                unplaced.push(*code);
+            }
+        }
+        assert_eq!(unplaced, Vec::<&str>::new(), "platform codes with no place");
+        // No stale entry: each named code still exists.
+        for (code, _) in ELSEWHERE {
+            assert!(opentide_core::codes::ALL.contains(code), "{code}");
+        }
+    }
+
+    /// A constraint code fails the `schema` check on an object's model
+    /// finding only: the query engine's finding under the same code stays
+    /// the `queries` check's, and a configuration file's the
+    /// `configuration` check's.
+    #[test]
+    fn a_constraint_code_is_the_schema_checks_on_a_model_finding_only() {
+        let model = Diagnostic::error("microsoft_defender_severity", "m").object("u", "rule");
+        assert!(is_model_constraint(&model));
+        let engine = model.clone().with("source", "engine");
+        assert!(!is_model_constraint(&engine));
+        let configuration =
+            Diagnostic::error("microsoft_defender_severity", "m").object("", "configuration");
+        assert!(!is_model_constraint(&configuration));
+        assert!(!is_model_constraint(&Diagnostic::error(
+            "kql_parse_error",
+            "m"
+        )));
     }
 
     #[test]
