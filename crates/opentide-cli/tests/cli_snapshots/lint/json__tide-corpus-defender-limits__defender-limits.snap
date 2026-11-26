@@ -274,7 +274,7 @@ exit: 0
       "code": "microsoft_defender_placeholder_limit",
       "column": 15,
       "end_column": 85,
-      "end_line": 34,
+      "end_line": 35,
       "explain": "opentide explain microsoft_defender_placeholder_limit",
       "field_path": [
         "configurations",
@@ -284,12 +284,12 @@ exit: 0
       ],
       "fix": null,
       "help": null,
-      "line": 34,
+      "line": 35,
       "message": "alert.title references 4 columns ({{DeviceName}}, {{FileName}}, {{AccountName}}, {{FolderPath}}); Defender documents at most 3 per field",
       "path": "objects/rules/rule-0002-defender-kql.yaml",
       "severity": "warning",
       "uuid": "00000000-0000-4000-8003-000000000002",
-      "yaml_line": 33
+      "yaml_line": 34
     },
     {
       "check": "filenames",

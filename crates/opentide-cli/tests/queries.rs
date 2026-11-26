@@ -926,9 +926,15 @@ fn lint_reports_the_microsoft_defender_documented_limits() {
          hosts: [{{device_id: DeviceId}}]\n    alert:\n      title: \"{{{{A}}}} {{{{B}}}} {{{{C}}}} \
          {{{{D}}}}\"\n      custom_details:\n{details}"
     ));
+    // #1885's output findings on the same block are its own tests'.
+    let limits = [
+        "microsoft_defender_custom_details_limit",
+        "microsoft_defender_nrt_query",
+        "microsoft_defender_placeholder_limit",
+    ];
     let found: Vec<(String, String, usize)> = lint_check(&text)
         .into_iter()
-        .filter(|(code, _, _)| code.starts_with("microsoft_defender_"))
+        .filter(|(code, _, _)| limits.contains(&code.as_str()))
         .collect();
     let warning = |code: &str, line: usize| (code.to_owned(), "warning".to_owned(), line);
     assert_eq!(

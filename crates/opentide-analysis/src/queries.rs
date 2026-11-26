@@ -151,7 +151,15 @@ pub fn lint_owned(code: &str) -> bool {
         || ELASTIC_ADVISORIES.contains(&code)
         || code == opentide_core::codes::SYSDIG_LIST_SELF_REFERENCE
         || DECLARED_DATASET_CODES.contains(&code)
+        || DEFENDER_OUTPUT_ADVISORIES.contains(&code)
 }
+
+/// The warnings of a Microsoft Defender block checked against its query's
+/// output (#1885): lint's, as its errors are `validate`'s.
+const DEFENDER_OUTPUT_ADVISORIES: [&str; 2] = [
+    opentide_core::codes::MICROSOFT_DEFENDER_COLUMN_TYPE,
+    opentide_core::codes::MICROSOFT_DEFENDER_UNPROJECTED_OUTPUT,
+];
 
 /// Words in an engine message that make its `suggestion` a replacement name.
 const ENGINE_UNKNOWN: [&str; 3] = ["unknown", "deprecated", "not a command"];
@@ -1272,6 +1280,12 @@ mod tests {
             assert!(lint_owned(code), "{code}");
         }
         assert!(lint_owned(opentide_core::codes::SYSDIG_LIST_SELF_REFERENCE));
+        assert!(lint_owned(
+            opentide_core::codes::MICROSOFT_DEFENDER_UNPROJECTED_OUTPUT
+        ));
+        assert!(lint_owned(
+            opentide_core::codes::MICROSOFT_DEFENDER_COLUMN_TYPE
+        ));
         assert!(!lint_owned("vocab_unknown"));
         // A Graylog finding names Graylog's search syntax page.
         assert!(

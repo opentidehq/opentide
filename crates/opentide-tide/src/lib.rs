@@ -23,6 +23,7 @@ mod folded;
 mod google_secops;
 mod injection;
 mod intel;
+mod microsoft_defender;
 mod microsoft_defender_nrt;
 mod outline;
 mod placeholder;
@@ -786,9 +787,11 @@ fn analyze_queries_lines(source: &str, elastic_tenants: &[ElasticTenant]) -> Vec
 }
 
 /// The block findings a query carries: the datasets the Elastic block
-/// reads (`index`, `threat.index`, `data_view_id`) are its query's, and the
+/// reads (`index`, `threat.index`, `data_view_id`) are its query's, the
 /// Sysdig block's event source and exceptions its condition's (Falco
-/// appends the exceptions to the condition when it loads the rule). A
+/// appends the exceptions to the condition when it loads the rule), and the
+/// Microsoft Defender block's columns, checked against what its query
+/// returns, its query's ([`microsoft_defender`]). A
 /// placeholder query carries none: `opentide validate` skips it, and
 /// [`block_diagnostics`] reports them on the block instead.
 fn attach_to_queries(source: &str, configurations: Option<&Arc<Node>>, out: &mut [QueryAnalysis]) {
@@ -821,6 +824,13 @@ fn attach_to_queries(source: &str, configurations: Option<&Arc<Node>>, out: &mut
         out[at]
             .diagnostics
             .extend(exceptions_beyond_the_model(source, block));
+    }
+    // The Defender block's columns against what its query returns (#1885).
+    if let Some(configurations) = configurations
+        && let Some(at) = carrier(out, microsoft_defender::QUERY)
+    {
+        let found = microsoft_defender::output_findings(source, configurations, &out[at].query);
+        out[at].diagnostics.extend(found);
     }
 }
 

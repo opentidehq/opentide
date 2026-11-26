@@ -302,7 +302,7 @@ exit: 0
                   "entityMappings": {
                     "hosts": [
                       {
-                        "deviceIdColumn": "device_id"
+                        "deviceIdColumn": "DeviceId"
                       }
                     ]
                   },
@@ -322,7 +322,7 @@ exit: 0
               },
               "displayName": "Defender KQL Rule",
               "queryCondition": {
-                "queryText": "DeviceProcessEvents\n| take 1\n"
+                "queryText": "DeviceProcessEvents\n| take 1\n| project Timestamp, DeviceId, ReportId\n"
               },
               "schedule": {
                 "frequency": "PT1H"

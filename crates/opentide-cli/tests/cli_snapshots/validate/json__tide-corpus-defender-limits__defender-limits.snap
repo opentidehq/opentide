@@ -54,7 +54,7 @@ exit: 0
         "column": 15,
         "context": {},
         "end_column": 85,
-        "end_line": 34,
+        "end_line": 35,
         "explain": "opentide explain microsoft_defender_placeholder_limit",
         "field_path": [
           "configurations",
@@ -65,14 +65,14 @@ exit: 0
         "file_path": "<WS>/Objects/Detection Rules/rule-0002-defender-kql.yaml",
         "fix": null,
         "help": null,
-        "line": 34,
+        "line": 35,
         "message": "alert.title references 4 columns ({{DeviceName}}, {{FileName}}, {{AccountName}}, {{FolderPath}}); Defender documents at most 3 per field",
         "object_type": "rule",
         "object_uuid": "00000000-0000-4000-8003-000000000002",
         "path": "Objects/Detection Rules/rule-0002-defender-kql.yaml",
         "severity": "warning",
         "suggestion": null,
-        "yaml_line": 33
+        "yaml_line": 34
       }
     ]
   },
@@ -88,7 +88,7 @@ exit: 0
     "warnings": 1
   },
   "warnings": [
-    "<WS>/Objects/Detection Rules/rule-0002-defender-kql.yaml:34: configurations.microsoft_defender.alert.title: alert.title references 4 columns ({{DeviceName}}, {{FileName}}, {{AccountName}}, {{FolderPath}}); Defender documents at most 3 per field"
+    "<WS>/Objects/Detection Rules/rule-0002-defender-kql.yaml:35: configurations.microsoft_defender.alert.title: alert.title references 4 columns ({{DeviceName}}, {{FileName}}, {{AccountName}}, {{FolderPath}}); Defender documents at most 3 per field"
   ],
   "workspace": "<WS>"
 }
