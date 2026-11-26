@@ -110,8 +110,8 @@ The language is not well served either:
 
 | In `datadog-1.0` | Later (`datadog-1.x`) | Out of scope |
 |---|---|---|
-| Real-time `log_detection` rules | **Cross-rule correlation**, on `sequence` rules (steps and transitions) with queries over signals. Its design (5.6) needs deploy ordering, cycle and delete rules, and a dry-run placeholder | `signal_correlation`: Datadog refuses new ones (403, per the Terraform provider's tests of 2026-11-25), and its create docs no longer list it |
-| Methods `threshold`, `new_value`, `anomaly`, `impossible_travel` | `content_anomaly`, `third_party`; scheduled rules (`schedulingOptions`, an RFC 5545 RRULE) and their `calculatedFields` | `workload_security`, `workload_activity`: Agent rules written in SECL, another language |
+| Real-time `log_detection` rules | **Cross-rule correlation**, on `sequence` rules (steps and transitions) with queries over signals. Its design (5.6) needs deploy ordering, cycle and delete rules, and a dry-run placeholder | `signal_correlation`: Datadog refuses new ones (403, per the Terraform provider's tests as of the checkout of 2026-11-25), and its create docs no longer list it |
+| Methods `threshold`, `new_value`, `anomaly`, `impossible_travel` | Content anomaly (its API value is unverified; the enum has `anomaly_threshold`), `third_party`; scheduled rules (`schedulingOptions`, an RFC 5545 RRULE) and their `calculatedFields` | `workload_security`, `workload_activity`: Agent rules written in SECL, another language |
 | Queries `from` `logs` (the default), `audit`, `events`, `signals` | Reference tables (`referenceTables`); `spans`, `network`, `security_runtime` | `application_security`, `api_security`, `cloud_configuration`, `infrastructure_configuration` |
 | Live validation, deploy, disable, delete, drift | Tuning a default rule (`customQueryExtension`, `customStatus`, notifications), like Sysdig's `append_to_rule` | `queryLanguage: sql` (DDSQL): SQL stays unsupported in opentide |
 | `opentide query` over the Logs Search API | Rule tests (`POST /rules/test`); backtests (historical jobs, in preview); an importer (12) | `hardcoded` (one Datadog-owned value, `log4shell`) |
@@ -232,7 +232,7 @@ takes its default.
 | `schema` | `platform::datadog::1.0` | ✅ | | | |
 | `status` | a status of the merged `deployment.toml` | ✅ | | | Selects the deploy strategy (8.3) |
 | `enabled`, `name`, `flags`, `tenants`, `contributors` | as every block | | | | |
-| `queries` | list of 1 to 10 queries **(the upper bound is unverified; the API caps `correlatedQueryIndex` at 9)** | ✅ | | `queries` | |
+| `queries` | list of 1 to 10 queries **(the upper bound is unverified, open question 5)** | ✅ | | `queries` | |
 | `detection` | map | | `{method: threshold, window: 5m}` | `options` | |
 | `cases` | list of at least one case | ✅ | | `cases` | |
 | `signal` | map | | see below | `options`, `groupSignalsBy`, `hasExtendedTitle` | |
@@ -245,7 +245,7 @@ takes its default.
 
 | Key | Type and allowed values | Required | Default | API property | Meaning |
 |---|---|:-:|---|---|---|
-| `name` | `[a-z][a-z0-9_]*`, unique in the block | | `a`, `b`, … by position | `name` | What conditions call the query. Datadog's own tests use `first` and `second`. Not allowed on a `new_value` query (Terraform: "not compatible") |
+| `name` | `[a-z][a-z0-9_]*`, unique in the block | | `a`, `b`, … by position | `name` | What conditions call the query. Datadog's own detection tests name queries `first`, `second` and `my_query` (`first > 3 \|\| second > 10`, `my_query > 0.95`, terraform-provider-datadog `resource_datadog_security_monitoring_rule_test.go`). Not allowed on a `new_value` query (Terraform: "not compatible") |
 | `query` | Datadog search syntax, profile `rule` | ✅ | | `query` | |
 | `from` | `logs` \| `audit` \| `events` \| `signals` | | `logs` | `dataSource` (`signals` is `security_signals`) | The data the query searches |
 | `group_by` | list of field paths | | `[]` | `groupByFields` | Matches are counted per distinct combination of these values |
@@ -264,26 +264,29 @@ aggregation, `geo_data` on `@network.client.geoip`, follows from the method and 
 |---|---|:-:|---|---|---|
 | `method` | `threshold` \| `new_value` \| `anomaly` \| `impossible_travel` | | `threshold` | `options.detectionMethod` (`anomaly` is `anomaly_detection`) | |
 | `window` | `0`, `1m`, `5m`, `10m`, `15m`, `30m`, `1h`, `2h`, `3h`, `6h`, `12h` or `1d` | | `5m` | `options.evaluationWindow` (seconds) | The sliding window the cases are tested over |
-| `learning` | depends on the method (table below) | per method | per method | per method | How Datadog learns what is normal before it creates signals |
+| `learning` | depends on the method (table below) | | per method | per method | How Datadog learns what is normal before it creates signals |
 | `forget_after` | `1d` to `30d`, whole days | with `new_value` | | `newValueOptions.forgetAfter` (days) | A learned value unseen for this long is new again. Required, with no default, as Terraform has it |
 | `bucket` | `5m`, `10m`, `15m`, `30m`, `1h` or `3h` | | `5m` **(unverified default)** | `anomalyDetectionOptions.bucketDuration` (seconds) | The time bucket the baseline is computed on |
 | `tolerance` | integer, 1 to 5 | | `3` **(unverified default)** | `anomalyDetectionOptions.detectionTolerance` | How far above the baseline counts as anomalous |
-| `detect_ip_transitions` | bool | | `false` | `impossibleTravelOptions.detectIpTransition` | The spec: "the rule detects transitions between IP addresses of the same user". Its exact effect is **unverified** (open question 6) |
+| `detect_ip_transitions` | bool | | `false` | `impossibleTravelOptions.detectIpTransition`, sent only when `true` | The spec: "the rule detects transitions between IP addresses of the same user". Its exact effect is **unverified** (open question 6) |
 
 `learning` is one key for one idea across three methods; the compiler converts it to what each API
 property takes:
 
 | Method | `learning` | Default | API properties |
 |---|---|---|---|
-| `new_value` | `0d` to `30d` in whole days: learn for that long. Or `first_value`: alert from the first value seen, with no learning period (the editor's "after the first seen value") | `1d` | A duration: `learningMethod: duration`, `learningDuration` (days). `first_value`: `learningMethod: threshold`, `learningThreshold: 0` **(the mapping is unverified)** |
+| `new_value` | `0d` to `30d` in whole days: learn for that long. The spec says `0d` means "a signal will be generated for all new values after the first value is learned" | `1d` | `learningMethod: duration`, `learningDuration` (days). The editor's two other options, "for all new values" and "after the first seen value" (`learningMethod: threshold`, `learningThreshold` 0 or 1), wait for phase 0 to map them (open question 6) |
 | `anomaly` | `1h`, `6h`, `12h`, `1d`, `2d`, `7d` or `14d` | `7d` **(unverified default)** | `anomalyDetectionOptions.learningDuration` (hours) |
 | `impossible_travel` | `1d` to `30d` in whole days; setting it sets `baselineUserLocations: true` | unset: no location baseline | `impossibleTravelOptions.baselineUserLocationsDuration` (days) |
 
-Two refusals follow from the API (`datadog_detection_option`):
+A key the method does not take, such as `bucket` with `threshold`, is refused
+(`datadog_detection_option`).
 
-- A key the method does not take, such as `bucket` with `threshold`.
-- An impossible travel block that sets neither `learning` nor `detect_ip_transitions: true`. The
-  spec requires at least one of `baselineUserLocations` and `detectIpTransition` to be true.
+An impossible travel block may set neither `learning` nor `detect_ip_transitions`. The spec says
+that at least one of `baselineUserLocations` and `detectIpTransition` must be true, but Datadog's
+own client example creates a rule with `baselineUserLocations: false` and no `detectIpTransition`,
+and its docs call the disabled baseline the default. The block follows the example, and the
+spec's sentence is open question 6.
 
 #### `cases[]`
 
@@ -426,7 +429,7 @@ Each is its own finding at its own field path, as `graylog_constraints` reports 
 | `datadog_window_order` | error | `detection.window` longer than `signal.keep_alive` or `signal.max_duration` | `window: 1h` with `keep_alive: 30m` |
 | `datadog_query_name` | error | Not `[a-z][a-z0-9_]*`, a duplicate, or a name on a `new_value` query | `name: Failed-Logins` |
 | `datadog_measure` | error | More than one measure; `new_value` without `method: new_value`, or the reverse; more than five `new_value` fields | `count_distinct` and `sum` on one query |
-| `datadog_detection_option` | error | A `detection` key the method does not take; an impossible travel block with no `learning` and no `detect_ip_transitions`; `new_value` without `forget_after` | `bucket: 5m` with `method: threshold` |
+| `datadog_detection_option` | error | A `detection` key the method does not take; `new_value` without `forget_after` | `bucket: 5m` with `method: threshold` |
 | `datadog_signal_group_by` | error | A `signal.group_by` field that no query groups by | `signal.group_by: ["@usr.id"]` when the queries group by `@usr.email` |
 | `datadog_condition` | error | A condition that does not parse, names an unknown query, puts the number first, uses an operator the method does not allow, or an `anomaly` number outside (0, 1) | `3 < failed`; `fail > 1` with no query `fail`; `a > 5` with `anomaly` |
 | `datadog_condition_mixed` | warning | `&&` and `\|\|` in one condition, whose precedence is undocumented | `a > 1 \|\| b > 1 && c > 1` |
@@ -508,7 +511,7 @@ OR          = "OR"                                    // VRL also reads "||"
 
 Whitespace may separate a field's `:` from its value (`env: prod`). VRL allows this, and
 Datadog's pipelines and docs write it 15 times. Modifiers do not stack: `--a` is refused, as in
-VRL.
+VRL, and so are `NOT NOT a` and `-NOT a`, which VRL accepts.
 
 ### 6.4 Lexical rules
 
@@ -596,6 +599,8 @@ queries:
   starting with `+`.
 - **The model warns where VRL accepts:** `&&` and `||` between clauses, and the pipelines'
   `_exists_:`.
+- **The model refuses what VRL accepts:** stacked modifiers (`NOT NOT a`, `-NOT a`), which no
+  published query uses.
 
 ### 6.7 Diagnostics
 
@@ -731,9 +736,9 @@ Derived tags follow Datadog's own conventions and opentide's shared ATT&CK resol
 - **`technique:<t id>-<slug>`**, for each technique the rule inherits. These come through the shared
   resolver (`inherited_techniques`, `crates/opentide-compile/src/deploy.rs`), taking the parent
   technique for a sub-technique, as Datadog's default rules do.
-- **`tactic:<ta id>-<slug>`**, from the rule's stage through the stage-to-tactic map
-  (`attack::tactic`, `crates/opentide-compile/src/attack.rs`). There is no technique-to-tactic map,
-  and this RFC does not add one.
+- **`tactic:<ta id>-<slug>`**, for each stage of each inherited technique, through
+  `cx.attack.stages` and `attack::tactic` (`crates/opentide-compile/src/attack.rs`), as Sysdig's
+  `attack_tags` and Elastic's `threat` derive theirs.
 - **`security:attack`.**
 - **`opentide_uuid:<uuid>`.** It helps people find opentide's rules in Datadog, and is advisory
   only: the deployment-state shard stays the only proof that a rule is opentide's to change or
@@ -774,23 +779,36 @@ description = "Datadog Cloud SIEM detection rules."
 
 ### 8.2 Calls
 
-Every path is under `https://api.<site>/api/v2/security_monitoring`, and every call here is
+Paths are relative to `https://api.<site>/api/v2` (or the tenant's `api_url`). Every call here is
 generally available.
 
 | opentide | Call | Application-key scope | Result |
 |---|---|---|---|
-| `validate query --live` on a block, and before each create or update | `POST /rules/validation` with the compiled body | `security_monitoring_rules_write` | 204: valid. 400: `datadog_rule_invalid`, with Datadog's `errors[]` |
-| `validate query --live` on a `.datadog` file or a hunt | `POST /rules/validation` with the query wrapped in a minimal threshold rule (one query, `a > 0`) | `…_rules_write` | Diagnostics placed on the query |
-| Deploy, no stored id | `POST /rules` | `…_rules_write` | 200 with the rule. Its `id` goes to the deployment state |
-| Deploy, stored id | `GET /rules/{id}`, then `PUT /rules/{id}` only if a property opentide owns differs from the compiled body | `…_rules_read`, `…_rules_write` | The `PUT` sends `queries`, `cases` and `options` whole, and the `version` the `GET` returned. The spec answers a concurrent modification with **401**, which is reported as `datadog_concurrent_modification`, not as an authentication failure |
-| `DISABLEMENT` | `GET`, then `PUT /rules/{id}` with `isEnabled: false` and the `version` | `…_rules_write` | |
-| `DELETION` | `DELETE /rules/{id}` | `…_rules_write` | 204. A 404 is `datadog_rule_missing`: already gone |
-| Drift, `doctor` | `GET /rules/{id}`, compared with the compiled body; `GET /rules/{id}/version_history` names who changed what | `…_rules_read` | |
-| `opentide query` | `POST /api/v2/logs/events/search` with `filter.query`, `from`, `to`, `indexes` and `storage_tier` | `logs_read_data` | Paged by the cursor in `meta.page.after`, up to 5,000 events a page |
+| `validate query --live` on a block, and before each create or update | `POST /security_monitoring/rules/validation` with the compiled body | `security_monitoring_rules_write` | 204: valid. 400: `datadog_rule_invalid`, with Datadog's `errors[]` |
+| `validate query --live` on a `.datadog` file or a hunt (profile `search`) | `POST /logs/events/search` with the query, a one-minute window and `page.limit: 1` | `logs_read_data` | A 400 places Datadog's error on the query. A search is checked as a search, not wrapped in a rule, so `*:term` and `#name` are judged as Log Explorer judges them |
+| Deploy, no stored id | `POST /security_monitoring/rules` | `…_rules_write` | 200 with the rule. Its `id` goes to the deployment state |
+| Deploy, stored id | `GET /security_monitoring/rules/{id}`, then `PUT` the same path only if a property opentide owns differs from the compiled body (below) | `…_rules_read`, `…_rules_write` | The `PUT` sends `queries`, `cases` and `options` whole, and the `version` the `GET` returned. The spec answers a concurrent modification with **401**, which is reported as `datadog_concurrent_modification`, not as an authentication failure |
+| `DISABLEMENT` | `GET`, then `PUT /security_monitoring/rules/{id}` with `isEnabled: false` and the `version` | `…_rules_read`, `…_rules_write` | |
+| `DELETION` | `DELETE /security_monitoring/rules/{id}` | `…_rules_write` | 204. A 404 is `datadog_rule_missing`: already gone |
+| Drift, `doctor` | `GET /security_monitoring/rules/{id}`, compared with the compiled body; `GET …/rules/{id}/version_history` names who changed what | `…_rules_read` | |
+| `opentide query` | `POST /logs/events/search` with `filter.query`, `from`, `to`, `indexes` and `storage_tier` | `logs_read_data` | Paged by the cursor in `meta.page.after`, up to 5,000 events a page |
 
 The deployment state keeps only the id (`deployment.state::1.0`). Drift is therefore found by
 comparing the rule Datadog holds with the compiled body, as Sentinel's unchanged check compares, not
 by a stored version.
+
+The comparison covers only the properties opentide writes, normalised the same way on both
+sides:
+
+- **Compared:** `name`, `isEnabled`, `queries`, `cases`, `options`, `message`, `tags`,
+  `groupSignalsBy` and `hasExtendedTitle`.
+- **Not compared:** properties the response adds (`id`, `version`, `createdAt`, `defaultTags`,
+  `customMessage`, `filters`, …).
+- **Absent equals default.** A property the body leaves out equals the response's default
+  (`hasOptionalGroupByFields: false`, an empty `distinctFields`).
+- **Unordered lists.** Tags are compared as a set; queries and cases keep their order.
+
+A fake-API test holds that an unchanged rule sends no `PUT`.
 
 A rule whose `GET` answers `isDeleted: true` is treated like a 404.
 
@@ -827,9 +845,11 @@ reported before anything changes.
 
 **Retries.** Datadog waits out its own rate limits, as Bitdefender, Exabeam and Google SecOps do:
 
-- A 429 on any call is retried after the seconds `X-RateLimit-Reset` gives, at most 120 seconds and
-  at most three times. A 429 means Datadog refused the request, so resending even a create is
-  safe.
+- A 429 on any call is retried after the seconds `X-RateLimit-Reset` gives: the seconds until the
+  rate-limit window resets (Datadog's rate-limits page). It is retried at most three times. A 429
+  means Datadog refused the request, so resending even a create is safe.
+- When the reset is more than 120 seconds away, the call is not resent and is reported as
+  `datadog_rate_limited`.
 - A create that gets no answer, or a 5xx, is not resent (`datadog_create_unconfirmed`).
 - Every other call follows the shared retry policy (`docs/usage/configuration.md`, "Retries").
 
@@ -885,7 +905,7 @@ The engine wiring follows the add-language skill. These are the items it asks to
 | `LanguageId::Datadog` | A breaking change to the facade (`opentide`), a minor bump while 0.x, with a **Breaking** entry in `crates/CHANGELOG.md` |
 | Codes and registries | The codes in `opentide-core`; the keywords and `EMBEDDED_QUERIES` in `opentide-highlight`; `platform_field_language` and hunts with `system: datadog` in `opentide-tide`; `opentide-analysis` |
 | The VRL oracle | `scripts/engine/oracles/datadog/`, its exceptions in `crates/testdata/oracles/exceptions.toml` (`[[datadog]]`), a job in `.github/workflows/oracle.yml`, and VRL's licence in the licence scan |
-| Corpus gate | The language has no comment syntax, so the gate's tag line cannot use `#`, which starts a calculated field. The corpus files carry their tags in a sidecar instead, as for any language without comments |
+| Corpus gate | The language has no comment syntax. As for Lucene and Exabeam, each corpus file's tag sits on a `#` first line that the gate drops before parsing (`crates/opentide-analysis/tests/corpus_gate.rs`), so it never meets a calculated field |
 | Fuzzing and budgets | A fuzz target, and a row in the throughput budgets |
 
 `cargo test -p xtask --test language_wiring` and `xtask/tests/platform_docs.rs` list whatever is
@@ -1058,7 +1078,7 @@ thing to settle on a tenant.
 | **Validation needs a write-scoped key**, and a key that can validate can also delete | `setup` recommends a service account's key scoped to the security-monitoring rules. `doctor` warns that the key can write (open question 7) |
 | **Default rules** look like ordinary rules through the API | Deploy checks `isDefault` before any write and refuses (`datadog_rule_default`) |
 | **Preview signals can reach people** through Datadog's notification rules | The `opentide_strategy:preview` tag, and the platform page's guidance to exclude it (8.3) |
-| **Promotion may restart a learning period** on `new_value` and `impossible_travel` rules | Measured in phase 0 (open question 10). If confirmed, promotion keeps the body unchanged and only adds notifications, or the docs say to promote before the learning period matters |
+| **Promotion may restart a learning period** on `new_value` and `impossible_travel` rules | Measured in phase 0 (open question 10). Promotion is a `PUT` whatever it changes. If the restart is confirmed, these two methods get no `PREVIEW` deploy: `validate` warns when their status maps to `PREVIEW`, and they are deployed at `RELEASE` only |
 | **The API changes.** Datadog adds methods and properties, some in preview, and has already withdrawn `signal_correlation` | The block refuses anything outside its scope instead of passing it through. The fake-API tests pin the request bodies, and a tenant run per release catches drift |
 | **Rate limits are undocumented** for these endpoints | Deploy reads `X-RateLimit-*` and waits, and never runs parallel writes against one tenant |
 | **A team's pipelines remap attributes**, so the attribute catalog cannot know every field | An unknown attribute is a hint, never an error |
@@ -1092,7 +1112,10 @@ Each is settled by a probe on a trial tenant in phase 0, unless noted.
 6. **What each accepted-but-undocumented form does:**
    - `*:term`, `_exists_`, and open or mixed range bounds in rule queries;
    - an unescaped `:` in a value, a space after `:`, and duration units in comparisons;
-   - `detectIpTransition` and the `new_value` `first_value` mapping;
+   - `detectIpTransition`, and the spec's rule that it or `baselineUserLocations` must be true,
+     which Datadog's own example does not follow;
+   - the `new_value` editor options "for all new values" and "after the first seen value", in terms
+     of `learningMethod`, `learningDuration` and `learningThreshold`;
    - the anomaly `bucket`, `learning` and `tolerance` defaults, and whether `window` may be shorter
      than `bucket`.
 7. **A write-scoped key for validation.** Should `setup` recommend a separate validation key, and
