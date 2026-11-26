@@ -6,6 +6,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Eac
 
 ## [Unreleased]
 
+### Upgrade
+
+- If you deploy to Microsoft Defender, run `opentide validate` and add `key` to each `registry_values` mapping it reports as `microsoft_defender_entity_identifier`. If you run `validate --strict`, also add `aad_user_id`, `sid` or `upn` to each `accounts` mapping, and `device_id` or `name` to each `hosts` mapping, it reports as `microsoft_defender_impacted_asset_identifier`.
+
+### Breaking
+
+- **`validate` refuses a Defender registry value without its `key`.** A `registry_values` mapping that sets `value_name` alone is an error, `microsoft_defender_entity_identifier`, on `entities.registry_values.<N>`, in `validate` and the editor. Graph refuses such a rule with "Entity mapping for type 'RegistryValue' does not include a required identifier", but only when it creates or enables the rule ([#1884](https://github.com/opentidehq/opentide/issues/1884)).
+
+### Added
+
+- **`validate` warns when a Defender device or user has no identifier.** A `hosts` mapping without `device_id` or `name`, or an `accounts` mapping without `aad_user_id`, `sid` or `upn`, may give the alert no impacted asset: `validate`, `lint` and the editor report `microsoft_defender_impacted_asset_identifier`, and `validate --strict` fails on it ([#1884](https://github.com/opentidehq/opentide/issues/1884)).
+
 ## [1.0.0] — 2026-11-25
 
 opentide runs on one Rust core: a far smaller install, commands that start in about 20 ms, and SDKs for Python, Rust and Node.js.

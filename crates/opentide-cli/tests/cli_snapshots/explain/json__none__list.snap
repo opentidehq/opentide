@@ -1329,6 +1329,10 @@ exit: 0
       "meaning": "A Microsoft Defender block's `alert.custom_details` is not a mapping of non-blank names to result columns."
     },
     {
+      "code": "microsoft_defender_entity_identifier",
+      "meaning": "A Microsoft Defender entity mapping lacks an identifier Graph requires of its kind."
+    },
+    {
       "code": "microsoft_defender_entity_kind",
       "meaning": "A key of a Microsoft Defender block's `entities` is not an entity kind."
     },
@@ -1343,6 +1347,10 @@ exit: 0
     {
       "code": "microsoft_defender_grouping",
       "meaning": "A Microsoft Defender block's `alert.grouping` is not `alert_per_event` or `single_alert`."
+    },
+    {
+      "code": "microsoft_defender_impacted_asset_identifier",
+      "meaning": "A Microsoft Defender device, user or mailbox mapping sets none of the identifiers Defender names an impacted asset by."
     },
     {
       "code": "microsoft_defender_incident",
@@ -1977,13 +1985,13 @@ exit: 0
   "duration_ms": 0,
   "exit_code": 0,
   "failure": null,
-  "message": "491 diagnostic codes",
+  "message": "493 diagnostic codes",
   "next_actions": [],
   "ok": true,
   "schema_version": 1,
   "status": "completed",
   "summary": {
-    "codes": 491
+    "codes": 493
   }
 }
 

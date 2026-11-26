@@ -37,8 +37,14 @@ pub const SCHEMA: &str = "platform::microsoft_defender::1.0";
 /// The advisory of a block that maps no entity.
 pub const NO_ENTITIES: &str = opentide_core::codes::MICROSOFT_DEFENDER_NO_ENTITIES;
 
+/// The advisory of an impacted-asset mapping (`hosts`, `accounts`,
+/// `mailboxes`) that sets none of the asset's identifiers
+/// ([`Identifiers::asset`]).
+pub const IMPACTED_ASSET_IDENTIFIER: &str =
+    opentide_core::codes::MICROSOFT_DEFENDER_IMPACTED_ASSET_IDENTIFIER;
+
 /// Every advisory [`advisories`] reports.
-pub const ADVISORY_CODES: [&str; 1] = [NO_ENTITIES];
+pub const ADVISORY_CODES: [&str; 2] = [NO_ENTITIES, IMPACTED_ASSET_IDENTIFIER];
 
 /// One entity kind or automated action: its key in the block, its Graph
 /// name, and its fields, each the block's key and the Graph property it is
@@ -183,6 +189,175 @@ pub const ENTITY_KINDS: [Kind; 17] = [
         fields: &[("full_resource_name", "fullResourceNameColumn")],
     },
 ];
+
+/// Where a rule of [`ENTITY_IDENTIFIERS`] comes from, which decides whether
+/// it is enforced: only an observed or documented rule is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Evidence {
+    /// Graph refused such a mapping on a tenant; the reference quotes its
+    /// answer.
+    Observed,
+    /// Microsoft's documentation states it; the reference is the page.
+    Documented,
+    /// The kind has one field, which every mapping names already
+    /// (`microsoft_defender_entity_mapping`): nothing more to require.
+    OneField,
+    /// Nothing published or observed says Graph requires more than one of the
+    /// kind's fields: no rule until a tenant probe records one
+    /// (`docs/internal/microsoft-defender-tenant-test.md`, check 10).
+    Unprobed,
+}
+
+/// The provenance of a rule of [`ENTITY_IDENTIFIERS`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Source {
+    /// What kind of evidence it is.
+    pub evidence: Evidence,
+    /// The page, or Graph's answer, the rule comes from.
+    pub reference: &'static str,
+    /// When the reference was read (ISO 8601 date).
+    pub checked: &'static str,
+}
+
+/// What Graph requires of one entity kind's mapping beyond naming one of its
+/// fields, and, for an impacted asset, the fields Defender identifies the
+/// asset by. The checks read it: `microsoft_defender_entity_identifier`
+/// (an error) for a missing required field,
+/// `microsoft_defender_impacted_asset_identifier` (a warning) for an asset
+/// mapping that sets none of its identifiers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Identifiers {
+    /// The kind's key under `entities` (`registry_values`).
+    pub kind: &'static str,
+    /// Each field every mapping must set, with the identifier Graph's error
+    /// names it by (`("key", "RegKey")`). Empty: any one of the kind's fields
+    /// will do.
+    pub required: &'static [(&'static str, &'static str)],
+    /// Where `required` comes from.
+    pub source: Source,
+    /// For a kind that drives the alert's impacted assets (`hosts`,
+    /// `accounts`, `mailboxes`): the fields Defender identifies the asset by,
+    /// each with the Defender columns that hold it ([`IMPACTED_ASSET_SOURCE`]).
+    /// Empty for every other kind.
+    pub asset: &'static [(&'static str, &'static str)],
+}
+
+/// The date the identifier rules were last checked against their sources.
+pub const IDENTIFIERS_CHECKED: &str = "2026-11-26";
+
+/// Microsoft's custom detection rules page: the columns that hold a strong
+/// identifier of each impacted asset (device, mailbox, user).
+pub const IMPACTED_ASSET_SOURCE: Source = Source {
+    evidence: Evidence::Documented,
+    reference: "https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules \
+                (Required columns in the query results: a strong identifier for an impacted \
+                asset)",
+    checked: IDENTIFIERS_CHECKED,
+};
+
+const UNPROBED: Source = Source {
+    evidence: Evidence::Unprobed,
+    reference: "the Graph beta entity mapping types list their columns, not which are \
+                required; nothing observed",
+    checked: IDENTIFIERS_CHECKED,
+};
+
+const ONE_FIELD: Source = Source {
+    evidence: Evidence::OneField,
+    reference: "the Graph beta entity mapping type has one column",
+    checked: IDENTIFIERS_CHECKED,
+};
+
+/// A kind with no rule beyond one of its fields.
+const fn unprobed(kind: &'static str) -> Identifiers {
+    Identifiers {
+        kind,
+        required: &[],
+        source: UNPROBED,
+        asset: &[],
+    }
+}
+
+/// A kind with one field.
+const fn one_field(kind: &'static str) -> Identifiers {
+    Identifiers {
+        kind,
+        required: &[],
+        source: ONE_FIELD,
+        asset: &[],
+    }
+}
+
+/// The identifier rules of the seventeen kinds, in [`ENTITY_KINDS`]' order
+/// (microsoft-defender-1.0, `entities`). A rule is enforced only when its
+/// source is [`Evidence::Observed`] or [`Evidence::Documented`]: an error
+/// that blocks a deploy Graph would accept is worse than a missed one.
+pub const ENTITY_IDENTIFIERS: [Identifiers; 17] = [
+    Identifiers {
+        kind: "hosts",
+        required: &[],
+        source: UNPROBED,
+        asset: &[
+            ("device_id", "DeviceId"),
+            ("name", "DeviceName, RemoteDeviceName"),
+        ],
+    },
+    Identifiers {
+        kind: "accounts",
+        required: &[],
+        source: UNPROBED,
+        asset: &[
+            ("aad_user_id", "AccountObjectId"),
+            ("sid", "AccountSid, InitiatingProcessAccountSid"),
+            ("upn", "AccountUpn, InitiatingProcessAccountUpn"),
+        ],
+    },
+    Identifiers {
+        kind: "mailboxes",
+        required: &[],
+        source: ONE_FIELD,
+        asset: &[(
+            "primary_address",
+            "RecipientEmailAddress, SenderFromAddress, SenderMailFromAddress",
+        )],
+    },
+    unprobed("files"),
+    unprobed("processes"),
+    unprobed("ips"),
+    one_field("urls"),
+    unprobed("dns"),
+    Identifiers {
+        kind: "registry_values",
+        required: &[("key", "RegKey")],
+        source: Source {
+            evidence: Evidence::Observed,
+            reference: "Graph beta detectionRules, a rule whose registryValues mapping sets \
+                        valueNameColumn and no keyColumn, refused at deploy on a production \
+                        tenant: \"HTTP 400 · Entity mapping for type 'RegistryValue' does not include a required \
+                        identifier. Supported identifiers: RegKey | Name\" (opentide#1884); \
+                        Microsoft Sentinel's entity reference agrees: a registry value's strong \
+                        identifier is Key + Name, Name without Key is weak \
+                        (https://learn.microsoft.com/en-us/azure/sentinel/entities-reference)",
+            checked: IDENTIFIERS_CHECKED,
+        },
+        asset: &[],
+    },
+    unprobed("mail_messages"),
+    unprobed("mail_clusters"),
+    unprobed("cloud_applications"),
+    one_field("oauth_applications"),
+    unprobed("security_groups"),
+    one_field("azure_resources"),
+    one_field("amazon_resources"),
+    one_field("google_cloud_resources"),
+];
+
+/// The identifier rules of the entity kind `key`.
+pub fn entity_identifiers(key: &str) -> Option<&'static Identifiers> {
+    ENTITY_IDENTIFIERS
+        .iter()
+        .find(|identifiers| identifiers.kind == key)
+}
 
 /// An action target's `isolation_type`, which is not a column.
 pub const ISOLATION_TYPE: &str = "isolation_type";
@@ -1205,8 +1380,12 @@ platform_block! {
 }
 
 /// The block's advisories (microsoft-defender-1.0, Advisories):
-/// `microsoft_defender_no_entities` on a block that maps no entity. A block
-/// whose `entities` breaks a constraint earns none: its finding says more.
+/// `microsoft_defender_no_entities` on a block that maps no entity, and
+/// `microsoft_defender_impacted_asset_identifier` on each impacted-asset
+/// mapping that sets none of its asset's identifiers. A block whose
+/// `entities` breaks a constraint earns no `no_entities`, and a mapping that
+/// is not a mapping of its kind's fields no asset advisory: the constraint's
+/// finding says more.
 pub fn advisories(rule: &Node) -> Vec<super::Advisory> {
     let Some(block) = rule
         .get("configurations")
@@ -1215,6 +1394,88 @@ pub fn advisories(rule: &Node) -> Vec<super::Advisory> {
     else {
         return Vec::new();
     };
+    let mut found = no_entities(block);
+    found.extend(impacted_assets(block));
+    found
+}
+
+/// `microsoft_defender_impacted_asset_identifier`, on `entities.<kind>.<N>`
+/// of each `hosts`, `accounts` or `mailboxes` mapping that names only its
+/// kind's fields and none of the asset's identifiers.
+fn impacted_assets(block: &Node) -> Vec<super::Advisory> {
+    let mut found = Vec::new();
+    let Some(Value::Map(kinds)) = block.get("entities").map(|entities| &entities.value) else {
+        return found;
+    };
+    for entry in kinds {
+        let (Some(name), Value::Seq(mappings)) = (entry.key.value.as_str(), &entry.value.value)
+        else {
+            continue;
+        };
+        let (Some(kind), Some(rules)) = (entity_kind(name), entity_identifiers(name)) else {
+            continue;
+        };
+        if rules.asset.is_empty() {
+            continue;
+        }
+        for (index, mapping) in mappings.iter().enumerate() {
+            let Value::Map(fields) = &mapping.value else {
+                continue;
+            };
+            let keys: Vec<Option<&str>> = fields
+                .iter()
+                .map(|field| field.key.value.as_str())
+                .collect();
+            let shaped = !keys.is_empty()
+                && keys
+                    .iter()
+                    .all(|key| key.is_some_and(|key| kind.graph_field(key).is_some()));
+            let identified = keys
+                .iter()
+                .flatten()
+                .any(|key| rules.asset.iter().any(|(field, _)| field == key));
+            if !shaped || identified {
+                continue;
+            }
+            let identifiers = rules
+                .asset
+                .iter()
+                .map(|(field, columns)| format!("{field} ({columns})"))
+                .collect::<Vec<_>>()
+                .join(", ");
+            found.push(super::Advisory {
+                code: IMPACTED_ASSET_IDENTIFIER,
+                field_path: vec![
+                    "configurations".to_owned(),
+                    PLATFORM.to_owned(),
+                    "entities".to_owned(),
+                    name.to_owned(),
+                    index.to_string(),
+                ],
+                message: format!(
+                    "entities.{name}[{index}] sets none of the identifiers Defender names an \
+                     impacted {} by: {identifiers}; without one the alert may list no impacted \
+                     asset to triage or act on",
+                    asset_noun(name)
+                ),
+            });
+        }
+    }
+    found
+}
+
+/// The impacted asset an entity kind maps, as Defender's wizard names it.
+fn asset_noun(kind: &str) -> &'static str {
+    match kind {
+        "hosts" => "device",
+        "accounts" => "user",
+        "mailboxes" => "mailbox",
+        _ => "asset",
+    }
+}
+
+/// `microsoft_defender_no_entities`, when the block maps no entity.
+fn no_entities(block: &Node) -> Vec<super::Advisory> {
     let entities = block.get("entities");
     let maps_one = match entities.map(|entities| &entities.value) {
         None | Some(Value::Null) => false,
