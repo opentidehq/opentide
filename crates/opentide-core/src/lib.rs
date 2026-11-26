@@ -84,6 +84,10 @@ pub enum LanguageId {
     /// `.yl2` files). Not YARA: no code is shared.
     #[serde(rename = "yaral", alias = "opentide-yaral", alias = "yara-l")]
     Yaral,
+    /// The Datadog log search syntax (Datadog Cloud SIEM detection-rule
+    /// queries, `.datadog` files): Datadog's API calls it `event_query`.
+    #[serde(rename = "datadog", alias = "opentide-datadog")]
+    Datadog,
 }
 
 impl LanguageId {
@@ -102,6 +106,7 @@ impl LanguageId {
             Self::Yara => "yara",
             Self::Exabeam => "exabeam",
             Self::Yaral => "yaral",
+            Self::Datadog => "datadog",
         }
     }
 
@@ -120,6 +125,7 @@ impl LanguageId {
             "yara" | "opentide-yara" | "YARA" => Some(Self::Yara),
             "exabeam" | "opentide-exabeam" | "Exabeam" => Some(Self::Exabeam),
             "yaral" | "opentide-yaral" | "yara-l" | "YARA-L" => Some(Self::Yaral),
+            "datadog" | "opentide-datadog" | "Datadog" => Some(Self::Datadog),
             _ => None,
         }
     }
@@ -139,12 +145,13 @@ impl LanguageId {
             "yar" | "yara" => Some(Self::Yara),
             "exabeam" => Some(Self::Exabeam),
             "yaral" | "yl2" => Some(Self::Yaral),
+            "datadog" => Some(Self::Datadog),
             _ => None,
         }
     }
 
     /// Query languages with a tree-sitter grammar and an engine.
-    pub const QUERY_LANGUAGES: [Self; 11] = [
+    pub const QUERY_LANGUAGES: [Self; 12] = [
         Self::Kql,
         Self::Spl,
         Self::Esql,
@@ -156,6 +163,7 @@ impl LanguageId {
         Self::Yara,
         Self::Exabeam,
         Self::Yaral,
+        Self::Datadog,
     ];
 }
 
@@ -1109,6 +1117,26 @@ pub mod codes {
     pub const EXABEAM_OUTCOME_SILENT: &str = "exabeam_outcome_silent";
     pub const EXABEAM_CORRELATION_WINDOW: &str = "exabeam_correlation_window";
 
+    // The Datadog search syntax (rfc-datadog-cloud-siem, §6.7). Errors are
+    // datadog_parse_error through datadog_range (a range's mixed bounds are a
+    // warning); datadog_unknown_attribute is a hint; the rest are warnings.
+    pub const DATADOG_PARSE_ERROR: &str = "datadog_parse_error";
+    pub const DATADOG_UNESCAPED_SPECIAL: &str = "datadog_unescaped_special";
+    pub const DATADOG_REGEX: &str = "datadog_regex";
+    pub const DATADOG_CIDR: &str = "datadog_cidr";
+    pub const DATADOG_RANGE: &str = "datadog_range";
+    pub const DATADOG_MIXED_BOOLEAN: &str = "datadog_mixed_boolean";
+    pub const DATADOG_LOWERCASE_OPERATOR: &str = "datadog_lowercase_operator";
+    pub const DATADOG_CURLY_QUOTE: &str = "datadog_curly_quote";
+    pub const DATADOG_WILDCARD_IN_PHRASE: &str = "datadog_wildcard_in_phrase";
+    pub const DATADOG_UNESCAPED_COLON: &str = "datadog_unescaped_colon";
+    pub const DATADOG_SYMBOL_OPERATOR: &str = "datadog_symbol_operator";
+    pub const DATADOG_DETACHED_OPERATOR: &str = "datadog_detached_operator";
+    pub const DATADOG_FULL_TEXT_IN_RULE: &str = "datadog_full_text_in_rule";
+    pub const DATADOG_CALCULATED_FIELD_IN_RULE: &str = "datadog_calculated_field_in_rule";
+    pub const DATADOG_PIPELINES_ONLY: &str = "datadog_pipelines_only";
+    pub const DATADOG_UNKNOWN_ATTRIBUTE: &str = "datadog_unknown_attribute";
+
     /// Every code above, in declaration order.
     pub const ALL: &[&str] = &[
         SCHEMA_VALIDATION,
@@ -1433,6 +1461,22 @@ pub mod codes {
         MICROSOFT_DEFENDER_INCIDENT,
         MICROSOFT_DEFENDER_NO_ENTITIES,
         MICROSOFT_DEFENDER_IMPACTED_ASSET_IDENTIFIER,
+        DATADOG_PARSE_ERROR,
+        DATADOG_UNESCAPED_SPECIAL,
+        DATADOG_REGEX,
+        DATADOG_CIDR,
+        DATADOG_RANGE,
+        DATADOG_MIXED_BOOLEAN,
+        DATADOG_LOWERCASE_OPERATOR,
+        DATADOG_CURLY_QUOTE,
+        DATADOG_WILDCARD_IN_PHRASE,
+        DATADOG_UNESCAPED_COLON,
+        DATADOG_SYMBOL_OPERATOR,
+        DATADOG_DETACHED_OPERATOR,
+        DATADOG_FULL_TEXT_IN_RULE,
+        DATADOG_CALCULATED_FIELD_IN_RULE,
+        DATADOG_PIPELINES_ONLY,
+        DATADOG_UNKNOWN_ATTRIBUTE,
     ];
 
     /// One sentence on what a code means, for hosts that explain a diagnostic
@@ -2250,6 +2294,52 @@ pub mod codes {
             }
             MICROSOFT_DEFENDER_IMPACTED_ASSET_IDENTIFIER => {
                 "A device or user mapping sets no strong identifier of its impacted asset."
+            }
+            DATADOG_PARSE_ERROR => {
+                "The Datadog search does not parse: an unbalanced bracket, a dangling operator, an empty group, a field with no value, two modifiers in a row, or an unclosed phrase."
+            }
+            DATADOG_UNESCAPED_SPECIAL => {
+                "A Datadog search term holds an unescaped `!`, `<` or `>`, or a value starts with an unescaped `-`, which Datadog reads as an exclusion: escape it with `\\`."
+            }
+            DATADOG_REGEX => {
+                "A Datadog search term holds `~` or `^`: the search syntax has no regular expression, fuzzy or boost operator."
+            }
+            DATADOG_CIDR => {
+                "A Datadog `CIDR()` call does not name an `@attribute` first, has no block, or has an argument that is not an IPv4 or IPv6 CIDR block."
+            }
+            DATADOG_RANGE => {
+                "A Datadog range is malformed (a missing bound, a lower-case `to`), or mixes an inclusive and an exclusive bound."
+            }
+            DATADOG_MIXED_BOOLEAN => {
+                "A Datadog search puts OR beside an AND, written or implied, without parentheses: AND binds tighter, as VRL reads it (unverified on Cloud SIEM)."
+            }
+            DATADOG_LOWERCASE_OPERATOR => {
+                "A lower-case `and`, `or` or `not` stands between field clauses or in a value group, where Datadog reads it as a search term, not an operator."
+            }
+            DATADOG_CURLY_QUOTE => {
+                "A Datadog search holds a curly quote, which is not a quote: the words around it are searched as separate terms."
+            }
+            DATADOG_WILDCARD_IN_PHRASE => {
+                "A `*` or `?` touches a word inside a quoted phrase, where it is punctuation, not a wildcard."
+            }
+            DATADOG_UNESCAPED_COLON => {
+                "A Datadog search value holds an unescaped `:`, which Datadog's docs say to escape."
+            }
+            DATADOG_SYMBOL_OPERATOR => {
+                "`&&` or `||` stands between Datadog search clauses: Datadog's docs list them as characters to escape; write AND or OR."
+            }
+            DATADOG_DETACHED_OPERATOR => "A Datadog exclusion `-` is followed by a space.",
+            DATADOG_FULL_TEXT_IN_RULE => {
+                "A detection rule's query searches every attribute with `*:term`, which Datadog documents for monitors, dashboards and notebooks, not for detection rules."
+            }
+            DATADOG_CALCULATED_FIELD_IN_RULE => {
+                "A detection rule's query names a calculated field (`#name`): real-time detection rules have none."
+            }
+            DATADOG_PIPELINES_ONLY => {
+                "A Datadog search uses Observability Pipelines syntax (`_exists_:`, `_missing_:`, a quoted field name), which log search does not read the same way."
+            }
+            DATADOG_UNKNOWN_ATTRIBUTE => {
+                "A Datadog search field is a dotted bare key, searched as a tag, where an `@attribute` was probably meant."
             }
             _ => return None,
         })

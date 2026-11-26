@@ -31,6 +31,7 @@ opentide-cql.workspace = true
 opentide-yara.workspace = true
 opentide-yaral.workspace = true
 opentide-exabeam.workspace = true
+opentide-datadog.workspace = true
 opentide-highlight.workspace = true
 serde.workspace = true
 serde_json.workspace = true

@@ -45,9 +45,11 @@ fn builtins(language: LanguageId) -> &'static [&'static str] {
 fn comparison(language: LanguageId) -> String {
     let symbols = match language {
         // `field:value`; `:=` assigns in CQL.
-        LanguageId::Kuery | LanguageId::Lucene | LanguageId::Cql | LanguageId::Exabeam => {
-            r"==|!=|=~|!~|<=|>=|:=|=|<|>|:"
-        }
+        LanguageId::Kuery
+        | LanguageId::Lucene
+        | LanguageId::Cql
+        | LanguageId::Exabeam
+        | LanguageId::Datadog => r"==|!=|=~|!~|<=|>=|:=|=|<|>|:",
         _ => r"==|!=|=~|!~|<=|>=|:=|=|<|>",
     };
     let words = match language {
@@ -131,7 +133,8 @@ pub(crate) fn before_keywords(language: LanguageId, spec: &HighlightSpec) -> Vec
     }
     let logical = match language {
         LanguageId::Kuery | LanguageId::Cql => Some(r"(?i)(?<![\w.])(?:and|or|not)(?![\w.])"),
-        LanguageId::Lucene => Some(r"(?<![\w.])(?:AND|OR|NOT)(?![\w.])"),
+        // Upper case only: a lower-case `and` is a search term.
+        LanguageId::Lucene | LanguageId::Datadog => Some(r"(?<![\w.])(?:AND|OR|NOT)(?![\w.])"),
         _ => None,
     };
     if let Some(logical) = logical {
@@ -219,6 +222,7 @@ pub(crate) fn after_keywords(
         LanguageId::Kuery
             | LanguageId::Lucene
             | LanguageId::Exabeam
+            | LanguageId::Datadog
             | LanguageId::TideYaml
             | LanguageId::Config
     ) {
@@ -299,7 +303,12 @@ mod tests {
         }
         assert!(has(LanguageId::Kql, "tm_extras:table"));
         assert!(has(LanguageId::Esql, "tm_extras:esql-source"));
-        for language in [LanguageId::Kuery, LanguageId::Lucene, LanguageId::Cql] {
+        for language in [
+            LanguageId::Kuery,
+            LanguageId::Lucene,
+            LanguageId::Cql,
+            LanguageId::Datadog,
+        ] {
             assert!(has(language, "tm_extras:logical"), "{language}");
         }
         // Not query languages: no extras at all.

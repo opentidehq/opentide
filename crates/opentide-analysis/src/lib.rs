@@ -243,6 +243,15 @@ pub fn analyze(host: &dyn WorkspaceHost, request: AnalyzeRequest) -> AnalyzeResp
                 symbols: Vec::new(),
             }
         }
+        // A `.datadog` file is a search (rfc-datadog-cloud-siem, §6.1).
+        LanguageId::Datadog => {
+            let r = opentide_datadog::analyze(&request.text);
+            AnalyzeResponse {
+                diagnostics: r.diagnostics,
+                tokens: r.tokens,
+                symbols: Vec::new(),
+            }
+        }
         LanguageId::TideYaml => {
             let r: TideAnalyzeResult = opentide_tide::analyze(opentide_tide::AnalyzeInput {
                 path: &request.uri,
@@ -394,6 +403,16 @@ pub fn analyze_query(request: &QueryRequest) -> Vec<Diagnostic> {
                 opentide_exabeam::Context::SEARCH
             };
             opentide_exabeam::analyze_with(&request.text, &ctx).diagnostics
+        }
+        // `platform: datadog` is a detection rule's query (the `rule`
+        // profile); without it, a search.
+        LanguageId::Datadog => {
+            let ctx = if platform == "datadog" {
+                opentide_datadog::Context::RULE
+            } else {
+                opentide_datadog::Context::SEARCH
+            };
+            opentide_datadog::analyze_with(&request.text, &ctx).diagnostics
         }
         LanguageId::Lucene => {
             let dialect = opentide_lucene::Dialect::for_platform(platform);
@@ -793,6 +812,7 @@ fn query_hover(language: LanguageId, text: &str, offset: usize, platform: &str) 
         LanguageId::Cql => opentide_cql::hover(text, offset),
         LanguageId::Yara => opentide_yara::editor::hover(text, offset),
         LanguageId::Exabeam => opentide_exabeam::hover(text, offset),
+        LanguageId::Datadog => opentide_datadog::hover(text, offset),
         LanguageId::Yaral => opentide_yaral::editor::hover(text, offset),
         // Configuration hover needs the file's path: configuration_hover.
         LanguageId::TideYaml | LanguageId::Config => None,
@@ -877,6 +897,7 @@ fn query_completions(
         LanguageId::Cql => opentide_cql::completions(text, offset),
         LanguageId::Yara => opentide_yara::editor::completions(text, offset),
         LanguageId::Exabeam => opentide_exabeam::completions(text, offset),
+        LanguageId::Datadog => opentide_datadog::completions(text, offset),
         LanguageId::Yaral => opentide_yaral::editor::completions(text, offset),
         // Configuration completion needs the file's path: configuration_completions.
         LanguageId::TideYaml | LanguageId::Config => Vec::new(),
@@ -935,6 +956,7 @@ fn query_signature_help(
         | LanguageId::Lucene
         | LanguageId::Falco
         | LanguageId::Exabeam
+        | LanguageId::Datadog
         | LanguageId::TideYaml
         | LanguageId::Config => None,
     }

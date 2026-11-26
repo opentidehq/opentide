@@ -84,6 +84,22 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`credentials`](#credentials) | Per configured tenant, whether every `$VARIABLE` its setup names is set. |
 | [`crowdstrike_unsupported`](#crowdstrike_unsupported) | Retired in engine 0.12.0; CrowdStrike queries are now checked as CQL: see the `cql_*` codes. |
 | [`cve_lookup_unavailable`](#cve_lookup_unavailable) | A threat lists CVE identifiers, but Vulnerability-Lookup could not be reached to check them. |
+| [`datadog_calculated_field_in_rule`](#datadog_calculated_field_in_rule) | A detection rule's query names a calculated field (`#name`): real-time detection rules have none. |
+| [`datadog_cidr`](#datadog_cidr) | A Datadog `CIDR()` call does not name an `@attribute` first, has no block, or has an argument that is not an IPv4 or IPv6 CIDR block. |
+| [`datadog_curly_quote`](#datadog_curly_quote) | A Datadog search holds a curly quote, which is not a quote: the words around it are searched as separate terms. |
+| [`datadog_detached_operator`](#datadog_detached_operator) | A Datadog exclusion `-` is followed by a space. |
+| [`datadog_full_text_in_rule`](#datadog_full_text_in_rule) | A detection rule's query searches every attribute with `*:term`, which Datadog documents for monitors, dashboards and notebooks, not for detection rules. |
+| [`datadog_lowercase_operator`](#datadog_lowercase_operator) | A lower-case `and`, `or` or `not` stands between field clauses or in a value group, where Datadog reads it as a search term, not an operator. |
+| [`datadog_mixed_boolean`](#datadog_mixed_boolean) | A Datadog search puts OR beside an AND, written or implied, without parentheses: AND binds tighter, as VRL reads it (unverified on Cloud SIEM). |
+| [`datadog_parse_error`](#datadog_parse_error) | The Datadog search does not parse: an unbalanced bracket, a dangling operator, an empty group, a field with no value, two modifiers in a row, or an unclosed phrase. |
+| [`datadog_pipelines_only`](#datadog_pipelines_only) | A Datadog search uses Observability Pipelines syntax (`_exists_:`, `_missing_:`, a quoted field name), which log search does not read the same way. |
+| [`datadog_range`](#datadog_range) | A Datadog range is malformed (a missing bound, a lower-case `to`), or mixes an inclusive and an exclusive bound. |
+| [`datadog_regex`](#datadog_regex) | A Datadog search term holds `~` or `^`: the search syntax has no regular expression, fuzzy or boost operator. |
+| [`datadog_symbol_operator`](#datadog_symbol_operator) | `&&` or `||` stands between Datadog search clauses: Datadog's docs list them as characters to escape; write AND or OR. |
+| [`datadog_unescaped_colon`](#datadog_unescaped_colon) | A Datadog search value holds an unescaped `:`, which Datadog's docs say to escape. |
+| [`datadog_unescaped_special`](#datadog_unescaped_special) | A Datadog search term holds an unescaped `!`, `<` or `>`, or a value starts with an unescaped `-`, which Datadog reads as an exclusion: escape it with `\`. |
+| [`datadog_unknown_attribute`](#datadog_unknown_attribute) | A Datadog search field is a dotted bare key, searched as a tag, where an `@attribute` was probably meant. |
+| [`datadog_wildcard_in_phrase`](#datadog_wildcard_in_phrase) | A `*` or `?` touches a word inside a quoted phrase, where it is punctuation, not a wildcard. |
 | [`defender_output_columns`](#defender_output_columns) | A Defender custom detection must return the columns Defender requires. |
 | [`deployment_state_platform`](#deployment_state_platform) | A deployment state shard names a platform that stores no external ids. |
 | [`deployment_state_shape`](#deployment_state_shape) | A deployment state shard is not the JSON shape opentide writes. |
@@ -1796,6 +1812,262 @@ threat:
 ### How to fix
 
 Check network access to https://vulnerability.circl.lu (or the configured lookup URL and any proxy), then run `opentide validate --check cve` again. The identifiers themselves were not judged: the check failed open.
+
+## datadog_calculated_field_in_rule
+
+A detection rule's query names a calculated field (`#name`): real-time detection rules have none.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## datadog_cidr
+
+A Datadog `CIDR()` call does not name an `@attribute` first, has no block, or has an argument that is not an IPv4 or IPv6 CIDR block.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## datadog_curly_quote
+
+A Datadog search holds a curly quote, which is not a quote: the words around it are searched as separate terms.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## datadog_detached_operator
+
+A Datadog exclusion `-` is followed by a space.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## datadog_full_text_in_rule
+
+A detection rule's query searches every attribute with `*:term`, which Datadog documents for monitors, dashboards and notebooks, not for detection rules.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## datadog_lowercase_operator
+
+A lower-case `and`, `or` or `not` stands between field clauses or in a value group, where Datadog reads it as a search term, not an operator.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## datadog_mixed_boolean
+
+A Datadog search puts OR beside an AND, written or implied, without parentheses: AND binds tighter, as VRL reads it (unverified on Cloud SIEM).
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## datadog_parse_error
+
+The Datadog search does not parse: an unbalanced bracket, a dangling operator, an empty group, a field with no value, two modifiers in a row, or an unclosed phrase.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## datadog_pipelines_only
+
+A Datadog search uses Observability Pipelines syntax (`_exists_:`, `_missing_:`, a quoted field name), which log search does not read the same way.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## datadog_range
+
+A Datadog range is malformed (a missing bound, a lower-case `to`), or mixes an inclusive and an exclusive bound.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## datadog_regex
+
+A Datadog search term holds `~` or `^`: the search syntax has no regular expression, fuzzy or boost operator.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## datadog_symbol_operator
+
+`&&` or `||` stands between Datadog search clauses: Datadog's docs list them as characters to escape; write AND or OR.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## datadog_unescaped_colon
+
+A Datadog search value holds an unescaped `:`, which Datadog's docs say to escape.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## datadog_unescaped_special
+
+A Datadog search term holds an unescaped `!`, `<` or `>`, or a value starts with an unescaped `-`, which Datadog reads as an exclusion: escape it with `\`.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## datadog_unknown_attribute
+
+A Datadog search field is a dotted bare key, searched as a tag, where an `@attribute` was probably meant.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
+
+## datadog_wildcard_in_phrase
+
+A `*` or `?` touches a word inside a quoted phrase, where it is punctuation, not a wildcard.
+
+Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+
+### Example
+
+```text
+opentide validate
+```
+
+### How to fix
+
+Change the file where the frame points, then run `opentide validate` again.
 
 ## defender_output_columns
 
