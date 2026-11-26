@@ -161,8 +161,11 @@ pub(crate) fn nrt_findings(source: &str, block: &Node, query: &InjectedQuery) ->
         ));
     }
     if distinct == ["EmailEvents"] {
+        // A column the query defines under an excluded name (`extend
+        // LatestDeliveryAction = ...`) is its own, not the table's.
+        let defined = |name: &str| shape.defined.iter().any(|(own, _)| own == name);
         for (name, span) in &shape.names {
-            if EMAIL_EVENTS_EXCLUDED.contains(&name.as_str()) {
+            if EMAIL_EVENTS_EXCLUDED.contains(&name.as_str()) && !defined(name) {
                 found.push((
                     *span,
                     format!(
@@ -263,11 +266,34 @@ mod tests {
             nrt("NRT", "// recent\nDeviceEvents // all of them\n| take 1"),
             [(7, "// recent".to_owned())]
         );
-        // EmailEvents' excluded columns.
+        // EmailEvents' excluded columns, but not a column of that name the
+        // query defines, nor the name a rename gives.
         assert_eq!(
             nrt(
                 "NRT",
                 "EmailEvents | where LatestDeliveryAction == \"Blocked\""
+            ),
+            [(7, "LatestDeliveryAction".to_owned())]
+        );
+        assert_eq!(
+            nrt(
+                "NRT",
+                "EmailEvents\n| extend LatestDeliveryAction = \"n/a\"\n\
+                 | where LatestDeliveryAction == \"n/a\""
+            ),
+            []
+        );
+        assert_eq!(
+            nrt(
+                "NRT",
+                "EmailEvents | project-rename LatestDeliveryAction = DeliveryAction"
+            ),
+            []
+        );
+        assert_eq!(
+            nrt(
+                "NRT",
+                "EmailEvents | project-rename Action = LatestDeliveryAction"
             ),
             [(7, "LatestDeliveryAction".to_owned())]
         );

@@ -29,8 +29,14 @@ pub struct Shape {
     pub externaldata: Vec<ByteSpan>,
     /// Each `//` comment.
     pub comments: Vec<ByteSpan>,
-    /// Each column name the query refers to (unquoted), with its span.
+    /// Each column name the query reads (unquoted), with its span: a name
+    /// in [`Shape::defined`]'s place is not one.
     pub names: Vec<(String, ByteSpan)>,
+    /// Each column name an operator defines (unquoted), with its span: an
+    /// assignment's left-hand name (`extend A = 1`, `summarize N = count()`,
+    /// each name of a tuple assignment) and the new name of a
+    /// `project-rename`.
+    pub defined: Vec<(String, ByteSpan)>,
 }
 
 /// The shape of `source`, or `None` when it has a syntax error: a broken
@@ -81,8 +87,12 @@ pub fn shape(source: &str) -> Option<Shape> {
                 K::NAME_REF => {
                     let name = crate::syntax_util::name(source, &node);
                     if !name.is_empty() {
-                        out.names
-                            .push((name.to_owned(), span(crate::syntax_util::range(&node))));
+                        let at = (name.to_owned(), span(crate::syntax_util::range(&node)));
+                        if defines(&node) {
+                            out.defined.push(at);
+                        } else {
+                            out.names.push(at);
+                        }
                     }
                 }
                 _ => {}
@@ -94,6 +104,23 @@ pub fn shape(source: &str) -> Option<Shape> {
         .filter(|(name, _)| !bound.contains(name))
         .collect();
     Some(out)
+}
+
+/// Whether the `NAME_REF` `name_ref` is a name an operator defines: the
+/// first name of an assignment or of a `project-rename` item (its new
+/// name), or a name of an assignment's tuple.
+fn defines(name_ref: &SyntaxNode) -> bool {
+    let Some(parent) = name_ref.parent() else {
+        return false;
+    };
+    match parent.kind() {
+        K::ASSIGNMENT | K::RENAME_ITEM => parent
+            .children()
+            .find(|child| child.kind() == K::NAME_REF)
+            .is_some_and(|first| first == *name_ref),
+        K::NAME_TUPLE => true,
+        _ => false,
+    }
 }
 
 /// The first identifier directly under `node`: a `let`'s or a parameter's
@@ -195,6 +222,24 @@ mod tests {
                 .names
                 .iter()
                 .any(|(name, _)| name == "LatestDeliveryAction"),
+            "{found:?}"
+        );
+    }
+
+    #[test]
+    fn a_name_an_operator_defines_is_not_a_name_it_reads() {
+        let names = |found: &[(String, ByteSpan)]| -> Vec<String> {
+            found.iter().map(|(name, _)| name.clone()).collect()
+        };
+        let found = shape(
+            "EmailEvents\n| extend A = DeliveryAction, B = 1\n\
+             | project-rename D = DeliveryLocation\n| summarize N = count() by A",
+        )
+        .unwrap();
+        assert_eq!(names(&found.defined), ["A", "B", "D", "N"], "{found:?}");
+        assert_eq!(
+            names(&found.names),
+            ["DeliveryAction", "DeliveryLocation", "A"],
             "{found:?}"
         );
     }

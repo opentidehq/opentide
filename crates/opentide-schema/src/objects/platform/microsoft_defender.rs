@@ -1673,23 +1673,27 @@ fn limit_advisories(block: &Node) -> Vec<super::Advisory> {
     found
 }
 
-/// The distinct columns `text` references as `{{Column}}`, in order of
-/// first use: the text between `{{` and the next `}}`, trimmed, when it is
-/// not empty and holds no brace.
+/// A `{{Column}}` placeholder: an identifier between the braces, with no
+/// space. The docs show only that form ("User {{AccountName}} unexpectedly
+/// signed in from {{Location}}"), so neither braces around other text (JSON,
+/// prose) nor a spaced `{{ Column }}`, whose substitution is not documented,
+/// count as a column.
+static PLACEHOLDER: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+    #[expect(clippy::expect_used, reason = "a literal pattern")]
+    regex::Regex::new(r"\{\{([A-Za-z_][A-Za-z0-9_]*)\}\}").expect("valid regex")
+});
+
+/// The distinct columns `text` references as `{{Column}}` ([`PLACEHOLDER`]'s
+/// form), in order of first use.
 #[must_use]
 pub fn placeholder_columns(text: &str) -> Vec<&str> {
     let mut columns: Vec<&str> = Vec::new();
     // Seen columns, so a text of many placeholders is read in linear time.
     let mut seen: std::collections::HashSet<&str> = std::collections::HashSet::new();
-    let mut rest = text;
-    while let Some(open) = rest.find("{{") {
-        let inner = &rest[open + 2..];
-        let Some(close) = inner.find("}}") else {
-            break;
-        };
-        let column = inner[..close].trim();
-        rest = &inner[close + 2..];
-        if !column.is_empty() && !column.contains(['{', '}']) && seen.insert(column) {
+    for found in PLACEHOLDER.captures_iter(text) {
+        if let Some(column) = found.get(1).map(|m| m.as_str())
+            && seen.insert(column)
+        {
             columns.push(column);
         }
     }

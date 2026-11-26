@@ -83,19 +83,18 @@ The specification sends near real time as `PT0S` (`frequency: NRT`).
 
 1. `ID=$(uuidgen | tr A-Z a-z); g -X POST "$BASE" -d "$(body $ID PT0S)"`
 2. `g "$BASE/$ID" | jq .schedule`
+3. Once steps 1 and 2 have settled the encoding, create an NRT rule whose query starts with a `//`
+   comment line, then one that joins `DeviceInfo`, and enable each. Microsoft documents neither as
+   runnable continuously; `lint` reports both as `microsoft_defender_nrt_query` (#1890).
 
 **Expected:** `201`, and the rule reads back with a near-real-time schedule (the portal shows
-"Continuous (NRT)").
+"Continuous (NRT)"). For step 3, record whether Graph refuses each rule (and its message), at
+create or at enable, or creates it: a refusal makes the warning an error `validate` reports.
 
 **If not:** repeat step 1 with `PT0M`, then `P0D`. Record which one Graph accepts. If one does,
 change `Duration::iso8601` in `crates/opentide-schema/src/objects/platform/microsoft_defender.rs`
 (the `NearRealTime` arm) and the spec's `schedule` table. If none does, Graph cannot create an NRT
 rule through this API: report it, and the spec makes `NRT` a `microsoft_defender_frequency` error.
-
-3. Create an NRT rule whose query starts with a `//` comment line, then one that joins
-   `DeviceInfo`. Microsoft documents neither as runnable continuously; `lint` reports both as
-   `microsoft_defender_nrt_query` (#1890). Record whether Graph refuses each (and its message) or
-   creates it. A refusal makes the warning an error `validate` reports.
 
 ## 2. 404 and 409
 
@@ -363,7 +362,7 @@ After the curl checks, run the platform the way users will:
 
 | # | Question | Result | Graph's answer, if different | Follow-up |
 |---|----------|--------|-------------------------------|-----------|
-| 1 | NRT encoding (`PT0S`) | | | |
+| 1 | NRT encoding (`PT0S`); an NRT query with a comment or a join (step 3) | | | |
 | 2 | 404 on PATCH and DELETE, 409 on POST | | | |
 | 3 | PATCH replaces nested objects | | | |
 | 4 | Tactic values (`DefenseEvasion`), v19 ids | | | |
@@ -371,6 +370,6 @@ After the curl checks, run the platform the way users will:
 | 6 | Every entity kind accepted; none required | | | |
 | 7 | Frequencies, largest lookback | | | |
 | 8 | `opentide-<uuid>` as client id, compared exactly | | | |
-| 9 | Custom detail count and names | | | |
+| 9 | Custom detail count and names; four `{{Column}}` columns in a title (step 3) | | | |
 | 10 | 409 on a held name or alert title, disabled or renamed | | | |
 | 11 | Required identifiers per entity kind | | | |

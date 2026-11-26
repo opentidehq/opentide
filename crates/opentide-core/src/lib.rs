@@ -2266,7 +2266,7 @@ pub mod codes {
                 "`alert.title` or `alert.description` references more than the three `{{Column}}` columns Defender documents per field."
             }
             MICROSOFT_DEFENDER_NRT_QUERY => {
-                "A `frequency: NRT` rule's query is one Defender documents it cannot run continuously: it reads more than one table or a table outside the NRT list, joins, unions, uses externaldata, or has a comment."
+                "A `frequency: NRT` rule's query is one Defender documents it cannot run continuously: it reads more than one table or a table outside the NRT list, joins, unions, uses externaldata, has a comment, or reads `EmailEvents`' `LatestDeliveryLocation` or `LatestDeliveryAction`."
             }
             _ => return None,
         })

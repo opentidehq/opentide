@@ -692,8 +692,12 @@ fn custom_details_past_the_documented_limits_earn_the_advisory() {
 
 #[test]
 fn more_than_three_columns_in_a_title_or_description_earn_the_advisory() {
-    let three = "      title: \"{{A}} on {{ B }} by {{C}}, {{A}} again\"\n";
+    let three = "      title: \"{{A}} on {{B}} by {{C}}, {{A}} again\"\n";
     assert_eq!(alert_advisories(three), []);
+    // Braces around anything but a bare identifier are not a column: JSON,
+    // prose, and the spaced form, whose substitution is not documented.
+    let not_columns = "      description: '{{A}} {{B}} {{C}} {{ D }} {{\"k\": 1}} {{two words}}'\n";
+    assert_eq!(alert_advisories(not_columns), []);
     let four = "      title: \"{{A}} {{B}} {{C}} {{D}}\"\n      description: \"{{A}} {{B}} {{C}} \
                 {{D}}\"\n";
     assert_eq!(
@@ -710,8 +714,8 @@ fn more_than_three_columns_in_a_title_or_description_earn_the_advisory() {
         ]
     );
     assert_eq!(
-        placeholder_columns("{{A}} {{ A }} {{}} {{ {x} }} {{B}} {{C"),
-        ["A", "B"]
+        placeholder_columns("{{A}} {{ A }} {{}} {{ {x} }} {{B}} {{_c1}} {{1d}} {{a.b}} {{C"),
+        ["A", "B", "_c1"]
     );
 }
 

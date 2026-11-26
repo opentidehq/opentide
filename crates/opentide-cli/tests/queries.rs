@@ -948,9 +948,76 @@ fn lint_reports_the_microsoft_defender_documented_limits() {
     );
 }
 
+/// #1890: `lint --strict` fails on the three Defender limit warnings, and
+/// `[queries.codes]` in lint.toml, the changelog's Upgrade step, sets each
+/// to `info`, which keeps them reported without failing: the block
+/// advisories as the engine's NRT finding.
+#[test]
+fn lint_strict_fails_on_the_defender_limits_unless_lint_toml_lowers_them() {
+    let details = (1..=21)
+        .map(|n| format!("        Detail{n}: Column{n}\n"))
+        .collect::<Vec<_>>()
+        .concat();
+    let text = rule(&format!(
+        "  microsoft_defender:\n    status: STAGING\n    schedule:\n      frequency: NRT\n    \
+         query: |\n      // all devices\n      DeviceEvents\n    entities:\n      hosts: \
+         [{{device_id: DeviceId}}]\n    alert:\n      title: \"{{{{A}}}} {{{{B}}}} {{{{C}}}} \
+         {{{{D}}}}\"\n      custom_details:\n{details}"
+    ));
+    const CODES: [&str; 3] = [
+        "microsoft_defender_custom_details_limit",
+        "microsoft_defender_nrt_query",
+        "microsoft_defender_placeholder_limit",
+    ];
+    let defender = |document: &Value| -> Vec<(String, String)> {
+        let mut found: Vec<(String, String)> = document["findings"]
+            .as_array()
+            .unwrap_or_else(|| panic!("{document}"))
+            .iter()
+            .filter(|finding| CODES.contains(&finding["code"].as_str().unwrap()))
+            .map(|finding| {
+                (
+                    finding["code"].as_str().unwrap().to_owned(),
+                    finding["severity"].as_str().unwrap().to_owned(),
+                )
+            })
+            .collect();
+        found.sort();
+        found
+    };
+    let strict = lint_run(&text, &["--strict"]);
+    assert_eq!(strict["exit_code"], 1, "{strict}");
+    assert_eq!(
+        defender(&strict),
+        CODES.map(|code| (code.to_owned(), "warning".to_owned())),
+        "{strict}"
+    );
+    let lowered = lint_run_with(
+        &text,
+        Some(
+            "[queries.codes]\nmicrosoft_defender_custom_details_limit = \"info\"\n\
+             microsoft_defender_placeholder_limit = \"info\"\n\
+             microsoft_defender_nrt_query = \"info\"\n",
+        ),
+        &["--strict"],
+    );
+    assert_eq!(
+        defender(&lowered),
+        CODES.map(|code| (code.to_owned(), "info".to_owned())),
+        "{lowered}"
+    );
+    assert_eq!(lowered["exit_code"], 0, "{lowered}");
+}
+
 /// `opentide --json lint` with `words` after it, in-process, in a workspace
 /// on disk holding `text` as its one rule: the JSON document.
 fn lint_run(text: &str, words: &[&str]) -> Value {
+    lint_run_with(text, None, words)
+}
+
+/// [`lint_run`] with `lint_toml`, when given, as the workspace's
+/// `.opentide/configurations/lint.toml`.
+fn lint_run_with(text: &str, lint_toml: Option<&str>, words: &[&str]) -> Value {
     use std::sync::Mutex;
     #[derive(Clone, Default)]
     struct Sink(Arc<Mutex<Vec<u8>>>);
@@ -968,6 +1035,9 @@ fn lint_run(text: &str, words: &[&str]) -> Value {
     std::fs::create_dir_all(ws.join(".opentide/configurations")).unwrap();
     std::fs::create_dir_all(ws.join("objects/rules")).unwrap();
     std::fs::write(ws.join("objects/rules/a.yaml"), text).unwrap();
+    if let Some(lint_toml) = lint_toml {
+        std::fs::write(ws.join(".opentide/configurations/lint.toml"), lint_toml).unwrap();
+    }
     let home = scratch.path().join("home");
     std::fs::create_dir_all(&home).unwrap();
     let host = opentide_cli::Host {
