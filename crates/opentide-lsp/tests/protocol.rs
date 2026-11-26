@@ -731,6 +731,90 @@ fn code_actions_follow_the_context() {
     assert!(found.iter().all(|a| a["kind"] == "quickfix"), "{found:#?}");
 }
 
+/// A Microsoft Defender rule whose block names a column its query does not
+/// return, and whose query ends without a `project` (#1885).
+const DEFENDER_RULE: &str = "name: Defender rule
+configurations:
+  microsoft_defender:
+    query: |
+      DeviceProcessEvents
+      | where FileName =~ 'powershell.exe' // encoded
+    entities:
+      hosts:
+        - device_id: DevicId
+      accounts:
+        - upn: AccountUpn
+";
+
+/// #1885: the Defender block's columns against its query's output, with a
+/// quick fix for each: the column it most likely means, and the `| project`
+/// appended after the query's last operator, on its line.
+#[test]
+fn defender_output_findings_have_quick_fixes() {
+    let scratch = workspace("defender_output", false);
+    let uri = file_uri(&scratch.0.join("objects/rules/defender.yaml"));
+    let (mut lsp, _) = start(json!({ "capabilities": {}, "rootUri": file_uri(&scratch.0) }));
+    open(&mut lsp, &uri, "opentide-yaml", DEFENDER_RULE);
+    let diagnostics = published_for(&mut lsp, &uri);
+    let find = |code: &str| {
+        diagnostics
+            .iter()
+            .find(|d| d["code"] == code)
+            .unwrap_or_else(|| panic!("{code}: {diagnostics:#?}"))
+            .clone()
+    };
+    let column = find("microsoft_defender_column_not_in_output");
+    assert_eq!(column["severity"], 1, "{column}");
+    assert_eq!(
+        column["range"]["start"],
+        json!({ "line": 8, "character": 21 })
+    );
+    assert_eq!(
+        column["range"]["end"],
+        json!({ "line": 8, "character": 28 })
+    );
+    let unprojected = find("microsoft_defender_unprojected_output");
+    assert_eq!(unprojected["severity"], 2, "{unprojected}");
+    assert_eq!(
+        unprojected["range"]["start"],
+        json!({ "line": 5, "character": 8 })
+    );
+    assert_eq!(
+        unprojected["range"]["end"],
+        json!({ "line": 5, "character": 42 })
+    );
+
+    let actions = |lsp: &mut Lsp, diagnostic: &Value| {
+        lsp.request(
+            "textDocument/codeAction",
+            json!({
+                "textDocument": { "uri": uri },
+                "range": diagnostic["range"],
+                "context": { "diagnostics": [diagnostic] }
+            }),
+        )["result"]
+            .as_array()
+            .unwrap()
+            .clone()
+    };
+    let found = actions(&mut lsp, &column);
+    assert_eq!(found.len(), 1, "{found:#?}");
+    assert_eq!(found[0]["title"], "Apply suggestion: DeviceId");
+    let edit = &found[0]["edit"]["changes"][&uri][0];
+    assert_eq!(edit["range"], column["range"]);
+    assert_eq!(edit["newText"], "DeviceId");
+
+    let found = actions(&mut lsp, &unprojected);
+    assert_eq!(found.len(), 1, "{found:#?}");
+    let project = "| project Timestamp, DeviceId, ReportId, AccountUpn";
+    assert_eq!(found[0]["title"], format!("Append {project}"));
+    let edit = &found[0]["edit"]["changes"][&uri][0];
+    // An insertion after the operator, before the line's comment.
+    assert_eq!(edit["range"]["start"], unprojected["range"]["end"]);
+    assert_eq!(edit["range"]["end"], unprojected["range"]["end"]);
+    assert_eq!(edit["newText"], format!(" {project}"));
+}
+
 /// #887: an unknown SPL command's fix replaces the command, not its stage.
 #[test]
 fn an_spl_command_fix_keeps_the_stage_s_arguments() {

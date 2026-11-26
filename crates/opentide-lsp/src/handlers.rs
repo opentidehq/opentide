@@ -2276,9 +2276,15 @@ fn handle_code_action(
             let range = finding.diagnostic.range;
             let start = Position::new(range.start.line, range.start.character);
             let end = Position::new(range.end.line, range.end.character);
-            let replaced = suggestion_range(&finding.code, Range::new(start, end), text);
+            let (replaced, new_text) =
+                suggestion_edit(&finding.code, Range::new(start, end), suggestion, text);
+            let title = if finding.code == codes::MICROSOFT_DEFENDER_UNPROJECTED_OUTPUT {
+                format!("Append {suggestion}")
+            } else {
+                format!("Apply suggestion: {suggestion}")
+            };
             actions.push(lsp::CodeActionOrCommand::CodeAction(lsp::CodeAction {
-                title: format!("Apply suggestion: {suggestion}"),
+                title,
                 kind: Some(lsp::CodeActionKind::QUICKFIX),
                 diagnostics: Some(vec![finding.diagnostic.clone()]),
                 edit: Some(lsp::WorkspaceEdit {
@@ -2286,7 +2292,7 @@ fn handle_code_action(
                         uri.clone(),
                         vec![lsp::TextEdit {
                             range: lsp_range(replaced),
-                            new_text: suggestion.clone(),
+                            new_text,
                         }],
                     )])),
                     ..Default::default()
@@ -2498,6 +2504,22 @@ fn declare_actions(
     actions
 }
 
+/// The edit a suggestion makes: it replaces [`suggestion_range`], except
+/// `microsoft_defender_unprojected_output`'s, a `| project` appended after
+/// the query's last operator, which the finding underlines (#1885): on the
+/// same line, so a block scalar's indentation and a trailing comment stay.
+fn suggestion_edit(
+    code: &str,
+    range: Range,
+    suggestion: &str,
+    text: Option<&str>,
+) -> (Range, String) {
+    if code == codes::MICROSOFT_DEFENDER_UNPROJECTED_OUTPUT {
+        return (Range::new(range.end, range.end), format!(" {suggestion}"));
+    }
+    (suggestion_range(code, range, text), suggestion.to_owned())
+}
+
 /// What a suggestion replaces: the diagnostic's range, but for the codes
 /// whose range is a whole pipe stage (an unknown KQL operator, an unknown SPL
 /// command), only the word the stage starts with, so applying the suggestion
@@ -2543,9 +2565,11 @@ fn fix_all(session: &Session, uri: &lsp::Uri) -> Option<lsp::CodeActionOrCommand
         .filter(|d| d.code != FILENAME_MISMATCH)
         .filter_map(|d| {
             let text = session.docs.get(uri.as_str()).map(|doc| doc.text.as_str());
-            Some((
-                suggestion_range(&d.code, d.range, text),
-                d.suggestion.clone()?,
+            Some(suggestion_edit(
+                &d.code,
+                d.range,
+                d.suggestion.as_deref()?,
+                text,
             ))
         })
         .collect();
