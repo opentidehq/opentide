@@ -2,7 +2,7 @@
   "method": "POST",
   "url": "https://graph.microsoft.com/beta/security/rules/detectionRules",
   "body": {
-    "id": "00000000-0000-4000-8003-0000000000d5",
+    "id": "opentide-00000000-0000-4000-8003-0000000000d5",
     "displayName": "Encoded PowerShell with follow-on activity",
     "description": "Encoded PowerShell followed by network, mail, and identity activity: every Microsoft Defender key set.\n",
     "status": "enabled",

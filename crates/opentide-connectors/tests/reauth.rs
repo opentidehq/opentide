@@ -250,9 +250,10 @@ fn sentinel_log_analytics_signs_in_again_once_after_a_401() {
 }
 
 /// The golden deploy's cassette, and the index of its update of rule
-/// `...0000d2`: a `PATCH` the stand-in answered 200.
+/// `opentide-...0000d2` (its Defender rule id, #1886): a `PATCH` the
+/// stand-in answered 200.
 const DEFENDER_DEPLOY: &str = "golden/deploy-defender-continues";
-const DEFENDER_RULE: &str = "00000000-0000-4000-8047-0000000000d2";
+const DEFENDER_RULE: &str = "opentide-00000000-0000-4000-8047-0000000000d2";
 
 fn defender_update() -> (usize, Json) {
     let recorded = cassette(DEFENDER_DEPLOY);

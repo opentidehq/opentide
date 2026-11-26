@@ -87,6 +87,7 @@ pub const FIXTURES: &[&str] = &[
     "tide-corpus-folders",
     "tide-corpus-typo",
     "tide-corpus-bad-values",
+    "tide-corpus-defender-entity-identifier",
     "tide-corpus-lint-code-note",
     "tide-corpus-lint-unknown-code",
     "tide-corpus-lint-engine-warning",
@@ -327,7 +328,8 @@ pub fn fixture(name: &str, ws: &Path) {
         | "tide-corpus-lint-unknown-code"
         | "tide-corpus-lint-engine-warning"
         | "tide-corpus-lint-retired-code"
-        | "tide-corpus-bad-values" => {
+        | "tide-corpus-bad-values"
+        | "tide-corpus-defender-entity-identifier" => {
             fixture("tide-corpus", ws);
             apply_edits(name, ws);
         }

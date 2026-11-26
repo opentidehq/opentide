@@ -1,6 +1,6 @@
 ---
 title: Microsoft Defender tenant test plan
-description: Step-by-step checks a person with a Microsoft Defender XDR tenant runs to confirm or correct the nine positions microsoft-defender-1.0 takes where the Graph beta docs are silent.
+description: Step-by-step checks a person with a Microsoft Defender XDR tenant runs to confirm or correct the ten positions microsoft-defender-1.0 takes where the Graph beta docs are silent.
 ---
 
 # Microsoft Defender tenant test plan
@@ -9,7 +9,7 @@ description: Step-by-step checks a person with a Microsoft Defender XDR tenant r
 detection API, `https://graph.microsoft.com/beta/security/rules/detectionRules`
 ([microsoft-defender-1.0](https://github.com/opentidehq/specifications/blob/main/specs/platforms/microsoft-defender-1.0.md),
 [RFC 0021](https://github.com/opentidehq/specifications/blob/main/rfcs/0021-defender-graph-beta-detection-rules.md)).
-The Graph documentation leaves nine questions open. opentide 1.0 implements the position the
+The Graph documentation leaves ten questions open. opentide 1.0 implements the position the
 specification takes for each; this page is how someone with a tenant confirms each position, or
 records what Graph does instead, before 1.0.0 GA.
 
@@ -98,9 +98,9 @@ The specification assumes `404` for an id the tenant does not have, on `PATCH` a
 and `409` for a `POST` whose `id` exists.
 
 a. Unknown id on `PATCH`:
-   `g -X PATCH "$BASE/$(uuidgen | tr A-Z a-z)" -d '{"status":"disabled"}'`
+   `g -X PATCH "$BASE/opentide-$(uuidgen | tr A-Z a-z)" -d '{"status":"disabled"}'`
 
-b. Existing id on `POST`: `ID=$(uuidgen | tr A-Z a-z); g -X POST "$BASE" -d "$(body $ID)"`, then the
+b. Existing id on `POST`: `ID=opentide-$(uuidgen | tr A-Z a-z); g -X POST "$BASE" -d "$(body $ID)"`, then the
    same `POST` again.
 
 c. `DELETE`: `g -X DELETE "$BASE/$ID"` (expect `204`), then the same `DELETE` again.
@@ -109,7 +109,7 @@ c. `DELETE`: `g -X DELETE "$BASE/$ID"` (expect `204`), then the same `DELETE` ag
 
 **If not:** record the status and the `error.code` of each answer. opentide treats only `404` as
 "absent" (`crates/opentide-connectors/src/microsoft_defender.rs`: `upsert`, `disable`, `delete`). If Graph answers `400`
-or `403` for an unknown id, the deployer must `GET {base}/{uuid}` first and decide on its `404`; if
+or `403` for an unknown id, the deployer must `GET {base}/opentide-<uuid>` first and decide on its `404`; if
 the second `POST` is not `409`, the concurrent-create path changes. Either is a spec change
 (microsoft-defender-1.0, Deploy).
 
@@ -226,14 +226,21 @@ the documented frequencies, the spec can tighten `microsoft_defender_frequency`;
 
 ## 8. The client id
 
-opentide uses the rule's lowercase canonical `metadata.uuid` as `id` and compares ids exactly.
+opentide uses `opentide-` and the rule's lowercase canonical `metadata.uuid` as `id`, and compares ids
+exactly. Graph refuses an id that does not begin with a letter (HTTP 400, "Rule ID must be either
+numeric or consist of letters, numbers, dashes, and underscores only, and begin with a letter";
+[#1886](https://github.com/opentidehq/opentide/issues/1886)), so a bare uuid fails ten times in
+sixteen. Step 4 checks that the prefix passes where a bare uuid does not.
 
-1. Create a rule with an upper-case uuid as `id`, then `GET` it with the lower-case form.
+1. Create a rule with `opentide-` and an upper-case uuid as `id`, then `GET` it with the lower-case form.
 2. Create a rule whose `id` is not a uuid (`opentide-test-1`).
 3. `GET "$BASE?\$filter=id eq '$ID'"` for a rule you created, and list `$BASE` to see how ids are
    returned.
+4. Create a rule whose `id` is a bare uuid that begins with a digit, then one whose `id` is
+   `opentide-` and that uuid.
 
-**Expected:** a lower-case uuid round-trips unchanged; record whether Graph folds case (step 1) and
+**Expected:** a lower-case id round-trips unchanged; step 4's bare uuid is refused (`400`) and
+`opentide-<uuid>` is created; record whether Graph folds case (step 1) and
 whether it takes a non-uuid id (step 2).
 
 **If not:** if Graph rewrites the id (case, braces, its own id instead of ours), deploy cannot
@@ -251,6 +258,71 @@ the identity model (RFC 0021, Identity).
 **If not / to record:** limits found become `microsoft_defender_custom_details` constraints in the
 spec and in `checks.rs` (`custom_details`).
 
+## 10. Name and alert title conflicts
+
+Graph's `409` says "A detection rule with this name, title, or rule ID already exists." opentide
+reads a `409` on create, when no rule has the id, as another rule holding the display name or the
+alert title (`microsoft_defender_rule_conflict`), and tells users upgrading from 1.0.0 to delete the
+old rule, or to rename both its name and its alert title. Check what Graph compares:
+
+1. Create rule A (`opentide-<uuid A>`, display name `N`, alert title `T`).
+2. Create rule B with another id, display name `N` and alert title `T2`.
+3. Create rule C with another id, display name `N2` and alert title `T`.
+4. Disable A, then repeat steps 2 and 3.
+5. Rename A to `N3` (its alert title still `T`), then repeat step 3; then change A's alert title
+   to `T3` and repeat it again.
+6. Delete A, then repeat steps 2 and 3.
+
+**Expected:** steps 2 and 3 answer `409` while A holds `N` or `T`, disabled or not (step 4); in
+step 5 the create is refused until A's alert title changes too; after step 6 both are created.
+
+**If not:** record which of name and title Graph compares, and whether a disabled or renamed rule
+keeps them. Correct the advice in `microsoft_defender_rule_conflict`'s message
+(`crates/opentide-connectors/src/microsoft_defender.rs`, `conflict`), its explain page, the
+changelog's Upgrade step, `docs/cli/deploy.md` and the opentidehq/skills Defender skill.
+
+## 11. Which identifiers each entity kind requires
+
+Graph's entity mapping types list their columns, not which are required. Graph checks a rule's
+mappings when it creates the rule and each time it enables it, but not on an update to a disabled
+rule (#1884); whether it checks a rule **created** disabled is an open question (step 1). One rule is
+known from production: a `registryValues` mapping with `valueNameColumn` and no `keyColumn` is
+refused with `HTTP 400 · Entity mapping for type 'RegistryValue' does not include a required
+identifier. Supported identifiers: RegKey | Name` (#1884). opentide enforces it
+(`microsoft_defender_entity_identifier`, the table `ENTITY_IDENTIFIERS` in
+`crates/opentide-schema/src/objects/platform/microsoft_defender.rs`); every other kind needs one
+of its fields.
+
+1. Create a **disabled** rule whose `registryValues` mapping sets `valueNameColumn` alone, and
+   record whether the create is refused (the known 400) or accepted; if accepted, enable it and
+   record the refusal. This says whether Graph checks a rule created disabled.
+2. For each kind with more than one field (`hosts`, `accounts`, `files`, `processes`, `ips`,
+   `dns`, `registryValues`, `mailMessages`, `mailClusters`, `cloudApplications`,
+   `securityGroups`), create a **disabled** rule whose only mapping sets one column, once per
+   column (`entityMappings: {"ips": [{"scopeColumn": "RemoteIPType"}]}`), with a query that
+   projects it.
+3. Enable each rule Graph created (`PATCH {"status": "enabled"}`), then disable it again.
+4. For `registryValues`, also try `keyColumn` alone.
+5. For `hosts` and `accounts`, note which mappings give the alert an impacted device or user: a
+   host by `netBiosNameColumn` with `ntDomainColumn` or `dnsDomainColumn`, an account by
+   `nameColumn` with `ntDomainColumn`, `dnsDomainColumn` or `upnSuffixColumn`, and each by a
+   weak column alone (`nameColumn` for an account, `dnsDomainColumn` for a host).
+
+**Expected:** step 1: record the answer (opentide assumes either). Steps 2 to 4: every
+single-column mapping is accepted at create and at enable, except `registryValues` with
+`valueNameColumn` alone (refused, as above).
+
+**If not:** record each refused combination with Graph's message (its "Supported identifiers"
+list names the kind's identifiers). Each becomes a row of `ENTITY_IDENTIFIERS` with
+`Evidence::Observed`, the message as its reference and the date, and a case in
+`crates/opentide-schema/tests/microsoft_defender.rs`; and a spec change (microsoft-defender-1.0,
+Constraints). Step 5 settles `microsoft_defender_impacted_asset_identifier`: it warns, without failing
+`--strict` (`STRICT_EXEMPT_WARNINGS`), on a `hosts` or `accounts` mapping with none of the
+columns the custom detection wizard maps to an impacted asset (`DeviceId`, `DeviceName`;
+`AccountObjectId`, `AccountSid`, `AccountUpn`) and none of Sentinel's strong combinations. If the
+weak mappings still show an impacted asset, drop the warning; if Graph refuses them, make it an
+error with `Evidence::Observed`.
+
 ## End to end with opentide
 
 After the curl checks, run the platform the way users will:
@@ -262,13 +334,15 @@ After the curl checks, run the platform the way users will:
    `deployment.toml` whose strategy is `PREVIEW`.
 4. `opentide validate` and `opentide validate query --platform microsoft_defender --live <file>`.
 5. `opentide deploy --dry-run --platform microsoft_defender --json`: the payload is
-   `PATCH {base}/{uuid}` with the body.
+   `PATCH {base}/opentide-<uuid>` with the body.
 6. `opentide deploy --platform microsoft_defender`: the rule is **created** (`404` then `POST`).
    Deploy again: it is **updated** (one `PATCH`).
 7. Set a DISABLEMENT status and deploy: `status: disabled` in the portal. Deploy the same rule with
    another uuid that the tenant does not hold: `microsoft_defender_rule_absent`, nothing created.
-8. Set a DELETION status and deploy: the rule is gone. Deploy again: "already gone".
-9. Delete the rule file and run `opentide deploy --prune`: a rule deployed from it is deleted by uuid.
+8. Set a DELETION status and deploy: the rule is gone. Deploy again: skipped, "no rule
+   opentide-<uuid> on the tenant".
+9. Delete the rule file and run `opentide deploy --prune`: a rule deployed from it is deleted by
+   `opentide-<uuid>`.
 
 **Expected:** each step as written. Any difference is a bug to file against opentide, with the
 `--json` output attached.
@@ -284,5 +358,7 @@ After the curl checks, run the platform the way users will:
 | 5 | Parent in `technique`, sub in `subTechniques` | | | |
 | 6 | Every entity kind accepted; none required | | | |
 | 7 | Frequencies, largest lookback | | | |
-| 8 | The uuid as client id, compared exactly | | | |
+| 8 | `opentide-<uuid>` as client id, compared exactly | | | |
 | 9 | Custom detail count and names | | | |
+| 10 | 409 on a held name or alert title, disabled or renamed | | | |
+| 11 | Required identifiers per entity kind | | | |

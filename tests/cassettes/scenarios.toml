@@ -451,7 +451,7 @@ exit = 1
 
 [[scenario]]
 name = "golden/deploy-defender-continues"
-description = "deploy on Microsoft Defender's stand-in (the Graph beta custom detection API, RFC 0021), recorded with the Rust CLI: sign in; a rule the tenant lacks (PATCH 404, then POST with its uuid as id); one it holds (PATCH); one another run creates meanwhile (PATCH 404, POST 409, PATCH); a DISABLEMENT the tenant lacks (PATCH 404: microsoft_defender_rule_absent, nothing created); a DELETION already gone (DELETE 404); and an update the tenant refuses (400): that rule fails and the run goes on."
+description = "deploy on Microsoft Defender's stand-in (the Graph beta custom detection API, RFC 0021), recorded with the Rust CLI: every rule addressed as opentide-<uuid> (#1886); sign in; a rule the tenant lacks (PATCH 404, then POST with opentide-<uuid> as id); one it holds (PATCH); one another run creates meanwhile (PATCH 404, POST 409, PATCH); a DISABLEMENT the tenant lacks (PATCH 404: microsoft_defender_rule_absent, nothing created); a DELETION already gone (DELETE 404); an update the tenant refuses (400): that rule fails and the run goes on; and a rule whose alert title a rule opentide 1.0.0 left under the bare uuid still holds (PATCH 404, POST 409, PATCH 404): microsoft_defender_rule_conflict."
 client = ["/bin/sh", "-c", "cp -R tests/golden/fixtures/deploy-tenants \"$HOME/ws\" && exec {oracle}/opentide --repo \"$HOME/ws\" --json deploy --platform microsoft_defender --strategy PREVIEW --strategy RELEASE --all --keep-deprecated"]
 tenant = ["{python}", "tests/cassettes/defender/tenant.py"]
 routes = ["login.microsoftonline.com", "graph.microsoft.com"]
@@ -566,7 +566,7 @@ exit = 3
 
 [[scenario]]
 name = "golden/extract-defender"
-description = "generate extract defender on Microsoft Defender's stand-in (the Graph beta custom detection API), recorded with the Rust CLI: sign in, then the custom detections listed over two pages (`@odata.nextLink`): one setting tactics, recommended actions, entities, custom details, grouping, an automated action, a scope and incident correlation, a disabled NRT one, and one whose name differs from it only in case."
+description = "generate extract defender on Microsoft Defender's stand-in (the Graph beta custom detection API), recorded with the Rust CLI: sign in, then the custom detections listed over two pages (`@odata.nextLink`): the copy opentide 1.0.0 left under the bare uuid of the next one, renamed (skipped: one file per uuid), one deployed by opentide (`opentide-<uuid>`) setting tactics, recommended actions, entities, custom details, grouping, an automated action, a scope and incident correlation, a disabled NRT one, and one whose name differs from it only in case."
 client = ["/bin/sh", "-c", "cp -R tests/golden/fixtures/tenants \"$HOME/ws\" && cd \"$HOME/ws\" && exec {oracle}/opentide --json generate extract defender"]
 tenant = ["{python}", "tests/cassettes/defender/tenant.py"]
 routes = ["login.microsoftonline.com", "graph.microsoft.com"]

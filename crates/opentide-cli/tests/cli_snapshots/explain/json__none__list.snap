@@ -1330,11 +1330,15 @@ exit: 0
     },
     {
       "code": "microsoft_defender_column_type",
-      "meaning": "A Microsoft Defender entity or action is mapped from a column that is not text."
+      "meaning": "A Microsoft Defender entity or action is mapped from a column that holds no identifier, name or address."
     },
     {
       "code": "microsoft_defender_custom_details",
       "meaning": "A Microsoft Defender block's `alert.custom_details` is not a mapping of non-blank names to result columns."
+    },
+    {
+      "code": "microsoft_defender_entity_identifier",
+      "meaning": "A Microsoft Defender entity mapping lacks an identifier Graph requires of its kind."
     },
     {
       "code": "microsoft_defender_entity_kind",
@@ -1351,6 +1355,10 @@ exit: 0
     {
       "code": "microsoft_defender_grouping",
       "meaning": "A Microsoft Defender block's `alert.grouping` is not `alert_per_event` or `single_alert`."
+    },
+    {
+      "code": "microsoft_defender_impacted_asset_identifier",
+      "meaning": "A Microsoft Defender device or user mapping sets no strong identifier of its impacted asset."
     },
     {
       "code": "microsoft_defender_incident",
@@ -1375,6 +1383,10 @@ exit: 0
     {
       "code": "microsoft_defender_rule_absent",
       "meaning": "A Microsoft Defender rule to disable is not on the tenant, so nothing was disabled or created."
+    },
+    {
+      "code": "microsoft_defender_rule_conflict",
+      "meaning": "Graph refused to create a Microsoft Defender rule because another rule most likely holds its display name or alert title."
     },
     {
       "code": "microsoft_defender_schema",
@@ -1993,13 +2005,13 @@ exit: 0
   "duration_ms": 0,
   "exit_code": 0,
   "failure": null,
-  "message": "495 diagnostic codes",
+  "message": "498 diagnostic codes",
   "next_actions": [],
   "ok": true,
   "schema_version": 1,
   "status": "completed",
   "summary": {
-    "codes": 495
+    "codes": 498
   }
 }
 

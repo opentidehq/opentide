@@ -1,7 +1,8 @@
 //! Microsoft Defender: the custom detection rule a deploy sends to one
 //! tenant through the Microsoft Graph beta custom detection API
 //! (microsoft-defender-1.0, Request body). Create and update send the same
-//! body; create adds `id`, the rule's lowercase canonical `metadata.uuid`.
+//! body; create adds `id`, the rule's Defender rule id ([`rule_id`]:
+//! `opentide-` and its lowercase canonical `metadata.uuid`, #1886).
 //! A key the block leaves unset is omitted, never sent as `null`, and no
 //! deprecated Graph property is sent.
 
@@ -380,9 +381,51 @@ pub fn body(cx: &Context<'_>, rule: &Rule, tenant: &str) -> Result<Json, Compile
     body_with_warnings(cx, rule, tenant).map(|(body, _)| body)
 }
 
-/// The Defender rule id of `rule`: its lowercase canonical `metadata.uuid`.
+/// What every Defender rule id opentide gives a rule starts with (#1886):
+/// Graph refuses a rule id that does not begin with a letter, and a UUID
+/// begins with a digit ten times in sixteen.
+pub const RULE_ID_PREFIX: &str = "opentide-";
+
+/// The Defender rule id of `rule`: [`rule_id_of`] its `metadata.uuid`.
 pub fn rule_id(rule: &Rule) -> String {
-    canonical_uuid(&rule.uuid).to_ascii_lowercase()
+    rule_id_of(&rule.uuid)
+}
+
+/// The Defender rule id of the rule whose `metadata.uuid` is `uuid`:
+/// [`RULE_ID_PREFIX`], then the lowercase canonical uuid
+/// (`opentide-8f3c4a7e-...`, 45 characters, within Graph's 100). Every
+/// request that names a rule (deploy, disable, delete, `--prune`, the dry
+/// run's `api_request`) takes its id from here. An id that already starts
+/// with the prefix names the same rule, so it is returned as the same id.
+pub fn rule_id_of(uuid: &str) -> String {
+    format!("{RULE_ID_PREFIX}{}", bare_uuid(uuid))
+}
+
+/// The lowercase canonical uuid `id` names, with or without
+/// [`RULE_ID_PREFIX`] (any case).
+fn bare_uuid(id: &str) -> String {
+    let trimmed = id.trim();
+    let bare = trimmed
+        .get(..RULE_ID_PREFIX.len())
+        .filter(|head| head.eq_ignore_ascii_case(RULE_ID_PREFIX))
+        .map_or(trimmed, |_| &trimmed[RULE_ID_PREFIX.len()..]);
+    canonical_uuid(bare).to_ascii_lowercase()
+}
+
+/// The `metadata.uuid` a Defender rule id names: the lowercase canonical
+/// UUID after [`RULE_ID_PREFIX`] (`generate extract defender` imports an
+/// opentide rule under its own uuid), only when the id is exactly the one
+/// [`rule_id_of`] gives that uuid, as deploy addresses no other; `None` for
+/// any other id (`OPENTIDE-<UUID>`, a braced uuid, a bare uuid).
+pub fn uuid_of_rule_id(id: &str) -> Option<String> {
+    let rest = id.strip_prefix(RULE_ID_PREFIX)?;
+    let canonical = canonical_uuid(rest).to_ascii_lowercase();
+    let hex = canonical.chars().filter(|c| *c != '-').count();
+    (canonical.len() == 36
+        && hex == 32
+        && canonical.chars().all(|c| c == '-' || c.is_ascii_hexdigit())
+        && rule_id_of(&canonical) == id)
+        .then_some(canonical)
 }
 
 /// The create body: `id` first, then the update `body`.
@@ -397,15 +440,16 @@ pub fn create_body(id: &str, body: &Json) -> Json {
     Json::Object(out)
 }
 
-/// `{base}/{uuid}`.
+/// `{base}/{id}`, for a Defender rule id ([`rule_id_of`]).
 pub fn rule_url(id: &str) -> String {
     format!("{ENDPOINT}/{id}")
 }
 
 /// The first call a deploy of `rule` to `tenant` makes (microsoft-defender-1.0,
-/// Deploy): `PATCH {base}/{uuid}` with the body for an active or DISABLEMENT
-/// status, `DELETE {base}/{uuid}` for a DELETION, none for an INERT one. The
-/// `POST` a `404` leads to is not shown: a dry run reaches no tenant.
+/// Deploy): `PATCH {base}/{id}` with the body for an active or DISABLEMENT
+/// status, `DELETE {base}/{id}` for a DELETION, none for an INERT one, `id`
+/// being the rule's [`rule_id`]. The `POST` a `404` leads to is not shown: a
+/// dry run reaches no tenant.
 pub fn compile(cx: &Context<'_>, rule: &Rule, tenant: &str) -> Result<Vec<Write>, CompileError> {
     let block = block(rule)?;
     let status = block
@@ -450,6 +494,61 @@ mod tests {
             Some("CommandAndControl")
         );
         assert_eq!(tactic_rank("Inhibit Response Function"), None);
+    }
+
+    #[test]
+    fn the_rule_id_starts_with_a_letter_whatever_the_uuid() {
+        // #1886: Graph refuses an id that begins with a digit.
+        for (uuid, id) in [
+            (
+                "8F3C4A7E-0000-4000-8000-000000000001",
+                "opentide-8f3c4a7e-0000-4000-8000-000000000001",
+            ),
+            (
+                " ff19aaaa-0000-4000-8000-000000000001 ",
+                "opentide-ff19aaaa-0000-4000-8000-000000000001",
+            ),
+            (
+                "{2594bf5e000040008000000000000001}",
+                "opentide-2594bf5e-0000-4000-8000-000000000001",
+            ),
+            // An id already given names the same rule.
+            (
+                "OPENTIDE-2594BF5E-0000-4000-8000-000000000001",
+                "opentide-2594bf5e-0000-4000-8000-000000000001",
+            ),
+        ] {
+            assert_eq!(rule_id_of(uuid), id, "{uuid}");
+            assert!(id.len() <= 100);
+            assert_eq!(
+                uuid_of_rule_id(id).as_deref(),
+                id.strip_prefix(RULE_ID_PREFIX)
+            );
+        }
+    }
+
+    #[test]
+    fn only_the_id_deploy_gives_a_rule_names_its_uuid() {
+        // #1886: any other form of the id is not the rule deploy addresses.
+        for id in [
+            "8f3c4a7e-0000-4000-8000-000000000001",
+            "OPENTIDE-8F3C4A7E-0000-4000-8000-000000000001",
+            "opentide-8F3C4A7E-0000-4000-8000-000000000001",
+            "Opentide-8f3c4a7e-0000-4000-8000-000000000001",
+            "opentide-{8f3c4a7e-0000-4000-8000-000000000001}",
+            "opentide-8f3c4a7e000040008000000000000001",
+            " opentide-8f3c4a7e-0000-4000-8000-000000000001",
+            "opentide-8f3c4a7e-0000-4000-8000-000000000001 ",
+            "opentide-7506",
+            "opentide-",
+            "7506",
+        ] {
+            assert_eq!(uuid_of_rule_id(id), None, "{id}");
+        }
+        assert_eq!(
+            uuid_of_rule_id("opentide-8f3c4a7e-0000-4000-8000-000000000001").as_deref(),
+            Some("8f3c4a7e-0000-4000-8000-000000000001")
+        );
     }
 
     #[test]

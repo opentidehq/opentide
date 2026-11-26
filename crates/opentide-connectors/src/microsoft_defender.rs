@@ -1,6 +1,6 @@
 //! Microsoft Defender through the Microsoft Graph beta security API
-//! (microsoft-defender-1.0, RFC 0021): custom detection rules addressed by the
-//! rule's `metadata.uuid`, advanced hunting (`runHuntingQuery`) for
+//! (microsoft-defender-1.0, RFC 0021): custom detection rules addressed by
+//! `opentide-<metadata.uuid>` (#1886), advanced hunting (`runHuntingQuery`) for
 //! `opentide query` and `validate query --live`, and the columns a custom
 //! detection needs.
 //!
@@ -10,12 +10,16 @@
 //! new token and one resend), and sends every call to Graph's beta security
 //! API with the bearer token and `Content-Type: application/json`.
 //!
-//! Deploy keeps no deployment state ([`MicrosoftDefender::deploy`]): an
-//! active status sends `PATCH {base}/{uuid}`, and on a `404` `POST {base}`
-//! with `id`; a `409` on that `POST` (a concurrent create) is followed by one
-//! more `PATCH`. A DISABLEMENT is a `PATCH` with `status: disabled`, and a
-//! `404` there creates nothing ([`RULE_ABSENT`]). A DELETION is a `DELETE`,
-//! whose `404` is the rule already gone.
+//! Deploy keeps no deployment state ([`MicrosoftDefender::deploy`]): the
+//! rule id is `opentide-` and the rule's lowercase canonical uuid
+//! ([`opentide_compile::microsoft_defender::rule_id_of`]), since Graph
+//! refuses an id that begins with a digit. An active status sends
+//! `PATCH {base}/{id}`, and on a `404` `POST {base}` with `id`; a `409` on
+//! that `POST` (a concurrent create) is followed by one more `PATCH`, and
+//! when that one finds no rule either, the `409` was another rule holding
+//! the name ([`RULE_CONFLICT`]). A DISABLEMENT is a `PATCH` with
+//! `status: disabled`, and a `404` there creates nothing ([`RULE_ABSENT`]).
+//! A DELETION is a `DELETE`, whose `404` is the rule already gone.
 
 use std::sync::Arc;
 
@@ -492,9 +496,15 @@ pub const RULE_CREATED: &str = "microsoft_defender_rule_created";
 pub const RULE_UPDATED: &str = "microsoft_defender_rule_updated";
 /// The event of a rule deleted.
 pub const RULE_DELETED: &str = "microsoft_defender_rule_deleted";
-/// The warning of a DISABLEMENT that found no rule with the uuid on the
+/// The warning of a DISABLEMENT that found no rule with the id on the
 /// tenant: nothing is created (microsoft-defender-1.0, Diagnostics).
 pub const RULE_ABSENT: &str = "microsoft_defender_rule_absent";
+/// The failure of a create Graph refused with `409` while no rule has the
+/// id: another rule most likely holds the display name or the alert title
+/// (one an earlier opentide release created, under its bare uuid or in 0.x,
+/// or one created by hand), which Graph keeps reserved for a disabled rule
+/// too (#1886).
+pub const RULE_CONFLICT: &str = "microsoft_defender_rule_conflict";
 
 /// What one rule's deploy did.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -567,7 +577,10 @@ impl MicrosoftDefender {
     /// An active status (microsoft-defender-1.0, Deploy): `PATCH
     /// {base}/{id}` with *body*; on `404`, `POST {base}` with the body and
     /// `id`; a `409` on that `POST` (the rule was created meanwhile) gets one
-    /// more `PATCH`, never another `POST`.
+    /// more `PATCH`, never another `POST`. When that `PATCH` answers `404`
+    /// too, no rule has the id and the `409` was another rule's display
+    /// name: [`RULE_CONFLICT`]. *id* is the Defender rule id
+    /// ([`opentide_compile::microsoft_defender::rule_id_of`]).
     pub async fn upsert(
         &self,
         cx: TenantContext<'_>,
@@ -593,11 +606,41 @@ impl MicrosoftDefender {
         if answer.status != 409 {
             return Err(Self::refused(cx, "create", id, &answer));
         }
+        let conflict = answer;
         let answer = self.send(cx, Method::PATCH, &url, Some(body)).await?;
         if succeeded(answer.status) {
             return Ok(Sent::Updated);
         }
+        if answer.status == 404 {
+            return Err(Self::conflict(cx, id, &conflict));
+        }
         Err(Self::refused(cx, "update", id, &answer))
+    }
+
+    /// [`RULE_CONFLICT`]: Graph refused to create *id* with *answer*'s `409`,
+    /// and no rule has the id.
+    fn conflict(cx: TenantContext<'_>, id: &str, answer: &Answer) -> crate::connector::DeployError {
+        let tenant = &cx.tenant.label.tenant;
+        crate::connector::DeployError::rule(
+            crate::connector::DeployFailure::new(
+                RULE_CONFLICT,
+                format!(
+                    "Graph refused to create detection rule {id} on tenant {tenant}: HTTP {} \
+                     ({}). No rule has this id, so another rule most likely holds its \
+                     display name or alert title: one an earlier opentide release created \
+                     (under the bare uuid in 1.0.0, or in 0.x), or one created by hand. \
+                     Graph keeps them reserved for a disabled rule too: delete that rule in \
+                     the Defender portal (or rename both its name and its alert title), \
+                     then deploy again",
+                    answer.status,
+                    error_message(answer)
+                ),
+            )
+            .with_status(answer.status)
+            .with_field("platform", PLATFORM)
+            .with_field("tenant", tenant.as_str())
+            .with_field("detail", error_body(answer)),
+        )
     }
 
     /// A DISABLEMENT: `PATCH {base}/{id}` with *body* (`status: disabled`);
@@ -646,10 +689,12 @@ impl Deployer for MicrosoftDefender {
         crate::connector::opening(self.open_tenant(cx))
     }
 
-    /// One rule by its uuid (`request.rule_id`, lower-cased), with the
-    /// compiled update body: [`MicrosoftDefender::upsert`] for a create or an
-    /// update, [`MicrosoftDefender::disable`], [`MicrosoftDefender::delete`].
-    /// No id is recorded: `remote_id` is the uuid while the rule exists.
+    /// One rule by its Defender rule id
+    /// ([`opentide_compile::microsoft_defender::rule_id_of`] of
+    /// `request.rule_id`, the rule's uuid or that id), with the compiled
+    /// update body: [`MicrosoftDefender::upsert`] for a create or an update,
+    /// [`MicrosoftDefender::disable`], [`MicrosoftDefender::delete`]. No id
+    /// is recorded: `remote_id` is the rule id while the rule exists.
     fn deploy<'a>(
         &'a self,
         cx: TenantContext<'a>,
@@ -664,7 +709,7 @@ impl Deployer for MicrosoftDefender {
                 failed.scope = crate::connector::DeployScope::Tenant;
                 failed
             })?;
-            let id = request.rule_id.trim().to_ascii_lowercase();
+            let id = opentide_compile::microsoft_defender::rule_id_of(&request.rule_id);
             let body = || -> Result<Json, crate::connector::DeployError> {
                 serde_json::from_slice(&request.body).map_err(|error| {
                     ConnectorError::Setup {

@@ -8,17 +8,26 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Eac
 
 ### Upgrade
 
-1. If you deploy to Microsoft Defender, run `opentide validate --check queries` and fix each `microsoft_defender_column_not_in_output` and `microsoft_defender_required_columns` it reports: correct the column the block names, or add it to the query's final `project`.
-2. If you deploy to Microsoft Defender, run `opentide lint --verbose --check queries` and end each query it reports as `microsoft_defender_unprojected_output` with the `| project` it suggests.
+1. If you deploy to Microsoft Defender, before the next deploy, delete in the Defender portal every custom detection an earlier opentide release created (1.0.0's bare-uuid rules, 0.x's), or rename both its name and its alert title. Graph refuses a new rule while another holds either, even a disabled one.
+2. If you deploy to Microsoft Defender, run `opentide validate`: it now reports each `registry_values` mapping without `key` as `microsoft_defender_entity_identifier`.
+3. Add `key` to each mapping it reports, set to the column that holds the registry key (`RegistryKey`), and have the query return that column.
+4. Fix each `microsoft_defender_column_not_in_output` and `microsoft_defender_required_columns` the same run reports: correct the column the block names, or add it to the query's final `project`.
+5. If you deploy to Microsoft Defender, run `opentide lint --verbose --check queries` and end each query it reports as `microsoft_defender_unprojected_output` with the `| project` it suggests.
 
 ### Breaking
 
+- **Microsoft Defender rules are deployed as `opentide-<uuid>`** ([#1886](https://github.com/opentidehq/opentide/issues/1886)). Graph refuses an id that begins with a digit, so most bare-uuid rules failed with HTTP 400. Rules 1.0.0 deployed are no longer addressed, and a create blocked by one fails with `microsoft_defender_rule_conflict`.
+  - Deploy, disable, delete, `--prune` and the dry run's `api_request` URL use the new id
+  - The SDKs' Defender `deploy(rule_id)` always sends `opentide-<uuid>`
+  - `generate extract defender` writes one file per uuid, preferring the `opentide-` rule
+- **`validate` refuses a Defender registry value without its `key`.** 1.0.0 passed a `registry_values` mapping that sets `value_name` alone, which Graph refuses with "Entity mapping for type 'RegistryValue' does not include a required identifier", so the rule failed at deploy. `validate` and the editor now report it as an error, `microsoft_defender_entity_identifier`, on `entities.registry_values.<N>` ([#1884](https://github.com/opentidehq/opentide/issues/1884)).
 - **`validate` fails a Defender block whose columns its query does not return.** The engine works out the columns a `microsoft_defender` query returns, offline, and reports what Defender would refuse or leave unmapped at deploy. Nothing is reported when it cannot tell what the query returns ([#1885](https://github.com/opentidehq/opentide/issues/1885)).
   - `microsoft_defender_column_not_in_output`: an entity, action, custom detail or alert `{{Column}}` the output lacks, with the column it most likely means
   - `microsoft_defender_required_columns`: the output lacks `Timestamp`, `DeviceId`, `ReportId` or another column a custom detection needs for the Defender XDR tables the query reads
 
 ### Added
 
+- **`validate` warns when a Defender device or user has no strong identifier.** A `hosts` or `accounts` mapping with neither a column Defender maps to an impacted asset (`device_id`, `name`; `aad_user_id`, `sid`, `upn`) nor a strong combination such as an account's `name` with `nt_domain` gets `microsoft_defender_impacted_asset_identifier`, in `validate`, `lint` and the editor. `validate --strict` reports it without failing ([#1884](https://github.com/opentidehq/opentide/issues/1884)).
 - **`lint` flags Defender queries that return columns the rule does not use.** Defender derives entity mappings of its own from extra result columns; the note `microsoft_defender_unprojected_output` suggests the `| project` to end the query with, and the warning `microsoft_defender_column_type` reports an entity mapped from a `dynamic`, `datetime`, `bool` or `timespan` column ([#1885](https://github.com/opentidehq/opentide/issues/1885)).
 - **Editor quick fixes for Defender columns.** The language server replaces a misspelt column with the one the query returns, and appends the suggested `| project` after the query's last operator ([#1885](https://github.com/opentidehq/opentide/issues/1885)).
 
@@ -29,7 +38,7 @@ opentide runs on one Rust core: a far smaller install, commands that start in ab
 ### Upgrade
 
 - If you deploy to Defender for Endpoint, move each rule's `configurations.defender_for_endpoint` block to `configurations.microsoft_defender` and rewrite it in the 1.0 shape: `query`, `schedule.frequency`, `alert`, `entities`, `actions`, `scope.device_groups` ([microsoft-defender-1.0](https://github.com/opentidehq/specifications/blob/main/specs/platforms/microsoft-defender-1.0.md); `opentide new rule --platform microsoft_defender` writes one). Rename `.opentide/configurations/platforms/defender_for_endpoint.toml` to `microsoft_defender.toml`, and `--defender-for-endpoint` to `--microsoft-defender` in `opentide setup platforms`.
-- If deployment state records Defender rules (`defender_for_endpoint` under `.opentide/states/deployment/`), delete those entries, then disable or delete the rules an earlier release created in the Defender portal: a rule's `metadata.uuid` is now its Defender rule id, so the first deploy creates each rule anew under its UUID.
+- If deployment state records Defender rules (`defender_for_endpoint` under `.opentide/states/deployment/`), delete those entries, then, in the Defender portal, delete the rules an earlier release created, or rename both their name and their alert title: a rule's `metadata.uuid` is now its Defender rule id, so the first deploy creates each rule anew under its UUID, and Graph refuses that create while another rule holds the name or the alert title, even a disabled one.
 - If a script read `deprecated` from `opentide setup vscode --json`, stop: the command is supported, and the field is no longer emitted.
 - If a script reads `path` from a configuration finding of `opentide validate --json` or SARIF (`unknown_key`, `missing_field` or `schema_validation` on a `.opentide/configurations` file, `asset_unknown` on `visibility.toml`), read it as the file's full path, as for every other finding: it was the name relative to `.opentide/configurations` (`deployment.toml`), with no line or column.
 - Run `opentide validate`; where it reports `kql_table_misspelt`, correct the table name, or, if the workspace really holds that table or function, declare it as a `[[logsources]]` entry in `visibility.toml`.

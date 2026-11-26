@@ -342,18 +342,21 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`microsoft_defender_action_target`](#microsoft_defender_action_target) | A Microsoft Defender automated action has no target, or a target is empty or names a field its action does not take. |
 | [`microsoft_defender_column`](#microsoft_defender_column) | A Microsoft Defender column name is blank or not a string. |
 | [`microsoft_defender_column_not_in_output`](#microsoft_defender_column_not_in_output) | A column a Microsoft Defender block names is not a column of its query's output. |
-| [`microsoft_defender_column_type`](#microsoft_defender_column_type) | A Microsoft Defender entity or action is mapped from a column that is not text. |
+| [`microsoft_defender_column_type`](#microsoft_defender_column_type) | A Microsoft Defender entity or action is mapped from a column that holds no identifier, name or address. |
 | [`microsoft_defender_custom_details`](#microsoft_defender_custom_details) | A Microsoft Defender block's `alert.custom_details` is not a mapping of non-blank names to result columns. |
+| [`microsoft_defender_entity_identifier`](#microsoft_defender_entity_identifier) | A Microsoft Defender entity mapping lacks an identifier Graph requires of its kind. |
 | [`microsoft_defender_entity_kind`](#microsoft_defender_entity_kind) | A key of a Microsoft Defender block's `entities` is not an entity kind. |
 | [`microsoft_defender_entity_mapping`](#microsoft_defender_entity_mapping) | A Microsoft Defender entity mapping is empty, is not a mapping, or names a field its kind does not have. |
 | [`microsoft_defender_frequency`](#microsoft_defender_frequency) | A Microsoft Defender block's `schedule.frequency` is not `NRT`, `<n>H` or `<n>D`. |
 | [`microsoft_defender_grouping`](#microsoft_defender_grouping) | A Microsoft Defender block's `alert.grouping` is not `alert_per_event` or `single_alert`. |
+| [`microsoft_defender_impacted_asset_identifier`](#microsoft_defender_impacted_asset_identifier) | A Microsoft Defender device or user mapping sets no strong identifier of its impacted asset. |
 | [`microsoft_defender_incident`](#microsoft_defender_incident) | A Microsoft Defender block's `incident` is not a mapping whose `exclude_from_correlation` is `true` or `false`. |
 | [`microsoft_defender_isolation_type`](#microsoft_defender_isolation_type) | A Microsoft Defender `isolate_devices` target's `isolation_type` is not `full` or `selective`. |
 | [`microsoft_defender_lookback`](#microsoft_defender_lookback) | A Microsoft Defender block's `schedule.lookback` is not a duration, is set on a near-real-time rule, or is shorter than its frequency. |
 | [`microsoft_defender_no_entities`](#microsoft_defender_no_entities) | A Microsoft Defender block maps no entity. |
 | [`microsoft_defender_required_columns`](#microsoft_defender_required_columns) | A Microsoft Defender query's output lacks a column a custom detection needs. |
 | [`microsoft_defender_rule_absent`](#microsoft_defender_rule_absent) | A Microsoft Defender rule to disable is not on the tenant, so nothing was disabled or created. |
+| [`microsoft_defender_rule_conflict`](#microsoft_defender_rule_conflict) | Graph refused to create a Microsoft Defender rule because another rule most likely holds its display name or alert title. |
 | [`microsoft_defender_schema`](#microsoft_defender_schema) | A Microsoft Defender block's `schema` names another schema. |
 | [`microsoft_defender_scope`](#microsoft_defender_scope) | A Microsoft Defender block's `scope` is not a non-empty list of device group names. |
 | [`microsoft_defender_severity`](#microsoft_defender_severity) | A Microsoft Defender block's `alert.severity` is not one of opentide's five severities. |
@@ -6216,7 +6219,7 @@ Name a column the query returns, spelled as it is (`device_id: DeviceId`), or ad
 
 ## microsoft_defender_column_type
 
-A Microsoft Defender entity or action is mapped from a column that is not text.
+A Microsoft Defender entity or action is mapped from a column that holds no identifier, name or address.
 
 Severity: warning. Reported by the analysis engine on a `microsoft_defender` block (microsoft-defender-1.0), with its query's findings: `opentide lint` (its `queries` check) and an editor running `opentide lsp start` show it; `opentide validate` does not fail on it. An entity field (`hosts.device_id`, `ips.address`, `files.sha256`, ...) or an action's column holds an identifier, a name or an address, which Defender reads as text. The engine reports a mapping from an output column whose type it knows is `dynamic`, `datetime`, `bool` or `timespan`, none of which holds an identifier, a name or an address; a number may (`cloud_applications.app_id` from `ApplicationId`), and is not reported. Custom details and alert placeholders show any type and are not checked. When the engine does not know the column's type, or cannot infer the query's output, nothing is reported. The finding is on the field.
 
@@ -6256,6 +6259,34 @@ configurations:
 ### How to fix
 
 Write a mapping: `custom_details: {CommandLine: ProcessCommandLine}`.
+
+## microsoft_defender_entity_identifier
+
+A Microsoft Defender entity mapping lacks an identifier Graph requires of its kind.
+
+Severity: error. Reported by `opentide validate` (its `schema` check) and by an editor running `opentide lsp start`, on a `microsoft_defender` block (microsoft-defender-1.0). Graph checks a rule's mappings when it creates the rule and each time it enables it, but not on an update to a disabled rule (#1884); whether it checks a rule created disabled is not confirmed. So a disabled rule with a bad mapping can sit in the tenant and fail on the deploy that enables it. The finding is on `entities.<kind>.<N>`, and its message names the missing field, Graph's identifier for it and the property it is sent as.
+
+One rule is enforced: a `registry_values` mapping sets `key` (identifier `RegKey`, sent as `keyColumn`). Without it Graph answers:
+
+```text illustrative
+HTTP 400 · Entity mapping for type 'RegistryValue' does not include a required identifier. Supported identifiers: RegKey | Name
+```
+
+The other kinds need any one of their fields (`microsoft_defender_entity_mapping`): Microsoft documents no further requirement for them, and none has been observed.
+
+### Example
+
+```yaml
+configurations:
+  microsoft_defender:
+    entities:
+      registry_values:
+        - value_name: RegistryValueName
+```
+
+### How to fix
+
+Map the missing field to the result column that holds it, and have the query return that column: `registry_values: [{key: RegistryKey, value_name: RegistryValueName}]`.
 
 ## microsoft_defender_entity_kind
 
@@ -6335,6 +6366,26 @@ configurations:
 ### How to fix
 
 Write `single_alert` or `alert_per_event`, or remove the key: Defender then creates one alert per event.
+
+## microsoft_defender_impacted_asset_identifier
+
+A Microsoft Defender device or user mapping sets no strong identifier of its impacted asset.
+
+Severity: warning, which `opentide validate --strict` reports without failing. Reported by `opentide validate`, `opentide lint` (its `queries` check) and an editor running `opentide lsp start`, on a `microsoft_defender` block (microsoft-defender-1.0). `hosts` and `accounts` map the alert's impacted devices and users. Microsoft's custom detection page lists the result columns its rule wizard maps to an impacted asset by itself, each a strong identifier: for a device `DeviceId` (`device_id`) or `DeviceName`, `RemoteDeviceName` (`name`); for a user `AccountObjectId` (`aad_user_id`), `AccountSid`, `InitiatingProcessAccountSid` (`sid`) or `AccountUpn`, `InitiatingProcessAccountUpn` (`upn`). Microsoft Sentinel's entity reference adds the strong combinations: a user's `name` with `nt_domain`, `dns_domain` or `upn_suffix`, and a device's `netbios_name` with `nt_domain` or `dns_domain`. A mapping with none of these (an account's `name` alone, a device's `dns_domain` alone) may not tell Defender which device or user the alert is about. Neither page says Graph refuses such a mapping, so the rule validates and deploys. The finding is on `entities.<kind>.<N>`.
+
+### Example
+
+```yaml
+configurations:
+  microsoft_defender:
+    entities:
+      accounts:
+        - name: AccountName
+```
+
+### How to fix
+
+Add an identifier to the mapping, and have the query return its column: `accounts: [{upn: AccountUpn}]`, or `accounts: [{name: AccountName, nt_domain: AccountDomain}]`.
 
 ## microsoft_defender_incident
 
@@ -6441,17 +6492,33 @@ Keep the columns the message names in the query's output: `| project Timestamp, 
 
 A Microsoft Defender rule to disable is not on the tenant, so nothing was disabled or created.
 
-Severity: warning. Reported by `opentide deploy` on a `microsoft_defender` tenant (microsoft-defender-1.0). A `DISABLEMENT` status sends `PATCH {base}/{uuid}` with `status: disabled`; Graph answered `404`, so the tenant has no rule with the rule's `metadata.uuid`. Deploy does not create a rule only to disable it. The rule is reported as skipped.
+Severity: warning. Reported by `opentide deploy` on a `microsoft_defender` tenant (microsoft-defender-1.0). A `DISABLEMENT` status sends `PATCH {base}/opentide-<uuid>` with `status: disabled`; Graph answered `404`, so the tenant has no rule with the id deploy gives the rule, `opentide-` and its `metadata.uuid`. Deploy does not create a rule only to disable it. The rule is reported as skipped.
 
 ### Example
 
 ```text illustrative
-microsoft_defender_rule_absent: rule 00000000-0000-4000-8003-0000000000d0 is not on tenant 'contoso': nothing to disable
+microsoft_defender_rule_absent: rule opentide-00000000-0000-4000-8003-0000000000d0 is not on tenant 'contoso': nothing to disable
 ```
 
 ### How to fix
 
-Nothing to do if the rule was never deployed to that tenant. If it was, it was deleted in the portal or deployed under another uuid: check the rule's `metadata.uuid`.
+Nothing to do if the rule was never deployed to that tenant. If it was, it was deleted in the portal, deployed under another uuid (check the rule's `metadata.uuid`), or deployed by an earlier opentide release: 1.0.0 deployed under the bare uuid, without the `opentide-` prefix, and this deploy does not touch that rule. Delete it in the portal, or rename it: Graph keeps a disabled rule's name reserved, so a later create of the rule fails with `microsoft_defender_rule_conflict` while it is there.
+
+## microsoft_defender_rule_conflict
+
+Graph refused to create a Microsoft Defender rule because another rule most likely holds its display name or alert title.
+
+Severity: error. Reported by `opentide deploy` on a `microsoft_defender` tenant (microsoft-defender-1.0). Deploy addresses each rule as `opentide-<uuid>`: its `PATCH` found no rule with that id, so it sent a `POST` to create one, and Graph answered `409` (`A detection rule with this name, title, or rule ID already exists.`). The `PATCH` deploy sends after a `409` found no rule with the id either, so the conflict is another rule with the same display name or alert title. Most often it is one an earlier opentide release created: 1.0.0 deployed under the bare uuid, without the `opentide-` prefix, and 0.x under ids of its own. It can also be a rule created by hand in the portal. Graph keeps the name and alert title of a disabled rule reserved, so disabling that rule is not enough, and the alert title defaults to the rule's name, so renaming the rule alone may not be either. The rule fails, with the code before its message in the row's `error`; the others are deployed.
+
+### Example
+
+```text illustrative
+microsoft_defender_rule_conflict: Graph refused to create detection rule opentide-8f3c4a7e-1b2d-4c3e-9f0a-1234567890ab on tenant contoso: HTTP 409 (A detection rule with this name, title, or rule ID already exists.). No rule has this id, so another rule most likely holds its display name or alert title: one an earlier opentide release created (under the bare uuid in 1.0.0, or in 0.x), or one created by hand. Graph keeps them reserved for a disabled rule too: delete that rule in the Defender portal (or rename both its name and its alert title), then deploy again
+```
+
+### How to fix
+
+In the Defender portal (Investigation & response > Hunting > Custom detection rules), find the rule with the same name or alert title: delete it (the simplest fix), or rename both its name and its alert title, then deploy again. A rule that an earlier opentide release created is replaced by the one this deploy creates. To keep the other rule, give the opentide rule another display name (`configurations.microsoft_defender.name`, else the rule's `name`) and alert title (`alert.title`).
 
 ## microsoft_defender_schema
 

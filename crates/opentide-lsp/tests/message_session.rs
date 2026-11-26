@@ -735,3 +735,88 @@ configurations:
         .collect();
     assert!(labels.contains(&"registry"), "{labels:?}");
 }
+
+/// #1884: a Microsoft Defender entity mapping Graph refuses is shown as the
+/// author types, as `validate` reports it: an error on the mapping that
+/// names the missing field, and the impacted-asset warning on an account
+/// mapped by name alone. With its key, the error goes.
+#[test]
+fn a_defender_entity_mapping_graph_refuses_is_shown_as_you_type() {
+    let mut session = start(Value::Null);
+    let head = "name: Defender rule
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000097
+  schema: rule::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: A Defender rule.
+status: STAGING
+detection_model: 00000000-0000-4000-8002-000000000001
+configurations:
+  microsoft_defender:
+    status: STAGING
+    query: |
+      DeviceRegistryEvents
+    schedule:
+      frequency: 1H
+    entities:
+      accounts:
+        - upn: InitiatingProcessAccountUpn
+        - name: AccountName
+      registry_values:
+";
+    let uri = "objects/rules/defender.yaml";
+    let text = format!("{head}        - value_name: RegistryValueName\n");
+    let found = open(&mut session, uri, "opentide-yaml", &text);
+    let line = |needle: &str| text.lines().position(|l| l.contains(needle)).unwrap();
+    let error = found
+        .iter()
+        .find(|d| d["code"] == "microsoft_defender_entity_identifier")
+        .unwrap_or_else(|| panic!("{found:#?}"));
+    assert_eq!(error["severity"], 1, "an error: {error}");
+    assert_eq!(
+        error["range"]["start"]["line"],
+        line("- value_name: RegistryValueName"),
+        "{error}"
+    );
+    let message = error["message"].as_str().unwrap();
+    assert!(message.contains("RegKey"), "{message}");
+    let warning = found
+        .iter()
+        .find(|d| d["code"] == "microsoft_defender_impacted_asset_identifier")
+        .unwrap_or_else(|| panic!("{found:#?}"));
+    assert_eq!(warning["severity"], 2, "a warning: {warning}");
+    assert_eq!(
+        warning["range"]["start"]["line"],
+        line("- name: AccountName"),
+        "{warning}"
+    );
+
+    let keyed =
+        format!("{head}        - key: RegistryKey\n          value_name: RegistryValueName\n");
+    let replies = send(
+        &mut session,
+        json!({
+            "method": "textDocument/didChange",
+            "params": {
+                "textDocument": { "uri": uri, "version": 2 },
+                "contentChanges": [{ "text": keyed }],
+            },
+        }),
+    );
+    let published = replies
+        .iter()
+        .find(|m| m["method"] == "textDocument/publishDiagnostics")
+        .expect("didChange publishes diagnostics");
+    let after = codes(published["params"]["diagnostics"].as_array().unwrap());
+    assert!(
+        !after.contains(&"microsoft_defender_entity_identifier"),
+        "{after:?}"
+    );
+    assert!(
+        after.contains(&"microsoft_defender_impacted_asset_identifier"),
+        "{after:?}"
+    );
+}

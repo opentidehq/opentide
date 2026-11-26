@@ -55,6 +55,14 @@ exit: 1
       "status": "STAGING",
       "tenant": "lab",
       "uuid": "00000000-0000-4000-8047-0000000000d6"
+    },
+    {
+      "action": "upsert",
+      "name": "Defender name held rule",
+      "platform": "microsoft_defender",
+      "status": "STAGING",
+      "tenant": "lab",
+      "uuid": "00000000-0000-4000-8047-0000000000d7"
     }
   ],
   "command": "deploy",
@@ -87,7 +95,8 @@ exit: 1
       "00000000-0000-4000-8047-0000000000d3",
       "00000000-0000-4000-8047-0000000000d4",
       "00000000-0000-4000-8047-0000000000d5",
-      "00000000-0000-4000-8047-0000000000d6"
+      "00000000-0000-4000-8047-0000000000d6",
+      "00000000-0000-4000-8047-0000000000d7"
     ]
   },
   "results": [
@@ -156,6 +165,17 @@ exit: 1
       "seconds": 0.0,
       "status": "not_attempted",
       "tenant": "lab"
+    },
+    {
+      "action": "upsert",
+      "error": null,
+      "id": "00000000-0000-4000-8047-0000000000d7",
+      "name": "Defender name held rule",
+      "platform": "microsoft_defender",
+      "reason": "not attempted: tenant lab failed",
+      "seconds": 0.0,
+      "status": "not_attempted",
+      "tenant": "lab"
     }
   ],
   "schema_version": 1,
@@ -169,7 +189,7 @@ exit: 1
     "delete": 0,
     "disable": 0,
     "failed": 0,
-    "not_attempted": 6,
+    "not_attempted": 7,
     "platforms": 1,
     "seconds": 0.0,
     "skipped": 0,
