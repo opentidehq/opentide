@@ -51,8 +51,8 @@ pub(crate) fn walk(
         profile,
         findings: Vec::new(),
         term: TermFlags::default(),
-        curly_open_seen: false,
-        in_tags: false,
+        curly_open: false,
+        tags_clause: None,
     };
     let mut ancestors: Ancestors<K> = Ancestors::default();
     walk_once(root, |element, depth| {
@@ -91,12 +91,11 @@ struct Walker<'s> {
     profile: Profile,
     findings: Vec<Finding>,
     term: TermFlags,
-    /// Whether a left curly quote was reported: its closing quote is the same mistake.
-    curly_open_seen: bool,
-    /// Whether the field clause the walk is in searches `tags`, whose values are `key:value`
-    /// pairs by definition: a colon there needs no escape. Field clauses do not nest, so the
-    /// last one entered is the one a term of a value is in.
-    in_tags: bool,
+    /// Whether a left curly quote is open: its closing quote is the same mistake, reported once.
+    curly_open: bool,
+    /// The range of the last field clause on `tags`, whose values are `key:value` pairs by
+    /// definition: a colon inside it needs no escape. Field clauses do not nest.
+    tags_clause: Option<TextRange>,
 }
 
 impl Walker<'_> {
@@ -119,9 +118,12 @@ impl Walker<'_> {
     fn node(&mut self, node: &SyntaxNode, parent: Option<K>) {
         match node.kind() {
             K::FIELD_CLAUSE => {
-                self.in_tags = node
+                let tags = node
                     .first_child()
                     .is_some_and(|f| f.kind() == K::TAG_KEY && self.text(trimmed(&f)) == "tags");
+                if tags {
+                    self.tags_clause = Some(node.text_range());
+                }
             }
             K::OR_EXPR | K::VALUE_OR_EXPR => self.mixed_boolean(node),
             K::AND_EXPR | K::VALUE_AND_EXPR => self.lowercase_operators(node),
@@ -169,8 +171,9 @@ impl Walker<'_> {
             K::CIDR_CALL => self.cidr_call(node),
             K::CIDR_BLOCK => {
                 let range = trimmed(node);
-                let text = self.text(range).to_owned();
-                if !is_cidr_block(&text) {
+                let text = self.text(range);
+                if !is_cidr_block(text) {
+                    let text = shorten(text);
                     self.push(
                         codes::DATADOG_CIDR,
                         Severity::Error,
@@ -216,7 +219,12 @@ impl Walker<'_> {
                     );
                 }
             }
-            K::COLON if parent == K::TERM && !self.in_tags => {
+            K::COLON
+                if parent == K::TERM
+                    && !self
+                        .tags_clause
+                        .is_some_and(|clause| clause.contains_range(token.text_range())) =>
+            {
                 if !std::mem::replace(&mut self.term.colon, true) {
                     self.push(
                         codes::DATADOG_UNESCAPED_COLON,
@@ -271,22 +279,35 @@ impl Walker<'_> {
                     );
                 }
             }
-            K::WORD => {
-                let text = token.text();
-                let open = text.contains('\u{201c}');
-                if open || (!self.curly_open_seen && text.contains('\u{201d}')) {
-                    self.curly_open_seen |= open;
-                    self.push(
-                        codes::DATADOG_CURLY_QUOTE,
-                        Severity::Warning,
-                        "a curly quote is not a quote: Datadog searches the words around it as \
-                         separate terms; use straight double quotes (`\"…\"`)"
-                            .into(),
-                        span(token.text_range()),
-                    );
-                }
-            }
+            K::WORD => self.curly_quotes(token),
             _ => {}
+        }
+    }
+
+    /// Curly quotes: a pair `“…”` is one mistake, reported on its opening quote; a closing
+    /// quote with none open is reported on its own.
+    fn curly_quotes(&mut self, token: &SyntaxToken) {
+        let mut report = false;
+        for c in token.text().chars() {
+            match c {
+                '\u{201c}' => {
+                    report = true;
+                    self.curly_open = true;
+                }
+                '\u{201d}' if self.curly_open => self.curly_open = false,
+                '\u{201d}' => report = true,
+                _ => {}
+            }
+        }
+        if report {
+            self.push(
+                codes::DATADOG_CURLY_QUOTE,
+                Severity::Warning,
+                "a curly quote is not a quote: Datadog searches the words around it as \
+                 separate terms; use straight double quotes (`\"…\"`)"
+                    .into(),
+                span(token.text_range()),
+            );
         }
     }
 
@@ -300,8 +321,8 @@ impl Walker<'_> {
         let Some(first) = node.children().find(|c| c.kind() == and) else {
             return;
         };
-        let group = self.text(trimmed(&first)).to_owned();
-        let group = shorten(&group);
+        // `shorten` reads a bounded prefix: nested ORs do not re-read their whole text.
+        let group = shorten(self.text(trimmed(&first)));
         self.push(
             codes::DATADOG_MIXED_BOOLEAN,
             Severity::Warning,
@@ -345,7 +366,8 @@ impl Walker<'_> {
     /// pipelines'. The first argument of `CIDR` must be an `@attribute`.
     fn tag_key(&mut self, node: &SyntaxNode, parent: Option<K>) {
         let range = trimmed(node);
-        let text = self.text(range).to_owned();
+        let dotted = has_unescaped_dot(self.text(range));
+        let text = shorten(self.text(range));
         if parent == Some(K::CIDR_CALL) {
             self.push(
                 codes::DATADOG_CIDR,
@@ -369,7 +391,7 @@ impl Walker<'_> {
             );
             return;
         }
-        if has_unescaped_dot(&text) {
+        if dotted {
             self.push(
                 codes::DATADOG_UNKNOWN_ATTRIBUTE,
                 Severity::Hint,
@@ -508,7 +530,11 @@ pub(crate) fn is_cidr_block(text: &str) -> bool {
 
 /// `text`, cut to about 40 characters for a message.
 fn shorten(text: &str) -> String {
-    let one_line: String = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    // Read a bounded prefix only: a message never costs more than its own length.
+    let prefix = text
+        .get(..text.floor_char_boundary(text.len().min(160)))
+        .unwrap_or("");
+    let one_line: String = prefix.split_whitespace().collect::<Vec<_>>().join(" ");
     match one_line.char_indices().nth(40) {
         Some((at, _)) => format!("{}…", &one_line[..at]),
         None => one_line,

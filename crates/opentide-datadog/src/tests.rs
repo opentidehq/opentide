@@ -507,3 +507,77 @@ fn the_highlight_has_the_captures_of_the_rfc() {
     assert_eq!(capture_of("w*").as_deref(), Some("string"));
     let _ = K::QUERY;
 }
+
+// ---- Regressions from the adversarial review -----------------------------------------------
+
+/// A `tags:` clause exempts its own value's colons only, not a later term's.
+#[test]
+fn the_tags_exemption_ends_with_its_clause() {
+    assert!(search("tags:env:prod").is_empty());
+    assert_eq!(
+        search(r#"tags:x "a"b:c"#),
+        vec![codes::DATADOG_UNESCAPED_COLON]
+    );
+}
+
+/// A pair of curly quotes is one finding; a stray closing quote after it is another.
+#[test]
+fn curly_quotes_pair_up() {
+    assert_eq!(search("“a” b”"), vec![codes::DATADOG_CURLY_QUOTE; 2]);
+    assert_eq!(search("a” b”"), vec![codes::DATADOG_CURLY_QUOTE; 2]);
+    assert_eq!(search("“a b”"), vec![codes::DATADOG_CURLY_QUOTE]);
+}
+
+/// After `: `, the next clause is not the field's value.
+#[test]
+fn a_space_after_the_colon_does_not_swallow_the_next_clause() {
+    for broken in ["@a: @b:c", "@a: NOT b", "@a: OR b", "@a: AND b"] {
+        assert_eq!(search(broken), vec![codes::DATADOG_PARSE_ERROR], "{broken}");
+    }
+    assert!(search("@a: b").is_empty());
+    assert!(search("@a:NOT").is_empty());
+}
+
+#[test]
+fn an_extra_token_in_a_range_is_named() {
+    let found = findings("@a:[1 TO 5 6]", Profile::Search);
+    assert_eq!(found[0].code, codes::DATADOG_RANGE);
+    assert!(
+        found[0].message.contains("two bounds"),
+        "{}",
+        found[0].message
+    );
+    let found = findings("@a:[1 TO 5", Profile::Search);
+    assert!(
+        found[0].message.contains("never closed"),
+        "{}",
+        found[0].message
+    );
+}
+
+/// A message quotes a bounded excerpt, whatever the size of what it is about.
+#[test]
+fn messages_are_bounded() {
+    for source in [
+        format!("CIDR(@ip, {})", "1:".repeat(100_000)),
+        format!("CIDR({}, 10.0.0.0/8)", "a".repeat(100_000)),
+        format!("{}:x", "a.".repeat(100_000)),
+        format!("{} OR b", "a ".repeat(100_000)),
+    ] {
+        for f in findings(&source, Profile::Search) {
+            assert!(
+                f.message.len() < 400,
+                "{}: {} bytes",
+                f.code,
+                f.message.len()
+            );
+        }
+    }
+}
+
+/// A byte-order mark after the start is a term's character, so what follows it touches it.
+#[test]
+fn a_bom_after_the_start_is_part_of_a_term() {
+    assert_eq!(shape("\u{feff}a:b"), "(QUERY (FIELD_CLAUSE TAG_KEY TERM))");
+    assert_eq!(shape("x\u{feff}:b"), "(QUERY (FIELD_CLAUSE TAG_KEY TERM))");
+}

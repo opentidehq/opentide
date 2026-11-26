@@ -136,3 +136,18 @@ fn nesting_past_the_limit_is_one_error() {
         }
     });
 }
+
+/// A valid term of six million pieces: looking for a field's colon must not run the parser's
+/// fuel out (2^24 lookups without progress), as an unbounded lookahead did.
+#[test]
+fn a_huge_term_parses() {
+    on_small_stack(|| {
+        for source in [
+            "a*".repeat(3_000_000),
+            format!("{}:x", "a*".repeat(3_000_000)),
+        ] {
+            let (text, errors) = debug_roundtrip(&source);
+            assert!(text == source && errors == 0, "{errors} errors");
+        }
+    });
+}

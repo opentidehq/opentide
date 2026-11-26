@@ -244,6 +244,11 @@ index filters), `licence` and `source` (a GitHub URL pinned to a commit). They a
 unmodified. They were gathered for `docs/internal/rfc-datadog-cloud-siem.md` (§11) and are the
 conformance corpus of the `datadog` language.
 
+`datadog/broken.jsonl` holds twelve twins, one per fault kind, each a published query (`line`)
+with one injected fault and the code it must raise; `datadog/EXCEPTIONS.toml` lists the published
+queries the engine refuses, each with its reason.
+`crates/opentide-analysis/tests/external_datadog.rs` holds both.
+
 | Source | Licence | Licence text | Queries |
 |---|---|---|--:|
 | DataDog/integrations-core@640a412b | BSD-3-Clause | [`LICENSE.BSD-3-Clause-Datadog-integrations-core.txt`](LICENSE.BSD-3-Clause-Datadog-integrations-core.txt) | 1,862 |

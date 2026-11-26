@@ -64,7 +64,15 @@ fn broken_inputs_are_linear() {
 
 #[test]
 fn long_valid_inputs_are_linear() {
-    let cases: [Case; 5] = [
+    let cases: [Case; 6] = [
+        // ORs nested around a long AND run: each level's message must not re-read the run.
+        ("nested ORs", |n| {
+            let mut s = "a ".repeat(n);
+            for _ in 0..n / 100 {
+                s = format!("({s} x OR y)");
+            }
+            s
+        }),
         ("an AND chain", |n| "@a:b ".repeat(n)),
         ("an OR chain", |n| vec!["@a:b"; n].join(" OR ")),
         ("a mixed chain", |n| "a b OR ".repeat(n) + "c"),

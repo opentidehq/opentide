@@ -22,6 +22,8 @@ pub(crate) const MAX_DEPTH: u32 = 1_000;
 pub(crate) const UNEXPECTED: &str = "unexpected";
 pub(crate) const MISSING_PAREN: &str = "missing `)`";
 pub(crate) const MISSING_RANGE_CLOSE: &str = "the range is never closed: missing `]` or `}`";
+pub(crate) const EXPECTED_RANGE_CLOSE: &str =
+    "expected `]` or `}` after the range's upper bound: a range holds two bounds";
 pub(crate) const EMPTY_GROUP: &str = "an empty group: put a clause between the parentheses";
 pub(crate) const EXPECTED_CLAUSE: &str = "expected a search term after the operator";
 pub(crate) const EXPECTED_MODIFIED: &str = "expected a search term after the modifier";
@@ -97,6 +99,10 @@ const CIDR_FIELD_PIECES: TokenSet = K::set(&[
     K::PLUS,
     K::EQ,
 ]);
+
+/// The most pieces a field is looked for in before its colon: far above any real field
+/// (`@user.first\ name` is three), and few enough that the lookahead never nears the fuel.
+const MAX_FIELD_PIECES: usize = 1_024;
 
 const COMPARE: TokenSet = K::set(&[K::GT, K::GT_EQ, K::LT, K::LT_EQ]);
 const CLOSERS: TokenSet = K::set(&[K::R_BRACK, K::R_BRACE]);
@@ -363,9 +369,12 @@ fn field_at(p: &Parser<'_>) -> Option<usize> {
         k if FIELD_PIECES.contains(k.raw()) && !matches!(k, K::MINUS | K::PLUS | K::EQ) => {}
         _ => return None,
     }
+    // The lookahead consumes nothing, so it is bounded: a run longer than any field name is a
+    // term, read as one (a colon past the bound is then a colon in a value). Unbounded, a
+    // multi-megabyte term ran the parser's fuel out (2^24 lookups without progress).
     let mut n = 0;
     loop {
-        if !touches(p, n) {
+        if n >= MAX_FIELD_PIECES || !touches(p, n) {
             return None;
         }
         let next = kind(p, n + 1);
@@ -387,12 +396,18 @@ fn field_clause(p: &mut Parser<'_>, pieces: usize) {
     let touching = touches_previous(p);
     if kind(p, 0) == K::L_PAREN {
         group(p, true);
-    } else if starts_value(p) && (touching || (or_at(p).is_none() && and_at(p).is_none())) {
+    } else if starts_value(p) && (touching || !next_clause_at(p)) {
         value_node(p);
     } else {
         err(p, EXPECTED_VALUE);
     }
     m.complete(p, K::FIELD_CLAUSE.raw());
+}
+
+/// After a space that follows a field's colon: whether what comes is the next clause rather
+/// than the value (`@a: OR b`, `@a: NOT b`, `@a: @b:c`), which leaves the field with no value.
+fn next_clause_at(p: &Parser<'_>) -> bool {
+    or_at(p).is_some() || and_at(p).is_some() || word(p, 0, "NOT") || field_at(p).is_some()
 }
 
 /// Whether a value starts at the current token (after a colon: a `-` is part of the value
@@ -472,7 +487,9 @@ fn touches_previous(p: &Parser<'_>) -> bool {
     };
     let at = usize::from(here.start());
     // The token before has no trivia after it when the byte before this one is not whitespace.
-    at > 0 && !p.source()[..at].ends_with([' ', '\t', '\r', '\n', '\u{feff}'])
+    // A byte-order mark is whitespace only at the start of the text (the lexer's rule).
+    let bom = at == '\u{feff}'.len_utf8() && p.source().starts_with('\u{feff}');
+    at > 0 && !bom && !p.source()[..at].ends_with([' ', '\t', '\r', '\n'])
 }
 
 // ---- Values --------------------------------------------------------------------------------
@@ -555,7 +572,14 @@ fn range(p: &mut Parser<'_>) {
     if p.at_set(CLOSERS) {
         p.bump();
     } else {
-        err(p, MISSING_RANGE_CLOSE);
+        err(
+            p,
+            if p.at_eof() {
+                MISSING_RANGE_CLOSE
+            } else {
+                EXPECTED_RANGE_CLOSE
+            },
+        );
     }
     m.complete(p, K::RANGE.raw());
 }

@@ -134,6 +134,7 @@ and an `@attribute` arm of `datadog_unknown_attribute`, which waits for them.
 | Suite | Queries | Result | Harness |
 |-------|---------|--------|---------|
 | Datadog's published queries (`crates/testdata/conformance/external/datadog/published.jsonl`: docs, integrations, API clients; BSD-3-Clause and Apache-2.0) | 2,895 | no error but the 4 reasoned exceptions of `EXCEPTIONS.toml`; the count of each code pinned (below) | `crates/opentide-datadog/tests/published.rs` |
+| Twins of published queries with one injected fault each (`broken.jsonl`, 12 fault kinds) | 12 | each original clean, each twin exactly its fault's code | `crates/opentide-analysis/tests/external_datadog.rs` |
 | The same, against VRL's grammar (accept or reject) | 2,895 | 2,883 agree; the 12 others are the RFC's expected disagreements (below) | `scripts/engine/oracles/datadog/oracle.py` |
 | The corpus, against VRL's grammar | 44 | 38 agree; 6 departures on purpose (below) | the same |
 | Datadog's default rules as the Terraform provider's cassettes record them (measured, not vendored: MPL-2.0 files of Datadog's own content) | 199 rules, 153 distinct queries | 0 errors; 153 / 153 agree with VRL; one warning, `datadog_mixed_boolean` on the Microsoft 365 rule of RFC §11.3 | `scripts/engine/oracles/datadog/default_rules.py` |
