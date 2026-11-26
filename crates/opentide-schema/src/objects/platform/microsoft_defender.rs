@@ -37,9 +37,8 @@ pub const SCHEMA: &str = "platform::microsoft_defender::1.0";
 /// The advisory of a block that maps no entity.
 pub const NO_ENTITIES: &str = opentide_core::codes::MICROSOFT_DEFENDER_NO_ENTITIES;
 
-/// The advisory of an impacted-asset mapping (`hosts`, `accounts`,
-/// `mailboxes`) that sets none of the asset's identifiers
-/// ([`Identifiers::asset`]).
+/// The advisory of an impacted-asset mapping (`hosts`, `accounts`) that
+/// sets none of the asset's identifiers ([`Identifiers::asset`]).
 pub const IMPACTED_ASSET_IDENTIFIER: &str =
     opentide_core::codes::MICROSOFT_DEFENDER_IMPACTED_ASSET_IDENTIFIER;
 
@@ -206,6 +205,9 @@ pub enum Evidence {
     /// kind's fields: no rule until a tenant probe records one
     /// (`docs/internal/microsoft-defender-tenant-test.md`, check 10).
     Unprobed,
+    /// Microsoft's documentation recommends it without saying Graph refuses
+    /// anything else: a warning at most, never an error.
+    Advised,
 }
 
 /// The provenance of a rule of [`ENTITY_IDENTIFIERS`].
@@ -235,25 +237,69 @@ pub struct Identifiers {
     pub required: &'static [(&'static str, &'static str)],
     /// Where `required` comes from.
     pub source: Source,
-    /// For a kind that drives the alert's impacted assets (`hosts`,
-    /// `accounts`, `mailboxes`): the fields Defender identifies the asset by,
-    /// each with the Defender columns that hold it ([`IMPACTED_ASSET_SOURCE`]).
-    /// Empty for every other kind.
-    pub asset: &'static [(&'static str, &'static str)],
+    /// For a kind whose mapping should identify an impacted asset (`hosts`,
+    /// `accounts`): the fields, or combinations of fields, that do. A mapping
+    /// that sets all the fields of one of them is identified. Empty for every
+    /// other kind.
+    pub asset: &'static [AssetIdentifier],
+}
+
+/// One way an impacted-asset mapping identifies its device or user: the
+/// fields it sets, all of them, and where that comes from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AssetIdentifier {
+    /// The fields, all set (`["name", "nt_domain"]`).
+    pub fields: &'static [&'static str],
+    /// The result columns the source names for it (`AccountSid,
+    /// InitiatingProcessAccountSid`); empty when it names none.
+    pub columns: &'static str,
+    /// [`IMPACTED_ASSET_COLUMNS`] or [`STRONG_IDENTIFIERS`].
+    pub source: Source,
 }
 
 /// The date the identifier rules were last checked against their sources.
 pub const IDENTIFIERS_CHECKED: &str = "2026-11-26";
 
-/// Microsoft's custom detection rules page: the columns that hold a strong
-/// identifier of each impacted asset (device, mailbox, user).
-pub const IMPACTED_ASSET_SOURCE: Source = Source {
-    evidence: Evidence::Documented,
+/// Microsoft's custom detection rules page: the result columns the rule
+/// wizard maps to an impacted device, mailbox or user by itself, each "a
+/// strong identifier for an impacted asset". It does not say what Graph
+/// does with a mapping that sets none of them.
+pub const IMPACTED_ASSET_COLUMNS: Source = Source {
+    evidence: Evidence::Advised,
     reference: "https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules \
-                (Required columns in the query results: a strong identifier for an impacted \
-                asset)",
+                (Required columns in the query results: the columns the wizard maps to an \
+                impacted asset automatically)",
     checked: IDENTIFIERS_CHECKED,
 };
+
+/// Microsoft Sentinel's entity reference, whose Account and Host entities
+/// are Defender's users and devices: the combinations that are strong
+/// identifiers.
+pub const STRONG_IDENTIFIERS: Source = Source {
+    evidence: Evidence::Advised,
+    reference: "https://learn.microsoft.com/en-us/azure/sentinel/entities-reference (strong \
+                identifiers of an account: Name + UPNSuffix, Name + NTDomain, Name + DnsDomain; \
+                of a host: HostName or NetBiosName + NTDomain or DnsDomain)",
+    checked: IDENTIFIERS_CHECKED,
+};
+
+/// An identifier from the custom detection rules page's columns.
+const fn column(fields: &'static [&'static str], columns: &'static str) -> AssetIdentifier {
+    AssetIdentifier {
+        fields,
+        columns,
+        source: IMPACTED_ASSET_COLUMNS,
+    }
+}
+
+/// A strong combination from Sentinel's entity reference.
+const fn strong(fields: &'static [&'static str]) -> AssetIdentifier {
+    AssetIdentifier {
+        fields,
+        columns: "",
+        source: STRONG_IDENTIFIERS,
+    }
+}
 
 const UNPROBED: Source = Source {
     evidence: Evidence::Unprobed,
@@ -298,8 +344,10 @@ pub const ENTITY_IDENTIFIERS: [Identifiers; 17] = [
         required: &[],
         source: UNPROBED,
         asset: &[
-            ("device_id", "DeviceId"),
-            ("name", "DeviceName, RemoteDeviceName"),
+            column(&["device_id"], "DeviceId"),
+            column(&["name"], "DeviceName, RemoteDeviceName"),
+            strong(&["netbios_name", "nt_domain"]),
+            strong(&["netbios_name", "dns_domain"]),
         ],
     },
     Identifiers {
@@ -307,20 +355,15 @@ pub const ENTITY_IDENTIFIERS: [Identifiers; 17] = [
         required: &[],
         source: UNPROBED,
         asset: &[
-            ("aad_user_id", "AccountObjectId"),
-            ("sid", "AccountSid, InitiatingProcessAccountSid"),
-            ("upn", "AccountUpn, InitiatingProcessAccountUpn"),
+            column(&["aad_user_id"], "AccountObjectId"),
+            column(&["sid"], "AccountSid, InitiatingProcessAccountSid"),
+            column(&["upn"], "AccountUpn, InitiatingProcessAccountUpn"),
+            strong(&["name", "upn_suffix"]),
+            strong(&["name", "nt_domain"]),
+            strong(&["name", "dns_domain"]),
         ],
     },
-    Identifiers {
-        kind: "mailboxes",
-        required: &[],
-        source: ONE_FIELD,
-        asset: &[(
-            "primary_address",
-            "RecipientEmailAddress, SenderFromAddress, SenderMailFromAddress",
-        )],
-    },
+    one_field("mailboxes"),
     unprobed("files"),
     unprobed("processes"),
     unprobed("ips"),
@@ -1400,8 +1443,10 @@ pub fn advisories(rule: &Node) -> Vec<super::Advisory> {
 }
 
 /// `microsoft_defender_impacted_asset_identifier`, on `entities.<kind>.<N>`
-/// of each `hosts`, `accounts` or `mailboxes` mapping that names only its
-/// kind's fields and none of the asset's identifiers.
+/// of each `hosts` or `accounts` mapping that names only its kind's fields
+/// and sets no identifier of the asset ([`AssetIdentifier`]): neither a
+/// column the custom detection wizard maps to the asset nor a strong
+/// combination of Sentinel's entity reference.
 fn impacted_assets(block: &Node) -> Vec<super::Advisory> {
     let mut found = Vec::new();
     let Some(Value::Map(kinds)) = block.get("entities").map(|entities| &entities.value) else {
@@ -1430,17 +1475,27 @@ fn impacted_assets(block: &Node) -> Vec<super::Advisory> {
                 && keys
                     .iter()
                     .all(|key| key.is_some_and(|key| kind.graph_field(key).is_some()));
-            let identified = keys
-                .iter()
-                .flatten()
-                .any(|key| rules.asset.iter().any(|(field, _)| field == key));
+            let identified = rules.asset.iter().any(|identifier| {
+                identifier
+                    .fields
+                    .iter()
+                    .all(|field| keys.contains(&Some(*field)))
+            });
             if !shaped || identified {
                 continue;
             }
+            let noun = asset_noun(name);
             let identifiers = rules
                 .asset
                 .iter()
-                .map(|(field, columns)| format!("{field} ({columns})"))
+                .map(|identifier| {
+                    let fields = identifier.fields.join(" + ");
+                    if identifier.columns.is_empty() {
+                        fields
+                    } else {
+                        format!("{fields} ({})", identifier.columns)
+                    }
+                })
                 .collect::<Vec<_>>()
                 .join(", ");
             found.push(super::Advisory {
@@ -1453,10 +1508,9 @@ fn impacted_assets(block: &Node) -> Vec<super::Advisory> {
                     index.to_string(),
                 ],
                 message: format!(
-                    "entities.{name}[{index}] sets none of the identifiers Defender names an \
-                     impacted {} by: {identifiers}; without one the alert may list no impacted \
-                     asset to triage or act on",
-                    asset_noun(name)
+                    "entities.{name}[{index}] sets no strong identifier of an impacted {noun}: \
+                     map one of {identifiers}, so Defender can tell which {noun} the alert is \
+                     about"
                 ),
             });
         }
@@ -1469,7 +1523,6 @@ fn asset_noun(kind: &str) -> &'static str {
     match kind {
         "hosts" => "device",
         "accounts" => "user",
-        "mailboxes" => "mailbox",
         _ => "asset",
     }
 }

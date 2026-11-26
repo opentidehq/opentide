@@ -8,15 +8,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Eac
 
 ### Upgrade
 
-- If you deploy to Microsoft Defender, run `opentide validate` and add `key` to each `registry_values` mapping it reports as `microsoft_defender_entity_identifier`. If you run `validate --strict`, also add `aad_user_id`, `sid` or `upn` to each `accounts` mapping, and `device_id` or `name` to each `hosts` mapping, it reports as `microsoft_defender_impacted_asset_identifier`.
+- If you deploy to Microsoft Defender, run `opentide validate`: it now reports each `registry_values` mapping without `key` as `microsoft_defender_entity_identifier`.
+- Add `key` to each mapping it reports, set to the column that holds the registry key (`RegistryKey`), and have the query return that column.
 
 ### Breaking
 
-- **`validate` refuses a Defender registry value without its `key`.** A `registry_values` mapping that sets `value_name` alone is an error, `microsoft_defender_entity_identifier`, on `entities.registry_values.<N>`, in `validate` and the editor. Graph refuses such a rule with "Entity mapping for type 'RegistryValue' does not include a required identifier", but only when it creates or enables the rule ([#1884](https://github.com/opentidehq/opentide/issues/1884)).
+- **`validate` refuses a Defender registry value without its `key`.** 1.0.0 passed a `registry_values` mapping that sets `value_name` alone, which Graph refuses with "Entity mapping for type 'RegistryValue' does not include a required identifier", so the rule failed at deploy. `validate` and the editor now report it as an error, `microsoft_defender_entity_identifier`, on `entities.registry_values.<N>` ([#1884](https://github.com/opentidehq/opentide/issues/1884)).
 
 ### Added
 
-- **`validate` warns when a Defender device or user has no identifier.** A `hosts` mapping without `device_id` or `name`, or an `accounts` mapping without `aad_user_id`, `sid` or `upn`, may give the alert no impacted asset: `validate`, `lint` and the editor report `microsoft_defender_impacted_asset_identifier`, and `validate --strict` fails on it ([#1884](https://github.com/opentidehq/opentide/issues/1884)).
+- **`validate` warns when a Defender device or user has no strong identifier.** A `hosts` or `accounts` mapping with neither a column Defender maps to an impacted asset (`device_id`, `name`; `aad_user_id`, `sid`, `upn`) nor a strong combination such as an account's `name` with `nt_domain` gets `microsoft_defender_impacted_asset_identifier`, in `validate`, `lint` and the editor. `validate --strict` reports it without failing ([#1884](https://github.com/opentidehq/opentide/issues/1884)).
 
 ## [1.0.0] — 2026-11-25
 

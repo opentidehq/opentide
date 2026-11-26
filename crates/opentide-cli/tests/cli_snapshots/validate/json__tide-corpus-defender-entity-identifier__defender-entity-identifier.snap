@@ -110,7 +110,7 @@ exit: 1
         "fix": null,
         "help": null,
         "line": 37,
-        "message": "entities.accounts[1] sets none of the identifiers Defender names an impacted user by: aad_user_id (AccountObjectId), sid (AccountSid, InitiatingProcessAccountSid), upn (AccountUpn, InitiatingProcessAccountUpn); without one the alert may list no impacted asset to triage or act on",
+        "message": "entities.accounts[1] sets no strong identifier of an impacted user: map one of aad_user_id (AccountObjectId), sid (AccountSid, InitiatingProcessAccountSid), upn (AccountUpn, InitiatingProcessAccountUpn), name + upn_suffix, name + nt_domain, name + dns_domain, so Defender can tell which user the alert is about",
         "object_type": "rule",
         "object_uuid": "00000000-0000-4000-8003-000000000002",
         "path": "Objects/Detection Rules/rule-0002-defender-kql.yaml",
@@ -132,7 +132,7 @@ exit: 1
     "warnings": 1
   },
   "warnings": [
-    "Validation reported warnings"
+    "<WS>/Objects/Detection Rules/rule-0002-defender-kql.yaml:37: configurations.microsoft_defender.entities.accounts.1: entities.accounts[1] sets no strong identifier of an impacted user: map one of aad_user_id (AccountObjectId), sid (AccountSid, InitiatingProcessAccountSid), upn (AccountUpn, InitiatingProcessAccountUpn), name + upn_suffix, name + nt_domain, name + dns_domain, so Defender can tell which user the alert is about"
   ],
   "workspace": "<WS>"
 }

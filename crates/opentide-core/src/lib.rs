@@ -2249,7 +2249,7 @@ pub mod codes {
                 "The block maps no entity, so the alert names no device, user, or mailbox to triage or act on."
             }
             MICROSOFT_DEFENDER_IMPACTED_ASSET_IDENTIFIER => {
-                "A device, user or mailbox mapping sets none of the identifiers Defender names an impacted asset by."
+                "A device or user mapping sets no strong identifier of its impacted asset."
             }
             _ => return None,
         })

@@ -1350,7 +1350,7 @@ exit: 0
     },
     {
       "code": "microsoft_defender_impacted_asset_identifier",
-      "meaning": "A Microsoft Defender device, user or mailbox mapping sets none of the identifiers Defender names an impacted asset by."
+      "meaning": "A Microsoft Defender device or user mapping sets no strong identifier of its impacted asset."
     },
     {
       "code": "microsoft_defender_incident",

@@ -18,7 +18,7 @@ use opentide_schema::from_node::Context;
 use opentide_schema::node::{self, Node, Value};
 use opentide_schema::objects::platform::microsoft_defender::{
     ACTIONS, ADVISORY_CODES, CONSTRAINT_CODES, Duration, ENTITY_IDENTIFIERS, ENTITY_KINDS,
-    Evidence, IDENTIFIERS_CHECKED, IMPACTED_ASSET_SOURCE, MicrosoftDefenderConfig, NOT_MODELLED,
+    Evidence, IDENTIFIERS_CHECKED, IMPACTED_ASSET_COLUMNS, MicrosoftDefenderConfig, NOT_MODELLED,
     NotModelled, TEMPLATE, advisories, block_codes, block_findings, entity_kind,
 };
 
@@ -388,9 +388,22 @@ fn the_identifier_table_has_one_sourced_row_per_kind() {
             assert!(kind.graph_field(field).is_some(), "{}.{field}", row.kind);
             assert!(!identifier.is_empty(), "{}.{field}", row.kind);
         }
-        for (field, columns) in row.asset {
-            assert!(kind.graph_field(field).is_some(), "{}.{field}", row.kind);
-            assert!(!columns.is_empty(), "{}.{field}", row.kind);
+        for identifier in row.asset {
+            assert!(!identifier.fields.is_empty(), "{}", row.kind);
+            for field in identifier.fields {
+                assert!(kind.graph_field(field).is_some(), "{}.{field}", row.kind);
+            }
+            // Advice, never an error; a column list only where the page
+            // names columns.
+            assert_eq!(identifier.source.evidence, Evidence::Advised);
+            assert_eq!(identifier.source.checked, IDENTIFIERS_CHECKED);
+            assert_eq!(
+                identifier.columns.is_empty(),
+                identifier.source != IMPACTED_ASSET_COLUMNS,
+                "{}: {:?}",
+                row.kind,
+                identifier.fields
+            );
         }
         assert_eq!(row.source.checked, IDENTIFIERS_CHECKED, "{}", row.kind);
         assert!(!row.source.reference.is_empty(), "{}", row.kind);
@@ -406,16 +419,17 @@ fn the_identifier_table_has_one_sourced_row_per_kind() {
                 assert!(row.required.is_empty(), "{}", row.kind);
                 assert!(kind.fields.len() > 1, "{}", row.kind);
             }
+            Evidence::Advised => panic!("{}: advice is never a required field", row.kind),
         }
     }
-    // The impacted assets are the device, the user and the mailbox.
+    // The impacted assets with more than one field: the device and the user
+    // (a mailbox mapping names its one field, its address).
     let assets: Vec<&str> = ENTITY_IDENTIFIERS
         .iter()
         .filter(|row| !row.asset.is_empty())
         .map(|row| row.kind)
         .collect();
-    assert_eq!(assets, ["hosts", "accounts", "mailboxes"]);
-    assert_eq!(IMPACTED_ASSET_SOURCE.evidence, Evidence::Documented);
+    assert_eq!(assets, ["hosts", "accounts"]);
 }
 
 /// The errors of the block mapping `mapping` under the kind `kind`.
@@ -554,37 +568,47 @@ fn asset_advisories(entities: &str) -> Vec<(String, String)> {
 }
 
 #[test]
-fn an_impacted_asset_without_an_identifier_earns_the_advisory() {
+fn an_impacted_asset_without_a_strong_identifier_earns_the_advisory() {
     let at = |path: &str| {
         vec![(
             "microsoft_defender_impacted_asset_identifier".to_owned(),
             format!("configurations.microsoft_defender.entities.{path}"),
         )]
     };
-    // A user by name alone, a device by its domain alone.
-    assert_eq!(
-        asset_advisories("      accounts: [{name: AccountName}]\n"),
-        at("accounts.0")
-    );
-    assert_eq!(
-        asset_advisories(
-            "      accounts: [{upn: AccountUpn}, {name: AccountName, nt_domain: AccountDomain}]\n"
+    // Weak alone: a user by name, a device by its domain or NetBIOS name.
+    for (entities, path) in [
+        ("      accounts: [{name: AccountName}]\n", "accounts.0"),
+        (
+            "      accounts: [{nt_domain: AccountDomain}]\n",
+            "accounts.0",
         ),
-        at("accounts.1")
-    );
-    assert_eq!(
-        asset_advisories("      hosts: [{netbios_name: N, dns_domain: D}]\n"),
-        at("hosts.0")
-    );
-    // One identifier is enough.
+        (
+            "      accounts: [{upn: AccountUpn}, {name: AccountName}]\n",
+            "accounts.1",
+        ),
+        ("      hosts: [{dns_domain: D}]\n", "hosts.0"),
+        ("      hosts: [{netbios_name: N}]\n", "hosts.0"),
+        ("      hosts: [{nt_domain: D, dns_domain: D}]\n", "hosts.0"),
+    ] {
+        assert_eq!(asset_advisories(entities), at(path), "{entities}");
+    }
+    // A column the wizard maps to the asset, or a strong combination of
+    // Sentinel's entity reference, identifies it.
     for entities in [
         "      accounts: [{aad_user_id: AccountObjectId}]\n",
         "      accounts: [{sid: AccountSid, name: AccountName}]\n",
         "      accounts: [{upn: InitiatingProcessAccountUpn}]\n",
+        "      accounts: [{name: AccountName, nt_domain: AccountDomain}]\n",
+        "      accounts: [{name: AccountName, dns_domain: AccountDnsDomain}]\n",
+        "      accounts: [{name: AccountName, upn_suffix: AccountUpnSuffix}]\n",
         "      hosts: [{device_id: DeviceId}]\n",
+        "      hosts: [{name: DeviceName}]\n",
         "      hosts: [{name: DeviceName, dns_domain: D}]\n",
+        "      hosts: [{netbios_name: N, nt_domain: D}]\n",
+        "      hosts: [{netbios_name: N, dns_domain: D}]\n",
+        // A mailbox has one field, its address; evidence kinds are not
+        // impacted assets.
         "      mailboxes: [{primary_address: RecipientEmailAddress}]\n",
-        // Evidence kinds are not impacted assets.
         "      ips: [{scope: S}]\n",
         // A mapping a constraint reports earns no advisory.
         "      accounts: [{}]\n",
@@ -602,10 +626,12 @@ fn an_impacted_asset_without_an_identifier_earns_the_advisory() {
     let message = &advisories(&rule)[0].message;
     for needle in [
         "entities.accounts[0]",
-        "aad_user_id",
+        "impacted user",
+        "aad_user_id (AccountObjectId)",
         "sid",
         "upn",
-        "AccountUpn",
+        "name + nt_domain",
+        "name + upn_suffix",
     ] {
         assert!(message.contains(needle), "{needle}: {message}");
     }

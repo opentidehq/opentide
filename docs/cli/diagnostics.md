@@ -347,7 +347,7 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`microsoft_defender_entity_mapping`](#microsoft_defender_entity_mapping) | A Microsoft Defender entity mapping is empty, is not a mapping, or names a field its kind does not have. |
 | [`microsoft_defender_frequency`](#microsoft_defender_frequency) | A Microsoft Defender block's `schedule.frequency` is not `NRT`, `<n>H` or `<n>D`. |
 | [`microsoft_defender_grouping`](#microsoft_defender_grouping) | A Microsoft Defender block's `alert.grouping` is not `alert_per_event` or `single_alert`. |
-| [`microsoft_defender_impacted_asset_identifier`](#microsoft_defender_impacted_asset_identifier) | A Microsoft Defender device, user or mailbox mapping sets none of the identifiers Defender names an impacted asset by. |
+| [`microsoft_defender_impacted_asset_identifier`](#microsoft_defender_impacted_asset_identifier) | A Microsoft Defender device or user mapping sets no strong identifier of its impacted asset. |
 | [`microsoft_defender_incident`](#microsoft_defender_incident) | A Microsoft Defender block's `incident` is not a mapping whose `exclude_from_correlation` is `true` or `false`. |
 | [`microsoft_defender_isolation_type`](#microsoft_defender_isolation_type) | A Microsoft Defender `isolate_devices` target's `isolation_type` is not `full` or `selective`. |
 | [`microsoft_defender_lookback`](#microsoft_defender_lookback) | A Microsoft Defender block's `schedule.lookback` is not a duration, is set on a near-real-time rule, or is shorter than its frequency. |
@@ -6207,7 +6207,7 @@ Write a mapping: `custom_details: {CommandLine: ProcessCommandLine}`.
 
 A Microsoft Defender entity mapping lacks an identifier Graph requires of its kind.
 
-Severity: error. Reported by `opentide validate` (its `schema` check) and by an editor running `opentide lsp start`, on a `microsoft_defender` block (microsoft-defender-1.0). Graph checks a rule's entity mappings when the rule is created and each time it is enabled, not while it is disabled, so without this check a disabled rule with a bad mapping fails on the deploy that turns it back on. The finding is on `entities.<kind>.<N>`, and its message names the missing field, Graph's identifier for it and the property it is sent as.
+Severity: error. Reported by `opentide validate` (its `schema` check) and by an editor running `opentide lsp start`, on a `microsoft_defender` block (microsoft-defender-1.0). Graph checks a rule's mappings when it creates the rule and each time it enables it, but not on an update to a disabled rule (#1884); whether it checks a rule created disabled is not confirmed. So a disabled rule with a bad mapping can sit in the tenant and fail on the deploy that enables it. The finding is on `entities.<kind>.<N>`, and its message names the missing field, Graph's identifier for it and the property it is sent as.
 
 One rule is enforced: a `registry_values` mapping sets `key` (identifier `RegKey`, sent as `keyColumn`). Without it Graph answers:
 
@@ -6312,9 +6312,9 @@ Write `single_alert` or `alert_per_event`, or remove the key: Defender then crea
 
 ## microsoft_defender_impacted_asset_identifier
 
-A Microsoft Defender device, user or mailbox mapping sets none of the identifiers Defender names an impacted asset by.
+A Microsoft Defender device or user mapping sets no strong identifier of its impacted asset.
 
-Severity: warning. Reported by `opentide validate`, `opentide lint` (its `queries` check) and an editor running `opentide lsp start`, on a `microsoft_defender` block (microsoft-defender-1.0). `hosts`, `accounts` and `mailboxes` are the alert's impacted assets, and Defender identifies each by a strong identifier: a device by `device_id` (`DeviceId`) or `name` (`DeviceName`, `RemoteDeviceName`); a user by `aad_user_id` (`AccountObjectId`), `sid` (`AccountSid`, `InitiatingProcessAccountSid`) or `upn` (`AccountUpn`, `InitiatingProcessAccountUpn`); a mailbox by `primary_address` (`RecipientEmailAddress`, `SenderFromAddress`). A mapping with only weak fields (an account's `name` or `nt_domain`, a device's `netbios_name` or `dns_domain`) may leave the alert without an impacted asset to triage, correlate or act on. The finding is on `entities.<kind>.<N>`. It is an advisory: the rule validates and deploys.
+Severity: warning, which `opentide validate --strict` reports without failing. Reported by `opentide validate`, `opentide lint` (its `queries` check) and an editor running `opentide lsp start`, on a `microsoft_defender` block (microsoft-defender-1.0). `hosts` and `accounts` map the alert's impacted devices and users. Microsoft's custom detection page lists the result columns its rule wizard maps to an impacted asset by itself, each a strong identifier: for a device `DeviceId` (`device_id`) or `DeviceName`, `RemoteDeviceName` (`name`); for a user `AccountObjectId` (`aad_user_id`), `AccountSid`, `InitiatingProcessAccountSid` (`sid`) or `AccountUpn`, `InitiatingProcessAccountUpn` (`upn`). Microsoft Sentinel's entity reference adds the strong combinations: a user's `name` with `nt_domain`, `dns_domain` or `upn_suffix`, and a device's `netbios_name` with `nt_domain` or `dns_domain`. A mapping with none of these (an account's `name` alone, a device's `dns_domain` alone) may not tell Defender which device or user the alert is about. Neither page says Graph refuses such a mapping, so the rule validates and deploys. The finding is on `entities.<kind>.<N>`.
 
 ### Example
 
@@ -6324,12 +6324,11 @@ configurations:
     entities:
       accounts:
         - name: AccountName
-          nt_domain: AccountDomain
 ```
 
 ### How to fix
 
-Add an identifier field to the mapping, and have the query return its column: `accounts: [{upn: AccountUpn, name: AccountName}]`.
+Add an identifier to the mapping, and have the query return its column: `accounts: [{upn: AccountUpn}]`, or `accounts: [{name: AccountName, nt_domain: AccountDomain}]`.
 
 ## microsoft_defender_incident
 
