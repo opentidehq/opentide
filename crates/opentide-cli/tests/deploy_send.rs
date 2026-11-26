@@ -4814,6 +4814,59 @@ fn golden_send(platform: &str, scenario: &str, variable: &str) -> (Vec<Json>, Ve
     (planned, received_writes(replayed(&proxy)))
 }
 
+/// #1886: a rule whose create Graph refuses because another rule holds its
+/// alert title (one 1.0.0 left under the bare uuid) fails with
+/// `microsoft_defender_rule_conflict` in its row's `error`, and a delete that
+/// finds no `opentide-<uuid>` says so rather than "already gone".
+#[test]
+fn a_defender_rule_another_rule_blocks_fails_with_its_code() {
+    let scenario = "golden/deploy-defender-continues";
+    let ws = fixture("deploy-tenants");
+    let text =
+        std::fs::read_to_string(repo().join(format!("tests/cassettes/{scenario}.json"))).unwrap();
+    let all: Vec<usize> = (0..Cassette::parse(&text).unwrap().interactions.len()).collect();
+    let (proxy, env, _ca) = replay(scenario, &all, "DEFENDER_CLIENT_SECRET");
+    let (sent, _) = deploy(
+        ws.path(),
+        "microsoft_defender",
+        &env,
+        &opentide_connectors::builtin(),
+        0,
+    );
+    assert_eq!(proxy.verify(), Vec::new(), "{:?}", sent.result);
+    let Json::Array(results) = value(&sent, "results") else {
+        panic!("no results")
+    };
+    let row = |uuid: &str| {
+        results
+            .iter()
+            .find(|row| row.get("id").and_then(Json::as_str) == Some(uuid))
+            .unwrap_or_else(|| panic!("no row {uuid}"))
+    };
+    let text = |row: &Json, key: &str| row.get(key).and_then(Json::as_str).map(str::to_owned);
+    let held = row("00000000-0000-4000-8047-0000000000d7");
+    assert_eq!(text(held, "status").as_deref(), Some("failed"));
+    let error = text(held, "error").unwrap_or_default();
+    assert!(
+        error.starts_with("microsoft_defender_rule_conflict: Graph refused to create"),
+        "{error}"
+    );
+    let gone = row("00000000-0000-4000-8047-0000000000d5");
+    assert_eq!(text(gone, "status").as_deref(), Some("skipped"));
+    assert_eq!(
+        text(gone, "reason").as_deref(),
+        Some("no rule opentide-00000000-0000-4000-8047-0000000000d5 on the tenant")
+    );
+    // A refusal with no code of its own keeps its message as it was.
+    let refused = row("00000000-0000-4000-8047-0000000000d6");
+    assert!(
+        text(refused, "error")
+            .unwrap_or_default()
+            .starts_with("Graph refused to update"),
+        "{refused:?}"
+    );
+}
+
 #[test]
 fn a_defender_dry_run_shows_the_requests_the_tenant_receives() {
     let (planned, received) = golden_send(
@@ -4833,11 +4886,17 @@ fn a_defender_dry_run_shows_the_requests_the_tenant_receives() {
             .iter()
             .map(|write| at(write, "method"))
             .collect::<Vec<_>>(),
-        ["PATCH", "PATCH", "PATCH", "PATCH", "DELETE", "PATCH"].map(Json::str)
+        [
+            "PATCH", "PATCH", "PATCH", "PATCH", "DELETE", "PATCH", "PATCH"
+        ]
+        .map(Json::str)
     );
     // #1886: every uuid here begins with a digit, which Graph refuses as an
     // id; each request names `opentide-<uuid>`.
-    for (write, number) in planned.iter().zip(["d1", "d2", "d3", "d4", "d5", "d6"]) {
+    for (write, number) in planned
+        .iter()
+        .zip(["d1", "d2", "d3", "d4", "d5", "d6", "d7"])
+    {
         assert_eq!(
             write.get("url").and_then(Json::as_str),
             Some(

@@ -355,7 +355,7 @@ fn microsoft_defender_deploy_follows_the_spec_through_every_answer() {
     use opentide_connectors::connector::{DeployRequest, Deployer, Operation};
     use opentide_connectors::microsoft_defender::{RULE_ABSENT, Sent};
     let cassette = support::cassette("golden/deploy-defender-continues");
-    let bodies: Vec<Json> = ["d1", "d2", "d3", "d4", "d6"]
+    let bodies: Vec<Json> = ["d1", "d2", "d3", "d4", "d6", "d7"]
         .iter()
         .map(|number| recorded_body(&cassette, &rule(number)))
         .collect();
@@ -431,6 +431,15 @@ fn microsoft_defender_deploy_follows_the_spec_through_every_answer() {
                 .contains("The query is not valid for a custom detection."),
             "{refused:?}"
         );
+        // PATCH 404, POST 409, PATCH 404: a rule 1.0.0 left under the
+        // bare uuid holds the alert title (#1886).
+        let held = connector
+            .deploy(cx, &request(&rule("d7"), Operation::Update, &bodies[5]))
+            .await
+            .unwrap_err();
+        assert_eq!(held.failure.code, microsoft_defender::RULE_CONFLICT);
+        assert_eq!(held.failure.status, Some(409));
+        assert!(held.connector.is_none());
     })
     .unwrap();
     assert_eq!(tenant.verify(), Vec::new());
@@ -468,8 +477,9 @@ fn microsoft_defender_creates_with_the_opentide_rule_id() {
 
 /// #1886: a create Graph refuses with `409` while no rule has the id (the
 /// `PATCH` after it answers `404` again) is another rule holding the
-/// display name, one an earlier opentide release or a person created:
-/// `microsoft_defender_rule_conflict`, which says to delete or rename it.
+/// display name or alert title, one an earlier opentide release or a person
+/// created: `microsoft_defender_rule_conflict`, which says to delete it (or
+/// rename both its name and its alert title).
 #[test]
 fn microsoft_defender_a_name_held_by_another_rule_is_a_conflict() {
     use opentide_connectors::connector::{DeployRequest, Deployer, Operation};
@@ -524,7 +534,8 @@ fn microsoft_defender_a_name_held_by_another_rule_is_a_conflict() {
         "Graph refused to create detection rule opentide-00000000-0000-4000-8047-0000000000d3",
         "A detection rule with this name, title, or rule ID already exists.",
         "an earlier opentide release",
-        "delete or rename that rule in the Defender portal",
+        "most likely holds its display name or alert title",
+        "delete that rule in the Defender portal (or rename both its name and its alert title)",
     ] {
         assert!(message.contains(said), "{said}: {message}");
     }

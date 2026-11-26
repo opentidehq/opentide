@@ -656,9 +656,10 @@ pub const RULE_DELETED: &str = "microsoft_defender_rule_deleted";
 /// tenant: nothing is created (microsoft-defender-1.0, Diagnostics).
 pub const RULE_ABSENT: &str = "microsoft_defender_rule_absent";
 /// The failure of a create Graph refused with `409` while no rule has the
-/// id: another rule holds the display name (one an earlier opentide release
-/// created, under its bare uuid or in 0.x, or one created by hand), and
-/// Graph keeps a disabled rule's name reserved (#1886).
+/// id: another rule most likely holds the display name or the alert title
+/// (one an earlier opentide release created, under its bare uuid or in 0.x,
+/// or one created by hand), which Graph keeps reserved for a disabled rule
+/// too (#1886).
 pub const RULE_CONFLICT: &str = "microsoft_defender_rule_conflict";
 
 /// What one rule's deploy did.
@@ -781,11 +782,12 @@ impl MicrosoftDefender {
                 RULE_CONFLICT,
                 format!(
                     "Graph refused to create detection rule {id} on tenant {tenant}: HTTP {} \
-                     ({}). No rule has this id, so another rule holds its display name: \
-                     most likely one an earlier opentide release created (under the bare \
-                     uuid in 1.0.0, or in 0.x), or one created by hand. Graph keeps the \
-                     name of a disabled rule reserved: delete or rename that rule in the \
-                     Defender portal, then deploy again",
+                     ({}). No rule has this id, so another rule most likely holds its \
+                     display name or alert title: one an earlier opentide release created \
+                     (under the bare uuid in 1.0.0, or in 0.x), or one created by hand. \
+                     Graph keeps them reserved for a disabled rule too: delete that rule in \
+                     the Defender portal (or rename both its name and its alert title), \
+                     then deploy again",
                     answer.status,
                     error_message(answer)
                 ),

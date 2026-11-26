@@ -55,6 +55,14 @@ exit: 1
       "status": "STAGING",
       "tenant": "lab",
       "uuid": "00000000-0000-4000-8047-0000000000d6"
+    },
+    {
+      "action": "upsert",
+      "name": "Defender name held rule",
+      "platform": "microsoft_defender",
+      "status": "STAGING",
+      "tenant": "lab",
+      "uuid": "00000000-0000-4000-8047-0000000000d7"
     }
   ],
   "command": "deploy",
@@ -63,13 +71,13 @@ exit: 1
   ],
   "dry_run": false,
   "duration_ms": 0,
-  "error": "Deployment to microsoft_defender failed on Defender refused rule: Graph refused to update detection rule opentide-00000000-0000-4000-8047-0000000000d6 on tenant lab: HTTP 400 (The query is not valid for a custom detection.): {\"error\":{\"code\":\"***\",\"message\":\"The query is not valid for a custom detection.\"}}",
+  "error": "Deployment to microsoft_defender failed on Defender refused rule: Graph refused to update detection rule opentide-00000000-0000-4000-8047-0000000000d6 on tenant lab: HTTP 400 (The query is not valid for a custom detection.): {\"error\":{\"code\":\"***\",\"message\":\"The query is not valid for a custom detection.\"}} (and 1 more failure)",
   "exit_code": 1,
   "failure": {
     "argument": null,
     "code": "issues_found",
     "crash_log": null,
-    "message": "Deployment to microsoft_defender failed on Defender refused rule: Graph refused to update detection rule opentide-00000000-0000-4000-8047-0000000000d6 on tenant lab: HTTP 400 (The query is not valid for a custom detection.): {\"error\":{\"code\":\"***\",\"message\":\"The query is not valid for a custom detection.\"}}",
+    "message": "Deployment to microsoft_defender failed on Defender refused rule: Graph refused to update detection rule opentide-00000000-0000-4000-8047-0000000000d6 on tenant lab: HTTP 400 (The query is not valid for a custom detection.): {\"error\":{\"code\":\"***\",\"message\":\"The query is not valid for a custom detection.\"}} (and 1 more failure)",
     "suggestion": null
   },
   "failures": [
@@ -79,9 +87,16 @@ exit: 1
       "name": "Defender refused rule",
       "platform": "microsoft_defender",
       "tenant": "lab"
+    },
+    {
+      "error": "microsoft_defender_rule_conflict: Graph refused to create detection rule opentide-00000000-0000-4000-8047-0000000000d7 on tenant lab: HTTP 409 (A detection rule with this name, title, or rule ID already exists.). No rule has this id, so another rule most likely holds its display name or alert title: one an earlier opentide release created (under the bare uuid in 1.0.0, or in 0.x), or one created…",
+      "id": "00000000-0000-4000-8047-0000000000d7",
+      "name": "Defender name held rule",
+      "platform": "microsoft_defender",
+      "tenant": "lab"
     }
   ],
-  "message": "Deployment failed · 1 created, 2 updated, 2 skipped, 1 failed, 0 not attempted · <SECONDS>",
+  "message": "Deployment failed · 1 created, 2 updated, 2 skipped, 2 failed, 0 not attempted · <SECONDS>",
   "next_actions": [],
   "ok": false,
   "plan": {
@@ -91,7 +106,8 @@ exit: 1
       "00000000-0000-4000-8047-0000000000d3",
       "00000000-0000-4000-8047-0000000000d4",
       "00000000-0000-4000-8047-0000000000d5",
-      "00000000-0000-4000-8047-0000000000d6"
+      "00000000-0000-4000-8047-0000000000d6",
+      "00000000-0000-4000-8047-0000000000d7"
     ]
   },
   "results": [
@@ -145,7 +161,7 @@ exit: 1
       "id": "00000000-0000-4000-8047-0000000000d5",
       "name": "Defender delete absent rule",
       "platform": "microsoft_defender",
-      "reason": "already gone from the tenant",
+      "reason": "no rule opentide-00000000-0000-4000-8047-0000000000d5 on the tenant",
       "seconds": 0.0,
       "status": "skipped",
       "tenant": "lab"
@@ -155,6 +171,17 @@ exit: 1
       "error": "Graph refused to update detection rule opentide-00000000-0000-4000-8047-0000000000d6 on tenant lab: HTTP 400 (The query is not valid for a custom detection.): {\"error\":{\"code\":\"***\",\"message\":\"The query is not valid for a custom detection.\"}}",
       "id": "00000000-0000-4000-8047-0000000000d6",
       "name": "Defender refused rule",
+      "platform": "microsoft_defender",
+      "reason": null,
+      "seconds": 0.0,
+      "status": "failed",
+      "tenant": "lab"
+    },
+    {
+      "action": "upsert",
+      "error": "microsoft_defender_rule_conflict: Graph refused to create detection rule opentide-00000000-0000-4000-8047-0000000000d7 on tenant lab: HTTP 409 (A detection rule with this name, title, or rule ID already exists.). No rule has this id, so another rule most likely holds its display name or alert title: one an earlier opentide release created (under the bare uuid in 1.0.0, or in 0.x), or one created…",
+      "id": "00000000-0000-4000-8047-0000000000d7",
+      "name": "Defender name held rule",
       "platform": "microsoft_defender",
       "reason": null,
       "seconds": 0.0,
@@ -172,7 +199,7 @@ exit: 1
     "create": 1,
     "delete": 0,
     "disable": 0,
-    "failed": 1,
+    "failed": 2,
     "not_attempted": 0,
     "platforms": 1,
     "seconds": 0.0,

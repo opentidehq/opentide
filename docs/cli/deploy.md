@@ -210,13 +210,13 @@ Microsoft Defender rules are custom detections on the Graph **beta** API, `https
 
 | Change | Requests | The tenant's answer |
 |---|---|---|
-| create or update | `PATCH detectionRules/opentide-<uuid>` with the rule | `404`: `POST detectionRules` with the rule and its `id`; that create's `409`: one more `PATCH`, which updates the rule when another run created it first, and fails the rule with `microsoft_defender_rule_conflict` when it answers `404` too (another rule holds the display name) |
+| create or update | `PATCH detectionRules/opentide-<uuid>` with the rule | `404`: `POST detectionRules` with the rule and its `id`; that create's `409`: one more `PATCH`, which updates the rule when another run created it first, and fails the rule with `microsoft_defender_rule_conflict` when it answers `404` too (another rule most likely holds the display name or the alert title) |
 | disable (`DISABLED`) | `PATCH detectionRules/opentide-<uuid>` with the rule and `status: disabled` | `404`: the rule is skipped, `not on the tenant: nothing to disable`, with the `microsoft_defender_rule_absent` warning |
-| delete (`REMOVED`, `--prune`) | `DELETE detectionRules/opentide-<uuid>` | `404`: skipped, `already gone from the tenant` |
+| delete (`REMOVED`, `--prune`) | `DELETE detectionRules/opentide-<uuid>` | `404`: skipped, `no rule opentide-<uuid> on the tenant` |
 
-The plan counts each active rule as `create or update`; the row of `results` says which it was. Any other answer fails the rule with `tenant_refused`, the status and Graph's message. A deleted rule file is retired by `opentide-<uuid>`, so `--prune` deletes only a rule opentide deployed.
+The plan counts each active rule as `create or update`; the row of `results` says which it was. A rule that fails with `microsoft_defender_rule_conflict` has the code before its message in the row's `error` (`microsoft_defender_rule_conflict: Graph refused to create …`). Any other answer fails the rule with `tenant_refused`, the status and Graph's message. A deleted rule file is retired by `opentide-<uuid>`, so `--prune` deletes only a rule opentide deployed.
 
-A rule an earlier release created is not under that id: 1.0.0 deployed under the bare uuid (only a uuid that begins with `a` to `f`; Graph refused the others), and 0.x under ids of its own. Deploy does not touch those rules. Delete or rename them in the Defender portal before the first deploy with this release: the create of `opentide-<uuid>` fails with `microsoft_defender_rule_conflict` while another rule holds the display name, and Graph keeps a disabled rule's name reserved, so disabling it is not enough. A rule to disable or delete that only exists under its bare uuid reads `not on the tenant` or `already gone from the tenant`.
+A rule an earlier release created is not under that id: 1.0.0 deployed under the bare uuid (only a uuid that begins with `a` to `f`; Graph refused the others), and 0.x under ids of its own. Deploy does not touch those rules. Before the first deploy with this release, delete them in the Defender portal, or rename both their name and their alert title (deleting is simpler): Graph refuses the create of `opentide-<uuid>` while another rule holds its display name, alert title or id, and keeps them reserved for a disabled rule too, so disabling is not enough. The rule then fails with `microsoft_defender_rule_conflict`. A rule to disable or delete that only exists under its bare uuid reads `not on the tenant: nothing to disable`, or `no rule opentide-<uuid> on the tenant`: that rule may still run under the bare uuid, so delete it in the portal.
 
 When no rule the run read has a status mapping to its strategies, the command reports `skipped` with exit `0`. The reserved `deploy metadata` command is hidden and returns a non-zero “not implemented” result rather than reporting false success.
 
@@ -381,7 +381,7 @@ opentide retires only what it can show it deployed, from two kinds of evidence:
 
 An `--all` run cannot find a deleted rule on the platforms that keep no state; only the run whose diff deleted the file can. Run `--prune` on the push that deletes rules, or retire them with a `DELETION` status before deleting the file.
 
-A retirement is a `delete` row of `changes` and `results` with `"retired": true`, counted under `delete` in the summary; the plan view says `rule file deleted` in place of a status. A delete the tenant answers `404` is `skipped` (`already gone from the tenant`), and a recorded id is forgotten all the same. Each retirement goes to its tenant after the platform's own rules, and a tenant that stopped on one of them is not asked.
+A retirement is a `delete` row of `changes` and `results` with `"retired": true`, counted under `delete` in the summary; the plan view says `rule file deleted` in place of a status. A delete the tenant answers `404` is `skipped` (`already gone from the tenant`; on Microsoft Defender `no rule opentide-<uuid> on the tenant`, as a rule 1.0.0 deployed under the bare uuid may still run), and a recorded id is forgotten all the same. Each retirement goes to its tenant after the platform's own rules, and a tenant that stopped on one of them is not asked.
 
 Nothing is retired, and a warning says why, when:
 

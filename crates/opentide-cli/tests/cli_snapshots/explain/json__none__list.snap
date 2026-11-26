@@ -1366,7 +1366,7 @@ exit: 0
     },
     {
       "code": "microsoft_defender_rule_conflict",
-      "meaning": "Graph refused to create a Microsoft Defender rule because another rule holds its display name."
+      "meaning": "Graph refused to create a Microsoft Defender rule because another rule most likely holds its display name or alert title."
     },
     {
       "code": "microsoft_defender_schema",

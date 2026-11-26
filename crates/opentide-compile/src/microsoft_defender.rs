@@ -414,19 +414,18 @@ fn bare_uuid(id: &str) -> String {
 
 /// The `metadata.uuid` a Defender rule id names: the lowercase canonical
 /// UUID after [`RULE_ID_PREFIX`] (`generate extract defender` imports an
-/// opentide rule under its own uuid); `None` for any other id.
+/// opentide rule under its own uuid), only when the id is exactly the one
+/// [`rule_id_of`] gives that uuid, as deploy addresses no other; `None` for
+/// any other id (`OPENTIDE-<UUID>`, a braced uuid, a bare uuid).
 pub fn uuid_of_rule_id(id: &str) -> Option<String> {
-    let trimmed = id.trim();
-    let rest = trimmed
-        .get(..RULE_ID_PREFIX.len())
-        .filter(|head| head.eq_ignore_ascii_case(RULE_ID_PREFIX))
-        .map(|_| &trimmed[RULE_ID_PREFIX.len()..])?;
+    let rest = id.strip_prefix(RULE_ID_PREFIX)?;
     let canonical = canonical_uuid(rest).to_ascii_lowercase();
     let hex = canonical.chars().filter(|c| *c != '-').count();
     (canonical.len() == 36
         && hex == 32
-        && canonical.chars().all(|c| c == '-' || c.is_ascii_hexdigit()))
-    .then_some(canonical)
+        && canonical.chars().all(|c| c == '-' || c.is_ascii_hexdigit())
+        && rule_id_of(&canonical) == id)
+        .then_some(canonical)
 }
 
 /// The create body: `id` first, then the update `body`.
@@ -526,12 +525,30 @@ mod tests {
                 id.strip_prefix(RULE_ID_PREFIX)
             );
         }
+    }
+
+    #[test]
+    fn only_the_id_deploy_gives_a_rule_names_its_uuid() {
+        // #1886: any other form of the id is not the rule deploy addresses.
+        for id in [
+            "8f3c4a7e-0000-4000-8000-000000000001",
+            "OPENTIDE-8F3C4A7E-0000-4000-8000-000000000001",
+            "opentide-8F3C4A7E-0000-4000-8000-000000000001",
+            "Opentide-8f3c4a7e-0000-4000-8000-000000000001",
+            "opentide-{8f3c4a7e-0000-4000-8000-000000000001}",
+            "opentide-8f3c4a7e000040008000000000000001",
+            " opentide-8f3c4a7e-0000-4000-8000-000000000001",
+            "opentide-8f3c4a7e-0000-4000-8000-000000000001 ",
+            "opentide-7506",
+            "opentide-",
+            "7506",
+        ] {
+            assert_eq!(uuid_of_rule_id(id), None, "{id}");
+        }
         assert_eq!(
-            uuid_of_rule_id("8f3c4a7e-0000-4000-8000-000000000001"),
-            None
+            uuid_of_rule_id("opentide-8f3c4a7e-0000-4000-8000-000000000001").as_deref(),
+            Some("8f3c4a7e-0000-4000-8000-000000000001")
         );
-        assert_eq!(uuid_of_rule_id("opentide-7506"), None);
-        assert_eq!(uuid_of_rule_id("7506"), None);
     }
 
     #[test]
