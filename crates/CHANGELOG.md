@@ -6,6 +6,76 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-11-26
+
+The KQL engine infers the columns a query returns, and Microsoft Defender blocks are checked against them, with quick fixes in the editor.
+
+### Upgrade
+
+#### `opentide`
+
+- If you deploy Microsoft Defender rules through `opentide::Workspace` or `opentide::connectors`, delete in the Defender portal the rules 1.0.0 created under their bare uuid, or rename both their name and their alert title, before the next deploy: Graph refuses to create `opentide-<uuid>` while another rule holds either, even a disabled one.
+
+### Breaking
+
+#### `opentide`
+
+- **Microsoft Defender rules are addressed as `opentide-<uuid>`** ([opentide#1886](https://github.com/opentidehq/opentide/issues/1886)). Graph refuses a rule id that begins with a digit, so most rules 1.0.0 deployed under their bare uuid failed with HTTP 400. Deploy, disable, delete, retirement and the dry run's `api_request` use the new id; a create another rule's name or alert title blocks fails with `microsoft_defender_rule_conflict`.
+  - API: `opentide_compile::microsoft_defender::rule_id_of`, `uuid_of_rule_id`, `RULE_ID_PREFIX`
+  - API: `opentide_connectors::microsoft_defender::RULE_CONFLICT`
+
+#### `opentide-tide`
+
+- **A Defender block is checked against what its query returns** ([opentide#1885](https://github.com/opentidehq/opentide/issues/1885)). `analyze_queries` reports two errors on a `microsoft_defender` block's `query`, at its last operator, and nothing when the output cannot be inferred:
+  - `microsoft_defender_column_not_in_output`: an entity field, action column, custom detail or alert `{{Column}}` the output lacks, with the column it most likely means as the suggestion
+  - `microsoft_defender_required_columns`: the output lacks `Timestamp`, `DeviceId`, `ReportId` or another column a custom detection needs for the Defender XDR tables the query reads
+
+#### `opentide-schema`
+
+- **A Defender `registry_values` mapping without `key` is an error** ([opentide#1884](https://github.com/opentidehq/opentide/issues/1884)). Graph refuses it at deploy ("does not include a required identifier"); the block's checks report `microsoft_defender_entity_identifier` on `entities.registry_values.<N>`, which `opentide-lsp` publishes.
+
+### Added
+
+#### `opentide-lsp`
+
+- **Quick fixes for the Defender output findings** ([opentide#1885](https://github.com/opentidehq/opentide/issues/1885)). `microsoft_defender_column_not_in_output` takes "Apply suggestion", the column the query most likely returns. `microsoft_defender_unprojected_output` gets "Append | project …", inserted after the query's last operator on its own line, so a block scalar's indentation stays. `source.fixAll.opentide` applies the first, never the `| project`.
+
+#### `opentide-tide`
+
+- **A warning and a note on a Defender query's output** ([opentide#1885](https://github.com/opentidehq/opentide/issues/1885)). Both are `lint`'s, not `validate`'s:
+  - `microsoft_defender_column_type` (warning): an entity or action mapped from a `dynamic`, `datetime`, `bool` or `timespan` column
+  - `microsoft_defender_unprojected_output` (note): output columns nothing in the block uses, from which Defender derives entity mappings of its own; the suggestion is the `| project` to end the query with
+
+#### `opentide-schema`
+
+- **`microsoft_defender_impacted_asset_identifier` warns on a device or user with no strong identifier** ([opentide#1884](https://github.com/opentidehq/opentide/issues/1884)). A `hosts` or `accounts` mapping without `device_id` or `name`, or `aad_user_id`, `sid` or `upn`, and without a strong combination such as `name` with `nt_domain`, gets the warning.
+- **Defender's required output columns live in `opentide-schema`** ([opentide#1885](https://github.com/opentidehq/opentide/issues/1885)), so the offline checks and `validate query --live` read one table. `opentide_connectors::microsoft_defender` re-exports them, and `opentide_connectors::connector::kql_code` is this module's.
+  - API: `opentide_schema::objects::platform::microsoft_defender::required_columns` (`DEFENDER_XDR_TABLES`, `defender_xdr_tables_in_query`, `required_column_groups`, `missing_required_column_groups`, `kql_code`)
+
+#### `opentide-kql`
+
+- **`opentide_kql::output` infers the columns a query returns** ([opentide#1885](https://github.com/opentidehq/opentide/issues/1885)). `output(source, profile)` follows the column pass to the last operator of the query's one tabular statement. It answers `None` when the query does not parse, has several statements, or reads something the pass cannot follow (an unknown table, `evaluate`, `mv-apply`). `docs/engine/kql/columns.md` has the details.
+  - API: `output::output`, `output::Output` (`columns`, `complete`, `last_operator`, `column`, `lacks`), `output::OutputColumn` (`name`, `type_name`)
+
+#### `opentide-core`
+
+- **Six Microsoft Defender diagnostic codes** ([opentide#1884](https://github.com/opentidehq/opentide/issues/1884), [opentide#1885](https://github.com/opentidehq/opentide/issues/1885)), each described by `codes::describe`:
+  - API: `codes::MICROSOFT_DEFENDER_ENTITY_IDENTIFIER`, `MICROSOFT_DEFENDER_IMPACTED_ASSET_IDENTIFIER`
+  - API: `codes::MICROSOFT_DEFENDER_COLUMN_NOT_IN_OUTPUT`, `MICROSOFT_DEFENDER_REQUIRED_COLUMNS`, `MICROSOFT_DEFENDER_COLUMN_TYPE`, `MICROSOFT_DEFENDER_UNPROJECTED_OUTPUT`
+
+### Changed
+
+#### `opentide-workspace`
+
+- **`validate --strict` spares `microsoft_defender_impacted_asset_identifier`** ([opentide#1884](https://github.com/opentidehq/opentide/issues/1884)). `opentide_workspace::validate::STRICT_EXEMPT_WARNINGS` holds it beside `platform_not_enabled`, and is now `[&str; 2]`.
+
+### Fixed
+
+#### `opentide-kql`
+
+- **Defender tables no longer list Log Analytics columns** ([opentide#1885](https://github.com/opentidehq/opentide/issues/1885)). Under `Profile::Defender`, a table's reference columns leave out `TimeGenerated`, `TenantId`, `Type`, `_BilledSize` and the other standard columns of its Log Analytics copy, which advanced hunting does not have; completion and hover no longer offer them. `Timestamp` stays.
+- **The column pass follows `project-keep` and `arg_max(T, *)` as Kusto does** ([opentide#1885](https://github.com/opentidehq/opentide/issues/1885)). `project-keep` without a pattern keeps a name the table's reference does not list, and `arg_max(T, *) by K` and `arg_min` no longer repeat the `by` keys.
+
 ## [1.0.0] - 2026-11-25
 
 From 1.0.0 the language server and engine ship in lockstep with opentide: one version, one tag, `v1.0.0`. The `engine-v*` series ended at 0.16.1.
@@ -1138,7 +1208,8 @@ The first working server serves KQL, SPL and Tide YAML over stdio and WASM, with
 - **A frozen HighlightSpec with generated editor maps.** Semantic tokens use the standard LSP legend.
 - **Stdio and WASM hosts, with Zed, Helix and Neovim samples.**
 
-[Unreleased]: https://github.com/opentidehq/opentide/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/opentidehq/opentide/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/opentidehq/opentide/releases/tag/v1.1.0
 [1.0.0]: https://github.com/opentidehq/opentide/releases/tag/v1.0.0
 [0.16.1]: https://github.com/opentidehq/language-server/compare/v0.16.0...v0.16.1
 [0.16.0]: https://github.com/opentidehq/language-server/compare/v0.15.0...v0.16.0

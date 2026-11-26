@@ -81,7 +81,7 @@ exit: 0
     {
       "code": "analysis_engine",
       "fix": null,
-      "message": "The analysis engine (language server 1.0.0) loads",
+      "message": "The analysis engine (language server 1.1.0) loads",
       "status": "pass",
       "subject": null
     },

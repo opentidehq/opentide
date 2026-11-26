@@ -11,7 +11,7 @@ The server ships in the base package:
 
 ```bash
 pip install opentide              # the latest release
-pip install 'opentide==1.0.0'     # or pin it
+pip install 'opentide==1.1.0'     # or pin it
 ```
 
 Command: **`opentide mcp start`**. The server is the command line's own, in Rust (rmcp, the official Rust MCP SDK): it needs no Python package of its own.

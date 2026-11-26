@@ -3173,7 +3173,7 @@ checksum = "7e036b411754132fd6b74e94b74e9a13c5cf606fa93d1885c35860d3060820b1"
 
 [[package]]
 name = "opentide"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "jiff 0.2.41",
  "opentide-analysis",
@@ -3195,7 +3195,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-analysis"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "indexmap",
  "insta",
@@ -3225,7 +3225,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-cassette"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "base64 0.23.1",
  "http-body-util",
@@ -3247,7 +3247,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-cli"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "ansi-to-tui",
  "anstream",
@@ -3315,7 +3315,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-compile"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "caseless",
  "dunce",
@@ -3361,7 +3361,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-connectors"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "base64 0.23.1",
  "http",
@@ -3398,7 +3398,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-core"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "compact_str",
  "indexmap",
@@ -3415,7 +3415,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-cql"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "insta",
  "logos",
@@ -3430,7 +3430,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-dataset"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "postcard",
  "ruzstd",
@@ -3441,7 +3441,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-ecs"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "opentide-core",
  "opentide-dataset",
@@ -3452,7 +3452,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-eql"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "insta",
  "logos",
@@ -3470,7 +3470,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-esql"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "insta",
  "logos",
@@ -3487,7 +3487,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-exabeam"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "insta",
  "logos",
@@ -3505,7 +3505,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-falco"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "insta",
  "logos",
@@ -3522,7 +3522,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-highlight"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "insta",
  "opentide-core",
@@ -3536,7 +3536,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-kql"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "foldhash",
  "hashbrown 0.17.1",
@@ -3555,7 +3555,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-kuery"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "insta",
  "logos",
@@ -3569,7 +3569,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-lsp"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -3593,7 +3593,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-lucene"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "insta",
  "opentide-core",
@@ -3611,7 +3611,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-native"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "jiff 0.2.41",
  "opentide",
@@ -3639,7 +3639,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-parse"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "foldhash",
  "insta",
@@ -3649,7 +3649,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-schema"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "fancy-regex 0.20.1",
  "garde",
@@ -3677,7 +3677,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-schema-derive"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3686,7 +3686,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-spl"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "foldhash",
  "insta",
@@ -3703,7 +3703,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-tide"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "opentide-core",
  "opentide-cql",
@@ -3731,7 +3731,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-wasm"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "js-sys",
  "opentide",
@@ -3741,7 +3741,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-workspace"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "dunce",
  "indexmap",
@@ -3765,7 +3765,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-yara"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "foldhash",
  "opentide-core",
@@ -3780,7 +3780,7 @@ dependencies = [
 
 [[package]]
 name = "opentide-yaral"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "insta",
  "logos",
