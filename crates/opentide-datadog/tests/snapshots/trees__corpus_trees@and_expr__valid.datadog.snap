@@ -1,0 +1,22 @@
+---
+source: crates/opentide-datadog/tests/trees.rs
+expression: "debug_tree(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/datadog/and_expr__valid.datadog
+---
+QUERY@0..36
+  AND_EXPR@0..36
+    FIELD_CLAUSE@0..11
+      TAG_KEY@0..6
+        WORD@0..6 "source"
+      COLON@6..7 ":"
+      TERM@7..11
+        WORD@7..11 "okta"
+    WHITESPACE@11..12 " "
+    AND_KW@12..15 "AND"
+    WHITESPACE@15..16 " "
+    FIELD_CLAUSE@16..36
+      ATTRIBUTE@16..28
+        WORD@16..28 "@evt.outcome"
+      COLON@28..29 ":"
+      TERM@29..36
+        WORD@29..36 "FAILURE"

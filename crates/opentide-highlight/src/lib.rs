@@ -1046,9 +1046,15 @@ fn generate_tm_language_from(
             "comment": "capture:number",
         }));
     } else {
+        // Datadog's search syntax quotes with `"` only: `'` is a term's character.
+        let string_match = if language == LanguageId::Datadog {
+            "\"(\\\\.|[^\"\\\\])*\"?"
+        } else {
+            "\"(\\\\.|[^\"\\\\])*\"|'(\\\\.|[^'\\\\])*'"
+        };
         patterns.push(serde_json::json!({
             "name": string_tm,
-            "match": "\"(\\\\.|[^\"\\\\])*\"|'(\\\\.|[^'\\\\])*'",
+            "match": string_match,
             "comment": "capture:string",
         }));
         patterns.push(serde_json::json!({

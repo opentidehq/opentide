@@ -5,7 +5,7 @@ description: How opentide compiles its vocabularies, catalogs and templates into
 
 # Embedded datasets
 
-Every binary carries data: the ATT&CK and actors vocabularies, the Falco, KQL, SPL, ES|QL, EQL, CQL, Exabeam, YARA and YARA-L catalogs, the Tide field catalog, the setup templates, the explain pages, the pins. Before [#1743](https://github.com/opentidehq/opentide/issues/1743) they were `include_str!`d as plain text, 11 MB of security vocabulary in the `.rdata` of every executable. Antivirus engines read it as the binary's own: ClamAV `Win.Coinminer.Generic-7150608-0` on the Falco miner-domain lists, hunting rules on the ATT&CK text (`sekurlsa::`, `InjectDLL`), a cloud verdict on a large unsigned executable full of stealer, miner and injection vocabulary ([the investigation](av-false-positives-2026-11-21.md)).
+Every binary carries data: the ATT&CK and actors vocabularies, the Falco, KQL, SPL, ES|QL, EQL, CQL, Exabeam, YARA, YARA-L and Datadog catalogs, the Tide field catalog, the setup templates, the explain pages, the pins. Before [#1743](https://github.com/opentidehq/opentide/issues/1743) they were `include_str!`d as plain text, 11 MB of security vocabulary in the `.rdata` of every executable. Antivirus engines read it as the binary's own: ClamAV `Win.Coinminer.Generic-7150608-0` on the Falco miner-domain lists, hunting rules on the ATT&CK text (`sekurlsa::`, `InjectDLL`), a cloud verdict on a large unsigned executable full of stealer, miner and injection vocabulary ([the investigation](av-false-positives-2026-11-21.md)).
 
 They are now **compressed at build time and decoded once per process, on first use**. This is compression, not obfuscation: no XOR (a byte XOR trips another rule, `SUSP_XORed_Mozilla_Oct19`), no key, no encryption, no packer. Code is not compressed: section entropy stays well below the 7.0 "packed" threshold ([measured below](#measurements)).
 
@@ -40,7 +40,7 @@ A parse at run time is what a dataset costs most. Where a model is plain data, t
 | The Tide field catalog (`data/catalogs/tide/generated/fields.json`, 1.1 MB) | `opentide-highlight`'s `tide_model.rs`: every string once, the fields by place in that table, and the lists of enum values (440 KB of the file, repeated for each revision of each schema that has them) as a blob of their own, decoded when a field's list is first read | The first Tide document of a process parsed all of it |
 | The KQL catalogs' own rows (`data/catalogs/kql/core`, the hand-written `sentinel` and `defender` tables and columns: operators, functions, plugins, types, options) | `opentide-kql`'s `rows_model.rs` (#1767) | Building any query's catalog parsed about 40 KB of TOML for them, a third of the first KQL answer on a host with no threads |
 | The Azure Monitor tables' columns (`data/catalogs/kql/azure-monitor/tables.toml`) | `opentide-kql`'s `tables_model.rs`, `kql_azure_shards.rs` (#1767) | The heads (35 KB) are one blob and the columns are 30 shards of 32 tables (299 KB): the first KQL answer decodes the shards of the tables the query names, not all 27,237 columns |
-| The CQL, Falco, Exabeam, ES\|QL, SPL, YARA and YARA-L catalogs (`data/catalogs/<language>/*.toml`) | Each crate's `catalog_model.rs` | The first query or rule of the language read them item by item (ADR 0013), the larger part of its first answer |
+| The CQL, Falco, Exabeam, ES\|QL, SPL, YARA, YARA-L and Datadog catalogs (`data/catalogs/<language>/*.toml`) | Each crate's `catalog_model.rs` | The first query or rule of the language read them item by item (ADR 0013), the larger part of its first answer |
 
 Not pre-parsed: the small catalogs read once and cheaply (EQL, Carbon Black's Lucene fields, the ECS fields), which are stored as compressed text.
 
@@ -147,6 +147,7 @@ Every dataset compiled in is redistributed in every binary, wheel, crate, npm pa
 | ES\|QL, EQL (`esql/`, `eql/`) | elastic/elasticsearch documentation | AGPL-3.0, SSPL or Elastic License 2.0 (the repository's `LICENSE.txt`) | — (facts only; ES\|QL descriptions written here) | Named in `NOTICE`; EQL descriptions to be confirmed as written here |
 | CQL (`cql/`) | CrowdStrike reference (facts), logscale-community-content (Unlicense), others | Unlicense, MIT, Apache-2.0, LGPL-2.1 (names only) | Licence texts | Shipped |
 | Exabeam (`exabeam/`) | ExabeamLabs/CIMLibrary | Apache-2.0 | Licence text and NOTICE | Shipped |
+| Datadog (`datadog/`) | DataDog/documentation (the Default Standard Attributes table), facts only | BSD-3-Clause | Copyright, conditions, disclaimer in binary distributions | Shipped (`LICENSE-BSD-3-Clause.txt`, `NOTICE`) |
 | YARA (`yara/`) | VirusTotal/yara-x, VirusTotal/yara | BSD-3-Clause | Copyright, conditions, disclaimer in binary distributions | Shipped |
 | YARA-L (`yaral/`) | Google Security Operations documentation | CC BY 4.0 | Credit, licence link | In `NOTICE`, `yaral/NOTICE` |
 | Bitdefender, Carbon Black (`bitdefender/`, `carbon_black/`) | Vendor pages and MIT repositories, facts only | — (no text copied) | — | In `NOTICE` and each `NOTICE` |

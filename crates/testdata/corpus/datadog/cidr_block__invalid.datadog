@@ -1,0 +1,2 @@
+# prod:cidr_block invalid
+CIDR(@network.client.ip, 10.0.0.300)

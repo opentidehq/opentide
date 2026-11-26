@@ -160,6 +160,7 @@ macro_rules! baseline_tests {
 
 baseline_tests! {
     cql => LanguageId::Cql,
+    datadog => LanguageId::Datadog,
     eql => LanguageId::Eql,
     esql => LanguageId::Esql,
     exabeam => LanguageId::Exabeam,
@@ -183,8 +184,8 @@ fn every_query_language_has_a_baseline() {
     assert_eq!(
         languages,
         [
-            "cql", "eql", "esql", "exabeam", "falco", "kql", "kuery", "lucene", "spl", "yara",
-            "yaral"
+            "cql", "datadog", "eql", "esql", "exabeam", "falco", "kql", "kuery", "lucene", "spl",
+            "yara", "yaral"
         ]
     );
 }

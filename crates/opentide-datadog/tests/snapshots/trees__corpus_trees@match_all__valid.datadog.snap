@@ -1,0 +1,10 @@
+---
+source: crates/opentide-datadog/tests/trees.rs
+expression: "debug_tree(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/datadog/match_all__valid.datadog
+---
+QUERY@0..3
+  MATCH_ALL@0..3
+    STAR@0..1 "*"
+    COLON@1..2 ":"
+    STAR@2..3 "*"

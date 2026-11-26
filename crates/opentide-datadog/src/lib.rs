@@ -226,6 +226,32 @@ pub fn debug_node_kinds() -> Vec<String> {
     syntax::node_kinds()
 }
 
+/// The tree of `source` and how many syntax errors it has: what the `.ungram` conformance test
+/// reads. Not part of the API.
+#[doc(hidden)]
+#[must_use]
+pub fn debug_syntax(source: &str) -> (SyntaxNode, usize) {
+    let (root, parse) = parser::parse(source);
+    (root, parse.errors.len())
+}
+
+/// The toolkit's kinds for the language: what `opentide_parse::conformance::check` takes. Not
+/// part of the API.
+#[doc(hidden)]
+#[must_use]
+pub fn debug_grammar() -> opentide_parse::Grammar {
+    parser::GRAMMAR
+}
+
+/// The text of the tree of `source` and how many syntax errors it has: a lossless tree's text
+/// is the source. Not part of the API.
+#[doc(hidden)]
+#[must_use]
+pub fn debug_roundtrip(source: &str) -> (String, usize) {
+    let (root, parse) = parser::parse(source);
+    (root.to_string(), parse.errors.len())
+}
+
 /// The tree of `source` and its errors, as text, for snapshots. Not part of the API.
 #[doc(hidden)]
 #[must_use]

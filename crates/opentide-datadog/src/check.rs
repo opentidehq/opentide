@@ -573,6 +573,9 @@ fn capture(token: &SyntaxToken, parent: K) -> Option<Capture> {
         K::PHRASE_TOKEN if parent == K::QUOTED_FIELD => Capture::PROPERTY,
         K::PHRASE_TOKEN | K::UNCLOSED_PHRASE => Capture::STRING,
         K::NUMBER => Capture::NUMBER,
+        // A term's text is a value, as Lucene colours its terms; its wildcards stay operators.
+        K::WORD if matches!(parent, K::TERM | K::RANGE_BOUND) => Capture::STRING,
+        K::COLON | K::COMMA | K::EQ | K::PLUS | K::MINUS if parent == K::TERM => Capture::STRING,
         K::COLON if matches!(parent, K::FIELD_CLAUSE | K::MATCH_ALL) => Capture::OPERATOR,
         K::STAR | K::QUESTION => Capture::OPERATOR,
         K::MINUS | K::PLUS if matches!(parent, K::NOT_EXPR | K::VALUE_NOT_EXPR) => {

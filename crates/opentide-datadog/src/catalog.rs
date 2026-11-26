@@ -112,7 +112,7 @@ mod tests {
     /// The pre-parsed catalogue is the TOML file, row for row (ADR 0013: the compiled-in form
     /// is what `toml` reads from the whole file).
     #[test]
-    fn the_compiled_catalogue_is_the_file() {
+    fn the_stored_catalogs_are_the_whole_files() {
         #[derive(serde::Deserialize)]
         struct File {
             reserved: Vec<Attribute>,

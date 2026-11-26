@@ -244,6 +244,15 @@ pub(crate) fn after_keywords(
             "comment": "tm_extras:call",
         }));
     }
+    if language == LanguageId::Datadog {
+        // What is left of a Datadog search is a term: a value, as the semantic tokens colour
+        // it (a run of term characters; wildcards, escapes and punctuation stay their own).
+        rules.push(json!({
+            "name": scope(spec, "string", "string.quoted"),
+            "match": r#"[^\s()\[\]{}":\\!~^<>*?,=+\-][^\s()\[\]{}":\\!~^<>*?,]*"#,
+            "comment": "tm_extras:term",
+        }));
+    }
     if has_identifier_fallback(language) {
         // What is left: a name no rule above placed. The semantic tokens
         // call such a name a variable too.

@@ -1,0 +1,29 @@
+---
+source: crates/opentide-datadog/tests/trees.rs
+expression: "debug_tree(\"a OR b c AND d OR -e\")"
+---
+QUERY@0..20
+  OR_EXPR@0..20
+    TERM@0..1
+      WORD@0..1 "a"
+    WHITESPACE@1..2 " "
+    OR_KW@2..4 "OR"
+    WHITESPACE@4..5 " "
+    AND_EXPR@5..14
+      TERM@5..6
+        WORD@5..6 "b"
+      WHITESPACE@6..7 " "
+      TERM@7..8
+        WORD@7..8 "c"
+      WHITESPACE@8..9 " "
+      AND_KW@9..12 "AND"
+      WHITESPACE@12..13 " "
+      TERM@13..14
+        WORD@13..14 "d"
+    WHITESPACE@14..15 " "
+    OR_KW@15..17 "OR"
+    WHITESPACE@17..18 " "
+    NOT_EXPR@18..20
+      MINUS@18..19 "-"
+      TERM@19..20
+        WORD@19..20 "e"

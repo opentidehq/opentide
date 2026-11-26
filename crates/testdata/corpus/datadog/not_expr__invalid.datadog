@@ -1,0 +1,2 @@
+# prod:not_expr invalid
+NOT NOT status:debug

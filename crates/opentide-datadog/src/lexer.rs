@@ -17,10 +17,13 @@ use opentide_parse::Lexeme;
 /// The pieces of a query.
 #[derive(Logos, Clone, Copy, Debug, PartialEq, Eq)]
 enum Piece {
-    /// VRL's `WHITESPACE` (space, tab, carriage return, line feed), and a byte-order mark.
-    #[regex(r"[ \t\r\n\u{feff}]+")]
+    /// VRL's `WHITESPACE`: space, tab, carriage return, line feed (ASCII bytes only, so the
+    /// repetition is a byte loop).
+    #[regex(r"[ \t\r\n]+")]
     Whitespace,
-    #[regex(r#"[^ \t\r\n\u{feff}()\[\]{}":\\!~^<>*?,=+\-][^ \t\r\n\u{feff}()\[\]{}":\\!~^<>*?,]*"#)]
+    /// A word's first character; [`word`] scans the rest. A repeated class of multi-byte
+    /// characters recursed once per character in logos and overflowed a 1 MB stack.
+    #[regex(r#"[^ \t\r\n()\[\]{}":\\!~^<>*?,=+\-]"#, word)]
     Word,
     #[token("\\", escape)]
     Escape,
@@ -69,6 +72,40 @@ enum Piece {
     RBrace,
 }
 
+/// The rest of a word after its first character: every character up to whitespace or a
+/// character a term cannot hold unescaped.
+fn word(lex: &mut logos::Lexer<'_, Piece>) {
+    let end = lex
+        .remainder()
+        .find(|c: char| {
+            matches!(
+                c,
+                ' ' | '\t'
+                    | '\r'
+                    | '\n'
+                    | '('
+                    | ')'
+                    | '['
+                    | ']'
+                    | '{'
+                    | '}'
+                    | '"'
+                    | ':'
+                    | '\\'
+                    | '!'
+                    | '~'
+                    | '^'
+                    | '<'
+                    | '>'
+                    | '*'
+                    | '?'
+                    | ','
+            )
+        })
+        .unwrap_or(lex.remainder().len());
+    lex.bump(end);
+}
+
 /// A backslash takes the one character after it, whatever it is (a space, a line break, a
 /// quote). A backslash at the end of the text takes nothing: an error.
 fn escape(lex: &mut logos::Lexer<'_, Piece>) -> bool {
@@ -103,8 +140,32 @@ fn phrase(lex: &mut logos::Lexer<'_, Piece>) -> bool {
     false
 }
 
-/// Lexes `source` into lexemes that tile it.
+/// Lexes `source` into lexemes that tile it. A byte-order mark at the start is whitespace, as
+/// an editor shows the text; anywhere else it is a term's character.
 pub(crate) fn lex(source: &str) -> Vec<Lexeme> {
+    let bom = if source.starts_with('\u{feff}') {
+        '\u{feff}'.len_utf8()
+    } else {
+        0
+    };
+    let mut out = Vec::new();
+    let shift = rowan::TextSize::from(u32::try_from(bom).unwrap_or(0));
+    if bom > 0 {
+        out.push(Lexeme {
+            kind: K::WHITESPACE.raw(),
+            range: rowan::TextRange::up_to(shift),
+        });
+    }
+    let rest = source.get(bom..).unwrap_or("");
+    out.extend(pieces(rest).into_iter().map(|l| Lexeme {
+        kind: l.kind,
+        range: l.range + shift,
+    }));
+    out
+}
+
+/// The lexemes of `source`, from its first byte.
+fn pieces(source: &str) -> Vec<Lexeme> {
     opentide_parse::lex::<Piece>(source, |piece, _| {
         match piece {
             Ok(Piece::Whitespace) => K::WHITESPACE,

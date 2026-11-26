@@ -86,6 +86,13 @@ doc = false
 bench = false
 
 [[bin]]
+name = "datadog"
+path = "fuzz_targets/datadog.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
 name = "exabeam"
 path = "fuzz_targets/exabeam.rs"
 test = false

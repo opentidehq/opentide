@@ -1,8 +1,8 @@
 -- Neovim sample: opentide LSP.
 -- Disable yamlls on objects/**. Languages: opentide-yaml, kql, spl, esql, eql,
 -- kuery (Kibana KQL), lucene, falco (Falco conditions), cql (CrowdStrike
--- Query Language), yara, exabeam (Exabeam Query Language), and
--- opentide-config for .opentide/configurations/**/*.toml (not sql).
+-- Query Language), yara, exabeam (Exabeam Query Language), yaral (YARA-L),
+-- datadog (the Datadog log search syntax), and opentide-config for .opentide/configurations/**/*.toml (not sql).
 -- Configuration checks need `opentide lsp start`: `opentide-lsp` on its own
 -- reports nothing there. Cassandra's CQL uses *.cql too: drop
 -- "cql" from the loop below where a workspace holds Cassandra scripts.
@@ -61,7 +61,7 @@ vim.api.nvim_create_autocmd({ "BufRead", "BufNewFile" }, {
   end,
 })
 
-for _, lang in ipairs({ "esql", "eql", "kuery", "lucene", "falco", "cql", "exabeam" }) do
+for _, lang in ipairs({ "esql", "eql", "kuery", "lucene", "falco", "cql", "exabeam", "datadog" }) do
   vim.api.nvim_create_autocmd({ "BufRead", "BufNewFile" }, {
     pattern = { "*." .. lang },
     callback = function()
@@ -92,7 +92,7 @@ vim.api.nvim_create_autocmd("FileType", {
 })
 
 vim.api.nvim_create_autocmd("FileType", {
-  pattern = { "opentide-yaml", "kql", "spl", "esql", "eql", "kuery", "lucene", "falco", "cql", "yara", "exabeam", "yaral" },
+  pattern = { "opentide-yaml", "kql", "spl", "esql", "eql", "kuery", "lucene", "falco", "cql", "yara", "exabeam", "yaral", "datadog" },
   callback = function()
     vim.lsp.start({
       name = "opentide-lsp",

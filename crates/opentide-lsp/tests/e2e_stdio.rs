@@ -2440,6 +2440,49 @@ fn exabeam_over_stdio() {
 }
 
 #[test]
+fn datadog_over_stdio() {
+    let mut lsp = Lsp::spawn();
+    lsp.request("initialize", json!({ "capabilities": {} }));
+    lsp.notify("initialized", json!({}));
+    // The `.datadog` suffix selects the engine when the client reports no
+    // known id; a raw file is a search.
+    let broken = "source:okta @evt.name:foo!bar\n";
+    let codes = published_codes(&mut lsp, "file:///tmp/r.datadog", "plaintext", broken);
+    assert_eq!(
+        codes,
+        vec!["datadog_unescaped_special"],
+        "raw .datadog file"
+    );
+    let uri = "file:///tmp/h.datadog";
+    let text = "source:okta @evt.outcome:FAILURE\n-@network.client.ip:10.* CIDR(@network.client.ip, 10.0.0.0/8)\n";
+    let codes = published_codes(&mut lsp, uri, "datadog", text);
+    assert!(codes.is_empty(), "{codes:?}");
+    let at = |line: u32, character: usize| {
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": line, "character": character }
+        })
+    };
+    let hover = lsp.request("textDocument/hover", at(0, 15));
+    let value = hover["result"]["contents"]["value"]
+        .as_str()
+        .unwrap_or_default();
+    assert!(value.contains("@evt.outcome"), "{hover}");
+    let tokens = lsp.request(
+        "textDocument/semanticTokens/full",
+        json!({ "textDocument": { "uri": uri } }),
+    );
+    let data = tokens["result"]["data"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    assert!(
+        data.len() >= 5 * 10,
+        "semantic tokens for .datadog: {tokens}"
+    );
+}
+
+#[test]
 fn yaral_over_stdio() {
     let mut lsp = Lsp::spawn();
     lsp.request("initialize", json!({ "capabilities": {} }));

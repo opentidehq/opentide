@@ -81,6 +81,7 @@ fn main() {
         ("yara", LanguageId::Yara),
         ("exabeam", LanguageId::Exabeam),
         ("yaral", LanguageId::Yaral),
+        ("datadog", LanguageId::Datadog),
     ] {
         let texts = corpus(name);
         if texts.is_empty() {

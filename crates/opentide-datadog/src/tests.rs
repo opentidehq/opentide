@@ -503,5 +503,7 @@ fn the_highlight_has_the_captures_of_the_rfc() {
     assert_eq!(capture_of("\\:").as_deref(), Some("constant"));
     assert_eq!(capture_of(">1").as_deref(), Some("operator"));
     assert_eq!(capture_of("1 TO").as_deref(), Some("number"));
+    assert_eq!(capture_of("FAILURE").as_deref(), Some("string"));
+    assert_eq!(capture_of("w*").as_deref(), Some("string"));
     let _ = K::QUERY;
 }

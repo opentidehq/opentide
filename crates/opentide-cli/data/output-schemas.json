@@ -5535,7 +5535,8 @@
             "yara",
             "exabeam",
             "yaral",
-            "cql"
+            "cql",
+            "datadog"
           ],
           "title": "Language",
           "type": "string"

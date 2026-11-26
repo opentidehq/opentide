@@ -1,0 +1,17 @@
+---
+source: crates/opentide-datadog/tests/trees.rs
+expression: "debug_tree(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/datadog/value_not_expr__invalid.datadog
+---
+QUERY@0..18
+  FIELD_CLAUSE@0..18
+    ATTRIBUTE@0..13
+      WORD@0..13 "@process.args"
+    COLON@13..14 ":"
+    VALUE_GROUP@14..18
+      L_PAREN@14..15 "("
+      VALUE_NOT_EXPR@15..16
+        MINUS@15..16 "-"
+      WHITESPACE@16..17 " "
+      R_PAREN@17..18 ")"
+16..17: expected a search term after the modifier
