@@ -1817,257 +1817,295 @@ Check network access to https://vulnerability.circl.lu (or the configured lookup
 
 A detection rule's query names a calculated field (`#name`): real-time detection rules have none.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: warning. Reported by the analysis engine on a Datadog log search: in an editor on a `.datadog` file (`opentide lsp start`, profile `search`), and, once the `datadog` platform lands, on a detection rule's queries (profile `rule`).
+
+Calculated fields are defined in a Log Explorer view; a real-time detection rule evaluates incoming logs, which carry none. In a `.datadog` file (profile `search`) `#name` is allowed.
 
 ### Example
 
-```text
-opentide validate
+```text illustrative
+#duration_ms:>500
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Use the attribute the calculated field is computed from: `@duration:>500ms`.
 
 ## datadog_cidr
 
 A Datadog `CIDR()` call does not name an `@attribute` first, has no block, or has an argument that is not an IPv4 or IPv6 CIDR block.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by the analysis engine on a Datadog log search: in an editor on a `.datadog` file (`opentide lsp start`, profile `search`), and, once the `datadog` platform lands, on a detection rule's queries (profile `rule`).
+
+`CIDR(@attribute, block, …)` matches an IP attribute inside any of the blocks. The first argument is an attribute (with `@`); each block is an IPv4 or IPv6 address with an optional prefix length (`10.0.0.0/8`, `fc00::/7`), within 32 or 128.
 
 ### Example
 
-```text
-opentide validate
+```text illustrative
+CIDR(network.client.ip, 10.0.0.0/8)
+CIDR(@network.client.ip, 10.0.0.300)
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Name the attribute with `@` and write each block as an address and prefix: `CIDR(@network.client.ip, 10.0.0.0/8)`.
 
 ## datadog_curly_quote
 
 A Datadog search holds a curly quote, which is not a quote: the words around it are searched as separate terms.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: warning. Reported by the analysis engine on a Datadog log search: in an editor on a `.datadog` file (`opentide lsp start`, profile `search`), and, once the `datadog` platform lands, on a detection rule's queries (profile `rule`).
+
+Only the straight double quote `"` delimits a phrase. Text pasted from a document often carries `“` and `”`, which Datadog searches as part of the words.
 
 ### Example
 
-```text
-opentide validate
+```text illustrative
+@evt.name:“Console Login”
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Use straight double quotes: `@evt.name:"Console Login"`.
 
 ## datadog_detached_operator
 
 A Datadog exclusion `-` is followed by a space.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: warning. Reported by the analysis engine on a Datadog log search: in an editor on a `.datadog` file (`opentide lsp start`, profile `search`), and, once the `datadog` platform lands, on a detection rule's queries (profile `rule`).
+
+The exclusion is written against what it excludes. With a space after it, a reader cannot tell what is excluded, and the docs never write it so.
 
 ### Example
 
-```text
-opentide validate
+```text illustrative
+- @login_type:k
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Remove the space: `-@login_type:k`.
 
 ## datadog_full_text_in_rule
 
 A detection rule's query searches every attribute with `*:term`, which Datadog documents for monitors, dashboards and notebooks, not for detection rules.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: warning. Reported by the analysis engine on a Datadog log search: in an editor on a `.datadog` file (`opentide lsp start`, profile `search`), and, once the `datadog` platform lands, on a detection rule's queries (profile `rule`).
+
+Datadog's search syntax page documents `*:term` for Log Management's monitor, dashboard and notebook queries; detection rules are not on that list. `*:*` (every event) is not reported. In a `.datadog` file (profile `search`) `*:term` is allowed.
 
 ### Example
 
-```text
-opentide validate
+```text illustrative
+*:mimikatz
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Name the attribute the term is in: `@process.command_line:*mimikatz*`.
 
 ## datadog_lowercase_operator
 
 A lower-case `and`, `or` or `not` stands between field clauses or in a value group, where Datadog reads it as a search term, not an operator.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: warning. Reported by the analysis engine on a Datadog log search: in an editor on a `.datadog` file (`opentide lsp start`, profile `search`), and, once the `datadog` platform lands, on a detection rule's queries (profile `rule`).
+
+Operators are upper case only. A lower-case `or` between two field clauses is a free-text term joined to both by AND; in a value group it is a value. Between free-text words it is just a word, and is not reported (`not enough attributes`).
 
 ### Example
 
-```text
-opentide validate
+```text illustrative
+@login_type:(k OR n or E)
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Write the operator in upper case: `@login_type:(k OR n OR E)`.
 
 ## datadog_mixed_boolean
 
 A Datadog search puts OR beside an AND, written or implied, without parentheses: AND binds tighter, as VRL reads it (unverified on Cloud SIEM).
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: warning. Reported by the analysis engine on a Datadog log search: in an editor on a `.datadog` file (`opentide lsp start`, profile `search`), and, once the `datadog` platform lands, on a detection rule's queries (profile `rule`).
+
+In Datadog's search syntax, a space between two clauses is AND, and AND binds tighter than OR, so `service:x status:error OR warning` reads as `(service:x status:error) OR warning`: any log containing the word `warning` matches. The precedence is VRL's (the library behind Datadog's Observability Pipelines) and is not yet verified on Cloud SIEM, so this is a warning. The same holds inside a value group: `@SourceFileName:(*.exe OR *.rar *.7z)` asks for a name ending in both `.rar` and `.7z`.
 
 ### Example
 
-```text
-opentide validate
+```text illustrative
+service:azure-service-bus status:error OR warning
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Add parentheses to say which you mean: `service:azure-service-bus status:(error OR warning)`.
 
 ## datadog_parse_error
 
 The Datadog search does not parse: an unbalanced bracket, a dangling operator, an empty group, a field with no value, two modifiers in a row, or an unclosed phrase.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by the analysis engine on a Datadog log search: in an editor on a `.datadog` file (`opentide lsp start`, profile `search`), and, once the `datadog` platform lands, on a detection rule's queries (profile `rule`).
+
+Datadog refuses the query. The engine reports the first fault only: what follows it is not checked. Modifiers do not stack (`--a`, `NOT NOT a`, `-NOT a`), a field needs a value after its colon, and a space between a field and its colon makes the field free text, so the colon starts nothing. Nesting deeper than 1,000 groups is the same error.
 
 ### Example
 
-```text
-opentide validate
+```text illustrative
+service:(web OR api
+@usr.email:
+@session.view.count :> 3
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Close the bracket, give the field a value, write one modifier, and put the colon right after the field: `service:(web OR api)`, `@session.view.count:>3`.
 
 ## datadog_pipelines_only
 
 A Datadog search uses Observability Pipelines syntax (`_exists_:`, `_missing_:`, a quoted field name), which log search does not read the same way.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: warning. Reported by the analysis engine on a Datadog log search: in an editor on a `.datadog` file (`opentide lsp start`, profile `search`), and, once the `datadog` platform lands, on a detection rule's queries (profile `rule`).
+
+Observability Pipelines (VRL) has its own search dialect. In log search, existence is `@attribute:*`, absence `-@attribute:*`, and a field name is written bare, with what needs it escaped.
 
 ### Example
 
-```text
-opentide validate
+```text illustrative
+_exists_:service
+"service.status":disabled
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Write the log search form: `service:*`, `service.status:disabled` (as a tag) or `@service.status:disabled` (as an attribute).
 
 ## datadog_range
 
 A Datadog range is malformed (a missing bound, a lower-case `to`), or mixes an inclusive and an exclusive bound.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error (a malformed range); warning (mixed bounds). Reported by the analysis engine on a Datadog log search: in an editor on a `.datadog` file (`opentide lsp start`, profile `search`), and, once the `datadog` platform lands, on a detection rule's queries (profile `rule`).
+
+A range is `[low TO high]` (inclusive) or `{low TO high}` (exclusive), with `TO` in upper case and `*` for an open end. A range that is never closed, or has no `TO`, is an error. `[1 TO 5}`, which mixes the two, is a warning: Datadog does not document it.
 
 ### Example
 
-```text
-opentide validate
+```text illustrative
+@http.status_code:[400 to 499]
+@http.status_code:[400 TO 499}
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Write `TO` in upper case and the same bracket on both ends: `@http.status_code:[400 TO 499]`.
 
 ## datadog_regex
 
 A Datadog search term holds `~` or `^`: the search syntax has no regular expression, fuzzy or boost operator.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by the analysis engine on a Datadog log search: in an editor on a `.datadog` file (`opentide lsp start`, profile `search`), and, once the `datadog` platform lands, on a detection rule's queries (profile `rule`).
+
+Lucene's `foo~2` (fuzzy) and `foo^2` (boost) are not Datadog syntax, and `/…/` is not a regular expression: `/` is an ordinary character.
 
 ### Example
 
-```text
-opentide validate
+```text illustrative
+@msg:foo~2
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Use wildcards (`@msg:foo*`), or escape the character to search for it (`@msg:foo\~2`).
 
 ## datadog_symbol_operator
 
 `&&` or `||` stands between Datadog search clauses: Datadog's docs list them as characters to escape; write AND or OR.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: warning. Reported by the analysis engine on a Datadog log search: in an editor on a `.datadog` file (`opentide lsp start`, profile `search`), and, once the `datadog` platform lands, on a detection rule's queries (profile `rule`).
+
+VRL (Observability Pipelines) reads `&&` and `||` as AND and OR, and so does the engine, but Datadog's log search documents them as characters to escape, not as operators.
 
 ### Example
 
-```text
-opentide validate
+```text illustrative
+source:okta && @evt.outcome:FAILURE
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Write the operator: `source:okta AND @evt.outcome:FAILURE`.
 
 ## datadog_unescaped_colon
 
 A Datadog search value holds an unescaped `:`, which Datadog's docs say to escape.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: warning. Reported by the analysis engine on a Datadog log search: in an editor on a `.datadog` file (`opentide lsp start`, profile `search`), and, once the `datadog` platform lands, on a detection rule's queries (profile `rule`).
+
+A field is everything before the first unescaped colon, so a colon in the value is ambiguous; Datadog's docs list `:` among the characters to escape, though its own content does not always. A value of `tags` is a `key:value` pair by definition and is not reported.
 
 ### Example
 
-```text
-opentide validate
+```text illustrative
+@usr.id:system:serviceaccount:x
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Escape the colons: `@usr.id:system\:serviceaccount\:x`, or quote the value.
 
 ## datadog_unescaped_special
 
 A Datadog search term holds an unescaped `!`, `<` or `>`, or a value starts with an unescaped `-`, which Datadog reads as an exclusion: escape it with `\`.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: error. Reported by the analysis engine on a Datadog log search: in an editor on a `.datadog` file (`opentide lsp start`, profile `search`), and, once the `datadog` platform lands, on a detection rule's queries (profile `rule`).
+
+Datadog's search syntax reserves `!`, `<` and `>` (comparisons go right after a field's colon: `@x:>=5`), and a `-` before a value excludes it. A negative number in a comparison is fine (`@x:>-1`).
 
 ### Example
 
-```text
-opentide validate
+```text illustrative
+foo!bar
+@x:-1
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Escape the character (`foo\!bar`, `@x:\-1`) or quote the value (`@x:"-1"`). To exclude, put `-` before the field: `-@x:1`.
 
 ## datadog_unknown_attribute
 
 A Datadog search field is a dotted bare key, searched as a tag, where an `@attribute` was probably meant.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: hint. Reported by the analysis engine on a Datadog log search: in an editor on a `.datadog` file (`opentide lsp start`, profile `search`), and, once the `datadog` platform lands, on a detection rule's queries (profile `rule`).
+
+A bare key (`host`, `service`, `env:prod`) searches a reserved attribute or a tag; an attribute of the log is written with `@`. A dotted bare key such as `evt.name` searches a tag named `evt.name`, which is rarely what was meant.
 
 ### Example
 
-```text
-opentide validate
+```text illustrative
+evt.name:ConsoleLogin
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Add `@` to search the attribute: `@evt.name:ConsoleLogin`. If the tag is meant, escape the dot (`evt\.name:ConsoleLogin`) to say so.
 
 ## datadog_wildcard_in_phrase
 
 A `*` or `?` touches a word inside a quoted phrase, where it is punctuation, not a wildcard.
 
-Reported by the analysis engine for an object file: an editor running `opentide lsp start` shows it. `opentide validate` and `opentide lint` are the authority for objects and name the same problem with their own code.
+Severity: warning. Reported by the analysis engine on a Datadog log search: in an editor on a `.datadog` file (`opentide lsp start`, profile `search`), and, once the `datadog` platform lands, on a detection rule's queries (profile `rule`).
+
+Wildcards work in terms only. Inside quotes, `"*mimikatz*"` searches for the word `mimikatz`, with the asterisks as punctuation.
 
 ### Example
 
-```text
-opentide validate
+```text illustrative
+"*mimikatz*"
 ```
 
 ### How to fix
 
-Change the file where the frame points, then run `opentide validate` again.
+Take the wildcard out of the quotes, escaping any space: `*mimikatz*`, `*my\ test*`.
 
 ## defender_output_columns
 

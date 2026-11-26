@@ -20,20 +20,22 @@ parse_external = 16050818
 parse_external_allocations = 10316
 
 [datadog]
-analyze_corpus = 1661766
-analyze_corpus_allocations = 5735
-analyze_external = 72146209
-analyze_external_allocations = 234216
-parse_corpus = 980658
-parse_corpus_allocations = 2242
-parse_external = 45643140
-parse_external_allocations = 102108
+analyze_corpus = 1691637
+analyze_corpus_allocations = 5779
+analyze_external = 74347823
+analyze_external_allocations = 237111
+parse_corpus = 1010970
+parse_corpus_allocations = 2286
+parse_external = 47844404
+parse_external_allocations = 105003
 
 [datasets]
 complete-attack-technique = 34019684
 complete-attack-technique_allocations = 55395
 cql = 6816716
 cql_allocations = 11087
+datadog = 600666
+datadog_allocations = 1358
 eql = 2309827
 eql_allocations = 2771
 esql = 4701376

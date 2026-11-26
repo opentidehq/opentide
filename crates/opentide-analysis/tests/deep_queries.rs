@@ -512,6 +512,10 @@ fn stopped(diagnostics: &[Diagnostic]) -> Vec<&str> {
 /// a ladder analyses cleanly at the floor, or at the limit its own grammar sets for the
 /// shape; far past it, the engine stops with one error: never an abort, never more.
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one ladder per language: a table read top to bottom"
+)]
 fn a_precedence_chain_in_each_level_stops_with_one_error() {
     let ladders = [
         Ladder {

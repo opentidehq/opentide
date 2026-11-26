@@ -22,6 +22,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Eac
 
 ### Added
 
+- **Datadog search syntax in the editor.** `opentide lsp start` checks, highlights, hovers and completes `.datadog` files: the log search syntax of Datadog Cloud SIEM detection rules, with 16 `datadog_*` codes (`opentide explain datadog_mixed_boolean`) and Datadog's reserved and standard attributes. `opentide validate` and `opentide validate query` do not take `.datadog` files yet: the `datadog` platform comes next.
 - **`validate` warns when a Defender device or user has no strong identifier.** A `hosts` or `accounts` mapping with neither a column Defender maps to an impacted asset (`device_id`, `name`; `aad_user_id`, `sid`, `upn`) nor a strong combination such as an account's `name` with `nt_domain` gets `microsoft_defender_impacted_asset_identifier`, in `validate`, `lint` and the editor. `validate --strict` reports it without failing ([#1884](https://github.com/opentidehq/opentide/issues/1884)).
 
 ## [1.0.0] — 2026-11-25

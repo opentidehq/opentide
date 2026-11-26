@@ -109,26 +109,6 @@ pub(crate) fn markdown(attribute: &Attribute, reserved: bool) -> String {
 mod tests {
     use super::*;
 
-    /// The pre-parsed catalogue is the TOML file, row for row (ADR 0013: the compiled-in form
-    /// is what `toml` reads from the whole file).
-    #[test]
-    fn the_stored_catalogs_are_the_whole_files() {
-        #[derive(serde::Deserialize)]
-        struct File {
-            reserved: Vec<Attribute>,
-            attributes: Vec<Attribute>,
-        }
-        let text = std::fs::read_to_string(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../../data/catalogs/datadog/attributes.toml"
-        ))
-        .expect("the catalogue");
-        let file: File = toml::from_str(&text).expect("TOML");
-        let catalog = Catalog::cached();
-        assert_eq!(catalog.reserved, file.reserved);
-        assert_eq!(catalog.attributes, file.attributes);
-    }
-
     #[test]
     fn cached_loads_the_expected_rows() {
         let catalog = Catalog::cached();

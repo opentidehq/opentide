@@ -13,6 +13,9 @@ use opentide_datadog::{Context, analyze_with};
 
 const N: usize = 20_000;
 
+/// A case: its name, and the input of size `n`.
+type Case = (&'static str, fn(usize) -> String);
+
 /// The best of three runs of the analysis of `source`.
 fn time(source: &str) -> Duration {
     (0..3)
@@ -40,7 +43,7 @@ fn grows_linearly(name: &str, build: impl Fn(usize) -> String) {
 
 #[test]
 fn broken_inputs_are_linear() {
-    let cases: [(&str, fn(usize) -> String); 12] = [
+    let cases: [Case; 12] = [
         ("unclosed quotes", |n| "\"a ".repeat(n)),
         ("escaped quotes", |n| format!("\"{}", "\\\"".repeat(n))),
         ("stray closers", |n| "a ) ".repeat(n)),
@@ -61,7 +64,7 @@ fn broken_inputs_are_linear() {
 
 #[test]
 fn long_valid_inputs_are_linear() {
-    let cases: [(&str, fn(usize) -> String); 5] = [
+    let cases: [Case; 5] = [
         ("an AND chain", |n| "@a:b ".repeat(n)),
         ("an OR chain", |n| vec!["@a:b"; n].join(" OR ")),
         ("a mixed chain", |n| "a b OR ".repeat(n) + "c"),

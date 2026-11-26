@@ -1,11 +1,6 @@
 //! The parser's trees as snapshots: a few hand-picked queries, and one tree per corpus file,
 //! valid and invalid alike. A corpus file's first line is its `prod:` tag, not part of the query.
 
-#![expect(
-    clippy::expect_used,
-    reason = "test helpers outside #[test] functions: a panic fails the test"
-)]
-
 use opentide_datadog::debug_tree;
 
 #[test]

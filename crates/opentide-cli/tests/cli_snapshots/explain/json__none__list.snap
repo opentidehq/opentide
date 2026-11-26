@@ -297,6 +297,70 @@ exit: 0
       "meaning": "A threat lists CVE identifiers, but Vulnerability-Lookup could not be reached to check them."
     },
     {
+      "code": "datadog_calculated_field_in_rule",
+      "meaning": "A detection rule's query names a calculated field (`#name`): real-time detection rules have none."
+    },
+    {
+      "code": "datadog_cidr",
+      "meaning": "A Datadog `CIDR()` call does not name an `@attribute` first, has no block, or has an argument that is not an IPv4 or IPv6 CIDR block."
+    },
+    {
+      "code": "datadog_curly_quote",
+      "meaning": "A Datadog search holds a curly quote, which is not a quote: the words around it are searched as separate terms."
+    },
+    {
+      "code": "datadog_detached_operator",
+      "meaning": "A Datadog exclusion `-` is followed by a space."
+    },
+    {
+      "code": "datadog_full_text_in_rule",
+      "meaning": "A detection rule's query searches every attribute with `*:term`, which Datadog documents for monitors, dashboards and notebooks, not for detection rules."
+    },
+    {
+      "code": "datadog_lowercase_operator",
+      "meaning": "A lower-case `and`, `or` or `not` stands between field clauses or in a value group, where Datadog reads it as a search term, not an operator."
+    },
+    {
+      "code": "datadog_mixed_boolean",
+      "meaning": "A Datadog search puts OR beside an AND, written or implied, without parentheses: AND binds tighter, as VRL reads it (unverified on Cloud SIEM)."
+    },
+    {
+      "code": "datadog_parse_error",
+      "meaning": "The Datadog search does not parse: an unbalanced bracket, a dangling operator, an empty group, a field with no value, two modifiers in a row, or an unclosed phrase."
+    },
+    {
+      "code": "datadog_pipelines_only",
+      "meaning": "A Datadog search uses Observability Pipelines syntax (`_exists_:`, `_missing_:`, a quoted field name), which log search does not read the same way."
+    },
+    {
+      "code": "datadog_range",
+      "meaning": "A Datadog range is malformed (a missing bound, a lower-case `to`), or mixes an inclusive and an exclusive bound."
+    },
+    {
+      "code": "datadog_regex",
+      "meaning": "A Datadog search term holds `~` or `^`: the search syntax has no regular expression, fuzzy or boost operator."
+    },
+    {
+      "code": "datadog_symbol_operator",
+      "meaning": "`&&` or `||` stands between Datadog search clauses: Datadog's docs list them as characters to escape; write AND or OR."
+    },
+    {
+      "code": "datadog_unescaped_colon",
+      "meaning": "A Datadog search value holds an unescaped `:`, which Datadog's docs say to escape."
+    },
+    {
+      "code": "datadog_unescaped_special",
+      "meaning": "A Datadog search term holds an unescaped `!`, `<` or `>`, or a value starts with an unescaped `-`, which Datadog reads as an exclusion: escape it with `\\`."
+    },
+    {
+      "code": "datadog_unknown_attribute",
+      "meaning": "A Datadog search field is a dotted bare key, searched as a tag, where an `@attribute` was probably meant."
+    },
+    {
+      "code": "datadog_wildcard_in_phrase",
+      "meaning": "A `*` or `?` touches a word inside a quoted phrase, where it is punctuation, not a wildcard."
+    },
+    {
       "code": "defender_output_columns",
       "meaning": "A Defender custom detection must return the columns Defender requires."
     },
@@ -1989,13 +2053,13 @@ exit: 0
   "duration_ms": 0,
   "exit_code": 0,
   "failure": null,
-  "message": "494 diagnostic codes",
+  "message": "510 diagnostic codes",
   "next_actions": [],
   "ok": true,
   "schema_version": 1,
   "status": "completed",
   "summary": {
-    "codes": 494
+    "codes": 510
   }
 }
 
