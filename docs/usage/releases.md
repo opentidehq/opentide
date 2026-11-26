@@ -7,6 +7,51 @@ description: Public package versions of opentide on PyPI.
 
 Every version of the [`opentide`](https://pypi.org/project/opentide/) package, newest first. Each opens with what it does for you, then the steps to take after upgrading, then what changed, under the same headings every time: Breaking, Added, Changed, Deprecated, Removed, Fixed and Security. Pin a version in CI. [`CHANGELOG.md`](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md) records every change in full; GitHub Releases are tagged `v*` and publish to PyPI.
 
+## 1.1.0 — 26 November 2026
+
+Microsoft Defender deploys work for every rule, and `validate` catches Defender blocks that would fail at deploy. Its breaking changes correct 1.0.0 defects.
+
+**Install**
+
+```bash
+pip install opentide==1.1.0
+export OPENTIDE_REPO_ROOT=/path/to/detection-repo
+opentide validate --strict
+```
+
+**Upgrade**
+
+1. If you deploy to Microsoft Defender, delete in the Defender portal the custom detections earlier releases created, or rename both their name and their alert title, before the next deploy. Graph refuses a new rule while another holds either, even a disabled one.
+2. If you deploy to Microsoft Defender, run `opentide validate`. Add `key` (the `RegistryKey` column, returned by the query) to each `registry_values` mapping it reports as `microsoft_defender_entity_identifier`.
+3. For each `microsoft_defender_column_not_in_output` or `microsoft_defender_required_columns` it reports, correct the column the block names, or add it to the query's final `project`.
+4. Run `opentide lint --verbose --check queries` and end each query it reports as `microsoft_defender_unprojected_output` with the `| project` it suggests.
+
+**Breaking**
+
+- **Microsoft Defender rules are deployed as `opentide-<uuid>`.** Graph refuses an id that begins with a digit, so most rules failed with HTTP 400. Rules 1.0.0 deployed are not touched; one that blocks a create fails it with `microsoft_defender_rule_conflict` ([#1886](https://github.com/opentidehq/opentide/issues/1886)).
+- **`validate` refuses a Defender registry value without its `key`.** Graph refused such a rule at deploy; it is now the error `microsoft_defender_entity_identifier` ([#1884](https://github.com/opentidehq/opentide/issues/1884)).
+- **`validate` fails a Defender block whose columns its query does not return.** `microsoft_defender_column_not_in_output` names a column the block maps that the query lacks, and `microsoft_defender_required_columns` a column a custom detection needs ([#1885](https://github.com/opentidehq/opentide/issues/1885)).
+
+**Added**
+
+- **`validate` warns when a Defender device or user has no strong identifier**, as `microsoft_defender_impacted_asset_identifier`. `validate --strict` does not fail on it ([#1884](https://github.com/opentidehq/opentide/issues/1884)).
+- **`lint` flags Defender queries that return columns the rule does not use**, and suggests the `| project` to end them with. It warns about an entity mapped from a `dynamic`, `datetime`, `bool` or `timespan` column ([#1885](https://github.com/opentidehq/opentide/issues/1885)).
+- **Editor quick fixes for Defender columns**: replace a misspelt column, or append the suggested `| project` ([#1885](https://github.com/opentidehq/opentide/issues/1885)).
+
+**Fixed**
+
+- **Defender queries no longer offer Log Analytics columns** such as `TimeGenerated` and `TenantId`, which advanced hunting does not have ([#1885](https://github.com/opentidehq/opentide/issues/1885)).
+
+See the [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md#110--2026-11-26) for every change.
+
+**Links**
+
+- [PyPI](https://pypi.org/project/opentide/1.1.0/)
+- [crates.io](https://crates.io/crates/opentide/1.1.0)
+- [npm](https://www.npmjs.com/package/@opentide/opentide/v/1.1.0)
+- [GitHub Release](https://github.com/opentidehq/opentide/releases/tag/v1.1.0)
+- [CHANGELOG](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md)
+
 ## 1.0.0 — 25 November 2026
 
 opentide runs on one Rust core: a far smaller install, commands that start in about 20 ms, and SDKs for Python, Rust and Node.js.

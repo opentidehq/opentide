@@ -9,12 +9,12 @@ description: Install opentide as a library dependency with PEP 561 typing suppor
 
 ```python
 # pyproject.toml — pin the current release in CI
-dependencies = ["opentide==1.0.0"]
+dependencies = ["opentide==1.1.0"]
 ```
 
 ```bash
 pip install opentide              # the latest release
-pip install 'opentide==1.0.0'     # or pin it
+pip install 'opentide==1.1.0'     # or pin it
 ```
 
 This SDK (`opentide.Workspace` and the rest of these pages) is new in 1.0: the 0.x releases have none of it ([Migrating to Workspace](./migration.md)). See [Installation](../usage/installation.md) for uv, pipx, crates.io, npm and the binaries.

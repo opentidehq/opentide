@@ -6,9 +6,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Eac
 
 ## [Unreleased]
 
+## [1.1.0] — 2026-11-26
+
+Microsoft Defender deploys work for every rule, and `validate` catches Defender blocks that would fail at deploy. Its breaking changes correct 1.0.0 defects.
+
 ### Upgrade
 
-- If you deploy to Microsoft Defender, before the next deploy, delete in the Defender portal every custom detection an earlier opentide release created (1.0.0's bare-uuid rules, 0.x's), or rename both its name and its alert title. Graph refuses a new rule while another holds either, even a disabled one.
+1. If you deploy to Microsoft Defender, before the next deploy, delete in the Defender portal every custom detection an earlier opentide release created (1.0.0's bare-uuid rules, 0.x's), or rename both its name and its alert title. Graph refuses a new rule while another holds either, even a disabled one.
+2. If you deploy to Microsoft Defender, run `opentide validate`. Add `key` to each `registry_values` mapping it reports as `microsoft_defender_entity_identifier`, set to the column that holds the registry key (`RegistryKey`), and have the query return that column.
+3. For each `microsoft_defender_column_not_in_output` or `microsoft_defender_required_columns` it reports, correct the column the block names, or add the column to the query's final `project`.
+4. Run `opentide lint --verbose --check queries` and end each query it reports as `microsoft_defender_unprojected_output` with the `| project` it suggests.
 
 ### Breaking
 
@@ -16,6 +23,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Eac
   - Deploy, disable, delete, `--prune` and the dry run's `api_request` URL use the new id
   - The SDKs' Defender `deploy(rule_id)` always sends `opentide-<uuid>`
   - `generate extract defender` writes one file per uuid, preferring the `opentide-` rule
+- **`validate` refuses a Defender registry value without its `key`** ([#1884](https://github.com/opentidehq/opentide/issues/1884)). 1.0.0 passed a `registry_values` mapping with `value_name` alone, which Graph refuses at deploy ("does not include a required identifier"). `validate` and the editor report it as the error `microsoft_defender_entity_identifier`.
+- **`validate` fails a Defender block whose columns its query does not return** ([#1885](https://github.com/opentidehq/opentide/issues/1885)). opentide works out a `microsoft_defender` query's output offline and reports what Defender would refuse or leave unmapped at deploy. Nothing is reported when it cannot tell what the query returns.
+  - `microsoft_defender_column_not_in_output`: an entity, action, custom detail or alert `{{Column}}` the output lacks, with the column it most likely means
+  - `microsoft_defender_required_columns`: the output lacks `Timestamp`, `DeviceId`, `ReportId` or another column a custom detection needs for the tables it reads
+
+### Added
+
+- **`validate` warns when a Defender device or user has no strong identifier** ([#1884](https://github.com/opentidehq/opentide/issues/1884)). A `hosts` or `accounts` mapping without a column Defender maps to an impacted asset (`device_id`, `name`; `aad_user_id`, `sid`, `upn`), or a strong combination such as `name` with `nt_domain`, gets `microsoft_defender_impacted_asset_identifier`. `validate --strict` reports it without failing.
+- **`lint` flags Defender queries that return columns the rule does not use** ([#1885](https://github.com/opentidehq/opentide/issues/1885)). Defender derives entity mappings of its own from extra columns: the note `microsoft_defender_unprojected_output` suggests the `| project` to end the query with. The warning `microsoft_defender_column_type` reports an entity mapped from a `dynamic`, `datetime`, `bool` or `timespan` column.
+- **Editor quick fixes for Defender columns** ([#1885](https://github.com/opentidehq/opentide/issues/1885)). The language server replaces a misspelt column with the one the query returns, and appends the suggested `| project` after the query's last operator.
+
+### Fixed
+
+- **Defender queries no longer offer Log Analytics columns** ([#1885](https://github.com/opentidehq/opentide/issues/1885)). Completion and hover on a `microsoft_defender` query leave out `TimeGenerated`, `TenantId`, `Type`, `_BilledSize` and the other columns of a table's Log Analytics copy, which advanced hunting does not have. `Timestamp` stays.
 
 ## [1.0.0] — 2026-11-25
 
@@ -2504,7 +2525,8 @@ export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 opentide validate --strict
 ```
 
-[Unreleased]: https://github.com/opentidehq/opentide/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/opentidehq/opentide/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/opentidehq/opentide/releases/tag/v1.1.0
 [1.0.0]: https://github.com/opentidehq/opentide/releases/tag/v1.0.0
 [0.28.1]: https://github.com/opentidehq/opentide/releases/tag/v0.28.1
 [0.28.0]: https://github.com/opentidehq/opentide/releases/tag/v0.28.0
