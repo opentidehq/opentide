@@ -40,7 +40,7 @@ uv venv
 
 ## PyPI install
 
-The latest release is **1.0.0** (25 November 2026), which `pip install opentide` installs. The first public release was **0.1.0** (9 September 2026). Notes: [Releases](./releases.md).
+The latest release is **1.1.0** (26 November 2026), which `pip install opentide` installs. The first public release was **0.1.0** (9 September 2026). Notes: [Releases](./releases.md).
 
 <Tabs items={['venv + pip', 'uv']}>
 
@@ -49,7 +49,7 @@ The latest release is **1.0.0** (25 November 2026), which `pip install opentide`
 ```bash
 pip install opentide              # latest on PyPI
 # python -m pip install opentide  # in constrained environments
-pip install 'opentide==1.0.0'      # pin the current release
+pip install 'opentide==1.1.0'      # pin the current release
 ```
 
 </Tab>
@@ -58,7 +58,7 @@ pip install 'opentide==1.0.0'      # pin the current release
 
 ```bash
 uv pip install opentide              # latest on PyPI
-uv pip install 'opentide==1.0.0'     # pin the current release
+uv pip install 'opentide==1.1.0'     # pin the current release
 ```
 
 </Tab>
@@ -91,24 +91,24 @@ See the [TypeScript SDK](../sdk/typescript.md). A release candidate publishes un
 
 **GitHub Release binaries**
 
-The `v1.0.0` [GitHub Release](https://github.com/opentidehq/opentide/releases/tag/v1.0.0) carries the `opentide` and `opentide-lsp` binaries for glibc Linux and macOS, and an installer that installs both. There are no Windows binaries: on Windows, install from PyPI or npm, as [Windows](#windows) describes.
+The `v1.1.0` [GitHub Release](https://github.com/opentidehq/opentide/releases/tag/v1.1.0) carries the `opentide` and `opentide-lsp` binaries for glibc Linux and macOS, and an installer that installs both. There are no Windows binaries: on Windows, install from PyPI or npm, as [Windows](#windows) describes.
 
 ```bash
 curl --proto '=https' --tlsv1.2 -sSfLO \
-  https://github.com/opentidehq/opentide/releases/download/v1.0.0/opentide-installer.sh
+  https://github.com/opentidehq/opentide/releases/download/v1.1.0/opentide-installer.sh
 sh opentide-installer.sh                 # into ~/.local/bin; OPENTIDE_INSTALL_DIR changes it
-opentide --version                       # opentide 1.0.0
-opentide-lsp --version                   # opentide-lsp 1.0.0
+opentide --version                       # opentide 1.1.0
+opentide-lsp --version                   # opentide-lsp 1.1.0
 ```
 
 The installer checks each binary against the release's `SHA256SUMS` before it installs it. To check what you downloaded yourself, and where it was built:
 
 ```bash
-BASE=https://github.com/opentidehq/opentide/releases/download/v1.0.0
+BASE=https://github.com/opentidehq/opentide/releases/download/v1.1.0
 curl -sSfLO "$BASE/SHA256SUMS"
-curl -sSfLO "$BASE/opentide-v1.0.0-x86_64-unknown-linux-gnu"
+curl -sSfLO "$BASE/opentide-v1.1.0-x86_64-unknown-linux-gnu"
 sha256sum --check --ignore-missing SHA256SUMS
-gh attestation verify opentide-v1.0.0-x86_64-unknown-linux-gnu -R opentidehq/opentide
+gh attestation verify opentide-v1.1.0-x86_64-unknown-linux-gnu -R opentidehq/opentide
 ```
 
 `sha256sum --check` names each file that matches. `gh attestation verify` checks the file's build provenance, an attestation signed by the release workflow (`publish.yml` of opentidehq/opentide); it exits 0 when the file is genuine and prints nothing on a non-terminal, so check the exit status (add `--format json` to see the workflow). There are no musl binaries: on Alpine, install from the sdist or `cargo install`, as [below](#the-analysis-engine-and-the-language-server) describes.
@@ -145,7 +145,7 @@ The build takes several minutes. `opentide doctor` reports it (`analysis_engine`
 On Windows, install opentide from PyPI or npm. There is no standalone `opentide.exe` or `opentide-lsp.exe` to download and no PowerShell installer, so that no unsigned executable is downloaded on its own. The recommended install is a uv tool, which puts `opentide` on `PATH` in an environment of its own:
 
 ```powershell
-uv tool install opentide                 # or: uv tool install 'opentide==1.0.0'
+uv tool install opentide                 # or: uv tool install 'opentide==1.1.0'
 opentide --version
 ```
 
