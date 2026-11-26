@@ -368,9 +368,12 @@ fn unescaped_colon() {
         vec![codes::DATADOG_UNESCAPED_COLON]
     );
     assert!(search(r"@my_attribute:hello\:world").is_empty());
-    // A tag is `key:value` by definition, as Datadog's docs search them.
-    assert!(search("tags:(security-group:sg-123 AND role:common-node)").is_empty());
-    assert!(search("tags:env:prod").is_empty());
+    // A tag's value is no exception: the log docs escape it (`tags:(env\:prod OR env\:test)`).
+    assert_eq!(
+        search("tags:env:prod"),
+        vec![codes::DATADOG_UNESCAPED_COLON]
+    );
+    assert!(search(r"tags:(env\:prod OR env\:test)").is_empty());
 }
 
 #[test]
@@ -509,16 +512,6 @@ fn the_highlight_has_the_captures_of_the_rfc() {
 }
 
 // ---- Regressions from the adversarial review -----------------------------------------------
-
-/// A `tags:` clause exempts its own value's colons only, not a later term's.
-#[test]
-fn the_tags_exemption_ends_with_its_clause() {
-    assert!(search("tags:env:prod").is_empty());
-    assert_eq!(
-        search(r#"tags:x "a"b:c"#),
-        vec![codes::DATADOG_UNESCAPED_COLON]
-    );
-}
 
 /// A pair of curly quotes is one finding; a stray closing quote after it is another.
 #[test]

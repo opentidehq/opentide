@@ -52,7 +52,6 @@ pub(crate) fn walk(
         findings: Vec::new(),
         term: TermFlags::default(),
         curly_open: false,
-        tags_clause: None,
     };
     let mut ancestors: Ancestors<K> = Ancestors::default();
     walk_once(root, |element, depth| {
@@ -93,9 +92,6 @@ struct Walker<'s> {
     term: TermFlags,
     /// Whether a left curly quote is open: its closing quote is the same mistake, reported once.
     curly_open: bool,
-    /// The range of the last field clause on `tags`, whose values are `key:value` pairs by
-    /// definition: a colon inside it needs no escape. Field clauses do not nest.
-    tags_clause: Option<TextRange>,
 }
 
 impl Walker<'_> {
@@ -117,14 +113,6 @@ impl Walker<'_> {
     /// The checks of a node, as the walk enters it. `parent` is the kind of the node above.
     fn node(&mut self, node: &SyntaxNode, parent: Option<K>) {
         match node.kind() {
-            K::FIELD_CLAUSE => {
-                let tags = node
-                    .first_child()
-                    .is_some_and(|f| f.kind() == K::TAG_KEY && self.text(trimmed(&f)) == "tags");
-                if tags {
-                    self.tags_clause = Some(node.text_range());
-                }
-            }
             K::OR_EXPR | K::VALUE_OR_EXPR => self.mixed_boolean(node),
             K::AND_EXPR | K::VALUE_AND_EXPR => self.lowercase_operators(node),
             K::TERM => {
@@ -219,12 +207,7 @@ impl Walker<'_> {
                     );
                 }
             }
-            K::COLON
-                if parent == K::TERM
-                    && !self
-                        .tags_clause
-                        .is_some_and(|clause| clause.contains_range(token.text_range())) =>
-            {
+            K::COLON if parent == K::TERM => {
                 if !std::mem::replace(&mut self.term.colon, true) {
                     self.push(
                         codes::DATADOG_UNESCAPED_COLON,

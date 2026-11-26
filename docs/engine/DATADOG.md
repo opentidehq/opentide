@@ -89,7 +89,7 @@ recovery rebuilt is noise. A fault inside a range is `datadog_range`, every othe
 | `datadog_lowercase_operator` | warning | `and`, `or`, `not` in a lower-case spelling between two clauses that are not free text, or in a value group |
 | `datadog_curly_quote` | warning | `“` or `”` |
 | `datadog_wildcard_in_phrase` | warning | `*` or `?` next to a letter or digit inside quotes |
-| `datadog_unescaped_colon` | warning | an unescaped `:` in a value, but in a value of `tags`, whose values are `key:value` by definition |
+| `datadog_unescaped_colon` | warning | an unescaped `:` in a value, a value of `tags` included (the log docs escape it: `tags:(env\:prod OR env\:test)`) |
 | `datadog_symbol_operator` | warning | `&&` or `\|\|` between clauses |
 | `datadog_detached_operator` | warning | `-` followed by a space |
 | `datadog_full_text_in_rule` | warning | `*:term` in profile `rule` |
@@ -153,7 +153,7 @@ Each query runs under profile `rule` (profile `search` for an Observability Pipe
 | `datadog_pipelines_only` | 3 | 3 | 3 |
 | `datadog_wildcard_in_phrase` | 3 | 3 | 3 |
 | `datadog_unescaped_special` (error) | 2 | 2 | 3 |
-| `datadog_unescaped_colon` | 1 | 1 | 4 |
+| `datadog_unescaped_colon` | 3 | 2 | 4 |
 | `datadog_curly_quote` | 1 | 1 | 1 |
 | `datadog_range` (error) | 1 | 1 | 1 |
 | `datadog_parse_error` (error) | 1 | 1 | 1 |
@@ -179,10 +179,10 @@ Security Labs, under Datadog's site terms), so every count the prototype found t
   `- @login_type:(k OR n or E)`). The default-rule finding of §11.3 is in the cassettes, measured
   above. The RFC does not name the fifth mixed-boolean query; the engine finds none in the
   vendored set.
-- `datadog_unescaped_colon` 4 → 1: the RUM docs example (`@http.url:https:\/\/*`) is the one here;
-  the two blog posts are not vendored; and the engine leaves out a value of `tags`
-  (`tags:(security-group:sg-123 AND role:common-node)`, a docs example), whose values are
-  `key:value` pairs by definition, which the token-level prototype flagged.
+- `datadog_unescaped_colon` 4 → 2 queries: the RUM docs example (`@http.url:https:\/\/*`) and the
+  Events migration guide's `tags:(security-group:sg-123 AND role:common-node)` (one finding per
+  term, so 3 findings) are here; the two blog posts are not vendored. A value of `tags` is not
+  exempt: the log docs escape its colons (`tags:(env\:prod OR env\:test)`).
 - `datadog_unescaped_special` 3 and `datadog_parse_error` 1 → 2 and 1, with `datadog_range` 1 → 1:
   the same rejections, coded as the tree sees them. The engine reports a fault inside a range as
   `datadog_range` (RFC §6.7: "a malformed range"), so `rule:[A-Invalid` is `datadog_range` and

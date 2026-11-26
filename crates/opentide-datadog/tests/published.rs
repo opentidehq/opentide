@@ -26,7 +26,7 @@ const COUNTS: &[(&str, usize, usize)] = &[
     ("datadog_parse_error", 1, 1),
     ("datadog_pipelines_only", 3, 3),
     ("datadog_range", 1, 1),
-    ("datadog_unescaped_colon", 1, 1),
+    ("datadog_unescaped_colon", 3, 2),
     ("datadog_unescaped_special", 2, 2),
     ("datadog_unknown_attribute", 50, 49),
     ("datadog_wildcard_in_phrase", 3, 3),
