@@ -12,6 +12,7 @@
 //! Schema and the Python classes the same fields.
 
 pub mod checks;
+pub mod required_columns;
 
 use garde::Validate;
 use indexmap::IndexMap;
