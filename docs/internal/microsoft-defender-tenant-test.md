@@ -281,6 +281,48 @@ keeps them. Correct the advice in `microsoft_defender_rule_conflict`'s message
 (`crates/opentide-connectors/src/microsoft_defender.rs`, `conflict`), its explain page, the
 changelog's Upgrade step, `docs/cli/deploy.md` and the opentidehq/skills Defender skill.
 
+## 11. Which identifiers each entity kind requires
+
+Graph's entity mapping types list their columns, not which are required. Graph checks a rule's
+mappings when it creates the rule and each time it enables it, but not on an update to a disabled
+rule (#1884); whether it checks a rule **created** disabled is an open question (step 1). One rule is
+known from production: a `registryValues` mapping with `valueNameColumn` and no `keyColumn` is
+refused with `HTTP 400 · Entity mapping for type 'RegistryValue' does not include a required
+identifier. Supported identifiers: RegKey | Name` (#1884). opentide enforces it
+(`microsoft_defender_entity_identifier`, the table `ENTITY_IDENTIFIERS` in
+`crates/opentide-schema/src/objects/platform/microsoft_defender.rs`); every other kind needs one
+of its fields.
+
+1. Create a **disabled** rule whose `registryValues` mapping sets `valueNameColumn` alone, and
+   record whether the create is refused (the known 400) or accepted; if accepted, enable it and
+   record the refusal. This says whether Graph checks a rule created disabled.
+2. For each kind with more than one field (`hosts`, `accounts`, `files`, `processes`, `ips`,
+   `dns`, `registryValues`, `mailMessages`, `mailClusters`, `cloudApplications`,
+   `securityGroups`), create a **disabled** rule whose only mapping sets one column, once per
+   column (`entityMappings: {"ips": [{"scopeColumn": "RemoteIPType"}]}`), with a query that
+   projects it.
+3. Enable each rule Graph created (`PATCH {"status": "enabled"}`), then disable it again.
+4. For `registryValues`, also try `keyColumn` alone.
+5. For `hosts` and `accounts`, note which mappings give the alert an impacted device or user: a
+   host by `netBiosNameColumn` with `ntDomainColumn` or `dnsDomainColumn`, an account by
+   `nameColumn` with `ntDomainColumn`, `dnsDomainColumn` or `upnSuffixColumn`, and each by a
+   weak column alone (`nameColumn` for an account, `dnsDomainColumn` for a host).
+
+**Expected:** step 1: record the answer (opentide assumes either). Steps 2 to 4: every
+single-column mapping is accepted at create and at enable, except `registryValues` with
+`valueNameColumn` alone (refused, as above).
+
+**If not:** record each refused combination with Graph's message (its "Supported identifiers"
+list names the kind's identifiers). Each becomes a row of `ENTITY_IDENTIFIERS` with
+`Evidence::Observed`, the message as its reference and the date, and a case in
+`crates/opentide-schema/tests/microsoft_defender.rs`; and a spec change (microsoft-defender-1.0,
+Constraints). Step 5 settles `microsoft_defender_impacted_asset_identifier`: it warns, without failing
+`--strict` (`STRICT_EXEMPT_WARNINGS`), on a `hosts` or `accounts` mapping with none of the
+columns the custom detection wizard maps to an impacted asset (`DeviceId`, `DeviceName`;
+`AccountObjectId`, `AccountSid`, `AccountUpn`) and none of Sentinel's strong combinations. If the
+weak mappings still show an impacted asset, drop the warning; if Graph refuses them, make it an
+error with `Evidence::Observed`.
+
 ## End to end with opentide
 
 After the curl checks, run the platform the way users will:
@@ -319,3 +361,4 @@ After the curl checks, run the platform the way users will:
 | 8 | `opentide-<uuid>` as client id, compared exactly | | | |
 | 9 | Custom detail count and names | | | |
 | 10 | 409 on a held name or alert title, disabled or renamed | | | |
+| 11 | Required identifiers per entity kind | | | |

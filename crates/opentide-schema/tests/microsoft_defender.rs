@@ -17,8 +17,9 @@ use opentide_schema::FromNode;
 use opentide_schema::from_node::Context;
 use opentide_schema::node::{self, Node, Value};
 use opentide_schema::objects::platform::microsoft_defender::{
-    ACTIONS, CONSTRAINT_CODES, Duration, ENTITY_KINDS, MicrosoftDefenderConfig, NOT_MODELLED,
-    NotModelled, TEMPLATE, advisories, block_codes, block_findings,
+    ACTIONS, ADVISORY_CODES, CONSTRAINT_CODES, Duration, ENTITY_IDENTIFIERS, ENTITY_KINDS,
+    Evidence, IDENTIFIERS_CHECKED, IMPACTED_ASSET_COLUMNS, MicrosoftDefenderConfig, NOT_MODELLED,
+    NotModelled, TEMPLATE, advisories, block_codes, block_findings, entity_kind,
 };
 
 fn fixtures() -> PathBuf {
@@ -148,7 +149,7 @@ fn codes_at(yaml: &str) -> Vec<(String, String)> {
 #[test]
 #[expect(clippy::too_many_lines, reason = "one row per constraint, as a table")]
 fn each_constraint_is_reported_by_its_code_at_its_path() {
-    let cases: [(&str, (&str, &str)); 19] = [
+    let cases: [(&str, (&str, &str)); 20] = [
         (
             "schema: platform::microsoft_defender::2.0\n",
             ("microsoft_defender_schema", "schema"),
@@ -207,6 +208,13 @@ fn each_constraint_is_reported_by_its_code_at_its_path() {
         (
             "entities:\n  hosts: [{device_id: ''}]\n",
             ("microsoft_defender_column", "entities.hosts.0.device_id"),
+        ),
+        (
+            "entities:\n  registry_values: [{value_name: RegistryValueName}]\n",
+            (
+                "microsoft_defender_entity_identifier",
+                "entities.registry_values.0",
+            ),
         ),
         (
             "actions:\n  isolate_device: [{device_id: DeviceId}]\n",
@@ -274,6 +282,7 @@ fn cases_codes() -> BTreeSet<&'static str> {
         "microsoft_defender_column",
         "microsoft_defender_entity_kind",
         "microsoft_defender_entity_mapping",
+        "microsoft_defender_entity_identifier",
         "microsoft_defender_action_kind",
         "microsoft_defender_action_target",
         "microsoft_defender_isolation_type",
@@ -362,6 +371,270 @@ fn a_block_that_maps_no_entity_earns_the_advisory() {
         assert_eq!(found[0].code, "microsoft_defender_no_entities");
     }
     assert!(advisories(&rule("    entities:\n      hosts: [{device_id: D}]\n")).is_empty());
+}
+
+/// The identifier table: one row per kind, in the kinds' order, naming only
+/// its kind's fields, each row with its source and date; only observed or
+/// documented evidence carries a required field.
+#[test]
+fn the_identifier_table_has_one_sourced_row_per_kind() {
+    assert_eq!(
+        ENTITY_IDENTIFIERS.map(|row| row.kind),
+        ENTITY_KINDS.map(|kind| kind.key)
+    );
+    for row in ENTITY_IDENTIFIERS {
+        let kind = entity_kind(row.kind).unwrap();
+        for (field, identifier) in row.required {
+            assert!(kind.graph_field(field).is_some(), "{}.{field}", row.kind);
+            assert!(!identifier.is_empty(), "{}.{field}", row.kind);
+        }
+        for identifier in row.asset {
+            assert!(!identifier.fields.is_empty(), "{}", row.kind);
+            for field in identifier.fields {
+                assert!(kind.graph_field(field).is_some(), "{}.{field}", row.kind);
+            }
+            // Advice, never an error; a column list only where the page
+            // names columns.
+            assert_eq!(identifier.source.evidence, Evidence::Advised);
+            assert_eq!(identifier.source.checked, IDENTIFIERS_CHECKED);
+            assert_eq!(
+                identifier.columns.is_empty(),
+                identifier.source != IMPACTED_ASSET_COLUMNS,
+                "{}: {:?}",
+                row.kind,
+                identifier.fields
+            );
+        }
+        assert_eq!(row.source.checked, IDENTIFIERS_CHECKED, "{}", row.kind);
+        assert!(!row.source.reference.is_empty(), "{}", row.kind);
+        match row.source.evidence {
+            Evidence::Observed | Evidence::Documented => {
+                assert!(!row.required.is_empty(), "{}", row.kind);
+            }
+            Evidence::OneField => {
+                assert!(row.required.is_empty(), "{}", row.kind);
+                assert_eq!(kind.fields.len(), 1, "{}", row.kind);
+            }
+            Evidence::Unprobed => {
+                assert!(row.required.is_empty(), "{}", row.kind);
+                assert!(kind.fields.len() > 1, "{}", row.kind);
+            }
+            Evidence::Advised => panic!("{}: advice is never a required field", row.kind),
+        }
+    }
+    // The impacted assets with more than one field: the device and the user
+    // (a mailbox mapping names its one field, its address).
+    let assets: Vec<&str> = ENTITY_IDENTIFIERS
+        .iter()
+        .filter(|row| !row.asset.is_empty())
+        .map(|row| row.kind)
+        .collect();
+    assert_eq!(assets, ["hosts", "accounts"]);
+}
+
+/// The errors of the block mapping `mapping` under the kind `kind`.
+fn entity_codes(kind: &str, mapping: &str) -> Vec<(String, String)> {
+    codes_at(&format!("entities:\n  {kind}: [{mapping}]\n"))
+}
+
+/// A mapping of `fields`, each to a column named after it.
+fn mapping_of(fields: &[&str]) -> String {
+    let pairs: Vec<String> = fields
+        .iter()
+        .map(|field| format!("{field}: Column_{field}"))
+        .collect();
+    format!("{{{}}}", pairs.join(", "))
+}
+
+/// For every kind, a valid and an invalid mapping: the mapping with every
+/// field is valid, and so is each field alone unless the kind requires
+/// another; the invalid one lacks what the kind's rule requires (its
+/// required field, or, with none, any field at all).
+#[test]
+fn every_kind_has_a_valid_and_an_invalid_mapping() {
+    for row in ENTITY_IDENTIFIERS {
+        let kind = entity_kind(row.kind).unwrap();
+        let fields: Vec<&str> = kind.fields.iter().map(|(field, _)| *field).collect();
+        assert_eq!(
+            entity_codes(row.kind, &mapping_of(&fields)),
+            [],
+            "{}: every field",
+            row.kind
+        );
+        for field in &fields {
+            let alone = entity_codes(row.kind, &mapping_of(&[field]));
+            let missing: Vec<(String, String)> = row
+                .required
+                .iter()
+                .filter(|(required, _)| required != field)
+                .map(|_| {
+                    (
+                        "microsoft_defender_entity_identifier".to_owned(),
+                        format!("entities.{}.0", row.kind),
+                    )
+                })
+                .collect();
+            assert_eq!(alone, missing, "{}.{field} alone", row.kind);
+        }
+        let invalid = if row.required.is_empty() {
+            ("{}".to_owned(), "microsoft_defender_entity_mapping")
+        } else {
+            let others: Vec<&str> = fields
+                .iter()
+                .copied()
+                .filter(|field| row.required.iter().all(|(required, _)| required != field))
+                .collect();
+            (mapping_of(&others), "microsoft_defender_entity_identifier")
+        };
+        let found = entity_codes(row.kind, &invalid.0);
+        assert_eq!(
+            found,
+            [(invalid.1.to_owned(), format!("entities.{}.0", row.kind))],
+            "{}: {}",
+            row.kind,
+            invalid.0
+        );
+    }
+}
+
+/// #1884: the issue's block passes the shape checks and Graph refuses it.
+/// The finding is on the mapping, names the missing field, Graph's
+/// identifier and its property, and the model rejects the block with it.
+#[test]
+fn a_registry_value_without_its_key_is_refused_as_graph_refuses_it() {
+    let yaml = "entities:\n  accounts:\n    - upn: InitiatingProcessAccountUpn\n  \
+                registry_values:\n    - value_name: RegistryValueName   # no key\n";
+    let found = block_findings(&block_of(yaml));
+    assert_eq!(found.len(), 1, "{found:#?}");
+    assert_eq!(found[0].code, "microsoft_defender_entity_identifier");
+    let message = &found[0].message;
+    for needle in ["entities.registry_values[0]", "key", "RegKey", "keyColumn"] {
+        assert!(message.contains(needle), "{needle}: {message}");
+    }
+    let (value, errors) = convert(&block_of(yaml));
+    assert!(value.is_none());
+    assert_eq!(
+        errors,
+        [(
+            "microsoft_defender_entity_identifier".to_owned(),
+            "entities.registry_values.0".to_owned()
+        )]
+    );
+    // With its key, the same block converts.
+    let keyed = yaml.replace(
+        "    - value_name: RegistryValueName   # no key\n",
+        "    - key: RegistryKey\n      value_name: RegistryValueName\n",
+    );
+    assert_eq!(convert(&block_of(&keyed)).1, []);
+    // A key with a blank column is the column's finding, not a missing key.
+    assert_eq!(
+        entity_codes("registry_values", "{key: '', value_name: V}"),
+        [(
+            "microsoft_defender_column".to_owned(),
+            "entities.registry_values.0.key".to_owned()
+        )]
+    );
+    // A mapping with a field its kind lacks is the shape's finding alone.
+    assert_eq!(
+        entity_codes("registry_values", "{value: V}"),
+        [(
+            "microsoft_defender_entity_mapping".to_owned(),
+            "entities.registry_values.0".to_owned()
+        )]
+    );
+    // Each mapping is judged on its own.
+    assert_eq!(
+        entity_codes(
+            "registry_values",
+            "{key: K, value_name: V}, {value_name: V}"
+        ),
+        [(
+            "microsoft_defender_entity_identifier".to_owned(),
+            "entities.registry_values.1".to_owned()
+        )]
+    );
+}
+
+/// The impacted-asset advisories of a rule whose block maps `entities`.
+fn asset_advisories(entities: &str) -> Vec<(String, String)> {
+    let rule = load(&format!(
+        "configurations:\n  microsoft_defender:\n    status: STAGING\n    query: Q\n    \
+         entities:\n{entities}"
+    ));
+    advisories(&rule)
+        .into_iter()
+        .map(|advisory| (advisory.code.to_owned(), advisory.field_path.join(".")))
+        .collect()
+}
+
+#[test]
+fn an_impacted_asset_without_a_strong_identifier_earns_the_advisory() {
+    let at = |path: &str| {
+        vec![(
+            "microsoft_defender_impacted_asset_identifier".to_owned(),
+            format!("configurations.microsoft_defender.entities.{path}"),
+        )]
+    };
+    // Weak alone: a user by name, a device by its domain or NetBIOS name.
+    for (entities, path) in [
+        ("      accounts: [{name: AccountName}]\n", "accounts.0"),
+        (
+            "      accounts: [{nt_domain: AccountDomain}]\n",
+            "accounts.0",
+        ),
+        (
+            "      accounts: [{upn: AccountUpn}, {name: AccountName}]\n",
+            "accounts.1",
+        ),
+        ("      hosts: [{dns_domain: D}]\n", "hosts.0"),
+        ("      hosts: [{netbios_name: N}]\n", "hosts.0"),
+        ("      hosts: [{nt_domain: D, dns_domain: D}]\n", "hosts.0"),
+    ] {
+        assert_eq!(asset_advisories(entities), at(path), "{entities}");
+    }
+    // A column the wizard maps to the asset, or a strong combination of
+    // Sentinel's entity reference, identifies it.
+    for entities in [
+        "      accounts: [{aad_user_id: AccountObjectId}]\n",
+        "      accounts: [{sid: AccountSid, name: AccountName}]\n",
+        "      accounts: [{upn: InitiatingProcessAccountUpn}]\n",
+        "      accounts: [{name: AccountName, nt_domain: AccountDomain}]\n",
+        "      accounts: [{name: AccountName, dns_domain: AccountDnsDomain}]\n",
+        "      accounts: [{name: AccountName, upn_suffix: AccountUpnSuffix}]\n",
+        "      hosts: [{device_id: DeviceId}]\n",
+        "      hosts: [{name: DeviceName}]\n",
+        "      hosts: [{name: DeviceName, dns_domain: D}]\n",
+        "      hosts: [{netbios_name: N, nt_domain: D}]\n",
+        "      hosts: [{netbios_name: N, dns_domain: D}]\n",
+        // A mailbox has one field, its address; evidence kinds are not
+        // impacted assets.
+        "      mailboxes: [{primary_address: RecipientEmailAddress}]\n",
+        "      ips: [{scope: S}]\n",
+        // A mapping a constraint reports earns no advisory.
+        "      accounts: [{}]\n",
+        "      accounts: [{name: A, device_id: D}]\n",
+        "      accounts: [name]\n",
+        "      accounts: {name: A}\n",
+    ] {
+        assert_eq!(asset_advisories(entities), [], "{entities}");
+    }
+    assert!(ADVISORY_CODES.contains(&"microsoft_defender_impacted_asset_identifier"));
+    let rule = load(
+        "configurations:\n  microsoft_defender:\n    status: STAGING\n    query: Q\n    \
+         entities:\n      accounts: [{name: AccountName}]\n",
+    );
+    let message = &advisories(&rule)[0].message;
+    for needle in [
+        "entities.accounts[0]",
+        "impacted user",
+        "aad_user_id (AccountObjectId)",
+        "sid",
+        "upn",
+        "name + nt_domain",
+        "name + upn_suffix",
+    ] {
+        assert!(message.contains(needle), "{needle}: {message}");
+    }
 }
 
 /// The keys of a YAML block, as dotted paths, list items read through.

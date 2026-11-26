@@ -14,7 +14,7 @@ opentide uses the same result semantics in human and JSON modes: presentation fo
 | Code | Meaning | Emitted when |
 |-----:|---------|--------------|
 | `0` | Success | The command completed or intentionally skipped without an operational failure. Success JSON includes `"ok": true`. |
-| `1` | Error | Validation/deployment errors, a [`generate` phase](./generate.md#when-a-phase-fails) that raised or logged an error, network/runtime failure, an unexpected error (`failure.code` `internal`, see [JSON output](./json-output.md#an-unexpected-error)), or `--strict` with a warning other than `platform_not_enabled`. Also stdout closed before the output was written (`opentide --json commands | head -c 1`), with no message: the reader is gone. |
+| `1` | Error | Validation/deployment errors, a [`generate` phase](./generate.md#when-a-phase-fails) that raised or logged an error, network/runtime failure, an unexpected error (`failure.code` `internal`, see [JSON output](./json-output.md#an-unexpected-error)), or `--strict` with a warning other than `platform_not_enabled` and `microsoft_defender_impacted_asset_identifier`. Also stdout closed before the output was written (`opentide --json commands | head -c 1`), with no message: the reader is gone. |
 | `2` | Usage error | An unknown command or option, a value outside the accepted ones (an `info` section, an `info vocab` name, a `generate` phase, `--type`, `--platform`, `share --target`), a missing required flag, a prompt nobody can answer (`setup` without a terminal, under `--json` or under a coding agent), or an explicitly unsupported command. Also the `validate query --live`, `migrate vocab-scope` and `share` cases below. |
 | `3` | Partial success | `share` only: see [Share](#share). |
 | `130` | Interrupted | Ctrl-C. One `error: interrupted` line on stderr, no traceback. |
@@ -25,7 +25,7 @@ Usage errors the command itself detects (an unknown `info` section, `info covera
 
 [`opentide doctor`](./doctor.md#exit-codes) exits `1` when a check fails. With `--live`, that includes a tenant whose credentials are set but which refuses them or does not answer (`connectivity`); a tenant whose credentials are not set is skipped and never fails the run. `--live` with `--offline` exits `2`.
 
-There is no soft-failure exit code. Warnings are listed under `warnings` in JSON (and printed in human mode) and only fail the process when `--strict` is set. Even then, [`platform_not_enabled`](./validate.md#platforms-this-workspace-has-not-enabled) is reported without failing.
+There is no soft-failure exit code. Warnings are listed under `warnings` in JSON (and printed in human mode) and only fail the process when `--strict` is set. Even then, [`platform_not_enabled`](./validate.md#platforms-this-workspace-has-not-enabled) and [`microsoft_defender_impacted_asset_identifier`](./diagnostics.md#microsoft_defender_impacted_asset_identifier) are reported without failing.
 
 `validate query --live` also exits `2` (`failure.code` `no_tenant_reached`) when it reports `skipped` because the plan's rules reached no configured tenant, so no query was sent. That is a check that did not run, not a pass. See [Which tenants are checked](./validate.md#which-tenants-are-checked).
 
@@ -38,7 +38,7 @@ There is no soft-failure exit code. Warnings are listed under `warnings` in JSON
 | Signal | Set when | Affects |
 |--------|----------|---------|
 | A validation error | Any issue in the report, or a query a tenant rejected (`validate query --live`) | Exit `1`, `status: failed` |
-| A validation warning | Any warning except [`platform_not_enabled`](./validate.md#platforms-this-workspace-has-not-enabled) | Exit `1` with `--strict`; otherwise exit `0` with warnings |
+| A validation warning | Any warning except [`platform_not_enabled`](./validate.md#platforms-this-workspace-has-not-enabled) and [`microsoft_defender_impacted_asset_identifier`](./diagnostics.md#microsoft_defender_impacted_asset_identifier) | Exit `1` with `--strict`; otherwise exit `0` with warnings |
 | `DEPLOYMENT_ERROR_RAISED` | Any deployment error | Exit `1`, `status: failed` |
 | `DEPLOYMENT_WARNING_RAISED` | Any deployment warning | Exit `0` with warnings |
 
@@ -60,7 +60,7 @@ Diagnostics use stderr. Automation should parse stdout and evaluate both `ok`/`s
 ## Gating CI
 
 ```bash
-opentide validate --strict   # errors and warnings fail the job, except platform_not_enabled
+opentide validate --strict   # errors and warnings fail the job, except platform_not_enabled and microsoft_defender_impacted_asset_identifier
 opentide validate            # errors fail; warnings are reported but exit 0
 ```
 

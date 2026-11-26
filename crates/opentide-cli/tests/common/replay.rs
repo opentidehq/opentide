@@ -87,6 +87,7 @@ pub const FIXTURES: &[&str] = &[
     "tide-corpus-folders",
     "tide-corpus-typo",
     "tide-corpus-bad-values",
+    "tide-corpus-defender-entity-identifier",
     "tide-corpus-lint-code-note",
     "tide-corpus-lint-unknown-code",
     "tide-corpus-lint-engine-warning",
@@ -109,6 +110,7 @@ pub const FIXTURES: &[&str] = &[
     "vscode-own-pipeline",
     "tenants",
     "live-tenants",
+    "defender-output",
     "deploy-tenants",
     "deploy-tenants-sysdig",
     "deploy-push",
@@ -219,6 +221,7 @@ pub fn fixture(name: &str, ws: &Path) {
         // The stand-in tenants of the cassette cases (UC-4.2c): `query`'s.
         "tenants" => copy_tree(&repo().join("tests/golden/fixtures/tenants"), ws),
         "live-tenants" => copy_tree(&repo().join("tests/golden/fixtures/live-tenants"), ws),
+        "defender-output" => copy_tree(&repo().join("tests/golden/fixtures/defender-output"), ws),
         "deploy-tenants" => copy_tree(&repo().join("tests/golden/fixtures/deploy-tenants"), ws),
         // Every platform but Sysdig disabled (UC-4.4c): a deploy without
         // --platform sends to Sysdig's stand-in alone.
@@ -325,7 +328,8 @@ pub fn fixture(name: &str, ws: &Path) {
         | "tide-corpus-lint-unknown-code"
         | "tide-corpus-lint-engine-warning"
         | "tide-corpus-lint-retired-code"
-        | "tide-corpus-bad-values" => {
+        | "tide-corpus-bad-values"
+        | "tide-corpus-defender-entity-identifier" => {
             fixture("tide-corpus", ws);
             apply_edits(name, ws);
         }
