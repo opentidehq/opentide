@@ -1044,6 +1044,7 @@ pub mod codes {
     pub const MICROSOFT_DEFENDER_CUSTOM_DETAILS: &str = "microsoft_defender_custom_details";
     pub const MICROSOFT_DEFENDER_ENTITY_KIND: &str = "microsoft_defender_entity_kind";
     pub const MICROSOFT_DEFENDER_ENTITY_MAPPING: &str = "microsoft_defender_entity_mapping";
+    pub const MICROSOFT_DEFENDER_ENTITY_IDENTIFIER: &str = "microsoft_defender_entity_identifier";
     pub const MICROSOFT_DEFENDER_ACTION_KIND: &str = "microsoft_defender_action_kind";
     pub const MICROSOFT_DEFENDER_ACTION_TARGET: &str = "microsoft_defender_action_target";
     pub const MICROSOFT_DEFENDER_ISOLATION_TYPE: &str = "microsoft_defender_isolation_type";
@@ -1051,6 +1052,8 @@ pub mod codes {
     pub const MICROSOFT_DEFENDER_SCOPE: &str = "microsoft_defender_scope";
     pub const MICROSOFT_DEFENDER_INCIDENT: &str = "microsoft_defender_incident";
     pub const MICROSOFT_DEFENDER_NO_ENTITIES: &str = "microsoft_defender_no_entities";
+    pub const MICROSOFT_DEFENDER_IMPACTED_ASSET_IDENTIFIER: &str =
+        "microsoft_defender_impacted_asset_identifier";
 
     // The Exabeam Query Language (specifications exabeam-1.0, language).
     pub const EXABEAM_PARSE_ERROR: &str = "exabeam_parse_error";
@@ -1421,6 +1424,7 @@ pub mod codes {
         MICROSOFT_DEFENDER_CUSTOM_DETAILS,
         MICROSOFT_DEFENDER_ENTITY_KIND,
         MICROSOFT_DEFENDER_ENTITY_MAPPING,
+        MICROSOFT_DEFENDER_ENTITY_IDENTIFIER,
         MICROSOFT_DEFENDER_ACTION_KIND,
         MICROSOFT_DEFENDER_ACTION_TARGET,
         MICROSOFT_DEFENDER_ISOLATION_TYPE,
@@ -1428,6 +1432,7 @@ pub mod codes {
         MICROSOFT_DEFENDER_SCOPE,
         MICROSOFT_DEFENDER_INCIDENT,
         MICROSOFT_DEFENDER_NO_ENTITIES,
+        MICROSOFT_DEFENDER_IMPACTED_ASSET_IDENTIFIER,
     ];
 
     /// One sentence on what a code means, for hosts that explain a diagnostic
@@ -2221,6 +2226,9 @@ pub mod codes {
             MICROSOFT_DEFENDER_ENTITY_MAPPING => {
                 "An entity kind does not hold a list, or a mapping is empty or names a field its kind does not have."
             }
+            MICROSOFT_DEFENDER_ENTITY_IDENTIFIER => {
+                "An entity mapping lacks an identifier Graph requires of its kind (a registry value without its `key`)."
+            }
             MICROSOFT_DEFENDER_ACTION_KIND => {
                 "A key of `actions` is not one of the sixteen automated actions."
             }
@@ -2239,6 +2247,9 @@ pub mod codes {
             }
             MICROSOFT_DEFENDER_NO_ENTITIES => {
                 "The block maps no entity, so the alert names no device, user, or mailbox to triage or act on."
+            }
+            MICROSOFT_DEFENDER_IMPACTED_ASSET_IDENTIFIER => {
+                "A device or user mapping sets no strong identifier of its impacted asset."
             }
             _ => return None,
         })
