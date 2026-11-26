@@ -29,8 +29,9 @@ manifests=(
 # so a missing file can never hide a match.
 rc=0
 # YARA: the yara-x compiler crate (wasmtime; the shipped parser is
-# yara-x-parser) and yara-python are oracles only.
-grep -IilE 'kusto[._-]language|splunklib|splunk[-_]sdk|@elastic/esql|antlr-ng|peggy|lucene-queryparser|"yara-x"|^yara-x *=|dependencies\.yara-x\]|yara-python|wasmtime' "${manifests[@]}" || rc=$?
+# yara-x-parser) and yara-python are oracles only. Datadog: the VRL grammar's
+# pest tool (scripts/engine/oracles/datadog/) is an oracle only.
+grep -IilE 'kusto[._-]language|splunklib|splunk[-_]sdk|@elastic/esql|antlr-ng|peggy|lucene-queryparser|"yara-x"|^yara-x *=|dependencies\.yara-x\]|yara-python|wasmtime|datadog-vrl-oracle' "${manifests[@]}" || rc=$?
 if [[ $rc -ne 1 ]]; then
   [[ $rc -eq 0 ]] && echo "a shipped manifest depends on an oracle reference" || echo "could not read every shipped manifest"
   exit 1

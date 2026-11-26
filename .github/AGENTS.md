@@ -276,7 +276,8 @@ merging** → add `PR gate`, remove the others → **Save changes**.
   Its issue job is the only job in any workflow with `issues: write`, and it never runs on a pull
   request (`tests/test_ci/test_workflows.py`).
 - [`oracle.yml`](workflows/oracle.yml) checks the query parsers against Kusto.Language, Splunk,
-  Elasticsearch, Lucene, Kibana and Falco (`OPENTIDE_ORACLE_REQUIRED`), the vendors' own parsers
+  Elasticsearch, Lucene, Kibana, Falco, YARA-X and VRL's Datadog search grammar
+  (`OPENTIDE_ORACLE_REQUIRED`), the vendors' own parsers
   (not the Python oracle), in the nightly (nightly.yml calls it, with the Carbon Black Cloud tenant)
   and on demand: every reference on each run. Its network-heavy references keep it out of ci.yml. The pinned Elastic
   references (Lucene's jars from Maven Central, the EQL and kuery grammars) are cached under
