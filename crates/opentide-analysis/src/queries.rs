@@ -143,11 +143,13 @@ pub const ENGINE_REFERENCES: [(&str, &str, &str); 14] = [
 
 /// Whether `opentide lint` reports an engine warning of `code`: a query
 /// language's (one with a reference), an Elastic advisory, Sysdig's list
-/// self-reference, or an undeclared dataset. 0.28.1 added Graylog's dialect:
+/// self-reference, a continuous Defender rule's NRT finding, or an
+/// undeclared dataset. 0.28.1 added Graylog's dialect:
 /// before, `graylog_analyzed_field` and `graylog_regex_operator` reached the
 /// editor alone.
 pub fn lint_owned(code: &str) -> bool {
     opentide_schema::objects::platform::harfanglab::yara::ADVISORY_CODES.contains(&code)
+        || code == opentide_core::codes::MICROSOFT_DEFENDER_NRT_QUERY
         || ENGINE_REFERENCES
             .iter()
             .any(|(prefix, _, _)| code.starts_with(prefix))
@@ -1252,7 +1254,10 @@ mod tests {
         let reported: Vec<&str> = ELASTIC_ADVISORIES
             .into_iter()
             .chain(DECLARED_DATASET_CODES)
-            .chain([opentide_core::codes::SYSDIG_LIST_SELF_REFERENCE])
+            .chain([
+                opentide_core::codes::SYSDIG_LIST_SELF_REFERENCE,
+                opentide_core::codes::MICROSOFT_DEFENDER_NRT_QUERY,
+            ])
             .chain(graylog::ADVISORY_CODES)
             .chain(harfanglab::yara::ADVISORY_CODES)
             .chain(bitdefender::advisories::ADVISORY_CODES)

@@ -25,7 +25,7 @@ Usage errors the command itself detects (an unknown `info` section, `info covera
 
 [`opentide doctor`](./doctor.md#exit-codes) exits `1` when a check fails. With `--live`, that includes a tenant whose credentials are set but which refuses them or does not answer (`connectivity`); a tenant whose credentials are not set is skipped and never fails the run. `--live` with `--offline` exits `2`.
 
-There is no soft-failure exit code. Warnings are listed under `warnings` in JSON (and printed in human mode) and only fail the process when `--strict` is set. Even then, [`platform_not_enabled`](./validate.md#platforms-this-workspace-has-not-enabled) and [`microsoft_defender_impacted_asset_identifier`](./diagnostics.md#microsoft_defender_impacted_asset_identifier) are reported without failing.
+There is no soft-failure exit code. Warnings are listed under `warnings` in JSON (and printed in human mode) and only fail the process when `--strict` is set. Even then, under `validate --strict`, [`platform_not_enabled`](./validate.md#platforms-this-workspace-has-not-enabled), [`microsoft_defender_impacted_asset_identifier`](./diagnostics.md#microsoft_defender_impacted_asset_identifier), [`microsoft_defender_custom_details_limit`](./diagnostics.md#microsoft_defender_custom_details_limit) and [`microsoft_defender_placeholder_limit`](./diagnostics.md#microsoft_defender_placeholder_limit) are reported without failing. `lint --strict` fails on every warning it reports; its `lint.toml` sets a code's severity ([Severity per code](./lint.md#severity-per-code)).
 
 `validate query --live` also exits `2` (`failure.code` `no_tenant_reached`) when it reports `skipped` because the plan's rules reached no configured tenant, so no query was sent. That is a check that did not run, not a pass. See [Which tenants are checked](./validate.md#which-tenants-are-checked).
 
@@ -38,7 +38,7 @@ There is no soft-failure exit code. Warnings are listed under `warnings` in JSON
 | Signal | Set when | Affects |
 |--------|----------|---------|
 | A validation error | Any issue in the report, or a query a tenant rejected (`validate query --live`) | Exit `1`, `status: failed` |
-| A validation warning | Any warning except [`platform_not_enabled`](./validate.md#platforms-this-workspace-has-not-enabled) and [`microsoft_defender_impacted_asset_identifier`](./diagnostics.md#microsoft_defender_impacted_asset_identifier) | Exit `1` with `--strict`; otherwise exit `0` with warnings |
+| A validation warning | Any warning except [`platform_not_enabled`](./validate.md#platforms-this-workspace-has-not-enabled), [`microsoft_defender_impacted_asset_identifier`](./diagnostics.md#microsoft_defender_impacted_asset_identifier), [`microsoft_defender_custom_details_limit`](./diagnostics.md#microsoft_defender_custom_details_limit) and [`microsoft_defender_placeholder_limit`](./diagnostics.md#microsoft_defender_placeholder_limit) | Exit `1` with `--strict`; otherwise exit `0` with warnings |
 | `DEPLOYMENT_ERROR_RAISED` | Any deployment error | Exit `1`, `status: failed` |
 | `DEPLOYMENT_WARNING_RAISED` | Any deployment warning | Exit `0` with warnings |
 
@@ -60,7 +60,7 @@ Diagnostics use stderr. Automation should parse stdout and evaluate both `ok`/`s
 ## Gating CI
 
 ```bash
-opentide validate --strict   # errors and warnings fail the job, except platform_not_enabled and microsoft_defender_impacted_asset_identifier
+opentide validate --strict   # errors and warnings fail the job, except platform_not_enabled and the Defender advisories waiting on a tenant check
 opentide validate            # errors fail; warnings are reported but exit 0
 ```
 

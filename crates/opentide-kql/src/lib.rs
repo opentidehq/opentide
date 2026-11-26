@@ -21,6 +21,7 @@ pub mod output;
 mod perf;
 mod rows_model;
 pub mod schema;
+pub mod shape;
 pub mod tables;
 mod tables_model;
 

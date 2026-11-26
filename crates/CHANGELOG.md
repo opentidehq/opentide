@@ -28,8 +28,35 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 #### `opentide-schema`
 
+- **Defender blocks are checked against Microsoft's documented limits** ([opentide#1890](https://github.com/opentidehq/opentide/issues/1890)). Two advisories, warnings on the block's `alert`:
+  - `microsoft_defender_custom_details_limit`: more than 20 custom details, or names past 4 KB
+  - `microsoft_defender_placeholder_limit`: more than three `{{Column}}` columns in `alert.title` or `alert.description`
+  - API: `microsoft_defender::CUSTOM_DETAILS_LIMIT`, `PLACEHOLDER_LIMIT`, `MAX_CUSTOM_DETAILS`, `MAX_CUSTOM_DETAILS_BYTES`, `MAX_PLACEHOLDER_COLUMNS`, `placeholder_columns`; `ADVISORY_CODES` is now `[&str; 4]`
 - **`constraint_codes` lists every platform model's own error codes** ([opentide#1893](https://github.com/opentidehq/opentide/issues/1893)). It reads Bitdefender's, Graylog's, Exabeam's, Microsoft Defender's and Google SecOps' lists, so a host can tell a model's finding from the query engine's.
   - API: `opentide_schema::objects::platform::constraint_codes`
+
+#### `opentide-tide`
+
+- **A continuous Defender query is checked against the NRT rules** ([opentide#1890](https://github.com/opentidehq/opentide/issues/1890)). `analyze_queries` warns `microsoft_defender_nrt_query` on a `frequency: NRT` block whose query reads more than one table or a table off the NRT list, joins, unions, uses `externaldata`, has a comment, or reads `EmailEvents`' `LatestDeliveryLocation` or `LatestDeliveryAction`. It is `lint`'s, not `validate`'s.
+
+#### `opentide-kql`
+
+- **`opentide_kql::shape` lists what a query reads and the constructs it uses** ([opentide#1890](https://github.com/opentidehq/opentide/issues/1890)): its tables, joins, unions, `externaldata` sources, comments and the columns it names, from the tree `analyze` builds.
+  - API: `shape::shape`, `shape::Shape`
+
+#### `opentide-core`
+
+- **Three Defender codes with their explanations** ([opentide#1890](https://github.com/opentidehq/opentide/issues/1890)): `codes::MICROSOFT_DEFENDER_CUSTOM_DETAILS_LIMIT`, `MICROSOFT_DEFENDER_PLACEHOLDER_LIMIT` and `MICROSOFT_DEFENDER_NRT_QUERY`.
+
+### Changed
+
+#### `opentide-workspace`
+
+- **`validate --strict` spares the two Defender limit advisories** ([opentide#1890](https://github.com/opentidehq/opentide/issues/1890)). `opentide_workspace::validate::STRICT_EXEMPT_WARNINGS` holds `microsoft_defender_custom_details_limit` and `microsoft_defender_placeholder_limit`, and is now `[&str; 4]`; `VALIDATION_CODES` holds both.
+
+#### `opentide-analysis`
+
+- **`lint_owned` claims `microsoft_defender_nrt_query`** ([opentide#1890](https://github.com/opentidehq/opentide/issues/1890)), so `opentide lint` reports it and `validate` does not.
 
 ### Fixed
 
