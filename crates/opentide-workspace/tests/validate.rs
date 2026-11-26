@@ -893,6 +893,52 @@ mod validate {
         assert_eq!(status(&validation, Check::Schema), "passed");
     }
 
+    /// A rule whose only error is a platform block's constraint code (a
+    /// finding its model reports under its own code, not
+    /// `schema_validation`) fails the `schema` check, which runs the models
+    /// (#1893): a run with `ok: false` never shows every check passed.
+    #[test]
+    fn a_platform_constraint_code_alone_fails_the_schema_check() {
+        let fixture = |path: &str| {
+            std::fs::read_to_string(
+                Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .join("../../tests/fixtures")
+                    .join(path),
+            )
+            .unwrap()
+        };
+        let cases = [
+            (
+                "microsoft_defender/microsoft-defender.yaml",
+                "      severity: High\n",
+                "      severity: Severe\n",
+                "microsoft_defender_severity",
+            ),
+            (
+                "graylog/rule-graylog-aggregation-1.0.yaml",
+                "    streams: sysmon\n",
+                "    streams: sysmon\n    priority: Severe\n",
+                "graylog_priority",
+            ),
+        ];
+        for (path, find, replace, code) in cases {
+            let text = fixture(path);
+            assert_eq!(text.matches(find).count(), 1, "{path}");
+            let fs = workspace();
+            fs.write("/ws/objects/rules/a.yaml", text.replace(find, replace));
+            let validation = run(&fs, &Options::default());
+            let codes: Vec<&str> = validation
+                .report
+                .issues
+                .iter()
+                .map(|issue| issue.code.as_str())
+                .collect();
+            assert_eq!(codes, [code], "{path}");
+            assert!(validation.failed, "{path}");
+            assert_eq!(status(&validation, Check::Schema), "failed", "{path}");
+        }
+    }
+
     #[test]
     fn a_vocabulary_typo_has_a_safe_fix_only_when_it_is_the_same_word() {
         let fs = workspace();

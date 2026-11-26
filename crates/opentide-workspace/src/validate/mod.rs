@@ -1903,12 +1903,25 @@ fn status(report: &Report, check: Check) -> &'static str {
             let codes = check.issue_codes();
             report.issues.iter().any(|issue| {
                 (codes.contains(&issue.code.as_str()) && issue.object_type != "configuration")
+                    || (check == Check::Schema && is_model_constraint(issue))
                     || (matches!(check, Check::UuidFormat | Check::Schema)
                         && matches!(issue.code.as_str(), "scope_no_match" | "file_not_found"))
             })
         }
     };
     if failed { "failed" } else { "passed" }
+}
+
+/// Whether `issue` is a platform block's model finding under its own
+/// constraint code (`microsoft_defender_severity`, `graylog_schedule`, ...):
+/// the `schema` check runs the models, so it fails on one. The codes are the
+/// models' own ([`opentide_schema::objects::platform::constraint_codes`]),
+/// and a finding of the query engine (`source: engine`) under the same code
+/// stays the `queries` check's.
+fn is_model_constraint(issue: &Diagnostic) -> bool {
+    issue.object_type != "configuration"
+        && issue.context.get("source").and_then(ContextValue::as_str) != Some("engine")
+        && opentide_schema::objects::platform::constraint_codes().any(|code| code == issue.code)
 }
 
 /// The `deployment_state_*` findings on the shards under

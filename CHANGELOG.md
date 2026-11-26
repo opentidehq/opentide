@@ -17,6 +17,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Eac
   - The SDKs' Defender `deploy(rule_id)` always sends `opentide-<uuid>`
   - `generate extract defender` writes one file per uuid, preferring the `opentide-` rule
 
+### Fixed
+
+- **`validate` fails its `schema` check on a platform block's constraint codes.** A run whose only errors were codes such as `microsoft_defender_severity` or `graylog_priority` reported `checks.schema.status: "passed"` beside `ok: false`. Every code a platform model reports under its own name now fails the check ([#1893](https://github.com/opentidehq/opentide/issues/1893)).
+
 ## [1.0.0] — 2026-11-25
 
 opentide runs on one Rust core: a far smaller install, commands that start in about 20 ms, and SDKs for Python, Rust and Node.js.
