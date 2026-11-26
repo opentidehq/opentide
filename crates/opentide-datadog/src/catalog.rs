@@ -109,6 +109,25 @@ pub(crate) fn markdown(attribute: &Attribute, reserved: bool) -> String {
 mod tests {
     use super::*;
 
+    /// The catalogue `build.rs` stores pre-parsed (#1743) is the TOML file, row for row (ADR
+    /// 0013: what the engine reads is what `toml` reads from the whole file). `text!` also names
+    /// the file `scripts/engine/release.py vendor` copies into the published crate.
+    #[test]
+    fn the_stored_catalogs_are_the_whole_files() {
+        #[derive(serde::Deserialize)]
+        struct File {
+            reserved: Vec<Attribute>,
+            attributes: Vec<Attribute>,
+        }
+        let file: File = toml::from_str(opentide_dataset::text!(
+            "data/catalogs/datadog/attributes.toml"
+        ))
+        .expect("TOML");
+        let catalog = Catalog::cached();
+        assert_eq!(catalog.reserved, file.reserved);
+        assert_eq!(catalog.attributes, file.attributes);
+    }
+
     #[test]
     fn cached_loads_the_expected_rows() {
         let catalog = Catalog::cached();
