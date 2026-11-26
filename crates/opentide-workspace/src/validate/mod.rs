@@ -186,7 +186,9 @@ pub const VALIDATION_CODES: &[&str] = &[
     "invalid_uuid",
     "invalid_value",
     "max_tlp_unknown",
+    "microsoft_defender_custom_details_limit",
     "microsoft_defender_impacted_asset_identifier",
+    "microsoft_defender_placeholder_limit",
     "missing_field",
     "missing_uuid",
     "name_invalid",
@@ -485,13 +487,18 @@ pub struct Summary {
 }
 
 /// Warning codes `--strict` reports without failing:
-/// `platform_not_enabled`, and `microsoft_defender_impacted_asset_identifier`,
-/// whose rule is Microsoft's advice rather than something Graph is known to
-/// refuse, until a tenant probe settles it
-/// (`docs/internal/microsoft-defender-tenant-test.md`, check 11).
-pub const STRICT_EXEMPT_WARNINGS: [&str; 2] = [
+/// `platform_not_enabled`, and Microsoft Defender's advisories that wait on
+/// a tenant probe (`docs/internal/microsoft-defender-tenant-test.md`):
+/// `microsoft_defender_impacted_asset_identifier`, whose rule is Microsoft's
+/// advice rather than something Graph is known to refuse (check 11), and
+/// `microsoft_defender_custom_details_limit` and
+/// `microsoft_defender_placeholder_limit`, limits Microsoft documents without
+/// saying what Graph does past them (check 9, #1890).
+pub const STRICT_EXEMPT_WARNINGS: [&str; 4] = [
     "platform_not_enabled",
     opentide_core::codes::MICROSOFT_DEFENDER_IMPACTED_ASSET_IDENTIFIER,
+    opentide_core::codes::MICROSOFT_DEFENDER_CUSTOM_DETAILS_LIMIT,
+    opentide_core::codes::MICROSOFT_DEFENDER_PLACEHOLDER_LIMIT,
 ];
 
 /// The object families `validate --type` takes.
@@ -2044,6 +2051,8 @@ mod tests {
         ("microsoft_defender_required_columns", "engine"),
         ("microsoft_defender_column_type", "engine"),
         ("microsoft_defender_unprojected_output", "engine"),
+        // Microsoft's documented NRT restrictions (#1890): lint's advisory.
+        ("microsoft_defender_nrt_query", "engine"),
         ("graylog_leading_wildcard", "engine"),
         ("graylog_regex_unsupported", "engine"),
         ("graylog_regex_operator", "engine"),

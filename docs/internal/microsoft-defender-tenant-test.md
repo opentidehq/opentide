@@ -83,9 +83,13 @@ The specification sends near real time as `PT0S` (`frequency: NRT`).
 
 1. `ID=$(uuidgen | tr A-Z a-z); g -X POST "$BASE" -d "$(body $ID PT0S)"`
 2. `g "$BASE/$ID" | jq .schedule`
+3. Once steps 1 and 2 have settled the encoding, create an NRT rule whose query starts with a `//`
+   comment line, then one that joins `DeviceInfo`, and enable each. Microsoft documents neither as
+   runnable continuously; `lint` reports both as `microsoft_defender_nrt_query` (#1890).
 
 **Expected:** `201`, and the rule reads back with a near-real-time schedule (the portal shows
-"Continuous (NRT)").
+"Continuous (NRT)"). For step 3, record whether Graph refuses each rule (and its message), at
+create or at enable, or creates it: a refusal makes the warning an error `validate` reports.
 
 **If not:** repeat step 1 with `PT0M`, then `P0D`. Record which one Graph accepts. If one does,
 change `Duration::iso8601` in `crates/opentide-schema/src/objects/platform/microsoft_defender.rs`
@@ -249,14 +253,21 @@ the identity model (RFC 0021, Identity).
 
 ## 9. Custom detail limits
 
-1. Create a rule with 20 custom details (`Detail1` … `Detail20`, each a projected column).
+1. Create a rule with 20 custom details (`Detail1` … `Detail20`, each a projected column), then one
+   with 21.
 2. Create rules with a detail name holding a space, a dot, a non-ASCII letter, and a 100-character
    name.
+3. Create a rule whose `alert.title` references four columns (`{{A}} {{B}} {{C}} {{D}}`), let it
+   alert, and read the alert's title.
 
 **Expected:** record the largest count accepted, and which names are refused, with Graph's message.
+Microsoft documents 20 details per rule and three columns per field (#1890), which `validate`
+reports as the warnings `microsoft_defender_custom_details_limit` and
+`microsoft_defender_placeholder_limit`.
 
 **If not / to record:** limits found become `microsoft_defender_custom_details` constraints in the
-spec and in `checks.rs` (`custom_details`).
+spec and in `checks.rs` (`custom_details`). If Graph refuses the 21st detail or the fourth column,
+the warning becomes an error.
 
 ## 10. Name and alert title conflicts
 
@@ -351,7 +362,7 @@ After the curl checks, run the platform the way users will:
 
 | # | Question | Result | Graph's answer, if different | Follow-up |
 |---|----------|--------|-------------------------------|-----------|
-| 1 | NRT encoding (`PT0S`) | | | |
+| 1 | NRT encoding (`PT0S`); an NRT query with a comment or a join (step 3) | | | |
 | 2 | 404 on PATCH and DELETE, 409 on POST | | | |
 | 3 | PATCH replaces nested objects | | | |
 | 4 | Tactic values (`DefenseEvasion`), v19 ids | | | |
@@ -359,6 +370,6 @@ After the curl checks, run the platform the way users will:
 | 6 | Every entity kind accepted; none required | | | |
 | 7 | Frequencies, largest lookback | | | |
 | 8 | `opentide-<uuid>` as client id, compared exactly | | | |
-| 9 | Custom detail count and names | | | |
+| 9 | Custom detail count and names; four `{{Column}}` columns in a title (step 3) | | | |
 | 10 | 409 on a held name or alert title, disabled or renamed | | | |
 | 11 | Required identifiers per entity kind | | | |

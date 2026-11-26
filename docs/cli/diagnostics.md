@@ -344,6 +344,7 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`microsoft_defender_column_not_in_output`](#microsoft_defender_column_not_in_output) | A column a Microsoft Defender block names is not a column of its query's output. |
 | [`microsoft_defender_column_type`](#microsoft_defender_column_type) | A Microsoft Defender entity or action is mapped from a column that holds no identifier, name or address. |
 | [`microsoft_defender_custom_details`](#microsoft_defender_custom_details) | A Microsoft Defender block's `alert.custom_details` is not a mapping of non-blank names to result columns. |
+| [`microsoft_defender_custom_details_limit`](#microsoft_defender_custom_details_limit) | A Microsoft Defender block's `alert.custom_details` is past the limits Microsoft documents. |
 | [`microsoft_defender_entity_identifier`](#microsoft_defender_entity_identifier) | A Microsoft Defender entity mapping lacks an identifier Graph requires of its kind. |
 | [`microsoft_defender_entity_kind`](#microsoft_defender_entity_kind) | A key of a Microsoft Defender block's `entities` is not an entity kind. |
 | [`microsoft_defender_entity_mapping`](#microsoft_defender_entity_mapping) | A Microsoft Defender entity mapping is empty, is not a mapping, or names a field its kind does not have. |
@@ -354,6 +355,8 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`microsoft_defender_isolation_type`](#microsoft_defender_isolation_type) | A Microsoft Defender `isolate_devices` target's `isolation_type` is not `full` or `selective`. |
 | [`microsoft_defender_lookback`](#microsoft_defender_lookback) | A Microsoft Defender block's `schedule.lookback` is not a duration, is set on a near-real-time rule, or is shorter than its frequency. |
 | [`microsoft_defender_no_entities`](#microsoft_defender_no_entities) | A Microsoft Defender block maps no entity. |
+| [`microsoft_defender_nrt_query`](#microsoft_defender_nrt_query) | A Microsoft Defender rule runs continuously (`frequency: NRT`), and its query is one Microsoft documents NRT cannot run. |
+| [`microsoft_defender_placeholder_limit`](#microsoft_defender_placeholder_limit) | A Microsoft Defender alert title or description references more than three columns. |
 | [`microsoft_defender_required_columns`](#microsoft_defender_required_columns) | A Microsoft Defender query's output lacks a column a custom detection needs. |
 | [`microsoft_defender_rule_absent`](#microsoft_defender_rule_absent) | A Microsoft Defender rule to disable is not on the tenant, so nothing was disabled or created. |
 | [`microsoft_defender_rule_conflict`](#microsoft_defender_rule_conflict) | Graph refused to create a Microsoft Defender rule because another rule most likely holds its display name or alert title. |
@@ -6260,6 +6263,28 @@ configurations:
 
 Write a mapping: `custom_details: {CommandLine: ProcessCommandLine}`.
 
+## microsoft_defender_custom_details_limit
+
+A Microsoft Defender block's `alert.custom_details` is past the limits Microsoft documents.
+
+Severity: warning. Reported by `opentide validate` (its `schema` check) and `opentide lint` (its `queries` check) on a `microsoft_defender` block (microsoft-defender-1.0), at `alert.custom_details`, when it has more than 20 details, or when the details' names alone take more than 4 KB (4096 bytes). Microsoft's [custom detection docs](https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules) (read 2026-11-26) say: "Each rule is limited to up to 20 key-value pairs of custom details. The combined size limit for all custom details and their values in a single alert is 4 KB. If the custom details array exceeds this limit, the whole custom details array is dropped from the alert." The values are the query's results, known only when the rule runs, so opentide reports the size only when the names fill the limit on their own. Graph's answer to a 21st detail is not documented, so this is an advisory: the rule validates and deploys, and `validate --strict` reports it without failing until a tenant check settles it. `lint --strict` fails on it, as on every warning; `microsoft_defender_custom_details_limit = "info"` under `[queries.codes]` in `lint.toml` keeps it reported without failing.
+
+### Example
+
+```yaml
+configurations:
+  microsoft_defender:
+    alert:
+      custom_details:
+        Detail1: Column1
+        # Detail2 to Detail20
+        Detail21: Column21
+```
+
+### How to fix
+
+Keep the details an analyst needs first, at most 20, and keep their values short: a long command line or a JSON column can push one alert past 4 KB, and then the alert shows no custom detail at all.
+
 ## microsoft_defender_entity_identifier
 
 A Microsoft Defender entity mapping lacks an identifier Graph requires of its kind.
@@ -6466,6 +6491,53 @@ configurations:
 ### How to fix
 
 Map the columns the query returns: `entities: {hosts: [{device_id: DeviceId}]}`.
+
+## microsoft_defender_nrt_query
+
+A Microsoft Defender rule runs continuously (`frequency: NRT`), and its query is one Microsoft documents NRT cannot run.
+
+Severity: warning. Reported by the analysis engine on the KQL query of a `microsoft_defender` block whose `schedule.frequency` is `NRT`: `opentide lint` (its `queries` check) and an editor running `opentide lsp start` show it; `opentide validate` does not report it. `lint --strict` fails on it, as on every warning; `microsoft_defender_nrt_query = "info"` under `[queries.codes]` in `lint.toml` keeps it reported without failing. Microsoft's [custom detection docs](https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules) (read 2026-11-26) say "You can run a query continuously as long as: The query references one table only. [...] The query doesn't use joins, unions, or the externaldata operator. The query doesn't include any comments line or information.", list the tables near real-time detections support, and leave out `EmailEvents`' `LatestDeliveryLocation` and `LatestDeliveryAction` columns. Each finding is where the query breaks one of these: a second table, a table off the list, each `join`, `union` and `externaldata`, the first comment (the message counts them), or an excluded `EmailEvents` column.
+
+The check is conservative. A query with a syntax error, a table read through a function or another database's table, and the docs' list of supported KQL operators are not judged. A `let` or a parameter name is not a table, and a column the query defines (`extend LatestDeliveryAction = ...`, a `project-rename`'s new name) is not `EmailEvents`' own. What Graph does with such a rule is not documented.
+
+The tables: `AlertEvidence`, `CloudAppEvents`, `DeviceEvents`, `DeviceFileCertificateInfo`, `DeviceFileEvents`, `DeviceImageLoadEvents`, `DeviceLogonEvents`, `DeviceNetworkEvents`, `DeviceNetworkInfo`, `DeviceInfo`, `DeviceProcessEvents`, `DeviceRegistryEvents`, `EmailAttachmentInfo`, `EmailEvents`, `EmailPostDeliveryEvents`, `EmailUrlInfo`, `IdentityDirectoryEvents`, `IdentityLogonEvents`, `IdentityQueryEvents` and `UrlClickEvents` from Defender XDR; `ABAPAuditLog_C`, `ABAPChangeDocsLog_CL`, `AuditLogs`, `AWSCloudTrail`, `AWSGuardDuty`, `AzureActivity`, `CommonSecurityLog`, `GCPAuditLogs`, `MicrosoftGraphActivityLogs`, `OfficeActivity`, `Okta_CL`, `OktaV2_CL`, `ProofpointPOD`, `ProofPointTAPClicksPermitted_CL`, `ProofPointTAPMessagesDelivered_CL`, `SecurityAlert`, `SecurityEvent` and `SigninLogs` from Microsoft Sentinel.
+
+### Example
+
+```yaml
+configurations:
+  microsoft_defender:
+    schedule:
+      frequency: NRT
+    query: |
+      // PowerShell on servers
+      DeviceProcessEvents
+      | where FileName =~ "powershell.exe"
+      | join (DeviceInfo | where DeviceType == "Server") on DeviceId
+```
+
+### How to fix
+
+Move comments to the rule's description, and filter one table from the list without a join, a union or `externaldata`. A detection that needs more than that runs on a schedule: `frequency: 1H`, `3H`, `12H` or `24H`.
+
+## microsoft_defender_placeholder_limit
+
+A Microsoft Defender alert title or description references more than three columns.
+
+Severity: warning. Reported by `opentide validate` (its `schema` check) and `opentide lint` (its `queries` check) on a `microsoft_defender` block (microsoft-defender-1.0), at `alert.title` or `alert.description`, when the field references more than three distinct columns as `{{Column}}`. Only an identifier between the braces, with no space, counts (`{{AccountName}}`, the form the docs show): JSON or prose in braces, and `{{ AccountName }}`, whose substitution is not documented, do not. Microsoft's [custom detection docs](https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules) (read 2026-11-26) say of a dynamic alert title and description: "You can reference up to three columns in each field." A column referenced twice counts once. What Defender does with a fourth is not documented, so this is an advisory: the rule validates and deploys, and `validate --strict` reports it without failing until a tenant check settles it. `lint --strict` fails on it, as on every warning; `microsoft_defender_placeholder_limit = "info"` under `[queries.codes]` in `lint.toml` keeps it reported without failing.
+
+### Example
+
+```yaml
+configurations:
+  microsoft_defender:
+    alert:
+      title: "{{AccountName}} ran {{FileName}} on {{DeviceName}} from {{FolderPath}}"
+```
+
+### How to fix
+
+Keep three columns in the field, and show the others as custom details (`alert.custom_details`), which the alert side panel lists.
 
 ## microsoft_defender_required_columns
 

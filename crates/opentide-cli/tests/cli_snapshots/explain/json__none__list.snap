@@ -1337,6 +1337,10 @@ exit: 0
       "meaning": "A Microsoft Defender block's `alert.custom_details` is not a mapping of non-blank names to result columns."
     },
     {
+      "code": "microsoft_defender_custom_details_limit",
+      "meaning": "A Microsoft Defender block's `alert.custom_details` is past the limits Microsoft documents."
+    },
+    {
       "code": "microsoft_defender_entity_identifier",
       "meaning": "A Microsoft Defender entity mapping lacks an identifier Graph requires of its kind."
     },
@@ -1375,6 +1379,14 @@ exit: 0
     {
       "code": "microsoft_defender_no_entities",
       "meaning": "A Microsoft Defender block maps no entity."
+    },
+    {
+      "code": "microsoft_defender_nrt_query",
+      "meaning": "A Microsoft Defender rule runs continuously (`frequency: NRT`), and its query is one Microsoft documents NRT cannot run."
+    },
+    {
+      "code": "microsoft_defender_placeholder_limit",
+      "meaning": "A Microsoft Defender alert title or description references more than three columns."
     },
     {
       "code": "microsoft_defender_required_columns",
@@ -2005,13 +2017,13 @@ exit: 0
   "duration_ms": 0,
   "exit_code": 0,
   "failure": null,
-  "message": "498 diagnostic codes",
+  "message": "501 diagnostic codes",
   "next_actions": [],
   "ok": true,
   "schema_version": 1,
   "status": "completed",
   "summary": {
-    "codes": 498
+    "codes": 501
   }
 }
 

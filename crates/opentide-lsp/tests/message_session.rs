@@ -667,6 +667,86 @@ fn a_uri_removed_and_added_in_one_change_is_there_with_its_new_text() {
     assert!(hover.to_string().contains("After"), "{hover}");
 }
 
+/// A Microsoft Defender block past the limits Microsoft documents (#1890):
+/// the editor shows the alert's advisories (`validate`'s) and a continuous
+/// rule's NRT finding (the query's analysis), where each is broken.
+#[test]
+fn a_defender_block_past_its_documented_limits_is_shown() {
+    let mut session = start(Value::Null);
+    let details = (1..=21)
+        .map(|n| format!("        Detail{n}: Column{n}\n"))
+        .collect::<Vec<_>>()
+        .concat();
+    let text = format!(
+        "name: Defender rule
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000099
+  schema: rule::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: A Defender rule.
+configurations:
+  microsoft_defender:
+    enabled: true
+    status: STAGING
+    schedule:
+      frequency: NRT
+    query: |
+      // servers only
+      DeviceProcessEvents
+    entities:
+      hosts: [{{device_id: DeviceId}}]
+    alert:
+      title: \"{{{{A}}}} {{{{B}}}} {{{{C}}}} {{{{D}}}}\"
+      custom_details:
+{details}"
+    );
+    let found = open(
+        &mut session,
+        "objects/rules/defender.yaml",
+        "opentide-yaml",
+        &text,
+    );
+    let line_of = |needle: &str| text.lines().position(|l| l.contains(needle)).unwrap();
+    let at = |code: &str| -> Vec<(u64, u64)> {
+        found
+            .iter()
+            .filter(|d| d["code"] == code)
+            .map(|d| {
+                assert_eq!(d["severity"], 2, "{d}");
+                (
+                    d["range"]["start"]["line"].as_u64().unwrap(),
+                    d["range"]["start"]["character"].as_u64().unwrap(),
+                )
+            })
+            .collect()
+    };
+    let line = |needle: &str| u64::try_from(line_of(needle)).unwrap();
+    assert_eq!(
+        at("microsoft_defender_nrt_query"),
+        [(line("// servers only"), 6)],
+        "{found:#?}"
+    );
+    assert_eq!(
+        at("microsoft_defender_placeholder_limit")
+            .into_iter()
+            .map(|(line, _)| line)
+            .collect::<Vec<_>>(),
+        [line("title:")],
+        "{found:#?}"
+    );
+    assert_eq!(
+        at("microsoft_defender_custom_details_limit")
+            .into_iter()
+            .map(|(line, _)| line)
+            .collect::<Vec<_>>(),
+        [line("custom_details:")],
+        "{found:#?}"
+    );
+}
+
 /// A Bitdefender block in the editor: `validate`'s findings (the model's
 /// `yara_empty_signature`, the advisories), and completion and hover from
 /// the criteria catalogue.

@@ -6,6 +6,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Eac
 
 ## [Unreleased]
 
+### Upgrade
+
+1. If CI runs `opentide lint --strict` on Microsoft Defender rules (`opentide setup ci` generates it), it now fails on three new warnings. To keep the previous result while you fix the rules, set each to `"info"` under `[queries.codes]` in `.opentide/configurations/lint.toml`: `microsoft_defender_custom_details_limit`, `microsoft_defender_placeholder_limit` and `microsoft_defender_nrt_query`.
+
+### Added
+
+- **Defender rules are checked against Microsoft's documented limits** ([#1890](https://github.com/opentidehq/opentide/issues/1890)). Each is a warning, so the rule validates and deploys. `validate --strict` reports the first two without failing; `lint --strict` fails on all three.
+  - `microsoft_defender_custom_details_limit`: more than 20 custom details, or names past 4 KB, beyond which Defender drops them all from the alert
+  - `microsoft_defender_placeholder_limit`: more than three `{{Column}}` columns in the alert title or description
+  - `microsoft_defender_nrt_query`, reported by `lint` and the editor, not `validate`: a `frequency: NRT` query that reads two tables or one off the NRT list, joins, unions, uses `externaldata` or has a comment
+
 ### Fixed
 
 - **`deploy` keeps a connector's own failure code in the rule's row.** A failure a connector reports under a code of its own read as its message alone; the row's `error` now starts with the code (`code: message`), as Microsoft Defender's, Bitdefender's and Google SecOps' rows already did ([#1894](https://github.com/opentidehq/opentide/issues/1894)). The rows that change:

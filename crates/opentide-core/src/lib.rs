@@ -1060,6 +1060,11 @@ pub mod codes {
     pub const MICROSOFT_DEFENDER_NO_ENTITIES: &str = "microsoft_defender_no_entities";
     pub const MICROSOFT_DEFENDER_IMPACTED_ASSET_IDENTIFIER: &str =
         "microsoft_defender_impacted_asset_identifier";
+    // The limits of Microsoft's custom detection docs (#1890).
+    pub const MICROSOFT_DEFENDER_CUSTOM_DETAILS_LIMIT: &str =
+        "microsoft_defender_custom_details_limit";
+    pub const MICROSOFT_DEFENDER_PLACEHOLDER_LIMIT: &str = "microsoft_defender_placeholder_limit";
+    pub const MICROSOFT_DEFENDER_NRT_QUERY: &str = "microsoft_defender_nrt_query";
 
     // The Exabeam Query Language (specifications exabeam-1.0, language).
     pub const EXABEAM_PARSE_ERROR: &str = "exabeam_parse_error";
@@ -1443,6 +1448,9 @@ pub mod codes {
         MICROSOFT_DEFENDER_INCIDENT,
         MICROSOFT_DEFENDER_NO_ENTITIES,
         MICROSOFT_DEFENDER_IMPACTED_ASSET_IDENTIFIER,
+        MICROSOFT_DEFENDER_CUSTOM_DETAILS_LIMIT,
+        MICROSOFT_DEFENDER_PLACEHOLDER_LIMIT,
+        MICROSOFT_DEFENDER_NRT_QUERY,
     ];
 
     /// One sentence on what a code means, for hosts that explain a diagnostic
@@ -2272,6 +2280,15 @@ pub mod codes {
             }
             MICROSOFT_DEFENDER_IMPACTED_ASSET_IDENTIFIER => {
                 "A device or user mapping sets no strong identifier of its impacted asset."
+            }
+            MICROSOFT_DEFENDER_CUSTOM_DETAILS_LIMIT => {
+                "`alert.custom_details` has more than the 20 details Defender documents per rule, or names longer than the 4 KB beyond which Defender drops every detail from the alert."
+            }
+            MICROSOFT_DEFENDER_PLACEHOLDER_LIMIT => {
+                "`alert.title` or `alert.description` references more than the three `{{Column}}` columns Defender documents per field."
+            }
+            MICROSOFT_DEFENDER_NRT_QUERY => {
+                "A `frequency: NRT` rule's query is one Defender documents it cannot run continuously: it reads more than one table or a table outside the NRT list, joins, unions, uses externaldata, has a comment, or reads `EmailEvents`' `LatestDeliveryLocation` or `LatestDeliveryAction`."
             }
             _ => return None,
         })
