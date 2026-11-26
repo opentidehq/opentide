@@ -31,12 +31,15 @@ Add **`datadog`, Datadog Cloud SIEM**, as the fourteenth built-in platform:
 - **The connector.** Deploy (create, update, disable, delete) goes through
   `/api/v2/security_monitoring/rules`. `validate query --live` uses the vendor's own
   `POST /rules/validation`. `opentide query` uses the Logs Search API.
-- **The starting content.** There is no open corpus of Datadog-format rules. The conformance corpus
-  comes from the real queries in Datadog's integration assets (BSD-3-Clause). Seed rules come from
-  Sigma's cloud rules (DRL 1.1), converted by our own mapping, and from 11 BSD-3 rules already in
-  Datadog's format. The built-in rules recorded in the Terraform provider's tests are measured,
-  never vendored. Section 9 lists every source and its licence; section 9.1 has what a prototype
-  checker found in them.
+- **The language model is held to Datadog's own content.** The grammar is written from Datadog's
+  docs, then checked against two references, and every difference is explained:
+  - 3,318 queries that Datadog itself publishes, in its docs, integrations, Terraform provider, API
+    clients, blog and Security Labs;
+  - the parser in Datadog's open-source VRL.
+
+  No converted third-party content is used.
+  Section 5.5 lists the model construct by construct; section 9 lists the sources and their
+  licences; section 9.1 has the measurements.
 
 Capability row as proposed (for the registry in `crates/opentide-schema/src/platforms.rs`):
 
@@ -72,7 +75,7 @@ The language is not well served today:
 | `type: log_detection`, real time | `sequence_detection` (steps and transitions) | `workload_security` / `workload_activity`: Agent rules in SECL, a different language, the Datadog Agent's runtime policies |
 | Detection methods `threshold`, `new_value`, `anomaly`, `impossible_travel` | Scheduled rules (`schedulingOptions`, an RFC 5545 RRULE), `calculatedFields` (a formula language) | `application_security`, `api_security` (App and API Protection, ASM actions) |
 | `type: signal_correlation`, referencing Tide rules or Datadog rule ids | `third_party` (`thirdPartyCases`, `rootQueries`) | `cloud_configuration`, `infrastructure_configuration` (CSPM, Rego) |
-| `dataSource` `logs` (default), `audit`, `events`, `security_signals` | Reference tables (`referenceTables`) | `queryLanguage: sql` (DDSQL): SQL stays unsupported in opentide; a block that asks for it is refused with `datadog_sql_unsupported` |
+| Queries `from` `logs` (default), `audit`, `events`, `signals` | Reference tables (`referenceTables`) | `queryLanguage: sql` (DDSQL): SQL stays unsupported in opentide; a block that asks for it is refused with `datadog_sql_unsupported` |
 | Live validation, deploy, disable, delete, drift by `version` | Tuning a Datadog default rule (`customQueryExtension`, `customStatus`, notifications), like Sysdig's `append_to_rule` | `hardcoded` (one value, `log4shell`, Datadog-owned) |
 | `opentide query` over the Logs Search API | Rule tests through `POST /rules/test`; backtests through historical jobs (preview) | Suppression rules and security filters as their own Tide objects (a separate RFC) |
 
@@ -462,6 +465,46 @@ Not part of the language, so refused or flagged:
 | `datadog_regex` | error | `~` or `^` in a term: Datadog has no fuzzy or boost operators, and no regex (`/` is an ordinary character, so `@http.url:/api` is a path, not a regex) |
 | `datadog_unknown_attribute` | hint | A dotted bare key (`evt.name:x`), searched as a tag where an attribute was likely meant; with catalogs, an `@attribute` that neither the standard attributes nor the source's pipeline catalog knows (5.7) |
 
+### 5.5 The model, construct by construct
+
+Each construct is held to three references: Datadog's docs; VRL, Datadog's open-source parser for
+the same syntax; and how often Datadog's own published queries use it (9.1, 3,318 queries).
+
+| Construct | Example | Docs | VRL | Published uses | Model |
+|---|---|:-:|:-:|--:|---|
+| Free-text term | `authentication` | ✅ | ✅ | 778 | Searches `message`, `@title`, `@error.message`, `@error.stack` |
+| Phrase | `"hello world"`, `""` | ✅ | ✅ | 301 | `\X` escapes; curly quotes are not quotes (`datadog_curly_quote`) |
+| Attribute | `@evt.outcome:FAILURE` | ✅ | ✅ | 2,042 | `@` path; `\ ` and `\.` inside a key |
+| Tag or reserved attribute | `source:okta`, `env:prod` | ✅ | ✅ | 1,528 | A dotted bare key is a hint (`datadog_unknown_attribute`, 58 uses, mostly APM-style dashboards) |
+| Calculated field | `#duration_ms:>500` | ✅ | ✅ | 0 | Documented only; parsed like an attribute |
+| `AND`, `OR`, implicit AND | `a OR b c` | ✅ | ✅ | 77 / 626 / most | AND binds tighter than OR (VRL); unverified on Cloud SIEM (`datadog_mixed_boolean`) |
+| `NOT`, `NOT(` | `NOT(CIDR(…))` | ✅ | ✅ | 6 | |
+| `-` exclusion | `-@level:Error`, `-(…)`, `-"…"` | ✅ | ✅ | 143 | A space after it is a warning (`datadog_detached_operator`; 2 uses) |
+| `+` prefix | `+@a:1` | — | ✅ | 0 | Parsed; never used. `@data.message:+*` (docs) is a value starting with `+`, which the docs accept and VRL does not |
+| Grouping | `(a OR b)` | ✅ | ✅ | 71 | |
+| Value group | `env:(prod OR test)`, `@perms:(4 6)` | ✅ | ✅ | 577 | Takes comparisons (`(>=400 <500)`), ranges, `-*` and nested `key:value` (`tag:(integration:dcgm)`), as Datadog's pipelines write them |
+| Wildcards | `web*`, `hello?world`, `waiting**time` | ✅ | ✅ (not `**`) | 496 / 8 / 4 | Not wildcards inside quotes (`datadog_wildcard_in_phrase` when one touches a word, `"*test*"`) |
+| Escaped space | `waiting\ un*` | ✅ | ✅ | 11 | |
+| Existence | `@attr:*`, `-@attr:*` | ✅ | ✅ | 245 | `_exists_:` / `_missing_:` are Observability Pipelines only (`datadog_pipelines_only`) |
+| Comparison | `@duration:>=100ms` | ✅ | ✅ | 48 | Numbers may carry a duration unit (`100ms`, `1s`, `7days`), as Datadog's RUM, CI and database queries do |
+| Range | `[400 TO 499]`, `{200 TO 299}` | ✅ | ✅ | 112 / 2 | `TO` upper case; `[* TO 5]` parses but is never used; mixed bounds a warning |
+| `CIDR()` | `CIDR(@network.client.ip, 10.0.0.0/8, fc00::/7)` | ✅ | ❌ | 8 | Log Explorer only; IPv4 and IPv6 blocks; a comma has meaning only here |
+| Full text, match all | `*:hello`, `*:*` | ✅ | ❌ / ✅ | 4 / 1 | `*:term` is a warning in rule queries (`datadog_full_text_in_rule`) |
+| Space after `:` | `env: prod`, `@severity: "."` | — | ✅ | 16 | Accepted: VRL allows it and Datadog publishes it |
+| Unescaped `:` in a value | `@http.url:https:\/\/*`, `tag:integration:airflow` | ❌ (escape it) | ❌ | 31 | A warning (`datadog_unescaped_colon`), none for `tag` and `tags`, whose values are `key:value`. Datadog's own docs and dashboards write it, so it is not an error |
+| `&&`, `\|\|`, `!` as operators | `a && b` | ❌ (escape them) | ✅ | 0 | A warning (`datadog_symbol_operator`); `!` inside a term is an error |
+| Lower-case operators | `k OR n or E` | ❌ | ❌ | 1 (a bug) | A term (`datadog_lowercase_operator`) |
+| Regex, fuzzy, boost | `/re/`, `foo~2` | ❌ | ❌ | 0 | `/` is ordinary; `~` and `^` are errors (`datadog_regex`) |
+
+Two differences from VRL are deliberate, and both follow Datadog's docs and its published queries
+rather than VRL:
+
+- **What the model accepts and VRL refuses:** `CIDR()`, `*:term`, an unescaped `:` in a value,
+  and a value starting with `+`.
+- **What VRL accepts and the model warns about:** `&&` and `||` between clauses.
+
+The probes on a trial tenant (open question 2) settle the cases where neither reference does.
+
 ### 5.6 Highlighting (existing captures only)
 
 No capture is added to `highlights/spec.toml`.
@@ -669,44 +712,87 @@ What exists, ranked by use:
 
 | Source | Licence | What it gives | Use |
 |---|---|---|---|
-| [DataDog/integrations-core](https://github.com/DataDog/integrations-core) and [integrations-extras](https://github.com/DataDog/integrations-extras): log saved views (135, 169 unique queries), `logs("…")` monitors (31), pipeline test fixtures (`assets/logs/`, 408 files) | BSD-3-Clause | Real Datadog search queries written by Datadog, sources and attribute remaps, sample logs | **(a) Conformance corpus**, vendored with the notice. Catalogs (5.7). Sample events for `POST /rules/test` |
+| **The Datadog-published query corpus**: 3,318 distinct literal queries from Datadog's docs (Log Search Syntax, Cloud SIEM, RUM, CI, Audit, Events, Observability Pipelines pages and the API reference), [integrations-core](https://github.com/DataDog/integrations-core) and [integrations-extras](https://github.com/DataDog/integrations-extras) (pipeline filters, dashboards, saved views, monitors, security rules), the Terraform provider's docs and tests, the datadog-api-client examples, the Datadog blog and Security Labs. Each query keeps its source and licence. Templated queries (`$var`, `{{…}}`, `<PLACEHOLDER>`: 2,659) are kept apart | BSD-3-Clause (docs and integrations: 2,888), MPL-2.0 (Terraform: 95), Apache-2.0 (API clients and two DataDog repos: 95), Datadog's site terms (blog and Security Labs: 240) | Real queries in every context: SIEM rules 42, pipeline filters 1,650, dashboards 643, saved views 96, monitors 48, docs 398, API 104, blog 240, suppressions 10 | **(a) The conformance corpus.** BSD-3 and Apache-2.0 queries are vendored with their notices; MPL-2.0 files kept apart, unmodified; blog and Security Labs queries measured, not vendored |
+| integrations-core `*/assets/logs/` (408 pipeline files with test samples) | BSD-3-Clause | Sources, attribute remaps and sample logs | Catalogs (5.7); sample events for `POST /rules/test` |
 | integrations-extras `*/assets/security/*.json` (AppOmni, Bottomline, Contrast: 11 rules) | BSD-3-Clause | The only permissively licensed rules already in Datadog's export format: threshold, impossible travel, anomaly and third party | **API body fixtures** and **(b) seed rules** |
-| [terraform-provider-datadog](https://github.com/DataDog/terraform-provider-datadog) test cassettes `TestAccDatadogSecurityMonitoringDefaultRule_*.yaml` | MPL-2.0 files, recording Datadog's proprietary rule content | 199 recorded built-in rules: 82 `log_detection` with 122 unique queries (67 CloudTrail, Microsoft 365, 1Password, Kubernetes audit), real escaping (`system\:serviceaccount\:*`), every detection method | **Measured, not vendored**, as Exabeam's content hub: an ignored test reads a local checkout. The provider's `examples/` and the [datadog-api-client-*](https://github.com/DataDog/datadog-api-client-python) `examples/v2/security-monitoring` (Apache-2.0) give API fixtures |
-| [DataDog/documentation](https://github.com/DataDog/documentation) `hugo/content/en/api/v2/security-monitoring/request.*Rule*.json` | to confirm (GitHub reports NOASSERTION) | 42 synthetic API request bodies covering every rule type and detection method | Schema fixtures once the licence is confirmed; until then, a reference only |
+| [terraform-provider-datadog](https://github.com/DataDog/terraform-provider-datadog) test cassettes `TestAccDatadogSecurityMonitoringDefaultRule_*.yaml` | MPL-2.0 files, recording Datadog's proprietary rule content | 199 recorded built-in rules: 82 `log_detection` with 122 unique queries (67 CloudTrail, Microsoft 365, 1Password, Kubernetes audit), every detection method | **Measured, not vendored**, as Exabeam's content hub: an ignored test reads a local checkout |
+| [DataDog/documentation](https://github.com/DataDog/documentation) `hugo/content/en/api/v2/security-monitoring/request.*Rule*.json`, and the [datadog-api-client-*](https://github.com/DataDog/datadog-api-client-python) `examples/v2/security-monitoring` | BSD-3-Clause `LICENSE` (GitHub reports NOASSERTION); Apache-2.0 | 42 synthetic API request bodies covering every rule type and detection method | API body fixtures |
 | [vectordotdev/vrl](https://github.com/vectordotdev/vrl) `src/datadog/search/` | MPL-2.0 | Datadog's own pest grammar for the search syntax, with its tests | The grammar reference and a **differential oracle** (`scripts/engine/oracles/datadog/`): run VRL over the corpus and compare accept and reject verdicts. Not vendored |
 | [DataDog/stratus-red-team](https://github.com/DataDog/stratus-red-team) (103 techniques, 36 detonation logs), [grimoire](https://github.com/DataDog/grimoire), [threatest](https://github.com/DataDog/threatest) | Apache-2.0 | Attack, recorded logs, and an assertion that the Datadog signal fired | Seed rules written against Stratus techniques, with the detonation logs as their `POST /rules/test` samples; a manual tenant run like `microsoft-defender-tenant-test.md` |
 | [DataDog/security-agent-policies](https://github.com/DataDog/security-agent-policies) | Apache-2.0 | 331 Workload Protection rules in SECL | Out of scope (a different language) |
 | Community Terraform (139 files contain `resource "datadog_security_monitoring_rule"`, nearly all docs, forks or tooling; for example grcengineering/how-to-harden, MIT, 7 rules on `source:audit`) | mixed; several have no licence | Tiny sets | Only MIT or Apache-2.0 ones, as examples; never an unlicensed repository |
 | panther-analysis (Apache-2.0), splunk/security_content (Apache-2.0), Azure-Sentinel (MIT), elastic/detection-rules (Elastic License 2.0) | as listed | Rules in other languages | Ideas for coverage, not content; nothing from ELv2 |
 
+Seed rules for opentide's examples come from three places, none of them converted from
+another format:
+
+- the 11 BSD-3 rules in Datadog's own format;
+- rules written here for Stratus Red Team's cloud techniques, each with its detonation log as a
+  test sample;
+- the Cloud SIEM rule examples in Datadog's docs.
+
 ### 9.1 What the prototype checker already shows
 
-The tokenizer prototype in the technical artifact implements sections 4.6 and 5.3 to 5.6. It was run over
-two corpora on 2026-11-26:
+The prototype in the technical artifact implements sections 4.6 and 5.3 to 5.6. It was run on
+2026-11-26 over three corpora, next to VRL's grammar compiled as an accept or reject oracle (a
+local tool, not vendored).
 
-- **The 153 unique queries of the recorded built-in rules** (122 from log detection rules, the
-  rest posture queries). Every query parsed, and the tokens cover the text exactly. There is one
-  finding, and it is real: a Microsoft 365 rule lists file types as
-  `@SourceFileName:(*.exe OR … OR *.zip OR *.rar *.7z *.cab OR *.tar …)`. Datadog documents a space
-  inside a value group as AND (`@user_perms:(4 6)` means both). With AND binding tighter than OR,
-  `*.rar *.7z *.cab` asks for a file name ending in all three at once, which never happens, so
-  `.rar`, `.7z` and `.cab` uploads go undetected.
-  That is `datadog_mixed_boolean`, as designed. It also makes open question 2 worth settling on a
-  tenant first.
-- **1,411 Sigma rules converted by pySigma-backend-datadog.** 39 queries have at least one finding
-  (32 with `datadog_parse_error`, 24 with `datadog_mixed_boolean`, 3 with
-  `datadog_wildcard_in_phrase`; some have several). The samples
-  inspected trace to the backend's own output: an empty value (`@DeviceDetail.trusttype: OR …`),
-  `\\"` escaping, and its `-@field:[0* TO z*] AND @field:*` null check placed inside an OR group
-  without parentheses. Its `siem_rule` format also prepends `source:gcp ` to an OR without
-  parentheses. Hence our own conversion for seed rules.
+| Corpus | Queries | Agree with VRL | Prototype errors | Every difference explained |
+|---|--:|--:|--:|---|
+| The Log Search Syntax page's examples | 28 | 27 | 0 | `*:hello*`: documented full-text search VRL does not know |
+| The Datadog-published corpus | 3,318 | 3,289 | 6 | Yes, below |
+| The recorded built-in rules (measured only) | 153 | 153 | 0 | One warning, a real bug (below) |
+
+**All 29 disagreements on the published corpus are queries Datadog publishes that VRL refuses:**
+
+- `tag:integration:<name>` in 13 integration dashboards;
+- `CIDR(…)` lists with IPv6 blocks in 3 pipeline filters;
+- the docs' own `*:term` examples (4) and `@http.url:https:\/\/*`;
+- values starting with `+` (2 doc examples);
+- 2 Observability Pipelines forms;
+- 3 blog queries with unescaped colons.
+
+The prototype accepts them, with a warning where the docs say otherwise. The six queries it calls
+errors are not queries a rule could hold:
+
+- a dashboard title (`[Prefect]`);
+- a deliberately invalid query from Datadog's API tests (`rule:[A-Invalid`);
+- two Observability Pipelines-only forms (`message:*!*`);
+- a RUM retention filter written `@session.view.count :> 3`;
+- indicators a Security Labs article wrote as `models.litellm[.]cloud` on purpose, so they cannot
+  be clicked.
+
+Building the model against this corpus changed it in five places, each now in 5.3 and 5.5:
+
+1. A space after `:` is allowed.
+2. Value groups take comparisons and ranges.
+3. Duration units are part of numbers.
+4. An unescaped `:` in a value is a warning, not an error, and nothing for tag values.
+5. A comma has meaning only inside `CIDR()`.
+
+**The warnings find real mistakes in Datadog's own content:**
+
+- **A built-in Microsoft 365 rule** (recorded by the Terraform provider) lists file types as
+  `@SourceFileName:(*.exe OR … OR *.zip OR *.rar *.7z *.cab OR *.tar …)`. Datadog documents a
+  space inside a value group as AND (`@user_perms:(4 6)` means both). `*.rar *.7z *.cab` therefore
+  asks for a file name ending in all three at once, which never happens, so `.rar`, `.7z` and
+  `.cab` uploads go undetected (`datadog_mixed_boolean`).
+- **A Datadog blog post** queries `service:azure-service-bus status:error OR warning` (twice, also
+  with `throttled OR quota_exceeded`). That is "(this service and error) or any log containing the
+  word warning", where `status:(error OR warning)` was meant (`datadog_mixed_boolean`).
+- **A Security Labs Salesforce guide** queries `- @login_type:(k OR n or E)`. The lower-case `or`
+  is a search term, so the group asks for `k`, or for `n`, `or` and `E` at once
+  (`datadog_lowercase_operator`; the detached `-` is `datadog_detached_operator`).
+
+These three are also why open question 2, whether Cloud SIEM binds AND tighter than OR, is the
+first thing to settle on a tenant.
 
 ## 10. Plan
 
 | Phase | Delivers | Exit criteria |
 |---|---|---|
 | 0. Specs | This RFC numbered in opentidehq/specifications; `datadog-1.0` language and platform specs with fixtures; an issue per phase | Specs reviewed; open questions 2 to 6 answered on a trial tenant |
-| 1. Engine | `opentide-datadog`: lexer, Pratt grammar, `.ungram`, profiles, diagnostics, highlight, catalogs, corpus gate, VRL differential, fuzz target, throughput budget | `language_wiring` green; the integrations corpus clean; the recorded built-in rules measured with every finding explained; VRL agreement measured and explained |
+| 1. Engine | `opentide-datadog`: lexer, Pratt grammar, `.ungram`, profiles, diagnostics, highlight, catalogs, corpus gate, VRL differential, fuzz target, throughput budget | `language_wiring` green; the Datadog-published corpus parses with every error and every VRL disagreement explained, as in 9.1; the recorded built-in rules measured |
 | 2. Platform | Model, constraints, compiler, connector (validate, deploy, disable, delete, drift), registry row, `setup --datadog`, docs, explain pages, snapshots | `scripts/ci-local.sh --full`; a tenant run recorded like the Defender one; the skills companion |
 | 3. Depth | `opentide query`; rule tests through `/rules/test`; sequence, scheduled and third-party rules; default-rule tuning; message template checks | Each behind its own spec minor version |
 
@@ -725,7 +811,7 @@ two corpora on 2026-11-26:
    `isDefault` either way.
 5. **Limits.** The maximum number of queries and cases per rule (historical jobs cap both at 10),
    the query length, and the numeric rate limits for the rules and logs-search endpoints.
-6. **`*:` full text, `_exists_`, open and mixed range bounds** in rule queries.
+6. **`*:` full text, `_exists_`, open and mixed range bounds** in rule queries. And three forms Datadog's own content uses that its docs do not describe: an unescaped `:` in a value (`tag:integration:airflow`, 31 uses), a space after `:` (`env: prod`, 16 uses), and duration units in comparisons (`@duration:>=100ms`). The model accepts all three; a tenant probe confirms what each matches.
 7. **A write-scoped key for validation.** `validate --live` needs
    `security_monitoring_rules_write`. Should `setup` recommend a separate validation key, and should
    `doctor` warn when the key that only validates could also delete?
