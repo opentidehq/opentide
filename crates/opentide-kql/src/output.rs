@@ -212,6 +212,85 @@ mod tests {
     }
 
     #[test]
+    fn project_keep_returns_the_names_it_keeps_even_undocumented_ones() {
+        // #1885 review: project-keep only removed, so a kept name the
+        // catalog lacks was missing from a "complete" output.
+        let columns = exactly(
+            "DeviceNetworkInfo | where NetworkAdapterStatus == 'Up' \
+             | project-keep Timestamp, ReportId, DeviceId, IPAddresses, NotInTheReference",
+        );
+        for name in [
+            "Timestamp",
+            "ReportId",
+            "DeviceId",
+            "IPAddresses",
+            "NotInTheReference",
+        ] {
+            assert!(columns.iter().any(|c| c == name), "{name}: {columns:?}");
+        }
+        assert_eq!(columns.len(), 5, "{columns:?}");
+    }
+
+    #[test]
+    fn arg_max_star_leaves_out_the_by_keys_and_is_as_sure_as_its_input() {
+        // Kusto's arg_max example: `arg_max(Version, *) by Fruit` returns
+        // Fruit, Version, Color, with no Fruit1.
+        assert_eq!(
+            exactly(
+                "datatable(Fruit: string, Color: string, Version: int) ['a', 'b', 1] \
+                 | summarize arg_max(Version, *) by Fruit"
+            ),
+            ["Fruit", "Version", "Color"]
+        );
+        // From a table, the copied columns are its documented ones: not
+        // a complete output.
+        let (columns, complete) =
+            names("DeviceProcessEvents | summarize arg_max(Timestamp, *) by DeviceId").unwrap();
+        assert!(!complete);
+        assert!(!columns.iter().any(|c| c == "DeviceId1"), "{columns:?}");
+        assert_eq!(columns.first().map(String::as_str), Some("DeviceId"));
+    }
+
+    #[test]
+    fn a_defender_table_has_no_log_analytics_columns() {
+        let out = output("DeviceNetworkInfo", Profile::Defender).unwrap();
+        for name in [
+            "TimeGenerated",
+            "TenantId",
+            "Type",
+            "SourceSystem",
+            "_BilledSize",
+        ] {
+            assert!(out.column(name).is_none(), "{name}");
+        }
+        assert!(out.column("Timestamp").is_some());
+        assert!(out.column("ReportId").is_some());
+    }
+
+    #[test]
+    fn every_defender_table_has_timestamp_and_no_log_analytics_column() {
+        // #1885 review: the reference describes the Log Analytics copies of
+        // the advanced hunting tables.
+        let catalog = Catalog::cached(Profile::Defender);
+        let tables: Vec<&str> = catalog
+            .tables
+            .iter()
+            .filter(|t| t.profile.as_deref() == Some("defender"))
+            .map(|t| t.name.as_str())
+            .collect();
+        assert!(tables.len() > 30, "{tables:?}");
+        for table in tables {
+            let Some(out) = output(table, Profile::Defender) else {
+                continue;
+            };
+            assert!(out.column("Timestamp").is_some(), "{table}");
+            for (name, _) in crate::tables::STANDARD_COLUMNS {
+                assert!(out.column(name).is_none(), "{table}: {name}");
+            }
+        }
+    }
+
+    #[test]
     fn the_last_operator_is_where_a_project_goes() {
         let query = "DeviceEvents\n| where ActionType == 'x' // note\n";
         let out = output(query, Profile::Defender).unwrap();

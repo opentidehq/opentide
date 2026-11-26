@@ -238,6 +238,19 @@ fn comma_quirk(quirk: bool, out: &mut Schema, items: usize) {
     }
 }
 
+/// Whether an aggregate item (`arg_max(T, *)`, `L = arg_min(T, *)`) has a
+/// `*` argument.
+fn has_star_arg(item: &SyntaxNode) -> bool {
+    item.descendants().any(|n| n.kind() == K::STAR_ARG)
+}
+
+/// The columns of an `arg_max(T, *)` but the `by` keys the `*` leaves out;
+/// the first, `T`'s, stays.
+fn drop_by_keys(columns: &mut Vec<Column>, by: &HashSet<String>) {
+    let mut first = true;
+    columns.retain(|c| std::mem::take(&mut first) || !by.contains(&c.name));
+}
+
 /// The child nodes of an operator that are not one of `skip`.
 fn nodes_but(node: &SyntaxNode, skip: &[K]) -> Vec<SyntaxNode> {
     node.children()
@@ -700,6 +713,22 @@ impl<'a> Pass<'a> {
                     out.narrowed = true;
                     out.reshaped_by = Some(kind);
                     if patterns.is_empty() {
+                        // A kept name the input does not list is still a
+                        // column of the output (a table outgrows its
+                        // reference): the columns are exactly the names.
+                        if input.known != Known::Closed {
+                            let have: HashSet<&str> =
+                                out.columns.iter().map(|c| c.name.as_str()).collect();
+                            let missing: Vec<String> = kept
+                                .iter()
+                                .filter(|name| !have.contains(*name))
+                                .map(|name| (*name).to_owned())
+                                .collect();
+                            drop(have);
+                            for name in missing {
+                                out.set(Column::new(name, None));
+                            }
+                        }
                         out.known = reshaped(input.known);
                         out.custom_columns = false;
                     }
@@ -1039,14 +1068,25 @@ impl<'a> Pass<'a> {
         // Every column the operator makes, in order, named in one batch at
         // the end: a batch per item rebuilt the set of names taken each time,
         // quadratic in the items (#1424). The items read the input, not `out`.
+        // `arg_max(T, *) by K` returns K, T, then the input's other columns:
+        // the `*` leaves out the `by` keys (Kusto's arg_max example, `by
+        // Fruit` gives `Fruit, Version, Color`), and the columns it copies
+        // are only as sure as the input's.
+        let by_names: HashSet<String> = by_columns.iter().map(|c| c.name.clone()).collect();
+        let mut starred = false;
         let mut made = by_columns;
         for item in &aggregates {
+            let star = has_star_arg(item);
+            starred |= star;
             match self.column_item(item, &ctx_input, scope, op_span, None) {
                 Item::Named(names, _) if names.len() == 1 && self.is_arg_extreme(item) => {
                     let Some(mut columns) = self.aggregate_columns(item, &ctx_input) else {
                         out.make_open();
                         continue;
                     };
+                    if star {
+                        drop_by_keys(&mut columns, &by_names);
+                    }
                     if let Some(first) = columns.first_mut() {
                         first.name.clone_from(&names[0]);
                     }
@@ -1081,7 +1121,10 @@ impl<'a> Pass<'a> {
                     }
                 }
                 Item::Unnamed(_) => match self.aggregate_columns(item, &ctx_input) {
-                    Some(columns) => {
+                    Some(mut columns) => {
+                        if star {
+                            drop_by_keys(&mut columns, &by_names);
+                        }
                         made.extend(columns.into_iter().map(|column| Column {
                             made_by: Some(made_by),
                             ..column
@@ -1092,6 +1135,9 @@ impl<'a> Pass<'a> {
             }
         }
         out.push_all_unique(made);
+        if starred {
+            out.weaken(input.known);
+        }
         out
     }
 
