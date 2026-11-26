@@ -10,12 +10,12 @@ opentide gives every detection an ontology and a taxonomy, so it stays threat-al
 ## Install
 
 ```bash
-pip install opentide==1.0.0
+pip install opentide==1.1.0
 export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 opentide validate
 ```
 
-opentide 1.0.0 runs on one Rust core. The same release is on [crates.io](https://crates.io/crates/opentide) (`cargo install opentide --features cli`) and [npm](https://www.npmjs.com/package/@opentide/opentide) (`npm install @opentide/opentide`).
+opentide 1.1.0 runs on one Rust core. The same release is on [crates.io](https://crates.io/crates/opentide) (`cargo install opentide --features cli`) and [npm](https://www.npmjs.com/package/@opentide/opentide) (`npm install @opentide/opentide`).
 
 Release notes: [CHANGELOG.md](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md) · [Usage → Releases](https://opentide.org/docs/usage/releases/)
 
