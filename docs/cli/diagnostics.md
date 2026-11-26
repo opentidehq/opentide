@@ -341,6 +341,8 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`microsoft_defender_action_kind`](#microsoft_defender_action_kind) | A key of a Microsoft Defender block's `actions` is not an automated action. |
 | [`microsoft_defender_action_target`](#microsoft_defender_action_target) | A Microsoft Defender automated action has no target, or a target is empty or names a field its action does not take. |
 | [`microsoft_defender_column`](#microsoft_defender_column) | A Microsoft Defender column name is blank or not a string. |
+| [`microsoft_defender_column_not_in_output`](#microsoft_defender_column_not_in_output) | A column a Microsoft Defender block names is not a column of its query's output. |
+| [`microsoft_defender_column_type`](#microsoft_defender_column_type) | A Microsoft Defender entity or action is mapped from a column that holds no identifier, name or address. |
 | [`microsoft_defender_custom_details`](#microsoft_defender_custom_details) | A Microsoft Defender block's `alert.custom_details` is not a mapping of non-blank names to result columns. |
 | [`microsoft_defender_entity_identifier`](#microsoft_defender_entity_identifier) | A Microsoft Defender entity mapping lacks an identifier Graph requires of its kind. |
 | [`microsoft_defender_entity_kind`](#microsoft_defender_entity_kind) | A key of a Microsoft Defender block's `entities` is not an entity kind. |
@@ -352,11 +354,13 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`microsoft_defender_isolation_type`](#microsoft_defender_isolation_type) | A Microsoft Defender `isolate_devices` target's `isolation_type` is not `full` or `selective`. |
 | [`microsoft_defender_lookback`](#microsoft_defender_lookback) | A Microsoft Defender block's `schedule.lookback` is not a duration, is set on a near-real-time rule, or is shorter than its frequency. |
 | [`microsoft_defender_no_entities`](#microsoft_defender_no_entities) | A Microsoft Defender block maps no entity. |
+| [`microsoft_defender_required_columns`](#microsoft_defender_required_columns) | A Microsoft Defender query's output lacks a column a custom detection needs. |
 | [`microsoft_defender_rule_absent`](#microsoft_defender_rule_absent) | A Microsoft Defender rule to disable is not on the tenant, so nothing was disabled or created. |
 | [`microsoft_defender_rule_conflict`](#microsoft_defender_rule_conflict) | Graph refused to create a Microsoft Defender rule because another rule most likely holds its display name or alert title. |
 | [`microsoft_defender_schema`](#microsoft_defender_schema) | A Microsoft Defender block's `schema` names another schema. |
 | [`microsoft_defender_scope`](#microsoft_defender_scope) | A Microsoft Defender block's `scope` is not a non-empty list of device group names. |
 | [`microsoft_defender_severity`](#microsoft_defender_severity) | A Microsoft Defender block's `alert.severity` is not one of opentide's five severities. |
+| [`microsoft_defender_unprojected_output`](#microsoft_defender_unprojected_output) | A Microsoft Defender query returns columns nothing in its block uses. |
 | [`missing_author`](#missing_author) | Retired in opentide 0.24.0; `opentide lint` reports a missing recommended metadata field as `metadata_recommended`. |
 | [`missing_field`](#missing_field) | A configuration file is missing a required key, once it is merged with the bundled file and the parent instance. |
 | [`missing_organisation`](#missing_organisation) | Retired in opentide 0.24.0; `opentide lint` reports a missing recommended metadata field as `metadata_recommended`. |
@@ -6169,7 +6173,7 @@ Keep only the action's fields: `block_files` takes `sha1`, `sha256` and `device_
 
 A Microsoft Defender column name is blank or not a string.
 
-Severity: error. Reported by `opentide validate` (its `schema` check) on a `microsoft_defender` block (microsoft-defender-1.0). Entity fields, action columns and custom detail values name a column of the query's output, sent verbatim (`DeviceId`). Whether the column exists is Defender's to check at deploy. The finding is on the field.
+Severity: error. Reported by `opentide validate` (its `schema` check) on a `microsoft_defender` block (microsoft-defender-1.0). Entity fields, action columns and custom detail values name a column of the query's output, sent verbatim (`DeviceId`). Whether the query returns the column is `microsoft_defender_column_not_in_output`, which the analysis engine checks offline against the query's inferred output. The finding is on the field.
 
 ### Example
 
@@ -6184,6 +6188,58 @@ configurations:
 ### How to fix
 
 Name the result column (`device_id: DeviceId`), or remove the field.
+
+## microsoft_defender_column_not_in_output
+
+A column a Microsoft Defender block names is not a column of its query's output.
+
+Severity: error. Reported by the analysis engine on a `microsoft_defender` block (microsoft-defender-1.0), with its query's findings: `opentide validate` and `opentide lint` (their `queries` check) and an editor running `opentide lsp start` show it, without a tenant. Every column the block names is a column of what the query returns: an `entities` field, an action's column (not `isolation_type` or `device_groups`), an `alert.custom_details` value, and a `{{Column}}` placeholder in `alert.title` or `alert.description`. A column the query does not return cannot be filled from its results: Defender refuses the rule at deploy, or maps nothing. Column names compare as KQL's do: case-sensitively, so `deviceid` is not `DeviceId`. The finding is on the field (on the placeholder, in a title or description), with the output column it most likely means; an editor offers to replace it.
+
+The engine infers the output offline: the columns after the query's last operator. A query names its columns once a `project`, a `project-keep` without a pattern, a `summarize` (one without `arg_max(..., *)` or `arg_min(..., *)`, which copies a table's columns), `distinct` or `count` sets them and nothing after it adds a column the engine cannot name; any other name is then reported. Otherwise the query returns every column of its tables, and a table can have columns its reference does not list yet: only a near miss of a documented column is reported then (`DevicId`). When the engine cannot infer the output (a table or function it does not know, an `evaluate` plugin, `bag_unpack`, an expression whose column name it does not model, a `union` with such a leg, several tabular statements), nothing is reported. `opentide validate query --live` checks what the tenant returns.
+
+### Example
+
+```yaml
+configurations:
+  microsoft_defender:
+    query: |
+      DeviceProcessEvents
+      | where FileName =~ "powershell.exe"
+      | project Timestamp, ReportId, DeviceId, AccountUpn
+    alert:
+      title: Encoded PowerShell on {{DeviceName}}   # not projected
+    entities:
+      hosts:
+        - device_id: DevicId                         # did you mean DeviceId?
+```
+
+### How to fix
+
+Name a column the query returns, spelled as it is (`device_id: DeviceId`), or add the column to the query's final `project`.
+
+## microsoft_defender_column_type
+
+A Microsoft Defender entity or action is mapped from a column that holds no identifier, name or address.
+
+Severity: warning. Reported by the analysis engine on a `microsoft_defender` block (microsoft-defender-1.0), with its query's findings: `opentide lint` (its `queries` check) and an editor running `opentide lsp start` show it; `opentide validate` does not fail on it. An entity field (`hosts.device_id`, `ips.address`, `files.sha256`, ...) or an action's column holds an identifier, a name or an address, which Defender reads as text. The engine reports a mapping from an output column whose type it knows is `dynamic`, `datetime`, `bool` or `timespan`, none of which holds an identifier, a name or an address; a number may (`cloud_applications.app_id` from `ApplicationId`), and is not reported. Custom details and alert placeholders show any type and are not checked. When the engine does not know the column's type, or cannot infer the query's output, nothing is reported. The finding is on the field.
+
+### Example
+
+```yaml
+configurations:
+  microsoft_defender:
+    query: |
+      DeviceNetworkEvents
+      | extend Remote = parse_json(AdditionalFields)
+      | project Timestamp, ReportId, DeviceId, Remote
+    entities:
+      ips:
+        - address: Remote   # a dynamic column
+```
+
+### How to fix
+
+Map the column that holds the identifier, or extract it as text in the query: `| extend RemoteAddress = tostring(Remote.ip)`, then `address: RemoteAddress`.
 
 ## microsoft_defender_custom_details
 
@@ -6411,6 +6467,27 @@ configurations:
 
 Map the columns the query returns: `entities: {hosts: [{device_id: DeviceId}]}`.
 
+## microsoft_defender_required_columns
+
+A Microsoft Defender query's output lacks a column a custom detection needs.
+
+Severity: error. Reported by the analysis engine on a `microsoft_defender` block's `query` (microsoft-defender-1.0), at its last operator: `opentide validate` and `opentide lint` (their `queries` check) and an editor running `opentide lsp start` show it, without a tenant. A custom detection's results need `Timestamp`; `DeviceId` and `ReportId` when the query reads a device table (`DeviceProcessEvents`, `DeviceEvents`, ...); `ObservationId` for an observation table; `ReportId` for the other Defender XDR tables, with a column that identifies the impacted asset (`AccountUpn`, `RecipientEmailAddress`, `DeviceName`, ...); and `Timestamp` or `TimeGenerated`, `ReportId` and an asset column when the query reads none of them. It is the offline twin of the check `opentide validate query --live` makes on the columns the tenant returns, from the same table. The engine reports it only when the query names its output columns (a query names its columns once a `project`, a `project-keep` without a pattern, a `summarize` (one without `arg_max(..., *)` or `arg_min(..., *)`, which copies a table's columns), `distinct` or `count` sets them and nothing after it adds a column the engine cannot name): otherwise the query returns every column of its tables. Offline, the table family is read from the Defender XDR tables the query names anywhere, a `join`, a `union` or a `let` included, as the live check reads it; a query that names none of them (only a custom table, a function, `datatable`) gets nothing offline, and its columns are checked by `opentide validate query --live`. A table named only in a `let` the query does not use still counts. When the engine cannot infer the output, nothing is reported.
+
+### Example
+
+```yaml
+configurations:
+  microsoft_defender:
+    query: |
+      DeviceProcessEvents
+      | where FileName =~ "powershell.exe"
+      | project Timestamp, AccountUpn   # lacks DeviceId and ReportId
+```
+
+### How to fix
+
+Keep the columns the message names in the query's output: `| project Timestamp, ReportId, DeviceId, AccountUpn`.
+
 ## microsoft_defender_rule_absent
 
 A Microsoft Defender rule to disable is not on the tenant, so nothing was disabled or created.
@@ -6498,6 +6575,29 @@ configurations:
 ### How to fix
 
 Write the severity with its capital (`High`), or remove it: deploy then uses `response.alert_severity`, else `Medium`.
+
+## microsoft_defender_unprojected_output
+
+A Microsoft Defender query returns columns nothing in its block uses.
+
+Severity: note. Reported by the analysis engine on a `microsoft_defender` block's `query` (microsoft-defender-1.0), at its last operator: `opentide lint` (its `queries` check) shows it with `--verbose` and counts it otherwise, and an editor running `opentide lsp start` shows it; a note never fails `validate` or `lint --strict`. It applies when the query's output has a column that no entity, action, custom detail or alert `{{placeholder}}` names and a custom detection does not require, typically because the query ends without a `project` and returns every column of its table. Defender derives entity mappings of its own from a rule's result columns (IP addresses, files, processes, URLs, registry values), beyond the ones the block declares. They are stored on the rule, opentide never sees them, and Graph can later refuse them when the rule is enabled: a rule could be disabled and then not enabled again until its `entityMappings` were rewritten by hand. Projecting only the columns the rule uses prevents it. When the engine cannot infer the output, nothing is reported.
+
+### Example
+
+```yaml
+configurations:
+  microsoft_defender:
+    query: |
+      DeviceProcessEvents
+      | where FileName =~ "powershell.exe"
+    entities:
+      accounts:
+        - upn: AccountUpn
+```
+
+### How to fix
+
+End the query with a `project` of the columns a custom detection needs and the ones the block names. The finding suggests it, and an editor offers to append it after the query's last operator: `| project Timestamp, DeviceId, ReportId, AccountUpn` (not after a final `render`, nor in a single-quoted YAML query where a bracketed column name would need escaping). Applying every suggestion of a file at once leaves it out: it changes what the rule returns.
 
 ## missing_author
 
