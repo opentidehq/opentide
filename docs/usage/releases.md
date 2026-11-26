@@ -25,6 +25,7 @@ opentide validate --strict
 2. If you deploy to Microsoft Defender, run `opentide validate`. Add `key` (the `RegistryKey` column, returned by the query) to each `registry_values` mapping it reports as `microsoft_defender_entity_identifier`.
 3. For each `microsoft_defender_column_not_in_output` or `microsoft_defender_required_columns` it reports, correct the column the block names, or add it to the query's final `project`.
 4. Run `opentide lint --verbose --check queries` and end each query it reports as `microsoft_defender_unprojected_output` with the `| project` it suggests.
+5. If your CI runs `opentide lint --strict` (the pipeline `opentide setup ci` generates does), fix each `microsoft_defender_impacted_asset_identifier` and `microsoft_defender_column_type` it reports: `validate --strict` passes them, `lint --strict` fails on any warning. To keep the previous result instead, make them notes under `[queries.codes]` in `.opentide/configurations/lint.toml` (`microsoft_defender_column_type = "info"`).
 
 **Breaking**
 
