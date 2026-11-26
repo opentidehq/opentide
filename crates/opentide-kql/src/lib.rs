@@ -17,6 +17,7 @@ use opentide_core::{
     SignatureInformation, codes, suggest,
 };
 use opentide_highlight::HighlightToken;
+pub mod output;
 mod perf;
 mod rows_model;
 pub mod schema;

@@ -31,7 +31,28 @@ pub(crate) fn analyze(
     catalog: &Catalog,
     clean: bool,
 ) -> Analysis {
-    run(root, source, lines, catalog, clean).out
+    run(root, source, lines, catalog, clean, true).out
+}
+
+/// What a query returns: the schema of its one tabular statement, and where
+/// that statement's last operator (or its source, when it has none) is.
+/// `None` when the query has no tabular statement or several of them.
+///
+/// The pass runs without the comma quirk ([`comma_quirk`], #1386): a
+/// `project`, `extend` or `summarize` list of several items leaves the
+/// columns it names, as Kusto does. No diagnostic is made. A schema the pass
+/// cannot follow is [`Known::Open`]; the caller says "unknown" for it.
+pub(crate) fn output(
+    root: &SyntaxNode,
+    source: &str,
+    lines: &LineIndex<'_>,
+    catalog: &Catalog,
+) -> Option<(Schema, ByteSpan)> {
+    let pass = run(root, source, lines, catalog, false, false);
+    match pass.queries.as_slice() {
+        [(schema, at)] => Some((schema.clone(), *at)),
+        _ => None,
+    }
 }
 
 fn run<'a>(
@@ -40,6 +61,7 @@ fn run<'a>(
     lines: &'a LineIndex<'a>,
     catalog: &'a Catalog,
     clean: bool,
+    quirk: bool,
 ) -> Pass<'a> {
     let mut pass = Pass {
         source,
@@ -47,9 +69,11 @@ fn run<'a>(
         lines,
         out: Analysis::default(),
         diagnose: clean,
+        quirk,
         depth: 0,
         function_schemas: HashMap::new(),
         bodies_read: 0,
+        queries: Vec::new(),
     };
     let mut scope = Scope::default();
     for child in root.children() {
@@ -58,7 +82,18 @@ fn run<'a>(
             K::QUERY_PARAMETERS_STATEMENT => pass.query_parameters(&child, &mut scope),
             K::QUERY => {
                 if let Some(body) = child_of(&child, K::TABULAR_EXPRESSION) {
-                    pass.tabular(&body, &scope);
+                    let schema = pass.tabular(&body, &scope);
+                    // The last operator, else the source.
+                    let last = body
+                        .children()
+                        .filter(|c| c.kind() != K::ERROR)
+                        .last()
+                        .map_or_else(|| span(&body), |node| span(&node));
+                    pass.queries.push((schema, last));
+                } else {
+                    // A statement the pass does not read: what the query
+                    // returns is not known.
+                    pass.queries.push((Schema::open(), span(&child)));
                 }
             }
             _ => {}
@@ -118,6 +153,12 @@ struct Pass<'a> {
     lines: &'a LineIndex<'a>,
     out: Analysis,
     diagnose: bool,
+    /// Whether [`comma_quirk`] applies: on for the diagnostics, off for
+    /// [`output`].
+    quirk: bool,
+    /// Each tabular statement's schema and its last operator's span, in
+    /// order ([`output`]).
+    queries: Vec<(Schema, ByteSpan)>,
     /// What the walk down the tree has spent of [`BUDGET`].
     depth: u32,
     /// What each `let` function's body returns, read once where the
@@ -189,8 +230,10 @@ impl Defined {
 /// diagnostic after it). Kept for parity with the engine this one replaces
 /// (epic #1219); #1386 removes it after the port, behind a measurement of
 /// every new `kql_unknown_column` over the corpora.
-fn comma_quirk(out: &mut Schema, items: usize) {
-    if items >= 2 {
+/// [`output`] runs the pass without it, so the schema it returns is what
+/// Kusto returns.
+fn comma_quirk(quirk: bool, out: &mut Schema, items: usize) {
+    if quirk && items >= 2 {
         out.make_open();
     }
 }
@@ -694,7 +737,7 @@ impl<'a> Pass<'a> {
             K::EXTEND_OPERATOR | K::SERIALIZE_OPERATOR => {
                 let mut out = input.clone();
                 let mut defined = Defined::default();
-                comma_quirk(&mut out, op.children().count());
+                comma_quirk(self.quirk, &mut out, op.children().count());
                 for item in op.children() {
                     match self.column_item(&item, &input, scope, op_span, Some(&defined)) {
                         Item::Named(names, type_name) => {
@@ -897,7 +940,7 @@ impl<'a> Pass<'a> {
             ..input.clone()
         };
         let mut defined = Defined::default();
-        comma_quirk(&mut out, op.children().count());
+        comma_quirk(self.quirk, &mut out, op.children().count());
         for item in op.children() {
             match self.column_item(&item, &input, scope, op_span, Some(&defined)) {
                 Item::Named(names, type_name) => {
@@ -953,8 +996,8 @@ impl<'a> Pass<'a> {
         let (by_items, aggregates): (Vec<SyntaxNode>, Vec<SyntaxNode>) = items
             .into_iter()
             .partition(|n| by_at.is_some_and(|at| n.text_range().start() >= at));
-        comma_quirk(&mut out, by_items.len());
-        comma_quirk(&mut out, aggregates.len());
+        comma_quirk(self.quirk, &mut out, by_items.len());
+        comma_quirk(self.quirk, &mut out, aggregates.len());
         let mut by_columns = Vec::new();
         for item in &by_items {
             match self.column_item(item, &ctx_input, scope, op_span, None) {
@@ -1546,6 +1589,7 @@ mod tests {
             &LineIndex::new(source),
             &catalog,
             parsed.errors.is_empty(),
+            true,
         ));
     }
 
