@@ -763,8 +763,8 @@ description = "Datadog Cloud SIEM detection rules."
 # https://api.<site>, or to api_url when set (a new site, a proxy). api_key and app_key are sent
 # as DD-API-KEY and DD-APPLICATION-KEY. The application key needs
 # security_monitoring_rules_read and security_monitoring_rules_write (validation needs write),
-# and logs_read_data for opentide query and for checking searches live. Use a service account's scoped key. The rule id is kept
-# in .opentide/states/deployment/ (commit it).
+# and logs_read_data for opentide query and for checking searches live. Use a service
+# account's scoped key. The rule id is kept in .opentide/states/deployment/ (commit it).
 #[[tenants]]
 #name = "datadog-eu"
 #strategies = ["RELEASE"]
