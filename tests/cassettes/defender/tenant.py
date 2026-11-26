@@ -3,16 +3,16 @@ custom detection API (RFC 0021, microsoft-defender-1.0).
 
 The recorder starts it on a free loopback port (printed on the first line of stdout) and
 routes ``login.microsoftonline.com`` and ``graph.microsoft.com`` to it. It holds custom
-detection rules by their client-provided ``id`` (the rule's uuid):
+detection rules by their client-provided ``id`` (``opentide-`` and the rule's uuid, #1886):
 
 - ``PATCH {base}/{id}`` refuses a query holding ``// refused`` (400), updates a rule it
   holds (200), and answers 404 with no body for an id it does not hold;
 - ``POST {base}`` creates the rule under its ``id`` (201), or answers 409 when that id
-  exists; the id ``...0000d3`` is created by "another run" when its first ``PATCH``
+  exists; the id ``opentide-...0000d3`` is created by "another run" when its first ``PATCH``
   answers 404, so its ``POST`` meets the 409;
 - ``DELETE {base}/{id}`` deletes a rule (204), or answers 404;
 - ``GET {base}`` lists the rules ``generate extract`` imports, in the beta shape, over two
-  pages;
+  pages: one opentide deployed (``opentide-<uuid>``), two under a bare uuid (opentide 1.0.0);
 - a hunting query returns the columns its ``| project`` names (the default schema
   otherwise); ``whre`` is a syntax error (400), a ``// forbidden`` query a missing
   permission (403), a ``// gateway`` query a proxy's HTML page (502).
@@ -40,9 +40,9 @@ DEFAULT_SCHEMA = [
     ("ReportId", "Int64"),
 ]
 # The rules the tenant holds, by id: the golden deploy's update target.
-CREATED: dict[str, dict[str, Any]] = {"00000000-0000-4000-8047-0000000000d2": {}}
+CREATED: dict[str, dict[str, Any]] = {"opentide-00000000-0000-4000-8047-0000000000d2": {}}
 # Ids another run creates as soon as this run's PATCH has found none.
-RACING = {"00000000-0000-4000-8047-0000000000d3"}
+RACING = {"opentide-00000000-0000-4000-8047-0000000000d3"}
 
 
 def _row(names: list[str], number: int) -> dict[str, Any]:
@@ -88,7 +88,7 @@ def _listed(rule_id: str, name: str, **changes: Any) -> dict[str, Any]:
 
 LISTED: list[dict[str, Any]] = [
     _listed(
-        "8d7c6b5a-0000-4000-8000-000000000201",
+        "opentide-8d7c6b5a-0000-4000-8000-000000000201",
         'Suspicious PowerShell: "encoded" command',
         lastModifiedBy="bob@contoso.example",
         schedule={"frequency": "PT1H", "lookback": "PT4H"},

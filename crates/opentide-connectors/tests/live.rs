@@ -86,7 +86,10 @@ fn live_microsoft_defender_deploy_validate_query_disable() {
     )
     .unwrap();
     let rule = golden.get("body").unwrap().clone();
-    let id = uuid::Uuid::new_v4().hyphenated().to_string();
+    // The Defender rule id deploy gives a rule, `opentide-<uuid>` (#1886).
+    let id = opentide_compile::microsoft_defender::rule_id_of(
+        &uuid::Uuid::new_v4().hyphenated().to_string(),
+    );
     let connector = MicrosoftDefender::new();
     block_on(async {
         println!("upsert {id}: {:?}", connector.upsert(cx, &id, &rule).await);

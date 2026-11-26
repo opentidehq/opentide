@@ -641,17 +641,33 @@ fn defender_block(rule: &CJson, tenant_names: &[String]) -> Result<Object, Field
     Ok(block)
 }
 
-/// The rule's `metadata.uuid`: the Defender rule id when it is a UUID, as
-/// deploy addresses the rule by it; otherwise a UUID derived from the id,
-/// and `false`: a deploy of the file creates a new rule beside it.
-fn defender_uuid(id: &str) -> (String, bool) {
+/// How deploy addresses the rule a Defender rule id names.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Addressed {
+    /// `opentide-<uuid>`: the id deploy gives the rule (#1886).
+    Yes,
+    /// A bare UUID (a rule opentide 1.0.0 deployed): the file keeps it, and
+    /// deploying it creates `opentide-<uuid>` beside the original.
+    BareUuid,
+    /// Any other id (a rule created in the portal): the file gets a UUID
+    /// derived from it, and deploying it creates a new rule.
+    Derived,
+}
+
+/// The rule's `metadata.uuid`: the uuid after `opentide-` in the Defender
+/// rule id, as deploy addresses the rule by `opentide-<uuid>`; the id itself
+/// when it is a bare UUID; otherwise a UUID derived from the id.
+fn defender_uuid(id: &str) -> (String, Addressed) {
+    if let Some(uuid) = opentide_compile::microsoft_defender::uuid_of_rule_id(id) {
+        return (uuid, Addressed::Yes);
+    }
     match uuid::Uuid::try_parse(id) {
-        Ok(parsed) => (parsed.hyphenated().to_string(), true),
+        Ok(parsed) => (parsed.hyphenated().to_string(), Addressed::BareUuid),
         Err(_) => (
             uuid::Uuid::new_v5(&defender_namespace(), id.as_bytes())
                 .hyphenated()
                 .to_string(),
-            false,
+            Addressed::Derived,
         ),
     }
 }
@@ -867,18 +883,27 @@ fn defender_run(cx: &Context<'_>, written_count: &mut usize) -> Outcome {
                 "defender_import_tenants_differ"
             );
         }
-        if !addressed {
-            // Deploy addresses a Defender rule by its uuid
-            // (microsoft-defender-1.0): this file deploys as a new rule.
+        // Deploy addresses a Defender rule by `opentide-<uuid>` (#1886):
+        // any other id deploys as a new rule, and Graph refuses its create
+        // while the original holds the display name, even disabled.
+        let unaddressed = match addressed {
+            Addressed::Yes => None,
+            Addressed::BareUuid => Some(format!(
+                "the tenant's rule id {id} is not the id deploy addresses a rule by \
+                 (opentide-<uuid>): deploying the file creates opentide-{uuid}; delete or \
+                 rename the original in the portal first"
+            )),
+            Addressed::Derived => Some(format!(
+                "the tenant's rule id {id} is not a UUID, so deploy cannot address it: \
+                 the file was given the UUID {uuid}, and deploying it creates a new rule; \
+                 delete or rename the original in the portal first"
+            )),
+        };
+        if let Some(detail) = unaddressed {
             tracing::warn!(
                 rule = shown,
                 uuid = uuid.as_str(),
-                detail = format!(
-                    "the tenant's rule id {id} is not a UUID, so deploy cannot address it: \
-                     the file was given the UUID {uuid}, and deploying it creates a new rule; \
-                     disable or delete the original in the portal"
-                )
-                .as_str(),
+                detail = detail.as_str(),
                 "defender_import_new_uuid"
             );
         }
@@ -976,12 +1001,23 @@ mod tests {
 
     #[test]
     fn a_uuid_id_is_kept_and_another_id_gets_a_derived_uuid() {
+        // #1886: deploy's own id names the rule's uuid.
+        assert_eq!(
+            defender_uuid("opentide-2594BF5E-0000-4000-8000-000000000201"),
+            (
+                "2594bf5e-0000-4000-8000-000000000201".to_owned(),
+                Addressed::Yes
+            )
+        );
         assert_eq!(
             defender_uuid("8D7C6B5A-0000-4000-8000-000000000201"),
-            ("8d7c6b5a-0000-4000-8000-000000000201".to_owned(), true)
+            (
+                "8d7c6b5a-0000-4000-8000-000000000201".to_owned(),
+                Addressed::BareUuid
+            )
         );
         let (derived, addressed) = defender_uuid("7506");
-        assert!(!addressed);
+        assert_eq!(addressed, Addressed::Derived);
         assert_eq!(
             derived,
             defender_uuid("7506").0,

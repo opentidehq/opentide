@@ -63,18 +63,18 @@ exit: 1
   ],
   "dry_run": false,
   "duration_ms": 0,
-  "error": "Deployment to microsoft_defender failed on Defender refused rule: Graph refused to update detection rule 00000000-0000-4000-8047-0000000000d6 on tenant lab: HTTP 400 (The query is not valid for a custom detection.): {\"error\":{\"code\":\"***\",\"message\":\"The query is not valid for a custom detection.\"}}",
+  "error": "Deployment to microsoft_defender failed on Defender refused rule: Graph refused to update detection rule opentide-00000000-0000-4000-8047-0000000000d6 on tenant lab: HTTP 400 (The query is not valid for a custom detection.): {\"error\":{\"code\":\"***\",\"message\":\"The query is not valid for a custom detection.\"}}",
   "exit_code": 1,
   "failure": {
     "argument": null,
     "code": "issues_found",
     "crash_log": null,
-    "message": "Deployment to microsoft_defender failed on Defender refused rule: Graph refused to update detection rule 00000000-0000-4000-8047-0000000000d6 on tenant lab: HTTP 400 (The query is not valid for a custom detection.): {\"error\":{\"code\":\"***\",\"message\":\"The query is not valid for a custom detection.\"}}",
+    "message": "Deployment to microsoft_defender failed on Defender refused rule: Graph refused to update detection rule opentide-00000000-0000-4000-8047-0000000000d6 on tenant lab: HTTP 400 (The query is not valid for a custom detection.): {\"error\":{\"code\":\"***\",\"message\":\"The query is not valid for a custom detection.\"}}",
     "suggestion": null
   },
   "failures": [
     {
-      "error": "Graph refused to update detection rule 00000000-0000-4000-8047-0000000000d6 on tenant lab: HTTP 400 (The query is not valid for a custom detection.): {\"error\":{\"code\":\"***\",\"message\":\"The query is not valid for a custom detection.\"}}",
+      "error": "Graph refused to update detection rule opentide-00000000-0000-4000-8047-0000000000d6 on tenant lab: HTTP 400 (The query is not valid for a custom detection.): {\"error\":{\"code\":\"***\",\"message\":\"The query is not valid for a custom detection.\"}}",
       "id": "00000000-0000-4000-8047-0000000000d6",
       "name": "Defender refused rule",
       "platform": "microsoft_defender",
@@ -152,7 +152,7 @@ exit: 1
     },
     {
       "action": "upsert",
-      "error": "Graph refused to update detection rule 00000000-0000-4000-8047-0000000000d6 on tenant lab: HTTP 400 (The query is not valid for a custom detection.): {\"error\":{\"code\":\"***\",\"message\":\"The query is not valid for a custom detection.\"}}",
+      "error": "Graph refused to update detection rule opentide-00000000-0000-4000-8047-0000000000d6 on tenant lab: HTTP 400 (The query is not valid for a custom detection.): {\"error\":{\"code\":\"***\",\"message\":\"The query is not valid for a custom detection.\"}}",
       "id": "00000000-0000-4000-8047-0000000000d6",
       "name": "Defender refused rule",
       "platform": "microsoft_defender",
@@ -189,7 +189,7 @@ exit: 1
 
 ━━━ stderr · json, 1 lines
 {
-  "detail": "rule 00000000-0000-4000-8047-0000000000d4 is not on tenant '***': nothing to disable",
+  "detail": "rule opentide-00000000-0000-4000-8047-0000000000d4 is not on tenant '***': nothing to disable",
   "event": "microsoft_defender_rule_absent",
   "level": "warning",
   "timestamp": "0000-00-00 00:00:00"

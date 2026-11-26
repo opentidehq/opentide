@@ -5,7 +5,8 @@
 //! command line against `tests/cassettes/defender/tenant.py`), replayed
 //! through the connector: `PATCH` then `POST` on a `404`, one more `PATCH`
 //! after a `409`, a DISABLEMENT's `404` creating nothing, a DELETE's `404`
-//! and a refusal.
+//! and a refusal, every rule addressed as `opentide-<uuid>` (#1886); and a
+//! `409` whose `PATCH` finds no rule, another rule holding the name.
 
 #![expect(clippy::unwrap_used, reason = "a test: a failed set-up is a failure")]
 
@@ -341,6 +342,11 @@ fn rule(number: &str) -> String {
     format!("00000000-0000-4000-8047-0000000000{number}")
 }
 
+/// The Defender rule id of [`rule`] *number*: `opentide-<uuid>`.
+fn rule_id(number: &str) -> String {
+    opentide_compile::microsoft_defender::rule_id_of(&rule(number))
+}
+
 /// RFC 0021's deploy, replayed through the connector from the golden
 /// deploy's cassette: every call is the one the command line made, and
 /// each answer reads as microsoft-defender-1.0 says.
@@ -363,26 +369,38 @@ fn microsoft_defender_deploy_follows_the_spec_through_every_answer() {
     let connector = MicrosoftDefender::new();
     let cx = tenant.cx();
     let request = |id: &str, operation: Operation, body: &Json| {
-        // An upper-case uuid addresses the same rule.
+        // An upper-case uuid addresses the same rule. Each uuid begins
+        // with a digit, which Graph refuses as an id (#1886): the requests
+        // name `opentide-<uuid>`.
         DeployRequest::new(id.to_uppercase(), operation, body.to_compact().into_bytes())
     };
     block_on(async {
-        // PATCH 404, then POST with the uuid as id: created.
+        // PATCH 404, then POST with `opentide-<uuid>` as id: created.
         let created = connector
             .deploy(cx, &request(&rule("d1"), Operation::Update, &bodies[0]))
             .await
             .unwrap();
         assert_eq!(created.operation, Operation::Create);
-        assert_eq!(created.remote_id.as_deref(), Some(rule("d1").as_str()));
+        assert_eq!(created.remote_id.as_deref(), Some(rule_id("d1").as_str()));
         assert_eq!(created.events[0].name, "microsoft_defender_rule_created");
+        assert_eq!(
+            created.events[0].fields,
+            [("rule_id".to_owned(), rule_id("d1"))]
+        );
         // PATCH 200: updated, in one call.
         assert_eq!(
-            connector.upsert(cx, &rule("d2"), &bodies[1]).await.unwrap(),
+            connector
+                .upsert(cx, &rule_id("d2"), &bodies[1])
+                .await
+                .unwrap(),
             Sent::Updated
         );
         // PATCH 404, POST 409 (created meanwhile), PATCH 200: updated.
         assert_eq!(
-            connector.upsert(cx, &rule("d3"), &bodies[2]).await.unwrap(),
+            connector
+                .upsert(cx, &rule_id("d3"), &bodies[2])
+                .await
+                .unwrap(),
             Sent::Updated
         );
         // A DISABLEMENT's PATCH 404: nothing created, a warning.
@@ -401,7 +419,7 @@ fn microsoft_defender_deploy_follows_the_spec_through_every_answer() {
         assert_eq!(gone.failure.status, Some(404));
         // A refusal fails the rule, with Graph's message.
         let refused = connector
-            .upsert(cx, &rule("d6"), &bodies[4])
+            .upsert(cx, &rule_id("d6"), &bodies[4])
             .await
             .unwrap_err();
         assert_eq!(refused.failure.status, Some(400));
@@ -419,9 +437,10 @@ fn microsoft_defender_deploy_follows_the_spec_through_every_answer() {
 }
 
 /// The create body is the update body with `id` first: the `POST` the
-/// golden deploy recorded is the `PATCH` before it, plus the id.
+/// golden deploy recorded is the `PATCH` before it, plus the id,
+/// `opentide-<uuid>` (#1886).
 #[test]
-fn microsoft_defender_creates_with_the_uuid_as_id() {
+fn microsoft_defender_creates_with_the_opentide_rule_id() {
     let cassette = support::cassette("golden/deploy-defender-continues");
     let patch = recorded_body(&cassette, &rule("d1"));
     let post = cassette
@@ -435,10 +454,78 @@ fn microsoft_defender_creates_with_the_uuid_as_id() {
     let post: Json = serde_json::from_slice(&post.request.body.bytes()).unwrap();
     assert_eq!(
         post,
-        opentide_compile::microsoft_defender::create_body(&rule("d1"), &patch)
+        opentide_compile::microsoft_defender::create_body(&rule_id("d1"), &patch)
+    );
+    assert_eq!(
+        post.get("id").and_then(Json::as_str),
+        Some("opentide-00000000-0000-4000-8047-0000000000d1")
     );
     assert_eq!(
         post.as_object().unwrap().keys().next().map(String::as_str),
         Some("id")
     );
+}
+
+/// #1886: a create Graph refuses with `409` while no rule has the id (the
+/// `PATCH` after it answers `404` again) is another rule holding the
+/// display name, one an earlier opentide release or a person created:
+/// `microsoft_defender_rule_conflict`, which says to delete or rename it.
+#[test]
+fn microsoft_defender_a_name_held_by_another_rule_is_a_conflict() {
+    use opentide_connectors::connector::{DeployRequest, Deployer, Operation};
+    let recorded = support::cassette("golden/deploy-defender-continues");
+    let find = |method: &str, status: u16| {
+        recorded
+            .interactions
+            .iter()
+            .find(|interaction| {
+                interaction.request.method == method
+                    && interaction.response.status == status
+                    && (interaction.request.url.ends_with(&rule_id("d3")) || method == "POST")
+            })
+            .unwrap()
+            .clone()
+    };
+    // d3's PATCH 404 and POST 409, then a PATCH that finds no rule either.
+    let patch = find("PATCH", 404);
+    let mut post = find("POST", 409);
+    post.response.headers = vec![("content-type".into(), "application/json".into())];
+    post.response.body = Body::Text(
+        r#"{"error":{"code":"Conflict","message":"A detection rule with this name, title, or rule ID already exists."}}"#
+            .into(),
+    );
+    let cassette = opentide_cassette::Cassette::new(
+        &recorded.scenario,
+        recorded.recorded_from.clone(),
+        vec![recorded.interactions[0].clone(), patch.clone(), post, patch],
+    );
+    let body = recorded_body(&recorded, &rule_id("d3"));
+    let tenant = Replayed::start_with(
+        cassette,
+        microsoft_defender::PLATFORM,
+        GOLDEN_SETUP,
+        "DEFENDER_CLIENT_SECRET",
+        &microsoft_defender::http_settings(),
+    );
+    let request = DeployRequest::new(
+        rule("d3"),
+        Operation::Update,
+        body.to_compact().into_bytes(),
+    );
+    let failed = block_on(async { MicrosoftDefender::new().deploy(tenant.cx(), &request).await })
+        .unwrap()
+        .unwrap_err();
+    assert_eq!(tenant.verify(), Vec::new());
+    assert_eq!(failed.failure.code, microsoft_defender::RULE_CONFLICT);
+    assert_eq!(failed.failure.code, "microsoft_defender_rule_conflict");
+    assert_eq!(failed.failure.status, Some(409));
+    let message = &failed.failure.message;
+    for said in [
+        "Graph refused to create detection rule opentide-00000000-0000-4000-8047-0000000000d3",
+        "A detection rule with this name, title, or rule ID already exists.",
+        "an earlier opentide release",
+        "delete or rename that rule in the Defender portal",
+    ] {
+        assert!(message.contains(said), "{said}: {message}");
+    }
 }

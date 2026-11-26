@@ -17,7 +17,8 @@
 //! tenants and ids its shard records, and forgets them once retired; the
 //! others (Sentinel, Microsoft Defender, Splunk, Elastic, HarfangLab) retire from the deleted
 //! file alone, on the tenants its blocks reached, as the same blocks would
-//! retire with a status that maps to `DELETION`. Carbon Black Cloud cannot
+//! retire with a status that maps to `DELETION` (Microsoft Defender by
+//! `opentide-<uuid>`, the id it deployed the rule under). Carbon Black Cloud cannot
 //! retire a report without the rule, so its rows say so.
 
 use std::collections::HashSet;
@@ -508,6 +509,12 @@ fn stateless_request(
             delete(orphan.uuid.clone(), body.to_compact().into_bytes())
         }
         Some(PlatformId::CarbonBlackCloud) => Request::Unsupported(CARBON_BLACK_UNSUPPORTED.into()),
+        // The Defender rule id opentide gives the rule, `opentide-<uuid>`
+        // (#1886): a retirement deletes only a rule opentide manages.
+        Some(PlatformId::MicrosoftDefender) => delete(
+            opentide_compile::microsoft_defender::rule_id_of(&orphan.uuid),
+            Vec::new(),
+        ),
         _ => delete(orphan.uuid.clone(), Vec::new()),
     }
 }
@@ -575,9 +582,24 @@ mod tests {
     }
 
     #[test]
-    fn sentinel_defender_and_elastic_delete_by_the_rules_uuid() {
+    fn microsoft_defender_retires_the_opentide_rule_id() {
+        // #1886: Graph refuses an id that begins with a digit, so the rule
+        // was deployed as `opentide-<uuid>`, and is retired by that id.
         let block = json(r#"{"status": "PRODUCTION"}"#);
-        for platform in ["sentinel", "microsoft_defender", "elastic"] {
+        assert_eq!(
+            stateless_request("microsoft_defender", &orphan("Gone", ""), &block, None),
+            Request::Delete {
+                rule_id: "opentide-00000000-0000-4000-8003-000000000001".into(),
+                body: Vec::new(),
+                state: false,
+            }
+        );
+    }
+
+    #[test]
+    fn sentinel_and_elastic_delete_by_the_rules_uuid() {
+        let block = json(r#"{"status": "PRODUCTION"}"#);
+        for platform in ["sentinel", "elastic"] {
             assert_eq!(
                 stateless_request(platform, &orphan("Gone", ""), &block, None),
                 Request::Delete {

@@ -4822,7 +4822,8 @@ fn a_defender_dry_run_shows_the_requests_the_tenant_receives() {
         "DEFENDER_CLIENT_SECRET",
     );
     // Defender's dry run shows each rule's first request: the PATCH of its
-    // uuid (an upsert or a disablement), or the DELETE of a deletion. What
+    // rule id, `opentide-<uuid>` (an upsert or a disablement), or the DELETE
+    // of a deletion. What
     // follows on the tenant's answer (a POST after a 404, one more PATCH
     // after a 409) is not planned, so each planned write is the first
     // request the tenant received at its URL.
@@ -4834,6 +4835,20 @@ fn a_defender_dry_run_shows_the_requests_the_tenant_receives() {
             .collect::<Vec<_>>(),
         ["PATCH", "PATCH", "PATCH", "PATCH", "DELETE", "PATCH"].map(Json::str)
     );
+    // #1886: every uuid here begins with a digit, which Graph refuses as an
+    // id; each request names `opentide-<uuid>`.
+    for (write, number) in planned.iter().zip(["d1", "d2", "d3", "d4", "d5", "d6"]) {
+        assert_eq!(
+            write.get("url").and_then(Json::as_str),
+            Some(
+                format!(
+                    "https://graph.microsoft.com/beta/security/rules/detectionRules/\
+                     opentide-00000000-0000-4000-8047-0000000000{number}"
+                )
+                .as_str()
+            )
+        );
+    }
     for write in &planned {
         let shown = write.to_compact();
         let text = |key: &str| write.get(key).and_then(Json::as_str).unwrap_or_default();

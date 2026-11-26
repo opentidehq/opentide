@@ -226,14 +226,21 @@ the documented frequencies, the spec can tighten `microsoft_defender_frequency`;
 
 ## 8. The client id
 
-opentide uses the rule's lowercase canonical `metadata.uuid` as `id` and compares ids exactly.
+opentide uses `opentide-` and the rule's lowercase canonical `metadata.uuid` as `id`, and compares ids
+exactly. Graph refuses an id that does not begin with a letter (HTTP 400, "Rule ID must be either
+numeric or consist of letters, numbers, dashes, and underscores only, and begin with a letter";
+[#1886](https://github.com/opentidehq/opentide/issues/1886)), so a bare uuid fails ten times in
+sixteen. Step 4 checks that the prefix passes where a bare uuid does not.
 
-1. Create a rule with an upper-case uuid as `id`, then `GET` it with the lower-case form.
+1. Create a rule with `opentide-` and an upper-case uuid as `id`, then `GET` it with the lower-case form.
 2. Create a rule whose `id` is not a uuid (`opentide-test-1`).
 3. `GET "$BASE?\$filter=id eq '$ID'"` for a rule you created, and list `$BASE` to see how ids are
    returned.
+4. Create a rule whose `id` is a bare uuid that begins with a digit, then one whose `id` is
+   `opentide-` and that uuid.
 
-**Expected:** a lower-case uuid round-trips unchanged; record whether Graph folds case (step 1) and
+**Expected:** a lower-case id round-trips unchanged; step 4's bare uuid is refused (`400`) and
+`opentide-<uuid>` is created; record whether Graph folds case (step 1) and
 whether it takes a non-uuid id (step 2).
 
 **If not:** if Graph rewrites the id (case, braces, its own id instead of ours), deploy cannot
@@ -284,5 +291,5 @@ After the curl checks, run the platform the way users will:
 | 5 | Parent in `technique`, sub in `subTechniques` | | | |
 | 6 | Every entity kind accepted; none required | | | |
 | 7 | Frequencies, largest lookback | | | |
-| 8 | The uuid as client id, compared exactly | | | |
+| 8 | `opentide-<uuid>` as client id, compared exactly | | | |
 | 9 | Custom detail count and names | | | |

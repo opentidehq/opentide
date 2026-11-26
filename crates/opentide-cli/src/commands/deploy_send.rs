@@ -3155,8 +3155,9 @@ impl Sender<'_, '_> {
     }
 
     /// The request a Microsoft Defender rule sends (microsoft-defender-1.0,
-    /// Deploy): addressed by its lowercase canonical uuid, with the compiled
-    /// update body; a DELETION carries none. The objective's techniques
+    /// Deploy): addressed by its Defender rule id, `opentide-` and its
+    /// lowercase canonical uuid (#1886), with the compiled update body; a
+    /// DELETION carries none. The objective's techniques
     /// left out of the alert's tactics are warned about once per rule.
     fn microsoft_defender_request(
         &mut self,
@@ -3419,7 +3420,7 @@ impl Sender<'_, '_> {
                     tracing::warn!(report = warning.message.as_str(), "{}", warning.code);
                 }
                 // `microsoft_defender_rule_absent`: a DISABLEMENT found no
-                // rule with the uuid; nothing was created.
+                // rule with the rule id; nothing was created.
                 Some(PlatformId::MicrosoftDefender) => {
                     self.warned |= warning.raised;
                     tracing::warn!(detail = warning.message.as_str(), "{}", warning.code);
