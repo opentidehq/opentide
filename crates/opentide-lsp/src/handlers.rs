@@ -2561,8 +2561,12 @@ fn fix_all(session: &Session, uri: &lsp::Uri) -> Option<lsp::CodeActionOrCommand
     let mut fixes: Vec<(Range, String)> = analysis
         .diagnostics
         .iter()
-        // A file name is not an edit of the text (#215).
-        .filter(|d| d.code != FILENAME_MISMATCH)
+        // A file name is not an edit of the text (#215). The `| project`
+        // of an unprojected Defender query changes what the rule returns:
+        // only its own quick fix applies it (#1885).
+        .filter(|d| {
+            d.code != FILENAME_MISMATCH && d.code != codes::MICROSOFT_DEFENDER_UNPROJECTED_OUTPUT
+        })
         .filter_map(|d| {
             let text = session.docs.get(uri.as_str()).map(|doc| doc.text.as_str());
             Some(suggestion_edit(

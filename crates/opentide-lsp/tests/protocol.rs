@@ -774,7 +774,8 @@ fn defender_output_findings_have_quick_fixes() {
         json!({ "line": 8, "character": 28 })
     );
     let unprojected = find("microsoft_defender_unprojected_output");
-    assert_eq!(unprojected["severity"], 2, "{unprojected}");
+    // A note: it never fails `lint --strict`.
+    assert_eq!(unprojected["severity"], 3, "{unprojected}");
     assert_eq!(
         unprojected["range"]["start"],
         json!({ "line": 5, "character": 8 })
@@ -813,6 +814,36 @@ fn defender_output_findings_have_quick_fixes() {
     assert_eq!(edit["range"]["start"], unprojected["range"]["end"]);
     assert_eq!(edit["range"]["end"], unprojected["range"]["end"]);
     assert_eq!(edit["newText"], format!(" {project}"));
+
+    // fixAll applies the column's suggestion, never the project.
+    let all = lsp.request(
+        "textDocument/codeAction",
+        json!({
+            "textDocument": { "uri": uri },
+            "range": { "start": { "line": 0, "character": 0 }, "end": { "line": 12, "character": 0 } },
+            "context": { "diagnostics": [], "only": ["source.fixAll.opentide"] }
+        }),
+    )["result"]
+        .as_array()
+        .unwrap()
+        .clone();
+    let edits = all
+        .iter()
+        .flat_map(|a| {
+            a["edit"]["changes"][&uri]
+                .as_array()
+                .cloned()
+                .unwrap_or_default()
+        })
+        .collect::<Vec<_>>();
+    assert!(
+        edits.iter().all(|e| !e["newText"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("project")),
+        "{all:#?}"
+    );
+    assert!(edits.iter().any(|e| e["newText"] == "DeviceId"), "{all:#?}");
 }
 
 /// #887: an unknown SPL command's fix replaces the command, not its stage.
