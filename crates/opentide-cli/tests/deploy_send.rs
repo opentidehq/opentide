@@ -4867,6 +4867,158 @@ fn a_defender_rule_another_rule_blocks_fails_with_its_code() {
     );
 }
 
+/// #1894: a Splunk rule written under its name whose old saved search (an
+/// earlier name of the rule) Splunk's stand-in tenant refuses to delete
+/// fails with `splunk_renamed_search_not_deleted` leading its row's error,
+/// not the refusal's message alone.
+#[test]
+fn a_splunk_rename_cleanup_the_tenant_refuses_fails_with_its_code() {
+    use opentide_cassette::cassette::Body;
+    let ws = fixture("deploy-tenants");
+    let text =
+        std::fs::read_to_string(repo().join("tests/cassettes/golden/deploy-splunk.json")).unwrap();
+    let mut cassette = Cassette::parse(&text).unwrap();
+    let recorded = cassette.interactions.clone();
+    // The listing of the saved searches naming the created rule holds one
+    // an earlier name of it left, owned by `nobody` as opentide's are.
+    let mut listed = recorded[4].clone();
+    let Body::Text(feed) = &listed.response.body else {
+        panic!("the listing is a feed")
+    };
+    let entry = &feed[feed.find("<entry>").unwrap()..feed.find("</entry>").unwrap() + 8];
+    let old = entry
+        .replace("Splunk create rule", "Old create rule")
+        .replace("Splunk%20create%20rule", "Old%20create%20rule");
+    listed.response.body = Body::Text(feed.replacen("</feed>", &format!("{old}</feed>"), 1));
+    let mut delete = recorded[4].clone();
+    delete.request.method = "DELETE".into();
+    delete.request.url =
+        "https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches/Old+create+rule"
+            .into();
+    delete.response.status = 403;
+    delete.response.body = Body::Text(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<response>\n  <messages>\n    <msg \
+         type=\"ERROR\">You do not have permission to delete this object</msg>\n  \
+         </messages>\n</response>\n"
+            .into(),
+    );
+    cassette.interactions = recorded[..4]
+        .iter()
+        .cloned()
+        .chain([listed, delete])
+        .chain(recorded[5..].iter().cloned())
+        .collect();
+    let proxy = Proxy::start(
+        Mode::Replay { cassette },
+        Redaction::new([SECRET.to_owned()]),
+    )
+    .unwrap();
+    let mut ca = tempfile::NamedTempFile::new().unwrap();
+    ca.write_all(proxy.ca_pem().as_bytes()).unwrap();
+    let env = Env::from_pairs(
+        proxy
+            .client_env(ca.path().to_str().unwrap())
+            .into_iter()
+            .chain([("SPLUNK_TOKEN".to_owned(), SECRET.to_owned())]),
+    );
+    let (sent, text) = deploy(
+        ws.path(),
+        "splunk",
+        &env,
+        &opentide_connectors::builtin(),
+        0,
+    );
+    assert_eq!(proxy.verify(), Vec::new(), "{text}");
+    let Json::Array(results) = value(&sent, "results") else {
+        panic!("no results: {text}")
+    };
+    let created = results
+        .iter()
+        .find(|row| {
+            row.get("id").and_then(Json::as_str) == Some("00000000-0000-4000-8047-000000000041")
+        })
+        .unwrap_or_else(|| panic!("{results:?}"));
+    assert_eq!(
+        created.get("status").and_then(Json::as_str),
+        Some("failed"),
+        "{text}"
+    );
+    let error = created
+        .get("error")
+        .and_then(Json::as_str)
+        .unwrap_or_default();
+    assert!(
+        error.starts_with(
+            "splunk_renamed_search_not_deleted: saved search \"Splunk create rule\" was \
+             written, but \"Old create rule\""
+        ),
+        "{error}"
+    );
+}
+
+/// A HarfangLab deployer that refuses every request as one it cannot read
+/// (`harfanglab_request_invalid`, which its connector raises before any
+/// request reaches the tenant).
+struct HarfangLabRefusing;
+
+impl Deployer for HarfangLabRefusing {
+    fn deploy<'a>(
+        &'a self,
+        _cx: TenantContext<'a>,
+        _request: &'a DeployRequest,
+    ) -> BoxFuture<'a, Result<DeployOutcome, DeployError>> {
+        use opentide_connectors::connector::DeployFailure;
+        Box::pin(async move {
+            Err(DeployError::rule(DeployFailure::new(
+                opentide_connectors::harfanglab::REQUEST_INVALID,
+                "A HarfangLab deploy request's body is {\"kind\": \"Sigma\" or \"YARA\", \
+                 \"rule\": <the compiled rule>}: it is empty",
+            )))
+        })
+    }
+}
+
+impl Platform for HarfangLabRefusing {
+    fn id(&self) -> &'static str {
+        "harfanglab"
+    }
+
+    fn deployer(&self) -> Option<&dyn Deployer> {
+        Some(self)
+    }
+}
+
+/// #1894: a HarfangLab rule its connector refuses with a code of its own
+/// fails with that code leading its row's error.
+#[test]
+fn a_harfanglab_failure_with_its_own_code_keeps_it_in_the_row() {
+    let fixture = |file: &str| {
+        std::fs::read_to_string(repo().join(format!(
+            "tests/golden/fixtures/deploy-tenants/objects/rules/{file}"
+        )))
+        .unwrap()
+    };
+    let ws = workspace(
+        "harfanglab",
+        "lab",
+        "url = \"https://harfanglab.invalid\"\napi_token = \"$HARFANGLAB_API_TOKEN\"\n\
+         source_id = \"s\"\n",
+        &[("a.yaml", fixture("harfanglab-a-sigma.yaml"))],
+    );
+    let mut registry = Registry::new();
+    registry.register(Box::new(HarfangLabRefusing)).unwrap();
+    let env = Env::from_pairs([("HARFANGLAB_API_TOKEN".to_owned(), "token".to_owned())]);
+    let (sent, text) = deploy(ws.path(), "harfanglab", &env, &registry, 0);
+    let rows = rows(&sent);
+    assert_eq!(rows.len(), 1, "{rows:?}\n{text}");
+    assert_eq!(rows[0].0, "failed", "{text}");
+    let error = rows[0].1.clone().unwrap_or_default();
+    assert!(
+        error.starts_with("harfanglab_request_invalid: A HarfangLab deploy request's body"),
+        "{error}"
+    );
+}
+
 #[test]
 fn a_defender_dry_run_shows_the_requests_the_tenant_receives() {
     let (planned, received) = golden_send(
@@ -5883,6 +6035,15 @@ fn a_splunk_retirement_names_the_rule_and_removed_survives_a_failed_cleanup() {
         "{text}"
     );
     assert_eq!(removed(RETIRED), ["Old B 1"]);
+    // The cleanup's own code leads the row's error (#1894).
+    let error = row(RETIRED)
+        .get("error")
+        .and_then(Json::as_str)
+        .unwrap_or_default();
+    assert!(
+        error.starts_with("splunk_renamed_search_not_deleted: saved search \"Retired\""),
+        "{error}"
+    );
 }
 
 /// A cassette of the Sentinel sign-in, the `GET` of the one rule the

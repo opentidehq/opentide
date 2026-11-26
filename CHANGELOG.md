@@ -17,6 +17,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Eac
   - The SDKs' Defender `deploy(rule_id)` always sends `opentide-<uuid>`
   - `generate extract defender` writes one file per uuid, preferring the `opentide-` rule
 
+### Fixed
+
+- **`deploy` keeps a connector's own failure code in the rule's row.** On Splunk and HarfangLab, and in a `--prune` retirement on any platform, the row's `error` showed the message alone; it now starts with the code, as Microsoft Defender's, Bitdefender's and Google SecOps' rows do ([#1894](https://github.com/opentidehq/opentide/issues/1894)).
+  - `splunk_renamed_search_not_deleted`: a saved search an earlier name of the rule left could not be deleted
+  - `harfanglab_request_invalid`: the request's body is not one HarfangLab's deployer reads
+
 ## [1.0.0] — 2026-11-25
 
 opentide runs on one Rust core: a far smaller install, commands that start in about 20 ms, and SDKs for Python, Rust and Node.js.
