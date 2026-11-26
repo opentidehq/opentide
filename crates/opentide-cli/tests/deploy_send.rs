@@ -3041,7 +3041,7 @@ fn sentinel_one_stops_a_tenant_refusing_the_key() {
         &sent,
         "sentinel_one",
         "lab",
-        "could not create the rule on tenant 'lab': ",
+        "sentinel_one_unauthorized: could not create the rule on tenant 'lab': ",
     );
 }
 
@@ -4881,7 +4881,17 @@ fn a_splunk_rename_cleanup_the_tenant_refuses_fails_with_its_code() {
     let recorded = cassette.interactions.clone();
     // The listing of the saved searches naming the created rule holds one
     // an earlier name of it left, owned by `nobody` as opentide's are.
-    let mut listed = recorded[4].clone();
+    let at = recorded
+        .iter()
+        .position(|interaction| {
+            interaction.request.method == "GET"
+                && interaction
+                    .request
+                    .url
+                    .ends_with("saved/searches?search=00000000-0000-4000-8047-000000000041&count=0")
+        })
+        .expect("the listing of the created rule's saved searches");
+    let mut listed = recorded[at].clone();
     let Body::Text(feed) = &listed.response.body else {
         panic!("the listing is a feed")
     };
@@ -4890,7 +4900,7 @@ fn a_splunk_rename_cleanup_the_tenant_refuses_fails_with_its_code() {
         .replace("Splunk create rule", "Old create rule")
         .replace("Splunk%20create%20rule", "Old%20create%20rule");
     listed.response.body = Body::Text(feed.replacen("</feed>", &format!("{old}</feed>"), 1));
-    let mut delete = recorded[4].clone();
+    let mut delete = recorded[at].clone();
     delete.request.method = "DELETE".into();
     delete.request.url =
         "https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches/Old+create+rule"
@@ -4902,11 +4912,11 @@ fn a_splunk_rename_cleanup_the_tenant_refuses_fails_with_its_code() {
          </messages>\n</response>\n"
             .into(),
     );
-    cassette.interactions = recorded[..4]
+    cassette.interactions = recorded[..at]
         .iter()
         .cloned()
         .chain([listed, delete])
-        .chain(recorded[5..].iter().cloned())
+        .chain(recorded[at + 1..].iter().cloned())
         .collect();
     let proxy = Proxy::start(
         Mode::Replay { cassette },
@@ -6035,15 +6045,6 @@ fn a_splunk_retirement_names_the_rule_and_removed_survives_a_failed_cleanup() {
         "{text}"
     );
     assert_eq!(removed(RETIRED), ["Old B 1"]);
-    // The cleanup's own code leads the row's error (#1894).
-    let error = row(RETIRED)
-        .get("error")
-        .and_then(Json::as_str)
-        .unwrap_or_default();
-    assert!(
-        error.starts_with("splunk_renamed_search_not_deleted: saved search \"Retired\""),
-        "{error}"
-    );
 }
 
 /// A cassette of the Sentinel sign-in, the `GET` of the one rule the

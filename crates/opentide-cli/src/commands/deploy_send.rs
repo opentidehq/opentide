@@ -4070,8 +4070,11 @@ impl Sender<'_, '_> {
             } else {
                 Stops::Rule
             };
+            // Its code leads the row's error, as every coded failure's does
+            // (`coded_failure`, #1894).
             Raised::new(format!(
-                "could not {} the rule on tenant '{tenant}': {}",
+                "{}: could not {} the rule on tenant '{tenant}': {}",
+                failure.code,
                 action_verb(action),
                 failure.message
             ))

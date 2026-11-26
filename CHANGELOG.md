@@ -33,9 +33,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Eac
 
 ### Fixed
 
-- **`deploy` keeps a connector's own failure code in the rule's row.** On Splunk and HarfangLab, and in a `--prune` retirement on any platform, the row's `error` showed the message alone; it now starts with the code, as Microsoft Defender's, Bitdefender's and Google SecOps' rows do ([#1894](https://github.com/opentidehq/opentide/issues/1894)).
-  - `splunk_renamed_search_not_deleted`: a saved search an earlier name of the rule left could not be deleted
-  - `harfanglab_request_invalid`: the request's body is not one HarfangLab's deployer reads
+- **`deploy` keeps a connector's own failure code in the rule's row.** A failure a connector reports under a code of its own read as its message alone; the row's `error` now starts with the code (`code: message`), as Microsoft Defender's, Bitdefender's and Google SecOps' rows already did ([#1894](https://github.com/opentidehq/opentide/issues/1894)). The rows that change:
+  - Splunk: `splunk_renamed_search_not_deleted`, when a saved search an earlier name of the rule left could not be deleted
+  - HarfangLab: `harfanglab_request_invalid`
+  - SentinelOne: a refusal under its own code (`sentinel_one_rule_invalid: could not create the rule on tenant …`, `sentinel_one_rule_not_found`, `sentinel_one_unauthorized`, `sentinel_one_request_failed`), and the run's `error` that quotes it
+  - a `--prune` retirement on any platform; when it stops the tenant, the run's `error` (`Deployment to <platform> failed on tenant <tenant>: <code>: …`) carries the code too
 
 ## [1.0.0] — 2026-11-25
 
