@@ -452,6 +452,31 @@ pub const NAMED_CHECKS: [NamedCheck; 5] = [
     },
 ];
 
+/// Every code a platform block's model reports as an error typed by its own
+/// code ([`ErrorKind::Constraint`](crate::error::ErrorKind::Constraint)),
+/// read from each platform's own list: Bitdefender's
+/// ([`bitdefender::checks::CODE_MESSAGES`]), Graylog's
+/// ([`graylog::constraint_codes`]), Exabeam's ([`exabeam::constraint_codes`]),
+/// Microsoft Defender's ([`microsoft_defender::CONSTRAINT_CODES`]) and Google
+/// SecOps' ([`google_secops::CONSTRAINT_CODES`], but `extra_forbidden`, which
+/// its model reports as an unknown key). `validate` attributes a finding
+/// under one of them to its `schema` check, which runs the models. The other
+/// platforms' named checks report their codes in one `schema_validation`
+/// finding ([`codes_message`]).
+pub fn constraint_codes() -> impl Iterator<Item = &'static str> {
+    bitdefender::checks::CODE_MESSAGES
+        .iter()
+        .map(|(code, _)| *code)
+        .chain(graylog::constraint_codes())
+        .chain(exabeam::constraint_codes())
+        .chain(microsoft_defender::CONSTRAINT_CODES)
+        .chain(
+            google_secops::CONSTRAINT_CODES
+                .into_iter()
+                .filter(|code| *code != "extra_forbidden"),
+        )
+}
+
 /// Every block advisory a rule earns, each platform's in the platform
 /// table's order: a warning that never rejects the rule, which `validate`
 /// and `lint`'s `queries` check report at its field path. Bitdefender's

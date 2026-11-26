@@ -20,9 +20,22 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ### Added
 
+#### `opentide-datadog`
+
 - **The Datadog log search syntax** (`datadog`, `.datadog` files): the queries of Datadog Cloud SIEM detection rules, checked, highlighted, hovered and completed as you type ([`docs/engine/DATADOG.md`](../docs/engine/DATADOG.md)). The new crate `opentide-datadog` parses it in pure Rust, with AND (written or implied) binding tighter than OR, as VRL reads it. It reports the 16 `datadog_*` codes (`opentide explain datadog_mixed_boolean`, …), under the profiles `rule` and `search`; a `.datadog` file is a search. Hover and completion know Datadog's reserved and standard attributes. No Tide block embeds the language yet: the `datadog` platform is the RFC's next phase.
 - **API: `opentide_core::LanguageId::Datadog`**, the `datadog_*` codes in `opentide_core::codes`, and the `opentide-datadog` crate.
 - **`highlights/generated/datadog.tmLanguage.json`** (`source.datadog`), and the `datadog` language in the Helix, Neovim and Zed samples and `@opentide/lsp-client`'s `LANGUAGES`.
+
+#### `opentide-schema`
+
+- **`constraint_codes` lists every platform model's own error codes** ([opentide#1893](https://github.com/opentidehq/opentide/issues/1893)). It reads Bitdefender's, Graylog's, Exabeam's, Microsoft Defender's and Google SecOps' lists, so a host can tell a model's finding from the query engine's.
+  - API: `opentide_schema::objects::platform::constraint_codes`
+
+### Fixed
+
+#### `opentide-workspace`
+
+- **`validate`'s `schema` check fails on a platform block's constraint codes** ([opentide#1893](https://github.com/opentidehq/opentide/issues/1893)). A report whose only errors were codes such as `microsoft_defender_severity`, `graylog_priority` or `exabeam_name_duplicate` had `checks.schema.status` `passed`; it is `failed`, and `VALIDATION_CODES` holds `exabeam_name_duplicate`.
 
 ## [1.1.0] - 2026-11-26
 
