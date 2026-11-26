@@ -6,6 +6,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Eac
 
 ## [Unreleased]
 
+### Upgrade
+
+- If you deploy to Microsoft Defender, before the next deploy, delete in the Defender portal every custom detection an earlier opentide release created (1.0.0's bare-uuid rules, 0.x's), or rename both its name and its alert title. Graph refuses a new rule while another holds either, even a disabled one.
+
+### Breaking
+
+- **Microsoft Defender rules are deployed as `opentide-<uuid>`** ([#1886](https://github.com/opentidehq/opentide/issues/1886)). Graph refuses an id that begins with a digit, so most bare-uuid rules failed with HTTP 400. Rules 1.0.0 deployed are no longer addressed, and a create blocked by one fails with `microsoft_defender_rule_conflict`.
+  - Deploy, disable, delete, `--prune` and the dry run's `api_request` URL use the new id
+  - The SDKs' Defender `deploy(rule_id)` always sends `opentide-<uuid>`
+  - `generate extract defender` writes one file per uuid, preferring the `opentide-` rule
+
 ## [1.0.0] — 2026-11-25
 
 opentide runs on one Rust core: a far smaller install, commands that start in about 20 ms, and SDKs for Python, Rust and Node.js.
@@ -13,7 +24,7 @@ opentide runs on one Rust core: a far smaller install, commands that start in ab
 ### Upgrade
 
 - If you deploy to Defender for Endpoint, move each rule's `configurations.defender_for_endpoint` block to `configurations.microsoft_defender` and rewrite it in the 1.0 shape: `query`, `schedule.frequency`, `alert`, `entities`, `actions`, `scope.device_groups` ([microsoft-defender-1.0](https://github.com/opentidehq/specifications/blob/main/specs/platforms/microsoft-defender-1.0.md); `opentide new rule --platform microsoft_defender` writes one). Rename `.opentide/configurations/platforms/defender_for_endpoint.toml` to `microsoft_defender.toml`, and `--defender-for-endpoint` to `--microsoft-defender` in `opentide setup platforms`.
-- If deployment state records Defender rules (`defender_for_endpoint` under `.opentide/states/deployment/`), delete those entries, then disable or delete the rules an earlier release created in the Defender portal: a rule's `metadata.uuid` is now its Defender rule id, so the first deploy creates each rule anew under its UUID.
+- If deployment state records Defender rules (`defender_for_endpoint` under `.opentide/states/deployment/`), delete those entries, then, in the Defender portal, delete the rules an earlier release created, or rename both their name and their alert title: a rule's `metadata.uuid` is now its Defender rule id, so the first deploy creates each rule anew under its UUID, and Graph refuses that create while another rule holds the name or the alert title, even a disabled one.
 - If a script read `deprecated` from `opentide setup vscode --json`, stop: the command is supported, and the field is no longer emitted.
 - If a script reads `path` from a configuration finding of `opentide validate --json` or SARIF (`unknown_key`, `missing_field` or `schema_validation` on a `.opentide/configurations` file, `asset_unknown` on `visibility.toml`), read it as the file's full path, as for every other finding: it was the name relative to `.opentide/configurations` (`deployment.toml`), with no line or column.
 - Run `opentide validate`; where it reports `kql_table_misspelt`, correct the table name, or, if the workspace really holds that table or function, declare it as a `[[logsources]]` entry in `visibility.toml`.

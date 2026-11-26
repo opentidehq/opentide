@@ -3,16 +3,19 @@ custom detection API (RFC 0021, microsoft-defender-1.0).
 
 The recorder starts it on a free loopback port (printed on the first line of stdout) and
 routes ``login.microsoftonline.com`` and ``graph.microsoft.com`` to it. It holds custom
-detection rules by their client-provided ``id`` (the rule's uuid):
+detection rules by their client-provided ``id`` (``opentide-`` and the rule's uuid, #1886):
 
 - ``PATCH {base}/{id}`` refuses a query holding ``// refused`` (400), updates a rule it
   holds (200), and answers 404 with no body for an id it does not hold;
 - ``POST {base}`` creates the rule under its ``id`` (201), or answers 409 when that id
-  exists; the id ``...0000d3`` is created by "another run" when its first ``PATCH``
-  answers 404, so its ``POST`` meets the 409;
+  exists or another rule holds its display name or alert title; the id ``opentide-...0000d3``
+  is created by "another run" when its first ``PATCH`` answers 404, so its ``POST`` meets
+  the 409; the rule ``...0000d7`` opentide 1.0.0 left under its bare uuid, renamed since,
+  still holds the alert title ``Defender name held rule``;
 - ``DELETE {base}/{id}`` deletes a rule (204), or answers 404;
 - ``GET {base}`` lists the rules ``generate extract`` imports, in the beta shape, over two
-  pages;
+  pages: one opentide deployed (``opentide-<uuid>``) and the copy 1.0.0 left of it under the
+  bare uuid, renamed, and two others under a bare uuid (opentide 1.0.0);
 - a hunting query returns the columns its ``| project`` names (the default schema
   otherwise); ``whre`` is a syntax error (400), a ``// forbidden`` query a missing
   permission (403), a ``// gateway`` query a proxy's HTML page (502).
@@ -39,10 +42,24 @@ DEFAULT_SCHEMA = [
     ("DeviceName", "String"),
     ("ReportId", "Int64"),
 ]
-# The rules the tenant holds, by id: the golden deploy's update target.
-CREATED: dict[str, dict[str, Any]] = {"00000000-0000-4000-8047-0000000000d2": {}}
+# The rules the tenant holds, by id: the golden deploy's update target, and a rule opentide
+# 1.0.0 deployed under its bare uuid, renamed since, whose alert title is still the one the
+# golden deploy's rule d7 sends (#1886).
+CREATED: dict[str, dict[str, Any]] = {
+    "opentide-00000000-0000-4000-8047-0000000000d2": {},
+    "00000000-0000-4000-8047-0000000000d7": {
+        "displayName": "Defender name held rule (1.0.0)",
+        "detectionAction": {"alertTemplate": {"title": "Defender name held rule"}},
+    },
+}
 # Ids another run creates as soon as this run's PATCH has found none.
-RACING = {"00000000-0000-4000-8047-0000000000d3"}
+RACING = {"opentide-00000000-0000-4000-8047-0000000000d3"}
+
+
+def _held(rule: dict[str, Any]) -> set[str]:
+    """The display name and alert title *rule* holds: Graph refuses another rule either."""
+    title = rule.get("detectionAction", {}).get("alertTemplate", {}).get("title")
+    return {name for name in (rule.get("displayName"), title) if name}
 
 
 def _row(names: list[str], number: int) -> dict[str, Any]:
@@ -87,8 +104,13 @@ def _listed(rule_id: str, name: str, **changes: Any) -> dict[str, Any]:
 
 
 LISTED: list[dict[str, Any]] = [
+    # The copy opentide 1.0.0 left under the bare uuid, renamed: extract keeps the other.
     _listed(
         "8d7c6b5a-0000-4000-8000-000000000201",
+        'Suspicious PowerShell: "encoded" command (1.0.0)',
+    ),
+    _listed(
+        "opentide-8d7c6b5a-0000-4000-8000-000000000201",
         'Suspicious PowerShell: "encoded" command',
         lastModifiedBy="bob@contoso.example",
         schedule={"frequency": "PT1H", "lookback": "PT4H"},
@@ -175,12 +197,12 @@ class Handler(BaseHTTPRequestHandler):
             self._json(
                 200,
                 {
-                    "value": LISTED[:2],
+                    "value": LISTED[:3],
                     "@odata.nextLink": f"https://graph.microsoft.com{RULES}?$skiptoken=2",
                 },
             )
         elif self.path == RULES + "?$skiptoken=2":
-            self._json(200, {"value": LISTED[2:]})
+            self._json(200, {"value": LISTED[3:]})
         else:
             self._error(404, "ResourceNotFound", "no such resource")
 
@@ -206,8 +228,12 @@ class Handler(BaseHTTPRequestHandler):
         body = json.loads(self._read() or b"{}")
         if self.path == RULES:
             remote = body.get("id", "")
-            if remote in CREATED:
-                self._error(409, "Conflict", f"A rule with id {remote} already exists.")
+            if remote in CREATED or any(_held(body) & _held(rule) for rule in CREATED.values()):
+                self._error(
+                    409,
+                    "Conflict",
+                    "A detection rule with this name, title, or rule ID already exists.",
+                )
                 return
             CREATED[remote] = body
             self._json(201, body)

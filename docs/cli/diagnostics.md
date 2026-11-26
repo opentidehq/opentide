@@ -351,6 +351,7 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`microsoft_defender_lookback`](#microsoft_defender_lookback) | A Microsoft Defender block's `schedule.lookback` is not a duration, is set on a near-real-time rule, or is shorter than its frequency. |
 | [`microsoft_defender_no_entities`](#microsoft_defender_no_entities) | A Microsoft Defender block maps no entity. |
 | [`microsoft_defender_rule_absent`](#microsoft_defender_rule_absent) | A Microsoft Defender rule to disable is not on the tenant, so nothing was disabled or created. |
+| [`microsoft_defender_rule_conflict`](#microsoft_defender_rule_conflict) | Graph refused to create a Microsoft Defender rule because another rule most likely holds its display name or alert title. |
 | [`microsoft_defender_schema`](#microsoft_defender_schema) | A Microsoft Defender block's `schema` names another schema. |
 | [`microsoft_defender_scope`](#microsoft_defender_scope) | A Microsoft Defender block's `scope` is not a non-empty list of device group names. |
 | [`microsoft_defender_severity`](#microsoft_defender_severity) | A Microsoft Defender block's `alert.severity` is not one of opentide's five severities. |
@@ -6364,17 +6365,33 @@ Map the columns the query returns: `entities: {hosts: [{device_id: DeviceId}]}`.
 
 A Microsoft Defender rule to disable is not on the tenant, so nothing was disabled or created.
 
-Severity: warning. Reported by `opentide deploy` on a `microsoft_defender` tenant (microsoft-defender-1.0). A `DISABLEMENT` status sends `PATCH {base}/{uuid}` with `status: disabled`; Graph answered `404`, so the tenant has no rule with the rule's `metadata.uuid`. Deploy does not create a rule only to disable it. The rule is reported as skipped.
+Severity: warning. Reported by `opentide deploy` on a `microsoft_defender` tenant (microsoft-defender-1.0). A `DISABLEMENT` status sends `PATCH {base}/opentide-<uuid>` with `status: disabled`; Graph answered `404`, so the tenant has no rule with the id deploy gives the rule, `opentide-` and its `metadata.uuid`. Deploy does not create a rule only to disable it. The rule is reported as skipped.
 
 ### Example
 
 ```text illustrative
-microsoft_defender_rule_absent: rule 00000000-0000-4000-8003-0000000000d0 is not on tenant 'contoso': nothing to disable
+microsoft_defender_rule_absent: rule opentide-00000000-0000-4000-8003-0000000000d0 is not on tenant 'contoso': nothing to disable
 ```
 
 ### How to fix
 
-Nothing to do if the rule was never deployed to that tenant. If it was, it was deleted in the portal or deployed under another uuid: check the rule's `metadata.uuid`.
+Nothing to do if the rule was never deployed to that tenant. If it was, it was deleted in the portal, deployed under another uuid (check the rule's `metadata.uuid`), or deployed by an earlier opentide release: 1.0.0 deployed under the bare uuid, without the `opentide-` prefix, and this deploy does not touch that rule. Delete it in the portal, or rename it: Graph keeps a disabled rule's name reserved, so a later create of the rule fails with `microsoft_defender_rule_conflict` while it is there.
+
+## microsoft_defender_rule_conflict
+
+Graph refused to create a Microsoft Defender rule because another rule most likely holds its display name or alert title.
+
+Severity: error. Reported by `opentide deploy` on a `microsoft_defender` tenant (microsoft-defender-1.0). Deploy addresses each rule as `opentide-<uuid>`: its `PATCH` found no rule with that id, so it sent a `POST` to create one, and Graph answered `409` (`A detection rule with this name, title, or rule ID already exists.`). The `PATCH` deploy sends after a `409` found no rule with the id either, so the conflict is another rule with the same display name or alert title. Most often it is one an earlier opentide release created: 1.0.0 deployed under the bare uuid, without the `opentide-` prefix, and 0.x under ids of its own. It can also be a rule created by hand in the portal. Graph keeps the name and alert title of a disabled rule reserved, so disabling that rule is not enough, and the alert title defaults to the rule's name, so renaming the rule alone may not be either. The rule fails, with the code before its message in the row's `error`; the others are deployed.
+
+### Example
+
+```text illustrative
+microsoft_defender_rule_conflict: Graph refused to create detection rule opentide-8f3c4a7e-1b2d-4c3e-9f0a-1234567890ab on tenant contoso: HTTP 409 (A detection rule with this name, title, or rule ID already exists.). No rule has this id, so another rule most likely holds its display name or alert title: one an earlier opentide release created (under the bare uuid in 1.0.0, or in 0.x), or one created by hand. Graph keeps them reserved for a disabled rule too: delete that rule in the Defender portal (or rename both its name and its alert title), then deploy again
+```
+
+### How to fix
+
+In the Defender portal (Investigation & response > Hunting > Custom detection rules), find the rule with the same name or alert title: delete it (the simplest fix), or rename both its name and its alert title, then deploy again. A rule that an earlier opentide release created is replaced by the one this deploy creates. To keep the other rule, give the opentide rule another display name (`configurations.microsoft_defender.name`, else the rule's `name`) and alert title (`alert.title`).
 
 ## microsoft_defender_schema
 

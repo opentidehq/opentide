@@ -124,7 +124,8 @@ fn a_preview_run_plans_an_upsert_of_each_rule_by_its_uuid() {
     );
     assert_eq!(outcome.outcome_kind, Some("plan"));
     // Defender keeps no deployment state: a deploy's first request is the
-    // PATCH of the rule its uuid names (platform::microsoft_defender::1.0).
+    // PATCH of the rule `opentide-<uuid>` names (#1886: Graph refuses an id
+    // that begins with a digit, as these uuids do).
     let body = |uuid: &str| {
         format!(
             r#"{{"displayName":"Rule {uuid}","description":"d","status":"enabled","queryCondition":{{"queryText":"DeviceEvents"}},"schedule":{{"frequency":"PT1H"}},"detectionAction":{{"alertTemplate":{{"title":"Rule {uuid}","description":"d","severity":"medium"}}}}}}"#
@@ -138,7 +139,7 @@ fn a_preview_run_plans_an_upsert_of_each_rule_by_its_uuid() {
     assert_eq!(
         text(&outcome, "payloads"),
         format!(
-            r#"{{"microsoft_defender":[{{"uuid":"{a}","name":"Rule {a}","api_request":[{{"method":"PATCH","url":"{endpoint}/{a}","body":{}}}],"tenant":"one"}},{{"uuid":"{b}","name":"Rule {b}","api_request":[{{"method":"PATCH","url":"{endpoint}/{b}","body":{}}}],"tenant":"one"}}]}}"#,
+            r#"{{"microsoft_defender":[{{"uuid":"{a}","name":"Rule {a}","api_request":[{{"method":"PATCH","url":"{endpoint}/opentide-{a}","body":{}}}],"tenant":"one"}},{{"uuid":"{b}","name":"Rule {b}","api_request":[{{"method":"PATCH","url":"{endpoint}/opentide-{b}","body":{}}}],"tenant":"one"}}]}}"#,
             body(a),
             body(b)
         )

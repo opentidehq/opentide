@@ -540,10 +540,10 @@ fn a_deleted_elastic_rule_is_retired_by_its_uuid() {
 }
 
 /// Microsoft Defender keeps no deployment state: a deleted rule is retired
-/// by its uuid, which is the Defender rule id
-/// (`platform::microsoft_defender::1.0`).
+/// by its Defender rule id, `opentide-<uuid>` (#1886: Graph refuses an id
+/// that begins with a digit, as this uuid does).
 #[test]
-fn a_deleted_microsoft_defender_rule_is_retired_by_its_uuid() {
+fn a_deleted_microsoft_defender_rule_is_retired_by_its_rule_id() {
     let block = "  microsoft_defender:\n    status: PRODUCTION\n    query: DeviceEvents\n    \
                  schedule:\n      frequency: 1H\n";
     let ws = workspace(
@@ -557,7 +557,7 @@ fn a_deleted_microsoft_defender_rule_is_retired_by_its_uuid() {
     assert_eq!(
         *recorder.seen.lock().unwrap(),
         [Seen {
-            rule_id: GONE.into(),
+            rule_id: format!("opentide-{GONE}"),
             operation: Operation::Delete,
             body: String::new(),
         }]
