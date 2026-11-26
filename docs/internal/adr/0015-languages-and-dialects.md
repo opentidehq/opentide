@@ -1,6 +1,6 @@
 ---
 title: "0015: When a vendor's syntax is a language, a dialect or a profile"
-description: "A written rule for the engine's query languages: a syntax gets its own crate and LanguageId when it changes the tree, has a reference of its own or needs its own editor grammar; a product that runs an existing language is a dialect, chosen by platform; a use within one product is a profile, chosen by position. Applied to KQL, Lucene, YARA, Exabeam, YARA-L, CQL, ES|QL, Falco and the proposed Datadog crate, with what it costs under the facade's 1.x semver."
+description: "A written rule for the engine's query languages: a syntax gets its own crate and LanguageId when it changes the tree, has a reference of its own or needs its own editor grammar; a product that runs an existing language is a dialect, chosen by platform; a use within one product is a profile, chosen by position. Applied to KQL, Lucene, YARA, Exabeam, YARA-L, CQL, ES|QL, Falco and the Datadog crate the RFC proposes, with what it costs under the facade's 1.x semver."
 ---
 
 # 0015: When a vendor's syntax is a language, a dialect or a profile
@@ -9,7 +9,7 @@ description: "A written rule for the engine's query languages: a syntax gets its
 |---|---|
 | Status | Proposed |
 | Date | 2026-11-26 |
-| Decision | None yet: the owner's call on this ADR. It was raised by the Datadog Cloud SIEM RFC draft (`docs/internal/rfc-datadog-cloud-siem.md`, §5.2, not on `development` when this was written) |
+| Decision | None yet: the owner's call on this ADR. It was raised by the [Datadog Cloud SIEM RFC](../rfc-datadog-cloud-siem.md), §6.2 ([#1898](https://github.com/opentidehq/opentide/pull/1898)) |
 | Issues | None yet; the follow-ups in [Migration order](#7-migration-order) each get one |
 
 ## Context
@@ -32,10 +32,12 @@ between them in four ways, with no written rule for which to use:
   `Search` (`crates/opentide-exabeam/src/check.rs:22-45`, `crates/opentide-yaral/src/lib.rs:58-80`),
   which is a use within one product. `opentide-cql` expresses the same rule-versus-search axis as
   `Context { correlation_rule }` (`crates/opentide-cql/src/lib.rs:40-50`).
-- The Datadog Cloud SIEM RFC draft (§5.2) argues that Datadog's log search syntax should be a new
-  crate, `opentide-datadog`, and not a fourth Lucene dialect. In Datadog, `AND` binds tighter than
-  `OR`, while Lucene has no precedence. Datadog also has `@attr` attribute paths, a `CIDR()` function
-  and `**`. The owner agrees with that call and wants the general rule written down.
+- The [Datadog Cloud SIEM RFC](../rfc-datadog-cloud-siem.md) (§6.2) makes Datadog's search syntax a new crate, `opentide-datadog`, and not a fourth
+  Lucene dialect. In Datadog, `AND` binds tighter than `OR`, while Lucene has no precedence. Datadog
+  also has `@attribute` paths, `#calculated` fields, a `CIDR()` function and `**`, and lacks
+  Lucene's regex, fuzzy and boost. The RFC draws the line as "the precedence changes the tree's
+  shape". The owner agrees with that call and wants the general rule written down. This ADR's
+  test 1 is that line, stated for every language.
 
 The choice matters for three reasons. A language costs a full crate and a `LanguageId` variant, and
 the [add-language](https://github.com/opentidehq/opentide/blob/development/.agents/skills/add-language/SKILL.md)
@@ -70,12 +72,18 @@ every dialect that shares it.
 Apply the tests in order. The first that answers "language" decides.
 
 1. **The tree test.** A syntax is a separate language when either of these holds:
-   - the same text, accepted by both, needs a different tree: precedence, associativity, or where
-     a token ends. A difference in meaning that the shared tree does not encode is not enough on
-     its own. Carbon Black's default operator `AND` changes what a bare run of terms means, but
-     Lucene's flat `BooleanQuery` holds both readings, so it is a dialect;
+   - **the tree's shape changes**: the same text, accepted by both, needs a differently shaped
+     tree. Precedence, associativity and where a token ends all change the shape. A difference in
+     meaning that leaves the shape alone does not: Carbon Black's default operator `AND` changes
+     what a bare run of terms means, but both readings are the same flat `BooleanQuery`, so Carbon
+     Black is a dialect. Precedence is different, because it nests one operator's operands under
+     the other's, so a precedence difference is a shape difference;
    - one of them accepts a construct the shared grammar has no node or token for, such as a new
      token class or a new production.
+
+   A sign, not a test: if a dialect flag would make the crate's single walk (ADR 0014 §5a) branch
+   at almost every node, as the RFC's §6.2 finds for Datadog, one of the two conditions above
+   usually holds. Check which.
 
    **Exception: a subset is a dialect or a profile.** A product that accepts only part of the
    shared grammar is checked by parsing the superset and diagnosing what it excludes. This is
@@ -146,7 +154,7 @@ would need a parameter there, test 1 has answered "language".
 | CQL (`cql`) | crowdstrike | `Context { correlation_rule }` | A **profile** named as context: rename when next touched. Selection by platform in `analyze_query` breaks §4 (§5.3) |
 | Falco (`falco`) | sysdig | `Context`: event source, macros, lists, `append`, `macro_condition` | **Context**, plus a tuning-versus-rule **profile** (`append`). No dialect |
 | SPL (`spl`) | splunk | None | One dialect. Splunk Cloud versus Enterprise would be a dialect if a difference were ever found |
-| Datadog (proposed) | datadog (RFC) | Not built | A new **language** (§5.2) |
+| Datadog (proposed: `datadog`, `.datadog`) | datadog (RFC) | Not built | A new **language** (§5.2) |
 | S1QL or PowerQuery | sentinel_one | No offline language (`platforms.rs:196-207`) | Decided by add-language step 0. Both have their own vendor reference |
 
 #### 5.1 KQL: Sentinel and Defender are dialects
@@ -184,22 +192,26 @@ So KQL stays one language with two dialects. The work is a rename plus content, 
 
 #### 5.2 Datadog: a new language
 
-The RFC's facts, as §5.2 of the draft states them, meet test 1:
+The [Datadog Cloud SIEM RFC](../rfc-datadog-cloud-siem.md)'s §6.2 meets test 1 on both of its conditions:
 
-- **Precedence:** with `AND` binding tighter than `OR`, `a OR b AND c` is `a OR (b AND c)` in
-  Datadog, while in Lucene it is `a +b +c`. Lucene's tree is one flat `BooleanQuery`
-  (`crates/opentide-lucene/src/parser.rs:1-5`). `lucene_mixed_operators` warns exactly where the two
-  disagree (`lib.rs:367-381`), so the same text is correct in one and a warning in the other. On its own, this is close to
-  Carbon Black's default operator: the flat tree could carry Datadog's precedence as a reading of
-  the operator list. It is not what decides the call.
-- **Constructs Lucene has no node for:** `@attr` paths, `CIDR(...)` calls and `**`. These are new
-  tokens and productions, and they decide it.
+- **The tree's shape changes.** With `AND` binding tighter than `OR`, `a OR b AND c` is
+  `a OR (b AND c)` in Datadog: an `and_expr` nested under an `or_expr` (RFC §6.3). In Lucene it is
+  `a +b +c`, one flat `BooleanQuery` (`crates/opentide-lucene/src/parser.rs:1-5`).
+  `lucene_mixed_operators` warns exactly where the two disagree (`lib.rs:367-381`), so the same text
+  is correct in one and a warning in the other. This is the RFC's own line.
+- **Constructs Lucene has no node for:** `@attribute` paths, `#calculated` fields, `CIDR(...)`
+  calls, `**` across words, and duration units on numbers. In the other direction, Lucene's regex,
+  fuzzy and boost are absent, so `/` is an ordinary character in Datadog.
+
+The RFC marks the precedence as unverified on Cloud SIEM (its open question 2). The call does not
+depend on it: the second condition holds whatever the precedence turns out to be.
 
 Datadog also meets test 2, because it documents its own search syntax with its own reference. It
 meets test 3, because `CIDR` would be a keyword only one of the two TextMate grammars should
 color. It therefore gets its own crate and `LanguageId`, at add-language's full cost. Its
-Datadog-specific variants inside that language (log search, Cloud SIEM detection rules, and any
-signal or security filter syntax) are then that crate's dialects and profiles, under this ADR.
+Datadog-specific variants inside that language are then that crate's dialects and profiles, under
+this ADR. The RFC already has the two profiles §4 asks for: `rule` for a block's `queries[].query`,
+and `search` for `.datadog` files, hunts and `opentide query`, chosen by position (RFC §6.1).
 
 #### 5.3 Two findings the rule settles
 
@@ -296,7 +308,8 @@ semver row is corrected. That edit is made once the ADR is accepted.
 ## Counter-arguments
 
 **"Datadog fits Lucene's flat tree: apply its precedence when reading `BooleanQuery`'s operator list,
-and keep one crate."** The flat tree could carry the precedence as an interpretation. But `@attr`,
+and keep one crate."** That would hide a shape difference inside a reading of a flat list (test 1),
+and nothing would hold the nesting the checks and ranges need. And `@attr`,
 `CIDR()` and `**` still need new tokens and productions. These would be a dialect parameter in
 Lucene's lexer and parser, so one grammar would have two corpora: Lucene's `__invalid` fixtures
 that Datadog accepts, and the reverse. Structural precedence also shapes selection ranges, hover
