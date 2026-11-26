@@ -27,10 +27,11 @@ configurations:
     query: |
       DeviceProcessEvents
       | take 1
+      | project Timestamp, DeviceId, ReportId
     schedule:
       frequency: 1H
     alert:
       title: Defender KQL Rule
     entities:
       hosts:
-        - device_id: device_id
+        - device_id: DeviceId

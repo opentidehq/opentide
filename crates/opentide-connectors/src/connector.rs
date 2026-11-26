@@ -781,68 +781,10 @@ pub fn columns_of(rows: &[Row]) -> Vec<QueryColumn> {
         .collect()
 }
 
-/// *query* with its `//` comments and string literals blanked, positions
-/// (characters) kept (`query.runner.kql_code`). Kusto has no `/* */`
-/// comments, so those stay code.
-pub fn kql_code(query: &str) -> String {
-    let chars: Vec<char> = query.chars().collect();
-    let length = chars.len();
-    let mut out = String::with_capacity(query.len());
-    let mut index = 0;
-    while index < length {
-        let character = chars[index];
-        if character == '/' && chars.get(index + 1) == Some(&'/') {
-            let end = chars[index..]
-                .iter()
-                .position(|&c| c == '\n')
-                .map_or(length, |offset| index + offset);
-            out.extend(std::iter::repeat_n(' ', end - index));
-            index = end;
-            continue;
-        }
-        // A multi-line string (```…``` or ~~~…~~~) has no escapes and ends at
-        // the next chord of the same kind (the Kusto grammar's `KqlTokens.g4`).
-        if (character == '`' || character == '~')
-            && chars.get(index + 1) == Some(&character)
-            && chars.get(index + 2) == Some(&character)
-        {
-            let end = chars[index + 3..]
-                .windows(3)
-                .position(|chord| chord.iter().all(|&c| c == character))
-                .map_or(length, |offset| index + 3 + offset + 3);
-            out.extend(std::iter::repeat_n(' ', end - index));
-            index = end;
-            continue;
-        }
-        if character == '\'' || character == '"' {
-            // A verbatim string (`@"C:\"`) has no escapes: a quote inside
-            // it is doubled (`@"say ""hi"""`).
-            let verbatim = index > 0 && chars[index - 1] == '@';
-            let mut end = index + 1;
-            while end < length {
-                if chars[end] == character {
-                    if verbatim && chars.get(end + 1) == Some(&character) {
-                        end += 2;
-                        continue;
-                    }
-                    break;
-                }
-                end += if chars[end] == '\\' && !verbatim {
-                    2
-                } else {
-                    1
-                };
-            }
-            let end = (end + 1).min(length);
-            out.extend(std::iter::repeat_n(' ', end - index));
-            index = end;
-            continue;
-        }
-        out.push(character);
-        index += 1;
-    }
-    out
-}
+/// *query* with its `//` comments and string literals blanked
+/// (`query.runner.kql_code`): opentide-schema's, which the offline Defender
+/// checks read too (#1885).
+pub use opentide_schema::objects::platform::microsoft_defender::required_columns::kql_code;
 
 /// *query* with `| take limit+1` on a line of its own, unless it already
 /// ends in `take` or `limit` (`query.runner.kql_with_limit`).

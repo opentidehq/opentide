@@ -8,9 +8,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Eac
 
 ### Upgrade
 
-- If you deploy to Microsoft Defender, before the next deploy, delete in the Defender portal every custom detection an earlier opentide release created (1.0.0's bare-uuid rules, 0.x's), or rename both its name and its alert title. Graph refuses a new rule while another holds either, even a disabled one.
-- If you deploy to Microsoft Defender, run `opentide validate`: it now reports each `registry_values` mapping without `key` as `microsoft_defender_entity_identifier`.
-- Add `key` to each mapping it reports, set to the column that holds the registry key (`RegistryKey`), and have the query return that column.
+1. If you deploy to Microsoft Defender, before the next deploy, delete in the Defender portal every custom detection an earlier opentide release created (1.0.0's bare-uuid rules, 0.x's), or rename both its name and its alert title. Graph refuses a new rule while another holds either, even a disabled one.
+2. If you deploy to Microsoft Defender, run `opentide validate`: it now reports each `registry_values` mapping without `key` as `microsoft_defender_entity_identifier`.
+3. Add `key` to each mapping it reports, set to the column that holds the registry key (`RegistryKey`), and have the query return that column.
+4. Fix each `microsoft_defender_column_not_in_output` and `microsoft_defender_required_columns` the same run reports: correct the column the block names, or add it to the query's final `project`.
+5. If you deploy to Microsoft Defender, run `opentide lint --verbose --check queries` and end each query it reports as `microsoft_defender_unprojected_output` with the `| project` it suggests.
 
 ### Breaking
 
@@ -19,10 +21,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Eac
   - The SDKs' Defender `deploy(rule_id)` always sends `opentide-<uuid>`
   - `generate extract defender` writes one file per uuid, preferring the `opentide-` rule
 - **`validate` refuses a Defender registry value without its `key`.** 1.0.0 passed a `registry_values` mapping that sets `value_name` alone, which Graph refuses with "Entity mapping for type 'RegistryValue' does not include a required identifier", so the rule failed at deploy. `validate` and the editor now report it as an error, `microsoft_defender_entity_identifier`, on `entities.registry_values.<N>` ([#1884](https://github.com/opentidehq/opentide/issues/1884)).
+- **`validate` fails a Defender block whose columns its query does not return.** The engine works out the columns a `microsoft_defender` query returns, offline, and reports what Defender would refuse or leave unmapped at deploy. Nothing is reported when it cannot tell what the query returns ([#1885](https://github.com/opentidehq/opentide/issues/1885)).
+  - `microsoft_defender_column_not_in_output`: an entity, action, custom detail or alert `{{Column}}` the output lacks, with the column it most likely means
+  - `microsoft_defender_required_columns`: the output lacks `Timestamp`, `DeviceId`, `ReportId` or another column a custom detection needs for the Defender XDR tables the query reads
 
 ### Added
 
 - **`validate` warns when a Defender device or user has no strong identifier.** A `hosts` or `accounts` mapping with neither a column Defender maps to an impacted asset (`device_id`, `name`; `aad_user_id`, `sid`, `upn`) nor a strong combination such as an account's `name` with `nt_domain` gets `microsoft_defender_impacted_asset_identifier`, in `validate`, `lint` and the editor. `validate --strict` reports it without failing ([#1884](https://github.com/opentidehq/opentide/issues/1884)).
+- **`lint` flags Defender queries that return columns the rule does not use.** Defender derives entity mappings of its own from extra result columns; the note `microsoft_defender_unprojected_output` suggests the `| project` to end the query with, and the warning `microsoft_defender_column_type` reports an entity mapped from a `dynamic`, `datetime`, `bool` or `timespan` column ([#1885](https://github.com/opentidehq/opentide/issues/1885)).
+- **Editor quick fixes for Defender columns.** The language server replaces a misspelt column with the one the query returns, and appends the suggested `| project` after the query's last operator ([#1885](https://github.com/opentidehq/opentide/issues/1885)).
 
 ### Fixed
 
