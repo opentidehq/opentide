@@ -208,17 +208,13 @@ The guard also refuses `checkout_ref` of a `vX.Y.Z-rc.N` tag older than `v1.0.0-
 
 #### After the final release
 
-A final release publishes `latest`, and `next` keeps the last candidate (`1.0.0-rc.N`), so `npm install @opentide/opentide@next` would install an older version than `latest`. Move `next` to the release, for every package. **Trusted publishing covers `npm publish` only**, so the workflow cannot do it (it names the packages that need it, as a warning: `dist-tags of every package`); a maintainer signed in to npm (`npm whoami`, two-factor authentication) runs, from anywhere:
+A final release publishes `latest`, and `next` would keep the last candidate (`1.0.0-rc.N`), so `npm install @opentide/opentide@next` would install an older version than `latest`. **Trusted publishing covers `npm publish` only**, so moving a dist-tag needs a token. [`npm-dist-tags.yml`](../../.github/workflows/npm-dist-tags.yml) does it, and nothing else uses the token:
 
-```bash
-version=1.0.0   # the release
-for p in @opentide/opentide opentide @opentide/opentide-linux-x64-gnu @opentide/opentide-linux-arm64-gnu \
-    @opentide/opentide-darwin-x64 @opentide/opentide-darwin-arm64 @opentide/opentide-win32-x64-msvc \
-    @opentide/opentide-win32-arm64-msvc @opentide/lsp-client @opentide/lsp-worker @opentide/wasi-host; do
-  npm dist-tag add "$p@$version" next
-done
-npm view @opentide/opentide dist-tags    # latest and next: the release
-```
+- `publish.yml`'s `npm-dist-tags` job calls it after every final release (`npm` → `npm-dist-tags`). For each package `release.py npm-names` lists, it checks that `latest` is the release and runs `npm dist-tag add <package>@X.Y.Z next`. A package already at it is skipped. A missing token is a warning there: the packages are out.
+- **Run workflow** on `npm-dist-tags.yml` with a version moves `next` for a release already out, building nothing (1.0.0 was moved this way). Run by hand, a missing token fails it.
+- **The token, set up once by an npm owner:**
+  1. On npmjs.com, Access Tokens → Generate New Token → **Granular Access Token**, with **Read and write** on the packages `@opentide/opentide`, its six `@opentide/opentide-*` native packages, `opentide`, `@opentide/lsp-client`, `@opentide/lsp-worker` and `@opentide/wasi-host` (or the `@opentide` scope plus `opentide`), and no organisation access. Give it the longest expiry your policy allows, and set a reminder to rotate it.
+  2. In this repository, Settings → Environments → **New environment** `npm-dist-tags`, with deployment branches limited to `development`. Add the secret `NPM_DIST_TAG_TOKEN`.
 
 Later releases and candidates keep `next` at the newest of the two: a candidate of the next version (`1.1.0-rc.1`) is above the release and publishes `next` as before.
 

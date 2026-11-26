@@ -336,7 +336,7 @@ gh api repos/opentidehq/opentide/releases/tags/v0.x.y --jq '.tag_name, .prerelea
 python3 scripts/engine/release.py assets v0.x.y | wc -l                 # the same count
 ```
 
-**After a final release, move npm's `next`** to it for all eleven packages: `npm dist-tag add <pkg>@X.Y.Z next` (trusted publishing covers `npm publish` only, so a maintainer signed in to npm runs it; the `npm` job's warning names the packages; `docs/internal/publishing.md`, "After the final release"), so that `@next` never installs something older than `latest`.
+**After a final release, npm's `next` follows it**: publish.yml's `npm-dist-tags` job (`npm-dist-tags.yml`) runs `npm dist-tag add <pkg>@X.Y.Z next` for all eleven packages with the `npm-dist-tags` environment's `NPM_DIST_TAG_TOKEN` (trusted publishing covers `npm publish` only). Check `npm view @opentide/opentide dist-tags`: `latest` and `next` are the release. If the job warned that the token is missing, set it up (`docs/internal/publishing.md`, "After the final release") and Run workflow `npm-dist-tags.yml` with the version: nothing is rebuilt.
 
 ---
 
@@ -393,7 +393,8 @@ Link that pull request from the tracking issue in Step 4.
 | npm: `refusing to publish it under next` / `under latest` | A tarball's version does not fit the channel (a candidate must be `X.Y.Z-rc.N`, a release `X.Y.Z`). Every tarball is checked before the first publish, so nothing was published; fix the build |
 | npm: `npm's next is already …, newer than …` | The candidate would move `next` backwards (an older candidate resumed, or an older branch). Nothing was published to npm; cut the next candidate instead |
 | Guard: `… is older than v1.0.0-rc.3, the first candidate that publishes to npm` | A `checkout_ref` resume of `v1.0.0-rc.1` or `rc.2` would publish an old version under `next`. Cut the next candidate |
-| npm: `::warning::next trails latest …` (after a release) | Trusted publishing cannot move a dist-tag. As a maintainer signed in to npm run `npm dist-tag add <pkg>@X.Y.Z next` for each of the eleven packages (`docs/internal/publishing.md`, "After the final release") |
+| `npm next follows the release`: `NPM_DIST_TAG_TOKEN is not set …` (a warning) | The `npm-dist-tags` environment has no token: create it (`docs/internal/publishing.md`, "After the final release"), then Run workflow `npm-dist-tags.yml` with the version |
+| `npm-dist-tags.yml`: `latest is …, not X.Y.Z` | `next` only follows a published release: wait for npm's `latest` to show it, or check the version |
 | `502` / 5xx on PyPI upload, some files already there (0.4.0) | Re-run failed jobs on that run (`skip-existing` uploads only the missing files); otherwise resume with `checkout_ref=v0.x.y` on `development`; `skip-existing` uploads only the missing files. The step log prints the command |
 | Verify PyPI lists every built file fails | Wait out the CDN delay (Step 3), then re-run failed jobs (the step prints the command) |
 | New tag not shown as Latest | `gh release edit v0.x.y --repo opentidehq/opentide --latest` |

@@ -28,6 +28,7 @@
                                     that resolves them in place of crates.io's
     release.py sums DIR             write DIR/SHA256SUMS for every file in DIR
     release.py verify-sums DIR      DIR/SHA256SUMS lists exactly DIR's files, each digest right
+    release.py npm-names            the npm packages a release publishes, one name per line
     release.py unpublished TAG      fail when the tag's GitHub Release already has assets
     release.py stale-draft TAG      delete the tag's GitHub Release when it is a draft and
                                     the tag does not exist (a release job that failed partway)
@@ -945,6 +946,11 @@ def main(argv: list[str]) -> None:
             if problems:
                 sys.exit(1)
             print(f"the crates are at {version}, the npm packages at {npm_version}")
+        case ["npm-names"]:
+            # The npm packages a release publishes, one name per line
+            # (npm-dist-tags.yml moves `next` on each).
+            for path in npm_packages():
+                print(read_json(path / "package.json")["name"])
         case ["npm-version", version]:
             set_npm_version(version)
             print(f"the npm packages are at {version}")

@@ -1950,14 +1950,43 @@ class ReleaseWorkflowTest(unittest.TestCase):
         self.assertNotIn("::warning::", output)
         trailing = {**done, "@opentide/opentide": {"latest": "1.0.0", "next": "1.0.0-rc.4"}}
         code, output, _ = self._run_with_stubs(script, packages, "release", tags=trailing)
-        self.assertEqual(code, 0, output)  # a warning: trusted publishing cannot move a tag
-        self.assertIn("::warning::next trails latest for 1 packages", output)
-        self.assertIn("@opentide/opentide@1.0.0", output)
-        self.assertIn('npm dist-tag add "$p" next', output)
+        self.assertEqual(code, 0, output)  # the npm-dist-tags job moves it next
+        self.assertIn("next trails latest for 1 packages: the npm-dist-tags job moves it", output)
+        self.assertNotIn("::warning::", output)
         # A release whose latest is not the release fails.
         stale = {**done, "@opentide/wasi-host": {"latest": "0.0.0", "next": "0.0.0"}}
         code, output, _ = self._run_with_stubs(script, packages, "release", tags=stale)
         self.assertEqual(code, 1, output)
+
+    def test_after_a_release_npm_next_follows_it_with_its_own_token(self) -> None:
+        job = workflow_jobs()["npm-dist-tags"]
+        self.assertIn("uses: ./.github/workflows/npm-dist-tags.yml", job)
+        self.assertIn("needs: [guard, npm]", job)
+        self.assertIn("if: needs.guard.outputs.channel == 'release'", job)
+        self.assertIn("from_release: true", job)
+        # The token lives in its own environment; publish.yml never names it.
+        self.assertNotIn("NPM_DIST_TAG_TOKEN", WORKFLOW.read_text(encoding="utf-8"))
+        moves = workflow_jobs(WORKFLOWS / "npm-dist-tags.yml")["next"]
+        self.assertIn("environment: npm-dist-tags", moves)
+        self.assertIn("release.py npm-names", moves)
+        self.assertIn('npm dist-tag add "${name}@${VERSION}" next', moves)
+        # next follows a published release only, never a candidate.
+        self.assertLess(
+            moves.index("latest is ${latest}, not ${VERSION}"), moves.index("npm dist-tag add")
+        )
+
+    def test_npm_names_lists_every_package_a_release_publishes(self) -> None:
+        done = subprocess.run(
+            [sys.executable, str(release.ROOT / "scripts" / "engine" / "release.py"), "npm-names"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        names = done.stdout.split()
+        self.assertEqual(
+            names, [release.read_json(d / "package.json")["name"] for d in release.npm_packages()]
+        )
+        self.assertEqual(len(names), 11)
 
     @unittest.skipUnless(shutil.which("bash"), "bash is not installed")
     def test_a_candidate_never_moves_next_backwards(self) -> None:
