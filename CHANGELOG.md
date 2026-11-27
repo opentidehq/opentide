@@ -9,6 +9,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Eac
 ### Upgrade
 
 1. If CI runs `opentide lint --strict` on Microsoft Defender rules (`opentide setup ci` generates it), it now fails on three new warnings. To keep the previous result while you fix the rules, set each to `"info"` under `[queries.codes]` in `.opentide/configurations/lint.toml`: `microsoft_defender_custom_details_limit`, `microsoft_defender_placeholder_limit` and `microsoft_defender_nrt_query`.
+2. If CI runs `opentide generate docs --changed` in a shallow clone, check out the full history: `fetch-depth: 0` on GitHub Actions' `actions/checkout`, `GIT_DEPTH: "0"` on GitLab, `fetchDepth: 0` on Azure Pipelines. The run now fails where it used to compare with `HEAD` and report nothing changed.
 
 ### Added
 
@@ -20,6 +21,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Eac
 
 ### Changed
 
+- **`validate query --live` checks up to four tenants of a platform at once** ([#1941](https://github.com/opentidehq/opentide/issues/1941)). A run used to finish one tenant before starting the next, so with several tenants it took as long as all of them added up. It now takes about as long as the slowest tenant. Each tenant still gets one query at a time, so three timeouts in a row still mark it unreachable. The result, the exit code and the check's own log lines come out in the same order as before, and a tenant that stops the check (unreachable, or failed) still stops it there: the tenants after it that have not started are not asked, and nothing of theirs is reported. A tenant's log lines now come out once it and every tenant before it have finished, so a slow tenant holds back the lines of the tenants after it, and under `--debug` a tenant's `validating_query` lines come after the connector's HTTP lines for its queries rather than before each one. Elastic and Google SecOps tenants are still checked one at a time: each has a check of its own rather than the shared one.
 - **The MCP server reads the workspace once, not on every tool call** ([#1942](https://github.com/opentidehq/opentide/issues/1942)). `opentide mcp start` keeps the workspace between calls and re-reads only the files changed, added or deleted on disk since the last one, so `search`, `get_chaining`, `coverage`, `deployment_status`, `validate_rule` and the resources answer without parsing every object again. A `deploy_rule` that is not a dry run reads the workspace afresh.
 
 ### Fixed
@@ -40,6 +42,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Eac
 - **Tenant credentials no longer appear in a debug print of the configuration** ([#1933](https://github.com/opentidehq/opentide/issues/1933)). In the Rust SDK, `{:?}` of a tenant setup or a `[[misp]]` block (in a log line, a panic message or a failed test) printed its token, client secret or API key as written. Sentinel, Splunk, Carbon Black Cloud, SentinelOne, Microsoft Defender, CrowdStrike and HarfangLab setups and MISP blocks now print `[REDACTED]` in its place.
 - **`validate` reports a Defender schedule that ends in a non-ASCII character instead of crashing** ([#1926](https://github.com/opentidehq/opentide/issues/1926)). `schedule: frequency: 1é` stopped the whole run with `failure.code: internal`; it is now the error `microsoft_defender_frequency` (or `microsoft_defender_lookback`), in `validate`, the editor and `deploy`. `generate extract microsoft_defender` no longer crashes on such a schedule from Graph either.
 - **The home screen names the platforms every other command names** ([#1935](https://github.com/opentidehq/opentide/issues/1935)). Bare `opentide` read only the files in `.opentide/configurations/platforms/`, so a platform enabled in the 0.x `systems.toml` or in the parent instance's configuration was missing from its `platforms` line while `doctor`, `info` and `deploy` listed it. It now reads the resolved configuration, and falls back to the files when the configuration does not resolve. Every command now decides which platforms are enabled with one rule (`[platform] enabled = true` in the resolved `platforms` table).
+- **`generate docs --changed` fails on a git baseline it cannot read instead of guessing** ([#1931](https://github.com/opentidehq/opentide/issues/1931)). It used to compare with `HEAD`, or with an empty tree, and report the wrong pages. Each of these is now the run's failure (`status: failed`, exit `1`), with an `error` that starts `--changed could not read the git baseline:`:
+  - a shallow clone that does not hold the merge base with the default branch, or holds no default-branch ref at all (`actions/checkout`'s default depth of 1); the message says to check out the full history (`fetch-depth: 0`)
+  - a baseline commit, tree or file git cannot read, which made a folder look empty or a committed file look new
+  - an object folder or file in the work tree that cannot be read, whose committed files looked deleted
 
 ## [1.1.0] — 2026-11-26
 
