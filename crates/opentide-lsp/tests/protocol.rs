@@ -4359,3 +4359,85 @@ fn a_workspace_pull_is_answered_while_the_client_keeps_editing() {
     });
     assert!(in_time, "the pull was not answered within 60 s of edits");
 }
+
+/// #1943: a keystroke in one open object runs the engine on that object
+/// alone. The analysis of every open object is made again (what `validate`
+/// says of one may change with another), but the engine's analysis of an
+/// object reads no other object, and is kept per text. What each document
+/// is told is what a server that opens the same texts tells it.
+#[test]
+fn a_keystroke_runs_the_engine_on_the_object_it_changed_alone() {
+    const OPEN: usize = 10;
+    let scratch = workspace("engine-analysis-per-text", true);
+    let rules = scratch.0.join("objects/rules");
+    let mut texts: Vec<(String, String)> = (0..OPEN)
+        .map(|n| {
+            let path = rules.join(format!("rule-{n}.yaml"));
+            let text = fixture(RULE)
+                .replace("8003-000000000001", &format!("8003-0000000001{n:02}"))
+                .replace("name: Sentinel KQL Rule", &format!("name: Rule é😀 {n}"));
+            std::fs::write(&path, &text).unwrap();
+            (file_uri(&path), text)
+        })
+        .collect();
+    let session = |texts: &[(String, String)]| {
+        let (mut lsp, _) = start(json!({
+            "capabilities": watching_relative(),
+            "rootUri": file_uri(&scratch.0)
+        }));
+        for (uri, text) in texts {
+            open(&mut lsp, uri, "opentide-yaml", text);
+        }
+        lsp
+    };
+    let pull_all = |lsp: &mut Lsp, texts: &[(String, String)]| -> Vec<Value> {
+        texts
+            .iter()
+            .map(|(uri, _)| {
+                let report = lsp.request(
+                    "textDocument/diagnostic",
+                    json!({ "textDocument": { "uri": uri } }),
+                );
+                report["result"]["items"].clone()
+            })
+            .collect()
+    };
+    let engine = |lsp: &mut Lsp| {
+        lsp.request("opentide/__stats", Value::Null)["result"]["engineAnalyses"]
+            .as_u64()
+            .unwrap()
+    };
+
+    let mut lsp = session(&texts);
+    pull_all(&mut lsp, &texts);
+    assert_eq!(engine(&mut lsp), OPEN as u64, "each object once");
+    let analyses = stats(&mut lsp);
+
+    let typed = format!("{}\n# typé 😀\n", texts[0].1);
+    lsp.notify(
+        "textDocument/didChange",
+        json!({ "textDocument": { "uri": texts[0].0, "version": 2 },
+                "contentChanges": [{ "text": typed }] }),
+    );
+    texts[0].1 = typed;
+    let after = pull_all(&mut lsp, &texts);
+    assert_eq!(
+        engine(&mut lsp),
+        OPEN as u64 + 1,
+        "a keystroke ran the engine on every open object again"
+    );
+    assert_eq!(
+        stats(&mut lsp),
+        analyses + OPEN as u64,
+        "the findings across objects are made again for each"
+    );
+
+    let mut fresh = session(&texts);
+    assert_eq!(after, pull_all(&mut fresh, &texts));
+    assert!(
+        after
+            .iter()
+            .any(|items| !items.as_array().unwrap().is_empty()),
+        "the comparison compares diagnostics: {after:?}"
+    );
+}
