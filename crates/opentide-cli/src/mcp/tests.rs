@@ -1293,6 +1293,28 @@ fn a_tool_that_fails_reports_is_error_and_one_that_finds_something_does_not() {
         json!({"query": "SecurityEvent | where EventID == 4688", "platform": "sentinel"}),
     );
     assert_eq!(valid["valid"], true, "{valid}");
+    let preview = call(
+        &server,
+        "deploy_rule",
+        json!({"uuid": SENTINEL_RULE, "platform": "sentinel"}),
+    );
+    assert_eq!(preview["action"], "dry-run", "{preview}");
+    call(&server, "validation_report", json!({}));
+    call(
+        &server,
+        "get_chaining",
+        json!({"uuid": "00000000-0000-4000-8001-ffffffffffff"}),
+    );
+}
+
+/// `validate_query` checks a query as a file of its language is (#1912), or,
+/// with `position: rule`, as the platform's rule block checks its own
+/// (#1993); a position it does not know is refused.
+#[test]
+fn validate_query_takes_a_position() {
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = corpus(scratch.path());
+    let server = server(&ws);
     // A query is checked as a file of its language is: an Exabeam search with
     // Search's operators, and plain LogScale after `correlate()`, are valid
     // under their platforms (#1912, ADR 0015 §4).
@@ -1313,19 +1335,38 @@ fn a_tool_that_fails_reports_is_error_and_one_that_finds_something_does_not() {
         );
         assert_eq!(search["valid"], true, "{search}");
         assert_eq!(search["diagnostics"], json!([]), "{search}");
+        assert_eq!(search["position"], "search", "{search}");
     }
-    let preview = call(
+    // `position: rule` checks the query as the platform's rule block checks
+    // its own, so the rule-only codes come back (#1993).
+    for (query, platform, code) in [
+        (
+            "SELECT DISTINCT user, src_ip WHERE vendor:\"Microsoft\"",
+            "exabeam",
+            "exabeam_advanced_in_rule",
+        ),
+        (
+            "correlate(A: { #event_simpleName=UserLogon }, B: { #event_simpleName=ProcessRollup2 | aid <=> A.aid }, within=10m) | groupBy(aid)",
+            "crowdstrike",
+            "cql_correlate_aggregate",
+        ),
+    ] {
+        let rule = call(
+            &server,
+            "validate_query",
+            json!({"query": query, "platform": platform, "position": "rule"}),
+        );
+        assert_eq!(rule["valid"], false, "{rule}");
+        assert_eq!(rule["position"], "rule", "{rule}");
+        assert_eq!(rule["errors"][0]["code"], code, "{rule}");
+    }
+    // A position the tool does not know is refused, not read as a search.
+    let unknown = failed_call(
         &server,
-        "deploy_rule",
-        json!({"uuid": SENTINEL_RULE, "platform": "sentinel"}),
+        "validate_query",
+        json!({"query": "x", "platform": "exabeam", "position": "hunt"}),
     );
-    assert_eq!(preview["action"], "dry-run", "{preview}");
-    call(&server, "validation_report", json!({}));
-    call(
-        &server,
-        "get_chaining",
-        json!({"uuid": "00000000-0000-4000-8001-ffffffffffff"}),
-    );
+    assert_eq!(unknown["status"], "failed", "{unknown}");
 }
 
 /// `get_chaining`'s `depth` bounds the hops from the object; a depth that is

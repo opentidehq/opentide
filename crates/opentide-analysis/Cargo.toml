@@ -16,6 +16,7 @@ categories = ["parser-implementations", "development-tools"]
 workspace = true
 
 [dependencies]
+thiserror.workspace = true
 opentide-core.workspace = true
 opentide-highlight.workspace = true
 opentide-kql.workspace = true

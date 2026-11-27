@@ -35,12 +35,9 @@ struct Case {
 }
 
 fn query(language: LanguageId, platform: Option<&str>, text: &str) {
-    std::hint::black_box(analyze_query(&QueryRequest {
-        language,
-        platform: platform.map(str::to_owned),
-        stack: None,
-        text: text.to_owned(),
-    }));
+    std::hint::black_box(analyze_query(
+        &QueryRequest::new(language, text.to_owned()).with_platform(platform.map(str::to_owned)),
+    ));
 }
 
 fn vocabulary(field: &str) {

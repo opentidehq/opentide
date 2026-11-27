@@ -61,6 +61,8 @@ pub struct QueryCheck {
     pub language: String,
     /// `stack`.
     pub stack: String,
+    /// `position`: `search` (the default) or `rule`.
+    pub position: String,
 }
 
 /// `run_query`'s arguments.
@@ -248,6 +250,7 @@ fn offline(check: &QueryCheck, context: &Context<'_>) -> Json {
         platform,
         language,
         stack,
+        position,
         ..
     } = check;
     let live_step = next_action(
@@ -292,6 +295,21 @@ fn offline(check: &QueryCheck, context: &Context<'_>) -> Json {
             "query is empty: pass the query text to check".to_owned(),
         ));
     }
+    let position = match position.trim() {
+        "" => opentide_analysis::QueryPosition::Search,
+        named => match opentide_analysis::QueryPosition::parse(named) {
+            Some(position) => position,
+            None => {
+                return Json::object(failed(
+                    payload,
+                    format!(
+                        "position is search (a query file or a hunt) or rule (the query of the \
+                         platform's rule block), not {named:?}"
+                    ),
+                ));
+            }
+        },
+    };
     if !stack.trim().is_empty() && !known_stack(stack) {
         return Json::object(failed(
             payload,
@@ -338,6 +356,7 @@ fn offline(check: &QueryCheck, context: &Context<'_>) -> Json {
         language_id,
         Some(platform),
         (!stack.is_empty()).then_some(stack.as_str()),
+        position,
     );
     let diagnostics: Vec<Json> = findings
         .iter()
@@ -408,6 +427,7 @@ fn offline(check: &QueryCheck, context: &Context<'_>) -> Json {
     }
     payload.extend([
         ("language".to_owned(), Json::str(&chosen)),
+        ("position".to_owned(), Json::str(position.as_str())),
         ("valid".to_owned(), Json::Bool(errors.is_empty())),
         (
             "status".to_owned(),
@@ -642,6 +662,7 @@ mod tests {
                     live: false,
                     language: language.into(),
                     stack: String::new(),
+                    position: String::new(),
                 },
                 &context(&env),
             )

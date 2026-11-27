@@ -139,12 +139,7 @@ fn every_public_cql_query_is_clean() {
         let text = fs::read_to_string(root().join(&entry.file)).unwrap();
         let found = opentide_cql::analyze(&text).diagnostics;
         assert!(found.is_empty(), "{}: {:?}", entry.file, summary(&found));
-        let found = analyze_query(&QueryRequest {
-            language: LanguageId::Cql,
-            platform: None,
-            stack: None,
-            text,
-        });
+        let found = analyze_query(&QueryRequest::new(LanguageId::Cql, text));
         assert!(
             found.is_empty(),
             "{} through analyze_query: {:?}",

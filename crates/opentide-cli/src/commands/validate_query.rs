@@ -15,7 +15,7 @@
 
 use std::path::{Path, PathBuf};
 
-use opentide_analysis::{LanguageId, Severity as EngineSeverity};
+use opentide_analysis::{LanguageId, QueryPosition, Severity as EngineSeverity};
 use opentide_compile::plan::Scope;
 use opentide_workspace::validate::QueriesMode;
 use opentide_workspace::{FileSystem as _, OsFs, Workspace};
@@ -85,6 +85,8 @@ pub struct Args {
     pub queries: Option<QueriesMode>,
     /// `--check-timeout`.
     pub check_timeout: Option<String>,
+    /// `--position`: where a `--file` query will sit.
+    pub position: QueryPosition,
 }
 
 /// Why `validate <options> query` is refused, if it is: an option of
@@ -212,6 +214,10 @@ impl Args {
                 .or(strictness.queries)
                 .map(QueriesMode::from),
             check_timeout: query.check_timeout.clone(),
+            position: match query.position {
+                Some(crate::tree::Position::Rule) => QueryPosition::Rule,
+                Some(crate::tree::Position::Search) | None => QueryPosition::Search,
+            },
         }
     }
 }
@@ -741,6 +747,21 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     }
     let platform = args.platform.as_deref();
     let queries = args.queries.unwrap_or_default();
+    // A rule block is a platform's: there is no rule to check a query file
+    // as without one (#1993), and no silent fallback to a search.
+    if args.position == QueryPosition::Rule && platform.is_none() {
+        let mut report = refused(
+            platform,
+            "--position rule checks a query as a platform's rule block checks its own: pass \
+             --platform",
+            USAGE_EXIT_CODE,
+            code::USAGE_MISSING_OPTION,
+        );
+        if let Some(failure) = &mut report.outcome.failure {
+            failure.argument = Some("--platform".into());
+        }
+        return report;
+    }
     if let Some(name) = platform
         && offline_languages(name).is_none()
     {
@@ -990,7 +1011,8 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
                         offline_languages(name)
                             .is_some_and(|languages| languages.contains(&language.as_str()))
                     });
-                    let findings = profiles.check_query(&text, language, platform, None);
+                    let findings =
+                        profiles.check_query(&text, language, platform, None, args.position);
                     checks.push(Check {
                         file_path: file_path.clone(),
                         path: shown.clone(),

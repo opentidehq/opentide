@@ -16,12 +16,11 @@ system = "sentinel"
 "#;
 
 fn codes() -> Vec<String> {
-    analysis::analyze_query(&QueryRequest {
-        language: LanguageId::Kql,
-        platform: None,
-        stack: None,
-        text: "DeviceProcessEvents | take 1".to_owned(),
-    })
+    analysis::analyze_query(&QueryRequest::new(
+        LanguageId::Kql,
+        "DeviceProcessEvents | take 1",
+    ))
+    .unwrap_or_else(|error| panic!("a search needs no platform: {error}"))
     .into_iter()
     .map(|diagnostic| diagnostic.code)
     .collect()

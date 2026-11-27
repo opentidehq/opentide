@@ -387,52 +387,174 @@ pub fn analyze_tide_parsed(
     }
 }
 
-/// A query on its own, outside an object file.
+/// Where a query on its own will sit: the profile it is checked under
+/// (ADR 0015 §4: a profile is chosen by where the text sits; a caller that
+/// names the position says where it will sit).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum QueryPosition {
+    /// A search: a query file, a hunt, `opentide query`. The default.
+    #[default]
+    Search,
+    /// A rule block's query on the request's platform: checked exactly as
+    /// that block's query is. It needs a platform
+    /// ([`QueryRequest::validate`]). Exabeam's `rule` profile, CQL's
+    /// Next-Gen SIEM correlation rule and Datadog's `rule` profile differ
+    /// from a search; every other language checks a rule's query as a
+    /// search.
+    Rule,
+}
+
+impl QueryPosition {
+    /// The position's name: `search` or `rule`.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            QueryPosition::Search => "search",
+            QueryPosition::Rule => "rule",
+        }
+    }
+
+    /// The position named `name` (`search` or `rule`, ASCII case ignored).
+    #[must_use]
+    pub fn parse(name: &str) -> Option<Self> {
+        if name.eq_ignore_ascii_case("search") {
+            Some(QueryPosition::Search)
+        } else if name.eq_ignore_ascii_case("rule") {
+            Some(QueryPosition::Rule)
+        } else {
+            None
+        }
+    }
+}
+
+/// Why a [`QueryRequest`] cannot be checked.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[non_exhaustive]
+pub enum QueryRequestError {
+    /// [`QueryPosition::Rule`] without a platform: a rule block is a
+    /// platform's, so there is no rule to check the query as.
+    #[error(
+        "position `rule` needs a platform: name the platform whose rule block the query is for"
+    )]
+    RuleWithoutPlatform,
+}
+
+/// A query on its own, outside an object file. Build it with
+/// [`QueryRequest::new`] and the `with_*` methods.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct QueryRequest {
     pub language: LanguageId,
     /// The detection platform the query is for, as a `configurations` key.
-    /// It names the language's dialect, the product's catalogs and checks,
-    /// and nothing else (ADR 0015 §4): `microsoft_defender` picks the
-    /// Defender KQL schema, `carbon_black_cloud` the Carbon Black Lucene
-    /// dialect, `graylog` the Graylog one, and `harfanglab` or `bitdefender`
-    /// that product's YARA checks. `None` for the language's default.
-    ///
-    /// The query is checked as a file of its language is, whatever the
-    /// platform: an Exabeam, CQL or Datadog query is a search, never a
-    /// correlation or detection rule's query, and a YARA-L text is a rule
-    /// when it declares one. A query in a rule block is checked as one with
-    /// its object (the facade's `Workspace::validate` and `Workspace::lint`),
-    /// which knows the block it sits in.
+    /// It names the language's dialect, the product's catalogs and checks
+    /// (ADR 0015 §3): `microsoft_defender` picks the Defender KQL schema,
+    /// `carbon_black_cloud` the Carbon Black Lucene dialect, `graylog` the
+    /// Graylog one, and `harfanglab` or `bitdefender` that product's YARA
+    /// checks. `None` for the language's default. It never picks the
+    /// profile: [`QueryRequest::position`] does.
     pub platform: Option<String>,
     /// Elastic stack the query must run on (`"9.5"`, `"serverless"`), for
     /// ES|QL. `None`, or a value that does not parse, checks every supported
     /// stack.
     pub stack: Option<String>,
+    /// Where the query will sit. [`QueryPosition::Search`] (the default)
+    /// checks it as a file of its language is: an Exabeam, CQL or Datadog
+    /// query is a search, and a YARA-L text is a rule when it declares one.
+    /// [`QueryPosition::Rule`] checks it as the platform's rule block
+    /// checks its query.
+    pub position: QueryPosition,
     pub text: String,
 }
 
-/// Diagnostics for one query, in the query's own coordinates.
+impl QueryRequest {
+    /// A request to check `text` as `language`: no platform, every stack,
+    /// position [`QueryPosition::Search`].
+    #[must_use]
+    pub fn new(language: LanguageId, text: impl Into<String>) -> Self {
+        QueryRequest {
+            language,
+            platform: None,
+            stack: None,
+            position: QueryPosition::Search,
+            text: text.into(),
+        }
+    }
+
+    /// The request for `platform` (a `configurations` key), or for none.
+    #[must_use]
+    pub fn with_platform(mut self, platform: Option<impl Into<String>>) -> Self {
+        self.platform = platform.map(Into::into);
+        self
+    }
+
+    /// The request for an Elastic `stack` (ES|QL), or for every one.
+    #[must_use]
+    pub fn with_stack(mut self, stack: Option<impl Into<String>>) -> Self {
+        self.stack = stack.map(Into::into);
+        self
+    }
+
+    /// The request at `position`.
+    #[must_use]
+    pub fn with_position(mut self, position: QueryPosition) -> Self {
+        self.position = position;
+        self
+    }
+
+    /// Whether the request can be checked: a [`QueryPosition::Rule`] needs a
+    /// platform. Hosts call it before [`analyze_query`] and report the error
+    /// their own way (a usage error, an error value); [`analyze_query`] on a
+    /// request that fails it checks the rule profile without a dialect.
+    ///
+    /// # Errors
+    ///
+    /// [`QueryRequestError::RuleWithoutPlatform`] for a rule with no
+    /// platform (or an empty one).
+    pub fn validate(&self) -> Result<(), QueryRequestError> {
+        let has_platform = self.platform.as_deref().is_some_and(|p| !p.is_empty());
+        if self.position == QueryPosition::Rule && !has_platform {
+            return Err(QueryRequestError::RuleWithoutPlatform);
+        }
+        Ok(())
+    }
+}
+
+/// Diagnostics for one query, in the query's own coordinates, under its
+/// platform's dialect and its position's profile. It does not refuse a
+/// request [`QueryRequest::validate`] refuses.
 pub fn analyze_query(request: &QueryRequest) -> Vec<Diagnostic> {
     let platform = request.platform.as_deref().unwrap_or("");
     match request.language {
         LanguageId::Kql => {
             opentide_kql::analyze(&request.text, Dialect::for_platform(platform)).diagnostics
         }
-        // A query on its own is a search, as a file of its language is: the
-        // profile comes from where the text sits, never from the platform
-        // (ADR 0015 §4). A `.cql` file is plain LogScale, without the
-        // correlation rule's restrictions; a `.exabeam` or `.datadog` file is
-        // the `search` profile. A rule block's query is checked as a rule by
-        // `analyze` on its object, by its field path.
-        LanguageId::Cql => opentide_cql::analyze(&request.text).diagnostics,
+        // The profile comes from the position, never from the platform
+        // (ADR 0015 §4). A search is checked as a file of its language is: a
+        // `.cql` file is plain LogScale, without the correlation rule's
+        // restrictions; a `.exabeam` or `.datadog` file is the `search`
+        // profile. A rule is checked as the platform's block checks its query
+        // (Tide's field paths).
+        LanguageId::Cql => {
+            let profile = match request.position {
+                QueryPosition::Rule => opentide_cql::Profile::CORRELATION_RULE,
+                QueryPosition::Search => opentide_cql::Profile::default(),
+            };
+            opentide_cql::analyze_with(&request.text, &profile).diagnostics
+        }
         LanguageId::Exabeam => {
-            opentide_exabeam::analyze_with(&request.text, &opentide_exabeam::Context::SEARCH)
-                .diagnostics
+            let ctx = match request.position {
+                QueryPosition::Rule => opentide_exabeam::Context::RULE,
+                QueryPosition::Search => opentide_exabeam::Context::SEARCH,
+            };
+            opentide_exabeam::analyze_with(&request.text, &ctx).diagnostics
         }
         LanguageId::Datadog => {
-            opentide_datadog::analyze_with(&request.text, &opentide_datadog::Context::SEARCH)
-                .diagnostics
+            let ctx = match request.position {
+                QueryPosition::Rule => opentide_datadog::Context::RULE,
+                QueryPosition::Search => opentide_datadog::Context::SEARCH,
+            };
+            opentide_datadog::analyze_with(&request.text, &ctx).diagnostics
         }
         LanguageId::Lucene => {
             let dialect = opentide_lucene::Dialect::for_platform(platform);

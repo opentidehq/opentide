@@ -145,12 +145,10 @@ fn cmd_analyze(
     let text = read_document(file)?;
     let language = detect_language(file, language)?;
     if let Some(platform) = platform.filter(|_| language != LanguageId::TideYaml) {
-        let diagnostics = opentide_analysis::analyze_query(&opentide_analysis::QueryRequest {
-            language,
-            platform: Some(platform.to_string()),
-            stack: None,
-            text,
-        });
+        let diagnostics = opentide_analysis::analyze_query(
+            &opentide_analysis::QueryRequest::new(language, text)
+                .with_platform(Some(platform.to_string())),
+        );
         println!("{}", serde_json::to_string_pretty(&diagnostics)?);
         return Ok(());
     }

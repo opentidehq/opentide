@@ -25,11 +25,9 @@ fn check(text: &str, profile: &str) -> Vec<Diagnostic> {
     if profile == "rule" {
         return opentide_exabeam::analyze_with(text, &opentide_exabeam::Context::RULE).diagnostics;
     }
-    let request = |platform: Option<&str>| QueryRequest {
-        language: LanguageId::Exabeam,
-        platform: platform.map(str::to_string),
-        stack: None,
-        text: text.to_string(),
+    let request = |platform: Option<&str>| {
+        QueryRequest::new(LanguageId::Exabeam, text.to_string())
+            .with_platform(platform.map(str::to_string))
     };
     let plain = analyze_query(&request(None));
     assert_eq!(plain, analyze_query(&request(Some("exabeam"))), "{text}");
