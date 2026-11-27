@@ -634,7 +634,9 @@ impl Duration {
         if text == "NRT" {
             return Some(Self::NearRealTime);
         }
-        let (count, unit) = text.split_at(text.len().checked_sub(1)?);
+        // `None` when the last character is not one byte, so not a unit
+        // (#1926).
+        let (count, unit) = text.split_at_checked(text.len().checked_sub(1)?)?;
         if count.is_empty()
             || count.starts_with('0')
             || !count.bytes().all(|byte| byte.is_ascii_digit())

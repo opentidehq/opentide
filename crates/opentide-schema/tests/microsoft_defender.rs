@@ -347,7 +347,7 @@ fn durations_parse_and_print_as_graph_takes_them() {
         Some("P1D")
     );
     for bad in [
-        "", "H", "0H", "01H", "1h", "1M", "PT1H", "-1H", "1.5H", "NRTH",
+        "", "H", "0H", "01H", "1h", "1M", "PT1H", "-1H", "1.5H", "NRTH", "1é", "1😀", "é", "😀",
     ] {
         assert_eq!(Duration::parse(bad), None, "{bad}");
     }
@@ -357,6 +357,30 @@ fn durations_parse_and_print_as_graph_takes_them() {
         None,
         "no overflow"
     );
+}
+
+#[test]
+fn a_schedule_ending_in_a_multi_byte_character_is_refused_not_a_panic() {
+    // #1926: the unit was split off at a byte index inside the last character.
+    for frequency in ["1é", "1😀", "é"] {
+        let found: Vec<(String, String)> = block_findings(&load(&format!(
+            "status: STAGING\nquery: Q\nschedule:\n  frequency: {frequency}\n"
+        )))
+        .into_iter()
+        .map(|finding| {
+            let path: Vec<String> = finding.path.iter().map(ToString::to_string).collect();
+            (finding.code.to_owned(), path.join("."))
+        })
+        .collect();
+        assert_eq!(
+            found,
+            [(
+                "microsoft_defender_frequency".to_owned(),
+                "schedule.frequency".to_owned()
+            )],
+            "{frequency}"
+        );
+    }
 }
 
 #[test]
