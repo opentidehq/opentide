@@ -156,7 +156,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     let vocabularies = Vocabularies::bundled();
     let is_set = |name: &str| cx.env.get(name).is_some_and(|value| !value.is_empty());
     let platforms = data::platforms(
-        workspace.configuration().resolved.get("systems"),
+        workspace.configuration().resolved.platforms(),
         args.platform.as_deref(),
         &is_set,
     );

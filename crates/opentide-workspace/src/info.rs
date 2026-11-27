@@ -7,6 +7,7 @@
 use std::collections::BTreeMap;
 use std::sync::OnceLock;
 
+use opentide_schema::configuration::resolve::platform_enabled;
 use opentide_schema::node::{Node, Value};
 use opentide_schema::objects::fields::{model_schema, newest_model_schema, property};
 use opentide_schema::pins::PinTable;
@@ -14,7 +15,7 @@ use opentide_schema::vocab::{Version, Vocabularies, Vocabulary};
 use regex::Regex;
 use serde::Serialize;
 
-use crate::fields::{get, mapping};
+use crate::fields::get;
 
 /// Every platform, in the table's order ([`opentide_schema::platforms`]).
 fn all_platforms() -> Vec<&'static opentide_schema::platforms::Platform> {
@@ -166,9 +167,9 @@ pub fn tenants(configured: Option<&Node>, is_set: &dyn Fn(&str) -> bool) -> Vec<
 }
 
 /// The platforms, all or the one `only` names, with their tenants, from the
-/// resolved `systems` table.
+/// resolved `platforms` table.
 pub fn platforms(
-    systems: Option<&Node>,
+    platforms: Option<&Node>,
     only: Option<&str>,
     is_set: &dyn Fn(&str) -> bool,
 ) -> Vec<PlatformInfo> {
@@ -176,11 +177,8 @@ pub fn platforms(
         .into_iter()
         .filter(|platform| only.is_none_or(|only| only == platform.id))
         .map(|platform| {
-            let config = systems.and_then(|systems| get(systems, platform.id));
-            let enabled = config
-                .and_then(|config| mapping(config, "platform"))
-                .and_then(|block| get(block, "enabled"))
-                .is_some_and(|enabled| matches!(enabled.value, Value::Bool(true)));
+            let config = platforms.and_then(|platforms| get(platforms, platform.id));
+            let enabled = platform_enabled(platforms, platform.id);
             PlatformInfo {
                 name: platform.id.to_owned(),
                 enabled,

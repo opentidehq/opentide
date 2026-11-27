@@ -115,7 +115,9 @@ pub fn nested_warning(nested: &[String], folder: &str) -> String {
 /// Whether the configuration enables *platform*: its
 /// `platforms.<platform>.platform.enabled` is the boolean `true`. An
 /// `enabled` anywhere else, such as directly under `platforms.<platform>`,
-/// does not count.
+/// does not count. The JSON twin of
+/// [`opentide_schema::configuration::resolve::platform_enabled`], for the
+/// configuration as the compiler holds it; a test keeps the two in step.
 pub fn platform_enabled(config: &Json, platform: &str) -> bool {
     matches!(
         config
@@ -1072,6 +1074,59 @@ mod tests {
         // Another spelling of the same rule's shard makes the state unusable.
         fs.write(format!("{dir}/{}.JSON", uuid.to_uppercase()), shard);
         assert_eq!(state_id(&fs, root, uuid, "crowdstrike", "t"), None);
+    }
+
+    /// The compiler's JSON reading of "enabled" agrees with the model's rule,
+    /// whether the configuration says `systems` (0.x) or `platforms` (#1935).
+    #[test]
+    fn enabled_agrees_with_the_resolved_configuration_for_systems_and_platforms() {
+        use opentide_schema::configuration::resolve::{Folder, Instance, resolve};
+        let configure = |files: &[(&str, &str)], folders: &[&str]| {
+            let folder = Folder {
+                path: "/w/.opentide/configurations".to_owned(),
+                files: files
+                    .iter()
+                    .map(|(path, text)| ((*path).to_owned(), (*text).to_owned()))
+                    .collect(),
+                folders: folders.iter().map(|name| (*name).to_owned()).collect(),
+            };
+            resolve(&Instance {
+                workspace: Some(&folder),
+                ..Instance::default()
+            })
+            .unwrap()
+        };
+        let by_systems = configure(
+            &[(
+                "systems.toml",
+                "[sentinel.platform]\nenabled = true\n[acme.platform]\nenabled = true\n\
+                 [splunk]\nenabled = true\n",
+            )],
+            &[],
+        );
+        let by_platforms = configure(
+            &[
+                ("platforms/sentinel.toml", "[platform]\nenabled = true\n"),
+                ("platforms/acme.toml", "[platform]\nenabled = true\n"),
+                ("platforms/splunk.toml", "enabled = true\n"),
+            ],
+            &["platforms"],
+        );
+        for resolved in [by_systems, by_platforms] {
+            let config = Json::from_node(&resolved.tree);
+            let model: Vec<&str> = resolved
+                .enabled_platforms()
+                .into_iter()
+                .map(opentide_schema::platforms::PlatformId::as_str)
+                .collect();
+            assert_eq!(model, ["sentinel"]);
+            assert_eq!(enabled(&config), model);
+            assert_eq!(
+                enabled_with(&config, &["acme".to_owned()]),
+                ["sentinel", "acme"]
+            );
+            assert!(resolved.platform_enabled("acme"));
+        }
     }
 
     #[test]

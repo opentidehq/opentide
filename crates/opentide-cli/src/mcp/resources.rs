@@ -874,25 +874,12 @@ fn vocabulary(objects: Option<&Workspace>, name: &str) -> Json {
 
 /// `opentide://platforms`: what each platform can do here.
 fn platforms(workspace: &Workspace) -> Json {
-    let systems = workspace
-        .configuration()
-        .resolved
-        .tree
-        .get("systems")
-        .cloned();
+    let resolved = &workspace.configuration().resolved;
     Json::Array(
         PLATFORMS
             .iter()
             .map(|name| {
-                let enabled = matches!(
-                    systems
-                        .as_ref()
-                        .and_then(|systems| systems.get(name))
-                        .and_then(|system| system.get("platform"))
-                        .and_then(|platform| platform.get("enabled"))
-                        .map(|node| &node.value),
-                    Some(Value::Bool(true))
-                );
+                let enabled = resolved.platform_enabled(name);
                 Json::object([
                     ("name", Json::str(*name)),
                     ("enabled", Json::Bool(enabled)),

@@ -17,7 +17,7 @@ use std::sync::OnceLock;
 use opentide_connectors::connector::ConfigurationFinding;
 use opentide_connectors::plugin::{self, PluginError, PluginHost};
 use opentide_connectors::{ConnectorError, Registry};
-use opentide_schema::node::{Node, Value};
+use opentide_schema::node::Node;
 use opentide_workspace::validate::{PlatformConfigurations, PlatformFinding};
 
 static HOST: OnceLock<Box<dyn PluginHost>> = OnceLock::new();
@@ -138,22 +138,8 @@ fn reason(error: &ConnectorError) -> String {
 /// The platforms the workspace enables (`[platform] enabled = true`) that
 /// are not built in, in the configuration's order.
 pub fn enabled_outside_builtin(platforms: Option<&Node>) -> Vec<String> {
-    let Some(Value::Map(entries)) = platforms.map(|node| &node.value) else {
-        return Vec::new();
-    };
-    entries
-        .iter()
-        .filter(|entry| {
-            matches!(
-                entry
-                    .value
-                    .get("platform")
-                    .and_then(|block| block.get("enabled"))
-                    .map(|enabled| &enabled.value),
-                Some(Value::Bool(true))
-            )
-        })
-        .map(|entry| entry.key.value.to_string())
+    opentide_schema::configuration::resolve::enabled_platform_ids(platforms)
+        .into_iter()
         .filter(|id| !plugin::is_builtin(id))
         .collect()
 }
