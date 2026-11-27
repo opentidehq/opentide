@@ -2,6 +2,12 @@
 # Names: opentide, never otide. No opentide-sql crate/package.
 # Documentation that forbids those names, and the throwing createOtideClient
 # stub, are allowed.
+#
+# The crates' sources state their own contracts: never "the oracle's ..." (the
+# retired Python CLI is not the spec, and "oracle" is kept for the vendor
+# parsers) and never a `.py` file that is not in this tree (#1958). A crate
+# the sweep has not reached yet is held to its count in RETIRED_BASELINE,
+# which only goes down.
 set -euo pipefail
 root="$(cd "$(dirname "$0")/../.." && pwd)"
 hits="$(
@@ -16,6 +22,56 @@ hits="$(
 if [[ -n "$hits" ]]; then
   echo "$hits"
   echo "forbidden identifier found"
+  exit 1
+fi
+
+# Python files of other repositories that the sources cite on purpose:
+# opentidehq/specifications' reference checker for the Exabeam Query Language.
+external_py=" scripts/exabeam_language.py "
+# Mentions of the retired Python CLI each crate still has, until it is swept.
+declare -A RETIRED_BASELINE=(
+  [opentide-cli]=144
+  [opentide-compile]=96
+  [opentide-connectors]=32
+  [opentide-schema]=177
+  [opentide-workspace]=45
+)
+tracked_py="$(git -C "$root" ls-files '*.py')"
+py_in_tree() {
+  local name="$1" path
+  [[ "$external_py" == *" $name "* ]] && return 0
+  while IFS= read -r path; do
+    [[ "$path" == "$name" || "$path" == */"$name" ]] && return 0
+  done <<<"$tracked_py"
+  return 1
+}
+retired_mentions() {
+  local dir="$1" hit
+  grep -RInE "oracle's|Python oracle" "$dir" || true
+  { grep -RInoE '[A-Za-z0-9_./-]+\.py\b' "$dir" || true; } | while IFS= read -r hit; do
+    py_in_tree "${hit##*:}" || echo "$hit"
+  done
+}
+failed=0
+for dir in "$root"/crates/*/src; do
+  crate="$(basename "$(dirname "$dir")")"
+  mentions="$(retired_mentions "$dir" | sed "s|^$root/||")"
+  count=0
+  if [[ -n "$mentions" ]]; then
+    count="$(wc -l <<<"$mentions")"
+  fi
+  allowed="${RETIRED_BASELINE[$crate]:-0}"
+  if ((count > allowed)); then
+    echo "$mentions"
+    echo "$crate: $count mentions of the retired Python CLI (\"oracle's\", or a .py file not in the tree), $allowed allowed."
+    echo "  Say what the code does and the contract it keeps instead (#1958)."
+    failed=1
+  elif ((count < allowed)); then
+    echo "$crate: $count mentions of the retired Python CLI; lower RETIRED_BASELINE[$crate] from $allowed to $count in scripts/engine/check-names.sh."
+    failed=1
+  fi
+done
+if ((failed)); then
   exit 1
 fi
 echo "names ok"

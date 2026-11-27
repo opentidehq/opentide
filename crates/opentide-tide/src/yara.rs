@@ -6,10 +6,9 @@
 //!   a whole YARA text, analysed as it is written under the platform's profile
 //!   (an ordinary one-scalar injection, [`crate::injection`]);
 //! - **the decomposed HarfangLab form**: `yara.strings`, `yara.condition` and
-//!   `yara.imports` are assembled into the one rule deploy builds
-//!   (`compile_yara_deployment`, `platforms/harfanglab/deployer.py`): the
-//!   `import` lines, `rule <name> {`, the generated meta, and each body's
-//!   lines indented by eight spaces after `strip()`. The bodies keep a map
+//!   `yara.imports` are assembled into the one rule HarfangLab's deploy
+//!   builds: the `import` lines, `rule <name> {`, the generated meta, and
+//!   each body's lines, trimmed, indented by eight spaces. The bodies keep a map
 //!   to their own scalar, so a finding lands where it is written; the text
 //!   deploy generates is marked synthetic.
 //!

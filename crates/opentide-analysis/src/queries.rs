@@ -15,11 +15,9 @@
 //! `platforms/elastic.toml` (8.19 when none says), and the datasets
 //! `visibility.toml` declares are the ones the engines know.
 //!
-//! This module ports the oracle's `opentide.analysis.check_queries`,
-//! `opentide.validation.queries` and `diagnostic_from_engine`: a query `opentide
-//! new` left as a placeholder is not counted; only the engine's errors are
-//! `validate`'s (its warnings and notes are `lint`'s); `--queries warn`
-//! reports them as warnings with a note.
+//! What counts: a query `opentide new` left as a placeholder is not checked;
+//! only the engine's errors are `validate`'s (its warnings and notes are
+//! `lint`'s); `--queries warn` reports them as warnings with a note.
 //!
 //! The datasets a workspace declares are its [`Profiles`]': each check
 //! enters them on the thread that runs it, so checks of different
