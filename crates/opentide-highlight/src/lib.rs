@@ -29,7 +29,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex, OnceLock, RwLock};
 use thiserror::Error;
 
-pub use engine::{AnalyzeResult, QueryEngine};
+pub use engine::{AnalyzeResult, Profile, QueryEngine, Setting};
 pub use keywords::{Capture, Keywords, keywords};
 pub use markdown::highlight_markdown_line;
 use tide_model::Repr;

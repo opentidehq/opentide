@@ -1191,7 +1191,9 @@ pub fn analyze(source: &str, profile: Dialect) -> AnalyzeResult {
 /// The Kusto Query Language (KQL) [`QueryEngine`](opentide_highlight::QueryEngine) (#1953):
 /// [`analyze`] behind the shared interface.
 ///
-/// A `.kql` file reads as Microsoft Sentinel's, the default dialect.
+/// The dialect is the platform's ([`Dialect::for_platform`]): a `.kql` file
+/// reads as Microsoft Sentinel's, the default. A rule's query and a search
+/// get their [`Profile`]'s findings ([`apply_profile`]); a file gets none.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Engine;
 
@@ -1200,8 +1202,21 @@ impl opentide_highlight::QueryEngine for Engine {
         opentide_core::LanguageId::Kql
     }
 
-    fn analyze(&self, source: &str) -> opentide_highlight::AnalyzeResult {
-        let r = analyze(source, Dialect::Sentinel);
+    fn analyze_for(
+        &self,
+        source: &str,
+        setting: &opentide_highlight::Setting<'_>,
+    ) -> opentide_highlight::AnalyzeResult {
+        let dialect = Dialect::for_platform(setting.platform);
+        let mut r = analyze(source, dialect);
+        let profile = match setting.profile {
+            opentide_highlight::Profile::File => None,
+            opentide_highlight::Profile::Search => Some(Profile::Search),
+            opentide_highlight::Profile::Rule => Some(Profile::Rule),
+        };
+        if let Some(profile) = profile {
+            apply_profile(source, dialect, profile, &mut r.diagnostics);
+        }
         opentide_highlight::AnalyzeResult {
             diagnostics: r.diagnostics,
             tokens: r.tokens,

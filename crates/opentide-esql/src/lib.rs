@@ -145,7 +145,8 @@ pub fn analyze(source: &str) -> AnalyzeResult {
 /// The ES|QL [`QueryEngine`](opentide_highlight::QueryEngine) (#1953):
 /// [`analyze`] behind the shared interface.
 ///
-/// A query on its own has no Elastic tenant, so no stack target.
+/// The stack is the setting's ([`StackTarget::parse`]); a query on its own
+/// has no Elastic tenant, so no stack target.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Engine;
 
@@ -154,8 +155,12 @@ impl opentide_highlight::QueryEngine for Engine {
         opentide_core::LanguageId::Esql
     }
 
-    fn analyze(&self, source: &str) -> opentide_highlight::AnalyzeResult {
-        let r = analyze(source);
+    fn analyze_for(
+        &self,
+        source: &str,
+        setting: &opentide_highlight::Setting<'_>,
+    ) -> opentide_highlight::AnalyzeResult {
+        let r = analyze_for(source, setting.stack.and_then(StackTarget::parse));
         opentide_highlight::AnalyzeResult {
             diagnostics: r.diagnostics,
             tokens: r.tokens,

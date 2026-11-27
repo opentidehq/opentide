@@ -340,57 +340,31 @@ pub struct QueryRequest {
 
 /// Diagnostics for one query, in the query's own coordinates.
 pub fn analyze_query(request: &QueryRequest) -> Vec<Diagnostic> {
-    let platform = request.platform.as_deref().unwrap_or("");
-    match request.language {
-        LanguageId::Kql => {
-            opentide_kql::analyze(&request.text, Dialect::for_platform(platform)).diagnostics
-        }
-        // A query on its own is a search, as a file of its language is: the
-        // profile comes from where the text sits, never from the platform
-        // (ADR 0015 §4). A `.cql` file is plain LogScale, without the
-        // correlation rule's restrictions; a `.exabeam` or `.datadog` file is
-        // the `search` profile. A rule block's query is checked as a rule by
-        // `analyze` on its object, by its field path.
-        LanguageId::Cql => opentide_cql::analyze(&request.text).diagnostics,
-        LanguageId::Exabeam => {
-            opentide_exabeam::analyze_with(&request.text, &opentide_exabeam::Context::SEARCH)
-                .diagnostics
-        }
-        LanguageId::Datadog => {
-            opentide_datadog::analyze_with(&request.text, &opentide_datadog::Context::SEARCH)
-                .diagnostics
-        }
-        LanguageId::Lucene => {
-            let dialect = opentide_lucene::Dialect::for_platform(platform);
-            opentide_lucene::analyze_dialect(&request.text, dialect).diagnostics
-        }
-        // `platform: harfanglab` or `bitdefender`: the platform's YARA dialect.
-        LanguageId::Yara => {
-            let ctx = opentide_yara::Dialect::for_platform(platform)
-                .map(opentide_yara::Context::for_profile)
-                .unwrap_or_default();
-            opentide_yara::analyze_with(&request.text, &ctx).diagnostics
-        }
-        LanguageId::Esql => {
-            let target = request
-                .stack
-                .as_deref()
-                .and_then(opentide_esql::StackTarget::parse);
-            opentide_esql::analyze_for(&request.text, target).diagnostics
-        }
-        language => {
-            let host = MemoryWorkspace::default();
-            analyze(
-                &host,
-                AnalyzeRequest {
-                    uri: "query".into(),
-                    language,
-                    text: request.text.clone(),
-                },
-            )
-            .diagnostics
-        }
+    // The platform names the dialect, and the stack ES|QL's target. A query
+    // on its own is a file of its language: the profile comes from where the
+    // text sits, never from the platform (ADR 0015 §4). A `.cql` file is
+    // plain LogScale, without the correlation rule's restrictions; a
+    // `.exabeam` or `.datadog` file is the `search` profile. A rule block's
+    // query is checked as a rule by `analyze` on its object, by its field
+    // path.
+    let setting = opentide_highlight::Setting {
+        platform: request.platform.as_deref().unwrap_or(""),
+        profile: opentide_highlight::Profile::File,
+        stack: request.stack.as_deref(),
+    };
+    if let Some(engine) = engines::engine(request.language) {
+        return engine.analyze_for(&request.text, &setting).diagnostics;
     }
+    let host = MemoryWorkspace::default();
+    analyze(
+        &host,
+        AnalyzeRequest {
+            uri: "query".into(),
+            language: request.language,
+            text: request.text.clone(),
+        },
+    )
+    .diagnostics
 }
 
 /// Workspace catalogs that replace the bundled ones, as `opentide generate
