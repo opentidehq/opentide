@@ -803,6 +803,8 @@ pub mod codes {
             => "The KQL function is not in the Kusto function catalog.";
         KQL_DEPRECATED_FUNCTION = "kql_deprecated_function"
             => "The KQL function is a deprecated alias; Microsoft Learn names its replacement.";
+        KQL_FUNCTION_UNAVAILABLE = "kql_function_unavailable"
+            => "The KQL function is another dialect's: a Microsoft Defender advanced hunting function in a Microsoft Sentinel query.";
         KQL_DEPRECATED_OPERATOR = "kql_deprecated_operator"
             => "The KQL scalar operator is a legacy spelling (containscs); use the current name (contains_cs).";
         KQL_UNKNOWN_TABLE = "kql_unknown_table"

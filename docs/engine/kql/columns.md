@@ -31,6 +31,7 @@ The engine reads `.opentide/configurations/visibility.toml` itself (`DeclaredDat
 | File | Source | Generator |
 | --- | --- | --- |
 | `data/catalogs/kql/azure-monitor/tables.toml` | [Azure Monitor Logs table reference](https://learn.microsoft.com/azure/azure-monitor/reference/tables/tables-category) (MicrosoftDocs/azure-monitor-docs, CC BY 4.0), plus the columns of Azure-Sentinel's KQL validation schemas (MIT) | `scripts/engine/sync_azure_monitor_tables.py` |
+| `data/catalogs/kql/defender/functions.toml` | Advanced hunting's own functions (`FileProfile`, `DeviceFromIP`, `SeenBy`, `AssignedIPAddresses`) from each function's [Learn page](https://learn.microsoft.com/defender-xdr/advanced-hunting-fileprofile-function): the Defender dialect lists them; under Sentinel a call to one is `kql_function_unavailable` | `scripts/engine/sync_defender_functions.py` |
 | `data/catalogs/kql/asim/asim.toml` | [ASIM](https://learn.microsoft.com/azure/sentinel/normalization) schemas from `ASIM/dev/ASimTester/ASimTester.csv` and parsers from `Parsers/ASim*/Parsers/*.yaml` (Azure/Azure-Sentinel, MIT) | `scripts/engine/sync_asim_schemas.py` |
 | `data/catalogs/kql/{sentinel,defender}/` | hand-written tables and detection-critical columns with docs | — |
 
