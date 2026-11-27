@@ -3,11 +3,15 @@
 //! `compile_deployment`): `kind` and camelCase `properties`, unset fields left
 //! out, in the oracle's key order.
 
+use std::sync::Arc;
+
+use opentide_schema::node::{Entry, Mark, Node, Value};
 use opentide_schema::objects::platform::SentinelConfig;
 use opentide_schema::objects::platform::sentinel::{
     SentinelAlert, SentinelAlertGrouping, SentinelEntityMapping, Suppression,
 };
 use opentide_schema::vocab::sentinel::SentinelAttack;
+use opentide_schema::{ErrorKind, FromNode, SchemaError};
 
 use crate::Context;
 use crate::deploy;
@@ -163,8 +167,20 @@ fn v18_techniques(
 }
 
 /// The rule's Sentinel block, read by the model `opentide validate` checks it
-/// with (`SentinelConfig`, #1951). A block the model refuses fails the
-/// compile with the model's words, as a Bitdefender block does.
+/// with (`SentinelConfig`, #1951), through the same conversion
+/// (`FromNode`), so a refusal reads as `validate`'s `schema` finding does:
+/// the field path the rule wrote and the model's reason
+/// (`configurations.sentinel.alert: Field required`), every one the block
+/// earns, at the first one's field.
+///
+/// A block whose only faults are values a field's own check refuses (a
+/// duration it cannot read, a technique newer than ATT&CK v18) is not
+/// refused here: it is read as before (serde, which runs no field check) and
+/// the compile deals with those values as it always has (`compile_invalid_rule`
+/// for the duration, the v18 mapping and its warning for the technique).
+///
+/// The block is the one the deploy sends (`modifiers::rule_for_tenant` may
+/// have changed it), so it is read from the rule's JSON, not its node.
 fn block_of(rule: &Rule) -> Result<SentinelConfig, CompileError> {
     let Some(block) = rule.block("sentinel").filter(|block| block.is_filled()) else {
         return Err(CompileError::invalid_rule(format!(
@@ -172,10 +188,87 @@ fn block_of(rule: &Rule) -> Result<SentinelConfig, CompileError> {
             rule.uuid, rule.name
         )));
     };
-    // Through the block's text, not `serde_json::Value`, so the `let`
-    // bindings of an exclusion keep the order they are written in.
-    serde_json::from_str(&block.to_compact())
-        .map_err(|error| CompileError::failed(DISPLAY, &error.to_string()))
+    let node = json_node(block);
+    let mut cx = opentide_schema::from_node::Context::new();
+    let config = cx.at_key("configurations", |cx| {
+        cx.at_key("sentinel", |cx| SentinelConfig::from_node(&node, cx))
+    });
+    let errors = cx.into_errors();
+    if let (Some(config), true) = (config, errors.is_empty()) {
+        return Ok(config);
+    }
+    if !errors.is_empty() && errors.iter().all(is_field_check) {
+        // Through the block's text, not `serde_json::Value`, so the order of
+        // an exclusion's `let` bindings is kept.
+        return serde_json::from_str(&block.to_compact())
+            .map_err(|error| CompileError::failed(DISPLAY, &error.to_string()));
+    }
+    let field = errors
+        .first()
+        .map(SchemaError::field_path)
+        .unwrap_or_default();
+    let field: Vec<&str> = field.iter().map(String::as_str).collect();
+    let reasons: Vec<String> = errors.iter().map(ToString::to_string).collect();
+    let mut error = CompileError::failed(DISPLAY, &reasons.join("; "));
+    error.hint = Some(REFUSED_HINT.to_owned());
+    Err(error.at(&field))
+}
+
+/// Whether the model refused a value a field's own check reads (a duration,
+/// an ATT&CK id), not the block's shape: a missing or unknown key, a type,
+/// a value outside a closed set.
+fn is_field_check(error: &SchemaError) -> bool {
+    matches!(error.kind, ErrorKind::InvalidValue(kind) if kind != "literal_error" && kind != "enum")
+}
+
+/// The block's exclusions as written (`[{query, tenant, let}]`), which
+/// [`kql::compile_query`] reads, once the model has read them. A `let`
+/// value is taken from the rule, not the model: through serde a non-finite
+/// float (`.inf`, `.nan`) would become `null`, and its `let` statement be
+/// dropped.
+fn exclusions<'a>(rule: &'a Rule, block: &SentinelConfig) -> Option<&'a Json> {
+    block.exclusions.as_ref()?;
+    rule.block("sentinel")?.get("exclusions")
+}
+
+/// What to do about a block the model refuses.
+const REFUSED_HINT: &str =
+    "run `opentide validate` and fix what its schema check reports on this block";
+
+/// A JSON value as a node without positions, for the model's conversion. A
+/// rule's JSON comes from its YAML, whose loader refuses an integer past
+/// `i64`, so a `UInt` does not occur; it would read as a float.
+fn json_node(value: &Json) -> Node {
+    let value = match value {
+        Json::Null => Value::Null,
+        Json::Bool(flag) => Value::Bool(*flag),
+        Json::Int(integer) => Value::Int(*integer),
+        #[expect(
+            clippy::cast_precision_loss,
+            reason = "a rule read from YAML holds no integer past i64; a node has no wider integer"
+        )]
+        Json::UInt(integer) => Value::Float(*integer as f64),
+        Json::Float(float) => Value::Float(*float),
+        Json::Str(text) => Value::Str(text.as_str().into()),
+        Json::Array(items) => {
+            Value::Seq(items.iter().map(|item| Arc::new(json_node(item))).collect())
+        }
+        Json::Object(members) => Value::Map(
+            members
+                .iter()
+                .map(|(key, item)| Entry {
+                    key: Arc::new(json_node(&Json::Str(key.clone()))),
+                    value: Arc::new(json_node(item)),
+                })
+                .collect(),
+        ),
+    };
+    Node {
+        value,
+        start: Mark::default(),
+        end: Mark::default(),
+        text: None,
+    }
 }
 
 /// [`compile`], with the warnings the body earned.
@@ -200,20 +293,10 @@ pub fn compile_with_warnings(
     };
     let mut properties = Object::new();
     properties.insert("enabled".into(), Json::Bool(true));
-    let exclusions = match &block.exclusions {
-        Some(exclusions) => Some(
-            Json::from_serialize(exclusions)
-                .map_err(|error| CompileError::failed(DISPLAY, &error.to_string()))?,
-        ),
-        None => None,
-    };
+    let exclusions = exclusions(rule, &block);
     properties.insert(
         "query".into(),
-        Json::Str(kql::compile_query(
-            &block.query,
-            exclusions.as_ref(),
-            tenant,
-        )),
+        Json::Str(kql::compile_query(&block.query, exclusions, tenant)),
     );
     let strategy = cx
         .statuses
@@ -509,46 +592,150 @@ mod tests {
                          frequency: PT1H\n      lookback: PT1H\n    alert:\n      suppression: \
                          false\n";
 
-    /// The block is read by `SentinelConfig` (#1951), through its text, so
-    /// an exclusion's `let` bindings keep their written order and their
-    /// non-ASCII text.
+    /// The block is read by `SentinelConfig` (#1951); an exclusion's `let`
+    /// bindings keep their written order and their non-ASCII text.
     #[test]
     fn the_block_is_read_by_its_model_in_its_order() {
         let block = format!(
             "{VALID}    exclusions:\n      - query: '| where A != zeta'\n        reason: é\n        \
              let:\n          zeta: \"é😀\"\n          alpha: 1\n"
         );
-        let config = block_of(&rule_of(&block)).unwrap();
-        let exclusions = Json::from_serialize(&config.exclusions).unwrap();
+        let rule = rule_of(&block);
+        let config = block_of(&rule).unwrap();
+        let exclusions = exclusions(&rule, &config);
         assert_eq!(
-            exclusions.to_compact(),
-            r#"[{"query":"| where A != zeta","reason":"é","let":{"zeta":"é😀","alpha":1}}]"#
+            exclusions.map(Json::to_compact).as_deref(),
+            Some(r#"[{"query":"| where A != zeta","reason":"é","let":{"zeta":"é😀","alpha":1}}]"#)
         );
         assert_eq!(
-            kql::compile_query(&config.query, Some(&exclusions), "t"),
+            kql::compile_query(&config.query, exclusions, "t"),
             "let zeta = \"é😀\";\nlet alpha = 1;\nSecurityEvent\n| where A != zeta"
         );
     }
 
-    /// A block the model refuses (no `alert`, a key it does not know) fails
-    /// the compile with the model's words, before any deploy check; the old
-    /// compile read past both.
+    /// The refusal of a block the model refuses: its code, field and reason.
+    fn refusal(block: &str) -> CompileError {
+        let error = block_of(&rule_of(block)).unwrap_err();
+        assert_eq!(error.code, codes::COMPILE_FAILED, "{error}");
+        assert_eq!(error.hint.as_deref(), Some(REFUSED_HINT));
+        // Nothing of an intermediate text or of serde's enum handling.
+        assert!(!error.reason.contains("line 1"), "{error}");
+        assert!(!error.reason.contains("untagged"), "{error}");
+        error
+    }
+
+    /// A block the model refuses fails the compile, before any deploy check,
+    /// at the field path the rule wrote and with the reason `validate`'s
+    /// `schema` check gives (#1951); the old compile read past these.
     #[test]
-    fn a_block_the_model_refuses_fails_the_compile() {
-        let without_alert = VALID.replace("    alert:\n      suppression: false\n", "");
-        let error = block_of(&rule_of(&without_alert)).unwrap_err();
-        assert_eq!(error.code, codes::COMPILE_FAILED);
-        assert!(error.reason.contains("missing field `alert`"), "{error}");
-        let unknown = format!("{VALID}    sevérity: High\n");
-        let error = block_of(&rule_of(&unknown)).unwrap_err();
-        assert_eq!(error.code, codes::COMPILE_FAILED);
-        assert!(error.reason.contains("unknown field `sevérity`"), "{error}");
-        // No block at all keeps its own error.
-        let none = rule_of("    {}\n");
+    fn a_missing_alert_is_refused_at_its_path() {
+        let error = refusal(&VALID.replace("    alert:\n      suppression: false\n", ""));
         assert_eq!(
-            block_of(&none).unwrap_err().code,
+            error.reason,
+            "Sentinel cannot compile this rule: configurations.sentinel.alert: Field required"
+        );
+        assert_eq!(error.field, ["configurations", "sentinel", "alert"]);
+    }
+
+    #[test]
+    fn an_unknown_key_is_refused_at_its_path() {
+        let error = refusal(&format!(
+            "{VALID}    grouping:\n      event: SingleAlert\n      alert:\n        enabled: false\n        \
+             sevérity: 1\n"
+        ));
+        assert_eq!(
+            error.reason,
+            "Sentinel cannot compile this rule: configurations.sentinel.grouping.alert.sevérity: \
+             Extra inputs are not permitted"
+        );
+        assert_eq!(
+            error.field,
+            [
+                "configurations",
+                "sentinel",
+                "grouping",
+                "alert",
+                "sevérity"
+            ]
+        );
+    }
+
+    #[test]
+    fn a_bad_suppression_is_refused_at_its_path() {
+        let error = refusal(&VALID.replace("suppression: false", "suppression: 5"));
+        assert!(
+            error.reason.starts_with(
+                "Sentinel cannot compile this rule: configurations.sentinel.alert.suppression: "
+            ),
+            "{error}"
+        );
+        assert_eq!(
+            error.field,
+            ["configurations", "sentinel", "alert", "suppression"]
+        );
+    }
+
+    /// A value only a field's own check refuses is left to the compile,
+    /// which refuses a duration it cannot read with its own code and words,
+    /// as before.
+    #[test]
+    fn a_bad_duration_is_left_to_the_compile() {
+        let config = block_of(&rule_of(
+            &VALID.replace("frequency: PT1H", "frequency: bientôt"),
+        ))
+        .unwrap();
+        let error = iso(&config.scheduling.frequency.unwrap()).unwrap_err();
+        assert_eq!(error.code, codes::COMPILE_INVALID_RULE, "{error}");
+        assert!(
+            error.reason.starts_with("Duration \"bientôt\" is not"),
+            "{error}"
+        );
+    }
+
+    /// Every error the block earns is named, in the model's order.
+    #[test]
+    fn every_refusal_is_named() {
+        let block = VALID.replace("    alert:\n      suppression: false\n", "") + "    bogus: 1\n";
+        let error = refusal(&block);
+        assert_eq!(
+            error.reason,
+            "Sentinel cannot compile this rule: configurations.sentinel.alert: Field required; \
+             configurations.sentinel.bogus: Extra inputs are not permitted"
+        );
+        assert_eq!(error.field, ["configurations", "sentinel", "alert"]);
+    }
+
+    /// No block at all keeps its own error.
+    #[test]
+    fn no_block_keeps_its_own_error() {
+        assert_eq!(
+            block_of(&rule_of("    {}\n")).unwrap_err().code,
             codes::COMPILE_INVALID_RULE
         );
+    }
+
+    /// A non-finite `let` value keeps its `let` statement, as `real(...)`,
+    /// as it did before the typed conversion, and so do a `-0.0` and a
+    /// timestamp (a string in YAML 1.2). An integer past `i64` never gets
+    /// here: the YAML loader refuses it.
+    #[test]
+    fn non_finite_let_values_are_kept() {
+        let block = format!(
+            "{VALID}    exclusions:\n      - query: '| where A != a'\n        reason: r\n        \
+             let:\n          a: .inf\n          b: -.inf\n          c: .nan\n          d: -0.0\n          \
+             f: 2024-01-01T00:00:00Z\n"
+        );
+        let rule = rule_of(&block);
+        let config = block_of(&rule).unwrap();
+        let old = kql::compile_query(&config.query, exclusions(&rule, &config), "t");
+        assert!(
+            old.starts_with(
+                "let a = real(+inf);\nlet b = real(-inf);\nlet c = real(nan);\nlet d = -0.0;\n"
+            ),
+            "{old}"
+        );
+        assert!(old.contains("let f = \"2024-01-01T00:00:00Z\";"), "{old}");
+        assert_eq!(old.matches("let ").count(), 5, "{old}");
     }
 
     #[test]
