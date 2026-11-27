@@ -45,7 +45,7 @@ regex.workspace = true
 percent-encoding = "2"
 # Splunk's XML: the error body's message and the Atom feed of saved searches.
 roxmltree = { version = "0.21", default-features = false, features = ["std"] }
-shlex = "2.0"
+shlex.workspace = true
 # Exabeam's rule names compare as `str.casefold()` does: full Unicode case
 # folding, the crate opentide-compile sorts exported names with.
 caseless = "0.2"
