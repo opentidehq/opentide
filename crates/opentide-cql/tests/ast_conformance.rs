@@ -1,26 +1,12 @@
 //! The typed AST of `cql.ungram` (`src/generated/ast.rs`, written by `cargo xtask codegen`,
 //! kept current by `codegen --check`) and its conformance: every tree of the corpus that
 //! parses without an error has the shape the `.ungram` states, node by node.
-//!
-//! The parser is private to the crate, so this test
-//! includes its source.
 
-#![expect(dead_code, reason = "the included modules are used in part")]
-
-#[path = "../src/generated/ast.rs"]
-mod ast;
-#[path = "../src/lexer.rs"]
-mod lexer;
-#[path = "../src/parser.rs"]
-mod parser;
-#[path = "../src/syntax.rs"]
-mod syntax;
+use opentide_cql::{ast, parser};
 
 use opentide_parse::ast::AstNode;
 use opentide_parse::conformance::{assert_conforms, check};
 use std::path::{Path, PathBuf};
-
-pub(crate) use syntax::{Lang, SyntaxKind, SyntaxNode, SyntaxToken};
 
 /// Every `.cql` file under `crates/testdata`.
 fn corpus() -> Vec<PathBuf> {

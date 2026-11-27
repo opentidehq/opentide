@@ -7,7 +7,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use opentide_core::{Severity, codes};
-use opentide_kql::{Profile, analyze};
+use opentide_kql::{Dialect, analyze};
 
 #[test]
 fn kql_probes_parse_and_broken_twins_do_not() {
@@ -23,7 +23,7 @@ fn kql_probes_parse_and_broken_twins_do_not() {
     for path in &paths {
         let name = path.file_name().unwrap().to_string_lossy().into_owned();
         let source = fs::read_to_string(path).expect("probe");
-        let diagnostics = analyze(&source, Profile::Sentinel).diagnostics;
+        let diagnostics = analyze(&source, Dialect::Sentinel).diagnostics;
         if name.contains(".broken.") {
             if !diagnostics.iter().any(|d| d.code == codes::KQL_PARSE_ERROR) {
                 failures.push(format!("{name}: broken twin parses"));

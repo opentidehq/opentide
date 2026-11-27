@@ -1,0 +1,22 @@
+# condition with the number first
+# Expected constraint code: datadog_condition.
+name: Datadog condition with the number first
+metadata:
+  uuid: 00000000-0000-4000-8004-000000000101
+  schema: rule::1.0
+  version: 1
+  created: "2026-11-27"
+  modified: "2026-11-27"
+  tlp: clear
+  author: Detection Engineering
+description: |
+  condition with the number first.
+configurations:
+  datadog:
+    schema: platform::datadog::1.0
+    status: STAGING
+    queries:
+      - name: failed
+        query: source:okta @evt.outcome:FAILURE
+    cases:
+      - condition: 3 < failed

@@ -27,6 +27,7 @@ pub fn required(platform: &str) -> &'static [&'static str] {
         "harfanglab" | "elastic" | "sysdig" | "bitdefender" => &["status"],
         "exabeam" => &["status", "sequences"],
         "google_secops" => &["status", "events", "condition"],
+        "datadog" => &["status", "queries", "cases"],
         // Carbon Black, Graylog, and the oracle's default for a model it does
         // not list.
         _ => &["status", "query"],
@@ -135,6 +136,7 @@ mod tests {
             ("graylog", &["status", "query"]),
             ("exabeam", &["status", "sequences"]),
             ("google_secops", &["status", "events", "condition"]),
+            ("datadog", &["status", "queries", "cases"]),
         ];
         assert_eq!(oracle.len(), crate::platforms::COUNT);
         for (key, keys) in oracle {

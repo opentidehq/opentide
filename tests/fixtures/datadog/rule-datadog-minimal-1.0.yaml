@@ -1,0 +1,20 @@
+# The smallest block that deploys (RFC §5.1): one query, one case.
+name: Console login failures
+metadata:
+  uuid: 00000000-0000-4000-8004-000000000001
+  schema: rule::1.0
+  version: 1
+  created: "2026-11-27"
+  modified: "2026-11-27"
+  tlp: clear
+  author: Detection Engineering
+description: |
+  More than five failed AWS console logins in five minutes.
+configurations:
+  datadog:
+    schema: platform::datadog::1.0
+    status: PRODUCTION
+    queries:
+      - query: source:cloudtrail @evt.name:ConsoleLogin @evt.outcome:Failure
+    cases:
+      - condition: a > 5

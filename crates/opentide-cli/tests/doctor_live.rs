@@ -42,7 +42,7 @@ enum Read {
     /// other.
     Rejecting(&'static str),
     /// Presses Ctrl-C on the first request, then holds it until the run
-    /// cancels it (or five seconds, which the tests call a failure).
+    /// cancels it (or 60 seconds, which the tests call a failure).
     Hold,
 }
 
@@ -237,7 +237,7 @@ impl Transport for Wire {
             if held {
                 tokio::select! {
                     () = cancel.cancelled() => return Err(TransportFailure::Cancelled),
-                    () = tokio::time::sleep(Duration::from_secs(5)) => {}
+                    () = tokio::time::sleep(Duration::from_secs(60)) => {}
                 }
             }
             let (status, body) = outcome?;
@@ -792,7 +792,7 @@ fn two_tenants_of_one_platform_each_have_their_own_result_and_settings() {
 fn ctrl_c_stops_a_probe_that_the_tenant_holds() {
     let (_scratch, ws) = workspace();
     let interrupt = Interrupt::default();
-    // The wire presses Ctrl-C on the request and holds it for five seconds
+    // The wire presses Ctrl-C on the request and holds it for 60 seconds
     // unless the run cancels it.
     let wire = Wire::new(Read::Hold).pressing(&interrupt);
     let raw = run_doctor(
@@ -808,7 +808,9 @@ fn ctrl_c_stops_a_probe_that_the_tenant_holds() {
         "{}",
         raw.stderr
     );
-    assert!(raw.took < Duration::from_secs(3), "{:?}", raw.took);
+    // Half the hold: a run that waited it out takes 60 s, one that stopped takes milliseconds,
+    // so a loaded runner cannot land between the two.
+    assert!(raw.took < Duration::from_secs(30), "{:?}", raw.took);
 }
 
 // ---- the metadata server (#1726, round 3) ----

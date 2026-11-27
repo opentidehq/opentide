@@ -241,7 +241,8 @@ Every fallible call returns `opentide::Error`. Its variants each map to a stable
 
 ## Stability
 
-- The crate follows semantic versioning as Cargo reads it. While it is `0.x`, a release that breaks the API raises the minor version (0.12 to 0.13); a patch release never breaks it.
+- The crate follows semantic versioning as Cargo reads it: a release that breaks the API raises the major version; a minor or patch release never breaks it.
+- Platforms, query languages and diagnostic codes are open sets. Adding one is a minor release; match them with a wildcard arm. `analysis::LanguageId` and `models::RuleConfigurations` (a field per platform) are `#[non_exhaustive]`: build a `RuleConfigurations` from `RuleConfigurations::default()`. Their lists (`LanguageId::QUERY_LANGUAGES`, `RuleConfigurations::PLATFORMS`, `validate::STRICT_EXEMPT_WARNINGS`) are slices.
 - Every item the crate exports is covered, re-exported types included. The `opentide-*` crates are internal: their APIs change with the engine, at the same version.
 - `cargo semver-checks` checks the crate's API in CI against the branch it merges into, until the crate is published on crates.io; from then on, against the last published version.
 - Structs that may gain a field and enums that may gain a variant are `#[non_exhaustive]`: build options with their constructors and builder methods (`ValidateOptions::default().strict(true)`).

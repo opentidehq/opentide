@@ -21,7 +21,7 @@ opentide --json query --platform microsoft_defender --file objects/rules/suspici
 | Input | Purpose |
 |-------|---------|
 | `[QUERY]` | The query, in the platform's language. `-` reads it from stdin |
-| `--platform` | Required. `sentinel`, `microsoft_defender`, `splunk`, `sentinel_one`, `crowdstrike`, `harfanglab`, `carbon_black_cloud`, `elastic`, `graylog`, `exabeam` or `google_secops` (a YARA-L search through `udmSearch`; `--rule` is not supported). `sysdig` has no query runner, and `bitdefender` has no query runner either: each exits `2` (`usage_invalid_value`) |
+| `--platform` | Required. `sentinel`, `microsoft_defender`, `splunk`, `sentinel_one`, `crowdstrike`, `harfanglab`, `carbon_black_cloud`, `elastic`, `graylog`, `exabeam`, `google_secops` (a YARA-L search through `udmSearch`; `--rule` is not supported) or `datadog` (a search through Logs Search; `--rule` runs each `queries[].query`). `sysdig` has no query runner, and `bitdefender` has no query runner either: each exits `2` (`usage_invalid_value`) |
 | `--tenant` | A configured tenant name (repeatable), or `all`. Default: the only tenant configured |
 | `--rule` | Run the query this rule (by UUID) deploys to the platform |
 | `--file` | Run the query of the rule in this YAML file, saved or not: a path from the current directory or the repository root |
@@ -59,6 +59,7 @@ Each tenant runs independently: one that refuses the query or cannot be reached 
 | Graylog | `POST /api/search/messages`, newest first; `--index` names stream aliases | Lucene (Graylog dialect) | `timerange`, absolute | `limit` |
 | Exabeam | Search `POST /search/v2/events`, synchronous | Exabeam Query Language, as the `filter` | `startTime`/`endTime` | `limit`, at most 3,000 |
 | Google SecOps | Chronicle `udmSearch`, `queryDialect=YL2` | YARA-L 2.0 | `timeRange.startTime`/`timeRange.endTime` | `limit`, at most 10,000 |
+| Datadog | Logs Search `POST /api/v2/logs/events/search`, paged by `meta.page.after`; `--index` names log indexes | Datadog search syntax (`filter.query`) | `filter.from`/`filter.to` | `page.limit`, at most 5,000 a page and 10,000 in all |
 
 One row past `--limit` is requested, so a result knows when more matched: `truncated` is `true` and the table says `more matched; raise --limit`.
 

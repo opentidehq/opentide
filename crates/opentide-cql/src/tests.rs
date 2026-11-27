@@ -12,7 +12,7 @@ fn codes_of(source: &str) -> Vec<String> {
 }
 
 fn codes_in_rule(source: &str) -> Vec<String> {
-    analyze_with(source, &Context::CORRELATION_RULE)
+    analyze_with(source, &Profile::CORRELATION_RULE)
         .diagnostics
         .into_iter()
         .map(|d| d.code)
@@ -302,7 +302,7 @@ fn deep_nesting_stays_fast_in_every_check() {
         " c=1)".repeat(990)
     );
     for q in [&aggregates, &cases, &linked] {
-        for ctx in [Context::default(), Context::CORRELATION_RULE] {
+        for ctx in [Profile::default(), Profile::CORRELATION_RULE] {
             let t = std::time::Instant::now();
             let r = analyze_with(q, &ctx);
             assert!(r.diagnostics.is_empty(), "{:?}", r.diagnostics);
@@ -549,7 +549,7 @@ fn a_subquery_missing_its_brace_says_so() {
     assert_eq!(d[0].code, codes::CQL_PARSE_ERROR, "{d:#?}");
     assert!(d[0].message.contains("missing `}`"), "{d:#?}");
     let q = "correlate(A: { a=1 | x <=> B.x , B: { b=1 | y <=> A.y }, within=5m)";
-    let d = analyze_with(q, &Context::CORRELATION_RULE).diagnostics;
+    let d = analyze_with(q, &Profile::CORRELATION_RULE).diagnostics;
     assert!(d[0].message.contains("missing `}`"), "{d:#?}");
     assert!(
         d.iter()

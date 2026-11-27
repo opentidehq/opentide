@@ -9,10 +9,10 @@
 )]
 
 use opentide_core::{Diagnostic, Severity, codes};
-use opentide_kql::{Profile, analyze, columns};
+use opentide_kql::{Dialect, analyze, columns};
 
 fn diagnostics(source: &str) -> Vec<Diagnostic> {
-    analyze(source, Profile::Sentinel).diagnostics
+    analyze(source, Dialect::Sentinel).diagnostics
 }
 
 fn assert_clean(source: &str) {
@@ -43,7 +43,7 @@ fn column_errors(source: &str) -> Vec<String> {
 
 /// The columns of the query's last pipeline after its last operator.
 fn output(source: &str) -> Vec<String> {
-    let analysis = columns(source, Profile::Sentinel);
+    let analysis = columns(source, Dialect::Sentinel);
     let pipeline = analysis
         .pipelines
         .iter()

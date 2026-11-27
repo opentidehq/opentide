@@ -1578,6 +1578,130 @@ fn exabeam_records_a_created_rule_and_fails_one_whose_name_is_taken() {
     );
 }
 
+/// A Datadog tenant on `server`, and the environment with its keys.
+fn datadog_stand(server: &wiremock::MockServer) -> (String, Env) {
+    let setup = format!(
+        "site = \"datadoghq.eu\"\napi_key = \"$DD_API_KEY\"\napp_key = \"$DD_APP_KEY\"\napi_url = \
+         \"{}/\"\n[tenants.setup.notifications]\nsoc = \"@slack-soc\"\n",
+        server.uri()
+    );
+    let env = Env::from_pairs([
+        ("DD_API_KEY".to_owned(), "api".to_owned()),
+        ("DD_APP_KEY".to_owned(), "app".to_owned()),
+    ]);
+    (setup, env)
+}
+
+const DATADOG_BLOCK: &str = "  datadog:\n    schema: platform::datadog::1.0\n    status: \
+                             PRODUCTION\n    queries:\n      - query: source:okta \
+                             @evt.outcome:FAILURE\n    cases:\n      - condition: a > 5\n        \
+                             notify: [soc]\n";
+
+/// Datadog through the command line (RFC rfc-datadog-cloud-siem §8.2): a
+/// created rule is validated first and its id recorded; the next run reads
+/// the rule by that id, finds it unchanged and sends no `PUT`, and its row
+/// says `unchanged`.
+#[test]
+fn datadog_records_a_created_rule_and_leaves_an_unchanged_one_alone() {
+    use wiremock::matchers::{body_partial_json, header, method, path};
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let server = rt.block_on(wiremock::MockServer::start());
+    let (setup, env) = datadog_stand(&server);
+    let uuid = "00000000-0000-4000-8099-0000000000d1";
+    let ws = workspace(
+        "datadog",
+        "eu",
+        &setup,
+        &[(
+            "a.yaml",
+            rule("Failed logins", uuid, "Failed logins.", DATADOG_BLOCK),
+        )],
+    );
+    let body: std::sync::Arc<std::sync::Mutex<Option<serde_json::Value>>> =
+        std::sync::Arc::default();
+    let kept = std::sync::Arc::clone(&body);
+    rt.block_on(async {
+        wiremock::Mock::given(method("POST"))
+            .and(path("/api/v2/security_monitoring/rules/validation"))
+            .and(header("DD-API-KEY", "api"))
+            .respond_with(wiremock::ResponseTemplate::new(204))
+            .expect(1)
+            .mount(&server)
+            .await;
+        wiremock::Mock::given(method("POST"))
+            .and(path("/api/v2/security_monitoring/rules"))
+            .and(body_partial_json(serde_json::json!({
+                "name": "Failed logins",
+                "type": "log_detection",
+                "cases": [{"status": "high", "condition": "a > 5",
+                           "notifications": ["@slack-soc"]}],
+            })))
+            .respond_with(move |request: &wiremock::Request| {
+                let sent: serde_json::Value = serde_json::from_slice(&request.body).unwrap();
+                *kept.lock().unwrap() = Some(sent.clone());
+                let mut stored = sent;
+                stored["id"] = "abc-def-ghi".into();
+                stored["version"] = 1.into();
+                wiremock::ResponseTemplate::new(200).set_body_json(stored)
+            })
+            .expect(1)
+            .mount(&server)
+            .await;
+    });
+    let (sent, _) = deploy(
+        ws.path(),
+        "datadog",
+        &env,
+        &opentide_connectors::builtin(),
+        0,
+    );
+    rt.block_on(server.verify());
+    assert_eq!(rows(&sent)[0].0, "deployed", "{:?}", rows(&sent));
+    let state = std::fs::read_to_string(
+        ws.path()
+            .join(format!(".opentide/states/deployment/{uuid}.json")),
+    )
+    .unwrap();
+    assert!(state.contains("\"eu\": \"abc-def-ghi\""), "{state}");
+    // The second run: the rule Datadog holds is the one the run would write.
+    let mut stored = body.lock().unwrap().clone().unwrap();
+    stored["id"] = "abc-def-ghi".into();
+    stored["version"] = 1.into();
+    stored["isDefault"] = false.into();
+    rt.block_on(async {
+        server.reset().await;
+        wiremock::Mock::given(method("GET"))
+            .and(path("/api/v2/security_monitoring/rules/abc-def-ghi"))
+            .respond_with(wiremock::ResponseTemplate::new(200).set_body_json(stored))
+            .expect(1)
+            .mount(&server)
+            .await;
+        for verb in ["PUT", "POST", "DELETE"] {
+            wiremock::Mock::given(method(verb))
+                .respond_with(wiremock::ResponseTemplate::new(500))
+                .expect(0)
+                .mount(&server)
+                .await;
+        }
+    });
+    let (sent, _) = deploy(
+        ws.path(),
+        "datadog",
+        &env,
+        &opentide_connectors::builtin(),
+        0,
+    );
+    rt.block_on(server.verify());
+    let Json::Array(results) = value(&sent, "results") else {
+        panic!("no results")
+    };
+    assert_eq!(
+        results[0].get("action").and_then(Json::as_str),
+        Some("unchanged"),
+        "{results:?}"
+    );
+}
+
 /// An Exabeam rule the tenant lost, while git ignores deployment state: it
 /// is not created again, the run warns that it was missing and fails the
 /// rule with the state's refusal.
@@ -6810,27 +6934,38 @@ fn sentinel_tenants(names: &[&str], rules: &[(&'static str, String)]) -> tempfil
 }
 
 /// A deployer that panics on the tenant `t1` once the four tenants deploying
-/// at once have all started, and holds every other tenant's rule until
-/// `t1`'s deploy has unwound (ten seconds at most), keeping the tenants it
-/// was asked to deploy to.
+/// at once have all started, and holds every other tenant's rule until the
+/// worker thread that ran `t1` has ended (a minute at most), keeping the
+/// tenants it was asked to deploy to.
 struct Panicking {
     opened: Mutex<Vec<String>>,
-    unwound: std::sync::atomic::AtomicBool,
 }
 
-/// Owned by `t1`'s deploy: its drop, while the panic unwinds the worker
-/// that polls the deploy, says the unwind has left the deploy.
-struct Unwinding<'a>(&'a std::sync::atomic::AtomicBool);
+/// Set when the worker thread that panicked on `t1` has ended: [`Exited`].
+static T1_WORKER_EXITED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
-impl Drop for Unwinding<'_> {
+/// Sets [`T1_WORKER_EXITED`] when dropped.
+struct Exited;
+
+impl Drop for Exited {
     fn drop(&mut self) {
-        self.0.store(true, std::sync::atomic::Ordering::SeqCst);
+        T1_WORKER_EXITED.store(true, std::sync::atomic::Ordering::SeqCst);
     }
 }
 
-/// Waits until `ready` says so, ten seconds at most.
+thread_local! {
+    /// `t1`'s [`Exited`], kept by the worker thread that polls `t1`'s deploy
+    /// (`runtime::block_on` polls it on the calling thread). A thread-local's
+    /// destructor runs when its thread exits: by then the worker caught the
+    /// panic, stopped the run and returned, so what waits for it needs no
+    /// margin.
+    static T1_WORKER: std::cell::RefCell<Option<Exited>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Waits until `ready` says so. The minute only keeps a broken run from
+/// hanging the test; a passing one ends on the event.
 async fn wait_until(ready: impl Fn() -> bool) {
-    let until = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    let until = std::time::Instant::now() + std::time::Duration::from_secs(60);
     while !ready() && std::time::Instant::now() < until {
         tokio::time::sleep(std::time::Duration::from_millis(5)).await;
     }
@@ -6850,14 +6985,12 @@ impl Deployer for Panicking {
                 // A barrier: every worker has taken its tenant, so none
                 // finds the run stopped before it took one.
                 wait_until(|| self.opened.lock().unwrap().len() >= 4).await;
-                let _unwinding = Unwinding(&self.unwound);
+                T1_WORKER.with(|worker| *worker.borrow_mut() = Some(Exited));
                 panic!("the stand-in's crash");
             }
-            wait_until(|| self.unwound.load(Ordering::SeqCst)).await;
-            // What is left of the unwind, `catch_panic` returning and the
-            // worker stopping the run, makes no system call: the margin is
-            // for the scheduler alone.
-            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+            // Once `t1`'s worker has exited, it had stopped the run: the
+            // worker that finishes this tenant finds it stopped. No margin.
+            wait_until(|| T1_WORKER_EXITED.load(Ordering::SeqCst)).await;
             Ok(DeployOutcome::new(None, request.operation))
         })
     }
@@ -6888,7 +7021,6 @@ fn a_panic_on_a_tenant_deploying_at_once_starts_no_other_tenant() {
     );
     let panicking: &'static Panicking = Box::leak(Box::new(Panicking {
         opened: Mutex::new(Vec::new()),
-        unwound: std::sync::atomic::AtomicBool::new(false),
     }));
     let mut registry = Registry::new();
     registry.register(Box::new(Panics(panicking))).unwrap();

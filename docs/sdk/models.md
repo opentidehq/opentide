@@ -86,6 +86,7 @@ rule.configurations.sentinel.query
 | `GraylogConfig` | `graylog` | `platform::graylog::1.0` | [graylog-1.0](/docs/specifications/specs/platforms/graylog-1.0/) |
 | `ExabeamConfig` | `exabeam` | `platform::exabeam::1.0` | [exabeam-1.0](/docs/specifications/specs/platforms/exabeam-1.0/) |
 | `GoogleSecopsConfig` | `google_secops` | `platform::google_secops::1.0` | [google-secops-1.0](/docs/specifications/specs/platforms/google-secops-1.0/) |
+| `DatadogConfig` | `datadog` | `platform::datadog::1.0` | RFC `rfc-datadog-cloud-siem` §5 (the specification `datadog-1.0` follows phase 0) |
 
 ```python
 rule.configurations.sentinel.query

@@ -12,11 +12,11 @@ use super::errors::{code_of, describe_error, model_errors};
 use super::merge::merge_layers;
 use super::models::{
     BitdefenderConfiguration, CarbonBlackCloudConfiguration, CrowdstrikeConfiguration,
-    DeploymentConfiguration, DocumentationConfiguration, ElasticConfiguration,
-    ExabeamConfiguration, GoogleSecopsConfiguration, GraylogConfiguration, HarfangLabConfiguration,
-    MicrosoftDefenderConfiguration, PLATFORMS, PathsConfiguration, PlatformConfiguration,
-    SentinelConfiguration, SentinelOneConfiguration, SplunkConfiguration, SysdigConfiguration,
-    VisibilityConfig,
+    DatadogConfiguration, DeploymentConfiguration, DocumentationConfiguration,
+    ElasticConfiguration, ExabeamConfiguration, GoogleSecopsConfiguration, GraylogConfiguration,
+    HarfangLabConfiguration, MicrosoftDefenderConfiguration, PLATFORMS, PathsConfiguration,
+    PlatformConfiguration, SentinelConfiguration, SentinelOneConfiguration, SplunkConfiguration,
+    SysdigConfiguration, VisibilityConfig,
 };
 use super::sharing::{SharingIssue, merge_sharing_documents};
 use super::{Finding, Severity, bundled, codes, models::TLP_ORDER, repr, toml};
@@ -320,6 +320,7 @@ fn validate(key: &str, merged: &Node) -> Vec<Finding> {
         "platforms/exabeam.toml" => (convert::<ExabeamConfiguration>(merged).0, None),
         "platforms/google_secops.toml" => (convert::<GoogleSecopsConfiguration>(merged).0, None),
         "platforms/graylog.toml" => (convert::<GraylogConfiguration>(merged).0, None),
+        "platforms/datadog.toml" => (convert::<DatadogConfiguration>(merged).0, None),
         _ => (convert::<PlatformConfiguration>(merged).0, None),
     };
     let mut issues: Vec<Finding> = errors

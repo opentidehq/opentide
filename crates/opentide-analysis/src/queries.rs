@@ -441,8 +441,9 @@ impl Profiles {
     }
 }
 
-/// One query on its own (a query file), in its own coordinates, with
-/// `platform`'s profile when one is given (`check_query`), with the
+/// One query on its own (a query file), in its own coordinates, under
+/// `platform`'s dialect when one is given (`check_query`), checked as a
+/// file of its language is, whatever the platform, with the
 /// datasets in use on this thread: [`Profiles::check_query`] checks it with
 /// a workspace's.
 pub fn check_query_text(

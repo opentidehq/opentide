@@ -5,7 +5,7 @@
 /// Every bundled `.toml` file, by its path relative to the folder, in the
 /// order the oracle reads them (sorted by name, the `platforms/` folder in
 /// its place).
-pub const FILES: [(&str, opentide_dataset::TextFn); 20] = [
+pub const FILES: [(&str, opentide_dataset::TextFn); 21] = [
     ("deployment.toml", || {
         opentide_dataset::text!("src/opentide/data/configurations/deployment.toml")
     }),
@@ -28,6 +28,9 @@ pub const FILES: [(&str, opentide_dataset::TextFn); 20] = [
     }),
     ("platforms/crowdstrike.toml", || {
         opentide_dataset::text!("src/opentide/data/configurations/platforms/crowdstrike.toml")
+    }),
+    ("platforms/datadog.toml", || {
+        opentide_dataset::text!("src/opentide/data/configurations/platforms/datadog.toml")
     }),
     ("platforms/elastic.toml", || {
         opentide_dataset::text!("src/opentide/data/configurations/platforms/elastic.toml")
