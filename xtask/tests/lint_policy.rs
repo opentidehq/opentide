@@ -143,3 +143,100 @@ fn each_unsafe_crate_copies_the_workspace_lints_with_unsafe_denied() -> TestResu
     }
     Ok(())
 }
+
+/// The reason a `too_many_lines` suppression gave to defer the split: the
+/// workspace's long functions were kept whole with it when the lint was
+/// enforced, and it says nothing about the function (#1959).
+const DEFERRED: &str = "split when next touched";
+
+/// The functions that still carry the deferred reason, one `path function`
+/// per line: the list only shrinks.
+const DEFERRED_LIST: &str = "xtask/too_many_lines.txt";
+
+/// Every `.rs` file under `dir`, but in build outputs and hidden directories.
+fn rust_files(dir: &std::path::Path, out: &mut Vec<PathBuf>) -> Result<(), Box<dyn Error>> {
+    for entry in std::fs::read_dir(dir)? {
+        let path = entry?.path();
+        let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+        if path.is_dir() {
+            if !name.starts_with('.') && name != "target" && name != "node_modules" {
+                rust_files(&path, out)?;
+            }
+        } else if path.extension().is_some_and(|ext| ext == "rs") {
+            out.push(path);
+        }
+    }
+    Ok(())
+}
+
+/// `path function` for each suppression whose reason defers the split: the
+/// function is the first `fn` after the reason.
+fn deferred_sites(root: &std::path::Path) -> Result<Vec<String>, Box<dyn Error>> {
+    let function = regex::Regex::new(r"\bfn\s+([A-Za-z_][A-Za-z0-9_]*)")?;
+    let mut files = Vec::new();
+    for top in ["bindings", "crates", "fuzz", "xtask"] {
+        rust_files(&root.join(top), &mut files)?;
+    }
+    let mut sites = Vec::new();
+    for file in files {
+        let text = std::fs::read_to_string(&file)?;
+        let relative = file
+            .strip_prefix(root)?
+            .to_string_lossy()
+            .replace('\\', "/");
+        let lines: Vec<&str> = text.lines().collect();
+        for (at, line) in lines.iter().enumerate() {
+            if !line.contains(DEFERRED) || relative == "xtask/tests/lint_policy.rs" {
+                continue;
+            }
+            let name = lines[at..]
+                .iter()
+                .filter(|line| !line.trim_start().starts_with("//"))
+                .find_map(|line| function.captures(line))
+                .map_or("?", |found| found.get(1).map_or("?", |m| m.as_str()));
+            sites.push(format!("{relative} {name}"));
+        }
+    }
+    sites.sort();
+    Ok(sites)
+}
+
+#[test]
+fn no_new_too_many_lines_suppression_defers_its_split() -> TestResult {
+    let root = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/.."));
+    let found = deferred_sites(&root)?;
+    let listed_text = std::fs::read_to_string(root.join(DEFERRED_LIST))?;
+    let mut listed: Vec<String> = listed_text
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty() && !line.starts_with('#'))
+        .map(str::to_string)
+        .collect();
+    listed.sort();
+    let mut new = found.clone();
+    for site in &listed {
+        if let Some(at) = new.iter().position(|other| other == site) {
+            new.remove(at);
+        }
+    }
+    let mut gone = listed.clone();
+    for site in &found {
+        if let Some(at) = gone.iter().position(|other| other == site) {
+            gone.remove(at);
+        }
+    }
+    assert!(
+        new.is_empty(),
+        "a `too_many_lines` suppression whose reason is \"{DEFERRED}\" is not in \
+         {DEFERRED_LIST}: split the function, or give the reason it is long \
+         (#1959):\n{}",
+        new.join("\n")
+    );
+    assert!(
+        gone.is_empty(),
+        "{DEFERRED_LIST} lists functions that no longer defer their split: take \
+         them off the list:\n{}",
+        gone.join("\n")
+    );
+    Ok(())
+}
