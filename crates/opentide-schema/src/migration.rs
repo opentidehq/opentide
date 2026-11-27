@@ -3,19 +3,18 @@
 //! Each family's revisions form a chain, oldest to newest
 //! ([`crate::revisions::revisions_of`]). Each edge is a one-step `From` impl
 //! (`From<RuleV1_0> for RuleV1_1`), and [`TideObject::step`] takes the one
-//! edge out of a revision. [`TideObject::migrate_to`] walks the chain as
-//! `SchemaVersionChain.migrate` does, and [`path`] lists it as
-//! `SchemaVersionChain.path` does. Migration is in memory: the catalogue and
-//! the compilers read [`TideObject::into_newest`]; only `opentide migrate`
-//! changes a file, with span-based text edits (UC-3.5).
+//! edge out of a revision. [`TideObject::migrate_to`] walks the chain to a
+//! target revision, and [`path`] lists the revisions it passes. Migration is
+//! in memory.
 //!
 //! A migrated object carries its new revision's identifier in
-//! `metadata.schema`, as `stamp_schema_identifier` sets it after a migration;
-//! [`stamp_schema_identifier`] is that function on an untyped document.
+//! `metadata.schema`; [`stamp_schema_identifier`] sets it on an untyped
+//! document.
 //!
-//! The oracle registered no migration (its chains were empty, so loading a
-//! `rule::1.0` object as `rule::1.1` raised `no migration registered`): the
-//! steps here are new, and no command runs them yet.
+//! No command runs these steps yet: nothing outside this module calls
+//! [`TideObject::migrate_to`] or [`TideObject::into_newest`]. `opentide
+//! migrate` changes files with span-based text edits of its own
+//! ([`vocab_scope`], UC-3.5).
 
 use std::sync::Arc;
 
@@ -194,13 +193,12 @@ fn check_direction(source: &Revision, target: &Revision) -> Result<(), Migration
     Ok(())
 }
 
-/// `root` with `metadata.schema` set to `schema_id`
-/// (`models/migration.py` `stamp_schema_identifier`): an empty identifier
+/// `root` with `metadata.schema` set to `schema_id`: an empty identifier
 /// changes nothing; a `metadata` mapping keeps its other keys and their
 /// order, `schema` staying where it was or coming last; any other
 /// `metadata` becomes `{schema: <id>}` in its place, and a missing one is
-/// added last. A root that is not a mapping is returned as it is (the
-/// oracle's `dict()` of it failed).
+/// added last. A root that is not a mapping is returned as it is: it has no
+/// `metadata` to set.
 pub fn stamp_schema_identifier(root: &Node, schema_id: &str) -> Node {
     let Value::Map(entries) = &root.value else {
         return root.clone();

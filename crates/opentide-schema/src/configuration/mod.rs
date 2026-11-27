@@ -4,18 +4,18 @@
 //! - [`toml`]: a file read with the `toml_edit` crate (TOML 1.0) into the
 //!   same node tree an object file is read into ([`crate::node`]), every node
 //!   with its position;
-//! - [`models`]: one model per file, the oracle's Pydantic models field for
-//!   field, converted with `#[derive(FromNode)]` so every error of a file is
-//!   reported at once, with Pydantic's error type and message;
-//! - [`resolve`]: the layering of `core/files.py` `resolve_configurations`
-//!   (bundled defaults, then the workspace, then the parent instance; tables
-//!   merge, every other value replaces), done once per run;
-//! - [`checks`]: `validation/configuration.py`: the findings of one file, as
+//! - [`models`]: one model per file, converted with `#[derive(FromNode)]` so
+//!   every error of a file is reported at once, with Pydantic's error type
+//!   and message;
+//! - [`resolve`]: the layering of the files (bundled defaults, then the
+//!   workspace, then the parent instance; tables merge, every other value
+//!   replaces), done once per run;
+//! - [`checks`]: the findings of one file, as
 //!   an editor buffer holds it ([`checks::text_issues`],
 //!   [`checks::buffer_issues`]), and of a resolved workspace
 //!   ([`checks::workspace_issues`]);
-//! - [`sharing`]: `sharing.toml`, merged block by block (`sharing/config.py`);
-//! - [`lint`]: `lint.toml`, checked as `core/lint_config.py` checks it.
+//! - [`sharing`]: `sharing.toml`, merged block by block;
+//! - [`lint`]: `lint.toml`, its `[lint]` tables checked in a fixed order.
 //!
 //! `$NAME` placeholders stay strings: resolving them is the connectors' work
 //! (UC-4.1, #829).
@@ -40,8 +40,7 @@ use indexmap::IndexMap;
 pub use opentide_core::Severity;
 use serde::Serialize;
 
-/// The codes configuration findings carry, as `validation/configuration.py`
-/// and `sharing/config.py` emit them.
+/// The codes configuration findings carry, `sharing.toml`'s included.
 pub mod codes {
     pub use crate::error::codes::{CONFIG_PARSE, MISSING_FIELD, SCHEMA_VALIDATION, UNKNOWN_KEY};
     /// `promotion.promotion_target` names no `[[statuses]]` entry.
@@ -76,8 +75,8 @@ pub mod codes {
     pub const INVALID_VALUE: &str = "invalid_value";
 }
 
-/// One configuration finding: `ValidationIssue` with `object_type`
-/// `configuration`, as the oracle builds it.
+/// One configuration finding, of a file under `configurations/` or of the
+/// resolved workspace.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Finding {
     /// The diagnostic code ([`codes`]).

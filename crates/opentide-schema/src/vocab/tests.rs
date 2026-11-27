@@ -127,17 +127,17 @@ fn stage_filters_apply_to_name_keyed_vocabularies() {
 
 #[test]
 fn the_vocab_unknown_findings_of_the_goldens() {
-    // The oracle's recordings of validate/json/{fault,tide-corpus-typo,vscode}
-    // (retired, #1142): the same message and help as the oracle, except where
-    // its suggestions were reviewed as noise.
+    // The values the `fault`, `tide-corpus-typo` and `vscode` fixtures of
+    // tests/golden misspell: each one's `vocab_unknown` message and help,
+    // with no suggestion where the nearest entry is not a likely typo.
     let set = Vocabularies::bundled();
     let cases: [(&str, &str, bool, Option<&str>); 6] = [
         ("tlp::1.0", "clearr", false, Some("clear")),
         ("tlp::1.0", "ambr", false, Some("amber")),
         ("tlp::1.0", "whitish", false, None),
         ("alert_severity::1.0", "high", false, Some("High")),
-        // The oracle suggests 'Substantial incident' and 'Host::File':
-        // unrelated words that share letters.
+        // No suggestion: 'Substantial incident' and 'Host::File' share
+        // letters but are unrelated words.
         ("severity::1.0", "Big incident", false, None),
         ("signal.entities::1.0", "Host::Gizmo", true, None),
     ];

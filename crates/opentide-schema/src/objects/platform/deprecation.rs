@@ -1,15 +1,14 @@
-//! Deprecated fields (`validation/deprecated_fields.py`): a field whose
-//! schema carries `tide.meta.deprecation` gives a `deprecated_field` warning
-//! when an object sets it (a value other than `null`).
+//! Deprecated fields: a field whose schema carries `tide.meta.deprecation`
+//! gives a `deprecated_field` warning when an object sets it (a value other
+//! than `null`).
 //!
-//! The walk follows the oracle's: each field of the schema's `properties`
-//! the object sets, and the nested `properties` of a field whose value is a
-//! mapping. Fields are visited in the object's order (the oracle visited
-//! the schema's, the models' field order, which a schemars schema without
-//! `preserve_order` does not keep). A `$ref` to the schema's `$defs`, as schemars
-//! writes nested models, is followed to its definition. In the oracle's
-//! models (0.23.0) no field is deprecated, so no object gets the warning;
-//! the walk is ready for the first marker.
+//! The walk visits each field of the schema's `properties` the object sets,
+//! and the nested `properties` of a field whose value is a mapping, in the
+//! object's order (a schemars schema without `preserve_order` does not keep
+//! the models' field order). A `$ref` to the schema's `$defs`, as schemars
+//! writes nested models, is followed to its definition. No field of the rule
+//! models is deprecated today (a test checks it), so no object gets the
+//! warning; the walk is ready for the first marker.
 
 use std::borrow::Cow;
 
@@ -201,7 +200,7 @@ mod tests {
         ] {
             assert!(
                 !schema.to_string().contains(keys::META_DEPRECATION),
-                "the oracle (0.23.0) deprecates no field"
+                "no field of the rule models is deprecated"
             );
         }
     }

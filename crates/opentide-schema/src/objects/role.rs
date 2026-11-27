@@ -1,4 +1,4 @@
-//! Field roles (`models/base.py` `FieldRole`): the role a field plays for
+//! Field roles: the role a field plays for
 //! cross-object field extraction, declared under `tide.field.role` in the
 //! field's schema, so extraction derives from the model, not a key list.
 
@@ -40,8 +40,8 @@ impl fmt::Display for FieldRole {
     }
 }
 
-/// A `tide.field.role` value no role has (`field_role` returns `None` for
-/// it, as the oracle's does).
+/// A `tide.field.role` value no role has ([`field_role`] returns `None` for
+/// it).
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("no field role `{0}`")]
 pub struct UnknownRole(pub String);
@@ -118,7 +118,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn roles_read_and_print_as_the_oracles() {
+    fn roles_read_and_print_as_their_names() {
         for role in FieldRole::ALL {
             assert_eq!(role.as_str().parse::<FieldRole>(), Ok(role));
         }

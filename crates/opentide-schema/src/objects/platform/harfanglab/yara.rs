@@ -1,18 +1,16 @@
-//! HarfangLab's YARA forms (harfanglab-1.0 1.2 and 1.3, yara-1.0), ported
-//! from `platforms/harfanglab/yara.py`: the codes a scan of a block decides
-//! without a YARA parser, the rule name deploy derives from the Tide rule
-//! `name`, and the texts deploy sends.
+//! HarfangLab's YARA forms (harfanglab-1.0 1.2 and 1.3, yara-1.0): the codes
+//! a scan of a block decides without a YARA parser, the rule name deploy
+//! derives from the Tide rule `name`, and the texts deploy sends.
 //!
-//! | Oracle | Here |
-//! |--------|------|
-//! | `YARA_MODULES`, `YARA_KEYWORDS` | [`YARA_MODULES`], [`YARA_KEYWORDS`] (`opentide-tide` tests them against the YARA catalog) |
-//! | `_blank` | [`blank`] |
-//! | `rule_headers` | [`rule_headers`] |
-//! | `signature_codes` | [`signature_codes`] |
-//! | `derived_rule_name`, `rule_name_problem` | [`derived_rule_name`], [`rule_name_problem`] |
-//! | `context_accepted`, `decomposed_context` | [`context_accepted`], [`decomposed_context`] |
-//! | `deployed_signature` | [`deployed_signature`] |
-//! | `block_codes` | [`block_codes`], the named check `harfanglab_rule_shape` |
+//! - [`YARA_MODULES`], [`YARA_KEYWORDS`]: the language's modules and
+//!   keywords (`opentide-tide` tests them against the YARA catalog);
+//! - [`blank`], [`rule_headers`], [`signature_codes`]: the scan of a
+//!   signature;
+//! - [`derived_rule_name`], [`rule_name_problem`]: the rule name deploy
+//!   derives;
+//! - [`context_accepted`], [`decomposed_context`], [`deployed_signature`]:
+//!   what deploy sends;
+//! - [`block_codes`]: the named check `harfanglab_rule_shape`.
 
 use std::collections::BTreeSet;
 use std::sync::OnceLock;
@@ -125,7 +123,7 @@ pub mod codes {
 }
 
 /// Whether the character before `at` in `text` lets a keyword start there:
-/// the oracle's `(?<![\w$#@!])`.
+/// none, or one that is not alphanumeric, `_`, `$`, `#`, `@` or `!`.
 fn starts_word(text: &str, at: usize) -> bool {
     text.get(..at).is_some_and(|head| {
         head.chars()
@@ -166,7 +164,7 @@ fn rule_pattern() -> &'static Regex {
 }
 
 /// `text` with comments and the insides of string and regexp literals turned
-/// into spaces, as libyara's lexer reads them (`_blank`). Offsets and line
+/// into spaces, as libyara's lexer reads them. Offsets and line
 /// breaks are kept; the quotes of a string and the slashes of a regexp stay.
 #[must_use]
 pub fn blank(text: &str) -> String {
@@ -416,7 +414,7 @@ fn entry<'n>(node: &'n Node, key: &str) -> Option<&'n Node> {
     }
 }
 
-/// Whether `key` holds a value that is not `null` (the oracle's `_set`).
+/// Whether `key` holds a value that is not `null`.
 fn set(node: &Node, key: &str) -> bool {
     entry(node, key).is_some_and(|value| !matches!(value.value, Value::Null))
 }
@@ -481,7 +479,7 @@ pub fn signature_is_aliased(root: &Node) -> bool {
 }
 
 /// The node a `signature` written as an alias names (its anchor's), when
-/// it is one ([`signature_is_aliased`]): the oracle places the finding there.
+/// it is one ([`signature_is_aliased`]): the finding is placed there.
 #[must_use]
 pub fn aliased_signature(root: &Node) -> Option<&Node> {
     let [configurations, harfanglab, yara, signature] = SIGNATURE_PATH;
@@ -688,7 +686,7 @@ mod tests {
     }
 
     #[test]
-    fn block_codes_are_the_oracles() {
+    fn block_codes_of_each_form() {
         assert_eq!(
             block("sigma: {condition: s}\nyara: {signature: 'rule a { condition: true }'}"),
             BTreeSet::from([codes::RULE_KIND])

@@ -1,13 +1,13 @@
 //! Google Security Operations YARA-L 2.0 detection rule,
 //! `platform::google_secops::1.0` (`GoogleSecopsConfig` and its nested
-//! models), ported from 0.28.0 (platform-google-secops rev 1.2).
+//! models; platform-google-secops rev 1.2).
 //!
-//! | Oracle (0.28.0) | Here |
-//! |-----------------|------|
-//! | `models/platform.py` `GoogleSecopsConfig`, `platform_configs.py` | [`GoogleSecopsConfig`], [`GoogleSecopsMatch`], [`GoogleSecopsOptions`], [`GoogleSecopsSchedule`] |
-//! | `platforms/google_secops/checks.py` `block_findings` | [`block_findings`], [`block_codes`] (the named check `google_secops_rule_shape`) |
-//! | `platforms/google_secops/yaral.py` | [`yaral`] |
-//! | `platforms/google_secops/compile.py` `assemble`, `AssembledRule`, `SectionPlace`, `Location` | [`assemble`] |
+//! - [`GoogleSecopsConfig`], [`GoogleSecopsMatch`], [`GoogleSecopsOptions`],
+//!   [`GoogleSecopsSchedule`]: the block's models;
+//! - [`block_findings`], [`block_codes`]: the named check
+//!   `google_secops_rule_shape`;
+//! - [`yaral`]: the parts of YARA-L checked without a parser;
+//! - [`assemble`]: the rule deploy sends.
 //!
 //! Unlike the older platforms' before-validators, which report one
 //! `value_error` naming every code, this block's reports one error per
@@ -427,7 +427,7 @@ platform_block! {
 }
 
 // ---------------------------------------------------------------------------
-// The named check `google_secops_rule_shape` (`checks.py` `block_findings`).
+// The named check `google_secops_rule_shape` ([`block_findings`]).
 // ---------------------------------------------------------------------------
 
 /// A positive `<n>s`, `<n>m`, `<n>h` or `<n>d` duration in seconds, or

@@ -22,8 +22,8 @@ pub struct ParseError {
     pub line: Option<usize>,
     /// The column.
     pub column: Option<usize>,
-    /// The tables nest deeper than [`MAX_DEPTH`] (the oracle's
-    /// `RecursionError`): `config_parse`, "The document is nested too deeply."
+    /// The tables nest deeper than [`MAX_DEPTH`]: `config_parse`, "The
+    /// document is nested too deeply."
     pub too_deep: bool,
 }
 
