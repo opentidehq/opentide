@@ -138,7 +138,8 @@ const PLATFORM_VALUES: [(&str, &[KnownValue]); 5] = [
             (&["detection", "criteria", "field"], "Process.Name", true),
             (&["detection", "criteria", "is"], "...", true),
         ],
-    ),    (
+    ),
+    (
         "datadog",
         // `a` is the first query's default name; the number is a decision.
         &[(&["cases", "condition"], "a > 0", true)],
