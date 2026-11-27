@@ -175,8 +175,8 @@ pub struct Context<'a> {
     pub terminal: &'a Terminal,
     /// Whether Ctrl-C was pressed.
     pub interrupted: &'a (dyn Fn() -> bool + Sync),
-    /// stdin, read whole (`QUERY` of `-`).
-    pub stdin: &'a dyn Fn() -> String,
+    /// stdin, read whole (`QUERY` of `-`), or why it could not be read.
+    pub stdin: &'a dyn Fn() -> std::io::Result<String>,
     /// The current time, the end of a window without `--to`.
     pub now: jiff::Timestamp,
     /// Where log lines and `OPENTIDE_PROGRESS=json`'s events go: the host's
@@ -290,7 +290,19 @@ fn query_text(args: &Args, cx: &Context<'_>) -> Result<Option<String>, Box<Repor
         };
     }
     if args.query.as_deref() == Some("-") {
-        return Ok(Some((cx.stdin)()));
+        return match (cx.stdin)() {
+            // A byte-order mark is dropped, as `--query-file` drops it:
+            // Windows PowerShell can add one when it pipes text.
+            Ok(text) => Ok(Some(
+                text.strip_prefix('\u{feff}').unwrap_or(&text).to_owned(),
+            )),
+            Err(error) => Err(Box::new(usage(
+                &args.platform,
+                &format!("cannot read the query from stdin: {error}"),
+                "QUERY",
+                &[],
+            ))),
+        };
     }
     Ok(args.query.clone())
 }
@@ -2010,7 +2022,7 @@ mod tests {
         let env = Env::from_pairs::<&str, &str>([]);
         let terminal = Terminal::plain(crate::mode::Mode::Json);
         let never = || false;
-        let stdin = || "from stdin".to_owned();
+        let stdin = || Ok("from stdin".to_owned());
         let log: crate::logging::Sink = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
         let cx = Context {
             repo: None,
@@ -2045,6 +2057,29 @@ mod tests {
             Some("x")
         );
         assert_eq!(query_text(&args(None, None), &cx).unwrap(), None);
+        let bom = || Ok("\u{feff}from stdin é😀".to_owned());
+        let with_bom = Context { stdin: &bom, ..cx };
+        assert_eq!(
+            query_text(&args(Some("-"), None), &with_bom)
+                .unwrap()
+                .as_deref(),
+            Some("from stdin é😀")
+        );
+        // A stdin that cannot be read is refused, not an empty query (#1936).
+        let broken = || Err(std::io::Error::other("stdin is closed"));
+        let broken_cx = Context {
+            stdin: &broken,
+            ..cx
+        };
+        let report = query_text(&args(Some("-"), None), &broken_cx).unwrap_err();
+        let failure = report.outcome.failure.clone().unwrap();
+        assert_eq!(report.outcome.exit_code, USAGE_EXIT_CODE);
+        assert_eq!(failure.code, code::USAGE_INVALID_VALUE);
+        assert_eq!(
+            failure.message,
+            "cannot read the query from stdin: stdin is closed"
+        );
+        assert_eq!(failure.argument.as_deref(), Some("QUERY"));
         let refused = |args: Args| {
             let report = query_text(&args, &cx).unwrap_err();
             let failure = report.outcome.failure.clone().unwrap();

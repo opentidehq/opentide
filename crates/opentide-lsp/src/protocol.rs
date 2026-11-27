@@ -631,7 +631,12 @@ pub(crate) fn frame_bodies(mut bytes: &[u8]) -> Vec<String> {
             })
         });
         let start = sep + 4;
-        let Some(body) = length.and_then(|length| bytes.get(start..start + length)) else {
+        // A length past `usize::MAX - start` ends the frames, as a short body
+        // does (#1936).
+        let Some(body) = length
+            .and_then(|length| start.checked_add(length))
+            .and_then(|end| bytes.get(start..end))
+        else {
             break;
         };
         bodies.push(String::from_utf8_lossy(body).into_owned());
@@ -920,6 +925,9 @@ mod tests {
         assert!(frame_bodies(b"").is_empty());
         // A frame cut short is dropped, never read past.
         assert!(frame_bodies(b"Content-Length: 10\r\n\r\n{}").is_empty());
+        // A length whose end overflows is dropped, never wrapped (#1936).
+        let huge = format!("Content-Length: {}\r\n\r\n{{}}", usize::MAX);
+        assert!(frame_bodies(huge.as_bytes()).is_empty());
     }
 
     #[test]

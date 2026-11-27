@@ -633,7 +633,7 @@ async fn read_caps(
     if answer.status != 200 {
         return Err(ElasticError::Rule(failed(answer.status, answer.text())));
     }
-    let data = answer.json().unwrap_or(Json::Null);
+    let data = json_answer(&answer, cx, "_field_caps")?;
     if matches!(data.get("indices"), Some(Json::Array(items)) if items.is_empty()) {
         return Ok(Caps::NotOnboarded);
     }
@@ -642,6 +642,21 @@ async fn read_caps(
             .cloned()
             .unwrap_or(Json::Object(Object::new())),
     ))
+}
+
+/// The JSON of a 200 answer to *what*; a body that is not JSON (a proxy's
+/// page, a truncated answer) is the tenant's refusal, never an empty answer
+/// (#1936).
+fn json_answer(answer: &Answer, cx: TenantContext<'_>, what: &str) -> Result<Json, ConnectorError> {
+    answer.json().ok_or_else(|| {
+        let tenant = &cx.tenant.label.tenant;
+        ConnectorError::refused(
+            PLATFORM,
+            tenant,
+            format!("Elastic answered {what} on {tenant} with a body that is not JSON"),
+            answer.not_json_detail(),
+        )
+    })
 }
 
 /// `any(isinstance(cap, dict) and cap.get(flag) is True for cap in caps.values())`.
@@ -691,7 +706,7 @@ impl Elastic {
                     answer.status
                 )));
             }
-            let data = answer.json().unwrap_or(Json::Null);
+            let data = json_answer(&answer, cx, "the data view lookup")?;
             let title = data_view_title(&data);
             return Ok((title, true));
         }
@@ -717,12 +732,11 @@ impl Elastic {
             return Err(tenant_error("_query", answer.status));
         }
         if answer.status == 200 {
-            return Ok(
-                match answer.json().as_ref().and_then(|data| data.get("columns")) {
-                    Some(Json::Array(columns)) => columns.clone(),
-                    _ => Vec::new(),
-                },
-            );
+            let data = json_answer(&answer, cx, "the ES|QL pre-flight")?;
+            return Ok(match data.get("columns") {
+                Some(Json::Array(columns)) => columns.clone(),
+                _ => Vec::new(),
+            });
         }
         let (kind, reason, blob) = error_payload(&answer);
         if kind == "parsing_exception" || blob.contains("parsing_exception") {
@@ -738,7 +752,7 @@ impl Elastic {
                     return Err(tenant_error("_resolve/index", resolved.status));
                 }
                 if resolved.status == 200 {
-                    let data = resolved.json().unwrap_or(Json::Null);
+                    let data = json_answer(&resolved, cx, "_resolve/index")?;
                     let empty = |key: &str| !data.get(key).is_some_and(Json::is_filled);
                     if empty("indices") && empty("aliases") && empty("data_streams") {
                         warnings.push(format!("ES|QL sources not onboarded yet: {sources}"));
