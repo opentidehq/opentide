@@ -3,14 +3,7 @@
 //! every recursive construct parses at the nesting floor (1,000 levels) with no error, past
 //! `max_depth` it is one `TooDeep` error and no overflow, and a long chain is flat.
 
-#![expect(dead_code, reason = "the included modules are used in part")]
-
-#[path = "../src/lexer.rs"]
-mod lexer;
-#[path = "../src/parser.rs"]
-mod parser;
-#[path = "../src/syntax.rs"]
-mod syntax;
+use opentide_cql::parser;
 
 use opentide_parse::ErrorKind;
 use std::time::{Duration, Instant};

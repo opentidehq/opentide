@@ -2,14 +2,7 @@
 //! parser builds on the files of `crates/testdata`. A test file, not a unit test: the crate's
 //! sources stay free of I/O (`scripts/engine/check-io-free.sh`).
 
-#![expect(dead_code, reason = "the included modules are used in part")]
-
-#[path = "../src/lexer.rs"]
-mod lexer;
-#[path = "../src/parser.rs"]
-mod parser;
-#[path = "../src/syntax.rs"]
-mod syntax;
+use opentide_cql::{parser, syntax};
 
 /// `syntax::PRODUCTIONS` is exactly what a parse builds: on every `.cql` file of
 /// `crates/testdata`, valid or broken, the node kinds other than `ERROR`, and the two comment

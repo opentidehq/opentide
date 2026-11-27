@@ -31,7 +31,9 @@ pub(crate) fn root_of(document: &node::Document) -> Arc<Node> {
         .unwrap_or_else(|| Arc::new(Node::null_at(Mark::default())))
 }
 
-/// What the engine reads of a node.
+/// What the engine reads of a node. An extension trait, not an abstraction
+/// awaiting a second implementation: [`Node`] is opentide-core's, so these
+/// cannot be inherent methods here.
 pub(crate) trait YamlNode {
     /// The text of a string; `None` for any other node, a number included.
     fn as_str(&self) -> Option<&str>;

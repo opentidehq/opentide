@@ -17,7 +17,6 @@ macro_rules! kinds {
         #[repr(u16)]
         #[expect(
             non_camel_case_types,
-            clippy::upper_case_acronyms,
             reason = "the kinds are written as rust-analyzer's are, and named by the ungram"
         )]
         pub enum SyntaxKind {
@@ -94,7 +93,7 @@ impl SyntaxKind {
 /// The node kinds a parse builds: one per named production of `cql.ungram` (its enums,
 /// such as `Filter` and `Expr`, are no node), and the two comments, which tree-sitter's
 /// grammar named. The corpus gate tags each (`prod:<name>`).
-pub(crate) const PRODUCTIONS: &[SyntaxKind] = {
+pub const PRODUCTIONS: &[SyntaxKind] = {
     use SyntaxKind as K;
     &[
         K::LINE_COMMENT,
@@ -154,7 +153,7 @@ pub(crate) const PRODUCTIONS: &[SyntaxKind] = {
 
 /// The `snake_case` name of `kind` (`FIELD_FILTER` is `field_filter`): tree-sitter's
 /// name of the same production.
-pub(crate) fn snake_case(kind: SyntaxKind) -> String {
+pub fn snake_case(kind: SyntaxKind) -> String {
     format!("{kind:?}").to_ascii_lowercase()
 }
 

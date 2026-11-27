@@ -23,9 +23,21 @@ pub mod catalog;
 mod catalog_model;
 pub mod check;
 mod highlight;
-mod lexer;
-mod parser;
-mod syntax;
+// The parser's pieces and the typed AST of `cql.ungram` (written by `cargo xtask codegen`):
+// public but hidden, as KQL's and SPL's, for the crate's corpus, tree and conformance tests
+// (`tests/`). Not an API.
+#[doc(hidden)]
+#[path = "generated/ast.rs"]
+pub mod ast;
+#[doc(hidden)]
+pub mod lexer;
+#[doc(hidden)]
+pub mod parser;
+#[doc(hidden)]
+pub mod syntax;
+// The typed AST and `T!` name the kinds from the crate root.
+#[doc(hidden)]
+pub use syntax::{Lang, SyntaxKind, SyntaxNode, SyntaxToken};
 
 pub use assist::{completions, hover, signature_help};
 
@@ -33,7 +45,7 @@ use opentide_core::{ByteSpan, Diagnostic, Range, codes, span_to_range};
 use opentide_highlight::{HighlightSpec, HighlightToken};
 use opentide_parse::{ErrorKind, SyntaxError};
 use rowan::TextRange;
-use syntax::{SyntaxKind as K, SyntaxNode};
+use syntax::SyntaxKind as K;
 
 /// Where the query runs.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
