@@ -11,7 +11,7 @@
 //!
 //! Every token request is sent on the tenant's own client, so it takes the
 //! tenant's proxy, CA bundles and timeouts: a service-account key signs a JWT
-//! (RS256, `jsonwebtoken`) and exchanges it at the key's `token_uri`; an
+//! (RS256, [`rs256`]) and exchanges it at the key's `token_uri`; an
 //! `authorized_user` file (gcloud's `application-default login`) exchanges its
 //! refresh token; the metadata server is asked for the default service
 //! account's token. A token is reused until 3 minutes 45 seconds before it
@@ -174,7 +174,7 @@ fn from_info(
         let private_key =
             required(&value, "private_key", "service-account key").map_err(invalid)?;
         // A key that does not parse is refused here, as google-auth refuses it.
-        jsonwebtoken::EncodingKey::from_rsa_pem(private_key.as_bytes()).map_err(|error| {
+        rs256::SigningKey::from_pem(&private_key).map_err(|error| {
             LoadError(format!(
                 "cannot load Google credentials: the private key cannot be read ({error})"
             ))
@@ -370,10 +370,8 @@ pub fn assertion(
     token_uri: &str,
     now: Timestamp,
 ) -> Result<String, LoadError> {
-    let key = jsonwebtoken::EncodingKey::from_rsa_pem(private_key.expose().as_bytes())
+    let key = rs256::SigningKey::from_pem(private_key.expose())
         .map_err(|error| LoadError(format!("the private key cannot be read ({error})")))?;
-    let mut header = jsonwebtoken::Header::new(jsonwebtoken::Algorithm::RS256);
-    header.kid = private_key_id.map(str::to_owned);
     let iat = now.as_second();
     let claims = Claims {
         iat,
@@ -382,7 +380,7 @@ pub fn assertion(
         aud: token_uri,
         scope: SCOPE,
     };
-    jsonwebtoken::encode(&header, &claims, &key)
+    rs256::encode(&key, private_key_id, &claims)
         .map_err(|error| LoadError(format!("the private key cannot sign ({error})")))
 }
 
@@ -716,6 +714,8 @@ fn refusal_reason(answer: &Answer) -> String {
             .unwrap_or_else(|| format!("HTTP {}", answer.status)),
     }
 }
+
+mod rs256;
 
 #[cfg(test)]
 mod tests;
