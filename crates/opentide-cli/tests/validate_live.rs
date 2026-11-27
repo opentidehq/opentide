@@ -473,7 +473,7 @@ fn each_outcome_of_a_check_is_the_oracles() {
     assert_eq!(
         first.get("errors"),
         Some(&Json::Array(vec![Json::str(
-            "no answer within the 5s check timeout (no answer from \
+            "no answer within the 5s check timeout (no complete answer from \
              https://splunk.invalid:8089 within 5s). Raise it with --check-timeout or \
              OPENTIDE_QUERY_CHECK_TIMEOUT, or make the query cheaper"
         )]))
