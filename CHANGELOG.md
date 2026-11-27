@@ -68,6 +68,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Eac
 
 ### Fixed
 
+- **A carriage return no longer splits a table row in generated docs** ([#1957](https://github.com/opentidehq/opentide/issues/1957)). `opentide generate docs` joined a table cell's lines at `\n` and `\r\n` only, so a value with a lone `\r` (a YAML `"a\rb"`) ended the row in the middle of the cell. The cell now reads every Markdown line ending, as the CI job summaries already did.
 - **A `.exabeam` search passes `validate query --platform exabeam`** ([#1912](https://github.com/opentidehq/opentide/issues/1912)). `opentide validate query --platform exabeam --file x.exabeam` reported Search's operators (`SELECT`, `WHERE`, `GROUP-BY`, pipes) as `exabeam_advanced_in_rule`, the error for a correlation rule's sequence, although a `.exabeam` file is a search and passed without `--platform`. Sequence filters in an Exabeam block still report it.
 - **`deploy` keeps a connector's own failure code in the rule's row.** A failure a connector reports under a code of its own read as its message alone; the row's `error` now starts with the code (`code: message`), as Microsoft Defender's, Bitdefender's and Google SecOps' rows already did ([#1894](https://github.com/opentidehq/opentide/issues/1894)). The rows that change:
   - Splunk: `splunk_renamed_search_not_deleted`, when a saved search an earlier name of the rule left could not be deleted
