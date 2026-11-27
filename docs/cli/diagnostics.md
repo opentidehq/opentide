@@ -1145,7 +1145,7 @@ Severity: error. Reported by `opentide deploy` on a `bitdefender` tenant (bitdef
 ### Example
 
 ```text illustrative
-bitdefender_tenant_unreachable: bitdefender tenant 'gz' at https://cloudgz.gravityzone.bitdefender.com sent no answer within 30s
+bitdefender_tenant_unreachable: bitdefender tenant 'gz' at https://cloudgz.gravityzone.bitdefender.com sent no complete answer within 30s
 ```
 
 ### How to fix
@@ -4102,7 +4102,7 @@ Severity: error. Reported by `opentide deploy` on an `exabeam` block (exabeam-1.
 ### Example
 
 ```text illustrative
-exabeam_tenant_deployment_failed: code=exabeam_tenant_unreachable tenant=exabeam-eu error=exabeam tenant 'exabeam-eu' at https://api.eu.exabeam.cloud sent no answer within 30s
+exabeam_tenant_deployment_failed: code=exabeam_tenant_unreachable tenant=exabeam-eu error=exabeam tenant 'exabeam-eu' at https://api.eu.exabeam.cloud sent no complete answer within 30s
 ```
 
 ### How to fix
@@ -5231,7 +5231,7 @@ Severity: error. Reported by `opentide deploy` on a `google_secops` tenant (goog
 ### Example
 
 ```text illustrative
-google_secops_tenant_unreachable: google_secops tenant 'eu' at https://eu-chronicle.googleapis.com sent no answer within 30s
+google_secops_tenant_unreachable: google_secops tenant 'eu' at https://eu-chronicle.googleapis.com sent no complete answer within 30s
 ```
 
 ### How to fix

@@ -573,7 +573,7 @@ A query that gets no answer in that time fails its own check, and the other rule
       "tenant": "Default",
       "status": "failed",
       "code": "query_check_timeout",
-      "errors": ["no answer within the 120s check timeout (The read operation timed out). Raise it with --check-timeout or OPENTIDE_QUERY_CHECK_TIMEOUT, or make the query cheaper"],
+      "errors": ["no answer within the 120s check timeout (no complete answer from https://splunk.example.com:8089 within 120s). Raise it with --check-timeout or OPENTIDE_QUERY_CHECK_TIMEOUT, or make the query cheaper"],
       "warnings": []
     }
   ],

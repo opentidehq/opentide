@@ -68,6 +68,7 @@ fn kind_name(kind: LoadErrorKind) -> &'static str {
         LoadErrorKind::RecursiveAlias => "recursive_alias",
         LoadErrorKind::MultipleDocuments => "multiple_documents",
         LoadErrorKind::TooDeep => "too_deep",
+        LoadErrorKind::AliasExpansion => "alias_expansion",
         LoadErrorKind::OutOfRange => "out_of_range",
     }
 }

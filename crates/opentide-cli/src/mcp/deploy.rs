@@ -29,9 +29,8 @@ fn missing_tenants(workspace: &Workspace, uuid: &str, platform: &str) -> Option<
     let tenants = workspace
         .configuration()
         .resolved
-        .tree
-        .get("systems")
-        .and_then(|systems| systems.get(platform))
+        .platforms()
+        .and_then(|platforms| platforms.get(platform))
         .and_then(|system| system.get("tenants"));
     if let Some(Value::Seq(items)) = tenants.map(|node| &node.value)
         && items.iter().any(|item| matches!(item.value, Value::Map(_)))
@@ -194,18 +193,10 @@ fn preview(uuid: &str, status: &str, platform: &str, message: &str, cli: Option<
 /// Whether the merged configuration enables `platform`
 /// (`platforms.<platform>.platform.enabled` is `true`).
 fn platform_enabled(workspace: &Workspace, platform: &str) -> bool {
-    matches!(
-        workspace
-            .configuration()
-            .resolved
-            .tree
-            .get("platforms")
-            .and_then(|platforms| platforms.get(platform))
-            .and_then(|table| table.get("platform"))
-            .and_then(|block| block.get("enabled"))
-            .map(|node| &node.value),
-        Some(Value::Bool(true))
-    )
+    workspace
+        .configuration()
+        .resolved
+        .platform_enabled(platform)
 }
 
 /// `deploy_rule`.
