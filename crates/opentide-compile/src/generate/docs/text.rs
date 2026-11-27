@@ -99,15 +99,26 @@ pub fn inline_code(text: &str) -> String {
 }
 
 /// `text` as a code span, as it is: fenced with a run of backticks longer
-/// than any it holds, and padded with a space inside the fence when it
-/// starts or ends with a backtick, which would otherwise join the fence.
-/// Nothing in it is escaped.
+/// than any it holds. Nothing in it is escaped; empty when the text is, as
+/// CommonMark has no empty code span (`` `` `` is two backticks as text).
+///
+/// It is padded with a space inside the fence when it starts or ends with a
+/// backtick, which would otherwise join the fence, and when it starts and
+/// ends with a space (a line ending counts as one), of which CommonMark
+/// strips one from each end.
 pub fn code_span(text: &str) -> String {
+    if text.is_empty() {
+        return String::new();
+    }
     let mut fence = "`".to_owned();
     while text.contains(&fence) {
         fence.push('`');
     }
-    let padding = if text.starts_with('`') || text.ends_with('`') {
+    let space = [' ', '\n', '\r'];
+    let stripped = text.starts_with(space)
+        && text.ends_with(space)
+        && !text.chars().all(|c| space.contains(&c));
+    let padding = if stripped || text.starts_with('`') || text.ends_with('`') {
         " "
     } else {
         ""
@@ -116,10 +127,26 @@ pub fn code_span(text: &str) -> String {
 }
 
 /// The lines of `text` as Markdown reads them: a line ends at `\n`, `\r\n`
-/// or a lone `\r` (CommonMark). A writer that must keep text on one line, a
+/// or a lone `\r` (CommonMark), and a line ending at the end of the text
+/// starts no line after it. A writer that must keep text on one line, a
 /// table cell, joins these.
 pub fn markdown_lines(text: &str) -> impl Iterator<Item = &str> {
-    text.lines().flat_map(|line| line.split('\r'))
+    let mut rest = text;
+    std::iter::from_fn(move || {
+        if rest.is_empty() {
+            return None;
+        }
+        let Some(at) = rest.find(['\r', '\n']) else {
+            return Some(std::mem::take(&mut rest));
+        };
+        // `at` is the offset of an ASCII byte, so a char boundary.
+        let (line, ending) = rest.split_at_checked(at)?;
+        rest = ending
+            .strip_prefix("\r\n")
+            .or_else(|| ending.get(1..))
+            .unwrap_or_default();
+        Some(line)
+    })
 }
 
 /// `text` without ATT&CK's inline `(Citation: …)` markers, and the blanks
@@ -300,6 +327,45 @@ mod tests {
         assert_eq!(inline_code("a\n  b"), "`a b`");
         assert_eq!(inline_code("é ``😀"), "```é ``😀```");
         assert_eq!(inline_code("😀`"), "`` 😀` ``");
+    }
+
+    #[test]
+    fn code_spans_keep_the_spaces_at_their_ends() {
+        // #2059: CommonMark strips one space from each end of a span that
+        // starts and ends with one, so those spans take one more.
+        assert_eq!(code_span(" a "), "`  a  `");
+        assert_eq!(code_span(" é😀 "), "`  é😀  `");
+        assert_eq!(code_span("\né\n"), "` \né\n `");
+        // One end only, or spaces only: nothing is stripped.
+        assert_eq!(code_span(" é"), "` é`");
+        assert_eq!(code_span("😀 "), "`😀 `");
+        assert_eq!(code_span("  "), "`  `");
+        // A backtick at one end and a space at the other.
+        assert_eq!(code_span("`é "), "`` `é  ``");
+        assert_eq!(code_span(" 😀`"), "``  😀` ``");
+    }
+
+    #[test]
+    fn an_empty_code_span_is_nothing() {
+        // #2059: "``" is two backticks as text, not an empty span.
+        assert_eq!(code_span(""), "");
+        assert_eq!(code_span("é"), "`é`");
+        assert_eq!(code_span("😀"), "`😀`");
+    }
+
+    #[test]
+    fn a_line_ending_at_the_end_starts_no_line() {
+        // #2059: a lone `\r` at the end ends the last line, as `\n` does.
+        let lines = |text| markdown_lines(text).collect::<Vec<_>>();
+        assert_eq!(lines("a\r"), ["a"]);
+        assert_eq!(lines("é\r😀\r"), ["é", "😀"]);
+        assert_eq!(lines("é\n"), ["é"]);
+        assert_eq!(lines("é\r\n"), ["é"]);
+        assert_eq!(lines("é\r\r\n😀"), ["é", "", "😀"]);
+        assert_eq!(lines("\r"), [""]);
+        assert_eq!(lines("\n\n"), ["", ""]);
+        assert!(lines("").is_empty());
+        assert_eq!(lines("é"), ["é"]);
     }
 
     #[test]

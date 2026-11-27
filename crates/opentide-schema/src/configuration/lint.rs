@@ -1,7 +1,7 @@
 //! `lint.toml`: which `opentide lint` checks run, at what severity, and what
-//! they demand (`core/lint_config.py` `parse_lint_config`). The merged
-//! `[lint]` tables are checked in the oracle's order and the first problem
-//! stops, with a message naming the key.
+//! they demand ([`parse_lint_config`]). The merged `[lint]` tables are
+//! checked in a fixed order and the first problem stops, with a message
+//! naming the key.
 //!
 //! A `[filenames]` `pattern` is compiled by the `regex` crate, which has no
 //! look-around or back-reference: such a pattern is refused with the crate's
@@ -31,7 +31,7 @@ pub const FILENAME_KINDS: [&str; 3] = ["threats", "objectives", "rules"];
 /// `metadata.required` when nothing configures it.
 pub const DEFAULT_REQUIRED_METADATA: [&str; 2] = ["author", "organisation"];
 /// Every key an object's `metadata` block can hold, across schemas
-/// (`metadata_keys`; `tests/oracle/config_table.json` holds the oracle's).
+/// (`tests/oracle/config_table.json` records the same list).
 pub const METADATA_KEYS: [&str; 10] = [
     "uuid",
     "schema",
@@ -229,7 +229,8 @@ fn key_of(entry: &crate::node::Entry) -> String {
 ///
 /// # Errors
 ///
-/// The first problem, in the oracle's order and words.
+/// The first problem, in the order the checks run, with a message naming
+/// the key.
 pub fn parse_lint_config(raw: Option<&Node>) -> Result<LintConfig, LintConfigError> {
     let Some(raw) = raw else {
         return Ok(LintConfig::default());

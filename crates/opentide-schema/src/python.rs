@@ -682,8 +682,8 @@ impl DeprecatedModelFields {
 /// The methods of every model class. `Type [identifier]` also gives the
 /// class `__schema_identifier__` and `schema_identifier()`; `(schema =
 /// field: type)` gives it `schema`, the serialised name of `field`, as a
-/// read-only attribute (every class whose serialised and attribute names
-/// differ has one: `test_native_models.py` checks it).
+/// read-only attribute (a class whose serialised and attribute names differ
+/// declares it here).
 macro_rules! py_models {
     ($($ty:ident $([$identifier:expr])? $((schema = $field:ident: $field_ty:ty))? $(with $rule:ident)?),+ $(,)?) => {$(
         #[::pyo3::pymethods]

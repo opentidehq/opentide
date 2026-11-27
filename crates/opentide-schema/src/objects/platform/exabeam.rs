@@ -11,9 +11,8 @@
 //! `exabeam_context_table_trigger`, a rule about the condition a
 //! context-table lookup may take ([`uses_context_table`]).
 //!
-//! A port of 0.28.0's `platforms/exabeam/constraints.py`; the language
-//! server's `opentide-tide` checks the block through this module, never a
-//! second copy.
+//! The language server's `opentide-tide` checks the block through this
+//! module, never a second copy.
 
 use std::collections::BTreeSet;
 use std::sync::OnceLock;
@@ -631,7 +630,7 @@ fn non_blank(node: Option<&Node>) -> bool {
     text(node).is_some_and(|text| !text.trim().is_empty())
 }
 
-/// `_number`: an integer or a float, not a boolean.
+/// An integer or a float, not a boolean.
 fn number(node: &Node) -> bool {
     matches!(node.value, Value::Int(_) | Value::Float(_))
 }
@@ -739,7 +738,7 @@ pub fn uses_context_table(query: &str) -> bool {
     false
 }
 
-/// `_group_by_ok`: a list of up to three distinct non-blank strings, empty
+/// A list of up to three distinct non-blank strings, empty
 /// only when `allow_empty`.
 fn group_by_ok(node: &Node, allow_empty: bool) -> bool {
     let Value::Seq(items) = &node.value else {
@@ -958,7 +957,9 @@ fn correlation_findings(correlation: Option<&Node>, count: usize) -> Vec<Finding
     findings
 }
 
-/// `_email_ok`.
+/// Whether `email` is a mapping with a non-empty list of distinct valid
+/// addresses in `recipients`, a non-blank `subject` when set, and a boolean
+/// `attach_csv` when set.
 fn email_ok(email: &Node) -> bool {
     if !matches!(email.value, Value::Map(_)) {
         return false;
@@ -1025,7 +1026,7 @@ fn distinct(items: &[std::sync::Arc<Node>]) -> bool {
         .all(|(index, item)| items[..index].iter().all(|seen| seen.value != item.value))
 }
 
-/// Why `recurrence` is not a valid `schedule[]` entry (`_recurrence_problem`).
+/// Why `recurrence` is not a valid `schedule[]` entry.
 fn recurrence_problem(recurrence: &Node) -> Option<String> {
     let every = if matches!(recurrence.value, Value::Map(_)) {
         text(field(recurrence, "every"))
@@ -1229,7 +1230,7 @@ pub fn block_codes(block: &Node) -> BTreeSet<&'static str> {
 }
 
 // ---------------------------------------------------------------------------
-// Across the workspace: rule names (`validation/exabeam_names.py`).
+// Across the workspace: rule names.
 // ---------------------------------------------------------------------------
 
 /// The workspace check's code.
@@ -1243,7 +1244,7 @@ fn rule_block(rule: &Node) -> Option<&Node> {
 
 /// The Exabeam rule name a rule resolves to: the block's `name`, else the
 /// rule's; `None` without a block, or, when `enabled_only`, for a block
-/// that is not `enabled: true` (`_exabeam_name`).
+/// that is not `enabled: true`.
 pub fn rule_exabeam_name(rule: &Node, enabled_only: bool) -> Option<String> {
     let block = rule_block(rule)?;
     if enabled_only
@@ -1372,8 +1373,7 @@ pub fn name_findings<'r>(
 }
 
 // ---------------------------------------------------------------------------
-// Advisories (`platforms/exabeam/advisories.py`): warnings that never
-// reject a rule.
+// Advisories: warnings that never reject a rule.
 // ---------------------------------------------------------------------------
 
 /// `outcome: none` and no email.

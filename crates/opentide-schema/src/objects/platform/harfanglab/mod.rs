@@ -3,11 +3,11 @@
 //! one kind per block, and a YARA rule as a whole `signature` or the
 //! decomposed form ([`yara`]).
 //!
-//! | Oracle | Here |
-//! |--------|------|
-//! | `HarfangLabConfig._validate_raw_harfanglab_block` (before) | [`yara::block_codes`], the named check `harfanglab_rule_shape` |
-//! | `HarfangLabYara._decomposed_form_is_complete` (after) | `decomposed_form`, the model's `after` |
-//! | `DetectionRule._harfanglab_yara_rule_name` (after) | [`rule_name`], the rule model's `after` |
+//! | Check | Here |
+//! |-------|------|
+//! | the block's shape (before the fields) | [`yara::block_codes`], the named check `harfanglab_rule_shape` |
+//! | a decomposed YARA rule is complete (after) | `decomposed_form`, the model's `after` |
+//! | the YARA rule name deploy derives from the rule's `name` (after) | [`rule_name`], the rule model's `after` |
 
 pub mod yara;
 
@@ -241,7 +241,7 @@ pub struct HarfangLabYara {
     pub imports: Option<Vec<String>>,
 }
 
-/// The message of `_decomposed_form_is_complete`.
+/// The message when a decomposed `yara` object leaves keys out ([`decomposed_form`]).
 fn decomposed_form_message(missing: &[&str]) -> String {
     format!(
         "a yara object sets signature, or the decomposed meta, strings and condition; missing {}",
@@ -250,7 +250,7 @@ fn decomposed_form_message(missing: &[&str]) -> String {
 }
 
 /// The decomposed form's keys a `yara` object without `signature` leaves
-/// out (`_decomposed_form_is_complete`).
+/// out.
 fn missing_keys(value: &HarfangLabYara) -> Vec<&'static str> {
     if value.signature.is_some() {
         return Vec::new();
@@ -265,9 +265,9 @@ fn missing_keys(value: &HarfangLabYara) -> Vec<&'static str> {
     .collect()
 }
 
-/// `_decomposed_form_is_complete` (after): a `yara` object without
-/// `signature` sets `meta`, `strings` and `condition`. As in Pydantic, it
-/// runs only once the fields validated.
+/// After the fields: a `yara` object without `signature` sets `meta`,
+/// `strings` and `condition`. As in Pydantic, it runs only once the fields
+/// validated.
 fn decomposed_form(value: &HarfangLabYara, node: &Node, cx: &mut Context) -> bool {
     let missing = missing_keys(value);
     if missing.is_empty() {
@@ -277,7 +277,7 @@ fn decomposed_form(value: &HarfangLabYara, node: &Node, cx: &mut Context) -> boo
     false
 }
 
-/// garde: `_decomposed_form_is_complete` on a value built in memory.
+/// garde: [`decomposed_form`] on a value built in memory.
 fn garde_decomposed_form(value: &HarfangLabYara, _pins: &Pins) -> garde::Result {
     let missing = missing_keys(value);
     if missing.is_empty() {

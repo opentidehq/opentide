@@ -1,4 +1,4 @@
-//! Shared metadata models for Tide objects (`models/metadata.py`).
+//! Shared metadata models for Tide objects.
 
 use std::collections::BTreeMap;
 

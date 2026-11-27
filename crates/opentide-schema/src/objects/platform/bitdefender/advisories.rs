@@ -1,5 +1,5 @@
 //! Bitdefender advisories (bitdefender-1.0, Advisories): warnings that never
-//! reject a rule (0.28.0's `platforms/bitdefender/advisories.py`).
+//! reject a rule.
 //!
 //! GravityZone accepts each of these, but the rule then does not do what its
 //! author most likely meant. `opentide validate` reports them as warnings,

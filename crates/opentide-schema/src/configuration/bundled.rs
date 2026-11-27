@@ -3,8 +3,8 @@
 //! `tests/configuration.rs` checks that this list is the folder's.
 
 /// Every bundled `.toml` file, by its path relative to the folder, in the
-/// order the oracle reads them (sorted by name, the `platforms/` folder in
-/// its place).
+/// order they are read: sorted by name, the `platforms/` folder in its
+/// place.
 pub const FILES: [(&str, opentide_dataset::TextFn); 21] = [
     ("deployment.toml", || {
         opentide_dataset::text!("src/opentide/data/configurations/deployment.toml")
@@ -101,7 +101,7 @@ pub fn layer(file_key: &str) -> crate::node::Node {
 }
 
 /// The `tlp` names of the bundled vocabulary, in its order; the `TlpName`
-/// values when it holds none (`_tlp_names`).
+/// values when it holds none.
 pub fn tlp_names() -> Vec<String> {
     let names: Vec<String> = super::toml::parse(tlp_vocabulary())
         .ok()

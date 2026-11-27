@@ -1,6 +1,6 @@
-//! VS Code snippets from the object and platform templates
-//! (`vscode_snippets.py`): each template's lines, with a tabstop on every
-//! empty value and on every `...`; commented optional lines stay comments.
+//! VS Code snippets from the object and platform templates: each template's
+//! lines, with a tabstop on every empty value and on every `...`; commented
+//! optional lines stay comments.
 
 use std::sync::OnceLock;
 

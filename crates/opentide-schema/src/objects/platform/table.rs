@@ -1,6 +1,6 @@
-//! The platform blocks against the oracle (UC-1.4, #810): every case of
+//! The platform blocks' table (UC-1.4, #810): every case of
 //! `tests/oracle/platform_cases.toml`, a rule holding one or more blocks,
-//! compared with what the oracle reports (`objects_table.json`, written by
+//! compared with its recorded result (`objects_table.json`, written by
 //! `objects_table.py`) by [`crate::objects::table::compare`]: each error's
 //! type, field path, message, input, context, span and `yaml_line`, or the
 //! whole validated value. A case that differs names the `[[difference]]`
@@ -8,14 +8,14 @@
 //! `src/objects/platform/snapshots/`.
 
 #[test]
-fn platform_cases_match_the_oracle() {
+fn platform_cases_convert_as_their_reviewed_snapshot() {
     let (failures, results) = crate::objects::table::compare(
         include_str!("../../../tests/oracle/platform_cases.toml"),
         |id| id.starts_with("platform-"),
         false,
     );
-    // The Python oracle's verdicts are no longer asserted (they had drifted by
-    // design, #1139): the reviewed snapshot below is the contract.
+    // The recorded results are not asserted (they drift by design, #1139):
+    // the reviewed snapshot below is the contract.
     drop(failures);
     insta::assert_snapshot!(
         "platform_results",

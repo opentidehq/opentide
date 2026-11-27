@@ -114,7 +114,7 @@ depends on opentide-core (`codes`, `suggest`). Not published yet (`publish = fal
 - `metadata.schema` is read through `revisions` (`select`, `read`), never matched by hand; a new
   revision is a row of `REVISIONS`, its struct, its `From` step and its arm of `TideObject::step`.
   `objects::checks::REGISTERED` is the registry's object and configuration rows
-  (`revisions::tests::the_object_registry_is_the_oracles`).
+  (`revisions::tests::the_object_registry_is_the_registered_object_revisions`).
 
 ## Test
 
