@@ -153,18 +153,9 @@ pub fn tenant_name(tenant: &Json) -> &str {
         .unwrap_or_default()
 }
 
-/// A value as text: a string as it is, anything else as its JSON (`42`,
-/// `1.5`, `true`, `null`).
-pub fn text(value: &Json) -> String {
-    match value {
-        Json::Str(text) => text.clone(),
-        other => other.to_compact(),
-    }
-}
-
 /// A setup string, `""` when unset.
 pub fn setup_text(tenant: &Json, key: &str) -> String {
-    setup(tenant, key).map(text).unwrap_or_default()
+    setup(tenant, key).map(Json::to_text).unwrap_or_default()
 }
 
 /// A tenant's on-or-off setup value at `key`: `default` when it is unset,
@@ -183,7 +174,7 @@ pub fn setup_switch(tenant: &Json, key: &str, default: bool) -> Result<bool, Str
         )),
         Some(other) => Err(format!(
             "{key} must be true or false, got {:?}",
-            text(other)
+            other.to_text()
         )),
     }
 }
@@ -302,15 +293,6 @@ mod tests {
         assert_eq!(encoded("logs-*,x_y.z~"), "logs-*,x_y.z~");
         assert_eq!(encoded("a b/c?d#e%"), "a%20b%2Fc%3Fd%23e%25");
         assert_eq!(encoded("é"), "%C3%A9");
-    }
-
-    #[test]
-    fn values_are_written_as_text_and_json() {
-        assert_eq!(text(&Json::Int(42)), "42");
-        assert_eq!(text(&Json::Str("x".into())), "x");
-        assert_eq!(text(&Json::Bool(true)), "true");
-        assert_eq!(text(&Json::Float(1.5)), "1.5");
-        assert_eq!(text(&Json::Null), "null");
     }
 
     #[test]

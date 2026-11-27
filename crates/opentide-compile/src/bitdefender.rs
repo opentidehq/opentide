@@ -180,7 +180,7 @@ pub fn derive_severity(rule: &Rule, block: &BitdefenderConfig) -> i64 {
     else {
         return DEFAULT_SEVERITY;
     };
-    let text = crate::deploy::text(written);
+    let text = Json::to_text(written);
     alert_severity(&text.trim().to_lowercase()).unwrap_or(DEFAULT_SEVERITY)
 }
 
@@ -333,7 +333,7 @@ pub fn derive_settings(
 
 fn aliases(value: Option<&Json>) -> Vec<String> {
     match value {
-        Some(Json::Array(items)) => items.iter().map(crate::deploy::text).collect(),
+        Some(Json::Array(items)) => items.iter().map(Json::to_text).collect(),
         _ => Vec::new(),
     }
 }
@@ -478,7 +478,7 @@ pub fn compile_rule(
             )
         })?;
         tenant_tags = aliases(setup(tenant, "tags"));
-        company_id = setup(tenant, "company_id").map(crate::deploy::text);
+        company_id = setup(tenant, "company_id").map(Json::to_text);
     }
     Ok(GravityZoneRule {
         uuid: rule.uuid.clone(),

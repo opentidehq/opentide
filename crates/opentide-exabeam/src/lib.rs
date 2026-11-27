@@ -85,6 +85,25 @@ pub fn analyze(source: &str) -> AnalyzeResult {
     analyze_with(source, &Context::default())
 }
 
+/// The Exabeam Query Language [`QueryEngine`](opentide_highlight::QueryEngine) (#1953):
+/// [`analyze`] behind the shared interface.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Engine;
+
+impl opentide_highlight::QueryEngine for Engine {
+    fn language(&self) -> opentide_core::LanguageId {
+        opentide_core::LanguageId::Exabeam
+    }
+
+    fn analyze(&self, source: &str) -> opentide_highlight::AnalyzeResult {
+        let r = analyze(source);
+        opentide_highlight::AnalyzeResult {
+            diagnostics: r.diagnostics,
+            tokens: r.tokens,
+        }
+    }
+}
+
 /// Analyze a query where `ctx` says it runs.
 #[expect(
     clippy::expect_used,

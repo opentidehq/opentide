@@ -150,7 +150,7 @@ pub fn error_of(answer: &Answer) -> (String, String) {
 /// A value as text; an empty or `null` one as nothing.
 fn text(value: &Json) -> String {
     if value.is_filled() {
-        opentide_compile::deploy::text(value)
+        Json::to_text(value)
     } else {
         String::new()
     }

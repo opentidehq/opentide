@@ -141,14 +141,6 @@ fn parse_message(text: &str) -> Result<Json, serde_json::Error> {
     serde_json::from_str::<serde_json::Value>(text).and_then(Json::deserialize)
 }
 
-/// A path `invalidate` names: a string as is, anything else as its JSON.
-fn path_text(value: &Json) -> String {
-    match value {
-        Json::Str(text) => text.clone(),
-        other => compact(other),
-    }
-}
-
 /// A protocol problem, answered with a JSON-RPC error.
 struct ProtocolError(i64, &'static str);
 
@@ -639,7 +631,7 @@ impl Server {
         };
         if method == "invalidate" {
             if let Some(Json::Array(paths)) = params.get("paths") {
-                let paths: Vec<String> = paths.iter().map(path_text).collect();
+                let paths: Vec<String> = paths.iter().map(Json::to_text).collect();
                 self.inner.runner.invalidate(&paths);
                 tracing::debug!(paths = paths.len(), "serve_invalidated");
             }

@@ -112,15 +112,6 @@ fn text<'j>(object: Option<&'j Json>, key: &str) -> Option<&'j str> {
         .filter(|text| !text.is_empty())
 }
 
-/// A duration field, given as the model reads it: a string, or the text of a
-/// number.
-fn duration_text(value: &Json) -> String {
-    match value {
-        Json::Str(text) => text.clone(),
-        other => other.to_compact(),
-    }
-}
-
 /// The code of the warning a technique newer than ATT&CK v18 earns.
 pub const TECHNIQUE_NEWER_CODE: &str = "technique_newer_than_sentinel_attack";
 
@@ -286,11 +277,11 @@ pub fn compile_with_warnings(
         };
         properties.insert(
             "queryFrequency".into(),
-            Json::Str(iso(&duration_text(frequency))?),
+            Json::Str(iso(&Json::to_text(frequency))?),
         );
         properties.insert(
             "queryPeriod".into(),
-            Json::Str(iso(&duration_text(lookback))?),
+            Json::Str(iso(&Json::to_text(lookback))?),
         );
         if let Some(trigger) = block.get("trigger").filter(|trigger| trigger.is_filled()) {
             properties.insert(
@@ -377,7 +368,7 @@ pub fn compile_with_warnings(
     configuration.insert(
         "lookbackDuration".into(),
         Json::Str(iso(
-            &lookback.map_or_else(|| "1h".to_owned(), duration_text)
+            &lookback.map_or_else(|| "1h".to_owned(), Json::to_text)
         )?),
     );
     configuration.insert(

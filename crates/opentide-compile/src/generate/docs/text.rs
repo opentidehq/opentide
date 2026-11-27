@@ -4,6 +4,9 @@
 //! turn them into Markdown that renders the same on every flavour: no raw
 //! newlines inside table cells, no unescaped pipes, code spans that hold
 //! backticks.
+//!
+//! [`code_span`] and [`markdown_lines`] are the one copy for every place
+//! that writes Markdown, the command line's job summaries included (#1957).
 
 /// Whitespace runs collapsed to one space, the ends trimmed.
 pub fn collapse(text: &str) -> String {
@@ -85,13 +88,21 @@ pub fn table_cell(text: &str) -> String {
     if out.is_empty() { "-".to_owned() } else { out }
 }
 
-/// `text` as a code span, the fence widened when the text holds backticks;
-/// empty when the text is.
+/// `text` as a code span, its white space collapsed ([`code_span`]); empty
+/// when the text is.
 pub fn inline_code(text: &str) -> String {
     let text = collapse(text);
     if text.is_empty() {
         return String::new();
     }
+    code_span(&text)
+}
+
+/// `text` as a code span, as it is: fenced with a run of backticks longer
+/// than any it holds, and padded with a space inside the fence when it
+/// starts or ends with a backtick, which would otherwise join the fence.
+/// Nothing in it is escaped.
+pub fn code_span(text: &str) -> String {
     let mut fence = "`".to_owned();
     while text.contains(&fence) {
         fence.push('`');
@@ -102,6 +113,13 @@ pub fn inline_code(text: &str) -> String {
         ""
     };
     format!("{fence}{padding}{text}{padding}{fence}")
+}
+
+/// The lines of `text` as Markdown reads them: a line ends at `\n`, `\r\n`
+/// or a lone `\r` (CommonMark). A writer that must keep text on one line, a
+/// table cell, joins these.
+pub fn markdown_lines(text: &str) -> impl Iterator<Item = &str> {
+    text.lines().flat_map(|line| line.split('\r'))
 }
 
 /// `text` without ATT&CK's inline `(Citation: …)` markers, and the blanks
@@ -280,6 +298,8 @@ mod tests {
         assert_eq!(inline_code("`a`"), "`` `a` ``");
         assert_eq!(inline_code(" \n "), "");
         assert_eq!(inline_code("a\n  b"), "`a b`");
+        assert_eq!(inline_code("é ``😀"), "```é ``😀```");
+        assert_eq!(inline_code("😀`"), "`` 😀` ``");
     }
 
     #[test]

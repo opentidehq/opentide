@@ -24,7 +24,6 @@ use crate::connector::{
     probe_verdict,
 };
 use crate::error::ConnectorError;
-use crate::text::json_text;
 use crate::{HttpSettings, TenantLabel};
 use opentide_compile::deploy::PATH_SEGMENT;
 use percent_encoding::utf8_percent_encode;
@@ -323,7 +322,7 @@ impl SavedSearch {
                 // `form` sends a null as the text `null`, which no tenant
                 // holds as "unset": a null is always a write.
                 Json::Array(_) | Json::Null => return false,
-                other => json_text(other),
+                other => Json::to_text(other),
             };
             let Some(held) = self
                 .content
@@ -389,28 +388,28 @@ fn messages(body: &Object, kinds: &[&str]) -> String {
         .iter()
         .filter_map(Json::as_object)
         .filter(|message| {
-            let kind = message.get("type").map(json_text).unwrap_or_default();
+            let kind = message.get("type").map(Json::to_text).unwrap_or_default();
             kinds.contains(&kind.to_uppercase().as_str())
         })
-        .map(|message| message.get("text").map(json_text).unwrap_or_default())
+        .map(|message| message.get("text").map(Json::to_text).unwrap_or_default())
         .filter(|text| !text.is_empty())
         .collect::<Vec<_>>()
         .join("; ")
 }
 
 /// A form of *pairs*, a list as one field per item and any other value as
-/// its text ([`json_text`]).
+/// its text ([`Json::to_text`]).
 fn form(pairs: &[(String, Json)]) -> String {
     let mut form = url::form_urlencoded::Serializer::new(String::new());
     for (key, value) in pairs {
         match value {
             Json::Array(items) => {
                 for item in items {
-                    form.append_pair(key, &json_text(item));
+                    form.append_pair(key, &Json::to_text(item));
                 }
             }
             other => {
-                form.append_pair(key, &json_text(other));
+                form.append_pair(key, &Json::to_text(other));
             }
         }
     }
@@ -860,7 +859,7 @@ impl Splunk {
         };
         let uuid = settings
             .get("description")
-            .map(json_text)
+            .map(Json::to_text)
             .as_deref()
             .and_then(opentide_compile::splunk::marked_rule)
             .map(str::to_owned);
@@ -941,7 +940,10 @@ impl Splunk {
                 second.insert(key.into(), value);
             }
         }
-        let query = settings.get("search").map(json_text).unwrap_or_default();
+        let query = settings
+            .get("search")
+            .map(Json::to_text)
+            .unwrap_or_default();
         let saved = match self.saved_search(cx, name).await? {
             Some(saved) => saved,
             None if deletion => return Ok(None),
@@ -1103,7 +1105,7 @@ fn all_messages(body: &Object) -> String {
     items
         .iter()
         .filter_map(Json::as_object)
-        .map(|message| message.get("text").map(json_text).unwrap_or_default())
+        .map(|message| message.get("text").map(Json::to_text).unwrap_or_default())
         .filter(|text| !text.is_empty())
         .collect::<Vec<_>>()
         .join("; ")

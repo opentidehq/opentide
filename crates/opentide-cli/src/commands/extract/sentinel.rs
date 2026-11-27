@@ -18,7 +18,6 @@ use opentide_compile::json::{Json as CJson, Object};
 use opentide_connectors::Environment;
 use opentide_connectors::connector::TenantContext;
 use opentide_connectors::sentinel::Sentinel;
-use opentide_connectors::text::json_text;
 use tokio_util::sync::CancellationToken;
 
 use super::{
@@ -179,7 +178,7 @@ fn convert_period(period: &str) -> String {
 /// otherwise. A value of several lines is a JSON string, which YAML reads as
 /// a double-quoted scalar, as the oracle wrote it.
 pub(crate) fn scalar(value: &CJson) -> String {
-    let text = json_text(value);
+    let text = CJson::to_text(value);
     if !text.contains('\n') {
         let options = serde_saphyr::ser_options! {
             indent_step: 2,
@@ -222,7 +221,7 @@ pub(crate) fn block_text(text: &str, field: &str) -> Result<String, FieldError> 
 /// writes it, so a string cannot break the line it is on.
 fn literal(value: &CJson) -> String {
     match value {
-        CJson::Bool(_) | CJson::Int(_) | CJson::UInt(_) | CJson::Float(_) => json_text(value),
+        CJson::Bool(_) | CJson::Int(_) | CJson::UInt(_) | CJson::Float(_) => CJson::to_text(value),
         _ => scalar(value),
     }
 }
@@ -285,7 +284,7 @@ fn items(object: &Object, key: &str) -> Result<Vec<CJson>, FieldError> {
 /// `_alert_techniques`: each sub-technique in place of its parent, a parent
 /// without one kept, an orphan sub-technique after them, each once.
 fn alert_techniques(techniques: &[CJson], sub_techniques: &[CJson]) -> Vec<CJson> {
-    let text = |value: &CJson| json_text(value);
+    let text = |value: &CJson| CJson::to_text(value);
     let mut result: Vec<CJson> = Vec::new();
     for technique in techniques {
         let parent = text(technique);
@@ -360,27 +359,27 @@ pub(crate) fn render(
         "DISABLED"
     };
     let kind = rule.get("kind");
-    let (trigger, scheduling) = if kind.map_or_else(String::new, json_text).to_uppercase() == "NRT"
-    {
-        (TRIGGER_TEMPLATE.to_owned(), NRT_SCHEDULING.to_owned())
-    } else if kind == Some(&CJson::Str("Scheduled".into())) {
-        let operator = scalar(required(rule, "trigger_operator")?);
-        let threshold = literal(required(rule, "trigger_threshold")?);
-        let frequency = period(required_text(rule, "query_frequency")?);
-        let lookback = period(required_text(rule, "query_period")?);
-        (
-            fill(
-                TRIGGER,
-                &[("operator", &operator), ("threshold", &threshold)],
-            ),
-            fill(
-                SCHEDULING,
-                &[("frequency", &frequency), ("lookback", &lookback)],
-            ),
-        )
-    } else {
-        return Ok(None);
-    };
+    let (trigger, scheduling) =
+        if kind.map_or_else(String::new, CJson::to_text).to_uppercase() == "NRT" {
+            (TRIGGER_TEMPLATE.to_owned(), NRT_SCHEDULING.to_owned())
+        } else if kind == Some(&CJson::Str("Scheduled".into())) {
+            let operator = scalar(required(rule, "trigger_operator")?);
+            let threshold = literal(required(rule, "trigger_threshold")?);
+            let frequency = period(required_text(rule, "query_frequency")?);
+            let lookback = period(required_text(rule, "query_period")?);
+            (
+                fill(
+                    TRIGGER,
+                    &[("operator", &operator), ("threshold", &threshold)],
+                ),
+                fill(
+                    SCHEDULING,
+                    &[("frequency", &frequency), ("lookback", &lookback)],
+                ),
+            )
+        } else {
+            return Ok(None);
+        };
     let create_incident = mapping(rule, "incident_configuration")?
         .and_then(|incident| incident.get("create_incident"))
         .map_or_else(|| "false".to_owned(), literal);
@@ -717,7 +716,7 @@ fn run(cx: &Context<'_>, connector: &Sentinel, written_count: &mut usize) -> Out
                 skipped.push("", "the listed rule is not a JSON object");
                 continue;
             };
-            let field = |key: &str| rule.get(key).map(json_text).unwrap_or_default();
+            let field = |key: &str| rule.get(key).map(CJson::to_text).unwrap_or_default();
             let (display_name, text) = match render(rule, &configured.name) {
                 Ok(Some(rendered)) => rendered,
                 Ok(None) => continue,

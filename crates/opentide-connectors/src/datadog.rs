@@ -195,14 +195,6 @@ impl From<ConnectorError> for Failure {
     }
 }
 
-/// A value as text: a string as itself, any other value in its JSON form.
-fn scalar_text(value: &Json) -> String {
-    match value {
-        Json::Str(text) => text.clone(),
-        other => other.to_compact(),
-    }
-}
-
 /// The [`ApiError`] a non-2xx answer reports, with Datadog's `errors[]`
 /// (strings, or objects with a `detail` or `title`).
 pub fn api_error(action: &str, answer: &Answer) -> ApiError {
@@ -216,8 +208,8 @@ pub fn api_error(action: &str, answer: &Answer) -> ApiError {
                 Json::Object(fields) => ["detail", "title", "message"]
                     .iter()
                     .find_map(|key| fields.get(*key).filter(|value| value.is_filled()))
-                    .map_or_else(|| entry.to_compact(), scalar_text),
-                other => scalar_text(other),
+                    .map_or_else(|| entry.to_compact(), Json::to_text),
+                other => Json::to_text(other),
             })
             .filter(|text| !text.trim().is_empty())
             .collect();
@@ -674,7 +666,7 @@ fn covers(ours: &Json, theirs: Option<&Json>) -> bool {
 /// The tags of a value, as a set.
 fn tag_set(value: Option<&Json>) -> std::collections::BTreeSet<String> {
     match value {
-        Some(Json::Array(items)) => items.iter().map(scalar_text).collect(),
+        Some(Json::Array(items)) => items.iter().map(Json::to_text).collect(),
         _ => std::collections::BTreeSet::new(),
     }
 }
@@ -1095,7 +1087,7 @@ async fn create(
         outcome.failure = Some(rule_failure(failure)?);
         return Ok(());
     }
-    let name = rule.body.get("name").map(scalar_text).unwrap_or_default();
+    let name = rule.body.get("name").map(Json::to_text).unwrap_or_default();
     let quoted = opentide_schema::configuration::repr::quote(&name);
     let unconfirmed = |how: &str| {
         format!(
@@ -1132,7 +1124,7 @@ async fn create(
     };
     let Some(rule_id) = created
         .get("id")
-        .map(scalar_text)
+        .map(Json::to_text)
         .map(|id| id.trim().to_owned())
         .filter(|id| !id.is_empty())
     else {

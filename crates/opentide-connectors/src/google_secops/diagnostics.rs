@@ -66,7 +66,7 @@ fn diagnostic(raw: &Json) -> Diagnostic {
     let text = |key: &str| {
         raw.get(key)
             .filter(|value| value.is_filled())
-            .map(opentide_compile::deploy::text)
+            .map(Json::to_text)
     };
     Diagnostic {
         message: text("message").unwrap_or_else(|| "no message".to_owned()),

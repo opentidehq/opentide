@@ -233,7 +233,7 @@ fn the_name_check_is_exact_and_case_insensitive() {
     let ids = |name: &str| -> Vec<String> {
         name_matches(&rules, name)
             .iter()
-            .map(|rule| rule.get("id").map(scalar_text).unwrap_or_default())
+            .map(|rule| rule.get("id").map(Json::to_text).unwrap_or_default())
             .collect()
     };
     assert_eq!(ids("failed logins"), ["1"]);
@@ -253,7 +253,7 @@ fn the_name_check_folds_case_fully() {
     let ids = |name: &str| -> Vec<String> {
         name_matches(&rules, name)
             .iter()
-            .map(|rule| rule.get("id").map(scalar_text).unwrap_or_default())
+            .map(|rule| rule.get("id").map(Json::to_text).unwrap_or_default())
             .collect()
     };
     assert_eq!(ids("FILE ACCESS 😀"), ["1"]);

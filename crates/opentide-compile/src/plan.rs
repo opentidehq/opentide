@@ -270,17 +270,13 @@ pub const MIGRATE_ADVICE: &str =
 
 /// The rule's UUID as the oracle reads a raw document (`object_uuid`).
 fn object_uuid(rule: &Json) -> Option<String> {
-    let text = |value: &Json| match value {
-        Json::Str(text) => text.clone(),
-        other => other.to_compact(),
-    };
     if let Some(top) = rule.get("uuid").filter(|value| value.is_name()) {
-        return Some(text(top));
+        return Some(top.to_text());
     }
     rule.get("metadata")
         .and_then(|metadata| metadata.get("uuid"))
         .filter(|value| value.is_name())
-        .map(text)
+        .map(Json::to_text)
 }
 
 /// The rule files of `scope`, read with `read`, selected for the run.
@@ -352,10 +348,7 @@ pub fn select(
                 let status = block
                     .get("status")
                     .filter(|status| status.is_filled())
-                    .map(|status| match status {
-                        Json::Str(text) => text.clone(),
-                        other => other.to_compact(),
-                    })
+                    .map(Json::to_text)
                     .ok_or_else(|| {
                         // The oracle's `get_platform_status` logs it, then raises.
                         let detail = format!(

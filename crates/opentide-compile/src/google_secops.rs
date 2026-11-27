@@ -74,7 +74,7 @@ pub fn facts(cx: &Context<'_>, rule: &Rule) -> RuleFacts {
         metadata
             .and_then(|metadata| metadata.get(key))
             .filter(|value| !value.is_null())
-            .map(deploy::text)
+            .map(Json::to_text)
     };
     let mut techniques = elastic::rule_techniques(cx, rule);
     techniques.sort();
@@ -89,7 +89,7 @@ pub fn facts(cx: &Context<'_>, rule: &Rule) -> RuleFacts {
             .response()
             .and_then(|response| response.get("alert_severity"))
             .filter(|value| !value.is_null())
-            .map(deploy::text),
+            .map(Json::to_text),
         techniques,
     }
 }
@@ -132,7 +132,7 @@ pub fn compile_offline(cx: &Context<'_>, rule: &Rule) -> Result<Json, CompileErr
 pub fn compile_deployment(cx: &Context<'_>, rule: &Rule) -> Result<Json, CompileError> {
     let assembled = assemble(cx, rule)?;
     let block = rule.block(PLATFORM).cloned().unwrap_or(Json::Null);
-    let status = block.get("status").map(deploy::text).unwrap_or_default();
+    let status = block.get("status").map(Json::to_text).unwrap_or_default();
     let strategy = cx
         .statuses
         .strategy(&status)
