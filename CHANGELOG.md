@@ -9,6 +9,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Eac
 ### Upgrade
 
 1. If CI runs `opentide lint --strict` on Microsoft Defender rules (`opentide setup ci` generates it), it now fails on three new warnings. To keep the previous result while you fix the rules, set each to `"info"` under `[queries.codes]` in `.opentide/configurations/lint.toml`: `microsoft_defender_custom_details_limit`, `microsoft_defender_placeholder_limit` and `microsoft_defender_nrt_query`.
+2. If CI runs `opentide generate docs --changed` in a shallow clone, check out the full history: `fetch-depth: 0` on GitHub Actions' `actions/checkout`, `GIT_DEPTH: "0"` on GitLab, `fetchDepth: 0` on Azure Pipelines. The run now fails where it used to compare with `HEAD` and report nothing changed.
 
 ### Added
 
@@ -34,7 +35,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Eac
 - **`validate` fails its `schema` check on a platform block's constraint codes.** A run whose only errors were codes such as `microsoft_defender_severity`, `graylog_priority` or `exabeam_name_duplicate` reported `checks.schema.status: "passed"` beside `ok: false`. Every code a platform model reports under its own name, and `exabeam_name_duplicate`, now fail the check ([#1893](https://github.com/opentidehq/opentide/issues/1893)).
 - **Tenant credentials no longer appear in a debug print of the configuration** ([#1933](https://github.com/opentidehq/opentide/issues/1933)). In the Rust SDK, `{:?}` of a tenant setup or a `[[misp]]` block (in a log line, a panic message or a failed test) printed its token, client secret or API key as written. Sentinel, Splunk, Carbon Black Cloud, SentinelOne, Microsoft Defender, CrowdStrike and HarfangLab setups and MISP blocks now print `[REDACTED]` in its place.
 - **`validate` reports a Defender schedule that ends in a non-ASCII character instead of crashing** ([#1926](https://github.com/opentidehq/opentide/issues/1926)). `schedule: frequency: 1é` stopped the whole run with `failure.code: internal`; it is now the error `microsoft_defender_frequency` (or `microsoft_defender_lookback`), in `validate`, the editor and `deploy`. `generate extract microsoft_defender` no longer crashes on such a schedule from Graph either.
-- **`generate docs --changed` fails on a git baseline it cannot read instead of guessing.** A shallow clone without the merge base with the default branch compared with HEAD, a baseline tree or file git could not read made a folder look empty or a committed file look new, and a rule file that could not be read looked deleted. Each is now the run's failure; in a shallow clone, the message says to check out the full history (`fetch-depth: 0`) ([#1931](https://github.com/opentidehq/opentide/issues/1931)).
+- **`generate docs --changed` fails on a git baseline it cannot read instead of guessing** ([#1931](https://github.com/opentidehq/opentide/issues/1931)). It used to compare with `HEAD`, or with an empty tree, and report the wrong pages. Each of these is now the run's failure (`status: failed`, exit `1`), with an `error` that starts `--changed could not read the git baseline:`:
+  - a shallow clone that does not hold the merge base with the default branch, or holds no default-branch ref at all (`actions/checkout`'s default depth of 1); the message says to check out the full history (`fetch-depth: 0`)
+  - a baseline commit, tree or file git cannot read, which made a folder look empty or a committed file look new
+  - an object folder or file in the work tree that cannot be read, whose committed files looked deleted
 
 ## [1.1.0] — 2026-11-26
 

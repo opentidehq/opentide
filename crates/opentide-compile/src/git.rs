@@ -1514,8 +1514,10 @@ fn upstream(git_dir: &Path, branch: &str) -> Option<(String, bool)> {
     }
 }
 
-/// The baseline refs to try, most specific first (`candidate_refs`).
-fn candidate_refs(repo: &Repo, git_dir: &Path) -> Vec<String> {
+/// The baseline refs to try, most specific first (`candidate_refs`), and
+/// the last resort apart: a non-default branch's own upstream, tried after
+/// every other.
+fn candidate_refs(repo: &Repo, git_dir: &Path) -> (Vec<String>, Option<String>) {
     let head_branch = current_branch(repo);
     let remote_default = remote_default_branch(repo);
     let tracked = head_branch
@@ -1543,7 +1545,6 @@ fn candidate_refs(repo: &Repo, git_dir: &Path) -> Vec<String> {
             .map(|name| format!("origin/{name}")),
     );
     candidates.extend(DEFAULT_BRANCH_NAMES.iter().map(|name| (*name).to_owned()));
-    candidates.extend(last_resort);
     let mut ordered: Vec<String> = Vec::new();
     for candidate in candidates {
         if Some(&candidate) == head_branch.as_ref() || ordered.contains(&candidate) {
@@ -1551,7 +1552,10 @@ fn candidate_refs(repo: &Repo, git_dir: &Path) -> Vec<String> {
         }
         ordered.push(candidate);
     }
-    ordered
+    let last_resort = last_resort.filter(|candidate| {
+        Some(candidate) != head_branch.as_ref() && !ordered.contains(candidate)
+    });
+    (ordered, last_resort)
 }
 
 /// The commit the work is compared with (`resolve_baseline`): HEAD's merge
@@ -1560,10 +1564,23 @@ fn candidate_refs(repo: &Repo, git_dir: &Path) -> Vec<String> {
 /// A merge base the walk cannot finish (a commit it needs is not in the
 /// clone) is an error, and so is none at all in a shallow clone, whose walk
 /// stops where its history does: it says to fetch more history, never
-/// compares with HEAD instead (#1931).
+/// compares with HEAD instead (#1931). So is a shallow clone that holds no
+/// candidate but the branch's own upstream (`actions/checkout`'s default:
+/// one commit of one ref); a full clone compares with that upstream, else
+/// HEAD.
 fn baseline(repo: &Repo, git_dir: &Path) -> Result<ObjectId, GitError> {
     let head = head_commit(repo).ok_or_else(|| failed(NO_GIT_MESSAGE))?;
-    for candidate in candidate_refs(repo, git_dir) {
+    let (candidates, last_resort) = candidate_refs(repo, git_dir);
+    if repo.shallow
+        && !candidates
+            .iter()
+            .any(|candidate| commit_id(repo, candidate).is_some())
+    {
+        return Err(failed(format!(
+            "Could not find a default branch to compare HEAD with: {SHALLOW_HINT}"
+        )));
+    }
+    for candidate in candidates.into_iter().chain(last_resort) {
         let Some(id) = commit_id(repo, &candidate) else {
             continue;
         };

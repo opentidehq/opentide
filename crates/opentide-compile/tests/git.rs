@@ -1726,3 +1726,44 @@ fn docs_changes_in_a_shallow_clone_without_the_merge_base_say_to_fetch_history()
         "{error:?}"
     );
 }
+
+/// A shallow single-branch clone (`actions/checkout`'s default: depth 1, one
+/// ref) holds no default-branch ref, and its branch's own upstream is HEAD:
+/// it says to fetch more history, not compare with HEAD (#1931).
+#[test]
+fn docs_changes_in_a_shallow_single_branch_clone_say_to_fetch_history() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dunce::canonicalize(dir.path()).unwrap();
+    let origin = root.join("origin");
+    std::fs::create_dir_all(&origin).unwrap();
+    git_cmd(&origin, &["init", "-q", "-b", "main"]);
+    write(&origin, "rules/a.yaml", "a: 1\n");
+    commit(&origin, "a");
+    git_cmd(&origin, &["checkout", "-q", "-b", "feature"]);
+    write(&origin, "rules/bé.yaml", "b: 1\n");
+    commit(&origin, "on the branch");
+    git_cmd(&origin, &["checkout", "-q", "main"]);
+    let path = origin.to_string_lossy().replace('\\', "/");
+    let url = format!("file:///{}", path.trim_start_matches('/'));
+    let shallow = root.join("shallow");
+    git_cmd(
+        &root,
+        &[
+            "clone",
+            "-q",
+            "--depth",
+            "1",
+            "--single-branch",
+            "--branch",
+            "feature",
+            &url,
+            &shallow.to_string_lossy(),
+        ],
+    );
+    let keep = |_: &str| true;
+    let error = git::changed_in_folders(&shallow, &[shallow.join("rules")], &keep).unwrap_err();
+    assert!(
+        matches!(&error, GitError::Failed(message) if message.contains("the checkout is shallow") && message.contains("fetch-depth: 0")),
+        "{error:?}"
+    );
+}
