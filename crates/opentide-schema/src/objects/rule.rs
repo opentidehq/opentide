@@ -21,11 +21,11 @@ use crate::objects::response::RuleResponse;
 use crate::pins::Pins;
 use crate::revision::revisions;
 
+// Non-exhaustive (ADR 0015 §6, #1911): a new platform is a new field and a
+// minor release. Outside this crate, a caller starts from `Default` and sets
+// the blocks it needs. A plain comment: the doc comment is the JSON schema's
+// description, which editors show.
 /// Dynamically composed rule platform configurations.
-///
-/// Non-exhaustive (ADR 0015 §6, #1911): a new platform is a new field and a
-/// minor release. Outside this crate, start from [`Default`] and set the
-/// blocks you need.
 #[derive(
     Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema, Validate, FromNode,
 )]
