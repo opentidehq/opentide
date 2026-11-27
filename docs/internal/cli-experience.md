@@ -368,7 +368,7 @@ What is built, and the APIs the next changes extend.
 | `opentide.cli.ui.diagnostics` (engine) | `diagnostic_from_engine(finding, file_path=, workspace=)`; `engine_reference(code)` → `(language, url)`; `diagnostic_from_issue` frames an issue whose `context.position` the engine set. |
 | `opentide.cli.services.engine` | `engine_unavailable_result()`, `findings_summary()`, `findings_outcome()` → `(line, kind)`. |
 | `opentide.cli.services.lsp` | `serve()` (`lsp start`), `run_lsp_check()`. |
-| `opentide.cli.ui.codeframe` (engine) | `QueryHighlighter` (the engine's tokens per file, read once; a `LineStyles` callable), `QUERY_STYLES`; `diagnostic_lines(..., styles=)` colours query findings' source lines, `render_diagnostics` passes one in `human` mode. |
+| `opentide.cli.ui.codeframe` (engine) | `QueryHighlighter` (the engine's tokens per file, read once), `QUERY_STYLES`; `diagnostic_lines(..., styles=)` colours query findings' source lines, `render_diagnostics` passes one in `human` mode. Now `crates/opentide-cli/src/render/codeframe.rs`: `QueryHighlighter::styles(path, line, sources)` gives a line's spans, `query_style(capture)` maps a highlight capture to its style, and `Frames::diagnostic_lines` takes an `Option<&mut QueryHighlighter>`. |
 | `opentide.validation.queries` | The `queries` check: `query_issues(objects, root=)` → `QueryIssues(errors, warnings, queries)`; `ENGINE_SOURCE`. |
 | `opentide.generation.lsp_catalog` | `write_catalog(root)`, `fields_catalog()`, `deprecations_catalog()`; `CATALOG_DIR`. Ported from the language server's `scripts/sync_opentide_schemas.py`, now `scripts/engine/sync_opentide_schemas.py`, which runs it (same output for the same models). |
 

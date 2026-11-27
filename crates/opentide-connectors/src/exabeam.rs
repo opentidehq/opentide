@@ -72,11 +72,11 @@ pub const MAX_ROWS: usize = 3000;
 pub const NAME_LIMIT: usize = opentide_schema::objects::platform::exabeam::NAME_LIMIT;
 
 /// A refused API key, at the token endpoint or on a call.
-pub const UNAUTHORIZED: &str = "exabeam_tenant_unauthorized";
+pub const UNAUTHORIZED: &str = crate::tenant_codes::EXABEAM.unauthorized;
 /// The subscription lacks the feature (`409`).
 pub const FEATURE_UNAVAILABLE: &str = "exabeam_feature_unavailable";
 /// No token could be had, or the tenant did not answer.
-pub const UNREACHABLE: &str = "exabeam_tenant_unreachable";
+pub const UNREACHABLE: &str = crate::tenant_codes::EXABEAM.unreachable;
 
 /// How an Exabeam tenant is reached: 30 s and no transport retries (a
 /// create is never sent twice).
@@ -952,7 +952,10 @@ fn failed(error: &ApiError) -> Event {
         }
         event
     } else {
-        Event::new("exabeam_request_failed", error.to_string())
+        Event::new(
+            crate::tenant_codes::EXABEAM.request_failed,
+            error.to_string(),
+        )
     }
 }
 

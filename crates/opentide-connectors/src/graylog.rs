@@ -159,7 +159,7 @@ impl ApiError {
         } else if self.invalid() {
             "graylog_definition_invalid"
         } else {
-            "graylog_request_failed"
+            REQUEST_FAILED
         }
     }
 
@@ -431,7 +431,7 @@ impl<'a> Client<'a> {
                 platform: PLATFORM.to_owned(),
                 tenant: self.tenant().to_owned(),
                 message: format!(
-                    "graylog_tenant_unauthorized: tenant {} refused the access token: HTTP 401",
+                    "{TENANT_UNAUTHORIZED}: tenant {} refused the access token: HTTP 401",
                     self.tenant()
                 ),
                 detail: None,
@@ -859,7 +859,7 @@ async fn recreate(
     });
     if let Some(refusal) = &rule.recreate_refusal {
         outcome.failure = Some(RuleFailure {
-            code: "graylog_request_failed",
+            code: REQUEST_FAILED,
             reason: refusal.clone(),
             status: None,
             detail: None,
@@ -1077,7 +1077,9 @@ pub const VERSION_UNSUPPORTED: &str = "graylog_version_unsupported";
 /// A version that does not revoke access tokens reliably (a warning).
 pub const VERSION_VULNERABLE: &str = "graylog_version_vulnerable";
 /// A token Graylog refuses (a tenant's failure).
-pub const TENANT_UNAUTHORIZED: &str = "graylog_tenant_unauthorized";
+pub const TENANT_UNAUTHORIZED: &str = crate::tenant_codes::GRAYLOG.unauthorized;
+/// A refused request (a tenant's answer no other code covers).
+pub const REQUEST_FAILED: &str = crate::tenant_codes::GRAYLOG.request_failed;
 /// A body that carries fields the tenant's version does not take.
 pub const FIELD_UNSUPPORTED: &str = "graylog_field_unsupported_version";
 
@@ -1228,7 +1230,7 @@ impl Deployer for Graylog {
             let failed = match refusal {
                 // `recreate` refuses with the message alone, and no status.
                 Some(refusal)
-                    if failure.code == "graylog_request_failed"
+                    if failure.code == REQUEST_FAILED
                         && failure.status.is_none()
                         && refusal.message == failure.reason =>
                 {
@@ -1300,7 +1302,7 @@ fn failed_with(error: &ApiError) -> DeployFailure {
     let code = if error.forbidden() {
         "graylog_forbidden"
     } else {
-        "graylog_request_failed"
+        REQUEST_FAILED
     };
     DeployFailure::new(code, error.reason())
         .with_status(error.status)

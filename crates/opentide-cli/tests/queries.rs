@@ -958,6 +958,46 @@ fn lint_checks_a_datadog_block_query_as_a_rule_and_a_hunt_as_a_search() {
     );
 }
 
+/// Advanced hunting's own functions (#1914): a Sentinel block that calls one
+/// gets lint's warning `kql_function_unavailable` at the function's name; a
+/// Defender block that calls it gets nothing, and `validate` fails neither.
+#[test]
+fn lint_reports_a_defender_function_in_a_sentinel_query() {
+    let query =
+        "query: |\n      DeviceFileEvents\n      | project SHA1\n      | invoke FileProfile()\n";
+    let sentinel = rule(&format!("  sentinel:\n    status: STAGING\n    {query}"));
+    let found: Vec<(String, String, usize)> = lint_check(&sentinel)
+        .into_iter()
+        .filter(|(code, _, _)| code == "kql_function_unavailable")
+        .collect();
+    assert_eq!(
+        found,
+        [(
+            "kql_function_unavailable".to_owned(),
+            "warning".to_owned(),
+            11
+        )]
+    );
+    let (errors, warnings, _) = check(&sentinel, false);
+    assert!(
+        errors
+            .iter()
+            .chain(&warnings)
+            .all(|d| d.code != "kql_function_unavailable"),
+        "{errors:?} {warnings:?}"
+    );
+    let defender = rule(&format!(
+        "  microsoft_defender:\n    status: STAGING\n    schedule:\n      frequency: 1H\n    {query}"
+    ));
+    assert!(
+        lint_check(&defender)
+            .iter()
+            .all(|(code, _, _)| code != "kql_function_unavailable"),
+        "{:?}",
+        lint_check(&defender)
+    );
+}
+
 /// Microsoft's documented custom detection limits (#1890): the alert's are
 /// block advisories, which lint reports like `validate`; a continuous rule's
 /// query is the engine's warning, lint's and not `validate`'s.

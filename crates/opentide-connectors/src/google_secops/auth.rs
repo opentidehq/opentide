@@ -62,7 +62,7 @@ pub const CREDENTIALS_MISSING: &str = "google_secops_credentials_missing";
 
 /// The code of credentials Google refused, or a token endpoint whose answer
 /// is no token.
-pub const TENANT_UNAUTHORIZED: &str = "google_secops_tenant_unauthorized";
+pub const TENANT_UNAUTHORIZED: &str = crate::tenant_codes::GOOGLE_SECOPS.unauthorized;
 
 /// What time it is, for a token's expiry and an assertion's `iat`: the
 /// system's clock, or a fixed one in a test.

@@ -17,6 +17,7 @@ The core migration is done on `integration/unified-core`: every implementation i
 
 - **Tree-sitter is gone** ([#1231](https://github.com/opentidehq/opentide/issues/1231)): every query parser is pure Rust on `opentide-parse` (ADR 0012), YARA's reads `yara-x-parser`.
 - **The Python oracle is retired** (#1496, #1512, #1522, #1525, under [#1142](https://github.com/opentidehq/opentide/issues/1142)): the command line is held by its own snapshots (`tests/golden/README.md`), not by a comparison with the Python implementation. Frozen artefacts of it remain as fixtures: `opentide-compile`'s `tests/oracle.rs` payloads and the benchmarks' 0.23.0 baselines.
+- **The crate layout is amended** ([ADR 0016](./adr/0016-tide-into-analysis.md), [#1965](https://github.com/opentidehq/opentide/issues/1965)): `opentide-tide` folds into `opentide-analysis`, not into `opentide-workspace`, which keeps no query engine among its dependencies (§4). The code move is tracked on #1965.
 - **Phases.** UC-0 to UC-4 are closed (#791 to #795). UC-5, UC-6 and UC-X (#796, #797, #798) stay open on the items below.
 
 What remains is tracked in open issues, not in this plan:
@@ -28,8 +29,6 @@ What remains is tracked in open issues, not in this plan:
 | [opentidehq/vscode-extension#75](https://github.com/opentidehq/vscode-extension/issues/75) | UC-6.1: the VS Code extension without its CPython bundle |
 | [#842](https://github.com/opentidehq/opentide/issues/842) | UC-6.3: archive language-server and publish the migration guide |
 | [#1513](https://github.com/opentidehq/opentide/issues/1513) | Supply chain: replace or drop `chrono` and `humantime` |
-
-Closed since this list was written: [#844](https://github.com/opentidehq/opentide/issues/844) (UC-X.2, the mutation-testing baseline), [#1571](https://github.com/opentidehq/opentide/issues/1571) (analysis faster than the vendors' analyzers, ADR 0014) and [#1071](https://github.com/opentidehq/opentide/issues/1071) (`validate`'s peak memory, catalog loading, ADR 0013).
 
 The rest of this page is the plan as it was written, kept for its decisions and its evidence; parts changed as it was carried out (the repository layout of section 9, the golden capture of section 5.1).
 
@@ -149,12 +148,15 @@ These do not change at any step. A change to one is a separate, explicit decisio
 
 Each crate depends only on crates in rows below it. `xtask check-layers` enforces this in CI, from [`xtask/layers.toml`](https://github.com/opentidehq/opentide/blob/integration/unified-core/xtask/layers.toml), the one place the enforced table is written down. It differs from this table in one way: the bindings sit above the facade, since they wrap it (ADR 0005). The query crates include `-cql` since language-server 0.12.0 (#859).
 
+**Amended ([ADR 0016](./adr/0016-tide-into-analysis.md), #1965).** As first written, the `opentide-workspace` row named language-server's `opentide-analysis` and `opentide-tide` as sources, which reads as folding both crates into the workspace. Both depend on every query engine, so that fold would make `opentide-compile` and `opentide-connectors`, which build on `opentide-workspace`, compile every parser. The workspace took the Tide object checks only; `opentide-tide` folds into `opentide-analysis`, which already depends on it, and `opentide-compile` and `opentide-connectors` never depend on `opentide-analysis`.
+
 | Layer | Crate | Responsibility | From |
 |-------|-------|----------------|------|
 | Facade | `opentide` | The public Rust API, features `schema`, `workspace`, `compile`, `connectors`, `cli`, `lsp`; re-exports; docs | new |
 | Application | `opentide-cli` | clap command tree, output modes, renderers, envelopes, `serve`, `mcp`, `tui`, `main(argv)` | `src/opentide/cli/`, `mcp_server/` |
 | Application | `opentide-lsp` | LSP host over `opentide-workspace`, incremental | language-server `opentide-lsp` |
-| Domain | `opentide-workspace` | Loading, configuration resolution, index, validate, lint, fixes, catalogue, coverage, chaining | `loading/`, `registry/`, `indexing/`, `validation/`, `core/`; language-server `opentide-analysis`, `opentide-tide` checks |
+| Domain | `opentide-workspace` | Loading, configuration resolution, index, validate, lint, fixes, catalogue, coverage, chaining. No query engine: the query checks plug in through its `QueryCheck` trait | `loading/`, `registry/`, `indexing/`, `validation/`, `core/`; the Tide object checks of language-server `opentide-tide` (the checks only, not the crate) |
+| Domain | `opentide-analysis` | The query engines behind one entry point (analyze, highlight, hover, completion, the `QueryCheck` the workspace runs) and Tide YAML in the editor: query injection, the UUID graph, outline, inlay hints, vocabularies (amended, ADR 0016) | language-server `opentide-analysis`, with `opentide-tide` folded in |
 | Domain | `opentide-compile` | Payload compile per platform, deploy plan, docs, exports, explorer, CI templates (minijinja) | `deployment/` planning, `platforms/*/compile`, `documentation/`, `export/`, `ci/` |
 | Domain | `opentide-connectors` | Tenant clients over tokio + reqwest, deploy, live validation, query runners, MISP, migrate-state | `platforms/*/{client,deployer,runner,validator}`, `sharing/`, `query/` |
 | Foundation | `opentide-schema` (+ `-derive`) | The Tide model as code, revisions, migrations, vocabularies, pins, configuration models, generated artifacts | `models/`, `vocabulary/`, `data/pins/`, `generation/` |
