@@ -101,6 +101,7 @@ pub const NO_COMMITS_ADVICE: &str = "commit the files, or drop --changed to lint
 /// A lint check.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize)]
 #[serde(rename_all = "lowercase")]
+#[non_exhaustive]
 pub enum LintCheck {
     /// File names, parse errors, names, nested files.
     Filenames,
@@ -144,6 +145,7 @@ impl LintCheck {
 
 /// A command `next_actions` suggests.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[non_exhaustive]
 pub struct NextAction {
     /// The command, as a person types it (`opentide lint --fix`).
     pub command: String,
@@ -267,6 +269,7 @@ impl std::fmt::Debug for LintOptions<'_> {
 
 /// One finding: its JSON entry and its diagnostic.
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub struct LintFinding {
     /// The check that found it.
     pub check: LintCheck,
@@ -393,6 +396,7 @@ impl Serialize for LintFinding {
 /// `lint`'s status.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
+#[non_exhaustive]
 pub enum LintStatus {
     /// Nothing found.
     Completed,
@@ -402,8 +406,21 @@ pub enum LintStatus {
     Failed,
 }
 
+impl LintStatus {
+    /// The status as `lint --json` writes it: `completed`, `issues` or
+    /// `failed`.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Completed => "completed",
+            Self::Issues => "issues",
+            Self::Failed => "failed",
+        }
+    }
+}
+
 /// The counts of `summary`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+#[non_exhaustive]
 pub struct LintSummary {
     /// Files linted.
     pub files: usize,
@@ -421,6 +438,7 @@ pub struct LintSummary {
 
 /// What `lint` reports.
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub struct LintReport {
     /// The workspace, resolved.
     pub path: PathBuf,
