@@ -29,9 +29,9 @@ One workspace (root `Cargo.toml`, one `Cargo.lock`; `fuzz/` keeps its own). A cr
 
 | Layer, tier | Crates (each with an `AGENTS.md`) |
 | --- | --- |
-| foundation 0 | [`opentide-core`](opentide-core/AGENTS.md), [`opentide-dataset`](opentide-dataset/AGENTS.md) (the embedded datasets, compressed at build time and decoded on first use, #1743), [`opentide-cassette`](opentide-cassette/AGENTS.md) (the recorded-HTTP harness, UC-4.1, not published) |
+| foundation 0 | [`opentide-core`](opentide-core/AGENTS.md), [`opentide-schema-derive`](opentide-schema-derive/AGENTS.md) (the `#[derive(FromNode)]` proc-macro opentide-schema uses), [`opentide-dataset`](opentide-dataset/AGENTS.md) (the embedded datasets, compressed at build time and decoded on first use, #1743), [`opentide-cassette`](opentide-cassette/AGENTS.md) (the recorded-HTTP harness, UC-4.1, not published) |
 | foundation 1 | [`opentide-parse`](opentide-parse/AGENTS.md) (the pure-Rust parsers' toolkit, ADR 0012), [`opentide-highlight`](opentide-highlight/AGENTS.md), [`opentide-ecs`](opentide-ecs/AGENTS.md) |
-| foundation 2 | [`opentide-kql`](opentide-kql/AGENTS.md), [`opentide-spl`](opentide-spl/AGENTS.md), [`opentide-kuery`](opentide-kuery/AGENTS.md), [`opentide-falco`](opentide-falco/AGENTS.md), [`opentide-cql`](opentide-cql/AGENTS.md), `opentide-yara`, `opentide-yaral`, `opentide-exabeam` (imported without an `AGENTS.md`; their guides are `docs/engine/YARA.md`, `YARAL.md` and `EXABEAM.md`), [`opentide-datadog`](opentide-datadog/AGENTS.md). A new query language goes here, with an `AGENTS.md` |
+| foundation 2 | [`opentide-kql`](opentide-kql/AGENTS.md), [`opentide-spl`](opentide-spl/AGENTS.md), [`opentide-kuery`](opentide-kuery/AGENTS.md), [`opentide-falco`](opentide-falco/AGENTS.md), [`opentide-cql`](opentide-cql/AGENTS.md), [`opentide-yara`](opentide-yara/AGENTS.md), [`opentide-yaral`](opentide-yaral/AGENTS.md), [`opentide-exabeam`](opentide-exabeam/AGENTS.md), [`opentide-datadog`](opentide-datadog/AGENTS.md). A new query language goes here, with an `AGENTS.md` |
 | foundation 3 | [`opentide-lucene`](opentide-lucene/AGENTS.md) (above kuery: each tells the other's rules by the other's grammar) |
 | foundation 4 | [`opentide-esql`](opentide-esql/AGENTS.md), [`opentide-eql`](opentide-eql/AGENTS.md) |
 | foundation 5 | [`opentide-schema`](opentide-schema/AGENTS.md) |
@@ -76,12 +76,12 @@ The workspace's lints are in the root `Cargo.toml` (`[workspace.lints]`), each a
 
 | Command | Runs |
 | --- | --- |
-| `cargo nextest run --profile fast` | Unit tests and the fast integration tests of the workspace, about 15 s warm on 4 cores; `-p <crate>` for one crate. It leaves out the stdio server tests, the Pydantic comparison, the deep-nesting test and the public corpora (`.config/nextest.toml`) |
+| `cargo nextest run --profile fast` | Unit tests and the fast integration tests of the workspace, about 15 s warm on 4 cores; `-p <crate>` for one crate. It leaves out the stdio server tests, the deep-nesting test, the public corpora, the comparisons with outside tools (`external_*`) and the command line's E2E tests on scratch git repositories (`.config/nextest.toml`) |
 | `cargo nextest run --workspace --profile ci` | Everything, no retries, JUnit at `target/nextest/ci/junit.xml` |
 | `cargo test --workspace --doc` | Doctests, which nextest does not run (CI's `cargo test --workspace` does) |
 | `cargo test --workspace` | Everything, without nextest |
 
-The tests that compare the engine with the Pydantic models need `uv sync --group dev` first (they run `.venv`'s interpreter; `OPENTIDE_PYTHON` names another).
+`opentide-workspace`'s `external_difflib` compares the dry run's diff with CPython's `difflib`: it needs a Python, `.venv`'s after `uv sync --group dev` (`OPENTIDE_PYTHON` names another).
 
 **Snapshots (insta).** `insta::assert_snapshot!` keeps the expected text in `tests/snapshots/*.snap` next to the test, committed and reviewed like code (`crates/opentide-analysis/tests/snapshots.rs`). After an intended change run the test, then `cargo insta review` (`cargo install cargo-insta --locked`) or `INSTA_UPDATE=always cargo test -p <crate> --test <name>`, and read the diff before committing. CI sets `INSTA_UPDATE=no`: a changed or missing snapshot fails and nothing is written. Never commit a `.snap.new` (gitignored). Snapshot what a contract fixes (a diagnostic's code, range and message, a renderer's output), not whole structs. A behaviour change does not need a snapshot: unit and end-to-end tests hold behaviour, and snapshots hold only what the exact output is the product of (the CLI's `--json` documents, the files it writes, exit codes and a small rendering set: `tests/golden/README.md`).
 
