@@ -107,6 +107,7 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 - **`analyze_query` takes the profile from the file, not from `QueryRequest.platform`** ([opentide#1912](https://github.com/opentidehq/opentide/issues/1912)), as the `opentide` entry under Breaking says. A valid `.exabeam` search, `SELECT DISTINCT user, src_ip WHERE vendor:"Microsoft"`, no longer reports `exabeam_advanced_in_rule` under `platform: exabeam`.
 - **`lint_owned` claims `microsoft_defender_nrt_query`** ([opentide#1890](https://github.com/opentidehq/opentide/issues/1890)), so `opentide lint` reports it and `validate` does not.
+- **`queries::engine_help(code, suggestion)` words the help from `codes::suggestion_kind` alone** ([opentide#1950](https://github.com/opentidehq/opentide/issues/1950)) and no longer takes the message: drop the second argument. `kql_table_misspelt`, `spl_unknown_datamodel`, `spl_unknown_datamodel_field`, `ecs_unknown_field` and `cbc_unknown_field` are replacements (`did you mean …?`); `esql_parse_error` and `esql_unavailable` are steps (`try: …`).
 
 ### Fixed
 

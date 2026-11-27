@@ -52,39 +52,56 @@ fn render(source: &str, diagnostics: &[Diagnostic], codes: &[&str]) -> String {
     out
 }
 
-/// The help a finding with a suggestion gets is the one the message's words
-/// chose before each code declared its kind (#1950), and its code declares
-/// one: every case of this file passes through here. The help is the
-/// `queries` feature's (`engine_help`); the workspace's run turns it on.
+/// The help a finding with a suggestion gets: the one the message's words
+/// chose before each code declared its kind (#1950), except where that was
+/// wrong, and its code declares a kind. Every case of this file passes
+/// through here. The help is the `queries` feature's (`engine_help`); the
+/// workspace's run turns it on.
 #[cfg(feature = "queries")]
 fn help_is_kept(d: &Diagnostic) {
     let Some(suggestion) = d.suggestion.as_deref().filter(|s| !s.is_empty()) else {
         return;
     };
+    let replacement = format!(
+        "did you mean {}?",
+        opentide_schema::vocab::quote(suggestion)
+    );
+    let step = format!("try: {suggestion}");
     let lower = d.message.to_lowercase();
     let words = ["unknown", "deprecated", "not a command"];
-    let before = if words.iter().any(|word| lower.contains(word)) {
-        format!(
-            "did you mean {}?",
-            opentide_schema::vocab::quote(suggestion)
-        )
+    let expected = if NOW_REPLACEMENTS.contains(&d.code.as_str()) {
+        replacement
+    } else if NOW_STEPS.contains(&d.code.as_str()) {
+        step
+    } else if words.iter().any(|word| lower.contains(word)) {
+        replacement
     } else {
-        format!("try: {suggestion}")
+        step
     };
-    let help = opentide_analysis::queries::engine_help(&d.code, &d.message, Some(suggestion));
-    assert_eq!(help, before, "{} {}", d.code, d.message);
+    let help = opentide_analysis::queries::engine_help(&d.code, Some(suggestion));
+    assert_eq!(help, expected, "{} {}", d.code, d.message);
     assert!(
-        opentide_core::codes::suggestion_kind(&d.code).is_some()
-            || UNDECLARED.contains(&d.code.as_str()),
+        opentide_core::codes::suggestion_kind(&d.code).is_some(),
         "{} suggests but declares no kind (`suggests` in opentide-core's codes!)",
         d.code
     );
 }
 
-/// The codes whose suggestions are a replacement in some messages and a step
-/// in others: their help still follows the message's words (#1950).
+/// Near misses of a known name whose messages named none of the words, so
+/// that they printed `try: …` (#1950).
 #[cfg(feature = "queries")]
-const UNDECLARED: [&str; 2] = ["esql_parse_error", "esql_unavailable"];
+const NOW_REPLACEMENTS: [&str; 5] = [
+    "kql_table_misspelt",
+    "spl_unknown_datamodel",
+    "spl_unknown_datamodel_field",
+    "ecs_unknown_field",
+    "cbc_unknown_field",
+];
+
+/// Fixes whose messages explain an "unknown command" in places, so that they
+/// printed `did you mean …?` there (#1950).
+#[cfg(feature = "queries")]
+const NOW_STEPS: [&str; 2] = ["esql_parse_error", "esql_unavailable"];
 
 #[cfg(not(feature = "queries"))]
 fn help_is_kept(_: &Diagnostic) {}

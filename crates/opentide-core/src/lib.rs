@@ -846,7 +846,7 @@ pub mod codes {
             => "The KQL scalar operator is a legacy spelling (containscs); use the current name (contains_cs).";
         KQL_UNKNOWN_TABLE = "kql_unknown_table" suggests Replacement
             => "The table is neither one the engine knows for the platform nor one the workspace declares in visibility.toml: a warning under Sentinel, whose workspaces hold tables no catalog lists; an error under Defender's advanced hunting schema. Declaring it in visibility.toml makes it known.";
-        KQL_TABLE_MISSPELT = "kql_table_misspelt" suggests Step
+        KQL_TABLE_MISSPELT = "kql_table_misspelt" suggests Replacement
             => "A KQL table is not one the engine knows or the workspace declares, but is a near miss of one that is (one edit for a name of up to seven characters, two for a longer one, and not a custom `_CL` table): most likely a typo.";
         KQL_RENDER_NOT_VALID = "kql_render_not_valid"
             => "render draws a chart; it has no effect in a detection rule.";
@@ -894,12 +894,12 @@ pub mod codes {
         /// for the word.
         SPL_COMMAND_WITHOUT_PIPE = "spl_command_without_pipe" suggests Step
             => "The query starts with a command name but no |, so Splunk searches for the word instead of running the command.";
-        ESQL_PARSE_ERROR = "esql_parse_error" => "The ES|QL query does not parse.";
+        ESQL_PARSE_ERROR = "esql_parse_error" suggests Step => "The ES|QL query does not parse.";
         ESQL_UNKNOWN_COMMAND = "esql_unknown_command" suggests Replacement
             => "The ES|QL command is not one Elasticsearch knows.";
         ESQL_UNKNOWN_FUNCTION = "esql_unknown_function" suggests Replacement
             => "The ES|QL function is not in the Elasticsearch function catalog.";
-        ESQL_UNAVAILABLE = "esql_unavailable"
+        ESQL_UNAVAILABLE = "esql_unavailable" suggests Step
             => "The command, function or form is missing or in preview on a targeted stack version.";
         ESQL_METADATA_ID = "esql_metadata_id" suggests Step
             => "A non-aggregating ES|QL rule query has no METADATA _id, so alerts cannot be deduplicated.";
@@ -1014,21 +1014,21 @@ pub mod codes {
             => "The column is not in the documented schema of the table or ASIM parser it comes from, or in the columns visibility.toml declares for the table.";
         KQL_TYPE_MISMATCH = "kql_type_mismatch"
             => "The operator cannot apply to the column's documented or declared type.";
-        SPL_UNKNOWN_DATAMODEL = "spl_unknown_datamodel" suggests Step
+        SPL_UNKNOWN_DATAMODEL = "spl_unknown_datamodel" suggests Replacement
             => "The CIM data model or dataset is not one Splunk CIM defines.";
-        SPL_UNKNOWN_DATAMODEL_FIELD = "spl_unknown_datamodel_field" suggests Step
+        SPL_UNKNOWN_DATAMODEL_FIELD = "spl_unknown_datamodel_field" suggests Replacement
             => "The field is not in the CIM data model the search reads.";
         SPL_DATASET_NOT_DECLARED = "spl_dataset_not_declared"
             => "The sourcetype is not one the workspace's Splunk log sources name in visibility.toml.";
         ECS_TYPE_MISMATCH = "ecs_type_mismatch"
             => "The operation cannot apply to the field's type, from ECS or from the columns visibility.toml declares for the index.";
-        ECS_UNKNOWN_FIELD = "ecs_unknown_field" suggests Step
+        ECS_UNKNOWN_FIELD = "ecs_unknown_field" suggests Replacement
             => "The field is not in the Elastic Common Schema, on indices that use it, nor declared for the index in visibility.toml; ECS allows custom fields.";
         ELASTIC_DATASET_NOT_DECLARED = "elastic_dataset_not_declared"
             => "The index pattern is not one the workspace's elastic log sources name, or cover, in visibility.toml.";
         /// A Carbon Black Cloud query field one edit or two from a catalog field
         /// (#162).
-        CBC_UNKNOWN_FIELD = "cbc_unknown_field" suggests Step
+        CBC_UNKNOWN_FIELD = "cbc_unknown_field" suggests Replacement
             => "A field in a Carbon Black Cloud query is a near miss of a process search field.";
         /// The host's configuration checker failed on a configuration file.
         CONFIG_CHECK_FAILED = "config_check_failed"
