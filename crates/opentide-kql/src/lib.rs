@@ -192,6 +192,87 @@ impl Dialect {
     }
 }
 
+/// What a KQL query is used as (ADR 0015 §1: a profile), chosen by its
+/// position, never by its platform: a block's query is a [`Profile::Rule`], a
+/// hunt's search or a `.kql` file a [`Profile::Search`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Profile {
+    /// A scheduled detection rule: a `configurations.<platform>.query`.
+    Rule,
+    /// A search run by hand: a hunt, `opentide query`, a `.kql` file.
+    #[default]
+    Search,
+}
+
+/// The longest query a Microsoft Sentinel scheduled analytics rule takes, in
+/// characters ([`rule_findings`]).
+pub const SENTINEL_RULE_MAX_CHARS: usize = 10_000;
+
+/// The findings a query gets only as a [`Profile::Rule`] of `dialect`, on top
+/// of [`analyze`]'s. Under Sentinel, Microsoft's scheduled analytics rules
+/// page (learn.microsoft.com/en-us/azure/sentinel/scheduled-rules-overview,
+/// read 2026-11-27) says "The query length should be between 1 and 10,000
+/// characters and can't contain `search *` or `union *`": each is an error,
+/// `kql_rule_search_star`, `kql_rule_union_star` and `kql_rule_too_long`.
+/// Defender's custom detection page sets none of these limits, so Defender
+/// and Core rules get none; a search gets none in any dialect.
+///
+/// `search *` is a `search` with no `in (...)` list whose predicate is a bare
+/// `*`; `union *` a `union` whose tables include a bare `*` (not `Sec*`).
+/// They take the place of the performance warnings at the same place
+/// (`kql_unscoped_search`, `kql_unscoped_union`), which [`analyze`] reports:
+/// [`apply_profile`] drops those.
+#[must_use]
+pub fn rule_findings(source: &str, dialect: Dialect, profile: Profile) -> Vec<Diagnostic> {
+    if dialect != Dialect::Sentinel || profile != Profile::Rule {
+        return Vec::new();
+    }
+    let lines = opentide_core::LineIndex::new(source);
+    let mut out = Vec::new();
+    perf::rule_scope(source, &lines, &mut out);
+    let length = source.trim().chars().count();
+    if length > SENTINEL_RULE_MAX_CHARS {
+        let start = source.len() - source.trim_start().len();
+        let first_line_end = source[start..]
+            .find('\n')
+            .map_or(source.len(), |at| start + at);
+        out.push(Diagnostic::error(
+            codes::KQL_RULE_TOO_LONG,
+            format!(
+                "the query is {length} characters long: a Microsoft Sentinel analytics rule's \
+                 query is at most {SENTINEL_RULE_MAX_CHARS}; move parts of it into a saved \
+                 workspace function"
+            ),
+            lines.range(ByteSpan::new(start, first_line_end.max(start))),
+        ));
+    }
+    out
+}
+
+/// [`rule_findings`] added to `diagnostics` ([`analyze`]'s for the same
+/// `source`), each in place of the performance warning at the same range.
+pub fn apply_profile(
+    source: &str,
+    dialect: Dialect,
+    profile: Profile,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    let found = rule_findings(source, dialect, profile);
+    if found.is_empty() {
+        return;
+    }
+    let replaces = |code: &str| match code {
+        codes::KQL_UNSCOPED_SEARCH => Some(codes::KQL_RULE_SEARCH_STAR),
+        codes::KQL_UNSCOPED_UNION => Some(codes::KQL_RULE_UNION_STAR),
+        _ => None,
+    };
+    diagnostics.retain(|d| {
+        replaces(&d.code)
+            .is_none_or(|rule| !found.iter().any(|f| f.code == rule && f.range == d.range))
+    });
+    diagnostics.extend(found);
+}
+
 /// The whole file, as the test reads it to compare (ADR 0013).
 #[cfg(test)]
 #[derive(Debug, Deserialize)]
@@ -2644,6 +2725,116 @@ mod tests {
                 rendered(eager.columns_for_table("SecurityEvent"))
             );
         }
+    }
+
+    /// A Sentinel analytics rule's limits (#1915): `search *`, `union *` and
+    /// a query over 10,000 characters are errors in the rule profile only, and
+    /// only under Sentinel; each takes the place of the scope warning at the
+    /// same place.
+    #[test]
+    fn sentinel_rule_profile_limits() {
+        let found = |source: &str, dialect: Dialect, profile: Profile| {
+            let mut diagnostics = analyze(source, dialect).diagnostics;
+            apply_profile(source, dialect, profile, &mut diagnostics);
+            diagnostics
+                .into_iter()
+                .filter(|d| {
+                    d.code.starts_with("kql_rule_")
+                        || d.code == codes::KQL_UNSCOPED_SEARCH
+                        || d.code == codes::KQL_UNSCOPED_UNION
+                })
+                .map(|d| {
+                    let start = opentide_core::position_to_offset(source, d.range.start);
+                    let end = opentide_core::position_to_offset(source, d.range.end);
+                    (d.code, d.severity, source[start..end].to_owned())
+                })
+                .collect::<Vec<_>>()
+        };
+        let error = |code: &str, at: &str| {
+            (
+                code.to_owned(),
+                opentide_core::Severity::Error,
+                at.to_owned(),
+            )
+        };
+        let warning = |code: &str, at: &str| {
+            (
+                code.to_owned(),
+                opentide_core::Severity::Warning,
+                at.to_owned(),
+            )
+        };
+        let rule = Profile::Rule;
+        let sentinel = Dialect::Sentinel;
+        assert_eq!(
+            found("search * | take 1", sentinel, rule),
+            [error(codes::KQL_RULE_SEARCH_STAR, "search")]
+        );
+        assert_eq!(
+            found("search kind=case_sensitive * | take 1", sentinel, rule),
+            [error(codes::KQL_RULE_SEARCH_STAR, "search")]
+        );
+        assert_eq!(
+            found("union * | take 1", sentinel, rule),
+            [error(codes::KQL_RULE_UNION_STAR, "*")]
+        );
+        assert_eq!(
+            found("union withsource=T * | take 1", sentinel, rule),
+            [error(codes::KQL_RULE_UNION_STAR, "*")]
+        );
+        assert_eq!(
+            found("SecurityEvent | union * | take 1", sentinel, rule),
+            [error(codes::KQL_RULE_UNION_STAR, "*")]
+        );
+        // Not `search *` or `union *`: scoped, a pattern, or a term.
+        for source in [
+            "search in (SecurityEvent) * | take 1",
+            "union Sec* | take 1",
+            "union SecurityEvent, SigninLogs | take 1",
+            "SecurityEvent | where Account == '*' | take 1",
+        ] {
+            assert!(
+                found(source, sentinel, rule)
+                    .iter()
+                    .all(|(code, _, _)| !code.starts_with("kql_rule_")),
+                "{source}"
+            );
+        }
+        // An unscoped search on a term is the warning it was.
+        assert_eq!(
+            found("search \"x\" | take 1", sentinel, rule),
+            [warning(codes::KQL_UNSCOPED_SEARCH, "search")]
+        );
+        // A search, and a Defender or Core rule, keep the warnings.
+        for (dialect, profile) in [
+            (sentinel, Profile::Search),
+            (Dialect::Defender, rule),
+            (Dialect::Core, rule),
+        ] {
+            assert_eq!(
+                found("union * | take 1", dialect, profile),
+                [warning(codes::KQL_UNSCOPED_UNION, "*")],
+                "{dialect:?} {profile:?}"
+            );
+        }
+        assert_eq!(Profile::default(), Profile::Search);
+        // The length: at most 10,000 characters (not bytes), around blanks.
+        let at = |n: usize| format!("SecurityEvent | where Account == \"{}\"", "é".repeat(n));
+        let base = at(0).chars().count();
+        let fits = format!("\n{}\n", at(SENTINEL_RULE_MAX_CHARS - base));
+        assert!(rule_findings(&fits, sentinel, rule).is_empty());
+        let over = at(SENTINEL_RULE_MAX_CHARS - base + 1);
+        let long = rule_findings(&over, sentinel, rule);
+        assert_eq!(long.len(), 1, "{long:?}");
+        assert_eq!(long[0].code, codes::KQL_RULE_TOO_LONG);
+        assert_eq!(long[0].severity, opentide_core::Severity::Error);
+        assert!(
+            long[0]
+                .message
+                .starts_with("the query is 10001 characters long")
+        );
+        assert!(rule_findings(&over, sentinel, Profile::Search).is_empty());
+        assert!(rule_findings(&over, Dialect::Defender, rule).is_empty());
     }
 
     /// Advanced hunting's own functions (#1914): pre-parsed as the file reads item by item,

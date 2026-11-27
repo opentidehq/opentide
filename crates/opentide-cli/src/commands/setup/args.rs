@@ -79,6 +79,20 @@ impl SetupPipelineFields {
     }
 }
 
+impl Ci {
+    /// The provider `--ci` writes a pipeline for; `None` for `--ci none`,
+    /// which writes none.
+    pub fn provider(self) -> Option<opentide_compile::ci::Provider> {
+        use opentide_compile::ci::Provider;
+        match self {
+            Ci::Github => Some(Provider::GitHub),
+            Ci::Gitlab => Some(Provider::GitLab),
+            Ci::Azure => Some(Provider::Azure),
+            Ci::None => None,
+        }
+    }
+}
+
 impl From<CiPlatform> for opentide_compile::ci::Provider {
     fn from(platform: CiPlatform) -> Self {
         match platform {
@@ -95,11 +109,7 @@ impl From<&SetupArgs> for GroupArgs {
         GroupArgs {
             path: args.path.clone(),
             repo: RepoOptions::from(&args.repo),
-            ci: args
-                .ci
-                .as_ref()
-                .and_then(Ci::to_possible_value)
-                .map(|value| value.get_name().to_owned()),
+            ci: args.ci,
             pipeline: None,
             staging: !pipeline.no_staging,
             inflight: !pipeline.no_inflight,
@@ -216,6 +226,21 @@ mod tests {
             panic!("not setup platforms");
         };
         assert_eq!(platforms.enabled(), ["sentinel", "google_secops"]);
+    }
+
+    #[test]
+    fn each_ci_choice_reaches_the_group_as_its_provider() {
+        use opentide_compile::ci::Provider;
+        for (word, provider) in [
+            ("github", Some(Provider::GitHub)),
+            ("gitlab", Some(Provider::GitLab)),
+            ("azure", Some(Provider::Azure)),
+            ("none", None),
+        ] {
+            let group = GroupArgs::from(&parse(&["setup", "--ci", word]));
+            assert_eq!(group.ci.and_then(Ci::provider), provider, "--ci {word}");
+        }
+        assert_eq!(GroupArgs::from(&parse(&["setup"])).ci, None);
     }
 
     #[test]

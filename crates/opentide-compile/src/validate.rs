@@ -12,6 +12,7 @@
 
 use std::collections::BTreeSet;
 
+use opentide_schema::platforms::PlatformId;
 use opentide_schema::vocab::Vocabularies;
 use opentide_workspace::Workspace;
 use opentide_workspace::validate::{CompileCheck, CompileFailure, CompileRule};
@@ -58,19 +59,20 @@ pub fn failures(
     enabled: &BTreeSet<String>,
 ) -> Vec<CompileFailure> {
     let compiled = Rule::new(rule.root, Some(rule.path.to_string_lossy().into_owned()));
-    let mut platforms: Vec<&str> = preview::offline()
+    let mut platforms: Vec<PlatformId> = preview::offline()
         .into_iter()
-        .filter(|platform| enabled.contains(*platform))
+        .filter(|platform| enabled.contains(platform.as_str()))
         .collect();
-    platforms.sort_unstable();
+    // By identifier, as the findings are reported.
+    platforms.sort_unstable_by_key(|platform| platform.as_str());
     let mut found = Vec::new();
     for platform in platforms {
-        if !deploys(cx, compiled.block(platform)) {
+        if !deploys(cx, compiled.block(platform.as_str())) {
             continue;
         }
         if let Some(Err(error)) = preview::compile_offline(cx, platform, &compiled) {
             found.push(CompileFailure {
-                platform: platform.to_owned(),
+                platform: platform.as_str().to_owned(),
                 code: error.code.to_owned(),
                 message: error.reason,
                 hint: error.hint,

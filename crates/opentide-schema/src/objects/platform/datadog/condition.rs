@@ -134,8 +134,7 @@ fn error(message: String, start: usize, end: usize) -> ConditionError {
 fn tokenize(text: &str) -> Result<Vec<Token<'_>>, ConditionError> {
     let mut tokens = Vec::new();
     let mut at = 0;
-    while at < text.len() {
-        let rest = &text[at..];
+    while let Some(rest) = text.get(at..) {
         let Some(ch) = rest.chars().next() else {
             break;
         };
@@ -174,8 +173,12 @@ fn tokenize(text: &str) -> Result<Vec<Token<'_>>, ConditionError> {
             };
             return Err(error(message, at, at + ch.len_utf8()));
         };
+        // Every length above ends a run of ASCII characters.
+        let Some((token, _)) = rest.split_at_checked(len) else {
+            break;
+        };
         tokens.push(Token {
-            text: &rest[..len],
+            text: token,
             kind,
             start: at,
         });
@@ -370,5 +373,20 @@ mod tests {
         assert!(!query_name("Failed-Logins"));
         assert!(!query_name("_a"));
         assert!(!query_name(""));
+    }
+
+    #[test]
+    fn a_multi_byte_character_is_an_error_at_its_bytes() {
+        // #1946: the tokenizer never slices inside a character.
+        let error = parse("é > 1").unwrap_err();
+        assert_eq!((error.start, error.end), (0, 2));
+        let error = parse("failed > 1 && 😀").unwrap_err();
+        assert_eq!((error.start, error.end), (14, 18));
+        assert!(error.message.contains('😀'), "{}", error.message);
+        // Non-ASCII whitespace separates tokens.
+        assert_eq!(
+            parse("failed\u{3000}> 1").unwrap().comparisons[0].query,
+            "failed"
+        );
     }
 }

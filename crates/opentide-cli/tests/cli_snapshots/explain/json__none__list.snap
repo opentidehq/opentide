@@ -1325,6 +1325,18 @@ exit: 0
       "meaning": "render draws a chart; it has no effect in a detection rule."
     },
     {
+      "code": "kql_rule_search_star",
+      "meaning": "A Microsoft Sentinel analytics rule's query contains `search *`, which Microsoft does not allow in a scheduled rule."
+    },
+    {
+      "code": "kql_rule_too_long",
+      "meaning": "A Microsoft Sentinel analytics rule's query is longer than the 10,000 characters Microsoft allows."
+    },
+    {
+      "code": "kql_rule_union_star",
+      "meaning": "A Microsoft Sentinel analytics rule's query contains `union *`, which Microsoft does not allow in a scheduled rule."
+    },
+    {
       "code": "kql_table_misspelt",
       "meaning": "A KQL table is not one the engine knows or the workspace declares, but is a near miss of one that is (one edit for a name of up to seven characters, two for a longer one, and not a custom `_CL` table): most likely a typo."
     },
@@ -2185,13 +2197,13 @@ exit: 0
   "duration_ms": 0,
   "exit_code": 0,
   "failure": null,
-  "message": "543 diagnostic codes",
+  "message": "546 diagnostic codes",
   "next_actions": [],
   "ok": true,
   "schema_version": 1,
   "status": "completed",
   "summary": {
-    "codes": 543
+    "codes": 546
   }
 }
 

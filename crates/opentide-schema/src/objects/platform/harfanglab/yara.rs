@@ -127,10 +127,11 @@ pub mod codes {
 /// Whether the character before `at` in `text` lets a keyword start there:
 /// the oracle's `(?<![\w$#@!])`.
 fn starts_word(text: &str, at: usize) -> bool {
-    text[..at]
-        .chars()
-        .next_back()
-        .is_none_or(|c| !(c.is_alphanumeric() || matches!(c, '_' | '$' | '#' | '@' | '!')))
+    text.get(..at).is_some_and(|head| {
+        head.chars()
+            .next_back()
+            .is_none_or(|c| !(c.is_alphanumeric() || matches!(c, '_' | '$' | '#' | '@' | '!')))
+    })
 }
 
 fn regex(cell: &'static OnceLock<Regex>, pattern: &str) -> &'static Regex {
@@ -193,12 +194,16 @@ pub fn blank(text: &str) -> String {
             space(&mut out, index + 1, end, false);
             index = end + 1;
         } else if rest.starts_with(b"//") {
-            let end = text[index..].find('\n').map_or(size, |n| index + n);
+            let end = rest
+                .iter()
+                .position(|&b| b == b'\n')
+                .map_or(size, |n| index + n);
             space(&mut out, index, end, false);
             index = end;
         } else if rest.starts_with(b"/*") {
-            let end = text[index + 2..]
-                .find("*/")
+            let end = rest
+                .get(2..)
+                .and_then(|after| after.windows(2).position(|pair| pair == b"*/"))
                 .map_or(size, |n| index + 2 + n + 2);
             space(&mut out, index, end, true);
             index = end;
@@ -522,7 +527,7 @@ fn context_pattern() -> &'static Regex {
 /// The first match of `pattern` in `code[from..to]` that starts a word.
 fn find_word(pattern: &Regex, code: &str, from: usize, to: usize) -> Option<(usize, usize)> {
     pattern
-        .find_iter(&code[..to])
+        .find_iter(code.get(..to)?)
         .filter(|m| m.start() >= from && starts_word(code, m.start()))
         .map(|m| (m.start(), m.end()))
         .next()
@@ -566,14 +571,20 @@ pub fn advisories(signature: &str) -> Vec<YaraAdvisory> {
             });
             continue;
         };
-        let rest = &signature[start..];
+        // `start` ends a match in `code`, whose blanked bytes are whole
+        // characters of `signature`; a slice off a boundary skips the rule.
+        let Some(rest) = signature.get(start..) else {
+            continue;
+        };
         let problem = if let Some(quoted) = rest.strip_prefix('"') {
             let bytes = quoted.as_bytes();
             let mut end = 0;
             while end < bytes.len() && bytes[end] != b'"' && bytes[end] != b'\n' {
                 end += if bytes[end] == b'\\' { 2 } else { 1 };
             }
-            let value = &quoted[..quoted.ceil_char_boundary(end.min(quoted.len()))];
+            let value = quoted
+                .get(..quoted.ceil_char_boundary(end.min(quoted.len())))
+                .unwrap_or(quoted);
             (!context_accepted(value)).then(|| {
                 format!(
                     "YARA rule {name} sets meta context {}; HarfangLab expects {}",
@@ -744,6 +755,23 @@ mod tests {
             found[2].message.contains("context to 1, not a string"),
             "{}",
             found[2].message
+        );
+    }
+
+    #[test]
+    fn multi_byte_text_around_the_context_is_read_whole() {
+        // #1946: comments, strings and values with multi-byte characters
+        // never put an offset inside a character.
+        let signature = "rule a { meta: d = \"é // 😀 /* x */\" // é\n /* 😀 */ context = \"😀\" condition: true }";
+        let found = advisories(signature);
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(found[0].code, "harfanglab_yara_context");
+        assert!(found[0].message.contains("\"😀\""), "{}", found[0].message);
+        let unquoted = advisories("rule b { meta: context = é😀 condition: true }");
+        assert_eq!(unquoted.len(), 1, "{unquoted:?}");
+        assert_eq!(
+            advisories("// é\nrule c { meta: context = \"\\é\" }").len(),
+            1
         );
     }
 }

@@ -542,6 +542,51 @@ impl std::fmt::Display for PlatformId {
     }
 }
 
+/// Text that names no built-in platform: a plugin's identifier, a typo, or
+/// an identifier in another case (`Sentinel`). It carries the text as given.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("{0:?} is not a built-in platform")]
+pub struct UnknownPlatform(pub String);
+
+impl std::str::FromStr for PlatformId {
+    type Err = UnknownPlatform;
+
+    /// [`PlatformId::parse`], with the text kept in the error.
+    fn from_str(id: &str) -> Result<Self, Self::Err> {
+        Self::parse(id).ok_or_else(|| UnknownPlatform(id.to_owned()))
+    }
+}
+
+/// Written as its identifier (`"sentinel_one"`), as `configurations` and
+/// `platforms` hold it.
+impl serde::Serialize for PlatformId {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.as_str())
+    }
+}
+
+/// Read from its identifier, exactly: any other text, a plugin's included,
+/// is an `unknown variant` error listing the built-in identifiers.
+impl<'de> serde::Deserialize<'de> for PlatformId {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct Visitor;
+
+        impl serde::de::Visitor<'_> for Visitor {
+            type Value = PlatformId;
+
+            fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.write_str("a built-in platform identifier")
+            }
+
+            fn visit_str<E: serde::de::Error>(self, id: &str) -> Result<PlatformId, E> {
+                PlatformId::parse(id).ok_or_else(|| E::unknown_variant(id, &IDS))
+            }
+        }
+
+        deserializer.deserialize_str(Visitor)
+    }
+}
+
 /// The platform `id` names, if it is built in.
 pub fn get(id: &str) -> Option<&'static Platform> {
     PLATFORMS.iter().find(|platform| platform.id == id)
@@ -627,6 +672,46 @@ mod tests {
         }
         assert_eq!(super::PlatformId::parse("my_plugin"), None);
         assert_eq!(super::PlatformId::parse("Sentinel"), None);
+    }
+
+    /// `FromStr`, `Display` and serde round-trip every identifier exactly;
+    /// anything else (a plugin's id, another case, padding, non-ASCII text)
+    /// is refused, its text kept in the error.
+    #[test]
+    fn platform_ids_round_trip_through_text_and_serde() {
+        use super::{PlatformId, UnknownPlatform};
+        for platform in PlatformId::ALL {
+            let text = platform.to_string();
+            assert_eq!(text.parse::<PlatformId>(), Ok(platform));
+            let json = serde_json::to_string(&platform).unwrap();
+            assert_eq!(json, format!("\"{text}\""));
+            assert_eq!(serde_json::from_str::<PlatformId>(&json).unwrap(), platform);
+        }
+        for unknown in [
+            "",
+            "my_plugin",
+            "Sentinel",
+            "SENTINEL",
+            " sentinel",
+            "sentinel ",
+            "sentinel-one",
+            "sentinél",
+            "😀",
+            "sentinel\u{0}",
+        ] {
+            assert_eq!(
+                unknown.parse::<PlatformId>(),
+                Err(UnknownPlatform(unknown.to_owned()))
+            );
+            let json = serde_json::to_string(unknown).unwrap();
+            let error = serde_json::from_str::<PlatformId>(&json).unwrap_err();
+            assert!(error.to_string().contains("unknown variant"), "{error}");
+        }
+        assert_eq!(
+            "sentinél".parse::<PlatformId>().unwrap_err().to_string(),
+            "\"sentinél\" is not a built-in platform"
+        );
+        assert!(serde_json::from_str::<PlatformId>("1").is_err());
     }
 
     use super::{
