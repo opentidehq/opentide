@@ -3858,6 +3858,33 @@ fn pulling_and_watching() -> Value {
     } }))
 }
 
+/// Queue the document's diagnostics (`1`) and the workspace's (`2`) as one
+/// batch that pauses before them (`opentide/__sleep`, debug builds) until
+/// the file `release` exists. The pulls are answered last in their batch,
+/// so what the test sends before it writes `release` is input the
+/// workspace pull finds waiting from its start, whatever the timing (#2041).
+fn pulls_paused_until(lsp: &mut Lsp, uri: &str, release: &std::path::Path) {
+    hold(lsp, 900, 3);
+    send(
+        lsp,
+        1,
+        "textDocument/diagnostic",
+        json!({ "textDocument": { "uri": uri } }),
+    );
+    send(
+        lsp,
+        2,
+        "workspace/diagnostic",
+        json!({ "previousResultIds": [] }),
+    );
+    send(
+        lsp,
+        901,
+        "opentide/__sleep",
+        json!({ "ms": 60_000, "until": release }),
+    );
+}
+
 /// A workspace pull the client cancels while it yields to the messages
 /// behind it is answered `RequestCanceled`, after them.
 #[test]
@@ -3870,19 +3897,8 @@ fn a_workspace_pull_cancelled_while_it_yields_is_answered_cancelled() {
     lsp.write(&json!({ "jsonrpc": "2.0", "id": register["id"], "result": null }));
     let uri = file_uri(&root.join("objects/rules/rule-1.0.yaml"));
     open(&mut lsp, &uri, "opentide-yaml", &fixture(RULE));
-    send(
-        &mut lsp,
-        1,
-        "textDocument/diagnostic",
-        json!({ "textDocument": { "uri": uri } }),
-    );
-    send(
-        &mut lsp,
-        2,
-        "workspace/diagnostic",
-        json!({ "previousResultIds": [] }),
-    );
-    until_response(&mut lsp, 1);
+    let release = root.join("released");
+    pulls_paused_until(&mut lsp, &uri, &release);
     send(
         &mut lsp,
         3,
@@ -3890,23 +3906,24 @@ fn a_workspace_pull_cancelled_while_it_yields_is_answered_cancelled() {
         json!({ "textDocument": { "uri": uri } }),
     );
     lsp.notify("$/cancelRequest", json!({ "id": 2 }));
+    std::fs::write(&release, "").unwrap();
     let seen = until_response(&mut lsp, 2);
     let answered: Vec<i64> = seen
         .iter()
         .filter(|message| message.get("method").is_none())
         .filter_map(|message| message["id"].as_i64())
         .collect();
-    assert_eq!(answered, [3, 2], "{seen:#?}");
+    assert_eq!(answered, [900, 901, 1, 3, 2], "{seen:#?}");
     assert_eq!(seen.last().unwrap()["error"]["code"], -32800, "{seen:#?}");
 }
 
 /// #1767: what VS Code sends after it opens a rule (QA's trace): the
 /// document's diagnostics, the workspace's, then `documentSymbol`,
 /// `codeAction`, `documentLink`, `inlayHint`, `foldingRange` and
-/// `semanticTokens/full`. The four after the workspace pull arrive while the
-/// server makes it, on a workspace of 1,000 rules; each is answered before
-/// the workspace pull, which yields to them and is answered after, with every
-/// rule's report.
+/// `semanticTokens/full`. The six after the workspace pull are waiting
+/// when the server starts it, on a workspace of 1,000 rules; each is
+/// answered before the workspace pull, which yields to them and is answered
+/// after, with every rule's report.
 #[test]
 fn document_requests_sent_during_a_workspace_pull_are_answered_first() {
     let scratch = rules_workspace("pull-yields", 1000);
@@ -3921,16 +3938,10 @@ fn document_requests_sent_during_a_workspace_pull_are_answered_first() {
     let document = json!({ "textDocument": { "uri": uri } });
     let range =
         json!({ "start": { "line": 0, "character": 0 }, "end": { "line": 5, "character": 0 } });
-    send(&mut lsp, 1, "textDocument/diagnostic", document.clone());
-    send(
-        &mut lsp,
-        2,
-        "workspace/diagnostic",
-        json!({ "previousResultIds": [] }),
-    );
-    // The document's diagnostics are answered first (the batch's rule); the
-    // workspace pull starts after them, and the rest arrive while it runs.
-    let mut seen = until_response(&mut lsp, 1);
+    // The pulls wait in their batch until the rest are sent: the workspace
+    // pull then finds them waiting, and yields to them.
+    let release = root.join("released");
+    pulls_paused_until(&mut lsp, &uri, &release);
     let requests = [
         (3, "textDocument/documentSymbol", document.clone()),
         (
@@ -3950,7 +3961,8 @@ fn document_requests_sent_during_a_workspace_pull_are_answered_first() {
     for (id, method, params) in requests {
         send(&mut lsp, id, method, params);
     }
-    seen.extend(until_response(&mut lsp, 2));
+    std::fs::write(&release, "").unwrap();
+    let seen = until_response(&mut lsp, 2);
     let answered: Vec<i64> = seen
         .iter()
         .filter(|message| message.get("method").is_none())
@@ -3974,7 +3986,7 @@ fn document_requests_sent_during_a_workspace_pull_are_answered_first() {
     let yields = lsp.request("opentide/__stats", Value::Null)["result"]["pullYields"]
         .as_u64()
         .unwrap();
-    assert!(yields >= 1, "{yields}");
+    assert_eq!(yields, 1);
     // The first validation of every object ran once, to its end. Whether it
     // also stopped for these messages depends on timing (a many-core host can
     // finish its first batch before they wait), so that is not asserted here:
