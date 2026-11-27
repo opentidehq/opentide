@@ -523,17 +523,16 @@ pub fn sources(block: &Json) -> Vec<String> {
         let search = field(query, "query").map(deploy::text).unwrap_or_default();
         let mut previous: Option<char> = None;
         let mut rest = search.as_str();
-        while let Some(at) = rest.find("source:") {
-            let before = rest[..at].chars().next_back().or(previous);
+        while let Some((head, after)) = rest.split_once("source:") {
+            let before = head.chars().next_back().or(previous);
             let starts_a_term =
                 before.is_none_or(|ch| ch.is_whitespace() || matches!(ch, '(' | '+'));
-            let after = &rest[at + "source:".len()..];
             let value: String = after
                 .chars()
                 .take_while(|ch| !ch.is_whitespace() && !matches!(ch, '(' | ')' | '"' | '\\'))
                 .collect();
-            let negated = rest[..at].ends_with('-')
-                || rest[..at]
+            let negated = head.ends_with('-')
+                || head
                     .trim_end()
                     .rsplit(|ch: char| ch.is_whitespace() || ch == '(')
                     .next()
@@ -889,6 +888,12 @@ mod tests {
         assert_eq!(
             sources(&block(&["NOT source:gcp source:aws", "(NOT source:x)"])),
             vec!["aws"]
+        );
+        // #1946: the term checks before and after `source:` never slice
+        // inside a character.
+        assert_eq!(
+            sources(&block(&["é source:okta 😀source:x source:É😀 -source:ü"])),
+            vec!["okta", "é😀"]
         );
     }
 

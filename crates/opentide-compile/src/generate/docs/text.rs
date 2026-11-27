@@ -36,17 +36,20 @@ pub fn escape_pipes(text: &str) -> String {
 pub fn markdown_text(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     let mut rest = text;
-    while let Some(c) = rest.chars().next() {
+    loop {
+        let mut chars = rest.chars();
+        let Some(c) = chars.next() else {
+            break;
+        };
         if c == '`' {
-            let run = rest.len() - rest.trim_start_matches('`').len();
-            if let Some(end) = closing_run(&rest[run..], run) {
-                let span = run + end + run;
-                out.push_str(&rest[..span]);
-                rest = &rest[span..];
-            } else {
-                // No closing run: the backticks are text, as CommonMark reads them.
-                out.push_str(&rest[..run]);
-                rest = &rest[run..];
+            let after = rest.trim_start_matches('`');
+            let run = rest.len() - after.len();
+            out.extend(std::iter::repeat_n('`', run));
+            rest = after;
+            // No closing run: the backticks are text, as CommonMark reads them.
+            if let Some((code, tail)) = code_span(after, run) {
+                out.push_str(code);
+                rest = tail;
             }
             continue;
         }
@@ -54,21 +57,24 @@ pub fn markdown_text(text: &str) -> String {
             out.push('\\');
         }
         out.push(c);
-        rest = &rest[c.len_utf8()..];
+        rest = chars.as_str();
     }
     out
 }
 
-/// Where in `text` a run of exactly `length` backticks starts.
-fn closing_run(text: &str, length: usize) -> Option<usize> {
-    let mut at = 0;
-    while let Some(found) = text[at..].find('`') {
-        let start = at + found;
-        let run = text[start..].len() - text[start..].trim_start_matches('`').len();
-        if run == length {
-            return Some(start);
+/// `text` cut after the first run of exactly `length` backticks: the code and
+/// that closing run, then what follows; `None` when no run closes the span.
+fn code_span(text: &str, length: usize) -> Option<(&str, &str)> {
+    let mut searched = text;
+    while let Some((_, run_on)) = searched.split_once('`') {
+        let tail = run_on.trim_start_matches('`');
+        if run_on.len() - tail.len() + 1 == length {
+            // `tail` is a suffix of `text`, so the cut is on a char boundary.
+            let cut = text.len() - tail.len();
+            debug_assert!(text.is_char_boundary(cut), "{text:?} cut at {cut}");
+            return text.split_at_checked(cut);
         }
-        at = start + run;
+        searched = tail;
     }
     None
 }
@@ -103,12 +109,13 @@ pub fn inline_code(text: &str) -> String {
 pub fn strip_citations(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     let mut rest = text;
-    while let Some(at) = rest.find("(Citation:") {
-        let Some(end) = rest[at..].find(')') else {
+    while let Some((before, marker)) = rest.split_once("(Citation:") {
+        // An unclosed marker is text.
+        let Some((_, after)) = marker.split_once(')') else {
             break;
         };
-        out.push_str(rest[..at].trim_end());
-        rest = &rest[at + end + 1..];
+        out.push_str(before.trim_end());
+        rest = after;
     }
     out.push_str(rest);
     out
@@ -146,6 +153,10 @@ pub fn first_sentence(text: &str, limit: usize) -> String {
         if matches!(before, '.' | '!' | '?')
             && after.is_some_and(|c| c.is_ascii_uppercase() || c == '[' || c == '(')
         {
+            #[expect(
+                clippy::string_slice,
+                reason = "`at` is a `char_indices` offset, so a char boundary"
+            )]
             let candidate = &collapsed[..at];
             if ends_with_abbreviation(candidate) {
                 continue;
@@ -164,10 +175,7 @@ pub fn truncate(text: &str, limit: usize) -> String {
         return collapsed;
     }
     let cut: String = collapsed.chars().take(limit.saturating_sub(1)).collect();
-    let cut = match cut.rfind(' ') {
-        Some(at) => &cut[..at],
-        None => cut.as_str(),
-    };
+    let cut = cut.rsplit_once(' ').map_or(cut.as_str(), |(head, _)| head);
     format!("{}…", cut.trim_end_matches([' ', ',', ';', ':']))
 }
 
@@ -314,5 +322,26 @@ mod tests {
         assert_eq!(join_lines(["a", "", "b"]), "a<br>b");
         assert_eq!(join(["\na\n\n", " ", "", "b\n"]), "a\n\nb");
         assert_eq!(title_case("a-b c"), "A-B C");
+    }
+
+    #[test]
+    fn multi_byte_text_is_never_cut_inside_a_character() {
+        // #1946: code spans, citations, sentences and truncation.
+        assert_eq!(
+            markdown_text("`é[` [😀] ``a`é`` é"),
+            "`é[` \\[😀\\] ``a`é`` é"
+        );
+        assert_eq!(markdown_text("``é`"), "``é`");
+        assert_eq!(markdown_text("😀`"), "😀`");
+        assert_eq!(
+            strip_citations("Één (Citation: 😀) deux (Citation: é"),
+            "Één deux (Citation: é"
+        );
+        assert_eq!(truncate("ééé 😀😀 ààà", 6), "ééé…");
+        assert_eq!(truncate("😀😀😀😀😀😀😀", 4), "😀😀😀…");
+        assert_eq!(
+            first_sentence("Été chaud. Le 😀 dort. Fin", 100),
+            "Été chaud."
+        );
     }
 }
