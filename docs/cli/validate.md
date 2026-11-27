@@ -494,8 +494,9 @@ answer; see [Slow queries and timeouts](#slow-queries-and-timeouts)) fails the c
 traceback. On Splunk, SentinelOne, Elastic, Carbon Black Cloud and Microsoft
 Defender, `--json` names the `tenant` and the `host` that failed, and `message`
 carries the network error; Sentinel does too, where it used to report only a rejected query. The human output prints the same message as an `error:` line,
-with the `advice` as a `help:` line under it. The platform's remaining tenants are not checked after the
-first one that cannot be reached. The sample is illustrative, because it needs a
+with the `advice` as a `help:` line under it. Up to four tenants of a platform are checked at once (Elastic's
+and Google SecOps' one at a time), each one query at a time, and reported in the configuration's order. Nothing is reported for the tenants after the
+first one that cannot be reached: those not yet started are not checked, and those running are stopped. The sample is illustrative, because it needs a
 configured tenant:
 
 ```json illustrative
