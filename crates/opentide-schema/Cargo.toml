@@ -18,7 +18,7 @@ workspace = true
 
 [build-dependencies]
 opentide-dataset = { workspace = true, features = ["encode"] }
-opentide-core.workspace = true
+opentide-core = { workspace = true, features = ["markdown"] }
 # The offers of the bundled vocabularies are worked out by build.rs from the same modules the crate
 # compiles (`src/vocab/offer.rs` and what it reads: the documents, the Markdown clean-up).
 serde.workspace = true
@@ -43,7 +43,7 @@ stubs = ["python", "pyo3/experimental-inspect"]
 
 [dependencies]
 opentide-dataset.workspace = true
-opentide-core.workspace = true
+opentide-core = { workspace = true, features = ["markdown"] }
 serde.workspace = true
 schemars.workspace = true
 garde.workspace = true

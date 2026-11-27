@@ -17,6 +17,10 @@ workspace = true
 # `text::sha256_hex`: SHA-256 in hex. Opt-in: only the command line and xtask
 # hash, so the engines, the facade and the hosts never build `sha2` (#2018).
 digest = ["dep:sha2"]
+# `markdown`: Markdown read as plain text (#1957). Opt-in: only the command
+# line, the schema and the language server read Markdown as text, so the
+# query engines never build `pulldown-cmark`.
+markdown = ["dep:pulldown-cmark"]
 
 [dependencies]
 # Elastic durations (`duration`): linear-time patterns, no look-around.
@@ -36,8 +40,9 @@ thiserror.workspace = true
 # `ids`: every crate's UUID reading and recognising (#1938).
 uuid.workspace = true
 strsim.workspace = true
-# `markdown`: Markdown read as plain text, the one converter (#1957).
-pulldown-cmark = { version = "0.13", default-features = false }
+# `markdown` (the `markdown` feature): Markdown read as plain text, the one
+# converter (#1957).
+pulldown-cmark = { workspace = true, optional = true }
 # `text::sha256_hex` (the `digest` feature): the one SHA-256 digest in hex
 # (RustCrypto).
 sha2 = { workspace = true, optional = true }
