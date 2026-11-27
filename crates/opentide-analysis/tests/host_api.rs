@@ -240,19 +240,60 @@ fn has_correlate_aggregate(diagnostics: &[opentide_analysis::Diagnostic]) -> boo
         .any(|d| d.code == codes::CQL_CORRELATE_AGGREGATE)
 }
 
+/// A query on its own is checked as a file of its language is: the platform
+/// names a dialect, never a profile (ADR 0015 §4, #1912). A `.cql` file is
+/// plain LogScale, which allows an aggregate after `correlate()`, even under
+/// `--platform crowdstrike`; the CrowdStrike block's query is the
+/// correlation rule ([`a_crowdstrike_hunt_search_is_not_a_correlation_rule`]).
 #[test]
-fn a_single_cql_query_is_a_correlation_rule_only_for_the_crowdstrike_platform() {
+fn a_single_cql_query_is_a_search_whatever_the_platform() {
     let request = |platform: Option<&str>| QueryRequest {
         language: LanguageId::Cql,
         platform: platform.map(str::to_string),
         stack: None,
         text: CORRELATE_THEN_AGGREGATE.into(),
     };
-    let rule = analyze_query(&request(Some("crowdstrike")));
-    assert!(has_correlate_aggregate(&rule), "{rule:?}");
-    // No platform: plain LogScale, which allows an aggregate after correlate().
     let plain = analyze_query(&request(None));
     assert!(!has_correlate_aggregate(&plain), "{plain:?}");
+    let crowdstrike = analyze_query(&request(Some("crowdstrike")));
+    assert!(!has_correlate_aggregate(&crowdstrike), "{crowdstrike:?}");
+}
+
+/// A `.exabeam` search with Search's advanced operators passed without a
+/// platform and failed with `exabeam_advanced_in_rule` under `exabeam`,
+/// whose `rule` profile is a correlation-rule sequence's (#1912). A
+/// `.datadog` search under a `datadog` platform is a search too.
+#[test]
+fn an_exabeam_or_datadog_search_is_a_search_under_its_platform() {
+    let request = |language: LanguageId, platform: Option<&str>, text: &str| QueryRequest {
+        language,
+        platform: platform.map(str::to_string),
+        stack: None,
+        text: text.into(),
+    };
+    let exabeam = "SELECT DISTINCT user, src_ip WHERE vendor:\"Microsoft\"";
+    for platform in [None, Some("exabeam")] {
+        let found = analyze_query(&request(LanguageId::Exabeam, platform, exabeam));
+        assert!(found.is_empty(), "{platform:?}: {found:?}");
+    }
+    // The same text in a sequence filter is refused, by its position.
+    let rule = opentide_exabeam::analyze_with(exabeam, &opentide_exabeam::Context::RULE);
+    assert!(
+        rule.diagnostics
+            .iter()
+            .any(|d| d.code == "exabeam_advanced_in_rule"),
+        "{:?}",
+        rule.diagnostics
+    );
+    // `*:term` is a warning only in a detection rule's query.
+    let datadog = "*:mimikatz";
+    for platform in [None, Some("datadog")] {
+        let found = analyze_query(&request(LanguageId::Datadog, platform, datadog));
+        assert!(
+            !found.iter().any(|d| d.code == "datadog_full_text_in_rule"),
+            "{platform:?}: {found:?}"
+        );
+    }
 }
 
 #[test]

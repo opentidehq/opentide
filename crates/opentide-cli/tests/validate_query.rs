@@ -520,6 +520,36 @@ fn exabeam_sequences_and_exabeam_files_are_checked_offline() {
     );
     assert_eq!(file.code, 0, "{}", file.stdout);
     assert_eq!(file.json()["queries"][0]["language"], "exabeam");
+    // And under `--platform exabeam`: the platform names the dialect, not the
+    // profile, so the file is still a search (#1912, ADR 0015 §4).
+    std::fs::write(
+        ws.join("x.exabeam"),
+        "SELECT DISTINCT user, src_ip WHERE vendor:\"Microsoft\"\n",
+    )
+    .unwrap();
+    let under_platform = opentide(
+        &ws,
+        &[
+            "--json",
+            "validate",
+            "query",
+            "--platform",
+            "exabeam",
+            "--file",
+            "x.exabeam",
+        ],
+        &[],
+    );
+    assert_eq!(under_platform.code, 0, "{}", under_platform.stdout);
+    let document = under_platform.json();
+    assert_eq!(document["queries"][0]["language"], "exabeam");
+    assert_eq!(document["queries"][0]["platform"], "exabeam");
+    assert_eq!(
+        document["diagnostics"],
+        serde_json::json!([]),
+        "{}",
+        under_platform.stdout
+    );
 }
 
 #[test]

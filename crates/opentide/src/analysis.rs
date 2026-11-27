@@ -23,7 +23,9 @@ pub const VERSION: &str = opentide_analysis::VERSION;
 /// Checks one query, read as `request.language`, on its own: the diagnostics
 /// the queries check would report for it, in the engine's coordinates. The
 /// `request`'s `platform` selects a schema or dialect and its `stack` an
-/// Elastic stack for ES|QL (see [`QueryRequest`]).
+/// Elastic stack for ES|QL (see [`QueryRequest`]). The query is checked as
+/// a file of its language is, whatever the platform: an Exabeam, CQL or
+/// Datadog query is a search, not a rule's query.
 ///
 /// ```
 /// use opentide::analysis::{LanguageId, QueryRequest};

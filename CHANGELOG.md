@@ -18,8 +18,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Eac
   - `microsoft_defender_nrt_query`, reported by `lint` and the editor, not `validate`: a `frequency: NRT` query that reads two tables or one off the NRT list, joins, unions, uses `externaldata` or has a comment
 - **Datadog search syntax in the editor.** `opentide lsp start` checks, highlights, hovers and completes `.datadog` files: the log search syntax of Datadog Cloud SIEM detection rules, with 16 `datadog_*` codes (`opentide explain datadog_mixed_boolean`) and Datadog's reserved and standard attributes. `opentide validate` and `opentide validate query` do not take `.datadog` files yet: the `datadog` platform comes next.
 
+### Changed
+
+- **A query file is checked as a search under every `--platform`** ([#1912](https://github.com/opentidehq/opentide/issues/1912)). `validate query --platform crowdstrike --file x.cql` checks the file as plain LogScale, as it was checked without `--platform`, so it no longer reports `cql_correlate_aggregate`. The CrowdStrike block's `query` is still checked as a Next-Gen SIEM correlation rule. The MCP tool `validate_query` reads its `query` the same way for `crowdstrike` and `exabeam`.
+
 ### Fixed
 
+- **A `.exabeam` search passes `validate query --platform exabeam`** ([#1912](https://github.com/opentidehq/opentide/issues/1912)). `opentide validate query --platform exabeam --file x.exabeam` reported Search's operators (`SELECT`, `WHERE`, `GROUP-BY`, pipes) as `exabeam_advanced_in_rule`, the error for a correlation rule's sequence, although a `.exabeam` file is a search and passed without `--platform`. Sequence filters in an Exabeam block still report it.
 - **`deploy` keeps a connector's own failure code in the rule's row.** A failure a connector reports under a code of its own read as its message alone; the row's `error` now starts with the code (`code: message`), as Microsoft Defender's, Bitdefender's and Google SecOps' rows already did ([#1894](https://github.com/opentidehq/opentide/issues/1894)). The rows that change:
   - Splunk: `splunk_renamed_search_not_deleted`, when a saved search an earlier name of the rule left could not be deleted
   - HarfangLab: `harfanglab_request_invalid`

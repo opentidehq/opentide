@@ -133,11 +133,43 @@ fn hand_written_rows(profile: Profile) -> (Vec<TableRow>, Vec<ColumnRow>) {
     }
 }
 
+/// The product a KQL query runs on (ADR 0015 §1 calls this a dialect): its
+/// tables, columns and functions, and how strictly an unknown table is
+/// reported.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Profile {
+    /// No product tables: tests and the throughput benchmark.
     Core,
+    /// Microsoft Sentinel, the default: its open schema makes an unknown
+    /// table a warning.
     Sentinel,
+    /// Microsoft Defender XDR's advanced hunting schema, closed: an unknown
+    /// table is an error.
     Defender,
+}
+
+impl Profile {
+    /// The profile of a detection platform, as a `configurations` key or a
+    /// hunt's `system`: `microsoft_defender` is Defender's, every other
+    /// platform (and none) Sentinel's. The only map from a platform to a KQL
+    /// profile (ADR 0015 §3): Tide and analysis call it and keep no copy.
+    #[must_use]
+    pub fn for_platform(platform: &str) -> Self {
+        match platform {
+            "microsoft_defender" => Profile::Defender,
+            _ => Profile::Sentinel,
+        }
+    }
+
+    /// The platform whose `visibility.toml` declarations the profile reads:
+    /// [`Profile::for_platform`]'s inverse, with `Core` reading Sentinel's.
+    #[must_use]
+    pub fn platform(self) -> &'static str {
+        match self {
+            Profile::Defender => "microsoft_defender",
+            Profile::Core | Profile::Sentinel => "sentinel",
+        }
+    }
 }
 
 /// The whole file, as the test reads it to compare (ADR 0013).
@@ -569,7 +601,7 @@ impl Catalog {
             return CatalogRef::Bundled(bundled);
         }
         let datasets = opentide_core::datasets::current();
-        let platform = dataset_platform(profile);
+        let platform = profile.platform();
         let declared: Vec<DeclaredSource> =
             datasets.sources_with_columns(platform).cloned().collect();
         if declared.is_empty() {
@@ -1100,14 +1132,6 @@ fn declared_targets<'d, 'n>(
     out
 }
 
-/// The platform whose `visibility.toml` declarations a profile reads.
-fn dataset_platform(profile: Profile) -> &'static str {
-    match profile {
-        Profile::Defender => "microsoft_defender",
-        Profile::Core | Profile::Sentinel => "sentinel",
-    }
-}
-
 /// [`check_table`] on the table's name and the range to report: the part of
 /// the check no parser is in.
 fn check_table_named(
@@ -1133,7 +1157,7 @@ fn check_table_named(
         return;
     }
     let known = catalog.table(table).is_some();
-    let platform = dataset_platform(catalog.profile);
+    let platform = catalog.profile.platform();
     let datasets = opentide_core::datasets::current();
     // Without declarations, a name that starts with a lower-case letter is
     // more likely a workspace function; `_CL` still marks a custom table
@@ -2206,6 +2230,18 @@ impl<K: PartialEq + Clone> Recent<K, Arc<Catalog>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Each product's profile reads that product's declarations, and an
+    /// unknown platform (or none) is Sentinel's (ADR 0015 §3).
+    #[test]
+    fn a_platform_and_its_profile_map_both_ways() {
+        for platform in ["sentinel", "microsoft_defender"] {
+            assert_eq!(Profile::for_platform(platform).platform(), platform);
+        }
+        assert_eq!(Profile::for_platform(""), Profile::Sentinel);
+        assert_eq!(Profile::for_platform("splunk"), Profile::Sentinel);
+        assert_eq!(Profile::Core.platform(), "sentinel");
+    }
 
     /// A profile's rows share their names with the reference's columns, and
     /// every column of a type shares that type's name (#1071): a row's own

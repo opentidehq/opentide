@@ -41,6 +41,8 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 #### `opentide-kql`
 
+- **`Profile::for_platform` is the one map from a platform to a KQL profile** ([opentide#1912](https://github.com/opentidehq/opentide/issues/1912), ADR 0015 §3): `microsoft_defender` is `Profile::Defender`, every other platform `Profile::Sentinel`. `opentide-analysis` and `opentide-tide` call it instead of keeping copies.
+  - API: `Profile::for_platform`, `Profile::platform` (the platform whose `visibility.toml` declarations a profile reads)
 - **`opentide_kql::shape` lists what a query reads and the constructs it uses** ([opentide#1890](https://github.com/opentidehq/opentide/issues/1890)): its tables, joins, unions, `externaldata` sources, comments and the columns it names, from the tree `analyze` builds.
   - API: `shape::shape`, `shape::Shape`
 
@@ -49,6 +51,14 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 - **Three Defender codes with their explanations** ([opentide#1890](https://github.com/opentidehq/opentide/issues/1890)): `codes::MICROSOFT_DEFENDER_CUSTOM_DETAILS_LIMIT`, `MICROSOFT_DEFENDER_PLACEHOLDER_LIMIT` and `MICROSOFT_DEFENDER_NRT_QUERY`.
 
 ### Changed
+
+#### `opentide`
+
+- **`QueryRequest.platform` names a dialect, never a profile** ([opentide#1912](https://github.com/opentidehq/opentide/issues/1912), ADR 0015 §4). `analyze_query` checks a query as a file of its language is: an Exabeam or Datadog query under the `search` profile and a CQL query as plain LogScale, whatever the platform. `platform: exabeam` chose Exabeam's `rule` profile, `crowdstrike` the Next-Gen SIEM correlation rule and `datadog` Datadog's `rule`; a rule block's query is still checked as a rule by `Workspace::validate` and `Workspace::lint`, by its field path.
+
+#### `opentide-analysis`
+
+- **`analyze_query` takes the profile from the file, not from `QueryRequest.platform`** ([opentide#1912](https://github.com/opentidehq/opentide/issues/1912)), as the `opentide` entry above says. A valid `.exabeam` search, `SELECT DISTINCT user, src_ip WHERE vendor:"Microsoft"`, no longer reports `exabeam_advanced_in_rule` under `platform: exabeam`.
 
 #### `opentide-workspace`
 
