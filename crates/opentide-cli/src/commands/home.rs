@@ -90,10 +90,13 @@ pub struct Facts {
 }
 
 /// The facts for the working directory `cwd`: the workspace
-/// `OPENTIDE_REPO_ROOT` names, else the nearest one (`gather`).
-pub fn gather(version: &str, cwd: &Path, repo_root: Option<&str>) -> Facts {
+/// `OPENTIDE_REPO_ROOT` (in `env`) names, else the nearest one (`gather`).
+/// Its configuration is read where every other command reads it
+/// ([`super::placement`]): `OPENTIDE_TIDE_WORKSPACE` included (#1996).
+pub fn gather(version: &str, cwd: &Path, env: &crate::env::Env) -> Facts {
     use opentide_workspace::root::{OPENTIDE_DIR, find_workspace_root, is_workspace_root};
     let fs = opentide_workspace::OsFs;
+    let repo_root = env.get("OPENTIDE_REPO_ROOT");
     let root = match repo_root.filter(|root| !root.is_empty()) {
         Some(root) => cwd.join(root),
         None => find_workspace_root(&fs, cwd),
@@ -127,9 +130,12 @@ pub fn gather(version: &str, cwd: &Path, repo_root: Option<&str>) -> Facts {
     let schemas = files_in(&root.join(OPENTIDE_DIR).join("schemas"))
         .iter()
         .any(|name| name.ends_with(".schema.json"));
-    let platforms = resolved_platforms(&root).unwrap_or_else(|| {
+    let (_, options) = super::placement(None, env, cwd);
+    let roots = opentide_workspace::root::resolve(&fs, &options);
+    let platforms = resolved_platforms(&roots).unwrap_or_else(|| {
         platforms(
-            &root
+            &roots
+                .workspace
                 .join(OPENTIDE_DIR)
                 .join("configurations")
                 .join("platforms"),
@@ -160,18 +166,13 @@ fn files_in(folder: &Path) -> Vec<String> {
     names
 }
 
-/// Each platform the resolved configuration of the workspace at `root`
+/// Each platform the resolved configuration of the workspace at `roots`
 /// enables ([`opentide_schema::configuration::resolve::Resolved::enabled_platform_ids`],
 /// the rule every command uses) and its number of `[[tenants]]`, in name
 /// order; `None` when the configuration does not resolve.
-fn resolved_platforms(root: &Path) -> Option<Vec<(String, usize)>> {
-    let roots = opentide_workspace::root::Roots {
-        repo: root.to_path_buf(),
-        workspace: root.to_path_buf(),
-        tide_workspace: false,
-    };
+fn resolved_platforms(roots: &opentide_workspace::root::Roots) -> Option<Vec<(String, usize)>> {
     let resolved =
-        opentide_workspace::config::resolve_only(&opentide_workspace::OsFs, &roots).ok()?;
+        opentide_workspace::config::resolve_only(&opentide_workspace::OsFs, roots).ok()?;
     let mut found: Vec<(String, usize)> = resolved
         .enabled_platform_ids()
         .into_iter()
@@ -516,6 +517,7 @@ pub fn render(facts: &Facts, screen: &Screen<'_>) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::env::Env;
 
     fn facts() -> Facts {
         Facts {
@@ -614,10 +616,10 @@ mod tests {
             "[platform]\nenabled = false\n",
         )
         .unwrap();
-        let facts = gather("1", root, None);
+        let facts = gather("1", root, &Env::default());
         assert_eq!(facts.platforms, [("splunk".to_owned(), 1)]);
         std::fs::write(platforms.join("broken.toml"), "[platform\n").unwrap();
-        let facts = gather("1", root, None);
+        let facts = gather("1", root, &Env::default());
         // The workspace is found from the resolved path: on macOS the
         // temporary folder is under /private, on Windows its short name
         // (RUNNER~1) becomes the long one.
@@ -627,11 +629,15 @@ mod tests {
         assert!(!facts.schemas);
         assert_eq!(facts.platforms, [("splunk".to_owned(), 1)]);
         let outside = tempfile::tempdir().unwrap();
-        assert_eq!(gather("1", outside.path(), None).workspace, None);
+        assert_eq!(gather("1", outside.path(), &Env::default()).workspace, None);
         assert_eq!(
-            gather("1", outside.path(), Some(&root.to_string_lossy()))
-                .workspace
-                .as_deref(),
+            gather(
+                "1",
+                outside.path(),
+                &Env::from_pairs([("OPENTIDE_REPO_ROOT", root.to_string_lossy())])
+            )
+            .workspace
+            .as_deref(),
             Some(root)
         );
         assert_eq!(workspace_path(root, root, None), ".");
@@ -643,8 +649,10 @@ mod tests {
     }
 
     /// The home screen names the platforms every other command does: the
-    /// 0.x `systems.toml` and the parent instance's configuration count
-    /// (#1935).
+    /// 0.x `systems.toml` counts (#1935), and the configuration is placed as
+    /// `doctor` places it ([`super::super::placement`]), so the parent
+    /// folder's configuration does not count, as it does not for `doctor`
+    /// (#1996).
     #[test]
     fn the_platforms_are_those_of_the_resolved_configuration() {
         let folder = tempfile::tempdir().unwrap();
@@ -659,10 +667,46 @@ mod tests {
         let parent = folder.path().join(".opentide/configurations/platforms");
         std::fs::create_dir_all(&parent).unwrap();
         std::fs::write(parent.join("elastic.toml"), "[platform]\nenabled = true\n").unwrap();
-        let facts = gather("1", &root, None);
+        let facts = gather("1", &root, &Env::default());
+        assert_eq!(facts.platforms, [("splunk".to_owned(), 1)]);
+        let (_, options) = super::super::placement(None, &Env::default(), &root);
+        let roots = opentide_workspace::root::resolve(&opentide_workspace::OsFs, &options);
+        let doctor = opentide_workspace::config::load(&opentide_workspace::OsFs, &roots).unwrap();
+        assert_eq!(doctor.resolved.enabled_platform_ids(), ["splunk"]);
+    }
+
+    /// `OPENTIDE_TIDE_WORKSPACE` names the workspace whose configuration
+    /// counts, as for `doctor`, `info` and `deploy`; the home screen read the
+    /// repository's (#1996).
+    #[test]
+    fn the_platforms_follow_opentide_tide_workspace() {
+        let folder = tempfile::tempdir().unwrap();
+        let root = folder.path().join("repo");
+        let own = root.join(".opentide/configurations/platforms");
+        std::fs::create_dir_all(&own).unwrap();
+        std::fs::write(own.join("splunk.toml"), "[platform]\nenabled = true\n").unwrap();
+        let sub = root.join("détections😀/.opentide/configurations/platforms");
+        std::fs::create_dir_all(&sub).unwrap();
+        std::fs::write(
+            sub.join("sentinel.toml"),
+            "[platform]\nenabled = true\n[[tenants]]\nname = 'é'\n",
+        )
+        .unwrap();
+        let env = Env::from_pairs([("OPENTIDE_TIDE_WORKSPACE", "détections😀")]);
         assert_eq!(
-            facts.platforms,
-            [("elastic".to_owned(), 0), ("splunk".to_owned(), 1)]
+            gather("1", &root, &env).platforms,
+            [("sentinel".to_owned(), 1)]
+        );
+        // The fallback, when the configuration does not resolve, reads the
+        // same folder.
+        std::fs::write(sub.join("broken.toml"), "[platform\n").unwrap();
+        assert_eq!(
+            gather("1", &root, &env).platforms,
+            [("sentinel".to_owned(), 1)]
+        );
+        assert_eq!(
+            gather("1", &root, &Env::default()).platforms,
+            [("splunk".to_owned(), 0)]
         );
     }
 }

@@ -2064,17 +2064,14 @@ mod tests {
                 files: vec![(file.to_owned(), text.to_owned())],
                 folders: vec!["platforms".to_owned()],
             };
-            let mut tree = resolve(&Instance {
+            let tree = resolve(&Instance {
                 workspace: Some(&folder),
                 ..Instance::default()
             })
             .unwrap()
             .tree;
-            // Only the `platforms` table counts; the `systems` copy is for
-            // external readers.
-            if let Value::Map(entries) = &mut tree.value {
-                entries.retain(|entry| entry.key.value.as_str() != Some("systems"));
-            }
+            // `systems` merges into `platforms`, the only table the tree holds.
+            assert!(tree.get("systems").is_none(), "{file}");
             let doctor = Doctor {
                 cx: &cx,
                 workspace: dir.path().to_path_buf(),

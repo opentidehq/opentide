@@ -374,11 +374,7 @@ impl Run<'_> {
             .get(if cfg!(windows) { "USERPROFILE" } else { "HOME" })
             .filter(|home| !home.is_empty())
             .map(PathBuf::from);
-        let facts = crate::commands::home::gather(
-            &self.host.version,
-            &cwd,
-            self.env.get("OPENTIDE_REPO_ROOT"),
-        );
+        let facts = crate::commands::home::gather(&self.host.version, &cwd, self.env);
         let console = self.console(self.host.stdout_tty);
         Some(crate::commands::home::render(
             &facts,
