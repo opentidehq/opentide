@@ -118,6 +118,26 @@ fn core_rows() -> CoreRows {
     opentide_dataset::compiled_value("kql-core-rows", opentide_dataset::blob!("kql-core-rows"))
 }
 
+/// Advanced hunting's own functions (`FileProfile`, `DeviceFromIP`, `SeenBy`,
+/// `AssignedIPAddresses`), as the build script pre-parsed them from
+/// `data/catalogs/kql/defender/functions.toml`: the Defender dialect's catalog lists them, and
+/// the Sentinel dialect reports a call to one as `kql_function_unavailable` (ADR 0015, §5.1).
+pub fn defender_functions() -> &'static [FunctionRow] {
+    static ROWS: OnceLock<Vec<FunctionRow>> = OnceLock::new();
+    ROWS.get_or_init(|| {
+        opentide_dataset::compiled_value(
+            "kql-defender-functions",
+            opentide_dataset::blob!("kql-defender-functions"),
+        )
+    })
+}
+
+/// The compiled-in text of the Defender functions, as the test reads it to compare (ADR 0013).
+#[cfg(test)]
+fn defender_functions_toml() -> &'static str {
+    opentide_dataset::text!("data/catalogs/kql/defender/functions.toml")
+}
+
 /// A profile's hand-written tables and columns, with the types settled against the reference
 /// ([`rows_model::profile_rows`]), as the build script pre-parsed them.
 fn hand_written_rows(profile: Profile) -> (Vec<TableRow>, Vec<ColumnRow>) {
@@ -351,7 +371,8 @@ impl Catalog {
     ///   are known sources ([`Catalog::asim_parser`]).
     /// - `microsoft_defender`: the advanced hunting tables, with the
     ///   columns the reference lists for those it has, but the Log Analytics
-    ///   standard columns of its copies (`TimeGenerated`, `TenantId`, ...).
+    ///   standard columns of its copies (`TimeGenerated`, `TenantId`, ...),
+    ///   and advanced hunting's own functions ([`defender_functions`]).
     ///
     /// Hand-written columns keep their docs and are added to the reference's,
     /// never removed: a column either lists is known.
@@ -402,6 +423,9 @@ impl Catalog {
         self.hand_len = columns.len();
         self.columns = columns;
         self.lazy = lazy;
+        if profile == Profile::Defender {
+            self.functions.extend(defender_functions().iter().cloned());
+        }
         self.reindex();
         self
     }
@@ -533,6 +557,16 @@ impl Catalog {
             return None;
         }
         tables::asim().parser(name)
+    }
+
+    /// The function `name` (exactly, as Kusto's names are case-sensitive) when another
+    /// dialect has it and this one does not: under Sentinel, one of advanced hunting's own
+    /// ([`defender_functions`]). `None` under Core, which has no product, and under Defender.
+    pub fn unavailable_function(&self, name: &str) -> Option<&'static FunctionRow> {
+        if self.profile != Profile::Sentinel {
+            return None;
+        }
+        defender_functions().iter().find(|f| f.name == name)
     }
 
     /// Parsed once per profile for the process. `core()` still reparses for tests.
@@ -2571,6 +2605,155 @@ mod tests {
                 rendered(eager.columns_for_table("SecurityEvent"))
             );
         }
+    }
+
+    /// Advanced hunting's own functions (#1914): pre-parsed as the file reads item by item,
+    /// listed by the Defender dialect only, each with its Learn page's signature.
+    #[test]
+    fn the_defender_functions_are_the_defender_dialects() {
+        let read = rows::<FunctionRow>("defender/", defender_functions_toml(), "functions");
+        assert_eq!(format!("{:?}", defender_functions()), format!("{read:?}"));
+        let names: Vec<&str> = defender_functions()
+            .iter()
+            .map(|f| f.name.as_str())
+            .collect();
+        assert_eq!(
+            names,
+            [
+                "FileProfile",
+                "DeviceFromIP",
+                "SeenBy",
+                "AssignedIPAddresses"
+            ]
+        );
+        for function in defender_functions() {
+            assert_eq!(
+                function.profile.as_deref(),
+                Some("defender"),
+                "{}",
+                function.name
+            );
+            assert_eq!(
+                function.kind.as_deref(),
+                Some("tabular"),
+                "{}",
+                function.name
+            );
+            assert_named_signature(&function.name, function.signature.as_deref());
+            assert!(
+                function
+                    .citation
+                    .as_deref()
+                    .is_some_and(|c| c.starts_with("https://learn.microsoft.com/defender-xdr/")),
+                "{}",
+                function.name
+            );
+        }
+        let defender = Catalog::cached(Profile::Defender);
+        let sentinel = Catalog::cached(Profile::Sentinel);
+        let core = Catalog::cached(Profile::Core);
+        for name in names {
+            assert!(defender.function(name).is_some(), "{name}");
+            assert!(defender.unavailable_function(name).is_none(), "{name}");
+            assert!(sentinel.function(name).is_none(), "{name}");
+            assert!(sentinel.unavailable_function(name).is_some(), "{name}");
+            assert!(core.function(name).is_none(), "{name}");
+            assert!(core.unavailable_function(name).is_none(), "{name}");
+        }
+        // Kusto's names are case-sensitive: another case is not the function.
+        assert!(sentinel.unavailable_function("fileprofile").is_none());
+        // Kusto's own functions stay in every dialect.
+        assert!(core.functions.iter().all(|f| f.profile.is_none()));
+    }
+
+    /// Under Defender the functions get hover and signature help from their rows; under
+    /// Sentinel a call to one is `kql_function_unavailable`, a warning at its name; under Core,
+    /// and wherever the query names its own function so, nothing is reported (#1914).
+    #[test]
+    fn defender_functions_by_dialect() {
+        let codes =
+            |source: &str, profile: Profile| -> Vec<(String, opentide_core::Severity, String)> {
+                analyze(source, profile)
+                    .diagnostics
+                    .into_iter()
+                    .filter(|d| d.code.starts_with("kql_") && d.code.contains("function"))
+                    .map(|d| {
+                        let start = opentide_core::position_to_offset(source, d.range.start);
+                        let end = opentide_core::position_to_offset(source, d.range.end);
+                        (d.code, d.severity, source[start..end].to_owned())
+                    })
+                    .collect()
+            };
+        let invoked = "DeviceFileEvents\n| project SHA1\n| invoke FileProfile(SHA1, 500)";
+        let sources = [
+            (invoked, "FileProfile"),
+            (
+                "DeviceNetworkEvents | project IP = LocalIP | invoke DeviceFromIP()",
+                "DeviceFromIP",
+            ),
+            ("DeviceInfo | take 10 | invoke SeenBy()", "SeenBy"),
+            (
+                "AssignedIPAddresses('host-1', ago(1d))",
+                "AssignedIPAddresses",
+            ),
+        ];
+        for (source, name) in sources {
+            assert_eq!(
+                codes(source, Profile::Sentinel),
+                [(
+                    codes::KQL_FUNCTION_UNAVAILABLE.to_owned(),
+                    opentide_core::Severity::Warning,
+                    name.to_owned()
+                )],
+                "{source}"
+            );
+            assert!(codes(source, Profile::Defender).is_empty(), "{source}");
+            assert!(codes(source, Profile::Core).is_empty(), "{source}");
+        }
+        // The query's own function of that name, and another case, are not reported.
+        let own =
+            "let FileProfile = (T:(SHA1:string)) { T };\nDeviceFileEvents | invoke FileProfile()";
+        assert!(codes(own, Profile::Sentinel).is_empty());
+        assert!(
+            codes("SecurityEvent | invoke fileprofile()", Profile::Sentinel)
+                .iter()
+                .all(|(code, _, _)| code != codes::KQL_FUNCTION_UNAVAILABLE)
+        );
+        let message = analyze(invoked, Profile::Sentinel)
+            .diagnostics
+            .into_iter()
+            .find(|d| d.code == codes::KQL_FUNCTION_UNAVAILABLE)
+            .map(|d| d.message);
+        assert_eq!(
+            message.as_deref(),
+            Some(
+                "'FileProfile' is a Microsoft Defender advanced hunting function, which a \
+                 Microsoft Sentinel workspace does not have"
+            )
+        );
+        // Signature help and hover under Defender.
+        let at = invoked.find("SHA1, 500").unwrap() + "SHA1, ".len();
+        let help = signature_help(invoked, at, Profile::Defender).unwrap();
+        assert_eq!(help.signatures[0].label, "invoke FileProfile(x,y)");
+        assert_eq!(help.active_parameter, 1);
+        let labels: Vec<&str> = help.signatures[0]
+            .parameters
+            .iter()
+            .map(|p| p.label.as_str())
+            .collect();
+        assert_eq!(labels, ["x", "y"]);
+        let hover_at = invoked.find("FileProfile").unwrap() + 2;
+        let text = hover(invoked, hover_at, Profile::Defender).unwrap();
+        assert!(text.contains("enrichment function"), "{text}");
+        assert!(
+            signature_help(invoked, at, Profile::Sentinel)
+                .is_none_or(|help| help.signatures[0].label != "invoke FileProfile(x,y)")
+        );
+        // Completion offers them under Defender only.
+        let items = completions("DeviceInfo | invoke ", 20, Profile::Defender);
+        assert!(items.iter().any(|i| i.label == "SeenBy"));
+        let items = completions("DeviceInfo | invoke ", 20, Profile::Sentinel);
+        assert!(!items.iter().any(|i| i.label == "SeenBy"));
     }
 
     /// What the build pre-parsed (`build.rs`, #1767) is what reading the TOML files item by item

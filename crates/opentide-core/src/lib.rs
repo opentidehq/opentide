@@ -766,6 +766,7 @@ pub mod codes {
     pub const KQL_UNKNOWN_OPERATOR: &str = "kql_unknown_operator";
     pub const KQL_UNKNOWN_FUNCTION: &str = "kql_unknown_function";
     pub const KQL_DEPRECATED_FUNCTION: &str = "kql_deprecated_function";
+    pub const KQL_FUNCTION_UNAVAILABLE: &str = "kql_function_unavailable";
     pub const KQL_DEPRECATED_OPERATOR: &str = "kql_deprecated_operator";
     pub const KQL_UNKNOWN_TABLE: &str = "kql_unknown_table";
     pub const KQL_TABLE_MISSPELT: &str = "kql_table_misspelt";
@@ -1161,6 +1162,7 @@ pub mod codes {
         KQL_UNKNOWN_OPERATOR,
         KQL_UNKNOWN_FUNCTION,
         KQL_DEPRECATED_FUNCTION,
+        KQL_FUNCTION_UNAVAILABLE,
         KQL_DEPRECATED_OPERATOR,
         KQL_UNKNOWN_TABLE,
         KQL_TABLE_MISSPELT,
@@ -1521,6 +1523,9 @@ pub mod codes {
             }
             KQL_UNKNOWN_OPERATOR => "The KQL tabular operator is not one Kusto knows.",
             KQL_UNKNOWN_FUNCTION => "The KQL function is not in the Kusto function catalog.",
+            KQL_FUNCTION_UNAVAILABLE => {
+                "The KQL function is another dialect's: a Microsoft Defender advanced hunting function in a Microsoft Sentinel query."
+            }
             KQL_DEPRECATED_FUNCTION => {
                 "The KQL function is a deprecated alias; Microsoft Learn names its replacement."
             }

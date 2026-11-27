@@ -41,6 +41,8 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 #### `opentide-kql`
 
+- **Defender's advanced hunting functions are in the Defender dialect's catalog** ([opentide#1914](https://github.com/opentidehq/opentide/issues/1914)). `FileProfile`, `DeviceFromIP`, `SeenBy` and `AssignedIPAddresses` get hover, completion and signature help under `Profile::Defender`, from their Learn pages (`data/catalogs/kql/defender/functions.toml`, `scripts/engine/sync_defender_functions.py`). Under `Profile::Sentinel`, an exact call to one is the warning `kql_function_unavailable`, unless the workspace declares that name as a log source.
+  - API: `opentide_kql::defender_functions`, `Catalog::unavailable_function`, `FunctionRow::profile`; `opentide_core::codes::KQL_FUNCTION_UNAVAILABLE`
 - **`opentide_kql::shape` lists what a query reads and the constructs it uses** ([opentide#1890](https://github.com/opentidehq/opentide/issues/1890)): its tables, joins, unions, `externaldata` sources, comments and the columns it names, from the tree `analyze` builds.
   - API: `shape::shape`, `shape::Shape`
 
