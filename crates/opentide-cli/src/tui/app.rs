@@ -1834,6 +1834,13 @@ mod tests {
             first_line("\n**Tlp** `string` — required\n\nmore"),
             "Tlp string — required"
         );
+        assert_eq!(
+            first_line("  \n**Évènement** `chaîne` 😀 — requis\nsuite"),
+            "Évènement chaîne 😀 — requis"
+        );
+        assert_eq!(first_line("snake_case_name `é`"), "snake_case_name é");
+        assert_eq!(first_line(""), "");
+        assert_eq!(first_line("\n\n"), "");
     }
 
     #[test]
