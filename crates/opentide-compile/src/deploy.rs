@@ -3,6 +3,8 @@
 //! of it (create, update or delete, `deployment/external_ids.py`
 //! `plan_external_id`) and a tenant's settings.
 
+use opentide_schema::platforms::PlatformKey;
+
 use crate::Context;
 use crate::json::{Json, Object};
 use crate::rule::{CompileError, Rule};
@@ -197,12 +199,12 @@ pub fn platform_config<'c>(cx: &'c Context<'_>, platform: &str) -> Option<&'c Js
 }
 
 /// The tenants configured for `platform`, in their order.
-pub fn tenants<'c>(cx: &'c Context<'_>, platform: &str) -> Vec<&'c Json> {
+pub fn tenants<'c>(cx: &'c Context<'_>, platform: &PlatformKey) -> Vec<&'c Json> {
     crate::plan::tenants(cx.config, platform)
 }
 
 /// The tenant of `platform` named `name`.
-pub fn tenant<'c>(cx: &'c Context<'_>, platform: &str, name: &str) -> Option<&'c Json> {
+pub fn tenant<'c>(cx: &'c Context<'_>, platform: &PlatformKey, name: &str) -> Option<&'c Json> {
     tenants(cx, platform)
         .into_iter()
         .find(|tenant| tenant_name(tenant) == name)

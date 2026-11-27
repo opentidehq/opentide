@@ -8,6 +8,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use opentide_compile::{Json, Owned, Rule, deploy, elastic, modifiers, preview};
+use opentide_schema::platforms::PlatformKey;
 use opentide_schema::vocab::Vocabularies;
 use opentide_workspace::{FileSystem, MemoryFs, Options, RootOptions, Workspace};
 
@@ -68,15 +69,15 @@ fn a_dry_run_shows_the_body_a_deploy_compiles_for_the_first_tenant() {
     let object = index.get("rule", UUID).unwrap();
     let rule = Rule::new(object.root().unwrap(), None);
     let tenants = vec!["basic".to_owned(), "full".to_owned()];
-    let entry = preview::preview_on(&cx, "elastic", &rule, &tenants);
+    let entry = preview::preview_on(&cx, &PlatformKey::new("elastic"), &rule, &tenants);
     assert_eq!(entry.get("tenant").and_then(Json::as_str), Some("basic"));
     let shown = entry.get("api_request").unwrap().clone();
     // The body `opentide deploy` sends to `basic`, byte for byte: the rule
     // with `basic`'s modifiers, compiled with its setup.
-    let table = deploy::tenant(&cx, "elastic", "basic").unwrap();
+    let table = deploy::tenant(&cx, &PlatformKey::new("elastic"), "basic").unwrap();
     let modified = modifiers::rule_for_tenant(
-        &modifiers::of_platform(cx.config, "elastic"),
-        "elastic",
+        &modifiers::of_platform(cx.config, &PlatformKey::new("elastic")),
+        &PlatformKey::new("elastic"),
         &rule,
         "basic",
     );
@@ -103,7 +104,7 @@ fn a_dry_run_shows_the_body_a_deploy_compiles_for_the_first_tenant() {
     );
     assert!(payload.get("alert_suppression").is_none(), "{payload:?}");
     // Compiled without a tenant, the rule keeps its suppression.
-    let offline = preview::preview(&cx, "elastic", &rule);
+    let offline = preview::preview(&cx, &PlatformKey::new("elastic"), &rule);
     assert!(offline.get("tenant").is_none());
     let offline = offline.get("api_request").unwrap().get("payload").unwrap();
     assert!(offline.get("alert_suppression").is_some(), "{offline:?}");

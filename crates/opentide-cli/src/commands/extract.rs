@@ -24,6 +24,7 @@ use opentide_compile::json::{Json as CJson, Object};
 use opentide_connectors::connector::TenantContext;
 use opentide_connectors::credentials::Mode as Resolve;
 use opentide_connectors::{Environment, HttpClient, Tenant};
+use opentide_schema::platforms::PlatformKey;
 use tokio_util::sync::CancellationToken;
 
 use super::query::{Configured, http_settings, toml_value};
@@ -68,7 +69,7 @@ fn configured(cx: &Context<'_>, platform: &str) -> Result<(Vec<Configured>, Path
     let (shown, options) = placement(cx.repo, cx.env, cx.cwd);
     let workspace = open(options)?;
     let config = CJson::from_node(&workspace.configuration().resolved.tree);
-    let tenants = opentide_compile::plan::tenants(&config, platform)
+    let tenants = opentide_compile::plan::tenants(&config, &PlatformKey::new(platform))
         .into_iter()
         .map(|tenant| Configured {
             name: opentide_compile::deploy::tenant_name(tenant).to_owned(),
