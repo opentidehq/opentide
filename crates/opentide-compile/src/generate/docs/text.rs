@@ -50,7 +50,7 @@ pub fn markdown_text(text: &str) -> String {
             out.extend(std::iter::repeat_n('`', run));
             rest = after;
             // No closing run: the backticks are text, as CommonMark reads them.
-            if let Some((code, tail)) = code_span(after, run) {
+            if let Some((code, tail)) = closing_code_span(after, run) {
                 out.push_str(code);
                 rest = tail;
             }
@@ -67,7 +67,7 @@ pub fn markdown_text(text: &str) -> String {
 
 /// `text` cut after the first run of exactly `length` backticks: the code and
 /// that closing run, then what follows; `None` when no run closes the span.
-fn code_span(text: &str, length: usize) -> Option<(&str, &str)> {
+fn closing_code_span(text: &str, length: usize) -> Option<(&str, &str)> {
     let mut searched = text;
     while let Some((_, run_on)) = searched.split_once('`') {
         let tail = run_on.trim_start_matches('`');
