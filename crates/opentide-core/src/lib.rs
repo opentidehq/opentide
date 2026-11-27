@@ -1483,6 +1483,29 @@ pub mod codes {
             => "A Datadog search uses Observability Pipelines syntax (`_exists_:`, `_missing_:`, a quoted field name), which log search does not read the same way.";
         DATADOG_UNKNOWN_ATTRIBUTE = "datadog_unknown_attribute"
             => "A Datadog search field is a dotted bare key, searched as a tag, where an `@attribute` was probably meant.";
+        // Datadog block constraint codes and the advisory (rfc-datadog-cloud-siem, §5.9).
+        DATADOG_METHOD_UNSUPPORTED = "datadog_method_unsupported"
+            => "A Datadog detection method is not threshold, new_value, anomaly or impossible_travel.";
+        DATADOG_DURATION = "datadog_duration"
+            => "A Datadog duration is not one of the values its key accepts (a window, a bucket, a learning period, forget_after).";
+        DATADOG_WINDOW_ORDER = "datadog_window_order"
+            => "A Datadog detection window is longer than the signal's keep_alive or max_duration.";
+        DATADOG_QUERY_NAME = "datadog_query_name"
+            => "A Datadog query name is not [a-z][a-z0-9_]*, is a duplicate, or is set on a new_value query.";
+        DATADOG_MEASURE = "datadog_measure"
+            => "A Datadog query sets more than one measure, or new_value does not match the detection method.";
+        DATADOG_DETECTION_OPTION = "datadog_detection_option"
+            => "A Datadog detection key the method does not take, or a new_value rule without forget_after.";
+        DATADOG_SIGNAL_GROUP_BY = "datadog_signal_group_by"
+            => "A Datadog signal.group_by field is in no query's group_by.";
+        DATADOG_CONDITION = "datadog_condition"
+            => "A Datadog case condition does not parse, names an unknown query, or does not suit the detection method.";
+        DATADOG_SEVERITY = "datadog_severity"
+            => "A Datadog case severity is not info, low, medium, high or critical.";
+        DATADOG_TAG = "datadog_tag"
+            => "A Datadog tag would be refused or rewritten: upper case, a character outside a-z 0-9 _ - : . /, or longer than 200 characters.";
+        DATADOG_CONDITION_MIXED = "datadog_condition_mixed"
+            => "A Datadog case condition mixes && and ||, whose precedence Datadog does not document.";
     }
 }
 

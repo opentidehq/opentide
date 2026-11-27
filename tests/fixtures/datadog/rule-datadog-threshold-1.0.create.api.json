@@ -1,0 +1,27 @@
+{
+  "method": "POST",
+  "path": "/api/v2/security_monitoring/rules",
+  "body": {
+    "name": "Okta brute force followed by a successful login",
+    "type": "log_detection",
+    "isEnabled": true,
+    "queries": [
+      {"name": "failed", "query": "source:okta @evt.name:user.session.start @evt.outcome:FAILURE",
+       "dataSource": "logs", "aggregation": "count", "groupByFields": ["@usr.email"], "distinctFields": []},
+      {"name": "success", "query": "source:okta @evt.name:user.session.start @evt.outcome:SUCCESS",
+       "dataSource": "logs", "aggregation": "count", "groupByFields": ["@usr.email"], "distinctFields": []}
+    ],
+    "cases": [
+      {"name": "brute force then success", "status": "high",
+       "condition": "failed > 10 && success > 0", "notifications": ["@slack-soc-alerts"]}
+    ],
+    "options": {"detectionMethod": "threshold", "evaluationWindow": 300, "keepAlive": 3600,
+                "maxSignalDuration": 86400, "decreaseCriticalityBasedOnEnv": true},
+    "groupSignalsBy": ["@usr.email"],
+    "hasExtendedTitle": true,
+    "message": "{{@usr.email}} failed to log in {{events_matched_per_query.failed}} times, then succeeded.",
+    "tags": ["team:identity", "source:okta", "tactic:ta0006-credential-access",
+             "technique:t1110-brute-force", "security:attack",
+             "opentide_uuid:2b0d7c1e-0b55-4f0e-9d0b-3c0f2a8f9a11"]
+  }
+}

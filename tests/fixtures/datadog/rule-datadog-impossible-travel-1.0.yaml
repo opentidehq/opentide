@@ -1,0 +1,24 @@
+# Impossible travel, with a learned location baseline per user (RFC §5.7).
+name: Okta impossible travel
+metadata:
+  uuid: 00000000-0000-4000-8004-000000000003
+  schema: rule::1.0
+  version: 1
+  created: "2026-11-27"
+  modified: "2026-11-27"
+  tlp: clear
+  author: Detection Engineering
+description: |
+  One user logs in to Okta from two places too far apart for the time between.
+configurations:
+  datadog:
+    schema: platform::datadog::1.0
+    status: PRODUCTION
+    queries:
+      - query: source:okta @evt.name:user.session.start @evt.outcome:SUCCESS
+        group_by: ["@usr.email"]
+    detection:
+      method: impossible_travel
+      learning: 7d
+    cases:
+      - severity: high

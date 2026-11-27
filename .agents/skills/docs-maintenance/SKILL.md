@@ -125,8 +125,8 @@ pages (`docs/mcp/`) are exempt.
 
 ## Platform capability rule
 
-All thirteen platforms deploy; nine validate queries on a tenant (`--live`), twelve offline, and
-eleven run `opentide query`. CrowdStrike, HarfangLab, Sysdig and Bitdefender are **`supported: false`**
+All fourteen platforms deploy; ten validate queries on a tenant (`--live`), thirteen offline, and
+twelve run `opentide query`. CrowdStrike, HarfangLab, Sysdig and Bitdefender are **`supported: false`**
 for `--live`; SentinelOne is checked on a tenant only, so `validate query` without `--live` is a usage
 error naming it. The matrix, from the registry
 (`crates/opentide-schema/src/platforms.rs`), is in the root [`AGENTS.md`](../../../AGENTS.md#platforms):

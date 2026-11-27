@@ -3204,6 +3204,13 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
             "name": "Crowdstrike Falcon Correlation Rules"
           }
         },
+        "datadog": {
+          "platform": {
+            "description": "Datadog Cloud SIEM detection rules.",
+            "enabled": false,
+            "name": "Datadog Cloud SIEM"
+          }
+        },
         "elastic": {
           "platform": {
             "description": "Elastic Security detection rules via the Kibana detection engine API.",
@@ -3533,6 +3540,13 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
             "name": "Crowdstrike Falcon Correlation Rules"
           }
         },
+        "datadog": {
+          "platform": {
+            "description": "Datadog Cloud SIEM detection rules.",
+            "enabled": false,
+            "name": "Datadog Cloud SIEM"
+          }
+        },
         "elastic": {
           "platform": {
             "description": "Elastic Security detection rules via the Kibana detection engine API.",
@@ -3833,6 +3847,13 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
             "name": "Crowdstrike Falcon Correlation Rules"
           }
         },
+        "datadog": {
+          "platform": {
+            "description": "Datadog Cloud SIEM detection rules.",
+            "enabled": false,
+            "name": "Datadog Cloud SIEM"
+          }
+        },
         "elastic": {
           "platform": {
             "description": "Elastic Security detection rules via the Kibana detection engine API.",
@@ -4123,6 +4144,13 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
             "name": "Crowdstrike Falcon Correlation Rules"
           }
         },
+        "datadog": {
+          "platform": {
+            "description": "Datadog Cloud SIEM detection rules.",
+            "enabled": false,
+            "name": "Datadog Cloud SIEM"
+          }
+        },
         "elastic": {
           "platform": {
             "description": "Elastic Security detection rules via the Kibana detection engine API.",
@@ -4407,6 +4435,13 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
             "description": "The CrowdStrike Falcon® platform delivers real-time\nthreat detection, simplified management, and proactive threat hunting\nfor unmatched protection.\n",
             "enabled": false,
             "name": "Crowdstrike Falcon Correlation Rules"
+          }
+        },
+        "datadog": {
+          "platform": {
+            "description": "Datadog Cloud SIEM detection rules.",
+            "enabled": false,
+            "name": "Datadog Cloud SIEM"
           }
         },
         "elastic": {
@@ -4753,6 +4788,13 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
             "name": "Crowdstrike Falcon Correlation Rules"
           }
         },
+        "datadog": {
+          "platform": {
+            "description": "Datadog Cloud SIEM detection rules.",
+            "enabled": false,
+            "name": "Datadog Cloud SIEM"
+          }
+        },
         "elastic": {
           "platform": {
             "description": "Elastic Security detection rules via the Kibana detection engine API.",
@@ -5054,6 +5096,13 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
             "name": "Crowdstrike Falcon Correlation Rules"
           }
         },
+        "datadog": {
+          "platform": {
+            "description": "Datadog Cloud SIEM detection rules.",
+            "enabled": false,
+            "name": "Datadog Cloud SIEM"
+          }
+        },
         "elastic": {
           "platform": {
             "description": "Elastic Security detection rules via the Kibana detection engine API.",
@@ -5342,6 +5391,13 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
             "description": "The CrowdStrike Falcon® platform delivers real-time\nthreat detection, simplified management, and proactive threat hunting\nfor unmatched protection.\n",
             "enabled": false,
             "name": "Crowdstrike Falcon Correlation Rules"
+          }
+        },
+        "datadog": {
+          "platform": {
+            "description": "Datadog Cloud SIEM detection rules.",
+            "enabled": false,
+            "name": "Datadog Cloud SIEM"
           }
         },
         "elastic": {
@@ -5636,6 +5692,13 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
             "description": "The CrowdStrike Falcon® platform delivers real-time\nthreat detection, simplified management, and proactive threat hunting\nfor unmatched protection.\n",
             "enabled": false,
             "name": "Crowdstrike Falcon Correlation Rules"
+          }
+        },
+        "datadog": {
+          "platform": {
+            "description": "Datadog Cloud SIEM detection rules.",
+            "enabled": false,
+            "name": "Datadog Cloud SIEM"
           }
         },
         "elastic": {
@@ -5999,6 +6062,13 @@ expression: "serde_json::to_string_pretty(&results).unwrap()"
             "description": "The CrowdStrike Falcon® platform delivers real-time\nthreat detection, simplified management, and proactive threat hunting\nfor unmatched protection.\n",
             "enabled": false,
             "name": "Crowdstrike Falcon Correlation Rules"
+          }
+        },
+        "datadog": {
+          "platform": {
+            "description": "Datadog Cloud SIEM detection rules.",
+            "enabled": false,
+            "name": "Datadog Cloud SIEM"
           }
         },
         "elastic": {

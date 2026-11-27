@@ -2211,6 +2211,22 @@ mod tests {
         ("exabeam_unknown_field", "engine"),
         ("exabeam_string_field_number", "engine"),
         ("exabeam_unknown_value", "engine"),
+        ("datadog_parse_error", "engine"),
+        ("datadog_unescaped_special", "engine"),
+        ("datadog_regex", "engine"),
+        ("datadog_cidr", "engine"),
+        ("datadog_range", "engine"),
+        ("datadog_mixed_boolean", "engine"),
+        ("datadog_lowercase_operator", "engine"),
+        ("datadog_curly_quote", "engine"),
+        ("datadog_wildcard_in_phrase", "engine"),
+        ("datadog_unescaped_colon", "engine"),
+        ("datadog_symbol_operator", "engine"),
+        ("datadog_detached_operator", "engine"),
+        ("datadog_full_text_in_rule", "engine"),
+        ("datadog_calculated_field_in_rule", "engine"),
+        ("datadog_pipelines_only", "engine"),
+        ("datadog_unknown_attribute", "engine"),
         // Named checks that report their codes inside one
         // `schema_validation` finding (`<Model> validation failed with
         // code(s): ...`), which the `schema` check fails on.
@@ -2254,6 +2270,7 @@ mod tests {
             .chain(models::exabeam::ADVISORY_CODES)
             .chain(models::microsoft_defender::ADVISORY_CODES)
             .chain(models::google_secops::advisories::ADVISORY_CODES)
+            .chain(models::datadog::ADVISORY_CODES)
             .chain(models::harfanglab::yara::ADVISORY_CODES)
             .collect();
         let elsewhere: BTreeSet<&str> = ELSEWHERE.iter().map(|(code, _)| *code).collect();

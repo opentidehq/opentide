@@ -19,7 +19,7 @@ pip install 'opentide==1.1.0'     # or pin it
 
 This SDK (`opentide.Workspace` and the rest of these pages) is new in 1.0: the 0.x releases have none of it ([Migrating to Workspace](./migration.md)). See [Installation](../usage/installation.md) for uv, pipx, crates.io, npm and the binaries.
 
-Includes the CLI, the thirteen platform connectors, the MCP server and the SDK, all compiled into one Rust core inside the wheel; it has no Python dependency. The `plugins` extra installs `pydantic`, which the [plugin API](./platforms.md#platform-plugins) needs: `pip install 'opentide[plugins]'`; nothing else asks for an extra. Start the MCP server with `opentide mcp start`; see [MCP installation](../mcp/installation.md).
+Includes the CLI, the fourteen platform connectors, the MCP server and the SDK, all compiled into one Rust core inside the wheel; it has no Python dependency. The `plugins` extra installs `pydantic`, which the [plugin API](./platforms.md#platform-plugins) needs: `pip install 'opentide[plugins]'`; nothing else asks for an extra. Start the MCP server with `opentide mcp start`; see [MCP installation](../mcp/installation.md).
 
 ## Platforms
 

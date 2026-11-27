@@ -46,6 +46,8 @@ pub const FALCO: CodeLanguage = language("Falco condition", "text");
 pub const GRAYLOG: CodeLanguage = language("Graylog search", "lucene");
 /// The Exabeam Query Language.
 pub const EXABEAM: CodeLanguage = language("Exabeam Query Language", "text");
+/// The Datadog search syntax.
+pub const DATADOG: CodeLanguage = language("Datadog search syntax", "text");
 /// YARA-L.
 pub const YARAL: CodeLanguage = language("YARA-L", "yaral");
 /// Markdown.
@@ -69,6 +71,7 @@ fn languages(platform: &str) -> &'static [(&'static str, CodeLanguage)] {
         "sysdig" => &[("condition", FALCO), ("macros.condition", FALCO)],
         "graylog" => &[("query", GRAYLOG)],
         "exabeam" => &[("sequences.query", EXABEAM)],
+        "datadog" => &[("queries.query", DATADOG), ("message", MARKDOWN)],
         "google_secops" => &[
             ("setup", YARAL),
             ("events", YARAL),

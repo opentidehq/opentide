@@ -137,6 +137,16 @@ pub fn platform_field_language(platform: PlatformId, field: &[&str]) -> Option<L
             }
             _ => None,
         },
+        // A Datadog Cloud SIEM rule's queries (RFC rfc-datadog-cloud-siem §6.8),
+        // profile `rule`.
+        PlatformId::Datadog => match field {
+            ["queries", item, "query"]
+                if !item.is_empty() && item.bytes().all(|b| b.is_ascii_digit()) =>
+            {
+                Some(LanguageId::Datadog)
+            }
+            _ => None,
+        },
         PlatformId::Elastic | PlatformId::SentinelOne => None,
     }
 }
@@ -1035,9 +1045,9 @@ fn analyze_injections(
                 let r = opentide_exabeam::analyze_with(&inj.inner, &ctx);
                 (r.diagnostics, r.tokens)
             }
-            // No platform embeds the Datadog search syntax yet (the `datadog` platform is
-            // phase 2 of rfc-datadog-cloud-siem): a rule block's query would be profile
-            // `rule`, a hunt's `search`.
+            // A query of the Datadog block is a detection rule's (profile `rule`); a hunt
+            // with `system: datadog` is a search (profile `search`), as a `.datadog`
+            // file is (RFC rfc-datadog-cloud-siem §6.1).
             LanguageId::Datadog => {
                 let ctx = if inj.field_path.first().map(String::as_str) == Some("configurations") {
                     opentide_datadog::Context::RULE
@@ -2024,6 +2034,7 @@ threat:
             PlatformId::Crowdstrike => Some(LanguageId::Cql),
             PlatformId::GoogleSecops => Some(LanguageId::Yaral),
             PlatformId::Exabeam => Some(LanguageId::Exabeam),
+            PlatformId::Datadog => Some(LanguageId::Datadog),
             PlatformId::Elastic => Some(LanguageId::Esql),
             // Sysdig's query is a block's `condition`, never a hunt's.
             PlatformId::Sysdig

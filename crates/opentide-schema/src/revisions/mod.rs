@@ -100,6 +100,7 @@ pub const REVISIONS: &[Revision] = &[
         Kind::Platform,
         "CrowdstrikeConfig",
     ),
+    revision("platform::datadog::1.0", Kind::Platform, "DatadogConfig"),
     revision("platform::elastic::1.0", Kind::Platform, "ElasticConfig"),
     revision("platform::exabeam::1.0", Kind::Platform, "ExabeamConfig"),
     revision(

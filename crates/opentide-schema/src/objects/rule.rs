@@ -13,9 +13,9 @@ use crate::FromNode;
 use crate::objects::any::Any;
 use crate::objects::metadata::{ObjectMetadata, ObjectReferences, RuleMetadata};
 use crate::objects::platform::{
-    BitdefenderConfig, CarbonBlackConfig, CrowdstrikeConfig, ElasticConfig, ExabeamConfig,
-    GoogleSecopsConfig, GraylogConfig, HarfangLabConfig, MicrosoftDefenderConfig, PlatformBlock,
-    SentinelConfig, SentinelOneConfig, SplunkConfig, SysdigConfig,
+    BitdefenderConfig, CarbonBlackConfig, CrowdstrikeConfig, DatadogConfig, ElasticConfig,
+    ExabeamConfig, GoogleSecopsConfig, GraylogConfig, HarfangLabConfig, MicrosoftDefenderConfig,
+    PlatformBlock, SentinelConfig, SentinelOneConfig, SplunkConfig, SysdigConfig,
 };
 use crate::objects::response::RuleResponse;
 use crate::pins::Pins;
@@ -97,6 +97,10 @@ pub struct RuleConfigurations {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[garde(dive)]
     pub google_secops: Option<GoogleSecopsConfig>,
+    /// Datadog Cloud SIEM detection rule (`platform::datadog::1.0`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[garde(dive)]
+    pub datadog: Option<DatadogConfig>,
 }
 
 impl RuleConfigurations {
@@ -121,6 +125,7 @@ impl RuleConfigurations {
             self.graylog.as_ref().map(PlatformBlock::status),
             self.exabeam.as_ref().map(PlatformBlock::status),
             self.google_secops.as_ref().map(PlatformBlock::status),
+            self.datadog.as_ref().map(PlatformBlock::status),
         ];
         Self::PLATFORMS
             .into_iter()

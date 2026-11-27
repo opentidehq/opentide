@@ -21,11 +21,11 @@ use serde_json::{Map, Value, json};
 use crate::configuration::checks::{FILE_MODELS, GENERIC_PLATFORM_FILE};
 use crate::configuration::models::{
     BitdefenderConfiguration, CarbonBlackCloudConfiguration, CrowdstrikeConfiguration,
-    DeploymentConfiguration, DocumentationConfiguration, ElasticConfiguration,
-    ExabeamConfiguration, GoogleSecopsConfiguration, GraylogConfiguration, HarfangLabConfiguration,
-    MicrosoftDefenderConfiguration, PLATFORMS, PathsConfiguration, PlatformConfiguration,
-    SentinelConfiguration, SentinelOneConfiguration, SharingConfiguration, SplunkConfiguration,
-    SysdigConfiguration, VisibilityConfig,
+    DatadogConfiguration, DeploymentConfiguration, DocumentationConfiguration,
+    ElasticConfiguration, ExabeamConfiguration, GoogleSecopsConfiguration, GraylogConfiguration,
+    HarfangLabConfiguration, MicrosoftDefenderConfiguration, PLATFORMS, PathsConfiguration,
+    PlatformConfiguration, SentinelConfiguration, SentinelOneConfiguration, SharingConfiguration,
+    SplunkConfiguration, SysdigConfiguration, VisibilityConfig,
 };
 
 use super::schema::StripFrameworkKeywords;
@@ -95,6 +95,7 @@ fn raw(file_key: &str) -> Option<Schema> {
         "platforms/exabeam.toml" => model_schema::<ExabeamConfiguration>(),
         "platforms/google_secops.toml" => model_schema::<GoogleSecopsConfiguration>(),
         "platforms/graylog.toml" => model_schema::<GraylogConfiguration>(),
+        "platforms/datadog.toml" => model_schema::<DatadogConfiguration>(),
         GENERIC_PLATFORM_FILE => model_schema::<PlatformConfiguration>(),
         _ => return None,
     })

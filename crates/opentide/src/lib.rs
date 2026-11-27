@@ -4,7 +4,7 @@
 //! for agentic detection engineering: open a Tide workspace (threat vectors,
 //! detection objectives and detection rules as YAML, with their
 //! configuration), validate and lint it, read its catalogue and its ATT&CK
-//! coverage, plan a deploy to the thirteen platforms opentide deploys to, and run
+//! coverage, plan a deploy to the fourteen platforms opentide deploys to, and run
 //! the `opentide` command line.
 //!
 //! This crate is opentide's public Rust API, and the only opentide crate with

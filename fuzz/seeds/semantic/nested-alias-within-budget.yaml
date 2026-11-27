@@ -121,6 +121,29 @@ configurations:
       $risk_score = 40
     condition: |
       $e
+  datadog:
+    enabled: true
+    status: STAGING
+    queries:
+      - name: failed
+        query: |
+          source:cloudtrail @evt.outcome:Failure
+        group_by:
+          - "@usr.id"
+    detection:
+      method: threshold
+      window: 5m
+    cases:
+      - name: many
+        condition: failed > 10
+        severity: high
+    signal:
+      group_by:
+        - "@usr.id"
+      keep_alive: 1h
+      max_duration: 1d
+    tags:
+      - team:soc
 x0: &a0 [lol, lol, lol, lol, lol, lol, lol, lol, lol, lol]
 x1: &a1 [*a0, *a0, *a0, *a0, *a0, *a0, *a0, *a0, *a0, *a0]
 x2: &a2 [*a1, *a1, *a1, *a1, *a1, *a1, *a1, *a1, *a1, *a1]
