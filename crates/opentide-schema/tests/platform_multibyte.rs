@@ -106,22 +106,28 @@ fn template() -> Value {
                 "outcome": "$risk_score = 40",
                 "condition": "$e"
             },
-            "datadog": {
-                "enabled": true, "status": "STAGING",
-                "queries": [{
-                    "name": "failed",
-                    "query": "source:cloudtrail @evt.outcome:Failure",
-                    "group_by": ["@usr.id"]
-                }],
-                "detection": {"method": "threshold", "window": "5m"},
-                "cases": [{
-                    "name": "many", "condition": "failed > 10",
-                    "severity": "high", "notify": ["@slack-soc"]
-                }],
-                "signal": {"group_by": ["@usr.id"], "keep_alive": "1h", "max_duration": "1d"},
-                "tags": ["team:soc"]
-            }
+            "datadog": datadog()
         }
+    })
+}
+
+/// The template's Datadog block: a threshold rule with a window, a case
+/// condition, a severity, a notification handle, a signal grouping and tags.
+fn datadog() -> Value {
+    json!({
+        "enabled": true, "status": "STAGING",
+        "queries": [{
+            "name": "failed",
+            "query": "source:cloudtrail @evt.outcome:Failure",
+            "group_by": ["@usr.id"]
+        }],
+        "detection": {"method": "threshold", "window": "5m"},
+        "cases": [{
+            "name": "many", "condition": "failed > 10",
+            "severity": "high", "notify": ["@slack-soc"]
+        }],
+        "signal": {"group_by": ["@usr.id"], "keep_alive": "1h", "max_duration": "1d"},
+        "tags": ["team:soc"]
     })
 }
 
