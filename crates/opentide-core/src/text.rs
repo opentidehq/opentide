@@ -2,11 +2,12 @@
 //! second one at a call site.
 //!
 //! - [`hex`]: bytes as lowercase hex digits;
-//! - [`sha256_hex`]: the SHA-256 of bytes as 64 lowercase hex digits
-//!   (RustCrypto's `sha2`).
+//! - `sha256_hex` (the opt-in `digest` feature): the SHA-256 of bytes as 64
+//!   lowercase hex digits (RustCrypto's `sha2`).
 
 use std::fmt::Write as _;
 
+#[cfg(feature = "digest")]
 use sha2::{Digest as _, Sha256};
 
 /// `bytes` as lowercase hex digits, two per byte.
@@ -21,6 +22,7 @@ pub fn hex(bytes: &[u8]) -> String {
 }
 
 /// The SHA-256 of `bytes`: 64 lowercase hex digits.
+#[cfg(feature = "digest")]
 #[must_use]
 pub fn sha256_hex(bytes: &[u8]) -> String {
     hex(&Sha256::digest(bytes))
@@ -28,7 +30,7 @@ pub fn sha256_hex(bytes: &[u8]) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{hex, sha256_hex};
+    use super::hex;
 
     #[test]
     fn hex_is_two_lowercase_digits_per_byte() {
@@ -37,8 +39,10 @@ mod tests {
         assert_eq!(hex("é😀".as_bytes()), "c3a9f09f9880");
     }
 
+    #[cfg(feature = "digest")]
     #[test]
     fn the_digest_is_lowercase_hex() {
+        use super::sha256_hex;
         assert_eq!(
             sha256_hex(b""),
             "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
