@@ -2,11 +2,14 @@
 //!
 //! One rule, on the [`uuid`] crate:
 //!
-//! - **Reading** ([`parse`], [`canonical`]) is as lenient as Python's
+//! - **Reading** ([`parse`], [`canonical`]) follows Python's
 //!   `uuid.UUID(text.strip())`, which wrote the deployment states and the
 //!   rule files opentide reads: surrounding white space is dropped, `urn:` and
 //!   `uuid:` and enclosing braces are dropped, hyphens are ignored, and the 32
 //!   hex digits may be in either case. Every version and variant is a UUID.
+//!   It is a strict subset of Python's reading on purpose: the signs (`+`),
+//!   underscores, `0x` and inner blanks Python's `int(hex, 16)` also takes
+//!   are refused, as `deploy` always refused them.
 //! - **Writing** ([`canonical`]) is lower case, hyphenated `8-4-4-4-12`.
 //! - **Recognising a value as written** is stricter, where the place asks
 //!   for it: [`is_hyphenated`] is the `8-4-4-4-12` form in either case (what
@@ -38,7 +41,8 @@ pub fn finder() -> &'static Regex {
     FINDER.get_or_init(|| Regex::new(PATTERN).expect("the UUID pattern compiles"))
 }
 
-/// `text` read as a UUID, as Python's `uuid.UUID(text.strip())` reads it;
+/// `text` read as a UUID, as Python's `uuid.UUID(text.strip())` reads it
+/// (without the signs, underscores and blanks Python's `int()` takes);
 /// `None` when it is not one.
 pub fn parse(text: &str) -> Option<Uuid> {
     let bare = text.trim().replace("urn:", "").replace("uuid:", "");
