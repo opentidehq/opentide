@@ -10,7 +10,7 @@
 )]
 
 use opentide_kql::{
-    Catalog, Profile, analyze_with_catalog, columns, completions, hover, lower, signature_help,
+    Catalog, Dialect, analyze_with_catalog, columns, completions, hover, lower, signature_help,
 };
 use std::time::{Duration, Instant};
 
@@ -21,14 +21,14 @@ fn every_entry_point(source: String) -> (Duration, Vec<String>) {
         .stack_size(1 << 20)
         .spawn(move || {
             let started = Instant::now();
-            let catalog = Catalog::for_workspace(Profile::Sentinel, &source);
+            let catalog = Catalog::for_workspace(Dialect::Sentinel, &source);
             let analysis = analyze_with_catalog(&source, &catalog);
-            let _ = columns(&source, Profile::Defender);
+            let _ = columns(&source, Dialect::Defender);
             let _ = lower(&source);
             for offset in [0, source.len() / 2, source.len()] {
-                let _ = hover(&source, offset, Profile::Sentinel);
-                let _ = completions(&source, offset, Profile::Sentinel);
-                let _ = signature_help(&source, offset, Profile::Sentinel);
+                let _ = hover(&source, offset, Dialect::Sentinel);
+                let _ = completions(&source, offset, Dialect::Sentinel);
+                let _ = signature_help(&source, offset, Dialect::Sentinel);
             }
             let codes = analysis.diagnostics.into_iter().map(|d| d.code).collect();
             (started.elapsed(), codes)
@@ -133,11 +133,11 @@ fn a_long_unknown_column_is_not_measured_against_every_column() {
         "SecurityEvent | where Account == ['{}'] | take 1",
         "a".repeat(N)
     );
-    let catalog = Catalog::for_workspace(Profile::Sentinel, &source);
+    let catalog = Catalog::for_workspace(Dialect::Sentinel, &source);
     let before = opentide_kql::inspect::columns_measured();
     let started = Instant::now();
     let _ = analyze_with_catalog(&source, &catalog);
-    let _ = hover(&source, 0, Profile::Sentinel);
+    let _ = hover(&source, 0, Dialect::Sentinel);
     // A hang guard, as for the other entry points here; the count below is
     // the regression test.
     assert_fast("a long unknown column", started.elapsed());
@@ -150,7 +150,7 @@ fn a_long_unknown_column_is_not_measured_against_every_column() {
     let before = opentide_kql::inspect::columns_measured();
     let near = analyze_with_catalog(
         "SecurityEvent | where Acount == 'x' | take 1",
-        &Catalog::for_workspace(Profile::Sentinel, ""),
+        &Catalog::for_workspace(Dialect::Sentinel, ""),
     );
     assert!(opentide_kql::inspect::columns_measured() > before);
     assert!(

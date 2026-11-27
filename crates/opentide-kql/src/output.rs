@@ -25,7 +25,7 @@
 
 use crate::schema::{self, Known};
 use crate::syntax::SyntaxNode;
-use crate::{Catalog, Profile, parser::parse_once};
+use crate::{Catalog, Dialect, parser::parse_once};
 use opentide_core::{ByteSpan, LineIndex};
 
 /// One column of a query's output.
@@ -68,7 +68,7 @@ impl Output {
 
 /// What `source` returns under `profile`'s catalog, or `None` when it cannot
 /// be inferred (see the module's documentation).
-pub fn output(source: &str, profile: Profile) -> Option<Output> {
+pub fn output(source: &str, profile: Dialect) -> Option<Output> {
     let catalog = Catalog::for_workspace(profile, source);
     let parsed = parse_once(source);
     if !parsed.errors.is_empty() {
@@ -101,7 +101,7 @@ mod tests {
     use super::*;
 
     fn names(query: &str) -> Option<(Vec<String>, bool)> {
-        output(query, Profile::Defender)
+        output(query, Dialect::Defender)
             .map(|o| (o.columns.into_iter().map(|c| c.name).collect(), o.complete))
     }
 
@@ -132,7 +132,7 @@ mod tests {
     fn a_project_types_its_columns_from_the_table() {
         let out = output(
             "DeviceEvents | project Timestamp, DeviceId",
-            Profile::Defender,
+            Dialect::Defender,
         )
         .unwrap();
         assert_eq!(out.columns[0].type_name.as_deref(), Some("datetime"));
@@ -145,7 +145,7 @@ mod tests {
         assert!(!complete);
         assert!(columns.iter().any(|c| c == "DeviceId"));
         assert!(columns.iter().any(|c| c == "InitiatingProcessAccountUpn"));
-        let out = output("DeviceEvents", Profile::Defender).unwrap();
+        let out = output("DeviceEvents", Dialect::Defender).unwrap();
         assert!(!out.lacks("SomeNewColumn"), "the table may have it");
     }
 
@@ -253,7 +253,7 @@ mod tests {
 
     #[test]
     fn a_defender_table_has_no_log_analytics_columns() {
-        let out = output("DeviceNetworkInfo", Profile::Defender).unwrap();
+        let out = output("DeviceNetworkInfo", Dialect::Defender).unwrap();
         for name in [
             "TimeGenerated",
             "TenantId",
@@ -271,7 +271,7 @@ mod tests {
     fn every_defender_table_has_timestamp_and_no_log_analytics_column() {
         // #1885 review: the reference describes the Log Analytics copies of
         // the advanced hunting tables.
-        let catalog = Catalog::cached(Profile::Defender);
+        let catalog = Catalog::cached(Dialect::Defender);
         let tables: Vec<&str> = catalog
             .tables
             .iter()
@@ -280,7 +280,7 @@ mod tests {
             .collect();
         assert!(tables.len() > 30, "{tables:?}");
         for table in tables {
-            let Some(out) = output(table, Profile::Defender) else {
+            let Some(out) = output(table, Dialect::Defender) else {
                 continue;
             };
             assert!(out.column("Timestamp").is_some(), "{table}");
@@ -293,18 +293,18 @@ mod tests {
     #[test]
     fn the_last_operator_is_where_a_project_goes() {
         let query = "DeviceEvents\n| where ActionType == 'x' // note\n";
-        let out = output(query, Profile::Defender).unwrap();
+        let out = output(query, Dialect::Defender).unwrap();
         assert_eq!(
             &query[out.last_operator.start..out.last_operator.end],
             "where ActionType == 'x'"
         );
-        let bare = output("DeviceEvents", Profile::Defender).unwrap();
+        let bare = output("DeviceEvents", Dialect::Defender).unwrap();
         assert_eq!(bare.last_operator, ByteSpan::new(0, 12));
     }
 
     #[test]
     fn column_names_are_compared_with_their_case() {
-        let out = output("DeviceEvents | project DeviceId", Profile::Defender).unwrap();
+        let out = output("DeviceEvents | project DeviceId", Dialect::Defender).unwrap();
         assert!(out.column("DeviceId").is_some());
         assert!(out.lacks("deviceid"));
     }
@@ -342,7 +342,7 @@ mod tests {
         // #1386: the diagnostics still leave the schema open after a list
         // of two items, while the output is exact.
         let query = "DeviceEvents | project DeviceId, ReportId | where Nope == 1";
-        let diagnostics = crate::analyze(query, Profile::Defender).diagnostics;
+        let diagnostics = crate::analyze(query, Dialect::Defender).diagnostics;
         assert!(
             !diagnostics
                 .iter()

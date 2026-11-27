@@ -51,33 +51,35 @@ use opentide_highlight::{HighlightSpec, HighlightToken, tokens_from_spans};
 use yara_x_parser::Parser;
 use yara_x_parser::ast::AST;
 
-/// A platform's YARA profile (yara-1.0 "Platform profiles").
+/// The product a YARA rule runs on (ADR 0015 §1: a dialect, chosen by
+/// platform). yara-1.0 calls these "Platform profiles"; the specification
+/// takes the term in its next revision.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Profile {
+pub enum Dialect {
     Harfanglab,
     Bitdefender,
 }
 
-impl Profile {
+impl Dialect {
     pub fn key(self) -> &'static str {
         match self {
-            Profile::Harfanglab => "harfanglab",
-            Profile::Bitdefender => "bitdefender",
+            Dialect::Harfanglab => "harfanglab",
+            Dialect::Bitdefender => "bitdefender",
         }
     }
 
     pub fn display(self) -> &'static str {
         match self {
-            Profile::Harfanglab => "HarfangLab",
-            Profile::Bitdefender => "Bitdefender",
+            Dialect::Harfanglab => "HarfangLab",
+            Dialect::Bitdefender => "Bitdefender",
         }
     }
 
     /// The profile of a Tide platform block, by its key under `configurations`.
     pub fn for_platform(platform: &str) -> Option<Self> {
         match platform {
-            "harfanglab" => Some(Profile::Harfanglab),
-            "bitdefender" => Some(Profile::Bitdefender),
+            "harfanglab" => Some(Dialect::Harfanglab),
+            "bitdefender" => Some(Dialect::Bitdefender),
             _ => None,
         }
     }
@@ -87,13 +89,13 @@ impl Profile {
 /// syntax allowed, no module set to confirm, no recommended meta.
 #[derive(Debug, Clone, Default)]
 pub struct Context {
-    pub profile: Option<Profile>,
+    pub profile: Option<Dialect>,
     pub yara_x_syntax: YaraXSyntax,
 }
 
 impl Context {
     /// The profile's context, with its `yara_x_syntax` setting.
-    pub fn for_profile(profile: Profile) -> Self {
+    pub fn for_profile(profile: Dialect) -> Self {
         let data = &catalog::Catalog::cached().profiles[profile.key()];
         Self {
             profile: Some(profile),

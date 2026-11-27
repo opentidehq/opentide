@@ -20,6 +20,18 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 - **`LanguageId` has a new variant, `LanguageId::Datadog`** (the Datadog log search syntax, `docs/internal/rfc-datadog-cloud-siem.md`). The enum is exhaustive, so a `match` without a wildcard arm no longer compiles. `LanguageId::QUERY_LANGUAGES` holds twelve languages; `LanguageId::parse` reads `datadog` and `opentide-datadog`, and `LanguageId::from_extension` reads `datadog`.
 - **`QueryRequest.platform` names a dialect, never a profile** ([opentide#1912](https://github.com/opentidehq/opentide/issues/1912), ADR 0015 §4). `analyze_query` checks a query as a file of its language is: an Exabeam or Datadog query under the `search` profile and a CQL query as plain LogScale, whatever the platform. `platform: exabeam` chose Exabeam's `rule` profile, `crowdstrike` the Next-Gen SIEM correlation rule and `datadog` Datadog's `rule`; a rule block's query is still checked as a rule by `Workspace::validate` and `Workspace::lint`, by its field path.
 
+#### `opentide-kql`
+
+- **`Profile` is renamed `Dialect`** ([opentide#1913](https://github.com/opentidehq/opentide/issues/1913), ADR 0015 §1: a product is a dialect, a use is a profile). `opentide_kql::Dialect::{Core, Sentinel, Defender}`, `Dialect::for_platform` and `Dialect::platform` replace `Profile`'s; nothing else changes. Rename the type where you name it.
+
+#### `opentide-yara`
+
+- **`Profile` is renamed `Dialect`** ([opentide#1913](https://github.com/opentidehq/opentide/issues/1913)). `opentide_yara::Dialect::{Harfanglab, Bitdefender}` with `key`, `display` and `for_platform`; `Context::for_profile` and `Context.profile` keep their names and take a `Dialect`. Rename the type where you name it.
+
+#### `opentide-cql`
+
+- **`Context` is renamed `Profile`** ([opentide#1913](https://github.com/opentidehq/opentide/issues/1913)): a correlation rule or a search is a use of the query, a profile. `opentide_cql::Profile { correlation_rule }`, `Profile::CORRELATION_RULE` and `analyze_with(source, &Profile)` replace `Context`'s. Rename the type where you name it.
+
 ### Added
 
 #### `opentide-datadog`
@@ -43,8 +55,8 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 #### `opentide-kql`
 
-- **`Profile::for_platform` is the one map from a platform to a KQL profile** ([opentide#1912](https://github.com/opentidehq/opentide/issues/1912), ADR 0015 §3): `microsoft_defender` is `Profile::Defender`, every other platform `Profile::Sentinel`. `opentide-analysis` and `opentide-tide` call it instead of keeping copies.
-  - API: `Profile::for_platform`, `Profile::platform` (the platform whose `visibility.toml` declarations a profile reads)
+- **`Dialect::for_platform` is the one map from a platform to a KQL dialect** ([opentide#1912](https://github.com/opentidehq/opentide/issues/1912), ADR 0015 §3): `microsoft_defender` is `Dialect::Defender`, every other platform `Dialect::Sentinel`. `opentide-analysis` and `opentide-tide` call it instead of keeping copies.
+  - API: `Dialect::for_platform`, `Dialect::platform` (the platform whose `visibility.toml` declarations a profile reads)
 - **`opentide_kql::shape` lists what a query reads and the constructs it uses** ([opentide#1890](https://github.com/opentidehq/opentide/issues/1890)): its tables, joins, unions, `externaldata` sources, comments and the columns it names, from the tree `analyze` builds.
   - API: `shape::shape`, `shape::Shape`
 

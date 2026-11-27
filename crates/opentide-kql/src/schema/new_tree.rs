@@ -1626,13 +1626,13 @@ fn aggregate_call(item: &SyntaxNode) -> Option<SyntaxNode> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Profile;
+    use crate::Dialect;
 
     /// The pass over `source`, against the Sentinel catalog.
     fn pass_over(source: &str, check: impl FnOnce(&Pass<'_>)) {
         let parsed = crate::parser::parse(source);
         let root = SyntaxNode::new_root(parsed.green);
-        let catalog = Catalog::for_workspace(Profile::Sentinel, source);
+        let catalog = Catalog::for_workspace(Dialect::Sentinel, source);
         check(&run(
             &root,
             source,
