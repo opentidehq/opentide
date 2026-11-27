@@ -29,6 +29,19 @@ pub(crate) struct Document {
     pub version: Option<i32>,
     /// The root the document belongs to ([`Session::root_for`]).
     pub root: Option<usize>,
+    /// Which text this is: a number no other text of any document had in
+    /// this session ([`Session::next_text`]), so an analysis of the text
+    /// is known current without comparing it.
+    pub serial: u64,
+}
+
+/// The engine's analysis of one text of a document, and what it was made
+/// under ([`Session::engine_cache`]).
+struct EngineAnalysis {
+    serial: u64,
+    root: Option<usize>,
+    epoch: u64,
+    response: Arc<AnalyzeResponse>,
 }
 
 /// What the client said it can do, read once at `initialize`.
@@ -721,8 +734,19 @@ pub(crate) struct Session {
     /// does not make the editor's workspace pull analyse every other again.
     env_epoch: Cell<u64>,
     cache: RefCell<HashMap<String, (u64, Arc<AnalyzeResponse>)>>,
+    /// The engine's analysis of each open document ([`opentide_analysis::analyze`]:
+    /// its queries, highlighting and symbols), which reads no other object:
+    /// current for the same text ([`Document::serial`]), root and
+    /// [`env_epoch`](Self::env_epoch), so typing in one object does not run
+    /// the engine on every other open one again (#1943).
+    engine_cache: RefCell<HashMap<String, EngineAnalysis>>,
+    /// The last [`Document::serial`] handed out.
+    text_serial: Cell<u64>,
     /// How many analyses ran, for the tests (`opentide/__stats`).
     pub analyses: Cell<u64>,
+    /// How many of them ran the engine, not read its analysis from
+    /// [`engine_cache`](Self::engine_cache), for the tests (`opentide/__stats`).
+    pub engine_analyses: Cell<u64>,
     /// How many closed object files were analysed (not read from their
     /// entry), for the tests (`opentide/__stats`).
     pub closed_analyses: Cell<u64>,
@@ -902,6 +926,27 @@ impl WorkspaceHost for SessionHost<'_> {
             files.push((path, text));
         }
         files
+    }
+
+    /// What [`documents`](WorkspaceHost::documents) would hold at the
+    /// configuration's path, without copying the other documents (#1943):
+    /// the first open document of the root there, else the root's file.
+    fn elastic_configuration(&self) -> Option<String> {
+        let session = self.session;
+        let open = session
+            .docs
+            .iter()
+            .filter(|(uri, doc)| {
+                doc.root == self.root
+                    && opentide_analysis::is_elastic_configuration(&uri_to_path(uri))
+            })
+            .min_by(|a, b| a.0.cmp(b.0));
+        if let Some((_, doc)) = open {
+            return Some(doc.text.clone());
+        }
+        session
+            .elastic_configuration(self.root)
+            .map(|(_, text)| text)
     }
 
     fn indexed_objects(&self) -> Option<Arc<[IndexedObject]>> {
@@ -1539,7 +1584,20 @@ impl Session {
         self.forget_disk();
         if !self.caps.watch_files {
             self.cache.borrow_mut().clear();
+            self.engine_cache.borrow_mut().clear();
         }
+    }
+
+    /// A number for a new text of a document ([`Document::serial`]).
+    pub(crate) fn next_text(&self) -> u64 {
+        self.text_serial.set(self.text_serial.get() + 1);
+        self.text_serial.get()
+    }
+
+    /// A document was closed: its analyses are dropped.
+    pub(crate) fn forget_analysis(&self, uri: &str) {
+        self.cache.borrow_mut().remove(uri);
+        self.engine_cache.borrow_mut().remove(uri);
     }
 
     /// Read the disk again from now on: what each root's
@@ -1569,38 +1627,73 @@ impl Session {
         {
             return Some(Arc::clone(response));
         }
-        let request = AnalyzeRequest {
-            uri: uri_to_path(uri),
-            language: doc.language,
-            text: doc.text.clone(),
-        };
         // The analysis of a Tide object reads no other object: its own
         // checks are `validate`'s (UC-2.6, #821), and what stays here is
         // the queries it carries. The editor's index is built on the first
         // request that reads it (a hover, a completion, the catalog), not
         // before the first diagnostics (#926).
         let _span = crate::timing::Span::new("analysis of an open document");
-        let mut response = {
-            let _span = crate::timing::Span::new("analysis: the engine");
-            analyze(&host, request)
-        };
-        match doc.language {
+        let engine = self.engine_analysis(uri, doc, &host);
+        // What reads the other documents is made again for each generation.
+        let response = match doc.language {
             LanguageId::TideYaml => {
                 let _span = crate::timing::Span::new("analysis: the object's findings");
                 let found = self.object_findings(uri, doc);
+                let mut response = AnalyzeResponse::clone(&engine);
                 response.diagnostics.splice(0..0, found);
+                Arc::new(response)
             }
-            LanguageId::Config => {
-                response.diagnostics = self.configuration_findings(uri, doc);
-            }
-            _ => {}
-        }
-        let response = Arc::new(response);
+            LanguageId::Config => Arc::new(AnalyzeResponse {
+                diagnostics: self.configuration_findings(uri, doc),
+                ..AnalyzeResponse::clone(&engine)
+            }),
+            _ => engine,
+        };
         self.analyses.set(self.analyses.get() + 1);
         self.cache
             .borrow_mut()
             .insert(uri.to_string(), (generation, Arc::clone(&response)));
         Some(response)
+    }
+
+    /// The engine's analysis of an open document, run once per text, root
+    /// and [`env_epoch`](Self::env_epoch) ([`engine_cache`](Self::engine_cache)):
+    /// what changes it (a catalog, the declared datasets, the Elastic
+    /// tenants) bumps the epoch, and an edit of another object does not.
+    fn engine_analysis(
+        &self,
+        uri: &str,
+        doc: &Document,
+        host: &SessionHost<'_>,
+    ) -> Arc<AnalyzeResponse> {
+        let epoch = self.env_epoch.get();
+        if let Some(kept) = self.engine_cache.borrow().get(uri)
+            && kept.serial == doc.serial
+            && kept.root == doc.root
+            && kept.epoch == epoch
+        {
+            return Arc::clone(&kept.response);
+        }
+        let request = AnalyzeRequest {
+            uri: uri_to_path(uri),
+            language: doc.language,
+            text: doc.text.clone(),
+        };
+        let response = {
+            let _span = crate::timing::Span::new("analysis: the engine");
+            Arc::new(analyze(host, request))
+        };
+        self.engine_analyses.set(self.engine_analyses.get() + 1);
+        self.engine_cache.borrow_mut().insert(
+            uri.to_string(),
+            EngineAnalysis {
+                serial: doc.serial,
+                root: doc.root,
+                epoch,
+                response: Arc::clone(&response),
+            },
+        );
+        response
     }
 
     /// What `validate` reports on an open Tide document, placed in its text:

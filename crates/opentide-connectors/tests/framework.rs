@@ -853,6 +853,58 @@ fn framework_timeout_per_tenant() {
     );
 }
 
+/// An answer that keeps trickling past the request's overall deadline is a
+/// timeout that names the deadline's length, not the read timeout it never
+/// missed (#1936).
+#[test]
+fn framework_an_answer_past_the_deadline_names_the_deadline() {
+    let trickling = TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = trickling.local_addr().unwrap().port();
+    std::thread::spawn(move || {
+        for mut stream in trickling.incoming().flatten() {
+            std::thread::spawn(move || {
+                use std::io::Read as _;
+                let mut buffer = [0u8; 4096];
+                let _ = stream.read(&mut buffer);
+                let _ = stream.write_all(b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n");
+                while stream.write_all(b"1\r\na\r\n").is_ok() {
+                    let _ = stream.flush();
+                    std::thread::sleep(Duration::from_millis(50));
+                }
+            });
+        }
+    });
+    // 250 ms to connect plus 4 reads of 250 ms: a deadline of 1.25 s, which
+    // the message rounds down to whole seconds.
+    let settings = HttpSettings {
+        timeout: Duration::from_millis(250),
+        ..HttpSettings::default()
+    };
+    let env = Environment::default();
+    let client = HttpClient::new(&label("trickle"), &settings, &env, None).unwrap();
+    let cancel = CancellationToken::new();
+    let outcome = block_on(async {
+        let request = client
+            .request(reqwest::Method::GET, &format!("http://127.0.0.1:{port}/q"))
+            .build()
+            .unwrap();
+        let answer = client.send(request, &cancel).await.unwrap();
+        client.bytes(answer, &cancel).await
+    })
+    .unwrap();
+    let error = outcome.unwrap_err();
+    assert!(
+        matches!(error, ConnectorError::Timeout { seconds: 1, .. }),
+        "{error:?}"
+    );
+    assert_eq!(
+        error.to_string(),
+        format!(
+            "mock tenant 'trickle' at http://127.0.0.1:{port} sent no complete answer within 1s"
+        )
+    );
+}
+
 #[test]
 fn framework_retry_per_tenant() {
     let (_runtime, server) = wiremock();
