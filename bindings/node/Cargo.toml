@@ -80,4 +80,4 @@ napi-build = "2"
 [dev-dependencies]
 # The unit tests read what the binding serialises.
 serde_json.workspace = true
-tempfile = "3"
+tempfile.workspace = true

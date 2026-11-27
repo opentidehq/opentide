@@ -1,7 +1,7 @@
 //! Falco's terms, as the Sysdig block's constraints judge them
-//! (`sysdig-1.0`, "Constraints"; the oracle's `SysdigConfig` validator and
-//! `platforms/sysdig/expansion.py`): the operators, modifiers, priorities,
-//! keywords, and the string rules over them.
+//! (`sysdig-1.0`, "Constraints", and Falco's own list expansion): the
+//! operators, modifiers, priorities, keywords, and the string rules over
+//! them.
 //!
 //! One copy for both engines: opentide-schema's `sysdig_rule_shape` (the
 //! CLI's model, on the YAML node tree, [`crate::node`]) and opentide-tide's `sysdig` module
@@ -80,7 +80,7 @@ pub const RESERVED_WORDS: [&str; 6] = ["and", "or", "not", "in", "exists", "val"
 /// the two line ends.
 pub const BLANKS: [char; 4] = [' ', '\t', '\n', '\r'];
 
-/// A string with nothing but whitespace (the oracle's `_non_blank`, negated).
+/// A string with nothing but whitespace: a blank name or value is a fault.
 pub fn is_blank(text: &str) -> bool {
     text.trim().is_empty()
 }
@@ -234,9 +234,8 @@ pub fn occurs(text: &str, name: &str) -> bool {
 
 /// How many items a list or a value list may expand to, and (times 16) how
 /// many bytes a macro's condition may grow to with the lists resolved: a
-/// block whose lists name earlier lists over and over grows exponentially
-/// (the oracle grew with it, without bound). Far above any rule; a bound so
-/// a crafted file cannot exhaust memory.
+/// block whose lists name earlier lists over and over grows exponentially.
+/// Far above any rule; a bound so a crafted file cannot exhaust memory.
 pub const EXPANSION_LIMIT: usize = 100_000;
 
 /// A dictionary's `d[name] = value`: replaced in place, or appended.
@@ -269,9 +268,9 @@ pub fn flatten_lists(lists: &[(String, Vec<String>)]) -> Vec<(String, Vec<String
     flat
 }
 
-/// The oracle's `_passes`: a value list after Falco's `resolve_list` passes,
-/// one per (flattened) block list in block order; a member equal to the
-/// list's name becomes its items. Each member is its text, or `None` for a
+/// A value list after Falco's `resolve_list` passes, one per (flattened)
+/// block list in block order; a member equal to the list's name becomes its
+/// items. Each member is its text, or `None` for a
 /// list or a mapping, which no pass replaces.
 pub fn value_passes(
     flat_lists: &[(String, Vec<String>)],
@@ -292,8 +291,9 @@ pub fn value_passes(
     out
 }
 
-/// The oracle's `_list_in`: the first block list whose name occurs inside
-/// `text` between delimiters, but is not all of it.
+/// The first block list whose name occurs inside `text` between delimiters,
+/// but is not all of it: a value that embeds a list name, which Falco would
+/// expand inside the value.
 pub fn list_inside<'a>(flat_lists: &'a [(String, Vec<String>)], text: &str) -> Option<&'a str> {
     flat_lists
         .iter()
@@ -309,7 +309,10 @@ mod tests {
         values.iter().map(|value| (*value).to_owned()).collect()
     }
 
-    /// The expected texts are the oracle's (`expansion.resolve_list`).
+    /// The expected texts are the expansion Falco's `resolve_list` performs
+    /// (each list name between delimiters replaced by its items, quoted where
+    /// they hold a blank), as the earlier Python port of it produced them;
+    /// they were not recorded by running Falco.
     #[test]
     fn resolve_list_follows_falco() {
         assert_eq!(
@@ -330,7 +333,6 @@ mod tests {
             resolve_list("x in (a, shells)", "shells", &[]),
             "x in (a  )"
         );
-        // The oracle's outputs (`expansion.resolve_list`, opentide 0.23.0):
         // `=` is a delimiter; an empty list with no comma to its left removes
         // the one to its right; an item already in quotes is kept as written,
         // space and all.

@@ -15,26 +15,24 @@ use opentide_schema::platforms::PlatformId;
 use crate::json::{Json, Object};
 
 /// The top-level keys of `platform`'s block model, attribute and serialised
-/// names (`_typed_platform_config_roots`); empty for a platform it does not
-/// know.
-pub fn typed_roots(platform: &str) -> Vec<&'static str> {
-    let fields: &[(&str, &str)] = match PlatformId::parse(platform) {
-        Some(PlatformId::Sentinel) => SentinelConfig::FIELDS,
-        Some(PlatformId::MicrosoftDefender) => MicrosoftDefenderConfig::FIELDS,
-        Some(PlatformId::Splunk) => SplunkConfig::FIELDS,
-        Some(PlatformId::SentinelOne) => SentinelOneConfig::FIELDS,
-        Some(PlatformId::Crowdstrike) => CrowdstrikeConfig::FIELDS,
-        Some(PlatformId::Harfanglab) => HarfangLabConfig::FIELDS,
-        Some(PlatformId::CarbonBlackCloud) => CarbonBlackConfig::FIELDS,
-        Some(PlatformId::Elastic) => ElasticConfig::FIELDS,
-        Some(PlatformId::Sysdig) => SysdigConfig::FIELDS,
-        Some(PlatformId::Bitdefender) => BitdefenderConfig::FIELDS,
-        Some(PlatformId::Exabeam) => ExabeamConfig::FIELDS,
-        Some(PlatformId::GoogleSecops) => GoogleSecopsConfig::FIELDS,
-        Some(PlatformId::Graylog) => GraylogConfig::FIELDS,
-        Some(PlatformId::Datadog) => DatadogConfig::FIELDS,
-        // A plugin's platform: no model here.
-        None => &[],
+/// names (`_typed_platform_config_roots`). A plugin's platform has no model
+/// here: [`apply`] then skips no root.
+pub fn typed_roots(platform: PlatformId) -> Vec<&'static str> {
+    let fields: &[(&str, &str)] = match platform {
+        PlatformId::Sentinel => SentinelConfig::FIELDS,
+        PlatformId::MicrosoftDefender => MicrosoftDefenderConfig::FIELDS,
+        PlatformId::Splunk => SplunkConfig::FIELDS,
+        PlatformId::SentinelOne => SentinelOneConfig::FIELDS,
+        PlatformId::Crowdstrike => CrowdstrikeConfig::FIELDS,
+        PlatformId::Harfanglab => HarfangLabConfig::FIELDS,
+        PlatformId::CarbonBlackCloud => CarbonBlackConfig::FIELDS,
+        PlatformId::Elastic => ElasticConfig::FIELDS,
+        PlatformId::Sysdig => SysdigConfig::FIELDS,
+        PlatformId::Bitdefender => BitdefenderConfig::FIELDS,
+        PlatformId::Exabeam => ExabeamConfig::FIELDS,
+        PlatformId::GoogleSecops => GoogleSecopsConfig::FIELDS,
+        PlatformId::Graylog => GraylogConfig::FIELDS,
+        PlatformId::Datadog => DatadogConfig::FIELDS,
     };
     let mut roots = Vec::with_capacity(fields.len() * 2);
     for (attribute, serialised) in fields {
@@ -180,7 +178,8 @@ pub fn apply(modifiers: &[Json], platform: &str, block: &Json, tenant: &str) -> 
         _ => String::new(),
     };
     let flags = strings(original.get("flags"));
-    let roots = typed_roots(platform);
+    // A plugin's platform (not built in): no model, so no root is skipped.
+    let roots = PlatformId::parse(platform).map_or_else(Vec::new, typed_roots);
     let mut raw = original.clone();
     for modifier in modifiers {
         if !applies(modifier.get("conditions"), &status, tenant, &flags) {
@@ -322,6 +321,11 @@ mod tests {
             Some(" (lab)")
         );
         assert_eq!(apply(&modifiers, "sentinel", &block, "prod"), block);
+        // A plugin's platform has no model here, so no root is skipped: the
+        // key the built-in model lacks is set too.
+        let plugin = apply(&modifiers, "acme_siem", &block, "lab");
+        assert_eq!(plugin.get("severity").and_then(Json::as_str), Some("high"));
+        assert!(plugin.get("dispatch").is_some());
     }
 
     #[test]

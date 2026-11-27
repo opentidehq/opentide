@@ -826,6 +826,13 @@ pub mod codes {
             => "A wildcard table name reads every matching table.";
         KQL_JOIN_SUMMARIZE_BEFORE_PROJECT = "kql_join_summarize_before_project"
             => "A `join` runs while the pipeline it sits in still carries every column, and a later `project` would have narrowed it.";
+        // A Microsoft Sentinel analytics rule's query (ADR 0015 §5.1, #1915).
+        KQL_RULE_SEARCH_STAR = "kql_rule_search_star"
+            => "A Microsoft Sentinel analytics rule's query contains `search *`, which Microsoft does not allow in a scheduled rule.";
+        KQL_RULE_UNION_STAR = "kql_rule_union_star"
+            => "A Microsoft Sentinel analytics rule's query contains `union *`, which Microsoft does not allow in a scheduled rule.";
+        KQL_RULE_TOO_LONG = "kql_rule_too_long"
+            => "A Microsoft Sentinel analytics rule's query is longer than the 10,000 characters Microsoft allows.";
         /// A `//` comment in a query that YAML folds into one line, so the
         /// comment swallows the lines after it.
         QUERY_FOLDED_COMMENT = "query_folded_comment"

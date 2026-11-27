@@ -252,9 +252,9 @@ fn table(entries: Vec<(String, Node)>) -> Node {
 
 /// `Path.stem`: the name less its last suffix; a dotfile keeps its name.
 fn stem(name: &str) -> &str {
-    match name.rfind('.') {
-        Some(0) | None => name,
-        Some(dot) => &name[..dot],
+    match name.rsplit_once('.') {
+        Some(("", _)) | None => name,
+        Some((stem, _)) => stem,
     }
 }
 

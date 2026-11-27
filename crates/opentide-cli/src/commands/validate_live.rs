@@ -2913,7 +2913,10 @@ async fn elastic_rule(
     let Some(raw) = rule.block("elastic") else {
         return Ok(());
     };
-    let block = opentide_compile::preview::config_dump("elastic", raw);
+    let block = opentide_compile::preview::config_dump(
+        opentide_schema::platforms::PlatformId::Elastic,
+        raw,
+    );
     let setup = opentide_compile::elastic::Setup::from_tenant(&batch.table);
     let payload = opentide_compile::elastic::compile(compile, rule, &setup)
         .map_err(|error| RuleFailure::Other(Early::Crashed(format!("CompileError: {error}"))))?;

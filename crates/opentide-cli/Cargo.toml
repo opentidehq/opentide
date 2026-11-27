@@ -101,11 +101,11 @@ ansi-to-tui = { version = "8.0", default-features = false, optional = true }
 # ratatui's own conversion of the renderers' anstyle styles (the query
 # highlights the Detail pane shares with the code frames).
 ratatui-core = { version = "0.1", default-features = false, features = ["anstyle"], optional = true }
-indexmap = "2"
+indexmap.workspace = true
 # `validate`'s queries check analyses the objects on every core (#817).
 rayon.workspace = true
 jiff.workspace = true
-form_urlencoded = "1.2"
+form_urlencoded.workspace = true
 # `doctor` (UC-3.5c): VS Code's and the MCP hosts' JSON with comments and
 # trailing commas, as VS Code reads them.
 jsonc-parser = { version = "0.26", features = ["cst", "serde"] }
@@ -115,13 +115,13 @@ pathdiff = "0.2"
 soft-canonicalize = { version = "0.5", default-features = false, features = ["dunce"] }
 # A path resolved without Windows' `\\?\` prefix where it can be written
 # without one (`new`'s printed and written paths).
-dunce = "1"
+dunce.workspace = true
 # The folder walks on disk (`new`, `migrate`, `doctor`, `setup skills`):
 # sorted siblings, links to folders not followed, or followed with loops cut.
 # The workspace's `FileSystem` (opentide-workspace) walks its own trees.
-walkdir = "2.5"
+walkdir.workspace = true
 # Percent-encoded paths in links and SARIF URIs.
-percent-encoding = "2.3"
+percent-encoding.workspace = true
 # `opentide explain <code>` in human mode: the page's Markdown, parsed for the terminal.
 pulldown-cmark.workspace = true
 regex.workspace = true
@@ -135,7 +135,7 @@ toml.workspace = true
 # `setup platforms` sets `enabled` in a configuration's `[platform]` table,
 # every other byte of the file kept.
 toml_edit.workspace = true
-tracing = "0.1"
+tracing.workspace = true
 unicode-segmentation = "1.13"
 unicode-width = "0.2"
 # The `setup` wizard (UC-3.6c, #951): its questions at a terminal, on
@@ -152,14 +152,14 @@ serde-saphyr.workspace = true
 pep440_rs = { version = "0.7", default-features = false }
 # `doctor` (UC-3.5c): whether git and an MCP server's command are on PATH.
 which = "7"
-tracing-subscriber = { version = "0.3", default-features = false, features = ["registry", "std"] }
+tracing-subscriber.workspace = true
 # `mcp start` (UC-3.7, #829): the official Rust MCP SDK serves the protocol on
 # stdio, on a current-thread tokio runtime (stdin, and the duplicate of stdout
 # the frames go to).
 rmcp = { version = "3.9", default-features = false, features = ["server"] }
 # Only the features tokio builds on wasm32 here; `fs` and `io-std`, which
 # `mcp start`'s native transport needs, are added off WASI below.
-tokio = { version = "1.48", default-features = false, features = ["rt", "io-util", "sync", "time", "macros"] }
+tokio = { workspace = true, features = ["rt", "io-util", "sync", "time", "macros"] }
 # `setup skills` (UC-4.1, #831): the opentidehq/skills catalogue, fetched with
 # the connectors' HTTP client, through the proxy and CA bundle the
 # environment names. Under WASI the connectors answer every request with
@@ -181,12 +181,12 @@ ctrlc = "3.4"
 # `mcp start`'s transport on stdin and a duplicate of stdout. WASI has
 # neither tokio's `fs` nor its `io-std` (tokio refuses them on wasm32); the
 # WASI build reads and writes the standard streams through blocking adapters.
-tokio = { version = "1.48", default-features = false, features = ["io-std", "fs"] }
+tokio = { workspace = true, features = ["io-std", "fs"] }
 
 [target.'cfg(unix)'.dependencies]
 # `mcp start` points descriptor 1 at stderr while it serves, so nothing but a
 # frame reaches stdout (`dup2`, safely).
-rustix = { version = "1.1", default-features = false, features = ["std", "stdio"] }
+rustix = { workspace = true, features = ["std", "stdio"] }
 # `serve` (UC-3.8, #830): SIGTERM and SIGHUP end the session as the end of
 # input does, so the run in progress is cancelled and cleans up.
 signal-hook = { version = "0.3", default-features = false, features = ["iterator"] }
@@ -194,7 +194,7 @@ signal-hook = { version = "0.3", default-features = false, features = ["iterator
 [target.'cfg(unix)'.dev-dependencies]
 # `tests/tui_terminal.rs`: the pseudo-terminals `tui` runs in at a terminal;
 # `tests/lsp_start.rs`: the Ctrl-C (SIGINT) a person sends `lsp start`.
-rustix = { version = "1.1", default-features = false, features = ["std", "fs", "process", "pty", "termios"] }
+rustix = { workspace = true, features = ["std", "fs", "process", "pty", "termios"] }
 # `tests/tui_pty.rs`: `opentide tui` driven in a pseudo-terminal (open, run
 # validate, quit) through portable-pty, as a person at a terminal runs it.
 # vt100 reads what the UI drew back into a screen: ratatui writes only the
@@ -208,10 +208,10 @@ opentide-cassette.workspace = true
 # deployed and checked through the CLI flow against wiremock, no recording
 # of a real instance being shareable.
 wiremock.workspace = true
-tempfile = "3"
+tempfile.workspace = true
 # `tests/deploy_payload_schema.rs`: the published `deploy` output schema
 # against the dry-run documents it describes (the validator `xtask` uses).
-jsonschema = { version = "0.61.1", default-features = false }
+jsonschema.workspace = true
 # A scratch folder's canonical path without Windows' `\\?\` prefix, which
 # git and the binary print otherwise (tests/workspace_e2e.rs).
 dunce.workspace = true

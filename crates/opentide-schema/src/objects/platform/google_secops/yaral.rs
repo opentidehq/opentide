@@ -410,7 +410,7 @@ pub fn window_minutes(window: &str) -> Option<u64> {
         'd' => 1440,
         _ => return None,
     };
-    positive_number(&window[..window.len() - 1]).map(|count| count.saturating_mul(factor))
+    positive_number(window.strip_suffix(unit)?).map(|count| count.saturating_mul(factor))
 }
 
 /// `[1-9][0-9]*`, as a number.

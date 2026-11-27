@@ -1,6 +1,6 @@
 //! The recording and replaying proxy.
 //!
-//! The client under test (the Python oracle, or the Rust CLI) runs with
+//! The client under test (the command line, or any HTTP client) runs with
 //! `HTTPS_PROXY` and `HTTP_PROXY` pointing here and trusts this run's CA
 //! ([`crate::tls::TestCa`], through `SSL_CERT_FILE` and
 //! `REQUESTS_CA_BUNDLE`). For an `https://` URL the client opens a tunnel

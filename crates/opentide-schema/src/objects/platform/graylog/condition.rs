@@ -227,8 +227,7 @@ impl Token<'_> {
 fn tokenize(text: &str) -> Result<Vec<Token<'_>>, ConditionError> {
     let mut tokens = Vec::new();
     let mut at = 0;
-    while at < text.len() {
-        let rest = &text[at..];
+    while let Some(rest) = text.get(at..) {
         let Some(ch) = rest.chars().next() else {
             break;
         };
@@ -243,15 +242,19 @@ fn tokenize(text: &str) -> Result<Vec<Token<'_>>, ConditionError> {
         } else if field_char(ch) {
             rest.find(|ch: char| !field_char(ch)).unwrap_or(rest.len())
         } else {
-            let shown: String = text[at..].trim().chars().take(12).collect();
+            let shown: String = rest.trim().chars().take(12).collect();
             return Err(ConditionError {
                 message: format!("unexpected {}", quote(&shown)),
                 start: at,
                 end: at + ch.len_utf8(),
             });
         };
+        // Every length above ends a run of ASCII characters.
+        let Some((token, _)) = rest.split_at_checked(len) else {
+            break;
+        };
         tokens.push(Token {
-            text: &rest[..len],
+            text: token,
             start: at,
         });
         at += len;
@@ -281,11 +284,9 @@ impl<'a> Parser<'a> {
         let (start, end) = match at {
             Some(token) => (token.start, token.end()),
             None => {
-                let end = self.text.trim_end().len();
-                let start = self.text[..end]
-                    .char_indices()
-                    .next_back()
-                    .map_or(0, |(at, _)| at);
+                let trimmed = self.text.trim_end();
+                let end = trimmed.len();
+                let start = trimmed.char_indices().next_back().map_or(0, |(at, _)| at);
                 (start, end)
             }
         };
@@ -410,8 +411,13 @@ impl<'a> Parser<'a> {
             }
         }
         let close = self.take(Some(")"))?;
+        #[expect(
+            clippy::string_slice,
+            reason = "both ends are token ends, which `tokenize` cuts at char boundaries"
+        )]
+        let text = &self.text[head.start..close.end()];
         let call = Token {
-            text: &self.text[head.start..close.end()],
+            text,
             start: head.start,
         };
         let wrong = |message: &str| self.error(message.to_owned(), Some(call));
@@ -614,5 +620,17 @@ mod tests {
         assert!(Number::parse("1.").is_none());
         assert!(Number::parse("-").is_none());
         assert!(Number::parse(".5").is_none());
+    }
+
+    #[test]
+    fn a_multi_byte_character_is_an_error_at_its_bytes() {
+        // #1946: the tokenizer and the end-of-text error never slice inside
+        // a character.
+        let failed = parse_condition("count() >= é").unwrap_err();
+        assert_eq!((failed.start, failed.end), (11, 13));
+        assert!(failed.message.contains('é'), "{}", failed.message);
+        // Trailing non-ASCII whitespace: the error is on the last character.
+        let failed = parse_condition("count() >=\u{3000}").unwrap_err();
+        assert_eq!((failed.start, failed.end), (9, 10));
     }
 }
