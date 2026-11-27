@@ -744,6 +744,17 @@ pub(crate) struct Session {
     text_serial: Cell<u64>,
     /// How many analyses ran, for the tests (`opentide/__stats`).
     pub analyses: Cell<u64>,
+    /// The open document each path names, by [`path_key`], built when a
+    /// lookup by path needs it after the open documents changed
+    /// ([`docs_changed`](Self::docs_changed)): a lookup does not compare
+    /// the path of every open document (#1944).
+    doc_paths: RefCell<Option<HashMap<String, String>>>,
+    /// How many open documents' paths were keyed for
+    /// [`doc_paths`](Self::doc_paths), for the tests (`opentide/__stats`).
+    pub doc_path_keys: Cell<u64>,
+    /// How many whole files [`WorkspaceHost::document`] copied, for the
+    /// tests (`opentide/__stats`).
+    pub text_copies: Cell<u64>,
     /// How many of them ran the engine, not read its analysis from
     /// [`engine_cache`](Self::engine_cache), for the tests (`opentide/__stats`).
     pub engine_analyses: Cell<u64>,
@@ -879,28 +890,13 @@ pub(crate) struct SessionHost<'a> {
 
 impl WorkspaceHost for SessionHost<'_> {
     fn document(&self, uri: &str) -> Option<String> {
-        let session = self.session;
-        if let Some(doc) = session.docs.get(uri) {
-            return Some(doc.text.clone());
+        let text = self.with_text(uri, str::to_string);
+        if text.is_some() {
+            self.session
+                .text_copies
+                .set(self.session.text_copies.get() + 1);
         }
-        let key = path_key(uri);
-        if let Some((_, doc)) = session
-            .docs
-            .iter()
-            .find(|(open, _)| path_key(&uri_to_path(open)) == key)
-        {
-            return Some(doc.text.clone());
-        }
-        for root in &session.roots {
-            if let Some(file) = root.disk.borrow().files.get(&key) {
-                return Some(file.text.clone());
-            }
-        }
-        if let Some((_, text, _)) = session.supplied.files.get(&key) {
-            return Some(text.clone());
-        }
-        let elastic = session.elastic_configuration(self.root)?;
-        (path_key(&elastic.0) == key).then_some(elastic.1)
+        text
     }
 
     /// The root's open documents and its Elastic tenants file. Object files
@@ -961,6 +957,31 @@ impl WorkspaceHost for SessionHost<'_> {
 }
 
 impl SessionHost<'_> {
+    /// `f` of the text [`document`](WorkspaceHost::document) returns for
+    /// `uri`, read where it is kept rather than copied (#1944): the open
+    /// document, else the open document at that path, the file on disk, what
+    /// the host supplied, the root's Elastic configuration.
+    pub(crate) fn with_text<R>(&self, uri: &str, f: impl FnOnce(&str) -> R) -> Option<R> {
+        let session = self.session;
+        if let Some(doc) = session.docs.get(uri) {
+            return Some(f(&doc.text));
+        }
+        let key = path_key(uri);
+        if let Some(doc) = session.open_at(&key) {
+            return Some(f(&doc.text));
+        }
+        for root in &session.roots {
+            if let Some(file) = root.disk.borrow().files.get(&key) {
+                return Some(f(&file.text));
+            }
+        }
+        if let Some((_, text, _)) = session.supplied.files.get(&key) {
+            return Some(f(text));
+        }
+        let elastic = session.elastic_configuration(self.root)?;
+        (path_key(&elastic.0) == key).then(|| f(&elastic.1))
+    }
+
     /// Where the root's index is kept.
     fn slot(&self) -> &RefCell<Option<Arc<[IndexedObject]>>> {
         match self.root {
@@ -2410,12 +2431,7 @@ impl Session {
             .join(opentide_analysis::ELASTIC_CONFIGURATION)
             .display()
             .to_string();
-        let key = path_key(&path);
-        if let Some((_, doc)) = self
-            .docs
-            .iter()
-            .find(|(uri, _)| path_key(&uri_to_path(uri)) == key)
-        {
+        if let Some(doc) = self.open_at(&path_key(&path)) {
             return Some((path, doc.text.clone()));
         }
         std::fs::read_to_string(&path).ok().map(|text| (path, text))
@@ -2503,6 +2519,35 @@ impl Session {
     /// `didOpen` being asked again after it.
     pub(crate) fn retrigger_once(&self, uri: &str) -> bool {
         self.retriggered.borrow_mut().insert(uri.to_string())
+    }
+
+    /// The open documents changed (one was opened or closed): the next
+    /// lookup by path keys them again ([`open_at`](Self::open_at)).
+    pub(crate) fn docs_changed(&self) {
+        self.doc_paths.borrow_mut().take();
+    }
+
+    /// The open document at the path whose [`path_key`] is `key`. Of two
+    /// URIs that spell one path, the first in order.
+    pub(crate) fn open_at(&self, key: &str) -> Option<&Document> {
+        let uri = {
+            let mut paths = self.doc_paths.borrow_mut();
+            let paths = paths.get_or_insert_with(|| {
+                let mut uris: Vec<&String> = self.docs.keys().collect();
+                uris.sort();
+                let mut paths = HashMap::with_capacity(uris.len());
+                for uri in uris {
+                    paths
+                        .entry(path_key(&uri_to_path(uri)))
+                        .or_insert_with(|| uri.clone());
+                }
+                self.doc_path_keys
+                    .set(self.doc_path_keys.get() + self.docs.len() as u64);
+                paths
+            });
+            paths.get(key)?.clone()
+        };
+        self.docs.get(&uri)
     }
 
     /// The catalog state of a root (`None`: outside every root).
