@@ -87,6 +87,12 @@ pub fn is_elastic_configuration(path: &str) -> bool {
 
 pub use opentide_tide::index_object;
 
+/// The query-engine registry (#1953): one
+/// [`QueryEngine`](opentide_highlight::QueryEngine) per query language. Crates
+/// above this one read it here, not from opentide-tide, which ADR 0016 folds
+/// into this crate.
+pub use opentide_tide::engines;
+
 #[derive(Debug, Clone, Default)]
 pub struct MemoryWorkspace {
     pub files: Vec<(String, String)>,
@@ -188,9 +194,16 @@ pub fn analyze(host: &dyn WorkspaceHost, request: AnalyzeRequest) -> AnalyzeResp
         // A query language's file is one query, read with its default
         // profile (a `.kql` file is Sentinel's, an `.exabeam` or a
         // `.datadog` file a search). `LanguageId` is non-exhaustive: a
-        // language with no engine yet has no findings, tokens or symbols.
+        // language that is not a query language has no findings, tokens or
+        // symbols. Every query language has an engine (the registry's test
+        // and `every_query_language_is_analysed` hold it).
         language => {
-            let r = opentide_tide::engines::engine(language)
+            let engine = engines::engine(language);
+            debug_assert!(
+                engine.is_some() || !LanguageId::QUERY_LANGUAGES.contains(&language),
+                "{language} is a query language with no engine in `engines::ENGINES`"
+            );
+            let r = engine
                 .map(|engine| engine.analyze(&request.text))
                 .unwrap_or_default();
             AnalyzeResponse {
@@ -986,6 +999,35 @@ mod tests {
                     || !completions(&host, language, "", 0).is_empty(),
                 "{language}: no completion"
             );
+        }
+    }
+
+    /// `analyze` of a query file is its engine's analysis: YARA's own arm
+    /// (`analyze_document`, for the outline) included.
+    #[test]
+    fn analyze_agrees_with_each_engine() {
+        let host = MemoryWorkspace { files: Vec::new() };
+        for &language in LanguageId::QUERY_LANGUAGES {
+            let Some(engine) = engines::engine(language) else {
+                panic!("{language}: no engine");
+            };
+            let (valid, broken) = samples(language);
+            for text in [valid, broken, "é 😀"] {
+                let response = analyze(
+                    &host,
+                    AnalyzeRequest {
+                        uri: "memory".into(),
+                        language,
+                        text: text.to_string(),
+                    },
+                );
+                let direct = engine.analyze(text);
+                assert_eq!(
+                    (response.diagnostics, response.tokens),
+                    (direct.diagnostics, direct.tokens),
+                    "{language}: {text:?}"
+                );
+            }
         }
     }
 

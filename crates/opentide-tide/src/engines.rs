@@ -2,10 +2,11 @@
 //! language, keyed by its [`LanguageId`].
 //!
 //! It lives here because opentide-tide is the lowest crate that depends on
-//! every query crate (`xtask/layers.toml`); opentide-analysis and the crates
-//! above it read it from here. A new query language adds its engine to
-//! [`ENGINES`], and a dispatcher that looks the language up here needs no
-//! new arm.
+//! every query crate (`xtask/layers.toml`). Crates above opentide-analysis
+//! read it as `opentide_analysis::engines`, never from here: it moves into
+//! opentide-analysis when ADR 0016 folds opentide-tide into it (#1965). A
+//! new query language adds its engine to [`ENGINES`], and a dispatcher that
+//! looks the language up here needs no new arm.
 
 use opentide_core::LanguageId;
 use opentide_highlight::QueryEngine;
@@ -49,11 +50,20 @@ mod tests {
         for registered in ENGINES {
             let language = registered.language();
             assert!(!seen.contains(&language), "{language:?} registered twice");
+            assert!(
+                LanguageId::QUERY_LANGUAGES.contains(&language),
+                "{language:?} has an engine but is not a query language"
+            );
             seen.push(language);
             let found = engine(language).map(QueryEngine::language);
             assert_eq!(found, Some(language));
         }
-        assert_eq!(seen.len(), 12);
+        for &language in LanguageId::QUERY_LANGUAGES {
+            assert!(
+                seen.contains(&language),
+                "{language:?} has no engine in ENGINES"
+            );
+        }
         assert!(engine(LanguageId::TideYaml).is_none());
         assert!(engine(LanguageId::Config).is_none());
     }

@@ -2,8 +2,9 @@
 //!
 //! Each of the twelve query crates (`opentide-kql` … `opentide-datadog`)
 //! implements [`QueryEngine`] on a struct of its own; the registry that maps
-//! a [`LanguageId`] to its engine is `opentide_tide::engines`, the lowest
-//! crate that depends on all of them. The trait lives here, beside
+//! a [`LanguageId`] to its engine is defined in `opentide_tide::engines`, the
+//! lowest crate that depends on all of them, and read as
+//! `opentide_analysis::engines`. The trait lives here, beside
 //! [`HighlightToken`], because an analysis is diagnostics and highlight
 //! tokens and every query crate already builds on this crate.
 

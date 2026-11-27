@@ -25,6 +25,11 @@ on; the language server and the browser build leave it off.
   the queries, the highlighting and the symbols, and no other object of the workspace is read
   for it. A platform block's own findings are `analyze_blocks`, which `opentide lint` reads
   (UC-2.6, #821): never fold them back into `analyze`, or the editor shows a fault twice.
+- The query-engine registry is re-exported as `opentide_analysis::engines` (`ENGINES`,
+  `engine`): crates above this one use that path, never `opentide_tide::engines`, so the fold of
+  opentide-tide into this crate (ADR 0016, #1965) changes no caller. A query language with no
+  row in `ENGINES` fails the registry's test and `every_query_language_is_analysed`, and
+  `analyze` `debug_assert!`s it.
 - The README's example is a doctest (`ReadmeDoctests`): keep it compiling.
 
 ## Test
