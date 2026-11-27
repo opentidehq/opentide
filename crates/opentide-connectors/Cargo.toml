@@ -53,9 +53,11 @@ caseless = "0.2"
 uuid = { workspace = true, features = ["v4"] }
 # Google SecOps: the service-account JWT (RS256) exchanged for an access token
 # on the tenant's own client (google-cloud-auth sends through a client of its
-# own, so it would bypass the tenant's proxy, CA bundles and timeouts). 9.x
-# signs with ring, the provider rustls already uses here.
-jsonwebtoken = { version = "9.3", default-features = false, features = ["use_pem"] }
+# own, so it would bypass the tenant's proxy, CA bundles and timeouts). Signed
+# with ring, the provider rustls already uses here, from the PEM key
+# rustls-pki-types reads (src/google_secops/auth/rs256.rs).
+ring = "0.17"
+rustls-pki-types = { version = "1.9", default-features = false, features = ["alloc"] }
 
 # The native transport (src/transport.rs, `ReqwestTransport`): reqwest on rustls
 # and the system's certificates, on tokio's multi-thread runtime. Not on WASI,
@@ -81,5 +83,6 @@ tokio-rustls.workspace = true
 tempfile = "3"
 # Entra's sign-in: what it logs is collected, to show the secret is not in it.
 tracing-subscriber = { version = "0.3", default-features = false, features = ["registry", "std"] }
-# Google SecOps: the test key's public half, to verify the assertion's signature.
-ring = "0.17"
+# Google SecOps: the assertion is cross-checked against jsonwebtoken's, and its
+# signature verified with the test key's public half.
+jsonwebtoken = { version = "9.3", default-features = false, features = ["use_pem"] }
