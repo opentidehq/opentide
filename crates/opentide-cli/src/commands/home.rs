@@ -94,20 +94,26 @@ pub struct Facts {
 /// Its configuration is read where every other command reads it
 /// ([`super::placement`]): `OPENTIDE_TIDE_WORKSPACE` included (#1996).
 pub fn gather(version: &str, cwd: &Path, env: &crate::env::Env) -> Facts {
-    use opentide_workspace::root::{OPENTIDE_DIR, find_workspace_root, is_workspace_root};
+    use opentide_workspace::root::{OPENTIDE_DIR, find_workspace_root};
     let fs = opentide_workspace::OsFs;
     let repo_root = env.get("OPENTIDE_REPO_ROOT");
     let root = match repo_root.filter(|root| !root.is_empty()) {
         Some(root) => cwd.join(root),
         None => find_workspace_root(&fs, cwd),
     };
-    if !is_workspace_root(&fs, &root) {
+    // A workspace when the repository root or the tide workspace holds a
+    // marker, the test every command applies (#1996).
+    if super::unplaced_root(None, env, cwd).is_some() {
         return Facts {
             version: version.to_owned(),
             git: git_state(&root),
             ..Facts::default()
         };
     }
+    // The objects, schemas and configuration are the tide workspace's, the
+    // folder every other command reads them from; git is the repository's.
+    let (_, options) = super::placement(None, env, cwd);
+    let roots = opentide_workspace::root::resolve(&fs, &options);
     // Only files directly in each folder are objects (#584).
     #[expect(
         clippy::case_sensitive_file_extension_comparisons,
@@ -116,7 +122,7 @@ pub fn gather(version: &str, cwd: &Path, env: &crate::env::Env) -> Facts {
     let catalogue = KINDS
         .iter()
         .map(|(kind, _)| {
-            let count = files_in(&root.join("objects").join(kind))
+            let count = files_in(&roots.workspace.join("objects").join(kind))
                 .iter()
                 .filter(|name| {
                     (name.ends_with(".yaml") || name.ends_with(".yml"))
@@ -127,11 +133,9 @@ pub fn gather(version: &str, cwd: &Path, env: &crate::env::Env) -> Facts {
             ((*kind).to_owned(), count)
         })
         .collect();
-    let schemas = files_in(&root.join(OPENTIDE_DIR).join("schemas"))
+    let schemas = files_in(&roots.workspace.join(OPENTIDE_DIR).join("schemas"))
         .iter()
         .any(|name| name.ends_with(".schema.json"));
-    let (_, options) = super::placement(None, env, cwd);
-    let roots = opentide_workspace::root::resolve(&fs, &options);
     let platforms = resolved_platforms(&roots).unwrap_or_else(|| {
         platforms(
             &roots
@@ -692,11 +696,27 @@ mod tests {
             "[platform]\nenabled = true\n[[tenants]]\nname = 'é'\n",
         )
         .unwrap();
+        let objects = root.join("détections😀/objects/rules");
+        std::fs::create_dir_all(&objects).unwrap();
+        std::fs::write(objects.join("règle.yaml"), "name: é\n").unwrap();
+        let schemas = root.join("détections😀/.opentide/schemas");
+        std::fs::create_dir_all(&schemas).unwrap();
+        std::fs::write(schemas.join("rule.schema.json"), "{}").unwrap();
         let env = Env::from_pairs([("OPENTIDE_TIDE_WORKSPACE", "détections😀")]);
+        let facts = gather("1", &root, &env);
+        assert_eq!(facts.platforms, [("sentinel".to_owned(), 1)]);
+        // The catalogue and the schemas are the same workspace's.
         assert_eq!(
-            gather("1", &root, &env).platforms,
-            [("sentinel".to_owned(), 1)]
+            facts.catalogue,
+            [
+                ("rules".to_owned(), 1),
+                ("threats".to_owned(), 0),
+                ("objectives".to_owned(), 0)
+            ]
         );
+        assert!(facts.schemas);
+        assert_eq!(gather("1", &root, &Env::default()).catalogue[0].1, 0);
+        assert!(!gather("1", &root, &Env::default()).schemas);
         // The fallback, when the configuration does not resolve, reads the
         // same folder.
         std::fs::write(sub.join("broken.toml"), "[platform\n").unwrap();
@@ -708,5 +728,23 @@ mod tests {
             gather("1", &root, &Env::default()).platforms,
             [("splunk".to_owned(), 0)]
         );
+    }
+
+    /// A repository root with no markers whose detections are in
+    /// `OPENTIDE_TIDE_WORKSPACE` is a workspace, as `unplaced_root` says for
+    /// every other command (#1996).
+    #[test]
+    fn a_marker_in_the_tide_workspace_makes_a_workspace() {
+        let folder = tempfile::tempdir().unwrap();
+        let root = folder.path().join("repo");
+        std::fs::create_dir_all(root.join(".git")).unwrap();
+        let objects = root.join("détections/objects/threats");
+        std::fs::create_dir_all(&objects).unwrap();
+        std::fs::write(objects.join("menace.yml"), "name: é\n").unwrap();
+        let env = Env::from_pairs([("OPENTIDE_TIDE_WORKSPACE", "détections")]);
+        let facts = gather("1", &root, &env);
+        assert!(facts.workspace.is_some());
+        assert_eq!(facts.catalogue[1], ("threats".to_owned(), 1));
+        assert_eq!(gather("1", &root, &Env::default()).workspace, None);
     }
 }
