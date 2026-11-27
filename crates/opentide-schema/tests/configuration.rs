@@ -859,3 +859,72 @@ fn the_dataset_list_refusal_covers_sourcetypes_and_a_missing_system() {
         "{message}"
     );
 }
+
+/// `T` read from a TOML table, and its `Debug` output.
+fn debug_of<T: opentide_schema::FromNode + std::fmt::Debug>(text: &str) -> String {
+    let node = config_toml::parse(text).unwrap();
+    let mut cx = opentide_schema::from_node::Context::new();
+    let value = T::from_node(&node, &mut cx);
+    assert_eq!(cx.into_errors(), [], "{text}");
+    format!("{:?}", value.unwrap())
+}
+
+#[test]
+fn credentials_never_print_in_a_debug_output() {
+    // #1933: the secrets are skipped when serialised, but `{:?}` printed them.
+    use opentide_schema::configuration::models::{
+        CarbonBlackCloudSetup, CrowdstrikeSetup, HarfangLabSetup, MicrosoftDefenderSetup,
+        MispIntegration, SentinelOneSetup, SentinelSetup, SplunkSetup,
+    };
+    use opentide_schema::configuration::sharing::MispBlock;
+    const SECRET: &str = "s3cr3t-é😀";
+    let shown = [
+        debug_of::<SentinelSetup>(&format!(
+            "resource_group = \"g\"\nworkspace_name = \"w\"\nworkspace_id = \"i\"\n\
+             azure_tenant_id = \"t\"\nazure_subscription_id = \"s\"\nazure_client_id = \"c\"\n\
+             azure_client_secret = \"{SECRET}\"\n"
+        )),
+        debug_of::<SplunkSetup>(&format!(
+            "url = \"u\"\nport = 8089\napp = \"search\"\ntoken = \"{SECRET}\"\n"
+        )),
+        debug_of::<CarbonBlackCloudSetup>(&format!(
+            "url = \"u\"\norg_key = \"o\"\ntoken = \"{SECRET}\"\n"
+        )),
+        debug_of::<SentinelOneSetup>(&format!(
+            "url = \"u\"\naccount_id = 1\napi_token = \"{SECRET}\"\n"
+        )),
+        debug_of::<MicrosoftDefenderSetup>(&format!(
+            "tenant_id = \"t\"\nclient_id = \"c\"\nclient_secret = \"{SECRET}\"\n"
+        )),
+        debug_of::<CrowdstrikeSetup>(&format!(
+            "api = \"a\"\nclient_id = \"c\"\nclient_secret = \"{SECRET}\"\ncustomer_id = \"x\"\n"
+        )),
+        debug_of::<HarfangLabSetup>(&format!(
+            "url = \"u\"\napi_token = \"{SECRET}\"\nsource_id = \"s\"\n"
+        )),
+        debug_of::<MispIntegration>(&format!(
+            "name = \"a\"\nurl = \"https://a\"\napi_key = \"{SECRET}\"\nmax_tlp = \"red\"\n"
+        )),
+        format!(
+            "{:?}",
+            MispBlock {
+                name: "a".to_owned(),
+                url: "https://a".to_owned(),
+                max_tlp: "red".to_owned(),
+                api_key: Some(SECRET.to_owned()),
+                enabled: true,
+                object_types: Vec::new(),
+                rule_statuses: Vec::new(),
+                organisation_uuid: None,
+                publish: false,
+                verify_ssl: true,
+            }
+        ),
+    ];
+    for shown in shown {
+        assert!(!shown.contains(SECRET), "{shown}");
+        assert!(shown.contains("[REDACTED]"), "{shown}");
+        // The other fields are still shown.
+        assert!(shown.contains("ssl") || shown.contains("name"), "{shown}");
+    }
+}
