@@ -37,8 +37,12 @@ const fn reported_version(from_build: Option<&'static str>, package: &'static st
 }
 
 /// Language identifier advertised to editors and WASM hosts.
+///
+/// Non-exhaustive (ADR 0015 §6): a new query language is a new variant and a
+/// minor release, so a `match` outside this crate needs a wildcard arm.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
+#[non_exhaustive]
 pub enum LanguageId {
     #[serde(rename = "kql", alias = "opentide-kql")]
     Kql,
@@ -150,8 +154,9 @@ impl LanguageId {
         }
     }
 
-    /// Query languages with a tree-sitter grammar and an engine.
-    pub const QUERY_LANGUAGES: [Self; 12] = [
+    /// Query languages with a grammar and an engine. A slice, not an array,
+    /// so a new language does not change the constant's type.
+    pub const QUERY_LANGUAGES: &'static [Self] = &[
         Self::Kql,
         Self::Spl,
         Self::Esql,
@@ -2561,7 +2566,8 @@ mod tests {
     #[test]
     fn language_id_roundtrip() {
         for id in LanguageId::QUERY_LANGUAGES
-            .into_iter()
+            .iter()
+            .copied()
             .chain([LanguageId::TideYaml])
         {
             assert_eq!(LanguageId::parse(id.as_str()), Some(id));

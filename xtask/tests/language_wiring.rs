@@ -71,10 +71,10 @@ const AWAITING_A_PLATFORM: &[(&str, &str)] = &[(
      phase 1 ships the language for editors and .datadog files",
 )];
 
-/// Whether a variant is a query language. The `match` has no wildcard, so a
-/// new variant does not compile until it is classified here; a query
-/// language then belongs in `LanguageId::QUERY_LANGUAGES`, which the test
-/// below holds to this.
+/// Whether a variant is a query language. `LanguageId` is non-exhaustive, so
+/// the wildcard panics: a new variant fails the test below until it is
+/// classified here, and `declared_variants` fails it until the variant is in
+/// `LanguageId::QUERY_LANGUAGES` or `NOT_QUERY_LANGUAGES`.
 const fn is_query_language(id: LanguageId) -> bool {
     match id {
         LanguageId::TideYaml | LanguageId::Config => false,
@@ -90,6 +90,7 @@ const fn is_query_language(id: LanguageId) -> bool {
         | LanguageId::Exabeam
         | LanguageId::Yaral
         | LanguageId::Datadog => true,
+        _ => panic!("classify the new LanguageId variant in is_query_language"),
     }
 }
 

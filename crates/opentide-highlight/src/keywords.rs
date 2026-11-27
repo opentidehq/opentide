@@ -93,6 +93,10 @@ pub const fn keywords(language: LanguageId) -> Option<Keywords> {
         LanguageId::Datadog => datadog::KEYWORDS,
         // Not query languages: no keywords of their own.
         LanguageId::TideYaml | LanguageId::Config => None,
+        // `LanguageId` is non-exhaustive: a language this crate does not know
+        // yet has no table (`xtask/tests/language_wiring.rs` holds every
+        // language of `QUERY_LANGUAGES` to one).
+        _ => None,
     }
 }
 

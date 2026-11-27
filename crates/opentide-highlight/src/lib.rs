@@ -968,6 +968,9 @@ fn generate_tm_language_from(
         | LanguageId::Exabeam
         | LanguageId::Datadog => None,
         LanguageId::Config => Some("(?m)^\\s*#.*$"),
+        // `LanguageId` is non-exhaustive: a language added later gets no
+        // comment pattern until it is given one here.
+        _ => None,
     };
     if let Some(comment_match) = comment_match {
         patterns.push(serde_json::json!({

@@ -264,6 +264,13 @@ pub fn analyze(host: &dyn WorkspaceHost, request: AnalyzeRequest) -> AnalyzeResp
                 symbols: r.symbols,
             }
         }
+        // `LanguageId` is non-exhaustive: a language this crate does not
+        // analyse yet has no findings, tokens or symbols.
+        _ => AnalyzeResponse {
+            diagnostics: Vec::new(),
+            tokens: Vec::new(),
+            symbols: Vec::new(),
+        },
     }
 }
 
@@ -816,6 +823,8 @@ fn query_hover(language: LanguageId, text: &str, offset: usize, platform: &str) 
         LanguageId::Yaral => opentide_yaral::editor::hover(text, offset),
         // Configuration hover needs the file's path: configuration_hover.
         LanguageId::TideYaml | LanguageId::Config => None,
+        // `LanguageId` is non-exhaustive: no hover for a language added later.
+        _ => None,
     }
 }
 
@@ -901,6 +910,8 @@ fn query_completions(
         LanguageId::Yaral => opentide_yaral::editor::completions(text, offset),
         // Configuration completion needs the file's path: configuration_completions.
         LanguageId::TideYaml | LanguageId::Config => Vec::new(),
+        // `LanguageId` is non-exhaustive: no completion for a language added later.
+        _ => Vec::new(),
     }
 }
 
@@ -959,6 +970,9 @@ fn query_signature_help(
         | LanguageId::Datadog
         | LanguageId::TideYaml
         | LanguageId::Config => None,
+        // `LanguageId` is non-exhaustive: no signature help for a language
+        // added later.
+        _ => None,
     }
 }
 

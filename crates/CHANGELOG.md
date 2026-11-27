@@ -10,13 +10,15 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 #### `opentide`
 
-- If you `match` on `opentide::LanguageId` (or `opentide_core::LanguageId`) without a wildcard arm, add an arm for `LanguageId::Datadog`.
+- If you `match` on `opentide::analysis::LanguageId` (or `opentide_core::LanguageId`), add a wildcard arm (`_ => …`). An arm for `LanguageId::Datadog` alone no longer compiles: the enum is now non-exhaustive.
+- If you name the type of `LanguageId::QUERY_LANGUAGES` (`[LanguageId; 11]`), use `&'static [LanguageId]`. Iterating it yields `&LanguageId`: write `for &language in LanguageId::QUERY_LANGUAGES`, or `.iter().copied()`.
 
 ### Breaking
 
 #### `opentide`
 
-- **`LanguageId` has a new variant, `LanguageId::Datadog`** (the Datadog log search syntax, `docs/internal/rfc-datadog-cloud-siem.md`). The enum is exhaustive, so a `match` without a wildcard arm no longer compiles. `LanguageId::QUERY_LANGUAGES` holds twelve languages; `LanguageId::parse` reads `datadog` and `opentide-datadog`, and `LanguageId::from_extension` reads `datadog`.
+- **`LanguageId` has a new variant, `LanguageId::Datadog`** (the Datadog log search syntax, `docs/internal/rfc-datadog-cloud-siem.md`). `LanguageId::QUERY_LANGUAGES` holds twelve languages; `LanguageId::parse` reads `datadog` and `opentide-datadog`, and `LanguageId::from_extension` reads `datadog`.
+- **`LanguageId` is `#[non_exhaustive]`, and `LanguageId::QUERY_LANGUAGES` is a `&'static [LanguageId]`** ([opentide#1911](https://github.com/opentidehq/opentide/issues/1911), ADR 0015 §6). It was an exhaustive enum and a `[LanguageId; 11]`, so every new language changed both and was a major release. A `match` outside `opentide-core` now needs a wildcard arm. This makes the next release a major; after it, a new query language is a minor release.
 
 ### Added
 
