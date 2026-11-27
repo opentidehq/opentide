@@ -238,7 +238,7 @@ macro_rules! T {
 }
 
 /// The `Debug` names of the node kinds, the error node left out (`debug_node_kinds`).
-pub(crate) fn node_kinds() -> Vec<String> {
+pub fn node_kinds() -> Vec<String> {
     ALL.iter()
         .filter(|k| **k >= SyntaxKind::SOURCE_FILE && **k != SyntaxKind::ERROR)
         .map(|k| format!("{k:?}"))

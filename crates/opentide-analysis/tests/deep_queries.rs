@@ -191,7 +191,7 @@ fn kql(expr: &str) -> String {
 }
 
 fn kql_diagnostics(q: &str) -> Vec<Diagnostic> {
-    opentide_kql::analyze(q, opentide_kql::Profile::Sentinel).diagnostics
+    opentide_kql::analyze(q, opentide_kql::Dialect::Sentinel).diagnostics
 }
 
 fn spl(expr: &str) -> String {

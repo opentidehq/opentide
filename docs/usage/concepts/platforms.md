@@ -1,11 +1,11 @@
 ---
 title: Platforms
-description: Thirteen deployment platforms, nine query validators on a tenant and twelve offline, eleven query runners, and where each platform block schema is specified.
+description: Fourteen deployment platforms, ten query validators on a tenant and thirteen offline, twelve query runners, and where each platform block schema is specified.
 ---
 
 # Platforms
 
-opentide integrates with **thirteen detection platforms** through connectors built into its Rust core. All ship in the base PyPI package; a Python package can add another as a [platform plugin](../../sdk/platforms.md#platform-plugins).
+opentide integrates with **fourteen detection platforms** through connectors built into its Rust core. All ship in the base PyPI package; a Python package can add another as a [platform plugin](../../sdk/platforms.md#platform-plugins).
 
 ## Capability matrix
 
@@ -24,6 +24,7 @@ opentide integrates with **thirteen detection platforms** through connectors bui
 | Graylog | `graylog` | yes | yes | yes | yes | Lucene (Graylog dialect) |
 | Exabeam New-Scale SIEM | `exabeam` | yes | yes (the filter) | yes | yes | Exabeam Query Language |
 | Google Security Operations | `google_secops` | yes | yes (`verifyRuleText`) | yes (YARA-L) | yes (`udmSearch`) | YARA-L 2.0 |
+| Datadog Cloud SIEM | `datadog` | yes | yes (`rules/validation`) | yes | yes (Logs Search) | Datadog search syntax |
 
 The offline check is the analysis engine that ships with `pip install opentide` (`opentide validate`, `opentide validate query`, `opentide lint`, [`opentide lsp`](../../cli/lsp.md)): it parses each query in its language, with the platform's tables or dialect, and needs no tenant.
 
@@ -133,6 +134,43 @@ configurations:
 `condition` is a block scalar on purpose: `condition: #fail >= 10 and $success` as a plain scalar is a YAML comment, loads as null, and fails with `yaral_section_empty`. `opentide validate` checks the block's constraints (`google_secops_rule_name`, `google_secops_severity`, `google_secops_run_frequency`, `google_secops_schedule`, `google_secops_meta_key`) and the sections' structure (`yaral_section_missing`, `yaral_section_empty`, `yaral_section_header`, `yaral_match_shape`, `yaral_match_window`, `yaral_option`), each at its field path, and that no two enabled blocks share a rule name, ignoring case (`google_secops_name_duplicate`). It warns, as `opentide lint` does, when `outcome` assigns no `$risk_score` (Google then gives every detection the instance's default score, 40 for an alert and 15 otherwise unless the instance's settings change them), when a rule matches a producer by a literal `ru_…` id, and on `run_frequency: LIVE` for a rule with two or more event variables, which deploy refuses because Google allows `LIVE` for single-event rules only (write `LIVE_CUSTOMIZABLE`).
 
 Deploy goes through the Chronicle API v1 and keeps Google's rule id (`ru_<uuid>`) in [deployment state](deployment-state.md); it never lists rules. Every create and every changed text is compiled by `verifyRuleText` first, and an unchanged text is not sent again, so the rule keeps its revision (a new revision is re-initialised for about an hour). A bound rule is read with its deployment, unarchived first when archived, then its text, its `scope` and its run state are each updated only where they differ. A `PREVIEW` rule runs without alerting, `RELEASE` and `UNIVERSAL` alert, `DISABLEMENT` disables, even when the rule's new text fails `verifyRuleText` or its update (the failure is still reported, and an archived rule is left archived), and `DELETION` archives the rule, or deletes it without `force` when the tenant's `deletion = "delete"`, archiving it instead when Google refuses (any 4xx but 401, 403, 404 and 429): deploy never deletes a rule's detections. `runFrequency` is sent only when the block names `run_frequency`: otherwise Google keeps the rule's frequency, or gives a new rule its default, and never moves a rule off a legacy schedule, which it cannot undo. A block `schedule` is compared as Google stores it, and removed from the rule when removed from the block. `data_access_scope` is a data access scope id or its full resource name; a changed or removed one reaches every rule. Credentials are a service-account key, or Application Default Credentials (a service-account key, a gcloud user login or the metadata server), applied with their quota project; a token that cannot be obtained stops the tenant before any request (`google_secops_tenant_unauthorized`). A 429, or a 503 on any call but a create, is waited out (`Retry-After`, else Google's `RetryInfo`, else 5, 15 and 60 seconds, three resends at most); a create is never resent after a 5xx or no answer (`google_secops_create_unconfirmed`). Deploy warns when Google reports a bound rule's execution as limited or paused (`google_secops_rule_execution_limited`) or its compilation as failed (`google_secops_rule_compilation_failed`). It manages custom rules and their deployment only: curated rules, rule exclusions, reference lists, data tables, retrohunts and rule tests stay in the console. `validate query --platform google_secops --live` sends each rule to `verifyRuleText`, which compiles it with the instance's reference lists and data tables and creates nothing, and places each diagnostic on its section key and line. [`opentide query`](../../cli/query.md) runs a YARA-L search through `udmSearch`; `--rule` is not supported. The analysis engine checks the sections offline as the one rule deploy assembles (the `yaral_*` codes: UDM fields and enum values, functions, scope across sections, windows, outcomes, condition shape), in `opentide validate`, in `validate query --platform google_secops` without `--live`, and in editors; a `.yaral` or `.yl2` file is checked with `opentide validate query --file`. Hunts with `system: google_secops` are checked as YARA-L searches. `deploy --dry-run` shows the assembled rule.
+
+### Datadog Cloud SIEM
+
+Datadog Cloud SIEM takes real-time detection rules (`log_detection`) through the v2 Security Monitoring API. A `datadog` block groups the rule by meaning rather than by the API's layout: `queries` (what to look at), `detection` (how the queries become a match), `cases` (when a match becomes a signal) and `signal` (what happens to the signal). 1.0 covers the `threshold`, `new_value`, `anomaly` and `impossible_travel` methods; sequence rules and cross-rule correlation wait for 1.x, and Datadog no longer accepts new `signal_correlation` rules.
+
+```yaml
+configurations:
+  datadog:
+    schema: platform::datadog::1.0
+    status: PRODUCTION
+    queries:
+      - name: failed
+        query: source:okta @evt.name:user.session.start @evt.outcome:FAILURE
+        group_by: ["@usr.email"]
+      - name: success
+        query: source:okta @evt.name:user.session.start @evt.outcome:SUCCESS
+        group_by: ["@usr.email"]
+    detection:
+      method: threshold
+      window: 5m
+    cases:
+      - name: brute force then success
+        condition: failed > 10 && success > 0
+        severity: high
+        notify: [soc]
+    signal:
+      group_by: ["@usr.email"]
+      keep_alive: 1h
+      max_duration: 1d
+    tags: ["team:identity"]
+```
+
+Each query is the Datadog search syntax, checked offline under the `rule` profile. A query is named `a`, `b`, … by its position unless it sets `name`, and measures events unless it sets one of `count_distinct`, `sum`, `max` or (with `method: new_value`) `new_value`. A case's `condition` compares query names with numbers, joined by `&&` or `||`; under `anomaly` the number is a percentile between 0 and 1 (`denied > 0.995`). A case's `severity` defaults to `response.alert_severity`, and its `notify` entries are tenant aliases (`[tenants.setup.notifications]`) or raw `@handles`. Left out, the method is `threshold`, the window `5m`, `keep_alive` `1h` and `max_duration` `1d`. The block's `message` defaults to Goal, Strategy and Triage and response sections derived from the rule, with any `{{` in its text escaped. Deploy adds lower-case tags: `source:` for each source the queries name, `tactic:` and `technique:` from the rule's ATT&CK techniques (a sub-technique as its parent), `security:attack`, `opentide_uuid:<uuid>` and the tenant's `tags`. `opentide validate` checks the block's constraints (`datadog_method_unsupported`, `datadog_duration`, `datadog_window_order`, `datadog_query_name`, `datadog_measure`, `datadog_detection_option`, `datadog_signal_group_by`, `datadog_condition`, `datadog_severity`, `datadog_tag`), each at its field path, and warns when a condition mixes `&&` and `||`, whose precedence Datadog does not document (`datadog_condition_mixed`). The anomaly defaults (`bucket`, `learning`, `tolerance`) and `detect_ip_transitions` are sent only as the block writes them: what Datadog does without them is not documented.
+
+Deploy keeps Datadog's rule id in [deployment state](deployment-state.md) and never lists rules. Every create and update is first sent to `POST /security_monitoring/rules/validation`, so an invalid rule is reported before anything changes (`datadog_rule_invalid`, with Datadog's `errors[]`). A recorded rule is read first (`GET`): it is updated only when a property opentide writes differs from the compiled body (tags compared as a set, defaults Datadog adds ignored), with the `version` the read returned, so an unchanged rule is sent nothing; Datadog's `401` to a stale version is `datadog_concurrent_modification`, not a refused key. A default rule (`isDefault: true`) is never changed or deleted (`datadog_rule_default`). A rule gone (`404`, or `isDeleted`) is created again (`datadog_rule_recreated`), or forgotten under a DISABLEMENT or a DELETION (`datadog_rule_missing`). `PREVIEW` deploys the rule enabled with no notifications on its cases and the tag `opentide_strategy:preview`; Datadog has no mode that runs a rule without signals, and its notification rules route signals whatever a rule's own notifications say, so exclude `opentide_strategy:preview` from them. A CI run other than the production job creates no rule (`deployment_state_unpersisted`). Datadog's docs say a modified rule's learning restarts at day 0, so promoting a `new_value` or `impossible_travel` rule from `PREVIEW` may restart its learning (whether a change of notifications and tags alone does is not documented). `RELEASE` and `UNIVERSAL` deploy the rule enabled with its notifications, `DISABLEMENT` sends `isEnabled: false` alone (with the `version`), neither compared nor validated, and `DELETION` deletes the rule. A 429 is waited out for the seconds `X-RateLimit-Reset` gives, three resends at most, and never for more than 120 seconds (`datadog_rate_limited`); a create is never resent after a 5xx or no answer (`datadog_create_unconfirmed`). A rule managed by Terraform as well is changed back and forth on every run: remove it from Terraform's state before opentide takes it over. To adopt a rule made in Datadog, write its block and record its id in the rule's shard before the first deploy.
+
+The tenant names its `site` (`datadoghq.com`, `us3.datadoghq.com`, `us5.datadoghq.com`, `datadoghq.eu`, `ap1.datadoghq.com`, `ap2.datadoghq.com`, `uk1.datadoghq.com`, `ddog-gov.com`, `us2.ddog-gov.com`), or an `api_url`; another site is `datadog_site`. `api_key` and `app_key` are `$NAME` placeholders, sent as `DD-API-KEY` and `DD-APPLICATION-KEY`; use a service account's application key scoped to `security_monitoring_rules_read` and `security_monitoring_rules_write` (validation needs write), and `logs_read_data` for searches. `validate query --platform datadog --live` validates each rule whole through `rules/validation`; a `.datadog` file and a `system: datadog` hunt are checked offline. [`opentide query`](../../cli/query.md) runs a search through Logs Search, paged by its cursor; `--rule` runs each of a block's queries. `deploy --dry-run` shows the body, an alias as `<tenant:notifications.ALIAS>` when no tenant is reached. The specification (`specs/platforms/datadog-1.0.md`) is drafted with the platform's tenant probes; until then the RFC is the contract.
 
 Normative capability flags and the shared block: [Platforms spec](/docs/specifications/specs/platforms/).
 

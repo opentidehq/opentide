@@ -4,10 +4,10 @@
 //! here: `docs/engine/kql/operators.md`).
 
 use opentide_core::{Severity, codes};
-use opentide_kql::{Hir, Profile, analyze};
+use opentide_kql::{Dialect, Hir, analyze};
 
 fn errors(src: &str) -> Vec<(String, String)> {
-    analyze(src, Profile::Sentinel)
+    analyze(src, Dialect::Sentinel)
         .diagnostics
         .into_iter()
         .filter(|d| d.severity == Severity::Error)

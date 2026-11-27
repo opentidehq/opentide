@@ -21,7 +21,7 @@ Read `references/crates.md` before adding a dependency or a new crate. Read `ref
 | `opentide-core` | no | `thiserror` | `LanguageId`, ranges, `codes` |
 | `opentide-highlight` | no | `thiserror` | HighlightSpec, semantic tokens |
 | `opentide-parse` | no | `SyntaxError` (data, no enum of errors) | the parsing toolkit: logos token source, event parser, lossless rowan trees, the `.ungram` runtime. See `parser` |
-| `opentide-kql` | no | `Diagnostic` | KQL catalog, HIR, profiles (`thiserror` is declared and unused) |
+| `opentide-kql` | no | `Diagnostic` | KQL catalog, HIR, dialects (`thiserror` is declared and unused) |
 | `opentide-spl` | no | `Diagnostic` | SPL catalog |
 | `opentide-esql` | no | `Diagnostic` | ES\|QL catalog, stack-version lifecycle |
 | `opentide-eql` | no | `Diagnostic` | EQL catalog, sequence and sample checks |

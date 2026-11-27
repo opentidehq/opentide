@@ -723,15 +723,61 @@ fn framework_retry_waits_for_retry_after() {
     assert!(started.elapsed() >= Duration::from_millis(950));
 }
 
+/// A server that counts the requests it holds at once and keeps the most it saw. Each request
+/// is held until *at_once* are held or *hold* has passed, then answered `200` on a connection it
+/// closes.
+fn in_flight_server(at_once: usize, hold: Duration) -> (String, Arc<AtomicUsize>) {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let url = format!("http://{}/", listener.local_addr().unwrap());
+    let peak = Arc::new(AtomicUsize::new(0));
+    let seen = peak.clone();
+    // How many requests are held now, and whether *at_once* were ever held together (which
+    // releases every request from then on).
+    let state = Arc::new((Mutex::new((0_usize, false)), std::sync::Condvar::new()));
+    std::thread::spawn(move || {
+        for mut stream in listener.incoming().flatten() {
+            let (state, seen) = (state.clone(), seen.clone());
+            std::thread::spawn(move || {
+                use std::io::Read as _;
+                let mut request = Vec::new();
+                let mut buffer = [0_u8; 4096];
+                while !request.windows(4).any(|end| end == b"\r\n\r\n") {
+                    match stream.read(&mut buffer) {
+                        Ok(0) | Err(_) => return,
+                        Ok(read) => request.extend_from_slice(&buffer[..read]),
+                    }
+                }
+                let (lock, arrived) = &*state;
+                let mut guard = lock.lock().unwrap();
+                guard.0 += 1;
+                seen.fetch_max(guard.0, Ordering::SeqCst);
+                if guard.0 >= at_once {
+                    guard.1 = true;
+                }
+                arrived.notify_all();
+                let (mut guard, _) = arrived
+                    .wait_timeout_while(guard, hold, |(_, released)| !*released)
+                    .unwrap();
+                guard.0 -= 1;
+                drop(guard);
+                let _ = stream.write_all(
+                    b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+                );
+            });
+        }
+    });
+    (url, peak)
+}
+
+/// The server holds each request until three are in flight, so a client that may send three at
+/// once is seen sending three, whatever the timing (the hold of 10 s is only a backstop). A
+/// client held to one request at a time is never seen with two, however its requests are
+/// scheduled; each waits out a hold of 1 s instead, so a client that broke the limit is seen
+/// with two unless its requests left more than 1 s apart.
 #[test]
 fn framework_max_in_flight_bounds_a_tenants_requests() {
-    let (_runtime, server) = wiremock();
-    tokio::runtime::Runtime::new().unwrap().block_on(
-        Mock::given(method("GET"))
-            .respond_with(ResponseTemplate::new(200).set_delay(Duration::from_millis(300)))
-            .mount(&server),
-    );
-    let three = |max_in_flight: usize| {
+    let peak = |max_in_flight: usize, hold: Duration| {
+        let (url, peak) = in_flight_server(3, hold);
         let settings = HttpSettings {
             max_in_flight,
             ..HttpSettings::default()
@@ -739,13 +785,9 @@ fn framework_max_in_flight_bounds_a_tenants_requests() {
         let client =
             HttpClient::new(&label("t"), &settings, &Environment::default(), None).unwrap();
         let cancel = CancellationToken::new();
-        let started = std::time::Instant::now();
         block_on(async {
             let one = || async {
-                let request = client
-                    .request(reqwest::Method::GET, &server.uri())
-                    .build()
-                    .unwrap();
+                let request = client.request(reqwest::Method::GET, &url).build().unwrap();
                 client
                     .send(request, &cancel)
                     .await
@@ -757,10 +799,10 @@ fn framework_max_in_flight_bounds_a_tenants_requests() {
             assert_eq!([a, b, c], [200, 200, 200]);
         })
         .unwrap();
-        started.elapsed()
+        peak.load(Ordering::SeqCst)
     };
-    assert!(three(1) >= Duration::from_millis(890));
-    assert!(three(3) < Duration::from_millis(890));
+    assert_eq!(peak(3, Duration::from_secs(10)), 3);
+    assert_eq!(peak(1, Duration::from_secs(1)), 1);
 }
 
 #[test]
@@ -778,15 +820,17 @@ fn framework_timeout_per_tenant() {
     let (_runtime, server) = wiremock();
     tokio::runtime::Runtime::new().unwrap().block_on(
         Mock::given(method("GET"))
-            .respond_with(ResponseTemplate::new(200).set_delay(Duration::from_millis(700)))
+            .respond_with(ResponseTemplate::new(200).set_delay(Duration::from_secs(2)))
             .mount(&server),
     );
+    // Five times apart on each side: the short tenant gives up on the head at 400 ms (200 to
+    // connect, 200 to read), the long one waits 10 s for the 2 s answer.
     let short = HttpSettings {
         timeout: Duration::from_millis(200),
         ..HttpSettings::default()
     };
     let long = HttpSettings {
-        timeout: Duration::from_secs(5),
+        timeout: Duration::from_secs(10),
         ..HttpSettings::default()
     };
     let env = Environment::default();
@@ -803,7 +847,7 @@ fn framework_timeout_per_tenant() {
         "a read timeout, not an unreachable tenant: {error:?}"
     );
     assert!(!error.is_unreachable());
-    // The same 700 ms answer: too slow for one tenant (200 ms once
+    // The same 2 s answer: too slow for one tenant (200 ms once
     // connected), in time for the other.
     let url = format!("{}/q", server.uri());
     assert!(matches!(
@@ -813,23 +857,34 @@ fn framework_timeout_per_tenant() {
     assert_eq!(get("long", &long, &env, None, &url).unwrap(), 200);
 
     // An answer whose body stops coming: each read of the body has the
-    // tenant's timeout, as `requests`' read timeout.
+    // tenant's timeout, as `requests`' read timeout. The body comes a byte every 1.5 s: past the
+    // read's own timeout (1 s, named as 1 s), within reqwest's per-read timer (connect + timeout:
+    // 2 s, restarted by each byte), and the exchange's deadline (1 s to connect and four reads:
+    // 5 s) would name 5 s. So only the body's own read timeout can give `seconds: 1`.
     let stalling = TcpListener::bind("127.0.0.1:0").unwrap();
     let stalling_port = stalling.local_addr().unwrap().port();
-    let kept = held.clone();
     std::thread::spawn(move || {
         for mut stream in stalling.incoming().flatten() {
-            use std::io::Read as _;
-            let mut buffer = [0u8; 4096];
-            let _ = stream.read(&mut buffer);
-            let _ = stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 10\r\n\r\nab");
-            let _ = stream.flush();
-            kept.lock().unwrap().push(stream);
+            std::thread::spawn(move || {
+                use std::io::Read as _;
+                let mut buffer = [0u8; 4096];
+                let _ = stream.read(&mut buffer);
+                let mut sent = stream
+                    .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 100\r\n\r\nab")
+                    .and_then(|()| stream.flush());
+                while sent.is_ok() {
+                    std::thread::sleep(Duration::from_millis(1500));
+                    sent = stream.write_all(b"c").and_then(|()| stream.flush());
+                }
+            });
         }
     });
-    let client = HttpClient::new(&label("stall"), &short, &env, None).unwrap();
+    let second = HttpSettings {
+        timeout: Duration::from_secs(1),
+        ..HttpSettings::default()
+    };
+    let client = HttpClient::new(&label("stall"), &second, &env, None).unwrap();
     let cancel = CancellationToken::new();
-    let started = std::time::Instant::now();
     let outcome = block_on(async {
         let request = client
             .request(
@@ -843,13 +898,8 @@ fn framework_timeout_per_tenant() {
     })
     .unwrap();
     assert!(
-        matches!(outcome, Err(ConnectorError::Timeout { .. })),
+        matches!(outcome, Err(ConnectorError::Timeout { seconds: 1, .. })),
         "{outcome:?}"
-    );
-    assert!(
-        started.elapsed() < Duration::from_millis(390),
-        "{:?}",
-        started.elapsed()
     );
 }
 
@@ -869,7 +919,8 @@ fn framework_an_answer_past_the_deadline_names_the_deadline() {
                 let _ = stream.write_all(b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n");
                 while stream.write_all(b"1\r\na\r\n").is_ok() {
                     let _ = stream.flush();
-                    std::thread::sleep(Duration::from_millis(50));
+                    // A chunk every 10 ms, 25 times inside each read's 250 ms.
+                    std::thread::sleep(Duration::from_millis(10));
                 }
             });
         }
@@ -1063,7 +1114,8 @@ fn framework_a_read_timeout_is_not_retried() {
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on(
         Mock::given(path("/slow"))
-            .respond_with(ResponseTemplate::new(200).set_delay(Duration::from_millis(700)))
+            // Far past the 400 ms the head may take (200 to connect, 200 to read).
+            .respond_with(ResponseTemplate::new(200).set_delay(Duration::from_secs(5)))
             .mount(&server),
     );
     let settings = HttpSettings {
@@ -1297,6 +1349,10 @@ fn framework_fan_out_is_bounded_ordered_reported_and_cancellable() {
     let peak = Arc::new(AtomicUsize::new(0));
     let events = Arc::new(Events::default());
     let tenants: Vec<TenantLabel> = (0..6).map(|n| label(&format!("t{n}"))).collect();
+    // Each tenant waits for a second one to be running before it ends, so two run at once
+    // whatever the scheduling (the 10 s are a backstop: a fan-out that ran one at a time would
+    // fail on the peak, not hang). Six tenants meet in pairs.
+    let pair = Arc::new(tokio::sync::Barrier::new(2));
     let cancel = CancellationToken::new();
     let runs = block_on(fan_out(
         tenants.clone(),
@@ -1306,10 +1362,11 @@ fn framework_fan_out_is_bounded_ordered_reported_and_cancellable() {
         |tenant, _token| {
             let running = running.clone();
             let peak = peak.clone();
+            let pair = pair.clone();
             async move {
                 let now = running.fetch_add(1, Ordering::SeqCst) + 1;
                 peak.fetch_max(now, Ordering::SeqCst);
-                tokio::time::sleep(Duration::from_millis(30)).await;
+                let _ = tokio::time::timeout(Duration::from_secs(10), pair.wait()).await;
                 running.fetch_sub(1, Ordering::SeqCst);
                 if tenant.tenant == "t3" {
                     Err(ConnectorError::Setup {
@@ -1354,15 +1411,21 @@ fn framework_fan_out_is_bounded_ordered_reported_and_cancellable() {
     let counted = started.clone();
     let events = Arc::new(Events::default());
     let cancelled_events = events.clone();
+    // The run is cancelled once the first tenant has started, never before.
+    let first = Arc::new(tokio::sync::Notify::new());
+    let begun = first.clone();
     let runs = block_on(async move {
         let handle = tokio::spawn(async move {
-            tokio::time::sleep(Duration::from_millis(50)).await;
+            begun.notified().await;
             trigger.cancel();
         });
         let runs = fan_out(tenants, 1, &cancel, cancelled_events, move |_, token| {
             let counted = counted.clone();
+            let first = first.clone();
             async move {
                 counted.fetch_add(1, Ordering::SeqCst);
+                // `notify_one` keeps a permit when no one waits yet.
+                first.notify_one();
                 token.cancelled().await;
                 Ok::<(), ConnectorError>(())
             }
@@ -1611,23 +1674,35 @@ fn framework_counts_the_requests_sent_and_the_writes_the_tenant_may_have_taken()
         (7, 3),
         "a POST whose answer timed out"
     );
+    // Cancelled once the server holds the POST (its second at `/slow`), so it was sent: a
+    // cancel on a timer could land before the request left.
     let cancel = CancellationToken::new();
     let trigger = cancel.clone();
-    std::thread::spawn(move || {
-        std::thread::sleep(Duration::from_millis(200));
-        trigger.cancel();
-    });
-    assert_eq!(
+    let slow_posts = || {
+        rt.block_on(server.received_requests())
+            .unwrap()
+            .iter()
+            .filter(|request| request.url.path() == "/slow")
+            .count()
+    };
+    let counts = std::thread::scope(|scope| {
+        scope.spawn(|| {
+            // The 10 s only keep a broken send from hanging the test; it then fails on the counts.
+            let backstop = std::time::Instant::now() + Duration::from_secs(10);
+            while slow_posts() < 2 && std::time::Instant::now() < backstop {
+                std::thread::sleep(Duration::from_millis(5));
+            }
+            trigger.cancel();
+        });
         send(
             &client,
             reqwest::Method::POST,
             &url("/slow"),
             plain,
-            &cancel
-        ),
-        (8, 4),
-        "a POST cancelled while it was on its way"
-    );
+            &cancel,
+        )
+    });
+    assert_eq!(counts, (8, 4), "a POST cancelled while it was on its way");
     // A clone shares the counts.
     assert_eq!(
         send(&clone, reqwest::Method::POST, &url("/ok"), plain, &never),

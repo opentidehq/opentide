@@ -2,7 +2,7 @@
 //! loop for expressions. It builds the tree `esql.ungram` describes.
 //!
 //! The lexer reads every word as [`K::WORD`]; ES|QL's keywords are contextual,
-//! so a grammar function asks [`at_kw`] where tree-sitter's lexer asked
+//! so a grammar function asks `at_kw` where tree-sitter's lexer asked
 //! "which tokens are valid here", and re-kinds the word it takes (`bump_as`).
 
 mod commands;
@@ -16,7 +16,7 @@ use opentide_parse::{Grammar, Input, Parse, Parser, TokenSet, build};
 /// The toolkit's view of the language. The nesting limit sits above the
 /// floor `deep_queries` holds (1,000 parentheses) by the levels a query's own
 /// structure adds.
-pub(crate) const GRAMMAR: Grammar = Grammar {
+pub const GRAMMAR: Grammar = Grammar {
     eof: K::EOF.raw(),
     error: K::ERROR.raw(),
     trivia: K::set(&[K::WHITESPACE, K::COMMENT]),
@@ -24,7 +24,7 @@ pub(crate) const GRAMMAR: Grammar = Grammar {
 };
 
 /// Parses `source` into a lossless tree and its syntax errors.
-pub(crate) fn parse(source: &str) -> Parse {
+pub fn parse(source: &str) -> Parse {
     let input = Input::new(source, lexer::lex(source), GRAMMAR);
     let mut p = Parser::new(&input);
     source_file(&mut p);

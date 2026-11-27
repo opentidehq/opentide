@@ -651,6 +651,42 @@ fn elastic_bad_duration_names_its_field_value_and_form() {
 }
 
 #[test]
+fn elastic_durations_past_the_deployable_bound_report_duration() {
+    // #1982: the seconds of a 40-digit lookback saturate at `u128::MAX`, and
+    // deploy wrote `now-340282366920938463463374607431768211455s`.
+    let huge = "9".repeat(40) + "s";
+    let block = merged(&elastic_base(), &json!({"scheduling": {"lookback": huge}}));
+    assert_eq!(
+        errors("elastic", &block),
+        format!(
+            "scheduling.lookback: ElasticConfig validation failed with code(s): duration \
+             (\"{huge}\" is longer than a rule can be deployed with: at most \
+             9223372036854775807 seconds)"
+        )
+    );
+    // The bound itself is a duration; a second more is not, in every field.
+    let max = "9223372036854775807s";
+    let over = "9223372036854775808s";
+    for (field, overrides) in [
+        ("lookback", json!({"scheduling": {"lookback": max}})),
+        ("interval", json!({"scheduling": {"interval": max}})),
+    ] {
+        let block = merged(&elastic_base(), &overrides);
+        assert!(!errors("elastic", &block).contains("duration"), "{field}");
+    }
+    for overrides in [
+        json!({"scheduling": {"lookback": over}}),
+        json!({"scheduling": {"interval": over}}),
+        json!({"scheduling": {"interval": "106751991167301d"}}),
+        json!({"suppression": {"group_by": ["host.name"], "duration": over}}),
+        json!({"type": "new_terms", "new_terms": {"fields": ["user.name"], "history_window_start": over}}),
+    ] {
+        let block = merged(&elastic_base(), &overrides);
+        assert!(errors("elastic", &block).contains("duration"), "{block}");
+    }
+}
+
+#[test]
 fn elastic_non_object_scheduling_is_a_shape_error() {
     for scheduling in [json!("5m"), json!(["5m"]), json!(5)] {
         let found = errors(

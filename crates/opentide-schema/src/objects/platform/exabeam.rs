@@ -1277,24 +1277,49 @@ pub struct NameFinding {
     pub value: Option<String>,
 }
 
+thread_local! {
+    /// [`name_steps`].
+    static NAME_STEPS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// How many rules [`name_findings`] has looked at on this thread, each rule
+/// indexed and each UUID looked up counting one: for the test that holds it
+/// to linear (a work count, not a wall clock).
+#[cfg(test)]
+fn name_steps() -> usize {
+    NAME_STEPS.get()
+}
+
 /// `exabeam_name_duplicate` and `exabeam_name_length` for each rule of
 /// `in_scope`, among `rules` (UUID and document): two enabled blocks that
-/// resolve to one name, compared case-insensitively; a block with no `name`
-/// whose rule name is longer than 128 characters (`exabeam_name_issues`).
+/// resolve to one name, compared under full Unicode case folding as the
+/// connector matches names on deploy (`ﬁle` and `FILE`, `ß` and `ss`, are one
+/// name); a block with no `name` whose rule name is longer than 128 characters
+/// (`exabeam_name_issues`).
 pub fn name_findings<'r>(
     rules: &[(&'r str, &'r Node)],
     in_scope: impl IntoIterator<Item = &'r str>,
 ) -> Vec<NameFinding> {
     let mut by_name: std::collections::BTreeMap<String, Vec<&str>> =
         std::collections::BTreeMap::new();
+    // Each in-scope rule found by its UUID, not by a scan of `rules` (#1945):
+    // the first rule of a UUID, as the scan found it.
+    let mut by_uuid: std::collections::HashMap<&str, &Node> =
+        std::collections::HashMap::with_capacity(rules.len());
+    NAME_STEPS.set(NAME_STEPS.get() + rules.len());
     for (uuid, rule) in rules {
+        by_uuid.entry(*uuid).or_insert(*rule);
         if let Some(name) = rule_exabeam_name(rule, true) {
-            by_name.entry(name.to_lowercase()).or_default().push(uuid);
+            by_name
+                .entry(caseless::default_case_fold_str(&name))
+                .or_default()
+                .push(uuid);
         }
     }
     let mut findings = Vec::new();
     for uuid in in_scope {
-        let Some((_, rule)) = rules.iter().find(|(known, _)| *known == uuid) else {
+        NAME_STEPS.set(NAME_STEPS.get() + 1);
+        let Some(rule) = by_uuid.get(uuid).copied() else {
             continue;
         };
         if let Some(block) = rule_block(rule)
@@ -1317,7 +1342,7 @@ pub fn name_findings<'r>(
             continue;
         };
         let mut others: Vec<&str> = by_name
-            .get(&name.to_lowercase())
+            .get(&caseless::default_case_fold_str(&name))
             .map(|uuids| {
                 uuids
                     .iter()

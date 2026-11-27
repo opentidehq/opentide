@@ -9,16 +9,16 @@ exit: 2
 {
   "command": "query",
   "duration_ms": 0,
-  "error": "the following required arguments were not provided: --platform <PLATFORM>. --platform: choose from sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops",
+  "error": "the following required arguments were not provided: --platform <PLATFORM>. --platform: choose from sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops, datadog",
   "exit_code": 2,
   "failure": {
     "argument": "--platform",
     "code": "usage_missing_option",
     "crash_log": null,
-    "message": "the following required arguments were not provided: --platform <PLATFORM>. --platform: choose from sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops",
+    "message": "the following required arguments were not provided: --platform <PLATFORM>. --platform: choose from sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops, datadog",
     "suggestion": null
   },
-  "message": "the following required arguments were not provided: --platform <PLATFORM>. --platform: choose from sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops",
+  "message": "the following required arguments were not provided: --platform <PLATFORM>. --platform: choose from sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops, datadog",
   "next_actions": [],
   "ok": false,
   "schema_version": 1,

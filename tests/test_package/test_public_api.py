@@ -108,7 +108,7 @@ def test_the_engine_serves_its_bundled_data_from_the_binary() -> None:
     """The binary compiles ``src/opentide/data`` and ``src/opentide/schemas`` in; the
     package reads neither. An installed wheel carries no copy (a checkout's
     editable install still has the tree), and the SDK answers all the same."""
-    assert len(importlib.import_module("opentide.sdk").platforms()) == 13
+    assert len(importlib.import_module("opentide.sdk").platforms()) == 14
     package = Path(opentide.__file__).parent
     if "site-packages" in package.parts:
         assert not (package / "data").exists()

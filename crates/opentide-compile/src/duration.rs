@@ -69,17 +69,27 @@ pub fn sentinel(duration: &str) -> Result<String, String> {
 /// An Elastic duration in seconds (`duration_seconds`): `<n>s|m|h|d`, compound
 /// shorthand (`1h10m`), or ISO 8601 (`PT1H`, `P14D`), read by
 /// `opentide_core::duration`, the one grammar the model and the language
-/// server use too. Zero only with `allow_zero`. The error is the oracle's
-/// message.
+/// server use too. Zero only with `allow_zero`; at most
+/// [`opentide_core::duration::ELASTIC_MAX_SECONDS`], as the model checks (#1982): past it the seconds
+/// saturate. The error is the oracle's message.
 pub fn elastic_seconds(value: &str, allow_zero: bool) -> Result<u128, String> {
-    opentide_core::duration::duration_seconds(value, allow_zero).map_err(|error| match error {
-        opentide_core::duration::DurationError::Format => {
-            format!("Invalid duration format: {value:?}")
-        }
-        opentide_core::duration::DurationError::NotPositive => {
-            format!("Duration must be positive (or zero if allowed): {value:?}")
-        }
-    })
+    let seconds = opentide_core::duration::duration_seconds(value, allow_zero).map_err(
+        |error| match error {
+            opentide_core::duration::DurationError::Format => {
+                format!("Invalid duration format: {value:?}")
+            }
+            opentide_core::duration::DurationError::NotPositive => {
+                format!("Duration must be positive (or zero if allowed): {value:?}")
+            }
+        },
+    )?;
+    let max = opentide_core::duration::ELASTIC_MAX_SECONDS;
+    if seconds > max {
+        return Err(format!(
+            "Duration {value:?} is longer than a rule can be deployed with: at most {max} seconds"
+        ));
+    }
+    Ok(seconds)
 }
 
 /// The units Elastic writes, largest first.

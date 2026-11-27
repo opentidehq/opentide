@@ -1,0 +1,33 @@
+[platform]
+enabled = false
+name = "Datadog Cloud SIEM"
+description = "Datadog Cloud SIEM detection rules."
+
+#[[modifiers]]
+#name = "Modifier Demo"
+#description = "Example of using modifiers as a development lifecycle automation"
+#[modifiers.conditions]
+#status = ["STAGING"]
+#[modifiers.modifications]
+#tags = ["stage:staging"]
+
+# Datadog Cloud SIEM through the v2 Security Monitoring API. site is the Datadog site
+# (datadoghq.com, us3.datadoghq.com, us5.datadoghq.com, datadoghq.eu, ap1.datadoghq.com,
+# ap2.datadoghq.com, uk1.datadoghq.com, ddog-gov.com, us2.ddog-gov.com); calls go to
+# https://api.<site>, or to api_url when set (a new site, a proxy). api_key and app_key are sent
+# as DD-API-KEY and DD-APPLICATION-KEY. The application key needs
+# security_monitoring_rules_read and security_monitoring_rules_write (validation needs write),
+# and logs_read_data for opentide query and for checking searches live. Use a service
+# account's scoped key. The rule id is kept in .opentide/states/deployment/ (commit it).
+# notifications maps the aliases a block's cases[].notify names to Datadog handles; tags are
+# added to every rule on the tenant.
+#[[tenants]]
+#name = "datadog-eu"
+#strategies = ["RELEASE"]
+#[tenants.setup]
+#site = "datadoghq.eu"
+#api_key = "$DD_API_KEY"
+#app_key = "$DD_APP_KEY"
+#tags = ["managed-by:opentide"]
+#[tenants.setup.notifications]
+#soc = "@slack-soc-alerts"

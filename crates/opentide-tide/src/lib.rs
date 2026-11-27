@@ -46,7 +46,7 @@ use opentide_highlight::{
     HighlightSpec, HighlightToken, TideField, highlight_markdown_line, tide_field_at,
     tokens_from_spans,
 };
-use opentide_kql::Profile;
+use opentide_kql::Dialect;
 use opentide_schema::platforms::PlatformId;
 use regex::Regex;
 use serde::Deserialize;
@@ -137,6 +137,16 @@ pub fn platform_field_language(platform: PlatformId, field: &[&str]) -> Option<L
             }
             _ => None,
         },
+        // A Datadog Cloud SIEM rule's queries (RFC rfc-datadog-cloud-siem §6.8),
+        // profile `rule`.
+        PlatformId::Datadog => match field {
+            ["queries", item, "query"]
+                if !item.is_empty() && item.bytes().all(|b| b.is_ascii_digit()) =>
+            {
+                Some(LanguageId::Datadog)
+            }
+            _ => None,
+        },
         PlatformId::Elastic | PlatformId::SentinelOne => None,
     }
 }
@@ -148,8 +158,8 @@ pub struct InjectedQuery {
     pub language: LanguageId,
     /// The platform the query runs on, as a `configurations` key
     /// (`sentinel`, `microsoft_defender`, `elastic`): the block's key for a
-    /// rule query, the entry's `system` for a hunt. It picks the KQL profile
-    /// and the Lucene dialect.
+    /// rule query, the entry's `system` for a hunt. It picks the query's KQL,
+    /// Lucene or YARA dialect.
     pub platform: String,
     /// YAML path of the query, list items by index:
     /// `["configurations", "sentinel", "query"]`,
@@ -906,12 +916,7 @@ fn analyze_injections(
         let mut extra = Vec::new();
         let (found, query_tokens) = match inj.language {
             LanguageId::Kql => {
-                let profile = if inj.platform == "microsoft_defender" {
-                    Profile::Defender
-                } else {
-                    Profile::Sentinel
-                };
-                let r = opentide_kql::analyze(&inj.inner, profile);
+                let r = opentide_kql::analyze(&inj.inner, Dialect::for_platform(&inj.platform));
                 (r.diagnostics, r.tokens)
             }
             LanguageId::Spl => {
@@ -989,15 +994,15 @@ fn analyze_injections(
                 // The rule block is a Next-Gen SIEM correlation rule; a hunt
                 // search is not.
                 let ctx = if inj.field_path.first().map(String::as_str) == Some("configurations") {
-                    opentide_cql::Context::CORRELATION_RULE
+                    opentide_cql::Profile::CORRELATION_RULE
                 } else {
-                    opentide_cql::Context::default()
+                    opentide_cql::Profile::default()
                 };
                 let r = opentide_cql::analyze_with(&inj.inner, &ctx);
                 (r.diagnostics, r.tokens)
             }
             LanguageId::Yara => {
-                let ctx = opentide_yara::Profile::for_platform(&inj.platform)
+                let ctx = opentide_yara::Dialect::for_platform(&inj.platform)
                     .map(opentide_yara::Context::for_profile)
                     .unwrap_or_default();
                 let r = opentide_yara::analyze_with(&inj.inner, &ctx);
@@ -1035,9 +1040,9 @@ fn analyze_injections(
                 let r = opentide_exabeam::analyze_with(&inj.inner, &ctx);
                 (r.diagnostics, r.tokens)
             }
-            // No platform embeds the Datadog search syntax yet (the `datadog` platform is
-            // phase 2 of rfc-datadog-cloud-siem): a rule block's query would be profile
-            // `rule`, a hunt's `search`.
+            // A query of the Datadog block is a detection rule's (profile `rule`); a hunt
+            // with `system: datadog` is a search (profile `search`), as a `.datadog`
+            // file is (RFC rfc-datadog-cloud-siem §6.1).
             LanguageId::Datadog => {
                 let ctx = if inj.field_path.first().map(String::as_str) == Some("configurations") {
                     opentide_datadog::Context::RULE
@@ -1048,6 +1053,9 @@ fn analyze_injections(
                 (r.diagnostics, r.tokens)
             }
             LanguageId::TideYaml | LanguageId::Config => (Vec::new(), Vec::new()),
+            // `LanguageId` is non-exhaustive: a language this crate does not
+            // analyse yet has no findings and no tokens.
+            _ => (Vec::new(), Vec::new()),
         };
         // The stand-in `opentide new` wrote is lint's `placeholders` finding,
         // not a query to check: `opentide validate` skips it too.
@@ -2024,6 +2032,7 @@ threat:
             PlatformId::Crowdstrike => Some(LanguageId::Cql),
             PlatformId::GoogleSecops => Some(LanguageId::Yaral),
             PlatformId::Exabeam => Some(LanguageId::Exabeam),
+            PlatformId::Datadog => Some(LanguageId::Datadog),
             PlatformId::Elastic => Some(LanguageId::Esql),
             // Sysdig's query is a block's `condition`, never a hunt's.
             PlatformId::Sysdig

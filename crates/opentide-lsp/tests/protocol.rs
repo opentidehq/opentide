@@ -77,10 +77,14 @@ fn send(lsp: &mut Lsp, id: i64, method: &str, params: Value) {
 }
 
 /// Have the server sleep, and wait until it does: what is sent next queues
-/// up as one batch.
+/// up as one batch. Two windows hold it, so both are wide: the server has
+/// 500 ms to take the sleep alone, and the test then has 2.5 s to write a
+/// few small messages (it was 150 ms and 550 ms). The server tells the
+/// client neither when it took a frame nor how many are queued, so a
+/// handshake would need a new test hook (#1947).
 fn hold(lsp: &mut Lsp, id: i64) {
-    send(lsp, id, "opentide/__sleep", json!({ "ms": 700 }));
-    std::thread::sleep(std::time::Duration::from_millis(150));
+    send(lsp, id, "opentide/__sleep", json!({ "ms": 3000 }));
+    std::thread::sleep(std::time::Duration::from_millis(500));
 }
 
 fn watch() -> Value {
@@ -526,6 +530,55 @@ fn an_elastic_rule_publishes_no_advisory_of_its_own() {
         "{diagnostics:#?}"
     );
     assert_eq!(editor_indexed(&mut lsp), 0);
+}
+
+/// #1982: the editor publishes `validate`'s schema finding on an Elastic
+/// lookback too long to deploy, placed at the value; the largest one the
+/// bound allows is not flagged.
+#[test]
+fn an_elastic_lookback_past_the_deployable_bound_is_flagged_in_the_editor() {
+    let scratch = workspace("elastic-duration-bound", false);
+    let root = &scratch.0;
+    let rule_uri = file_uri(&root.join("objects/rules/rule-1.0.yaml"));
+    let (mut lsp, _) = start(json!({ "capabilities": watch(), "rootUri": file_uri(root) }));
+    let register = lsp.read();
+    lsp.write(&json!({ "jsonrpc": "2.0", "id": register["id"], "result": null }));
+    let rule = |lookback: &str| {
+        format!(
+            "{}  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: \"é\"'\n    \
+             scheduling:\n      interval: 5m\n      lookback: {lookback}\n",
+            fixture(RULE)
+        )
+    };
+    let bounded = |diagnostics: &[Value]| {
+        diagnostics
+            .iter()
+            .filter(|d| {
+                d["message"]
+                    .as_str()
+                    .is_some_and(|m| m.contains("longer than a rule can be deployed"))
+            })
+            .count()
+    };
+    let huge = "9".repeat(40) + "s";
+    open(&mut lsp, &rule_uri, "opentide-yaml", &rule(&huge));
+    let diagnostics = published_for(&mut lsp, &rule_uri);
+    assert_eq!(bounded(&diagnostics), 1, "{diagnostics:#?}");
+
+    let scratch = workspace("elastic-duration-at-bound", false);
+    let root = &scratch.0;
+    let rule_uri = file_uri(&root.join("objects/rules/rule-1.0.yaml"));
+    let (mut lsp, _) = start(json!({ "capabilities": watch(), "rootUri": file_uri(root) }));
+    let register = lsp.read();
+    lsp.write(&json!({ "jsonrpc": "2.0", "id": register["id"], "result": null }));
+    open(
+        &mut lsp,
+        &rule_uri,
+        "opentide-yaml",
+        &rule("9223372036854775807s"),
+    );
+    let diagnostics = published_for(&mut lsp, &rule_uri);
+    assert_eq!(bounded(&diagnostics), 0, "{diagnostics:#?}");
 }
 
 /// #821 (UC-2.6): no object of the root is indexed by the editor for an
@@ -3953,10 +4006,11 @@ fn a_file_changed_on_disk_within_a_batch_is_read_again_for_its_event() {
     let rule = root.join("objects/rules/rule-1.0.yaml");
     // One batch: a request that reads every object file (the editor's index,
     // from the workspace it loads), a pause in which the rule changes on
-    // disk, the watcher's event for it, and the workspace's diagnostics.
+    // disk (2 s for the test to write it once the index is answered), the
+    // watcher's event for it, and the workspace's diagnostics.
     hold(&mut lsp, 1);
     send(&mut lsp, 2, "workspace/symbol", json!({ "query": "" }));
-    send(&mut lsp, 3, "opentide/__sleep", json!({ "ms": 400 }));
+    send(&mut lsp, 3, "opentide/__sleep", json!({ "ms": 2000 }));
     lsp.notify(
         "workspace/didChangeWatchedFiles",
         json!({ "changes": [{ "uri": file_uri(&rule), "type": 2 }] }),

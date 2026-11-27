@@ -322,17 +322,6 @@ pub fn shorten_path(location: &str, room: usize) -> String {
     format!("{head_text}…{tail_text}")
 }
 
-/// `(column, end_column, style)` spans of one source line of a file, 1-based code points.
-pub trait LineStyles {
-    /// The spans of line `line` (1-based) of `path`, whose text `sources` holds.
-    fn styles(
-        &mut self,
-        path: &Path,
-        line: usize,
-        sources: &mut dyn Sources,
-    ) -> Vec<(usize, usize, Style)>;
-}
-
 /// HighlightSpec capture → terminal style, for the query lines of a frame.
 /// Captures not listed (variables, properties, punctuation, Tide keys) keep the
 /// terminal's colour.
@@ -371,7 +360,7 @@ impl QueryHighlighter {
             return by_line;
         };
         // As a text file is read: every line break a `\n`.
-        let text = text.replace("\r\n", "\n").replace('\r', "\n");
+        let text = opentide_core::text::universal_newlines(text);
         for token in opentide_analysis::highlight(language, &text).tokens {
             let Some(style) = query_style(&token.capture) else {
                 continue;
@@ -410,8 +399,10 @@ fn language_of(path: &Path) -> Option<opentide_analysis::LanguageId> {
     opentide_analysis::LanguageId::from_extension(extension)
 }
 
-impl LineStyles for QueryHighlighter {
-    fn styles(
+impl QueryHighlighter {
+    /// The `(column, end_column, style)` spans of line `line` (1-based) of
+    /// `path`, whose text `sources` holds: 1-based code points.
+    pub fn styles(
         &mut self,
         path: &Path,
         line: usize,
@@ -433,7 +424,7 @@ impl Frames {
         &self,
         diagnostic: &Diagnostic,
         sources: &mut dyn Sources,
-        mut styles: Option<&mut dyn LineStyles>,
+        mut styles: Option<&mut QueryHighlighter>,
     ) -> Vec<Text> {
         let style = severity_style(diagnostic.severity);
         let bold = Style::new().bold();
@@ -711,7 +702,7 @@ impl Frames {
         let mut highlighter = QueryHighlighter::default();
         let mut out = String::new();
         for diagnostic in sort_diagnostics(shown) {
-            let styles: Option<&mut dyn LineStyles> = if self.highlight {
+            let styles: Option<&mut QueryHighlighter> = if self.highlight {
                 Some(&mut highlighter)
             } else {
                 None

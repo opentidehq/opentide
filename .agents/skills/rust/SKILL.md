@@ -92,7 +92,7 @@ The profiles are in `.config/nextest.toml`.
 
 | Profile | Use |
 |---------|-----|
-| `fast` | The agent loop. It leaves out the stdio server tests, the Pydantic comparison, the deep-nesting test and the public corpora. `--ignore-default-filter` runs everything |
+| `fast` | The agent loop. It leaves out the stdio server tests, the comparisons with outside tools (`external_*`, CPython's `difflib` among them), the deep-nesting test and the public corpora. `--ignore-default-filter` runs everything |
 | `ci` | As CI runs it: `fail-fast = false`, no retries, JUnit at `target/nextest/ci/junit.xml` |
 | default | Everything |
 

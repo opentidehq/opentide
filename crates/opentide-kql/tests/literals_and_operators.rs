@@ -3,10 +3,10 @@
 //! operators with their own syntax (opentidehq/language-server#125).
 
 use opentide_core::{Diagnostic, Severity, codes};
-use opentide_kql::{Hir, Profile, analyze, columns, lower};
+use opentide_kql::{Dialect, Hir, analyze, columns, lower};
 
 fn diagnostics(source: &str) -> Vec<Diagnostic> {
-    analyze(source, Profile::Sentinel).diagnostics
+    analyze(source, Dialect::Sentinel).diagnostics
 }
 
 fn errors(source: &str) -> Vec<(String, String)> {
@@ -335,7 +335,7 @@ fn obfuscated_strings_and_hex_integers_are_literals() {
     assert_parse_error("print h \"x\"");
     // A hexadecimal integer is a long, even with an `e` among its digits.
     let types = |source: &str| -> Vec<String> {
-        let analysis = columns(source, Profile::Sentinel);
+        let analysis = columns(source, Dialect::Sentinel);
         let pipeline = analysis.pipelines.last().expect("a pipeline");
         let schema = pipeline
             .stages
@@ -354,7 +354,7 @@ fn obfuscated_strings_and_hex_integers_are_literals() {
     assert_clean("union (print A = 0x1E), (print A = 1) | project A");
     // A table named by an obfuscated string is that table: its columns.
     let columns = |source: &str| -> Vec<String> {
-        let analysis = columns(source, Profile::Sentinel);
+        let analysis = columns(source, Dialect::Sentinel);
         let pipeline = analysis.pipelines.last().expect("a pipeline");
         pipeline
             .source

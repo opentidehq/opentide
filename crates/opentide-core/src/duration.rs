@@ -48,8 +48,18 @@ pub enum DurationError {
     NotPositive,
 }
 
+/// The longest Elastic duration opentide sends, in seconds: `i64::MAX`, the
+/// largest JSON integer the payload writes (`suppression.duration.value`;
+/// Elasticsearch's `long`). [`duration_seconds`] reads any number of digits
+/// and saturates at `u128::MAX`; past this bound a value is refused, by
+/// `validate` (the block's `duration` code) and by deploy's compiler, rather
+/// than written into the payload as a saturated number (#1982). Within it,
+/// every number deploy writes (`from` is `interval` plus `lookback`) is exact.
+pub const ELASTIC_MAX_SECONDS: u128 = i64::MAX as u128;
+
 /// The duration in seconds, saturated at `u128::MAX` (any number of digits
-/// is a duration, however large; only zero matters).
+/// is a duration, however large; only zero matters). Elastic's callers bound
+/// it at [`ELASTIC_MAX_SECONDS`].
 pub fn duration_seconds(value: &str, allow_zero: bool) -> Result<u128, DurationError> {
     let (short, iso) = patterns();
     let captures = if value.is_empty() {

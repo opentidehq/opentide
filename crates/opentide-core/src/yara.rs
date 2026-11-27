@@ -7,8 +7,9 @@ use std::fmt::Write as _;
 /// `text` as the inside of a YARA string literal (a `meta` value):
 /// `\` and `"` escaped, `\n` and `\t` as those escapes, and every other ASCII
 /// control character as `\xNN`, so no raw control character reaches the
-/// rule (#1939). A `\r` is dropped, as `escape_yara_string` dropped it: the
-/// same text saved with CRLF or LF line endings writes the same rule.
+/// rule (#1939). A `\r` is dropped, as `escape_yara_string` dropped it, so its
+/// payload does not change, and the same text with CRLF or LF line endings
+/// writes the same rule.
 /// Characters outside ASCII are kept as they are (YARA reads UTF-8).
 #[must_use]
 pub fn escape_string(text: &str) -> String {

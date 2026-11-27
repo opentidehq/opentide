@@ -37,7 +37,7 @@ use std::sync::Arc;
 
 use opentide_core::node::{Node, Value};
 use opentide_core::{ByteSpan, Diagnostic, LineIndex, codes, suggest};
-use opentide_kql::Profile;
+use opentide_kql::Dialect;
 use opentide_kql::output::Output;
 use opentide_schema::objects::platform::microsoft_defender::required_columns::{
     defender_xdr_tables_in_query, missing_required_column_groups, required_column_groups,
@@ -90,7 +90,7 @@ pub(crate) fn output_findings(
     let Some(block) = configurations.get(PLATFORM) else {
         return Vec::new();
     };
-    let Some(output) = opentide_kql::output::output(&query.inner, Profile::Defender) else {
+    let Some(output) = opentide_kql::output::output(&query.inner, Dialect::Defender) else {
         return Vec::new();
     };
     let lines = LineIndex::new(source);

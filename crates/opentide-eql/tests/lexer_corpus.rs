@@ -2,14 +2,7 @@
 //! cases of each token's regex: the five string forms, numbers, indexes, quoted names and the
 //! nested block comments.
 
-#![expect(dead_code, reason = "the included modules are used in part")]
-
-#[path = "../src/lexer.rs"]
-mod lexer;
-#[path = "../src/lexical.rs"]
-mod lexical;
-#[path = "../src/syntax.rs"]
-mod syntax;
+use opentide_eql::{lexer, lexical, syntax};
 
 use std::path::{Path, PathBuf};
 use syntax::SyntaxKind as K;

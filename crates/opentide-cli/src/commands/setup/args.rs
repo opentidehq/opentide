@@ -143,6 +143,7 @@ impl SetupPlatformsArgs {
             ("graylog", self.graylog),
             ("exabeam", self.exabeam),
             ("google_secops", self.google_secops),
+            ("datadog", self.datadog),
         ];
         opentide_schema::platforms::IDS
             .into_iter()

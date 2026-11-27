@@ -108,7 +108,18 @@ fn deploy(ws: &Path, platform: &str, env: &Env, registry: &Registry, now: i64) -
 
 /// Runs `deploy` with `args` in `ws`, with `env`, at `now`.
 fn deploy_with(ws: &Path, args: &Args, env: &Env, registry: &Registry, now: i64) -> (Sent, String) {
-    let buffer = Buffer::default();
+    deploy_into(ws, args, env, registry, now, &Buffer::default())
+}
+
+/// [`deploy_with`], its lines written to `buffer`.
+fn deploy_into(
+    ws: &Path,
+    args: &Args,
+    env: &Env,
+    registry: &Registry,
+    now: i64,
+    buffer: &Buffer,
+) -> (Sent, String) {
     let lines = Lines {
         sink: Arc::new(Mutex::new(buffer.clone())),
         console: Console {
@@ -531,24 +542,34 @@ impl Platform for Forward {
     }
 }
 
-/// A deployer that answers each request in turn with `outcomes`.
+/// A deployer that answers each request in turn with `outcomes`: every
+/// tenant's, or with `only` the requests of that tenant alone (the others
+/// answered `Ok`), as tenants deploy at once.
 struct Scripted {
     id: &'static str,
     outcomes: Mutex<std::collections::VecDeque<Result<(), ConnectorError>>>,
     seen: Mutex<Vec<(String, Operation)>>,
+    only: Option<&'static str>,
 }
 
 impl Deployer for Scripted {
     fn deploy<'a>(
         &'a self,
-        _cx: TenantContext<'a>,
+        cx: TenantContext<'a>,
         request: &'a DeployRequest,
     ) -> BoxFuture<'a, Result<DeployOutcome, DeployError>> {
         self.seen
             .lock()
             .unwrap()
             .push((request.rule_id.clone(), request.operation));
-        let next = self.outcomes.lock().unwrap().pop_front().unwrap_or(Ok(()));
+        let next = if self
+            .only
+            .is_none_or(|tenant| cx.tenant.label.tenant == tenant)
+        {
+            self.outcomes.lock().unwrap().pop_front().unwrap_or(Ok(()))
+        } else {
+            Ok(())
+        };
         deploying(async move { next.map(|()| DeployOutcome::new(None, request.operation)) })
     }
 }
@@ -589,10 +610,21 @@ fn scripted(
     platform: &'static str,
     outcomes: Vec<Result<(), ConnectorError>>,
 ) -> (Registry, &'static Scripted) {
+    scripted_on(platform, None, outcomes)
+}
+
+/// [`scripted`], `outcomes` answering only the requests of the tenant
+/// `only` when it is set.
+fn scripted_on(
+    platform: &'static str,
+    only: Option<&'static str>,
+    outcomes: Vec<Result<(), ConnectorError>>,
+) -> (Registry, &'static Scripted) {
     let scripted: &'static Scripted = Box::leak(Box::new(Scripted {
         id: platform,
         outcomes: Mutex::new(outcomes.into()),
         seen: Mutex::new(Vec::new()),
+        only,
     }));
     let mut registry = Registry::new();
     registry.register(Box::new(Forward(scripted))).unwrap();
@@ -771,8 +803,9 @@ fn a_tenant_refusing_the_credentials_stops_only_its_own_rules() {
     );
     let tenants = &second[second.find("[[tenants]]").unwrap()..];
     std::fs::write(&config, format!("{text}\n{tenants}")).unwrap();
-    let (registry, deployer) = scripted(
+    let (registry, deployer) = scripted_on(
         "sentinel",
+        Some("soc"),
         vec![Err(ConnectorError::Authentication {
             platform: "sentinel".into(),
             tenant: "soc".into(),
@@ -941,11 +974,13 @@ fn a_refused_rule_on_one_platform_leaves_the_next_platform_to_deploy() {
         id: "sentinel",
         outcomes: Mutex::new([Err(refused)].into()),
         seen: Mutex::new(Vec::new()),
+        only: None,
     }));
     let splunk: &'static Scripted = Box::leak(Box::new(Scripted {
         id: "splunk",
         outcomes: Mutex::new(std::collections::VecDeque::new()),
         seen: Mutex::new(Vec::new()),
+        only: None,
     }));
     let mut registry = Registry::new();
     registry.register(Box::new(Forward(sentinel))).unwrap();
@@ -1540,6 +1575,130 @@ fn exabeam_records_a_created_rule_and_fails_one_whose_name_is_taken() {
         !ws.path()
             .join(format!(".opentide/states/deployment/{taken}.json"))
             .exists()
+    );
+}
+
+/// A Datadog tenant on `server`, and the environment with its keys.
+fn datadog_stand(server: &wiremock::MockServer) -> (String, Env) {
+    let setup = format!(
+        "site = \"datadoghq.eu\"\napi_key = \"$DD_API_KEY\"\napp_key = \"$DD_APP_KEY\"\napi_url = \
+         \"{}/\"\n[tenants.setup.notifications]\nsoc = \"@slack-soc\"\n",
+        server.uri()
+    );
+    let env = Env::from_pairs([
+        ("DD_API_KEY".to_owned(), "api".to_owned()),
+        ("DD_APP_KEY".to_owned(), "app".to_owned()),
+    ]);
+    (setup, env)
+}
+
+const DATADOG_BLOCK: &str = "  datadog:\n    schema: platform::datadog::1.0\n    status: \
+                             PRODUCTION\n    queries:\n      - query: source:okta \
+                             @evt.outcome:FAILURE\n    cases:\n      - condition: a > 5\n        \
+                             notify: [soc]\n";
+
+/// Datadog through the command line (RFC rfc-datadog-cloud-siem §8.2): a
+/// created rule is validated first and its id recorded; the next run reads
+/// the rule by that id, finds it unchanged and sends no `PUT`, and its row
+/// says `unchanged`.
+#[test]
+fn datadog_records_a_created_rule_and_leaves_an_unchanged_one_alone() {
+    use wiremock::matchers::{body_partial_json, header, method, path};
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let server = rt.block_on(wiremock::MockServer::start());
+    let (setup, env) = datadog_stand(&server);
+    let uuid = "00000000-0000-4000-8099-0000000000d1";
+    let ws = workspace(
+        "datadog",
+        "eu",
+        &setup,
+        &[(
+            "a.yaml",
+            rule("Failed logins", uuid, "Failed logins.", DATADOG_BLOCK),
+        )],
+    );
+    let body: std::sync::Arc<std::sync::Mutex<Option<serde_json::Value>>> =
+        std::sync::Arc::default();
+    let kept = std::sync::Arc::clone(&body);
+    rt.block_on(async {
+        wiremock::Mock::given(method("POST"))
+            .and(path("/api/v2/security_monitoring/rules/validation"))
+            .and(header("DD-API-KEY", "api"))
+            .respond_with(wiremock::ResponseTemplate::new(204))
+            .expect(1)
+            .mount(&server)
+            .await;
+        wiremock::Mock::given(method("POST"))
+            .and(path("/api/v2/security_monitoring/rules"))
+            .and(body_partial_json(serde_json::json!({
+                "name": "Failed logins",
+                "type": "log_detection",
+                "cases": [{"status": "high", "condition": "a > 5",
+                           "notifications": ["@slack-soc"]}],
+            })))
+            .respond_with(move |request: &wiremock::Request| {
+                let sent: serde_json::Value = serde_json::from_slice(&request.body).unwrap();
+                *kept.lock().unwrap() = Some(sent.clone());
+                let mut stored = sent;
+                stored["id"] = "abc-def-ghi".into();
+                stored["version"] = 1.into();
+                wiremock::ResponseTemplate::new(200).set_body_json(stored)
+            })
+            .expect(1)
+            .mount(&server)
+            .await;
+    });
+    let (sent, _) = deploy(
+        ws.path(),
+        "datadog",
+        &env,
+        &opentide_connectors::builtin(),
+        0,
+    );
+    rt.block_on(server.verify());
+    assert_eq!(rows(&sent)[0].0, "deployed", "{:?}", rows(&sent));
+    let state = std::fs::read_to_string(
+        ws.path()
+            .join(format!(".opentide/states/deployment/{uuid}.json")),
+    )
+    .unwrap();
+    assert!(state.contains("\"eu\": \"abc-def-ghi\""), "{state}");
+    // The second run: the rule Datadog holds is the one the run would write.
+    let mut stored = body.lock().unwrap().clone().unwrap();
+    stored["id"] = "abc-def-ghi".into();
+    stored["version"] = 1.into();
+    stored["isDefault"] = false.into();
+    rt.block_on(async {
+        server.reset().await;
+        wiremock::Mock::given(method("GET"))
+            .and(path("/api/v2/security_monitoring/rules/abc-def-ghi"))
+            .respond_with(wiremock::ResponseTemplate::new(200).set_body_json(stored))
+            .expect(1)
+            .mount(&server)
+            .await;
+        for verb in ["PUT", "POST", "DELETE"] {
+            wiremock::Mock::given(method(verb))
+                .respond_with(wiremock::ResponseTemplate::new(500))
+                .expect(0)
+                .mount(&server)
+                .await;
+        }
+    });
+    let (sent, _) = deploy(
+        ws.path(),
+        "datadog",
+        &env,
+        &opentide_connectors::builtin(),
+        0,
+    );
+    rt.block_on(server.verify());
+    let Json::Array(results) = value(&sent, "results") else {
+        panic!("no results")
+    };
+    assert_eq!(
+        results[0].get("action").and_then(Json::as_str),
+        Some("unchanged"),
+        "{results:?}"
     );
 }
 
@@ -6533,4 +6692,447 @@ fn harfanglab_fails_each_rule_whose_source_id_variable_is_unset() {
     let (rows, bodies) = harfanglab_source("source_id = \"$HL_SOURCE\"", &[]);
     assert_unset_variable_fails_each_rule(&rows, &[], "HL_SOURCE");
     assert_eq!(bodies, Vec::<String>::new());
+}
+
+/// A deployer that holds each rule until a second rule is in flight at the
+/// same time (or five seconds pass), and keeps the most it saw at once.
+struct Meeting {
+    in_flight: std::sync::atomic::AtomicUsize,
+    most: std::sync::atomic::AtomicUsize,
+}
+
+impl Deployer for Meeting {
+    fn deploy<'a>(
+        &'a self,
+        _cx: TenantContext<'a>,
+        request: &'a DeployRequest,
+    ) -> BoxFuture<'a, Result<DeployOutcome, DeployError>> {
+        use std::sync::atomic::Ordering;
+        deploying(async move {
+            let now = self.in_flight.fetch_add(1, Ordering::SeqCst) + 1;
+            self.most.fetch_max(now, Ordering::SeqCst);
+            let until = std::time::Instant::now() + std::time::Duration::from_secs(5);
+            while self.most.load(Ordering::SeqCst) < 2 && std::time::Instant::now() < until {
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            }
+            self.in_flight.fetch_sub(1, Ordering::SeqCst);
+            Ok(DeployOutcome::new(None, request.operation))
+        })
+    }
+}
+
+/// [`Meeting`] as the Sentinel platform.
+struct Meets(&'static Meeting);
+
+impl Platform for Meets {
+    fn id(&self) -> &'static str {
+        "sentinel"
+    }
+
+    fn deployer(&self) -> Option<&dyn Deployer> {
+        Some(self.0)
+    }
+}
+
+/// The tenants of a platform deploy at once (#1940): two Sentinel tenants
+/// each have a rule in flight at the same time. One tenant after another,
+/// the first rule would wait alone.
+#[test]
+fn the_tenants_of_a_platform_deploy_at_once() {
+    let ws = workspace(
+        "sentinel",
+        "soc",
+        SENTINEL_SETUP,
+        &three_rules(SENTINEL_STAGING)[..1],
+    );
+    let config = ws
+        .path()
+        .join(".opentide/configurations/platforms/sentinel.toml");
+    let text = std::fs::read_to_string(&config).unwrap();
+    let second = text.replacen(
+        "[[tenants]]\nname = \"soc\"",
+        "[[tenants]]\nname = \"lab\"",
+        1,
+    );
+    let tenants = &second[second.find("[[tenants]]").unwrap()..];
+    std::fs::write(&config, format!("{text}\n{tenants}")).unwrap();
+    let meeting: &'static Meeting = Box::leak(Box::new(Meeting {
+        in_flight: std::sync::atomic::AtomicUsize::new(0),
+        most: std::sync::atomic::AtomicUsize::new(0),
+    }));
+    let mut registry = Registry::new();
+    registry.register(Box::new(Meets(meeting))).unwrap();
+    let env = Env::from_pairs([("AZURE_CLIENT_SECRET", SECRET)]);
+    let (sent, stderr) = deploy(ws.path(), "sentinel", &env, &registry, 0);
+    assert_eq!(
+        meeting.most.load(std::sync::atomic::Ordering::SeqCst),
+        2,
+        "{stderr}"
+    );
+    assert_eq!(
+        rows(&sent),
+        [("deployed".to_owned(), None), ("deployed".to_owned(), None)]
+    );
+}
+
+/// Tenants deploying at once end in any order, and the run is still the
+/// one a run sending to one tenant after another makes (#1940): four Sysdig
+/// tenants, the first the slowest to answer, two of them refusing every
+/// create. The rows are in the plan's order (tenant by tenant, as
+/// configured), the failures and the run's error name the first tenant's
+/// first, and each rule's deployment state shard holds the ids of the
+/// tenants that created it, the same bytes whichever wrote first.
+#[test]
+fn tenants_deploying_at_once_report_and_record_in_the_plans_order() {
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    // Each tenant's stand-in: (name, delay in ms, the status a create gets).
+    let stands = [
+        ("t1", 400, 500),
+        ("t2", 300, 201),
+        ("t3", 200, 500),
+        ("t4", 100, 201),
+    ];
+    let uuids = [
+        "00000000-0000-4000-8099-000000000191",
+        "00000000-0000-4000-8099-000000000192",
+    ];
+    let (ws, _servers) = sysdig_stands(&rt, &stands, &uuids);
+    let env = Env::from_pairs([("SYSDIG_SECURE_API_TOKEN".to_owned(), "token".to_owned())]);
+    let (sent, stderr) = deploy(
+        ws.path(),
+        "sysdig",
+        &env,
+        &opentide_connectors::builtin(),
+        0,
+    );
+    let Json::Array(results) = value(&sent, "results") else {
+        panic!("no results")
+    };
+    let placed: Vec<(String, String, String)> = results
+        .iter()
+        .map(|row| {
+            let text = |key| row.get(key).and_then(Json::as_str).unwrap().to_owned();
+            (text("tenant"), text("id"), text("status"))
+        })
+        .collect();
+    let mut expected = Vec::new();
+    for (name, _, status) in stands {
+        let outcome = if status == 201 { "deployed" } else { "failed" };
+        for uuid in uuids {
+            expected.push((name.to_owned(), uuid.to_owned(), outcome.to_owned()));
+        }
+    }
+    assert_eq!(placed, expected, "{stderr}");
+    let Json::Array(failures) = value(&sent, "failures") else {
+        panic!("no failures")
+    };
+    let failed_on: Vec<&str> = failures
+        .iter()
+        .map(|failure| failure.get("tenant").and_then(Json::as_str).unwrap())
+        .collect();
+    assert_eq!(failed_on, ["t1", "t1", "t3", "t3"], "{failures:?}");
+    // t1's answer (its id 10), though t3 refused first.
+    assert_eq!(
+        value(&sent, "error"),
+        &Json::str(
+            "Deployment to sysdig failed on First: create rule: HTTP 500: {\"id\": 10} (and 3 \
+             more failures)"
+        )
+    );
+    for uuid in uuids {
+        let shard = std::fs::read_to_string(
+            ws.path()
+                .join(format!(".opentide/states/deployment/{uuid}.json")),
+        )
+        .unwrap();
+        assert_eq!(
+            shard,
+            format!(
+                "{{\n  \"object_uuid\": \"{uuid}\",\n  \"platforms\": {{\n    \"sysdig\": {{\n      \
+                 \"t2\": \"20\",\n      \"t4\": \"40\"\n    }}\n  }},\n  \"schema\": \
+                 \"deployment.state::1.0\"\n}}\n"
+            )
+        );
+    }
+}
+
+/// A Sysdig workspace with a tenant for each of `stands` (name, delay in
+/// ms, the status a create gets), each on a stand-in of its own that
+/// answers every create after the delay, with an id of its own (10, 20,
+/// …), and a rule for each of `uuids`.
+fn sysdig_stands(
+    rt: &tokio::runtime::Runtime,
+    stands: &[(&str, u64, u16)],
+    uuids: &[&str; 2],
+) -> (tempfile::TempDir, Vec<wiremock::MockServer>) {
+    use wiremock::matchers::{method, path};
+    let mut servers = Vec::new();
+    for (index, (_, delay, status)) in stands.iter().enumerate() {
+        let server = rt.block_on(wiremock::MockServer::start());
+        rt.block_on(
+            wiremock::Mock::given(method("POST"))
+                .and(path("/api/secure/rules"))
+                .respond_with(
+                    wiremock::ResponseTemplate::new(*status)
+                        .set_body_string(format!(r#"{{"id": {}}}"#, (index + 1) * 10))
+                        .set_delay(std::time::Duration::from_millis(*delay)),
+                )
+                .mount(&server),
+        );
+        servers.push(server);
+    }
+    let block = "  sysdig:\n    schema: platform::sysdig::1.0\n    status: STAGING\n    condition: \
+                 spawned_process and container\n    tags: [container]\n";
+    let ws = workspace(
+        "sysdig",
+        "t1",
+        &format!(
+            "url = \"{}\"\napi_token = \"$SYSDIG_SECURE_API_TOKEN\"\n",
+            servers[0].uri()
+        ),
+        &[
+            ("a.yaml", rule("First", uuids[0], "First.", block)),
+            ("b.yaml", rule("Second", uuids[1], "Second.", block)),
+        ],
+    );
+    let config = ws
+        .path()
+        .join(".opentide/configurations/platforms/sysdig.toml");
+    let mut text = std::fs::read_to_string(&config).unwrap();
+    for ((name, ..), server) in stands.iter().zip(&servers).skip(1) {
+        text.push_str(&format!(
+            "\n[[tenants]]\nname = \"{name}\"\nstrategies = [\"PREVIEW\", \"RELEASE\"]\n\
+             [tenants.setup]\nurl = \"{}\"\napi_token = \"$SYSDIG_SECURE_API_TOKEN\"\n",
+            server.uri()
+        ));
+    }
+    std::fs::write(&config, text).unwrap();
+    (ws, servers)
+}
+
+/// A Sentinel workspace with a tenant for each of `names`, each taking
+/// `rules`.
+fn sentinel_tenants(names: &[&str], rules: &[(&'static str, String)]) -> tempfile::TempDir {
+    let ws = workspace("sentinel", names[0], SENTINEL_SETUP, rules);
+    let config = ws
+        .path()
+        .join(".opentide/configurations/platforms/sentinel.toml");
+    let text = std::fs::read_to_string(&config).unwrap();
+    let first = &text[text.find("[[tenants]]").unwrap()..];
+    let mut all = text.clone();
+    for name in &names[1..] {
+        let tenant = first.replacen(
+            &format!("[[tenants]]\nname = \"{}\"", names[0]),
+            &format!("[[tenants]]\nname = \"{name}\""),
+            1,
+        );
+        all.push('\n');
+        all.push_str(&tenant);
+    }
+    std::fs::write(&config, all).unwrap();
+    ws
+}
+
+/// A deployer that panics on the tenant `t1` once the four tenants deploying
+/// at once have all started, and holds every other tenant's rule until the
+/// worker thread that ran `t1` has ended (a minute at most), keeping the
+/// tenants it was asked to deploy to.
+struct Panicking {
+    opened: Mutex<Vec<String>>,
+}
+
+/// Set when the worker thread that panicked on `t1` has ended: [`Exited`].
+static T1_WORKER_EXITED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Sets [`T1_WORKER_EXITED`] when dropped.
+struct Exited;
+
+impl Drop for Exited {
+    fn drop(&mut self) {
+        T1_WORKER_EXITED.store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
+thread_local! {
+    /// `t1`'s [`Exited`], kept by the worker thread that polls `t1`'s deploy
+    /// (`runtime::block_on` polls it on the calling thread). A thread-local's
+    /// destructor runs when its thread exits: by then the worker caught the
+    /// panic, stopped the run and returned, so what waits for it needs no
+    /// margin.
+    static T1_WORKER: std::cell::RefCell<Option<Exited>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Waits until `ready` says so. The minute only keeps a broken run from
+/// hanging the test; a passing one ends on the event.
+async fn wait_until(ready: impl Fn() -> bool) {
+    let until = std::time::Instant::now() + std::time::Duration::from_secs(60);
+    while !ready() && std::time::Instant::now() < until {
+        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+    }
+}
+
+impl Deployer for Panicking {
+    fn deploy<'a>(
+        &'a self,
+        cx: TenantContext<'a>,
+        request: &'a DeployRequest,
+    ) -> BoxFuture<'a, Result<DeployOutcome, DeployError>> {
+        let tenant = cx.tenant.label.tenant.clone();
+        self.opened.lock().unwrap().push(tenant.clone());
+        deploying(async move {
+            use std::sync::atomic::Ordering;
+            if tenant == "t1" {
+                // A barrier: every worker has taken its tenant, so none
+                // finds the run stopped before it took one.
+                wait_until(|| self.opened.lock().unwrap().len() >= 4).await;
+                T1_WORKER.with(|worker| *worker.borrow_mut() = Some(Exited));
+                panic!("the stand-in's crash");
+            }
+            // Once `t1`'s worker has exited, it had stopped the run: the
+            // worker that finishes this tenant finds it stopped. No margin.
+            wait_until(|| T1_WORKER_EXITED.load(Ordering::SeqCst)).await;
+            Ok(DeployOutcome::new(None, request.operation))
+        })
+    }
+}
+
+/// [`Panicking`] as the Sentinel platform.
+struct Panics(&'static Panicking);
+
+impl Platform for Panics {
+    fn id(&self) -> &'static str {
+        "sentinel"
+    }
+
+    fn deployer(&self) -> Option<&dyn Deployer> {
+        Some(self.0)
+    }
+}
+
+/// A panic on one of the tenants deploying at once stops the run as it
+/// did one tenant after another (#1998): of five Sentinel tenants, the
+/// four first start, `t1` panics, and no tenant starts after it while the
+/// three others finish.
+#[test]
+fn a_panic_on_a_tenant_deploying_at_once_starts_no_other_tenant() {
+    let ws = sentinel_tenants(
+        &["t0", "t1", "t2", "t3", "t4"],
+        &three_rules(SENTINEL_STAGING)[..1],
+    );
+    let panicking: &'static Panicking = Box::leak(Box::new(Panicking {
+        opened: Mutex::new(Vec::new()),
+    }));
+    let mut registry = Registry::new();
+    registry.register(Box::new(Panics(panicking))).unwrap();
+    let env = Env::from_pairs([("AZURE_CLIENT_SECRET", SECRET)]);
+    let (sent, stderr) = deploy(ws.path(), "sentinel", &env, &registry, 0);
+    assert_eq!(
+        value(&sent, "message"),
+        &Json::str("the deploy stopped unexpectedly"),
+        "{stderr}"
+    );
+    let mut opened = panicking.opened.lock().unwrap().clone();
+    opened.sort();
+    assert_eq!(opened, ["t0", "t1", "t2", "t3"], "{stderr}");
+}
+
+/// A deployer that answers the rules of the tenants in `order`, one after
+/// another: the n-th answer waits until n rules' lines are printed in
+/// `buffer`.
+struct Turns {
+    order: &'static [&'static str],
+    asked: Mutex<std::collections::HashMap<String, usize>>,
+    buffer: Buffer,
+}
+
+impl Deployer for Turns {
+    fn deploy<'a>(
+        &'a self,
+        cx: TenantContext<'a>,
+        request: &'a DeployRequest,
+    ) -> BoxFuture<'a, Result<DeployOutcome, DeployError>> {
+        let tenant = cx.tenant.label.tenant.clone();
+        let nth = {
+            let mut asked = self.asked.lock().unwrap();
+            let count = asked.entry(tenant.clone()).or_default();
+            *count += 1;
+            *count
+        };
+        let turn = self
+            .order
+            .iter()
+            .enumerate()
+            .filter(|(_, name)| **name == tenant)
+            .nth(nth - 1)
+            .map(|(turn, _)| turn)
+            .unwrap();
+        deploying(async move {
+            let until = std::time::Instant::now() + std::time::Duration::from_secs(10);
+            while self.buffer.text().matches(" ✓ ").count() < turn
+                && std::time::Instant::now() < until
+            {
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            }
+            Ok(DeployOutcome::new(None, request.operation))
+        })
+    }
+}
+
+/// [`Turns`] as the Sentinel platform.
+struct Takes(&'static Turns);
+
+impl Platform for Takes {
+    fn id(&self) -> &'static str {
+        "sentinel"
+    }
+
+    fn deployer(&self) -> Option<&dyn Deployer> {
+        Some(self.0)
+    }
+}
+
+/// The lines of tenants deploying at once interleave, and each rule's line
+/// stays under its own tenant's header (#1998): a line that follows
+/// another tenant's prints its `Deploying to` header again first.
+#[test]
+fn interleaved_rule_lines_each_come_under_their_tenants_header() {
+    let ws = sentinel_tenants(&["soc", "lab"], &three_rules(SENTINEL_STAGING)[..2]);
+    let buffer = Buffer::default();
+    let turns: &'static Turns = Box::leak(Box::new(Turns {
+        order: &["soc", "lab", "lab", "soc"],
+        asked: Mutex::new(std::collections::HashMap::new()),
+        buffer: buffer.clone(),
+    }));
+    let mut registry = Registry::new();
+    registry.register(Box::new(Takes(turns))).unwrap();
+    let env = Env::from_pairs([("AZURE_CLIENT_SECRET", SECRET)]);
+    let args = Args {
+        strategies: vec!["PREVIEW".into(), "RELEASE".into()],
+        all: true,
+        platform: Some("sentinel".to_owned()),
+        keep_deprecated: Some(true),
+        ..Args::default()
+    };
+    let (sent, stderr) = deploy_into(ws.path(), &args, &env, &registry, 0, &buffer);
+    // Each header, and each rule's line up to its mark.
+    let lines: Vec<&str> = stderr
+        .lines()
+        .skip_while(|line| !line.starts_with("Deploying to"))
+        .filter(|line| !line.is_empty())
+        .map(|line| &line[..line.find(" ✓ ").unwrap_or(line.len())])
+        .collect();
+    assert_eq!(
+        lines[..7],
+        [
+            "Deploying to sentinel / soc · 2 rules",
+            "  [1/2]",
+            "Deploying to sentinel / lab · 2 rules",
+            "  [1/2]",
+            "  [2/2]",
+            "Deploying to sentinel / soc · 2 rules",
+            "  [2/2]",
+        ],
+        "{stderr}"
+    );
+    assert_eq!(rows(&sent).len(), 4, "{stderr}");
 }

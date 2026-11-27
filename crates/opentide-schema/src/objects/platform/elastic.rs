@@ -19,7 +19,7 @@ use crate::FromNode;
 use crate::from_node::Context;
 use crate::node::{Node, Value};
 use crate::objects::any::Any;
-use crate::objects::platform::durations::duration_seconds;
+use crate::objects::platform::durations::{ELASTIC_MAX_SECONDS, duration_seconds};
 use crate::objects::platform::{
     filled, get, is_map, literal_enum, non_empty_str, platform_block, present,
 };
@@ -989,7 +989,8 @@ pub fn block_codes(raw: &Node) -> BTreeSet<&'static str> {
     codes
 }
 
-/// The block's durations that do not parse, as `(key path, node)`:
+/// The block's durations that do not parse, or are longer than
+/// [`ELASTIC_MAX_SECONDS`], as `(key path, node)`:
 /// `scheduling.lookback` (which may be zero), `scheduling.interval`,
 /// `suppression.duration` and `new_terms.history_window_start`. The
 /// `duration` code's places, which its message names (B3: it named the
@@ -1006,10 +1007,12 @@ pub fn bad_durations(raw: &Node) -> Vec<(&'static str, &Node)> {
     } else {
         None
     };
+    // Past `ELASTIC_MAX_SECONDS` the seconds saturate: refused, as deploy
+    // refuses them (#1982).
     let duration_ok = |node: &Node, allow_zero: bool| {
-        node.value
-            .as_str()
-            .is_some_and(|text| duration_seconds(text, allow_zero).is_ok())
+        node.value.as_str().is_some_and(|text| {
+            duration_seconds(text, allow_zero).is_ok_and(|seconds| seconds <= ELASTIC_MAX_SECONDS)
+        })
     };
     // `None` is absent (#557); every other value, "" included, must parse.
     [
@@ -1037,15 +1040,23 @@ pub fn duration_detail(raw: &Node, named: bool) -> String {
                 Value::Str(text) => format!("{:?}", text.as_str()),
                 other => other.to_string(),
             };
-            let extra = if *path == "new_terms.history_window_start" {
-                "; deploy adds `now-`"
-            } else {
-                ""
-            };
             let field = if named {
                 format!("{path} ")
             } else {
                 String::new()
+            };
+            if node.value.as_str().is_some_and(|text| {
+                duration_seconds(text, true).is_ok_and(|seconds| seconds > ELASTIC_MAX_SECONDS)
+            }) {
+                return format!(
+                    "{field}{value} is longer than a rule can be deployed with: at most \
+                     {ELASTIC_MAX_SECONDS} seconds"
+                );
+            }
+            let extra = if *path == "new_terms.history_window_start" {
+                "; deploy adds `now-`"
+            } else {
+                ""
             };
             format!(
                 "{field}{value} is not a duration: a number and a unit, s, m, h or d, such as \

@@ -601,6 +601,20 @@ fn save(shard: &mut Shard) -> Result<(), WriteError> {
     })
 }
 
+/// Held while a shard is read, changed and written back: a rule's one shard
+/// holds every tenant's id, and a deploy sends to several tenants at once
+/// (#1940), so two tenants' writes must not interleave and lose one. The
+/// file's bytes do not depend on which write came first: `render` sorts
+/// the platforms and tenants.
+static WRITING: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// [`WRITING`], held.
+fn writing() -> std::sync::MutexGuard<'static, ()> {
+    WRITING
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
 /// Reads the shard, binds one tenant and writes the rest back
 /// (`record_created`); the id as stored, or `deployment_state_write_failed`
 /// naming the id the platform created (the remote rule is not removed).
@@ -612,6 +626,7 @@ pub fn record_created(
     external_id: &ExternalId,
 ) -> Result<String, StateError> {
     let written = (|| {
+        let _writing = writing();
         let mut shard = Shard::load(workspace, object_uuid).map_err(WriteError::State)?;
         let stored = shard
             .set(platform, tenant, external_id)
@@ -643,6 +658,7 @@ pub fn record_deleted(
     tenant: &str,
 ) -> Result<(), StateError> {
     let written = (|| {
+        let _writing = writing();
         let mut shard = Shard::load(workspace, object_uuid).map_err(WriteError::State)?;
         if shard.remove(platform, tenant).is_some() {
             save(&mut shard)?;

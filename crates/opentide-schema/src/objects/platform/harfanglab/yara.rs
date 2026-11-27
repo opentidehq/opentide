@@ -394,7 +394,7 @@ pub fn decomposed_context(contexts: &[String], os: &str) -> String {
 /// anywhere, are sent as written.
 #[must_use]
 pub fn deployed_signature(signature: &str) -> String {
-    let text = signature.replace("\r\n", "\n").replace('\r', "\n");
+    let text = opentide_core::text::universal_newlines(signature).into_owned();
     if text.ends_with('\n') {
         text
     } else {

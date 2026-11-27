@@ -86,20 +86,43 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`cve_lookup_unavailable`](#cve_lookup_unavailable) | A threat lists CVE identifiers, but Vulnerability-Lookup could not be reached to check them. |
 | [`datadog_calculated_field_in_rule`](#datadog_calculated_field_in_rule) | A detection rule's query names a calculated field (`#name`): real-time detection rules have none. |
 | [`datadog_cidr`](#datadog_cidr) | A Datadog `CIDR()` call does not name an `@attribute` first, has no block, or has an argument that is not an IPv4 or IPv6 CIDR block. |
+| [`datadog_concurrent_modification`](#datadog_concurrent_modification) | The Datadog rule changed between deploy's read and its update. |
+| [`datadog_condition`](#datadog_condition) | A case's condition does not parse, names an unknown query, or does not suit the method. |
+| [`datadog_condition_mixed`](#datadog_condition_mixed) | A condition mixes `&&` and `||`, whose precedence Datadog does not document. |
+| [`datadog_create_unconfirmed`](#datadog_create_unconfirmed) | A Datadog create got no answer, or a server error, so it may or may not have happened. |
 | [`datadog_curly_quote`](#datadog_curly_quote) | A Datadog search holds a curly quote, which is not a quote: the words around it are searched as separate terms. |
 | [`datadog_detached_operator`](#datadog_detached_operator) | A Datadog exclusion `-` is followed by a space. |
+| [`datadog_detection_option`](#datadog_detection_option) | A `detection` key the method does not take, or `new_value` without `forget_after`. |
+| [`datadog_duration`](#datadog_duration) | A duration is not one of the values its key accepts. |
 | [`datadog_full_text_in_rule`](#datadog_full_text_in_rule) | A detection rule's query searches every attribute with `*:term`, which Datadog documents for monitors, dashboards and notebooks, not for detection rules. |
 | [`datadog_lowercase_operator`](#datadog_lowercase_operator) | A lower-case `and`, `or` or `not` stands between field clauses or in a value group, where Datadog reads it as a search term, not an operator. |
+| [`datadog_measure`](#datadog_measure) | A query sets more than one measure, or `new_value` does not match the method. |
+| [`datadog_method_unsupported`](#datadog_method_unsupported) | `detection.method` is not a detection method of `platform::datadog::1.0`. |
 | [`datadog_mixed_boolean`](#datadog_mixed_boolean) | A Datadog search puts OR beside an AND, written or implied, without parentheses: AND binds tighter, as VRL reads it (unverified on Cloud SIEM). |
+| [`datadog_notification_alias`](#datadog_notification_alias) | A case's `notify` names an alias the tenant does not define. |
 | [`datadog_parse_error`](#datadog_parse_error) | The Datadog search does not parse: an unbalanced bracket, a dangling operator, an empty group, a field with no value, two modifiers in a row, or an unclosed phrase. |
 | [`datadog_pipelines_only`](#datadog_pipelines_only) | A Datadog search uses Observability Pipelines syntax (`_exists_:`, `_missing_:`, a quoted field name), which log search does not read the same way. |
+| [`datadog_query_name`](#datadog_query_name) | A query name is not `[a-z][a-z0-9_]*`, is a duplicate, or is set on a `new_value` query. |
 | [`datadog_range`](#datadog_range) | A Datadog range is malformed (a missing bound, a lower-case `to`), or mixes an inclusive and an exclusive bound. |
+| [`datadog_rate_limited`](#datadog_rate_limited) | Datadog's rate limit held after the waits a deploy allows. |
 | [`datadog_regex`](#datadog_regex) | A Datadog search term holds `~` or `^`: the search syntax has no regular expression, fuzzy or boost operator. |
+| [`datadog_request_failed`](#datadog_request_failed) | Datadog answered a rule's request with an error other than a refusal of the rule. |
+| [`datadog_rule_default`](#datadog_rule_default) | The id a deployment state names is a Datadog default rule, which opentide never changes. |
+| [`datadog_rule_invalid`](#datadog_rule_invalid) | Datadog refused the rule: its validation, or a write, answered `400`. |
+| [`datadog_rule_missing`](#datadog_rule_missing) | The rule a deployment state names no longer exists on the Datadog tenant. |
+| [`datadog_rule_recreated`](#datadog_rule_recreated) | The rule a deployment state names was gone, and deploy created it again. |
+| [`datadog_severity`](#datadog_severity) | A case severity is not one of Datadog's five statuses. |
+| [`datadog_signal_group_by`](#datadog_signal_group_by) | A `signal.group_by` field is in no query's `group_by`. |
+| [`datadog_site`](#datadog_site) | A tenant's `site` is not a Datadog site, and no `api_url` is set. |
 | [`datadog_symbol_operator`](#datadog_symbol_operator) | `&&` or `||` stands between Datadog search clauses: Datadog's docs list them as characters to escape; write AND or OR. |
+| [`datadog_tag`](#datadog_tag) | A tag Datadog would refuse or rewrite. |
+| [`datadog_tenant_unauthorized`](#datadog_tenant_unauthorized) | Datadog refused the tenant's API or application key. |
+| [`datadog_tenant_unreachable`](#datadog_tenant_unreachable) | The Datadog tenant did not answer. |
 | [`datadog_unescaped_colon`](#datadog_unescaped_colon) | A Datadog search value holds an unescaped `:`, which Datadog's docs say to escape. |
 | [`datadog_unescaped_special`](#datadog_unescaped_special) | A Datadog search term holds an unescaped `!`, `<` or `>`, or a value starts with an unescaped `-`, which Datadog reads as an exclusion: escape it with `\`. |
 | [`datadog_unknown_attribute`](#datadog_unknown_attribute) | A Datadog search field is a dotted bare key, searched as a tag, where an `@attribute` was probably meant. |
 | [`datadog_wildcard_in_phrase`](#datadog_wildcard_in_phrase) | A `*` or `?` touches a word inside a quoted phrase, where it is punctuation, not a wildcard. |
+| [`datadog_window_order`](#datadog_window_order) | `detection.window` is longer than `signal.keep_alive` or `signal.max_duration`. |
 | [`defender_output_columns`](#defender_output_columns) | A Defender custom detection must return the columns Defender requires. |
 | [`deployment_state_platform`](#deployment_state_platform) | A deployment state shard names a platform that stores no external ids. |
 | [`deployment_state_shape`](#deployment_state_shape) | A deployment state shard is not the JSON shape opentide writes. |
@@ -1859,6 +1882,79 @@ CIDR(@network.client.ip, 10.0.0.300)
 
 Name the attribute with `@` and write each block as an address and prefix: `CIDR(@network.client.ip, 10.0.0.0/8)`.
 
+## datadog_concurrent_modification
+
+The Datadog rule changed between deploy's read and its update.
+
+Severity: error. Reported by `opentide deploy` on a `datadog` block (`platform::datadog::1.0`). An update sends the `version` the `GET` returned; Datadog answers a stale version with `401`, which opentide reports as this code rather than as a refused key. Someone or something changed the rule meanwhile.
+
+### Example
+
+```text illustrative
+datadog_concurrent_modification: Datadog rule abc-def-ghi changed after deploy read it (HTTP 401 on the update, which carries the version read)
+```
+
+### How to fix
+
+Deploy again. If the rule keeps changing, find what else edits it (the UI, Terraform) and stop it.
+
+## datadog_condition
+
+A case's condition does not parse, names an unknown query, or does not suit the method.
+
+Severity: error. Reported by `opentide validate` on a `datadog` block (`platform::datadog::1.0`). A condition compares query names with numbers, joined by `&&` or `||`: `failed > 10 && success > 0`. The query name comes first (Datadog allows `a > 3`, not `3 < a`). `threshold` and `anomaly` cases need a condition. Under `anomaly` the number is a percentile between 0 and 1 (`a > 0.995`), and `<` and `<=` are documented for threshold rules only. Parentheses and `==` are not documented.
+
+### Example
+
+```yaml
+configurations:
+  datadog:
+    queries:
+      - name: failed
+        query: source:okta @evt.outcome:FAILURE
+    cases:
+      - condition: 3 < failed
+```
+
+### How to fix
+
+Put the query name first (`failed > 3`), name a query the block has, and under `anomaly` compare with a fraction.
+
+## datadog_condition_mixed
+
+A condition mixes `&&` and `||`, whose precedence Datadog does not document.
+
+Severity: warning. Reported by `opentide validate` and `opentide lint` (its `queries` check) on a `datadog` block (`platform::datadog::1.0`). Datadog documents both operators but not which binds tighter, so `a > 1 || b > 1 && c > 1` may not mean what it reads as. It is an advisory: the rule validates and deploys.
+
+### Example
+
+```yaml
+configurations:
+  datadog:
+    cases:
+      - condition: a > 1 || b > 1 && c > 1
+```
+
+### How to fix
+
+Split the condition into two cases, which Datadog tests in order, or keep to one operator.
+
+## datadog_create_unconfirmed
+
+A Datadog create got no answer, or a server error, so it may or may not have happened.
+
+Severity: error. Reported by `opentide deploy` on a `datadog` block (`platform::datadog::1.0`). The create timed out, the connection was reset, or Datadog answered `5xx`. Datadog may have created the rule, but its id never reached opentide. Deploy never sends a create again.
+
+### Example
+
+```text illustrative
+datadog_create_unconfirmed: the create of 'Okta brute force followed by a successful login' got HTTP 503, so Datadog may have created it with an id opentide does not know
+```
+
+### How to fix
+
+Look for the rule by its name, or by the tag `opentide_uuid:<uuid>`, in Datadog. Delete it and deploy again, or record its id under `platforms.datadog.<tenant>` in `.opentide/states/deployment/<uuid>.json` and commit it. If there is none, deploy again.
+
 ## datadog_curly_quote
 
 A Datadog search holds a curly quote, which is not a quote: the words around it are searched as separate terms.
@@ -1894,6 +1990,45 @@ The exclusion is written against what it excludes. With a space after it, a read
 ### How to fix
 
 Remove the space: `-@login_type:k`.
+
+## datadog_detection_option
+
+A `detection` key the method does not take, or `new_value` without `forget_after`.
+
+Severity: error. Reported by `opentide validate` on a `datadog` block (`platform::datadog::1.0`). `learning` goes with `new_value`, `anomaly` and `impossible_travel`; `forget_after` with `new_value`, where it is required; `bucket` and `tolerance` (a whole number, 1 to 5) with `anomaly`; `detect_ip_transitions` with `impossible_travel`. `threshold` takes only `method` and `window`.
+
+### Example
+
+```yaml
+configurations:
+  datadog:
+    detection:
+      method: threshold
+      bucket: 5m
+```
+
+### How to fix
+
+Remove the key, or use the method it belongs to. A `new_value` rule needs `forget_after`.
+
+## datadog_duration
+
+A duration is not one of the values its key accepts.
+
+Severity: error. Reported by `opentide validate` on a `datadog` block (`platform::datadog::1.0`). `detection.window`, `signal.keep_alive` and `signal.max_duration` take `0`, `1m`, `5m`, `10m`, `15m`, `30m`, `1h`, `2h`, `3h`, `6h`, `12h` or `1d`. `detection.bucket` takes `5m`, `10m`, `15m`, `30m`, `1h` or `3h`. `detection.learning` takes `0d` to `30d` under `new_value`, `1h`, `6h`, `12h`, `1d`, `2d`, `7d` or `14d` under `anomaly`, and `1d` to `30d` under `impossible_travel`. `detection.forget_after` takes `1d` to `30d`. Datadog's API takes only these values.
+
+### Example
+
+```yaml
+configurations:
+  datadog:
+    detection:
+      window: 7m
+```
+
+### How to fix
+
+Pick the nearest value the key takes: `5m` or `10m` here.
 
 ## datadog_full_text_in_rule
 
@@ -1931,6 +2066,46 @@ Operators are upper case only. A lower-case `or` between two field clauses is a 
 
 Write the operator in upper case: `@login_type:(k OR n OR E)`.
 
+## datadog_measure
+
+A query sets more than one measure, or `new_value` does not match the method.
+
+Severity: error. Reported by `opentide validate` on a `datadog` block (`platform::datadog::1.0`). A query sets at most one of `count_distinct`, `sum`, `max` and `new_value`; with none it counts events. `new_value` lists one to five fields and goes with `method: new_value`, and every query of a `new_value` rule sets it. An `impossible_travel` query takes no measure: it measures the distance between logins itself.
+
+### Example
+
+```yaml
+configurations:
+  datadog:
+    queries:
+      - query: source:okta
+        count_distinct: "@usr.email"
+        sum: "@bytes"
+```
+
+### How to fix
+
+Keep one measure per query, and set `new_value` only under `method: new_value`.
+
+## datadog_method_unsupported
+
+`detection.method` is not a detection method of `platform::datadog::1.0`.
+
+Severity: error. Reported by `opentide validate` on a `datadog` block (`platform::datadog::1.0`). 1.0 takes `threshold`, `new_value`, `anomaly` and `impossible_travel`, written in lower case. Datadog no longer accepts new `signal_correlation` rules, and sequence rules, which correlate other rules' signals, wait for 1.x.
+
+### Example
+
+```yaml
+configurations:
+  datadog:
+    detection:
+      method: sequence
+```
+
+### How to fix
+
+Use one of the four methods. To count another rule's signals, write a query `from: signals`.
+
 ## datadog_mixed_boolean
 
 A Datadog search puts OR beside an AND, written or implied, without parentheses: AND binds tighter, as VRL reads it (unverified on Cloud SIEM).
@@ -1948,6 +2123,24 @@ service:azure-service-bus status:error OR warning
 ### How to fix
 
 Add parentheses to say which you mean: `service:azure-service-bus status:(error OR warning)`.
+
+## datadog_notification_alias
+
+A case's `notify` names an alias the tenant does not define.
+
+Severity: error. Reported by `opentide deploy` on a `datadog` block (`platform::datadog::1.0`). Also reported by `opentide deploy --dry-run` and `validate query --live` for a tenant the run reaches. An entry that starts with `@` is a Datadog handle and is sent as written; any other entry is an alias, which `[tenants.setup.notifications]` in `platforms/datadog.toml` maps to a handle. A dry run with no tenant shows an alias as `<tenant:notifications.ALIAS>`.
+
+### Example
+
+```toml
+# platforms/datadog.toml: no secops alias for notify: [secops]
+[tenants.setup.notifications]
+soc = "@slack-soc-alerts"
+```
+
+### How to fix
+
+Add the alias to the tenant's `notifications`, or write the `@handle` itself.
 
 ## datadog_parse_error
 
@@ -1988,6 +2181,26 @@ _exists_:service
 
 Write the log search form: `service:*`, `service.status:disabled` (as a tag) or `@service.status:disabled` (as an attribute).
 
+## datadog_query_name
+
+A query name is not `[a-z][a-z0-9_]*`, is a duplicate, or is set on a `new_value` query.
+
+Severity: error. Reported by `opentide validate` on a `datadog` block (`platform::datadog::1.0`). Conditions call queries by name. An unnamed query is called `a`, `b`, … by its position, so a query named `a` after an unnamed first query clashes with it. A `new_value` query takes no name: Datadog's own provider calls the two not compatible.
+
+### Example
+
+```yaml
+configurations:
+  datadog:
+    queries:
+      - name: Failed-Logins
+        query: source:okta @evt.outcome:FAILURE
+```
+
+### How to fix
+
+Use lower-case letters, digits and underscores, starting with a letter (`failed_logins`), and give each query its own name.
+
 ## datadog_range
 
 A Datadog range is malformed (a missing bound, a lower-case `to`), or mixes an inclusive and an exclusive bound.
@@ -2007,6 +2220,22 @@ A range is `[low TO high]` (inclusive) or `{low TO high}` (exclusive), with `TO`
 
 Write `TO` in upper case and the same bracket on both ends: `@http.status_code:[400 TO 499]`.
 
+## datadog_rate_limited
+
+Datadog's rate limit held after the waits a deploy allows.
+
+Severity: error. Reported by `opentide deploy` on a `datadog` block (`platform::datadog::1.0`). A `429` is waited out for the seconds its `X-RateLimit-Reset` gives and sent again, at most three times. A reset more than 120 seconds away is not waited for. The rule fails; the next rule is tried.
+
+### Example
+
+```text illustrative
+datadog_rate_limited: POST /api/v2/security_monitoring/rules: Datadog's rate limit resets in 600s, more than the 120s a deploy waits
+```
+
+### How to fix
+
+Deploy again later, or deploy fewer rules in one run.
+
 ## datadog_regex
 
 A Datadog search term holds `~` or `^`: the search syntax has no regular expression, fuzzy or boost operator.
@@ -2025,6 +2254,145 @@ Lucene's `foo~2` (fuzzy) and `foo^2` (boost) are not Datadog syntax, and `/…/`
 
 Use wildcards (`@msg:foo*`), or escape the character to search for it (`@msg:foo\~2`).
 
+## datadog_request_failed
+
+Datadog answered a rule's request with an error other than a refusal of the rule.
+
+Severity: error. Reported by `opentide deploy` on a `datadog` block (`platform::datadog::1.0`). Any answer that is not `400` (`datadog_rule_invalid`), a refused key, a stale version or a rate limit: a `404` on a path, a `5xx` on an update or a read after its retries. The rule fails; the next rule is tried.
+
+### Example
+
+```text illustrative
+datadog_request_failed: PUT /api/v2/security_monitoring/rules/abc-def-ghi: HTTP 500: Internal Server Error
+```
+
+### How to fix
+
+Deploy again; if it persists, check Datadog's status page.
+
+## datadog_rule_default
+
+The id a deployment state names is a Datadog default rule, which opentide never changes.
+
+Severity: error. Reported by `opentide deploy` on a `datadog` block (`platform::datadog::1.0`). Datadog ships and maintains default rules (`isDefault: true`); they can be enabled and tuned, but not rewritten or deleted through opentide. Deploy checks before any write and refuses.
+
+### Example
+
+```text illustrative
+datadog_rule_default: Datadog rule def-000-u7q is a default rule, which opentide never changes or deletes
+```
+
+### How to fix
+
+Remove the id from `.opentide/states/deployment/<uuid>.json`: the next deploy creates a rule of its own.
+
+## datadog_rule_invalid
+
+Datadog refused the rule: its validation, or a write, answered `400`.
+
+Severity: error. Reported by `opentide deploy` on a `datadog` block (`platform::datadog::1.0`). Also reported by `validate query --live` on a block. Every create and update is first sent to `POST /security_monitoring/rules/validation`, so an invalid rule is reported before anything changes. The finding lists Datadog's `errors[]`.
+
+### Example
+
+```text illustrative
+datadog_rule_invalid: POST /api/v2/security_monitoring/rules/validation: HTTP 400: Invalid query: unbalanced parenthesis
+```
+
+### How to fix
+
+Fix what Datadog names, then run `opentide validate query --live --platform datadog` before deploying.
+
+## datadog_rule_missing
+
+The rule a deployment state names no longer exists on the Datadog tenant.
+
+Severity: warning. Reported by `opentide deploy` on a `datadog` block (`platform::datadog::1.0`). Under a DELETION or a DISABLEMENT status, the stored id answered `404`, or `isDeleted: true`. There is nothing to delete or disable, so the id is removed from the deployment state.
+
+### Example
+
+```text illustrative
+datadog_rule_missing: Datadog rule abc-def-ghi no longer exists on the tenant; its id is removed
+```
+
+### How to fix
+
+Nothing to do; commit the updated `.opentide/states/deployment/` shard.
+
+## datadog_rule_recreated
+
+The rule a deployment state names was gone, and deploy created it again.
+
+Severity: warning. Reported by `opentide deploy` on a `datadog` block (`platform::datadog::1.0`). The stored id answered `404`, or `isDeleted: true`, so deploy created the rule anew and recorded its new id. A CI run that cannot persist deployment state does not create it (`deployment_state_unpersisted`).
+
+### Example
+
+```text illustrative
+datadog_rule_recreated: Datadog rule abc-def-ghi no longer exists on the tenant; creating it again
+```
+
+### How to fix
+
+Commit the updated `.opentide/states/deployment/` shard. If the rule was deleted on purpose, set the block's status to a DELETION status instead.
+
+## datadog_severity
+
+A case severity is not one of Datadog's five statuses.
+
+Severity: error. Reported by `opentide validate` on a `datadog` block (`platform::datadog::1.0`). A case's `severity` is `info`, `low`, `medium`, `high` or `critical`, in lower case. Left out, it comes from `response.alert_severity`, else `info`.
+
+### Example
+
+```yaml
+configurations:
+  datadog:
+    cases:
+      - condition: a > 5
+        severity: urgent
+```
+
+### How to fix
+
+Use one of the five values, or leave `severity` out.
+
+## datadog_signal_group_by
+
+A `signal.group_by` field is in no query's `group_by`.
+
+Severity: error. Reported by `opentide validate` on a `datadog` block (`platform::datadog::1.0`). Signals can only be grouped by a field the queries group their matches by. Which subset Datadog requires exactly is not documented; opentide asks that each field be in some query's `group_by`.
+
+### Example
+
+```yaml
+configurations:
+  datadog:
+    queries:
+      - query: source:okta
+        group_by: ["@usr.email"]
+    signal:
+      group_by: ["@usr.id"]
+```
+
+### How to fix
+
+Group the signals by a field the queries group by, or add the field to a query's `group_by`.
+
+## datadog_site
+
+A tenant's `site` is not a Datadog site, and no `api_url` is set.
+
+Severity: error. Reported by `opentide deploy` on a `datadog` block (`platform::datadog::1.0`). The sites are `datadoghq.com`, `us3.datadoghq.com`, `us5.datadoghq.com`, `datadoghq.eu`, `ap1.datadoghq.com`, `ap2.datadoghq.com`, `uk1.datadoghq.com`, `ddog-gov.com` and `us2.ddog-gov.com`; calls go to `https://api.<site>`.
+
+### Example
+
+```toml
+[tenants.setup]
+site = "app.datadoghq.eu"
+```
+
+### How to fix
+
+Write the site, not the web address (`datadoghq.eu`), or set `api_url` for a new site or a proxy.
+
 ## datadog_symbol_operator
 
 `&&` or `||` stands between Datadog search clauses: Datadog's docs list them as characters to escape; write AND or OR.
@@ -2042,6 +2410,56 @@ source:okta && @evt.outcome:FAILURE
 ### How to fix
 
 Write the operator: `source:okta AND @evt.outcome:FAILURE`.
+
+## datadog_tag
+
+A tag Datadog would refuse or rewrite.
+
+Severity: error. Reported by `opentide validate` on a `datadog` block (`platform::datadog::1.0`). Also reported by `opentide deploy` for a tenant's `tags`. A tag starts with a lower-case letter, holds only `a-z`, `0-9`, `_`, `-`, `:`, `.` and `/`, and is at most 200 characters. Datadog lowers upper case and replaces other characters, so the rule it holds would differ from the one opentide compiled.
+
+### Example
+
+```yaml
+configurations:
+  datadog:
+    tags: ["Team:Identity"]
+```
+
+### How to fix
+
+Write the tag in lower case with the allowed characters: `team:identity`.
+
+## datadog_tenant_unauthorized
+
+Datadog refused the tenant's API or application key.
+
+Severity: error. Reported by `opentide deploy` on a `datadog` block (`platform::datadog::1.0`). Also reported by `validate query --live` and `opentide query`. Datadog answered `403`, or `401` on a request that is not an update. The application key needs `security_monitoring_rules_read` and `security_monitoring_rules_write` (validation needs write), and `logs_read_data` for queries. The tenant's other rules are not attempted.
+
+### Example
+
+```text illustrative
+datadog_tenant_unauthorized: tenant datadog-eu refused GET /api/v2/security_monitoring/rules/abc-def-ghi: HTTP 403 (Forbidden)
+```
+
+### How to fix
+
+Check `$DD_API_KEY` and `$DD_APP_KEY`, the scopes of the application key, and that the tenant's `site` is the organisation's.
+
+## datadog_tenant_unreachable
+
+The Datadog tenant did not answer.
+
+Severity: error. Reported by `opentide deploy` on a `datadog` block (`platform::datadog::1.0`). DNS, TLS or a timeout stopped the request. The tenant's other rules are not attempted.
+
+### Example
+
+```text illustrative
+datadog_tenant_unreachable: Cannot reach datadog tenant 'datadog-eu' at https://api.datadoghq.eu: dns error
+```
+
+### How to fix
+
+Check the tenant's `site` or `api_url`, the network and the proxy, then deploy again.
 
 ## datadog_unescaped_colon
 
@@ -2115,6 +2533,27 @@ Wildcards work in terms only. Inside quotes, `"*mimikatz*"` searches for the wor
 ### How to fix
 
 Take the wildcard out of the quotes, escaping any space: `*mimikatz*`, `*my\ test*`.
+
+## datadog_window_order
+
+`detection.window` is longer than `signal.keep_alive` or `signal.max_duration`.
+
+Severity: error. Reported by `opentide validate` on a `datadog` block (`platform::datadog::1.0`). A signal would close before the window its cases are tested over ends. `keep_alive` defaults to `1h` and `max_duration` to `1d`, so a window of `2h` or more needs a longer `keep_alive`.
+
+### Example
+
+```yaml
+configurations:
+  datadog:
+    detection:
+      window: 1h
+    signal:
+      keep_alive: 30m
+```
+
+### How to fix
+
+Make `signal.keep_alive` and `signal.max_duration` at least as long as `detection.window`, or shorten the window.
 
 ## defender_output_columns
 
@@ -3255,7 +3694,7 @@ Rename the block (`configurations.exabeam.name`), or delete the old rule in the 
 
 Two enabled Exabeam blocks resolve to the same Exabeam rule name.
 
-Severity: error. Reported by `opentide validate` on an `exabeam` block (exabeam-1.0). The Exabeam rule name is the block's `name`, else the rule's `name`, compared case-insensitively. Exabeam's import refuses a rule whose name exists and Search links rules by name, so the second deploy would fail with `exabeam_name_conflict`.
+Severity: error. Reported by `opentide validate` on an `exabeam` block (exabeam-1.0). The Exabeam rule name is the block's `name`, else the rule's `name`, compared under full Unicode case folding, as deploy compares them (`ﬁle Access` and `file access`, `Straße` and `STRASSE`, are one name). Exabeam's import refuses a rule whose name exists and Search links rules by name, so the second deploy would fail with `exabeam_name_conflict`.
 
 ### Example
 

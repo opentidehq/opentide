@@ -663,6 +663,456 @@
       ],
       "type": "object"
     },
+    "DatadogCase": {
+      "additionalProperties": false,
+      "properties": {
+        "condition": {
+          "description": "Comparisons of query names with numbers, joined by && or ||: failed > 10 && success > 0. Required with threshold and anomaly; under anomaly, the number is a percentile between 0 and 1.",
+          "markdownDescription": "Comparisons of query names with numbers, joined by `&&` or `||`: `failed > 10 && success > 0`.\nRequired with `threshold` and `anomaly`; under `anomaly`, the number is a percentile between 0\nand 1.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "description": "The case's name.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "notify": {
+          "description": "Tenant notification aliases or raw @handles. Left out in a PREVIEW deploy.",
+          "items": {
+            "type": "string"
+          },
+          "markdownDescription": "Tenant notification aliases or raw `@handles`. Left out in a `PREVIEW` deploy.",
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "severity": {
+          "anyOf": [
+            {
+              "enum": [
+                "info",
+                "low",
+                "medium",
+                "high",
+                "critical"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "info, low, medium, high, or critical. Default: from response.alert_severity, else info.",
+          "markdownDescription": "`info`, `low`, `medium`, `high`, or `critical`. Default: from `response.alert_severity`, else\n`info`."
+        }
+      },
+      "type": "object"
+    },
+    "DatadogConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "cases": {
+          "description": "One or more cases, tested in order: the first that matches creates or updates the signal.",
+          "items": {
+            "$ref": "#/$defs/DatadogCase"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "contributors": {
+          "description": "Platform contributors.",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "detection": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DatadogDetection"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "How the queries become a match. Default: method: threshold, window: 5m.",
+          "markdownDescription": "How the queries become a match. Default: `method: threshold`, `window: 5m`."
+        },
+        "enabled": {
+          "default": false,
+          "description": "Whether this platform block is active.",
+          "type": "boolean"
+        },
+        "flags": {
+          "description": "Platform flags.",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "message": {
+          "description": "The signal's message: Markdown with Datadog template variables. Default: derived from the rule's description and response.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "default": "",
+          "description": "Platform-specific rule name.",
+          "type": "string"
+        },
+        "queries": {
+          "description": "One or more searches, each with the name conditions call it by.",
+          "items": {
+            "$ref": "#/$defs/DatadogQuery"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "schema": {
+          "description": "Platform schema identifier, for example platform::sentinel::1.0.",
+          "markdownDescription": "Platform schema identifier, for example `platform::sentinel::1.0`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "signal": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DatadogSignal"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "What happens to the signal: grouping, how long it stays open, how it reads."
+        },
+        "status": {
+          "description": "Deployment status of this platform block, from the statuses in deployment.toml. Required: the deploy planner selects on it.",
+          "markdownDescription": "Deployment status of this platform block, from the statuses in `deployment.toml`. Required:\nthe deploy planner selects on it.",
+          "type": "string"
+        },
+        "tags": {
+          "description": "Datadog tags, added to the derived ones: lower case, such as team:identity.",
+          "items": {
+            "type": "string"
+          },
+          "markdownDescription": "Datadog tags, added to the derived ones: lower case, such as `team:identity`.",
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "tenants": {
+          "description": "Target tenant identifiers.",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "status",
+        "queries",
+        "cases"
+      ],
+      "type": "object"
+    },
+    "DatadogDetection": {
+      "additionalProperties": false,
+      "properties": {
+        "bucket": {
+          "description": "anomaly only: the time bucket the baseline is computed on: 5m, 10m, 15m, 30m, 1h, or 3h.",
+          "markdownDescription": "`anomaly` only: the time bucket the baseline is computed on: `5m`, `10m`, `15m`, `30m`, `1h`,\nor `3h`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "detect_ip_transitions": {
+          "description": "impossible_travel only: detect transitions between IP addresses of the same user.",
+          "markdownDescription": "`impossible_travel` only: detect transitions between IP addresses of the same user.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "forget_after": {
+          "description": "new_value only, required: a learned value unseen for this long is new again, 1d to 30d.",
+          "markdownDescription": "`new_value` only, required: a learned value unseen for this long is new again, `1d` to `30d`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "learning": {
+          "description": "How long Datadog learns what is normal. new_value: 0d to 30d (default 1d). anomaly: 1h, 6h, 12h, 1d, 2d, 7d, or 14d. impossible_travel: 1d to 30d, a baseline of each user's locations.",
+          "markdownDescription": "How long Datadog learns what is normal. `new_value`: `0d` to `30d` (default `1d`).\n`anomaly`: `1h`, `6h`, `12h`, `1d`, `2d`, `7d`, or `14d`. `impossible_travel`: `1d` to `30d`,\na baseline of each user's locations.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "method": {
+          "anyOf": [
+            {
+              "enum": [
+                "threshold",
+                "new_value",
+                "anomaly",
+                "impossible_travel"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "threshold, new_value, anomaly, or impossible_travel. Default: threshold.",
+          "markdownDescription": "`threshold`, `new_value`, `anomaly`, or `impossible_travel`. Default: `threshold`."
+        },
+        "tolerance": {
+          "description": "anomaly only: how far above the baseline counts as anomalous, 1 to 5.",
+          "format": "int64",
+          "markdownDescription": "`anomaly` only: how far above the baseline counts as anomalous, 1 to 5.",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "window": {
+          "anyOf": [
+            {
+              "enum": [
+                "5m",
+                "0",
+                "1m",
+                "10m",
+                "15m",
+                "30m",
+                "1h",
+                "2h",
+                "3h",
+                "6h",
+                "12h",
+                "1d"
+              ],
+              "type": "string"
+            },
+            {
+              "const": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The sliding window the cases are tested over: 0, 1m, 5m, 10m, 15m, 30m, 1h, 2h, 3h, 6h, 12h, or 1d. Default: 5m.",
+          "markdownDescription": "The sliding window the cases are tested over: `0`, `1m`, `5m`, `10m`, `15m`, `30m`, `1h`,\n`2h`, `3h`, `6h`, `12h`, or `1d`. Default: `5m`."
+        }
+      },
+      "type": "object"
+    },
+    "DatadogQuery": {
+      "additionalProperties": false,
+      "properties": {
+        "count_distinct": {
+          "description": "The cases compare the number of distinct values of this field instead of events.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "from": {
+          "anyOf": [
+            {
+              "enum": [
+                "logs",
+                "audit",
+                "events",
+                "signals"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "logs, audit, events, or signals (security signals). Default: logs.",
+          "markdownDescription": "`logs`, `audit`, `events`, or `signals` (security signals). Default: `logs`."
+        },
+        "group_by": {
+          "description": "Matches are counted per distinct combination of these fields' values.",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "keep_missing_groups": {
+          "description": "Keep an event that lacks a group_by value, grouped as N/A, instead of dropping it. Default: false.",
+          "markdownDescription": "Keep an event that lacks a `group_by` value, grouped as `N/A`, instead of dropping it.\nDefault: `false`.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "max": {
+          "description": "The cases compare this numeric field's maximum.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "description": "What conditions call the query: [a-z][a-z0-9_]*, unique in the block. Default: a, b, … by position. Not allowed on a new_value query.",
+          "markdownDescription": "What conditions call the query: `[a-z][a-z0-9_]*`, unique in the block. Default: `a`, `b`, …\nby position. Not allowed on a `new_value` query.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "new_value": {
+          "description": "method: new_value only: one to five fields whose unseen values trigger.",
+          "items": {
+            "type": "string"
+          },
+          "markdownDescription": "`method: new_value` only: one to five fields whose unseen values trigger.",
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "query": {
+          "description": "The Datadog search syntax, profile rule. Multiline in YAML.",
+          "markdownDescription": "The Datadog search syntax, profile `rule`. Multiline in YAML.",
+          "type": "string"
+        },
+        "sum": {
+          "description": "The cases compare this numeric field's sum.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "type": "object"
+    },
+    "DatadogSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "downgrade_non_production": {
+          "description": "One severity level lower when the env tag starts with staging, test, or dev. Default: false.",
+          "markdownDescription": "One severity level lower when the `env` tag starts with `staging`, `test`, or `dev`. Default:\n`false`.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "group_by": {
+          "description": "Matches with the same values of these fields update one signal. Each is in some query's group_by. Default: no signal grouping.",
+          "items": {
+            "type": "string"
+          },
+          "markdownDescription": "Matches with the same values of these fields update one signal. Each is in some query's\n`group_by`. Default: no signal grouping.",
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "group_in_notification_title": {
+          "description": "Notifications put the group-by values in their title. Default: false.",
+          "markdownDescription": "Notifications put the group-by values in their title. Default: `false`.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "keep_alive": {
+          "anyOf": [
+            {
+              "enum": [
+                "1h",
+                "0",
+                "1m",
+                "5m",
+                "10m",
+                "15m",
+                "30m",
+                "2h",
+                "3h",
+                "6h",
+                "12h",
+                "1d"
+              ],
+              "type": "string"
+            },
+            {
+              "const": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The signal stays open while a case matches again within this time: a detection.window value, at least the window. Default: 1h.",
+          "markdownDescription": "The signal stays open while a case matches again within this time: a `detection.window` value,\nat least the window. Default: `1h`."
+        },
+        "max_duration": {
+          "anyOf": [
+            {
+              "enum": [
+                "1d",
+                "0",
+                "1m",
+                "5m",
+                "10m",
+                "15m",
+                "30m",
+                "1h",
+                "2h",
+                "3h",
+                "6h",
+                "12h"
+              ],
+              "type": "string"
+            },
+            {
+              "const": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The signal closes this long after its first match: a detection.window value, at least the window. Default: 1d.",
+          "markdownDescription": "The signal closes this long after its first match: a `detection.window` value, at least the\nwindow. Default: `1d`."
+        }
+      },
+      "type": "object"
+    },
     "DefenderAccountMapping": {
       "additionalProperties": false,
       "properties": {
@@ -4683,6 +5133,18 @@
           ],
           "description": "CrowdStrike Falcon correlation rule (platform::crowdstrike::1.0).",
           "markdownDescription": "CrowdStrike Falcon correlation rule (`platform::crowdstrike::1.0`)."
+        },
+        "datadog": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DatadogConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Datadog Cloud SIEM detection rule (platform::datadog::1.0).",
+          "markdownDescription": "Datadog Cloud SIEM detection rule (`platform::datadog::1.0`)."
         },
         "elastic": {
           "anyOf": [

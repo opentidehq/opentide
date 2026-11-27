@@ -523,7 +523,9 @@ pub struct Summary {
 /// `microsoft_defender_custom_details_limit` and
 /// `microsoft_defender_placeholder_limit`, limits Microsoft documents without
 /// saying what Graph does past them (check 9, #1890).
-pub const STRICT_EXEMPT_WARNINGS: [&str; 4] = [
+///
+/// A slice, not an array, so a code made exempt does not change its type.
+pub const STRICT_EXEMPT_WARNINGS: &[&str] = &[
     "platform_not_enabled",
     opentide_core::codes::MICROSOFT_DEFENDER_IMPACTED_ASSET_IDENTIFIER,
     opentide_core::codes::MICROSOFT_DEFENDER_CUSTOM_DETAILS_LIMIT,
@@ -739,9 +741,12 @@ fn file_name(path: &Path) -> String {
 /// `graylog_title_duplicate`: each rule in scope whose enabled Graylog block
 /// resolves to the event definition title of another rule's
 /// (`graylog_title_issues`): Graylog's alert list cannot tell them apart.
+///
+/// The titles are grouped once (`graylog::Titles`) and each rule found by its
+/// UUID: a scan of every rule per rule was quadratic (#1945).
 fn title_duplicates(index: &Index, work: &[Subject<'_>]) -> Vec<Diagnostic> {
     use opentide_schema::objects::platform::graylog::{
-        definition_title, title_duplicate_message, title_duplicates,
+        Titles, definition_title, title_duplicate_message,
     };
     let Some(rules) = index.objects.get("rule") else {
         return Vec::new();
@@ -750,12 +755,15 @@ fn title_duplicates(index: &Index, work: &[Subject<'_>]) -> Vec<Diagnostic> {
         .iter()
         .filter_map(|(uuid, object)| Some((uuid.as_str(), object.root()?)))
         .collect();
+    cross_rule_steps(all.len());
+    let titles = Titles::new(&all);
     work.iter()
         .filter(|subject| subject.family == "rule")
         .filter_map(|subject| {
-            let (_, root) = all.iter().find(|(uuid, _)| *uuid == subject.uuid)?;
+            cross_rule_steps(1);
+            let root = rules.get(subject.uuid)?.root()?;
             let title = definition_title(root)?;
-            let others = title_duplicates(subject.uuid, title, &all);
+            let others = titles.duplicates(subject.uuid, title);
             if others.is_empty() {
                 return None;
             }
@@ -772,10 +780,23 @@ fn title_duplicates(index: &Index, work: &[Subject<'_>]) -> Vec<Diagnostic> {
         .collect()
 }
 
+thread_local! {
+    /// [`cross_rule_steps`].
+    static CROSS_RULE_STEPS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Counts `n` rules the cross-rule checks (`graylog_title_duplicate`,
+/// `exabeam_name_duplicate`) looked at on this thread, each rule indexed and
+/// each UUID looked up counting one: for the test that holds them to linear
+/// (a work count, not a wall clock).
+fn cross_rule_steps(n: usize) {
+    CROSS_RULE_STEPS.set(CROSS_RULE_STEPS.get() + n);
+}
+
 /// `exabeam_name_duplicate` and `exabeam_name_length`: the cross-rule check of
 /// Exabeam rule names (`exabeam::name_findings`), over every rule in the
 /// workspace, reported on the rules this run validates (`work`). Two enabled Exabeam blocks that
-/// resolve to one name (case-insensitively) are a duplicate; a block with no
+/// resolve to one name (under full case folding) are a duplicate; a block with no
 /// `name` whose rule name is over the limit is too long.
 fn exabeam_names(index: &Index, work: &[Subject<'_>]) -> Vec<Diagnostic> {
     use opentide_schema::objects::platform::exabeam;
@@ -807,14 +828,22 @@ fn exabeam_names(index: &Index, work: &[Subject<'_>]) -> Vec<Diagnostic> {
         .filter(|subject| subject.family == "rule")
         .map(|subject| subject.uuid)
         .collect();
+    // Each finding's file by its rule's UUID, the first source of the UUID
+    // as a scan finds it, not a scan per finding (#1945).
+    let mut paths: HashMap<&str, &Path> = HashMap::with_capacity(rules.len());
+    cross_rule_steps(rules.len());
+    for (uuid, _, path) in &rules {
+        paths.entry(uuid.as_str()).or_insert(*path);
+    }
     let mut out = Vec::new();
     for finding in exabeam::name_findings(&pairs, in_scope.iter().copied()) {
-        let Some((_, _, path)) = rules.iter().find(|(uuid, _, _)| *uuid == finding.uuid) else {
+        cross_rule_steps(1);
+        let Some(path) = paths.get(finding.uuid.as_str()).copied() else {
             continue;
         };
         let mut diagnostic = Diagnostic::error(finding.code, finding.message)
             .object(finding.uuid.clone(), "rule")
-            .file(*path)
+            .file(path)
             .at([
                 "configurations".to_owned(),
                 "exabeam".to_owned(),
@@ -2056,6 +2085,66 @@ impl Workspace {
 mod tests {
     use super::*;
 
+    /// #1945: `graylog_title_duplicate` and `exabeam_name_duplicate` index the
+    /// rules once and find each by its UUID, so their work grows with the
+    /// rules, not with their square (a scan of every rule per rule).
+    #[test]
+    fn cross_rule_checks_look_at_each_rule_a_bounded_number_of_times() {
+        use std::sync::Arc;
+
+        use crate::fs::{FileSystem, MemoryFs};
+        use crate::root::RootOptions;
+        use crate::workspace::{Options as WorkspaceOptions, Workspace};
+
+        let steps = |n: usize| {
+            let fs = Arc::new(MemoryFs::new());
+            fs.create_dir("/ws/.opentide/configurations");
+            fs.create_dir("/ws/objects/rules");
+            for i in 0..n {
+                // Every tenth rule shares its titles with the one before it.
+                let name = format!("Rule é {}", i - usize::from(i % 10 == 9));
+                fs.write(
+                    format!("/ws/objects/rules/r{i}.yaml"),
+                    format!(
+                        "name: {name}\nmetadata:\n  uuid: 00000000-0000-4000-8000-{i:012}\n  \
+                         schema: rule::1.1\nconfigurations:\n  graylog:\n    enabled: true\n  \
+                         exabeam:\n    enabled: true\n"
+                    ),
+                );
+            }
+            let ws = Workspace::open(
+                Arc::clone(&fs) as Arc<dyn FileSystem>,
+                WorkspaceOptions {
+                    roots: RootOptions {
+                        repo: Some(PathBuf::from("/ws")),
+                        cwd: PathBuf::from("/ws"),
+                        ..RootOptions::default()
+                    },
+                },
+            )
+            .unwrap();
+            let before = CROSS_RULE_STEPS.get();
+            let validation = validate(&ws, &Options::default());
+            let found = |code: &str| {
+                validation
+                    .report
+                    .issues
+                    .iter()
+                    .chain(&validation.report.warnings)
+                    .filter(|d| d.code == code)
+                    .count()
+            };
+            assert_eq!(found("graylog_title_duplicate"), n / 10 * 2);
+            assert_eq!(found("exabeam_name_duplicate"), n / 10 * 2);
+            CROSS_RULE_STEPS.get() - before
+        };
+        let (small, large) = (steps(100), steps(400));
+        assert!(
+            large < small * 8,
+            "{small} steps for 100 rules, {large} for 400"
+        );
+    }
+
     #[test]
     fn workers_follow_the_cores_and_never_outnumber_the_items() {
         let cores = std::thread::available_parallelism().map_or(1, std::num::NonZero::get);
@@ -2124,6 +2213,22 @@ mod tests {
         ("exabeam_unknown_field", "engine"),
         ("exabeam_string_field_number", "engine"),
         ("exabeam_unknown_value", "engine"),
+        ("datadog_parse_error", "engine"),
+        ("datadog_unescaped_special", "engine"),
+        ("datadog_regex", "engine"),
+        ("datadog_cidr", "engine"),
+        ("datadog_range", "engine"),
+        ("datadog_mixed_boolean", "engine"),
+        ("datadog_lowercase_operator", "engine"),
+        ("datadog_curly_quote", "engine"),
+        ("datadog_wildcard_in_phrase", "engine"),
+        ("datadog_unescaped_colon", "engine"),
+        ("datadog_symbol_operator", "engine"),
+        ("datadog_detached_operator", "engine"),
+        ("datadog_full_text_in_rule", "engine"),
+        ("datadog_calculated_field_in_rule", "engine"),
+        ("datadog_pipelines_only", "engine"),
+        ("datadog_unknown_attribute", "engine"),
         // Named checks that report their codes inside one
         // `schema_validation` finding (`<Model> validation failed with
         // code(s): ...`), which the `schema` check fails on.
@@ -2167,6 +2272,7 @@ mod tests {
             .chain(models::exabeam::ADVISORY_CODES)
             .chain(models::microsoft_defender::ADVISORY_CODES)
             .chain(models::google_secops::advisories::ADVISORY_CODES)
+            .chain(models::datadog::ADVISORY_CODES)
             .chain(models::harfanglab::yara::ADVISORY_CODES)
             .collect();
         let elsewhere: BTreeSet<&str> = ELSEWHERE.iter().map(|(code, _)| *code).collect();
@@ -2222,7 +2328,7 @@ mod tests {
             }
         }
         for code in STRICT_EXEMPT_WARNINGS {
-            assert!(VALIDATION_CODES.contains(&code), "{code}");
+            assert!(VALIDATION_CODES.contains(code), "{code}");
         }
         assert!(VALIDATION_CODES.windows(2).all(|pair| pair[0] < pair[1]));
     }

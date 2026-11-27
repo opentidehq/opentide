@@ -1429,6 +1429,86 @@ platform!(
     GoogleSecopsConfiguration, "GoogleSecopsConfiguration", GoogleSecopsTenant
 );
 
+/// The Datadog sites a tenant's `site` names (RFC `rfc-datadog-cloud-siem.md`
+/// §8.1); each is served at `https://api.<site>`.
+pub const DATADOG_SITES: [&str; 9] = [
+    "datadoghq.com",
+    "us3.datadoghq.com",
+    "us5.datadoghq.com",
+    "datadoghq.eu",
+    "ap1.datadoghq.com",
+    "ap2.datadoghq.com",
+    "uk1.datadoghq.com",
+    "ddog-gov.com",
+    "us2.ddog-gov.com",
+];
+
+/// `[tenants.setup]` for Datadog Cloud SIEM.
+#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[from_node(model = "DatadogSetup")]
+pub struct DatadogSetup {
+    /// Verify the tenant's TLS certificate.
+    #[serde(default = "ssl_true")]
+    pub ssl: SslValue,
+    /// The Datadog site: datadoghq.com, us3.datadoghq.com, us5.datadoghq.com, datadoghq.eu,
+    /// ap1.datadoghq.com, ap2.datadoghq.com, uk1.datadoghq.com, ddog-gov.com or us2.ddog-gov.com.
+    /// Calls go to `https://api.<site>`.
+    #[serde(default)]
+    #[schemars(
+        description = "The Datadog site: datadoghq.com, us3.datadoghq.com, us5.datadoghq.com, \
+                       datadoghq.eu, ap1.datadoghq.com, ap2.datadoghq.com, uk1.datadoghq.com, \
+                       ddog-gov.com or us2.ddog-gov.com. Calls go to https://api.<site>."
+    )]
+    pub site: Option<String>,
+    /// An HTTPS base URL that replaces the site's (a new site, a proxy).
+    #[serde(default)]
+    pub api_url: Option<Matching<HttpsUrlPattern>>,
+    /// The API key, sent as DD-API-KEY. Must be a $NAME placeholder.
+    #[serde(skip_serializing)]
+    pub api_key: EnvPlaceholder,
+    /// The application key, sent as DD-APPLICATION-KEY: security_monitoring_rules_read and
+    /// security_monitoring_rules_write, and logs_read_data for queries. Must be a $NAME
+    /// placeholder.
+    #[serde(skip_serializing)]
+    pub app_key: EnvPlaceholder,
+    /// Tags added to every rule on this tenant.
+    #[serde(default)]
+    pub tags: Vec<String>,
+    /// Notification alias to Datadog handle (`soc = "@slack-soc-alerts"`), for `cases[].notify`.
+    #[serde(default)]
+    pub notifications: indexmap::IndexMap<String, String>,
+}
+
+/// The API base URL of a Datadog tenant: `api_url` without a trailing slash,
+/// else `https://api.<site>`; `None` when neither is usable (a `site`
+/// outside [`DATADOG_SITES`] with no `api_url`, `datadog_site`).
+pub fn datadog_base_url(site: Option<&str>, api_url: Option<&str>) -> Option<String> {
+    if let Some(url) = api_url.filter(|url| !url.is_empty()) {
+        return Some(url.trim_end_matches('/').to_owned());
+    }
+    let site = site.filter(|site| DATADOG_SITES.contains(site))?;
+    Some(format!("https://api.{site}"))
+}
+
+impl DatadogSetup {
+    /// The API base URL ([`datadog_base_url`]).
+    pub fn url(&self) -> Option<String> {
+        datadog_base_url(
+            self.site.as_deref(),
+            self.api_url.as_ref().map(Matching::as_str),
+        )
+    }
+}
+tenant!(
+    /// `[[tenants]]` for Datadog Cloud SIEM.
+    DatadogTenant, "DatadogTenant", DatadogSetup
+);
+platform!(
+    /// Merged `platforms/datadog.toml`.
+    DatadogConfiguration, "DatadogConfiguration", DatadogTenant
+);
+
 /// A Graylog alias or tag: one, or a list (`GraylogName | list[GraylogName]`).
 #[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
 #[serde(untagged)]

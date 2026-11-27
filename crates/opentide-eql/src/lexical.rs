@@ -4,12 +4,12 @@
 use opentide_core::ByteSpan;
 
 /// Depth limit of `EqlParser.MAX_EXPRESSION_DEPTH`.
-pub(crate) const MAX_EXPRESSION_DEPTH: i64 = 250;
+pub const MAX_EXPRESSION_DEPTH: i64 = 250;
 
 /// How Elasticsearch reads one `/* ... */` comment, when that differs from
 /// the grammar's first-`*/` rule.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum CommentFinding {
+pub enum CommentFinding {
     /// Elasticsearch nests this comment; it ends later than the first `*/`.
     Nested(ByteSpan),
     /// Elasticsearch does not read a comment here: `/` and `*` become
@@ -19,11 +19,11 @@ pub(crate) enum CommentFinding {
 
 /// What a scan of the source finds about its block comments (the lexer itself ends a
 /// comment where Elasticsearch's lexer does, nested ones too).
-pub(crate) struct Prepared {
+pub struct Prepared {
     pub comments: Vec<CommentFinding>,
 }
 
-pub(crate) fn prepare(source: &str) -> Prepared {
+pub fn prepare(source: &str) -> Prepared {
     let bytes = source.as_bytes();
     let mut comments = Vec::new();
     let mut i = 0;
