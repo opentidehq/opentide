@@ -81,12 +81,10 @@ pub fn legacy_external_id_keys(rule: &Node) -> Vec<(String, String)> {
 }
 
 /// `metadata.uuid` in lowercase canonical form, or `None` when it is not a
-/// UUID; surrounding white space, braces, `urn:uuid:` and the unhyphenated
-/// form are taken too.
+/// UUID ([`opentide_core::ids::canonical`]): surrounding white space, braces,
+/// `urn:uuid:` and the unhyphenated form are taken too.
 pub fn canonical_uuid(value: &str) -> Option<String> {
-    uuid::Uuid::try_parse(value.trim())
-        .ok()
-        .map(|parsed| parsed.hyphenated().to_string())
+    opentide_core::ids::canonical(value)
 }
 
 /// `.opentide/states/deployment/` of `workspace`.

@@ -16,7 +16,7 @@ use opentide_workspace::validate::{Check, Options as ValidateOptions, QueriesMod
 
 use super::config::{Block, INTEGRATION_MISP};
 use super::document::{TideDocument, resolve};
-use super::event::{self, REQUIRED_RELATIONS, TEMPLATE_VERSION, is_ours, uuid_pattern};
+use super::event::{self, REQUIRED_RELATIONS, TEMPLATE_VERSION, is_canonical_uuid, is_ours};
 use super::ledger::Ledger;
 use super::{Mode, TLP_ORDER};
 use crate::json::Json as OutJson;
@@ -651,7 +651,7 @@ fn organisation(block: &Block, document: &TideDocument) -> (Option<String>, &'st
         && !raw.trim().is_empty()
     {
         let text = raw.trim().to_lowercase();
-        if uuid_pattern().is_match(&text) {
+        if is_canonical_uuid(&text) {
             return (Some(text), "object");
         }
         return (None, "invalid");

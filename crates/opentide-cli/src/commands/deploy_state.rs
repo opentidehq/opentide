@@ -66,25 +66,9 @@ pub fn state_dir(workspace: &Path) -> PathBuf {
 }
 
 /// *value* as `uuid.UUID(value.strip())` reads it, in lowercase canonical
-/// form; `None` when it is not a UUID.
+/// form; `None` when it is not a UUID ([`opentide_core::ids::canonical`]).
 pub fn canonical(value: &str) -> Option<String> {
-    let mut hex = value.trim().replace("urn:", "").replace("uuid:", "");
-    hex = hex
-        .trim_start_matches('{')
-        .trim_end_matches('}')
-        .replace('-', "");
-    if hex.len() != 32 || !hex.chars().all(|c| c.is_ascii_hexdigit()) {
-        return None;
-    }
-    let hex = hex.to_ascii_lowercase();
-    Some(format!(
-        "{}-{}-{}-{}-{}",
-        &hex[0..8],
-        &hex[8..12],
-        &hex[12..16],
-        &hex[16..20],
-        &hex[20..32]
-    ))
+    opentide_core::ids::canonical(value)
 }
 
 /// *value*'s canonical form, or `deployment_state_shape` (`canonical_uuid`).
