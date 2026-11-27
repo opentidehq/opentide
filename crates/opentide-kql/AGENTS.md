@@ -1,8 +1,8 @@
 # opentide-kql — agent guide
 
 The Microsoft Kusto (KQL) engine for Sentinel and Defender rules: parse, HIR, the operator,
-function and table catalogs (`data/catalogs/kql/`, Azure Monitor and ASIM tables), profiles
-(core, Sentinel, Defender), diagnostics, highlighting, hover and completion. `kql` is Kusto;
+function and table catalogs (`data/catalogs/kql/`, Azure Monitor and ASIM tables), dialects
+(`Dialect`: core, Sentinel, Defender), diagnostics, highlighting, hover and completion. `kql` is Kusto;
 Kibana's KQL is `opentide-kuery`.
 
 ## Place

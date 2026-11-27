@@ -17,6 +17,18 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 - If you destructure one of these structs with a pattern that lists fields and no `..`, add `..` to the pattern.
 - If you `match` on `validate::Check`, `validate::QueriesMode`, `lint::LintCheck` or `lint::LintStatus`, add a wildcard arm; `QueriesMode::as_str` and `LintStatus::as_str` give their names.
 
+#### `opentide-kql`
+
+- If you name `opentide_kql::Profile`, rename it `opentide_kql::Dialect`.
+
+#### `opentide-yara`
+
+- If you name `opentide_yara::Profile`, rename it `opentide_yara::Dialect`.
+
+#### `opentide-cql`
+
+- If you name `opentide_cql::Context`, rename it `opentide_cql::Profile`.
+
 ### Breaking
 
 #### `opentide`
@@ -27,6 +39,18 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
   - `LanguageId::QUERY_LANGUAGES`, `RuleConfigurations::PLATFORMS` and `validate::STRICT_EXEMPT_WARNINGS` are `&'static [_]`; in 1.1.0 they were `[_; 11]`, `[_; 13]` and `[_; 2]`
 - **The report types are `#[non_exhaustive]`, as the crate's stability section promises** ([opentide#1937](https://github.com/opentidehq/opentide/issues/1937)). Code outside the crate can no longer build them with a struct expression (or `..` update), nor destructure them with a pattern that lacks `..`, nor match their enums without a wildcard arm, so a new field or variant is no longer a breaking change. Structs: `Diagnostic`, `Fix`, `TextEdit`, `Report`, `validate::{PlatformFinding, Refusal, Stats, Summary}`, `lint::{LintReport, LintFinding, LintSummary, NextAction}`, `catalog::{Catalogue, Edge, LoadErrorDetail, LoadErrorRow, ObjectRow, PlatformBlock, SignalRow, Summary, Techniques, Coverage, PlatformInfo, Tenant, Variable}`. Enums: `validate::{Check, QueriesMode}`, `lint::{LintCheck, LintStatus}`. `catalog::Row` (an object or a load error) stays exhaustive. See Upgrade.
 - **`QueryRequest.platform` names a dialect, never a profile** ([opentide#1912](https://github.com/opentidehq/opentide/issues/1912), ADR 0015 §4). `analyze_query` checks a query as a file of its language is: an Exabeam or Datadog query under the `search` profile and a CQL query as plain LogScale, whatever the platform. `platform: exabeam` chose Exabeam's `rule` profile, `crowdstrike` the Next-Gen SIEM correlation rule and `datadog` Datadog's `rule`; a rule block's query is still checked as a rule by `Workspace::validate` and `Workspace::lint`, by its field path.
+
+#### `opentide-kql`
+
+- **`Profile` is renamed `Dialect`** ([opentide#1913](https://github.com/opentidehq/opentide/issues/1913), ADR 0015 §1: a product is a dialect, a use is a profile). `opentide_kql::Dialect::{Core, Sentinel, Defender}` replaces `Profile`'s variants. `Catalog.profile`, `Catalog::with_profile`, `Catalog::cached`, `Catalog::for_workspace` and the functions' `profile` parameters keep their names and take a `Dialect`, and the catalogs' `profile = "…"` rows keep their key.
+
+#### `opentide-yara`
+
+- **`Profile` is renamed `Dialect`** ([opentide#1913](https://github.com/opentidehq/opentide/issues/1913)). `opentide_yara::Dialect::{Harfanglab, Bitdefender}` with `key`, `display` and `for_platform`; `Context::for_profile` and `Context.profile` keep their names and take a `Dialect`.
+
+#### `opentide-cql`
+
+- **`Context` is renamed `Profile`** ([opentide#1913](https://github.com/opentidehq/opentide/issues/1913)): a correlation rule or a search is a use of the query, a profile. `opentide_cql::Profile { correlation_rule }`, `Profile::CORRELATION_RULE` and `analyze_with(source, &Profile)` replace `Context`'s.
 
 ### Added
 
@@ -56,8 +80,8 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 #### `opentide-kql`
 
-- **`Profile::for_platform` is the one map from a platform to a KQL profile** ([opentide#1912](https://github.com/opentidehq/opentide/issues/1912), ADR 0015 §3): `microsoft_defender` is `Profile::Defender`, every other platform `Profile::Sentinel`. `opentide-analysis` and `opentide-tide` call it instead of keeping copies.
-  - API: `Profile::for_platform`, `Profile::platform` (the platform whose `visibility.toml` declarations a profile reads)
+- **`Dialect::for_platform` is the one map from a platform to a KQL dialect** ([opentide#1912](https://github.com/opentidehq/opentide/issues/1912), ADR 0015 §3): `microsoft_defender` is `Dialect::Defender`, every other platform `Dialect::Sentinel`. `opentide-analysis` and `opentide-tide` call it instead of keeping copies.
+  - API: `Dialect::for_platform`, `Dialect::platform` (the platform whose `visibility.toml` declarations a dialect reads)
 - **`opentide_kql::shape` lists what a query reads and the constructs it uses** ([opentide#1890](https://github.com/opentidehq/opentide/issues/1890)): its tables, joins, unions, `externaldata` sources, comments and the columns it names, from the tree `analyze` builds.
   - API: `shape::shape`, `shape::Shape`
 

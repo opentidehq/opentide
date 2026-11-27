@@ -120,9 +120,9 @@ fn core_rows() -> CoreRows {
 
 /// A profile's hand-written tables and columns, with the types settled against the reference
 /// ([`rows_model::profile_rows`]), as the build script pre-parsed them.
-fn hand_written_rows(profile: Profile) -> (Vec<TableRow>, Vec<ColumnRow>) {
+fn hand_written_rows(profile: Dialect) -> (Vec<TableRow>, Vec<ColumnRow>) {
     match profile {
-        Profile::Defender => opentide_dataset::compiled_value(
+        Dialect::Defender => opentide_dataset::compiled_value(
             "kql-defender-rows",
             opentide_dataset::blob!("kql-defender-rows"),
         ),
@@ -133,11 +133,11 @@ fn hand_written_rows(profile: Profile) -> (Vec<TableRow>, Vec<ColumnRow>) {
     }
 }
 
-/// The product a KQL query runs on (ADR 0015 §1 calls this a dialect): its
+/// The product a KQL query runs on (ADR 0015 §1: a dialect): its
 /// tables, columns and functions, and how strictly an unknown table is
 /// reported.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Profile {
+pub enum Dialect {
     /// No product tables: tests and the throughput benchmark.
     Core,
     /// Microsoft Sentinel, the default: its open schema makes an unknown
@@ -148,26 +148,26 @@ pub enum Profile {
     Defender,
 }
 
-impl Profile {
-    /// The profile of a detection platform, as a `configurations` key or a
+impl Dialect {
+    /// The dialect of a detection platform, as a `configurations` key or a
     /// hunt's `system`: `microsoft_defender` is Defender's, every other
     /// platform (and none) Sentinel's. The only map from a platform to a KQL
-    /// profile (ADR 0015 §3): Tide and analysis call it and keep no copy.
+    /// dialect (ADR 0015 §3): Tide and analysis call it and keep no copy.
     #[must_use]
     pub fn for_platform(platform: &str) -> Self {
         match platform {
-            "microsoft_defender" => Profile::Defender,
-            _ => Profile::Sentinel,
+            "microsoft_defender" => Dialect::Defender,
+            _ => Dialect::Sentinel,
         }
     }
 
-    /// The platform whose `visibility.toml` declarations the profile reads:
-    /// [`Profile::for_platform`]'s inverse, with `Core` reading Sentinel's.
+    /// The platform whose `visibility.toml` declarations the dialect reads:
+    /// [`Dialect::for_platform`]'s inverse, with `Core` reading Sentinel's.
     #[must_use]
     pub fn platform(self) -> &'static str {
         match self {
-            Profile::Defender => "microsoft_defender",
-            Profile::Core | Profile::Sentinel => "sentinel",
+            Dialect::Defender => "microsoft_defender",
+            Dialect::Core | Dialect::Sentinel => "sentinel",
         }
     }
 }
@@ -236,7 +236,7 @@ impl ColumnRow {
     }
 }
 
-/// A profile's KQL catalog: operators, functions, plugins, types, tables and
+/// A dialect's KQL catalog: operators, functions, plugins, types, tables and
 /// columns.
 ///
 /// Reading it builds indexes and schemas once and keeps them on it, for
@@ -246,8 +246,8 @@ impl ColumnRow {
 /// before any read.
 #[derive(Debug, Clone)]
 pub struct Catalog {
-    /// The profile the tables and columns come from.
-    pub profile: Profile,
+    /// The dialect the tables and columns come from.
+    pub profile: Dialect,
     pub operators: Vec<OperatorRow>,
     pub functions: Vec<FunctionRow>,
     pub scalar_operators: Vec<ScalarOperatorRow>,
@@ -358,7 +358,7 @@ impl Catalog {
     pub fn core() -> Self {
         let (operators, functions, scalar_operators, plugins, types, options) = core_rows();
         Self {
-            profile: Profile::Core,
+            profile: Dialect::Core,
             operators,
             functions,
             scalar_operators,
@@ -387,14 +387,14 @@ impl Catalog {
     ///
     /// Hand-written columns keep their docs and are added to the reference's,
     /// never removed: a column either lists is known.
-    pub fn with_profile(mut self, profile: Profile) -> Self {
-        if profile == Profile::Core {
+    pub fn with_profile(mut self, profile: Dialect) -> Self {
+        if profile == Dialect::Core {
             return self;
         }
         self.profile = profile;
         let (mut tables, columns) = hand_written_rows(profile);
         let heads = tables::azure_monitor_heads();
-        if profile == Profile::Sentinel {
+        if profile == Dialect::Sentinel {
             let known: HashSet<String> = tables.iter().map(|t| t.name.clone()).collect();
             for head in heads {
                 if !known.contains(&head.name) {
@@ -454,7 +454,7 @@ impl Catalog {
             return Vec::new();
         };
         let profile_name = match self.profile {
-            Profile::Defender => "defender",
+            Dialect::Defender => "defender",
             _ => "sentinel",
         };
         // The names the table's hand-written columns have, which the reference does not repeat.
@@ -482,7 +482,7 @@ impl Catalog {
                 // advanced hunting table: its standard columns
                 // (`TimeGenerated`, `TenantId`, `Type`, `_BilledSize`, ...)
                 // are the workspace's, not advanced hunting's (#1885).
-                if self.profile == Profile::Defender
+                if self.profile == Dialect::Defender
                     && tables::STANDARD_COLUMNS
                         .iter()
                         .any(|(name, _)| *name == &*column.name)
@@ -561,26 +561,26 @@ impl Catalog {
     /// An ASIM parser the profile knows (`_Im_NetworkSession`,
     /// `imAuthentication`, `ASimDns`). Only Sentinel workspaces have them.
     pub fn asim_parser(&self, name: &str) -> Option<&'static tables::AsimParser> {
-        if self.profile != Profile::Sentinel {
+        if self.profile != Dialect::Sentinel {
             return None;
         }
         tables::asim().parser(name)
     }
 
     /// Parsed once per profile for the process. `core()` still reparses for tests.
-    pub fn cached(profile: Profile) -> &'static Self {
+    pub fn cached(profile: Dialect) -> &'static Self {
         match profile {
-            Profile::Core => {
+            Dialect::Core => {
                 static CORE: OnceLock<Catalog> = OnceLock::new();
                 CORE.get_or_init(Self::core)
             }
-            Profile::Sentinel => {
+            Dialect::Sentinel => {
                 static SENTINEL: OnceLock<Catalog> = OnceLock::new();
-                SENTINEL.get_or_init(|| Self::core().with_profile(Profile::Sentinel))
+                SENTINEL.get_or_init(|| Self::core().with_profile(Dialect::Sentinel))
             }
-            Profile::Defender => {
+            Dialect::Defender => {
                 static DEFENDER: OnceLock<Catalog> = OnceLock::new();
-                DEFENDER.get_or_init(|| Self::core().with_profile(Profile::Defender))
+                DEFENDER.get_or_init(|| Self::core().with_profile(Dialect::Defender))
             }
         }
     }
@@ -595,9 +595,9 @@ impl Catalog {
     /// that a declared pattern with columns matches (`Vendor*_CL`), gets a
     /// copy of that copy with the name's table added, the two most recent
     /// kept. `Core` has no tables and takes none.
-    pub fn for_workspace(profile: Profile, source: &str) -> CatalogRef {
+    pub fn for_workspace(profile: Dialect, source: &str) -> CatalogRef {
         let bundled = Self::cached(profile);
-        if profile == Profile::Core {
+        if profile == Dialect::Core {
             return CatalogRef::Bundled(bundled);
         }
         let datasets = opentide_core::datasets::current();
@@ -623,7 +623,7 @@ impl Catalog {
         static SENTINEL_QUERY: OnceLock<QueryCache> = OnceLock::new();
         static DEFENDER_QUERY: OnceLock<QueryCache> = OnceLock::new();
         let (cache, query_cache) = match profile {
-            Profile::Defender => (&DEFENDER, &DEFENDER_QUERY),
+            Dialect::Defender => (&DEFENDER, &DEFENDER_QUERY),
             _ => (&SENTINEL, &SENTINEL_QUERY),
         };
         let cache = cache.get_or_init(Default::default);
@@ -697,7 +697,7 @@ impl Catalog {
     fn apply_declared(&mut self, targets: BTreeMap<String, Vec<&DeclaredSource>>) {
         self.memo = Memo::default();
         let profile_name = match self.profile {
-            Profile::Defender => "defender",
+            Dialect::Defender => "defender",
             _ => "sentinel",
         };
         for (table, sources) in targets {
@@ -1065,7 +1065,7 @@ pub struct AnalyzeResult {
     pub tokens: Vec<HighlightToken>,
 }
 
-pub fn analyze(source: &str, profile: Profile) -> AnalyzeResult {
+pub fn analyze(source: &str, profile: Dialect) -> AnalyzeResult {
     let catalog = Catalog::for_workspace(profile, source);
     analyze_with_catalog(source, &catalog)
 }
@@ -1073,7 +1073,7 @@ pub fn analyze(source: &str, profile: Profile) -> AnalyzeResult {
 /// The columns at every operator of a query, with the references and
 /// definitions the column pass found (#112). Empty for a query that does not
 /// parse at all.
-pub fn columns(source: &str, profile: Profile) -> schema::Analysis {
+pub fn columns(source: &str, profile: Dialect) -> schema::Analysis {
     let catalog = Catalog::for_workspace(profile, source);
     std::rc::Rc::unwrap_or_clone(diagnose::columns(source, &catalog))
 }
@@ -1146,7 +1146,7 @@ fn check_table_named(
     if table.starts_with('$')
         || binds(table)
         || catalog.asim_parser(table).is_some()
-        || (catalog.profile == Profile::Sentinel && asim_shaped(table))
+        || (catalog.profile == Dialect::Sentinel && asim_shaped(table))
         || catalog.operator(table).is_some()
         // A function of exactly this name: the first of any case, else a scan
         // for one of another case (the catalog has none).
@@ -1235,7 +1235,7 @@ fn check_table_named(
                 // A near miss of a table the workspace declares or the catalog
                 // lists (`misspelt_edits`), and not a custom `_CL` table, is a
                 // typo: an error under its own code.
-                Profile::Sentinel => match (!table.ends_with("_CL") && suggestion().is_some())
+                Dialect::Sentinel => match (!table.ends_with("_CL") && suggestion().is_some())
                     .then(near_miss)
                     .flatten()
                 {
@@ -1258,12 +1258,12 @@ fn check_table_named(
                 },
                 // Advanced hunting is a closed schema: an unknown table is an
                 // error, and with declarations its help names them.
-                Profile::Core | Profile::Defender if opted_in => Diagnostic::error(
+                Dialect::Core | Dialect::Defender if opted_in => Diagnostic::error(
                     codes::KQL_UNKNOWN_TABLE,
                     format!("unknown table '{table}'{help}"),
                     range,
                 ),
-                Profile::Core | Profile::Defender => Diagnostic::error(
+                Dialect::Core | Dialect::Defender => Diagnostic::error(
                     codes::KQL_UNKNOWN_TABLE,
                     format!("unknown table '{table}'"),
                     range,
@@ -1452,7 +1452,7 @@ const COLUMN_OPERATORS: &[&str] = &[
     "parse",
 ];
 
-pub fn completions(source: &str, offset: usize, profile: Profile) -> Vec<CompletionItem> {
+pub fn completions(source: &str, offset: usize, profile: Dialect) -> Vec<CompletionItem> {
     // An offset inside a character (a decoded escape) completes nothing.
     let Some(before) = source.get(..offset.min(source.len())) else {
         return Vec::new();
@@ -1707,7 +1707,7 @@ fn prefix_option_items(op: &str, options: &[&OperatorOption]) -> Vec<CompletionI
 
 /// Hover at byte `offset` of `source` (an LSP host converts the editor's
 /// UTF-16 position once, with `opentide_core::position_to_offset`).
-pub fn hover(source: &str, offset: usize, profile: Profile) -> Option<String> {
+pub fn hover(source: &str, offset: usize, profile: Dialect) -> Option<String> {
     let offset = offset.min(source.len());
     // An offset inside a character (a decoded escape) has nothing to show.
     if !source.is_char_boundary(offset) {
@@ -1834,7 +1834,7 @@ pub fn hover(source: &str, offset: usize, profile: Profile) -> Option<String> {
     clippy::cast_possible_truncation,
     reason = "a signature has a handful of parameters, far below u32::MAX"
 )]
-pub fn signature_help(source: &str, offset: usize, profile: Profile) -> Option<SignatureHelp> {
+pub fn signature_help(source: &str, offset: usize, profile: Dialect) -> Option<SignatureHelp> {
     // An offset inside a character (a decoded escape) has nothing to show.
     let before = source.get(..offset.min(source.len()))?;
     let workspace = Catalog::for_workspace(profile, source);
@@ -2231,16 +2231,16 @@ impl<K: PartialEq + Clone> Recent<K, Arc<Catalog>> {
 mod tests {
     use super::*;
 
-    /// Each product's profile reads that product's declarations, and an
+    /// Each product's dialect reads that product's declarations, and an
     /// unknown platform (or none) is Sentinel's (ADR 0015 §3).
     #[test]
-    fn a_platform_and_its_profile_map_both_ways() {
+    fn a_platform_and_its_dialect_map_both_ways() {
         for platform in ["sentinel", "microsoft_defender"] {
-            assert_eq!(Profile::for_platform(platform).platform(), platform);
+            assert_eq!(Dialect::for_platform(platform).platform(), platform);
         }
-        assert_eq!(Profile::for_platform(""), Profile::Sentinel);
-        assert_eq!(Profile::for_platform("splunk"), Profile::Sentinel);
-        assert_eq!(Profile::Core.platform(), "sentinel");
+        assert_eq!(Dialect::for_platform(""), Dialect::Sentinel);
+        assert_eq!(Dialect::for_platform("splunk"), Dialect::Sentinel);
+        assert_eq!(Dialect::Core.platform(), "sentinel");
     }
 
     /// A profile's rows share their names with the reference's columns, and
@@ -2249,7 +2249,7 @@ mod tests {
     /// tests, comparing texts, would not see.
     #[test]
     fn the_rows_share_the_reference_names_and_the_type_names() {
-        let catalog = Catalog::cached(Profile::Sentinel);
+        let catalog = Catalog::cached(Dialect::Sentinel);
         let reference = tables::azure_monitor();
         // A table's reference columns are read when asked for (#1767).
         let rows = catalog.columns_for_table("SigninLogs");
@@ -2277,14 +2277,14 @@ mod tests {
     /// The catalog as `with_profile` built it before the reference's columns were read on demand
     /// (#1767): every column of every table a row of `columns`, from the TOML read item by item
     /// and the reference decoded whole. The oracle the lazy catalog is held to.
-    fn eager(profile: Profile) -> Catalog {
+    fn eager(profile: Dialect) -> Catalog {
         let mut catalog = Catalog::core();
         catalog.profile = profile;
         let defender: Vec<TableRow> = rows("", defender_tables(), "tables");
         let defender_columns: Vec<ColumnRow> = rows("", defender_columns(), "columns");
         let mut tables = Vec::new();
         let mut columns = Vec::new();
-        if profile == Profile::Sentinel {
+        if profile == Dialect::Sentinel {
             tables.extend(rows::<TableRow>("", sentinel_tables(), "tables"));
             columns.extend(rows::<ColumnRow>("", sentinel_columns(), "columns"));
         }
@@ -2295,7 +2295,7 @@ mod tests {
         }
         columns.extend(defender_columns);
         let reference = tables::azure_monitor();
-        if profile == Profile::Sentinel {
+        if profile == Dialect::Sentinel {
             for (name, table) in reference {
                 if !tables.iter().any(|t| &t.name == name) {
                     tables.push(TableRow {
@@ -2311,7 +2311,7 @@ mod tests {
             }
         }
         let profile_name = match profile {
-            Profile::Defender => "defender",
+            Dialect::Defender => "defender",
             _ => "sentinel",
         };
         let profile_shared: Arc<str> = Arc::from(profile_name);
@@ -2333,7 +2333,7 @@ mod tests {
             }
             let table: Arc<str> = Arc::from(row.name.as_str());
             for column in listed {
-                if profile == Profile::Defender
+                if profile == Dialect::Defender
                     && tables::STANDARD_COLUMNS
                         .iter()
                         .any(|(name, _)| *name == &*column.name)
@@ -2396,7 +2396,7 @@ mod tests {
     /// column is found among all the columns, in the order they were pushed.
     fn declare_eagerly(catalog: &mut Catalog, targets: BTreeMap<String, Vec<&DeclaredSource>>) {
         let profile_name = match catalog.profile {
-            Profile::Defender => "defender",
+            Dialect::Defender => "defender",
             _ => "sentinel",
         };
         for (table, sources) in targets {
@@ -2498,11 +2498,11 @@ mod tests {
     #[test]
     fn the_reference_columns_read_on_demand_are_the_ones_read_up_front() {
         let rendered = |rows: Vec<&ColumnRow>| format!("{rows:?}");
-        for profile in [Profile::Sentinel, Profile::Defender] {
+        for profile in [Dialect::Sentinel, Dialect::Defender] {
             let lazy = Catalog::core().with_profile(profile);
             let eager = eager(profile);
             assert_eq!(format!("{:?}", lazy.tables), format!("{:?}", eager.tables));
-            let least = if profile == Profile::Sentinel {
+            let least = if profile == Dialect::Sentinel {
                 900
             } else {
                 50
@@ -2648,8 +2648,8 @@ mod tests {
         // rows read from the TOML, put together as `profile_rows` does.
         let reference = tables::azure_monitor();
         for (profile, sentinel, name) in [
-            (Profile::Sentinel, true, "sentinel"),
-            (Profile::Defender, false, "defender"),
+            (Dialect::Sentinel, true, "sentinel"),
+            (Dialect::Defender, false, "defender"),
         ] {
             let (tables, columns) = rows_model::profile_rows(
                 sentinel,
@@ -2748,7 +2748,7 @@ mod tests {
         let core = Catalog::core();
         assert_eq!(core.suggest_table("SecurityEvnt"), None);
         assert!(core.function("strlen").is_some());
-        let sentinel = core.with_profile(Profile::Sentinel);
+        let sentinel = core.with_profile(Dialect::Sentinel);
         assert_eq!(
             sentinel.suggest_table("SecurityEvnt").as_deref(),
             Some("SecurityEvent")
@@ -2771,7 +2771,7 @@ mod tests {
         fn index<T>(rows: &[T], found: Option<&T>) -> Option<usize> {
             found.and_then(|f| rows.iter().position(|r| std::ptr::eq(r, f)))
         }
-        for profile in [Profile::Core, Profile::Sentinel, Profile::Defender] {
+        for profile in [Dialect::Core, Dialect::Sentinel, Dialect::Defender] {
             let bundled = Catalog::cached(profile);
             let copy = bundled.clone();
             let names: Vec<String> = bundled
@@ -2843,7 +2843,7 @@ mod tests {
         for round in 0..3 {
             for (datasets, table) in [(&first, "FirstOne_CL"), (&second, "SecondOne_CL")] {
                 let _scope = opentide_core::datasets::scope_thread(Some(datasets.clone()));
-                let catalog = Catalog::for_workspace(Profile::Sentinel, table);
+                let catalog = Catalog::for_workspace(Dialect::Sentinel, table);
                 assert!(catalog.table(table).is_some(), "{table}, round {round}");
                 assert!(
                     catalog
@@ -2872,7 +2872,7 @@ mod tests {
             let datasets =
                 opentide_core::datasets::DeclaredDatasets::from_visibility(visibility).unwrap();
             let _scope = opentide_core::datasets::scope_thread(Some(datasets));
-            Catalog::for_workspace(Profile::Sentinel, "SecurityEvent | take 1")
+            Catalog::for_workspace(Dialect::Sentinel, "SecurityEvent | take 1")
                 .table("VendorFoo_CL")
                 .is_some()
         };
@@ -2883,7 +2883,7 @@ mod tests {
 
     #[test]
     fn catalog_loads() {
-        let c = Catalog::core().with_profile(Profile::Sentinel);
+        let c = Catalog::core().with_profile(Dialect::Sentinel);
         assert!(c.operator("where").is_some());
         assert!(c.function("ago").is_some());
         assert!(c.table("SecurityEvent").is_some());
@@ -2891,7 +2891,7 @@ mod tests {
 
     #[test]
     fn control_command_is_unsupported() {
-        let r = analyze(".show tables", Profile::Core);
+        let r = analyze(".show tables", Dialect::Core);
         let diag = r
             .diagnostics
             .iter()
@@ -2907,14 +2907,14 @@ mod tests {
 
     #[test]
     fn hll_merge_is_aggregate() {
-        let c = Catalog::cached(Profile::Core);
+        let c = Catalog::cached(Dialect::Core);
         let row = c.function("hll_merge").expect("hll_merge");
         assert_eq!(row.kind.as_deref(), Some("aggregate"));
     }
 
     #[test]
     fn unknown_operator_is_not_silent() {
-        let r = analyze("SecurityEvent | frobnicate x", Profile::Core);
+        let r = analyze("SecurityEvent | frobnicate x", Dialect::Core);
         assert!(
             r.diagnostics
                 .iter()
@@ -2934,7 +2934,7 @@ mod tests {
             "search kind=case_sensitive \"Mimikatz\"",
             "find in (SecurityEvent) where Account == \"a\" | project Account",
         ] {
-            let r = analyze(query, Profile::Sentinel);
+            let r = analyze(query, Dialect::Sentinel);
             let errors: Vec<_> = r
                 .diagnostics
                 .iter()
@@ -2946,7 +2946,7 @@ mod tests {
 
     #[test]
     fn render_is_warning() {
-        let r = analyze("SecurityEvent | render table", Profile::Core);
+        let r = analyze("SecurityEvent | render table", Dialect::Core);
         assert!(
             r.diagnostics
                 .iter()
@@ -2997,7 +2997,7 @@ mod tests {
     #[test]
     fn function_parameters_are_not_tables() {
         let src = "let f = (T:(TimeGenerated:datetime), InDeviceId:string) { T | where TimeGenerated > ago(1d) }; f(DeviceInfo, 'x')";
-        let r = analyze(src, Profile::Defender);
+        let r = analyze(src, Dialect::Defender);
         assert!(
             !r.diagnostics
                 .iter()
@@ -3019,7 +3019,7 @@ mod tests {
             ("SigninLogsXY | take 1", "SigninLogs"),
             ("SIGNINLOGS | take 1", "SigninLogs"),
         ] {
-            let r = analyze(query, Profile::Sentinel);
+            let r = analyze(query, Dialect::Sentinel);
             let d = r
                 .diagnostics
                 .iter()
@@ -3048,7 +3048,7 @@ mod tests {
     #[test]
     fn short_names_two_edits_away_are_not_misspelt() {
         for query in ["Sysmon | take 1", "Device | take 1"] {
-            let r = analyze(query, Profile::Sentinel);
+            let r = analyze(query, Dialect::Sentinel);
             assert!(
                 !r.diagnostics
                     .iter()
@@ -3073,7 +3073,7 @@ mod tests {
             "let SigninLog = SigninLogs;\nSigninLog | take 1",
             "signinlog | take 1",
         ] {
-            let r = analyze(query, Profile::Sentinel);
+            let r = analyze(query, Dialect::Sentinel);
             assert!(
                 !r.diagnostics.iter().any(|d| {
                     d.code == codes::KQL_TABLE_MISSPELT || d.code == codes::KQL_UNKNOWN_TABLE
@@ -3090,7 +3090,7 @@ mod tests {
     fn far_or_custom_table_stays_an_unknown_warning() {
         // `SigninLogsXYZ` is three insertions from `SigninLogs`.
         for query in ["SigninLogsXYZ | take 1", "SigninLog_CL | take 1"] {
-            let r = analyze(query, Profile::Sentinel);
+            let r = analyze(query, Dialect::Sentinel);
             let d = r
                 .diagnostics
                 .iter()
@@ -3113,7 +3113,7 @@ mod tests {
             "VendorFirewallEvents | take 1",
             "TableNotInAnyCatalog | take 1",
         ] {
-            let r = analyze(query, Profile::Sentinel);
+            let r = analyze(query, Dialect::Sentinel);
             let tables: Vec<_> = r
                 .diagnostics
                 .iter()
@@ -3142,7 +3142,7 @@ mod tests {
     #[test]
     fn unknown_table_stays_an_error_under_defender() {
         // A Log Analytics table is not an advanced hunting table.
-        let r = analyze("NTANetAnalytics | take 1", Profile::Defender);
+        let r = analyze("NTANetAnalytics | take 1", Dialect::Defender);
         let d = r
             .diagnostics
             .iter()
@@ -3167,10 +3167,10 @@ mod tests {
             "imAuthentication | take 1",
             "_ASim_Dns | take 1",
         ] {
-            let r = analyze(query, Profile::Sentinel);
+            let r = analyze(query, Dialect::Sentinel);
             assert!(r.diagnostics.is_empty(), "{query}: {:?}", r.diagnostics);
         }
-        let c = Catalog::cached(Profile::Sentinel);
+        let c = Catalog::cached(Dialect::Sentinel);
         assert!(c.table("NTANetAnalytics").is_some_and(|t| t.documented));
         assert!(c.table("AzureDiagnostics").is_some_and(|t| !t.documented));
         assert!(c.table("DeviceProcessEvents").is_some_and(|t| t.documented));
@@ -3181,7 +3181,7 @@ mod tests {
             .find(|col| &*col.name == "DeviceId")
             .and_then(|col| col.docs.clone());
         assert!(docs.is_some());
-        let d = Catalog::cached(Profile::Defender);
+        let d = Catalog::cached(Dialect::Defender);
         assert!(d.table("DeviceProcessEvents").is_some_and(|t| t.documented));
         assert!(d.table("ExposureGraphNodes").is_some_and(|t| !t.documented));
         assert!(d.asim_parser("_Im_NetworkSession").is_none());
@@ -3189,7 +3189,7 @@ mod tests {
 
     #[test]
     fn completions_after_pipe() {
-        let items = completions("SecurityEvent | ", 16, Profile::Core);
+        let items = completions("SecurityEvent | ", 16, Dialect::Core);
         assert!(items.iter().any(|i| i.label == "where"));
         assert!(items.iter().any(|i| i.label == "mv-expand"));
         assert!(items.iter().any(|i| i.label == "top"));
@@ -3197,7 +3197,7 @@ mod tests {
 
     #[test]
     fn highlight_tokens_include_keyword_and_pipe() {
-        let r = analyze("SecurityEvent | take 1", Profile::Core);
+        let r = analyze("SecurityEvent | take 1", Dialect::Core);
         assert!(r.tokens.iter().any(|t| t.capture == "keyword"));
         assert!(r.tokens.iter().any(|t| t.capture == "operator.pipe"));
     }
@@ -3223,7 +3223,7 @@ mod tests {
             "SecurityEvent | evaluate bag_unpack(AdditionalFields)",
         ];
         for src in samples {
-            let r = analyze(src, Profile::Core);
+            let r = analyze(src, Dialect::Core);
             assert!(
                 !r.diagnostics
                     .iter()
@@ -3236,7 +3236,7 @@ mod tests {
 
     #[test]
     fn hover_where_operator() {
-        let h = hover("SecurityEvent | where EventID == 1", 16, Profile::Core);
+        let h = hover("SecurityEvent | where EventID == 1", 16, Dialect::Core);
         assert!(h.unwrap().contains("where"));
     }
 
@@ -3247,7 +3247,7 @@ mod tests {
 
     #[test]
     fn catalog_covers_hunting_surface() {
-        let c = Catalog::core().with_profile(Profile::Sentinel);
+        let c = Catalog::core().with_profile(Dialect::Sentinel);
         assert!(c.function("ago").is_some());
         assert!(c.function("parse_json").is_some() || c.function("todynamic").is_some());
         assert!(c.function("iff").is_some() || c.function("iif").is_some());
@@ -3271,7 +3271,7 @@ mod tests {
     #[test]
     fn highlight_scm_query_emits_visible_tokens() {
         let src = "SecurityEvent | where TimeGenerated > ago(1d) | take 1";
-        let r = analyze(src, Profile::Core);
+        let r = analyze(src, Dialect::Core);
         let slice =
             |t: &opentide_highlight::HighlightToken| src[t.span.start..t.span.end].to_string();
         assert!(
@@ -3301,23 +3301,23 @@ mod tests {
     #[test]
     fn sentinel_columns_hover_and_complete() {
         let src = "SecurityEvent | where EventID == 4688";
-        let h = hover(src, 24, Profile::Sentinel).expect("EventID hover");
+        let h = hover(src, 24, Dialect::Sentinel).expect("EventID hover");
         assert!(h.contains("EventID"), "{h}");
         assert!(h.contains("SecurityEvent"), "{h}");
-        let table = hover(src, 0, Profile::Sentinel).expect("table hover");
+        let table = hover(src, 0, Dialect::Sentinel).expect("table hover");
         assert!(
             table.contains("EventID") || table.contains("Columns"),
             "{table}"
         );
         let where_off = src.find("where ").unwrap() + 6;
-        let items = completions(src, where_off, Profile::Sentinel);
+        let items = completions(src, where_off, Dialect::Sentinel);
         assert!(
             items.iter().any(|i| i.label == "EventID"),
             "{:?}",
             items.iter().map(|i| &i.label).take(20).collect::<Vec<_>>()
         );
         assert!(items.iter().any(|i| i.label == "TimeGenerated"));
-        let r = analyze(src, Profile::Sentinel);
+        let r = analyze(src, Dialect::Sentinel);
         assert!(
             r.tokens
                 .iter()
@@ -3333,7 +3333,7 @@ mod tests {
     #[test]
     fn join_kind_signature_and_highlight() {
         let src = "SecurityEvent | join kind=inner SecurityAlert on EventID";
-        let r = analyze(src, Profile::Sentinel);
+        let r = analyze(src, Dialect::Sentinel);
         assert!(
             r.tokens
                 .iter()
@@ -3345,9 +3345,9 @@ mod tests {
                 .collect::<Vec<_>>()
         );
         let eq = src.find("kind=").unwrap() + 5;
-        let items = completions(src, eq, Profile::Sentinel);
+        let items = completions(src, eq, Dialect::Sentinel);
         assert!(items.iter().any(|i| i.label == "leftouter"), "{items:?}");
-        let help = signature_help(src, src.find("join ").unwrap() + 5, Profile::Sentinel)
+        let help = signature_help(src, src.find("join ").unwrap() + 5, Dialect::Sentinel)
             .expect("signature");
         assert!(
             help.signatures[0].label.to_lowercase().contains("join"),
@@ -3363,7 +3363,7 @@ mod tests {
             help.signatures[0].parameters
         );
         let ago = "SecurityEvent | where TimeGenerated > ago(1d)";
-        let help = signature_help(ago, ago.find("ago(").unwrap() + 4, Profile::Sentinel)
+        let help = signature_help(ago, ago.find("ago(").unwrap() + 4, Dialect::Sentinel)
             .expect("ago signature");
         assert!(help.signatures[0].label.to_lowercase().contains("ago"));
         assert!(
@@ -3430,7 +3430,7 @@ mod tests {
     #[test]
     fn operator_options_complete_where_the_syntax_puts_them() {
         let render = "StormEvents | render ";
-        let items = completions(render, render.len(), Profile::Sentinel);
+        let items = completions(render, render.len(), Dialect::Sentinel);
         assert!(
             items.iter().any(|i| i.label == "timechart"),
             "render chart types complete after the operator, got {:?}",
@@ -3442,7 +3442,7 @@ mod tests {
         );
 
         let series = "StormEvents | make-series ";
-        let items = completions(series, series.len(), Profile::Sentinel);
+        let items = completions(series, series.len(), Dialect::Sentinel);
         for keyword in ["on", "from", "to", "step", "by", "default"] {
             assert!(
                 items.iter().any(|i| i.label == keyword),
@@ -3452,29 +3452,29 @@ mod tests {
         }
 
         let union = "StormEvents | union ";
-        let items = completions(union, union.len(), Profile::Sentinel);
+        let items = completions(union, union.len(), Dialect::Sentinel);
         assert!(items.iter().any(|i| i.label == "withsource="), "{items:?}");
         assert!(items.iter().any(|i| i.label == "isfuzzy="), "{items:?}");
 
         let search = "search ";
-        let items = completions(search, search.len(), Profile::Sentinel);
+        let items = completions(search, search.len(), Dialect::Sentinel);
         assert!(items.iter().any(|i| i.label == "kind="), "{items:?}");
         assert!(items.iter().any(|i| i.label == "in"), "{items:?}");
 
         let parse = "StormEvents | parse ";
-        let items = completions(parse, parse.len(), Profile::Sentinel);
+        let items = completions(parse, parse.len(), Dialect::Sentinel);
         assert!(items.iter().any(|i| i.label == "flags="), "{items:?}");
 
         let expand = "StormEvents | mv-expand ";
-        let items = completions(expand, expand.len(), Profile::Sentinel);
+        let items = completions(expand, expand.len(), Dialect::Sentinel);
         assert!(items.iter().any(|i| i.label == "kind="), "{items:?}");
         let kind = "StormEvents | mv-expand kind=";
-        let items = completions(kind, kind.len(), Profile::Sentinel);
+        let items = completions(kind, kind.len(), Dialect::Sentinel);
         assert!(items.iter().any(|i| i.label == "bag"), "{items:?}");
         assert!(items.iter().any(|i| i.label == "array"), "{items:?}");
 
         let join_prefix = "StormEvents | join ";
-        let items = completions(join_prefix, join_prefix.len(), Profile::Sentinel);
+        let items = completions(join_prefix, join_prefix.len(), Dialect::Sentinel);
         assert!(
             items.iter().any(|i| i.label == "kind="),
             "join options stay available: {items:?}"
@@ -3490,14 +3490,14 @@ mod tests {
         );
 
         let named = "StormEvents | evaluate bag_unpack(Parsed, columnsConflict=";
-        let items = completions(named, named.len(), Profile::Sentinel);
+        let items = completions(named, named.len(), Dialect::Sentinel);
         assert!(
             items.iter().any(|i| i.label == "replace_source"),
             "named columnsConflict= should complete: {items:?}"
         );
 
         let join = "StormEvents | join kind=";
-        let items = completions(join, join.len(), Profile::Sentinel);
+        let items = completions(join, join.len(), Dialect::Sentinel);
         assert!(items.iter().any(|i| i.label == "leftantisemi"), "{items:?}");
         assert!(
             items.iter().any(|i| i.label == "rightantisemi"),
@@ -3505,7 +3505,7 @@ mod tests {
         );
 
         let unpack = "StormEvents | evaluate bag_unpack(Parsed, \"pre\", ";
-        let items = completions(unpack, unpack.len(), Profile::Sentinel);
+        let items = completions(unpack, unpack.len(), Dialect::Sentinel);
         assert!(
             items.iter().any(|i| i.label == "replace_source"),
             "{items:?}"
@@ -3578,7 +3578,7 @@ mod tests {
     #[test]
     fn dynamic_is_type_constructor() {
         let src = "let x = dynamic(\"[]\"); SecurityEvent | take 1";
-        let r = analyze(src, Profile::Core);
+        let r = analyze(src, Dialect::Core);
         assert!(
             r.tokens
                 .iter()
@@ -3635,14 +3635,14 @@ mod tests {
     #[test]
     fn operator_signature_tracks_kind_and_on() {
         let kind = "SecurityEvent | join kind=";
-        let help = signature_help(kind, kind.len(), Profile::Sentinel).expect("join kind");
+        let help = signature_help(kind, kind.len(), Dialect::Sentinel).expect("join kind");
         assert_eq!(
             help.signatures[0].parameters[help.active_parameter as usize].label,
             "JoinFlavor"
         );
 
         let on_clause = "SecurityEvent | join kind=inner AlertInfo on ";
-        let help = signature_help(on_clause, on_clause.len(), Profile::Sentinel).expect("join on");
+        let help = signature_help(on_clause, on_clause.len(), Dialect::Sentinel).expect("join on");
         assert_eq!(
             help.signatures[0].parameters[help.active_parameter as usize].label, "Conditions",
             "a later `on` wins over an earlier kind=: {:?}",
@@ -3650,7 +3650,7 @@ mod tests {
         );
 
         let union = "SecurityEvent | union kind=";
-        let help = signature_help(union, union.len(), Profile::Sentinel).expect("union kind");
+        let help = signature_help(union, union.len(), Dialect::Sentinel).expect("union kind");
         assert_eq!(
             help.signatures[0].parameters[help.active_parameter as usize].label,
             "kind"
@@ -3660,7 +3660,7 @@ mod tests {
     #[test]
     fn nested_call_commas_stay_inside_the_inner_signature() {
         let outer = "T | evaluate bag_unpack(Parsed, strcat(\"a\", \"b\"), ";
-        let help = signature_help(outer, outer.len(), Profile::Sentinel).expect("bag_unpack");
+        let help = signature_help(outer, outer.len(), Dialect::Sentinel).expect("bag_unpack");
         assert!(
             help.signatures[0].label.starts_with("bag_unpack("),
             "{}",
@@ -3673,7 +3673,7 @@ mod tests {
         );
 
         let inner = "T | evaluate bag_unpack(Parsed, strcat(\"a\", ";
-        let help = signature_help(inner, inner.len(), Profile::Sentinel).expect("strcat");
+        let help = signature_help(inner, inner.len(), Dialect::Sentinel).expect("strcat");
         assert!(
             help.signatures[0].label.starts_with("strcat("),
             "{}",
@@ -3687,8 +3687,8 @@ mod tests {
         // query) can reach the engine as the second byte of `\u{e9}`.
         let src = "T | where A == \"\u{e9}\" | project B";
         let inside = src.find('\u{e9}').unwrap() + 1;
-        assert!(completions(src, inside, Profile::Sentinel).is_empty());
-        assert_eq!(hover(src, inside, Profile::Sentinel), None);
-        assert!(signature_help(src, inside, Profile::Sentinel).is_none());
+        assert!(completions(src, inside, Dialect::Sentinel).is_empty());
+        assert_eq!(hover(src, inside, Dialect::Sentinel), None);
+        assert!(signature_help(src, inside, Dialect::Sentinel).is_none());
     }
 }

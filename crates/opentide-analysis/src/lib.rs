@@ -37,7 +37,7 @@ pub use opentide_highlight::{HighlightResult, HighlightToken, SemanticTokens};
 pub use opentide_tide::{DocumentSymbol, ElasticTenant, IndexedObject};
 
 use opentide_highlight::{HighlightSpec, encode_lsp_semantic_tokens};
-use opentide_kql::Profile;
+use opentide_kql::Dialect;
 use opentide_tide::TideAnalyzeResult;
 
 // The README's example runs as a doctest, so the crates.io page cannot drift.
@@ -161,7 +161,7 @@ pub fn elastic_tenants(host: &dyn WorkspaceHost) -> Vec<ElasticTenant> {
 pub fn analyze(host: &dyn WorkspaceHost, request: AnalyzeRequest) -> AnalyzeResponse {
     match request.language {
         LanguageId::Kql => {
-            let r = opentide_kql::analyze(&request.text, Profile::Sentinel);
+            let r = opentide_kql::analyze(&request.text, Dialect::Sentinel);
             AnalyzeResponse {
                 diagnostics: r.diagnostics,
                 tokens: r.tokens,
@@ -417,7 +417,7 @@ pub fn analyze_query(request: &QueryRequest) -> Vec<Diagnostic> {
     let platform = request.platform.as_deref().unwrap_or("");
     match request.language {
         LanguageId::Kql => {
-            opentide_kql::analyze(&request.text, Profile::for_platform(platform)).diagnostics
+            opentide_kql::analyze(&request.text, Dialect::for_platform(platform)).diagnostics
         }
         // A query on its own is a search, as a file of its language is: the
         // profile comes from where the text sits, never from the platform
@@ -438,9 +438,9 @@ pub fn analyze_query(request: &QueryRequest) -> Vec<Diagnostic> {
             let dialect = opentide_lucene::Dialect::for_platform(platform);
             opentide_lucene::analyze_dialect(&request.text, dialect).diagnostics
         }
-        // `platform: harfanglab` or `bitdefender`: the platform's YARA profile.
+        // `platform: harfanglab` or `bitdefender`: the platform's YARA dialect.
         LanguageId::Yara => {
-            let ctx = opentide_yara::Profile::for_platform(platform)
+            let ctx = opentide_yara::Dialect::for_platform(platform)
                 .map(opentide_yara::Context::for_profile)
                 .unwrap_or_default();
             opentide_yara::analyze_with(&request.text, &ctx).diagnostics
@@ -794,10 +794,10 @@ pub fn hover(
     }
 }
 
-/// Hover inside one query language. `platform` selects the KQL profile.
+/// Hover inside one query language. `platform` selects the KQL dialect.
 fn query_hover(language: LanguageId, text: &str, offset: usize, platform: &str) -> Option<String> {
     match language {
-        LanguageId::Kql => opentide_kql::hover(text, offset, Profile::for_platform(platform)),
+        LanguageId::Kql => opentide_kql::hover(text, offset, Dialect::for_platform(platform)),
         LanguageId::Spl => opentide_spl::hover(text, offset),
         LanguageId::Esql => opentide_esql::hover(text, offset).or_else(|| ecs::hover(text, offset)),
         LanguageId::Eql => opentide_eql::hover(text, offset).or_else(|| ecs::hover(text, offset)),
@@ -887,7 +887,7 @@ fn query_completions(
     platform: &str,
 ) -> Vec<CompletionItem> {
     match language {
-        LanguageId::Kql => opentide_kql::completions(text, offset, Profile::for_platform(platform)),
+        LanguageId::Kql => opentide_kql::completions(text, offset, Dialect::for_platform(platform)),
         LanguageId::Spl => opentide_spl::completions(text, offset),
         LanguageId::Lucene
             if opentide_lucene::Dialect::for_platform(platform)
@@ -966,7 +966,7 @@ fn query_signature_help(
 ) -> Option<SignatureHelp> {
     match language {
         LanguageId::Kql => {
-            opentide_kql::signature_help(text, offset, Profile::for_platform(platform))
+            opentide_kql::signature_help(text, offset, Dialect::for_platform(platform))
         }
         LanguageId::Spl => opentide_spl::signature_help(text, offset),
         LanguageId::Esql => opentide_esql::signature_help(text, offset),

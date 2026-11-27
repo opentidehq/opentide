@@ -255,7 +255,7 @@ fn raw_and_decomposed_agree() {
         );
         let mut raw_codes: Vec<String> = opentide_yara::analyze_with(
             &raw,
-            &opentide_yara::Context::for_profile(opentide_yara::Profile::Harfanglab),
+            &opentide_yara::Context::for_profile(opentide_yara::Dialect::Harfanglab),
         )
         .diagnostics
         .into_iter()
