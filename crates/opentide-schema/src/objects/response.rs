@@ -1,4 +1,4 @@
-//! Detection rule response block models (`models/response.py`).
+//! Detection rule response block models.
 
 use garde::Validate;
 use schemars::JsonSchema;

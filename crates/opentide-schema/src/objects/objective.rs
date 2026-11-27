@@ -1,5 +1,4 @@
-//! Detection objective (DOM) models, schema `objective::1.0`
-//! (`models/objective.py`).
+//! Detection objective (DOM) models, schema `objective::1.0`.
 
 use garde::Validate;
 use schemars::JsonSchema;

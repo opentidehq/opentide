@@ -369,6 +369,9 @@ def test_a_budgets_only_change_runs_the_throughput_gate_and_the_wiring_test_alon
         # RuleConfigurations: the facade re-exports it from opentide-schema,
         # where cargo semver-checks run on the facade never sees it (#1911).
         ("crates/opentide-schema/src/objects/rule.rs", True),
+        # A feature or a build script of such a crate decides what it defines.
+        ("crates/opentide-connectors/Cargo.toml", True),
+        ("crates/opentide-schema/build.rs", True),
         # A crate the facade re-exports nothing from, and a test of one it does.
         ("crates/opentide-kql/src/lib.rs", False),
         ("crates/opentide-schema/tests/models.rs", False),

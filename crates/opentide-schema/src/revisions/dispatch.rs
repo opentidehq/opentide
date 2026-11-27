@@ -1,6 +1,5 @@
 //! Dispatch: `metadata.schema` selects the revision, then that revision's
-//! conversion and checks run (`loading/object_loader.py`
-//! `load_object_for_validation`, ADR 0009).
+//! conversion and checks run (ADR 0009).
 //!
 //! | `metadata.schema` | Result |
 //! | --- | --- |
@@ -10,10 +9,9 @@
 //! | an unregistered revision of the expected family (`rule::7.0`, `Rule::1.1`) | [`Selection::Unknown`]: the family's newest model without the unknown-key check, and an error at `metadata.schema` |
 //! | anything else | [`Rejection::Unknown`] |
 //!
-//! The oracle rejected every unregistered identifier before any model ran
-//! (`unknown schema identifier`); the language server checked an unknown
-//! revision against the family's newest. The registry takes the language
-//! server's policy, keeping the error so the object still fails
+//! An unknown revision of the expected family is still checked against the
+//! family's newest model, so its other findings show, and keeps its error at
+//! `metadata.schema`, so the object still fails
 //! (`tests/oracle/objects_cases.toml`, `unknown-revision`).
 
 use serde::Serialize;
@@ -94,8 +92,8 @@ pub enum Rejection {
     /// No `metadata.schema` (`SchemaMissingError`, `schema_missing`).
     #[error("missing metadata.schema on object")]
     SchemaMissing,
-    /// `metadata` is not a mapping: the oracle's `dict_type` error at
-    /// `metadata`, placed.
+    /// `metadata` is not a mapping: a `dict_type` error at `metadata`, with
+    /// its span.
     #[error("{}", .0.message)]
     MetadataNotAMapping(Box<SchemaError>),
     /// A registered object revision of another family.
@@ -107,10 +105,10 @@ pub enum Rejection {
         family: String,
     },
     /// An identifier that is neither registered nor a revision of the expected
-    /// family. The message quotes it in single quotes whatever it holds: a
+    /// family. The message quotes it in double quotes whatever it holds: a
     /// string as written, a boolean or number as YAML 1.2 reads it, a list as
     /// `[...]` and a mapping as `{...}` (`identifier-quoting` in
-    /// `tests/oracle/objects_cases.toml`; the oracle used Python's `repr`).
+    /// `tests/oracle/objects_cases.toml`).
     #[error("unknown schema identifier: {identifier:?}")]
     Unknown {
         /// The identifier as written.

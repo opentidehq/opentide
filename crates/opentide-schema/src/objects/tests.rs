@@ -1,7 +1,6 @@
-//! The object models' unit tests, ported from `tests/test_models/`
-//! (`test_base.py`, `test_metadata.py`, `test_threat.py`,
-//! `test_objective.py`, `test_rule_reviewed.py`); the oracle comparison of
-//! every case is `table.rs`.
+//! The object models' unit tests: fields and their `tide.*` keys, metadata,
+//! threat vectors, objectives and `rule::1.1`'s `reviewed`. Every case of
+//! `tests/oracle/objects_cases.toml` is `table.rs`'s.
 
 use garde::Validate;
 use serde_json::{Value, json};
@@ -39,7 +38,7 @@ fn messages(errors: &[crate::SchemaError]) -> Vec<(String, Option<&'static str>,
         .collect()
 }
 
-// test_base.py
+// Fields and their `tide.*` keys.
 
 #[test]
 fn a_field_carries_its_tide_keys_in_the_schema() {
@@ -95,7 +94,7 @@ fn field_roles_are_read_from_the_models() {
     );
 }
 
-// test_metadata.py
+// Metadata.
 
 #[test]
 fn public_reference_keys_are_numbers() {
@@ -176,7 +175,7 @@ fn created_and_modified_are_strings() {
     assert_eq!(rule.metadata.created, "2026-01-01 10:00:00");
 }
 
-// test_threat.py
+// Threat vectors.
 
 const THREAT: &str = "name: TVM\ncriticality: High\nmetadata:\n  uuid: u\n  schema: threat::1.0\n  \
                       version: 1\n  created: '2026-01-01'\n  modified: '2026-01-02'\n  tlp: clear\n\
@@ -314,7 +313,7 @@ fn impact_and_leverage_are_non_empty_string_arrays_in_the_schema() {
     }
 }
 
-// test_objective.py
+// Objectives.
 
 const OBJECTIVE: &str = "name: Objective\nmetadata:\n  uuid: u\n  schema: objective::1.0\n  \
                          version: 1\n  created: '2026-01-01'\n  modified: '2026-01-02'\n  \
@@ -348,7 +347,7 @@ fn a_root_composition_is_an_unknown_key() {
     );
 }
 
-// test_rule_reviewed.py
+// `rule::1.1`'s `metadata.reviewed`.
 
 #[test]
 fn rule_1_1_accepts_a_date_and_a_datetime() {

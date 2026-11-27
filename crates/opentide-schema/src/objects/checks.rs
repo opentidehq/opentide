@@ -4,14 +4,14 @@
 //! other errors in Pydantic's order, and garde ([`garde::Validate`] with the
 //! [`Pins`] context), which checks a value built in memory.
 //!
-//! | Oracle | Here |
-//! |--------|------|
-//! | `ObjectMetadata._validate_schema_identifier` (after) | [`schema_identifier`] |
-//! | `RuleMetadata._coerce_reviewed` (before), `_validate_reviewed` (after, `parse_review_instant`) | [`reviewed`] |
-//! | `ObjectMetadata._coerce_dates` (before) | none: `created` and `modified` take a string (an approved difference, `CHANGELOG.md`) |
-//! | `ThreatBody._require_vocab_list` (before) | [`crate::from_node::require_vocab_list`] |
-//! | `_single_vocab_name` (`VocabName`, after), `min_length=1` | [`check_single_vocab_name`], [`check_at_least_one`], [`vocab_names`] |
-//! | `ObjectReferences.coerce_public_keys` (`from_yaml_dict`) | [`public_references`] |
+//! | Check | Here |
+//! |-------|------|
+//! | `metadata.schema` is a registered identifier (after) | [`schema_identifier`] |
+//! | `metadata.reviewed` is a date or a datetime with an offset | [`reviewed`] |
+//! | `metadata.created` and `metadata.modified` are a string holding a date or a datetime, its offset optional | [`created`], [`modified`] |
+//! | a threat's vocabulary lists are lists (before) | [`crate::from_node::require_vocab_list`] |
+//! | a vocabulary name is one value, and a list holds at least one | [`check_single_vocab_name`], [`check_at_least_one`], [`vocab_names`] |
+//! | `references.public` keys are reference numbers | [`public_references`] |
 
 use std::collections::BTreeMap;
 use std::sync::OnceLock;
@@ -23,9 +23,9 @@ use crate::from_node::{Context, FromNode, messages};
 use crate::node::{Node, Value};
 use crate::pins::Pins;
 
-/// The schema identifiers the oracle's registry holds
-/// (`schema_registry.registered_identifiers()`), sorted (held to them by the
-/// retired `cargo xtask schema diff`, #1142).
+/// The schema identifiers `metadata.schema` accepts, sorted: the object
+/// registry's revisions ([`crate::revisions::Revision::in_object_registry`],
+/// which a test holds to this list).
 pub const REGISTERED: &[&str] = &[
     "objective::1.0",
     "rule::1.0",
@@ -118,8 +118,8 @@ pub fn check_at_least_one(length: usize) -> Result<(), Violation> {
     }
 }
 
-/// The message when `reviewed` is neither form (the oracle's
-/// `parse_review_instant`).
+/// The message when `reviewed` is neither a date nor a datetime
+/// ([`check_reviewed`]).
 pub const REVIEWED_SHAPE: &str =
     "metadata.reviewed must be an ISO 8601 date (YYYY-MM-DD) or datetime";
 
@@ -148,8 +148,8 @@ fn review_patterns() -> &'static (Regex, Regex, Regex) {
 
 /// `metadata.reviewed` (trimmed, not empty): an ISO 8601 date
 /// (`2026-09-01`) or a datetime with `Z` or a numeric offset
-/// (`2026-09-01T15:04:05Z`, `2026-09-01 15:04:05.5+02:00`), as the oracle's
-/// `parse_review_instant` accepts them, and one that exists: jiff checks the
+/// (`2026-09-01T15:04:05Z`, `2026-09-01 15:04:05.5+02:00`), in ASCII digits,
+/// and one that exists: jiff checks the
 /// calendar, the clock and the offset. The year is 0001 to 9999, and so is
 /// the instant in UTC (year 0 is refused, and so is an offset that moves the
 /// instant out of that range).
@@ -305,8 +305,8 @@ fn instant(field: &str, node: &Node, cx: &mut Context) -> Option<String> {
 
 /// `metadata.reviewed`: `null` is `None`; a string is trimmed, and an empty
 /// one is `None`; what is left must be a date or a datetime. Any other value
-/// is the oracle's `value_error` (it turns the value into text, which never
-/// has either form).
+/// (a number, a list, a mapping) is a `value_error` with the shape message,
+/// [`REVIEWED_SHAPE`].
 pub fn reviewed(node: &Node, cx: &mut Context) -> Option<Option<String>> {
     let text = match &node.value {
         Value::Null => return Some(None),
@@ -373,14 +373,12 @@ pub fn vocab_names(node: &Node, cx: &mut Context) -> Option<Vec<String>> {
     }
 }
 
-/// `references.public`: reference numbers to URLs. The oracle turns every
-/// key into an integer with `int()` before the model sees it
-/// (`coerce_public_keys`); here a key is an integer, or a string that is one
-/// (`"12"`, `"-1"`, `"+3"`: ASCII digits, an optional sign, within i64). Any
-/// other key is `int_parsing` (a string: a word, whitespace, `_`, other
-/// digits, a number wider than i64) or `int_type` (a float, which the oracle
-/// truncated, a boolean, an integer wider than i64), at the key's `[key]`, as
-/// Pydantic reports a dictionary key (`public-reference-keys` in
+/// `references.public`: reference numbers to URLs. A key is an integer, or
+/// a string that is one (`"12"`, `"-1"`, `"+3"`: ASCII digits, an optional
+/// sign, within i64). Any other key is `int_parsing` (a string: a word,
+/// whitespace, `_`, other digits, a number wider than i64) or `int_type` (a
+/// float, never truncated; a boolean; an integer wider than i64), at the
+/// key's `[key]`, as Pydantic reports a dictionary key (`public-reference-keys` in
 /// tests/oracle/objects_cases.toml).
 pub fn public_references(node: &Node, cx: &mut Context) -> Option<Option<BTreeMap<i64, String>>> {
     let entries = match &node.value {
@@ -476,7 +474,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn reviewed_accepts_the_oracles_forms() {
+    fn reviewed_accepts_a_date_and_a_datetime_with_an_offset() {
         for text in [
             "2026-09-01",
             "2026-09-01T15:04:05Z",
@@ -502,7 +500,7 @@ mod tests {
     }
 
     #[test]
-    fn reviewed_refuses_other_shapes_with_the_oracles_message() {
+    fn reviewed_refuses_other_shapes_with_the_shape_message() {
         for text in [
             "yesterday",
             "20260101",
@@ -518,13 +516,11 @@ mod tests {
         }
     }
 
-    /// Where the shape message is intended and the oracle's differs
+    /// Two inputs that are refused with the shape message
     /// (`reviewed-validity-message` in tests/oracle/objects_cases.toml): a
-    /// date in other digits than ASCII's (the oracle's `\d` took them, and
-    /// `date.fromisoformat` refused them, `Invalid isoformat string`), and a
-    /// date after a control character Python's `strip()` removes and Rust's
-    /// `trim()`, Unicode's `White_Space`, keeps (U+001C to U+001F; the oracle
-    /// accepted the date).
+    /// date in other digits than ASCII's, and a date after a control
+    /// character that `trim()` (Unicode's `White_Space`) keeps, U+001C to
+    /// U+001F.
     #[test]
     fn reviewed_refuses_other_digits_and_control_padding_with_the_shape_message() {
         for text in [

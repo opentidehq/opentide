@@ -384,8 +384,7 @@ fn path_lists_the_chain_as_schema_version_chain_does() {
     );
 }
 
-/// `stamp_schema_identifier`'s cases, each as the oracle's function returns
-/// it (`models/migration.py`), written as YAML.
+/// `stamp_schema_identifier`'s cases, input and result written as YAML.
 #[test]
 fn stamp_schema_identifier_keeps_its_semantics() {
     let cases = [

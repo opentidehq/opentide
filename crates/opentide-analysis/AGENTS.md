@@ -30,6 +30,11 @@ on; the language server and the browser build leave it off.
   opentide-tide into this crate (ADR 0016, #1965) changes no caller. A query language with no
   row in `ENGINES` fails the registry's test and `every_query_language_is_analysed`, and
   `analyze` `debug_assert!`s it.
+- A query's dialect, profile and stack reach its engine as an `opentide_highlight::Setting`
+  through `QueryEngine::analyze_for`: `analyze_query` passes the request's platform and stack with
+  the `File` profile, Tide's injections the block's or hunt's (ADR 0015 §4). Each engine maps the
+  setting onto its crate's own types; a new language does it in its `Engine`, not in a `match`
+  here.
 - The README's example is a doctest (`ReadmeDoctests`): keep it compiling.
 
 ## Test

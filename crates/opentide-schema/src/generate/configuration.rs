@@ -1,5 +1,5 @@
 //! The JSON Schema of each configuration TOML file and the router keyed by
-//! file name (`configuration_schemas.py`; UC-1.8b, #900), from the
+//! file name (UC-1.8b, #900), from the
 //! configuration models' derived [`JsonSchema`] (schemars), never from a
 //! hand-written schema.
 //!
@@ -9,9 +9,8 @@
 //! `.opentide/configurations/` to its schema file, since a TOML file is
 //! routed by its name rather than by a key inside it.
 //!
-//! The documents accept and refuse what the oracle's do (`cargo xtask
-//! codegen --check --oracle` validated every configuration file of the
-//! corpora against both until #1142); their text is schemars'.
+//! The documents accept and refuse what the models' derived schemas do, and
+//! their text is schemars'.
 
 use schemars::generate::SchemaSettings;
 use schemars::transform::Transform;
@@ -45,9 +44,9 @@ pub const VISIBILITY_SCHEMA_ID: &str = "visibility::1.0";
 /// The MISP connector's schema identifier (`MISP_SCHEMA_ID`).
 pub const MISP_SCHEMA_ID: &str = "sharing::misp::1.0";
 
-/// Every router key with a model, in the oracle's order
-/// (`configuration_files`): the files with a model of their own, each
-/// platform's file, then the generic platform file.
+/// Every router key with a model, in the router's order: the files with a
+/// model of their own, each platform's file, then the generic platform
+/// file.
 pub fn file_keys() -> Vec<String> {
     let mut keys: Vec<String> = FILE_MODELS.iter().map(|&key| key.to_owned()).collect();
     keys.extend(PLATFORMS.iter().map(|id| format!("platforms/{id}.toml")));
@@ -156,8 +155,8 @@ pub fn configuration_router() -> Value {
     })
 }
 
-/// Every configuration schema and the router, by output file name, in the
-/// oracle's order (`generate_configuration_schemas`).
+/// Every configuration schema and the router, by output file name: one
+/// schema per file name, in [`file_keys`]'s order, then the router.
 pub fn configuration_schemas() -> Vec<(String, Value)> {
     let mut documents: Vec<(String, Value)> = Vec::new();
     for key in file_keys() {

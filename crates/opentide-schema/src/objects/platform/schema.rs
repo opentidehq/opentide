@@ -1,5 +1,5 @@
-//! Platform block schema metadata for editor schemas and templates
-//! (`models/platform_schema.py`): which keys each block requires besides
+//! Platform block schema metadata for editor schemas and templates: which
+//! keys each block requires besides
 //! what its model requires, the titles and `tide.*` keys of the shared
 //! properties, and the `schema` identifiers a block offers.
 
@@ -7,7 +7,7 @@ use serde_json::{Value, json};
 
 use crate::objects::platform::{PLATFORM_CONFIG_MODELS, Registered};
 
-/// The keys a platform block requires (`_REQUIRED`), by its key under
+/// The keys a platform block requires, by its key under
 /// `configurations`. Not Splunk's `scheduling`: a correlation search has
 /// nothing to schedule, so the model, the deployer and the template all leave
 /// it optional.
@@ -28,8 +28,7 @@ pub fn required(platform: &str) -> &'static [&'static str] {
         "exabeam" => &["status", "sequences"],
         "google_secops" => &["status", "events", "condition"],
         "datadog" => &["status", "queries", "cases"],
-        // Carbon Black, Graylog, and the oracle's default for a model it does
-        // not list.
+        // Carbon Black, Graylog, and any platform not listed above.
         _ => &["status", "query"],
     }
 }
@@ -77,7 +76,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn platform_root_extras_follow_the_oracle() {
+    fn platform_root_extras_hold_each_platforms_keys() {
         let extras = all_root_extras();
         assert_eq!(extras.len(), crate::platforms::COUNT);
         let sentinel = &extras[0].1;
@@ -108,12 +107,12 @@ mod tests {
         );
     }
 
-    /// Every block's required keys are 0.28.1's `_REQUIRED`
-    /// (`models/platform_schema.py`): a Bitdefender block (a detection or a
-    /// YARA rule) and a Google SecOps block (YARA-L sections) have no `query`.
+    /// Every block's required keys, one entry per platform: a Bitdefender
+    /// block (a detection or a YARA rule) and a Google SecOps block (YARA-L
+    /// sections) have no `query`.
     #[test]
-    fn every_block_requires_the_oracles_keys() {
-        let oracle: &[(&str, &[&str])] = &[
+    fn every_block_requires_its_keys() {
+        let expected: &[(&str, &[&str])] = &[
             ("sentinel", &["status", "query", "scheduling", "alert"]),
             (
                 "microsoft_defender",
@@ -138,8 +137,8 @@ mod tests {
             ("google_secops", &["status", "events", "condition"]),
             ("datadog", &["status", "queries", "cases"]),
         ];
-        assert_eq!(oracle.len(), crate::platforms::COUNT);
-        for (key, keys) in oracle {
+        assert_eq!(expected.len(), crate::platforms::COUNT);
+        for (key, keys) in expected {
             assert_eq!(required(key), *keys, "{key}");
         }
     }

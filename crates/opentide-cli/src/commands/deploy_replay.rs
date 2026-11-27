@@ -26,6 +26,7 @@ use opentide_compile::git::GitError;
 
 use super::deploy_state::{Shard, StateError};
 use super::{Report, counted};
+use crate::env::Env;
 use crate::envelope::Failure;
 use crate::json::Json;
 
@@ -143,17 +144,21 @@ impl Drop for Scratch {
     clippy::case_sensitive_file_extension_comparisons,
     reason = "a shard is named <uuid>.json in lower case; git lists the paths as committed"
 )]
-pub fn replay(root: &Path, state_commit: &str) -> Result<Replayed, ReplayError> {
-    let changes = opentide_compile::git::commit_changes(root, state_commit, DEPLOYMENT_STATES)
-        .map_err(|error| {
-            ReplayError::Git(match error {
-                GitError::MissingCheckout(searched) => format!(
-                    "no git checkout was found from {}",
-                    dunce::simplified(&searched).display()
-                ),
-                other => other.message(),
-            })
-        })?;
+pub fn replay(root: &Path, env: &Env, state_commit: &str) -> Result<Replayed, ReplayError> {
+    // The checkout is the one git would find with the run's environment
+    // (`GIT_DIR`, `GIT_WORK_TREE`, `GIT_CEILING_DIRECTORIES`).
+    let lookup = |name: &str| env.get(name).map(std::ffi::OsString::from);
+    let changes =
+        opentide_compile::git::commit_changes(root, &lookup, state_commit, DEPLOYMENT_STATES)
+            .map_err(|error| {
+                ReplayError::Git(match error {
+                    GitError::MissingCheckout(searched) => format!(
+                        "no git checkout was found from {}",
+                        dunce::simplified(&searched).display()
+                    ),
+                    other => other.message(),
+                })
+            })?;
     let scratch = Scratch::new().map_err(ReplayError::Io)?;
     let mut result = Replayed::default();
     for change in changes
@@ -231,9 +236,9 @@ pub const COMMAND: &str = "deploy replay-state";
 /// removed are the document's `written` and `removed`; each binding a
 /// concurrent run changed too is a `deployment_state_conflict` line in
 /// `conflicts` and `warnings`, so the CI log shows both ids.
-pub fn report(cwd: &Path, state_commit: &str) -> Report {
+pub fn report(cwd: &Path, env: &Env, state_commit: &str) -> Report {
     let paths = |paths: &[String]| Json::Array(paths.iter().map(Json::str).collect());
-    match replay(cwd, state_commit) {
+    match replay(cwd, env, state_commit) {
         Ok(result) => {
             let mut report = Report::completed(
                 COMMAND,
@@ -289,9 +294,44 @@ mod tests {
             .current_dir(dir)
             .env("GIT_CONFIG_GLOBAL", "/dev/null")
             .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env_remove("GIT_DIR")
+            .env_remove("GIT_WORK_TREE")
+            .env_remove("GIT_INDEX_FILE")
             .status()
             .unwrap();
         assert!(status.success(), "git {args:?}");
+    }
+
+    /// A run's environment without git's variables (a hook running the
+    /// tests exports `GIT_DIR`).
+    fn no_env() -> Env {
+        Env::from_pairs(Vec::<(String, String)>::new())
+    }
+
+    /// The run's `GIT_DIR` and `GIT_WORK_TREE` name the checkout, as they
+    /// did for the `git` program: a run from outside it replays its commit.
+    #[test]
+    fn the_runs_git_dir_names_the_checkout() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("dépôt");
+        let elsewhere = dir.path().join("ailleurs");
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::create_dir_all(&elsewhere).unwrap();
+        git_in(&root, &["init", "-q"]);
+        write(&root, &shard("{\"crowdstrike\": {\"lab\": \"1\"}}"));
+        git_in(&root, &["add", "-A"]);
+        git_in(&root, &["commit", "-qm", "base"]);
+        write(&root, &shard("{\"crowdstrike\": {\"lab\": \"2\"}}"));
+        git_in(&root, &["commit", "-qam", "ours"]);
+        let env = Env::from_pairs([
+            ("GIT_DIR", root.join(".git").to_string_lossy().into_owned()),
+            ("GIT_WORK_TREE", root.to_string_lossy().into_owned()),
+        ]);
+        let result = replay(&elsewhere, &env, "HEAD").unwrap();
+        assert_eq!(result.written.len(), 1, "{result:?}");
+        // Without them, the folder is no checkout.
+        let error = replay(&elsewhere, &no_env(), "HEAD").unwrap_err();
+        assert!(error.to_string().contains("no git checkout"), "{error}");
     }
 
     fn shard(platforms: &str) -> String {
@@ -323,7 +363,7 @@ mod tests {
         git_in(root, &["commit", "-qam", "ours"]);
         // The tip, as a concurrent merge left it.
         write(root, &shard("{\"crowdstrike\": {\"lab\": \"9\"}}"));
-        let result = replay(root, "HEAD").unwrap();
+        let result = replay(root, &no_env(), "HEAD").unwrap();
         assert_eq!(result.written.len(), 1);
         assert!(result.conflicts.is_empty(), "{:?}", result.conflicts);
         let text =
@@ -346,7 +386,7 @@ mod tests {
         write(root, &shard("{\"crowdstrike\": {\"lab\": \"2\"}}"));
         git_in(root, &["commit", "-qam", "ours"]);
         write(root, &shard("{\"crowdstrike\": {\"lab\": \"3\"}}"));
-        let result = replay(root, "HEAD").unwrap();
+        let result = replay(root, &no_env(), "HEAD").unwrap();
         assert_eq!(
             result.conflicts,
             [format!(
@@ -360,10 +400,10 @@ mod tests {
         std::fs::remove_file(&path).unwrap();
         git_in(root, &["commit", "-qam", "removed"]);
         write(root, &shard("{\"crowdstrike\": {\"lab\": \"2\"}}"));
-        let result = replay(root, "HEAD").unwrap();
+        let result = replay(root, &no_env(), "HEAD").unwrap();
         assert_eq!(result.removed.len(), 1);
         assert!(!path.exists());
-        let report = report(root, "HEAD~1");
+        let report = report(root, &no_env(), "HEAD~1");
         assert_eq!(report.outcome.exit_code, 0);
         assert!(
             report
@@ -373,7 +413,7 @@ mod tests {
             "{}",
             report.outcome.message
         );
-        let failed = super::report(root, "no-such-commit");
+        let failed = super::report(root, &no_env(), "no-such-commit");
         assert_eq!(failed.outcome.exit_code, 1);
         assert_eq!(failed.outcome.status, "failed");
     }

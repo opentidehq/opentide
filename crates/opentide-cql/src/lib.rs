@@ -139,8 +139,17 @@ impl opentide_highlight::QueryEngine for Engine {
         opentide_core::LanguageId::Cql
     }
 
-    fn analyze(&self, source: &str) -> opentide_highlight::AnalyzeResult {
-        let r = analyze(source);
+    fn analyze_for(
+        &self,
+        source: &str,
+        setting: &opentide_highlight::Setting<'_>,
+    ) -> opentide_highlight::AnalyzeResult {
+        let profile = if setting.profile == opentide_highlight::Profile::Rule {
+            Profile::CORRELATION_RULE
+        } else {
+            Profile::default()
+        };
+        let r = analyze_with(source, &profile);
         opentide_highlight::AnalyzeResult {
             diagnostics: r.diagnostics,
             tokens: r.tokens,

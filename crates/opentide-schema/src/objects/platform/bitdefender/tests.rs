@@ -1,7 +1,6 @@
 //! `BitdefenderConfig` and its constraint codes (bitdefender-1.0,
-//! Constraints): the cases of 0.28.0's
-//! `tests/test_platforms/test_bitdefender_model.py` and of the language
-//! server's `bitdefender_spec.rs`, on the model. The YARA signature's codes
+//! Constraints), on the model: each constraint's accepted and refused
+//! forms, the language server's `bitdefender_spec.rs` cases included. The YARA signature's codes
 //! are the YARA lane's, with their cases.
 
 use std::sync::Arc;
@@ -840,7 +839,7 @@ fn literal_true_actions_refuse_false() {
 
 #[test]
 fn a_block_without_status_is_left_to_the_field() {
-    // `status: null` skips the named check, as the oracle's before-validator does.
+    // `status: null` skips the named check: only the field's own error.
     let mut raw = block(&json!({}));
     raw["status"] = Json::Null;
     let found = errors(&raw);

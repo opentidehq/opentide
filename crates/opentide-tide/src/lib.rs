@@ -44,10 +44,9 @@ mod yara;
 use opentide_core::node::{Node, Value};
 use opentide_core::{ByteSpan, Diagnostic, LanguageId, Range, span_to_range};
 use opentide_highlight::{
-    HighlightSpec, HighlightToken, TideField, highlight_markdown_line, tide_field_at,
-    tokens_from_spans,
+    HighlightSpec, HighlightToken, Profile, Setting, TideField, highlight_markdown_line,
+    tide_field_at, tokens_from_spans,
 };
-use opentide_kql::Dialect;
 use opentide_schema::platforms::PlatformId;
 use regex::Regex;
 use serde::Deserialize;
@@ -943,41 +942,38 @@ fn analyze_injections(
     });
     for inj in injections {
         let mut extra = Vec::new();
+        // A block's query is a rule, a hunt's search is not (ADR 0015 §4);
+        // the platform (the block's key, the hunt's `system`) names the
+        // dialect.
+        let rule = inj.field_path.first().map(String::as_str) == Some("configurations");
+        // Hunts have no tenants; only the rule block's ES|QL is targeted.
+        let stack = (rule && inj.language == LanguageId::Esql)
+            .then(|| {
+                elastic::stack_target(
+                    configurations.and_then(|c| c.get("elastic")),
+                    elastic_tenants,
+                )
+            })
+            .flatten()
+            .map(|target| target.to_string());
+        let setting = Setting {
+            platform: &inj.platform,
+            profile: if rule { Profile::Rule } else { Profile::Search },
+            stack: stack.as_deref(),
+        };
+        // `LanguageId` is non-exhaustive: Tide YAML, a configuration file and
+        // a language this crate does not analyse yet have no engine, and no
+        // findings or tokens.
+        let checked = || {
+            engines::engine(inj.language)
+                .map(|engine| engine.analyze_for(&inj.inner, &setting))
+                .unwrap_or_default()
+        };
         let (found, query_tokens) = match inj.language {
-            LanguageId::Kql => {
-                let dialect = Dialect::for_platform(&inj.platform);
-                let mut r = opentide_kql::analyze(&inj.inner, dialect);
-                // A block's query is a rule, a hunt's search is not (ADR 0015 §4).
-                let profile =
-                    if inj.field_path.first().map(String::as_str) == Some("configurations") {
-                        opentide_kql::Profile::Rule
-                    } else {
-                        opentide_kql::Profile::Search
-                    };
-                opentide_kql::apply_profile(&inj.inner, dialect, profile, &mut r.diagnostics);
-                (r.diagnostics, r.tokens)
-            }
-            LanguageId::Spl => {
-                let r = opentide_spl::analyze(&inj.inner);
-                (r.diagnostics, r.tokens)
-            }
-            LanguageId::Esql => {
-                // Hunts have no tenants; only the rule block is targeted.
-                let target = (inj.field_path.first().map(String::as_str) == Some("configurations"))
-                    .then(|| {
-                        elastic::stack_target(
-                            configurations.and_then(|c| c.get("elastic")),
-                            elastic_tenants,
-                        )
-                    })
-                    .flatten();
-                let r = opentide_esql::analyze_for(&inj.inner, target);
-                (r.diagnostics, r.tokens)
-            }
             LanguageId::Eql => {
-                let mut r = opentide_eql::analyze(&inj.inner);
+                let mut r = checked();
                 // Hunts have no schedule; only the rule query is compared.
-                if inj.field_path.first().map(String::as_str) == Some("configurations") {
+                if rule {
                     extra = elastic::maxspan_advisories(source, configurations, &inj);
                 }
                 if let Some(indices) = elastic::ecs_indices(configurations, &inj.field_path) {
@@ -989,7 +985,7 @@ fn analyze_injections(
                 (r.diagnostics, r.tokens)
             }
             LanguageId::Kuery => {
-                let mut r = opentide_kuery::analyze(&inj.inner, opentide_lucene::parses);
+                let mut r = checked();
                 if let Some(indices) = elastic::ecs_indices(configurations, &inj.field_path) {
                     let ecs = opentide_ecs::with_declared_fields(&indices, || {
                         opentide_kuery::ecs_diagnostics(&inj.inner)
@@ -1000,10 +996,10 @@ fn analyze_injections(
             }
             LanguageId::Lucene => {
                 // Carbon Black's and Graylog's dialects by their block or
-                // hunt `system`; Elastic's otherwise.
-                let dialect = opentide_lucene::Dialect::for_platform(&inj.platform);
-                let mut r = opentide_lucene::analyze_dialect(&inj.inner, dialect);
-                let indices = (dialect == opentide_lucene::Dialect::Elastic)
+                // hunt `system`; Elastic's otherwise, the one that reads ECS.
+                let mut r = checked();
+                let indices = (opentide_lucene::Dialect::for_platform(&inj.platform)
+                    == opentide_lucene::Dialect::Elastic)
                     .then(|| elastic::ecs_indices(configurations, &inj.field_path))
                     .flatten();
                 if let Some(indices) = indices {
@@ -1014,6 +1010,7 @@ fn analyze_injections(
                 }
                 (r.diagnostics, r.tokens)
             }
+            // The block's macros, lists and event source, and its `output`.
             LanguageId::Falco => {
                 let ctx = falco::context_for(
                     configurations
@@ -1028,22 +1025,8 @@ fn analyze_injections(
                 };
                 (r.diagnostics, r.tokens)
             }
-            LanguageId::Cql => {
-                // The rule block is a Next-Gen SIEM correlation rule; a hunt
-                // search is not.
-                let ctx = if inj.field_path.first().map(String::as_str) == Some("configurations") {
-                    opentide_cql::Profile::CORRELATION_RULE
-                } else {
-                    opentide_cql::Profile::default()
-                };
-                let r = opentide_cql::analyze_with(&inj.inner, &ctx);
-                (r.diagnostics, r.tokens)
-            }
             LanguageId::Yara => {
-                let ctx = opentide_yara::Dialect::for_platform(&inj.platform)
-                    .map(opentide_yara::Context::for_profile)
-                    .unwrap_or_default();
-                let r = opentide_yara::analyze_with(&inj.inner, &ctx);
+                let r = checked();
                 let inner_lines = opentide_core::LineIndex::new(&inj.inner);
                 let diagnostics = r
                     .diagnostics
@@ -1061,39 +1044,16 @@ fn analyze_injections(
                 extra.extend(secops_block.take().unwrap_or_default());
                 (found, opentide_yaral::highlight(&inj.inner))
             }
-            // A hunt with `system: google_secops`: a search.
-            LanguageId::Yaral => {
-                let r = opentide_yaral::analyze_with(&inj.inner, &opentide_yaral::Context::SEARCH);
+            // Each engine maps the setting onto its own profile: KQL's rule
+            // profile (Sentinel's limits), SPL, ES|QL, CQL (a block's query
+            // is a Next-Gen SIEM correlation rule), YARA-L (a hunt with
+            // `system: google_secops`, a search), Exabeam (a block's
+            // sequence filter is the `rule` profile) and Datadog (a block's
+            // query is a detection rule's, RFC rfc-datadog-cloud-siem §6.1).
+            _ => {
+                let r = checked();
                 (r.diagnostics, r.tokens)
             }
-            // A sequence filter of the Exabeam block is a correlation-rule
-            // query (profile `rule`); a hunt with `system: exabeam` is a
-            // search (profile `search`), as a `.exabeam` file is.
-            LanguageId::Exabeam => {
-                let ctx = if inj.field_path.first().map(String::as_str) == Some("configurations") {
-                    opentide_exabeam::Context::RULE
-                } else {
-                    opentide_exabeam::Context::SEARCH
-                };
-                let r = opentide_exabeam::analyze_with(&inj.inner, &ctx);
-                (r.diagnostics, r.tokens)
-            }
-            // A query of the Datadog block is a detection rule's (profile `rule`); a hunt
-            // with `system: datadog` is a search (profile `search`), as a `.datadog`
-            // file is (RFC rfc-datadog-cloud-siem §6.1).
-            LanguageId::Datadog => {
-                let ctx = if inj.field_path.first().map(String::as_str) == Some("configurations") {
-                    opentide_datadog::Context::RULE
-                } else {
-                    opentide_datadog::Context::SEARCH
-                };
-                let r = opentide_datadog::analyze_with(&inj.inner, &ctx);
-                (r.diagnostics, r.tokens)
-            }
-            LanguageId::TideYaml | LanguageId::Config => (Vec::new(), Vec::new()),
-            // `LanguageId` is non-exhaustive: a language this crate does not
-            // analyse yet has no findings and no tokens.
-            _ => (Vec::new(), Vec::new()),
         };
         // The stand-in `opentide new` wrote is lint's `placeholders` finding,
         // not a query to check: `opentide validate` skips it too.

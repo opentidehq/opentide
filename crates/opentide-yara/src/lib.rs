@@ -206,8 +206,15 @@ impl opentide_highlight::QueryEngine for Engine {
         opentide_core::LanguageId::Yara
     }
 
-    fn analyze(&self, source: &str) -> opentide_highlight::AnalyzeResult {
-        let r = analyze(source);
+    fn analyze_for(
+        &self,
+        source: &str,
+        setting: &opentide_highlight::Setting<'_>,
+    ) -> opentide_highlight::AnalyzeResult {
+        let ctx = Dialect::for_platform(setting.platform)
+            .map(Context::for_profile)
+            .unwrap_or_default();
+        let r = analyze_with(source, &ctx);
         opentide_highlight::AnalyzeResult {
             diagnostics: r.diagnostics,
             tokens: r.tokens,

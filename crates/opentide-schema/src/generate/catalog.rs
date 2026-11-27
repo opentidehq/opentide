@@ -1,4 +1,4 @@
-//! The language server's Tide field catalog (`lsp_catalog.py`): what
+//! The language server's Tide field catalog: what
 //! `opentide generate schemas` writes to `.opentide/lsp/catalogs/generated/`
 //! and what the engine compiles in (`data/catalogs/tide/generated/`).
 //!
@@ -486,7 +486,7 @@ impl Keywords for Spec<'_> {
 
 /// The object schema a field holds, through `$ref` and `anyOf` branches
 /// (unions of unions included); `None` for a field that holds no object with
-/// properties (`_unwrap`).
+/// properties.
 fn object_of<'s>(root: &'s Value, node: &'s Value) -> Option<&'s Value> {
     object_in(root, node, 0)
 }
@@ -724,7 +724,7 @@ fn field_row(
         values.clear();
         docs.clear();
     }
-    // An empty constant offers no value (the oracle tests it for truth).
+    // An empty constant offers no value.
     if let Some(constant) = &constant
         && !constant.is_empty()
         && values.is_empty()

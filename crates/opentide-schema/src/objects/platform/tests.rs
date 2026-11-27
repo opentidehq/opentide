@@ -1,9 +1,7 @@
-//! The platform blocks' tests, ported from the oracle's
-//! `tests/test_platforms/test_elastic_model.py`,
-//! `tests/test_platforms/test_sysdig_model.py`,
-//! `tests/test_models/test_platform*.py` and
-//! `tests/test_models/test_sentinel_attack.py`: each block is a JSON value,
-//! read as the node the YAML would give.
+//! The platform blocks' tests: the shared fields, Elastic's and Sysdig's
+//! named checks, Sentinel's techniques and durations, and Splunk's
+//! `advanced` table. Each block is a JSON value, read as the node the YAML
+//! would give.
 
 use garde::Validate;
 use serde_json::{Value as Json, json};
@@ -259,7 +257,7 @@ fn named_checks_are_registered_by_name() {
 }
 
 // ---------------------------------------------------------------------------
-// elastic_rule_shape (`test_elastic_model.py`).
+// elastic_rule_shape.
 // ---------------------------------------------------------------------------
 
 const ELASTIC: &str = "configurations.elastic";
@@ -730,7 +728,7 @@ fn elastic_round_trips_through_its_serialised_form() {
 }
 
 // ---------------------------------------------------------------------------
-// sysdig_rule_shape (`test_sysdig_model.py`).
+// sysdig_rule_shape.
 // ---------------------------------------------------------------------------
 
 fn rule() -> Json {
@@ -1118,7 +1116,7 @@ fn garde_runs_the_named_checks_and_the_field_checks() {
 }
 
 // ---------------------------------------------------------------------------
-// Sentinel (`test_sentinel_attack.py`, the known gap on durations).
+// Sentinel: techniques, and the durations deploy converts.
 // ---------------------------------------------------------------------------
 
 fn sentinel_with(alert: &Json, scheduling: &Json) -> Json {
@@ -1233,8 +1231,7 @@ fn a_block_larger_than_the_budget_is_left_to_the_conversion() {
 }
 
 /// An optional `Literal` is Pydantic's `anyOf [literal, null]`: its `enum`
-/// holds the literal's values only, never a `null` (as the retired schema
-/// diff against the oracle held it).
+/// holds the literal's values only, never a `null`.
 #[test]
 fn an_optional_literal_keeps_null_out_of_its_enum() {
     let schema = serde_json::to_value(schemars::schema_for!(ElasticConfig)).unwrap();
@@ -1297,7 +1294,7 @@ fn sysdig_a_null_exception_value_is_refused() {
 }
 
 // ---------------------------------------------------------------------------
-// Splunk's `advanced` table (0.24.0's `test_platform_query_contract.py`).
+// Splunk's `advanced` table.
 // ---------------------------------------------------------------------------
 
 fn splunk_block() -> Json {

@@ -951,6 +951,11 @@ fn a_misspelt_sentinel_table_fails_a_query_file() {
         .map(|item| item["code"].as_str().unwrap())
         .collect();
     assert_eq!(codes, ["kql_table_misspelt"], "{document}");
+    // The near miss is a replacement name (#1950).
+    assert_eq!(
+        document["diagnostics"][0]["help"], "did you mean \"SecurityEvent\"?",
+        "{document}"
+    );
     std::fs::write(ws.join("c.kql"), "VendorFirewallEvents | take 1\n").unwrap();
     let run = opentide(
         &ws,
