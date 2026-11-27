@@ -5884,53 +5884,62 @@ impl Sender<'_, '_> {
     /// recorded id, or deleted. A refused key, an unknown site or a tenant
     /// with no answer stops its batch.
     fn datadog(&mut self, batches: &[Batch], log: &mut DeployLog<'_>) -> Result<(), Raised> {
-        use opentide_connectors::datadog::Datadog;
+        let datadog = opentide_connectors::datadog::Datadog::new();
+        self.tenants(batches, log, |sender, batch, log| {
+            sender.datadog_tenant(&datadog, batch, log)
+        })
+    }
+
+    /// One tenant's rules of [`datadog`](Self::datadog).
+    fn datadog_tenant(
+        &mut self,
+        datadog: &opentide_connectors::datadog::Datadog,
+        batch: &Batch,
+        log: &mut DeployLog<'_>,
+    ) -> Result<(), Raised> {
         let platform = opentide_compile::datadog::PLATFORM;
-        let datadog = Datadog::new();
-        for batch in batches {
-            let tenant = batch.tenant.name.clone();
-            let planned = self.screen(platform, batch, log);
-            if planned.is_empty() {
-                continue;
-            }
-            let Some(connection) = self.connect_or_fail(platform, batch, log)? else {
-                continue;
-            };
-            let cancel = self.cancel.clone();
-            let context = TenantContext {
-                tenant: &connection.tenant,
-                http: &connection.http,
-                cancel: &cancel,
-            };
-            let opened = self
-                .block(async { Ok(datadog.open(context).await) })
-                .map_err(DeployError::from)
-                .and_then(|opened| opened);
-            if let Err(error) = opened {
-                // An unset key variable or a site that is not one: no rule
-                // on the tenant can deploy.
-                let text = error.into_connector().text();
-                tracing::error!(
-                    tenant = tenant.as_str(),
-                    error = text.as_str(),
-                    critical = true,
-                    "datadog_tenant_deployment_failed"
-                );
-                self.unusable(platform, Some(&tenant), &text);
-                log.unreached_on(
-                    platform,
-                    &tenant,
-                    "not_attempted",
-                    &format!("not attempted: tenant {tenant} failed"),
-                );
-                continue;
-            }
-            connection.mark_opened();
-            for (rule, action) in planned {
-                connection.rule_begins();
-                if self.datadog_rule(&connection, batch, rule, &action, &datadog, log)? {
-                    break;
-                }
+        let tenant = batch.tenant.name.clone();
+        let planned = self.screen(platform, batch, log);
+        if planned.is_empty() {
+            return Ok(());
+        }
+        let Some(connection) = self.connect_or_fail(platform, batch, log)? else {
+            return Ok(());
+        };
+        let cancel = self.cancel.clone();
+        let context = TenantContext {
+            tenant: &connection.tenant,
+            http: &connection.http,
+            cancel: &cancel,
+        };
+        let opened = self
+            .block(async { Ok(datadog.open(context).await) })
+            .map_err(DeployError::from)
+            .and_then(|opened| opened);
+        if let Err(error) = opened {
+            // An unset key variable or a site that is not one: no rule
+            // on the tenant can deploy.
+            let text = error.into_connector().text();
+            tracing::error!(
+                tenant = tenant.as_str(),
+                error = text.as_str(),
+                critical = true,
+                "datadog_tenant_deployment_failed"
+            );
+            self.unusable(platform, Some(&tenant), &text);
+            log.unreached_on(
+                platform,
+                &tenant,
+                "not_attempted",
+                &format!("not attempted: tenant {tenant} failed"),
+            );
+            return Ok(());
+        }
+        connection.mark_opened();
+        for (rule, action) in planned {
+            connection.rule_begins();
+            if self.datadog_rule(&connection, batch, rule, &action, datadog, log)? {
+                break;
             }
         }
         Ok(())
