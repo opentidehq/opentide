@@ -490,7 +490,7 @@ impl Transport for ClientTransport {
             };
             drop(pending);
             match outcome {
-                Err(_) => Err(TransportFailure::Timeout),
+                Err(_) => Err(TransportFailure::Deadline { after: limit }),
                 Ok(Err(_)) => Err(TransportFailure::Unreachable {
                     reason: fetcher.wire.gone.to_owned(),
                 }),
