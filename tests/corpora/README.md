@@ -38,6 +38,7 @@ cargo xtask corpus generate --seed 20261107 --scale 10 --out /tmp/x10
 cargo xtask corpus generate --seed 1 --threats 30 --objectives 30 --rules 50 --out /tmp/small
 cargo xtask corpus generate --seed 1 --threats 30 --objectives 30 --rules 50 --digest
 cargo xtask corpus clean --engine python --repo /tmp/heavy           # validate and lint: zero findings
+cargo xtask corpus clean --engine rust --repo /tmp/heavy             # the same, on this checkout's command line
 ```
 
 - **Deterministic by seed.** The generator has its own SplitMix64 and YAML emitter, reads no clock,
@@ -63,6 +64,8 @@ cargo xtask corpus clean --engine python --repo /tmp/heavy           # validate 
   `paths.toml`.
 - **Clean.** Seed 1 (30/30/50) and seed 20261107 (300/300/500) have zero findings in the
   oracle's `validate` and `lint`; ci.yml's `corpus` job checks the heavy one.
+  Under `--engine rust`, `lint` reports info notes on both
+  (`microsoft_defender_unprojected_output`), a check the oracle does not have.
 
 Consumers: the CLI snapshots run the small workspace (seed 1, 30/30/50) and the fault workspace as
 fixtures (`OPENTIDE_REPLAY_FIXTURES`, tests/golden/README.md); `xtask bench` (UC-0.8) generates seed 20261107 with `--scale`. The library
