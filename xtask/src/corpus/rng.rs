@@ -2,8 +2,6 @@
 //! seed gives the same workspace on every platform, toolchain and dependency
 //! update (no crate's algorithm can change under the recorded hash).
 
-use std::fmt::Write as _;
-
 /// A SplitMix64 generator (Steele, Lea and Flood, 2014).
 #[derive(Debug, Clone)]
 pub struct Rng {
@@ -93,12 +91,7 @@ impl Rng {
         bytes[8..].copy_from_slice(&low.to_be_bytes());
         bytes[6] = (bytes[6] & 0x0f) | 0x40;
         bytes[8] = (bytes[8] & 0x3f) | 0x80;
-        let hex = bytes
-            .iter()
-            .fold(String::with_capacity(32), |mut hex, byte| {
-                let _ = write!(hex, "{byte:02x}");
-                hex
-            });
+        let hex = opentide_core::text::hex(&bytes);
         format!(
             "{}-{}-{}-{}-{}",
             &hex[0..8],

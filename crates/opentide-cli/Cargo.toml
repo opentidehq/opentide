@@ -127,8 +127,6 @@ regex.workspace = true
 url.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-# SARIF and Code Quality fingerprints (RustCrypto).
-sha2 = "0.11"
 shlex = "2.0"
 terminal_size = "0.4"
 textwrap = { version = "0.16", default-features = false }

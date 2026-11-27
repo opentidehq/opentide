@@ -38,6 +38,8 @@ crate depends on it.
   finding UUIDs in text (`PATTERN`, `finder`). Never another regex, `is_uuid` or hand parse.
 
 [#821]: https://github.com/opentidehq/opentide/issues/821
+- `text` is the one copy of the small text helpers (#1957): `hex`, `sha256_hex`. Never a second
+  hex encoder or digest at a call site.
 - YAML is read with `node` only: never `serde_yaml`, `serde_yml` or a second parser (#850).
   What it reads differently from the oracle is `crates/opentide-schema/YAML.md`.
 - Codes, severities, field paths and position rules are invariant 3 of the plan: a change is a recorded decision, not a refactor.
