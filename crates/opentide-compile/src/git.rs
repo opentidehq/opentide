@@ -217,8 +217,9 @@ fn discover(start: &Path) -> Option<(PathBuf, PathBuf)> {
 }
 
 /// The environment discovery reads: a variable's raw value, which a path
-/// need not spell in UTF-8.
-type OsEnv<'a> = &'a dyn Fn(&str) -> Option<std::ffi::OsString>;
+/// need not spell in UTF-8. A caller with its own environment (the command
+/// line's, which a test injects) passes it rather than the process's.
+pub type OsEnv<'a> = &'a dyn Fn(&str) -> Option<std::ffi::OsString>;
 
 /// A variable git reads as a path, made absolute against `start`; unset and
 /// empty are the same.
@@ -233,8 +234,13 @@ fn absolute(path: &Path) -> PathBuf {
     std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf())
 }
 
-/// [`discover`], reading the environment from `env`.
-fn discover_with(start: &Path, env: OsEnv<'_>) -> Option<(PathBuf, PathBuf)> {
+/// The checkout at or above `start`, as [`worktree`] finds it, reading
+/// `GIT_DIR`, `GIT_WORK_TREE` and `GIT_CEILING_DIRECTORIES` from `env`
+/// rather than the process: its work tree and its git directory (for a
+/// linked worktree, the worktree's own one). `None` when there is no
+/// checkout, or the repository is bare.
+#[must_use]
+pub fn discover_with(start: &Path, env: OsEnv<'_>) -> Option<(PathBuf, PathBuf)> {
     let work_tree = env_path(env, "GIT_WORK_TREE", start);
     if let Some(git_dir) = env_path(env, "GIT_DIR", start) {
         return named_repository(start, git_dir, work_tree);
@@ -270,9 +276,11 @@ fn discover_with(start: &Path, env: OsEnv<'_>) -> Option<(PathBuf, PathBuf)> {
 }
 
 /// The repository `GIT_DIR` names, without a search: a file there is a
-/// gitfile (`gitdir: <path>`). Its work tree is `GIT_WORK_TREE`, else
-/// `core.worktree`, else none in a bare repository, else `start`, the
-/// directory git runs in.
+/// gitfile (`gitdir: <path>`). Its work tree is `GIT_WORK_TREE`, else none
+/// in a bare repository (`core.bare`), else `core.worktree`, else `start`,
+/// the directory git runs in. `core.worktree` is read only here: git also
+/// applies it to a git directory found by the search (run inside the git
+/// directory, say), a layout opentide does not follow.
 fn named_repository(
     start: &Path,
     git_dir: PathBuf,
@@ -288,6 +296,15 @@ fn named_repository(
         return Some((work_tree, git_dir));
     }
     let config = config(&git_dir);
+    // git reads `core.bare` first: a bare repository has no work tree, even
+    // with `core.worktree` set.
+    let bare = config
+        .as_ref()
+        .and_then(|config| config.boolean("core.bare").ok().flatten())
+        .unwrap_or(false);
+    if bare {
+        return None;
+    }
     if let Some(configured) = config
         .as_ref()
         .and_then(|config| config.path("core.worktree"))
@@ -295,11 +312,7 @@ fn named_repository(
         let configured = gix_path::from_bstr(configured.value.as_bstr()).ok()?;
         return Some((absolute(&git_dir.join(configured)), git_dir));
     }
-    let bare = config
-        .as_ref()
-        .and_then(|config| config.boolean("core.bare").ok().flatten())
-        .unwrap_or(false);
-    (!bare).then(|| (absolute(start), git_dir))
+    Some((absolute(start), git_dir))
 }
 
 /// `GIT_CEILING_DIRECTORIES` as git reads it: absolute paths separated as in
@@ -322,6 +335,12 @@ fn ceiling_dirs(value: &std::ffi::OsStr) -> Vec<PathBuf> {
 /// The work tree of the checkout at or above `start`.
 pub fn worktree(start: &Path) -> Option<PathBuf> {
     discover(start).map(|(work_dir, _)| work_dir)
+}
+
+/// [`worktree`], reading the environment from `env` (see [`discover_with`]).
+#[must_use]
+pub fn worktree_with(start: &Path, env: OsEnv<'_>) -> Option<PathBuf> {
+    discover_with(start, env).map(|(work_dir, _)| work_dir)
 }
 
 fn failed(message: impl Into<String>) -> GitError {
@@ -2328,7 +2347,37 @@ mod tests {
             .args(args)
             .current_dir(dir)
             .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
             .env("HOME", dir)
+            // A hook running the tests exports these (a linked worktree's
+            // `GIT_DIR`): `git init --bare` would then rewrite that
+            // repository rather than create one here.
+            .env_remove("GIT_DIR")
+            .env_remove("GIT_WORK_TREE")
+            .env_remove("GIT_INDEX_FILE")
+            .env_remove("GIT_CEILING_DIRECTORIES")
+            .env_remove("GIT_COMMON_DIR")
+            .env_remove("GIT_OBJECT_DIRECTORY")
+            .env_remove("GIT_ALTERNATE_OBJECT_DIRECTORIES")
+            .env_remove("GIT_NAMESPACE")
+            .env_remove("GIT_PREFIX")
+            .status()
+            .expect("git runs");
+        assert!(status.success());
+    }
+
+    /// `git config <key> <value>` in the repository at `git_dir`.
+    fn git_config(git_dir: &Path, key: &str, value: &Path) {
+        let status = std::process::Command::new("git")
+            .arg("--git-dir")
+            .arg(git_dir)
+            .args(["config", key])
+            .arg(value)
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env_remove("GIT_DIR")
+            .env_remove("GIT_WORK_TREE")
+            .env_remove("GIT_COMMON_DIR")
             .status()
             .expect("git runs");
         assert!(status.success());
@@ -2373,6 +2422,14 @@ mod tests {
         assert_eq!(git_dir.canonicalize().unwrap(), bare);
         // A bare repository without `GIT_WORK_TREE` has no work tree.
         assert_eq!(discover_with(&sub, &os_lookup(&[("GIT_DIR", &bare)])), None);
+        // `core.bare` wins over `core.worktree`, as in git.
+        git_config(&bare, "core.worktree", &work_tree);
+        assert_eq!(discover_with(&sub, &os_lookup(&[("GIT_DIR", &bare)])), None);
+        git_config(&bare, "core.bare", Path::new("false"));
+        assert_eq!(
+            discover_with(&sub, &os_lookup(&[("GIT_DIR", &bare)])),
+            Some((work_tree.clone(), bare.clone()))
+        );
         // `GIT_DIR` naming no repository finds none, without a search.
         let missing = os_lookup(&[("GIT_DIR", &root.join("missing"))]);
         assert_eq!(discover_with(&sub, &missing), None);
