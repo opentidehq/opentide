@@ -120,6 +120,25 @@ pub fn analyze(source: &str) -> AnalyzeResult {
     analyze_with(source, &Context::default())
 }
 
+/// The Falco condition [`QueryEngine`](opentide_highlight::QueryEngine) (#1953):
+/// [`analyze`] behind the shared interface.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Engine;
+
+impl opentide_highlight::QueryEngine for Engine {
+    fn language(&self) -> opentide_core::LanguageId {
+        opentide_core::LanguageId::Falco
+    }
+
+    fn analyze(&self, source: &str) -> opentide_highlight::AnalyzeResult {
+        let r = analyze(source);
+        opentide_highlight::AnalyzeResult {
+            diagnostics: r.diagnostics,
+            tokens: r.tokens,
+        }
+    }
+}
+
 /// Analyze a condition where `ctx` says it runs. The findings' ranges come
 /// from one line table ([`opentide_core::with_line_index`]).
 pub fn analyze_with(text: &str, ctx: &Context) -> AnalyzeResult {

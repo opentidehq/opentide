@@ -154,60 +154,8 @@ pub fn elastic_tenants(host: &dyn WorkspaceHost) -> Vec<ElasticTenant> {
 /// workspace, so a host checking many files of one workspace calls it file
 /// by file: the object's own checks are `validate`'s (UC-2.6, #821) and its
 /// platform blocks' are [`analyze_blocks`], which `lint` reads.
-#[expect(
-    clippy::too_many_lines,
-    reason = "one arm per language: kept whole; split when next touched"
-)]
 pub fn analyze(host: &dyn WorkspaceHost, request: AnalyzeRequest) -> AnalyzeResponse {
     match request.language {
-        LanguageId::Kql => {
-            let r = opentide_kql::analyze(&request.text, Dialect::Sentinel);
-            AnalyzeResponse {
-                diagnostics: r.diagnostics,
-                tokens: r.tokens,
-                symbols: Vec::new(),
-            }
-        }
-        LanguageId::Spl => {
-            let r = opentide_spl::analyze(&request.text);
-            AnalyzeResponse {
-                diagnostics: r.diagnostics,
-                tokens: r.tokens,
-                symbols: Vec::new(),
-            }
-        }
-        LanguageId::Esql => {
-            let r = opentide_esql::analyze(&request.text);
-            AnalyzeResponse {
-                diagnostics: r.diagnostics,
-                tokens: r.tokens,
-                symbols: Vec::new(),
-            }
-        }
-        LanguageId::Eql => {
-            let r = opentide_eql::analyze(&request.text);
-            AnalyzeResponse {
-                diagnostics: r.diagnostics,
-                tokens: r.tokens,
-                symbols: Vec::new(),
-            }
-        }
-        LanguageId::Kuery => {
-            let r = opentide_kuery::analyze(&request.text, opentide_lucene::parses);
-            AnalyzeResponse {
-                diagnostics: r.diagnostics,
-                tokens: r.tokens,
-                symbols: Vec::new(),
-            }
-        }
-        LanguageId::Lucene => {
-            let r = opentide_lucene::analyze(&request.text);
-            AnalyzeResponse {
-                diagnostics: r.diagnostics,
-                tokens: r.tokens,
-                symbols: Vec::new(),
-            }
-        }
         // A configuration file's findings are the host's: it checks the
         // buffer with opentide-schema's models and places them
         // ([`place_configuration_issues`]).
@@ -216,22 +164,6 @@ pub fn analyze(host: &dyn WorkspaceHost, request: AnalyzeRequest) -> AnalyzeResp
             tokens: Vec::new(),
             symbols: Vec::new(),
         },
-        LanguageId::Falco => {
-            let r = opentide_falco::analyze(&request.text);
-            AnalyzeResponse {
-                diagnostics: r.diagnostics,
-                tokens: r.tokens,
-                symbols: Vec::new(),
-            }
-        }
-        LanguageId::Cql => {
-            let r = opentide_cql::analyze(&request.text);
-            AnalyzeResponse {
-                diagnostics: r.diagnostics,
-                tokens: r.tokens,
-                symbols: Vec::new(),
-            }
-        }
         LanguageId::Yara => {
             // One parse for the diagnostics and the outline (ADR 0014).
             let (r, symbols) = opentide_yara::analyze_document(&request.text);
@@ -239,32 +171,6 @@ pub fn analyze(host: &dyn WorkspaceHost, request: AnalyzeRequest) -> AnalyzeResp
                 diagnostics: r.diagnostics,
                 tokens: r.tokens,
                 symbols: yara::outline(&request.text, symbols),
-            }
-        }
-        // A `.exabeam` file is a search (exabeam-1.0, "Defaults").
-        LanguageId::Exabeam => {
-            let r = opentide_exabeam::analyze(&request.text);
-            AnalyzeResponse {
-                diagnostics: r.diagnostics,
-                tokens: r.tokens,
-                symbols: Vec::new(),
-            }
-        }
-        LanguageId::Yaral => {
-            let r = opentide_yaral::analyze(&request.text);
-            AnalyzeResponse {
-                diagnostics: r.diagnostics,
-                tokens: r.tokens,
-                symbols: Vec::new(),
-            }
-        }
-        // A `.datadog` file is a search (rfc-datadog-cloud-siem, §6.1).
-        LanguageId::Datadog => {
-            let r = opentide_datadog::analyze(&request.text);
-            AnalyzeResponse {
-                diagnostics: r.diagnostics,
-                tokens: r.tokens,
-                symbols: Vec::new(),
             }
         }
         LanguageId::TideYaml => {
@@ -279,13 +185,20 @@ pub fn analyze(host: &dyn WorkspaceHost, request: AnalyzeRequest) -> AnalyzeResp
                 symbols: r.symbols,
             }
         }
-        // `LanguageId` is non-exhaustive: a language this crate does not
-        // analyse yet has no findings, tokens or symbols.
-        _ => AnalyzeResponse {
-            diagnostics: Vec::new(),
-            tokens: Vec::new(),
-            symbols: Vec::new(),
-        },
+        // A query language's file is one query, read with its default
+        // profile (a `.kql` file is Sentinel's, an `.exabeam` or a
+        // `.datadog` file a search). `LanguageId` is non-exhaustive: a
+        // language with no engine yet has no findings, tokens or symbols.
+        language => {
+            let r = opentide_tide::engines::engine(language)
+                .map(|engine| engine.analyze(&request.text))
+                .unwrap_or_default();
+            AnalyzeResponse {
+                diagnostics: r.diagnostics,
+                tokens: r.tokens,
+                symbols: Vec::new(),
+            }
+        }
     }
 }
 

@@ -1107,6 +1107,27 @@ pub fn analyze(source: &str, profile: Dialect) -> AnalyzeResult {
     analyze_with_catalog(source, &catalog)
 }
 
+/// The Kusto Query Language (KQL) [`QueryEngine`](opentide_highlight::QueryEngine) (#1953):
+/// [`analyze`] behind the shared interface.
+///
+/// A `.kql` file reads as Microsoft Sentinel's, the default dialect.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Engine;
+
+impl opentide_highlight::QueryEngine for Engine {
+    fn language(&self) -> opentide_core::LanguageId {
+        opentide_core::LanguageId::Kql
+    }
+
+    fn analyze(&self, source: &str) -> opentide_highlight::AnalyzeResult {
+        let r = analyze(source, Dialect::Sentinel);
+        opentide_highlight::AnalyzeResult {
+            diagnostics: r.diagnostics,
+            tokens: r.tokens,
+        }
+    }
+}
+
 /// The columns at every operator of a query, with the references and
 /// definitions the column pass found (#112). Empty for a query that does not
 /// parse at all.

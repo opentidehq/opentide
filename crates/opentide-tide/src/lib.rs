@@ -18,6 +18,7 @@
 )]
 mod bitdefender;
 mod elastic;
+pub mod engines;
 mod falco;
 mod folded;
 mod google_secops;
