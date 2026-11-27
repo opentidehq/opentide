@@ -21,6 +21,10 @@ digest = ["dep:sha2"]
 # line, the schema and the language server read Markdown as text, so the
 # query engines never build `pulldown-cmark`.
 markdown = ["dep:pulldown-cmark"]
+# `text::shell_word` and `text::shell_line`: words quoted for a POSIX shell
+# (#1957). Opt-in: only the command line, the compiler's pipelines and the
+# workspace's next actions write a command line.
+shell = ["dep:shlex"]
 
 [dependencies]
 # Elastic durations (`duration`): linear-time patterns, no look-around.
@@ -46,6 +50,8 @@ pulldown-cmark = { workspace = true, optional = true }
 # `text::sha256_hex` (the `digest` feature): the one SHA-256 digest in hex
 # (RustCrypto).
 sha2 = { workspace = true, optional = true }
+# `text::shell_word` (the `shell` feature): the one shell quoting.
+shlex = { workspace = true, optional = true }
 # YAML 1.2 (`node`, the node tree every crate reads YAML with, #850):
 # saphyr-parser's events with their spans and saphyr's core-schema scalars.
 saphyr.workspace = true

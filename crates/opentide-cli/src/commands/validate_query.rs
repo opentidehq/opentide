@@ -1256,7 +1256,7 @@ fn rerun(args: &Args, queries: QueriesMode) -> String {
     if args.strict {
         words.push("--strict".into());
     }
-    shlex::try_join(words.iter().map(String::as_str)).unwrap_or_else(|_| words.join(" "))
+    opentide_core::text::shell_line(words.iter().map(String::as_str))
 }
 
 #[cfg(test)]

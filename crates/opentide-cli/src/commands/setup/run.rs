@@ -1003,8 +1003,7 @@ fn outcome(
         };
         let mut actions = Vec::new();
         if !here {
-            let word = shlex::try_quote(shown.trim_end_matches('/'))
-                .map_or_else(|_| shown.clone(), std::borrow::Cow::into_owned);
+            let word = opentide_core::text::shell_word(shown.trim_end_matches('/'));
             actions.push(NextAction::new(format!("cd {word}"), ""));
         }
         actions.push(NextAction::new(
