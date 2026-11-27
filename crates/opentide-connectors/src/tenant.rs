@@ -7,6 +7,8 @@
 
 use std::collections::BTreeMap;
 
+use opentide_schema::platforms::PlatformKey;
+
 use crate::credentials::{self, Credential, Mode, Origin};
 use crate::error::ConnectorError;
 use crate::http::HttpSettings;
@@ -191,7 +193,7 @@ impl Tenant {
 /// value with no TOML form (a null) is left out, as the loader leaves it out
 /// of the strings it resolves; a table is kept for [`Tenant::tables`].
 pub fn configured(config: &opentide_compile::Json, platform: &str) -> Vec<(String, toml::Table)> {
-    opentide_compile::plan::tenants(config, platform)
+    opentide_compile::plan::tenants(config, &PlatformKey::new(platform))
         .into_iter()
         .map(|tenant| {
             let setup = tenant

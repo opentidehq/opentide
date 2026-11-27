@@ -34,7 +34,7 @@ pub use opentide_core::{
     CompletionItem, Diagnostic, LanguageId, Position, Range, Severity, SignatureHelp, codes,
 };
 pub use opentide_highlight::{HighlightResult, HighlightToken, SemanticTokens};
-pub use opentide_tide::{DocumentSymbol, ElasticTenant, IndexedObject};
+pub use opentide_tide::{DocumentSymbol, ElasticTenant, IndexEntry, IndexedObject};
 
 use opentide_highlight::{HighlightSpec, encode_lsp_semantic_tokens};
 use opentide_kql::Dialect;
@@ -313,23 +313,74 @@ pub fn analyze_tide_parsed(
     }
 }
 
+/// Where a query on its own will sit: the profile [`analyze_query_at`]
+/// checks it under (ADR 0015 §4: a profile is chosen by where the text sits;
+/// a caller that names the position says where it will sit).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum QueryPosition {
+    /// A search: a query file, a hunt, `opentide query`. The default.
+    #[default]
+    Search,
+    /// A rule block's query on the request's platform: checked as that
+    /// block checks its query's text. It needs a platform
+    /// ([`validate_position`]). Exabeam's `rule` profile, CQL's
+    /// Next-Gen SIEM correlation rule, Datadog's `rule` profile, a Sentinel
+    /// scheduled rule's KQL limits and YARA-L's assembled rule (the rule
+    /// profile, its `meta` deploy's) differ from a search; every other language checks a rule's query as a search. The
+    /// checks that read the rest of a block (Elastic's tenants and schedule,
+    /// Sysdig's macros, Defender's alert mapping) need the object: see
+    /// `Workspace::validate`. The platform is not checked to have a block in
+    /// the query's language: the command line and MCP refuse that first.
+    Rule,
+}
+
+impl QueryPosition {
+    /// The position's name: `search` or `rule`.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            QueryPosition::Search => "search",
+            QueryPosition::Rule => "rule",
+        }
+    }
+
+    /// The position named `name`: `search` or `rule`, as the command line
+    /// and MCP spell them.
+    #[must_use]
+    pub fn parse(name: &str) -> Option<Self> {
+        match name {
+            "search" => Some(QueryPosition::Search),
+            "rule" => Some(QueryPosition::Rule),
+            _ => None,
+        }
+    }
+}
+
+/// Why a [`QueryRequest`] cannot be checked at a position
+/// ([`validate_position`]).
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[non_exhaustive]
+pub enum QueryRequestError {
+    /// [`QueryPosition::Rule`] without a platform: a rule block is a
+    /// platform's, so there is no rule to check the query as.
+    #[error(
+        "position `rule` needs a platform: name the platform whose rule block the query is for"
+    )]
+    RuleWithoutPlatform,
+}
+
 /// A query on its own, outside an object file.
 #[derive(Debug, Clone)]
 pub struct QueryRequest {
     pub language: LanguageId,
     /// The detection platform the query is for, as a `configurations` key.
-    /// It names the language's dialect, the product's catalogs and checks,
-    /// and nothing else (ADR 0015 §4): `microsoft_defender` picks the
-    /// Defender KQL schema, `carbon_black_cloud` the Carbon Black Lucene
-    /// dialect, `graylog` the Graylog one, and `harfanglab` or `bitdefender`
-    /// that product's YARA checks. `None` for the language's default.
-    ///
-    /// The query is checked as a file of its language is, whatever the
-    /// platform: an Exabeam, CQL or Datadog query is a search, never a
-    /// correlation or detection rule's query, and a YARA-L text is a rule
-    /// when it declares one. A query in a rule block is checked as one with
-    /// its object (the facade's `Workspace::validate` and `Workspace::lint`),
-    /// which knows the block it sits in.
+    /// It names the language's dialect, the product's catalogs and checks
+    /// (ADR 0015 §3): `microsoft_defender` picks the Defender KQL schema,
+    /// `carbon_black_cloud` the Carbon Black Lucene dialect, `graylog` the
+    /// Graylog one, and `harfanglab` or `bitdefender` that product's YARA
+    /// checks. `None` for the language's default. It never picks the
+    /// profile: the position does ([`analyze_query_at`]).
     pub platform: Option<String>,
     /// Elastic stack the query must run on (`"9.5"`, `"serverless"`), for
     /// ES|QL. `None`, or a value that does not parse, checks every supported
@@ -338,18 +389,91 @@ pub struct QueryRequest {
     pub text: String,
 }
 
-/// Diagnostics for one query, in the query's own coordinates.
+impl QueryRequest {
+    /// A request to check `text` as `language`: no platform, every stack.
+    #[must_use]
+    pub fn new(language: LanguageId, text: impl Into<String>) -> Self {
+        QueryRequest {
+            language,
+            platform: None,
+            stack: None,
+            text: text.into(),
+        }
+    }
+
+    /// The request for `platform` (a `configurations` key), or for none.
+    #[must_use]
+    pub fn with_platform(mut self, platform: Option<&str>) -> Self {
+        self.platform = platform.map(str::to_owned);
+        self
+    }
+
+    /// The request for an Elastic `stack` (ES|QL), or for every one.
+    #[must_use]
+    pub fn with_stack(mut self, stack: Option<&str>) -> Self {
+        self.stack = stack.map(str::to_owned);
+        self
+    }
+}
+
+/// Whether `request` can be checked at `position`: a [`QueryPosition::Rule`]
+/// needs a platform. Hosts that refuse a usage error up front (the command
+/// line, MCP) call it before [`analyze_query_at`], which answers a request
+/// that fails it with one `query_position_needs_platform` error and nothing
+/// else.
+///
+/// # Errors
+///
+/// [`QueryRequestError::RuleWithoutPlatform`] for a rule with no platform
+/// (or an empty one).
+pub fn validate_position(
+    request: &QueryRequest,
+    position: QueryPosition,
+) -> Result<(), QueryRequestError> {
+    let has_platform = request.platform.as_deref().is_some_and(|p| !p.is_empty());
+    if position == QueryPosition::Rule && !has_platform {
+        return Err(QueryRequestError::RuleWithoutPlatform);
+    }
+    Ok(())
+}
+
+/// Diagnostics for one query, in the query's own coordinates, under its
+/// platform's dialect, at [`QueryPosition::Search`]: as a file of its
+/// language is checked.
 pub fn analyze_query(request: &QueryRequest) -> Vec<Diagnostic> {
-    // The platform names the dialect, and the stack ES|QL's target. A query
-    // on its own is a file of its language: the profile comes from where the
-    // text sits, never from the platform (ADR 0015 §4). A `.cql` file is
-    // plain LogScale, without the correlation rule's restrictions; a
-    // `.exabeam` or `.datadog` file is the `search` profile. A rule block's
-    // query is checked as a rule by `analyze` on its object, by its field
-    // path.
+    analyze_query_at(request, QueryPosition::Search)
+}
+
+/// [`analyze_query`] at `position`: the platform picks the dialect, the
+/// position the profile (ADR 0015 §4). A request [`validate_position`]
+/// refuses (a rule with no platform) gets one error,
+/// `query_position_needs_platform`, on the query's start, and is not
+/// checked: there is no rule block to check it as, and a search would be a
+/// silent fallback.
+pub fn analyze_query_at(request: &QueryRequest, position: QueryPosition) -> Vec<Diagnostic> {
+    if let Err(error) = validate_position(request, position) {
+        return vec![Diagnostic::error(
+            codes::QUERY_POSITION_NEEDS_PLATFORM,
+            error.to_string(),
+            Range::point(0, 0),
+        )];
+    }
+    // The platform names the dialect, and the stack ES|QL's target. The
+    // profile comes from the position, never from the platform (ADR 0015
+    // §4). A search is checked as a file of its language is: a `.cql` file
+    // is plain LogScale, without the correlation rule's restrictions; a
+    // `.exabeam` or `.datadog` file is the `search` profile; a `.yaral` file
+    // is a rule or a search by its text; KQL's search profile adds nothing.
+    // A rule is checked as the platform's block checks its query (Tide's
+    // field paths): Sentinel's scheduled rule limits, CQL's correlation
+    // rule, Exabeam's and Datadog's `rule` profile, YARA-L's assembled rule.
+    let profile = match position {
+        QueryPosition::Search => opentide_highlight::Profile::File,
+        QueryPosition::Rule => opentide_highlight::Profile::Rule,
+    };
     let setting = opentide_highlight::Setting {
         platform: request.platform.as_deref().unwrap_or(""),
-        profile: opentide_highlight::Profile::File,
+        profile,
         stack: request.stack.as_deref(),
     };
     if let Some(engine) = engines::engine(request.language) {

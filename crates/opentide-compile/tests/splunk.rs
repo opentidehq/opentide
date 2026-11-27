@@ -13,6 +13,7 @@ use std::sync::Arc;
 
 use opentide_compile::json::Object;
 use opentide_compile::{Json, Owned, Rule, deploy, splunk};
+use opentide_schema::platforms::PlatformKey;
 use opentide_schema::vocab::Vocabularies;
 use opentide_workspace::{FileSystem, MemoryFs, Options, RootOptions, Workspace};
 
@@ -114,7 +115,7 @@ fn settings_at(block: &str, clock: Option<splunk::Clock>) -> Object {
     let cx = owned.context(&index);
     let object = index.get("rule", UUID).unwrap();
     let rule = Rule::new(object.root().unwrap(), None);
-    let tenant = deploy::tenants(&cx, splunk::PLATFORM)[0];
+    let tenant = deploy::tenants(&cx, &PlatformKey::new(splunk::PLATFORM))[0];
     let writes = splunk::compile(&cx, &rule, tenant, clock).unwrap();
     assert_eq!(writes.len(), 3, "create, settings, then the late settings");
     let Json::Object(body) = writes[1].body.clone() else {

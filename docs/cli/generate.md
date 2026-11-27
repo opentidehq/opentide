@@ -320,6 +320,8 @@ opentide generate inflight prune
 
 The pipelines from `opentide setup ci` run this on every pull request and commit only `.opentide/inflight/` to the default branch, from a worktree of that branch, never the pull request itself.
 
+Outside CI, the changed objects are those of the work tree against the [baseline](#changed-object-baseline) `generate docs --changed` reads, untracked files included, read without the `git` program. Where `generate docs --changed` fails for want of a baseline, `generate inflight` writes no shard and logs `inflight_no_git_baseline` with the reason.
+
 `generate inflight` checks each changed object as `generate docs` reads it. An object that fails its model check (a typo'd date such as `created: 20256-11-06`) fails the run with exit `1`, naming the file, the object's UUID and the first error, and no shard is written. In the pipelines this is the pull or merge request's own `inflight_shards` job, so the invalid object stays out of the default branch's previews.
 
 `generate docs` and `generate explorer` also check every shard they read. A preview is left out when its object fails its model check, when a reference it makes (a rule's `detection_model`, an objective's `threats`) does not resolve once the previews are laid over the object files, or when it drops a signal a committed rule uses. A preview that only resolved through one left out is left out too. Each is reported as a warning (with `--json`, in `warnings`) naming the shard file, the object's UUID and name, its pull or merge request, and the first error:

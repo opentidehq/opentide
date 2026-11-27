@@ -138,6 +138,9 @@ would need a parameter there, test 1 has answered "language".
 - A profile is chosen by where the text sits: the injection's field path in Tide (Exabeam's
   sequence filter is `rule`, `crates/opentide-tide/src/lib.rs:1010-1015`), or by what a file is.
 - A profile is not chosen from the platform. `QueryRequest.platform` names the dialect only.
+- An explicit position on a bare query is a position: a caller that says where the text will sit
+  (`analyze_query_at`'s position, `validate query --position rule`, MCP `validate_query`'s `position`)
+  chooses its profile as the field path would ([#1993](https://github.com/opentidehq/opentide/issues/1993)).
 - A file's profile is the one the language's specification gives a file: a `.exabeam` file is a
   search, and a `.yaral` file is decided by its text.
 
