@@ -7,10 +7,10 @@ description: "A written rule for the engine's query languages: a syntax gets its
 
 | | |
 |---|---|
-| Status | Proposed |
-| Date | 2026-11-26 |
-| Decision | None yet: the owner's call on this ADR. It was raised by the [Datadog Cloud SIEM RFC](../rfc-datadog-cloud-siem.md), §6.2 ([#1898](https://github.com/opentidehq/opentide/pull/1898)) |
-| Issues | None yet; the follow-ups in [Migration order](#7-migration-order) each get one |
+| Status | Accepted |
+| Date | 2026-11-26, accepted 2026-11-27 |
+| Decision | Accepted by the owner, with option B of §6 as the owner amended it: a platform or language is **never** a reason for a major. `LanguageId`, and every facade enum that grows with platforms, becomes `#[non_exhaustive]` in the same minor release (1.2.0) that ships `LanguageId::Datadog` (#1902) ([#1911](https://github.com/opentidehq/opentide/issues/1911)). Raised by the [Datadog Cloud SIEM RFC](../rfc-datadog-cloud-siem.md), §6.2 ([#1898](https://github.com/opentidehq/opentide/pull/1898)). Raw query files keep their default dialect, and platform-specific checks on raw queries go through the crates or the SDK ([#1917](https://github.com/opentidehq/opentide/issues/1917), not planned). The `.cql` file profile is settled in [#1912](https://github.com/opentidehq/opentide/issues/1912) |
+| Issues | Tracked in [#1910](https://github.com/opentidehq/opentide/issues/1910): step 1 [#1912](https://github.com/opentidehq/opentide/issues/1912), step 2 [#1913](https://github.com/opentidehq/opentide/issues/1913), step 3 [#1914](https://github.com/opentidehq/opentide/issues/1914) and [#1915](https://github.com/opentidehq/opentide/issues/1915), step 4 [#1911](https://github.com/opentidehq/opentide/issues/1911); step 5 is Datadog's phase 2, [#1920](https://github.com/opentidehq/opentide/issues/1920) |
 
 ## Context
 
@@ -249,10 +249,10 @@ Options for the owner:
 | Option | What | Cost |
 |---|---|---|
 | A | Add `LanguageId::Datadog` in 2.0.0, and take a product major for every later language (add-language names S1QL and Sigma) | A major per language, with a **Breaking** entry each time |
-| **B (recommended)** | In the next major, whichever comes first, mark `LanguageId` `#[non_exhaustive]` and make `QUERY_LANGUAGES` a `&'static [LanguageId]`. Datadog then lands in that major or in a later minor. Every language after that is a minor | One major. Downstream `match`es need a wildcard arm once. JSON consumers see a new `language` value, which is additive (`data/output-schemas.json`, the Python `Language` literal and the npm types are updated as add-language step 7 lists) |
+| **B (accepted, amended)** | Mark `LanguageId` (and `PlatformId`, and any facade enum that grows with platforms) `#[non_exhaustive]`, and make `QUERY_LANGUAGES` a `&'static [LanguageId]`. The owner's amendment: this lands in the next **minor**, 1.2.0, with Datadog. opentide never ships a major because a platform or language is added; these are open sets by policy, stated in the facade's docs. Every language after that is a minor | One upgrade note, not a major. Downstream `match`es need a wildcard arm once. JSON consumers see a new `language` value, which is additive (`data/output-schemas.json`, the Python `Language` literal and the npm types are updated as add-language step 7 lists) |
 | C | Keep Datadog out of `LanguageId`, as a fourth Lucene dialect | Breaks the invariant of §2 (a dialect parameter in Lucene's parser). Rejected by the rule |
 
-Option B is recommended because the cost of A recurs and the cost of B is paid once. The renames in
+Option B was chosen because the cost of A recurs and the cost of B is paid once. The owner amended it: the one-time switch ships in a minor, because platforms and languages are open sets by policy, never a reason for a major. The renames in
 §5.1 and §5.3 are in `opentide-kql` and `opentide-yara`. Those crates are published at the lockstep
 version but carry no stability promise (only the facade does, per `crates/opentide/AGENTS.md`), so
 they need a **Breaking** entry in `crates/CHANGELOG.md` and no product major.
@@ -279,9 +279,10 @@ Each step is its own pull request. None changes a tree or a corpus.
 
    Each item ships with regression tests, the CHANGELOG entry and the opentidehq/skills companion
    that root `AGENTS.md` item 5 asks for when a check's codes change.
-4. **`LanguageId` non-exhaustive** in the next major (option B). This needs the release manager's
-   decision on that major.
-5. **Datadog** per its RFC and add-language. It lands in or after step 4's major.
+4. **`LanguageId` non-exhaustive** in 1.2.0, with Datadog (option B, as amended;
+   [#1911](https://github.com/opentidehq/opentide/issues/1911)).
+5. **Datadog** per its RFC and add-language. The engine landed in #1902, and ships in the same minor
+   as step 4.
 
 Then the add-language skill's step 0, "Decide what the language is", links this ADR's tests, and its
 semver row is corrected. That edit is made once the ADR is accepted.
@@ -292,16 +293,18 @@ semver row is corrected. That edit is made once the ADR is accepted.
   answer in add-language step 0's issue. Datadog is the first case.
 - Dialects become cheap and safe: no facade change, no new corpus gate, fuzz target or editor
   grammar. Adding one is a catalog, a branch in the single walk, and `for_platform`. Languages stay
-  expensive, but after option B they no longer cost a product major.
+  expensive, but they never cost a product major: platforms and languages are open sets by policy.
 - The grammar of each crate stays one grammar. A future request to "just add `@attr` to Lucene for
   Datadog" is refused by the invariant in §2, not argued case by case.
 - Names follow the terms: `Dialect` for products, `Profile` for uses, `Context` for inputs. Today
   two crates call a product a profile and one calls a profile a context. Until the renames land,
   this ADR's §5 table is the map.
-- Raw files and editors keep a default dialect. An editor that wants Graylog or Defender behavior
-  for a raw file needs a way to name the platform. `opentide-lsp analyze --platform` already
-  exists, but a running language server has no such setting. That is left open: a setting, or the
-  file's place in the workspace, are both possible, and neither is decided here.
+- Raw files keep their language's default dialect, in the editor and in `validate query --file`. This
+  was decided with the ADR's acceptance ([#1917](https://github.com/opentidehq/opentide/issues/1917),
+  not planned). opentide validates Tide objects, where a block's or hunt's position gives the
+  platform. Anyone who needs platform-specific checks on raw queries uses the crates or the SDK,
+  which already take a platform (`QueryRequest.platform`, `opentide-lsp analyze --platform`). No
+  language-server setting or pragma is planned.
 - What a dialect may not do is now a review item. A dialect check that branches the lexer or parser,
   or a profile chosen from the platform, is a defect under this ADR.
 

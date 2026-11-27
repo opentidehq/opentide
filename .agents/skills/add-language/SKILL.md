@@ -45,7 +45,7 @@ highlighter is not a language, and a platform whose language is unspecified gets
 | Highlighting: HighlightSpec captures from the tree; a capture is appended, never renamed (a minor bump of `highlights/spec.toml`'s `[meta].version`); the TextMate grammar's keywords come from the `KEYWORDS` table, the Monaco and Helix themes from the spec's captures | [`parser`](../parser/SKILL.md) "Highlighting", [`crates/opentide-highlight/AGENTS.md`](../../../crates/opentide-highlight/AGENTS.md) |
 | I/O and concurrency: no `std::fs` in an engine's `src/`; no `async` or tokio in the engine; CPU work on rayon, network I/O only on the one process runtime (#1558) | [`crates/AGENTS.md`](../../../crates/AGENTS.md) "Hard rules", [`rust-engine`](../rust-engine/SKILL.md) |
 | Errors, panics and lints: no panic on user input, `thiserror` in the engine, `#[expect(..., reason)]` on the narrowest item, `missing_docs` for every new crate | [`rust-engine`](../rust-engine/SKILL.md), [`crates/AGENTS.md`](../../../crates/AGENTS.md) "Lints", [`rust`](../rust/SKILL.md) |
-| The facade's semver: `LanguageId` is exhaustive and re-exported by `opentide` (its `analysis` feature), so a new variant is a breaking change (a minor bump while 0.x, a **Breaking** entry; CI's `cargo semver-checks --all-features`) | [`crates/opentide/AGENTS.md`](../../../crates/opentide/AGENTS.md) |
+| The facade's semver: `LanguageId` is exhaustive and re-exported by `opentide` (its `analysis` feature), and platforms and query languages are open sets by policy: adding one is always a minor release, never a major. `LanguageId` and `PlatformId` are `#[non_exhaustive]` from 1.2.0 ([ADR 0015](../../../docs/internal/adr/0015-languages-and-dialects.md) §6, option B as amended; [#1911](https://github.com/opentidehq/opentide/issues/1911)), so a new variant is an **Added** entry, checked by CI's `cargo semver-checks --all-features` | [`crates/opentide/AGENTS.md`](../../../crates/opentide/AGENTS.md) |
 
 ## Checklist
 
@@ -65,6 +65,17 @@ end of step 5: work them on one branch and check each crate as you go
 
 ### 0. Decide what the language is
 
+- [ ] **A language, a dialect or a profile.** Apply [ADR 0015](../../../docs/internal/adr/0015-languages-and-dialects.md)'s
+  three tests, in order, and write the answer in the issue:
+  1. Does the vendor's syntax change the tree's shape, or have constructs the shared grammar has
+     no node for?
+  2. Does the vendor publish its own reference?
+  3. Does a file need its own suffix or keywords?
+
+  If no test is met, the syntax is a dialect (chosen by platform, through the crate's one
+  `Dialect::for_platform`) or a profile (chosen by position). It is then not a new language, and
+  this checklist does not apply. A dialect or profile never becomes a parameter of the lexer or
+  parser.
 - [ ] **The language and its grammar.** Read the platform's model in `opentide-schema`
   (`src/objects/platform/<platform>.rs`), its deploy body in `opentide-compile`, its live check in
   `opentide-connectors` and its row in the registry
