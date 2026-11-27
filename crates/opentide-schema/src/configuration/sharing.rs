@@ -1,5 +1,4 @@
-//! `sharing.toml`, merged block by block (`sharing/config.py`
-//! `merge_sharing_documents`).
+//! `sharing.toml`, merged block by block.
 //!
 //! `deep_merge` replaces every list, so a later layer restating only a
 //! block's `name` and `enabled` would drop its `url`: each integration array

@@ -208,21 +208,139 @@ impl GitError {
 
 /// The checkout at or above `start`: its work tree and its git directory
 /// (for a linked worktree, the worktree's own one). A bare repository is no
-/// checkout. Discovery crosses file systems, as the oracle's did.
+/// checkout. Discovery crosses file systems, as the oracle's did. The
+/// environment steers it as it steers git (#2049): `GIT_DIR`,
+/// `GIT_WORK_TREE` and `GIT_CEILING_DIRECTORIES`, a relative path read
+/// against `start`, the directory opentide ran git in.
 fn discover(start: &Path) -> Option<(PathBuf, PathBuf)> {
+    discover_with(start, &|name| std::env::var_os(name))
+}
+
+/// The environment discovery reads: a variable's raw value, which a path
+/// need not spell in UTF-8. A caller with its own environment (the command
+/// line's, which a test injects) passes it rather than the process's.
+pub type OsEnv<'a> = &'a dyn Fn(&str) -> Option<std::ffi::OsString>;
+
+/// A variable git reads as a path, made absolute against `start`; unset and
+/// empty are the same.
+fn env_path(env: OsEnv<'_>, name: &str, start: &Path) -> Option<PathBuf> {
+    let value = env(name).filter(|value| !value.is_empty())?;
+    Some(absolute(&start.join(value)))
+}
+
+/// `path`, absolute against the working directory (as written when that
+/// cannot be read).
+fn absolute(path: &Path) -> PathBuf {
+    std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf())
+}
+
+/// The checkout at or above `start`, as [`worktree`] finds it, reading
+/// `GIT_DIR`, `GIT_WORK_TREE` and `GIT_CEILING_DIRECTORIES` from `env`
+/// rather than the process: its work tree and its git directory (for a
+/// linked worktree, the worktree's own one). `None` when there is no
+/// checkout, or the repository is bare.
+#[must_use]
+pub fn discover_with(start: &Path, env: OsEnv<'_>) -> Option<(PathBuf, PathBuf)> {
+    let work_tree = env_path(env, "GIT_WORK_TREE", start);
+    if let Some(git_dir) = env_path(env, "GIT_DIR", start) {
+        return named_repository(start, git_dir, work_tree);
+    }
+    let ceilings = env("GIT_CEILING_DIRECTORIES")
+        .map(|dirs| ceiling_dirs(&dirs))
+        .unwrap_or_default();
     let options = gix_discover::upwards::Options {
         cross_fs: true,
         dot_git_only: true,
+        ceiling_dirs: ceilings.clone(),
+        // git ignores the ceilings that are not above `start` rather than
+        // failing.
+        match_ceiling_dir_or_error: false,
         ..Default::default()
     };
     let (path, _trust) = gix_discover::upwards_opts(start, options).ok()?;
     let (git_dir, work_dir) = path.into_repository_and_work_tree_directories();
-    Some((work_dir?, git_dir))
+    // gix stops at a ceiling after looking in it; git stops below it, unless
+    // the ceiling is `start` itself.
+    if !ceilings.is_empty() {
+        let found = work_dir
+            .as_deref()
+            .or_else(|| git_dir.parent())
+            .and_then(|dir| gix_path::realpath(dir).ok());
+        let start = gix_path::realpath(start).ok();
+        if found.is_some_and(|found| Some(&found) != start.as_ref() && ceilings.contains(&found)) {
+            return None;
+        }
+    }
+    // `GIT_WORK_TREE` names the work tree of the repository found.
+    Some((work_tree.or(work_dir)?, git_dir))
+}
+
+/// The repository `GIT_DIR` names, without a search: a file there is a
+/// gitfile (`gitdir: <path>`). Its work tree is `GIT_WORK_TREE`, else none
+/// in a bare repository (`core.bare`), else `core.worktree`, else `start`,
+/// the directory git runs in. `core.worktree` is read only here: git also
+/// applies it to a git directory found by the search (run inside the git
+/// directory, say), a layout opentide does not follow.
+fn named_repository(
+    start: &Path,
+    git_dir: PathBuf,
+    work_tree: Option<PathBuf>,
+) -> Option<(PathBuf, PathBuf)> {
+    let git_dir = if git_dir.is_file() {
+        gix_discover::path::from_gitdir_file(&git_dir).ok()?
+    } else {
+        git_dir
+    };
+    gix_discover::is_git(&git_dir).ok()?;
+    if let Some(work_tree) = work_tree {
+        return Some((work_tree, git_dir));
+    }
+    let config = config(&git_dir);
+    // git reads `core.bare` first: a bare repository has no work tree, even
+    // with `core.worktree` set.
+    let bare = config
+        .as_ref()
+        .and_then(|config| config.boolean("core.bare").ok().flatten())
+        .unwrap_or(false);
+    if bare {
+        return None;
+    }
+    if let Some(configured) = config
+        .as_ref()
+        .and_then(|config| config.path("core.worktree"))
+    {
+        let configured = gix_path::from_bstr(configured.value.as_bstr()).ok()?;
+        return Some((absolute(&git_dir.join(configured)), git_dir));
+    }
+    Some((absolute(start), git_dir))
+}
+
+/// `GIT_CEILING_DIRECTORIES` as git reads it: absolute paths separated as in
+/// `PATH`, relative ones skipped; those before an empty entry have their
+/// symbolic links resolved, those after it are taken as written.
+fn ceiling_dirs(value: &std::ffi::OsStr) -> Vec<PathBuf> {
+    let mut resolve = true;
+    let mut dirs = Vec::new();
+    for dir in std::env::split_paths(value) {
+        if dir.as_os_str().is_empty() {
+            resolve = false;
+        } else if dir.is_absolute() {
+            let resolved = resolve.then(|| gix_path::realpath(&dir).ok()).flatten();
+            dirs.push(resolved.unwrap_or(dir));
+        }
+    }
+    dirs
 }
 
 /// The work tree of the checkout at or above `start`.
 pub fn worktree(start: &Path) -> Option<PathBuf> {
     discover(start).map(|(work_dir, _)| work_dir)
+}
+
+/// [`worktree`], reading the environment from `env` (see [`discover_with`]).
+#[must_use]
+pub fn worktree_with(start: &Path, env: OsEnv<'_>) -> Option<PathBuf> {
+    discover_with(start, env).map(|(work_dir, _)| work_dir)
 }
 
 fn failed(message: impl Into<String>) -> GitError {
@@ -231,6 +349,9 @@ fn failed(message: impl Into<String>) -> GitError {
 
 /// A repository: its references and its objects.
 struct Repo {
+    /// The git directory (for a linked worktree, the worktree's own one),
+    /// whose configuration names a branch's upstream.
+    git_dir: PathBuf,
     refs: gix_ref::file::Store,
     odb: gix_odb::Handle,
     /// Whether the clone is shallow (git's `shallow` file): it then names
@@ -240,8 +361,13 @@ struct Repo {
 
 /// Opens the checkout at or above `start`.
 fn open(start: &Path) -> Result<Repo, GitError> {
+    open_with(start, &|name| std::env::var_os(name))
+}
+
+/// [`open`], discovering the checkout with the environment `env`.
+fn open_with(start: &Path, env: OsEnv<'_>) -> Result<Repo, GitError> {
     let (top, git_dir) =
-        discover(start).ok_or_else(|| GitError::MissingCheckout(start.to_path_buf()))?;
+        discover_with(start, env).ok_or_else(|| GitError::MissingCheckout(start.to_path_buf()))?;
     // A linked worktree's git directory names the repository it shares.
     let common =
         match gix_discover::path::from_plain_file_relative_to_file(&git_dir.join("commondir")) {
@@ -256,9 +382,9 @@ fn open(start: &Path) -> Result<Repo, GitError> {
         };
     let kind = gix_hash::Kind::Sha1;
     let refs = if common == git_dir {
-        gix_ref::file::Store::at(git_dir, kind)
+        gix_ref::file::Store::at(git_dir.clone(), kind)
     } else {
-        gix_ref::file::Store::for_linked_worktree(git_dir, common.clone(), kind)
+        gix_ref::file::Store::for_linked_worktree(git_dir.clone(), common.clone(), kind)
     };
     let odb = gix_odb::at(common.join("objects"), kind).map_err(|error| {
         failed(format!(
@@ -267,7 +393,12 @@ fn open(start: &Path) -> Result<Repo, GitError> {
         ))
     })?;
     let shallow = common.join("shallow").is_file();
-    Ok(Repo { refs, odb, shallow })
+    Ok(Repo {
+        git_dir,
+        refs,
+        odb,
+        shallow,
+    })
 }
 
 /// A commit's tree and parents.
@@ -300,14 +431,27 @@ fn refused(message: String) -> gix_error::Error {
     gix_error::Message::new(message).raise()
 }
 
-/// Resolves the revisions `gix_revision::spec::parse` reads: references
-/// (partial names searched as git does: `refs/`, tags, heads, remotes),
-/// object ids and their prefixes, and parent and ancestor steps. Reflogs,
-/// upstreams, message searches, index paths and ranges name no commit a run
-/// diffs and are refused.
+/// Resolves the revisions `gix_revision::spec::parse` reads, as git does:
+/// references (partial names searched as git does: `refs/`, tags, heads,
+/// remotes), object ids and their prefixes, parent and ancestor steps,
+/// reflog entries (`HEAD@{1}`, `main@{yesterday}`), the branches checked out
+/// before (`@{-1}`), a branch's upstream (`@{u}`) and message searches
+/// (`:/fix`, `HEAD^{/fix}`). What names no single commit is refused: ranges,
+/// paths (`HEAD:file`, `:file`), trees and blobs; and `@{push}`, whose
+/// branch depends on the push configuration. Without `every_form`, the
+/// forms that name no commit a CI run diffs (reflogs, earlier branches,
+/// upstreams, message searches) are refused as well.
 struct Resolve<'r> {
     repo: &'r Repo,
+    /// Whether reflogs, earlier branches, upstreams and message searches
+    /// are read (`deploy replay-state`'s commit, which a person may type).
+    every_form: bool,
     current: Option<ObjectId>,
+    /// The reference the revision named last (`HEAD`, `refs/heads/main`),
+    /// whose reflog and upstream `@{...}` reads.
+    current_ref: Option<gix_ref::FullName>,
+    /// Why the revision was refused, in words a person reads.
+    refusal: Option<String>,
 }
 
 impl Resolve<'_> {
@@ -333,8 +477,177 @@ impl Resolve<'_> {
             .ok_or_else(|| refused("no revision to start from".to_owned()))
     }
 
-    fn unsupported(what: &str) -> Result<(), gix_error::Error> {
-        Err(refused(format!("{what} names no commit a run diffs")))
+    /// Refuses the revision, remembering `message` for the person.
+    fn refuse(&mut self, message: String) -> gix_error::Error {
+        self.refusal = Some(message.clone());
+        refused(message)
+    }
+
+    fn unsupported(&mut self, what: &str) -> Result<(), gix_error::Error> {
+        Err(self.refuse(what.to_owned()))
+    }
+
+    /// Refuses `what` unless every form is read.
+    fn every_form(&mut self, what: &str) -> Result<(), gix_error::Error> {
+        if self.every_form {
+            Ok(())
+        } else {
+            self.unsupported(&format!("{what} names no commit a run diffs"))
+        }
+    }
+
+    /// The reference `@{...}` applies to: the one named last, else the
+    /// branch `HEAD` is on (`HEAD` itself when detached).
+    fn anchor_ref(&self) -> Option<gix_ref::FullName> {
+        if let Some(name) = &self.current_ref {
+            return Some(name.clone());
+        }
+        let head = self.repo.refs.try_find("HEAD").ok()??;
+        Some(match head.target {
+            gix_ref::Target::Symbolic(name) => name,
+            gix_ref::Target::Object(_) => head.name,
+        })
+    }
+
+    /// The reflog of `name`, newest entry first. The file is read whole, so
+    /// a line of any length (a long commit subject) is read.
+    fn reflog_lines(&self, name: &gix_ref::FullName) -> Result<Vec<gix_ref::log::Line>, String> {
+        let mut buf = Vec::new();
+        let lines = self
+            .repo
+            .refs
+            .reflog_iter(name.as_ref(), &mut buf)
+            .map_err(|error| format!("could not read the reflog of {name}: {error}"))?
+            .ok_or_else(|| format!("{name} has no reflog"))?;
+        let mut lines = lines
+            .map(|line| line.map(gix_ref::log::Line::from))
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|error| format!("could not read the reflog of {name}: {error}"))?;
+        lines.reverse();
+        Ok(lines)
+    }
+
+    /// The commit `@{n}` or `@{<date>}` names in `lines` (newest first), as
+    /// git reads it: the n-th entry's new value; for a date, the newest
+    /// entry at or before it, else the oldest entry's previous value.
+    fn reflog_entry(
+        lines: &[gix_ref::log::Line],
+        name: &gix_ref::FullName,
+        query: delegate::ReflogLookup,
+    ) -> Result<ObjectId, String> {
+        match query {
+            delegate::ReflogLookup::Entry(n) => {
+                if let Some(line) = lines.get(n) {
+                    return Ok(line.new_oid);
+                }
+                // One past the oldest entry is the value before it.
+                match lines.last() {
+                    Some(oldest) if n == lines.len() && !oldest.previous_oid.is_null() => {
+                        Ok(oldest.previous_oid)
+                    }
+                    _ => Err(format!(
+                        "the reflog of {name} has only {} entries",
+                        lines.len()
+                    )),
+                }
+            }
+            delegate::ReflogLookup::Date(time) => {
+                if let Some(line) = lines
+                    .iter()
+                    .find(|line| line.signature.time.seconds <= time.seconds)
+                {
+                    return Ok(line.new_oid);
+                }
+                let oldest = lines
+                    .last()
+                    .ok_or_else(|| format!("the reflog of {name} is empty"))?;
+                Ok(if oldest.previous_oid.is_null() {
+                    oldest.new_oid
+                } else {
+                    oldest.previous_oid
+                })
+            }
+        }
+    }
+
+    /// The `n`-th branch (or commit) `HEAD` was checked out from, newest
+    /// first, as `checkout: moving from <from> to <to>` reflog lines name it.
+    fn checked_out_before(&self, n: usize) -> Result<String, String> {
+        let head = gix_ref::FullName::try_from("HEAD")
+            .map_err(|error| format!("HEAD is not a reference name: {error}"))?;
+        let lines = self.reflog_lines(&head)?;
+        lines
+            .iter()
+            .filter_map(|line| {
+                let rest = line.message.strip_prefix(b"checkout: moving from ")?;
+                let to = rest.rfind(b" to ")?;
+                rest.get(..to)?.to_str().ok().map(str::to_owned)
+            })
+            .nth(n.saturating_sub(1))
+            .ok_or_else(|| format!("HEAD's reflog names fewer than {n} checked-out branches"))
+    }
+
+    /// The commits reachable from `tips`, newest committer date first
+    /// (git's order for `:/`), the first whose message `regex` matches (or,
+    /// `negated`, does not match).
+    fn search_messages(
+        &self,
+        tips: Vec<ObjectId>,
+        regex: &regex::bytes::Regex,
+        negated: bool,
+    ) -> Option<ObjectId> {
+        let mut seen: std::collections::HashSet<ObjectId> = tips.iter().copied().collect();
+        let mut queue = std::collections::BinaryHeap::new();
+        let mut buf = Vec::new();
+        for tip in tips {
+            if let Ok(commit) = self.repo.odb.find_commit(&tip, &mut buf) {
+                queue.push((commit.time().map_or(0, |time| time.seconds), tip));
+            }
+        }
+        while let Some((_, id)) = queue.pop() {
+            let Ok(commit) = self.repo.odb.find_commit(&id, &mut buf) else {
+                continue;
+            };
+            if regex.is_match(commit.message) != negated {
+                return Some(id);
+            }
+            let parents: Vec<ObjectId> = commit.parents().collect();
+            for parent in parents {
+                if seen.insert(parent) {
+                    let mut parent_buf = Vec::new();
+                    // A shallow clone names parents it does not hold.
+                    if let Ok(found) = self.repo.odb.find_commit(&parent, &mut parent_buf) {
+                        queue.push((found.time().map_or(0, |time| time.seconds), parent));
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    /// Every commit a reference or `HEAD` points at, `:/`'s starting points.
+    fn every_tip(&self) -> Vec<ObjectId> {
+        let mut tips = Vec::new();
+        let mut add = |mut reference: gix_ref::Reference| {
+            if let Ok(id) = reference.peel_to_id(&self.repo.refs, &self.repo.odb)
+                && let Some(commit) = self.peel_to_commit(id)
+            {
+                tips.push(commit);
+            }
+        };
+        if let Ok(Some(head)) = self.repo.refs.try_find("HEAD") {
+            add(head);
+        }
+        if let Ok(platform) = self.repo.refs.iter()
+            && let Ok(all) = platform.all()
+        {
+            for reference in all.flatten() {
+                add(reference);
+            }
+        }
+        tips.sort();
+        tips.dedup();
+        tips
     }
 }
 
@@ -347,10 +660,12 @@ impl delegate::Revision for Resolve<'_> {
             .map_err(|error| refused(format!("reference {name}: {error}")))?
             .ok_or_else(|| refused(format!("no reference {name}")))?;
         let mut found = found;
+        let full_name = found.name.clone();
         let id = found
             .peel_to_id(&self.repo.refs, &self.repo.odb)
             .map_err(|error| refused(format!("reference {name}: {error}")))?;
         self.current = Some(id);
+        self.current_ref = Some(full_name);
         Ok(())
     }
 
@@ -362,6 +677,7 @@ impl delegate::Revision for Resolve<'_> {
         match self.repo.odb.lookup_prefix(prefix, None) {
             Ok(Some(Ok(id))) => {
                 self.current = Some(id);
+                self.current_ref = None;
                 Ok(())
             }
             Ok(Some(Err(()))) => Err(refused(format!("{prefix} is ambiguous"))),
@@ -370,16 +686,79 @@ impl delegate::Revision for Resolve<'_> {
         }
     }
 
-    fn reflog(&mut self, _query: delegate::ReflogLookup) -> Result<(), gix_error::Error> {
-        Self::unsupported("a reflog entry")
+    fn reflog(&mut self, query: delegate::ReflogLookup) -> Result<(), gix_error::Error> {
+        self.every_form("a reflog entry")?;
+        let name = self
+            .anchor_ref()
+            .ok_or_else(|| self.refuse("HEAD names no reference".to_owned()))?;
+        let found = self
+            .reflog_lines(&name)
+            .and_then(|lines| Self::reflog_entry(&lines, &name, query));
+        match found {
+            Ok(id) => {
+                self.current = Some(id);
+                self.current_ref = None;
+                Ok(())
+            }
+            Err(message) => Err(self.refuse(message)),
+        }
     }
 
-    fn nth_checked_out_branch(&mut self, _branch_no: usize) -> Result<(), gix_error::Error> {
-        Self::unsupported("a checked-out branch")
+    fn nth_checked_out_branch(&mut self, branch_no: usize) -> Result<(), gix_error::Error> {
+        self.every_form("a checked-out branch")?;
+        let before = self
+            .checked_out_before(branch_no)
+            .map_err(|message| self.refuse(message))?;
+        // A detached checkout is named by its commit id.
+        if let Ok(id) = ObjectId::from_hex(before.as_bytes()) {
+            self.current = Some(id);
+            self.current_ref = None;
+            return Ok(());
+        }
+        let branch = format!("refs/heads/{before}");
+        self.find_ref(branch.as_bytes().as_bstr())
+            .or_else(|_| self.find_ref(before.as_bytes().as_bstr()))
+            .map_err(|_| {
+                self.refuse(format!(
+                    "the branch checked out before, {before}, no longer exists"
+                ))
+            })
     }
 
-    fn sibling_branch(&mut self, _kind: delegate::SiblingBranch) -> Result<(), gix_error::Error> {
-        Self::unsupported("an upstream branch")
+    fn sibling_branch(&mut self, kind: delegate::SiblingBranch) -> Result<(), gix_error::Error> {
+        self.every_form("an upstream branch")?;
+        if matches!(kind, delegate::SiblingBranch::Push) {
+            return self.unsupported(
+                "@{push} is not supported: the branch a push goes to depends on the push \
+                 configuration; name the remote branch instead (origin/<branch>)",
+            );
+        }
+        let branch = self
+            .anchor_ref()
+            .and_then(|name| {
+                // `HEAD@{u}` is the upstream of the branch HEAD is on.
+                if name.as_bstr() == "HEAD" {
+                    return current_branch(self.repo);
+                }
+                name.as_bstr()
+                    .to_str()
+                    .ok()?
+                    .strip_prefix("refs/heads/")
+                    .map(str::to_owned)
+            })
+            .ok_or_else(|| self.refuse("@{upstream} needs a branch".to_owned()))?;
+        let upstream = upstream_ref(&self.repo.git_dir, &branch)
+            .ok_or_else(|| self.refuse(format!("branch {branch} has no upstream")))?;
+        let upstream = upstream.map_err(|merge| {
+            self.refuse(format!(
+                "the upstream of {branch}, {merge}, is fetched by none of its remote's refspecs"
+            ))
+        })?;
+        self.find_ref(upstream.as_bytes().as_bstr()).map_err(|_| {
+            self.refuse(format!(
+                "the upstream of {branch}, {upstream}, is not in the checkout"
+            ))
+        })
     }
 }
 
@@ -422,22 +801,48 @@ impl delegate::Navigate for Resolve<'_> {
                     _ => Err(refused(format!("no object {id}"))),
                 }
             }
-            _ => Self::unsupported("a tree, blob or path"),
+            delegate::PeelTo::Path(_) => {
+                self.unsupported("a file in a commit (<rev>:<path>) is not a commit")
+            }
+            delegate::PeelTo::ObjectKind(_) => {
+                self.unsupported("a tree, blob or tag object is not a commit")
+            }
         }
     }
 
-    fn find(&mut self, _regex: &BStr, _negated: bool) -> Result<(), gix_error::Error> {
-        Self::unsupported("a message search")
+    fn find(&mut self, regex: &BStr, negated: bool) -> Result<(), gix_error::Error> {
+        self.every_form("a message search")?;
+        let pattern = regex
+            .to_str()
+            .map_err(|_| self.refuse(format!("the message search {regex} is not UTF-8")))?;
+        let compiled = regex::bytes::Regex::new(pattern).map_err(|error| {
+            self.refuse(format!(
+                "the message search {pattern} is not a regular expression: {error}"
+            ))
+        })?;
+        // `<rev>^{/text}` searches from `<rev>`; `:/text` from every reference.
+        let tips = match self.current {
+            Some(id) => self.peel_to_commit(id).into_iter().collect(),
+            None => self.every_tip(),
+        };
+        match self.search_messages(tips, &compiled, negated) {
+            Some(id) => {
+                self.current = Some(id);
+                self.current_ref = None;
+                Ok(())
+            }
+            None => Err(self.refuse(format!("no commit's message matches {pattern}"))),
+        }
     }
 
     fn index_lookup(&mut self, _path: &BStr, _stage: u8) -> Result<(), gix_error::Error> {
-        Self::unsupported("an index path")
+        self.unsupported("a file in the index (:<path>) is not a commit")
     }
 }
 
 impl delegate::Kind for Resolve<'_> {
     fn kind(&mut self, _kind: gix_revision::spec::Kind) -> Result<(), gix_error::Error> {
-        Self::unsupported("a range")
+        self.unsupported("a range (a..b, a...b, ^a) names more than one commit")
     }
 }
 
@@ -447,17 +852,30 @@ impl gix_revision::spec::parse::Delegate for Resolve<'_> {
     }
 }
 
-/// The commit `rev` names, as `git rev-parse` reads it: an object id, a
-/// reference (`origin/main`, `refs/...`), a parent step; an annotated tag
-/// peeled.
+/// The commit `rev` names, as `git rev-parse` reads it (see [`Resolve`]);
+/// an annotated tag peeled.
 fn commit_id(repo: &Repo, rev: &str) -> Option<ObjectId> {
+    resolve_commit(repo, rev, false).ok()
+}
+
+/// [`commit_id`], reading every form when `every_form`, or why `rev` names
+/// no commit, when opentide knows (`None` for a revision that names
+/// nothing).
+fn resolve_commit(repo: &Repo, rev: &str, every_form: bool) -> Result<ObjectId, Option<String>> {
     let mut resolve = Resolve {
         repo,
+        every_form,
         current: None,
+        current_ref: None,
+        refusal: None,
     };
-    gix_revision::spec::parse(rev.as_bytes().as_bstr(), &mut resolve).ok()?;
-    let id = resolve.current?;
-    resolve.peel_to_commit(id)
+    if gix_revision::spec::parse(rev.as_bytes().as_bstr(), &mut resolve).is_err() {
+        return Err(resolve.refusal);
+    }
+    let id = resolve.current.ok_or(None)?;
+    resolve
+        .peel_to_commit(id)
+        .ok_or_else(|| Some(format!("{id} is not a commit")))
 }
 
 fn has_commit(repo: &Repo, id: &str) -> bool {
@@ -730,6 +1148,150 @@ fn deleted_between(
     }
     deleted.sort_by(|a, b| a.path.cmp(&b.path));
     Ok(deleted)
+}
+
+/// A file a commit changed against its first parent, with its content on
+/// each side.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CommitChange {
+    /// Its path, relative to the git top level.
+    pub path: String,
+    /// What the parent held; `None` when the commit added it.
+    pub before: Option<Vec<u8>>,
+    /// What the commit holds; `None` when the commit deleted it.
+    pub after: Option<Vec<u8>>,
+}
+
+/// The files under `folder` (relative to `start`) that the commit `rev`
+/// changed against its first parent, sorted by path, as `git diff
+/// --no-renames <rev>^ <rev> -- <folder>` lists them, each with what `git
+/// show` prints of it on either side. `rev` is read as `git rev-parse` reads
+/// it, except what names no single commit (a range, a path, `@{push}`). The
+/// checkout is found with `env` (`GIT_DIR`, `GIT_WORK_TREE`,
+/// `GIT_CEILING_DIRECTORIES`; see [`discover_with`]). A root commit has no
+/// parent to compare with, and an object the checkout cannot read is an
+/// error, not an empty side.
+pub fn commit_changes(
+    start: &Path,
+    env: OsEnv<'_>,
+    rev: &str,
+    folder: &str,
+) -> Result<Vec<CommitChange>, GitError> {
+    let (top, _) =
+        discover_with(start, env).ok_or_else(|| GitError::MissingCheckout(start.to_path_buf()))?;
+    let repo = open_with(start, env)?;
+    let head = resolve_commit(&repo, rev, true).map_err(|reason| {
+        failed(match reason {
+            Some(reason) => format!("Could not find git commit {rev}: {reason}"),
+            None => format!("Could not find git commit {rev}"),
+        })
+    })?;
+    let parents = parents(&repo, head).ok_or_else(|| missing_parent(&repo, head))?;
+    let Some(parent) = parents.first().copied() else {
+        return Err(failed(format!(
+            "Commit {rev} has no parent to compare with"
+        )));
+    };
+    if repo.commit(parent).is_none() {
+        return Err(missing_parent(&repo, parent));
+    }
+    let scope = pathspec_scope(start, &top, folder);
+    let within = |path: &str| {
+        scope.is_empty()
+            || path
+                .strip_prefix(scope.as_str())
+                .is_some_and(|rest| rest.is_empty() || rest.starts_with('/'))
+    };
+    let blob = |oid: ObjectId| -> Result<Vec<u8>, GitError> {
+        let mut buf = Vec::new();
+        repo.odb
+            .find_blob(&oid, &mut buf)
+            .map(|blob| blob.data.to_vec())
+            .map_err(|error| failed(format!("Could not find git object {oid}: {error}")))
+    };
+    let mut changes: std::collections::BTreeMap<String, CommitChange> =
+        std::collections::BTreeMap::new();
+    for change in tree_changes(&repo, Some(parent), head)? {
+        use gix_diff::tree::recorder::Change;
+        // A file's side, or none where the entry is a folder (a file that
+        // became a folder, or the reverse, is a deletion and an addition).
+        let side = |mode: gix_object::tree::EntryMode, oid: ObjectId| {
+            if mode.is_tree() || mode.is_commit() {
+                Ok(None)
+            } else {
+                blob(oid).map(Some)
+            }
+        };
+        let (path, before, after) = match change {
+            Change::Addition {
+                entry_mode,
+                oid,
+                path,
+                ..
+            } => (path, None, side(entry_mode, oid)?),
+            Change::Deletion {
+                entry_mode,
+                oid,
+                path,
+                ..
+            } => (path, side(entry_mode, oid)?, None),
+            Change::Modification {
+                previous_entry_mode,
+                previous_oid,
+                entry_mode,
+                oid,
+                path,
+            } => (
+                path,
+                side(previous_entry_mode, previous_oid)?,
+                side(entry_mode, oid)?,
+            ),
+        };
+        if before.is_none() && after.is_none() {
+            continue;
+        }
+        let path = String::from_utf8_lossy(&path).into_owned();
+        if !within(&path) {
+            continue;
+        }
+        let entry = changes.entry(path.clone()).or_insert(CommitChange {
+            path,
+            before: None,
+            after: None,
+        });
+        if before.is_some() {
+            entry.before = before;
+        }
+        if after.is_some() {
+            entry.after = after;
+        }
+    }
+    Ok(changes.into_values().collect())
+}
+
+/// `folder`, a pathspec relative to `start`, as a path from the top level
+/// `top` (`/`-separated, empty for the whole tree).
+fn pathspec_scope(start: &Path, top: &Path, folder: &str) -> String {
+    let below = match (gix_path::realpath(start), gix_path::realpath(top)) {
+        (Ok(start), Ok(top)) => start
+            .strip_prefix(&top)
+            .ok()
+            .map(|relative| {
+                relative
+                    .components()
+                    .map(|part| part.as_os_str().to_string_lossy().into_owned())
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default(),
+        _ => Vec::new(),
+    };
+    let parts: Vec<&str> = below
+        .iter()
+        .map(String::as_str)
+        .chain(folder.split('/'))
+        .filter(|part| !part.is_empty() && *part != ".")
+        .collect();
+    parts.join("/")
 }
 
 /// Every change of a file or folder from `base` to `head`, as gix records
@@ -1523,6 +2085,43 @@ fn upstream(git_dir: &Path, branch: &str) -> Option<(String, bool)> {
     }
 }
 
+/// The reference `<branch>@{upstream}` names, as git maps it: with
+/// `branch.<b>.remote = .` the merge reference itself; otherwise the merge
+/// reference mapped through the first of the remote's fetch refspecs that
+/// matches it. `None` when the branch has no upstream; `Err(merge)` when no
+/// refspec fetches it.
+fn upstream_ref(git_dir: &Path, branch: &str) -> Option<Result<String, String>> {
+    let config = config(git_dir)?;
+    let remote = config.string(format!("branch.{branch}.remote").as_str())?;
+    let merge = config.string(format!("branch.{branch}.merge").as_str())?;
+    let remote = remote.to_str().ok()?;
+    let merge = merge.to_str().ok()?.to_owned();
+    if remote == "." {
+        return Some(Ok(merge));
+    }
+    let specs = config
+        .strings(format!("remote.{remote}.fetch").as_str())
+        .unwrap_or_default();
+    let mapped = specs.iter().find_map(|spec| {
+        let spec = spec.to_str().ok()?;
+        if spec.starts_with('^') {
+            return None;
+        }
+        let (source, destination) = spec.trim_start_matches('+').split_once(':')?;
+        match (source.split_once('*'), destination.split_once('*')) {
+            (Some((prefix, suffix)), Some((to_prefix, to_suffix))) => {
+                let middle = merge.strip_prefix(prefix)?.strip_suffix(suffix)?;
+                Some(format!("{to_prefix}{middle}{to_suffix}"))
+            }
+            (None, None) if source == merge && !destination.is_empty() => {
+                Some(destination.to_owned())
+            }
+            _ => None,
+        }
+    });
+    Some(mapped.ok_or(merge))
+}
+
 /// The baseline refs to try, most specific first (`candidate_refs`), and
 /// the last resort apart: a non-default branch's own upstream, tried after
 /// every other.
@@ -2227,6 +2826,154 @@ mod tests {
                 .find(|(key, _)| key == name)
                 .map(|(_, value)| value.clone())
         }
+    }
+
+    /// `git init` in `dir`, with `args` (`--bare`).
+    fn git_init(dir: &Path, args: &[&str]) {
+        std::fs::create_dir_all(dir).unwrap();
+        let status = std::process::Command::new("git")
+            .arg("init")
+            .arg("-q")
+            .args(args)
+            .current_dir(dir)
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("HOME", dir)
+            // A hook running the tests exports these (a linked worktree's
+            // `GIT_DIR`): `git init --bare` would then rewrite that
+            // repository rather than create one here.
+            .env_remove("GIT_DIR")
+            .env_remove("GIT_WORK_TREE")
+            .env_remove("GIT_INDEX_FILE")
+            .env_remove("GIT_CEILING_DIRECTORIES")
+            .env_remove("GIT_COMMON_DIR")
+            .env_remove("GIT_OBJECT_DIRECTORY")
+            .env_remove("GIT_ALTERNATE_OBJECT_DIRECTORIES")
+            .env_remove("GIT_NAMESPACE")
+            .env_remove("GIT_PREFIX")
+            .status()
+            .expect("git runs");
+        assert!(status.success());
+    }
+
+    /// `git config <key> <value>` in the repository at `git_dir`.
+    fn git_config(git_dir: &Path, key: &str, value: &Path) {
+        let status = std::process::Command::new("git")
+            .arg("--git-dir")
+            .arg(git_dir)
+            .args(["config", key])
+            .arg(value)
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env_remove("GIT_DIR")
+            .env_remove("GIT_WORK_TREE")
+            .env_remove("GIT_COMMON_DIR")
+            .status()
+            .expect("git runs");
+        assert!(status.success());
+    }
+
+    fn os_lookup(pairs: &[(&str, &Path)]) -> impl Fn(&str) -> Option<std::ffi::OsString> + use<> {
+        let pairs: Vec<(String, PathBuf)> = pairs
+            .iter()
+            .map(|(k, v)| ((*k).to_owned(), v.to_path_buf()))
+            .collect();
+        move |name: &str| {
+            pairs
+                .iter()
+                .find(|(key, _)| key == name)
+                .map(|(_, value)| value.clone().into_os_string())
+        }
+    }
+
+    #[test]
+    fn git_dir_and_git_work_tree_name_a_bare_repository_and_its_work_tree() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().canonicalize().unwrap();
+        let bare = root.join("dépôt.git");
+        git_init(&bare, &["--bare"]);
+        let work_tree = root.join("arbre 😀");
+        let sub = work_tree.join("rules");
+        std::fs::create_dir_all(&sub).unwrap();
+        // Discovery alone finds nothing: the work tree has no `.git`.
+        assert_eq!(discover_with(&sub, &os_lookup(&[])), None);
+        let env = os_lookup(&[("GIT_DIR", &bare), ("GIT_WORK_TREE", &work_tree)]);
+        assert_eq!(
+            discover_with(&sub, &env),
+            Some((work_tree.clone(), bare.clone()))
+        );
+        // Relative paths are read against the directory git runs in.
+        let relative = os_lookup(&[
+            ("GIT_DIR", Path::new("../../dépôt.git")),
+            ("GIT_WORK_TREE", Path::new("..")),
+        ]);
+        let (top, git_dir) = discover_with(&sub, &relative).unwrap();
+        assert_eq!(top.canonicalize().unwrap(), work_tree);
+        assert_eq!(git_dir.canonicalize().unwrap(), bare);
+        // A bare repository without `GIT_WORK_TREE` has no work tree.
+        assert_eq!(discover_with(&sub, &os_lookup(&[("GIT_DIR", &bare)])), None);
+        // `core.bare` wins over `core.worktree`, as in git.
+        git_config(&bare, "core.worktree", &work_tree);
+        assert_eq!(discover_with(&sub, &os_lookup(&[("GIT_DIR", &bare)])), None);
+        git_config(&bare, "core.bare", Path::new("false"));
+        assert_eq!(
+            discover_with(&sub, &os_lookup(&[("GIT_DIR", &bare)])),
+            Some((work_tree.clone(), bare.clone()))
+        );
+        // `GIT_DIR` naming no repository finds none, without a search.
+        let missing = os_lookup(&[("GIT_DIR", &root.join("missing"))]);
+        assert_eq!(discover_with(&sub, &missing), None);
+    }
+
+    #[test]
+    fn git_dir_alone_makes_the_running_directory_the_work_tree() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().canonicalize().unwrap();
+        let repo = root.join("repo");
+        git_init(&repo, &[]);
+        let elsewhere = root.join("ailleurs");
+        std::fs::create_dir_all(&elsewhere).unwrap();
+        let git_dir = repo.join(".git");
+        let env = os_lookup(&[("GIT_DIR", &git_dir)]);
+        assert_eq!(
+            discover_with(&elsewhere, &env),
+            Some((elsewhere.clone(), git_dir.clone()))
+        );
+        // `GIT_WORK_TREE` alone names the work tree of the repository found.
+        let env = os_lookup(&[("GIT_WORK_TREE", &elsewhere)]);
+        assert_eq!(discover_with(&repo, &env), Some((elsewhere, git_dir)));
+        // An empty variable is unset.
+        let env = os_lookup(&[("GIT_DIR", Path::new("")), ("GIT_WORK_TREE", Path::new(""))]);
+        assert_eq!(
+            discover_with(&repo, &env),
+            Some((repo.clone(), repo.join(".git")))
+        );
+    }
+
+    #[test]
+    fn a_ceiling_directory_stops_the_search_above_the_start() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().canonicalize().unwrap();
+        let repo = root.join("dépôt");
+        git_init(&repo, &[]);
+        let deep = repo.join("a").join("b");
+        std::fs::create_dir_all(&deep).unwrap();
+        let found = Some((repo.clone(), repo.join(".git")));
+        assert_eq!(discover_with(&deep, &os_lookup(&[])), found);
+        // A ceiling between the start and the repository hides it, and so
+        // does the repository's own top level, which git does not enter.
+        for ceiling in [repo.join("a"), repo.clone()] {
+            let env = os_lookup(&[("GIT_CEILING_DIRECTORIES", &ceiling)]);
+            assert_eq!(discover_with(&deep, &env), None, "{}", ceiling.display());
+        }
+        // The start itself is searched even when it is a ceiling.
+        let env = os_lookup(&[("GIT_CEILING_DIRECTORIES", &repo)]);
+        assert_eq!(discover_with(&repo, &env), found);
+        // A ceiling that is not above the start, or a relative one, is
+        // ignored rather than an error.
+        let joined = std::env::join_paths([root.join("autre"), PathBuf::from("a")]).unwrap();
+        let env = |name: &str| (name == "GIT_CEILING_DIRECTORIES").then(|| joined.clone());
+        assert_eq!(discover_with(&deep, &env), found);
     }
 
     #[test]

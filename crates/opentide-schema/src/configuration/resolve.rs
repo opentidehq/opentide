@@ -1,9 +1,8 @@
-//! The layering of the configuration files (`core/files.py`
-//! `resolve_configurations`): the bundled defaults, then the workspace's
+//! The layering of the configuration files: the bundled defaults, then the workspace's
 //! `.opentide/configurations/`, then the parent instance's; each layer merged
 //! onto the ones before ([`super::merge::deep_merge`]).
 //!
-//! A folder's files are read as the oracle reads them: each `.toml` file at
+//! A folder's files are read this way: each `.toml` file at
 //! the top (but `sharing.toml`, which merges block by block,
 //! [`super::sharing`]) under its name without `.toml`, and each folder at the
 //! top that is not hidden (`.x`) or private (`__x`) as a table of its
@@ -108,8 +107,8 @@ pub enum ResolveError {
 }
 
 impl ResolveError {
-    /// The diagnostic code; the oracle gives a retired proxy setting none
-    /// (a plain `ValueError`).
+    /// The diagnostic code; a retired proxy setting has none, and its
+    /// message says what to do.
     pub fn code(&self) -> Option<&'static str> {
         match self {
             Self::Parse { .. } => Some(super::codes::CONFIG_PARSE),
@@ -273,7 +272,7 @@ fn parse(
     })
 }
 
-/// A folder's documents (`_fetch_configs`).
+/// A folder's documents.
 fn fetch(folder: &Folder, parsed: &mut usize) -> Result<Node, ResolveError> {
     let mut names: Vec<&str> = folder
         .files
@@ -286,7 +285,7 @@ fn fetch(folder: &Folder, parsed: &mut usize) -> Result<Node, ResolveError> {
     names.dedup();
     let mut entries: Vec<(String, Node)> = Vec::new();
     // A key read twice (`platforms.toml` after the folder `platforms`) takes
-    // the later entry in name order, as the oracle's dict assignment does.
+    // the later entry in name order.
     let mut put = |key: &str, node: Node| match entries.iter_mut().find(|(seen, _)| seen == key) {
         Some((_, existing)) => *existing = node,
         None => entries.push((key.to_owned(), node)),
@@ -521,8 +520,8 @@ mod tests {
 
     #[test]
     fn a_file_replaces_the_folder_of_its_name() {
-        // `platforms.toml` sorts after `platforms`: the oracle's dict keeps
-        // the file, and the folder's `enabled = true` is not merged.
+        // `platforms.toml` sorts after `platforms`: the file wins, and the
+        // folder's `enabled = true` is not merged.
         let workspace = folder(
             &[
                 ("platforms.toml", "[splunk]\nx = 1\n"),

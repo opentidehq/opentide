@@ -1,4 +1,4 @@
-//! Editor annotations on a generated JSON Schema (`schema_annotations.py`):
+//! Editor annotations on a generated JSON Schema:
 //! annotation keywords only, so what the schema accepts is unchanged.
 //!
 //! - a root `$comment` naming opentide, and a root `description` when the
@@ -10,11 +10,12 @@
 //!
 //! Markdown becomes plain text through `opentide_core::markdown`, the
 //! workspace's one converter (#1957): links read as their text, and each
-//! block is one paragraph of one line. The other patterns are the oracle's,
-//! run by the `regex` crate; the sentence end of `first_sentence` has a
-//! look-ahead, which it has not, so it is tested by hand, and the tests hold
-//! it to the oracle's pattern, run by `fancy-regex` (a dev-dependency only),
-//! on every bundled description and on generated text.
+//! block is one paragraph of one line. The other patterns run on the `regex`
+//! crate. The sentence end of `first_sentence`, `[.!?](?=\s|$)`, needs a
+//! look-ahead, which `regex` has not, so `sentence_ends` finds it by hand,
+//! and the tests hold it to that pattern, run by `fancy-regex` (a
+//! dev-dependency only), on every bundled description and on generated
+//! text.
 
 use std::sync::OnceLock;
 
@@ -489,8 +490,8 @@ mod tests {
         assert_eq!(field.get("x-enumDescriptions"), Some(&plain));
     }
 
-    /// The starts of the sentence ends of the oracle's pattern, as
-    /// `fancy-regex` runs it, which [`sentence_ends`] finds by hand.
+    /// The starts of the sentence ends of `[.!?](?=\s|$)`, as `fancy-regex`
+    /// runs it, which [`sentence_ends`] finds by hand.
     fn reference(text: &str) -> Vec<usize> {
         static SENTENCE_END: OnceLock<fancy_regex::Regex> = OnceLock::new();
         SENTENCE_END

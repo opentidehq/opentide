@@ -1,4 +1,4 @@
-//! The merge of configuration layers (`core/files.py` `deep_merge`): a table
+//! The merge of configuration layers ([`deep_merge`]): a table
 //! merges into a table key by key, and every other value (a scalar, an array,
 //! an array of tables) replaces what was there. A key new to the table is
 //! added after the others, a replaced key keeps its place.

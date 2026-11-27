@@ -164,10 +164,6 @@ const DEFENDER_OUTPUT_ADVISORIES: [&str; 2] = [
     opentide_core::codes::MICROSOFT_DEFENDER_UNPROJECTED_OUTPUT,
 ];
 
-/// Words in an engine message that make its `suggestion` a replacement name,
-/// for a code that declares no [`SuggestionKind`](opentide_core::codes::SuggestionKind).
-const ENGINE_UNKNOWN: [&str; 3] = ["unknown", "deprecated", "not a command"];
-
 /// Held by a host while it installs datasets or catalogs for the whole
 /// process. Nothing in opentide takes it any more (#1142): the queries
 /// checks of [`Profiles`] and the TUI's catalog are scoped to the threads
@@ -923,22 +919,16 @@ fn span_end(
     }
 }
 
-/// The help line of an engine finding: `did you mean …?` for an unknown or
-/// deprecated name, the step to take otherwise; without a suggestion, the
-/// language reference, or the code's `opentide explain`.
-pub fn engine_help(code: &str, message: &str, suggestion: Option<&str>) -> String {
+/// The help line of an engine finding: `did you mean …?` when its code
+/// declares its suggestion a replacement name
+/// ([`suggestion_kind`](opentide_core::codes::suggestion_kind)), `try: …`
+/// otherwise; without a suggestion, the language reference, or the code's
+/// `opentide explain`. The message's words never decide it (#1950).
+pub fn engine_help(code: &str, suggestion: Option<&str>) -> String {
     if let Some(suggestion) = suggestion.filter(|text| !text.is_empty()) {
-        let replacement = match opentide_core::codes::suggestion_kind(code) {
-            Some(opentide_core::codes::SuggestionKind::Replacement) => true,
-            Some(_) => false,
-            // A code that declares no kind: `esql_parse_error` and
-            // `esql_unavailable`, whose messages decide it today (#1950).
-            None => {
-                let lower = message.to_lowercase();
-                ENGINE_UNKNOWN.iter().any(|word| lower.contains(word))
-            }
-        };
-        if replacement {
+        if opentide_core::codes::suggestion_kind(code)
+            == Some(opentide_core::codes::SuggestionKind::Replacement)
+        {
             return format!(
                 "did you mean {}?",
                 opentide_schema::vocab::quote(suggestion)
@@ -973,11 +963,7 @@ pub fn engine_diagnostic(
     diagnostic.column = Some(finding.column);
     diagnostic.end_line = Some(finding.end_line);
     diagnostic.end_column = Some(finding.end_column);
-    diagnostic.help = Some(engine_help(
-        &finding.code,
-        &finding.message,
-        finding.suggestion.as_deref(),
-    ));
+    diagnostic.help = Some(engine_help(&finding.code, finding.suggestion.as_deref()));
     diagnostic
 }
 
@@ -1332,68 +1318,84 @@ mod tests {
     #[test]
     fn help_names_the_replacement_the_step_the_reference_or_the_page() {
         assert_eq!(
-            engine_help("kql_unknown_table", "unknown table 'X'", Some("Y")),
+            engine_help("kql_unknown_table", Some("Y")),
             "did you mean \"Y\"?"
         );
         assert_eq!(
-            engine_help("spl_x", "is Not A Command here", Some("stats")),
+            engine_help("spl_unknown_command", Some("stats")),
             "did you mean \"stats\"?"
         );
+        assert_eq!(engine_help("spl_search_operator", Some("=")), "try: =");
+        // A code that declares no kind gets the step.
         assert_eq!(
-            engine_help("esql_x", "needs a source", Some("FROM logs-*")),
+            engine_help("esql_x", Some("FROM logs-*")),
             "try: FROM logs-*"
         );
         assert_eq!(
-            engine_help("falco_value_type", "abc is not a number", None),
+            engine_help("falco_value_type", None),
             "the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/"
         );
         assert_eq!(
-            engine_help("kql_table_not_declared", "not declared", None),
+            engine_help("kql_table_not_declared", None),
             "opentide explain kql_table_not_declared describes it"
         );
         assert_eq!(
-            engine_help("sysdig_list_self_reference", "x", None),
+            engine_help("sysdig_list_self_reference", None),
             "opentide explain sysdig_list_self_reference describes it"
         );
         assert_eq!(
-            engine_help("kql_x", "x", Some("")),
+            engine_help("kql_x", Some("")),
             "the KQL reference: https://learn.microsoft.com/kusto/query/"
         );
     }
 
-    /// The help follows the kind the code declares, never the message's
-    /// words (#1950): a reworded message keeps its help.
+    /// A near miss of a known name is a replacement whatever its message
+    /// says (#1950): these printed `try: …` while their messages named none
+    /// of "unknown", "deprecated" or "not a command".
     #[test]
-    fn help_follows_the_declared_kind_not_the_wording() {
-        // A replacement whose message names none of the words.
-        assert_eq!(
-            engine_help(
-                "kql_unknown_table",
-                "'Tablé😀' is missing here",
-                Some("Table")
+    fn a_near_miss_is_a_replacement() {
+        for (code, suggestion) in [
+            (opentide_core::codes::KQL_TABLE_MISSPELT, "SecurityEvent"),
+            (
+                opentide_core::codes::SPL_UNKNOWN_DATAMODEL,
+                "Endpoint.Processes",
             ),
-            "did you mean \"Table\"?"
+            (
+                opentide_core::codes::SPL_UNKNOWN_DATAMODEL_FIELD,
+                "Endpoint.Processes.process_name",
+            ),
+            (opentide_core::codes::ECS_UNKNOWN_FIELD, "process.name"),
+            (opentide_core::codes::CBC_UNKNOWN_FIELD, "process_name"),
+            (opentide_core::codes::KQL_UNKNOWN_COLUMN, "FileName"),
+            (opentide_core::codes::FALCO_UNKNOWN_FIELD, "proc.name"),
+            (opentide_core::codes::FALCO_UNKNOWN_MACRO, "spawned_process"),
+            (
+                opentide_core::codes::FALCO_UNKNOWN_RULE,
+                "Terminal shell in container",
+            ),
+            (opentide_core::codes::CQL_UNKNOWN_EVENT, "ProcessRollup2"),
+            (opentide_core::codes::CQL_UNKNOWN_PARAMETER, "function"),
+            (opentide_core::codes::ESQL_UNKNOWN_TYPE, "long"),
+        ] {
+            assert_eq!(
+                engine_help(code, Some(suggestion)),
+                format!("did you mean \"{suggestion}\"?"),
+                "{code}"
+            );
+        }
+    }
+
+    /// ES|QL's parse errors and gates suggest the text to write, even where
+    /// their message explains an "unknown command" (#1950).
+    #[test]
+    fn an_esql_fix_is_a_step() {
+        assert_eq!(
+            engine_help(opentide_core::codes::ESQL_PARSE_ERROR, Some("FROM é😀")),
+            "try: FROM é😀"
         );
         assert_eq!(
-            engine_help(
-                "spl_unknown_command",
-                "'statz' is not recognised",
-                Some("stats")
-            ),
-            "did you mean \"stats\"?"
-        );
-        // A step whose message names one, as a user's text can.
-        assert_eq!(
-            engine_help(
-                "falco_unknown_macro",
-                "`unknown_é` is not a macro",
-                Some("known_é")
-            ),
-            "try: known_é"
-        );
-        assert_eq!(
-            engine_help("spl_search_operator", "a deprecated '=='", Some("=")),
-            "try: ="
+            engine_help(opentide_core::codes::ESQL_UNAVAILABLE, Some("FROM (")),
+            "try: FROM ("
         );
     }
 

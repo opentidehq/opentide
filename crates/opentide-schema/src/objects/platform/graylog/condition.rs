@@ -1,6 +1,6 @@
 //! The aggregation condition grammar (graylog-1.0, "Condition grammar"):
-//! `aggregation.condition` compiled into Graylog's series and condition tree
-//! (`platforms/graylog/constraints.py` `parse_condition`).
+//! `aggregation.condition` compiled into Graylog's series and condition
+//! tree.
 //!
 //! The parser is language-server 0.16.0's (`opentide-tide/src/graylog.rs`),
 //! moved here so the model, deploy and the editor share one copy: it keeps
@@ -222,8 +222,8 @@ impl Token<'_> {
     }
 }
 
-/// The oracle's `_tokens`: comparisons, parentheses and commas, and words of
-/// field-name characters, around whitespace.
+/// The condition's tokens: comparisons, parentheses and commas, and words
+/// of field-name characters, around whitespace.
 fn tokenize(text: &str) -> Result<Vec<Token<'_>>, ConditionError> {
     let mut tokens = Vec::new();
     let mut at = 0;
@@ -297,8 +297,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// The oracle's `take`: the next token, which must be `expected` when
-    /// one is given.
+    /// The next token, which must be `expected` when one is given.
     fn take(&mut self, expected: Option<&str>) -> Result<Token<'a>, ConditionError> {
         match self.peek() {
             Some(token) if expected.is_none_or(|expected| token.text == expected) => {
@@ -380,7 +379,7 @@ impl<'a> Parser<'a> {
         Ok(Expr::Compare { op, series, value })
     }
 
-    /// The oracle's `_number`.
+    /// A number token, or the error `<token> is not a number`.
     fn number(&self, token: Token<'_>) -> Result<Number, ConditionError> {
         Number::parse(token.text).ok_or_else(|| {
             self.error(
@@ -555,7 +554,7 @@ mod tests {
     }
 
     #[test]
-    fn errors_name_what_the_oracle_names() {
+    fn errors_name_the_offending_token() {
         assert_eq!(error(""), "the condition is empty");
         assert_eq!(error("   "), "the condition is empty");
         assert_eq!(error("count() >= 3 $x"), "unexpected \"$x\"");

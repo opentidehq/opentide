@@ -1,5 +1,4 @@
-//! The parts of YARA-L 2.0 opentide checks without a parser (yara-l-1.0),
-//! ported from 0.28.0's `platforms/google_secops/yaral.py`.
+//! The parts of YARA-L 2.0 opentide checks without a parser (yara-l-1.0).
 //!
 //! A `configurations.google_secops` block carries a rule's sections as keys:
 //! `setup`, `events`, `outcome`, `condition` and `export` as YARA-L text,

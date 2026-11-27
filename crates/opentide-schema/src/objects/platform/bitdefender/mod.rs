@@ -3,15 +3,13 @@
 //! `bitdefender_rule_shape` ([`checks::block_findings`]): the constraint codes
 //! of bitdefender-1.0 (`bitdefender_*`), judged on the raw block before its
 //! fields, each reported at the path the spec fixes for it, so `validate`
-//! and the editor name the same finding (0.28.0's
-//! `platforms/bitdefender/catalog.py`).
+//! and the editor name the same finding.
 //!
-//! | 0.28.0 | Here |
-//! |--------|------|
-//! | `platforms/bitdefender/criteria.py` | [`criteria`]: `data/catalogs/bitdefender/criteria.toml` |
-//! | `platforms/bitdefender/catalog.py` (`block_findings`) | [`checks`] |
-//! | `platforms/bitdefender/advisories.py` | [`advisories`] |
-//! | `platforms/bitdefender/compile.py` (`normalise`, `gravityzone_name`) | [`normalise`], [`gravityzone_name`] |
+//! - [`criteria`]: the criteria catalogue,
+//!   `data/catalogs/bitdefender/criteria.toml`;
+//! - [`checks`]: the constraint findings of a block;
+//! - [`advisories`]: the warnings;
+//! - [`normalise`], [`gravityzone_name`]: the GravityZone name deploy sends.
 
 pub mod advisories;
 pub mod checks;
@@ -553,7 +551,7 @@ fn garde_block(block: &BitdefenderConfig, _pins: &Pins) -> garde::Result {
     }
 }
 
-/// `_validate_raw_bitdefender_block` (before): with a `status`, every
+/// With a `status`, every
 /// finding of [`block_findings`] is one error typed by its code, at its path
 /// under the block; the block's fields are then not converted.
 fn raw_block(node: &Node, cx: &mut Context) -> bool {
@@ -617,7 +615,7 @@ impl BitdefenderConfig {
 }
 
 // ---------------------------------------------------------------------------
-// GravityZone names (`compile.py`): what deploy sends and what the workspace
+// GravityZone names: what deploy sends and what the workspace
 // check `bitdefender_name_duplicate` compares.
 // ---------------------------------------------------------------------------
 
