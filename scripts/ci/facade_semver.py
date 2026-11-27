@@ -16,6 +16,11 @@ of a re-exported module, and the modules and `use` items that lead to them),
 and runs `cargo semver-checks` on the pair. The internal crates' other items
 carry no promise and are left out, so their changes never fail the check.
 
+Each re-exported item is tracked by its facade path (`plugins::set_host`): an
+item that moved between workspace crates is held in the crate that defines it
+now, not reported missing from the one that used to (#2040). A facade path
+that resolves nowhere any more stays with its old crate, and fails there.
+
 Majors only (`--release-type minor`): the facade's release decides the
 version, and an addition, such as a variant of a `#[non_exhaustive]` enum, is
 a minor change, as cargo semver-checks reads it.
@@ -78,11 +83,43 @@ def rustdoc_json(root: Path, target: Path, package: str) -> JsonDoc:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def reexports(facade: JsonDoc) -> dict[str, set[ItemPath]]:
-    """The items each other crate defines that the facade re-exports, by crate."""
+def facade_paths(facade: JsonDoc) -> dict[int, ItemPath]:
+    """The facade path of each `use` item public modules reach: ("plugins", "set_host")."""
+    index = facade["index"]
+    found: dict[int, ItemPath] = {}
+    stack: list[tuple[int, ItemPath]] = [(facade["root"], ())]
+    seen: set[int] = set()
+    while stack:
+        item_id, prefix = stack.pop()
+        if item_id in seen:
+            continue
+        seen.add(item_id)
+        item = index.get(str(item_id))
+        if item is None or "module" not in item["inner"]:
+            continue
+        for child in item["inner"]["module"]["items"]:
+            entry = index.get(str(child))
+            if entry is None:
+                continue
+            use = entry["inner"].get("use")
+            if use is not None:
+                name = use["name"]
+                found[child] = (*prefix, name, "*") if use["is_glob"] else (*prefix, name)
+            elif "module" in entry["inner"]:
+                stack.append((child, (*prefix, entry["name"])))
+    return found
+
+
+def reexports(facade: JsonDoc) -> dict[ItemPath, tuple[str, ItemPath]]:
+    """The items other crates define that the facade re-exports, by facade path.
+
+    Each maps to its defining crate and its canonical path there. A `use` no
+    public module reaches is keyed by that crate and path.
+    """
     crates = facade["external_crates"]
-    found: dict[str, set[ItemPath]] = {}
-    for item in facade["index"].values():
+    paths = facade_paths(facade)
+    found: dict[ItemPath, tuple[str, ItemPath]] = {}
+    for item_id, item in facade["index"].items():
         use = item["inner"].get("use")
         if use is None or use["id"] is None:
             continue
@@ -90,7 +127,30 @@ def reexports(facade: JsonDoc) -> dict[str, set[ItemPath]]:
         if summary is None or summary["crate_id"] == 0:
             continue
         crate = crates[str(summary["crate_id"])]["name"]
-        found.setdefault(crate, set()).add(tuple(summary["path"][1:]))
+        canonical = tuple(summary["path"][1:])
+        key = paths.get(int(item_id), ("<unreached>", crate, *canonical))
+        found[key] = (crate, canonical)
+    return found
+
+
+def by_crate(
+    exposed: dict[ItemPath, tuple[str, ItemPath]],
+    current: dict[ItemPath, tuple[str, ItemPath]] | None = None,
+    workspace: set[str] | frozenset[str] = frozenset(),
+) -> dict[str, set[ItemPath]]:
+    """The items `exposed` names, grouped by the crate they are checked in.
+
+    With `current` (the change's re-exports), an item whose facade path now
+    resolves in another workspace crate is held there (#2040): it moved, and
+    its old crate no longer promises it. A facade path the change drops stays
+    with its old crate, so a removal there still fails.
+    """
+    found: dict[str, set[ItemPath]] = {}
+    for facade_path, (crate, canonical) in exposed.items():
+        moved = (current or {}).get(facade_path)
+        if moved is not None and moved[0] != crate and moved[0] in workspace:
+            crate, canonical = moved
+        found.setdefault(crate, set()).add(canonical)
     return found
 
 
@@ -251,11 +311,17 @@ def main() -> int:
         "current": (args.current_root.resolve(), current_target),
         "baseline": (args.baseline_root.resolve(), baseline_target),
     }
-    exposed = {
+    found = {
         side: reexports(rustdoc_json(root, target, FACADE))
         for side, (root, target) in sides.items()
     }
     packages = {side: workspace_packages(root) for side, (root, _) in sides.items()}
+    # Each item is tracked by its facade path: one that moved between
+    # workspace crates is held in the crate that defines it now.
+    exposed = {
+        "current": by_crate(found["current"]),
+        "baseline": by_crate(found["baseline"], found["current"], set(packages["current"])),
+    }
 
     # The `facade` job runs on a change to these crates' sources
     # (scripts/ci/changes.py): a crate missing there would go unchecked.
