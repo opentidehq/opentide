@@ -394,12 +394,14 @@ fn response(
         None | Some(Json::Null) => Vec::new(),
         Some(Json::Str(text)) => {
             // Refused before it is decoded when its text is longer than
-            // the cap's base64 (#1999); padding and whitespace make that
-            // bound loose, so the decoded length is held to the cap too.
+            // the cap's base64 (#1999). That bound rounds the cap up to a
+            // multiple of three bytes, so the decoded length is held to the
+            // cap too.
             if text.len() > max_body.div_ceil(3).saturating_mul(4) {
                 // Padded base64 decodes to at most two bytes fewer than
-                // three for every four characters.
-                let least = (text.len() / 4 * 3).saturating_sub(2);
+                // three for every four characters, a partial group of four
+                // counting as one. Past the bound this is more than the cap.
+                let least = text.len().div_ceil(4).saturating_mul(3).saturating_sub(2);
                 return Err(body_too_large(format!("at least {least}"), max_body));
             }
             let body = base64::engine::general_purpose::STANDARD
@@ -575,7 +577,7 @@ mod tests {
             }
         );
         // Far past: refused from the text's length, before it is decoded
-        // (it would not even decode).
+        // (to 3000 zero bytes).
         let text = "A".repeat(4000);
         assert_eq!(
             read(&answer(&text), 10).unwrap_err(),
@@ -583,6 +585,40 @@ mod tests {
                 reason: "the answer's body (at least 2998 bytes) is larger than 10 bytes".into()
             }
         );
+        // Just past the bound (16 characters for 10 bytes): the text is
+        // read only up to its length, and the least it could decode to is
+        // past the cap, never at it.
+        let at_bound = engine.encode([0_u8; 12]);
+        assert_eq!(at_bound.len(), 16);
+        assert_eq!(
+            read(&answer(&at_bound), 10).unwrap_err(),
+            TransportFailure::Answer {
+                reason: "the answer's body (12 bytes) is larger than 10 bytes".into()
+            }
+        );
+        for extra in 1..=3 {
+            let text = format!("{at_bound}{}", "A".repeat(extra));
+            assert_eq!(
+                read(&answer(&text), 10).unwrap_err(),
+                TransportFailure::Answer {
+                    reason: "the answer's body (at least 13 bytes) is larger than 10 bytes".into()
+                },
+                "{} characters",
+                text.len()
+            );
+        }
+        let real_bound = MAX_BODY_BYTES.div_ceil(3) * 4;
+        for extra in 1..=3 {
+            let Err(TransportFailure::Answer { reason }) =
+                read(&answer(&"A".repeat(real_bound + extra)), MAX_BODY_BYTES)
+            else {
+                panic!("{extra} characters past the bound read");
+            };
+            assert_eq!(
+                reason,
+                "the answer's body (at least 67108867 bytes) is larger than 64 MiB"
+            );
+        }
         let long = engine.encode([0_u8; 13]);
         assert_eq!(long.len(), 20);
         assert_eq!(
