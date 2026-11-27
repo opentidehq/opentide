@@ -399,9 +399,9 @@ pub enum QueryPosition {
     /// A rule block's query on the request's platform: checked as that
     /// block checks its query's text. It needs a platform
     /// ([`validate_position`]). Exabeam's `rule` profile, CQL's
-    /// Next-Gen SIEM correlation rule, Datadog's `rule` profile and YARA-L's
-    /// assembled rule (the rule profile, its `meta` deploy's) differ from a
-    /// search; every other language checks a rule's query as a search. The
+    /// Next-Gen SIEM correlation rule, Datadog's `rule` profile, a Sentinel
+    /// scheduled rule's KQL limits and YARA-L's assembled rule (the rule
+    /// profile, its `meta` deploy's) differ from a search; every other language checks a rule's query as a search. The
     /// checks that read the rest of a block (Elastic's tenants and schedule,
     /// Sysdig's macros, Defender's alert mapping) need the object: see
     /// `Workspace::validate`. The platform is not checked to have a block in
@@ -534,8 +534,17 @@ pub fn analyze_query_at(request: &QueryRequest, position: QueryPosition) -> Vec<
     }
     let platform = request.platform.as_deref().unwrap_or("");
     match request.language {
+        // At `rule`, a Sentinel query gets the scheduled rule's limits
+        // (`kql_rule_*`), as Tide checks a block's query.
         LanguageId::Kql => {
-            opentide_kql::analyze(&request.text, Dialect::for_platform(platform)).diagnostics
+            let dialect = Dialect::for_platform(platform);
+            let mut diagnostics = opentide_kql::analyze(&request.text, dialect).diagnostics;
+            let profile = match position {
+                QueryPosition::Rule => opentide_kql::Profile::Rule,
+                QueryPosition::Search => opentide_kql::Profile::Search,
+            };
+            opentide_kql::apply_profile(&request.text, dialect, profile, &mut diagnostics);
+            diagnostics
         }
         // The profile comes from the position, never from the platform
         // (ADR 0015 §4). A search is checked as a file of its language is: a

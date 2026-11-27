@@ -16,6 +16,7 @@
     "0012-pure-rust-parsing",
     "0013-language-catalogs",
     "0014-analysis-performance",
-    "0015-languages-and-dialects"
+    "0015-languages-and-dialects",
+    "0016-tide-into-analysis"
   ]
 }

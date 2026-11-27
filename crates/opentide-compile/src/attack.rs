@@ -110,13 +110,7 @@ fn resolve(index: &Index, uuid: &str, depth: usize) -> Result<Vec<String>, Missi
         }
         _ => {}
     }
-    let mut unique: Vec<String> = Vec::with_capacity(found.len());
-    for technique in found {
-        if !unique.contains(&technique) {
-            unique.push(technique);
-        }
-    }
-    Ok(unique)
+    Ok(opentide_core::text::unique(found))
 }
 
 /// The vocabulary entries the compilers read.

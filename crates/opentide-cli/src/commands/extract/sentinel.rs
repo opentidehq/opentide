@@ -203,6 +203,7 @@ pub(crate) fn scalar(value: &CJson) -> String {
 /// allow in a file (a control character, U+FFFE) cannot be written in a
 /// block: the rule is not imported, and `field` names why.
 pub(crate) fn block_text(text: &str, field: &str) -> Result<String, FieldError> {
+    // Every YAML line break: wider than `opentide_core::text::universal_newlines`.
     let text = text
         .replace("\r\n", "\n")
         .replace(['\r', '\u{85}', '\u{2028}', '\u{2029}'], "\n");

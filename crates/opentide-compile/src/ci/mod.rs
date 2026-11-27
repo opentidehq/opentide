@@ -218,6 +218,7 @@ static SOURCES: LazyLock<Vec<(&'static str, String)>> = LazyLock::new(|| lf_sour
 fn lf_sources(templates: &[(&'static str, &str)]) -> Vec<(&'static str, String)> {
     templates
         .iter()
+        // Only CRLF: not `opentide_core::text::universal_newlines` (a lone `\r` is kept).
         .map(|(name, source)| (*name, source.replace("\r\n", "\n")))
         .collect()
 }

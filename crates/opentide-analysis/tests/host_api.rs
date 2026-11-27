@@ -329,6 +329,12 @@ fn a_query_at_the_rule_position_is_checked_as_its_rule_block() {
             "*:mimikatz",
             "datadog_full_text_in_rule",
         ),
+        (
+            LanguageId::Kql,
+            "sentinel",
+            "union * | take 1",
+            codes::KQL_RULE_UNION_STAR,
+        ),
     ];
     for (language, platform, text, code) in cases {
         let request = QueryRequest::new(language, text).with_platform(Some(platform));

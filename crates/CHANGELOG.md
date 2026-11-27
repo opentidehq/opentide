@@ -66,7 +66,7 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 - **API: `LanguageId::Datadog`**, the Datadog log search syntax (`docs/internal/rfc-datadog-cloud-siem.md`). `LanguageId::QUERY_LANGUAGES` holds twelve languages; `LanguageId::parse` reads `datadog` and `opentide-datadog`, and `LanguageId::from_extension` reads `datadog`.
 - **Constructors for the findings outside code builds** ([opentide#1937](https://github.com/opentidehq/opentide/issues/1937)): `PlatformFinding::new` (a plugin platform's check), `Fix::new` and `TextEdit::new`; `QueriesMode::as_str` and `LintStatus::as_str`; `Default` for `validate::Summary` and `catalog::PlatformInfo`.
-- **A bare query can be checked as a rule's** ([opentide#1993](https://github.com/opentidehq/opentide/issues/1993), ADR 0015 §4): `analysis::analyze_query_at(&request, position)` with `analysis::QueryPosition { Search, Rule }` (`#[non_exhaustive]`, default `Search`). At `Rule` the query is checked as the platform's rule block checks its own: an Exabeam sequence filter (`exabeam_advanced_in_rule`), a CrowdStrike correlation rule (`cql_correlate_aggregate`), a Datadog detection rule's query, a Google SecOps block's assembled YARA-L rule; other languages check a rule's query as a search. `analyze_query` is unchanged: the search.
+- **A bare query can be checked as a rule's** ([opentide#1993](https://github.com/opentidehq/opentide/issues/1993), ADR 0015 §4): `analysis::analyze_query_at(&request, position)` with `analysis::QueryPosition { Search, Rule }` (`#[non_exhaustive]`, default `Search`). At `Rule` the query is checked as the platform's rule block checks its own: an Exabeam sequence filter (`exabeam_advanced_in_rule`), a CrowdStrike correlation rule (`cql_correlate_aggregate`), a Datadog detection rule's query, a Google SecOps block's assembled YARA-L rule, a Sentinel scheduled rule (`kql_rule_union_star`, `kql_rule_search_star`, `kql_rule_too_long`); other languages check a rule's query as a search. `analyze_query` is unchanged: the search.
   - API: `analyze_query_at`, `QueryPosition`, `QueryPosition::{as_str, parse}`, `validate_position`, `QueryRequestError`, `QueryRequest::{new, with_platform, with_stack}`, and `codes::QUERY_POSITION_NEEDS_PLATFORM`: a rule position without a platform is answered with that one error, unchecked, rather than checked as a search
 
 #### `opentide-analysis`
@@ -81,6 +81,9 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 #### `opentide-schema`
 
+- **Sentinel schedules are checked against the bounds Microsoft documents** ([opentide#1916](https://github.com/opentidehq/opentide/issues/1916)). A scheduled rule's frequency and lookback are each 5 minutes to 14 days, the lookback at least the frequency; outside them, `SentinelScheduling` reports an error typed by its code at the key. A near-real-time rule is not checked.
+  - `sentinel_frequency` on `scheduling.frequency`, `sentinel_lookback` on `scheduling.lookback`
+  - API: `sentinel::schedule_findings`, `ScheduleFinding`, `CONSTRAINT_CODES`, `FREQUENCY`, `LOOKBACK`, `SCHEDULE_MIN_SECONDS`, `SCHEDULE_MAX_SECONDS`; `platform::constraint_codes` lists the two codes
 - **Defender blocks are checked against Microsoft's documented limits** ([opentide#1890](https://github.com/opentidehq/opentide/issues/1890)). Two advisories, warnings on the block's `alert`:
   - `microsoft_defender_custom_details_limit`: more than 20 custom details, or names past 4 KB
   - `microsoft_defender_placeholder_limit`: more than three `{{Column}}` columns in `alert.title` or `alert.description`
@@ -94,6 +97,10 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 #### `opentide-kql`
 
+- **A KQL rule profile: Sentinel's analytics-rule limits** ([opentide#1915](https://github.com/opentidehq/opentide/issues/1915)). `Profile::{Rule, Search}` (a query's use, chosen by position: a block's query is a rule, a hunt's search a search). Under `Dialect::Sentinel` and `Profile::Rule`, `search *`, `union *` and a query over 10,000 characters are errors; `apply_profile` adds them in place of the scope warnings at the same place. `opentide-tide` checks a `configurations.*` KQL query as a rule.
+  - API: `Profile`, `rule_findings`, `apply_profile`, `SENTINEL_RULE_MAX_CHARS`; `opentide_core::codes::KQL_RULE_SEARCH_STAR`, `KQL_RULE_UNION_STAR`, `KQL_RULE_TOO_LONG`
+- **Defender's advanced hunting functions are in the Defender dialect's catalog** ([opentide#1914](https://github.com/opentidehq/opentide/issues/1914)). `FileProfile`, `DeviceFromIP`, `SeenBy` and `AssignedIPAddresses` get hover, completion and signature help under `Profile::Defender`, from their Learn pages (`data/catalogs/kql/defender/functions.toml`, `scripts/engine/sync_defender_functions.py`). Under `Profile::Sentinel`, an exact call to one is the warning `kql_function_unavailable`, unless the workspace declares a log source of exactly that name.
+  - API: `opentide_kql::defender_functions`, `Catalog::unavailable_function`, `FunctionRow::profile`; `opentide_core::codes::KQL_FUNCTION_UNAVAILABLE`
 - **`Dialect::for_platform` is the one map from a platform to a KQL dialect** ([opentide#1912](https://github.com/opentidehq/opentide/issues/1912), ADR 0015 §3): `microsoft_defender` is `Dialect::Defender`, every other platform `Dialect::Sentinel`. `opentide-analysis` and `opentide-tide` call it instead of keeping copies.
   - API: `Dialect::for_platform`, `Dialect::platform` (the platform whose `visibility.toml` declarations a dialect reads)
 - **`opentide_kql::shape` lists what a query reads and the constructs it uses** ([opentide#1890](https://github.com/opentidehq/opentide/issues/1890)): its tables, joins, unions, `externaldata` sources, comments and the columns it names, from the tree `analyze` builds.

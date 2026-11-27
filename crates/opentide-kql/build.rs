@@ -10,6 +10,7 @@
 //!   options) and of the hand-written Sentinel and Defender tables and columns are parsed here
 //!   too, into the models of `src/rows_model.rs`: building any query's catalog parsed about 40 KB
 //!   of TOML for them, a third of the first KQL answer on a host with no threads (WASI, #1767).
+//!   So are advanced hunting's own functions (`data/catalogs/kql/defender/functions.toml`).
 //!
 //! The files are read from the workspace root in a checkout, or else from the `assets/` copy
 //! that `scripts/engine/release.py vendor` puts inside a published crate; the checkout wins.
@@ -48,6 +49,8 @@ struct AsimFile {
 const CORE: &str = "data/catalogs/kql/core";
 const SENTINEL: &str = "data/catalogs/kql/sentinel";
 const DEFENDER: &str = "data/catalogs/kql/defender";
+/// Advanced hunting's own functions: the Defender dialect's (ADR 0015, §5.1).
+const DEFENDER_FUNCTIONS: &str = "data/catalogs/kql/defender/functions.toml";
 
 #[derive(Deserialize)]
 struct Operators {
@@ -80,6 +83,21 @@ struct Tables {
 #[derive(Deserialize)]
 struct Columns {
     columns: Vec<ColumnRow>,
+}
+
+/// Advanced hunting's own functions, pre-parsed as `kql-defender-functions`.
+fn defender_functions(
+    datasets: &opentide_dataset::build::Datasets,
+    text: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let functions: Functions =
+        toml::from_str(text).map_err(|error| format!("{DEFENDER_FUNCTIONS}: {error}"))?;
+    datasets.value(
+        "kql-defender-functions",
+        &[DEFENDER_FUNCTIONS],
+        &functions.functions,
+    )?;
+    Ok(())
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -158,6 +176,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             options.options,
         ),
     )?;
+    defender_functions(&datasets, &read(DEFENDER_FUNCTIONS)?)?;
     let hand = |dir: &str| -> Result<(Vec<TableRow>, Vec<ColumnRow>), Box<dyn std::error::Error>> {
         let tables_path = format!("{dir}/tables.toml");
         let columns_path = format!("{dir}/columns.toml");
