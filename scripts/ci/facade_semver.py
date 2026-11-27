@@ -49,7 +49,10 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 FACADE = "opentide"
 #: The facade's crate name in Rust paths, and in rustdoc's JSON.
@@ -381,6 +384,34 @@ def prune(
     return doc, missing
 
 
+def close_over(
+    exposed: dict[str, set[ItemPath]],
+    packages: dict[str, str],
+    document: Callable[[str], JsonDoc],
+) -> None:
+    """Add to `exposed` the types of other workspace crates its items name, until none is new.
+
+    `packages` maps the side's crate names to package names and `document`
+    builds a package's rustdoc JSON on that side. A crate the side does not
+    have (an item `by_crate` moved to a crate new in the change) is skipped.
+    """
+    pending = sorted(crate for crate in exposed if crate in packages)
+    while pending:
+        crate = pending.pop()
+        if crate == FACADE_CRATE:
+            continue
+        foreign: set[tuple[str, ItemPath]] = set()
+        prune(document(packages[crate]), set(exposed[crate]), foreign)
+        for named_crate, path in sorted(foreign):
+            if named_crate not in packages or named_crate == FACADE_CRATE:
+                continue
+            held = exposed.setdefault(named_crate, set())
+            if path not in held:
+                held.add(path)
+                if named_crate not in pending:
+                    pending.append(named_crate)
+
+
 def semver_checks(current: Path, baseline: Path) -> bool:
     """Whether cargo semver-checks finds no major change from `baseline` to `current`."""
     result = subprocess.run(
@@ -435,28 +466,17 @@ def main() -> int:
     }
     # The types of other workspace crates that a re-exported item names (a
     # field's, a parameter's) are the facade's API too, though the facade
-    # never names them: they are held in their own crates, until no new one
-    # turns up (#1985).
-    root, target = sides["current"]
-    pending = sorted(crate for crate in exposed["current"] if crate in packages["current"])
-    while pending:
-        crate = pending.pop()
-        if crate == FACADE_CRATE:
-            continue
-        foreign: set[tuple[str, ItemPath]] = set()
-        prune(
-            rustdoc_json(root, target, packages["current"][crate]),
-            set(exposed["current"][crate]),
-            foreign,
+    # never names them: they are held in their own crates, on each side from
+    # that side's documents (#1985). The base's closure is what the change is
+    # held to: computed from the change alone, a foreign type the facade
+    # exposed only through another crate would have no baseline, and any
+    # break to it would read as an addition.
+    for side, (root, target) in sides.items():
+        close_over(
+            exposed[side],
+            packages[side],
+            lambda package, root=root, target=target: rustdoc_json(root, target, package),
         )
-        for named_crate, path in sorted(foreign):
-            if named_crate not in packages["current"] or named_crate == FACADE_CRATE:
-                continue
-            held = exposed["current"].setdefault(named_crate, set())
-            if path not in held:
-                held.add(path)
-                if named_crate not in pending:
-                    pending.append(named_crate)
 
     # The `facade` job runs on a change to these crates' sources
     # (scripts/ci/changes.py): a crate missing there would go unchecked.
@@ -488,8 +508,9 @@ def main() -> int:
             continue
         documents: dict[str, Path] = {}
         for side, (root, target) in sides.items():
-            # The items the facade exposed at the base stay held at the change:
-            # an item the facade stops re-exporting is the facade's own check's.
+            # The items the facade exposed at the base, directly or through a
+            # re-exported item's types, stay held at the change: an item the
+            # facade stops re-exporting is the facade's own check's.
             kept = exposed["baseline"].get(crate, set()) | exposed[side].get(crate, set())
             doc, missing = prune(rustdoc_json(root, target, package), kept)
             if side == "current" and missing:
