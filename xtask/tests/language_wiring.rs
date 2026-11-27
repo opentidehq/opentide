@@ -65,16 +65,13 @@ fn declared_variants() -> BTreeSet<String> {
 /// waits for the row. A language listed here that a platform already checks
 /// offline fails `languages_awaiting_a_platform_have_none`, so the entry is
 /// removed with the change that adds the row.
-const AWAITING_A_PLATFORM: &[(&str, &str)] = &[(
-    "datadog",
-    "the datadog platform is phase 2 of docs/internal/rfc-datadog-cloud-siem.md (§15); \
-     phase 1 ships the language for editors and .datadog files",
-)];
+const AWAITING_A_PLATFORM: &[(&str, &str)] = &[];
 
-/// Whether a variant is a query language. The `match` has no wildcard, so a
-/// new variant does not compile until it is classified here; a query
-/// language then belongs in `LanguageId::QUERY_LANGUAGES`, which the test
-/// below holds to this.
+/// Whether a variant is a query language. `LanguageId` is non-exhaustive, so
+/// the `match` needs a wildcard, which panics: the test below fails until a
+/// new variant is listed in `LanguageId::QUERY_LANGUAGES` or
+/// `NOT_QUERY_LANGUAGES` (`declared_variants`), and a new query language
+/// until it is classified here.
 const fn is_query_language(id: LanguageId) -> bool {
     match id {
         LanguageId::TideYaml | LanguageId::Config => false,
@@ -90,6 +87,7 @@ const fn is_query_language(id: LanguageId) -> bool {
         | LanguageId::Exabeam
         | LanguageId::Yaral
         | LanguageId::Datadog => true,
+        _ => panic!("classify the new LanguageId variant in is_query_language"),
     }
 }
 

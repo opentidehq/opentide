@@ -365,6 +365,25 @@ pub const PLATFORMS: &[Platform] = &[
         offline_languages: &["yaral"],
         query_file_suffixes: &["yaral", "yl2"],
     },
+    Platform {
+        id: "datadog",
+        label: "Datadog Cloud SIEM",
+        configuration_name: "Datadog Cloud SIEM",
+        config_class: "DatadogConfig",
+        // The rule id Datadog assigns. Its format is unverified (RFC
+        // rfc-datadog-cloud-siem.md §8.5, open question 4), so no pattern
+        // refuses a real shard.
+        external_id: ExternalId::Text { pattern: None },
+        deploys: true,
+        compiles_offline: true,
+        live_check: true,
+        query_runner: true,
+        runner_languages: &["datadog"],
+        // A block's queries, profile `rule`, and a `.datadog` file or a
+        // `system: datadog` hunt, profile `search` (RFC §6.1).
+        offline_languages: &["datadog"],
+        query_file_suffixes: &["datadog"],
+    },
 ];
 
 /// How many platforms are built in.
@@ -421,6 +440,8 @@ pub enum PlatformId {
     Exabeam,
     /// `google_secops`: Google Security Operations.
     GoogleSecops,
+    /// `datadog`: Datadog Cloud SIEM.
+    Datadog,
 }
 
 impl PlatformId {
@@ -439,6 +460,7 @@ impl PlatformId {
         Self::Graylog,
         Self::Exabeam,
         Self::GoogleSecops,
+        Self::Datadog,
     ];
 
     /// Its row of [`PLATFORMS`].
@@ -469,6 +491,7 @@ impl PlatformId {
             Self::Graylog => "graylog",
             Self::Exabeam => "exabeam",
             Self::GoogleSecops => "google_secops",
+            Self::Datadog => "datadog",
         }
     }
 
@@ -636,7 +659,8 @@ mod tests {
                 "bitdefender",
                 "graylog",
                 "exabeam",
-                "google_secops"
+                "google_secops",
+                "datadog"
             ]
         );
     }
@@ -653,7 +677,8 @@ mod tests {
                 "bitdefender",
                 "graylog",
                 "exabeam",
-                "google_secops"
+                "google_secops",
+                "datadog"
             ]
         );
         assert_eq!(
@@ -671,7 +696,8 @@ mod tests {
                 "elastic",
                 "graylog",
                 "exabeam",
-                "google_secops"
+                "google_secops",
+                "datadog"
             ]
         );
         assert_eq!(ids_where(|p| p.query_runner).len(), PLATFORMS.len() - 2);
@@ -684,14 +710,15 @@ mod tests {
                 "bitdefender",
                 "graylog",
                 "exabeam",
-                "google_secops"
+                "google_secops",
+                "datadog"
             ]
         );
         assert_eq!(
             query_file_suffixes(),
             [
                 "kql", "spl", "cql", "yar", "yara", "lucene", "esql", "eql", "kuery", "falco",
-                "exabeam", "yaral", "yl2"
+                "exabeam", "yaral", "yl2", "datadog"
             ]
         );
     }

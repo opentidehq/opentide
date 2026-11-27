@@ -417,6 +417,7 @@ The engine is [opentidehq/language-server](https://github.com/opentidehq/languag
 | `graylog` | Lucene, Graylog dialect: the block's query |
 | `exabeam` | The Exabeam Query Language: each sequence's filter under the `rule` profile, where Search's advanced operators (SELECT, GROUP-BY, pipes) are refused (`exabeam_advanced_in_rule`); a `system: exabeam` hunt and a `.exabeam` file under the `search` profile, `--platform exabeam` or not |
 | `google_secops` | YARA-L 2.0: the block's sections as the one rule deploy assembles, and `.yaral` and `.yl2` files |
+| `datadog` | The Datadog search syntax: each `queries[].query` under the `rule` profile, where full-text `*:term` and a calculated field `#name` are warnings; a `system: datadog` hunt and a `.datadog` file under the `search` profile |
 
 Google SecOps's YARA-L is checked offline by the analysis engine, the block's sections as the one rule deploy assembles (yara-l-1.0's `yaral_*` codes), and a `.yaral` or `.yl2` file with `--file`. `--live` sends each rule's assembled text to `verifyRuleText`, Google's compiler, which resolves the instance's reference lists and data tables and creates nothing. An `ERROR` diagnostic fails the rule as `google_secops_compile_error`, a `WARNING` is `google_secops_compile_warning`, each placed on the section key and line it falls in (`configurations.google_secops.events line 3, column 5`), and a block `run_frequency` Google does not allow for the rule is `google_secops_run_frequency_not_allowed`.
 
@@ -636,7 +637,7 @@ there is nothing to check.
 
 ### Supported platforms
 
-Live query validation works on **nine platforms**; the offline engine on twelve, eight of them the same:
+Live query validation works on **ten platforms**; the offline engine on thirteen, nine of them the same:
 
 | Platform | `--live` | Offline |
 |----------|:--------:|:-------:|
@@ -653,10 +654,15 @@ Live query validation works on **nine platforms**; the offline engine on twelve,
 | `graylog` (Lucene, Graylog dialect) | ✅ | ✅ |
 | `exabeam` (Exabeam Query Language) | ✅ the filter, through Search | ✅ |
 | `google_secops` (YARA-L 2.0) | ✅ `verifyRuleText` | ✅ YARA-L |
+| `datadog` (Datadog search syntax) | ✅ the whole rule, through `rules/validation` | ✅ |
 
 ### Exabeam live validation
 
 `opentide validate query --platform exabeam --live` sends each sequence query of each rule, on each tenant deploy would send it to, as the `filter` of `POST /search/v2/events`, with `fields: ["*"]`, `limit: 1` and the last 15 minutes, the window the console's "Test Last 15 mins" uses. A `200` passes, the row count information only; a `400` fails the sequence with Exabeam's message; any other answer fails it too, never a pass. Each sequence is its own check, labelled `sequence 1`, `sequence 2`… when the rule has several. The condition, windows, grouping and outcomes are not checked on the tenant: no Exabeam API previews a rule. The API key needs **Search, Analyze and Export**.
+
+### Datadog live validation
+
+`opentide validate query --platform datadog --live` compiles each rule for each tenant deploy would send it to, notification aliases resolved, and sends the body to `POST /api/v2/security_monitoring/rules/validation`, Datadog's own rule check, which creates nothing. A `2xx` passes; a `400` fails the rule with each entry of Datadog's `errors[]` as `datadog_rule_invalid`; a rule that does not compile for the tenant (an alias it lacks, `datadog_notification_alias`) fails with the compiler's reason. Any other answer, or a rate limit that outlasts its waits, fails that rule only, never a pass. A `.datadog` file and a `system: datadog` hunt are checked offline only, as every platform's query files and hunts are: `--live` sends the rules' blocks. The connector's search check (`POST /api/v2/logs/events/search` over the last minute, `page.limit: 1`) serves the SDK's `Connection.validate_query`. The application key needs `security_monitoring_rules_write` for the rule check.
 
 ### Elastic live validation and deploy
 

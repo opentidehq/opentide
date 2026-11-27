@@ -1,6 +1,6 @@
 # opentide
 
-The Rust SDK of [opentide](https://opentide.org), spec-driven development for agentic detection engineering. Open a Tide workspace (threat vectors, detection objectives and detection rules as YAML, with their configuration), validate and lint it, read its catalogue and ATT&CK coverage, plan a deploy to the thirteen platforms opentide deploys to, and run the `opentide` command line.
+The Rust SDK of [opentide](https://opentide.org), spec-driven development for agentic detection engineering. Open a Tide workspace (threat vectors, detection objectives and detection rules as YAML, with their configuration), validate and lint it, read its catalogue and ATT&CK coverage, plan a deploy to the fourteen platforms opentide deploys to, and run the `opentide` command line.
 
 ```rust
 use opentide::validate::QueriesMode;

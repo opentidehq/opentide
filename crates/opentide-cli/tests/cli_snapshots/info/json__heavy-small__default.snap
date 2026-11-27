@@ -19,7 +19,7 @@ summary.objectives: 30
 summary.rules: 50
 summary.threats: 30
 next_actions[]: 0 items
-platforms[]: 13 items
+platforms[]: 14 items
 platforms[].tenants[]: 8 items
 platforms[].tenants[].strategies[]: 12 items
 platforms[].tenants[].variables[]: 19 items
