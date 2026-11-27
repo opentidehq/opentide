@@ -323,12 +323,12 @@ fn offline(check: &QueryCheck, context: &Context<'_>) -> Json {
     // A configuration file that does not parse is `config_parse`, its place
     // in the message, not a workspace read as if it declared nothing (#1659).
     let root = if context.workspace_problem.is_none() {
-        match super::catalog::workspace(context) {
+        match super::catalog::open(context) {
             Ok(workspace) => Some(workspace.root().to_path_buf()),
-            Err(message) if message.starts_with("config_parse") => {
-                return Json::object(failed(payload, message));
+            Err(error @ super::catalog::OpenError::ConfigParse(_)) => {
+                return Json::object(failed(payload, error.to_string()));
             }
-            Err(_) => None,
+            Err(super::catalog::OpenError::Other { .. }) => None,
         }
     } else {
         None
@@ -676,6 +676,80 @@ mod tests {
                 .iter()
                 .all(|action| action.get("tool") != Some(&Json::str("validate_query"))),
             "sysdig has no live check"
+        );
+    }
+
+    /// #1950: the offline check stops on a configuration that does not parse
+    /// by matching `OpenError::ConfigParse`, not the message's first word;
+    /// any other refusal (no workspace) checks the query with no declared
+    /// datasets.
+    #[test]
+    fn a_configuration_that_does_not_parse_stops_the_offline_check() {
+        let env = Env::default();
+        let check = |cwd: &Path| {
+            let context = Context {
+                cwd: Some(cwd),
+                ..context(&env)
+            };
+            let opened = super::super::catalog::open(&context).err();
+            let checked = validate_query(
+                &QueryCheck {
+                    query: "SecurityEvent | where Account == 'é😀'".into(),
+                    platform: "sentinel".into(),
+                    live: false,
+                    language: String::new(),
+                    stack: String::new(),
+                },
+                &context,
+            )
+            .unwrap();
+            (opened, checked)
+        };
+        let broken = tempfile::tempdir().unwrap();
+        let platforms = broken.path().join(".opentide/configurations/platforms");
+        std::fs::create_dir_all(&platforms).unwrap();
+        std::fs::write(
+            platforms.join("sentinel.toml"),
+            "enabled = true\n[platform\n",
+        )
+        .unwrap();
+        let (opened, checked) = check(broken.path());
+        let Some(error @ super::super::catalog::OpenError::ConfigParse(_)) = opened else {
+            panic!("not config_parse: {opened:?}");
+        };
+        assert!(
+            error
+                .to_string()
+                .starts_with("config_parse: .opentide/configurations/platforms/sentinel.toml:2:"),
+            "{error}"
+        );
+        assert_eq!(checked.get("status"), Some(&Json::str("failed")));
+        assert_eq!(checked.get("message"), Some(&Json::Str(error.to_string())));
+
+        // A folder with no configuration opens: the query is checked.
+        let empty = tempfile::tempdir().unwrap();
+        let (opened, checked) = check(empty.path());
+        assert_eq!(opened, None);
+        assert_eq!(checked.get("language"), Some(&Json::str("kql")));
+        assert_ne!(checked.get("status"), Some(&Json::str("failed")));
+    }
+
+    /// An `OpenError` reads `code: message`, as the string it replaced did;
+    /// the variant, not the text, says whether it is `config_parse`.
+    #[test]
+    fn an_open_error_reads_code_then_message() {
+        use super::super::catalog::OpenError;
+        assert_eq!(
+            OpenError::ConfigParse("a.toml:2:1: é😀".into()).to_string(),
+            "config_parse: a.toml:2:1: é😀"
+        );
+        let other = OpenError::Other {
+            code: "command_failed".into(),
+            message: "config_parse in the text is not the code".into(),
+        };
+        assert_eq!(
+            other.to_string(),
+            "command_failed: config_parse in the text is not the code"
         );
     }
 
