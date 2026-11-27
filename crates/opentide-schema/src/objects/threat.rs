@@ -1,4 +1,4 @@
-//! Threat vector (TVM) models, schema `threat::1.0` (`models/threat.py`).
+//! Threat vector (TVM) models, schema `threat::1.0`.
 
 use garde::Validate;
 use indexmap::IndexMap;

@@ -1,10 +1,9 @@
-//! One model per configuration file, the oracle's Pydantic models
-//! (`models/configuration/*`, `models/visibility.py`) field for field: names,
-//! order, defaults, closure (`extra="forbid"` is `deny_unknown_fields`; a
-//! model without it takes unknown keys, as `extra="allow"`), unions and
-//! constraints ([`super::types`]).
+//! One model per configuration file: names, order, defaults, closure (a
+//! model with `deny_unknown_fields` refuses unknown keys, as Pydantic's
+//! `extra="forbid"`; one without it takes them, as `extra="allow"`), unions
+//! and constraints ([`super::types`]).
 //!
-//! The configuration models are strict, as the oracle's are: a value takes its
+//! The configuration models are strict: a value takes its
 //! declared type (TOML types every value already). `visibility.toml`'s are
 //! Tide models (lax), which reads the same for every value TOML can hold.
 
@@ -1174,7 +1173,7 @@ pub struct BitdefenderTenantTargets {
 }
 
 /// `targets`: a [`BitdefenderTenantTargets`] that sets exactly one list
-/// (`_exactly_one_list`, an after-validator).
+/// (after the fields).
 pub fn tenant_targets(node: &Node, cx: &mut Context) -> Option<Option<BitdefenderTenantTargets>> {
     let targets = Option::<BitdefenderTenantTargets>::from_node(node, cx)?;
     if let Some(set) = &targets
@@ -1310,7 +1309,7 @@ pub struct ExabeamSetup {
     pub test_mode: bool,
 }
 impl ExabeamRegion {
-    /// Every region, in the oracle's order (`EXABEAM_REGIONS`).
+    /// Every region, in declaration order.
     pub const ALL: [Self; 10] = [
         Self::UsWest,
         Self::UsEast,
@@ -1673,7 +1672,7 @@ const KQL_TYPES: &[&str] = &[
 ];
 
 /// The column types each system takes in a log source's `columns`, in the
-/// oracle's order.
+/// order a `columns` error lists the systems.
 pub const COLUMN_TYPES: [(&str, &[&str]); 4] = [
     ("sentinel", KQL_TYPES),
     ("splunk", &["string", "number", "boolean"]),
@@ -1778,7 +1777,7 @@ fn value_error(cx: &mut Context, message: impl Into<String>, node: &Node) {
     cx.error(ErrorKind::InvalidValue("value_error"), message, node);
 }
 
-/// `_no_legacy_keys`: every 0.20.0 dataset key fails on its key; `false`
+/// Every 0.20.0 dataset key fails on its key; `false`
 /// stops the entry there.
 fn no_legacy_keys(node: &Node, cx: &mut Context) -> bool {
     let Value::Map(entries) = &node.value else {
@@ -1912,7 +1911,7 @@ fn columns(node: &Node, cx: &mut Context) -> Option<Vec<(String, VisibilityColum
     ok.then_some(out)
 }
 
-/// `_columns_fit_system`: columns take the type set of the log source's
+/// Columns take the type set of the log source's
 /// system; other systems take none.
 fn columns_fit_system(
     columns: &[(String, VisibilityColumn)],

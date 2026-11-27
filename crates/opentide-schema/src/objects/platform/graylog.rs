@@ -1,8 +1,7 @@
 //! Graylog event definition, `platform::graylog::1.0` (`GraylogConfig` and
 //! its nested models), with the named check `graylog_constraints`
 //! ([`block_findings`]): every constraint code of graylog-1.0, each at the
-//! `field_path` the specification fixes for it, as
-//! `platforms/graylog/constraints.py` (0.26.0) reports them.
+//! `field_path` the specification fixes for it.
 //!
 //! Unlike the Elastic and Sysdig checks, which report their codes as one
 //! `value_error` on the block, each finding is its own error, typed by its
@@ -253,7 +252,7 @@ pub fn too_long_detail(field: &str, value: &str) -> String {
     )
 }
 
-/// `grace_period`: a duration, zero allowed (`_grace_period_duration`), at
+/// `grace_period`: a duration, zero allowed, at
 /// most [`MAX_DURATION_SECONDS`].
 pub fn check_grace_period(value: &str) -> Result<(), Violation> {
     let seconds = duration_seconds(value, true).map_err(|_| {
@@ -430,7 +429,7 @@ fn list_items(value: Option<&Node>) -> Vec<&str> {
     }
 }
 
-/// `_positive_duration`: a duration string greater than zero.
+/// A duration string greater than zero.
 fn positive_duration(node: &Node) -> bool {
     node.value
         .as_str()
@@ -717,8 +716,8 @@ pub fn block_findings(raw: &Node) -> Vec<Finding> {
 }
 
 /// The codes of [`block_findings`], sorted: what the named check
-/// `graylog_constraints` finds on a block with a `status` (the oracle's
-/// before-validator leaves a block without one to the field).
+/// `graylog_constraints` finds on a block with a `status` (a block without
+/// one is left to the field: a missing status is "Field required").
 pub fn block_codes(raw: &Node) -> BTreeSet<&'static str> {
     findings(raw)
         .into_iter()
@@ -743,9 +742,8 @@ impl GraylogConfig {
 }
 
 // ---------------------------------------------------------------------------
-// Advisories (graylog-1.0, "Advisories"): warnings that never reject a rule
-// (`platforms/graylog/advisories.py`). `graylog_title_duplicate` is a
-// workspace check.
+// Advisories (graylog-1.0, "Advisories"): warnings that never reject a
+// rule. `graylog_title_duplicate` is a workspace check.
 // ---------------------------------------------------------------------------
 
 /// The interval of a filter that sets none.

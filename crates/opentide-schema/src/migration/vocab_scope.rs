@@ -194,7 +194,7 @@ impl ScopeIndex {
                 .map(|stage| format!("{stage}{SCOPE_SEPARATOR}{key}"))
                 .collect();
             // Two forms or keys that differ only by case: the later one in
-            // the vocabulary wins, as the oracle's dicts keep the last.
+            // the vocabulary wins.
             for form in &forms {
                 index.key_by_scoped.insert(form.clone(), key.clone());
                 index
@@ -567,7 +567,7 @@ name = "Security::Kerberos"
     #[test]
     fn a_case_collision_keeps_the_later_key() {
         // Two keys, and two scoped forms, that differ only by case: the
-        // oracle's dict comprehensions keep the later one.
+        // later one is kept.
         let vocabulary = Vocabulary::from_file(
             "signal.entities.vocab.toml",
             r#"

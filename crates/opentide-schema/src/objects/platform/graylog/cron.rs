@@ -1,10 +1,9 @@
-//! `schedule.cron` and `schedule.timezone` (graylog-1.0, "Schedule"):
-//! `platforms/graylog/constraints.py` `cron_ok` and `timezone_ok`.
+//! `schedule.cron` and `schedule.timezone` (graylog-1.0, "Schedule").
 //!
 //! The Quartz reader is 0.26.0's. language-server 0.16.0 checks the same
 //! fields after the platform-graylog 1.1 clarifications (specifications #86)
 //! and differs from it in three places, kept as 0.26.0 has them until the
-//! oracle moves: it bounds an increment by the field's maximum (`*/90` in
+//! specification settles them: it bounds an increment by the field's maximum (`*/90` in
 //! minutes), takes the occurrence after `#` from 1 to 7 (0.26.0: 1 to 5), and
 //! takes `L-n` in day of week (0.26.0: day of month only).
 //!

@@ -1,7 +1,6 @@
 //! What the object models say about their fields, read from their JSON
-//! Schemas: the fields that play a catalogue role (`core/object_fields.py`
-//! `_role_paths`) and a field's own `tide.*` keys (`cli/services/info.py`
-//! `_field_is_scoped`). The schemas are generated once, on first use.
+//! Schemas: the fields that play a catalogue role ([`role_paths`]) and a
+//! field's own `tide.*` keys. The schemas are generated once, on first use.
 
 use std::sync::OnceLock;
 
@@ -59,8 +58,9 @@ pub fn newest_model_schema(family: &str) -> Option<&'static Value> {
 
 /// The paths of the fields that play `role` in the revision `identifier`,
 /// in lexicographic order. A revision without a model (or `None`)
-/// takes the union of every model's paths, as the oracle does for a body
-/// whose `metadata.schema` it cannot resolve. Computed once, on first use.
+/// takes the union of every model's paths, so a body whose
+/// `metadata.schema` resolves to no model still has its roles read.
+/// Computed once, on first use.
 pub fn role_paths(identifier: Option<&str>, role: FieldRole) -> &'static [Vec<String>] {
     type Table = Vec<(Option<&'static str>, FieldRole, Vec<Vec<String>>)>;
     static TABLE: OnceLock<Table> = OnceLock::new();
@@ -155,9 +155,9 @@ mod tests {
         paths.iter().map(|path| path.join(".")).collect()
     }
 
-    /// The oracle's `_role_paths` for each revision and for none.
+    /// The role paths of each revision, and of none (the union).
     #[test]
-    fn role_paths_are_the_oracles() {
+    fn role_paths_of_each_revision_and_of_none() {
         assert_eq!(
             joined(role_paths(None, FieldRole::Techniques)),
             [

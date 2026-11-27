@@ -441,7 +441,7 @@ opentide deploy replay-state HEAD
 opentide --json deploy replay-state "$state_commit"
 ```
 
-`<state_commit>` is any commit git resolves in the checkout. Only what it changed under `.opentide/states/deployment/` against its first parent is applied, per platform and tenant, so the ids other runs recorded since are kept:
+`<state_commit>` is a commit in the checkout, written as `git rev-parse` reads it: its id or a prefix of it, a reference (`HEAD`, a branch, `refs/opentide/deployment-state/<commit>`), a reflog entry (`HEAD@{1}`, `main@{yesterday}`), the branch checked out before (`@{-1}`), a branch's upstream (`@{u}`, mapped through the remote's fetch refspec as git maps it) or a message search (`:/fix` from every reference, `<rev>^{/fix}` from `<rev>`; the pattern is a Rust regular expression, where `.` does not match a newline), each with parent steps if you like (`HEAD~1`, `<commit>^`). Refused: `@{push}` (name the remote branch, `origin/<branch>`), ranges (`a..b`), files (`HEAD:path`, `:path`) and trees, which name no single commit. opentide reads the repository itself, so the runner does not need the `git` program; `GIT_DIR`, `GIT_WORK_TREE` and `GIT_CEILING_DIRECTORIES` choose the checkout as they do for git. Only what it changed under `.opentide/states/deployment/` against its first parent is applied, per platform and tenant, so the ids other runs recorded since are kept:
 
 - a binding the commit added or changed is set on the checkout's shard;
 - a binding the commit removed is removed, and a shard left with no binding is deleted;
