@@ -91,14 +91,12 @@ fn analyze_query(
     })?;
     let request = QueryRequest::new(language, text.clone())
         .with_platform(platform.as_deref())
-        .with_stack(stack.as_deref())
-        .with_position(position);
+        .with_stack(stack.as_deref());
     // A usage error, refused before the check as the command line and MCP
     // refuse it.
-    request
-        .validate()
+    analysis::validate_position(&request, position)
         .map_err(|error| PyValueError::new_err(error.to_string()))?;
-    let diagnostics = py.detach(|| analysis::analyze_query(&request));
+    let diagnostics = py.detach(|| analysis::analyze_query_at(&request, position));
     Ok(convert_all(&text, diagnostics))
 }
 

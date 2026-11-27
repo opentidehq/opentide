@@ -14,7 +14,7 @@
     reason = "test helpers outside #[test] functions: a panic fails the test"
 )]
 
-use opentide_analysis::{LanguageId, QueryPosition, QueryRequest, Severity, analyze_query};
+use opentide_analysis::{LanguageId, QueryPosition, QueryRequest, Severity, analyze_query_at};
 
 const DIR: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
@@ -22,10 +22,9 @@ const DIR: &str = concat!(
 );
 
 fn rule(text: &str) -> Vec<opentide_core::Diagnostic> {
-    analyze_query(
-        &QueryRequest::new(LanguageId::Datadog, text)
-            .with_platform(Some("datadog"))
-            .with_position(QueryPosition::Rule),
+    analyze_query_at(
+        &QueryRequest::new(LanguageId::Datadog, text).with_platform(Some("datadog")),
+        QueryPosition::Rule,
     )
 }
 

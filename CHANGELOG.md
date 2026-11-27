@@ -9,20 +9,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Eac
 ### Upgrade
 
 1. If you use the Rust SDK: add a wildcard arm (`_ => …`) where you match on `opentide::analysis::LanguageId`, and build an `opentide::models::RuleConfigurations` from `RuleConfigurations::default()`, not a struct literal. `LanguageId::QUERY_LANGUAGES`, `RuleConfigurations::PLATFORMS` and `opentide::validate::STRICT_EXEMPT_WARNINGS` are slices now (`for &item in …`).
-2. If you use the Rust SDK and build an `opentide::analysis::QueryRequest` with a struct literal, build it with `QueryRequest::new(language, text)` and `with_platform`, `with_stack` or `with_position` instead.
-3. If CI runs `opentide lint --strict` on Microsoft Defender rules (`opentide setup ci` generates it), it now fails on three new warnings. To keep the previous result while you fix the rules, set each to `"info"` under `[queries.codes]` in `.opentide/configurations/lint.toml`: `microsoft_defender_custom_details_limit`, `microsoft_defender_placeholder_limit` and `microsoft_defender_nrt_query`.
-4. If CI runs `opentide generate docs --changed` in a shallow clone, check out the full history: `fetch-depth: 0` on GitHub Actions' `actions/checkout`, `GIT_DEPTH: "0"` on GitLab, `fetchDepth: 0` on Azure Pipelines. The run now fails where it used to compare with `HEAD` and report nothing changed.
+2. If CI runs `opentide lint --strict` on Microsoft Defender rules (`opentide setup ci` generates it), it now fails on three new warnings. To keep the previous result while you fix the rules, set each to `"info"` under `[queries.codes]` in `.opentide/configurations/lint.toml`: `microsoft_defender_custom_details_limit`, `microsoft_defender_placeholder_limit` and `microsoft_defender_nrt_query`.
+3. If CI runs `opentide generate docs --changed` in a shallow clone, check out the full history: `fetch-depth: 0` on GitHub Actions' `actions/checkout`, `GIT_DEPTH: "0"` on GitLab, `fetchDepth: 0` on Azure Pipelines. The run now fails where it used to compare with `HEAD` and report nothing changed.
 
 ### Breaking
 
 - **The Rust SDK's platforms, languages and codes are open sets** ([#1911](https://github.com/opentidehq/opentide/issues/1911)). From this release on, adding one is a minor release, which breaks no code that matches with a wildcard arm. This release makes the switch once: `LanguageId` and `RuleConfigurations` are `#[non_exhaustive]`, so a `match` on `LanguageId` needs a wildcard arm and a `RuleConfigurations` starts from `Default`. `LanguageId::QUERY_LANGUAGES`, `RuleConfigurations::PLATFORMS` and `validate::STRICT_EXEMPT_WARNINGS` are slices, not fixed-size arrays. The command line, the Python package and the npm package are unaffected.
-- **The Rust SDK's `analysis::QueryRequest` is `#[non_exhaustive]`** ([#1993](https://github.com/opentidehq/opentide/issues/1993)). It gains `position`, so code outside the SDK builds it with `QueryRequest::new` and its `with_*` methods, and a later field breaks nothing; it lands in 1.2.0 with the other open types (ADR 0015 §6). `analyze_query` is unchanged. See Upgrade.
 
 ### Added
 
 - **Check a query on its own as a rule's** ([#1993](https://github.com/opentidehq/opentide/issues/1993)). `opentide validate query --platform crowdstrike --position rule --file x.cql` checks the file as the CrowdStrike block's query, a Next-Gen SIEM correlation rule; an Exabeam query at `rule` is a sequence filter, where `SELECT` and pipes are refused, a Datadog query a detection rule's, and a YARA-L text the rule a Google SecOps block assembles. A query file is still a search by default. `rule` needs `--platform`, and `--position` needs a query file and is refused with `--live`, rather than ignored.
   - MCP `validate_query` takes `position: "rule"`, so an agent drafting a rule's query sees the rule's checks; its result echoes `position`
   - Python: `opentide.analysis.check_query(..., position="rule")`, which raises `ValueError` without a `platform`
+  - Rust: `opentide::analysis::analyze_query_at(&request, QueryPosition::Rule)`; without a platform its answer is the one error `query_position_needs_platform`
 - **Defender rules are checked against Microsoft's documented limits** ([#1890](https://github.com/opentidehq/opentide/issues/1890)). Each is a warning, so the rule validates and deploys. `validate --strict` reports the first two without failing; `lint --strict` fails on all three.
   - `microsoft_defender_custom_details_limit`: more than 20 custom details, or names past 4 KB, beyond which Defender drops them all from the alert
   - `microsoft_defender_placeholder_limit`: more than three `{{Column}}` columns in the alert title or description

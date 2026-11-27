@@ -474,7 +474,7 @@ pub fn check_query_on_stack(
 
 /// [`check_query_on_stack`] at `position`: [`crate::QueryPosition::Rule`]
 /// checks the query as `platform`'s rule block checks its own. The caller
-/// refuses a rule without a platform first ([`crate::QueryRequest::validate`]).
+/// refuses a rule without a platform first ([`crate::validate_position`]).
 pub fn check_query_at(
     text: &str,
     language: crate::LanguageId,
@@ -484,11 +484,11 @@ pub fn check_query_at(
 ) -> Vec<Finding> {
     let text = universal_newlines(text);
     let lines = LineStarts::new(&text);
-    crate::analyze_query(
+    crate::analyze_query_at(
         &crate::QueryRequest::new(language, text.clone().into_owned())
             .with_platform(platform)
-            .with_stack(stack)
-            .with_position(position),
+            .with_stack(stack),
+        position,
     )
     .into_iter()
     .map(|diagnostic| finding(&text, &lines, diagnostic))

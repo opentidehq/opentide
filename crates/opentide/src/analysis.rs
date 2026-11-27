@@ -13,7 +13,7 @@
 
 pub use opentide_analysis::{
     Diagnostic, HighlightResult, HighlightToken, LanguageId, LineStarts, QueryPosition,
-    QueryRequest, QueryRequestError, Range, Severity, codes,
+    QueryRequest, QueryRequestError, Range, Severity, codes, validate_position,
 };
 
 /// The analysis engine's version: the lockstep version every `opentide-*` crate
@@ -22,11 +22,32 @@ pub const VERSION: &str = opentide_analysis::VERSION;
 
 /// Checks one query, read as `request.language`, on its own: the diagnostics
 /// the queries check would report for it, in the engine's coordinates. The
-/// `request`'s `platform` selects a schema or dialect, its `stack` an Elastic
-/// stack for ES|QL, and its `position` the profile (see [`QueryRequest`]).
+/// `request`'s `platform` selects a schema or dialect and its `stack` an
+/// Elastic stack for ES|QL (see [`QueryRequest`]). The query is checked as a
+/// file of its language is: an Exabeam, CQL or Datadog query is a search.
+/// [`analyze_query_at`] checks it where it will sit, a rule block's query
+/// included.
 ///
-/// At [`QueryPosition::Search`], the default, the query is checked as a file
-/// of its language is: an Exabeam, CQL or Datadog query is a search. At
+/// ```
+/// use opentide::analysis::{LanguageId, QueryRequest};
+///
+/// let request = QueryRequest::new(LanguageId::Esql, "FROM logs-* | WEHRE x == 1");
+/// let diagnostics = opentide::analysis::analyze_query(&request);
+/// assert!(diagnostics.iter().any(|d| d.code == "esql_unknown_command"));
+/// ```
+///
+/// The query is checked without a workspace: no workspace's declared
+/// datasets apply, not even ones a host installed for the process (a
+/// [`Workspace::validate`](crate::Workspace::validate) or
+/// [`Workspace::lint`](crate::Workspace::lint) run uses its own and installs
+/// nothing). It takes no lock.
+#[must_use]
+pub fn analyze_query(request: &QueryRequest) -> Vec<Diagnostic> {
+    analyze_query_at(request, QueryPosition::Search)
+}
+
+/// [`analyze_query`] at `position`, where the query will sit. At
+/// [`QueryPosition::Search`] it is checked as a file of its language is. At
 /// [`QueryPosition::Rule`] it is checked as the platform's rule block checks
 /// its query, as [`Workspace::validate`](crate::Workspace::validate) and
 /// [`Workspace::lint`](crate::Workspace::lint) check a rule's: an Exabeam
@@ -36,35 +57,28 @@ pub const VERSION: &str = opentide_analysis::VERSION;
 /// ```
 /// use opentide::analysis::{LanguageId, QueryPosition, QueryRequest};
 ///
-/// let request = QueryRequest::new(LanguageId::Esql, "FROM logs-* | WEHRE x == 1");
-/// let diagnostics = opentide::analysis::analyze_query(&request);
-/// assert!(diagnostics.iter().any(|d| d.code == "esql_unknown_command"));
-///
 /// // The query of a CrowdStrike rule block: a correlation rule.
 /// let rule = QueryRequest::new(
 ///     LanguageId::Cql,
-///     "correlate(A: { #event_simpleName=UserLogon }, B: { #event_simpleName=ProcessRollup2 \\
+///     "correlate(A: { #event_simpleName=UserLogon }, B: { #event_simpleName=ProcessRollup2 \
 ///      | aid <=> A.aid }, within=10m) | groupBy(aid)",
 /// )
-/// .with_platform(Some("crowdstrike"))
-/// .with_position(QueryPosition::Rule);
-/// let diagnostics = opentide::analysis::analyze_query(&rule);
+/// .with_platform(Some("crowdstrike"));
+/// let diagnostics = opentide::analysis::analyze_query_at(&rule, QueryPosition::Rule);
 /// assert!(diagnostics.iter().any(|d| d.code == "cql_correlate_aggregate"));
+/// // As a search, a `.cql` file, it is plain LogScale.
+/// let diagnostics = opentide::analysis::analyze_query_at(&rule, QueryPosition::Search);
+/// assert!(!diagnostics.iter().any(|d| d.code == "cql_correlate_aggregate"));
 /// ```
 ///
-/// The query is checked without a workspace: no workspace's declared
-/// datasets apply, not even ones a host installed for the process (a
-/// [`Workspace::validate`](crate::Workspace::validate) or
-/// [`Workspace::lint`](crate::Workspace::lint) run uses its own and installs
-/// nothing). It takes no lock.
-///
-/// A [`QueryPosition::Rule`] without a platform is not checked: the answer is
-/// one error, `query_position_needs_platform`
-/// ([`QueryRequest::validate`] says so before the call).
+/// A [`QueryPosition::Rule`] without a platform is not checked: the answer
+/// is one error, `query_position_needs_platform` ([`validate_position`]
+/// says so before the call). It takes no workspace and no lock, as
+/// [`analyze_query`].
 #[must_use]
-pub fn analyze_query(request: &QueryRequest) -> Vec<Diagnostic> {
+pub fn analyze_query_at(request: &QueryRequest, position: QueryPosition) -> Vec<Diagnostic> {
     let _standalone = opentide_analysis::standalone_datasets();
-    opentide_analysis::analyze_query(request)
+    opentide_analysis::analyze_query_at(request, position)
 }
 
 /// Highlights `text` read as `language`, as an editor colours it: the tokens
@@ -128,16 +142,18 @@ mod position_tests {
     /// one error and no check, never a search (#1993).
     #[test]
     fn a_rule_without_a_platform_is_one_error() {
-        let rule = QueryRequest::new(LanguageId::Exabeam, "SELECT user WHERE x:\"y\"")
-            .with_position(QueryPosition::Rule);
-        let found = analyze_query(&rule);
+        let rule = QueryRequest::new(LanguageId::Exabeam, "SELECT user WHERE x:\"y\"");
+        assert!(validate_position(&rule, QueryPosition::Rule).is_err());
+        let found = analyze_query_at(&rule, QueryPosition::Rule);
         assert_eq!(found.len(), 1, "{found:?}");
         assert_eq!(found[0].code, codes::QUERY_POSITION_NEEDS_PLATFORM);
         assert_eq!(found[0].severity, Severity::Error);
-        let found = analyze_query(&rule.with_platform(Some("exabeam")));
+        let rule = rule.with_platform(Some("exabeam"));
+        let found = analyze_query_at(&rule, QueryPosition::Rule);
         assert!(
             found.iter().any(|d| d.code == "exabeam_advanced_in_rule"),
             "{found:?}"
         );
+        assert!(analyze_query(&rule).is_empty());
     }
 }

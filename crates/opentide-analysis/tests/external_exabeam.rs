@@ -11,7 +11,9 @@
 //! which names no profile (ADR 0015 §4); a rule sequence at position `rule`
 //! (#1993), as its block's field path checks it.
 
-use opentide_analysis::{Diagnostic, LanguageId, QueryPosition, QueryRequest, analyze_query};
+use opentide_analysis::{
+    Diagnostic, LanguageId, QueryPosition, QueryRequest, analyze_query, analyze_query_at,
+};
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
@@ -23,10 +25,9 @@ fn root() -> PathBuf {
 /// is checked, a search's as a file is, whichever platform is named.
 fn check(text: &str, profile: &str) -> Vec<Diagnostic> {
     if profile == "rule" {
-        return analyze_query(
-            &QueryRequest::new(LanguageId::Exabeam, text)
-                .with_platform(Some("exabeam"))
-                .with_position(QueryPosition::Rule),
+        return analyze_query_at(
+            &QueryRequest::new(LanguageId::Exabeam, text).with_platform(Some("exabeam")),
+            QueryPosition::Rule,
         );
     }
     let request = |platform: Option<&str>| {

@@ -387,9 +387,9 @@ pub fn analyze_tide_parsed(
     }
 }
 
-/// Where a query on its own will sit: the profile it is checked under
-/// (ADR 0015 §4: a profile is chosen by where the text sits; a caller that
-/// names the position says where it will sit).
+/// Where a query on its own will sit: the profile [`analyze_query_at`]
+/// checks it under (ADR 0015 §4: a profile is chosen by where the text sits;
+/// a caller that names the position says where it will sit).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum QueryPosition {
@@ -398,7 +398,7 @@ pub enum QueryPosition {
     Search,
     /// A rule block's query on the request's platform: checked as that
     /// block checks its query's text. It needs a platform
-    /// ([`QueryRequest::validate`]). Exabeam's `rule` profile, CQL's
+    /// ([`validate_position`]). Exabeam's `rule` profile, CQL's
     /// Next-Gen SIEM correlation rule, Datadog's `rule` profile and YARA-L's
     /// assembled rule (the rule profile, its `meta` deploy's) differ from a
     /// search; every other language checks a rule's query as a search. The
@@ -431,7 +431,8 @@ impl QueryPosition {
     }
 }
 
-/// Why a [`QueryRequest`] cannot be checked.
+/// Why a [`QueryRequest`] cannot be checked at a position
+/// ([`validate_position`]).
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[non_exhaustive]
 pub enum QueryRequestError {
@@ -443,10 +444,8 @@ pub enum QueryRequestError {
     RuleWithoutPlatform,
 }
 
-/// A query on its own, outside an object file. Build it with
-/// [`QueryRequest::new`] and the `with_*` methods.
+/// A query on its own, outside an object file.
 #[derive(Debug, Clone)]
-#[non_exhaustive]
 pub struct QueryRequest {
     pub language: LanguageId,
     /// The detection platform the query is for, as a `configurations` key.
@@ -455,31 +454,23 @@ pub struct QueryRequest {
     /// `carbon_black_cloud` the Carbon Black Lucene dialect, `graylog` the
     /// Graylog one, and `harfanglab` or `bitdefender` that product's YARA
     /// checks. `None` for the language's default. It never picks the
-    /// profile: [`QueryRequest::position`] does.
+    /// profile: the position does ([`analyze_query_at`]).
     pub platform: Option<String>,
     /// Elastic stack the query must run on (`"9.5"`, `"serverless"`), for
     /// ES|QL. `None`, or a value that does not parse, checks every supported
     /// stack.
     pub stack: Option<String>,
-    /// Where the query will sit. [`QueryPosition::Search`] (the default)
-    /// checks it as a file of its language is: an Exabeam, CQL or Datadog
-    /// query is a search, and a YARA-L text is a rule when it declares one.
-    /// [`QueryPosition::Rule`] checks it as the platform's rule block
-    /// checks its query.
-    pub position: QueryPosition,
     pub text: String,
 }
 
 impl QueryRequest {
-    /// A request to check `text` as `language`: no platform, every stack,
-    /// position [`QueryPosition::Search`].
+    /// A request to check `text` as `language`: no platform, every stack.
     #[must_use]
     pub fn new(language: LanguageId, text: impl Into<String>) -> Self {
         QueryRequest {
             language,
             platform: None,
             stack: None,
-            position: QueryPosition::Search,
             text: text.into(),
         }
     }
@@ -497,41 +488,44 @@ impl QueryRequest {
         self.stack = stack.map(str::to_owned);
         self
     }
+}
 
-    /// The request at `position`.
-    #[must_use]
-    pub fn with_position(mut self, position: QueryPosition) -> Self {
-        self.position = position;
-        self
+/// Whether `request` can be checked at `position`: a [`QueryPosition::Rule`]
+/// needs a platform. Hosts that refuse a usage error up front (the command
+/// line, MCP) call it before [`analyze_query_at`], which answers a request
+/// that fails it with one `query_position_needs_platform` error and nothing
+/// else.
+///
+/// # Errors
+///
+/// [`QueryRequestError::RuleWithoutPlatform`] for a rule with no platform
+/// (or an empty one).
+pub fn validate_position(
+    request: &QueryRequest,
+    position: QueryPosition,
+) -> Result<(), QueryRequestError> {
+    let has_platform = request.platform.as_deref().is_some_and(|p| !p.is_empty());
+    if position == QueryPosition::Rule && !has_platform {
+        return Err(QueryRequestError::RuleWithoutPlatform);
     }
-
-    /// Whether the request can be checked: a [`QueryPosition::Rule`] needs a
-    /// platform. Hosts that refuse a usage error up front (the command line,
-    /// MCP) call it before [`analyze_query`], which answers a request that
-    /// fails it with one `query_position_needs_platform` error and nothing
-    /// else.
-    ///
-    /// # Errors
-    ///
-    /// [`QueryRequestError::RuleWithoutPlatform`] for a rule with no
-    /// platform (or an empty one).
-    pub fn validate(&self) -> Result<(), QueryRequestError> {
-        let has_platform = self.platform.as_deref().is_some_and(|p| !p.is_empty());
-        if self.position == QueryPosition::Rule && !has_platform {
-            return Err(QueryRequestError::RuleWithoutPlatform);
-        }
-        Ok(())
-    }
+    Ok(())
 }
 
 /// Diagnostics for one query, in the query's own coordinates, under its
-/// platform's dialect and its position's profile. A request
-/// [`QueryRequest::validate`] refuses (a rule with no platform) gets one
-/// error, `query_position_needs_platform`, on the query's start, and is not
+/// platform's dialect, at [`QueryPosition::Search`]: as a file of its
+/// language is checked.
+pub fn analyze_query(request: &QueryRequest) -> Vec<Diagnostic> {
+    analyze_query_at(request, QueryPosition::Search)
+}
+
+/// [`analyze_query`] at `position`: the platform picks the dialect, the
+/// position the profile (ADR 0015 §4). A request [`validate_position`]
+/// refuses (a rule with no platform) gets one error,
+/// `query_position_needs_platform`, on the query's start, and is not
 /// checked: there is no rule block to check it as, and a search would be a
 /// silent fallback.
-pub fn analyze_query(request: &QueryRequest) -> Vec<Diagnostic> {
-    if let Err(error) = request.validate() {
+pub fn analyze_query_at(request: &QueryRequest, position: QueryPosition) -> Vec<Diagnostic> {
+    if let Err(error) = validate_position(request, position) {
         return vec![Diagnostic::error(
             codes::QUERY_POSITION_NEEDS_PLATFORM,
             error.to_string(),
@@ -550,21 +544,21 @@ pub fn analyze_query(request: &QueryRequest) -> Vec<Diagnostic> {
         // profile. A rule is checked as the platform's block checks its query
         // (Tide's field paths).
         LanguageId::Cql => {
-            let profile = match request.position {
+            let profile = match position {
                 QueryPosition::Rule => opentide_cql::Profile::CORRELATION_RULE,
                 QueryPosition::Search => opentide_cql::Profile::default(),
             };
             opentide_cql::analyze_with(&request.text, &profile).diagnostics
         }
         LanguageId::Exabeam => {
-            let ctx = match request.position {
+            let ctx = match position {
                 QueryPosition::Rule => opentide_exabeam::Context::RULE,
                 QueryPosition::Search => opentide_exabeam::Context::SEARCH,
             };
             opentide_exabeam::analyze_with(&request.text, &ctx).diagnostics
         }
         LanguageId::Datadog => {
-            let ctx = match request.position {
+            let ctx = match position {
                 QueryPosition::Rule => opentide_datadog::Context::RULE,
                 QueryPosition::Search => opentide_datadog::Context::SEARCH,
             };
@@ -574,7 +568,7 @@ pub fn analyze_query(request: &QueryRequest) -> Vec<Diagnostic> {
         // its sections, which deploy gives its `meta`; at `search`, a `.yaral`
         // file, a rule or a search by its text.
         LanguageId::Yaral => {
-            let ctx = match request.position {
+            let ctx = match position {
                 QueryPosition::Rule => opentide_yaral::Context::SECTIONS,
                 QueryPosition::Search => opentide_yaral::Context::FILE,
             };

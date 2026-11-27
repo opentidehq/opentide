@@ -25,7 +25,7 @@ for finding in findings:
 check_query(query, language="cql", platform="crowdstrike", position="rule")
 ```
 
-Rust's `opentide::analysis::analyze_query` takes the same through `QueryRequest::new(language, text).with_platform(Some(...)).with_position(QueryPosition::Rule)`. A rule without a platform is not checked: its answer is one error, `query_position_needs_platform` (`QueryRequest::validate` says so before the call).
+In Rust, `opentide::analysis::analyze_query_at(&QueryRequest::new(language, text).with_platform(Some(...)), QueryPosition::Rule)` does the same. A rule without a platform is not checked: its answer is one error, `query_position_needs_platform` (`validate_position` says so before the call).
 
 Positions are 1-based lines and columns, in Unicode code points, `end_column` exclusive. A missing engine raises `opentide.analysis.EngineUnavailableError`, never a silent pass.
 

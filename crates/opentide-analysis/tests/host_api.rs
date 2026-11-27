@@ -3,7 +3,7 @@
 
 use opentide_analysis::{
     LanguageId, MemoryWorkspace, QueryPosition, QueryRequest, VERSION, analyze_queries,
-    analyze_query, codes,
+    analyze_query, analyze_query_at, codes, validate_position,
 };
 
 const RULE: &str = r#"name: Two Platforms
@@ -331,13 +331,26 @@ fn a_query_at_the_rule_position_is_checked_as_its_rule_block() {
         ),
     ];
     for (language, platform, text, code) in cases {
-        let search = QueryRequest::new(language, text).with_platform(Some(platform));
-        let rule = search.clone().with_position(QueryPosition::Rule);
-        assert_eq!(search.position, QueryPosition::Search);
-        assert!(rule.validate().is_ok(), "{platform}");
-        let found = |request: &QueryRequest| analyze_query(request).iter().any(|d| d.code == code);
-        assert!(found(&rule), "{platform}: {code} at rule");
-        assert!(!found(&search), "{platform}: {code} at search");
+        let request = QueryRequest::new(language, text).with_platform(Some(platform));
+        assert!(
+            validate_position(&request, QueryPosition::Rule).is_ok(),
+            "{platform}"
+        );
+        let found = |position| {
+            analyze_query_at(&request, position)
+                .iter()
+                .any(|d| d.code == code)
+        };
+        assert!(found(QueryPosition::Rule), "{platform}: {code} at rule");
+        assert!(
+            !found(QueryPosition::Search),
+            "{platform}: {code} at search"
+        );
+        // `analyze_query` is the search.
+        assert_eq!(
+            analyze_query(&request),
+            analyze_query_at(&request, QueryPosition::Search)
+        );
     }
 }
 
@@ -348,10 +361,9 @@ fn a_query_at_the_rule_position_is_checked_as_its_rule_block() {
 fn a_yaral_rule_at_the_rule_position_needs_no_meta() {
     let text = "rule r {\n  events:\n    $e.metadata.event_type = \"USER_LOGIN\"\n  condition:\n    $e\n}\n";
     let missing_section = |position: QueryPosition| {
-        analyze_query(
-            &QueryRequest::new(LanguageId::Yaral, text)
-                .with_platform(Some("google_secops"))
-                .with_position(position),
+        analyze_query_at(
+            &QueryRequest::new(LanguageId::Yaral, text).with_platform(Some("google_secops")),
+            position,
         )
         .into_iter()
         .any(|d| d.code == codes::YARAL_SECTION_MISSING)
@@ -364,20 +376,20 @@ fn a_yaral_rule_at_the_rule_position_needs_no_meta() {
 /// check, not a search.
 #[test]
 fn a_rule_position_needs_a_platform() {
-    let rule = QueryRequest::new(LanguageId::Cql, CORRELATE_THEN_AGGREGATE)
-        .with_position(QueryPosition::Rule);
+    let rule = QueryPosition::Rule;
+    let request = QueryRequest::new(LanguageId::Cql, CORRELATE_THEN_AGGREGATE);
     assert_eq!(
-        rule.validate(),
+        validate_position(&request, rule),
         Err(opentide_analysis::QueryRequestError::RuleWithoutPlatform)
     );
-    let found = analyze_query(&rule);
+    let found = analyze_query_at(&request, rule);
     assert_eq!(
         found.iter().map(|d| d.code.as_str()).collect::<Vec<_>>(),
         [codes::QUERY_POSITION_NEEDS_PLATFORM]
     );
-    assert!(rule.clone().with_platform(Some("")).validate().is_err());
-    assert!(rule.with_platform(Some("crowdstrike")).validate().is_ok());
-    assert!(QueryRequest::new(LanguageId::Cql, "x").validate().is_ok());
+    assert!(validate_position(&request.clone().with_platform(Some("")), rule).is_err());
+    assert!(validate_position(&request.clone().with_platform(Some("crowdstrike")), rule).is_ok());
+    assert!(validate_position(&request, QueryPosition::Search).is_ok());
 }
 
 #[test]
