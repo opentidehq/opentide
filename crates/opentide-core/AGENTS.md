@@ -33,6 +33,9 @@ crate depends on it.
   `falco` and `sysdig`); never a second table in either crate. Since UC-2.6 ([#821]) the Sysdig
   block's constraints are opentide-schema's alone: opentide-tide's `sysdig` keeps only
   `sysdig_list_self_reference`, so there is no second constraint engine to hold to the first.
+- `ids` is the one UUID rule (#1938): reading (`parse`, `canonical`: as Python's
+  `uuid.UUID(text.strip())`), the written forms (`is_hyphenated`, `is_canonical`, `is_v4`) and
+  finding UUIDs in text (`PATTERN`, `finder`). Never another regex, `is_uuid` or hand parse.
 
 [#821]: https://github.com/opentidehq/opentide/issues/821
 - YAML is read with `node` only: never `serde_yaml`, `serde_yml` or a second parser (#850).

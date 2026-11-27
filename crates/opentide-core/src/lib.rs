@@ -749,6 +749,7 @@ pub mod catalog;
 pub mod datasets;
 pub mod duration;
 pub mod falco;
+pub mod ids;
 pub mod json;
 pub mod node;
 pub mod suggest;

@@ -2246,34 +2246,113 @@ fn command_path(matches: &clap::ArgMatches) -> Vec<String> {
 }
 
 thread_local! {
-    static LAST_PANIC: RefCell<Option<Internal>> = const { RefCell::new(None) };
+    static LAST_PANIC: RefCell<Option<Recorded>> = const { RefCell::new(None) };
+}
+
+/// What the panic hook keeps of a panic: its message, its location and the
+/// backtrace, captured but not resolved. Resolving the symbols can take
+/// hundreds of milliseconds on a large binary, so the hook leaves it to the
+/// report ([`Recorded::into_internal`]): the hook stays cheap, a panic that
+/// is caught and swallowed never pays for it, and a worker's panic reaches
+/// [`catch_panic`], which stops the other workers, sooner.
+struct Recorded {
+    message: String,
+    location: String,
+    backtrace: std::backtrace::Backtrace,
+}
+
+impl Recorded {
+    /// The crash report's record, with the backtrace resolved.
+    fn into_internal(self) -> Internal {
+        Internal {
+            kind: "panic".into(),
+            message: self.message,
+            trace: format!("{}{}", self.location, self.backtrace),
+        }
+    }
 }
 
 /// Records each panic's message, location and backtrace for the crash report,
 /// instead of printing them: [`run`] reports the panic itself.
 pub fn install_panic_hook() {
-    std::panic::set_hook(Box::new(|info| {
-        let message = crash::panic_message(info.payload());
-        let location = info
-            .location()
-            .map(|location| {
-                format!(
-                    "at {}:{}:{}\n",
-                    location.file(),
-                    location.line(),
-                    location.column()
-                )
-            })
-            .unwrap_or_default();
-        let backtrace = std::backtrace::Backtrace::force_capture();
-        LAST_PANIC.with(|last| {
-            *last.borrow_mut() = Some(Internal {
-                kind: "panic".into(),
-                message,
-                trace: format!("{location}{backtrace}"),
-            });
+    std::panic::set_hook(Box::new(record_panic));
+}
+
+/// The panic hook's work: the panic's message, location and backtrace, kept
+/// for this thread's crash report.
+fn record_panic(info: &std::panic::PanicHookInfo<'_>) {
+    let message = crash::panic_message(info.payload());
+    let location = info
+        .location()
+        .map(|location| {
+            format!(
+                "at {}:{}:{}\n",
+                location.file(),
+                location.line(),
+                location.column()
+            )
+        })
+        .unwrap_or_default();
+    let backtrace = std::backtrace::Backtrace::force_capture();
+    LAST_PANIC.with(|last| {
+        *last.borrow_mut() = Some(Recorded {
+            message,
+            location,
+            backtrace,
         });
-    }));
+    });
+}
+
+/// A panic caught on a worker thread, with the message, location and
+/// backtrace the panic hook recorded there: [`resume`](Self::resume) raises
+/// it again on the thread that joins the worker, whose crash report then
+/// shows where the worker panicked. The hook's record is the panicking
+/// thread's own and `resume_unwind` does not run the hook again, so a
+/// worker's panic re-raised without it would lose its trace.
+pub struct CaughtPanic {
+    payload: Box<dyn std::any::Any + Send>,
+    recorded: Option<Recorded>,
+}
+
+impl std::fmt::Debug for CaughtPanic {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CaughtPanic")
+            .field("message", &crash::panic_message(self.payload.as_ref()))
+            .finish_non_exhaustive()
+    }
+}
+
+impl CaughtPanic {
+    /// A panic `join` returned, with what the hook recorded on this thread
+    /// (none when the panic was another thread's).
+    #[must_use]
+    pub fn from_payload(payload: Box<dyn std::any::Any + Send>) -> Self {
+        Self {
+            payload,
+            recorded: None,
+        }
+    }
+
+    /// Raises the panic again on this thread, with the record of the thread
+    /// it was caught on. Without one, this thread's record is cleared, so a
+    /// stale record of an earlier panic never stands in for this one.
+    pub fn resume(self) -> ! {
+        LAST_PANIC.with(|last| *last.borrow_mut() = self.recorded);
+        std::panic::resume_unwind(self.payload)
+    }
+}
+
+/// Runs `work`, catching its panic with what the panic hook recorded on
+/// this thread, for a worker thread to hand back ([`CaughtPanic`]).
+///
+/// # Errors
+///
+/// The panic of `work`.
+pub fn catch_panic<T>(work: impl FnOnce() -> T) -> Result<T, CaughtPanic> {
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(work)).map_err(|payload| CaughtPanic {
+        payload,
+        recorded: LAST_PANIC.with(|last| last.borrow_mut().take()),
+    })
 }
 
 /// The UTC time now: `2026-11-09T10:11:12Z`, the crash log's stamp
@@ -2422,11 +2501,14 @@ fn run_with(
         Err(payload) => {
             let internal = LAST_PANIC
                 .with(|last| last.borrow_mut().take())
-                .unwrap_or_else(|| Internal {
-                    kind: "panic".into(),
-                    message: crash::panic_message(payload.as_ref()),
-                    trace: String::new(),
-                });
+                .map_or_else(
+                    || Internal {
+                        kind: "panic".into(),
+                        message: crash::panic_message(payload.as_ref()),
+                        trace: String::new(),
+                    },
+                    Recorded::into_internal,
+                );
             report_internal(&run, &internal, &redactor, debug, out, err)
         }
     }
@@ -3075,6 +3157,67 @@ mod tests {
             });
             assert_eq!(result.stderr.contains("debug: Seen"), shown, "{pairs:?}");
         }
+    }
+
+    /// A panic on a worker thread, handed back with [`catch_panic`] and
+    /// raised again on the command's thread, keeps the worker's location and
+    /// backtrace in the crash report (#1998): the hook's record is the
+    /// worker's own, which `resume_unwind` alone would lose.
+    #[test]
+    fn a_worker_threads_panic_keeps_its_trace_in_the_crash_report() {
+        // The hook records as the binary's does, after printing as the test
+        // harness's does (the other tests' failures stay visible).
+        static HOOKED: std::sync::Once = std::sync::Once::new();
+        HOOKED.call_once(|| {
+            let previous = std::panic::take_hook();
+            std::panic::set_hook(Box::new(move |info| {
+                record_panic(info);
+                previous(info);
+            }));
+        });
+        let crashed = ran(
+            "--debug validate",
+            &[("XDG_STATE_HOME", "relative")],
+            false,
+            |_, _, _| {
+                let caught = std::thread::scope(|scope| {
+                    scope
+                        .spawn(|| catch_panic(|| -> i32 { panic!("worker boom") }))
+                        .join()
+                        .unwrap()
+                });
+                match caught {
+                    Ok(code) => Ok(code),
+                    Err(caught) => caught.resume(),
+                }
+            },
+        );
+        assert_eq!(crashed.code, 1);
+        assert!(
+            crashed.stderr.starts_with("panic: worker boom\n"),
+            "{}",
+            crashed.stderr
+        );
+        assert!(crashed.stderr.contains("src/app.rs:"), "{}", crashed.stderr);
+    }
+
+    /// A panic raised again without a record of its own clears this
+    /// thread's record (#1998): a stale record of an earlier, swallowed
+    /// panic never stands in for it in the crash report.
+    #[test]
+    fn a_panic_resumed_without_a_record_clears_the_stale_one() {
+        LAST_PANIC.with(|last| {
+            *last.borrow_mut() = Some(Recorded {
+                message: "an earlier panic".into(),
+                location: String::new(),
+                backtrace: std::backtrace::Backtrace::disabled(),
+            });
+        });
+        let resumed = std::panic::catch_unwind(|| {
+            CaughtPanic::from_payload(Box::new("another thread's panic")).resume()
+        });
+        assert!(resumed.is_err());
+        assert!(LAST_PANIC.with(|last| last.borrow().is_none()));
     }
 
     #[test]

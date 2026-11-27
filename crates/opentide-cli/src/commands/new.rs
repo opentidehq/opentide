@@ -512,14 +512,10 @@ fn inert_status(config: &Node) -> Option<String> {
     })
 }
 
-/// Whether `value` is a UUID in its canonical 8-4-4-4-12 hex form.
+/// Whether `value` is a UUID in its 8-4-4-4-12 hex form, in either case
+/// ([`opentide_core::ids::is_hyphenated`]).
 pub(crate) fn is_uuid(value: &str) -> bool {
-    let parts: Vec<&str> = value.split('-').collect();
-    parts.len() == 5
-        && parts
-            .iter()
-            .zip([8, 4, 4, 4, 12])
-            .all(|(part, len)| part.len() == len && part.bytes().all(|b| b.is_ascii_hexdigit()))
+    opentide_core::ids::is_hyphenated(value)
 }
 
 /// `[filenames]`'s convention for `kind` (`threats`).

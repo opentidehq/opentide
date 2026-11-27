@@ -2869,6 +2869,7 @@ dependencies = [
  "strsim",
  "thiserror 2.0.21",
  "toml",
+ "uuid",
 ]
 
 [[package]]
@@ -3092,6 +3093,7 @@ dependencies = [
 name = "opentide-schema"
 version = "1.1.0"
 dependencies = [
+ "caseless",
  "fancy-regex 0.20.2",
  "garde",
  "indexmap",
@@ -3162,7 +3164,6 @@ dependencies = [
  "serde",
  "serde_json",
  "toml",
- "uuid",
 ]
 
 [[package]]
@@ -3185,7 +3186,6 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.21",
  "toml",
- "uuid",
 ]
 
 [[package]]
