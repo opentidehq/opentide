@@ -322,8 +322,8 @@ fn criterion_code(catalogue: &Criteria, target: &str, criterion: &Node) -> Optio
     None
 }
 
-/// The sensors the criteria need: a field's, or each enum value's
-///, without `both`.
+/// The sensors the criteria need: a field's, or each enum value's, without
+/// `both`.
 fn sensors<'c>(catalogue: &'c Criteria, criteria: &[&Node]) -> BTreeSet<&'c str> {
     let mut sensors = BTreeSet::new();
     for criterion in criteria {

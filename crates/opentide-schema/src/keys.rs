@@ -8,8 +8,8 @@
 //!
 //! The list is every `tide.*` string that names metadata: the four highlight
 //! captures (`tide.keyword`, `tide.property`, `tide.schema`, `tide.uuid`) are
-//! not metadata keys. [`ALL`] holds them, and its test counts them by
-//! [`Origin`], which says where the Rust model sets each key.
+//! not metadata keys. [`ALL`] holds the metadata keys, and its test counts them
+//! by [`Origin`], which says where the Rust model sets each key.
 
 /// Where the Rust model sets a metadata key.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

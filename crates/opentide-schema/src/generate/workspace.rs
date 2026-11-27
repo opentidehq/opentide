@@ -311,8 +311,7 @@ fn push(artifacts: &mut Vec<Artifact>, path: String, text: String) {
     artifacts.push(Artifact { path, text });
 }
 
-/// `rule.1.0.template.yaml` as `rule::1.0`; `None` for another name
-///.
+/// `rule.1.0.template.yaml` as `rule::1.0`; `None` for another name.
 pub fn schema_id_from_template_filename(filename: &str) -> Option<String> {
     let stem = filename.strip_suffix(".template.yaml")?;
     let parts: Vec<&str> = stem.split('.').collect();
