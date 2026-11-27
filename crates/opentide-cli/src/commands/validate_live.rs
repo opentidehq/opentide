@@ -1545,6 +1545,34 @@ impl Streak {
         Ok(())
     }
 
+    /// The streak after *found*, what a query of the tenant got, and whether
+    /// it stops the tenant's check: a gateway or a read that timed out
+    /// counts toward the streak, an answer (a refusal or a search that ran
+    /// out of time included) ends it, and any other connector error stops
+    /// the check. Logs nothing: [`Asked::outcome`] reports the query.
+    fn step(
+        &mut self,
+        found: &Result<LiveCheck, ConnectorError>,
+        platform: &str,
+        tenant: &str,
+    ) -> Result<(), Early> {
+        match found {
+            Ok(_) | Err(ConnectorError::QueryTimedOut { .. } | ConnectorError::Refused { .. }) => {
+                self.answered();
+                Ok(())
+            }
+            Err(ConnectorError::Gateway { message, .. }) => {
+                self.timed_out(message, false).map_err(Early::Unreachable)
+            }
+            Err(ConnectorError::Timeout {
+                address, seconds, ..
+            }) => self
+                .timed_out(&read_timeout_text(address, *seconds), true)
+                .map_err(Early::Unreachable),
+            Err(error) => Err(early(platform, tenant, &self.host, error)),
+        }
+    }
+
     /// The end of the tenant's batch: one that only ever timed out is unreachable.
     fn finish(&self) -> Result<(), Unreachable> {
         match (&self.last_error, self.ever_answered) {
@@ -1878,28 +1906,65 @@ fn refuse(refusals: &Refusals, platform: &str, refused: Refused, logged: bool) {
         .push(refused);
 }
 
-/// `LiveQueryValidator.validate`: each rule's queries on each tenant.
-async fn generic(
-    platform: &str,
-    batches: &[Batch],
+/// How many tenants of a platform `validate query --live` checks at once
+/// (#1941). A tenant's own queries are asked one after another, so its
+/// streak of timeouts counts them in the order a serial run does.
+const TENANTS_AT_ONCE: usize = 4;
+
+/// What a tenant's check met, in order: [`generic`] replays it.
+enum Met<'b> {
+    /// A rule whose queries could not be read.
+    Unreadable {
+        rule: &'b opentide_compile::Rule,
+        error: String,
+    },
+    /// A rule's query, which found the tenant's connection cannot be made.
+    Unusable {
+        rule: &'b opentide_compile::Rule,
+        unusable: Unusable,
+    },
+    /// A rule's query asked of the tenant, and what it got.
+    Asked {
+        rule: &'b opentide_compile::Rule,
+        label: Option<String>,
+        text: String,
+        found: Box<Result<LiveCheck, ConnectorError>>,
+    },
+}
+
+/// How a tenant's check ended: every query asked, the tenant refused the
+/// check (the next tenant is checked), or the check stops at this tenant.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Ended {
+    Done,
+    Refused,
+    Stopped,
+}
+
+/// What every tenant's queries are asked with.
+struct Asking<'a> {
+    platform: &'a str,
     timeout: f64,
-    cx: &Context<'_>,
-    refusals: &Refusals,
-    report: &mut CheckReport,
-) -> Result<(), Early> {
-    let environment = Environment::from_pairs(cx.env.iter());
-    let validator = cx
-        .registry
-        .get(platform)
-        .and_then(opentide_connectors::Platform::live_validator)
-        .ok_or_else(|| Early::Crashed(format!("{platform} has no live validator")))?;
-    let window = check_window(platform, cx.now);
-    let cancel = CancellationToken::new();
-    'tenants: for batch in batches {
+    cx: &'a Context<'a>,
+    environment: Environment,
+    validator: &'a dyn opentide_connectors::connector::LiveValidator,
+    window: TimeWindow,
+    cancel: CancellationToken,
+}
+
+impl Asking<'_> {
+    /// The queries of one tenant's batch, asked one after another, and what
+    /// each got: until the last, or until the tenant's answers stop its
+    /// check (refused, unreachable, a failure), as [`Asked::outcome`]
+    /// decides. Nothing is logged or reported here: [`generic`] replays
+    /// what it met, tenant by tenant.
+    async fn tenant<'b>(&self, batch: &'b Batch) -> (Vec<Met<'b>>, Ended) {
+        let platform = self.platform;
         let tenant = &batch.tenant;
         let host = tenant_host(platform, tenant);
-        let mut streak = Streak::new(platform, &tenant.name, &host, timeout);
+        let mut streak = Streak::new(platform, &tenant.name, &host, self.timeout);
         let mut connection: Option<Result<Connection, Unusable>> = None;
+        let mut met = Vec::new();
         for sent in &batch.rules {
             let rule = &sent.rule;
             if rule.block(platform).is_none() {
@@ -1908,63 +1973,242 @@ async fn generic(
             let queries = match rule_queries(rule, platform) {
                 Ok(queries) => queries,
                 Err(error) => {
-                    report
-                        .checks
-                        .push(rejected(platform, rule, &tenant.name, None, &error));
+                    met.push(Met::Unreadable { rule, error });
                     continue;
                 }
             };
             for item in queries {
                 let mut request =
-                    QueryRequest::new(item.text_for(&tenant.name), &item.language, window);
+                    QueryRequest::new(item.text_for(&tenant.name), &item.language, self.window);
                 request.limit = 1;
-                request.timeout = seconds(timeout);
+                request.timeout = seconds(self.timeout);
                 request.index = item.index.clone();
-                tracing::info!(
-                    rule_name = rule.name.as_str(),
-                    uuid = rule.uuid.as_str(),
-                    tenant = tenant.name.as_str(),
-                    "validating_query"
-                );
-                let conn = connection
-                    .get_or_insert_with(|| connect(platform, tenant, timeout, cx, &environment));
+                let conn = connection.get_or_insert_with(|| {
+                    connect(platform, tenant, self.timeout, self.cx, &self.environment)
+                });
                 let conn = match conn {
                     Ok(conn) => &*conn,
-                    Err(unusable) => return Err(unusable.clone().into()),
+                    Err(unusable) => {
+                        met.push(Met::Unusable {
+                            rule,
+                            unusable: unusable.clone(),
+                        });
+                        return (met, Ended::Stopped);
+                    }
                 };
                 let context = TenantContext {
                     tenant: &conn.tenant,
                     http: &conn.http,
-                    cancel: &cancel,
+                    cancel: &self.cancel,
                 };
                 let found = watched(
-                    validator.validate(context, &request),
-                    &cancel,
-                    cx.interrupted,
+                    self.validator.validate(context, &request),
+                    &self.cancel,
+                    self.cx.interrupted,
                 )
                 .await;
-                let asked = Asked {
-                    platform,
+                let step = streak.step(&found, platform, &tenant.name);
+                met.push(Met::Asked {
                     rule,
-                    tenant: &tenant.name,
                     label: item.label.clone(),
-                    timeout,
-                };
-                match asked.outcome(found, &request.text, &mut streak) {
-                    Ok(check) => report.checks.push(check),
-                    // The tenant refused the check itself: its other rules
-                    // are not sent, the next tenant is checked (#1658, E8).
-                    Err(Early::Refused(refused)) => {
-                        refuse(refusals, platform, refused, false);
-                        continue 'tenants;
-                    }
-                    Err(early) => return Err(early),
+                    text: request.text,
+                    found: Box::new(found),
+                });
+                match step {
+                    Ok(()) => {}
+                    Err(Early::Refused(_)) => return (met, Ended::Refused),
+                    Err(_) => return (met, Ended::Stopped),
                 }
             }
         }
-        streak.finish().map_err(Early::Unreachable)?;
+        // A tenant that only ever timed out, on fewer queries than the
+        // streak needs, is unreachable too: the check stops here, and the
+        // tenants after it are not started.
+        if streak.finish().is_err() {
+            return (met, Ended::Stopped);
+        }
+        (met, Ended::Done)
     }
-    Ok(())
+}
+
+/// `LiveQueryValidator.validate`: each rule's queries on each tenant, the
+/// tenants [`TENANTS_AT_ONCE`] at a time (#1941). What each tenant met is
+/// then logged and reported tenant by tenant, in the configuration's order,
+/// as a serial run does: the same checks, log lines, refusals and failure,
+/// whichever tenant answered first. A tenant's are replayed as soon as it
+/// and every tenant before it have finished. A tenant that stops the check
+/// stops it there: the tenants after it are not started, those running are
+/// dropped, and nothing of theirs is reported.
+async fn generic(
+    platform: &str,
+    batches: &[Batch],
+    timeout: f64,
+    cx: &Context<'_>,
+    refusals: &Refusals,
+    report: &mut CheckReport,
+) -> Result<(), Early> {
+    let validator = cx
+        .registry
+        .get(platform)
+        .and_then(opentide_connectors::Platform::live_validator)
+        .ok_or_else(|| Early::Crashed(format!("{platform} has no live validator")))?;
+    let asking = Asking {
+        platform,
+        timeout,
+        cx,
+        environment: Environment::from_pairs(cx.env.iter()),
+        validator,
+        window: check_window(platform, cx.now),
+        cancel: CancellationToken::new(),
+    };
+    let asking = &asking;
+    let tenants = batches
+        .iter()
+        .map(|batch| async move {
+            let (met, ended) = asking.tenant(batch).await;
+            (batch, met, ended)
+        })
+        .collect();
+    let mut checked = Ok(());
+    in_order(
+        tenants,
+        TENANTS_AT_ONCE,
+        |(_, _, ended)| *ended == Ended::Stopped,
+        |(batch, met, _)| {
+            if checked.is_ok() {
+                checked = replay(platform, batch, met, timeout, refusals, report);
+            }
+        },
+    )
+    .await;
+    checked
+}
+
+/// Logs and reports what one tenant's check met, as a serial run does:
+/// `Ok` when the next tenant is checked (every query asked, or the tenant
+/// refused the check), the failure that stops the check otherwise.
+fn replay(
+    platform: &str,
+    batch: &Batch,
+    met: Vec<Met<'_>>,
+    timeout: f64,
+    refusals: &Refusals,
+    report: &mut CheckReport,
+) -> Result<(), Early> {
+    let tenant = &batch.tenant;
+    let host = tenant_host(platform, tenant);
+    let mut streak = Streak::new(platform, &tenant.name, &host, timeout);
+    for met in met {
+        let (rule, label, text, found) = match met {
+            Met::Unreadable { rule, error } => {
+                report
+                    .checks
+                    .push(rejected(platform, rule, &tenant.name, None, &error));
+                continue;
+            }
+            Met::Unusable { rule, unusable } => {
+                validating(rule, &tenant.name);
+                return Err(unusable.into());
+            }
+            Met::Asked {
+                rule,
+                label,
+                text,
+                found,
+            } => (rule, label, text, found),
+        };
+        validating(rule, &tenant.name);
+        let asked = Asked {
+            platform,
+            rule,
+            tenant: &tenant.name,
+            label,
+            timeout,
+        };
+        match asked.outcome(*found, &text, &mut streak) {
+            Ok(check) => report.checks.push(check),
+            // The tenant refused the check itself: its other rules
+            // were not sent, the next tenant is checked (#1658, E8).
+            Err(Early::Refused(refused)) => {
+                refuse(refusals, platform, refused, false);
+                return Ok(());
+            }
+            Err(early) => return Err(early),
+        }
+    }
+    streak.finish().map_err(Early::Unreachable)
+}
+
+/// The `validating_query` event of a rule's query on a tenant.
+fn validating(rule: &opentide_compile::Rule, tenant: &str) {
+    tracing::info!(
+        rule_name = rule.name.as_str(),
+        uuid = rule.uuid.as_str(),
+        tenant,
+        "validating_query"
+    );
+}
+
+/// Runs *work*, at most *limit* at once, in the order given: a future
+/// starts once every one before it has started. A *limit* of 0 counts as
+/// 1: the work is run, one future at a time. Each result is handed to
+/// *emit* in that order, as soon as it and every one before it are ready,
+/// so a caller can report the first while the others run. Once a result
+/// *stops* the run, the futures after it are dropped, started or not, and
+/// *emit* gets nothing after it.
+///
+/// [`opentide_connectors::runtime::fan_out`]'s bound and order for work that
+/// borrows the command's context: the futures are polled here, in this
+/// task, not spawned, so they need be neither `'static` nor `Send`.
+async fn in_order<T, F: std::future::Future<Output = T>>(
+    work: Vec<F>,
+    limit: usize,
+    stops: impl Fn(&T) -> bool,
+    mut emit: impl FnMut(T),
+) {
+    use std::task::Poll;
+    let limit = limit.max(1);
+    let mut running: Vec<Option<std::pin::Pin<Box<F>>>> = work
+        .into_iter()
+        .map(|future| Some(Box::pin(future)))
+        .collect();
+    let mut done: Vec<Option<T>> = running.iter().map(|_| None).collect();
+    // The results before `next` were emitted; those from `end` on never are.
+    let mut end = running.len();
+    let mut next = 0;
+    std::future::poll_fn(|context| {
+        let mut started = 0;
+        let mut at = next;
+        while at < end && started < limit {
+            if let Some(future) = running[at].as_mut() {
+                if let Poll::Ready(result) = future.as_mut().poll(context) {
+                    running[at] = None;
+                    if stops(&result) {
+                        end = at + 1;
+                        // Dropped now: a request in flight is aborted.
+                        running.truncate(end);
+                    }
+                    done[at] = Some(result);
+                } else {
+                    started += 1;
+                }
+            }
+            at += 1;
+        }
+        while next < end {
+            let Some(result) = done[next].take() else {
+                break;
+            };
+            emit(result);
+            next += 1;
+        }
+        if next >= end {
+            Poll::Ready(())
+        } else {
+            Poll::Pending
+        }
+    })
+    .await;
 }
 
 /// The window a rule's query is checked over: Exabeam searches the 15
@@ -2016,40 +2260,22 @@ impl Asked<'_> {
                 Vec::new(),
             )
         };
-        match found {
-            Ok(found) => {
-                streak.answered();
-                Ok(answered(platform, rule, tenant, label.clone(), text, found))
-            }
-            Err(ConnectorError::QueryTimedOut { message, .. }) => {
-                streak.answered();
-                Ok(timed_out(&message))
-            }
+        streak.step(&found, platform, tenant)?;
+        Ok(match found {
+            Ok(found) => answered(platform, rule, tenant, label.clone(), text, found),
+            Err(
+                ConnectorError::QueryTimedOut { message, .. }
+                | ConnectorError::Gateway { message, .. },
+            ) => timed_out(&message),
             Err(refused @ ConnectorError::Refused { .. }) => {
-                streak.answered();
-                Ok(rejected(
-                    platform,
-                    rule,
-                    tenant,
-                    label.clone(),
-                    &refused.text(),
-                ))
-            }
-            Err(ConnectorError::Gateway { message, .. }) => {
-                streak
-                    .timed_out(&message, false)
-                    .map_err(Early::Unreachable)?;
-                Ok(timed_out(&message))
+                rejected(platform, rule, tenant, label.clone(), &refused.text())
             }
             Err(ConnectorError::Timeout {
                 address, seconds, ..
-            }) => {
-                let error = read_timeout_text(&address, seconds);
-                streak.timed_out(&error, true).map_err(Early::Unreachable)?;
-                Ok(timed_out(&error))
-            }
-            Err(error) => Err(early(platform, tenant, &streak.host, error)),
-        }
+            }) => timed_out(&read_timeout_text(&address, seconds)),
+            // [`Streak::step`] stopped the check on any other failure.
+            Err(error) => return Err(early(platform, tenant, &streak.host, &error)),
+        })
     }
 }
 
@@ -2271,7 +2497,7 @@ async fn google_secops(
                         Vec::new(),
                     ));
                 }
-                Err(error) => return Err(early(platform, &tenant.name, &host, error)),
+                Err(error) => return Err(early(platform, &tenant.name, &host, &error)),
             }
         }
         streak.finish().map_err(Early::Unreachable)?;
@@ -2440,20 +2666,20 @@ async fn datadog(
 
 /// A failure that stops the check (`reaching_tenant`, then the service's
 /// handlers).
-fn early(platform: &str, tenant: &str, host: &str, error: ConnectorError) -> Early {
+fn early(platform: &str, tenant: &str, host: &str, error: &ConnectorError) -> Early {
     match error {
         ConnectorError::Unreachable {
             address, reason, ..
         } => Early::Unreachable(Unreachable {
             tenant: tenant.to_owned(),
             message: format!("Cannot reach {platform} tenant '{tenant}' at {address}: {reason}"),
-            host: address,
+            host: address.clone(),
             timeouts: 0,
         }),
-        ConnectorError::Setup { message, .. } => Early::Failed(message, None),
+        ConnectorError::Setup { message, .. } => Early::Failed(message.clone(), None),
         ConnectorError::Cancelled => Early::Failed("interrupted".to_owned(), None),
         ConnectorError::Authentication { message, .. } => {
-            Early::Refused(Refused::new(platform, tenant, host, &message))
+            Early::Refused(Refused::new(platform, tenant, host, message))
         }
         other => Early::Crashed(other.to_string()),
     }
@@ -2923,7 +3149,7 @@ async fn elastic(
                     ));
                 }
                 Err(RuleFailure::Connector(error)) => {
-                    return Err(early("elastic", &tenant.name, &host, error));
+                    return Err(early("elastic", &tenant.name, &host, &error));
                 }
                 Err(RuleFailure::Other(early)) => return Err(early),
             }
@@ -2980,7 +3206,7 @@ mod tests {
             "splunk",
             "lab",
             "host",
-            ConnectorError::authentication("splunk", "lab", "401"),
+            &ConnectorError::authentication("splunk", "lab", "401"),
         );
         let runs = Vec::new();
         let reach = Reach {
@@ -3217,5 +3443,195 @@ mod tests {
         assert_eq!(seconds(1e300), Duration::MAX);
         assert_eq!(seconds(2.5), Duration::from_millis(2500));
         assert!(timeout_text("r", 2.5).starts_with("no answer within the 2.5s check timeout (r)."));
+    }
+}
+
+#[cfg(test)]
+mod in_order_tests {
+    use super::in_order;
+    use std::cell::RefCell;
+    use std::future::Future;
+    use std::pin::{Pin, pin};
+    use std::rc::Rc;
+    use std::task::{Context, Poll, Waker};
+
+    /// What the gates saw.
+    #[derive(Default)]
+    struct Seen {
+        /// The gates opened so far, by index.
+        open: Vec<bool>,
+        /// Every poll, by the polled gate's index.
+        polled: Vec<usize>,
+        /// The gates polled and pending now.
+        running: Vec<usize>,
+        /// The most gates pending at once.
+        most: usize,
+        /// The gates dropped before they finished.
+        dropped: Vec<usize>,
+    }
+
+    /// Pending until its gate opens, then its index.
+    struct Gate {
+        id: usize,
+        done: bool,
+        seen: Rc<RefCell<Seen>>,
+    }
+
+    impl Future for Gate {
+        type Output = usize;
+
+        fn poll(mut self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<usize> {
+            let id = self.id;
+            let ready = {
+                let mut seen = self.seen.borrow_mut();
+                seen.polled.push(id);
+                if seen.open[id] {
+                    seen.running.retain(|&running| running != id);
+                    true
+                } else {
+                    if !seen.running.contains(&id) {
+                        seen.running.push(id);
+                    }
+                    seen.most = seen.most.max(seen.running.len());
+                    false
+                }
+            };
+            if ready {
+                self.done = true;
+                Poll::Ready(id)
+            } else {
+                Poll::Pending
+            }
+        }
+    }
+
+    impl Drop for Gate {
+        fn drop(&mut self) {
+            if !self.done {
+                self.seen.borrow_mut().dropped.push(self.id);
+            }
+        }
+    }
+
+    /// A run of `in_order` over gates.
+    struct Trace {
+        seen: Seen,
+        /// What was emitted after each step: the first poll, then each
+        /// gate of `opens` opened and the run polled again.
+        emitted: Vec<Vec<usize>>,
+        /// The step after which the run finished.
+        finished: Option<usize>,
+    }
+
+    /// `in_order` over `n` gates, at most `limit` at once, a gate in `stop`
+    /// stopping it; the gates of `opens` opened one by one.
+    fn drive(n: usize, limit: usize, stop: &[usize], opens: &[usize]) -> Trace {
+        let seen = Rc::new(RefCell::new(Seen {
+            open: vec![false; n],
+            ..Seen::default()
+        }));
+        let gates = (0..n)
+            .map(|id| Gate {
+                id,
+                done: false,
+                seen: Rc::clone(&seen),
+            })
+            .collect();
+        let out = RefCell::new(Vec::new());
+        let mut emitted = Vec::new();
+        let mut finished = None;
+        {
+            let mut run = pin!(in_order(
+                gates,
+                limit,
+                |id| stop.contains(id),
+                |id| out.borrow_mut().push(id),
+            ));
+            let mut context = Context::from_waker(Waker::noop());
+            for step in 0..=opens.len() {
+                if step > 0 {
+                    seen.borrow_mut().open[opens[step - 1]] = true;
+                }
+                let ready = run.as_mut().poll(&mut context).is_ready();
+                emitted.push(out.borrow().clone());
+                if ready {
+                    finished = Some(step);
+                    break;
+                }
+            }
+        }
+        let seen = std::mem::take(&mut *seen.borrow_mut());
+        Trace {
+            seen,
+            emitted,
+            finished,
+        }
+    }
+
+    #[test]
+    fn results_keep_the_order_given_when_later_work_finishes_first() {
+        let trace = drive(4, 4, &[], &[3, 2, 1, 0]);
+        assert_eq!(trace.emitted[1..4], [Vec::<usize>::new(), vec![], vec![]]);
+        assert_eq!(trace.emitted[4], [0, 1, 2, 3]);
+        assert_eq!(trace.finished, Some(4));
+    }
+
+    #[test]
+    fn the_head_is_emitted_as_soon_as_it_is_ready() {
+        let trace = drive(3, 3, &[], &[0, 2, 1]);
+        assert_eq!(trace.emitted, [vec![], vec![0], vec![0], vec![0, 1, 2]]);
+    }
+
+    #[test]
+    fn never_more_than_limit_run_at_once() {
+        let trace = drive(6, 2, &[], &[1, 3, 0, 2, 5, 4]);
+        assert_eq!(trace.seen.most, 2);
+        assert_eq!(trace.finished, Some(6));
+        assert_eq!(trace.emitted[6], [0, 1, 2, 3, 4, 5]);
+        // The first poll starts the first two, no more.
+        assert_eq!(trace.seen.polled[..2], [0, 1]);
+        assert_eq!(
+            trace.seen.polled[2], 0,
+            "the second poll starts at the head"
+        );
+    }
+
+    #[test]
+    fn a_stop_cuts_the_end_and_an_earlier_stop_cuts_it_further() {
+        let trace = drive(6, 6, &[1, 3], &[3, 1, 0]);
+        // Gate 3 stops the run: 4 and 5 are dropped at once.
+        assert_eq!(trace.seen.dropped[..2], [4, 5]);
+        assert_eq!(trace.emitted[1], Vec::<usize>::new());
+        // Gate 1 stops it earlier: 2 is dropped too, 3 is never emitted.
+        assert_eq!(trace.seen.dropped[2..], [2]);
+        assert_eq!(trace.emitted[2], Vec::<usize>::new());
+        assert_eq!(trace.emitted[3], [0, 1]);
+        assert_eq!(trace.finished, Some(3));
+    }
+
+    #[test]
+    fn work_past_a_stop_is_never_polled() {
+        let trace = drive(6, 2, &[0], &[0]);
+        assert_eq!(trace.finished, Some(1));
+        assert_eq!(trace.emitted[1], [0]);
+        for later in 2..6 {
+            assert!(!trace.seen.polled.contains(&later), "{later} was polled");
+        }
+        assert_eq!(trace.seen.dropped, [1, 2, 3, 4, 5]);
+    }
+
+    #[test]
+    fn empty_work_finishes_at_once() {
+        let trace = drive(0, 4, &[], &[]);
+        assert_eq!(trace.finished, Some(0));
+        assert_eq!(trace.emitted, [Vec::<usize>::new()]);
+    }
+
+    #[test]
+    fn a_limit_of_zero_runs_one_at_a_time() {
+        let trace = drive(3, 0, &[], &[0, 1, 2]);
+        assert_eq!(trace.seen.most, 1);
+        assert_eq!(trace.finished, Some(3));
+        assert_eq!(trace.emitted[3], [0, 1, 2]);
     }
 }

@@ -35,7 +35,7 @@ mod tools;
 
 use std::path::PathBuf;
 
-pub use server::Server;
+pub use server::{Answer, Server};
 
 #[cfg(test)]
 mod launch_tests {

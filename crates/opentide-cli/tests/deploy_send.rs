@@ -331,8 +331,8 @@ const CBC_NOW: i64 = 1_793_088_000;
 #[test]
 fn carbon_black_creates_the_report_as_the_python_deployer_did() {
     let ws = cbc_workspace();
-    // The watchlists read twice, the other rule's report, the new report, the watchlist.
-    let (proxy, env, _ca) = replay("carbon_black/deploy", &[0, 1, 2, 3, 4], "CBC_TOKEN");
+    // The watchlists read once (#1932), the other rule's report, the new report, the watchlist.
+    let (proxy, env, _ca) = replay("carbon_black/deploy", &[0, 1, 2, 3], "CBC_TOKEN");
     let (sent, stderr) = deploy(
         ws.path(),
         "carbon_black_cloud",
@@ -352,7 +352,7 @@ fn carbon_black_creates_the_report_as_the_python_deployer_did() {
 fn carbon_black_updates_the_report_as_the_python_deployer_did() {
     let ws = cbc_workspace();
     // The watchlists, both reports, then the rule's own report replaced.
-    let (proxy, env, _ca) = replay("carbon_black/deploy", &[5, 6, 7, 8, 9], "CBC_TOKEN");
+    let (proxy, env, _ca) = replay("carbon_black/deploy", &[4, 5, 6, 7], "CBC_TOKEN");
     let (sent, _) = deploy(
         ws.path(),
         "carbon_black_cloud",
@@ -5257,7 +5257,7 @@ fn a_carbon_black_dry_run_shows_the_requests_the_tenant_receives() {
         Some(&Json::str("<send-time:timestamp>"))
     );
     assert_eq!(body(&planned[1]), Json::str("<tenant-read:watchlist>"));
-    let (proxy, env, _ca) = replay("carbon_black/deploy", &[0, 1, 2, 3, 4], "CBC_TOKEN");
+    let (proxy, env, _ca) = replay("carbon_black/deploy", &[0, 1, 2, 3], "CBC_TOKEN");
     let (sent, _) = deploy(
         ws.path(),
         "carbon_black_cloud",
