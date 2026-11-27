@@ -5,7 +5,7 @@ description: "How opentide moves to the rule::2.0 document shape (RFC 0012, revi
 
 # rule::2.0 and opentide 2.0
 
-**Status:** plan, 2026-11-27. The design is [RFC 0012 revision 5](https://github.com/opentidehq/specifications/pull/109), open for comments on opentidehq/specifications#109. Nothing here is implemented yet.
+**Status:** plan, 2026-11-27. The design is [RFC 0012 revision 5](https://github.com/opentidehq/specifications/blob/main/rfcs/0012-rule-document-shape.md), published as a draft for comments ([opentidehq/specifications#109](https://github.com/opentidehq/specifications/pull/109)); discussion continues on [opentidehq/specifications#24](https://github.com/opentidehq/specifications/issues/24). Nothing here is implemented yet.
 
 **In one paragraph:** a rule becomes an envelope (`name`, `metadata`, `references`) plus one `rule:` block, like a threat or an objective. The block holds what the rule is (`description`, `signals`, `mitre_attack`), how far to trust it (`fidelity`: structured false positives and blind spots), how to handle its alerts (`response`, by stage: `triage`, `investigation`, `containment`, `remediation`, each with a `guide`, typed and runnable `searches`, and typed `actions`), and `detection`, one block per platform. Each platform block owns its operational state: `enabled`, `status`, `severity`. `signals` is one list of objective or signal UUIDs, across objectives. `rule::1.0` and `rule::1.1` keep working. The work ships as **opentide 2.0.0**, because the Rust SDK's public types cannot gain a revision without a semver-major release.
 
@@ -178,7 +178,7 @@ The file:line references in §4 come from that inventory. Fixtures that declare 
 
 Settled in review (2026-11-26 and 2026-11-27): `mitre_attack` inside `rule:`; `enabled` stays on blocks; one `signals` list, objectives or signals, across objectives; severity per platform block; the root reduced to identity; false positives and blind spots as structured entries under a parent block; searches stay in `response`, organised by stage; platform blocks grouped under `rule.detection`.
 
-Open, asked on [opentidehq/specifications#109](https://github.com/opentidehq/specifications/pull/109):
+Open, asked in the RFC (discussion on [opentidehq/specifications#24](https://github.com/opentidehq/specifications/issues/24)):
 
 1. The parent block's name: `fidelity`, `limitations` or `assessment`.
 2. `fidelity.validation` (true-positive validation) now or later.
