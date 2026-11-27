@@ -72,9 +72,10 @@ const AWAITING_A_PLATFORM: &[(&str, &str)] = &[(
 )];
 
 /// Whether a variant is a query language. `LanguageId` is non-exhaustive, so
-/// the wildcard panics: a new variant fails the test below until it is
-/// classified here, and `declared_variants` fails it until the variant is in
-/// `LanguageId::QUERY_LANGUAGES` or `NOT_QUERY_LANGUAGES`.
+/// the `match` needs a wildcard, which panics: the test below fails until a
+/// new variant is listed in `LanguageId::QUERY_LANGUAGES` or
+/// `NOT_QUERY_LANGUAGES` (`declared_variants`), and a new query language
+/// until it is classified here.
 const fn is_query_language(id: LanguageId) -> bool {
     match id {
         LanguageId::TideYaml | LanguageId::Config => false,

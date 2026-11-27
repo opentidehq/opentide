@@ -118,13 +118,14 @@
 //! field and enums that may gain a variant are `#[non_exhaustive]`.
 //!
 //! Platforms, query languages and diagnostic codes are open sets. Adding one
-//! is a minor release; match them with a wildcard arm. The enums that name
-//! them (`analysis::LanguageId` among them) are `#[non_exhaustive]`, and the
-//! lists of them are slices (`&'static [_]`), whose type does not change when
-//! one is added.
+//! is a minor release; match them with a wildcard arm. `analysis::LanguageId`
+//! is `#[non_exhaustive]`; [`models::RuleConfigurations`], a field per
+//! platform, is too, so build it from `Default`. The lists of them
+//! (`LanguageId::QUERY_LANGUAGES`, `RuleConfigurations::PLATFORMS`,
+//! [`validate::STRICT_EXEMPT_WARNINGS`]) are slices, whose type does not
+//! change when one is added.
 //!
-//! The
-//! JSON documents ([`Document`], [`cli::run_json`] when built) follow the
+//! The JSON documents ([`Document`], [`cli::run_json`] when built) follow the
 //! command line's contract (`docs/cli/json-output.md`), which only grows.
 //! The minimum supported Rust version is the `rust-version` of the
 //! manifest; raising it is a minor release.

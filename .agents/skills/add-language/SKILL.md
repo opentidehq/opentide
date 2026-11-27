@@ -233,7 +233,7 @@ them on one branch and check each crate as you go (`cargo check -p <crate>`). St
   `docs/cli/validate.md` and `docs/usage/concepts/platforms.md`. `docs/cli/diagnostics.md` comes
   from `cargo xtask codegen`.
 - [ ] `CHANGELOG.md` `## [Unreleased]` ([`release-notes`](../release-notes/SKILL.md)) and
-  `crates/CHANGELOG.md`, with the **Breaking** entry for the new `LanguageId` variant
+  `crates/CHANGELOG.md`, with the **Added** entry for the new `LanguageId` variant
   ([`engine-release-notes`](../engine-release-notes/SKILL.md)).
 - [ ] The new crate's name in [`docs/internal/publishing.md`](../../../docs/internal/publishing.md):
   its first publish to crates.io needs the maintainers' token.

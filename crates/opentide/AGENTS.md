@@ -49,9 +49,12 @@ facade (`xtask/layers.toml`), above the applications: its features reach opentid
   are `#[non_exhaustive]` with a `Default` and builder methods. A breaking change raises the major
   version and gets a **Breaking** entry in `crates/CHANGELOG.md`.
 - **Open sets.** Platforms, query languages and diagnostic codes are open sets. Adding one is a
-  minor release; match them with a wildcard arm. Every enum of the API that grows with them
-  (`LanguageId`, the platform enums) is `#[non_exhaustive]`, and every list of them is a
-  `&'static [_]`, never a `[_; N]` (ADR 0015 §6, #1911). A new such enum or list follows suit. CI's `facade` job runs
+  minor release; match them with a wildcard arm. Every item of the API that grows with them is
+  `#[non_exhaustive]` (`LanguageId`, and `RuleConfigurations`, a field per platform), and every
+  list of them is a `&'static [_]`, never a `[_; N]` (`LanguageId::QUERY_LANGUAGES`,
+  `RuleConfigurations::PLATFORMS`, `validate::STRICT_EXEMPT_WARNINGS`; #1911). A new such item
+  follows suit: `opentide_schema::platforms::PlatformId` and `IDS` are exhaustive and an array,
+  so they are converted before the facade ever re-exports them. CI's `facade` job runs
   `cargo semver-checks` against the pull request's base (the merge commit's first parent): the
   baseline stays the PR base until the crate is published on crates.io, and only then becomes the
   last published version. Do not switch it earlier; there is no published API to hold to yet.

@@ -13,7 +13,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Eac
 
 ### Breaking
 
-- **In the Rust SDK, platforms, query languages and diagnostic codes are open sets** ([#1911](https://github.com/opentidehq/opentide/issues/1911)). From this release on, adding one is a minor release and changes no type. This release makes the switch once: `LanguageId` and `RuleConfigurations` are `#[non_exhaustive]`, so a `match` on `LanguageId` needs a wildcard arm and a `RuleConfigurations` starts from `Default`. `LanguageId::QUERY_LANGUAGES`, `RuleConfigurations::PLATFORMS` and `validate::STRICT_EXEMPT_WARNINGS` are slices, not fixed-size arrays. The command line, the Python package and the npm package are unaffected.
+- **The Rust SDK's platforms, languages and codes are open sets** ([#1911](https://github.com/opentidehq/opentide/issues/1911)). From this release on, adding one is a minor release, which breaks no code that matches with a wildcard arm. This release makes the switch once: `LanguageId` and `RuleConfigurations` are `#[non_exhaustive]`, so a `match` on `LanguageId` needs a wildcard arm and a `RuleConfigurations` starts from `Default`. `LanguageId::QUERY_LANGUAGES`, `RuleConfigurations::PLATFORMS` and `validate::STRICT_EXEMPT_WARNINGS` are slices, not fixed-size arrays. The command line, the Python package and the npm package are unaffected.
 
 ### Added
 

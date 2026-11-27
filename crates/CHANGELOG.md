@@ -16,10 +16,10 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 #### `opentide`
 
-- **Platforms, query languages and diagnostic codes are open sets: adding one is a minor release** ([opentide#1911](https://github.com/opentidehq/opentide/issues/1911), ADR 0015 §6). This release switches the API over once, so the next platform or language changes no type:
+- **Platforms, languages and codes are open sets** ([opentide#1911](https://github.com/opentidehq/opentide/issues/1911), ADR 0015 §6). From this release on, adding one is a minor release. This release switches the API over once:
   - `LanguageId` is `#[non_exhaustive]`: a `match` on it outside `opentide-core` needs a wildcard arm
   - `RuleConfigurations`, which has one field per platform, is `#[non_exhaustive]` and implements `Default`: it cannot be built with a struct literal outside `opentide-schema`
-  - `LanguageId::QUERY_LANGUAGES`, `RuleConfigurations::PLATFORMS` and `validate::STRICT_EXEMPT_WARNINGS` are `&'static [_]`; they were `[_; 12]`, `[_; 13]` and `[_; 4]`
+  - `LanguageId::QUERY_LANGUAGES`, `RuleConfigurations::PLATFORMS` and `validate::STRICT_EXEMPT_WARNINGS` are `&'static [_]`; in 1.1.0 they were `[_; 11]`, `[_; 13]` and `[_; 2]`
 
 ### Added
 
@@ -30,7 +30,7 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 #### `opentide-datadog`
 
 - **The Datadog log search syntax** (`datadog`, `.datadog` files): the queries of Datadog Cloud SIEM detection rules, checked, highlighted, hovered and completed as you type ([`docs/engine/DATADOG.md`](../docs/engine/DATADOG.md)). The new crate `opentide-datadog` parses it in pure Rust, with AND (written or implied) binding tighter than OR, as VRL reads it. It reports the 16 `datadog_*` codes (`opentide explain datadog_mixed_boolean`, …), under the profiles `rule` and `search`; a `.datadog` file is a search. Hover and completion know Datadog's reserved and standard attributes. No Tide block embeds the language yet: the `datadog` platform is the RFC's next phase.
-- **API: `opentide_core::LanguageId::Datadog`**, the `datadog_*` codes in `opentide_core::codes`, and the `opentide-datadog` crate.
+- **API:** the `datadog_*` codes in `opentide_core::codes`, and the `opentide-datadog` crate.
 - **`highlights/generated/datadog.tmLanguage.json`** (`source.datadog`), and the `datadog` language in the Helix, Neovim and Zed samples and `@opentide/lsp-client`'s `LANGUAGES`.
 
 #### `opentide-schema`
