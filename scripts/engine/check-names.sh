@@ -26,8 +26,9 @@ if [[ -n "$hits" ]]; then
 fi
 
 # Python files of other repositories that the sources cite on purpose:
-# opentidehq/specifications' reference checker for the Exabeam Query Language.
-external_py=" scripts/exabeam_language.py "
+# opentidehq/specifications' reference checker for the Exabeam Query Language,
+# and its tests, whose block-code cases opentide-schema runs.
+external_py=" scripts/exabeam_language.py test_platform_exabeam.py "
 # Lines that name a vendor parser's oracle (Kusto's, in opentide-kql), not
 # the retired Python CLI.
 VENDOR_ORACLE="as the oracle probes|The oracle the lazy catalog is held to"
@@ -35,7 +36,7 @@ VENDOR_ORACLE="as the oracle probes|The oracle the lazy catalog is held to"
 declare -A RETIRED_BASELINE=(
   [opentide-cli]=172
   [opentide-compile]=121
-  [opentide-schema]=238
+  [opentide-schema]=0
 )
 tracked_py="$(git -C "$root" ls-files '*.py')"
 py_in_tree() {
@@ -55,7 +56,9 @@ retired_mentions() {
   # `oracles/`, and the two KQL comments in VENDOR_ORACLE.
   { grep -RInE -i "oracle's|oracles'|python oracle|(^|[^a-z])the[ _]oracles?([^a-z/]|\$)" "$dir" || true; } \
     | grep -vE "$VENDOR_ORACLE" || true
-  { grep -RInoE '[A-Za-z0-9_./-]+\.py\b' "$dir" || true; } | while IFS= read -r hit; do
+  # A name followed by `(` is a call (pyo3's `value.py()`), not a file.
+  { grep -RInoE '[A-Za-z0-9_./-]+\.py\b\(?' "$dir" || true; } | while IFS= read -r hit; do
+    [[ "$hit" == *"(" ]] && continue
     py_in_tree "${hit##*:}" || echo "$hit"
   done
 }

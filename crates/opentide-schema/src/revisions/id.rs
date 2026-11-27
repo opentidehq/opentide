@@ -1,5 +1,4 @@
-//! `SchemaId`: a schema identifier, `family::major.minor`
-//! (`models/version.py` `SchemaVersion`).
+//! `SchemaId`: a schema identifier, `family::major.minor`.
 
 use std::fmt;
 
@@ -20,19 +19,15 @@ pub enum SchemaIdError {
 
 /// A schema identifier: a family and a version, `rule::1.1`.
 ///
-/// The family is trimmed and lower-cased, and must not be empty, as
-/// `SchemaVersion._normalise_family` does. Identifiers order by family, then
-/// major, then minor (`SchemaVersion.sort_key`): the derived order compares
-/// the fields in that order, and a family compares by code point.
-///
-/// Two choices differ from `SchemaVersion.parse`, neither visible to a user
-/// (the oracle parses only identifiers its registry already holds, ADR 0009):
+/// The family is trimmed and lower-cased, and must not be empty. Identifiers
+/// order by family, then major, then minor: the derived order compares the
+/// fields in that order, and a family compares by code point.
 ///
 /// - The version is the text after the **last** `::`, so a platform block's
 ///   identifier, `platform::sentinel::1.0`, is the family `platform::sentinel`
-///   at 1.0. `SchemaVersion.parse` splits at the first `::` and fails on it.
-/// - A version number is ASCII digits only. Python's `int()` also took a sign,
-///   `_` separators, surrounding blanks and other scripts' digits.
+///   at 1.0.
+/// - A version number is ASCII digits only: no sign, `_` separator,
+///   surrounding blank or other script's digits.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SchemaId {
     family: String,

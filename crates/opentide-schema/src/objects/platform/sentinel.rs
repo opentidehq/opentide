@@ -89,8 +89,8 @@ pub struct SentinelTrigger {
 /// `1h10m`), around blanks; empty is left to deploy, which asks for the
 /// value where it needs one. Validation refuses what deploy cannot convert:
 /// a value of neither shape (`frequency: hourly`), and one longer than
-/// deploy's `timedelta` holds ([`MAX_DURATION_SECONDS`]: `1000000000d`,
-/// `P99999999999D`), both of which the oracle accepted and deploy refused.
+/// deploy converts ([`MAX_DURATION_SECONDS`]: `1000000000d`,
+/// `P99999999999D`).
 /// The grammar is [`SENTINEL`], the one deploy reads too (#1934).
 pub fn check_duration(value: &str) -> Result<(), Violation> {
     let text = value.trim();
@@ -901,9 +901,9 @@ mod tests {
         );
     }
 
-    /// What deploy's `timedelta` holds passes; one second more, or a part
-    /// too long for any integer, is refused (the oracle's deploy raised
-    /// `OverflowError` on each, after validation accepted it).
+    /// What deploy converts passes; one second more, or a part too long for
+    /// any integer, is refused, so validation never passes a duration that
+    /// deploy then refuses.
     #[test]
     fn sentinel_durations_are_bounded_by_what_deploy_converts() {
         for text in [

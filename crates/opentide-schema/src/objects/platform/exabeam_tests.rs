@@ -1,6 +1,5 @@
-//! `ExabeamConfig` and its constraint codes, ported from 0.28.0's
-//! `tests/test_platforms/test_exabeam_model.py`: each block is a JSON
-//! value, read as the node the YAML would give.
+//! `ExabeamConfig` and its constraint codes: each block is a JSON value,
+//! read as the node the YAML would give.
 
 use std::collections::BTreeSet;
 

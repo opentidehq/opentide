@@ -1,6 +1,5 @@
-//! Detection rule models, schemas `rule::1.0` and `rule::1.1`
-//! (`models/rule.py`), with the `configurations` container
-//! (`models/platform.py` `RuleConfigurations`).
+//! Detection rule models, schemas `rule::1.0` and `rule::1.1`, with the
+//! `configurations` container ([`RuleConfigurations`]).
 //!
 //! The platform blocks are [`crate::objects::platform`]'s (UC-1.4, #810).
 

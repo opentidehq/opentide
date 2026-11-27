@@ -1,12 +1,12 @@
 //! The Tide object models (UC-1.3, #809): metadata, references, the rule's
 //! response, the threat vector (`threat::1.0`), the detection objective
 //! (`objective::1.0`) and the detection rule (`rule::1.0`, `rule::1.1`),
-//! ported from `src/opentide/models` with their validators.
+//! with their validators.
 //!
-//! Each model follows ADR 0001: field names, serialised names, order,
+//! Each model follows ADR 0001: its field names, serialised names, order,
 //! optional and defaulted fields, closure and `tide.*` keys are the
-//! oracle's, and each doc comment is the schema's description, held to the
-//! oracle's text (by `cargo xtask schema diff` until #1142). The
+//! revision's contract, which only a new revision changes, and each doc
+//! comment is the field's description in the JSON Schema it derives. The
 //! structural conversion ([`crate::from_node`]) reads a file
 //! with every error placed; garde ([`garde::Validate`]) checks a value built
 //! in memory. The validators both run are in [`checks`].

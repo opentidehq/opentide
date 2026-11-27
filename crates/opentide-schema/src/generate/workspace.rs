@@ -1,7 +1,6 @@
 //! What `opentide generate` writes into a workspace from its resolved
-//! configuration: the object and platform templates
-//! (`template_renderer.py`), the VS Code snippets (`vscode_snippets.py`) and
-//! the router schema (`router_schema.py`). Paths are relative to the
+//! configuration: the object and platform templates, the VS Code snippets
+//! and the router schema. Paths are relative to the
 //! workspace, `/`-separated; the host writes the files.
 
 use crate::configuration::lint::parse_lint_config;
@@ -217,8 +216,7 @@ pub fn join_path(dir: &str, name: &str) -> String {
 }
 
 /// Platforms with a rule block whose merged `[platform] enabled` is `true`,
-/// in the configuration's order, each with its display name
-/// (`enabled_platforms`, `_entry_name`).
+/// in the configuration's order, each with its display name.
 pub fn enabled_platforms(config: &Node) -> Vec<(String, String)> {
     let Some(config_platforms) = table(Some(config), "platforms") else {
         return Vec::new();
@@ -314,7 +312,7 @@ fn push(artifacts: &mut Vec<Artifact>, path: String, text: String) {
 }
 
 /// `rule.1.0.template.yaml` as `rule::1.0`; `None` for another name
-/// (`_schema_id_from_template_filename`).
+///.
 pub fn schema_id_from_template_filename(filename: &str) -> Option<String> {
     let stem = filename.strip_suffix(".template.yaml")?;
     let parts: Vec<&str> = stem.split('.').collect();

@@ -6,25 +6,23 @@
 //! and the generation pipeline (UC-1.8, #814) strips every `tide.*` key from
 //! the editor schemas it writes, as `strip_framework_keywords` does today.
 //!
-//! The list is the oracle's (opentide 0.23.0, `src/opentide`): every `tide.*`
-//! string that names metadata, which is every `tide.*` string literal except
-//! the four highlight captures (`tide.keyword`, `tide.property`,
-//! `tide.schema`, `tide.uuid`) and logger or module names. [`Origin`] says
-//! where the oracle sets each key, which is where the Rust model sets it.
+//! The list is every `tide.*` string that names metadata: the four highlight
+//! captures (`tide.keyword`, `tide.property`, `tide.schema`, `tide.uuid`) are
+//! not metadata keys. [`ALL`] holds them, and its test counts them by
+//! [`Origin`], which says where the Rust model sets each key.
 
-/// Where the oracle sets a metadata key, and so where the Rust model does.
+/// Where the Rust model sets a metadata key.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Origin {
     /// A model field declares it (`TideField(schema_extra=…)`,
     /// `VocabField`): a `#[schemars(extend(…))]` attribute on the field.
     Field,
-    /// The schema pipeline adds it to a field's schema
-    /// (`generation/pydantic_metaschema.py`, `models/platform_schema.py`): an
-    /// attribute on the field where the value is static, or the pipeline's
-    /// schemars transform where it depends on the revision's pins.
+    /// The schema pipeline adds it to a field's schema: an attribute on the
+    /// field where the value is static, or the pipeline's schemars transform
+    /// where it depends on the revision's pins.
     Pipeline,
-    /// The pipeline reads it, but nothing sets it at the oracle: the reader is
-    /// ported with the key, so a field that sets it behaves as today.
+    /// The pipeline reads it, but no model field sets it yet: a field that
+    /// sets it later is read with no change to the reader.
     ReadOnly,
     /// Not a schema key: `lookup_schema_extra`'s request for a scope's whole
     /// property map.
@@ -37,7 +35,7 @@ pub enum Origin {
 /// One `tide.*` metadata key.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct MetadataKey {
-    /// The key, as the oracle spells it.
+    /// The key, as schemas and vocabularies spell it.
     pub name: &'static str,
     /// Where it is set.
     pub origin: Origin,

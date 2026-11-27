@@ -1,8 +1,7 @@
 //! Sysdig Secure or Falco rule, `platform::sysdig::1.0` (`SysdigConfig` and
 //! its nested models), with the named check `sysdig_rule_shape`
-//! ([`block_codes`]): the constraint codes of the oracle's
-//! `_validate_raw_sysdig_block` and `platforms/sysdig/expansion.py`
-//! (`check_definitions`), judged on the raw block before its fields.
+//! ([`block_codes`]): the block's constraint codes, its macros' and lists'
+//! included, judged on the raw block before its fields.
 //!
 //! Which names a macro uses, and where a list name stands in a value, are
 //! read on the text as Falco's loader reads it ([`super::falco_text`]).
@@ -293,13 +292,13 @@ platform_block! {
 // `tests/oracle/platform_cases.toml`.
 // ---------------------------------------------------------------------------
 
-/// `_non_blank`: a string with something besides whitespace.
+/// A string with something besides whitespace.
 fn non_blank(node: Option<&Node>) -> bool {
     node.and_then(|node| node.value.as_str())
         .is_some_and(|text| !is_blank(text))
 }
 
-/// `_sysdig_scalar`: neither a list nor a mapping.
+/// Neither a list nor a mapping.
 fn scalar(node: &Node) -> bool {
     !matches!(node.value, Value::Seq(_) | Value::Map(_))
 }
@@ -397,7 +396,7 @@ fn null_values<'a>(node: &'a Node, out: &mut Vec<(Vec<usize>, &'a Node)>) {
     }
 }
 
-/// `_sysdig_exception_ok`: one exception, by the checks of Falco's
+/// One exception, by the checks of Falco's
 /// `validate_exception_info` and `build_rule_exception_infos`. An exception
 /// it refuses is the block's `sysdig_exception_shape`; the engine's Falco
 /// checks of the same exception leave it to this check (UC-2.6, #821).
@@ -470,13 +469,13 @@ pub fn exception_shape_ok(entry: &Node) -> bool {
 }
 
 /// The block's macros and lists, in block order, each name once (a later
-/// definition replaces an earlier one, as the oracle's dictionaries do).
+/// definition replaces an earlier one).
 struct Definitions {
     macros: Vec<(String, String)>,
     lists: Vec<(String, Vec<String>)>,
 }
 
-/// `_sysdig_definitions`: the block's macros and lists by name;
+/// The block's macros and lists by name;
 /// `sysdig_definition_name` and `sysdig_definition_duplicate` into `codes`.
 fn definitions(raw: &Node, codes: &mut BTreeSet<&'static str>) -> Definitions {
     let mut out = Definitions {
@@ -564,13 +563,13 @@ impl Expander {
         true
     }
 
-    /// `_list_in`: a block list whose name occurs inside a value (not as all
+    /// A block list whose name occurs inside a value (not as all
     /// of it).
     fn list_in(&self, text: &str) -> bool {
         list_inside(&self.lists, text).is_some()
     }
 
-    /// `_passes`: each member as its text, or `None` for a list or mapping,
+    /// Each member as its text, or `None` for a list or mapping,
     /// through `opentide_core::falco::value_passes`.
     fn passes(&self, values: &[&Node]) -> Vec<Option<String>> {
         value_passes(
@@ -582,7 +581,7 @@ impl Expander {
         )
     }
 
-    /// `_members`: false when a member names a block list inside it.
+    /// False when a member names a block list inside it.
     fn members_ok(&self, values: &[&Node]) -> bool {
         self.passes(values)
             .iter()
@@ -646,8 +645,7 @@ fn as_list(node: Option<&Node>) -> Vec<&Node> {
     }
 }
 
-/// Every constraint code of the oracle's `_validate_raw_sysdig_block` on a
-/// raw block, sorted; empty when the block passes, is not a mapping, or has
+/// Every constraint code of `sysdig_rule_shape` on a raw block, sorted; empty when the block passes, is not a mapping, or has
 /// no `status`.
 pub fn block_codes(raw: &Node) -> BTreeSet<&'static str> {
     let mut codes = BTreeSet::new();

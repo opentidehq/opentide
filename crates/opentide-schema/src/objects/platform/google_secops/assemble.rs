@@ -1,7 +1,5 @@
 //! The YARA-L rule deploy sends for a `configurations.google_secops` block
-//! (google-secops-1.0, Assembled rule), ported from 0.28.0's
-//! `platforms/google_secops/compile.py` (`assemble`, `AssembledRule`,
-//! `SectionPlace`, `Location`).
+//! (google-secops-1.0, Assembled rule).
 //!
 //! The author writes the rule's sections; the rest is derived from the
 //! opentide rule: the rule name, the `meta` section (author, description,

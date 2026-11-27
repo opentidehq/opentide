@@ -1,7 +1,6 @@
 //! What Google accepts but the author most likely did not mean
 //! (google-secops-1.0, Advisories), and the workspace check
-//! `google_secops_name_duplicate`: `advisories.py` and
-//! `validation/google_secops.py`.
+//! `google_secops_name_duplicate`.
 //!
 //! An advisory never rejects a rule: `opentide validate` reports it as a
 //! warning, and so does `opentide lint` with its `queries` check. Each is
@@ -208,7 +207,7 @@ pub fn aliased_sections(rule: &Node) -> Vec<SectionAlias> {
 }
 
 /// The YARA-L rule name of an enabled `google_secops` block, as deploy
-/// writes it (`_rule_name`); `None` for a rule without one.
+/// writes it; `None` for a rule without one.
 pub fn enabled_rule_name(rule: &Node) -> Option<String> {
     let block = block_of(rule)?;
     if !matches!(

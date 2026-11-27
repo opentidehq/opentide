@@ -1,7 +1,6 @@
 //! The named check `bitdefender_rule_shape`: every bitdefender-1.0
 //! constraint finding of a block, as authored, at the `field_path` the spec
-//! fixes for it, relative to the block (0.28.0's
-//! `platforms/bitdefender/catalog.py`, `block_findings`).
+//! fixes for it, relative to the block ([`block_findings`]).
 //!
 //! The catalogue ([`super::criteria`]) covers the EDR targets; a field of
 //! another target is not checked here, because the spec makes an unknown
@@ -180,7 +179,7 @@ fn set<'n>(node: &'n Node, name: &str) -> Option<&'n Node> {
     get(node, name).filter(|value| !matches!(value.value, Value::Null))
 }
 
-/// A string or an integer: a boolean is neither (`_scalar`).
+/// A string or an integer: a boolean is neither.
 fn scalar(node: &Node) -> bool {
     matches!(node.value, Value::Str(_) | Value::Int(_))
 }
@@ -210,7 +209,7 @@ fn has(node: &Node, name: &str) -> bool {
     keys(node).contains(&Some(name))
 }
 
-/// The relation a well-shaped criterion uses (`_relation`).
+/// The relation a well-shaped criterion uses.
 fn relation(criterion: &Node) -> &'static str {
     RELATIONS
         .iter()
@@ -219,7 +218,7 @@ fn relation(criterion: &Node) -> &'static str {
         .unwrap_or("is")
 }
 
-/// The values of a well-shaped criterion (`_values`): its list for `any`,
+/// The values of a well-shaped criterion: its list for `any`,
 /// else its one value.
 fn values(criterion: &Node) -> Vec<&Node> {
     let relation = relation(criterion);
@@ -241,7 +240,7 @@ fn field_name(criterion: &Node) -> &str {
 }
 
 /// `field` and one relation: `is` a string or integer, `contains` a string,
-/// `any` a non-empty list of strings or integers (`_criterion_shape_ok`).
+/// `any` a non-empty list of strings or integers.
 pub fn criterion_shape_ok(criterion: &Node) -> bool {
     if !matches!(criterion.value, Value::Map(_))
         || get(criterion, "field")
@@ -302,7 +301,7 @@ pub fn unknown_field(catalogue: &Criteria, target: &str, criterion: &Node) -> bo
 }
 
 /// `bitdefender_criterion_field`, `_relation` and `_value` for one
-/// criterion (`_criterion_codes`). An unknown field is an error on a target
+/// criterion. An unknown field is an error on a target
 /// whose field list the spec states, and a warning elsewhere.
 fn criterion_code(catalogue: &Criteria, target: &str, criterion: &Node) -> Option<&'static str> {
     if unknown_field(catalogue, target, criterion) {
@@ -324,7 +323,7 @@ fn criterion_code(catalogue: &Criteria, target: &str, criterion: &Node) -> Optio
 }
 
 /// The sensors the criteria need: a field's, or each enum value's
-/// (`_sensors`), without `both`.
+///, without `both`.
 fn sensors<'c>(catalogue: &'c Criteria, criteria: &[&Node]) -> BTreeSet<&'c str> {
     let mut sensors = BTreeSet::new();
     for criterion in criteria {
@@ -352,8 +351,7 @@ fn clashes(names: &[String], fields: &BTreeSet<&str>) -> bool {
     names.iter().any(|name| fields.contains(name.as_str()))
 }
 
-/// The catalogue's pairing rules (`bitdefender_criteria_combination`,
-/// `_combination_ok`).
+/// The catalogue's pairing rules (`bitdefender_criteria_combination`).
 fn combination_ok(catalogue: &Criteria, target: &str, criteria: &[&Node], alert: bool) -> bool {
     let fields: BTreeSet<&str> = criteria
         .iter()
@@ -665,8 +663,8 @@ pub fn block_codes(block: &Node) -> BTreeSet<&'static str> {
 }
 
 /// Each platform whose `yara.signature` is a YAML alias in `rule`, with the
-/// node it names: its anchor's, which starts where the oracle places the
-/// finding (`yara_signature_alias`, 0.28.0's `validation/yara_signature.py`).
+/// node it names: its anchor's, where the finding (`yara_signature_alias`)
+/// is placed.
 /// A platform block's `YaraSignature` must be written out in the block. An
 /// alias shares its anchor's node, so the signature is an alias when its
 /// node first appears, in document order, at another path: also when the
@@ -709,7 +707,7 @@ pub fn signature_aliases(rule: &Node) -> Vec<(&str, &Node)> {
 }
 
 /// The path at which each node first appears, in document order, each node
-/// walked once (`_first_paths`).
+/// walked once.
 fn first_paths(node: &Node, path: &mut Vec<String>, first: &mut HashMap<*const Node, Vec<String>>) {
     let at = std::ptr::from_ref(node);
     if first.contains_key(&at) {
