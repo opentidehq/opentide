@@ -82,13 +82,13 @@ pub const RATE_LIMIT: RetryPolicy =
     RetryPolicy::rate_limited(MAX_RATE_LIMITED, DEFAULT_RETRY_AFTER);
 
 /// `bitdefender_tenant_unauthorized`.
-pub const TENANT_UNAUTHORIZED: &str = "bitdefender_tenant_unauthorized";
+pub const TENANT_UNAUTHORIZED: &str = crate::tenant_codes::BITDEFENDER.unauthorized;
 /// `bitdefender_incidents_api_unavailable`.
 pub const INCIDENTS_API_UNAVAILABLE: &str = "bitdefender_incidents_api_unavailable";
 /// `bitdefender_tenant_unreachable`.
-pub const TENANT_UNREACHABLE: &str = "bitdefender_tenant_unreachable";
+pub const TENANT_UNREACHABLE: &str = crate::tenant_codes::BITDEFENDER.unreachable;
 /// `bitdefender_request_failed`.
-pub const REQUEST_FAILED: &str = "bitdefender_request_failed";
+pub const REQUEST_FAILED: &str = crate::tenant_codes::BITDEFENDER.request_failed;
 /// `bitdefender_name_conflict`.
 pub const NAME_CONFLICT: &str = "bitdefender_name_conflict";
 /// `bitdefender_create_unconfirmed`.
