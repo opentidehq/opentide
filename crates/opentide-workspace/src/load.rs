@@ -1,6 +1,5 @@
 //! Reading one object file: bytes to a YAML 1.2 document
-//! (`opentide_schema::node`), or the reason it cannot be one
-//! (`registry/builder.py` `_parse_yaml_file`).
+//! (`opentide_schema::node`), or the reason it cannot be one.
 
 use std::sync::Arc;
 
@@ -38,9 +37,8 @@ pub enum Parsed {
     Failed(Failure),
 }
 
-/// Why a file that is not UTF-8 cannot be read, with the byte at fault
-/// (`core/io.py` `not_utf8_problem`). Offsets count from after a leading
-/// byte order mark.
+/// Why a file that is not UTF-8 cannot be read, with the byte at fault.
+/// Offsets count from after a leading byte order mark.
 pub fn not_utf8_problem(bytes: &[u8], offset: usize) -> String {
     match bytes.get(offset) {
         Some(byte) => format!(
@@ -50,8 +48,7 @@ pub fn not_utf8_problem(bytes: &[u8], offset: usize) -> String {
     }
 }
 
-/// Why a parsed document is not one mapping (`core/io.py`
-/// `root_mapping_problem`); `None` when it is.
+/// Why a parsed document is not one mapping; `None` when it is.
 pub fn root_mapping_problem(document: &Document) -> Option<String> {
     let found = match document.root().map(|root| &root.value) {
         Some(Value::Map(_)) => return None,

@@ -1,4 +1,4 @@
-//! Which files are objects (`registry/catalogue.py`, workspace 1.3, #584).
+//! Which files are objects (workspace 1.3, #584).
 //!
 //! An object is a YAML file directly in its family's folder. A YAML file in a
 //! subfolder is listed as nested and never read. Names are matched

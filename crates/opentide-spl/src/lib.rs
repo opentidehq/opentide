@@ -313,6 +313,25 @@ pub fn analyze(source: &str) -> AnalyzeResult {
     syntax::analyze(source)
 }
 
+/// The Splunk SPL [`QueryEngine`](opentide_highlight::QueryEngine) (#1953):
+/// [`analyze`] behind the shared interface.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Engine;
+
+impl opentide_highlight::QueryEngine for Engine {
+    fn language(&self) -> opentide_core::LanguageId {
+        opentide_core::LanguageId::Spl
+    }
+
+    fn analyze(&self, source: &str) -> opentide_highlight::AnalyzeResult {
+        let r = analyze(source);
+        opentide_highlight::AnalyzeResult {
+            diagnostics: r.diagnostics,
+            tokens: r.tokens,
+        }
+    }
+}
+
 #[cfg(test)]
 thread_local! {
     /// Typo distances measured on this thread ([`one_typo`]).

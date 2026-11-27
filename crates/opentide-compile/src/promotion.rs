@@ -199,10 +199,11 @@ fn scalar_end(source: &str, start: usize, end: usize) -> usize {
     let mut at = start;
     // A tag (`!!str`) before the value, and the blanks after it.
     if rest.starts_with('!') {
-        let tag = rest.find([' ', '\t', '\r', '\n']).unwrap_or(rest.len());
-        let blanks = rest[tag..]
+        let after_tag = rest.trim_start_matches(|c: char| !matches!(c, ' ' | '\t' | '\r' | '\n'));
+        let tag = rest.len() - after_tag.len();
+        let blanks = after_tag
             .find(|c: char| !matches!(c, ' ' | '\t'))
-            .unwrap_or(rest.len() - tag);
+            .unwrap_or(after_tag.len());
         at += tag + blanks;
         rest = source.get(at..).unwrap_or_default();
     }
@@ -711,5 +712,14 @@ mod tests {
         let off = Settings::new(&Json::Null, &statuses);
         assert!(!off.enabled);
         assert_eq!(off.target, None);
+    }
+
+    #[test]
+    fn a_tagged_multi_byte_status_is_replaced_whole() {
+        // #1946: the tag and the blanks after it are measured on characters.
+        let text =
+            "name: é\nconfigurations:\n  splunk:\n    status: !!str ÉTAPE😀  # é\n    query: 😀\n";
+        let promoted = promote(text, &["ÉTAPE😀"], "PRODUCTION").unwrap().unwrap();
+        assert_eq!(promoted, text.replace("!!str ÉTAPE😀", "PRODUCTION"));
     }
 }

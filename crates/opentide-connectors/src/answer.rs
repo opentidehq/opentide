@@ -1,6 +1,6 @@
 //! A tenant's answer, read whole: its status, its type, its bytes and how
 //! long it took, and what to say about one that is not the API's JSON
-//! (`platforms/transport.py` `describe_answer`, `not_json_detail`).
+//! ([`describe_answer`], [`Answer::not_json_detail`]).
 
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};

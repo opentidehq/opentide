@@ -4,14 +4,15 @@
 //!
 //! The JSON keys, in order: `code`, `severity`, `object_uuid`,
 //! `object_type`, `file_path`, `yaml_line`, `field_path`, `message`,
-//! `suggestion`, `context` (the validation issue, `validation/issues.py`),
-//! then `path`, `line`, `column`, `end_line`, `end_column`, `help`, `fix`,
-//! `explain` (the place and the step, `cli/ui/diagnostics.py` `annotate`).
+//! `suggestion`, `context` (the validation issue), then `path`, `line`,
+//! `column`, `end_line`, `end_column`, `help`, `fix`, `explain` (the place
+//! and the step, [`crate::validate::annotate::annotate`]).
 //!
 //! Positions are 1-based; columns count Unicode code points; a span runs
 //! from (`line`, `column`) up to (`end_line`, `end_column`), `end_column`
 //! exclusive and on `end_line` (`docs/cli/diagnostics.md`). `yaml_line` is
-//! the 0-based line of the value as the oracle's JSON writes it (a block's
+//! the value's line from 0 ([`opentide_schema::node::Document::yaml_line`]:
+//! a scalar's key's line, else the line the value starts on, a block's
 //! first child), kept for consumers that read it.
 //!
 //! What only the code frames read (the label under the underline, further
@@ -225,7 +226,8 @@ pub struct Diagnostic {
     /// The file, absolute, when one is at fault.
     #[serde(default)]
     pub file_path: Option<PathBuf>,
-    /// The value's line from 0, as the oracle's JSON writes it.
+    /// The value's line from 0: a scalar's key's line, else the line the
+    /// value starts on (`Document::yaml_line`).
     #[serde(default)]
     pub yaml_line: Option<usize>,
     /// The field at fault, keys and list indexes as strings.

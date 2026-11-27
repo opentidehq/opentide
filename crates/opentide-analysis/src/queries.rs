@@ -1377,4 +1377,230 @@ mod tests {
         assert!(decode(b"\xff").is_err());
         assert!(matches!(universal_newlines("a\nb"), Cow::Borrowed(_)));
     }
+
+    /// #1962: the queries check spreads its objects over rayon's pool, and a
+    /// thread-local scope does not follow work to a pool thread. Each job
+    /// enters the profiles' datasets itself, so the check run in parallel
+    /// reports what it reports run serially, whatever catalog the calling
+    /// thread entered.
+    #[test]
+    fn a_parallel_check_sees_the_datasets_a_serial_one_sees() {
+        use rayon::prelude::*;
+        let declares = |table: &str| {
+            format!(
+                "[[logsources]]\nname = \"{table}\"\ndescription = \"x\"\nsystem = \"sentinel\"\n"
+            )
+        };
+        let profiles = |visibility: Option<&str>| Profiles {
+            host: MemoryWorkspace { files: Vec::new() },
+            datasets: crate::Datasets::of_workspace(visibility).unwrap(),
+            visibility_problem: None,
+            graylog_tenants: Vec::new(),
+        };
+        let workspace = profiles(Some(&declares("Declared_CL")));
+        let objects: Vec<String> = (0..64)
+            .map(|i| {
+                let table = if i % 2 == 0 {
+                    "Declared_CL"
+                } else {
+                    "Other_CL"
+                };
+                format!(
+                    "name: Rule {i}\nconfigurations:\n  sentinel:\n    query: |\n      \
+                     {table} | take {i}\n"
+                )
+            })
+            .collect();
+        let codes = |checked: Vec<CheckedQuery>| -> Vec<String> {
+            checked
+                .into_iter()
+                .flat_map(|query| query.findings)
+                .map(|finding| finding.code)
+                .collect()
+        };
+        // The calling thread uses another catalog, which declares the
+        // other table: neither run may see it.
+        let _caller = crate::enter_catalog(&crate::Catalog {
+            visibility: Some(declares("Other_CL")),
+            ..crate::Catalog::default()
+        })
+        .unwrap();
+        let serial: Vec<Vec<String>> = objects
+            .iter()
+            .map(|text| codes(workspace.check_object(text)))
+            .collect();
+        let parallel: Vec<Vec<String>> = objects
+            .par_iter()
+            .map(|text| codes(workspace.check_object(text)))
+            .collect();
+        assert_eq!(parallel, serial);
+        // The workspace's datasets are the ones in use: the table it
+        // declares is known, the other is not, and with no declarations
+        // neither is.
+        let unknown = |codes: &[String]| codes.iter().any(|code| code == "kql_unknown_table");
+        assert!(!unknown(&serial[0]), "{serial:?}");
+        assert!(unknown(&serial[1]), "{serial:?}");
+        let undeclared = profiles(None);
+        assert!(unknown(&codes(undeclared.check_object(&objects[0]))));
+        // What the jobs enter is what makes them agree: a pool thread does
+        // not see the calling thread's scope.
+        let on_the_pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(2)
+            .build()
+            .unwrap()
+            .install(|| crate::declared_datasets().declares("sentinel"));
+        assert!(crate::declared_datasets().declares("sentinel"));
+        assert!(!on_the_pool);
+    }
+
+    /// 64 rule files of a workspace in memory whose `visibility.toml` is
+    /// `visibility`: rule `i` reads `table(i)` on `platform`'s query.
+    fn parallel_workspace(
+        visibility: &str,
+        platform: &str,
+        query: impl Fn(usize) -> String,
+    ) -> (
+        std::sync::Arc<opentide_workspace::MemoryFs>,
+        Vec<(std::path::PathBuf, String, String)>,
+    ) {
+        let fs = std::sync::Arc::new(opentide_workspace::MemoryFs::new());
+        fs.create_dir("/ws/.opentide/configurations");
+        fs.create_dir("/ws/objects/rules");
+        fs.write("/ws/.opentide/configurations/visibility.toml", visibility);
+        let rules = (0..64)
+            .map(|i| {
+                let uuid = format!("11111111-1111-4111-8111-{i:012}");
+                let path = std::path::PathBuf::from(format!("/ws/objects/rules/rule_{i}.yaml"));
+                let text = format!(
+                    "name: Rule {i}\nmetadata:\n  uuid: {uuid}\n  schema: rule::1.1\n\
+                     configurations:\n  {platform}:\n    query: |\n      {}\n",
+                    query(i)
+                );
+                fs.write(&path, text.as_str());
+                (path, uuid, text)
+            })
+            .collect();
+        (fs, rules)
+    }
+
+    /// #1962: `validate`'s queries check ([`EngineQueries::check`]) runs its
+    /// objects on rayon's pool; each job enters the workspace's datasets, so
+    /// every job sees the table `visibility.toml` declares, and only the
+    /// other table is unknown (an error in Defender's closed schema). Without
+    /// the job's scope a pool thread has no declarations, and every rule's
+    /// table would be unknown.
+    #[test]
+    fn validate_s_parallel_check_sees_the_workspace_s_datasets_on_every_job() {
+        let visibility = "[[logsources]]\nname = \"DeclaredEvents\"\ndescription = \"x\"\n\
+                          system = \"microsoft_defender\"\n";
+        let table = |i: usize| {
+            if i.is_multiple_of(2) {
+                "DeclaredEvents"
+            } else {
+                "OtherEvents"
+            }
+        };
+        let (fs, rules) = parallel_workspace(visibility, "microsoft_defender", |i| {
+            format!("{} | take {i}", table(i))
+        });
+        let ws = Workspace::open(
+            fs as std::sync::Arc<dyn FileSystem>,
+            opentide_workspace::Options {
+                roots: opentide_workspace::RootOptions {
+                    repo: Some(std::path::PathBuf::from("/ws")),
+                    cwd: std::path::PathBuf::from("/ws"),
+                    ..opentide_workspace::RootOptions::default()
+                },
+            },
+        )
+        .unwrap();
+        let objects: Vec<QueryObject<'_>> = rules
+            .iter()
+            .map(|(path, uuid, text)| QueryObject {
+                path,
+                uuid,
+                family: "rule",
+                source: text,
+            })
+            .collect();
+        // The calling thread's catalog declares the other table: no job sees it.
+        let _caller = crate::enter_catalog(&crate::Catalog {
+            visibility: Some(visibility.replace("DeclaredEvents", "OtherEvents")),
+            ..crate::Catalog::default()
+        })
+        .unwrap();
+        let found = EngineQueries.check(&ws, &objects, false);
+        assert_eq!(found.queries, 64);
+        let mut unknown: Vec<String> = found
+            .errors
+            .iter()
+            .filter(|error| error.code == "kql_unknown_table")
+            .map(|error| error.object_uuid.clone())
+            .collect();
+        unknown.sort();
+        let expected: Vec<String> = rules
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| table(*i) == "OtherEvents")
+            .map(|(_, (_, uuid, _))| uuid.clone())
+            .collect();
+        assert_eq!(unknown, expected, "{:#?}", found.errors);
+    }
+
+    /// #1962: `lint`'s queries check runs each chunk's files on rayon's pool
+    /// through [`EngineLintQueries`]' `check_parsed`; each job enters the
+    /// workspace's datasets, so exactly the rules that read a sourcetype
+    /// `visibility.toml` does not declare are warned about. Without the
+    /// job's scope a pool thread has no declarations, and none would be.
+    #[test]
+    fn lint_s_parallel_check_sees_the_workspace_s_datasets_on_every_job() {
+        use opentide_workspace::lint::{LintCheck, LintOptions, lint};
+        let visibility = "[[logsources]]\nname = \"main\"\ndescription = \"x\"\n\
+                          system = \"splunk\"\n[[logsources]]\nname = \"linux_secure\"\n\
+                          description = \"x\"\nsystem = \"splunk\"\n";
+        let sourcetype = |i: usize| {
+            if i.is_multiple_of(2) {
+                "linux_secure"
+            } else {
+                "other"
+            }
+        };
+        let (fs, rules) = parallel_workspace(visibility, "splunk", |i| {
+            format!("index=main sourcetype={} | head {i}", sourcetype(i))
+        });
+        let check = EngineLintQueries::install(fs.as_ref(), Path::new("/ws"));
+        // The calling thread's catalog declares the other sourcetype: no job
+        // sees it.
+        let _caller = crate::enter_catalog(&crate::Catalog {
+            visibility: Some(visibility.replace("linux_secure", "other")),
+            ..crate::Catalog::default()
+        })
+        .unwrap();
+        let report = lint(
+            fs.as_ref(),
+            None,
+            Path::new("/ws"),
+            &opentide_schema::configuration::lint::LintConfig::default(),
+            &LintOptions {
+                checks: vec![LintCheck::Queries],
+                cwd: std::path::PathBuf::from("/ws"),
+                query_check: Some(&check),
+                ..LintOptions::default()
+            },
+        );
+        let mut undeclared: Vec<String> = report
+            .findings
+            .iter()
+            .filter(|finding| finding.code() == "spl_dataset_not_declared")
+            .filter_map(|finding| finding.entry.uuid.clone())
+            .collect();
+        undeclared.sort();
+        let expected: Vec<String> = rules
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| sourcetype(*i) == "other")
+            .map(|(_, (_, uuid, _))| uuid.clone())
+            .collect();
+        assert_eq!(undeclared, expected, "{:#?}", report.findings);
+    }
 }

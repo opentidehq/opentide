@@ -70,16 +70,14 @@ fn user_sid(rest: &str) -> bool {
     let mut groups = 0;
     let mut rest = tail;
     loop {
-        let digits = rest.chars().take_while(char::is_ascii_digit).count();
-        if digits == 0 {
+        let after = rest.trim_start_matches(|c: char| c.is_ascii_digit());
+        if after.len() == rest.len() {
             return false;
         }
         groups += 1;
-        rest = &rest[digits..];
-        match rest.chars().next() {
-            None | Some('\\') => return groups >= 2,
-            Some('-') => rest = &rest[1..],
-            Some(_) => return false,
+        match after.strip_prefix('-') {
+            Some(next) => rest = next,
+            None => return (after.is_empty() || after.starts_with('\\')) && groups >= 2,
         }
     }
 }
@@ -394,5 +392,18 @@ mod tests {
         assert_eq!(short_hive("HKEY_USERS\\.DEFAULT").as_deref(), Some("HKLU"));
         assert_eq!(short_hive("HKEY_USERS").as_deref(), Some("HKLU"));
         assert_eq!(short_hive("HKLM\\Software"), None);
+    }
+
+    #[test]
+    fn a_user_sid_with_multi_byte_characters() {
+        // #1946: the SID scan never slices inside a character.
+        assert_eq!(
+            short_hive("HKEY_USERS\\S-1-5-21\\é").as_deref(),
+            Some("HKU")
+        );
+        assert_eq!(short_hive("HKEY_USERS\\S-1-5é").as_deref(), Some("HKLU"));
+        assert_eq!(short_hive("HKEY_USERS\\S-é").as_deref(), Some("HKLU"));
+        assert_eq!(short_hive("HKEY_USERS\\S-1-😀").as_deref(), Some("HKLU"));
+        assert_eq!(short_hive("HKEY_USERS\\s-1-5").as_deref(), Some("HKU"));
     }
 }

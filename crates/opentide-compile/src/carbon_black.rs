@@ -80,11 +80,11 @@ pub fn report(
     let mut tags: Vec<String> = vec![status.to_owned()];
     if let Some(model) = deploy::rule_value(rule, &["detection_model"]).filter(|m| m.is_name()) {
         let techniques = deploy::inherited_techniques(cx, DISPLAY, rule)?;
-        tags.push(deploy::text(model));
+        tags.push(Json::to_text(model));
         tags.extend(techniques);
     }
     if let Some(Json::Array(items)) = block.get("tags") {
-        tags.extend(items.iter().map(deploy::text));
+        tags.extend(items.iter().map(Json::to_text));
     }
     let alert_severity = if rule.response().is_some() {
         rule.alert_severity()
@@ -106,12 +106,12 @@ pub fn report(
             .filter(|value| value.is_filled())
             .or_else(|| deploy::setup(tenant, "watchlist"))
             .filter(|value| value.is_filled())
-            .map(deploy::text)
+            .map(Json::to_text)
             .unwrap_or_default(),
         report: block
             .get("report")
             .filter(|value| value.is_filled())
-            .map_or_else(|| name.clone(), deploy::text),
+            .map_or_else(|| name.clone(), Json::to_text),
         name,
     }))
 }
@@ -155,11 +155,11 @@ pub fn compile(
     let mut tags: Vec<String> = vec![status.to_owned()];
     if let Some(model) = deploy::rule_value(rule, &["detection_model"]).filter(|m| m.is_name()) {
         let techniques = deploy::inherited_techniques(cx, DISPLAY, rule)?;
-        tags.push(deploy::text(model));
+        tags.push(Json::to_text(model));
         tags.extend(techniques);
     }
     if let Some(Json::Array(items)) = block.get("tags") {
-        tags.extend(items.iter().map(deploy::text));
+        tags.extend(items.iter().map(Json::to_text));
     }
     let alert_severity = if rule.response().is_some() {
         rule.alert_severity()
@@ -172,12 +172,12 @@ pub fn compile(
         .filter(|value| value.is_filled())
         .or_else(|| deploy::setup(tenant, "watchlist"))
         .filter(|value| value.is_filled())
-        .map(deploy::text)
+        .map(Json::to_text)
         .unwrap_or_default();
     let report = block
         .get("report")
         .filter(|value| value.is_filled())
-        .map_or_else(|| name.to_owned(), deploy::text);
+        .map_or_else(|| name.to_owned(), Json::to_text);
     if watchlist.is_empty() {
         return Err(CompileError::failed(
             DISPLAY,

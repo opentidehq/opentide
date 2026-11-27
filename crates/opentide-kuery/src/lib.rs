@@ -154,6 +154,31 @@ pub fn analyze(source: &str, lucene_parses: fn(&str) -> bool) -> AnalyzeResult {
     }
 }
 
+/// The Kibana KQL [`QueryEngine`](opentide_highlight::QueryEngine) (#1953).
+///
+/// The engine tells a Lucene query from a Kibana one partly by whether the
+/// Lucene grammar accepts it, and Lucene sits above this crate: the registry
+/// passes [`Engine::lucene_parses`], as [`analyze`]'s callers do.
+#[derive(Debug, Clone, Copy)]
+pub struct Engine {
+    /// Whether the Lucene grammar accepts a query (`opentide_lucene::parses`).
+    pub lucene_parses: fn(&str) -> bool,
+}
+
+impl opentide_highlight::QueryEngine for Engine {
+    fn language(&self) -> opentide_core::LanguageId {
+        opentide_core::LanguageId::Kuery
+    }
+
+    fn analyze(&self, source: &str) -> opentide_highlight::AnalyzeResult {
+        let r = analyze(source, self.lucene_parses);
+        opentide_highlight::AnalyzeResult {
+            diagnostics: r.diagnostics,
+            tokens: r.tokens,
+        }
+    }
+}
+
 /// The first syntax error, in words: what is missing or which rule was
 /// broken. (Kibana's own text, `Expected AND, OR, or end of input but ":"
 /// found.`, comes from its PEG parser's furthest failure.)

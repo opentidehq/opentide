@@ -301,6 +301,16 @@ impl Json {
         }
     }
 
+    /// The value as text, where a value goes into a message or a field that
+    /// holds text: a string as it is, anything else as its compact JSON
+    /// (`null`, `true`, `42`, `1.5`, `["a",1]`). The one copy (#1957).
+    pub fn to_text(&self) -> String {
+        match self {
+            Json::Str(text) => text.clone(),
+            other => other.to_compact(),
+        }
+    }
+
     /// The value as serde_json writes it on one line, UTF-8 as is.
     pub fn to_compact(&self) -> String {
         // Writing into memory cannot fail: every key is a string, and a float
@@ -571,6 +581,21 @@ impl<'de> Visitor<'de> for JsonVisitor {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A string is its own text, unquoted and unescaped; anything else is
+    /// its compact JSON, UTF-8 as is (#1957).
+    #[test]
+    fn a_string_is_its_own_text_and_anything_else_its_json() {
+        assert_eq!(Json::Str("é \"😀\"\n".into()).to_text(), "é \"😀\"\n");
+        assert_eq!(Json::Str(String::new()).to_text(), "");
+        assert_eq!(Json::Null.to_text(), "null");
+        assert_eq!(Json::Bool(true).to_text(), "true");
+        assert_eq!(Json::Int(-42).to_text(), "-42");
+        assert_eq!(Json::Float(1.5).to_text(), "1.5");
+        let value =
+            Json::parse(r#"{"é": ["😀", 1, null, true, 1.5], "a": {}}"#).unwrap_or(Json::Null);
+        assert_eq!(value.to_text(), r#"{"é":["😀",1,null,true,1.5],"a":{}}"#);
+    }
 
     /// A float written and read back is the same float, bit for bit, as a
     /// `Deployer`'s body is (written with `to_compact`, read with

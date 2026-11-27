@@ -84,14 +84,6 @@ fn infer_type(body: &Json) -> Option<String> {
     }
 }
 
-/// A JSON value as text: a string as it is, anything else as its JSON.
-fn text(value: &Json) -> String {
-    match value {
-        Json::Str(text) => text.clone(),
-        other => other.to_compact(),
-    }
-}
-
 /// A rule's deployment status (`_status`): `PRODUCTION` when one platform
 /// says so, else `STAGING`, else the first platform's.
 fn status(body: &Json) -> Json {
@@ -101,7 +93,7 @@ fn status(body: &Json) -> Json {
         .map(|configuration| {
             configuration
                 .get("status")
-                .map(text)
+                .map(Json::to_text)
                 .unwrap_or_default()
                 .to_uppercase()
         })
@@ -213,7 +205,7 @@ fn staging_index(rules: &Object) -> Json {
         for (platform, configuration) in section(body, "configurations").into_iter().flatten() {
             let status = configuration
                 .get("status")
-                .map_or_else(|| "UNKNOWN".to_owned(), text)
+                .map_or_else(|| "UNKNOWN".to_owned(), Json::to_text)
                 .to_uppercase();
             let counts = summary.entry(platform.clone()).or_insert([0; 3]);
             match status.as_str() {
@@ -270,7 +262,7 @@ fn chaining(threats: &Object) -> Json {
         else {
             continue;
         };
-        let relations = chains.entry(text(uuid)).or_default();
+        let relations = chains.entry(uuid.to_text()).or_default();
         for link in links {
             let (Some(relation), Some(vector)) = (
                 link.get("relation").filter(|value| value.is_name()),
@@ -278,7 +270,7 @@ fn chaining(threats: &Object) -> Json {
             ) else {
                 continue;
             };
-            let vectors = relations.entry(text(relation)).or_default();
+            let vectors = relations.entry(relation.to_text()).or_default();
             if !vectors.contains(vector) {
                 vectors.push(vector.clone());
             }

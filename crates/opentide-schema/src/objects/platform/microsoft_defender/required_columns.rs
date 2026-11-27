@@ -76,17 +76,17 @@ pub fn defender_xdr_tables_in_query(query: &str) -> Vec<String> {
     let query = kql_code(query);
     let mut tables: Vec<String> = Vec::new();
     let preceded_ok = |at: usize| {
-        query[..at]
-            .chars()
-            .next_back()
-            .is_none_or(|c| !is_word(c) && c != '.')
+        query.get(..at).is_some_and(|head| {
+            head.chars()
+                .next_back()
+                .is_none_or(|c| !is_word(c) && c != '.')
+        })
     };
     for (table, _) in DEFENDER_XDR_TABLES {
         let found = query.match_indices(table).any(|(at, _)| {
-            let followed_ok = query[at + table.len()..]
-                .chars()
-                .next()
-                .is_none_or(|c| !is_word(c));
+            let followed_ok = query
+                .get(at + table.len()..)
+                .is_some_and(|rest| rest.chars().next().is_none_or(|c| !is_word(c)));
             preceded_ok(at) && followed_ok
         });
         if found {
@@ -94,17 +94,22 @@ pub fn defender_xdr_tables_in_query(query: &str) -> Vec<String> {
         }
     }
     let mut from = 0;
-    while let Some(offset) = query[from..].find("Observation") {
+    while let Some(offset) = query.get(from..).and_then(|rest| rest.find("Observation")) {
         let at = from + offset;
-        let rest = &query[at + "Observation".len()..];
+        let rest = query.get(at + "Observation".len()..).unwrap_or_default();
         let tail: usize = rest
             .chars()
             .take_while(|&c| is_word(c))
             .map(char::len_utf8)
             .sum();
         if preceded_ok(at) && tail > 0 {
-            let name = &query[at..at + "Observation".len() + tail];
-            if name != "ObservationId" && !tables.iter().any(|known| known == name) {
+            let name = query
+                .get(at..at + "Observation".len() + tail)
+                .unwrap_or_default();
+            if !name.is_empty()
+                && name != "ObservationId"
+                && !tables.iter().any(|known| known == name)
+            {
                 tables.push(name.to_owned());
             }
             from = at + "Observation".len() + tail;
@@ -313,6 +318,18 @@ mod tests {
                 "ReportId",
                 "AccountObjectId or AccountSid or AccountUpn or DeviceId or DeviceName or InitiatingProcessAccountObjectId or InitiatingProcessAccountSid or InitiatingProcessAccountUpn or RecipientEmailAddress or RecipientObjectId or RemoteDeviceName or SenderFromAddress or SenderMailFromAddress or SenderObjectId"
             ]
+        );
+    }
+
+    #[test]
+    fn multi_byte_words_around_table_names() {
+        // #1946: the word-boundary checks and the `Observation*` scan never
+        // slice inside a character.
+        assert_eq!(
+            defender_xdr_tables_in_query(
+                "é DeviceEvents | union ObservationÉ, Observation😀, éDeviceInfo, DeviceLogonEventsé"
+            ),
+            ["DeviceEvents", "ObservationÉ"]
         );
     }
 }

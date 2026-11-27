@@ -1086,10 +1086,11 @@ fn sentence(root: Option<&Node>, location: &str, message: &str, count: usize) ->
     } else {
         location
     };
-    let mut message = message.to_owned();
-    if let Some(head) = message.chars().next() {
-        message = head.to_lowercase().collect::<String>() + &message[head.len_utf8()..];
-    }
+    let mut rest = message.chars();
+    let message = match rest.next() {
+        Some(head) => head.to_lowercase().collect::<String>() + rest.as_str(),
+        None => String::new(),
+    };
     let more = if count > 1 {
         format!(" (and {} more)", count - 1)
     } else {
@@ -1291,5 +1292,17 @@ mod tests {
             chain_target(&entry(&[("vector", ""), ("relation", "r")])),
             None
         );
+    }
+
+    #[test]
+    fn the_sentence_lowers_a_multi_byte_first_letter() {
+        // #1946: the first character is split off whole.
+        assert_eq!(
+            sentence(None, "", "École 😀", 2),
+            "an object does not validate: the object: école 😀 (and 1 more); \
+             opentide validate shows each finding"
+        );
+        assert!(sentence(None, "x", "😀 é", 1).contains(": x: 😀 é;"));
+        assert!(sentence(None, "x", "", 1).contains(": x: ;"));
     }
 }

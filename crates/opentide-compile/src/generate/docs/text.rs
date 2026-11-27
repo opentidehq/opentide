@@ -4,6 +4,9 @@
 //! turn them into Markdown that renders the same on every flavour: no raw
 //! newlines inside table cells, no unescaped pipes, code spans that hold
 //! backticks.
+//!
+//! [`code_span`] and [`markdown_lines`] are the one copy for every place
+//! that writes Markdown, the command line's job summaries included (#1957).
 
 /// Whitespace runs collapsed to one space, the ends trimmed.
 pub fn collapse(text: &str) -> String {
@@ -36,17 +39,20 @@ pub fn escape_pipes(text: &str) -> String {
 pub fn markdown_text(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     let mut rest = text;
-    while let Some(c) = rest.chars().next() {
+    loop {
+        let mut chars = rest.chars();
+        let Some(c) = chars.next() else {
+            break;
+        };
         if c == '`' {
-            let run = rest.len() - rest.trim_start_matches('`').len();
-            if let Some(end) = closing_run(&rest[run..], run) {
-                let span = run + end + run;
-                out.push_str(&rest[..span]);
-                rest = &rest[span..];
-            } else {
-                // No closing run: the backticks are text, as CommonMark reads them.
-                out.push_str(&rest[..run]);
-                rest = &rest[run..];
+            let after = rest.trim_start_matches('`');
+            let run = rest.len() - after.len();
+            out.extend(std::iter::repeat_n('`', run));
+            rest = after;
+            // No closing run: the backticks are text, as CommonMark reads them.
+            if let Some((code, tail)) = closing_code_span(after, run) {
+                out.push_str(code);
+                rest = tail;
             }
             continue;
         }
@@ -54,21 +60,24 @@ pub fn markdown_text(text: &str) -> String {
             out.push('\\');
         }
         out.push(c);
-        rest = &rest[c.len_utf8()..];
+        rest = chars.as_str();
     }
     out
 }
 
-/// Where in `text` a run of exactly `length` backticks starts.
-fn closing_run(text: &str, length: usize) -> Option<usize> {
-    let mut at = 0;
-    while let Some(found) = text[at..].find('`') {
-        let start = at + found;
-        let run = text[start..].len() - text[start..].trim_start_matches('`').len();
-        if run == length {
-            return Some(start);
+/// `text` cut after the first run of exactly `length` backticks: the code and
+/// that closing run, then what follows; `None` when no run closes the span.
+fn closing_code_span(text: &str, length: usize) -> Option<(&str, &str)> {
+    let mut searched = text;
+    while let Some((_, run_on)) = searched.split_once('`') {
+        let tail = run_on.trim_start_matches('`');
+        if run_on.len() - tail.len() + 1 == length {
+            // `tail` is a suffix of `text`, so the cut is on a char boundary.
+            let cut = text.len() - tail.len();
+            debug_assert!(text.is_char_boundary(cut), "{text:?} cut at {cut}");
+            return text.split_at_checked(cut);
         }
-        at = start + run;
+        searched = tail;
     }
     None
 }
@@ -79,13 +88,21 @@ pub fn table_cell(text: &str) -> String {
     if out.is_empty() { "-".to_owned() } else { out }
 }
 
-/// `text` as a code span, the fence widened when the text holds backticks;
-/// empty when the text is.
+/// `text` as a code span, its white space collapsed ([`code_span`]); empty
+/// when the text is.
 pub fn inline_code(text: &str) -> String {
     let text = collapse(text);
     if text.is_empty() {
         return String::new();
     }
+    code_span(&text)
+}
+
+/// `text` as a code span, as it is: fenced with a run of backticks longer
+/// than any it holds, and padded with a space inside the fence when it
+/// starts or ends with a backtick, which would otherwise join the fence.
+/// Nothing in it is escaped.
+pub fn code_span(text: &str) -> String {
     let mut fence = "`".to_owned();
     while text.contains(&fence) {
         fence.push('`');
@@ -98,17 +115,25 @@ pub fn inline_code(text: &str) -> String {
     format!("{fence}{padding}{text}{padding}{fence}")
 }
 
+/// The lines of `text` as Markdown reads them: a line ends at `\n`, `\r\n`
+/// or a lone `\r` (CommonMark). A writer that must keep text on one line, a
+/// table cell, joins these.
+pub fn markdown_lines(text: &str) -> impl Iterator<Item = &str> {
+    text.lines().flat_map(|line| line.split('\r'))
+}
+
 /// `text` without ATT&CK's inline `(Citation: …)` markers, and the blanks
 /// before each.
 pub fn strip_citations(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     let mut rest = text;
-    while let Some(at) = rest.find("(Citation:") {
-        let Some(end) = rest[at..].find(')') else {
+    while let Some((before, marker)) = rest.split_once("(Citation:") {
+        // An unclosed marker is text.
+        let Some((_, after)) = marker.split_once(')') else {
             break;
         };
-        out.push_str(rest[..at].trim_end());
-        rest = &rest[at + end + 1..];
+        out.push_str(before.trim_end());
+        rest = after;
     }
     out.push_str(rest);
     out
@@ -146,6 +171,10 @@ pub fn first_sentence(text: &str, limit: usize) -> String {
         if matches!(before, '.' | '!' | '?')
             && after.is_some_and(|c| c.is_ascii_uppercase() || c == '[' || c == '(')
         {
+            #[expect(
+                clippy::string_slice,
+                reason = "`at` is a `char_indices` offset, so a char boundary"
+            )]
             let candidate = &collapsed[..at];
             if ends_with_abbreviation(candidate) {
                 continue;
@@ -164,10 +193,7 @@ pub fn truncate(text: &str, limit: usize) -> String {
         return collapsed;
     }
     let cut: String = collapsed.chars().take(limit.saturating_sub(1)).collect();
-    let cut = match cut.rfind(' ') {
-        Some(at) => &cut[..at],
-        None => cut.as_str(),
-    };
+    let cut = cut.rsplit_once(' ').map_or(cut.as_str(), |(head, _)| head);
     format!("{}…", cut.trim_end_matches([' ', ',', ';', ':']))
 }
 
@@ -272,6 +298,8 @@ mod tests {
         assert_eq!(inline_code("`a`"), "`` `a` ``");
         assert_eq!(inline_code(" \n "), "");
         assert_eq!(inline_code("a\n  b"), "`a b`");
+        assert_eq!(inline_code("é ``😀"), "```é ``😀```");
+        assert_eq!(inline_code("😀`"), "`` 😀` ``");
     }
 
     #[test]
@@ -314,5 +342,26 @@ mod tests {
         assert_eq!(join_lines(["a", "", "b"]), "a<br>b");
         assert_eq!(join(["\na\n\n", " ", "", "b\n"]), "a\n\nb");
         assert_eq!(title_case("a-b c"), "A-B C");
+    }
+
+    #[test]
+    fn multi_byte_text_is_never_cut_inside_a_character() {
+        // #1946: code spans, citations, sentences and truncation.
+        assert_eq!(
+            markdown_text("`é[` [😀] ``a`é`` é"),
+            "`é[` \\[😀\\] ``a`é`` é"
+        );
+        assert_eq!(markdown_text("``é`"), "``é`");
+        assert_eq!(markdown_text("😀`"), "😀`");
+        assert_eq!(
+            strip_citations("Één (Citation: 😀) deux (Citation: é"),
+            "Één deux (Citation: é"
+        );
+        assert_eq!(truncate("ééé 😀😀 ààà", 6), "ééé…");
+        assert_eq!(truncate("😀😀😀😀😀😀😀", 4), "😀😀😀…");
+        assert_eq!(
+            first_sentence("Été chaud. Le 😀 dort. Fin", 100),
+            "Été chaud."
+        );
     }
 }

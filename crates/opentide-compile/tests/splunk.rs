@@ -130,10 +130,7 @@ fn settings_at(block: &str, clock: Option<splunk::Clock>) -> Object {
 }
 
 fn text(body: &Object, key: &str) -> Option<String> {
-    body.get(key).map(|value| match value {
-        Json::Str(text) => text.clone(),
-        other => other.to_compact(),
-    })
+    body.get(key).map(Json::to_text)
 }
 
 #[test]

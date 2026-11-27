@@ -8,6 +8,7 @@
 
 use super::diagnostic::{Diagnostic, sort_diagnostics};
 use crate::json::{Json, Object};
+use opentide_compile::generate::docs::text::{code_span, markdown_lines};
 use std::sync::LazyLock;
 
 /// The generated reference of diagnostic codes; `#<code>` is each one's section.
@@ -64,9 +65,7 @@ pub fn cell(value: &str) -> String {
         .collect();
     // Markdown ends a line at `\n`, `\r\n` and a lone `\r`: each would end
     // the table row.
-    let joined = escaped
-        .lines()
-        .flat_map(|line| line.split('\r'))
+    let joined = markdown_lines(&escaped)
         .map(str::trim)
         .collect::<Vec<_>>()
         .join("<br>");
@@ -80,17 +79,7 @@ pub fn cell(value: &str) -> String {
 /// `value` as inline code, fenced with more backticks than it contains; only
 /// `|` is escaped (a table splits cells before it reads code spans).
 pub fn code(value: &str) -> String {
-    let text = value.replace('|', "\\|");
-    let mut fence = "`".to_owned();
-    while text.contains(&fence) {
-        fence.push('`');
-    }
-    let padded = if text.starts_with('`') || text.ends_with('`') {
-        format!(" {text} ")
-    } else {
-        text
-    };
-    format!("{fence}{padded}{fence}")
+    code_span(&value.replace('|', "\\|"))
 }
 
 /// `### ✓ opentide validate`; `kind` is `ok`, `failed`, `warning` or `skipped`.
@@ -554,6 +543,9 @@ mod tests {
         assert_eq!(code("a`"), "`` a` ``");
         assert_eq!(code("`a"), "`` `a ``");
         assert_eq!(code("a"), "`a`");
+        assert_eq!(code(""), "``");
+        assert_eq!(code("é|😀"), "`é\\|😀`");
+        assert_eq!(cell("é\r😀|`"), "é<br>😀\\|\\`");
     }
 
     #[test]

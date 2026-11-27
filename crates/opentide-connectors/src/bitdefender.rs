@@ -1,8 +1,7 @@
 //! Bitdefender GravityZone (bitdefender-1.0, Deploy): custom detection rules
 //! through the Incidents API, JSON-RPC 2.0 at `<url>/v1.0/jsonrpc/incidents`.
 //!
-//! A port of 0.28.0's `platforms/bitdefender/client.py` and of `deployer.py`,
-//! rule by rule and request for request:
+//! How the client speaks to GravityZone, rule by rule:
 //!
 //! - Every request is a `POST` with a fresh string `id`. A personal API key
 //!   is HTTP Basic (the key as user name), a service key the `X-API-Key`
@@ -456,7 +455,7 @@ impl<'a> Client<'a> {
             let message = error
                 .get("message")
                 .filter(|message| message.is_filled())
-                .map(|message| credentials.mask_text(&crate::text::json_text(message)))
+                .map(|message| credentials.mask_text(&Json::to_text(message)))
                 .unwrap_or_default();
             return match code {
                 Some(TOO_MANY_REQUESTS) => Ok(Attempt::RateLimited(retry_after)),
@@ -498,7 +497,7 @@ fn details(data: Option<&Json>) -> Option<String> {
         Json::Object(data) => data
             .get("details")
             .filter(|details| !details.is_null())
-            .map(crate::text::json_text),
+            .map(Json::to_text),
         Json::Str(text) => Some(text.clone()),
         _ => None,
     }
