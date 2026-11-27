@@ -54,6 +54,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Eac
   - a baseline commit, tree or file git cannot read, which made a folder look empty or a committed file look new
   - an object folder or file in the work tree that cannot be read, whose committed files looked deleted
 - **`validate` compares Exabeam rule names as deploy does.** `exabeam_name_duplicate` grouped names by lowercase while deploy matches them under full Unicode case folding, so two enabled rules named `ﬁle Access` and `file access` (or `Straße` and `STRASSE`) passed `validate` and the second deploy failed with `exabeam_name_conflict`. `validate` now folds names the same way ([#1983](https://github.com/opentidehq/opentide/issues/1983)).
+- **Graylog refuses a duration too long to deploy instead of writing a saturated one.** `schedule.every: 9223372036854776s` passed `validate` and deploy wrote `execute_every_ms: 9223372036854775807` into the event definition. `schedule.every`, `schedule.window` and `grace_period` now take at most 9,223,372,036,854,775 seconds (the most whose milliseconds the payload's integer holds): `validate` reports a longer one (`graylog_schedule`, or a `schema_validation` error on `grace_period`), and deploy refuses the rule (`compile_invalid_rule`) naming the field, as it does for Splunk ([#2005](https://github.com/opentidehq/opentide/issues/2005)).
 
 ## [1.1.0] — 2026-11-26
 
