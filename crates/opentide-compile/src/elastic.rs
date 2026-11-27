@@ -16,6 +16,7 @@ use crate::json::{Json, Object};
 use crate::rule::{CompileError, Rule, codes};
 use crate::strategy::StatusStrategy;
 use opentide_core::duration::{ELASTIC_MAX_SECONDS, duration_seconds};
+use opentide_core::text;
 
 /// The platform's display name, in messages.
 pub const DISPLAY: &str = "Elastic";
@@ -205,10 +206,7 @@ fn failed(message: String) -> CompileError {
 
 /// The phrase filter of the `field`/`value` shorthand.
 fn phrase(field: &Json, value: &Json, negate: bool) -> Json {
-    let field_name = match field {
-        Json::Str(text) => text.clone(),
-        other => other.to_compact(),
-    };
+    let field_name = field.to_text();
     let mut params = Object::new();
     params.insert("query".into(), value.clone());
     let mut meta = Object::new();
@@ -383,24 +381,9 @@ pub fn is_marker_tag(tag: &str) -> bool {
     tag == MARKER_TAG || tag == LEGACY_MARKER_TAG
 }
 
-/// Pushes each string not already there.
-fn extend_unique(into: &mut Vec<String>, items: impl IntoIterator<Item = String>) {
-    for item in items {
-        if !into.contains(&item) {
-            into.push(item);
-        }
-    }
-}
-
 fn strings(value: Option<&Json>) -> Vec<String> {
     match value {
-        Some(Json::Array(items)) => items
-            .iter()
-            .map(|item| match item {
-                Json::Str(text) => text.clone(),
-                other => other.to_compact(),
-            })
-            .collect(),
+        Some(Json::Array(items)) => items.iter().map(Json::to_text).collect(),
         _ => Vec::new(),
     }
 }
@@ -811,24 +794,22 @@ pub fn compile(cx: &Context<'_>, rule: &Rule, setup: &Setup) -> Result<Json, Com
             body.insert("exceptions_list".into(), Json::Array(lists));
         }
     }
-    let mut tags = vec![MARKER_TAG.to_owned()];
-    extend_unique(&mut tags, setup.tags.iter().cloned());
-    extend_unique(&mut tags, strings(get(block, "tags")));
+    let tags = text::unique(
+        std::iter::once(MARKER_TAG.to_owned())
+            .chain(setup.tags.iter().cloned())
+            .chain(strings(get(block, "tags"))),
+    );
     body.insert("tags".into(), tags.into());
 
     let metadata = rule.data.get("metadata");
-    let mut authors: Vec<String> = Vec::new();
     let author = metadata.and_then(|metadata| get(metadata, "author"));
     let contributors = strings(metadata.and_then(|metadata| get(metadata, "contributors")));
     let candidates = author
         .into_iter()
-        .map(|author| match author {
-            Json::Str(text) => text.clone(),
-            other => other.to_compact(),
-        })
+        .map(Json::to_text)
         .chain(contributors)
         .filter(|name| !name.is_empty());
-    extend_unique(&mut authors, candidates);
+    let authors = text::unique(candidates);
     if !authors.is_empty() {
         body.insert("author".into(), authors.into());
     }
@@ -859,10 +840,7 @@ pub fn compile(cx: &Context<'_>, rule: &Rule, setup: &Setup) -> Result<Json, Com
         .filter(|value| value.is_filled())
         .or(analysis);
     if let Some(note) = note {
-        let text = match note {
-            Json::Str(text) => text.clone(),
-            other => other.to_compact(),
-        };
+        let text = note.to_text();
         body.insert("note".into(), text.trim_end().into());
     }
     let threat = threat(cx, rule);
@@ -882,9 +860,7 @@ pub fn rule_techniques(cx: &Context<'_>, rule: &Rule) -> Vec<String> {
     {
         raw.extend(inherited);
     }
-    let mut unique = Vec::with_capacity(raw.len());
-    extend_unique(&mut unique, raw);
-    unique
+    text::unique(raw)
 }
 
 /// The `threat` array (`resolve_elastic_threat`): tactics in matrix order,

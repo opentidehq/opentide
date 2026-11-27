@@ -38,10 +38,11 @@ use tokio_util::sync::CancellationToken;
 use super::query::{
     Configured, default_host, http_settings, log_unset, toml_value, unset_credentials,
 };
+use super::result::CommandResult;
 use super::validate_query::{Args, COMMAND};
 use super::{Report, placement};
 use crate::env::Env;
-use crate::envelope::{Failure, NextAction, Outcome, code};
+use crate::envelope::code;
 use crate::json::{Json, Object};
 use crate::render::diagnostic::{Diagnostic, Severity};
 use crate::render::progress::{Progress, Step, StepStatus};
@@ -147,83 +148,10 @@ impl Live {
     }
 }
 
-/// The envelope of a service's result (`CommandResult.from_payload`):
-/// `message`, `status` and `warnings` leave the data, as do `_exit_code`,
-/// `_summary`, `_next_actions`, `_failure_code`, `_failure_argument` and
-/// `_failure_suggestion`; a run that failed or exits non-zero has a
-/// failure, with `error` (else the message) as its message.
+/// The envelope of a service's result built as keys in order, `_`-keys
+/// included ([`CommandResult::from_fields`]).
 pub fn report_of(command: &str, result: &[(String, Json)]) -> Report {
-    let take = |key: &str| result.iter().find(|(name, _)| name == key).map(|(_, v)| v);
-    let text = |key: &str| match take(key) {
-        Some(Json::Str(text)) => Some(text.clone()),
-        _ => None,
-    };
-    let exit_code = match take("_exit_code") {
-        Some(Json::Int(code)) => i32::try_from(*code).unwrap_or(1),
-        _ => 0,
-    };
-    let message = text("message").unwrap_or_else(|| "Completed successfully".to_owned());
-    let status = text("status").unwrap_or_else(|| "completed".to_owned());
-    let warnings: Vec<String> = match take("warnings") {
-        Some(Json::Array(items)) => items
-            .iter()
-            .map(|item| match item {
-                Json::Str(text) => text.clone(),
-                other => crate::json::document_text(other, false),
-            })
-            .collect(),
-        _ => Vec::new(),
-    };
-    let summary = match take("_summary") {
-        Some(Json::Object(members)) => members.clone().into_iter().collect(),
-        _ => Vec::new(),
-    };
-    let next_actions = match take("_next_actions") {
-        Some(Json::Array(items)) => items
-            .iter()
-            .map(|item| {
-                let field = |key: &str| item.get(key).and_then(Json::as_str).unwrap_or_default();
-                NextAction::new(field("command"), field("reason"))
-            })
-            .collect(),
-        _ => Vec::new(),
-    };
-    let ok = status != "failed";
-    let failure = (!ok || exit_code != 0).then(|| {
-        let default = match status.as_str() {
-            "issues" => super::ISSUES_FOUND,
-            "skipped" => "not_run",
-            _ => super::COMMAND_FAILED,
-        };
-        let failure_code = text("_failure_code").unwrap_or_else(|| default.to_owned());
-        let mut failure = Failure::new(
-            &failure_code,
-            text("error").unwrap_or_else(|| message.clone()),
-        );
-        failure.argument = text("_failure_argument");
-        failure.suggestion = text("_failure_suggestion");
-        failure
-    });
-    let data: Fields = result
-        .iter()
-        .filter(|(key, _)| {
-            !key.starts_with('_') && !matches!(key.as_str(), "message" | "status" | "warnings")
-        })
-        .cloned()
-        .collect();
-    let mut report = Report::completed(command, data);
-    report.outcome = Outcome {
-        command: command.to_owned(),
-        status,
-        message,
-        data: report.outcome.data,
-        exit_code,
-        summary,
-        next_actions,
-        failure,
-    };
-    report.warnings = warnings;
-    report
+    CommandResult::from_fields(result).report(command)
 }
 
 /// The keys every live result starts with.
@@ -876,7 +804,7 @@ fn system_name(config: &CJson, platform: &str) -> String {
         .and_then(|table| table.get("platform"))
         .and_then(|block| block.get("name"))
         .filter(|name| name.is_filled())
-        .map_or_else(|| platform.to_owned(), opentide_compile::deploy::text)
+        .map_or_else(|| platform.to_owned(), Json::to_text)
 }
 
 /// The strategies a run checked with and the queries it sends each tenant.
@@ -1175,10 +1103,7 @@ pub(crate) fn block_strategy(
     cx: &opentide_compile::Context<'_>,
 ) -> Result<(CJson, StatusStrategy), String> {
     let block = rule.block(platform).cloned().unwrap_or(CJson::Null);
-    let status = block
-        .get("status")
-        .map(opentide_compile::deploy::text)
-        .unwrap_or_default();
+    let status = block.get("status").map(Json::to_text).unwrap_or_default();
     let strategy = cx.statuses.strategy(&status).map_err(|error| match error {
         strategy::StatusError::Invalid(message) => message,
         other @ strategy::StatusError::Unknown(_) => other.to_string(),
@@ -1603,7 +1528,7 @@ fn timeout_text(reason: &str, timeout: f64) -> String {
 
 /// The address an unreachable tenant is reported at (`LiveQueryValidator.host`).
 fn tenant_host(platform: &str, tenant: &Configured) -> String {
-    let text = |key: &str| tenant.setup.get(key).map(opentide_compile::deploy::text);
+    let text = |key: &str| tenant.setup.get(key).map(Json::to_text);
     if platform == "splunk" {
         let url = text("url").unwrap_or_default();
         return match text("port") {
@@ -2765,7 +2690,7 @@ fn log_advisory(code: &str, rule: &str, block: &CJson, tenant: &str, uuid: &str,
         scheduling
             .and_then(|s| s.get(key))
             .filter(|value| !value.is_null())
-            .map_or_else(|| default.to_owned(), opentide_compile::deploy::text)
+            .map_or_else(|| default.to_owned(), Json::to_text)
     };
     let interval = text("interval", "5m");
     let lookback = text("lookback", "1m");
@@ -2835,10 +2760,7 @@ fn log_advisory(code: &str, rule: &str, block: &CJson, tenant: &str, uuid: &str,
             );
         }
         "eql_maxspan_window" | "eql_maxspan_lookback" => {
-            let query = block
-                .get("query")
-                .map(opentide_compile::deploy::text)
-                .unwrap_or_default();
+            let query = block.get("query").map(Json::to_text).unwrap_or_default();
             let maxspan = opentide_connectors::elastic::eql_maxspan(&query)
                 .map(|(text, _)| text)
                 .unwrap_or_default();
@@ -2913,7 +2835,10 @@ async fn elastic_rule(
     let Some(raw) = rule.block("elastic") else {
         return Ok(());
     };
-    let block = opentide_compile::preview::config_dump("elastic", raw);
+    let block = opentide_compile::preview::config_dump(
+        opentide_schema::platforms::PlatformId::Elastic,
+        raw,
+    );
     let setup = opentide_compile::elastic::Setup::from_tenant(&batch.table);
     let payload = opentide_compile::elastic::compile(compile, rule, &setup)
         .map_err(|error| RuleFailure::Other(Early::Crashed(format!("CompileError: {error}"))))?;
@@ -2983,7 +2908,7 @@ async fn elastic_rule(
         for entry in logs.iter().filter(|entry| entry.as_object().is_some()) {
             if let Some(CJson::Array(items)) = entry.get("warnings") {
                 for item in items {
-                    let warning = opentide_connectors::text::json_text(item);
+                    let warning = Json::to_text(item);
                     tracing::warn!(
                         rule = rule.name.as_str(),
                         warning = warning.as_str(),
@@ -2994,7 +2919,7 @@ async fn elastic_rule(
             }
             if let Some(CJson::Array(items)) = entry.get("errors") {
                 for item in items {
-                    let error = opentide_connectors::text::json_text(item);
+                    let error = Json::to_text(item);
                     if error.contains("preview-index") || error.contains("preview.alerts") {
                         return Err(RuleFailure::Tenant(format!(
                             "Tenant configuration error: missing preview-index privilege ({error})"

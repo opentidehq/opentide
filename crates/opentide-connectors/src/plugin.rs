@@ -17,6 +17,8 @@
 
 use crate::connector::{Platform, Registry};
 
+pub mod host;
+
 /// The entry-point group plugins register in.
 pub const ENTRY_POINT_GROUP: &str = "opentide.platforms";
 

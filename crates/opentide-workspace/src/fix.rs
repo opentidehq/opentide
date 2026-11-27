@@ -1,5 +1,5 @@
 //! `validate --fix`: the safe edits of the findings, applied as text splices
-//! (`cli/ui/fixes.py`, UC-2.3 #818).
+//! (UC-2.3, #818).
 //!
 //! An edit replaces the text from (`line`, `column`) up to (`end_line`,
 //! `end_column`) and keeps every other byte of the file: comments, quoting,
@@ -532,7 +532,7 @@ pub fn validate_command(
             words.extend([flag, value.as_str()]);
         }
     }
-    shlex::try_join(words).unwrap_or_default()
+    opentide_core::text::shell_line(words)
 }
 
 /// `apply 1 safe fix`, `apply 3 safe fixes`.
@@ -545,8 +545,7 @@ pub fn apply_reason(count: usize) -> String {
 }
 
 /// `Fixed 3 values in 2 files`, `Would fix 1 value in 1 file`, `No safe fix
-/// to apply`; `unwritten` counts the fixes whose file could not be written
-/// (`validation.py` `fix_phrase`).
+/// to apply`; `unwritten` counts the fixes whose file could not be written.
 pub fn fix_phrase(count: usize, files: usize, dry_run: bool, unwritten: usize) -> String {
     let failed = if unwritten == 1 {
         format!("could not write {unwritten} fix")
@@ -861,6 +860,16 @@ mod tests {
         assert_eq!(
             fix_command(None, None, &crate::validate::Selection::default()),
             "opentide validate --fix"
+        );
+        // A value no shell can carry (a NUL, from an MCP call) is shown, not
+        // dropped with the rest of the command (#1957).
+        let selection = crate::validate::Selection {
+            files: vec!["é 😀.yaml".to_owned(), "a\0b.yaml".to_owned()],
+            ..crate::validate::Selection::default()
+        };
+        assert_eq!(
+            fix_command(None, None, &selection),
+            "opentide validate --fix --file 'é 😀.yaml' --file \"a\\0b.yaml\""
         );
         assert_eq!(apply_reason(1), "apply 1 safe fix");
         assert_eq!(apply_reason(2), "apply 2 safe fixes");

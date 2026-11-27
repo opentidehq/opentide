@@ -104,6 +104,27 @@ pub fn analyze(source: &str) -> AnalyzeResult {
     analyze_dialect(source, Dialect::Elastic)
 }
 
+/// The Lucene query string [`QueryEngine`](opentide_highlight::QueryEngine) (#1953):
+/// [`analyze`] behind the shared interface.
+///
+/// Elastic's dialect, the default.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Engine;
+
+impl opentide_highlight::QueryEngine for Engine {
+    fn language(&self) -> opentide_core::LanguageId {
+        opentide_core::LanguageId::Lucene
+    }
+
+    fn analyze(&self, source: &str) -> opentide_highlight::AnalyzeResult {
+        let r = analyze(source);
+        opentide_highlight::AnalyzeResult {
+            diagnostics: r.diagnostics,
+            tokens: r.tokens,
+        }
+    }
+}
+
 #[expect(
     clippy::expect_used,
     reason = "loads the HighlightSpec compiled in (highlights/spec.toml): a bad spec fails the tests, never a user's document"

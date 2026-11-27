@@ -1,7 +1,6 @@
 //! The Exabeam client's pure parts: the pacer on a paused clock, `Retry-After`,
 //! Exabeam's error bodies, the name check, the created id and the `SELECT`
-//! columns, ported from 0.28.0's `test_exabeam_deployer.py` and
-//! `test_exabeam_runner.py`.
+//! columns.
 
 use super::*;
 use tokio::time::Instant;
@@ -233,7 +232,7 @@ fn the_name_check_is_exact_and_case_insensitive() {
     let ids = |name: &str| -> Vec<String> {
         name_matches(&rules, name)
             .iter()
-            .map(|rule| rule.get("id").map(scalar_text).unwrap_or_default())
+            .map(|rule| rule.get("id").map(Json::to_text).unwrap_or_default())
             .collect()
     };
     assert_eq!(ids("failed logins"), ["1"]);
@@ -253,7 +252,7 @@ fn the_name_check_folds_case_fully() {
     let ids = |name: &str| -> Vec<String> {
         name_matches(&rules, name)
             .iter()
-            .map(|rule| rule.get("id").map(scalar_text).unwrap_or_default())
+            .map(|rule| rule.get("id").map(Json::to_text).unwrap_or_default())
             .collect()
     };
     assert_eq!(ids("FILE ACCESS 😀"), ["1"]);

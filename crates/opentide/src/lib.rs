@@ -46,7 +46,7 @@
 //! | `cli-core` | no | `cli::main(argv)` and `cli::run_json(argv)` without the terminal UI and the `setup` wizard's prompts (`opentide tui` and the questions refuse, as under WASI); implies `compile` and `queries`. `cli` adds the terminal |
 //! | `lsp` | no | `lsp`: the language server, on stdio or one message at a time |
 //! | `connectors` | no | [`connectors`]: the tenants a workspace configures ([`Workspace::tenants`]), and on each a query run, a live query check and a rule deploy (async, on tokio); implies `compile` |
-//! | `plugins` | no | [`plugins`]: the platform plugin host a binding embeds to add platforms (the connectors' traits, [`plugins::set_host`]); implies `connectors`. Heavy |
+//! | `plugins` | no | [`plugins`]: the platform plugin host a binding embeds to add platforms (the connectors' traits, [`plugins::set_host`]); implies `connectors`, not the command line |
 //! | `python` | no | [`python`]: the Tide models as Python classes ([`python::register`]); brings PyO3 |
 //! | `stubs` | no | PyO3 introspection behind `python`, for `cargo xtask stubs` |
 //!

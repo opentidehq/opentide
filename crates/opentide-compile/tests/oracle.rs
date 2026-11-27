@@ -14,6 +14,7 @@ use std::sync::Arc;
 use opentide_compile::json::Json;
 use opentide_compile::preview::{self, Inputs};
 use opentide_compile::{CompileError, Owned, Rule, splunk};
+use opentide_schema::platforms::PlatformId;
 use opentide_schema::vocab::Vocabularies;
 use opentide_workspace::{FileSystem, Options, OsFs, RootOptions, Workspace};
 use serde_json::Value;
@@ -582,7 +583,10 @@ fn the_compile_corpus_compiles_as_the_oracle_compiles_it() {
     let faults = fault_approvals();
     let mut faulted = 0;
     let writes_classes = classes_of("writes");
-    let writes_preview = preview::deployers();
+    let writes_preview = preview::deployers()
+        .into_iter()
+        .map(PlatformId::as_str)
+        .collect::<Vec<_>>();
     let mut send_time = 0;
     let mut used = vec![false; approved.len()];
     let mut compared = 0;
@@ -632,7 +636,10 @@ fn the_compile_corpus_compiles_as_the_oracle_compiles_it() {
                 ));
             }
         };
-        if let Some(compiled) = preview::compile_offline(&cx, platform, &rule) {
+        // The corpus holds built-in platforms only: parsed once, here.
+        let platform_id = PlatformId::parse(platform)
+            .unwrap_or_else(|| panic!("{file}: {platform} is not built in"));
+        if let Some(compiled) = preview::compile_offline(&cx, platform_id, &rule) {
             check(
                 "compile".into(),
                 describe(&entry["compile"]),
@@ -658,7 +665,7 @@ fn the_compile_corpus_compiles_as_the_oracle_compiles_it() {
                 clock: Some(PROBE_CLOCK),
                 timestamp: Some(PROBE_TIMESTAMP),
             };
-            let compiled = preview::compile_tenant(&cx, platform, &rule, name, &inputs).unwrap();
+            let compiled = preview::compile_tenant(&cx, platform_id, &rule, name, &inputs);
             let mut mine = candidate(compiled.clone());
             // The `[[writes]]` classes: the writes as the oracle's probe
             // recorded them.
@@ -695,7 +702,7 @@ fn the_compile_corpus_compiles_as_the_oracle_compiles_it() {
                 }),
                 ..inputs
             };
-            let compiled = preview::compile_tenant(&cx, platform, &rule, name, &deployed).unwrap();
+            let compiled = preview::compile_tenant(&cx, platform_id, &rule, name, &deployed);
             sent.push((name.to_owned(), compiled));
         }
         if writes_preview.contains(&platform) {
@@ -849,7 +856,10 @@ fn a_dry_run_without_a_tenant_shows_the_writes_with_tenant_placeholders() {
     );
     let index = workspace.index().clone();
     let cx = owned.context(&index);
-    let deployers = preview::deployers();
+    let deployers = preview::deployers()
+        .into_iter()
+        .map(PlatformId::as_str)
+        .collect::<Vec<_>>();
     let mut seen: Vec<&str> = Vec::new();
     let mut shown_keys: Vec<String> = Vec::new();
     for entry in record["rules"].as_array().unwrap() {
@@ -980,7 +990,10 @@ fn the_documented_placeholders_are_those_a_dry_run_writes() {
     );
     let index = workspace.index().clone();
     let cx = owned.context(&index);
-    let deployers = preview::deployers();
+    let deployers = preview::deployers()
+        .into_iter()
+        .map(PlatformId::as_str)
+        .collect::<Vec<_>>();
     let mut written = std::collections::BTreeSet::new();
     for entry in record["rules"].as_array().unwrap() {
         let platform = entry["platform"].as_str().unwrap();

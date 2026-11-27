@@ -21,6 +21,7 @@ use opentide_workspace::validate::QueriesMode;
 use opentide_workspace::{FileSystem as _, OsFs, Workspace};
 
 use super::findings;
+use super::result::{CommandResult, ExitCode, FailureDetail};
 use super::{Block, ISSUES_FOUND, Report, Terminal, placement};
 use crate::env::Env;
 use crate::envelope::{Failure, NextAction, USAGE_EXIT_CODE, code};
@@ -462,27 +463,23 @@ pub const CHECK_TIMEOUT_ENV: &str = "OPENTIDE_QUERY_CHECK_TIMEOUT";
 /// What a `--live` run that names no `--platform` answers: a live check
 /// reads one platform's tenants, so the run is refused (exit 2,
 /// `usage_missing_option`), as `_validate_query_platform` refuses it. The
-/// result, keys in the oracle's order, `_`-keys included.
-pub fn live_without_platform() -> Vec<(String, Json)> {
-    vec![
+/// result's own keys are the live check's, in the oracle's order.
+pub fn live_without_platform() -> CommandResult {
+    let mut result = CommandResult::failed(
+        "--live checks one platform's tenants: pass --platform",
+        ExitCode::Usage,
+    );
+    result.failure = FailureDetail {
+        code: Some(code::USAGE_MISSING_OPTION.to_owned()),
+        argument: Some("--platform".to_owned()),
+        suggestion: None,
+    };
+    result.data = vec![
         ("platform".to_owned(), Json::Null),
         ("mode".to_owned(), Json::str("live")),
-        ("status".to_owned(), Json::str("failed")),
         ("supported".to_owned(), Json::Bool(true)),
-        (
-            "message".to_owned(),
-            Json::str("--live checks one platform's tenants: pass --platform"),
-        ),
-        (
-            "_exit_code".to_owned(),
-            Json::Int(i64::from(USAGE_EXIT_CODE)),
-        ),
-        (
-            "_failure_code".to_owned(),
-            Json::str(code::USAGE_MISSING_OPTION),
-        ),
-        ("_failure_argument".to_owned(), Json::str("--platform")),
-    ]
+    ];
+    result
 }
 
 /// One checked query: the rule or query file it is in, as shown and on disk.
@@ -1256,7 +1253,7 @@ fn rerun(args: &Args, queries: QueriesMode) -> String {
     if args.strict {
         words.push("--strict".into());
     }
-    shlex::try_join(words.iter().map(String::as_str)).unwrap_or_else(|_| words.join(" "))
+    opentide_core::text::shell_line(words.iter().map(String::as_str))
 }
 
 #[cfg(test)]

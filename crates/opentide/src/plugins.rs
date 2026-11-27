@@ -12,10 +12,9 @@
 //!
 //! This is the plugin-authoring surface, not the tenant operations a workspace
 //! configures; for those, see [`connectors`](crate::connectors). It brings the
-//! connectors and the command line, so it is behind its own feature.
+//! connectors (not the command line), so it is behind its own feature.
 
 pub use crate::connectors::Json;
-pub use opentide_cli::plugins::{configurations, set_host};
 pub use opentide_connectors::connector::{
     BoxFuture, ConfigurationCheck, ConfigurationFinding, DeployError, DeployEvent, DeployFailure,
     DeployOutcome, DeployRequest, DeployScope, DeployWarning, Deployer, LiveCheck, LiveValidator,
@@ -23,5 +22,6 @@ pub use opentide_connectors::connector::{
     TimeWindow, columns_of, deploying,
 };
 pub use opentide_connectors::credentials::Credential;
+pub use opentide_connectors::plugin::host::{configurations, set_host};
 pub use opentide_connectors::plugin::{ENTRY_POINT_GROUP, PluginError, PluginHost};
 pub use opentide_connectors::{ConnectorError, Tenant};

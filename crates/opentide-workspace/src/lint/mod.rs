@@ -1,4 +1,4 @@
-//! `opentide lint`: catalogue hygiene (`cli/services/lint.py`, UC-2.3 #818).
+//! `opentide lint`: catalogue hygiene (UC-2.3, #818).
 //!
 //! Every rule of `LINT_CODES`: a file that does not parse (`yaml_parse`), an
 //! object without a name (`name_missing`), a file name that is not the one
@@ -2209,7 +2209,7 @@ fn report(
         } else {
             format!(
                 " {}",
-                shlex::try_join(flags.iter().map(String::as_str)).unwrap_or_default()
+                opentide_core::text::shell_line(flags.iter().map(String::as_str))
             )
         };
         next_actions = vec![NextAction {

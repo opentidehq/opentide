@@ -18,6 +18,7 @@
 )]
 mod bitdefender;
 mod elastic;
+pub mod engines;
 mod falco;
 mod folded;
 mod google_secops;
@@ -517,9 +518,37 @@ impl TideObject {
 }
 
 /// One object of the workspace index: what its file says, read once per
-/// text.
+/// text. Its fields are read through [`IndexEntry`], shared: a clone is a
+/// reference count, so an index rebuilt after a keystroke copies none of
+/// the objects it keeps (#2002).
 #[derive(Debug, Clone)]
-pub struct IndexedObject {
+pub struct IndexedObject(Arc<IndexEntry>);
+
+impl IndexedObject {
+    /// The entry, shared from now on.
+    #[must_use]
+    pub fn new(entry: IndexEntry) -> Self {
+        Self(Arc::new(entry))
+    }
+
+    /// Whether `a` and `b` are one entry, not two equal ones.
+    #[must_use]
+    pub fn ptr_eq(a: &Self, b: &Self) -> bool {
+        Arc::ptr_eq(&a.0, &b.0)
+    }
+}
+
+impl std::ops::Deref for IndexedObject {
+    type Target = IndexEntry;
+
+    fn deref(&self) -> &IndexEntry {
+        &self.0
+    }
+}
+
+/// What an [`IndexedObject`] holds.
+#[derive(Debug)]
+pub struct IndexEntry {
     pub path: String,
     /// The schema family (`rule`, `objective`, `threat`).
     pub object_type: String,
@@ -549,7 +578,7 @@ impl IndexedObject {
     ) -> Self {
         let uuid = uuid.into();
         let refs = object_refs("", &body, &uuid);
-        Self {
+        Self::new(IndexEntry {
             path: path.into(),
             object_type: object_type.into(),
             name: name.into(),
@@ -563,7 +592,7 @@ impl IndexedObject {
             body,
             name_range: Range::point(0, 0),
             refs,
-        }
+        })
     }
 
     /// Whether the body names `uuid` (not as the object's own).
@@ -1588,7 +1617,7 @@ pub fn index_value(path: &str, source: &str, value: Arc<Node>) -> Option<Indexed
     let object_type = schema.split("::").next()?.to_string();
     let name = value.get("name")?.as_str().unwrap_or("").to_string();
     let refs = object_refs(source, &value, &uuid);
-    Some(IndexedObject {
+    Some(IndexedObject::new(IndexEntry {
         path: path.to_string(),
         object_type,
         name_range: name_range(source, &name),
@@ -1597,7 +1626,7 @@ pub fn index_value(path: &str, source: &str, value: Arc<Node>) -> Option<Indexed
         body: value,
         schema,
         refs,
-    })
+    }))
 }
 
 /// The `name` value's range on the key's line, else the key's, else the
@@ -1667,6 +1696,20 @@ mod tests {
     }
     use super::*;
     use opentide_core::codes;
+
+    /// #2002: an index rebuilt from the entries it kept copies none of them;
+    /// each clone is the same entry, with the same fields.
+    #[test]
+    fn a_cloned_index_entry_is_the_same_entry() {
+        let source = "name: Règle 😀\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000001\n  schema: rule::1.1\ndetection_model: 00000000-0000-4000-8002-000000000001\n";
+        let entry = index_object("objects/rules/r.yaml", source).unwrap();
+        let index: Arc<[IndexedObject]> = vec![entry.clone(), entry.clone()].into();
+        assert!(index.iter().all(|kept| IndexedObject::ptr_eq(kept, &entry)));
+        assert_eq!(index[0].name, "Règle 😀");
+        assert!(index[1].names("00000000-0000-4000-8002-000000000001"));
+        let twin = index_object("objects/rules/r.yaml", source).unwrap();
+        assert!(!IndexedObject::ptr_eq(&twin, &entry));
+    }
 
     /// The object checks are `opentide-workspace`'s `validate` (UC-2.6,
     /// #821): an object with a broken UUID, an unknown TLP, a dangling

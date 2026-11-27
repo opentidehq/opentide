@@ -34,7 +34,6 @@ use crate::connector::{
 use crate::entra::CredentialNames;
 use crate::error::ConnectorError;
 use crate::retry::RetryPolicy;
-use crate::text::json_text;
 use crate::token::TokenCache;
 use crate::{HttpSettings, Secret};
 
@@ -338,8 +337,8 @@ impl MicrosoftDefender {
                     let name = first_filled(column.get("name"), column.get("Name"));
                     let kind = first_filled(column.get("type"), column.get("Type"));
                     Some(QueryColumn {
-                        name: name.map_or_else(|| "null".to_owned(), json_text),
-                        kind: kind.map(json_text),
+                        name: name.map_or_else(|| "null".to_owned(), Json::to_text),
+                        kind: kind.map(Json::to_text),
                     })
                 })
                 .collect(),
@@ -415,7 +414,7 @@ fn error_body_value(answer: &Answer) -> Json {
 
 /// `str(_error_body(response))`.
 fn error_body(answer: &Answer) -> String {
-    json_text(&error_body_value(answer))
+    Json::to_text(&error_body_value(answer))
 }
 
 /// `str(_error_message(response))`: Graph's `error.message`, or the body.
@@ -426,7 +425,7 @@ fn error_message(answer: &Answer) -> String {
         .filter(|error| error.as_object().is_some())
         .and_then(|error| error.get("message"))
         .filter(|message| message.is_filled());
-    json_text(message.unwrap_or(&body))
+    Json::to_text(message.unwrap_or(&body))
 }
 
 /// `body.get(a, body.get(b, None))`.

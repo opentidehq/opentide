@@ -1,8 +1,7 @@
-//! Reading an object's fields by the role its model gives them
-//! (`core/object_fields.py`): ATT&CK techniques, threat actors and platform
-//! blocks live at different places in each family, and the places come from
-//! the models (`opentide_schema::objects::fields::role_paths`), never from a
-//! key list.
+//! Reading an object's fields by the role its model gives them: ATT&CK
+//! techniques, threat actors and platform blocks live at different places in
+//! each family, and the places come from the models
+//! (`opentide_schema::objects::fields::role_paths`), never from a key list.
 
 use std::collections::BTreeSet;
 

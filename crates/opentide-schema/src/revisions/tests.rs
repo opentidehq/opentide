@@ -262,7 +262,7 @@ fn an_unknown_revision_is_checked_against_the_newest_without_the_unknown_key_che
         "unknown schema identifier: \"rule::7.0\"; checked against rule::1.1, the \
          newest rule revision, without the unknown-key check"
     );
-    assert_eq!(errors[0].context["error"], errors[0].message["".len()..]);
+    assert_eq!(errors[0].context["error"], errors[0].message.as_str());
     assert_eq!(errors[0].code(crate::Surface::Object), "schema_validation");
     assert!(errors[0].span.is_some());
 

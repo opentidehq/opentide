@@ -24,6 +24,7 @@
 
 use crate::{Catalog, Dialect, tables};
 use foldhash::{HashMap, HashMapExt, HashSet};
+use opentide_core::datasets::glob_matches;
 use opentide_core::{ByteSpan, Diagnostic, codes};
 use std::collections::BTreeSet;
 use std::hash::BuildHasher;
@@ -722,29 +723,6 @@ fn reshaped(input: Known) -> Known {
     }
 }
 
-/// Whether `name` matches a column pattern: `*` stands for any run of
-/// characters, everything else matches itself (case-sensitive, as Kusto
-/// column names are).
-fn glob_matches(pattern: &str, name: &str) -> bool {
-    let mut parts = pattern.split('*');
-    let first = parts.next().unwrap_or("");
-    let Some(mut rest) = name.strip_prefix(first) else {
-        return false;
-    };
-    let parts: Vec<&str> = parts.collect();
-    let Some((last, middle)) = parts.split_last() else {
-        // No `*` at all: the pattern is a plain name.
-        return rest.is_empty();
-    };
-    for part in middle {
-        match rest.find(part) {
-            Some(at) => rest = &rest[at + part.len()..],
-            None => return false,
-        }
-    }
-    rest.len() >= last.len() && rest.ends_with(last)
-}
-
 /// The keyword an operator node is written with.
 fn operator_keyword(kind: &str) -> &'static str {
     match kind {
@@ -1287,7 +1265,6 @@ pub(crate) fn unknown_column(
 
 #[cfg(test)]
 pub(crate) mod tests {
-    use super::glob_matches;
     use super::{Column, Columns, Schema, Source, merge_union};
     use std::sync::Arc;
 
@@ -1858,21 +1835,5 @@ pub(crate) mod tests {
         /// The pipelines [`super::Analysis::pipeline`] scanned on this thread.
         pub(crate) static PIPELINES_SCANNED: std::cell::Cell<usize> =
             const { std::cell::Cell::new(0) };
-    }
-
-    #[test]
-    fn column_patterns_glob_over_names() {
-        assert!(glob_matches("*", "Anything"));
-        assert!(glob_matches("User*", "UserPrincipalName"));
-        assert!(glob_matches("User*", "User"));
-        assert!(glob_matches("*Id", "TenantId"));
-        assert!(glob_matches("Device*Name", "DeviceName"));
-        assert!(glob_matches("Device*Name", "DeviceHostName"));
-        assert!(glob_matches("a*b*c", "aXbYc"));
-        assert!(!glob_matches("User*", "user"));
-        assert!(!glob_matches("User*", "AppUser"));
-        assert!(!glob_matches("*Id", "Identity"));
-        assert!(!glob_matches("a*a", "a"));
-        assert!(!glob_matches("a*b*c", "acb"));
     }
 }

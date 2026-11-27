@@ -130,7 +130,7 @@ fn strings(values: &[Json]) -> Json {
     Json::Array(
         values
             .iter()
-            .map(|value| deploy::text(value).into())
+            .map(|value| Json::to_text(value).into())
             .collect(),
     )
 }
@@ -153,7 +153,7 @@ fn block_of(rule: &Rule) -> Result<&Json, CompileError> {
 pub fn strategy(cx: &Context<'_>, rule: &Rule) -> Result<StatusStrategy, CompileError> {
     let status = block_of(rule)?
         .get("status")
-        .map_or_else(|| "null".to_owned(), deploy::text);
+        .map_or_else(|| "null".to_owned(), Json::to_text);
     deploy::strategy(cx, DISPLAY, &status)
 }
 
@@ -184,7 +184,7 @@ fn query(index: usize, query: &Json, method: &str) -> Json {
         let name = text(query, "name").map_or_else(|| default_query_name(index), str::to_owned);
         out.insert("name".into(), name.into());
     }
-    let search = field(query, "query").map(deploy::text).unwrap_or_default();
+    let search = field(query, "query").map(Json::to_text).unwrap_or_default();
     out.insert("query".into(), search.trim().into());
     out.insert(
         "dataSource".into(),
@@ -227,7 +227,7 @@ pub fn case_status(rule: &Rule, case: &Json) -> String {
     }
     rule.response()
         .and_then(|response| response.get("alert_severity"))
-        .and_then(|severity| alert_severity(&deploy::text(severity).trim().to_lowercase()))
+        .and_then(|severity| alert_severity(&Json::to_text(severity).trim().to_lowercase()))
         .unwrap_or(DEFAULT_SEVERITY)
         .to_owned()
 }
@@ -273,7 +273,7 @@ fn case(
     out.insert(
         "name".into(),
         field(case, "name")
-            .map(deploy::text)
+            .map(Json::to_text)
             .unwrap_or_default()
             .into(),
     );
@@ -286,7 +286,7 @@ fn case(
     } else {
         items(case, "notify")
             .iter()
-            .map(|entry| notification(&deploy::text(entry), tenant, &rule.uuid).map(Json::Str))
+            .map(|entry| notification(&Json::to_text(entry), tenant, &rule.uuid).map(Json::Str))
             .collect::<Result<Vec<_>, _>>()?
     };
     out.insert("notifications".into(), Json::Array(notifications));
@@ -432,7 +432,7 @@ fn strategy_text(block: &Json) -> String {
     let mut lines = Vec::new();
     for (index, query) in items(block, "queries").iter().enumerate() {
         let name = text(query, "name").map_or_else(|| default_query_name(index), str::to_owned);
-        let search = field(query, "query").map(deploy::text).unwrap_or_default();
+        let search = field(query, "query").map(Json::to_text).unwrap_or_default();
         lines.push(format!(
             "- Query `{name}` searches {}: `{}`",
             text(query, "from").unwrap_or("logs"),
@@ -489,10 +489,10 @@ fn procedure_text(procedure: &Json) -> String {
         Json::Object(fields) => fields
             .iter()
             .filter(|(_, value)| !value.is_null())
-            .map(|(key, value)| format!("### {key}\n{}", deploy::text(value).trim()))
+            .map(|(key, value)| format!("### {key}\n{}", Json::to_text(value).trim()))
             .collect::<Vec<_>>()
             .join("\n\n"),
-        other => deploy::text(other),
+        other => Json::to_text(other),
     }
 }
 
@@ -520,20 +520,19 @@ fn parent_technique(id: &str) -> &str {
 pub fn sources(block: &Json) -> Vec<String> {
     let mut found: Vec<String> = Vec::new();
     for query in items(block, "queries") {
-        let search = field(query, "query").map(deploy::text).unwrap_or_default();
+        let search = field(query, "query").map(Json::to_text).unwrap_or_default();
         let mut previous: Option<char> = None;
         let mut rest = search.as_str();
-        while let Some(at) = rest.find("source:") {
-            let before = rest[..at].chars().next_back().or(previous);
+        while let Some((head, after)) = rest.split_once("source:") {
+            let before = head.chars().next_back().or(previous);
             let starts_a_term =
                 before.is_none_or(|ch| ch.is_whitespace() || matches!(ch, '(' | '+'));
-            let after = &rest[at + "source:".len()..];
             let value: String = after
                 .chars()
                 .take_while(|ch| !ch.is_whitespace() && !matches!(ch, '(' | ')' | '"' | '\\'))
                 .collect();
-            let negated = rest[..at].ends_with('-')
-                || rest[..at]
+            let negated = head.ends_with('-')
+                || head
                     .trim_end()
                     .rsplit(|ch: char| ch.is_whitespace() || ch == '(')
                     .next()
@@ -610,7 +609,7 @@ fn tags(
     strategy: StatusStrategy,
     tenant: Option<&Json>,
 ) -> Result<Vec<String>, CompileError> {
-    let mut all: Vec<String> = items(block, "tags").iter().map(deploy::text).collect();
+    let mut all: Vec<String> = items(block, "tags").iter().map(Json::to_text).collect();
     // The block's tags are the model's to check, but a `[[modifiers]]` entry
     // rewrites them after validation: they are checked as sent.
     if let Some(problem) = all.iter().find_map(|tag| tag_problem(tag)) {
@@ -889,6 +888,12 @@ mod tests {
         assert_eq!(
             sources(&block(&["NOT source:gcp source:aws", "(NOT source:x)"])),
             vec!["aws"]
+        );
+        // #1946: the term checks before and after `source:` never slice
+        // inside a character.
+        assert_eq!(
+            sources(&block(&["é source:okta 😀source:x source:É😀 -source:ü"])),
+            vec!["okta", "é😀"]
         );
     }
 

@@ -1,6 +1,4 @@
-//! OAuth 2.0 access tokens for Google Security Operations, ported from
-//! 0.28.0's `client.py` (`load_credentials`, `_authorise`), which used
-//! google-auth.
+//! OAuth 2.0 access tokens for Google Security Operations.
 //!
 //! A tenant's `credentials` is a service-account key, as a JSON document or
 //! the path to one (`type: service_account` only: another type runs commands

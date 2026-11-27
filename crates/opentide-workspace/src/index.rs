@@ -1,7 +1,8 @@
 //! The index: every object by family and UUID, with what the registry
-//! could not load (`registry/builder.py` `_load_objects`, `_ingest_object`;
-//! `registry/signals.py`; `core/chaining.py`; the references
-//! `validation/checks/cross_object.py` follows).
+//! could not load ([`Index`]): the signals objectives define, indexed on
+//! their own ([`Signal`]), the threats' chaining links
+//! ([`Index::chaining`]), and the references between objects that
+//! `validate` follows ([`Reference`]).
 //!
 //! Assembly is a pure function of the files' parses, taken in discovery
 //! order, so a full load and an incremental one build the same index from the
@@ -137,7 +138,7 @@ pub struct SkippedFolder {
     pub problem: FolderProblem,
 }
 
-/// A signal of an objective, indexed on its own (`registry/signals.py`).
+/// A signal of an objective, indexed on its own.
 #[derive(Debug, Clone)]
 pub struct Signal {
     /// Its UUID.

@@ -40,20 +40,22 @@ macro_rules! deployer {
 /// The platforms whose request body opentide builds from the rule alone,
 /// with no tenant (`OFFLINE_COMPILERS`), that this crate compiles: those
 /// [`compile_offline`] compiles.
-pub fn offline() -> Vec<&'static str> {
-    use opentide_schema::platforms::ids_where;
-    ids_where(|platform| platform.compiles_offline)
+pub fn offline() -> Vec<PlatformId> {
+    PlatformId::ALL
+        .into_iter()
+        .filter(|platform| platform.spec().compiles_offline)
+        .collect()
 }
 
 /// The request body a deploy would send for `rule` on `platform` with no
-/// tenant (`compile_offline`). `None` for a platform this crate does not
-/// compile offline.
+/// tenant (`compile_offline`). `None` for one of the [`deployers`], whose
+/// body needs the tenant.
 pub fn compile_offline(
     cx: &Context<'_>,
-    platform: &str,
+    platform: PlatformId,
     rule: &Rule,
 ) -> Option<Result<Json, CompileError>> {
-    match PlatformId::parse(platform)? {
+    match platform {
         PlatformId::Sentinel => Some(sentinel::compile(cx, rule, PREVIEW_TENANT)),
         PlatformId::Elastic => Some(elastic::compile(cx, rule, &elastic::Setup::none())),
         PlatformId::Sysdig => Some(sysdig::compile_body(cx, rule, None)),
@@ -105,9 +107,14 @@ fn bitdefender_request(
 /// The platforms whose deployer builds the body from the tenant (and, for
 /// Defender, SentinelOne and CrowdStrike, the deployment state): those
 /// [`compile_tenant`] builds writes for.
-pub fn deployers() -> Vec<&'static str> {
-    use opentide_schema::platforms::ids_where;
-    ids_where(|platform| platform.deploys && !platform.compiles_offline)
+pub fn deployers() -> Vec<PlatformId> {
+    PlatformId::ALL
+        .into_iter()
+        .filter(|platform| {
+            let spec = platform.spec();
+            spec.deploys && !spec.compiles_offline
+        })
+        .collect()
 }
 
 /// What a deployer's body depends on besides the rule and the tenant.
@@ -138,39 +145,34 @@ impl Inputs {
 
 /// What a deploy sends for `rule` on `platform` to the tenant named
 /// `tenant`: the body (Sentinel, Elastic, Sysdig) or the writes, in order
-/// (the deployers). `None` for a platform this crate does not know.
+/// (the deployers).
 pub fn compile_tenant(
     cx: &Context<'_>,
-    platform: &str,
+    platform: PlatformId,
     rule: &Rule,
     tenant: &str,
     inputs: &Inputs,
-) -> Option<Result<Json, CompileError>> {
-    let platform_id = PlatformId::parse(platform)?;
-    let known = deploy::tenant(cx, platform, tenant);
+) -> Result<Json, CompileError> {
+    let known = deploy::tenant(cx, platform.as_str(), tenant);
     let empty = Json::Object(Object::new());
     let config = known.unwrap_or(&empty);
     let id = inputs.known.as_deref();
-    match platform_id {
-        deployer!() => Some(tenant_writes(cx, platform_id, rule, tenant, config, inputs)),
-        PlatformId::Sentinel => Some(sentinel::compile(cx, rule, tenant)),
-        PlatformId::Sysdig => Some(sysdig::compile_body(cx, rule, known)),
-        PlatformId::Bitdefender => Some(bitdefender_tenant(cx, rule, config, id)),
-        PlatformId::Exabeam => Some(
-            exabeam::compile_deployment(cx, rule, known)
-                .map(|compiled| exabeam::create_request(&compiled)),
-        ),
+    match platform {
+        deployer!() => tenant_writes(cx, platform, rule, tenant, config, inputs),
+        PlatformId::Sentinel => sentinel::compile(cx, rule, tenant),
+        PlatformId::Sysdig => sysdig::compile_body(cx, rule, known),
+        PlatformId::Bitdefender => bitdefender_tenant(cx, rule, config, id),
+        PlatformId::Exabeam => exabeam::compile_deployment(cx, rule, known)
+            .map(|compiled| exabeam::create_request(&compiled)),
         // The text is the same on every tenant: the `rules.create` body,
         // with what the deploy reads beside it (the run state).
-        PlatformId::GoogleSecops => Some(google_secops::compile_deployment(cx, rule)),
-        PlatformId::Graylog => Some(graylog_request(cx, rule, known)),
-        PlatformId::Datadog => Some(
-            datadog::compile_deployment(cx, rule, known)
-                .map(|compiled| datadog::create_request(&compiled)),
-        ),
+        PlatformId::GoogleSecops => google_secops::compile_deployment(cx, rule),
+        PlatformId::Graylog => graylog_request(cx, rule, known),
+        PlatformId::Datadog => datadog::compile_deployment(cx, rule, known)
+            .map(|compiled| datadog::create_request(&compiled)),
         PlatformId::Elastic => {
             let setup = known.map_or_else(elastic::Setup::none, elastic::Setup::from_tenant);
-            Some(elastic::compile(cx, rule, &setup))
+            elastic::compile(cx, rule, &setup)
         }
     }
 }
@@ -417,7 +419,7 @@ fn model_dump<T: DeserializeOwned + Serialize>(block: &Json) -> Option<Json> {
 /// optional field is left out where the oracle writes it `null`, and a
 /// mapping keeps its model's order (`tests/golden/payloads/APPROVED.toml`).
 /// A block the model refuses is as written. Elastic's checks read it whole.
-pub fn config_dump(platform: &str, block: &Json) -> Json {
+pub fn config_dump(platform: PlatformId, block: &Json) -> Json {
     model_config_dump(platform, block).unwrap_or_else(|| block.clone())
 }
 
@@ -428,6 +430,10 @@ pub fn config_dump(platform: &str, block: &Json) -> Json {
 /// what the block says, and no deployer reads them (#1662, D12); every other
 /// default stays, since a deploy sends it.
 pub fn block_preview(platform: &str, block: &Json) -> Json {
+    // A plugin's platform: no model here, the block as written.
+    let Some(platform) = PlatformId::parse(platform) else {
+        return block.clone();
+    };
     let Some(Json::Object(mut dumped)) = model_config_dump(platform, block) else {
         return config_dump(platform, block);
     };
@@ -441,8 +447,8 @@ pub fn block_preview(platform: &str, block: &Json) -> Json {
 
 /// The block read by `platform`'s model, or `None` when the model refuses
 /// it or there is none.
-fn model_config_dump(platform: &str, block: &Json) -> Option<Json> {
-    match PlatformId::parse(platform)? {
+fn model_config_dump(platform: PlatformId, block: &Json) -> Option<Json> {
+    match platform {
         PlatformId::Sentinel => model_dump::<SentinelConfig>(block),
         PlatformId::MicrosoftDefender => model_dump::<MicrosoftDefenderConfig>(block),
         PlatformId::Splunk => model_dump::<SplunkConfig>(block),
@@ -773,7 +779,7 @@ pub fn elastic_request(rule: &Rule, payload: Json) -> Json {
     let mut request = Object::new();
     request.insert("payload".into(), payload);
     if let Some(block) = rule.block("elastic").filter(|block| block.is_filled()) {
-        request.insert("block".into(), config_dump("elastic", block));
+        request.insert("block".into(), config_dump(PlatformId::Elastic, block));
     }
     Json::Object(request)
 }
@@ -849,12 +855,12 @@ mod tests {
             let id = platform.as_str();
             assert_eq!(
                 matches!(platform, deployer!()),
-                deployers.contains(&id),
+                deployers.contains(&platform),
                 "{id}"
             );
             assert_eq!(
                 !matches!(platform, deployer!()),
-                offline.contains(&id),
+                offline.contains(&platform),
                 "{id}"
             );
         }
@@ -867,13 +873,13 @@ mod tests {
         )
         .unwrap();
         // `query` is not a SentinelOne field: the block is shown as written.
-        assert_eq!(config_dump("sentinel_one", &block), block);
+        assert_eq!(config_dump(PlatformId::SentinelOne, &block), block);
         let Json::Object(mut valid) = block else {
             unreachable!()
         };
         valid.shift_remove("query");
         assert_eq!(
-            config_dump("sentinel_one", &Json::Object(valid)).to_compact(),
+            config_dump(PlatformId::SentinelOne, &Json::Object(valid)).to_compact(),
             r#"{"enabled":false,"name":"","status":"STAGING","condition":{"type":"Single Event","single_event":{"query":"q"}},"response":{"treat_as_threat":false,"network_quarantine":true}}"#
         );
     }
@@ -888,7 +894,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(
-            config_dump("splunk", &block).to_compact(),
+            config_dump(PlatformId::Splunk, &block).to_compact(),
             r#"{"enabled":false,"name":"","status":"STAGING","query":"index=main","advanced":{"action.x.param.tags":null,"action.x.param.title":"t"}}"#
         );
     }
@@ -926,5 +932,10 @@ mod tests {
         // A block the model refuses is shown as written.
         let refused: Json = serde_json::from_str(r#"{"query":"q","status":"S"}"#).unwrap();
         assert_eq!(block_preview("sentinel_one", &refused), refused);
+        // A plugin's platform has no model here: its block as written,
+        // `enabled` and `name` included.
+        let plugin: Json =
+            serde_json::from_str(r#"{"enabled":true,"name":"é😀","status":"STAGING"}"#).unwrap();
+        assert_eq!(block_preview("acme_siem", &plugin), plugin);
     }
 }
