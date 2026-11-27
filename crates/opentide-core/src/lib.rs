@@ -1411,6 +1411,11 @@ pub mod codes {
             => "The rule compares `detection.detection.rule_id` with a literal `ru_` id, which differs per tenant: match `detection.detection.rule_name` instead.";
         GOOGLE_SECOPS_LIVE_FREQUENCY_UNAVAILABLE = "google_secops_live_frequency_unavailable"
             => "`run_frequency` is `LIVE` on a multi-event rule: Google stores `LIVE_CUSTOMIZABLE`, so the block differs from the tenant on every deploy.";
+        // The scheduled-rule bounds of sentinel-1.0 (#1916).
+        SENTINEL_FREQUENCY = "sentinel_frequency"
+            => "`scheduling.frequency` is shorter than 5 minutes or longer than 14 days.";
+        SENTINEL_LOOKBACK = "sentinel_lookback"
+            => "`scheduling.lookback` is shorter than 5 minutes, longer than 14 days, or shorter than `frequency`.";
         // The constraints and advisory of microsoft-defender-1.0.
         MICROSOFT_DEFENDER_SCHEMA = "microsoft_defender_schema"
             => "`schema`, when set, is not `platform::microsoft_defender::1.0`.";

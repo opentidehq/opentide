@@ -32,6 +32,8 @@ CLI `--platform` uses **registry keys** (`microsoft_defender`, `carbon_black_clo
 
 A Sentinel deploy reads each analytics rule before it writes it, so a rule the workspace already holds reads `unchanged` and is not written; see [`opentide deploy`](../../cli/deploy.md#unchanged-rules).
 
+`opentide validate` checks a scheduled Sentinel rule's `scheduling.frequency` and `scheduling.lookback` against the bounds Sentinel enforces at deploy: each from 5 minutes to 14 days, the lookback at least the frequency (`sentinel_frequency`, `sentinel_lookback`). A near-real-time rule (`nrt: true`) is not checked: deploy sends neither.
+
 A `sentinel` block's query is checked as an analytics rule: `search *`, `union *` and a query over 10,000 characters are errors (`kql_rule_search_star`, `kql_rule_union_star`, `kql_rule_too_long`), as Microsoft does not allow them in a scheduled rule. A Sentinel hunt's search may use them, and keeps the performance warnings `kql_unscoped_search` and `kql_unscoped_union`.
 
 CrowdStrike stores a Next-Gen SIEM correlation rule, whose `query` is CrowdStrike Query Language (CQL, Falcon LogScale's language). The analysis engine checks it offline; opentide calls no CrowdStrike query check, so `validate query --platform crowdstrike --live` reports `supported: false`. HarfangLab stores a Sigma rule or a YARA rule. Its YARA is checked offline, as YARA-X 1.x compiles it (the HarfangLab profile also refuses syntax only YARA-X has), and Sigma is not; `--live` reports `supported: false`.

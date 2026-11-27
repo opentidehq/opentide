@@ -181,6 +181,59 @@ fn the_catalog_holds_a_dangling_ref_with_its_range_and_follows_the_edit_that_fix
     assert_eq!(other["result"], json!({ "roots": [] }));
 }
 
+/// #2002: a keystroke in an open object digests that object alone to decide
+/// whether `opentide/catalogChanged` goes out, not every object on disk; a
+/// file on disk is digested once.
+#[test]
+fn a_keystroke_digests_the_object_it_changed_alone() {
+    const RULES: usize = 30;
+    let scratch = workspace("catalog-digest");
+    let root = &scratch.0;
+    for n in 0..RULES {
+        let text = rule(DANGLING)
+            .replace(
+                "00000000-0000-4000-8003-000000000001",
+                &format!("00000000-0000-4000-8003-0000000001{n:02}"),
+            )
+            .replace("name: Sentinel KQL Rule", &format!("name: Rule é😀 {n}"));
+        std::fs::write(root.join(format!("objects/rules/rule-{n}.yaml")), text).unwrap();
+    }
+    let rule_uri = file_uri(&root.join("objects/rules/rule-1.0.yaml"));
+    let mut lsp = start(json!({ "capabilities": {}, "rootUri": file_uri(root) }));
+    let digested = |lsp: &mut Lsp| {
+        lsp.request("opentide/__stats", Value::Null)["result"]["digestedObjects"]
+            .as_u64()
+            .unwrap()
+    };
+    let catalog = lsp.request("opentide/catalog", json!({}))["result"].clone();
+    let objects = catalog["roots"][0]["objects"].as_array().unwrap().len();
+    assert_eq!(objects, RULES + 2, "{catalog}");
+    // Every object, once.
+    assert_eq!(digested(&mut lsp), (RULES + 2) as u64);
+    lsp.notify(
+        "textDocument/didOpen",
+        json!({ "textDocument": { "uri": rule_uri, "languageId": "opentide-yaml", "version": 1, "text": rule(DANGLING) } }),
+    );
+    settle(&mut lsp);
+    let before = digested(&mut lsp);
+    // The open rule is digested from its text; no file on disk again.
+    assert_eq!(before, (RULES + 3) as u64);
+
+    // A keystroke that changes nothing the catalog says, then one that does.
+    did_change(
+        &mut lsp,
+        &rule_uri,
+        &rule(DANGLING).replace("Minimal valid", "A minimal é😀"),
+    );
+    let seen = settle(&mut lsp);
+    assert!(catalog_changes(&seen).is_empty(), "{seen:?}");
+    assert_eq!(digested(&mut lsp), before + 1);
+    did_change(&mut lsp, &rule_uri, &rule(MODEL));
+    let seen = settle(&mut lsp);
+    assert_eq!(catalog_changes(&seen).len(), 1, "{seen:?}");
+    assert_eq!(digested(&mut lsp), before + 2);
+}
+
 #[test]
 fn a_file_deleted_on_disk_is_announced_to_a_client_that_asked_for_the_catalog() {
     let scratch = workspace("catalog-watch");

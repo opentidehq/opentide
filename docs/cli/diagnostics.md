@@ -447,6 +447,8 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`schema_validation`](#schema_validation) | An object does not match the schema its `metadata.schema` names. |
 | [`schemas_fresh`](#schemas_fresh) | Every JSON schema this opentide version generates exists and matches what `opentide generate schemas` writes now. |
 | [`scope_no_match`](#scope_no_match) | A `--file`, `--uuid` or `--type` selection matched no object, so nothing was validated. |
+| [`sentinel_frequency`](#sentinel_frequency) | A Microsoft Sentinel block's `scheduling.frequency` is shorter than 5 minutes or longer than 14 days. |
+| [`sentinel_lookback`](#sentinel_lookback) | A Microsoft Sentinel block's `scheduling.lookback` is shorter than 5 minutes, longer than 14 days, or shorter than its frequency. |
 | [`share_failed`](#share_failed) | `share` reached the destination, and every object failed. |
 | [`share_partial`](#share_partial) | `share` shared some objects, and others failed. |
 | [`share_unreachable`](#share_unreachable) | `share` could not authenticate to, or reach, any destination. |
@@ -8208,6 +8210,46 @@ opentide validate --file objects/rules/sentinel-kql-rul.yaml
 ### How to fix
 
 Fix the path, file name or UUID. A `--file` path that does not exist on disk is reported as `file_not_found` instead. A path matches only that file; a bare file name matches every object file with that name. Every `--file` target must match. For `share`, name a target `opentide share targets` lists, and enable it in `sharing.toml`.
+
+## sentinel_frequency
+
+A Microsoft Sentinel block's `scheduling.frequency` is shorter than 5 minutes or longer than 14 days.
+
+Severity: error. Reported by `opentide validate` (its `schema` check) on a `sentinel` block (sentinel-1.0), on `scheduling.frequency`. Microsoft's [scheduled analytics rules docs](https://learn.microsoft.com/en-us/azure/sentinel/scheduled-rules-overview) (read 2026-11-27) say of the query interval and the lookback period: "The allowed range for both of these parameters is from 5 minutes to 14 days." Sentinel refuses a rule outside that range at deploy. A near-real-time rule (`scheduling.nrt: true`) is not checked, because deploy sends no frequency for it. A value that is not a duration is reported by the `schema` check's `value_error` instead.
+
+### Example
+
+```yaml
+configurations:
+  sentinel:
+    scheduling:
+      frequency: 1m
+      lookback: 1h
+```
+
+### How to fix
+
+Run the rule every 5 minutes or more, at most every 14 days (`frequency: 5m`, `PT1H`, `P1D`). For a rule that must fire as events arrive, set `scheduling.nrt: true` instead.
+
+## sentinel_lookback
+
+A Microsoft Sentinel block's `scheduling.lookback` is shorter than 5 minutes, longer than 14 days, or shorter than its frequency.
+
+Severity: error. Reported by `opentide validate` (its `schema` check) on a `sentinel` block (sentinel-1.0), on `scheduling.lookback`. Microsoft's [scheduled analytics rules docs](https://learn.microsoft.com/en-us/azure/sentinel/scheduled-rules-overview) (read 2026-11-27) say: "The allowed range for both of these parameters is from 5 minutes to 14 days", and "The query interval must be shorter than or equal to the lookback period": a lookback shorter than the frequency would leave gaps between runs. Sentinel refuses such a rule at deploy. Durations are compared in seconds (`1h` equals `PT60M`). A near-real-time rule (`scheduling.nrt: true`) is not checked, because deploy sends no lookback for it. A value that is not a duration is reported by the `schema` check's `value_error` instead.
+
+### Example
+
+```yaml
+configurations:
+  sentinel:
+    scheduling:
+      frequency: 1h
+      lookback: 30m
+```
+
+### How to fix
+
+Make the lookback at least the frequency and at most 14 days (`frequency: 1h`, `lookback: 2h`).
 
 ## share_failed
 
