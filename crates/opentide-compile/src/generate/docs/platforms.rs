@@ -176,7 +176,7 @@ mod tests {
 
     #[test]
     fn every_platform_has_a_profile() {
-        for platform in opentide_schema::objects::RuleConfigurations::PLATFORMS {
+        for &platform in opentide_schema::objects::RuleConfigurations::PLATFORMS {
             assert!(
                 opentide_schema::platforms::get(platform).is_some(),
                 "{platform} has no label"

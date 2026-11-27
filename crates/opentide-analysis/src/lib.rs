@@ -279,6 +279,13 @@ pub fn analyze(host: &dyn WorkspaceHost, request: AnalyzeRequest) -> AnalyzeResp
                 symbols: r.symbols,
             }
         }
+        // `LanguageId` is non-exhaustive: a language this crate does not
+        // analyse yet has no findings, tokens or symbols.
+        _ => AnalyzeResponse {
+            diagnostics: Vec::new(),
+            tokens: Vec::new(),
+            symbols: Vec::new(),
+        },
     }
 }
 
@@ -831,6 +838,8 @@ fn query_hover(language: LanguageId, text: &str, offset: usize, platform: &str) 
         LanguageId::Yaral => opentide_yaral::editor::hover(text, offset),
         // Configuration hover needs the file's path: configuration_hover.
         LanguageId::TideYaml | LanguageId::Config => None,
+        // `LanguageId` is non-exhaustive: no hover for a language added later.
+        _ => None,
     }
 }
 
@@ -916,6 +925,8 @@ fn query_completions(
         LanguageId::Yaral => opentide_yaral::editor::completions(text, offset),
         // Configuration completion needs the file's path: configuration_completions.
         LanguageId::TideYaml | LanguageId::Config => Vec::new(),
+        // `LanguageId` is non-exhaustive: no completion for a language added later.
+        _ => Vec::new(),
     }
 }
 
@@ -974,12 +985,100 @@ fn query_signature_help(
         | LanguageId::Datadog
         | LanguageId::TideYaml
         | LanguageId::Config => None,
+        // `LanguageId` is non-exhaustive: no signature help for a language
+        // added later.
+        _ => None,
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A query in `language` that parses, and one that does not.
+    /// `LanguageId` is non-exhaustive, so this `match` and the ones in this
+    /// crate have a wildcard arm: a language added to `QUERY_LANGUAGES`
+    /// panics here until it has samples, and then fails
+    /// [`every_query_language_is_analysed`] until its arms are written.
+    fn samples(language: LanguageId) -> (&'static str, &'static str) {
+        match language {
+            LanguageId::Kql => (
+                "SecurityEvent | where EventID == 4688 | take 1",
+                "SecurityEvent | where (",
+            ),
+            LanguageId::Spl => (
+                "index=main | stats count by host",
+                "index=main | stats count by (",
+            ),
+            LanguageId::Esql => ("FROM logs-* | WHERE x == 1", "FROM logs-* | WHERE ("),
+            LanguageId::Eql => (
+                "process where process.name : \"cmd.exe\"",
+                "process where (",
+            ),
+            LanguageId::Kuery => (
+                "event.category:process and not user.name:SYSTEM",
+                "event.category:(process",
+            ),
+            LanguageId::Lucene => (
+                "event.category:process AND process.name:cmd",
+                "event.category:(process",
+            ),
+            LanguageId::Falco => (
+                "spawned_process and proc.name = bash",
+                "spawned_process and (",
+            ),
+            LanguageId::Cql => (
+                "#event_simpleName=ProcessRollup2 | count()",
+                "#event_simpleName=ProcessRollup2 | count(",
+            ),
+            LanguageId::Exabeam => (
+                "activity_type:\"process-create\"",
+                "activity_type:(\"process-create\"",
+            ),
+            LanguageId::Yara => (
+                "rule demo { strings: $a = \"cmd.exe\" condition: $a }",
+                "rule demo { condition: ( }",
+            ),
+            LanguageId::Yaral => (
+                "rule demo { meta: author = \"a\" events: $e.metadata.event_type = \"PROCESS_LAUNCH\" condition: $e }",
+                "rule demo { events: ( }",
+            ),
+            LanguageId::Datadog => ("source:okta @evt.outcome:FAILURE", "source:(okta"),
+            other => panic!("give {other} samples in samples()"),
+        }
+    }
+
+    /// Every query language reaches its engine through each `match` on
+    /// `LanguageId` here: a missing arm falls into a wildcard that reports
+    /// nothing, highlights nothing and completes nothing.
+    #[test]
+    fn every_query_language_is_analysed() {
+        let host = MemoryWorkspace { files: Vec::new() };
+        for &language in LanguageId::QUERY_LANGUAGES {
+            let (valid, broken) = samples(language);
+            assert!(
+                !highlight(language, valid).tokens.is_empty(),
+                "{language}: no tokens"
+            );
+            let response = analyze(
+                &host,
+                AnalyzeRequest {
+                    uri: "memory".into(),
+                    language,
+                    text: broken.to_string(),
+                },
+            );
+            assert!(
+                !response.diagnostics.is_empty(),
+                "{language}: {broken:?} reports nothing"
+            );
+            assert!(
+                !completions(&host, language, valid, valid.len()).is_empty()
+                    || !completions(&host, language, "", 0).is_empty(),
+                "{language}: no completion"
+            );
+        }
+    }
 
     #[test]
     fn memory_workspace_indexes_objects() {

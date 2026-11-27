@@ -8,8 +8,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Eac
 
 ### Upgrade
 
-1. If CI runs `opentide lint --strict` on Microsoft Defender rules (`opentide setup ci` generates it), it now fails on three new warnings. To keep the previous result while you fix the rules, set each to `"info"` under `[queries.codes]` in `.opentide/configurations/lint.toml`: `microsoft_defender_custom_details_limit`, `microsoft_defender_placeholder_limit` and `microsoft_defender_nrt_query`.
-2. If CI runs `opentide generate docs --changed` in a shallow clone, check out the full history: `fetch-depth: 0` on GitHub Actions' `actions/checkout`, `GIT_DEPTH: "0"` on GitLab, `fetchDepth: 0` on Azure Pipelines. The run now fails where it used to compare with `HEAD` and report nothing changed.
+1. If you use the Rust SDK: add a wildcard arm (`_ => …`) where you match on `opentide::analysis::LanguageId`, and build an `opentide::models::RuleConfigurations` from `RuleConfigurations::default()`, not a struct literal. `LanguageId::QUERY_LANGUAGES`, `RuleConfigurations::PLATFORMS` and `opentide::validate::STRICT_EXEMPT_WARNINGS` are slices now (`for &item in …`).
+2. If CI runs `opentide lint --strict` on Microsoft Defender rules (`opentide setup ci` generates it), it now fails on three new warnings. To keep the previous result while you fix the rules, set each to `"info"` under `[queries.codes]` in `.opentide/configurations/lint.toml`: `microsoft_defender_custom_details_limit`, `microsoft_defender_placeholder_limit` and `microsoft_defender_nrt_query`.
+3. If CI runs `opentide generate docs --changed` in a shallow clone, check out the full history: `fetch-depth: 0` on GitHub Actions' `actions/checkout`, `GIT_DEPTH: "0"` on GitLab, `fetchDepth: 0` on Azure Pipelines. The run now fails where it used to compare with `HEAD` and report nothing changed.
+
+### Breaking
+
+- **The Rust SDK's platforms, languages and codes are open sets** ([#1911](https://github.com/opentidehq/opentide/issues/1911)). From this release on, adding one is a minor release, which breaks no code that matches with a wildcard arm. This release makes the switch once: `LanguageId` and `RuleConfigurations` are `#[non_exhaustive]`, so a `match` on `LanguageId` needs a wildcard arm and a `RuleConfigurations` starts from `Default`. `LanguageId::QUERY_LANGUAGES`, `RuleConfigurations::PLATFORMS` and `validate::STRICT_EXEMPT_WARNINGS` are slices, not fixed-size arrays. The command line, the Python package and the npm package are unaffected.
 
 ### Added
 

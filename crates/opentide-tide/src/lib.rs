@@ -1058,6 +1058,9 @@ fn analyze_injections(
                 (r.diagnostics, r.tokens)
             }
             LanguageId::TideYaml | LanguageId::Config => (Vec::new(), Vec::new()),
+            // `LanguageId` is non-exhaustive: a language this crate does not
+            // analyse yet has no findings and no tokens.
+            _ => (Vec::new(), Vec::new()),
         };
         // The stand-in `opentide new` wrote is lint's `placeholders` finding,
         // not a query to check: `opentide validate` skips it too.

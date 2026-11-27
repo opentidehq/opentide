@@ -174,7 +174,7 @@ pub fn run(
         validate,
         args.strict,
         args.selection.is_empty(),
-        &STRICT_EXEMPT_WARNINGS,
+        STRICT_EXEMPT_WARNINGS,
     )
     // `--strict` fails a full run that finds no object, as one run does.
     .requiring_objects(
