@@ -11,10 +11,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Eac
 1. If you use the Rust SDK: add a wildcard arm (`_ => …`) where you match on `opentide::analysis::LanguageId`, and build an `opentide::models::RuleConfigurations` from `RuleConfigurations::default()`, not a struct literal. `LanguageId::QUERY_LANGUAGES`, `RuleConfigurations::PLATFORMS` and `opentide::validate::STRICT_EXEMPT_WARNINGS` are slices now (`for &item in …`).
 2. If CI runs `opentide lint --strict` on Microsoft Defender rules (`opentide setup ci` generates it), it now fails on three new warnings. To keep the previous result while you fix the rules, set each to `"info"` under `[queries.codes]` in `.opentide/configurations/lint.toml`: `microsoft_defender_custom_details_limit`, `microsoft_defender_placeholder_limit` and `microsoft_defender_nrt_query`.
 3. If CI runs `opentide generate docs --changed` in a shallow clone, check out the full history: `fetch-depth: 0` on GitHub Actions' `actions/checkout`, `GIT_DEPTH: "0"` on GitLab, `fetchDepth: 0` on Azure Pipelines. The run now fails where it used to compare with `HEAD` and report nothing changed.
+4. If you deploy to Microsoft Sentinel, run `opentide validate` and fix each `kql_rule_search_star`, `kql_rule_union_star` and `kql_rule_too_long` it reports: name the tables the rule reads, and move long queries into a saved workspace function.
 
 ### Breaking
 
 - **The Rust SDK's platforms, languages and codes are open sets** ([#1911](https://github.com/opentidehq/opentide/issues/1911)). From this release on, adding one is a minor release, which breaks no code that matches with a wildcard arm. This release makes the switch once: `LanguageId` and `RuleConfigurations` are `#[non_exhaustive]`, so a `match` on `LanguageId` needs a wildcard arm and a `RuleConfigurations` starts from `Default`. `LanguageId::QUERY_LANGUAGES`, `RuleConfigurations::PLATFORMS` and `validate::STRICT_EXEMPT_WARNINGS` are slices, not fixed-size arrays. The command line, the Python package and the npm package are unaffected.
+
+- **`validate` refuses a Sentinel rule query Sentinel refuses** ([#1915](https://github.com/opentidehq/opentide/issues/1915)). Microsoft's scheduled analytics rules cannot contain `search *` or `union *`, or be longer than 10,000 characters. A `sentinel` block's query, checked as a rule, gets an error for each; a hunt's search keeps the performance warnings, and Defender is not affected.
+  - `kql_rule_search_star` and `kql_rule_union_star` replace `kql_unscoped_search` and `kql_unscoped_union` where they apply
+  - `kql_rule_too_long`: more than 10,000 characters
 
 ### Added
 

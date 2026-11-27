@@ -341,6 +341,9 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`kql_join_summarize_before_project`](#kql_join_summarize_before_project) | A `join` runs while the pipeline it sits in still carries every column, and a later `project` would have narrowed it. |
 | [`kql_parse_error`](#kql_parse_error) | The KQL query does not parse. |
 | [`kql_render_not_valid`](#kql_render_not_valid) | render draws a chart; it has no effect in a detection rule. |
+| [`kql_rule_search_star`](#kql_rule_search_star) | A Microsoft Sentinel analytics rule's query contains `search *`, which Microsoft does not allow in a scheduled rule. |
+| [`kql_rule_too_long`](#kql_rule_too_long) | A Microsoft Sentinel analytics rule's query is longer than the 10,000 characters Microsoft allows. |
+| [`kql_rule_union_star`](#kql_rule_union_star) | A Microsoft Sentinel analytics rule's query contains `union *`, which Microsoft does not allow in a scheduled rule. |
 | [`kql_table_misspelt`](#kql_table_misspelt) | A KQL table is not one the engine knows or the workspace declares, but is a near miss of one that is (one edit for a name of up to seven characters, two for a longer one, and not a custom `_CL` table): most likely a typo. |
 | [`kql_table_not_declared`](#kql_table_not_declared) | The table is one the engine knows for the platform, but no log source of the workspace declares it in visibility.toml. |
 | [`kql_type_mismatch`](#kql_type_mismatch) | The operator cannot apply to the column's documented or declared type. |
@@ -6276,6 +6279,58 @@ opentide validate query
 ### How to fix
 
 Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [KQL reference](https://learn.microsoft.com/kusto/query/) describes the syntax and the commands the engine checks against.
+
+## kql_rule_search_star
+
+A Microsoft Sentinel analytics rule's query contains `search *`, which Microsoft does not allow in a scheduled rule.
+
+Severity: error. Reported by the analysis engine on the query of a `sentinel` block (the KQL rule profile), at the `search` keyword: `opentide validate` (its `queries` check) and an editor running `opentide lsp start` show it. Microsoft's [scheduled analytics rules docs](https://learn.microsoft.com/en-us/azure/sentinel/scheduled-rules-overview) (read 2026-11-27) say: "The query length should be between 1 and 10,000 characters and can't contain "`search *`" or "`union *`"." It is `search` with no `in (...)` list and a bare `*`. A hunt's search (`response.procedure.searches`) may use it: there, an unscoped `search` is the performance warning `kql_unscoped_search`, which this error replaces in a rule. A Microsoft Defender block is not checked: Defender's custom detection docs set no such limit.
+
+### Example
+
+```yaml
+configurations:
+  sentinel:
+    query: |
+      search * | where Account == "admin"
+```
+
+### How to fix
+
+Start from the tables the rule needs (`SecurityEvent | where Account == "admin"`), or scope the search: `search in (SecurityEvent, SigninLogs) "admin"`.
+
+## kql_rule_too_long
+
+A Microsoft Sentinel analytics rule's query is longer than the 10,000 characters Microsoft allows.
+
+Severity: error. Reported by the analysis engine on the query of a `sentinel` block (the KQL rule profile), on its first line: `opentide validate` (its `queries` check) and an editor running `opentide lsp start` show it. Microsoft's [scheduled analytics rules docs](https://learn.microsoft.com/en-us/azure/sentinel/scheduled-rules-overview) (read 2026-11-27) say: "The query length should be between 1 and 10,000 characters", and suggest user-defined functions to stay under it. The query is counted in characters, not bytes, without the blank lines and spaces around it. The `exclusions` deploy appends for a tenant are not counted, so a query just under the limit passes this check and can still be refused once deploy adds them. A hunt's search is not checked, nor a Microsoft Defender block: Defender's custom detection docs set no such limit.
+
+### Example
+
+A `sentinel` block whose `query` holds 10,001 characters or more.
+
+### How to fix
+
+Move parts of the query into a saved workspace function and call it from the rule ("a single function can replace dozens of lines of code"), or split the rule in two.
+
+## kql_rule_union_star
+
+A Microsoft Sentinel analytics rule's query contains `union *`, which Microsoft does not allow in a scheduled rule.
+
+Severity: error. Reported by the analysis engine on the query of a `sentinel` block (the KQL rule profile), at the `*`: `opentide validate` (its `queries` check) and an editor running `opentide lsp start` show it. Microsoft's [scheduled analytics rules docs](https://learn.microsoft.com/en-us/azure/sentinel/scheduled-rules-overview) (read 2026-11-27) say: "The query length should be between 1 and 10,000 characters and can't contain "`search *`" or "`union *`"." It is a bare `*` among a `union`'s tables; a pattern such as `Sec*` names only the tables it matches and is not reported. A hunt's search (`response.procedure.searches`) may use it: there it is the performance warning `kql_unscoped_union`, which this error replaces in a rule. A Microsoft Defender block is not checked: Defender's custom detection docs set no such limit.
+
+### Example
+
+```yaml
+configurations:
+  sentinel:
+    query: |
+      union * | where EventID == 4625
+```
+
+### How to fix
+
+Name the tables the rule reads: `union SecurityEvent, WindowsEvent | where EventID == 4625`.
 
 ## kql_table_misspelt
 
