@@ -159,6 +159,31 @@ fn on_a_feature_branch(checkout: &Path, branch: &str) {
     git(checkout, &["checkout", "-qb", "feature"]);
 }
 
+/// #1955: the work tree is read with gix, so `generate inflight` and
+/// `generate docs --changed` see an uncommitted change with no `git` program
+/// on `PATH`. They once asked the program, and found nothing without it.
+#[test]
+fn changed_objects_are_read_without_the_git_program() {
+    let (_dir, root) = scratch();
+    let ws = root.join("no-git-program");
+    catalogue(&ws);
+    on_a_feature_branch(&ws, "main");
+    bump_rule(&ws);
+    let empty = root.join("empty-path");
+    std::fs::create_dir_all(&empty).unwrap();
+    let repo = ["--repo", ws.to_str().unwrap()];
+    let env = [
+        ("OPENTIDE_REPO_ROOT", ws.as_path()),
+        ("OPENTIDE_TIDE_WORKSPACE", ws.as_path()),
+        ("PATH", empty.as_path()),
+    ];
+    let run = |args: &[&str]| opentide(&ws, &[&repo[..], args].concat(), &env);
+    let docs = run(&["generate", "docs", "--changed"]).ok();
+    assert_eq!(changed_paths(&docs), [tutorial::RULE_FILE], "{docs}");
+    run(&["generate", "inflight"]).ok();
+    assert_eq!(shards(&ws), the_rule_shard());
+}
+
 /// The tutorial rule's version raised: a change to it.
 fn bump_rule(ws: &Path) {
     tutorial::edit(ws, tutorial::RULE_FILE, "version: 1", "version: 2");
