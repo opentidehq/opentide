@@ -146,7 +146,7 @@ thiserror.workspace = true
 
 [dev-dependencies]
 # The tests lay a workspace out under a temporary folder, never in the checkout.
-tempfile = "3"
+tempfile.workspace = true
 # `connectors`: a stand-in tenant (tests/connectors.rs), and the runtime the
 # tests await a connection's operations on.
 wiremock.workspace = true
