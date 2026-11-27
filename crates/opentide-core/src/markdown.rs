@@ -332,6 +332,29 @@ mod tests {
     }
 
     #[test]
+    fn a_wrapped_item_keeps_its_continuation_under_its_text() {
+        assert_eq!(to_text("- a\n  b\n- c", KEEP), "- a\n  b\n- c");
+        assert_eq!(
+            to_text("- x\n  - élément\n    suite 😀\n2. un\n   deux", KEEP),
+            "- x\n  - élément\n    suite 😀\n\n2. un\n  deux"
+        );
+        assert_eq!(to_text("- a\n  b", JOIN), "- a b");
+    }
+
+    #[test]
+    fn a_code_block_s_leading_blank_lines_are_dropped() {
+        assert_eq!(to_text("Avant\n\n```\n\n  é 😀\n```", KEEP), "Avant\n\n  é 😀");
+        assert_eq!(to_text("```\n \n\nx\n\ny\n```", KEEP), "x\n\ny");
+    }
+
+    #[test]
+    fn an_image_inside_a_link_reads_one_url() {
+        assert_eq!(to_text("[![logo é](i.png)](https://u/😀)", KEEP), "logo é (https://u/😀)");
+        assert_eq!(to_text("![logo](i.png)", KEEP), "logo (i.png)");
+        assert_eq!(to_text("[![logo](i.png)](u)", JOIN), "logo");
+    }
+
+    #[test]
     fn a_table_is_its_text() {
         assert_eq!(
             to_text("| a | b |\n|---|---|\n| `x` | y |", KEEP),
