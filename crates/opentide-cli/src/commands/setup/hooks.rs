@@ -345,6 +345,7 @@ fn with_local_hook(text: &str, relative: &str) -> Option<String> {
     } else {
         text
     };
+    // CRLF only when every line has it: not `opentide_core::text::newline_of` (any CRLF).
     let crlf = text.contains("\r\n") && text.matches('\n').count() == text.matches("\r\n").count();
     if crlf {
         let added = with_local_hook_lf(&text.replace("\r\n", "\n"), relative)?;

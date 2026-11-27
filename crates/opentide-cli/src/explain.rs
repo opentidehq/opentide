@@ -244,6 +244,7 @@ pub fn page(code: &str) -> Option<Page> {
 /// made LF: a checkout that converted the file to CRLF (Windows) builds a
 /// binary whose summary and Markdown are the same as an LF checkout's.
 fn file_page(code: &str, markdown: &str) -> Page {
+    // Only CRLF: not `opentide_core::text::universal_newlines` (a lone `\r` is kept).
     let markdown = markdown.replace("\r\n", "\n");
     Page {
         code: code.to_owned(),
@@ -695,6 +696,28 @@ mod tests {
                 "{code}: {}",
                 page.markdown
             );
+        }
+    }
+
+    /// Every tenant code `opentide_connectors::tenant_codes` builds from a
+    /// platform's prefix has its own page, which names the code and the
+    /// platform's deploy (#1960).
+    #[test]
+    fn every_platform_tenant_code_has_its_own_page() {
+        for codes in opentide_connectors::tenant_codes::ALL {
+            for code in codes.codes() {
+                let (_, markdown) = pages::PAGES
+                    .iter()
+                    .find(|(page, _)| *page == code)
+                    .unwrap_or_else(|| panic!("{code}: no page of its own"));
+                let markdown = markdown();
+                assert!(markdown.starts_with(&format!("# {code}\n")), "{code}");
+                assert!(
+                    markdown.contains(&format!("`{}` ", codes.platform)),
+                    "{code}: the page does not name `{}`",
+                    codes.platform
+                );
+            }
         }
     }
 

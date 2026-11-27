@@ -17,9 +17,9 @@ use std::time::Instant;
 /// `cargo xtask corpus <command>`: the corpora of UC-0.6 (#804).
 ///
 /// The oracle is BIN, else $OPENTIDE_ORACLE, else `opentide` on PATH; it must
-/// print the version faults.toml names. `--engine rust` covers the object kinds
-/// (opentide-schema, UC-1.3), the platform kinds (UC-1.4), the configuration
-/// kinds (UC-1.5) and validate's query kinds (UC-2.5) today.
+/// print the version faults.toml names. `faults --check --engine rust` compares
+/// the object, platform, configuration and query kinds with the oracle;
+/// `clean --engine rust` runs this checkout's command line in process.
 #[derive(clap::Subcommand, Debug)]
 pub enum Cmd {
     /// Write the heavy workspace for a seed (default counts 300/300/500,
@@ -32,8 +32,8 @@ pub enum Cmd {
     Faults(FaultsArgs),
     /// Print the codes the oracle can report (--write: tests/corpora/codes.toml)
     Codes(CodesArgs),
-    /// Run the oracle's validate and lint on a workspace that must report
-    /// nothing
+    /// Run validate and lint (the oracle's, or with --engine rust this
+    /// checkout's) on a workspace that must report nothing
     Clean(CleanArgs),
     /// Report which of the oracle's codes the fault catalogue covers
     Coverage(CoverageArgs),
@@ -146,8 +146,9 @@ pub struct FaultsArgs {
 /// The arguments of `corpus codes`.
 #[derive(clap::Args, Debug)]
 pub struct CodesArgs {
-    /// The engine: python, the oracle
-    #[arg(long, value_parser = clap::builder::PossibleValuesParser::new(ENGINES))]
+    /// The engine: python, the oracle, whose inventory codes.toml records (the
+    /// only one; the flag may be left out)
+    #[arg(long, value_parser = clap::builder::PossibleValuesParser::new(["python"]))]
     engine: Option<String>,
     /// The oracle executable
     #[arg(long, value_name = "BIN")]
@@ -174,10 +175,11 @@ pub struct CoverageArgs {
 /// The arguments of `corpus clean`.
 #[derive(clap::Args, Debug)]
 pub struct CleanArgs {
-    /// The engine: python, the oracle
+    /// The engine: python, the oracle; rust, this checkout's command line, run
+    /// in process
     #[arg(long, value_parser = clap::builder::PossibleValuesParser::new(ENGINES))]
     engine: Option<String>,
-    /// The oracle executable
+    /// The oracle executable (--engine python)
     #[arg(long, value_name = "BIN")]
     oracle: Option<String>,
     /// The workspace to run on
@@ -516,20 +518,63 @@ pub(crate) fn load_catalogue(path: &Path) -> Result<Catalogue> {
     Catalogue::parse(&text).with_context(|| format!("in {}", path.display()))
 }
 
-/// The engine a check runs against: only the oracle today.
-fn require_python(engine: Option<&str>) -> Result<Option<u8>> {
+/// The engine a check runs against, which the caller must name.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Engine {
+    /// The oracle: the Python command line at the version faults.toml names.
+    Python,
+    /// This checkout's command line, run in process.
+    Rust,
+}
+
+/// `--engine` as given; required.
+fn engine_of(engine: Option<&str>) -> Result<Engine> {
     match engine {
-        Some("python") => Ok(None),
-        Some("rust") => {
-            eprintln!(
-                "xtask corpus: --engine rust is not implemented yet; the Rust engine's \
-                 validate (UC-2.x, https://github.com/opentidehq/opentide/issues/790) runs it"
-            );
-            Ok(Some(1))
-        }
+        Some("python") => Ok(Engine::Python),
+        Some("rust") => Ok(Engine::Rust),
         Some(other) => bail!("--engine `{other}` is neither python nor rust"),
-        None => bail!("--engine python is required (the oracle the expectations name)"),
+        None => bail!("--engine is required: python (the oracle the expectations name) or rust"),
     }
+}
+
+/// Runs this checkout's `opentide --json --repo ROOT ARGS...` in process, as
+/// [`run_oracle`] runs the oracle (without the variables that would point it
+/// elsewhere), and parses its document.
+fn run_rust(root: &Path, args: &[String]) -> Result<serde_json::Value> {
+    let env = opentide_cli::env::Env::from_pairs(
+        std::env::vars()
+            .filter(|(name, _)| {
+                !matches!(
+                    name.as_str(),
+                    "OPENTIDE_REPO_ROOT"
+                        | "OPENTIDE_TIDE_WORKSPACE"
+                        | "OPENTIDE_DATA_ROOT"
+                        | "OPENTIDE_DEBUG"
+                        | "OPENTIDE_PROXY"
+                        | "NO_COLOR"
+                )
+            })
+            .chain([("NO_COLOR".to_owned(), "1".to_owned())]),
+    );
+    let command_line: Vec<String> = ["--json".to_owned(), "--repo".to_owned()]
+        .into_iter()
+        .chain([root.to_string_lossy().into_owned()])
+        .chain(args.iter().cloned())
+        .collect();
+    let captured = opentide_cli::embed::run_captured(
+        &command_line,
+        &env,
+        root,
+        env!("CARGO_PKG_VERSION"),
+        false,
+    );
+    serde_json::from_slice(&captured.stdout).with_context(|| {
+        format!(
+            "the Rust command line printed no JSON document for {args:?} in {}; stderr: {}",
+            root.display(),
+            String::from_utf8_lossy(&captured.stderr)
+        )
+    })
 }
 
 #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
@@ -545,9 +590,7 @@ fn faults_command(args: &FaultsArgs) -> Result<u8> {
     if parsed.engine.as_deref() == Some("rust") {
         return rust_check(&parsed, &catalogue);
     }
-    if let Some(code) = require_python(parsed.engine.as_deref())? {
-        return Ok(code);
-    }
+    engine_of(parsed.engine.as_deref())?;
     let bin = oracle_bin(parsed.oracle.as_deref());
     check_oracle_version(&bin, &catalogue.oracle)?;
     let base = generate::generate(&catalogue.base.options()?);
@@ -1082,8 +1125,8 @@ fn structural_check(parsed: &FaultArgs, catalogue: &Catalogue) -> Result<u8> {
                     bail!(
                         "--engine rust checks the object kinds (UC-1.3; --only objects lists \
                          them), the platform kinds (UC-1.4; --only platforms) and the \
-                         configuration kinds (UC-1.5; --only configuration): `{id}` comes with \
-                         the Rust engine's validate (UC-2.x)"
+                         configuration kinds (UC-1.5; --only configuration) and the query kinds \
+                         (UC-2.5; --only queries): `{id}` is checked with --engine python"
                     );
                 }
             }
@@ -1367,14 +1410,12 @@ fn oracle_python(bin: &Path) -> Result<PathBuf> {
 }
 
 fn codes_command(args: &CodesArgs) -> Result<u8> {
+    // `--engine` takes only `python`: codes.toml records the oracle's inventory.
     let CodesArgs {
-        engine,
+        engine: _,
         oracle,
         write,
     } = args;
-    if let Some(code) = require_python(engine.as_deref())? {
-        return Ok(code);
-    }
     let catalogue = load_catalogue(&corpora_dir().join("faults.toml"))?;
     let bin = oracle_bin(oracle.as_deref());
     check_oracle_version(&bin, &catalogue.oracle)?;
@@ -1455,17 +1496,24 @@ fn clean_command(args: &CleanArgs) -> Result<u8> {
         oracle,
         repo,
     } = args;
-    if let Some(code) = require_python(engine.as_deref())? {
-        return Ok(code);
-    }
+    let engine = engine_of(engine.as_deref())?;
     let repo = repo.as_ref().context("--repo is required")?;
-    let catalogue = load_catalogue(&corpora_dir().join("faults.toml"))?;
-    let bin = oracle_bin(oracle.as_deref());
-    check_oracle_version(&bin, &catalogue.oracle)?;
+    let bin = if engine == Engine::Python {
+        let catalogue = load_catalogue(&corpora_dir().join("faults.toml"))?;
+        let bin = oracle_bin(oracle.as_deref());
+        check_oracle_version(&bin, &catalogue.oracle)?;
+        Some(bin)
+    } else {
+        None
+    };
     let mut total = 0;
     for command in ["validate", "lint"] {
         let started = Instant::now();
-        let document = run_oracle(&bin, repo, &[command.to_string()], &BTreeMap::new())?;
+        let args = [command.to_string()];
+        let document = match &bin {
+            Some(bin) => run_oracle(bin, repo, &args, &BTreeMap::new())?,
+            None => run_rust(repo, &args)?,
+        };
         let elapsed = started.elapsed().as_secs_f64();
         let found = faults::findings(&document, &repo.to_string_lossy())?;
         let summary = document.get("summary").cloned().unwrap_or_default();

@@ -87,6 +87,10 @@ fn object_schemas() -> Vec<(String, Value)> {
             "GoogleSecopsConfig",
             schemars::schema_for!(platform::GoogleSecopsConfig),
         ),
+        (
+            "DatadogConfig",
+            schemars::schema_for!(platform::DatadogConfig),
+        ),
     ];
     schemas
         .drain(..)

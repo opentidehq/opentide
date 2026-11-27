@@ -9,47 +9,47 @@ view: diagnostics (code, severity, file, line, column and counts; a warning's te
 ━━━ stdout · json
 findings: 42
   issues_found | - | - | - | -
-  deployment_state_shape | error | <WS>/.opentide/states/deployment/e2cb0ccd-ebb4-4031-996c-2055d3d4de9e.json | - | -
-  deployment_state_platform | error | <WS>/.opentide/states/deployment/f9b687ac-3536-4bb1-a283-2b278f3f0780.json | - | -
-  deployment_state_uuid_mismatch | error | <WS>/.opentide/states/deployment/ffa05d91-6966-4583-ac48-7f849cd08261.json | - | -
+  deployment_state_uuid_mismatch | error | <WS>/.opentide/states/deployment/a82203e7-7105-4c10-9fc0-323ed6aaa69e.json | - | -
+  deployment_state_shape | error | <WS>/.opentide/states/deployment/b47c0ec3-8988-40a2-b6c7-2f76b2476121.json | - | -
+  deployment_state_platform | error | <WS>/.opentide/states/deployment/b84b7ffe-3d7e-4d91-9413-9d13fcac8dee.json | - | -
   invalid_ref | error | <WS>/objects/objectives/elevated-exfiltration-objective-0002.yaml | 54 | 7
   vocab_unknown | error | <WS>/objects/objectives/lateral-beacon-objective-0001.yaml | 34 | 11
   invalid_ref | error | <WS>/objects/objectives/rapid-tunnel-objective-0003.yaml | 77 | 7
-  invalid_ref | error | <WS>/objects/rules/covert-beacon-rule-0015.yaml | 29 | 18
-  schema_validation | error | <WS>/objects/rules/covert-dropper-rule-0064.yaml | 41 | 3
-  schema_validation | error | <WS>/objects/rules/covert-injection-rule-0032.yaml | 1 | 1
-  schema_validation | error | <WS>/objects/rules/elevated-exfiltration-rule-0014.yaml | 9 | 13
-  config_enum_unknown | error | <WS>/objects/rules/elevated-pivot-rule-0018.yaml | 29 | 15
-  yaml_parse | error | <WS>/objects/rules/encoded-beacon-rule-0034.yaml | 83 | 1
-  vocab_unknown | error | <WS>/objects/rules/encoded-implant-rule-0042.yaml | 9 | 8
-  config_enum_unknown | error | <WS>/objects/rules/encoded-implant-rule-0042.yaml | 43 | 13
-  schema_validation | error | <WS>/objects/rules/encoded-loader-rule-0035.yaml | 42 | 3
-  vocab_unknown | error | <WS>/objects/rules/encoded-tunnel-rule-0049.yaml | 9 | 8
-  missing_uuid | error | <WS>/objects/rules/hidden-implant-rule-0006.yaml | - | -
-  schema_validation | error | <WS>/objects/rules/hidden-loader-rule-0008.yaml | 1 | 1
-  yaml_parse | error | <WS>/objects/rules/hidden-loader-rule-0024.yaml | 45 | 1
-  schema_validation | error | <WS>/objects/rules/lateral-dropper-rule-0026.yaml | 1 | 1
-  schema_validation | error | <WS>/objects/rules/persistent-loader-rule-0010.yaml | 9 | 13
-  invalid_ref | error | <WS>/objects/rules/rapid-injection-rule-0013.yaml | 23 | 18
-  config_enum_unknown | error | <WS>/objects/rules/rapid-injection-rule-0023.yaml | 62 | 13
-  schema_missing | error | <WS>/objects/rules/rapid-relay-rule-0007.yaml | 3 | 1
-  schema_validation | error | <WS>/objects/rules/remote-beacon-rule-0061.yaml | 46 | 3
-  schema_validation | error | <WS>/objects/rules/remote-dropper-rule-0048.yaml | 36 | 3
-  schema_validation | error | <WS>/objects/rules/remote-dropper-rule-0074.yaml | 48 | 3
-  external_id_in_rule | error | <WS>/objects/rules/rogue-harvest-rule-0027.yaml | 55 | 14
-  vocab_unknown | error | <WS>/objects/rules/rogue-relay-rule-0011.yaml | 9 | 8
-  schema_validation | error | <WS>/objects/rules/scheduled-exfiltration-rule-0038.yaml | 61 | 3
-  schema_validation | error | <WS>/objects/rules/scheduled-loader-rule-0030.yaml | 65 | 3
-  schema_validation | error | <WS>/objects/rules/scheduled-relay-rule-0243.yaml | 38 | 3
-  schema_validation | error | <WS>/objects/rules/silent-injection-rule-0022.yaml | 51 | 3
-  schema_validation | error | <WS>/objects/rules/silent-pivot-rule-0025.yaml | 68 | 3
-  yaml_parse | error | <WS>/objects/rules/staged-exfiltration-rule-0021.yaml | 72 | 1
-  schema_validation | error | <WS>/objects/rules/staged-pivot-rule-0009.yaml | 14 | 3
+  yaml_parse | error | <WS>/objects/rules/covert-implant-rule-0021.yaml | 58 | 1
+  schema_validation | error | <WS>/objects/rules/covert-spray-rule-0009.yaml | 16 | 3
+  yaml_parse | error | <WS>/objects/rules/covert-tunnel-rule-0022.yaml | 73 | 1
+  schema_validation | error | <WS>/objects/rules/elevated-exfiltration-rule-0135.yaml | 52 | 3
+  schema_validation | error | <WS>/objects/rules/elevated-exfiltration-rule-0555.yaml | 44 | 3
+  config_enum_unknown | error | <WS>/objects/rules/elevated-injection-rule-0029.yaml | 48 | 13
+  vocab_unknown | error | <WS>/objects/rules/elevated-spray-rule-0011.yaml | 9 | 8
+  vocab_unknown | error | <WS>/objects/rules/elevated-spray-rule-0039.yaml | 9 | 8
+  config_enum_unknown | error | <WS>/objects/rules/elevated-spray-rule-0039.yaml | 57 | 13
+  schema_validation | error | <WS>/objects/rules/encoded-dropper-rule-0107.yaml | 50 | 3
+  yaml_parse | error | <WS>/objects/rules/encoded-tunnel-rule-0030.yaml | 70 | 1
+  schema_validation | error | <WS>/objects/rules/hidden-beacon-rule-0121.yaml | 49 | 3
+  schema_validation | error | <WS>/objects/rules/lateral-dropper-rule-0065.yaml | 42 | 3
+  schema_validation | error | <WS>/objects/rules/lateral-implant-rule-0008.yaml | 1 | 1
+  invalid_ref | error | <WS>/objects/rules/persistent-downgrade-rule-0013.yaml | 29 | 18
+  schema_validation | error | <WS>/objects/rules/persistent-harvest-rule-0024.yaml | 1 | 1
+  schema_missing | error | <WS>/objects/rules/rapid-downgrade-rule-0007.yaml | 3 | 1
+  schema_validation | error | <WS>/objects/rules/rapid-exfiltration-rule-0051.yaml | 51 | 3
+  schema_validation | error | <WS>/objects/rules/rapid-injection-rule-0037.yaml | 43 | 3
+  schema_validation | error | <WS>/objects/rules/rapid-injection-rule-0079.yaml | 36 | 3
+  schema_validation | error | <WS>/objects/rules/rapid-loader-rule-0093.yaml | 53 | 3
+  external_id_in_rule | error | <WS>/objects/rules/remote-relay-rule-0057.yaml | 67 | 14
+  schema_validation | error | <WS>/objects/rules/rogue-downgrade-rule-0023.yaml | 31 | 3
+  invalid_ref | error | <WS>/objects/rules/rogue-implant-rule-0015.yaml | 22 | 18
+  schema_validation | error | <WS>/objects/rules/scheduled-exfiltration-rule-0027.yaml | 1 | 1
+  vocab_unknown | error | <WS>/objects/rules/scheduled-relay-rule-0071.yaml | 9 | 8
+  schema_validation | error | <WS>/objects/rules/silent-spray-rule-0014.yaml | 9 | 13
+  config_enum_unknown | error | <WS>/objects/rules/silent-spray-rule-0017.yaml | 37 | 15
+  schema_validation | error | <WS>/objects/rules/staged-harvest-rule-0010.yaml | 9 | 13
+  missing_uuid | error | <WS>/objects/rules/staged-implant-rule-0006.yaml | - | -
   chaining_relation_unknown | error | <WS>/objects/threats/elevated-tunnel-threat-0003.yaml | 44 | 17
   yaml_parse | error | <WS>/objects/threats/encoded-exfiltration-threat-0030.yaml | - | -
   schema_validation | error | <WS>/objects/threats/remote-dropper-threat-0001.yaml | 21 | 11
   vocab_unknown | error | <WS>/objects/threats/rogue-downgrade-threat-0002.yaml | 22 | 13
-  nested_object_file | warning | <WS>/objects/rules/nested/encoded-spray-rule-0017.yaml | - | -
+  nested_object_file | warning | <WS>/objects/rules/nested/rapid-tunnel-rule-0018.yaml | - | -
 exit_code: 1
 report.stats.objects_checked: 872
 schema_version: 1

@@ -2,9 +2,9 @@
 //! would send, or why it would fail.
 
 use opentide_schema::objects::platform::{
-    BitdefenderConfig, CarbonBlackConfig, CrowdstrikeConfig, ElasticConfig, ExabeamConfig,
-    GoogleSecopsConfig, GraylogConfig, HarfangLabConfig, MicrosoftDefenderConfig, SentinelConfig,
-    SentinelOneConfig, SplunkConfig, SysdigConfig,
+    BitdefenderConfig, CarbonBlackConfig, CrowdstrikeConfig, DatadogConfig, ElasticConfig,
+    ExabeamConfig, GoogleSecopsConfig, GraylogConfig, HarfangLabConfig, MicrosoftDefenderConfig,
+    SentinelConfig, SentinelOneConfig, SplunkConfig, SysdigConfig,
 };
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -12,8 +12,9 @@ use serde::de::DeserializeOwned;
 use crate::json::{Json, Object};
 use crate::rule::{CompileError, Rule};
 use crate::{
-    Context, bitdefender, carbon_black, crowdstrike, deploy, elastic, exabeam, google_secops,
-    graylog, harfanglab, microsoft_defender, plan, sentinel, sentinel_one, splunk, sysdig,
+    Context, bitdefender, carbon_black, crowdstrike, datadog, deploy, elastic, exabeam,
+    google_secops, graylog, harfanglab, microsoft_defender, plan, sentinel, sentinel_one, splunk,
+    sysdig,
 };
 
 /// The tenant a preview compiles for: exclusions scoped to a tenant name are
@@ -48,6 +49,10 @@ pub fn compile_offline(
         ),
         "google_secops" => Some(google_secops::compile_offline(cx, rule)),
         "graylog" => Some(graylog_request(cx, rule, None)),
+        "datadog" => Some(
+            datadog::compile_deployment(cx, rule, None)
+                .map(|compiled| datadog::create_request(&compiled)),
+        ),
         _ => None,
     }
 }
@@ -144,6 +149,10 @@ pub fn compile_tenant(
         // with what the deploy reads beside it (the run state).
         "google_secops" => Some(google_secops::compile_deployment(cx, rule)),
         "graylog" => Some(graylog_request(cx, rule, known)),
+        "datadog" => Some(
+            datadog::compile_deployment(cx, rule, known)
+                .map(|compiled| datadog::create_request(&compiled)),
+        ),
         "elastic" => {
             let setup = known.map_or_else(elastic::Setup::none, elastic::Setup::from_tenant);
             Some(elastic::compile(cx, rule, &setup))
@@ -413,6 +422,7 @@ fn model_config_dump(platform: &str, block: &Json) -> Option<Json> {
         "exabeam" => model_dump::<ExabeamConfig>(block),
         "google_secops" => model_dump::<GoogleSecopsConfig>(block),
         "graylog" => model_dump::<GraylogConfig>(block),
+        "datadog" => model_dump::<DatadogConfig>(block),
         _ => None,
     }
 }
@@ -484,6 +494,7 @@ pub fn preview_planned(
         "bitdefender" => bitdefender_preview(cx, rule, tenants),
         "graylog" => graylog_preview(cx, rule, tenants),
         "exabeam" => exabeam_preview(cx, rule, tenants),
+        "datadog" => datadog_preview(cx, rule, tenants),
         "elastic" => elastic_preview(cx, rule, tenants),
         _ if deployers().contains(&platform) => {
             requests_preview(cx, platform, rule, tenants, known)
@@ -568,6 +579,47 @@ fn exabeam_preview(cx: &Context<'_>, rule: &Rule, tenants: &[String]) -> Json {
     }
 }
 
+/// The request a Datadog deploy would send (RFC rfc-datadog-cloud-siem §7.2):
+/// compiled for each tenant the run sends the rule to, so a tenant that lacks
+/// a notification alias the block names fails the dry run, naming it; the
+/// request shown is the first tenant's. With no tenant, an alias is shown as
+/// `<tenant:notifications.ALIAS>` and the tenant's tags are left out. A dry
+/// run makes no call: the validation every write starts with, and the
+/// comparison that leaves an unchanged rule alone, are not made.
+fn datadog_preview(cx: &Context<'_>, rule: &Rule, tenants: &[String]) -> Json {
+    let reached: Vec<(&str, &Json)> = tenants
+        .iter()
+        .filter_map(|name| {
+            deploy::tenant(cx, datadog::PLATFORM, name).map(|table| (name.as_str(), table))
+        })
+        .collect();
+    let mut first = None;
+    let attempts: Vec<Option<&Json>> = if reached.is_empty() {
+        vec![None]
+    } else {
+        reached.iter().map(|(_, table)| Some(*table)).collect()
+    };
+    for tenant in attempts {
+        match datadog::compile_deployment(cx, rule, tenant) {
+            Ok(compiled) => {
+                first.get_or_insert(compiled);
+            }
+            Err(error) => return failure(rule, &error),
+        }
+    }
+    let mut entry = Object::new();
+    entry.insert("uuid".into(), rule.uuid.clone().into());
+    entry.insert("name".into(), rule.name.clone().into());
+    entry.insert(
+        "api_request".into(),
+        first.map_or(Json::Null, |compiled| datadog::create_request(&compiled)),
+    );
+    if let Some((name, _)) = reached.first() {
+        entry.insert("tenant".into(), (*name).into());
+    }
+    Json::Object(entry)
+}
+
 /// The preview of `rule` on `platform` (`preview_rule_deployment`), the
 /// entry the dry run's `payloads` lists. Every platform but Elastic reports
 /// a rule it cannot compile as a failure; Elastic shows its deploy body
@@ -619,6 +671,7 @@ pub fn preview(cx: &Context<'_>, platform: &str, rule: &Rule) -> Json {
             Err(error) => failure(rule, &error),
         },
         "exabeam" => exabeam_preview(cx, rule, &[]),
+        "datadog" => datadog_preview(cx, rule, &[]),
         // `_google_secops_compile_preview`: the `rules.create` body with what
         // the deploy reads beside it (`compile_deployment`), or the failure,
         // named for Google SecOps.

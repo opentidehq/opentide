@@ -360,3 +360,19 @@ def test_a_budgets_only_change_runs_the_throughput_gate_and_the_wiring_test_alon
     outputs = plan("tests/bench/instructions.toml")
     assert on(outputs) == {"throughput", "wiring"}
     assert outputs["crates"] == ""
+
+
+@pytest.mark.parametrize(
+    ("path", "facade"),
+    [
+        ("crates/opentide/src/lib.rs", True),
+        # RuleConfigurations: the facade re-exports it from opentide-schema,
+        # where cargo semver-checks run on the facade never sees it (#1911).
+        ("crates/opentide-schema/src/objects/rule.rs", True),
+        # A crate the facade re-exports nothing from, and a test of one it does.
+        ("crates/opentide-kql/src/lib.rs", False),
+        ("crates/opentide-schema/tests/models.rs", False),
+    ],
+)
+def test_the_facade_job_runs_when_what_it_re_exports_can_change(path: str, facade: bool) -> None:
+    assert plan(path)["facade"] == str(facade).lower()

@@ -587,7 +587,7 @@ pub struct SetupRepoFields {
         help = "One-line description, used in the README"
     )]
     pub description: Option<String>,
-    #[arg(long = "platform", help = "Enable a detection platform (repeatable): sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops", action = clap::ArgAction::Append, value_name = "PLATFORM")]
+    #[arg(long = "platform", help = "Enable a detection platform (repeatable): sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops, datadog", action = clap::ArgAction::Append, value_name = "PLATFORM")]
     pub platform: Vec<Platform>,
 }
 
@@ -1006,6 +1006,8 @@ pub struct SetupPlatformsArgs {
         help = "Enable Google Security Operations (YARA-L)"
     )]
     pub google_secops: bool,
+    #[arg(long = "datadog", help = "Enable Datadog Cloud SIEM")]
+    pub datadog: bool,
     #[command(flatten)]
     pub confirm: SetupConfirm,
 }
@@ -1133,7 +1135,7 @@ pub struct SharePushArgs {
 pub struct DeployArgs {
     #[arg(
         long = "platform",
-        help = "Detection platform: sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops",
+        help = "Detection platform: sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops, datadog",
         value_name = "PLATFORM",
         value_parser = PlatformName
     )]
@@ -1202,7 +1204,7 @@ pub struct DeployArgs {
 pub struct DeployMetadataArgs {
     #[arg(
         long = "platform",
-        help = "Detection platform: sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops",
+        help = "Detection platform: sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops, datadog",
         value_name = "PLATFORM"
     )]
     pub platform: Platform,
@@ -1422,7 +1424,7 @@ pub struct NewArgs {
 pub struct NewRuleArgs {
     #[arg(long = "name", help = "Object name; the filename is its slug")]
     pub name: Option<String>,
-    #[arg(long = "platform", help = "Add a configuration block for this platform (repeatable): sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops", action = clap::ArgAction::Append, value_name = "PLATFORM")]
+    #[arg(long = "platform", help = "Add a configuration block for this platform (repeatable): sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops, datadog", action = clap::ArgAction::Append, value_name = "PLATFORM")]
     pub platform: Vec<Platform>,
     #[arg(
         long = "objective",
@@ -1467,7 +1469,7 @@ pub struct NewThreatArgs {
 pub struct InfoArgs {
     #[arg(
         long = "platform",
-        help = "Detection platform: sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops",
+        help = "Detection platform: sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops, datadog",
         value_name = "PLATFORM"
     )]
     pub platform: Option<Platform>,
@@ -1531,7 +1533,7 @@ pub struct QueryArgs {
     pub query: Option<String>,
     #[arg(
         long = "platform",
-        help = "Detection platform: sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops",
+        help = "Detection platform: sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops, datadog",
         value_name = "PLATFORM",
         value_parser = PlatformName
     )]

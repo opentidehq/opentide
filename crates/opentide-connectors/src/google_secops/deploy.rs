@@ -120,7 +120,10 @@ impl RuleOutcome {
     }
 
     fn request_failed(&mut self, error: &ApiError) {
-        self.fail("google_secops_request_failed", error.short());
+        self.fail(
+            crate::tenant_codes::GOOGLE_SECOPS.request_failed,
+            error.short(),
+        );
     }
 
     fn deployment_failed(&mut self, rule_id: &str, error: &ApiError) {

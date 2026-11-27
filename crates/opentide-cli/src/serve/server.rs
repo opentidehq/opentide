@@ -245,7 +245,7 @@ pub fn commands_digest(document: &Json) -> String {
         ),
         other => other.clone(),
     };
-    crate::digest::sha256_hex(compact(&sorted(&stable)).as_bytes())
+    opentide_core::text::sha256_hex(compact(&sorted(&stable)).as_bytes())
 }
 
 impl Server {

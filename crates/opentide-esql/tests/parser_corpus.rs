@@ -1,16 +1,6 @@
 //! The parser over every ES|QL file of the corpora: a lossless tree.
-//!
-//! The parser is private to the crate, so
-//! this test includes its source.
 
-#![expect(dead_code, reason = "the included modules are used in part")]
-
-#[path = "../src/lexer.rs"]
-mod lexer;
-#[path = "../src/parser/mod.rs"]
-mod parser;
-#[path = "../src/syntax.rs"]
-mod syntax;
+use opentide_esql::{parser, syntax};
 
 use std::path::{Path, PathBuf};
 

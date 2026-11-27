@@ -819,6 +819,7 @@ fn platform_block(
             pairs.extend(google_secops(variant, process, &mut tags));
         }
         "graylog" => pairs.extend(graylog(rng, variant, process, &mut tags)),
+        "datadog" => pairs.extend(datadog(rng, variant, process, &mut tags)),
         _ => {}
     }
     (Yaml::Map(pairs), tags)
@@ -1370,6 +1371,75 @@ fn exabeam(
 /// or every other variant a multi-event rule with a `match` window (which
 /// `LIVE` does not run, so it is `LIVE_CUSTOMIZABLE`). It draws nothing from
 /// `rng`.
+/// A Datadog block (RFC rfc-datadog-cloud-siem §5): a threshold rule on one
+/// query, or on two named queries grouped by host, with a signal grouping.
+fn datadog(
+    rng: &mut Rng,
+    variant: usize,
+    process: &str,
+    tags: &mut Vec<String>,
+) -> Vec<(String, Yaml)> {
+    if variant.is_multiple_of(2) {
+        return kv(vec![
+            (
+                "queries",
+                Yaml::Seq(vec![Yaml::map(vec![(
+                    "query",
+                    Yaml::s(format!("source:windows @process.name:{process}")),
+                )])]),
+            ),
+            (
+                "cases",
+                Yaml::Seq(vec![Yaml::map(vec![(
+                    "condition",
+                    Yaml::s(format!("a > {}", rng.below(5))),
+                )])]),
+            ),
+        ]);
+    }
+    tags.push("datadog:grouped".to_string());
+    kv(vec![
+        (
+            "queries",
+            Yaml::Seq(vec![
+                Yaml::map(vec![
+                    ("name", Yaml::s("started")),
+                    (
+                        "query",
+                        Yaml::s(format!("source:windows @process.name:{process}")),
+                    ),
+                    ("group_by", Yaml::strs(&["host"])),
+                ]),
+                Yaml::map(vec![
+                    ("name", Yaml::s("connected")),
+                    (
+                        "query",
+                        Yaml::s(
+                            "source:windows @evt.name:network_connection -@network.destination.ip:10.*",
+                        ),
+                    ),
+                    ("group_by", Yaml::strs(&["host"])),
+                ]),
+            ]),
+        ),
+        ("detection", Yaml::map(vec![("window", Yaml::s("15m"))])),
+        (
+            "cases",
+            Yaml::Seq(vec![Yaml::map(vec![
+                ("name", Yaml::s("started then connected")),
+                (
+                    "condition",
+                    Yaml::s(format!("started > 0 && connected > {}", 2 + rng.below(5))),
+                ),
+            ])]),
+        ),
+        (
+            "signal",
+            Yaml::map(vec![("group_by", Yaml::strs(&["host"]))]),
+        ),
+    ])
+}
+
 fn google_secops(variant: usize, process: &str, tags: &mut Vec<String>) -> Vec<(String, Yaml)> {
     if variant.is_multiple_of(2) {
         return kv(vec![
@@ -1634,6 +1704,21 @@ fn configuration_files(layout: Layout, platforms: &[&'static str]) -> Vec<File> 
 mod tests {
     use super::super::vocab;
     use super::{Counts, date, slugify};
+
+    #[test]
+    fn datadog_blocks_pass_the_block_checks() {
+        use opentide_schema::objects::platform::datadog::block_findings;
+        let mut rng = super::Rng::new(7);
+        for variant in 0..2 {
+            let mut tags = Vec::new();
+            let block = super::Yaml::Map(super::datadog(&mut rng, variant, "cmd.exe", &mut tags));
+            let document = opentide_schema::node::load(&block.render()).expect("YAML");
+            let root = document.root().expect("a block");
+            let findings = block_findings(root);
+            assert!(findings.is_empty(), "variant {variant}: {findings:?}");
+            assert_eq!(tags.len(), variant);
+        }
+    }
 
     #[test]
     fn google_secops_blocks_pass_the_block_checks() {

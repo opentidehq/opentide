@@ -411,12 +411,13 @@ The engine is [opentidehq/language-server](https://github.com/opentidehq/languag
 | `elastic` | ES\|QL, EQL, Kibana KQL or Lucene, by the block's `type` and `language`; ES\|QL against the lowest `setup.version` of the block's tenants |
 | `carbon_black_cloud` | Lucene, Carbon Black dialect |
 | `sysdig` | Falco: the block's `condition`, its `exceptions`, and the macros and lists of the block (and of the Falco default rules) it names |
-| `crowdstrike` | CQL, with the Next-Gen SIEM correlation-rule checks (`cql_correlate_aggregate`): the block's `query` |
+| `crowdstrike` | CQL, with the Next-Gen SIEM correlation-rule checks (`cql_correlate_aggregate`): the block's `query`; a `system: crowdstrike` hunt and a `.cql` file as plain LogScale, without them, `--platform crowdstrike` or not |
 | `harfanglab` | YARA, HarfangLab profile: the block's `yara.signature` or the rule its decomposed form assembles, and `.yar` and `.yara` files |
 | `bitdefender` | YARA, Bitdefender profile: the block's `yara.signature`, and `.yar` and `.yara` files |
 | `graylog` | Lucene, Graylog dialect: the block's query |
-| `exabeam` | The Exabeam Query Language: each sequence's filter under the `rule` profile, where Search's advanced operators (SELECT, GROUP-BY, pipes) are refused (`exabeam_advanced_in_rule`); a `system: exabeam` hunt and a `.exabeam` file under the `search` profile |
+| `exabeam` | The Exabeam Query Language: each sequence's filter under the `rule` profile, where Search's advanced operators (SELECT, GROUP-BY, pipes) are refused (`exabeam_advanced_in_rule`); a `system: exabeam` hunt and a `.exabeam` file under the `search` profile, `--platform exabeam` or not |
 | `google_secops` | YARA-L 2.0: the block's sections as the one rule deploy assembles, and `.yaral` and `.yl2` files |
+| `datadog` | The Datadog search syntax: each `queries[].query` under the `rule` profile, where full-text `*:term` and a calculated field `#name` are warnings; a `system: datadog` hunt and a `.datadog` file under the `search` profile |
 
 Google SecOps's YARA-L is checked offline by the analysis engine, the block's sections as the one rule deploy assembles (yara-l-1.0's `yaral_*` codes), and a `.yaral` or `.yl2` file with `--file`. `--live` sends each rule's assembled text to `verifyRuleText`, Google's compiler, which resolves the instance's reference lists and data tables and creates nothing. An `ERROR` diagnostic fails the rule as `google_secops_compile_error`, a `WARNING` is `google_secops_compile_warning`, each placed on the section key and line it falls in (`configurations.google_secops.events line 3, column 5`), and a block `run_frequency` Google does not allow for the rule is `google_secops_run_frequency_not_allowed`.
 
@@ -456,7 +457,7 @@ error[kql_unknown_operator]: unknown tabular operator 'wher'
 
 It reports the engine's errors, as `validate` does: they fail the run with exit `1` (`failure.code` `issues_found`), or, with `--queries warn`, print as warnings and exit `0` unless `--strict`. The engine's warnings and notes, such as a slow query shape (`kql_where_not_first`, `spl_wildcard`), are style: [`opentide lint`](./lint.md#queries) reports them. A passing run ends `✓ 3 queries valid`; one under `--queries warn` with rejected queries `! 2 warnings in 1 file · 3 queries checked`. With no query to check, the result is `skipped` with exit `0`. When the engine does not load, the run fails with exit `1` and `failure.code` `engine_unavailable`: it never skips.
 
-A query file (`--file hunting/lsass.kql`) holds one query in the language its extension names, in any case (`.KQL` too). With `--platform` it is checked with that platform's profile (`--platform microsoft_defender` knows Defender's tables) and `platform` names it; without, with the language alone, and `platform` is empty. `field_path` is empty for it, and given alone it checks no rule. A query file that does not exist, or whose language the `--platform` does not use (a `.kql` file with `--platform splunk`), exits `2`; one that is not UTF-8 or holds no query fails with exit `1`.
+A query file (`--file hunting/lsass.kql`) holds one query in the language its extension names, in any case (`.KQL` too). With `--platform` it is checked under that platform's dialect (`--platform microsoft_defender` knows Defender's tables, `--platform graylog` reads Graylog's Lucene) and `platform` names it, but it stays a file: a `.cql` file is plain LogScale and a `.exabeam` file a search, never a rule's query; without, with the language alone, and `platform` is empty. `field_path` is empty for it, and given alone it checks no rule. A query file that does not exist, or whose language the `--platform` does not use (a `.kql` file with `--platform splunk`), exits `2`; one that is not UTF-8 or holds no query fails with exit `1`.
 
 `--json` reports `mode` `offline`, `queries_validated`, one entry per query under `queries` (`path`, `platform`, `language`, `field_path`, `line`, `column`, `errors`), every finding under `diagnostics` with the [diagnostic fields](#diagnostic-fields), `engine` (the engine version), and `summary` (`queries`, `files`, `errors`, `warnings`, `notes`, `error_files`, `warning_files`).
 
@@ -636,7 +637,7 @@ there is nothing to check.
 
 ### Supported platforms
 
-Live query validation works on **nine platforms**; the offline engine on twelve, eight of them the same:
+Live query validation works on **ten platforms**; the offline engine on thirteen, nine of them the same:
 
 | Platform | `--live` | Offline |
 |----------|:--------:|:-------:|
@@ -653,10 +654,15 @@ Live query validation works on **nine platforms**; the offline engine on twelve,
 | `graylog` (Lucene, Graylog dialect) | ✅ | ✅ |
 | `exabeam` (Exabeam Query Language) | ✅ the filter, through Search | ✅ |
 | `google_secops` (YARA-L 2.0) | ✅ `verifyRuleText` | ✅ YARA-L |
+| `datadog` (Datadog search syntax) | ✅ the whole rule, through `rules/validation` | ✅ |
 
 ### Exabeam live validation
 
 `opentide validate query --platform exabeam --live` sends each sequence query of each rule, on each tenant deploy would send it to, as the `filter` of `POST /search/v2/events`, with `fields: ["*"]`, `limit: 1` and the last 15 minutes, the window the console's "Test Last 15 mins" uses. A `200` passes, the row count information only; a `400` fails the sequence with Exabeam's message; any other answer fails it too, never a pass. Each sequence is its own check, labelled `sequence 1`, `sequence 2`… when the rule has several. The condition, windows, grouping and outcomes are not checked on the tenant: no Exabeam API previews a rule. The API key needs **Search, Analyze and Export**.
+
+### Datadog live validation
+
+`opentide validate query --platform datadog --live` compiles each rule for each tenant deploy would send it to, notification aliases resolved, and sends the body to `POST /api/v2/security_monitoring/rules/validation`, Datadog's own rule check, which creates nothing. A `2xx` passes; a `400` fails the rule with each entry of Datadog's `errors[]` as `datadog_rule_invalid`; a rule that does not compile for the tenant (an alias it lacks, `datadog_notification_alias`) fails with the compiler's reason. Any other answer, or a rate limit that outlasts its waits, fails that rule only, never a pass. A `.datadog` file and a `system: datadog` hunt are checked offline only, as every platform's query files and hunts are: `--live` sends the rules' blocks. The connector's search check (`POST /api/v2/logs/events/search` over the last minute, `page.limit: 1`) serves the SDK's `Connection.validate_query`. The application key needs `security_monitoring_rules_write` for the rule check.
 
 ### Elastic live validation and deploy
 

@@ -59,7 +59,7 @@ pub const USAGE_NEEDS_INPUT: &str = super::setup::USAGE_NEEDS_INPUT;
 
 /// Keys a platform block needs beyond its model's required fields, so it
 /// holds detection logic and deploys (`PLATFORM_EXTRA_KEYS`).
-const PLATFORM_EXTRA_KEYS: [(&str, &[&[&str]]); 8] = [
+const PLATFORM_EXTRA_KEYS: [(&str, &[&[&str]]); 9] = [
     ("microsoft_defender", &[&["scope"], &["scope", "selection"]]),
     ("elastic", &[&["query"]]),
     (
@@ -93,6 +93,8 @@ const PLATFORM_EXTRA_KEYS: [(&str, &[&[&str]]); 8] = [
         "google_secops",
         &[&["events"], &["outcome"], &["condition"]],
     ),
+    // A case's condition is required with `threshold`, the default method.
+    ("datadog", &[&["cases", "condition"]]),
 ];
 
 /// A key under a platform block, its value, and whether it is a placeholder.
@@ -101,7 +103,7 @@ type KnownValue = (&'static [&'static str], &'static str, bool);
 /// Values for those keys that compile, with whether each is a placeholder
 /// (`PLATFORM_VALUES`): a detection decision nobody has made yet, or the
 /// platform's own default.
-const PLATFORM_VALUES: [(&str, &[KnownValue]); 4] = [
+const PLATFORM_VALUES: [(&str, &[KnownValue]); 5] = [
     (
         "crowdstrike",
         // The model holds both to a closed set in any case, which the JSON
@@ -136,6 +138,11 @@ const PLATFORM_VALUES: [(&str, &[KnownValue]); 4] = [
             (&["detection", "criteria", "field"], "Process.Name", true),
             (&["detection", "criteria", "is"], "...", true),
         ],
+    ),
+    (
+        "datadog",
+        // `a` is the first query's default name; the number is a decision.
+        &[(&["cases", "condition"], "a > 0", true)],
     ),
 ];
 

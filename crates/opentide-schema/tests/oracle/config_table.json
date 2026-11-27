@@ -7,6 +7,7 @@
   "platforms/bitdefender.toml",
   "platforms/carbon_black_cloud.toml",
   "platforms/crowdstrike.toml",
+  "platforms/datadog.toml",
   "platforms/elastic.toml",
   "platforms/exabeam.toml",
   "platforms/google_secops.toml",

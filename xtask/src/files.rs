@@ -1,23 +1,13 @@
 //! Small file helpers the kept commands share: a directory tree copied with
-//! its links, and a SHA-256 digest in hex. Moved from `xtask::golden`
-//! (deleted with the golden recordings, #1142).
+//! its links, and a SHA-256 digest in hex (`opentide_core::text`'s). Moved
+//! from `xtask::golden` (deleted with the golden recordings, #1142).
 
 use std::fs;
 use std::path::Path;
 
 use anyhow::{Context, Result};
 
-/// The lowercase hex SHA-256 of `data` (RustCrypto's `sha2`).
-pub fn sha256_hex(data: &[u8]) -> String {
-    use sha2::Digest as _;
-    use std::fmt::Write as _;
-    sha2::Sha256::digest(data)
-        .iter()
-        .fold(String::with_capacity(64), |mut hex, byte| {
-            let _ = write!(hex, "{byte:02x}");
-            hex
-        })
-}
+pub use opentide_core::text::sha256_hex;
 
 /// Copies a directory tree: regular files with their permissions, directories,
 /// and symbolic links as links.

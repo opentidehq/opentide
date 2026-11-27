@@ -36,12 +36,12 @@ macro_rules! kinds {
         /// The reserved words: lower-case text and kind. Never a name, except
         /// where a name is read whatever its spelling (a rule name, a meta
         /// key, a path segment).
-        pub(crate) const KEYWORDS: &[(&str, SyntaxKind)] = &[$(($text, SyntaxKind::$kw)),*];
+        pub const KEYWORDS: &[(&str, SyntaxKind)] = &[$(($text, SyntaxKind::$kw)),*];
 
         /// The words that are keywords only where the grammar takes them: the
         /// lexer reads them as [`SyntaxKind::IDENT`] and the parser re-kinds
         /// the ones it expects.
-        pub(crate) const CONTEXTUAL: &[(&str, SyntaxKind)] = &[$(($ctext, SyntaxKind::$ckw)),*];
+        pub const CONTEXTUAL: &[(&str, SyntaxKind)] = &[$(($ctext, SyntaxKind::$ckw)),*];
     };
 }
 
