@@ -854,8 +854,8 @@ fn framework_timeout_per_tenant() {
 }
 
 /// An answer that keeps trickling past the request's overall deadline is a
-/// timeout that names the deadline, not the read timeout it never missed
-/// (#1936).
+/// timeout that names the deadline's length, not the read timeout it never
+/// missed (#1936).
 #[test]
 fn framework_an_answer_past_the_deadline_names_the_deadline() {
     let trickling = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -894,20 +894,13 @@ fn framework_an_answer_past_the_deadline_names_the_deadline() {
     .unwrap();
     let error = outcome.unwrap_err();
     assert!(
-        matches!(
-            error,
-            ConnectorError::Timeout {
-                seconds: 1,
-                deadline: true,
-                ..
-            }
-        ),
+        matches!(error, ConnectorError::Timeout { seconds: 1, .. }),
         "{error:?}"
     );
     assert_eq!(
         error.to_string(),
         format!(
-            "mock tenant 'trickle' at http://127.0.0.1:{port} did not finish its answer within 1s"
+            "mock tenant 'trickle' at http://127.0.0.1:{port} sent no complete answer within 1s"
         )
     );
 }

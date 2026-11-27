@@ -425,7 +425,6 @@ fn read_timeout() -> ConnectorError {
         tenant: "lab".into(),
         address: "https://splunk.invalid:8089".into(),
         seconds: 5,
-        deadline: false,
     }
 }
 
@@ -1510,7 +1509,6 @@ impl LiveValidator for Paced {
                     tenant: tenant.clone(),
                     address: format!("https://{tenant}.invalid:8089"),
                     seconds: 5,
-                    deadline: false,
                 });
             }
             if self.delayed {

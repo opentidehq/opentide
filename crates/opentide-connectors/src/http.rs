@@ -188,14 +188,12 @@ impl HttpClient {
                 tenant,
                 address,
                 seconds: self.settings.timeout.as_secs(),
-                deadline: false,
             },
             TransportFailure::Deadline { after } => ConnectorError::Timeout {
                 platform,
                 tenant,
                 address,
                 seconds: after.as_secs(),
-                deadline: true,
             },
             TransportFailure::Answer { reason } => ConnectorError::Answer {
                 platform,

@@ -35,10 +35,11 @@ pub enum ConnectorError {
         /// What failed, without the URL.
         reason: String,
     },
-    /// The tenant took the request and sent no answer in time (a read
-    /// timeout: one query outlived the timeout, the tenant is not down), or
-    /// kept answering past the request's overall deadline (*deadline*).
-    #[error("{platform} tenant '{tenant}' at {address} {}", timeout_text(*.deadline, *.seconds))]
+    /// The tenant took the request and sent no complete answer in time: no
+    /// answer, or no more of it, within the read timeout (one query outlived
+    /// the timeout, the tenant is not down), or an answer that kept coming
+    /// past the request's overall deadline.
+    #[error("{platform} tenant '{tenant}' at {address} sent no complete answer within {seconds}s")]
     Timeout {
         /// The platform's identifier.
         platform: String,
@@ -47,11 +48,9 @@ pub enum ConnectorError {
         /// `scheme://host[:port]` of the request.
         address: String,
         /// The limit that ran out, in seconds: the read timeout, or the
-        /// deadline when *deadline* is set.
+        /// request's overall deadline (the connect timeout plus four read
+        /// timeouts) when the answer kept coming.
         seconds: u64,
-        /// Whether the overall deadline ran out (the answer kept coming but
-        /// did not finish), not one read timeout.
-        deadline: bool,
     },
     /// The request was answered, but the answer could not be read.
     #[error("{platform} tenant '{tenant}' at {address}: {reason}")]
@@ -237,16 +236,6 @@ impl ConnectorError {
     }
 }
 
-/// What a tenant did not do within *seconds*: answer at all (a read
-/// timeout), or finish its answer (the overall *deadline*).
-pub fn timeout_text(deadline: bool, seconds: u64) -> String {
-    if deadline {
-        format!("did not finish its answer within {seconds}s")
-    } else {
-        format!("sent no answer within {seconds}s")
-    }
-}
-
 /// `scheme://host[:port]` of *url*, without credentials, path or query.
 pub fn origin(url: &url::Url) -> String {
     let host = url.host_str().unwrap_or_default();
@@ -291,7 +280,6 @@ pub fn from_reqwest(
             tenant: label.tenant.clone(),
             address,
             seconds: timeout_secs,
-            deadline: false,
         };
     }
     let unreachable = error.is_connect() || error.is_request() || error.is_timeout();
