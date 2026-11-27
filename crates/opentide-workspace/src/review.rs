@@ -1,5 +1,5 @@
 //! `opentide rules unreviewed`: the rules RFC 0008's review predicate
-//! lists (`models/review.py`, `cli/services/rules.py`). Nothing is written.
+//! lists. Nothing is written.
 //!
 //! `rule::1.0` is always unreviewed; `rule::1.1` when `metadata.reviewed`
 //! is absent or strictly earlier than the evaluation instant minus the
@@ -129,8 +129,8 @@ pub struct Findings {
 ///
 /// # Errors
 ///
-/// The oracle's message for a value that is neither form, or the date
-/// library's for one that does not exist.
+/// [`REVIEWED_SHAPE`] for a value that is neither form, or the reason
+/// [`check_reviewed`] gives for one that does not exist (jiff's).
 pub fn review_instant(text: &str) -> Result<Timestamp, String> {
     let text = text.trim();
     check_reviewed(text).map_err(|violation| {

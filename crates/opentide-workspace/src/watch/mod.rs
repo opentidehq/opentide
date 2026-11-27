@@ -1,4 +1,4 @@
-//! `validate --watch` as a library (UC-2.3, #818; `cli/ui/watch.py`,
+//! `validate --watch` as a library (UC-2.3, #818;
 //! `docs/internal/cli-experience.md`): which files changed, and whether a
 //! pass validates them alone or the whole scope. Drawing a pass (the live
 //! view, the plain lines, cropping) is the command line's (UC-3.5).

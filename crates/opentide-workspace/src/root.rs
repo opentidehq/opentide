@@ -184,12 +184,12 @@ mod tests {
     }
 
     /// Only opentide's markers count, whatever else a folder holds: an
-    /// `objects/` with an `__init__.py` in it is still a catalogue.
+    /// `objects/` with source code in it is still a catalogue.
     #[test]
     fn git_objects_are_not_a_catalogue_and_any_objects_folder_is() {
         let fs = MemoryFs::new();
         fs.create_dir("/r/.git/objects");
-        fs.write("/py/objects/__init__.py", "");
+        fs.write("/py/objects/mod.rs", "");
         fs.create_dir("/cat/objects");
         assert!(!is_workspace_root(&fs, Path::new("/r/.git")));
         assert!(is_workspace_root(&fs, Path::new("/py")));
