@@ -749,9 +749,11 @@ pub mod catalog;
 pub mod datasets;
 pub mod duration;
 pub mod falco;
+pub mod ids;
 pub mod json;
 pub mod node;
 pub mod suggest;
+pub mod yara;
 
 /// Well-known diagnostic codes. Extra query diagnostics are allowed.
 pub mod codes {

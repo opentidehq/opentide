@@ -3365,6 +3365,7 @@ name = "opentide-connectors"
 version = "1.1.0"
 dependencies = [
  "base64 0.23.1",
+ "caseless",
  "http",
  "hyper-util",
  "jiff 0.2.41",
@@ -3412,6 +3413,7 @@ dependencies = [
  "strsim",
  "thiserror 2.0.21",
  "toml 0.8.23",
+ "uuid",
 ]
 
 [[package]]
@@ -3744,7 +3746,6 @@ dependencies = [
  "serde",
  "serde_json",
  "toml 0.8.23",
- "uuid",
 ]
 
 [[package]]
@@ -3778,7 +3779,6 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.21",
  "toml 0.8.23",
- "uuid",
 ]
 
 [[package]]

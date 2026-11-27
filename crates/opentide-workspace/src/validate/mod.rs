@@ -47,6 +47,7 @@ pub use scope::{Scope, Selection};
 
 /// One check `validate` can run (`ValidateCheck`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
 pub enum Check {
     /// `id-uniqueness`.
     IdUniqueness,
@@ -213,6 +214,7 @@ pub const VALIDATION_CODES: &[&str] = &[
 
 /// `--queries`: how the queries check reports a query the engine rejects.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub enum QueriesMode {
     /// As an error (the default).
     #[default]
@@ -221,6 +223,17 @@ pub enum QueriesMode {
     Warn,
     /// Not checked.
     Off,
+}
+
+impl QueriesMode {
+    /// The mode as `--queries` takes it: `error`, `warn` or `off`.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Error => "error",
+            Self::Warn => "warn",
+            Self::Off => "off",
+        }
+    }
 }
 
 /// An object whose queries the queries check reads.
@@ -330,6 +343,7 @@ pub trait CompileCheck: Sync {
 /// One finding of a plugin platform's own check of a rule's block
 /// ([`PlatformConfigurations`]).
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct PlatformFinding {
     /// Where, inside the block: keys and list indexes as strings.
     pub field_path: Vec<String>,
@@ -337,6 +351,18 @@ pub struct PlatformFinding {
     pub message: String,
     /// A warning rather than an error.
     pub warning: bool,
+}
+
+impl PlatformFinding {
+    /// A finding at `field_path` inside the block: an error, or a warning
+    /// when `warning` is set.
+    pub fn new(field_path: Vec<String>, message: impl Into<String>, warning: bool) -> Self {
+        Self {
+            field_path,
+            message: message.into(),
+            warning,
+        }
+    }
 }
 
 /// The configuration blocks of platform plugins (UC-4.5, #835), which the
@@ -435,6 +461,7 @@ impl std::fmt::Debug for Options<'_> {
 
 /// The report's `stats`.
 #[derive(Debug, Clone, PartialEq, Serialize)]
+#[non_exhaustive]
 pub struct Stats {
     /// Objects the object checks read.
     pub objects_checked: usize,
@@ -455,6 +482,7 @@ pub struct Stats {
 
 /// The report: `validate --json`'s `report`.
 #[derive(Debug, Clone, PartialEq, Serialize)]
+#[non_exhaustive]
 pub struct Report {
     /// No error.
     pub ok: bool,
@@ -467,7 +495,8 @@ pub struct Report {
 }
 
 /// The counts behind the outcome line (`summary`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+#[non_exhaustive]
 pub struct Summary {
     /// Objects checked.
     pub objects: usize,
@@ -508,6 +537,7 @@ pub const OBJECT_TYPES: [&str; 3] = ["rule", "threat", "objective"];
 /// it: the usage failure's code, the option, the first value refused, and
 /// the message.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct Refusal {
     /// The usage failure's code (`usage_invalid_choice`).
     pub code: &'static str,
@@ -931,10 +961,7 @@ fn enabled_platforms(
         else {
             continue;
         };
-        if matches!(
-            block.get("enabled").map(|e| &e.value),
-            Some(Value::Bool(true))
-        ) {
+        if opentide_schema::configuration::resolve::platform_enabled(platforms, platform) {
             enabled.insert(platform.to_owned());
         }
         if let Value::Map(entries) = &block.value {

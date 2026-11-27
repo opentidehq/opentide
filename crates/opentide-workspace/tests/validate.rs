@@ -1615,6 +1615,52 @@ mod validate {
         assert!(with_code(&other, "deployment_state_shape").is_empty());
     }
 
+    /// #1938: `validate`'s `states` check reads a shard's name as `deploy`
+    /// does. `deploy` refuses a rule whose shard sits beside another file
+    /// naming the same rule (`{<32 hex digits>}.json`, `uuid:<uuid>.json`);
+    /// `validate` used to read those names with `Uuid::try_parse`, which
+    /// refuses them, so it passed the rule `deploy` then refused.
+    #[test]
+    fn a_shard_named_in_another_uuid_spelling_is_the_mismatch_deploy_reports() {
+        let compact = U1.replace('-', "");
+        for variant in [format!("{{{compact}}}"), format!("uuid:{U1}")] {
+            let fs = workspace();
+            fs.write("/ws/objects/rules/a.yaml", rule(U1, "A"));
+            fs.write(
+                format!("/ws/.opentide/states/deployment/{U1}.json"),
+                format!(
+                    r#"{{"schema":"deployment.state::1.0","object_uuid":"{U1}","platforms":{{}}}}"#
+                ),
+            );
+            fs.write(
+                format!("/ws/.opentide/states/deployment/{variant}.json"),
+                format!(
+                    r#"{{"schema":"deployment.state::1.0","object_uuid":"{U1}","platforms":{{}}}}"#
+                ),
+            );
+            // The rule's own check, as `validate --file` and the editor run it.
+            let own = narrowed(&fs, None, &uuids(&[U1]));
+            let mismatches = with_code(&own, "deployment_state_uuid_mismatch");
+            assert_eq!(mismatches.len(), 1, "{variant}: {mismatches:?}");
+            assert!(
+                mismatches[0].message.contains(&format!(
+                    "holds {variant}.json for rule {U1}; the only valid name is {U1}.json"
+                )),
+                "{}",
+                mismatches[0].message
+            );
+            // A full run names both files as one rule's.
+            let full = run(&fs, &Options::default());
+            assert!(
+                with_code(&full, "deployment_state_uuid_mismatch")
+                    .iter()
+                    .any(|d| d.message.contains(&format!("all name rule {U1}"))),
+                "{variant}: {:?}",
+                with_code(&full, "deployment_state_uuid_mismatch")
+            );
+        }
+    }
+
     /// `Workspace::rule_shard_findings` is what `validate --file` files on
     /// each selected rule for its own shard, placed the same way: the editor
     /// adds it to an open rule when it keeps a full run's findings (#1750).
@@ -1894,18 +1940,18 @@ mod validate {
             assert_eq!(platform, "acme");
             let mut found = Vec::new();
             if !block["severity"].is_i64() {
-                found.push(opentide_workspace::validate::PlatformFinding {
-                    field_path: vec!["severity".to_owned()],
-                    message: "Input should be a valid integer".to_owned(),
-                    warning: false,
-                });
+                found.push(opentide_workspace::validate::PlatformFinding::new(
+                    vec!["severity".to_owned()],
+                    "Input should be a valid integer",
+                    false,
+                ));
             }
             if block.get("note").is_some() {
-                found.push(opentide_workspace::validate::PlatformFinding {
-                    field_path: vec!["note".to_owned()],
-                    message: "note is deprecated".to_owned(),
-                    warning: true,
-                });
+                found.push(opentide_workspace::validate::PlatformFinding::new(
+                    vec!["note".to_owned()],
+                    "note is deprecated",
+                    true,
+                ));
             }
             found
         }

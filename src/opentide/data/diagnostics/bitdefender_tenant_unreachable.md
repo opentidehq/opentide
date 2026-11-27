@@ -7,7 +7,7 @@ Severity: error. Reported by `opentide deploy` on a `bitdefender` tenant (bitdef
 ## Example
 
 ```text
-bitdefender_tenant_unreachable: bitdefender tenant 'gz' at https://cloudgz.gravityzone.bitdefender.com sent no answer within 30s
+bitdefender_tenant_unreachable: bitdefender tenant 'gz' at https://cloudgz.gravityzone.bitdefender.com sent no complete answer within 30s
 ```
 
 ## How to fix
