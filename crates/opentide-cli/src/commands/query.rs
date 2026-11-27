@@ -291,7 +291,11 @@ fn query_text(args: &Args, cx: &Context<'_>) -> Result<Option<String>, Box<Repor
     }
     if args.query.as_deref() == Some("-") {
         return match (cx.stdin)() {
-            Ok(text) => Ok(Some(text)),
+            // A byte-order mark is dropped, as `--query-file` drops it:
+            // Windows PowerShell can add one when it pipes text.
+            Ok(text) => Ok(Some(
+                text.strip_prefix('\u{feff}').unwrap_or(&text).to_owned(),
+            )),
             Err(error) => Err(Box::new(usage(
                 &args.platform,
                 &format!("cannot read the query from stdin: {error}"),
@@ -2053,6 +2057,14 @@ mod tests {
             Some("x")
         );
         assert_eq!(query_text(&args(None, None), &cx).unwrap(), None);
+        let bom = || Ok("\u{feff}from stdin é😀".to_owned());
+        let with_bom = Context { stdin: &bom, ..cx };
+        assert_eq!(
+            query_text(&args(Some("-"), None), &with_bom)
+                .unwrap()
+                .as_deref(),
+            Some("from stdin é😀")
+        );
         // A stdin that cannot be read is refused, not an empty query (#1936).
         let broken = || Err(std::io::Error::other("stdin is closed"));
         let broken_cx = Context {
