@@ -12,9 +12,10 @@
 //! backslash escapes and entity references are dropped or decoded; a code
 //! block's lines are kept as written (joined as any block's are under
 //! [`Lines::Join`]); a list item starts `- ` or `1. `,
-//! indented two spaces a level; blocks are separated by a blank line, the
+//! indented two spaces a level, its other lines under its text; blocks are separated by a blank line, the
 //! items of one list by a line break when lines are kept. HTML is kept as
-//! written, and an image reads as its alternative text.
+//! written, and an image reads as its alternative text (and, as a link,
+//! its destination after it; inside a link, only the link's).
 
 use pulldown_cmark::{Event, Parser, Tag, TagEnd};
 
@@ -70,8 +71,9 @@ struct Writer {
     marker: Option<String>,
     /// The open items: whether each already wrote a block.
     items: Vec<bool>,
-    /// The open links: where their text starts in `current`, and their
-    /// destination.
+    /// The open links and images: where their text starts in `current`,
+    /// and their destination. Only the outermost one's destination is
+    /// written, so an image inside a link reads one URL.
     links: Vec<(usize, String)>,
     /// Inside a code block: its text is kept as written.
     code: bool,
@@ -82,7 +84,13 @@ impl Writer {
     fn flush(&mut self) {
         let text = std::mem::take(&mut self.current);
         let text = if self.code && self.options.lines == Lines::Keep {
-            text.trim_end_matches('\n').to_owned()
+            // The lines as written, without the blank ones before the first
+            // or after the last (the blocks' separator stands for them).
+            let start = text
+                .find(|c: char| !c.is_whitespace())
+                .and_then(|at| text[..at].rfind('\n').map(|line| line + 1))
+                .unwrap_or(0);
+            text[start..].trim_end().to_owned()
         } else {
             match self.options.lines {
                 Lines::Keep => text.trim().to_owned(),
@@ -93,19 +101,27 @@ impl Writer {
             return;
         }
         let depth = self.lists.len().saturating_sub(1);
+        // Inside an item, every line but the marker's is under its text:
+        // the continuation of a wrapped item, a later paragraph of one.
+        let indent = "  ".repeat(depth + 1);
+        let under = |text: &str| -> String {
+            text.lines()
+                .map(|line| format!("{indent}{line}"))
+                .collect::<Vec<_>>()
+                .join("\n")
+        };
         let text = match (self.marker.take(), self.items.last_mut()) {
             (Some(marker), Some(wrote)) => {
                 *wrote = true;
-                format!("{}{marker}{text}", "  ".repeat(depth))
+                let (first, rest) = text.split_once('\n').unwrap_or((&text, ""));
+                let mut line = format!("{}{marker}{first}", "  ".repeat(depth));
+                if !rest.is_empty() {
+                    line.push('\n');
+                    line.push_str(&under(rest));
+                }
+                line
             }
-            // A later paragraph of an item: under its text.
-            (None, Some(_)) => {
-                let indent = "  ".repeat(depth + 1);
-                text.lines()
-                    .map(|line| format!("{indent}{line}"))
-                    .collect::<Vec<_>>()
-                    .join("\n")
-            }
+            (None, Some(_)) => under(&text),
             (_, None) => text,
         };
         self.blocks.push(Block {
@@ -177,6 +193,7 @@ impl Writer {
             }
             Event::End(TagEnd::Link | TagEnd::Image) => {
                 if let Some((start, url)) = self.links.pop()
+                    && self.links.is_empty()
                     && self.options.links == Links::TextAndUrl
                     && !url.is_empty()
                     && self.current.get(start..) != Some(url.as_str())
@@ -343,13 +360,19 @@ mod tests {
 
     #[test]
     fn a_code_block_s_leading_blank_lines_are_dropped() {
-        assert_eq!(to_text("Avant\n\n```\n\n  é 😀\n```", KEEP), "Avant\n\n  é 😀");
+        assert_eq!(
+            to_text("Avant\n\n```\n\n  é 😀\n```", KEEP),
+            "Avant\n\n  é 😀"
+        );
         assert_eq!(to_text("```\n \n\nx\n\ny\n```", KEEP), "x\n\ny");
     }
 
     #[test]
     fn an_image_inside_a_link_reads_one_url() {
-        assert_eq!(to_text("[![logo é](i.png)](https://u/😀)", KEEP), "logo é (https://u/😀)");
+        assert_eq!(
+            to_text("[![logo é](i.png)](https://u/😀)", KEEP),
+            "logo é (https://u/😀)"
+        );
         assert_eq!(to_text("![logo](i.png)", KEEP), "logo (i.png)");
         assert_eq!(to_text("[![logo](i.png)](u)", JOIN), "logo");
     }
