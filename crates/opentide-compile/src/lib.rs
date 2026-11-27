@@ -9,6 +9,8 @@
 //!   [`harfanglab`], [`carbon_black`]: the writes a deployer sends for a rule
 //!   to one tenant, built from the tenant and the deployment state
 //!   ([`deploy`]: create, update or delete).
+//! - [`compiler`]: the one compile entry point per platform the dry run and
+//!   the deploy share (`Compiler`).
 //! - [`promotion`]: the status promotion of a RELEASE deploy on a push.
 //! - [`preview`]: a dry run's payload entries; for a platform the oracle
 //!   shows as the block's model dump, the block serialised from
@@ -30,6 +32,7 @@ pub mod attack;
 pub mod bitdefender;
 pub mod carbon_black;
 pub mod ci;
+pub mod compiler;
 pub mod crowdstrike;
 pub mod datadog;
 pub mod deploy;

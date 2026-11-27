@@ -3434,9 +3434,11 @@ impl Sender<'_, '_> {
             );
             DeployRequest::delete(rule.uuid.clone())
         } else {
-            let (body, warnings) =
-                opentide_compile::sentinel::compile_with_warnings(self.compile, rule, tenant)
-                    .map_err(compile_error)?;
+            use opentide_compile::compiler::{Compiler, Sentinel};
+            // The dry run's compile ([`Compiler`]), so it shows this body.
+            let compiled = Sentinel::compile(self.compile, rule, tenant).map_err(compile_error)?;
+            let body = Sentinel::body(&compiled);
+            let warnings = compiled.1;
             // Once per rule, not once per tenant: the body, and so the
             // warning, is the same on each.
             if !warnings.is_empty() && self.warn_once(rule.uuid.clone()) {
@@ -5569,23 +5571,20 @@ impl Sender<'_, '_> {
         operation: Operation,
         stored: Option<&str>,
     ) -> Result<DeployRequest, String> {
-        use opentide_compile::graylog::create_body;
+        use opentide_compile::compiler::{Compiler, Graylog, GraylogTarget};
         if let Planned::Delete(id) = action {
             // A delete sends the recorded id alone: no rule compile.
             return Ok(DeployRequest::delete(id.clone()));
         }
         let tenant = batch.tenant.name.as_str();
-        // The tenant's whole `setup` table: its `stream_ids` and
-        // `notification_ids` resolve the block's aliases, as in a dry run.
-        let setup = opentide_compile::graylog::tenant_setup(&batch.table);
-        let compiled = opentide_compile::graylog::compile_definition(
-            self.compile,
-            rule,
+        // The dry run's compile ([`Compiler`]): the tenant's `setup` table,
+        // whose `stream_ids` and `notification_ids` resolve the block's
+        // aliases, and its name.
+        let target = GraylogTarget {
             version,
-            setup,
-            Some(tenant),
-        )
-        .map_err(|error| {
+            tenant: Some(&batch.table),
+        };
+        let compiled = Graylog::compile(self.compile, rule, target).map_err(|error| {
             // An alias the tenant does not define (or any other compile
             // failure) fails the rule with its own code
             // (`_deployment_error(exc.code)`), and the reason keeps the
@@ -5612,7 +5611,7 @@ impl Sender<'_, '_> {
                 "{code}"
             );
         }
-        serde_json::to_vec(&create_body(&compiled))
+        serde_json::to_vec(&Graylog::body(&compiled))
             .map(|body| DeployRequest::new(stored.unwrap_or(&rule.uuid), operation, body))
             .map_err(|error| format!("the compiled definition is not JSON: {error}"))
     }
