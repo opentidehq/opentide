@@ -1198,7 +1198,11 @@ mod tests {
     fn aliases_that_expand_past_the_budget_are_refused() {
         // #1927: nine levels would copy out a billion nodes.
         let text = laughs(9);
-        let error = load(&text).unwrap_err();
+        // Never `unwrap_err`: on a regression its panic would `Debug` the
+        // billion-node tree instead of failing.
+        let Err(error) = load(&text) else {
+            panic!("nine levels of nested aliases loaded");
+        };
         assert_eq!(error.kind, LoadErrorKind::AliasExpansion);
         let mark = error.mark.unwrap();
         // The heaviest alias: the first one of the last line.
