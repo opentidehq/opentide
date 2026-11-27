@@ -48,3 +48,39 @@ fn a_rule_revision_dispatches_to_its_struct() {
     let read = revisions::read(&document, "rule").unwrap();
     assert!(matches!(read.result, Ok(TideObject::RuleV1_1(_))));
 }
+
+#[test]
+fn a_splunk_lookback_too_long_for_deploy_fails_the_rule() {
+    // #1928: deploy refused it (or, before, wrote a corrupt earliest time)
+    // while `validate` passed it.
+    let text = RULE.to_owned()
+        + "configurations:\n  splunk:\n    status: STAGING\n    query: index=main | head 1\n    \
+           scheduling:\n      timerange: {lookback: 9999999999999999d}\n";
+    let document = node::load(&text).unwrap();
+    let errors = revisions::read(&document, "rule")
+        .unwrap()
+        .result
+        .unwrap_err();
+    let found: Vec<(Option<&str>, String, &str)> = errors
+        .iter()
+        .map(|error| {
+            (
+                error.kind.pydantic_type(),
+                error.field_path().join("."),
+                error.message.as_str(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        found,
+        [(
+            Some("value_error"),
+            "configurations.splunk.scheduling.timerange.lookback".to_owned(),
+            "Lookback \"9999999999999999d\" is too long to express in minutes (at \
+             most 9223372036854775807 minutes)"
+        )]
+    );
+    let fits = text.replace("9999999999999999d", "6405119470038038d");
+    let document = node::load(&fits).unwrap();
+    assert!(revisions::read(&document, "rule").unwrap().result.is_ok());
+}

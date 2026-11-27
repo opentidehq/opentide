@@ -2576,7 +2576,10 @@ pub fn eql_maxspan(query: &str) -> Option<(String, u128)> {
         "h" => 3_600_000,
         _ => 86_400_000,
     };
-    Some((found.get(1)?.as_str().to_owned(), amount * unit))
+    Some((
+        found.get(1)?.as_str().to_owned(),
+        amount.saturating_mul(unit),
+    ))
 }
 
 // ---- advisories (`validator._emit_rule_advisories`) ----
@@ -2921,6 +2924,22 @@ mod tests {
         assert_eq!(
             advisories(&block, "high", true, false).unwrap_or_default(),
             ["lookback_long"]
+        );
+    }
+
+    #[test]
+    fn a_huge_maxspan_saturates_instead_of_overflowing() {
+        // The multiplication panicked in debug and wrapped in release.
+        let span = format!("{}d", "9".repeat(36));
+        let query = format!("sequence with maxspan={span} [a] [b]");
+        assert_eq!(eql_maxspan(&query), Some((span, u128::MAX)));
+        let block: Json = serde_json::from_str(&format!(
+            r#"{{"type": "eql", "query": "{query}", "scheduling": {{"interval": "5m", "lookback": "1h"}}}}"#
+        ))
+        .unwrap_or(Json::Null);
+        assert_eq!(
+            advisories(&block, "high", true, false).unwrap_or_default(),
+            ["eql_maxspan_window"]
         );
     }
 }

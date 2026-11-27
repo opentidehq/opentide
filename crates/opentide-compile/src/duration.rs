@@ -60,8 +60,9 @@ pub fn sentinel_seconds(duration: &str) -> Result<u64, String> {
         };
         if let (Some((days, any_date)), Some((seconds, any_time))) = (date, time)
             && (any_date || any_time)
+            && let Some(total) = days.checked_add(seconds)
         {
-            return Ok(days + seconds);
+            return Ok(total);
         }
     }
     Err(format!(
@@ -191,6 +192,9 @@ mod tests {
         ] {
             assert!(sentinel(text).is_err(), "{text}");
         }
+        // Weeks and hours that each fit a u64 but not their sum: an error,
+        // not an overflow.
+        assert!(sentinel_seconds("P30500568904943WT8H").is_err());
         assert_eq!(
             sentinel("soon").unwrap_err(),
             "Duration \"soon\" is not an ISO 8601 duration (PT1H, PT30M, P1D) or a shorthand \
