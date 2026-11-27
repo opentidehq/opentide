@@ -7,6 +7,8 @@
 //! `every_platform_has_a_profile` fails when the rule model gains a platform
 //! this table does not name.
 
+use opentide_schema::platforms::PlatformId;
+
 use crate::json::Json;
 
 /// A query or rule language: its name and its code-fence info string.
@@ -58,28 +60,34 @@ pub const TEXT: CodeLanguage = language("Text", "text");
 /// The code languages of a platform's settings, by path (list indices
 /// removed: `exclusions.query`).
 fn languages(platform: &str) -> &'static [(&'static str, CodeLanguage)] {
+    let Some(platform) = PlatformId::parse(platform) else {
+        return &[];
+    };
     match platform {
-        "sentinel" | "microsoft_defender" => &[("query", KQL), ("exclusions.query", KQL)],
-        "splunk" => &[("query", SPL), ("actions.notable.drilldown.search", SPL)],
-        "sentinel_one" => &[
+        PlatformId::Sentinel | PlatformId::MicrosoftDefender => {
+            &[("query", KQL), ("exclusions.query", KQL)]
+        }
+        PlatformId::Splunk => &[("query", SPL), ("actions.notable.drilldown.search", SPL)],
+        PlatformId::SentinelOne => &[
             ("condition.single_event.query", S1QL),
             ("condition.correlation.sub_queries.query", S1QL),
         ],
-        "crowdstrike" => &[("query", CQL)],
-        "harfanglab" | "bitdefender" => &[("yara.signature", YARA)],
-        "carbon_black_cloud" => &[("query", LUCENE)],
-        "sysdig" => &[("condition", FALCO), ("macros.condition", FALCO)],
-        "graylog" => &[("query", GRAYLOG)],
-        "exabeam" => &[("sequences.query", EXABEAM)],
-        "datadog" => &[("queries.query", DATADOG), ("message", MARKDOWN)],
-        "google_secops" => &[
+        PlatformId::Crowdstrike => &[("query", CQL)],
+        PlatformId::Harfanglab | PlatformId::Bitdefender => &[("yara.signature", YARA)],
+        PlatformId::CarbonBlackCloud => &[("query", LUCENE)],
+        PlatformId::Sysdig => &[("condition", FALCO), ("macros.condition", FALCO)],
+        PlatformId::Graylog => &[("query", GRAYLOG)],
+        PlatformId::Exabeam => &[("sequences.query", EXABEAM)],
+        PlatformId::Datadog => &[("queries.query", DATADOG), ("message", MARKDOWN)],
+        PlatformId::GoogleSecops => &[
             ("setup", YARAL),
             ("events", YARAL),
             ("outcome", YARAL),
             ("condition", YARAL),
             ("export", YARAL),
         ],
-        _ => &[],
+        // Its languages depend on the rule: [`elastic_language`].
+        PlatformId::Elastic => &[],
     }
 }
 
