@@ -388,20 +388,27 @@ fn crowdstrike_stops_the_search_a_cancelled_run_stops_waiting_for() {
         &[],
         DEFAULT_QUERY_TIMEOUT,
     );
-    let trigger = cancel.clone();
-    let outcome = block_on(async {
-        let run = opentide_connectors::connector::QueryRunner::run(&runner, cx, &request);
-        tokio::pin!(run);
-        // Cancel between the first poll and the second (0.5 s apart).
-        tokio::select! {
-            outcome = &mut run => outcome,
-            () = tokio::time::sleep(Duration::from_millis(250)) => {
-                trigger.cancel();
-                run.await
+    // Cancel between the first poll and the second (0.5 s apart): once the proxy has the first
+    // poll (the third request), not on a timer that could fire before it. A cancel while that
+    // poll is still answered stops the search the same way: the poll was sent. The proxy is read
+    // from a thread of its own (it blocks on a runtime of its own).
+    let done = std::sync::atomic::AtomicBool::new(false);
+    let outcome = std::thread::scope(|scope| {
+        scope.spawn(|| {
+            while !done.load(std::sync::atomic::Ordering::SeqCst)
+                && replay.proxy.requests().len() < 3
+            {
+                std::thread::sleep(Duration::from_millis(2));
             }
-        }
-    })
-    .unwrap();
+            cancel.cancel();
+        });
+        let outcome = block_on(opentide_connectors::connector::QueryRunner::run(
+            &runner, cx, &request,
+        ))
+        .unwrap();
+        done.store(true, std::sync::atomic::Ordering::SeqCst);
+        outcome
+    });
     assert!(
         matches!(outcome, Err(ConnectorError::Cancelled)),
         "{outcome:?}"
