@@ -1786,7 +1786,7 @@ fn a_commits_changes_under_a_folder_carry_both_sides() {
     write(&root, "w/états/sub/new 😀.json", "4");
     write(&root, "w/other.json", "5");
     commit(&root, "ours");
-    let changes = git::commit_changes(&root.join("w"), "HEAD", "états").unwrap();
+    let changes = git::commit_changes(&root.join("w"), &no_env, "HEAD", "états").unwrap();
     let seen: Vec<_> = changes
         .iter()
         .map(|change| {
@@ -1806,14 +1806,143 @@ fn a_commits_changes_under_a_folder_carry_both_sides() {
         ]
     );
     // A parent step names the commit too; the first commit has no parent.
-    let first = git::commit_changes(&root, "HEAD~1", "w").unwrap_err();
+    let first = git::commit_changes(&root, &no_env, "HEAD~1", "w").unwrap_err();
     assert!(
         matches!(&first, GitError::Failed(message) if message.contains("no parent")),
         "{first:?}"
     );
-    let missing = git::commit_changes(&root, "no-such-commit", "w").unwrap_err();
+    let missing = git::commit_changes(&root, &no_env, "no-such-commit", "w").unwrap_err();
     assert!(
         matches!(&missing, GitError::Failed(message) if message.contains("no-such-commit")),
         "{missing:?}"
     );
+}
+
+/// Discovery without the process's git variables (a hook running the tests
+/// exports `GIT_DIR`).
+fn no_env(_: &str) -> Option<std::ffi::OsString> {
+    None
+}
+
+/// What `commit_changes` reads `a.json` as at `rev`: its content before and
+/// after that commit.
+fn sides(root: &Path, rev: &str) -> Result<(String, String), GitError> {
+    let changes = git::commit_changes(root, &no_env, rev, "w")?;
+    let [change] = changes.as_slice() else {
+        panic!("{rev}: {changes:?}");
+    };
+    let text = |side: &Option<Vec<u8>>| String::from_utf8(side.clone().unwrap()).unwrap();
+    Ok((text(&change.before), text(&change.after)))
+}
+
+/// Three commits on `main` edit `w/a.json` (0, 1, 2); the second's message
+/// is `première étape 😀`.
+fn three_steps() -> (tempfile::TempDir, PathBuf) {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().canonicalize().unwrap();
+    git_cmd(&root, &["init", "-q", "-b", "main"]);
+    for (text, message) in [("0", "base"), ("1", "première étape 😀"), ("2", "seconde")] {
+        write(&root, "w/a.json", text);
+        commit(&root, message);
+    }
+    (dir, root)
+}
+
+/// A reflog entry names the commit a reference held: `HEAD@{1}` and
+/// `main@{1}` are the commit before the last, `main@{2}` the one before
+/// it; one past the reflog is refused with its length (#1955).
+#[test]
+fn a_reflog_entry_names_a_commit() {
+    let (_dir, root) = three_steps();
+    let second = ("0".to_owned(), "1".to_owned());
+    assert_eq!(sides(&root, "HEAD@{1}").unwrap(), second);
+    assert_eq!(sides(&root, "main@{1}").unwrap(), second);
+    assert_eq!(sides(&root, "@{1}").unwrap(), second);
+    assert_eq!(
+        sides(&root, "HEAD@{0}").unwrap(),
+        ("1".to_owned(), "2".to_owned())
+    );
+    // A date after every entry is the newest one.
+    assert_eq!(
+        sides(&root, "main@{2999-01-01}").unwrap(),
+        ("1".to_owned(), "2".to_owned())
+    );
+    let error = sides(&root, "HEAD@{9}").unwrap_err();
+    assert!(
+        matches!(&error, GitError::Failed(message) if message.contains("has only 3 entries")),
+        "{error:?}"
+    );
+}
+
+/// `:/text` is the newest commit whose message matches, from every
+/// reference; `<rev>^{/text}` searches from `<rev>` (#1955).
+#[test]
+fn a_message_search_names_the_newest_match() {
+    let (_dir, root) = three_steps();
+    let second = ("0".to_owned(), "1".to_owned());
+    assert_eq!(sides(&root, ":/première").unwrap(), second);
+    assert_eq!(sides(&root, ":/étape 😀").unwrap(), second);
+    assert_eq!(sides(&root, "HEAD^{/^premi}").unwrap(), second);
+    assert_eq!(
+        sides(&root, ":/!-première").unwrap(),
+        ("1".to_owned(), "2".to_owned())
+    );
+    let error = sides(&root, ":/introuvable").unwrap_err();
+    assert!(
+        matches!(&error, GitError::Failed(message) if message.contains("no commit's message matches introuvable")),
+        "{error:?}"
+    );
+}
+
+/// `@{-1}` is the branch checked out before; `@{u}` a branch's upstream
+/// (#1955).
+#[test]
+fn the_previous_branch_and_the_upstream_name_commits() {
+    let (_dir, root) = three_steps();
+    let second = ("0".to_owned(), "1".to_owned());
+    git_cmd(&root, &["branch", "ancien-é", "HEAD~1"]);
+    git_cmd(&root, &["checkout", "-q", "ancien-é"]);
+    git_cmd(&root, &["checkout", "-q", "main"]);
+    assert_eq!(sides(&root, "@{-1}").unwrap(), second);
+    // `@{-1}~1` is the first commit, which has no parent to compare with.
+    let error = sides(&root, "@{-1}~1").unwrap_err();
+    assert!(error.message().contains("no parent"), "{error:?}");
+    let error = sides(&root, "@{-5}").unwrap_err();
+    assert!(error.message().contains("fewer than 5"), "{error:?}");
+    // No upstream yet.
+    let error = sides(&root, "@{u}").unwrap_err();
+    assert!(
+        error.message().contains("branch main has no upstream"),
+        "{error:?}"
+    );
+    git_cmd(&root, &["config", "branch.main.remote", "."]);
+    git_cmd(
+        &root,
+        &["config", "branch.main.merge", "refs/heads/ancien-é"],
+    );
+    assert_eq!(sides(&root, "@{u}").unwrap(), second);
+    assert_eq!(sides(&root, "main@{upstream}").unwrap(), second);
+    assert_eq!(sides(&root, "HEAD@{u}").unwrap(), second);
+    // A remote's branch is its remote-tracking reference.
+    git_cmd(&root, &["update-ref", "refs/remotes/origin/main", "HEAD~1"]);
+    git_cmd(&root, &["config", "branch.main.remote", "origin"]);
+    git_cmd(&root, &["config", "branch.main.merge", "refs/heads/main"]);
+    assert_eq!(sides(&root, "@{u}").unwrap(), second);
+}
+
+/// What names no single commit is refused, saying why (#1955).
+#[test]
+fn a_revision_that_names_no_commit_is_refused_with_the_reason() {
+    let (_dir, root) = three_steps();
+    for (rev, reason) in [
+        ("HEAD~1..HEAD", "a range"),
+        ("HEAD~1...HEAD", "a range"),
+        ("HEAD:w/a.json", "a file in a commit"),
+        (":w/a.json", "a file in the index"),
+        ("HEAD^{tree}", "is not a commit"),
+        ("@{push}", "@{push} is not supported"),
+    ] {
+        let error = sides(&root, rev).unwrap_err();
+        assert!(error.message().contains(reason), "{rev}: {error:?}");
+    }
 }
