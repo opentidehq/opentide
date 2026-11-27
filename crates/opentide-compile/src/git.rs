@@ -509,18 +509,22 @@ impl Resolve<'_> {
         })
     }
 
-    /// The reflog of `name`, newest entry first.
+    /// The reflog of `name`, newest entry first. The file is read whole, so
+    /// a line of any length (a long commit subject) is read.
     fn reflog_lines(&self, name: &gix_ref::FullName) -> Result<Vec<gix_ref::log::Line>, String> {
-        let mut buf = [0_u8; 1024];
+        let mut buf = Vec::new();
         let lines = self
             .repo
             .refs
-            .reflog_iter_rev(name.as_ref(), &mut buf)
+            .reflog_iter(name.as_ref(), &mut buf)
             .map_err(|error| format!("could not read the reflog of {name}: {error}"))?
             .ok_or_else(|| format!("{name} has no reflog"))?;
-        lines
+        let mut lines = lines
+            .map(|line| line.map(gix_ref::log::Line::from))
             .collect::<Result<Vec<_>, _>>()
-            .map_err(|error| format!("could not read the reflog of {name}: {error}"))
+            .map_err(|error| format!("could not read the reflog of {name}: {error}"))?;
+        lines.reverse();
+        Ok(lines)
     }
 
     /// The commit `@{n}` or `@{<date>}` names in `lines` (newest first), as
@@ -743,17 +747,18 @@ impl delegate::Revision for Resolve<'_> {
                     .map(str::to_owned)
             })
             .ok_or_else(|| self.refuse("@{upstream} needs a branch".to_owned()))?;
-        let (upstream, _) = upstream(&self.repo.git_dir, &branch)
+        let upstream = upstream_ref(&self.repo.git_dir, &branch)
             .ok_or_else(|| self.refuse(format!("branch {branch} has no upstream")))?;
-        let remote = format!("refs/remotes/{upstream}");
-        let local = format!("refs/heads/{upstream}");
-        self.find_ref(remote.as_bytes().as_bstr())
-            .or_else(|_| self.find_ref(local.as_bytes().as_bstr()))
-            .map_err(|_| {
-                self.refuse(format!(
-                    "the upstream of {branch}, {upstream}, is not in the checkout"
-                ))
-            })
+        let upstream = upstream.map_err(|merge| {
+            self.refuse(format!(
+                "the upstream of {branch}, {merge}, is fetched by none of its remote's refspecs"
+            ))
+        })?;
+        self.find_ref(upstream.as_bytes().as_bstr()).map_err(|_| {
+            self.refuse(format!(
+                "the upstream of {branch}, {upstream}, is not in the checkout"
+            ))
+        })
     }
 }
 
@@ -2069,6 +2074,43 @@ fn upstream(git_dir: &Path, branch: &str) -> Option<(String, bool)> {
     } else {
         Some((format!("{remote}/{name}"), own))
     }
+}
+
+/// The reference `<branch>@{upstream}` names, as git maps it: with
+/// `branch.<b>.remote = .` the merge reference itself; otherwise the merge
+/// reference mapped through the first of the remote's fetch refspecs that
+/// matches it. `None` when the branch has no upstream; `Err(merge)` when no
+/// refspec fetches it.
+fn upstream_ref(git_dir: &Path, branch: &str) -> Option<Result<String, String>> {
+    let config = config(git_dir)?;
+    let remote = config.string(format!("branch.{branch}.remote").as_str())?;
+    let merge = config.string(format!("branch.{branch}.merge").as_str())?;
+    let remote = remote.to_str().ok()?;
+    let merge = merge.to_str().ok()?.to_owned();
+    if remote == "." {
+        return Some(Ok(merge));
+    }
+    let specs = config
+        .strings(format!("remote.{remote}.fetch").as_str())
+        .unwrap_or_default();
+    let mapped = specs.iter().find_map(|spec| {
+        let spec = spec.to_str().ok()?;
+        if spec.starts_with('^') {
+            return None;
+        }
+        let (source, destination) = spec.trim_start_matches('+').split_once(':')?;
+        match (source.split_once('*'), destination.split_once('*')) {
+            (Some((prefix, suffix)), Some((to_prefix, to_suffix))) => {
+                let middle = merge.strip_prefix(prefix)?.strip_suffix(suffix)?;
+                Some(format!("{to_prefix}{middle}{to_suffix}"))
+            }
+            (None, None) if source == merge && !destination.is_empty() => {
+                Some(destination.to_owned())
+            }
+            _ => None,
+        }
+    });
+    Some(mapped.ok_or(merge))
 }
 
 /// The baseline refs to try, most specific first (`candidate_refs`), and

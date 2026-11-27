@@ -1874,6 +1874,25 @@ fn a_reflog_entry_names_a_commit() {
     );
 }
 
+/// A reflog line longer than any read window (a 5,000-character, non-ASCII
+/// commit subject) still reads: `HEAD@{n}` and `@{-1}` resolve (#1955).
+#[test]
+fn a_long_reflog_line_is_read() {
+    let (_dir, root) = three_steps();
+    git_cmd(&root, &["checkout", "-q", "-b", "longue-é"]);
+    write(&root, "w/a.json", "3");
+    commit(&root, &"é😀".repeat(2_500));
+    git_cmd(&root, &["checkout", "-q", "main"]);
+    let last = ("2".to_owned(), "3".to_owned());
+    assert_eq!(sides(&root, "@{-1}").unwrap(), last);
+    assert_eq!(sides(&root, "HEAD@{1}").unwrap(), last);
+    assert_eq!(sides(&root, "longue-é@{0}").unwrap(), last);
+    assert_eq!(
+        sides(&root, "HEAD@{3}").unwrap(),
+        ("1".to_owned(), "2".to_owned())
+    );
+}
+
 /// `:/text` is the newest commit whose message matches, from every
 /// reference; `<rev>^{/text}` searches from `<rev>` (#1955).
 #[test]
@@ -1927,7 +1946,43 @@ fn the_previous_branch_and_the_upstream_name_commits() {
     git_cmd(&root, &["update-ref", "refs/remotes/origin/main", "HEAD~1"]);
     git_cmd(&root, &["config", "branch.main.remote", "origin"]);
     git_cmd(&root, &["config", "branch.main.merge", "refs/heads/main"]);
+    git_cmd(
+        &root,
+        &[
+            "config",
+            "remote.origin.fetch",
+            "+refs/heads/*:refs/remotes/origin/*",
+        ],
+    );
     assert_eq!(sides(&root, "@{u}").unwrap(), second);
+    // The remote's fetch refspec maps the branch, as git maps it; a local
+    // branch named `origin/main` is not the upstream.
+    git_cmd(&root, &["update-ref", "-d", "refs/remotes/origin/main"]);
+    git_cmd(&root, &["update-ref", "refs/heads/origin/main", "HEAD~1"]);
+    let error = sides(&root, "@{u}").unwrap_err();
+    assert!(
+        error.message().contains("is not in the checkout"),
+        "{error:?}"
+    );
+    git_cmd(
+        &root,
+        &[
+            "config",
+            "remote.origin.fetch",
+            "+refs/heads/*:refs/miroir/é/*",
+        ],
+    );
+    git_cmd(&root, &["update-ref", "refs/miroir/é/main", "HEAD~1"]);
+    assert_eq!(sides(&root, "@{u}").unwrap(), second);
+    git_cmd(
+        &root,
+        &["config", "remote.origin.fetch", "+refs/tags/*:refs/tags/*"],
+    );
+    let error = sides(&root, "@{u}").unwrap_err();
+    assert!(
+        error.message().contains("none of its remote's refspecs"),
+        "{error:?}"
+    );
 }
 
 /// What names no single commit is refused, saying why (#1955).
