@@ -1,5 +1,4 @@
-//! The configuration, resolved once per run (`core/files.py`
-//! `resolve_configurations`, `registry/paths.py`).
+//! The configuration, resolved once per run.
 //!
 //! The host's part of UC-1.5: it reads the configuration folders through the
 //! [`FileSystem`], hands them to `opentide_schema::configuration::resolve`,
@@ -191,11 +190,12 @@ fn read_folder(
     Ok(Some(folder))
 }
 
-/// Whether `name` is a TOML file's: case-sensitive, as the oracle's
-/// `glob("*.toml")` and `endswith(".toml")` are on Linux.
+/// Whether `name` is a TOML file's: it ends with `.toml`, case-sensitively
+/// on every system, so `paths.TOML` is never read and a workspace reads the
+/// same files on Linux, macOS and Windows.
 #[expect(
     clippy::case_sensitive_file_extension_comparisons,
-    reason = "the oracle matches `.toml` case-sensitively"
+    reason = "`.toml` is matched case-sensitively on every system, so every OS reads the same files"
 )]
 fn is_toml(name: &str) -> bool {
     name.ends_with(".toml")
@@ -249,8 +249,7 @@ fn read(fs: &dyn FileSystem, roots: &Roots) -> Result<Merged, ConfigError> {
 }
 
 /// Resolves the configuration of the workspace at `roots` and checks
-/// nothing: the merged files as `core/files.py` `resolve_configurations`
-/// returns them, for what reads a configuration whose `paths.toml` its model
+/// nothing: the merged files, layered, for what reads a configuration whose `paths.toml` its model
 /// refuses (`setup ci`'s statuses, #957). [`load`] checks it.
 ///
 /// # Errors

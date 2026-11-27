@@ -37,7 +37,6 @@ declare -A RETIRED_BASELINE=(
   [opentide-compile]=121
   [opentide-connectors]=34
   [opentide-schema]=238
-  [opentide-workspace]=49
 )
 tracked_py="$(git -C "$root" ls-files '*.py')"
 py_in_tree() {

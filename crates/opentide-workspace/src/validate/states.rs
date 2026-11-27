@@ -1,4 +1,4 @@
-//! Deployment state shards (RFC 0010, `states/deployment.py`): the files
+//! Deployment state shards (RFC 0010): the files
 //! under `.opentide/states/deployment/` that hold each rule's vendor ids,
 //! checked for shape, and the vendor-id keys a rule must no longer carry.
 

@@ -1,5 +1,4 @@
-//! `validate` (UC-2.2, #817; `validation/session.py` and
-//! `cli/services/validation.py`): every check over a loaded [`Workspace`],
+//! `validate` (UC-2.2, #817): every check over a loaded [`Workspace`],
 //! reported as [`Diagnostic`]s, the one finding type the CLI, the SDK, MCP
 //! and the language server share.
 //!
@@ -1311,7 +1310,7 @@ pub fn validate(ws: &Workspace, options: &Options<'_>) -> Validation {
 /// uninterrupted run makes otherwise.
 #[expect(
     clippy::too_many_lines,
-    reason = "the run's phases in the oracle's order (session.py run_validation), read top to bottom"
+    reason = "the run's phases in the order they run, read top to bottom"
 )]
 pub fn validate_resumable(ws: &Workspace, options: &Options<'_>) -> Option<Validation> {
     if let Some(refusal) = options

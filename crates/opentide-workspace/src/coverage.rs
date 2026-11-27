@@ -1,7 +1,6 @@
 //! Which ATT&CK techniques each rule covers: those it lists, and those it
-//! inherits from its objective or that objective's threats
-//! (`core/technique_coverage.py`). `info catalog` and `info coverage` read
-//! coverage from here, so they cannot disagree.
+//! inherits from its objective or that objective's threats. `info catalog`
+//! and `info coverage` read coverage from here, so they cannot disagree.
 
 use indexmap::IndexMap;
 use opentide_schema::node::{Node, Value};

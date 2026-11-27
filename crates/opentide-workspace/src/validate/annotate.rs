@@ -1,7 +1,6 @@
-//! Where each finding points and the step it suggests
-//! (`cli/ui/diagnostics.py` `diagnostic_from_issue`): `path`, `line`,
+//! Where each finding points and the step it suggests: `path`, `line`,
 //! `column`, `end_line`, `end_column`, `help` and `fix`, read from the file
-//! the finding is about, and the frame's label and notes.
+//! the finding is about, and the frame's label and notes ([`annotate`]).
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -262,10 +261,10 @@ impl<'a> Sources<'a> {
         document.span(&target, at_key)
     }
 
-    /// Where a `yara_signature_alias` on `field_path` is written, as the
-    /// oracle's YAML reader places it: the aliased text, from its anchor to
-    /// the end of that line (a block scalar's `&name |`), on the node the
-    /// alias names (`aliased_yara_signature`).
+    /// Where a `yara_signature_alias` on `field_path` is written: the node
+    /// the alias names (`aliased_yara_signature`), from where it starts (its
+    /// anchor, or its tag) to its end when it ends on that line, else to the
+    /// end of that line (a block scalar's `&name |`).
     fn alias_anchor(&mut self, path: &Path, field_path: &[String]) -> Option<Span> {
         let document = self.document(path)?;
         let platform = field_path.get(1)?;

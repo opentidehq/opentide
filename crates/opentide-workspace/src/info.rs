@@ -1,6 +1,6 @@
 //! `opentide info`: the counts, the platforms with their tenants, and the
-//! vocabularies (`cli/services/info.py`). The tenants are the VS Code
-//! extension's contract (`docs/CONTRACTS.md`): name, description,
+//! vocabularies. The tenants are the VS Code extension's contract
+//! (`docs/CONTRACTS.md`): name, description,
 //! strategies, manual, and the variables each tenant's `setup` names with
 //! whether they are set, never a value.
 
