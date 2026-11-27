@@ -21,7 +21,7 @@ crate depends on it.
 
 - No `std::fs` in `src/` (`scripts/engine/check-io-free.sh`).
 - LSP `character` counts UTF-16 code units. Ranges sent to a client go through `span_to_range` / `offset_to_position`; inbound positions through `position_to_offset`, which returns a char boundary. Do not add another converter.
-- A diagnostic code is a constant in `codes`, listed in `codes::ALL`, with a sentence in `codes::describe` and a section in `docs/cli/diagnostics.md` (`tests/diagnostics_docs.rs`). Never a second string at the call site.
+- A diagnostic code is one line of the `codes!` table in `codes` (`NAME = "code" => "One sentence.";`), which writes its constant, its `codes::ALL` entry and its `codes::describe` sentence; it also needs a section in `docs/cli/diagnostics.md` (`tests/diagnostics_docs.rs`). Never a second string at the call site.
 - `LanguageId` changes `as_str`, `parse` and `Display` together; a new language follows the add-language skill.
 - Suggestions go through `suggest` (vocabulary values, configuration choices, CLI commands and
   options, every engine crate's "did you mean"), never a second similarity rule. It uses strsim;
