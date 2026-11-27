@@ -164,7 +164,8 @@ const DEFENDER_OUTPUT_ADVISORIES: [&str; 2] = [
     opentide_core::codes::MICROSOFT_DEFENDER_UNPROJECTED_OUTPUT,
 ];
 
-/// Words in an engine message that make its `suggestion` a replacement name.
+/// Words in an engine message that make its `suggestion` a replacement name,
+/// for a code that declares no [`SuggestionKind`](opentide_core::codes::SuggestionKind).
 const ENGINE_UNKNOWN: [&str; 3] = ["unknown", "deprecated", "not a command"];
 
 /// Held by a host while it installs datasets or catalogs for the whole
@@ -907,8 +908,17 @@ fn span_end(
 /// language reference, or the code's `opentide explain`.
 pub fn engine_help(code: &str, message: &str, suggestion: Option<&str>) -> String {
     if let Some(suggestion) = suggestion.filter(|text| !text.is_empty()) {
-        let lower = message.to_lowercase();
-        if ENGINE_UNKNOWN.iter().any(|word| lower.contains(word)) {
+        let replacement = match opentide_core::codes::suggestion_kind(code) {
+            Some(opentide_core::codes::SuggestionKind::Replacement) => true,
+            Some(_) => false,
+            // A code that declares no kind: `esql_parse_error` and
+            // `esql_unavailable`, whose messages decide it today (#1950).
+            None => {
+                let lower = message.to_lowercase();
+                ENGINE_UNKNOWN.iter().any(|word| lower.contains(word))
+            }
+        };
+        if replacement {
             return format!(
                 "did you mean {}?",
                 opentide_schema::vocab::quote(suggestion)
@@ -1328,6 +1338,42 @@ mod tests {
         assert_eq!(
             engine_help("kql_x", "x", Some("")),
             "the KQL reference: https://learn.microsoft.com/kusto/query/"
+        );
+    }
+
+    /// The help follows the kind the code declares, never the message's
+    /// words (#1950): a reworded message keeps its help.
+    #[test]
+    fn help_follows_the_declared_kind_not_the_wording() {
+        // A replacement whose message names none of the words.
+        assert_eq!(
+            engine_help(
+                "kql_unknown_table",
+                "'Tablé😀' is missing here",
+                Some("Table")
+            ),
+            "did you mean \"Table\"?"
+        );
+        assert_eq!(
+            engine_help(
+                "spl_unknown_command",
+                "'statz' is not recognised",
+                Some("stats")
+            ),
+            "did you mean \"stats\"?"
+        );
+        // A step whose message names one, as a user's text can.
+        assert_eq!(
+            engine_help(
+                "falco_unknown_macro",
+                "`unknown_é` is not a macro",
+                Some("known_é")
+            ),
+            "try: known_é"
+        );
+        assert_eq!(
+            engine_help("spl_search_operator", "a deprecated '=='", Some("=")),
+            "try: ="
         );
     }
 

@@ -58,6 +58,7 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 - **API: `LanguageId::Datadog`**, the Datadog log search syntax (`docs/internal/rfc-datadog-cloud-siem.md`). `LanguageId::QUERY_LANGUAGES` holds twelve languages; `LanguageId::parse` reads `datadog` and `opentide-datadog`, and `LanguageId::from_extension` reads `datadog`.
 - **Constructors for the findings outside code builds** ([opentide#1937](https://github.com/opentidehq/opentide/issues/1937)): `PlatformFinding::new` (a plugin platform's check), `Fix::new` and `TextEdit::new`; `QueriesMode::as_str` and `LintStatus::as_str`; `Default` for `validate::Summary` and `catalog::PlatformInfo`.
+- **API: `analysis::codes::suggestion_kind`** ([opentide#1950](https://github.com/opentidehq/opentide/issues/1950)) says what a code's `suggestion` is: a `SuggestionKind::Replacement` for an unknown or deprecated name, or a `SuggestionKind::Step`, the text a fix writes. `None` for a code that declares none. The command line words a finding's help from it (`did you mean …?` or `try: …`) instead of from the message's words.
 
 #### `opentide-datadog`
 
