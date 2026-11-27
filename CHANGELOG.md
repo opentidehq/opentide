@@ -20,7 +20,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Eac
 
 ### Changed
 
-- **A query file is checked as a search under every `--platform`** ([#1912](https://github.com/opentidehq/opentide/issues/1912)). `validate query --platform crowdstrike --file x.cql` checks the file as plain LogScale, as it was checked without `--platform`, so it no longer reports `cql_correlate_aggregate`. The CrowdStrike block's `query` is still checked as a Next-Gen SIEM correlation rule. The MCP tool `validate_query` reads its `query` the same way: under `crowdstrike` it no longer reports `cql_correlate_aggregate`, and under `exabeam` no longer `exabeam_advanced_in_rule`. To check a rule's queries as rules, use `validate_rule` or `validation_report`.
+- **A query file is checked as a search under every `--platform`** ([#1912](https://github.com/opentidehq/opentide/issues/1912)). `validate query --platform crowdstrike --file x.cql` checks the file as plain LogScale, as it was checked without `--platform`, so it no longer reports `cql_correlate_aggregate`. The CrowdStrike block's `query` is still checked as a Next-Gen SIEM correlation rule. The MCP tool `validate_query` reads its `query` the same way: under `crowdstrike` it no longer reports `cql_correlate_aggregate`, and under `exabeam` no longer `exabeam_advanced_in_rule`. To check a rule's queries as rules, use `validate_rule` or `validation_report`, or `position: rule` from [#1993](https://github.com/opentidehq/opentide/issues/1993).
 
 ### Fixed
 
