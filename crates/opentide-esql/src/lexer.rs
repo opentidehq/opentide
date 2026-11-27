@@ -9,7 +9,7 @@
 //! subquery, a `FORK` branch, `EXPLAIN (…)`). Words are not keywords here:
 //! every word is [`K::WORD`] and the parser decides.
 //!
-//! The scanner's job is [`block_comment`]: Elasticsearch nests `/* */`, and
+//! The scanner's job is `block_comment`: Elasticsearch nests `/* */`, and
 //! the scanner simulated its lexer's readings of a nested opener. The lexer
 //! tiles the source, whitespace and comments included, and never skips.
 
@@ -557,7 +557,7 @@ impl Driver<'_> {
 }
 
 /// The lexemes of `source`: they tile it, trivia included.
-pub(crate) fn lex(source: &str) -> Vec<Lexeme> {
+pub fn lex(source: &str) -> Vec<Lexeme> {
     let mut driver = Driver {
         source,
         pos: 0,

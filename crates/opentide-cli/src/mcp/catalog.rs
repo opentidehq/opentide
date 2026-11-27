@@ -5,7 +5,6 @@
 
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use std::sync::LazyLock;
 
 use indexmap::IndexMap;
 use opentide_schema::node::{Node, Value};
@@ -19,8 +18,9 @@ use crate::json::Json;
 /// The object families the catalogue tools read, in the order they search them.
 pub const FAMILIES: [&str; 3] = ["rule", "threat", "objective"];
 
-/// The workspace `context` places, opened afresh: the tools answer for the
-/// files as they are now.
+/// The workspace `context` places, as its files are now: under a call
+/// ([`super::tools::call`]) the process's warm one, brought up to date with
+/// what changed on disk since the last call.
 pub fn workspace(context: &Context<'_>) -> Result<Workspace, String> {
     let cwd = context
         .cwd
@@ -199,15 +199,11 @@ fn matches_platform(body: &Node, platform: &str) -> bool {
     needle.is_empty() || fields::platforms(body).contains(&needle)
 }
 
-static UUID: LazyLock<regex::Regex> = LazyLock::new(|| {
-    #[expect(clippy::expect_used, reason = "a literal pattern")]
-    regex::Regex::new("(?i)^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")
-        .expect("valid regex")
-});
-
 /// `search`: a summary of each object `query` and the filters match.
 pub fn search(index: &Index, query: &str, filters: &Filters) -> Vec<Json> {
-    if UUID.is_match(query.trim()) {
+    // A Tide object's id is a version 4 UUID (`metadata.uuid`'s rule): a
+    // query written as one looks the object up instead of searching text.
+    if opentide_core::ids::is_v4(query.trim()) {
         let Some(found) = get_object(index, query) else {
             return Vec::new();
         };

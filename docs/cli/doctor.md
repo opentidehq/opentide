@@ -107,6 +107,7 @@ The sign-in and the request for each platform:
 | `graylog` | None: the API token | `GET /api/system` |
 | `exabeam` | OAuth2 token | `GET` the correlation rules named `opentide` |
 | `google_secops` | Google OAuth2 token | `GET` one rule of the instance (`pageSize=1`) |
+| `datadog` | None: the API and application keys | `GET` one detection rule (`page[size]=1`) |
 | `bitdefender` | None | Not checked: the connector only sends rule writes, so there is no read-only request to make (`skip`) |
 
 `--live` and `--offline` contradict each other: together they exit `2` (`usage_error`).

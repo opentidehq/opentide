@@ -3,12 +3,7 @@
 //! aborts the process), and no quadratic rescanning. Every case runs on a 1 MB stack, in a
 //! debug build, with a time budget.
 
-#![expect(dead_code, reason = "the included modules are used in part")]
-
-#[path = "../src/lexer.rs"]
-mod lexer;
-#[path = "../src/syntax.rs"]
-mod syntax;
+use opentide_cql::{lexer, syntax};
 
 use std::time::{Duration, Instant};
 use syntax::SyntaxKind as K;

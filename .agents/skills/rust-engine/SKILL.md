@@ -21,7 +21,7 @@ Read `references/crates.md` before adding a dependency or a new crate. Read `ref
 | `opentide-core` | no | `thiserror` | `LanguageId`, ranges, `codes` |
 | `opentide-highlight` | no | `thiserror` | HighlightSpec, semantic tokens |
 | `opentide-parse` | no | `SyntaxError` (data, no enum of errors) | the parsing toolkit: logos token source, event parser, lossless rowan trees, the `.ungram` runtime. See `parser` |
-| `opentide-kql` | no | `Diagnostic` | KQL catalog, HIR, profiles (`thiserror` is declared and unused) |
+| `opentide-kql` | no | `Diagnostic` | KQL catalog, HIR, dialects (`thiserror` is declared and unused) |
 | `opentide-spl` | no | `Diagnostic` | SPL catalog |
 | `opentide-esql` | no | `Diagnostic` | ES\|QL catalog, stack-version lifecycle |
 | `opentide-eql` | no | `Diagnostic` | EQL catalog, sequence and sample checks |
@@ -61,7 +61,7 @@ Pinned stack (do not bump in passing):
 | `clap` 4 | derive | `opentide-lsp` CLI only |
 | `regex` 1 | lockfile | compile once |
 | `regex-syntax` 0.8 | lockfile (`regex`'s own parser) | `opentide-exabeam` only: RE2 syntax checks of Exabeam patterns, parsed, never compiled |
-| `uuid` 1 (`v4` feature) | 1.26 | Tide object ids in `opentide-tide` |
+| `uuid` 1 | 1.26 | every UUID read or recognised, through `opentide_core::ids`; `v4`/`v5` generation in `opentide-cli` and `opentide-connectors` |
 | `logos`, `rowan` 0.17 | workspace | the query parsers, on `opentide-parse`. See `parser` |
 | `yara-x-parser`, `yara-x-fmt` | `=1.23.0` | `opentide-yara` only. Never the `yara-x` compiler crate (wasmtime, no WASI): it is an oracle (`scripts/engine/oracles`) |
 
@@ -77,7 +77,7 @@ LSP `character` is a UTF-16 code unit count. `é` is one unit; an emoji outside 
 
 Inbound positions (LSP → byte offset) go through `opentide_core::position_to_offset`, which counts UTF-16 and always returns a char boundary. The host converts once, in `offset` (`crates/opentide-lsp/src/handlers.rs`), and the engines take byte offsets; `position_to_offset` in `opentide-kql` is a thin wrapper over it (#178: the byte-index version panicked after `日本`). Do not add another converter, and do not index the source with `position.character` as a byte index; a change here needs a fixture with `é`, a CJK character and a non-BMP character.
 
-`uuid::Uuid::parse_str` plus `get_version_num() == 4` is the object-id check (`is_uuidv4`). Do not add another parser. A 36-character hex UUID that is not version 4 is a different future check (configuration `organisation_uuid`) and does not belong in this function.
+`opentide_core::ids` is the one place UUIDs are read and recognised (#1938): `parse`/`canonical` read as Python's `uuid.UUID(text.strip())` does and write lower case, hyphenated; `is_hyphenated` is the `8-4-4-4-12` form in either case, `is_canonical` that form in lower case, `is_v4` the object-id check (`metadata.uuid`); `PATTERN`/`finder` find UUIDs in text. Do not add another parser, regex or `is_uuid`.
 
 ## Errors
 

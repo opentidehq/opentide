@@ -17,7 +17,7 @@ use std::sync::OnceLock;
 use opentide_connectors::connector::ConfigurationFinding;
 use opentide_connectors::plugin::{self, PluginError, PluginHost};
 use opentide_connectors::{ConnectorError, Registry};
-use opentide_schema::node::{Node, Value};
+use opentide_schema::node::Node;
 use opentide_workspace::validate::{PlatformConfigurations, PlatformFinding};
 
 static HOST: OnceLock<Box<dyn PluginHost>> = OnceLock::new();
@@ -108,21 +108,17 @@ impl PlatformConfigurations for PluginBlocks {
         };
         match check.check(block) {
             Ok(found) => found.into_iter().map(finding).collect(),
-            Err(error) => vec![PlatformFinding {
-                field_path: Vec::new(),
-                message: format!("the plugin could not check this block: {}", reason(&error)),
-                warning: false,
-            }],
+            Err(error) => vec![PlatformFinding::new(
+                Vec::new(),
+                format!("the plugin could not check this block: {}", reason(&error)),
+                false,
+            )],
         }
     }
 }
 
 fn finding(found: ConfigurationFinding) -> PlatformFinding {
-    PlatformFinding {
-        field_path: found.path,
-        message: found.message,
-        warning: found.warning,
-    }
+    PlatformFinding::new(found.path, found.message, found.warning)
 }
 
 /// An error's text without the platform and tenant a tenant error names.
@@ -138,22 +134,8 @@ fn reason(error: &ConnectorError) -> String {
 /// The platforms the workspace enables (`[platform] enabled = true`) that
 /// are not built in, in the configuration's order.
 pub fn enabled_outside_builtin(platforms: Option<&Node>) -> Vec<String> {
-    let Some(Value::Map(entries)) = platforms.map(|node| &node.value) else {
-        return Vec::new();
-    };
-    entries
-        .iter()
-        .filter(|entry| {
-            matches!(
-                entry
-                    .value
-                    .get("platform")
-                    .and_then(|block| block.get("enabled"))
-                    .map(|enabled| &enabled.value),
-                Some(Value::Bool(true))
-            )
-        })
-        .map(|entry| entry.key.value.to_string())
+    opentide_schema::configuration::resolve::enabled_platform_ids(platforms)
+        .into_iter()
         .filter(|id| !plugin::is_builtin(id))
         .collect()
 }

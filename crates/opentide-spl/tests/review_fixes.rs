@@ -120,22 +120,30 @@ fn command_words_glue_like_tree_sitter() {
 /// Fails unless `run(4 * n)` takes less than 8 times `run(n)`: linear work
 /// takes 4 times as long, quadratic 16 times. Each is the best of three runs,
 /// the sizes alternated, so a busy machine slows both alike; a run under 50 ms passes whatever the
-/// ratio, its noise being larger than it.
+/// ratio, its noise being larger than it. A growth over the bound is measured again, up to three
+/// times, as `opentide-parse`'s `token_cache` test does: quadratic work exceeds it every time, one
+/// burst of load on a shared runner does not.
 fn assert_linear(name: &str, n: usize, run: impl Fn(usize)) {
     let time = |k: usize| {
         let started = std::time::Instant::now();
         run(k);
         started.elapsed()
     };
-    // Alternated, so that a busy spell slows both sizes alike.
-    let (mut small, mut large) = (std::time::Duration::MAX, std::time::Duration::MAX);
+    let mut seen = Vec::new();
     for _ in 0..3 {
-        small = small.min(time(n));
-        large = large.min(time(4 * n));
+        // Alternated, so that a busy spell slows both sizes alike.
+        let (mut small, mut large) = (std::time::Duration::MAX, std::time::Duration::MAX);
+        for _ in 0..3 {
+            small = small.min(time(n));
+            large = large.min(time(4 * n));
+        }
+        if large < std::time::Duration::from_millis(50) || large < small * 8 {
+            return;
+        }
+        seen.push((small, large));
     }
-    assert!(
-        large < std::time::Duration::from_millis(50) || large < small * 8,
-        "{name}: {small:?} for {n}, {large:?} for {}: not linear",
+    panic!(
+        "{name}: not linear from {n} to {} in any of 3 measurements: {seen:?}",
         4 * n
     );
 }

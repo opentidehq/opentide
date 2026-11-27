@@ -10,7 +10,7 @@
 
 from typing import Any, Final, SupportsIndex, final
 
-__all__ = ["ValidationError", "BitdefenderActions", "BitdefenderConfig", "BitdefenderCriterion", "BitdefenderDetection", "BitdefenderProcessScope", "BitdefenderTargets", "BitdefenderYara", "CarbonBlackConfig", "CrowdstrikeConfig", "CrowdstrikeDetails", "CrowdstrikeSchedule", "DefenderAccountMapping", "DefenderAccountObjectTarget", "DefenderAccountSidTarget", "DefenderActions", "DefenderAlert", "DefenderAmazonResourceMapping", "DefenderAzureResourceMapping", "DefenderCloudApplicationMapping", "DefenderDeviceTarget", "DefenderDnsMapping", "DefenderEmailTarget", "DefenderEntities", "DefenderExclusion", "DefenderFileMapping", "DefenderFileTarget", "DefenderGoogleCloudResourceMapping", "DefenderHostMapping", "DefenderIncident", "DefenderIpMapping", "DefenderIsolationTarget", "DefenderMailClusterMapping", "DefenderMailMessageMapping", "DefenderMailboxMapping", "DefenderOAuthApplicationMapping", "DefenderProcessMapping", "DefenderQuarantineTarget", "DefenderRegistryValueMapping", "DefenderSchedule", "DefenderScope", "DefenderSecurityGroupMapping", "DefenderUrlMapping", "DeprecatedModelFields", "DetectionExample", "DetectionObjective", "DetectionRule", "DetectionRule_v1_1", "DetectionSignal", "ElasticActions", "ElasticCardinality", "ElasticConfig", "ElasticEql", "ElasticExceptionList", "ElasticExceptions", "ElasticFilter", "ElasticGuide", "ElasticIntegration", "ElasticMachineLearning", "ElasticNewTerms", "ElasticOverrides", "ElasticRequiredField", "ElasticRisk", "ElasticRiskScoreMapping", "ElasticScheduling", "ElasticSeverity", "ElasticSeverityMapping", "ElasticSuppression", "ElasticThreatEntry", "ElasticThreatGroup", "ElasticThreatMatch", "ElasticThreshold", "ElasticTimeline", "ExabeamConfig", "ExabeamCorrelation", "ExabeamEmail", "ExabeamRecurrence", "ExabeamSequence", "ExabeamSuppression", "ExabeamThreshold", "ExternalDetector", "GoogleSecopsConfig", "GoogleSecopsMatch", "GoogleSecopsOptions", "GoogleSecopsSchedule", "GraylogAggregation", "GraylogConfig", "GraylogEventLookup", "GraylogEventTemplate", "GraylogLookupTable", "GraylogSchedule", "HarfangLabConfig", "HarfangLabSigma", "HarfangLabSigmaLogSource", "HarfangLabSigmaSelection", "HarfangLabYara", "HarfangLabYaraMeta", "MicrosoftDefenderConfig", "ObjectMetadata", "ObjectReferences", "ObjectiveBody", "ObjectiveComposition", "Organisation", "ResponseProcedure", "ResponseSearch", "RuleConfigurations", "RuleMetadata", "RuleResponse", "SentinelAlert", "SentinelAlertGrouping", "SentinelConfig", "SentinelCustomDetails", "SentinelDynamicProperties", "SentinelEntityMapping", "SentinelExclusion", "SentinelGrouping", "SentinelMappingEntry", "SentinelOneCondition", "SentinelOneConfig", "SentinelOneCorrelation", "SentinelOneDetails", "SentinelOneResponse", "SentinelOneSingleEvent", "SentinelOneSubQuery", "SentinelScheduling", "SentinelTemplate", "SentinelTrigger", "SignalData", "SplunkActions", "SplunkConfig", "SplunkEmail", "SplunkEmailInclude", "SplunkNotable", "SplunkNotableDrilldown", "SplunkNotableEvent", "SplunkRisk", "SplunkRiskObject", "SplunkSchedule", "SplunkScheduling", "SplunkThreatObject", "SplunkThrottling", "SplunkTimerange", "SplunkTrigger", "SysdigConfig", "SysdigException", "SysdigList", "SysdigMacro", "ThreatActor", "ThreatBody", "ThreatVector"]
+__all__ = ["ValidationError", "BitdefenderActions", "BitdefenderConfig", "BitdefenderCriterion", "BitdefenderDetection", "BitdefenderProcessScope", "BitdefenderTargets", "BitdefenderYara", "CarbonBlackConfig", "CrowdstrikeConfig", "CrowdstrikeDetails", "CrowdstrikeSchedule", "DatadogCase", "DatadogConfig", "DatadogDetection", "DatadogQuery", "DatadogSignal", "DefenderAccountMapping", "DefenderAccountObjectTarget", "DefenderAccountSidTarget", "DefenderActions", "DefenderAlert", "DefenderAmazonResourceMapping", "DefenderAzureResourceMapping", "DefenderCloudApplicationMapping", "DefenderDeviceTarget", "DefenderDnsMapping", "DefenderEmailTarget", "DefenderEntities", "DefenderExclusion", "DefenderFileMapping", "DefenderFileTarget", "DefenderGoogleCloudResourceMapping", "DefenderHostMapping", "DefenderIncident", "DefenderIpMapping", "DefenderIsolationTarget", "DefenderMailClusterMapping", "DefenderMailMessageMapping", "DefenderMailboxMapping", "DefenderOAuthApplicationMapping", "DefenderProcessMapping", "DefenderQuarantineTarget", "DefenderRegistryValueMapping", "DefenderSchedule", "DefenderScope", "DefenderSecurityGroupMapping", "DefenderUrlMapping", "DeprecatedModelFields", "DetectionExample", "DetectionObjective", "DetectionRule", "DetectionRule_v1_1", "DetectionSignal", "ElasticActions", "ElasticCardinality", "ElasticConfig", "ElasticEql", "ElasticExceptionList", "ElasticExceptions", "ElasticFilter", "ElasticGuide", "ElasticIntegration", "ElasticMachineLearning", "ElasticNewTerms", "ElasticOverrides", "ElasticRequiredField", "ElasticRisk", "ElasticRiskScoreMapping", "ElasticScheduling", "ElasticSeverity", "ElasticSeverityMapping", "ElasticSuppression", "ElasticThreatEntry", "ElasticThreatGroup", "ElasticThreatMatch", "ElasticThreshold", "ElasticTimeline", "ExabeamConfig", "ExabeamCorrelation", "ExabeamEmail", "ExabeamRecurrence", "ExabeamSequence", "ExabeamSuppression", "ExabeamThreshold", "ExternalDetector", "GoogleSecopsConfig", "GoogleSecopsMatch", "GoogleSecopsOptions", "GoogleSecopsSchedule", "GraylogAggregation", "GraylogConfig", "GraylogEventLookup", "GraylogEventTemplate", "GraylogLookupTable", "GraylogSchedule", "HarfangLabConfig", "HarfangLabSigma", "HarfangLabSigmaLogSource", "HarfangLabSigmaSelection", "HarfangLabYara", "HarfangLabYaraMeta", "MicrosoftDefenderConfig", "ObjectMetadata", "ObjectReferences", "ObjectiveBody", "ObjectiveComposition", "Organisation", "ResponseProcedure", "ResponseSearch", "RuleConfigurations", "RuleMetadata", "RuleResponse", "SentinelAlert", "SentinelAlertGrouping", "SentinelConfig", "SentinelCustomDetails", "SentinelDynamicProperties", "SentinelEntityMapping", "SentinelExclusion", "SentinelGrouping", "SentinelMappingEntry", "SentinelOneCondition", "SentinelOneConfig", "SentinelOneCorrelation", "SentinelOneDetails", "SentinelOneResponse", "SentinelOneSingleEvent", "SentinelOneSubQuery", "SentinelScheduling", "SentinelTemplate", "SentinelTrigger", "SignalData", "SplunkActions", "SplunkConfig", "SplunkEmail", "SplunkEmailInclude", "SplunkNotable", "SplunkNotableDrilldown", "SplunkNotableEvent", "SplunkRisk", "SplunkRiskObject", "SplunkSchedule", "SplunkScheduling", "SplunkThreatObject", "SplunkThrottling", "SplunkTimerange", "SplunkTrigger", "SysdigConfig", "SysdigException", "SysdigList", "SysdigMacro", "ThreatActor", "ThreatBody", "ThreatVector"]
 
 ValidationError: Final[type[ValueError]]
 """
@@ -1181,6 +1181,578 @@ class CrowdstrikeSchedule:
     def start(self, /) -> str | None:
         """
         Do not run before this UTC time.
+        """
+
+@final
+class DatadogCase:
+    """
+    When a match becomes a signal (`DatadogCase`).
+    """
+    __tide_fields__: Final[list[tuple[str, str]]]
+    """
+    Each field's attribute and serialised name, in order.
+    """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
+    def __eq__(self, value: object, /) -> bool: ...
+    def __hash__(self, /) -> int: ...
+    def __ne__(self, value: object, /) -> bool: ...
+    def __reduce__(self, /) -> tuple[Any, tuple[dict]]: ...
+    def __repr__(self, /) -> str: ...
+    @property
+    def condition(self, /) -> str | None:
+        """
+        Comparisons of query names with numbers, joined by `&&` or `||`: `failed > 10 && success > 0`.
+        Required with `threshold` and `anomaly`; under `anomaly`, the number is a percentile between 0
+        and 1.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> DatadogCase:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
+    def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> DatadogCase:
+        """
+        A copy, with `update`'s fields replaced; the result is
+        validated. Models are frozen, so `deep` changes nothing.
+        """
+    def model_dump(self, /, *, mode: str = "python", by_alias: bool = False, exclude_none: bool = False) -> dict:
+        """
+        The fields as a dict: attribute names (`by_alias`: the
+        serialised ones), nested models as dicts. `mode` is
+        `"python"` or `"json"`, which give the same values.
+        """
+    def model_dump_json(self, /, *, by_alias: bool = False, exclude_none: bool = False, indent: SupportsIndex | None = None) -> str:
+        """
+        `model_dump` as JSON text, non-ASCII characters as they are.
+        """
+    @classmethod
+    def model_json_schema(cls, /, by_alias: bool = True, mode: str = "validation") -> dict:
+        """
+        The model's JSON Schema, the fields under their serialised
+        names (`by_alias=True` only); `mode` is `"validation"` or
+        `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
+        """
+    @classmethod
+    def model_validate(cls, /, obj: Any) -> DatadogCase:
+        """
+        Builds the model from a dict (or a model), checked; raises
+        `ValidationError` with every error.
+        """
+    @classmethod
+    def model_validate_json(cls, /, json_data: str) -> DatadogCase:
+        """
+        `model_validate` of a JSON document.
+        """
+    @property
+    def name(self, /) -> str | None:
+        """
+        The case's name.
+        """
+    @property
+    def notify(self, /) -> list[str] | None:
+        """
+        Tenant notification aliases or raw `@handles`. Left out in a `PREVIEW` deploy.
+        """
+    @property
+    def severity(self, /) -> str | None:
+        """
+        `info`, `low`, `medium`, `high`, or `critical`. Default: from `response.alert_severity`, else
+        `info`.
+        """
+
+@final
+class DatadogConfig:
+    """
+    Datadog Cloud SIEM detection rule (`DatadogConfig`).
+    """
+    __schema_identifier__: Final[str]
+    __tide_fields__: Final[list[tuple[str, str]]]
+    """
+    Each field's attribute and serialised name, in order.
+    """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
+    def __eq__(self, value: object, /) -> bool: ...
+    def __hash__(self, /) -> int: ...
+    def __ne__(self, value: object, /) -> bool: ...
+    def __reduce__(self, /) -> tuple[Any, tuple[dict]]: ...
+    def __repr__(self, /) -> str: ...
+    @property
+    def cases(self, /) -> list[DatadogCase]:
+        """
+        One or more cases, tested in order: the first that matches creates or updates the signal.
+        """
+    @property
+    def contributors(self, /) -> list[str] | None:
+        """
+        Platform contributors.
+        """
+    @property
+    def detection(self, /) -> DatadogDetection | None:
+        """
+        How the queries become a match. Default: `method: threshold`, `window: 5m`.
+        """
+    @property
+    def enabled(self, /) -> bool:
+        """
+        Whether this platform block is active.
+        """
+    @property
+    def flags(self, /) -> list[str] | None:
+        """
+        Platform flags.
+        """
+    @property
+    def message(self, /) -> str | None:
+        """
+        The signal's message: Markdown with Datadog template variables. Default: derived from the
+        rule's description and response.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> DatadogConfig:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
+    def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> DatadogConfig:
+        """
+        A copy, with `update`'s fields replaced; the result is
+        validated. Models are frozen, so `deep` changes nothing.
+        """
+    def model_dump(self, /, *, mode: str = "python", by_alias: bool = False, exclude_none: bool = False) -> dict:
+        """
+        The fields as a dict: attribute names (`by_alias`: the
+        serialised ones), nested models as dicts. `mode` is
+        `"python"` or `"json"`, which give the same values.
+        """
+    def model_dump_json(self, /, *, by_alias: bool = False, exclude_none: bool = False, indent: SupportsIndex | None = None) -> str:
+        """
+        `model_dump` as JSON text, non-ASCII characters as they are.
+        """
+    @classmethod
+    def model_json_schema(cls, /, by_alias: bool = True, mode: str = "validation") -> dict:
+        """
+        The model's JSON Schema, the fields under their serialised
+        names (`by_alias=True` only); `mode` is `"validation"` or
+        `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
+        """
+    @classmethod
+    def model_validate(cls, /, obj: Any) -> DatadogConfig:
+        """
+        Builds the model from a dict (or a model), checked; raises
+        `ValidationError` with every error.
+        """
+    @classmethod
+    def model_validate_json(cls, /, json_data: str) -> DatadogConfig:
+        """
+        `model_validate` of a JSON document.
+        """
+    @property
+    def name(self, /) -> str:
+        """
+        Platform-specific rule name.
+        """
+    @property
+    def platform_schema(self, /) -> str | None:
+        """
+        Platform schema identifier, for example `platform::sentinel::1.0`.
+        """
+    @property
+    def queries(self, /) -> list[DatadogQuery]:
+        """
+        One or more searches, each with the name conditions call it by.
+        """
+    @property
+    def schema(self, /) -> str | None:
+        """
+        The serialised name of the schema identifier field,
+        read-only (`metadata.schema`, `block.schema`).
+        """
+    @classmethod
+    def schema_identifier(cls, /) -> str:
+        """
+        The canonical schema identifier (`rule::1.0`).
+        """
+    @property
+    def signal(self, /) -> DatadogSignal | None:
+        """
+        What happens to the signal: grouping, how long it stays open, how it reads.
+        """
+    @property
+    def status(self, /) -> str:
+        """
+        Deployment status of this platform block, from the statuses in `deployment.toml`. Required:
+        the deploy planner selects on it.
+        """
+    @property
+    def tags(self, /) -> list[str] | None:
+        """
+        Datadog tags, added to the derived ones: lower case, such as `team:identity`.
+        """
+    @property
+    def tenants(self, /) -> list[str] | None:
+        """
+        Target tenant identifiers.
+        """
+
+@final
+class DatadogDetection:
+    """
+    How the queries become a match (`DatadogDetection`).
+    """
+    __tide_fields__: Final[list[tuple[str, str]]]
+    """
+    Each field's attribute and serialised name, in order.
+    """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
+    def __eq__(self, value: object, /) -> bool: ...
+    def __hash__(self, /) -> int: ...
+    def __ne__(self, value: object, /) -> bool: ...
+    def __reduce__(self, /) -> tuple[Any, tuple[dict]]: ...
+    def __repr__(self, /) -> str: ...
+    @property
+    def bucket(self, /) -> str | None:
+        """
+        `anomaly` only: the time bucket the baseline is computed on: `5m`, `10m`, `15m`, `30m`, `1h`,
+        or `3h`.
+        """
+    @property
+    def detect_ip_transitions(self, /) -> bool | None:
+        """
+        `impossible_travel` only: detect transitions between IP addresses of the same user.
+        """
+    @property
+    def forget_after(self, /) -> str | None:
+        """
+        `new_value` only, required: a learned value unseen for this long is new again, `1d` to `30d`.
+        """
+    @property
+    def learning(self, /) -> str | None:
+        """
+        How long Datadog learns what is normal. `new_value`: `0d` to `30d` (default `1d`).
+        `anomaly`: `1h`, `6h`, `12h`, `1d`, `2d`, `7d`, or `14d`. `impossible_travel`: `1d` to `30d`,
+        a baseline of each user's locations.
+        """
+    @property
+    def method(self, /) -> str | None:
+        """
+        `threshold`, `new_value`, `anomaly`, or `impossible_travel`. Default: `threshold`.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> DatadogDetection:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
+    def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> DatadogDetection:
+        """
+        A copy, with `update`'s fields replaced; the result is
+        validated. Models are frozen, so `deep` changes nothing.
+        """
+    def model_dump(self, /, *, mode: str = "python", by_alias: bool = False, exclude_none: bool = False) -> dict:
+        """
+        The fields as a dict: attribute names (`by_alias`: the
+        serialised ones), nested models as dicts. `mode` is
+        `"python"` or `"json"`, which give the same values.
+        """
+    def model_dump_json(self, /, *, by_alias: bool = False, exclude_none: bool = False, indent: SupportsIndex | None = None) -> str:
+        """
+        `model_dump` as JSON text, non-ASCII characters as they are.
+        """
+    @classmethod
+    def model_json_schema(cls, /, by_alias: bool = True, mode: str = "validation") -> dict:
+        """
+        The model's JSON Schema, the fields under their serialised
+        names (`by_alias=True` only); `mode` is `"validation"` or
+        `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
+        """
+    @classmethod
+    def model_validate(cls, /, obj: Any) -> DatadogDetection:
+        """
+        Builds the model from a dict (or a model), checked; raises
+        `ValidationError` with every error.
+        """
+    @classmethod
+    def model_validate_json(cls, /, json_data: str) -> DatadogDetection:
+        """
+        `model_validate` of a JSON document.
+        """
+    @property
+    def tolerance(self, /) -> int | None:
+        """
+        `anomaly` only: how far above the baseline counts as anomalous, 1 to 5.
+        """
+    @property
+    def window(self, /) -> str | None:
+        """
+        The sliding window the cases are tested over: `0`, `1m`, `5m`, `10m`, `15m`, `30m`, `1h`,
+        `2h`, `3h`, `6h`, `12h`, or `1d`. Default: `5m`.
+        """
+
+@final
+class DatadogQuery:
+    """
+    One search over a data source (`DatadogQuery`).
+    """
+    __tide_fields__: Final[list[tuple[str, str]]]
+    """
+    Each field's attribute and serialised name, in order.
+    """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
+    def __eq__(self, value: object, /) -> bool: ...
+    def __hash__(self, /) -> int: ...
+    def __ne__(self, value: object, /) -> bool: ...
+    def __reduce__(self, /) -> tuple[Any, tuple[dict]]: ...
+    def __repr__(self, /) -> str: ...
+    @property
+    def count_distinct(self, /) -> str | None:
+        """
+        The cases compare the number of distinct values of this field instead of events.
+        """
+    @property
+    def from_(self, /) -> str | None:
+        """
+        `logs`, `audit`, `events`, or `signals` (security signals). Default: `logs`.
+        """
+    @property
+    def group_by(self, /) -> list[str] | None:
+        """
+        Matches are counted per distinct combination of these fields' values.
+        """
+    @property
+    def keep_missing_groups(self, /) -> bool | None:
+        """
+        Keep an event that lacks a `group_by` value, grouped as `N/A`, instead of dropping it.
+        Default: `false`.
+        """
+    @property
+    def max(self, /) -> str | None:
+        """
+        The cases compare this numeric field's maximum.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> DatadogQuery:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
+    def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> DatadogQuery:
+        """
+        A copy, with `update`'s fields replaced; the result is
+        validated. Models are frozen, so `deep` changes nothing.
+        """
+    def model_dump(self, /, *, mode: str = "python", by_alias: bool = False, exclude_none: bool = False) -> dict:
+        """
+        The fields as a dict: attribute names (`by_alias`: the
+        serialised ones), nested models as dicts. `mode` is
+        `"python"` or `"json"`, which give the same values.
+        """
+    def model_dump_json(self, /, *, by_alias: bool = False, exclude_none: bool = False, indent: SupportsIndex | None = None) -> str:
+        """
+        `model_dump` as JSON text, non-ASCII characters as they are.
+        """
+    @classmethod
+    def model_json_schema(cls, /, by_alias: bool = True, mode: str = "validation") -> dict:
+        """
+        The model's JSON Schema, the fields under their serialised
+        names (`by_alias=True` only); `mode` is `"validation"` or
+        `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
+        """
+    @classmethod
+    def model_validate(cls, /, obj: Any) -> DatadogQuery:
+        """
+        Builds the model from a dict (or a model), checked; raises
+        `ValidationError` with every error.
+        """
+    @classmethod
+    def model_validate_json(cls, /, json_data: str) -> DatadogQuery:
+        """
+        `model_validate` of a JSON document.
+        """
+    @property
+    def name(self, /) -> str | None:
+        """
+        What conditions call the query: `[a-z][a-z0-9_]*`, unique in the block. Default: `a`, `b`, …
+        by position. Not allowed on a `new_value` query.
+        """
+    @property
+    def new_value(self, /) -> list[str] | None:
+        """
+        `method: new_value` only: one to five fields whose unseen values trigger.
+        """
+    @property
+    def query(self, /) -> str:
+        """
+        The Datadog search syntax, profile `rule`. Multiline in YAML.
+        """
+    @property
+    def sum(self, /) -> str | None:
+        """
+        The cases compare this numeric field's sum.
+        """
+
+@final
+class DatadogSignal:
+    """
+    What happens to a signal once it exists (`DatadogSignal`).
+    """
+    __tide_fields__: Final[list[tuple[str, str]]]
+    """
+    Each field's attribute and serialised name, in order.
+    """
+    model_fields: Final[DeprecatedModelFields]
+    """
+    Deprecated (Pydantic's): each field's attribute name mapped to
+    its serialised name, with a `DeprecationWarning`.
+    """
+    def __eq__(self, value: object, /) -> bool: ...
+    def __hash__(self, /) -> int: ...
+    def __ne__(self, value: object, /) -> bool: ...
+    def __reduce__(self, /) -> tuple[Any, tuple[dict]]: ...
+    def __repr__(self, /) -> str: ...
+    @property
+    def downgrade_non_production(self, /) -> bool | None:
+        """
+        One severity level lower when the `env` tag starts with `staging`, `test`, or `dev`. Default:
+        `false`.
+        """
+    @property
+    def group_by(self, /) -> list[str] | None:
+        """
+        Matches with the same values of these fields update one signal. Each is in some query's
+        `group_by`. Default: no signal grouping.
+        """
+    @property
+    def group_in_notification_title(self, /) -> bool | None:
+        """
+        Notifications put the group-by values in their title. Default: `false`.
+        """
+    @property
+    def keep_alive(self, /) -> str | None:
+        """
+        The signal stays open while a case matches again within this time: a `detection.window` value,
+        at least the window. Default: `1h`.
+        """
+    @property
+    def max_duration(self, /) -> str | None:
+        """
+        The signal closes this long after its first match: a `detection.window` value, at least the
+        window. Default: `1d`.
+        """
+    @classmethod
+    def model_construct(cls, /, _fields_set: Any | None = None, **values) -> DatadogSignal:
+        """
+        Deprecated (Pydantic's): `model_validate(values)`, with a
+        `DeprecationWarning`. Unlike Pydantic's, the values are
+        validated: a Rust model never holds an unchecked value.
+        """
+    def model_copy(self, /, update: dict | None = None, *, deep: bool = False) -> DatadogSignal:
+        """
+        A copy, with `update`'s fields replaced; the result is
+        validated. Models are frozen, so `deep` changes nothing.
+        """
+    def model_dump(self, /, *, mode: str = "python", by_alias: bool = False, exclude_none: bool = False) -> dict:
+        """
+        The fields as a dict: attribute names (`by_alias`: the
+        serialised ones), nested models as dicts. `mode` is
+        `"python"` or `"json"`, which give the same values.
+        """
+    def model_dump_json(self, /, *, by_alias: bool = False, exclude_none: bool = False, indent: SupportsIndex | None = None) -> str:
+        """
+        `model_dump` as JSON text, non-ASCII characters as they are.
+        """
+    @classmethod
+    def model_json_schema(cls, /, by_alias: bool = True, mode: str = "validation") -> dict:
+        """
+        The model's JSON Schema, the fields under their serialised
+        names (`by_alias=True` only); `mode` is `"validation"` or
+        `"serialization"`, which describe the same document.
+        """
+    def model_post_init(self, /, context: Any | None = None) -> None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class cannot be subclassed.
+        """
+    @classmethod
+    def model_rebuild(cls, /, **kwargs) -> bool | None:
+        """
+        Deprecated (Pydantic's): does nothing, with a
+        `DeprecationWarning`; a Rust class is complete when compiled.
+        """
+    @classmethod
+    def model_validate(cls, /, obj: Any) -> DatadogSignal:
+        """
+        Builds the model from a dict (or a model), checked; raises
+        `ValidationError` with every error.
+        """
+    @classmethod
+    def model_validate_json(cls, /, json_data: str) -> DatadogSignal:
+        """
+        `model_validate` of a JSON document.
         """
 
 @final
@@ -10114,6 +10686,11 @@ class RuleConfigurations:
     def crowdstrike(self, /) -> CrowdstrikeConfig | None:
         """
         CrowdStrike Falcon correlation rule (`platform::crowdstrike::1.0`).
+        """
+    @property
+    def datadog(self, /) -> DatadogConfig | None:
+        """
+        Datadog Cloud SIEM detection rule (`platform::datadog::1.0`).
         """
     @property
     def elastic(self, /) -> ElasticConfig | None:

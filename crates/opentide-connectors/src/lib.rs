@@ -33,6 +33,7 @@ pub mod carbon_black;
 pub mod connector;
 pub mod credentials;
 pub mod crowdstrike;
+pub mod datadog;
 pub mod elastic;
 pub mod entra;
 pub mod env;
@@ -85,6 +86,7 @@ pub fn http_settings(platform: &str, timeout: std::time::Duration) -> HttpSettin
         "sysdig" => sysdig::http_defaults(),
         "bitdefender" => bitdefender::http_defaults(),
         "exabeam" => exabeam::http_defaults(),
+        "datadog" => datadog::http_defaults(),
         "google_secops" => google_secops::http_settings(timeout),
         "graylog" => graylog::http_defaults(),
         "elastic" => elastic::http_settings(timeout),
@@ -120,7 +122,7 @@ pub fn deploy_http_settings(platform: &str) -> HttpSettings {
 /// HarfangLab and Sysdig (UC-4.2a), Microsoft Defender, Elastic and
 /// SentinelOne (UC-4.2b), Sentinel, Splunk and Carbon Black Cloud (UC-4.3),
 /// Bitdefender GravityZone and Graylog (the catch-up to 0.28.0), and Exabeam
-/// New-Scale SIEM (P-EX). Google SecOps reads Application Default
+/// New-Scale SIEM (P-EX), and Datadog Cloud SIEM. Google SecOps reads Application Default
 /// Credentials from the process environment; [`builtin_with`] names another.
 pub fn builtin() -> Registry {
     builtin_with(&Environment::process())
@@ -148,6 +150,7 @@ pub fn builtin_with(environment: &Environment) -> Registry {
         // Application Default Credentials are the environment's ambient
         // credentials (google-auth's `default()`).
         Box::new(google_secops::GoogleSecops::new(environment.clone())),
+        Box::new(datadog::Datadog::new()),
     ];
     // The table's order, wherever a connector is listed above; a connector
     // the table does not name would go last (the tests refuse one).
@@ -212,7 +215,7 @@ mod tests {
         for platform in opentide_schema::platforms::PLATFORMS.iter().map(|p| p.id) {
             let seconds = match platform {
                 "sentinel" | "google_secops" => 60,
-                "elastic" | "exabeam" | "sysdig" | "bitdefender" | "graylog" => 30,
+                "elastic" | "exabeam" | "sysdig" | "bitdefender" | "graylog" | "datadog" => 30,
                 "microsoft_defender" | "splunk" | "sentinel_one" | "carbon_black_cloud"
                 | "crowdstrike" | "harfanglab" => 120,
                 other => panic!("{other}: no deploy timeout pinned"),
@@ -292,7 +295,8 @@ mod tests {
                 "bitdefender",
                 "graylog",
                 "exabeam",
-                "google_secops"
+                "google_secops",
+                "datadog"
             ]
         );
         let can = |id: &str| {
@@ -316,6 +320,7 @@ mod tests {
         assert_eq!(can("exabeam"), (true, true, true));
         assert_eq!(can("google_secops"), (true, true, true));
         assert_eq!(can("graylog"), (true, true, true));
+        assert_eq!(can("datadog"), (true, true, true));
         // The platform table says the same of each connector.
         for row in opentide_schema::platforms::PLATFORMS {
             let (_, live, query) = can(row.id);

@@ -1,0 +1,28 @@
+# Anomaly (RFC §5.7): more denied API calls than 99.5% of this role's past
+# periods.
+name: Anomalous AWS access denied errors
+metadata:
+  uuid: 00000000-0000-4000-8004-000000000004
+  schema: rule::1.0
+  version: 1
+  created: "2026-11-27"
+  modified: "2026-11-27"
+  tlp: clear
+  author: Detection Engineering
+description: |
+  More denied API calls than 99.5% of this role's past periods.
+configurations:
+  datadog:
+    schema: platform::datadog::1.0
+    status: STAGING
+    queries:
+      - name: denied
+        query: source:cloudtrail @error.kind:AccessDenied
+        group_by: ["@userIdentity.arn"]
+    detection:
+      method: anomaly
+      window: 15m
+      bucket: 15m
+      learning: 7d
+    cases:
+      - condition: denied > 0.995

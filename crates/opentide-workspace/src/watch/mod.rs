@@ -25,7 +25,6 @@ pub mod events;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
-use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
 use crate::diagnostic::{Diagnostic, Severity};
@@ -62,17 +61,6 @@ pub fn take_snapshot(fs: &dyn FileSystem, roots: &[PathBuf]) -> Snapshot {
         .collect()
 }
 
-fn uuid_pattern() -> &'static regex::Regex {
-    static PATTERN: OnceLock<regex::Regex> = OnceLock::new();
-    PATTERN.get_or_init(|| {
-        #[expect(clippy::expect_used, reason = "a literal pattern")]
-        regex::Regex::new(
-            r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
-        )
-        .expect("the pattern compiles")
-    })
-}
-
 /// The UUIDs written in `path`, lower case: the object's own and every one
 /// it points at. A file that cannot be read writes none.
 pub fn references(fs: &dyn FileSystem, path: &Path) -> BTreeSet<String> {
@@ -80,7 +68,7 @@ pub fn references(fs: &dyn FileSystem, path: &Path) -> BTreeSet<String> {
         return BTreeSet::new();
     };
     let text = String::from_utf8_lossy(&bytes);
-    uuid_pattern()
+    opentide_core::ids::finder()
         .find_iter(&text)
         .map(|found| found.as_str().to_lowercase())
         .collect()

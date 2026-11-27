@@ -14,6 +14,7 @@ use std::sync::Arc;
 use schemars::JsonSchema;
 use serde::Serialize;
 
+use super::sharing::REDACTION_MARKER;
 use super::types::{
     ElasticVersionPattern, EnvPlaceholder, GravityZoneIdPattern, GraylogIdPattern,
     GraylogNamePattern, HttpUrlPattern, HttpsUrlPattern, Matching, MispNamePattern, NonEmptyList,
@@ -643,6 +644,44 @@ fn ssl_true() -> SslValue {
     SslValue::Bool(true)
 }
 
+/// A credential in a `Debug` output: [`REDACTION_MARKER`], whatever it holds.
+pub(crate) struct Redacted;
+
+impl std::fmt::Debug for Redacted {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(REDACTION_MARKER)
+    }
+}
+
+/// One field of [`debug_redacting!`]: the field, or [`Redacted`] for a
+/// credential.
+macro_rules! debug_field {
+    ($field:ident) => {
+        $field
+    };
+    ($field:ident, redacted) => {{
+        let _ = $field;
+        &Redacted
+    }};
+}
+
+/// `Debug` for a model that holds credentials: every field as `derive`
+/// writes it, a field marked `: redacted` as [`Redacted`] (#1933). Every
+/// field is listed, so a field added to the model does not compile until it
+/// is listed here too.
+macro_rules! debug_redacting {
+    ($name:ident { $($field:ident $(: $redacted:ident)?),+ $(,)? }) => {
+        impl std::fmt::Debug for $name {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                let Self { $($field),+ } = self;
+                f.debug_struct(stringify!($name))
+                    $(.field(stringify!($field), debug_field!($field $(, $redacted)?)))+
+                    .finish()
+            }
+        }
+    };
+}
+
 /// The fields every tenant has (`TenantBase`), then its own `setup` (and,
 /// for Defender, `parameters`).
 macro_rules! tenant {
@@ -696,7 +735,7 @@ macro_rules! platform {
 }
 
 /// `[tenants.setup]` for Microsoft Sentinel.
-#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
+#[derive(Clone, PartialEq, Serialize, FromNode, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[from_node(model = "SentinelSetup")]
 pub struct SentinelSetup {
@@ -719,6 +758,16 @@ pub struct SentinelSetup {
     #[serde(skip_serializing)]
     pub azure_client_secret: String,
 }
+debug_redacting!(SentinelSetup {
+    ssl,
+    resource_group,
+    workspace_name,
+    workspace_id,
+    azure_tenant_id,
+    azure_subscription_id,
+    azure_client_id,
+    azure_client_secret: redacted
+});
 tenant!(
     /// `[[tenants]]` for Microsoft Sentinel.
     SentinelTenant, "SentinelTenant", SentinelSetup
@@ -737,7 +786,7 @@ fn bool_true() -> BoolOrPlaceholder {
 }
 
 /// `[tenants.setup]` for Splunk.
-#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
+#[derive(Clone, PartialEq, Serialize, FromNode, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[from_node(model = "SplunkSetup")]
 pub struct SplunkSetup {
@@ -777,6 +826,20 @@ pub struct SplunkSetup {
     #[serde(default)]
     pub enterprise_security: bool,
 }
+debug_redacting!(SplunkSetup {
+    ssl,
+    url,
+    port,
+    app,
+    token: redacted,
+    correlation_searches,
+    allow_skew,
+    schedule_offset,
+    frequency_scheduling,
+    actions_enabled,
+    default_actions,
+    enterprise_security
+});
 tenant!(
     /// `[[tenants]]` for Splunk.
     SplunkTenant, "SplunkTenant", SplunkSetup
@@ -787,7 +850,7 @@ platform!(
 );
 
 /// `[tenants.setup]` for Carbon Black Cloud.
-#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
+#[derive(Clone, PartialEq, Serialize, FromNode, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[from_node(model = "CarbonBlackCloudSetup")]
 pub struct CarbonBlackCloudSetup {
@@ -808,6 +871,14 @@ pub struct CarbonBlackCloudSetup {
     #[serde(default)]
     pub organizations: Option<Vec<String>>,
 }
+debug_redacting!(CarbonBlackCloudSetup {
+    ssl,
+    url,
+    org_key,
+    token: redacted,
+    watchlist,
+    organizations
+});
 tenant!(
     /// `[[tenants]]` for Carbon Black Cloud.
     CarbonBlackCloudTenant, "CarbonBlackCloudTenant", CarbonBlackCloudSetup
@@ -818,7 +889,7 @@ platform!(
 );
 
 /// `[tenants.setup]` for SentinelOne.
-#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
+#[derive(Clone, PartialEq, Serialize, FromNode, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[from_node(model = "SentinelOneSetup")]
 pub struct SentinelOneSetup {
@@ -836,6 +907,13 @@ pub struct SentinelOneSetup {
     #[serde(default)]
     pub site_id: Option<IntOrString>,
 }
+debug_redacting!(SentinelOneSetup {
+    ssl,
+    url,
+    account_id,
+    api_token: redacted,
+    site_id
+});
 tenant!(
     /// `[[tenants]]` for SentinelOne.
     SentinelOneTenant, "SentinelOneTenant", SentinelOneSetup
@@ -846,7 +924,7 @@ platform!(
 );
 
 /// `[tenants.setup]` for Microsoft Defender.
-#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
+#[derive(Clone, PartialEq, Serialize, FromNode, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[from_node(model = "MicrosoftDefenderSetup")]
 pub struct MicrosoftDefenderSetup {
@@ -861,6 +939,12 @@ pub struct MicrosoftDefenderSetup {
     #[serde(skip_serializing)]
     pub client_secret: String,
 }
+debug_redacting!(MicrosoftDefenderSetup {
+    ssl,
+    tenant_id,
+    client_id,
+    client_secret: redacted
+});
 
 /// `[tenants.parameters]` for Microsoft Defender.
 #[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
@@ -886,7 +970,7 @@ platform!(
 );
 
 /// `[tenants.setup]` for CrowdStrike Falcon.
-#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
+#[derive(Clone, PartialEq, Serialize, FromNode, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[from_node(model = "CrowdstrikeSetup")]
 pub struct CrowdstrikeSetup {
@@ -903,6 +987,13 @@ pub struct CrowdstrikeSetup {
     /// Customer ID (CID).
     pub customer_id: String,
 }
+debug_redacting!(CrowdstrikeSetup {
+    ssl,
+    api,
+    client_id,
+    client_secret: redacted,
+    customer_id
+});
 tenant!(
     /// `[[tenants]]` for CrowdStrike Falcon.
     CrowdstrikeTenant, "CrowdstrikeTenant", CrowdstrikeSetup
@@ -945,7 +1036,7 @@ fn no_removed_harfanglab_keys(node: &Node, cx: &mut Context) -> bool {
 }
 
 /// `[tenants.setup]` for HarfangLab.
-#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
+#[derive(Clone, PartialEq, Serialize, FromNode, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[from_node(
     model = "HarfangLabSetup",
@@ -964,6 +1055,12 @@ pub struct HarfangLabSetup {
     /// Rule source the rules are written to.
     pub source_id: String,
 }
+debug_redacting!(HarfangLabSetup {
+    ssl,
+    url,
+    api_token: redacted,
+    source_id
+});
 tenant!(
     /// `[[tenants]]` for HarfangLab.
     HarfangLabTenant, "HarfangLabTenant", HarfangLabSetup
@@ -1330,6 +1427,86 @@ tenant!(
 platform!(
     /// Merged `platforms/google_secops.toml`.
     GoogleSecopsConfiguration, "GoogleSecopsConfiguration", GoogleSecopsTenant
+);
+
+/// The Datadog sites a tenant's `site` names (RFC `rfc-datadog-cloud-siem.md`
+/// §8.1); each is served at `https://api.<site>`.
+pub const DATADOG_SITES: [&str; 9] = [
+    "datadoghq.com",
+    "us3.datadoghq.com",
+    "us5.datadoghq.com",
+    "datadoghq.eu",
+    "ap1.datadoghq.com",
+    "ap2.datadoghq.com",
+    "uk1.datadoghq.com",
+    "ddog-gov.com",
+    "us2.ddog-gov.com",
+];
+
+/// `[tenants.setup]` for Datadog Cloud SIEM.
+#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[from_node(model = "DatadogSetup")]
+pub struct DatadogSetup {
+    /// Verify the tenant's TLS certificate.
+    #[serde(default = "ssl_true")]
+    pub ssl: SslValue,
+    /// The Datadog site: datadoghq.com, us3.datadoghq.com, us5.datadoghq.com, datadoghq.eu,
+    /// ap1.datadoghq.com, ap2.datadoghq.com, uk1.datadoghq.com, ddog-gov.com or us2.ddog-gov.com.
+    /// Calls go to `https://api.<site>`.
+    #[serde(default)]
+    #[schemars(
+        description = "The Datadog site: datadoghq.com, us3.datadoghq.com, us5.datadoghq.com, \
+                       datadoghq.eu, ap1.datadoghq.com, ap2.datadoghq.com, uk1.datadoghq.com, \
+                       ddog-gov.com or us2.ddog-gov.com. Calls go to https://api.<site>."
+    )]
+    pub site: Option<String>,
+    /// An HTTPS base URL that replaces the site's (a new site, a proxy).
+    #[serde(default)]
+    pub api_url: Option<Matching<HttpsUrlPattern>>,
+    /// The API key, sent as DD-API-KEY. Must be a $NAME placeholder.
+    #[serde(skip_serializing)]
+    pub api_key: EnvPlaceholder,
+    /// The application key, sent as DD-APPLICATION-KEY: security_monitoring_rules_read and
+    /// security_monitoring_rules_write, and logs_read_data for queries. Must be a $NAME
+    /// placeholder.
+    #[serde(skip_serializing)]
+    pub app_key: EnvPlaceholder,
+    /// Tags added to every rule on this tenant.
+    #[serde(default)]
+    pub tags: Vec<String>,
+    /// Notification alias to Datadog handle (`soc = "@slack-soc-alerts"`), for `cases[].notify`.
+    #[serde(default)]
+    pub notifications: indexmap::IndexMap<String, String>,
+}
+
+/// The API base URL of a Datadog tenant: `api_url` without a trailing slash,
+/// else `https://api.<site>`; `None` when neither is usable (a `site`
+/// outside [`DATADOG_SITES`] with no `api_url`, `datadog_site`).
+pub fn datadog_base_url(site: Option<&str>, api_url: Option<&str>) -> Option<String> {
+    if let Some(url) = api_url.filter(|url| !url.is_empty()) {
+        return Some(url.trim_end_matches('/').to_owned());
+    }
+    let site = site.filter(|site| DATADOG_SITES.contains(site))?;
+    Some(format!("https://api.{site}"))
+}
+
+impl DatadogSetup {
+    /// The API base URL ([`datadog_base_url`]).
+    pub fn url(&self) -> Option<String> {
+        datadog_base_url(
+            self.site.as_deref(),
+            self.api_url.as_ref().map(Matching::as_str),
+        )
+    }
+}
+tenant!(
+    /// `[[tenants]]` for Datadog Cloud SIEM.
+    DatadogTenant, "DatadogTenant", DatadogSetup
+);
+platform!(
+    /// Merged `platforms/datadog.toml`.
+    DatadogConfiguration, "DatadogConfiguration", DatadogTenant
 );
 
 /// A Graylog alias or tag: one, or a list (`GraylogName | list[GraylogName]`).
@@ -2012,7 +2189,7 @@ fn production_statuses() -> Vec<NonEmptyString> {
 }
 
 /// One `[[misp]]` block (`sharing::misp::1.0`).
-#[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]
+#[derive(Clone, PartialEq, Serialize, FromNode, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct MispIntegration {
     /// Block name.
@@ -2043,6 +2220,18 @@ pub struct MispIntegration {
     #[serde(default = "yes")]
     pub verify_ssl: bool,
 }
+debug_redacting!(MispIntegration {
+    name,
+    enabled,
+    url,
+    api_key: redacted,
+    max_tlp,
+    object_types,
+    rule_statuses,
+    organisation_uuid,
+    publish,
+    verify_ssl
+});
 
 /// Merged `sharing.toml`: connector arrays; `[[misp]]` is the only one.
 #[derive(Debug, Clone, PartialEq, Serialize, FromNode, JsonSchema)]

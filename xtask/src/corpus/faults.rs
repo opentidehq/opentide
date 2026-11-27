@@ -1068,7 +1068,7 @@ ops = [{ op = "set", path = "platform.colour", value = "blue" }, { op = "rename"
             counts: Counts {
                 threats: 6,
                 objectives: 6,
-                rules: 36,
+                rules: 52,
             },
             layout: Layout::Explicit,
         })

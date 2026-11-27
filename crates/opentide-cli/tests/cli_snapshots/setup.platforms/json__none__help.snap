@@ -55,6 +55,9 @@ Options:
       --google-secops
           Enable Google Security Operations (YARA-L)
 
+      --datadog
+          Enable Datadog Cloud SIEM
+
       --plan
           List the files each step would write, and write nothing
 

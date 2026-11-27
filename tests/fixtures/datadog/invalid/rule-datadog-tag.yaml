@@ -1,0 +1,22 @@
+# tag in upper case
+# Expected constraint code: datadog_tag.
+name: Datadog tag in upper case
+metadata:
+  uuid: 00000000-0000-4000-8004-000000000104
+  schema: rule::1.0
+  version: 1
+  created: "2026-11-27"
+  modified: "2026-11-27"
+  tlp: clear
+  author: Detection Engineering
+description: |
+  tag in upper case.
+configurations:
+  datadog:
+    schema: platform::datadog::1.0
+    status: STAGING
+    queries:
+      - query: source:okta @evt.outcome:FAILURE
+    cases:
+      - condition: a > 5
+    tags: ["Team:Identity"]

@@ -4,7 +4,7 @@ description: Install opentide from PyPI — one package, CLI, MCP, and all platf
 ---
 
 <Callout type="info">
-One install gets the CLI, the MCP server (`opentide mcp start`), all thirteen platform adapters, validate, generate, and deploy. Enable platforms in your repo with `opentide setup platforms` — not at pip install time.
+One install gets the CLI, the MCP server (`opentide mcp start`), all fourteen platform adapters, validate, generate, and deploy. Enable platforms in your repo with `opentide setup platforms` — not at pip install time.
 </Callout>
 
 ## Requirements
@@ -65,7 +65,7 @@ uv pip install 'opentide==1.1.0'     # pin the current release
 
 </Tabs>
 
-That installs all of opentide: the `opentide` CLI, validation, generation, deploy adapters, the MCP server, the language server and its query analysis engine, and all thirteen platforms. `pip install opentide` is the only install: the package has no Python dependencies, and its one extra, `plugins` (pydantic), is for writing a [platform plugin](../sdk/platforms.md). You do **not** pick Sentinel or Splunk at install time — enable platforms in your repo with `opentide setup platforms` (writes `.opentide/configurations/platforms/*.toml`).
+That installs all of opentide: the `opentide` CLI, validation, generation, deploy adapters, the MCP server, the language server and its query analysis engine, and all fourteen platforms. `pip install opentide` is the only install: the package has no Python dependencies, and its one extra, `plugins` (pydantic), is for writing a [platform plugin](../sdk/platforms.md). You do **not** pick Sentinel or Splunk at install time — enable platforms in your repo with `opentide setup platforms` (writes `.opentide/configurations/platforms/*.toml`).
 
 ### Binaries, crates and npm
 
@@ -233,6 +233,7 @@ These `--platform` values are built into the package:
 | `graylog` | Graylog |
 | `exabeam` | Exabeam New-Scale SIEM |
 | `google_secops` | Google Security Operations (YARA-L 2.0) |
+| `datadog` | Datadog Cloud SIEM (Datadog search syntax) |
 
 See [Platforms](./concepts/platforms.md) for deploy vs query-validation capabilities.
 

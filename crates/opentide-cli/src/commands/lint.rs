@@ -6,7 +6,7 @@
 
 use std::path::{Path, PathBuf};
 
-use opentide_workspace::lint::{Changed, LintCheck, LintOptions, LintStatus, NO_COMMITS_ADVICE};
+use opentide_workspace::lint::{Changed, LintCheck, LintOptions, NO_COMMITS_ADVICE};
 use opentide_workspace::{FileSystem as _, OsFs};
 
 use super::findings::{self, diagnostic};
@@ -191,12 +191,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
         })
         .collect();
     let mut report = Report::completed(COMMAND, data);
-    report.outcome.status = match lint.status {
-        LintStatus::Completed => "completed",
-        LintStatus::Issues => "issues",
-        LintStatus::Failed => "failed",
-    }
-    .into();
+    report.outcome.status = lint.status.as_str().into();
     report.outcome.message.clone_from(&lint.message);
     report.outcome.exit_code = lint.exit_code;
     if lint.exit_code != 0 {

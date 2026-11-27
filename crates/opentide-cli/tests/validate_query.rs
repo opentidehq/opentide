@@ -520,6 +520,80 @@ fn exabeam_sequences_and_exabeam_files_are_checked_offline() {
     );
     assert_eq!(file.code, 0, "{}", file.stdout);
     assert_eq!(file.json()["queries"][0]["language"], "exabeam");
+    // And under `--platform exabeam`: the platform names the dialect, not the
+    // profile, so the file is still a search (#1912, ADR 0015 §4).
+    std::fs::write(
+        ws.join("x.exabeam"),
+        "SELECT DISTINCT user, src_ip WHERE vendor:\"Microsoft\"\n",
+    )
+    .unwrap();
+    let under_platform = opentide(
+        &ws,
+        &[
+            "--json",
+            "validate",
+            "query",
+            "--platform",
+            "exabeam",
+            "--file",
+            "x.exabeam",
+        ],
+        &[],
+    );
+    assert_eq!(under_platform.code, 0, "{}", under_platform.stdout);
+    let document = under_platform.json();
+    assert_eq!(document["queries"][0]["language"], "exabeam");
+    assert_eq!(document["queries"][0]["platform"], "exabeam");
+    assert_eq!(
+        document["diagnostics"],
+        serde_json::json!([]),
+        "{}",
+        under_platform.stdout
+    );
+}
+
+#[test]
+fn datadog_queries_and_datadog_files_are_checked_offline() {
+    let (_scratch, ws) = corpus();
+    let rules = ws.join("objects/rules");
+    std::fs::write(
+        rules.join("datadog.yaml"),
+        "name: Datadog rule\nmetadata:\n  uuid: 00000000-0000-4000-8003-0000000005dd\n  schema: \
+         rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: \
+         clear\ndescription: d\nconfigurations:\n  datadog:\n    schema: \
+         platform::datadog::1.0\n    status: STAGING\n    queries:\n      - query: \
+         'service:(web OR api'\n    cases:\n      - condition: a > 0\n",
+    )
+    .unwrap();
+    let ran = opentide(
+        &ws,
+        &["--json", "validate", "query", "--platform", "datadog"],
+        &[],
+    );
+    let document = ran.json();
+    assert_eq!(ran.code, 1, "{}", ran.stdout);
+    assert_eq!(document["mode"], "offline", "{}", ran.stdout);
+    assert_eq!(document["queries"][0]["language"], "datadog");
+    assert_eq!(
+        document["queries"][0]["field_path"],
+        serde_json::json!(["configurations", "datadog", "queries", "0", "query"])
+    );
+    let codes: Vec<&str> = document["diagnostics"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|item| item["code"].as_str())
+        .collect();
+    assert_eq!(codes, ["datadog_parse_error"], "{}", ran.stdout);
+    // A `.datadog` file is a search.
+    std::fs::write(ws.join("hunt.datadog"), "*:mimikatz service:web\n").unwrap();
+    let file = opentide(
+        &ws,
+        &["--json", "validate", "query", "--file", "hunt.datadog"],
+        &[],
+    );
+    assert_eq!(file.code, 0, "{}", file.stdout);
+    assert_eq!(file.json()["queries"][0]["language"], "datadog");
 }
 
 #[test]

@@ -336,6 +336,54 @@ fn a_bad_grace_period_fails() {
 }
 
 #[test]
+fn durations_past_the_deployable_bound_fail() {
+    // #2005: deploy writes milliseconds as an i64; past `i64::MAX / 1000`
+    // seconds they saturated into the payload.
+    assert_eq!(
+        graylog::MAX_DURATION_SECONDS,
+        u128::try_from(i64::MAX / 1000).unwrap()
+    );
+    let over = "9223372036854776s";
+    let max = "9223372036854775s";
+    let (value, errors) = convert(&block(&format!("grace_period: {over}")));
+    assert!(value.is_none());
+    assert_eq!(
+        errors[0].message,
+        format!(
+            "grace_period \"{over}\" is longer than a rule can be deployed with: at most \
+             9223372036854775 seconds"
+        )
+    );
+    let (value, _) = convert(&block(&format!("grace_period: {max}")));
+    assert_eq!(value.unwrap().grace_period.as_deref(), Some(max));
+    for key in ["every", "window"] {
+        let found = block_findings(&block(&format!("schedule: {{{key}: {over}}}")));
+        assert_eq!(found.len(), 1, "{key}: {found:?}");
+        assert_eq!(found[0].code, "graylog_schedule");
+        assert_eq!(found[0].path, ["schedule", key]);
+        assert_eq!(
+            found[0].message,
+            format!(
+                "{key} \"{over}\" is longer than a rule can be deployed with: at most \
+                 9223372036854775 seconds"
+            )
+        );
+        assert!(
+            codes(&format!("schedule: {{{key}: {max}}}")).is_empty(),
+            "{key}"
+        );
+        // A 40-digit duration, and one long only in days, too.
+        for long in ["9".repeat(40) + "s", "106751991167301d".to_owned()] {
+            assert_eq!(
+                codes(&format!("schedule: {{{key}: {long}}}")),
+                set(&["graylog_schedule"]),
+                "{key}: {long}"
+            );
+        }
+    }
+}
+
+#[test]
 fn backlog_is_zero_or_more() {
     let (value, _) = convert(&block("backlog: -1"));
     assert!(value.is_none());

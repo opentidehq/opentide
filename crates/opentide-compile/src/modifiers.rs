@@ -6,9 +6,9 @@
 
 use opentide_schema::from_node::Model;
 use opentide_schema::objects::platform::{
-    BitdefenderConfig, CarbonBlackConfig, CrowdstrikeConfig, ElasticConfig, ExabeamConfig,
-    GoogleSecopsConfig, GraylogConfig, HarfangLabConfig, MicrosoftDefenderConfig, SentinelConfig,
-    SentinelOneConfig, SplunkConfig, SysdigConfig,
+    BitdefenderConfig, CarbonBlackConfig, CrowdstrikeConfig, DatadogConfig, ElasticConfig,
+    ExabeamConfig, GoogleSecopsConfig, GraylogConfig, HarfangLabConfig, MicrosoftDefenderConfig,
+    SentinelConfig, SentinelOneConfig, SplunkConfig, SysdigConfig,
 };
 
 use crate::json::{Json, Object};
@@ -31,6 +31,7 @@ pub fn typed_roots(platform: &str) -> Vec<&'static str> {
         "exabeam" => ExabeamConfig::FIELDS,
         "google_secops" => GoogleSecopsConfig::FIELDS,
         "graylog" => GraylogConfig::FIELDS,
+        "datadog" => DatadogConfig::FIELDS,
         _ => &[],
     };
     let mut roots = Vec::with_capacity(fields.len() * 2);

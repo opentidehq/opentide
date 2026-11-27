@@ -890,9 +890,10 @@ impl TenantFailure {
 /// (`returned_rule_id`).
 pub fn returned_rule_id(result: &Object) -> Option<String> {
     let value = result.get("id")?.as_str()?.trim();
-    let canonical = uuid::Uuid::try_parse(value).ok()?;
     // Only the hyphenated 8-4-4-4-12 form, as the oracle's pattern takes it.
-    (value.len() == 36).then(|| canonical.hyphenated().to_string())
+    opentide_core::ids::is_hyphenated(value)
+        .then(|| opentide_core::ids::canonical(value))
+        .flatten()
 }
 
 /// The rules whose name is `name`, compared case-insensitively and exactly:
@@ -907,12 +908,10 @@ pub fn name_matches<'r>(rules: &'r [Object], name: &str) -> Vec<&'r Object> {
         .collect()
 }
 
-/// `str.casefold()`, for the names Exabeam compares.
+/// `str.casefold()` (Unicode full case folding), for the names Exabeam
+/// compares.
 fn caseless_fold(text: &str) -> String {
-    text.chars()
-        .flat_map(char::to_lowercase)
-        .collect::<String>()
-        .replace('ß', "ss")
+    caseless::default_case_fold_str(text)
 }
 
 /// Whether the rule a `PUT` returned keeps a schedule the block no longer

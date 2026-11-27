@@ -10,7 +10,8 @@ the one "did you mean" rule every caller shares (`suggest`:
 the same word without case or `-`/`_` wins, otherwise the fewest edits, strsim's OSA distance),
 and the YAML node tree (`node`: saphyr-parser's events, saphyr's YAML 1.2 core-schema scalars,
 every node's position), the one YAML reader of the workspace: `validate`, the models
-(`opentide_schema::node` re-exports it) and opentide-tide read YAML with it (#850).
+(`opentide_schema::node` re-exports it) and opentide-tide read YAML with it (#850), and the small
+text helpers (`text`: `hex`, and `sha256_hex` behind the `digest` feature).
 
 ## Place
 
@@ -21,7 +22,7 @@ crate depends on it.
 
 - No `std::fs` in `src/` (`scripts/engine/check-io-free.sh`).
 - LSP `character` counts UTF-16 code units. Ranges sent to a client go through `span_to_range` / `offset_to_position`; inbound positions through `position_to_offset`, which returns a char boundary. Do not add another converter.
-- A diagnostic code is a constant in `codes`, listed in `codes::ALL`, with a sentence in `codes::describe` and a section in `docs/cli/diagnostics.md` (`tests/diagnostics_docs.rs`). Never a second string at the call site.
+- A diagnostic code is one line of the `codes!` table in `codes` (`NAME = "code" => "One sentence.";`), which writes its constant, its `codes::ALL` entry and its `codes::describe` sentence; it also needs a section in `docs/cli/diagnostics.md` (`tests/diagnostics_docs.rs`). Never a second string at the call site.
 - `LanguageId` changes `as_str`, `parse` and `Display` together; a new language follows the add-language skill.
 - Suggestions go through `suggest` (vocabulary values, configuration choices, CLI commands and
   options, every engine crate's "did you mean"), never a second similarity rule. It uses strsim;
@@ -33,8 +34,15 @@ crate depends on it.
   `falco` and `sysdig`); never a second table in either crate. Since UC-2.6 ([#821]) the Sysdig
   block's constraints are opentide-schema's alone: opentide-tide's `sysdig` keeps only
   `sysdig_list_self_reference`, so there is no second constraint engine to hold to the first.
+- `ids` is the one UUID rule (#1938): reading (`parse`, `canonical`: as Python's
+  `uuid.UUID(text.strip())`), the written forms (`is_hyphenated`, `is_canonical`, `is_v4`) and
+  finding UUIDs in text (`PATTERN`, `finder`). Never another regex, `is_uuid` or hand parse.
 
 [#821]: https://github.com/opentidehq/opentide/issues/821
+- `text` is the one copy of the small text helpers (#1957): `hex`, `sha256_hex`. Never a second
+  hex encoder or digest at a call site. `sha256_hex` and its `sha2` dependency are behind the
+  opt-in `digest` feature, which only opentide-cli and xtask turn on: the engines, the facade and
+  the hosts never build `sha2` (`cargo tree -p opentide-wasm -i sha2` prints nothing).
 - YAML is read with `node` only: never `serde_yaml`, `serde_yml` or a second parser (#850).
   What it reads differently from the oracle is `crates/opentide-schema/YAML.md`.
 - Codes, severities, field paths and position rules are invariant 3 of the plan: a change is a recorded decision, not a refactor.

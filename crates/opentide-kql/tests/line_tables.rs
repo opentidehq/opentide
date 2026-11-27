@@ -4,12 +4,12 @@
 //! A work count, not a wall clock.
 
 use opentide_core::line_tables_built;
-use opentide_kql::{Profile, analyze};
+use opentide_kql::{Dialect, analyze};
 
 /// The tables one `analyze` of `source` builds on this thread.
 fn tables(source: &str) -> usize {
     let before = line_tables_built();
-    let result = analyze(source, Profile::Sentinel);
+    let result = analyze(source, Dialect::Sentinel);
     std::hint::black_box(result);
     line_tables_built() - before
 }

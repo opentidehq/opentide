@@ -3290,7 +3290,6 @@ dependencies = [
  "serde",
  "serde-saphyr",
  "serde_json",
- "sha2 0.11.1",
  "shlex 2.0.1",
  "signal-hook",
  "soft-canonicalize",
@@ -3365,6 +3364,7 @@ name = "opentide-connectors"
 version = "1.1.0"
 dependencies = [
  "base64 0.23.1",
+ "caseless",
  "http",
  "hyper-util",
  "jiff 0.2.41",
@@ -3409,9 +3409,11 @@ dependencies = [
  "saphyr-parser",
  "serde",
  "serde_json",
+ "sha2 0.11.1",
  "strsim",
  "thiserror 2.0.21",
  "toml 0.8.23",
+ "uuid",
 ]
 
 [[package]]
@@ -3668,6 +3670,7 @@ dependencies = [
 name = "opentide-schema"
 version = "1.1.0"
 dependencies = [
+ "caseless",
  "fancy-regex 0.20.1",
  "garde",
  "indexmap",
@@ -3744,7 +3747,6 @@ dependencies = [
  "serde",
  "serde_json",
  "toml 0.8.23",
- "uuid",
 ]
 
 [[package]]
@@ -3778,7 +3780,6 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.21",
  "toml 0.8.23",
- "uuid",
 ]
 
 [[package]]
@@ -6578,7 +6579,6 @@ dependencies = [
  "schemars",
  "serde",
  "serde_json",
- "sha2 0.11.1",
  "similar 2.7.0",
  "tempfile",
  "toml 0.8.23",

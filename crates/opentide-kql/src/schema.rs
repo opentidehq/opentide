@@ -22,7 +22,7 @@
 //!
 //! The pass never reports on a query that does not parse.
 
-use crate::{Catalog, Profile, tables};
+use crate::{Catalog, Dialect, tables};
 use foldhash::{HashMap, HashMapExt, HashSet};
 use opentide_core::{ByteSpan, Diagnostic, codes};
 use std::collections::BTreeSet;
@@ -878,7 +878,7 @@ fn build_table_schema(catalog: &Catalog, name: &str) -> Option<Schema> {
         ..Schema::open()
     };
     // Every Log Analytics table has the standard columns.
-    if catalog.profile == Profile::Sentinel && table.documented {
+    if catalog.profile == Dialect::Sentinel && table.documented {
         for (column, type_name) in tables::STANDARD_COLUMNS {
             if !schema.has(column) {
                 Arc::make_mut(&mut schema.columns).push(Arc::new(
@@ -1298,7 +1298,7 @@ pub(crate) mod tests {
     /// bundled catalog's), and a copy of it builds its own again.
     #[test]
     fn a_declared_catalog_keeps_its_own_schemas() {
-        use crate::{Catalog, Profile};
+        use crate::{Catalog, Dialect};
         use std::sync::Arc;
         let declared = opentide_core::datasets::DeclaredDatasets::from_visibility(
             "[[logsources]]\nname = \"SecurityEvent\"\ndescription = \"x\"\n\
@@ -1306,7 +1306,7 @@ pub(crate) mod tests {
         )
         .expect("visibility.toml");
         let sources: Vec<_> = declared.sources_with_columns("sentinel").cloned().collect();
-        let bundled = Catalog::cached(Profile::Sentinel);
+        let bundled = Catalog::cached(Dialect::Sentinel);
         let catalog = bundled.with_declared_columns(&sources, &[]);
         let has = |schema: &Schema, name: &str| schema.columns.iter().any(|c| c.name == name);
 
@@ -1406,7 +1406,7 @@ pub(crate) mod tests {
             ("1000 `count()`", items("count()", 1000)),
         ] {
             NAMES_COMPARED.with(|c| c.set(0));
-            let analysis = crate::columns(&q, crate::Profile::Sentinel);
+            let analysis = crate::columns(&q, crate::Dialect::Sentinel);
             let compared = NAMES_COMPARED.with(std::cell::Cell::get);
             let made: usize = analysis
                 .pipelines
@@ -1503,7 +1503,7 @@ pub(crate) mod tests {
             let compared = |n: usize| {
                 let q = query(n);
                 NAMES_COMPARED.with(|c| c.set(0));
-                let _ = crate::columns(&q, crate::Profile::Core);
+                let _ = crate::columns(&q, crate::Dialect::Core);
                 NAMES_COMPARED.with(std::cell::Cell::get)
             };
             let (small, large) = (compared(1_000), compared(2_000));

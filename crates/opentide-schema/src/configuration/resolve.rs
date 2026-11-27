@@ -7,7 +7,11 @@
 //! the top (but `sharing.toml`, which merges block by block,
 //! [`super::sharing`]) under its name without `.toml`, and each folder at the
 //! top that is not hidden (`.x`) or private (`__x`) as a table of its
-//! `.toml` files by stem. `platforms` is also `systems`, the name 0.x used.
+//! `.toml` files by stem. `systems`, the name 0.x used, is read as an alias
+//! of `platforms`: a layer's `systems` table merges into `platforms`, and the
+//! resolved tree holds only `platforms` (#1996). Which platforms are on is
+//! read only through [`platform_enabled`] and
+//! [`Resolved::enabled_platforms`].
 //!
 //! Resolution happens once per run: every file is parsed once
 //! ([`Resolved::parsed`] counts them), and every consumer reads the
@@ -18,6 +22,7 @@ use std::sync::Arc;
 use super::merge::{deep_merge, empty};
 use super::{bundled, checks, toml};
 use crate::node::{Entry, Mark, Node, Value};
+use crate::platforms::PlatformId;
 
 /// A configuration folder, as the host read it: every file directly in it or
 /// in a folder directly under it, by its path relative to the folder
@@ -148,6 +153,75 @@ impl Resolved {
     pub fn issues(&self) -> Vec<super::Finding> {
         checks::workspace_issues(&self.tree)
     }
+
+    /// The `platforms` table: every platform's merged configuration, by
+    /// identifier (the 0.x `systems` merged in).
+    pub fn platforms(&self) -> Option<&Node> {
+        self.get("platforms")
+    }
+
+    /// Whether the configuration enables the platform `id`, built in or a
+    /// plugin's ([`platform_enabled`]).
+    pub fn platform_enabled(&self, id: &str) -> bool {
+        platform_enabled(self.platforms(), id)
+    }
+
+    /// The built-in platforms the configuration enables, in
+    /// [`crate::platforms::PLATFORMS`]' order: what `deploy`, `doctor`,
+    /// `info` and the MCP server call "enabled".
+    pub fn enabled_platforms(&self) -> Vec<PlatformId> {
+        enabled_platforms(self.platforms())
+    }
+
+    /// Every platform the configuration enables, built in or not, in the
+    /// configuration's order.
+    pub fn enabled_platform_ids(&self) -> Vec<String> {
+        enabled_platform_ids(self.platforms())
+    }
+}
+
+/// Whether the resolved `platforms` table enables the platform `id`: its
+/// `platforms.<id>.platform.enabled` is the boolean `true`. The string
+/// `"true"`, or an `enabled` anywhere else (directly under
+/// `platforms.<id>`), does not count. This is the one rule every command
+/// uses (#1935).
+pub fn platform_enabled(platforms: Option<&Node>, id: &str) -> bool {
+    platforms
+        .and_then(|platforms| platforms.get(id))
+        .is_some_and(|table| table_enables(table))
+}
+
+/// The built-in platforms the resolved `platforms` table enables
+/// ([`platform_enabled`]), in [`crate::platforms::PLATFORMS`]' order.
+pub fn enabled_platforms(platforms: Option<&Node>) -> Vec<PlatformId> {
+    PlatformId::ALL
+        .into_iter()
+        .filter(|id| platform_enabled(platforms, id.as_str()))
+        .collect()
+}
+
+/// Every platform the resolved `platforms` table enables
+/// ([`platform_enabled`]), built in or a plugin's, in the table's order.
+pub fn enabled_platform_ids(platforms: Option<&Node>) -> Vec<String> {
+    let Some(Value::Map(entries)) = platforms.map(|node| &node.value) else {
+        return Vec::new();
+    };
+    entries
+        .iter()
+        .filter(|entry| table_enables(&entry.value))
+        .map(|entry| entry.key.value.to_string())
+        .collect()
+}
+
+/// Whether one platform's table has `[platform] enabled = true`.
+fn table_enables(table: &Node) -> bool {
+    matches!(
+        table
+            .get("platform")
+            .and_then(|block| block.get("enabled"))
+            .map(|enabled| &enabled.value),
+        Some(Value::Bool(true))
+    )
 }
 
 fn key_node(key: &str) -> Arc<Node> {
@@ -304,19 +378,6 @@ pub fn resolve(instance: &Instance<'_>) -> Result<Resolved, ResolveError> {
         merge_layer(&mut unified, &layer);
     }
     reject_retired_proxy(&unified)?;
-    if let Some(platforms) = unified.get("platforms").map(|node| (**node).clone()) {
-        let Value::Map(entries) = &mut unified.value else {
-            return Ok(Resolved {
-                tree: unified,
-                parsed,
-            });
-        };
-        entries.retain(|entry| entry.key.value.as_str() != Some("systems"));
-        entries.push(Entry {
-            key: key_node("systems"),
-            value: Arc::new(platforms),
-        });
-    }
     Ok(Resolved {
         tree: unified,
         parsed,
@@ -360,13 +421,73 @@ mod tests {
     }
 
     #[test]
-    fn the_bundled_folder_resolves_with_platforms_twice() {
+    fn the_bundled_folder_resolves_with_platforms_once() {
         let resolved = resolve(&Instance::default()).unwrap();
         let json = resolved.to_json();
-        assert_eq!(json["platforms"], json["systems"]);
+        assert!(json.get("systems").is_none());
         assert!(json["platforms"]["splunk"].is_object());
         assert!(json.get("sharing").is_none());
         assert_eq!(resolved.parsed, bundled::FILES.len() - 1);
+    }
+
+    /// The resolved configuration of a workspace folder holding `files`.
+    fn resolved(files: &[(&str, &str)], folders: &[&str]) -> Resolved {
+        let workspace = folder(files, folders);
+        resolve(&Instance {
+            workspace: Some(&workspace),
+            ..Instance::default()
+        })
+        .unwrap()
+    }
+
+    /// A configuration written with the 0.x `systems` key and one written
+    /// with `platforms` enable the same platforms (#1935).
+    #[test]
+    fn systems_and_platforms_enable_the_same_platforms() {
+        let by_systems = resolved(
+            &[(
+                "systems.toml",
+                "[splunk.platform]\nenabled = true\n[acme.platform]\nenabled = true\n\
+                 [elastic.platform]\nenabled = \"true\"\n[sysdig]\nenabled = true\n",
+            )],
+            &[],
+        );
+        let by_platforms = resolved(
+            &[
+                ("platforms/splunk.toml", "[platform]\nenabled = true\n"),
+                ("platforms/acme.toml", "[platform]\nenabled = true\n"),
+                ("platforms/elastic.toml", "[platform]\nenabled = \"true\"\n"),
+                ("platforms/sysdig.toml", "enabled = true\n"),
+            ],
+            &["platforms"],
+        );
+        for resolved in [&by_systems, &by_platforms] {
+            // `systems` is an input alias only: the tree holds `platforms`.
+            let json = resolved.to_json();
+            assert!(json.get("systems").is_none());
+            assert_eq!(json["platforms"]["splunk"]["platform"]["enabled"], true);
+            assert_eq!(resolved.enabled_platforms(), [PlatformId::Splunk]);
+            assert!(resolved.platform_enabled("acme"));
+            assert!(!resolved.platform_enabled("elastic"));
+            assert!(!resolved.platform_enabled("sysdig"));
+            assert!(!resolved.platform_enabled("é😀"));
+            let mut ids = resolved.enabled_platform_ids();
+            ids.sort();
+            assert_eq!(ids, ["acme", "splunk"]);
+        }
+    }
+
+    #[test]
+    fn nothing_is_enabled_without_a_platforms_table() {
+        assert!(enabled_platforms(None).is_empty());
+        assert!(enabled_platform_ids(None).is_empty());
+        assert!(!platform_enabled(None, "splunk"));
+        assert!(
+            resolve(&Instance::default())
+                .unwrap()
+                .enabled_platforms()
+                .is_empty()
+        );
     }
 
     #[test]
@@ -392,7 +513,7 @@ mod tests {
         let json = resolved.to_json();
         assert_eq!(json["deployment"]["default_responders"], "cert");
         assert_eq!(json["platforms"]["splunk"]["platform"]["enabled"], true);
-        assert_eq!(json["systems"]["splunk"]["platform"]["enabled"], true);
+        assert!(json.get("systems").is_none());
         assert_eq!(json["empty"], serde_json::json!({}));
         assert!(json.get(".hidden").is_none());
         assert_eq!(resolved.parsed, bundled::FILES.len() - 1 + 3);

@@ -651,6 +651,42 @@ fn elastic_bad_duration_names_its_field_value_and_form() {
 }
 
 #[test]
+fn elastic_durations_past_the_deployable_bound_report_duration() {
+    // #1982: the seconds of a 40-digit lookback saturate at `u128::MAX`, and
+    // deploy wrote `now-340282366920938463463374607431768211455s`.
+    let huge = "9".repeat(40) + "s";
+    let block = merged(&elastic_base(), &json!({"scheduling": {"lookback": huge}}));
+    assert_eq!(
+        errors("elastic", &block),
+        format!(
+            "scheduling.lookback: ElasticConfig validation failed with code(s): duration \
+             (\"{huge}\" is longer than a rule can be deployed with: at most \
+             9223372036854775807 seconds)"
+        )
+    );
+    // The bound itself is a duration; a second more is not, in every field.
+    let max = "9223372036854775807s";
+    let over = "9223372036854775808s";
+    for (field, overrides) in [
+        ("lookback", json!({"scheduling": {"lookback": max}})),
+        ("interval", json!({"scheduling": {"interval": max}})),
+    ] {
+        let block = merged(&elastic_base(), &overrides);
+        assert!(!errors("elastic", &block).contains("duration"), "{field}");
+    }
+    for overrides in [
+        json!({"scheduling": {"lookback": over}}),
+        json!({"scheduling": {"interval": over}}),
+        json!({"scheduling": {"interval": "106751991167301d"}}),
+        json!({"suppression": {"group_by": ["host.name"], "duration": over}}),
+        json!({"type": "new_terms", "new_terms": {"fields": ["user.name"], "history_window_start": over}}),
+    ] {
+        let block = merged(&elastic_base(), &overrides);
+        assert!(errors("elastic", &block).contains("duration"), "{block}");
+    }
+}
+
+#[test]
 fn elastic_non_object_scheduling_is_a_shape_error() {
     for scheduling in [json!("5m"), json!(["5m"]), json!(5)] {
         let found = errors(
@@ -1175,15 +1211,15 @@ fn lists_that_double_at_each_step_stay_bounded() {
 
 #[test]
 fn a_block_larger_than_the_budget_is_left_to_the_conversion() {
-    let document = crate::node::load(
-        "a: &a [x, x, x, x, x, x, x, x, x, x]\n\
-         b: &b [*a, *a, *a, *a, *a, *a, *a, *a, *a, *a]\n\
-         c: &c [*b, *b, *b, *b, *b, *b, *b, *b, *b, *b]\n\
-         d: &d [*c, *c, *c, *c, *c, *c, *c, *c, *c, *c]\n\
-         e: &e [*d, *d, *d, *d, *d, *d, *d, *d, *d, *d]\n\
-         block:\n  status: S\n  priority: LOUD\n  tags: *e\n",
-    )
-    .unwrap();
+    // Past the conversion's budget, yet within the loader's alias budget
+    // (#1927): 21,000 written items, then five aliases of them (about
+    // 126,000 nodes expanded, under ten times what is written).
+    let items = vec!["x"; 21_000].join(", ");
+    let text = format!(
+        "a: &a [{items}]\n\
+         block:\n  status: S\n  priority: LOUD\n  tags: [*a, *a, *a, *a, *a]\n"
+    );
+    let document = crate::node::load(&text).unwrap();
     let block = document.root().unwrap().get("block").unwrap();
     assert!(!within_budget(block));
     assert!(sysdig::block_codes(block).is_empty());

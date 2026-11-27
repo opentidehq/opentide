@@ -937,6 +937,9 @@ use crate::objects::platform::carbon_black::CarbonBlackConfig;
 use crate::objects::platform::crowdstrike::{
     CrowdstrikeConfig, CrowdstrikeDetails, CrowdstrikeSchedule,
 };
+use crate::objects::platform::datadog::{
+    DatadogCase, DatadogConfig, DatadogDetection, DatadogQuery, DatadogSignal,
+};
 use crate::objects::platform::elastic::{
     ElasticActions, ElasticCardinality, ElasticConfig, ElasticEql, ElasticExceptionList,
     ElasticExceptions, ElasticFilter, ElasticGuide, ElasticIntegration, ElasticMachineLearning,
@@ -1259,6 +1262,11 @@ py_models! {
     GoogleSecopsOptions,
     GoogleSecopsSchedule,
     GoogleSecopsConfig [<GoogleSecopsConfig as PlatformBlock>::SCHEMA_IDENTIFIER] (schema = platform_schema: Option<String>),
+    DatadogQuery,
+    DatadogDetection,
+    DatadogCase,
+    DatadogSignal,
+    DatadogConfig [<DatadogConfig as PlatformBlock>::SCHEMA_IDENTIFIER] (schema = platform_schema: Option<String>),
 }
 
 /// Names the exported `models` submodule [`MODULE`] and puts it in
@@ -1317,6 +1325,9 @@ pub mod models {
         SplunkTimerange, SplunkTrigger, SysdigConfig, SysdigException, SysdigList, SysdigMacro,
         ThreatActor, ThreatBody, ThreatVectorV1_0,
     };
+
+    #[pymodule_export]
+    use super::{DatadogCase, DatadogConfig, DatadogDetection, DatadogQuery, DatadogSignal};
 
     #[pymodule_export]
     use super::{

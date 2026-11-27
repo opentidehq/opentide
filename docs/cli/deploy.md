@@ -54,7 +54,7 @@ A real (non-dry-run) deploy contacts the platform API, so it needs:
 | `--skip-promotion` | Skip the promotion step of a `RELEASE` run on a push to the default branch |
 | `--skip-unconfigured` | Exit 0 when every platform with rules to deploy has no `[[tenants]]` block |
 | `--prune` | With `--strategy RELEASE`: retire (delete) the rules deployed earlier whose rule file is gone, shown first in the dry run's plan. Without it, deploy only warns about them. Not with `--uuid` or `--file`. See [Deleted rule files](#deleted-rule-files) |
-| `--persist-state-externally` | In CI, allow a run other than `--strategy RELEASE` on a push to create rules on the platforms that keep vendor ids (Microsoft Defender, SentinelOne, CrowdStrike, Sysdig, Bitdefender, Graylog, Exabeam and Google SecOps, and platform plugins). Pass it only when the pipeline commits `.opentide/states/deployment/` itself; see [Creates outside the production job](../usage/concepts/deployment-state.md#creates-outside-the-production-job) |
+| `--persist-state-externally` | In CI, allow a run other than `--strategy RELEASE` on a push to create rules on the platforms that keep vendor ids (Microsoft Defender, SentinelOne, CrowdStrike, Sysdig, Bitdefender, Graylog, Exabeam, Google SecOps and Datadog, and platform plugins). Pass it only when the pipeline commits `.opentide/states/deployment/` itself; see [Creates outside the production job](../usage/concepts/deployment-state.md#creates-outside-the-production-job) |
 
 ### Selecting rules
 
@@ -99,7 +99,7 @@ warning: sentinel has no tenants configured in .opentide/configurations/platform
 dry run, nothing sent
 ```
 
-Microsoft Defender, SentinelOne, CrowdStrike, Sysdig, Bitdefender, Graylog, Exabeam and Google SecOps (and platform plugins) keep vendor ids in `.opentide/states/deployment/`, so their rows say `create` or `update`. The other platforms write a rule whether it exists or not, by its UUID or, on Splunk, by its title, and opentide does not claim either: their rows say `create or update`. Once sent, an Elastic or Sentinel rule's row says what the vendor did (`created` or `updated`); a Sentinel rule the workspace already held as sent reads `unchanged`. See [Splunk's renamed rules](#splunks-renamed-rules) for how a Splunk deploy removes the saved search a rule's earlier name left. A dry run ends with `dry run, nothing sent` after the tally and any next steps. A real run reports each rule as it is sent and ends with a counted outcome line; see [A real run](#a-real-run). Before anything is sent, which rules will be created and which updated is a prediction from `.opentide/states/deployment/` and each rule's status; after the send, only Elastic's and Sentinel's rows report what the vendor did. `--json` returns the same plan under `changes`, its tally under `summary`, and the selection:
+Microsoft Defender, SentinelOne, CrowdStrike, Sysdig, Bitdefender, Graylog, Exabeam, Google SecOps and Datadog (and platform plugins) keep vendor ids in `.opentide/states/deployment/`, so their rows say `create` or `update`. The other platforms write a rule whether it exists or not, by its UUID or, on Splunk, by its title, and opentide does not claim either: their rows say `create or update`. Once sent, an Elastic or Sentinel rule's row says what the vendor did (`created` or `updated`); a Sentinel rule the workspace already held as sent reads `unchanged`. See [Splunk's renamed rules](#splunks-renamed-rules) for how a Splunk deploy removes the saved search a rule's earlier name left. A dry run ends with `dry run, nothing sent` after the tally and any next steps. A real run reports each rule as it is sent and ends with a counted outcome line; see [A real run](#a-real-run). Before anything is sent, which rules will be created and which updated is a prediction from `.opentide/states/deployment/` and each rule's status; after the send, only Elastic's and Sentinel's rows report what the vendor did. `--json` returns the same plan under `changes`, its tally under `summary`, and the selection:
 
 ```bash
 opentide --json deploy --platform sentinel --dry-run --strategy PREVIEW --all
@@ -222,7 +222,7 @@ When no rule the run read has a status mapping to its strategies, the command re
 
 ## A real run
 
-A real run prints the plan's header and tally, then one line for each rule as the platform answers, so a CI log shows progress while a platform is slow, and the last line says which rule it is waiting on. The lines are append-only: no spinner and no carriage return unless stdout is a terminal, where the running rule is also shown on a live row that its result line replaces. The samples below are illustrative, not captured output: a real run needs a live tenant.
+A real run prints the plan's header and tally, then one line for each rule as the platform answers, so a CI log shows progress while a platform is slow, and the last line says which rule it is waiting on. The lines are append-only: no spinner and no carriage return unless stdout is a terminal, where the running rule is also shown on a live row that its result line replaces. Platforms deploy one after another; a platform's tenants deploy up to four at once (a platform plugin's one at a time), so the lines of tenants deploying at the same time may interleave: a rule's line that follows another tenant's comes under its own `Deploying to <platform> / <tenant>` header again. The `--json` document lists the rows in the plan's order whatever order they ended in. The samples below are illustrative, not captured output: a real run needs a live tenant.
 
 ```text illustrative
 Deploy plan · strategy PREVIEW · 1 platform, 1 tenant
@@ -336,6 +336,8 @@ The rename cleanup ([Splunk's renamed rules](#splunks-renamed-rules)) runs for a
 
 A Splunk schedule opentide draws (a `frequency` with no `custom_time`) takes its minute and hour from the rule's UUID, so it is the same on every deploy, and rules spread over the day; a `frequency_scheduling = "current"` tenant takes the deploy's time, so its rules are rewritten on every deploy.
 
+A Datadog rule is read with a `GET` by its stored id before it is written, and updated only when a property opentide writes differs from the compiled body: its name, whether it is enabled, its queries, cases, options, message, tags (as a set), signal grouping and title setting. Properties Datadog adds (`id`, `version`, `defaultTags`, …) and defaults it fills in for a property the body leaves out are not differences. An unchanged rule is sent nothing and its row's `action` is `unchanged`.
+
 The other platforms still write each selected rule, each for its own reason:
 
 | Platform | Why it is rewritten |
@@ -369,7 +371,7 @@ opentide deploy --strategy RELEASE --prune             # the job `setup ci` gene
 opentide retires only what it can show it deployed, from two kinds of evidence:
 
 - **The run's diff.** A change-detection run (no `--all`, `--uuid` or `--file`) reads the rule files its commits deleted directly in the rules folder, as the diff's base commit held them: the rule's UUID, its name and its platform blocks. A block whose status maps to `DELETION` (already retired) or `INERT` (never deployed) is left alone; any other block is retired on the tenants it reached.
-- **Deployment state.** On the platforms that keep vendor ids (Microsoft Defender, SentinelOne, CrowdStrike, Sysdig, Bitdefender, Graylog, Exabeam, Google SecOps, and platform plugins), only the tenants and ids the rule's [shard](../usage/concepts/deployment-state.md) records are retired, then forgotten. An `--all` run reads every shard: a shard whose rule no file in the workspace holds is retired.
+- **Deployment state.** On the platforms that keep vendor ids (Microsoft Defender, SentinelOne, CrowdStrike, Sysdig, Bitdefender, Graylog, Exabeam, Google SecOps, Datadog, and platform plugins), only the tenants and ids the rule's [shard](../usage/concepts/deployment-state.md) records are retired, then forgotten. An `--all` run reads every shard: a shard whose rule no file in the workspace holds is retired.
 
 | Platform | Retired by |
 |---|---|

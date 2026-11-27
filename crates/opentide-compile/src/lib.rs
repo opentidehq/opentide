@@ -26,6 +26,7 @@ pub mod bitdefender;
 pub mod carbon_black;
 pub mod ci;
 pub mod crowdstrike;
+pub mod datadog;
 pub mod deploy;
 pub mod dry_run;
 pub mod duration;

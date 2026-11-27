@@ -165,7 +165,7 @@ The document holds `objects`, `edges`, `signals` and `attack`. `summary` adds `o
 | `path`, `file_path`, `line` | The file relative to the workspace (forward slashes), the same file absolute, and the 1-based line of the `name:` key (1 when there is none) |
 | `tlp`, `author`, `created`, `modified`, `reviewed` | From `metadata`; `null` when unset |
 | `platforms` | A rule's platform blocks: `{id, enabled, status, strategy}`, the strategy being the one `deployment.toml` maps the status to |
-| `deployment` | A rule's tenant bindings in `.opentide/states/deployment/`: `{platform, tenant, deployed, rule_id}`. Only the platforms that keep a vendor id keep one: SentinelOne, CrowdStrike, Sysdig, Bitdefender, Graylog, Exabeam and Google SecOps ([deployment state](../usage/concepts/deployment-state.md)) |
+| `deployment` | A rule's tenant bindings in `.opentide/states/deployment/`: `{platform, tenant, deployed, rule_id}`. Only the platforms that keep a vendor id keep one: SentinelOne, CrowdStrike, Sysdig, Bitdefender, Graylog, Exabeam, Google SecOps and Datadog ([deployment state](../usage/concepts/deployment-state.md)) |
 | `techniques` | `own`: the ATT&CK ids the object lists. `inherited`: those its objective or threats give it that it does not list. An objective that lists no techniques inherits those of each threat it covers that exists; a rule, its objective's (through a signal's objective) |
 | `tactics` | The tactic shortnames of all those techniques, in matrix order |
 | `actors` | The actors of the threat, of the threats an objective covers, or of the threats of a rule's objective, as written (`att&ck::G0006`) |

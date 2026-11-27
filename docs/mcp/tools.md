@@ -11,6 +11,8 @@ Each tool below lists its parameters, an example call, and an example response s
 
 The server's `instructions`, sent with the `initialize` response, open with the tagline (*Spec-driven development for agentic detection engineering*) and give the agent its workflow: search, draft from a template, call `validation_report` until it is clean, then preview with `deploy_rule` and `dry_run: true`. People review and merge, and run real deployments.
 
+Every tool and resource answers for the files as they are on disk at the call. The server reads the workspace once and keeps it between calls: each call re-reads only the files changed, added or deleted since the last one. A `deploy_rule` that is not a dry run reads the workspace afresh, and the next call reads it again.
+
 ### Next actions
 
 `validate_rule`, `validation_report` and `validate_query` add a `next_actions` list: the calls worth making next.
@@ -349,7 +351,7 @@ Checks a query offline with the analysis engine, the same engine as `opentide va
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `query` | string | | The query to check offline. The live check reads catalogue rules, not this string |
-| `platform` | string | | Platform key: picks the language and its profile (Defender tables for `microsoft_defender`, the Carbon Black dialect for `carbon_black_cloud`, Graylog's Lucene for `graylog`, CQL with the Next-Gen SIEM correlation-rule checks for `crowdstrike`, Falco for `sysdig`, YARA under the HarfangLab or Bitdefender profile for `harfanglab` and `bitdefender`, the Exabeam Query Language for `exabeam`, a YARA-L rule for `google_secops`) |
+| `platform` | string | | Platform key: picks the language and the product's checks (Defender tables for `microsoft_defender`, the Carbon Black dialect for `carbon_black_cloud`, Graylog's Lucene for `graylog`, CQL for `crowdstrike`, Falco for `sysdig`, YARA under the HarfangLab or Bitdefender profile for `harfanglab` and `bitdefender`, the Exabeam Query Language for `exabeam`, YARA-L for `google_secops`). The query is checked as a file of its language is: a CrowdStrike query as plain LogScale, without the Next-Gen SIEM correlation-rule checks, an Exabeam query as a search, and a YARA-L text as a rule when it declares one. A rule block's query gets its rule checks from `validate_rule` or `opentide validate query --platform <platform>` |
 | `live` | boolean | `false` | `true` calls the tenant |
 | `language` | string | `""` | Empty: the platform's language. Elastic, the one platform with several: `esql`, `eql`, `kuery` (the default) or `lucene` |
 | `stack` | string | `""` | Elastic ES\|QL only: the stack the query must run on, `MAJOR.MINOR` such as `9.5`, or `serverless`. Empty: every supported stack. Any other value is refused with `status: "failed"` and `valid: null`, as an unknown `language` is |
@@ -434,7 +436,7 @@ SentinelOne's S1QL has no offline engine: the default refuses and names `live: t
 }
 ```
 
-Supported on the tenant: `carbon_black_cloud`, `microsoft_defender`, `elastic`, `exabeam`, `google_secops`, `graylog`, `sentinel`, `sentinel_one`, `splunk` (the registry's `live_check`; the tool description lists the same set). Offline: every platform but `sentinel_one`, the registry's `offline_languages`. The live next action says that it contacts the tenant with the configured credentials: ask a person before following it.
+Supported on the tenant: `carbon_black_cloud`, `microsoft_defender`, `elastic`, `datadog`, `exabeam`, `google_secops`, `graylog`, `sentinel`, `sentinel_one`, `splunk` (the registry's `live_check`; the tool description lists the same set). Offline: every platform but `sentinel_one`, the registry's `offline_languages`. The live next action says that it contacts the tenant with the configured credentials: ask a person before following it.
 
 ## run_query
 
@@ -556,7 +558,7 @@ Per-platform deployment state for a rule. Vendor rule ids come from the rule's [
 }
 ```
 
-`deployed` is true once a vendor id is recorded or the block names `tenants`. `external_ids` maps tenant name to the stored id (for the platforms that store one, below). `rule_id` is that id when exactly one tenant is bound, otherwise `null`. A shard that cannot be read adds `state_error` with its `deployment_state_*` code. A platform that addresses its rules without a vendor id (Sentinel, Microsoft Defender, Splunk, HarfangLab, Carbon Black Cloud and Elastic; the others store the id their vendor gives: SentinelOne, CrowdStrike, Sysdig, Bitdefender, Graylog, Exabeam and Google SecOps) keeps no deployment state, so a deploy to it leaves nothing for this tool to read: it adds a `note` saying so, and `deployed` is true only when the rule's block names `tenants`, never because a deploy went through. Ask the tenant instead (`validate_query` or `run_query` with `live: true`).
+`deployed` is true once a vendor id is recorded or the block names `tenants`. `external_ids` maps tenant name to the stored id (for the platforms that store one, below). `rule_id` is that id when exactly one tenant is bound, otherwise `null`. A shard that cannot be read adds `state_error` with its `deployment_state_*` code. A platform that addresses its rules without a vendor id (Sentinel, Microsoft Defender, Splunk, HarfangLab, Carbon Black Cloud and Elastic; the others store the id their vendor gives: SentinelOne, CrowdStrike, Sysdig, Bitdefender, Graylog, Exabeam, Google SecOps and Datadog) keeps no deployment state, so a deploy to it leaves nothing for this tool to read: it adds a `note` saying so, and `deployed` is true only when the rule's block names `tenants`, never because a deploy went through. Ask the tenant instead (`validate_query` or `run_query` with `live: true`).
 
 ## Agent workflows
 
