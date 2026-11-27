@@ -105,11 +105,14 @@ pub const OWNED: [&str; 9] = [
     "hasExtendedTitle",
 ];
 
+/// How long each request to the tenant may take.
+pub const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
+
 /// How a Datadog tenant is reached: 30 s and no transport retries (the
 /// session waits out rate limits itself, and a create is never sent twice).
 pub fn http_defaults() -> HttpSettings {
     HttpSettings {
-        timeout: Duration::from_secs(30),
+        timeout: REQUEST_TIMEOUT,
         ..HttpSettings::default()
     }
 }

@@ -33,6 +33,9 @@ pub const QUERY_PATH: &str = "/web/api/v2.1/dv/events/pq";
 /// A PowerQuery's progress, under the tenant's `url`.
 pub const PING_PATH: &str = "/web/api/v2.1/dv/events/pq-ping";
 
+/// The first wait between two polls of a running PowerQuery, doubled after
+/// each poll up to [`MAX_POLL_DELAY`].
+pub const FIRST_POLL_DELAY: Duration = Duration::from_millis(500);
 /// The longest wait between two polls of a running PowerQuery.
 pub const MAX_POLL_DELAY: Duration = Duration::from_secs(5);
 
@@ -389,7 +392,7 @@ impl SentinelOne {
             .map(Json::to_text)
             .filter(|id| !id.is_empty());
         let ping = format!("{}{PING_PATH}", setup.url);
-        let mut delay = Duration::from_millis(500);
+        let mut delay = FIRST_POLL_DELAY;
         while !finished(&data, &tenant)? {
             let Some(id) = &query_id else {
                 return Err(ConnectorError::refused(
