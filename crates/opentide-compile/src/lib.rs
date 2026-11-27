@@ -13,6 +13,8 @@
 //! - [`preview`]: a dry run's payload entries; for a platform the oracle
 //!   shows as the block's model dump, the block serialised from
 //!   opentide-schema's model.
+//! - [`rule_query`]: the queries a rule sends to a platform, which a search
+//!   runs and a tenant checks.
 //! - [`duration`], [`kql`], [`attack`]: what the compilers share.
 //!
 //! The crate does no I/O: the workspace (`opentide-workspace`) is loaded by
@@ -50,6 +52,7 @@ pub mod plan;
 pub mod preview;
 pub mod promotion;
 pub mod rule;
+pub mod rule_query;
 pub mod sentinel;
 pub mod sentinel_one;
 pub mod splunk;

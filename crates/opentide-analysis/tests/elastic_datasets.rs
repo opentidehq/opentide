@@ -42,12 +42,7 @@ system = "elastic"
 "#;
 
 fn esql(text: &str) -> Vec<Diagnostic> {
-    analyze_query(&QueryRequest {
-        language: LanguageId::Esql,
-        platform: None,
-        stack: None,
-        text: text.into(),
-    })
+    analyze_query(&QueryRequest::new(LanguageId::Esql, text))
 }
 
 /// The rule's queries and its platform blocks: the declared datasets are

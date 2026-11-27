@@ -34,6 +34,7 @@ pub mod plugin;
 pub mod promotion_preview;
 pub mod query;
 pub mod query_rule;
+pub mod result;
 pub mod rules;
 pub mod setup;
 pub mod share;
@@ -227,7 +228,7 @@ impl Terminal {
             )
             .chain(added.iter().copied())
             .collect();
-        shlex::try_join(words.iter().copied()).unwrap_or_else(|_| words.join(" "))
+        opentide_core::text::shell_line(words.iter().copied())
     }
 
     /// `next` with the step that shows the `hidden` notes the code frames

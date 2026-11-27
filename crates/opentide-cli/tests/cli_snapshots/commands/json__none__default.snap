@@ -10944,6 +10944,24 @@ exit: 0
           "type": "boolean"
         },
         {
+          "choices": [
+            "search",
+            "rule"
+          ],
+          "default": null,
+          "envvars": [],
+          "flags": [
+            "--position"
+          ],
+          "help": "Where a --file query will sit: search (the default; a query file or a hunt) or rule (the query of the --platform's rule block, checked as that block checks it)",
+          "is_flag": false,
+          "multiple": false,
+          "name": "position",
+          "required": false,
+          "secondary_flags": [],
+          "type": "choice"
+        },
+        {
           "choices": null,
           "default": null,
           "envvars": [],
