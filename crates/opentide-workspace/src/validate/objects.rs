@@ -587,12 +587,9 @@ fn deprecated_warnings(subject: &Subject<'_>, root: &Node, schema: &Json) -> Vec
 }
 
 /// Whether a node is a version 4 UUID written `8-4-4-4-12`, hex digits in
-/// either case (`_is_uuid_v4`).
+/// either case (`_is_uuid_v4`, [`opentide_core::ids::is_v4`]).
 fn is_uuid_v4(node: &Node) -> bool {
-    let text = node.value.to_string();
-    uuid::Uuid::try_parse(&text).is_ok_and(|parsed| {
-        parsed.get_version_num() == 4 && parsed.hyphenated().to_string() == text.to_lowercase()
-    })
+    opentide_core::ids::is_v4(&node.value.to_string())
 }
 
 /// A scalar as the messages that quote a value show it: a string quoted as

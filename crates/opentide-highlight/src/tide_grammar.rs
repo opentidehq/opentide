@@ -115,7 +115,7 @@ pub fn block_text_scope() -> String {
 const KEY: &str = r"[A-Za-z0-9_][A-Za-z0-9_.-]*";
 /// The end of a value: blanks, then a comment or the end of the line.
 const END: &str = r"[ \t]*(?:#.*)?$";
-const UUID: &str = "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}";
+const UUID: &str = opentide_core::ids::PATTERN;
 const SCHEMA: &str = "[A-Za-z][A-Za-z0-9_]*::[0-9.]+";
 const TECHNIQUE: &str = "T[0-9]{4}(?:\\.[0-9]{3})?";
 const PLAIN_VALUE: &str = r"(\S.*?)(?=[ \t]+#|[ \t]*$)";

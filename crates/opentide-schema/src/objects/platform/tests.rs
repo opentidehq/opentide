@@ -1175,15 +1175,15 @@ fn lists_that_double_at_each_step_stay_bounded() {
 
 #[test]
 fn a_block_larger_than_the_budget_is_left_to_the_conversion() {
-    let document = crate::node::load(
-        "a: &a [x, x, x, x, x, x, x, x, x, x]\n\
-         b: &b [*a, *a, *a, *a, *a, *a, *a, *a, *a, *a]\n\
-         c: &c [*b, *b, *b, *b, *b, *b, *b, *b, *b, *b]\n\
-         d: &d [*c, *c, *c, *c, *c, *c, *c, *c, *c, *c]\n\
-         e: &e [*d, *d, *d, *d, *d, *d, *d, *d, *d, *d]\n\
-         block:\n  status: S\n  priority: LOUD\n  tags: *e\n",
-    )
-    .unwrap();
+    // Past the conversion's budget, yet within the loader's alias budget
+    // (#1927): 21,000 written items, then five aliases of them (about
+    // 126,000 nodes expanded, under ten times what is written).
+    let items = vec!["x"; 21_000].join(", ");
+    let text = format!(
+        "a: &a [{items}]\n\
+         block:\n  status: S\n  priority: LOUD\n  tags: [*a, *a, *a, *a, *a]\n"
+    );
+    let document = crate::node::load(&text).unwrap();
     let block = document.root().unwrap().get("block").unwrap();
     assert!(!within_budget(block));
     assert!(sysdig::block_codes(block).is_empty());

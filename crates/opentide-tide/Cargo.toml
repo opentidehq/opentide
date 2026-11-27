@@ -39,7 +39,6 @@ serde_json.workspace = true
 ryu.workspace = true
 toml.workspace = true
 regex.workspace = true
-uuid.workspace = true
 
 [dev-dependencies]
 

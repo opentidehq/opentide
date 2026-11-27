@@ -3413,6 +3413,7 @@ dependencies = [
  "strsim",
  "thiserror 2.0.21",
  "toml 0.8.23",
+ "uuid",
 ]
 
 [[package]]
@@ -3746,7 +3747,6 @@ dependencies = [
  "serde",
  "serde_json",
  "toml 0.8.23",
- "uuid",
 ]
 
 [[package]]
@@ -3780,7 +3780,6 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.21",
  "toml 0.8.23",
- "uuid",
 ]
 
 [[package]]

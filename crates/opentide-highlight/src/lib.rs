@@ -1006,10 +1006,7 @@ fn generate_tm_language_from(
     if language == LanguageId::TideYaml {
         patterns.extend(tide_grammar::structure_rules(spec));
         for (capture, regex) in [
-            (
-                "tide.uuid",
-                "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
-            ),
+            ("tide.uuid", opentide_core::ids::PATTERN),
             ("tide.schema", "\\b[A-Za-z][A-Za-z0-9_]*::[0-9.]+"),
             ("boolean", "(?<![A-Za-z0-9_])(?:true|false)(?![A-Za-z0-9_])"),
         ] {
