@@ -121,16 +121,6 @@ pub struct FalcoRule {
     pub minimum_engine_version: Option<i64>,
 }
 
-/// A value as text: a string as it is, anything else as its JSON. In the
-/// block's definitions and exceptions every scalar is already text
-/// ([`falco_block`]).
-fn item_text(value: &Json) -> String {
-    match value {
-        Json::Str(text) => text.clone(),
-        other => other.to_compact(),
-    }
-}
-
 /// The rule's Sysdig block as Falco reads its definitions and exceptions:
 /// in `macros`, `lists` and `exceptions`, a scalar that is not a string is
 /// its text as written in the file (`1.50`, `True`), which is what Falco's
@@ -278,7 +268,7 @@ impl Expander {
     /// `_list_in`: a block list whose name occurs inside a value, not as all
     /// of it.
     fn list_in(&self, value: &Json) -> Option<&str> {
-        list_inside(&self.lists, &item_text(value))
+        list_inside(&self.lists, &Json::to_text(value))
     }
 
     /// `_passes`: a member equal to a list's name becomes its items, one pass
@@ -288,7 +278,8 @@ impl Expander {
         for (name, items) in &self.lists {
             let mut current = Vec::with_capacity(out.len());
             for value in out {
-                if !matches!(value, Json::Array(_) | Json::Object(_)) && item_text(&value) == *name
+                if !matches!(value, Json::Array(_) | Json::Object(_))
+                    && Json::to_text(&value) == *name
                 {
                     current.extend(items.iter().cloned().map(Json::Str));
                 } else {
@@ -317,7 +308,7 @@ impl Expander {
     /// An exception as Sysdig receives it (`exception`).
     fn exception(&self, entry: &Json) -> Result<Json, CompileError> {
         let set = |key: &str| entry.get(key).filter(|value| !value.is_null());
-        let name = item_text(set("name").unwrap_or(&Json::Null));
+        let name = Json::to_text(set("name").unwrap_or(&Json::Null));
         let fields = set("fields");
         let comps = set("comps");
         let values = set("values");
@@ -333,7 +324,7 @@ impl Expander {
             if let Some(comps) = comps {
                 out.insert(
                     "comps".into(),
-                    normalize_comp(&item_text(comps)).to_owned().into(),
+                    normalize_comp(&Json::to_text(comps)).to_owned().into(),
                 );
             }
             if let Some(values) = values {
@@ -344,7 +335,7 @@ impl Expander {
         let comp_list: Vec<String> = match comps {
             Some(Json::Array(items)) => items
                 .iter()
-                .map(|comp| normalize_comp(&item_text(comp)).to_owned())
+                .map(|comp| normalize_comp(&Json::to_text(comp)).to_owned())
                 .collect(),
             _ => {
                 let count = match fields {
@@ -378,7 +369,7 @@ impl Expander {
                 if let Some(found) = self.list_in(&item) {
                     return Err(list_in_value(found, &place));
                 }
-                let text = item_text(&item);
+                let text = Json::to_text(&item);
                 if self.items(&text).is_none() {
                     new_row.push(item);
                 } else if !is_list_comparison(comp) {
@@ -400,7 +391,7 @@ fn definitions(block: &Json, list: &str, key: &str) -> Vec<(String, Json)> {
     let mut out: Vec<(String, Json)> = Vec::new();
     if let Some(Json::Array(entries)) = block.get(list) {
         for entry in entries {
-            let name = item_text(entry.get("name").unwrap_or(&Json::Null));
+            let name = Json::to_text(entry.get("name").unwrap_or(&Json::Null));
             let value = entry.get(key).cloned().unwrap_or(Json::Null);
             upsert(&mut out, &name, value);
         }
@@ -466,7 +457,7 @@ pub fn attack_tags(cx: &Context<'_>, techniques: &[String]) -> Vec<String> {
 
 fn strings(value: Option<&Json>) -> Vec<String> {
     match value {
-        Some(Json::Array(items)) => items.iter().map(item_text).collect(),
+        Some(Json::Array(items)) => items.iter().map(Json::to_text).collect(),
         _ => Vec::new(),
     }
 }
@@ -482,7 +473,7 @@ pub fn compile(
     let block = &falco_block(rule)?;
     let macros: Vec<(String, String)> = definitions(block, "macros", "condition")
         .into_iter()
-        .map(|(name, condition)| (name, item_text(&condition)))
+        .map(|(name, condition)| (name, Json::to_text(&condition)))
         .collect();
     let lists: Vec<(String, Vec<String>)> = definitions(block, "lists", "items")
         .into_iter()
@@ -491,7 +482,7 @@ pub fn compile(
                 Json::Array(items) if items.iter().any(Json::is_null) => {
                     return Err(null_value(&format!("list {name:?}")));
                 }
-                Json::Array(items) => items.iter().map(item_text).collect(),
+                Json::Array(items) => items.iter().map(Json::to_text).collect(),
                 _ => Vec::new(),
             };
             Ok((name, items))
@@ -573,7 +564,7 @@ fn block_of(rule: &Rule) -> Result<&Json, CompileError> {
 pub fn strategy(cx: &Context<'_>, rule: &Rule) -> Result<StatusStrategy, CompileError> {
     let status = block_of(rule)?
         .get("status")
-        .map_or_else(|| "null".to_owned(), item_text);
+        .map_or_else(|| "null".to_owned(), Json::to_text);
     cx.statuses
         .strategy(&status)
         .map_err(|error| CompileError::failed(DISPLAY, &error.to_string()))

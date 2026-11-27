@@ -93,15 +93,6 @@ fn items<'j>(table: &'j Json, key: &str) -> &'j [Json] {
     }
 }
 
-/// A value as text: a string as itself, any other value in its JSON form
-/// (`null`, `true`, `false`, `42`), as the Rust messages write it (#1068).
-fn scalar_text(value: &Json) -> String {
-    match value {
-        Json::Str(text) => text.clone(),
-        other => other.to_compact(),
-    }
-}
-
 /// The rule's Exabeam block, or the error naming the rule (`block_of`).
 fn block_of(rule: &Rule) -> Result<&Json, CompileError> {
     rule.block(PLATFORM).ok_or_else(|| {
@@ -116,7 +107,7 @@ fn block_of(rule: &Rule) -> Result<&Json, CompileError> {
 pub fn strategy(cx: &Context<'_>, rule: &Rule) -> Result<StatusStrategy, CompileError> {
     let status = block_of(rule)?
         .get("status")
-        .map_or_else(|| "null".to_owned(), scalar_text);
+        .map_or_else(|| "null".to_owned(), Json::to_text);
     cx.statuses
         .strategy(&status)
         .map_err(|error| CompileError::failed(DISPLAY, &error.to_string()))
@@ -158,7 +149,7 @@ pub fn derive_severity(rule: &Rule, block: &Json) -> String {
     else {
         return DEFAULT_SEVERITY.to_owned();
     };
-    alert_severity(&scalar_text(severity).trim().to_lowercase())
+    alert_severity(&Json::to_text(severity).trim().to_lowercase())
         .unwrap_or(DEFAULT_SEVERITY)
         .to_owned()
 }
@@ -187,7 +178,7 @@ pub fn threshold_value(value: Option<&Json>) -> String {
             Json::Float(float) if float.fract() == 0.0 && float.is_finite() => {
                 format!("{float:.0}")
             }
-            other => scalar_text(other),
+            other => Json::to_text(other),
         }
     }
     match value {
@@ -201,7 +192,7 @@ fn strings(values: &[Json]) -> Json {
     Json::Array(
         values
             .iter()
-            .map(|value| scalar_text(value).into())
+            .map(|value| Json::to_text(value).into())
             .collect(),
     )
 }
@@ -217,7 +208,7 @@ fn condition(sequence: &Json) -> Result<Object, CompileError> {
         return Ok(condition);
     };
     let function = field(threshold, "function")
-        .map(scalar_text)
+        .map(Json::to_text)
         .unwrap_or_default();
     condition.insert("functionType".into(), function.into());
     let column = text(threshold, "field");
@@ -229,7 +220,7 @@ fn condition(sequence: &Json) -> Result<Object, CompileError> {
         condition.insert("field".into(), column.into());
     }
     let operator = field(threshold, "operator")
-        .map(scalar_text)
+        .map(Json::to_text)
         .unwrap_or_default();
     condition.insert("operator".into(), operator.into());
     condition.insert(
@@ -248,7 +239,7 @@ fn sequence(sequence: &Json) -> Result<Json, CompileError> {
         entry.insert("name".into(), name.into());
     }
     let query = field(sequence, "query")
-        .map(scalar_text)
+        .map(Json::to_text)
         .unwrap_or_default();
     entry.insert("query".into(), query.trim().into());
     entry.insert("condition".into(), Json::Object(condition(sequence)?));
@@ -301,20 +292,20 @@ fn recurrence(recurrence: &Json) -> Result<Json, CompileError> {
     out.insert(
         "startTime".into(),
         field(recurrence, "from")
-            .map(scalar_text)
+            .map(Json::to_text)
             .unwrap_or_default()
             .into(),
     );
     out.insert(
         "endTime".into(),
         field(recurrence, "to")
-            .map(scalar_text)
+            .map(Json::to_text)
             .unwrap_or_default()
             .into(),
     );
     let upper = |key: &str| {
         field(recurrence, key)
-            .map(scalar_text)
+            .map(Json::to_text)
             .unwrap_or_else(|| "null".to_owned())
             .to_uppercase()
     };
@@ -325,7 +316,7 @@ fn recurrence(recurrence: &Json) -> Result<Json, CompileError> {
                 Json::Array(
                     items(recurrence, "days")
                         .iter()
-                        .map(|day| scalar_text(day).to_uppercase().into())
+                        .map(|day| Json::to_text(day).to_uppercase().into())
                         .collect(),
                 ),
             );

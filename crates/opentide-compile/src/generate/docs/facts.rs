@@ -309,13 +309,7 @@ pub fn rule_deployments(
                 _ => Vec::new(),
             };
             let listed: Vec<String> = match block.json.get("tenants") {
-                Some(Json::Array(items)) => items
-                    .iter()
-                    .map(|item| match item {
-                        Json::Str(text) => text.clone(),
-                        other => other.to_compact(),
-                    })
-                    .collect(),
+                Some(Json::Array(items)) => items.iter().map(Json::to_text).collect(),
                 _ => Vec::new(),
             };
             let deployment = PlatformDeployment {
