@@ -488,18 +488,14 @@ fn production_base(repo: &Repo, head: ObjectId) -> Result<Option<ObjectId>, GitE
 fn missing_parent(repo: &Repo, parent: ObjectId) -> GitError {
     if repo.shallow {
         failed(format!(
-            "Could not find git commit {parent}: {SHALLOW_HINT}"
+            "Could not find git commit {parent}: the checkout is shallow, so it does not hold \
+             the commits the diff needs. Check out the full history (`fetch-depth: 0` in GitHub \
+             Actions, `GIT_DEPTH: \"0\"` on GitLab, `fetchDepth: 0` on Azure Pipelines)"
         ))
     } else {
         failed(format!("Could not find git commit {parent}"))
     }
 }
-
-/// Why a shallow clone cannot compute a diff, and what to fetch.
-const SHALLOW_HINT: &str = "the checkout is shallow, so it does not hold the commits the diff \
-                            needs. Check out the full history (`fetch-depth: 0` in GitHub \
-                            Actions, `GIT_DEPTH: \"0\"` on GitLab, `fetchDepth: 0` on Azure \
-                            Pipelines)";
 
 /// The first parent of the merge commit a request run builds, when `merge`
 /// has two parents, the first is in the checkout, and the second is `head`
@@ -1556,36 +1552,13 @@ fn candidate_refs(repo: &Repo, git_dir: &Path) -> Vec<String> {
 
 /// The commit the work is compared with (`resolve_baseline`): HEAD's merge
 /// base with the first candidate ref that has one, else HEAD itself.
-///
-/// A merge base the walk cannot finish (a commit it needs is not in the
-/// clone) is an error, and so is none at all in a shallow clone, whose walk
-/// stops where its history does: it says to fetch more history, never
-/// compares with HEAD instead (#1931).
 fn baseline(repo: &Repo, git_dir: &Path) -> Result<ObjectId, GitError> {
     let head = head_commit(repo).ok_or_else(|| failed(NO_GIT_MESSAGE))?;
     for candidate in candidate_refs(repo, git_dir) {
-        let Some(id) = commit_id(repo, &candidate) else {
-            continue;
-        };
-        let mut graph = gix_revwalk::Graph::new(&repo.odb, None);
-        match gix_revision::merge_base(head, &[id], &mut graph) {
-            Ok(Some(bases)) => return Ok(*bases.first()),
-            Ok(None) if repo.shallow => {
-                return Err(failed(format!(
-                    "Could not find the merge base of HEAD and {candidate}: {SHALLOW_HINT}"
-                )));
-            }
-            Ok(None) => {}
-            Err(error) => {
-                let why = if repo.shallow {
-                    SHALLOW_HINT.to_owned()
-                } else {
-                    error.to_string()
-                };
-                return Err(failed(format!(
-                    "Could not find the merge base of HEAD and {candidate}: {why}"
-                )));
-            }
+        if let Some(id) = commit_id(repo, &candidate)
+            && let Some(base) = merge_base(repo, head, id)
+        {
+            return Ok(base);
         }
     }
     Ok(head)
@@ -1593,56 +1566,38 @@ fn baseline(repo: &Repo, git_dir: &Path) -> Result<ObjectId, GitError> {
 
 /// The entries of the tree at `path` (`/`-separated, from the top level) in
 /// the commit `id`: name, object and whether it is a blob. A name that is not
-/// UTF-8 is left out; a folder the commit does not hold has no entries.
-///
-/// # Errors
-///
-/// The commit, or a tree on the way, cannot be read (#1931): an empty list
-/// would read as every file added, or every committed file deleted.
-fn tree_entries(
-    repo: &Repo,
-    id: ObjectId,
-    path: &str,
-) -> Result<Vec<(String, ObjectId, bool)>, GitError> {
-    let commit = repo.commit(id).ok_or_else(|| missing_parent(repo, id))?;
-    let unreadable = |tree: &ObjectId, error: &dyn std::fmt::Display| {
-        failed(format!("Could not find git object {tree}: {error}"))
+/// UTF-8 is left out.
+fn tree_entries(repo: &Repo, id: ObjectId, path: &str) -> Vec<(String, ObjectId, bool)> {
+    let Some(commit) = repo.commit(id) else {
+        return Vec::new();
     };
     let mut tree = commit.tree;
     let mut buf = Vec::new();
     for part in path.split('/').filter(|part| !part.is_empty()) {
-        let iter = repo
-            .odb
-            .find_tree_iter(&tree, &mut buf)
-            .map_err(|error| unreadable(&tree, &error))?;
-        let mut next = None;
-        for entry in iter {
-            let entry = entry.map_err(|error| unreadable(&tree, &error))?;
-            if entry.filename == part.as_bytes().as_bstr() && entry.mode.is_tree() {
-                next = Some(entry.oid.to_owned());
-                break;
-            }
-        }
-        match next {
-            Some(oid) => tree = oid,
-            None => return Ok(Vec::new()),
-        }
-    }
-    let iter = repo
-        .odb
-        .find_tree_iter(&tree, &mut buf)
-        .map_err(|error| unreadable(&tree, &error))?;
-    let mut entries = Vec::new();
-    for entry in iter {
-        let entry = entry.map_err(|error| unreadable(&tree, &error))?;
-        // A name that is not UTF-8 is left out, as on disk.
-        let Ok(name) = std::str::from_utf8(entry.filename) else {
-            tracing::warn!("git_path_not_utf8");
-            continue;
+        let Ok(iter) = repo.odb.find_tree_iter(&tree, &mut buf) else {
+            return Vec::new();
         };
-        entries.push((name.to_owned(), entry.oid.to_owned(), entry.mode.is_blob()));
+        let next = iter
+            .filter_map(Result::ok)
+            .find(|entry| entry.filename == part.as_bytes().as_bstr() && entry.mode.is_tree());
+        match next {
+            Some(entry) => tree = entry.oid.to_owned(),
+            None => return Vec::new(),
+        }
     }
-    Ok(entries)
+    let Ok(iter) = repo.odb.find_tree_iter(&tree, &mut buf) else {
+        return Vec::new();
+    };
+    iter.filter_map(Result::ok)
+        .filter_map(|entry| {
+            // A name that is not UTF-8 is left out, as on disk.
+            let Ok(name) = std::str::from_utf8(entry.filename) else {
+                tracing::warn!("git_path_not_utf8");
+                return None;
+            };
+            Some((name.to_owned(), entry.oid.to_owned(), entry.mode.is_blob()))
+        })
+        .collect()
 }
 
 /// The repository's configuration as git reads it for the work tree: the
@@ -1915,41 +1870,27 @@ fn changed_in_folders_against(
             }
         };
         let committed: std::collections::BTreeMap<String, ObjectId> =
-            tree_entries(&repo, base, &prefix)?
+            tree_entries(&repo, base, &prefix)
                 .into_iter()
                 .filter(|(name, _, blob)| *blob && keep(name))
                 .map(|(name, id, _)| (name, id))
                 .collect();
         let mut on_disk: std::collections::BTreeMap<String, Vec<u8>> =
             std::collections::BTreeMap::new();
-        // A folder or file that cannot be read is the run's failure: left
-        // out, its committed files would read as deleted (#1931). One gone
-        // between the listing and the read is deleted.
-        let unreadable = |path: &Path, error: &std::io::Error| {
-            failed(format!("Could not read {}: {error}", path.display()))
-        };
-        let entries = match std::fs::read_dir(&real) {
-            Ok(entries) => Some(entries),
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
-            Err(error) => return Err(unreadable(&real, &error)),
-        };
-        for entry in entries.into_iter().flatten() {
-            let entry = entry.map_err(|error| unreadable(&real, &error))?;
-            // A name that is not UTF-8 is left out with a warning, as
-            // `git_baseline::changed` (and the oracle) leave it out.
-            let Ok(name) = entry.file_name().into_string() else {
-                tracing::warn!("git_path_not_utf8");
-                continue;
-            };
-            if !keep(&name) || !entry.file_type().is_ok_and(|kind| kind.is_file()) {
-                continue;
-            }
-            match std::fs::read(entry.path()) {
-                Ok(bytes) => {
+        if let Ok(entries) = std::fs::read_dir(&real) {
+            for entry in entries.filter_map(Result::ok) {
+                // A name that is not UTF-8 is left out with a warning, as
+                // `git_baseline::changed` (and the oracle) leave it out.
+                let Ok(name) = entry.file_name().into_string() else {
+                    tracing::warn!("git_path_not_utf8");
+                    continue;
+                };
+                if !keep(&name) || !entry.file_type().is_ok_and(|kind| kind.is_file()) {
+                    continue;
+                }
+                if let Ok(bytes) = std::fs::read(entry.path()) {
                     on_disk.insert(name, bytes);
                 }
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-                Err(error) => return Err(unreadable(&entry.path(), &error)),
             }
         }
         let mut names: Vec<&String> = committed.keys().chain(on_disk.keys()).collect();
@@ -1979,17 +1920,13 @@ fn changed_in_folders_against(
             if !differs {
                 continue;
             }
-            // A committed file whose text cannot be read is not a new file.
-            let baseline = match before {
-                None => None,
-                Some(id) => {
-                    let mut buf = Vec::new();
-                    let blob = repo.odb.find_blob(id, &mut buf).map_err(|error| {
-                        failed(format!("Could not find git object {id}: {error}"))
-                    })?;
-                    Some(blob.data.to_vec())
-                }
-            };
+            let baseline = before.and_then(|id| {
+                let mut buf = Vec::new();
+                repo.odb
+                    .find_blob(id, &mut buf)
+                    .ok()
+                    .map(|blob| blob.data.to_vec())
+            });
             changed.push(ChangedFile {
                 absolute: top.join(&relative),
                 relative,
