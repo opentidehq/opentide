@@ -15,7 +15,7 @@ readme = "../COMPONENT.md"
 workspace = true
 
 [dependencies]
-opentide-core.workspace = true
+opentide-core = { workspace = true, features = ["shell"] }
 opentide-schema.workspace = true
 # The revisions' JSON Schemas, whose `tide.vocab` keys the vocabulary check reads.
 schemars.workspace = true
@@ -42,8 +42,6 @@ regex.workspace = true
 similar = "2.7"
 # `validate --fix` writes through a temporary file renamed into place.
 tempfile = "3"
-# `lint --fix`'s next step quotes its flags as a shell would read them.
-shlex = "2.0"
 
 # `--watch`'s change detection. The language server and the WebAssembly
 # build have no file watcher of their own to need.

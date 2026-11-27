@@ -437,7 +437,7 @@ fn again_action(file: &str, uuid: &str, object_type: &str, queries: &str) -> Jso
 
 /// A word of a command line, quoted for a POSIX shell when it needs it.
 pub fn quote(word: &str) -> String {
-    shlex::try_quote(word).map_or_else(|_| format!("{word:?}"), std::borrow::Cow::into_owned)
+    opentide_core::text::shell_word(word).into_owned()
 }
 
 /// A tool call worth making next: the CLI's `{command, reason}` plus the MCP call.

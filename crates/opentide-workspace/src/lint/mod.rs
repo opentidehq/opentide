@@ -2209,7 +2209,7 @@ fn report(
         } else {
             format!(
                 " {}",
-                shlex::try_join(flags.iter().map(String::as_str)).unwrap_or_default()
+                opentide_core::text::shell_line(flags.iter().map(String::as_str))
             )
         };
         next_actions = vec![NextAction {

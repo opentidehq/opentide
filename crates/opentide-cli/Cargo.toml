@@ -78,7 +78,7 @@ opentide-analysis = { workspace = true, features = ["queries"] }
 # `queries`, UC-2.5):
 # the workspace and its one Diagnostic, and the quoting of a suggestion.
 # `digest`: `text::sha256_hex`.
-opentide-core = { workspace = true, features = ["digest", "markdown"] }
+opentide-core = { workspace = true, features = ["digest", "markdown", "shell"] }
 # `generate` (UC-3.2): the files it writes; `deploy --dry-run` (UC-3.1c): the
 # plan, the compiled bodies, the git baseline.
 opentide-compile.workspace = true

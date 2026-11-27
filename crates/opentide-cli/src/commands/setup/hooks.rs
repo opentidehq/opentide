@@ -27,7 +27,7 @@ const LEGACY_HOOK_ENTRIES: [&str; 1] = ["opentide validate --strict"];
 
 /// `word` as one shell word.
 fn quote(word: &str) -> String {
-    shlex::try_quote(word).map_or_else(|_| format!("'{word}'"), std::borrow::Cow::into_owned)
+    opentide_core::text::shell_word(word).into_owned()
 }
 
 /// The shell word naming the workspace: the Git root, plus `relative`.
@@ -693,9 +693,7 @@ pub fn executable_bit_warning(paths: &[&str]) -> Option<String> {
     }
     let quoted: Vec<String> = paths
         .iter()
-        .map(|path| {
-            shlex::try_quote(path).map_or_else(|_| (*path).to_owned(), |quoted| quoted.into_owned())
-        })
+        .map(|path| opentide_core::text::shell_word(path).into_owned())
         .collect();
     Some(format!(
         "This build of opentide cannot set file permissions (WASI), so the hook is not executable and git will skip it; make it executable: chmod +x {}",

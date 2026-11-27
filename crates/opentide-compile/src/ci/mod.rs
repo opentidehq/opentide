@@ -12,12 +12,12 @@
 //! expressions `${{ }}`. The commands and conditions the jobs share are
 //! built here once, as `ci/stages.py` and `ci/gates.py` build them.
 
-use std::borrow::Cow;
 use std::sync::LazyLock;
 
 use indexmap::IndexMap;
 use minijinja::syntax::SyntaxConfig;
 use minijinja::{Environment, Value, context};
+use opentide_core::text::shell_word;
 
 /// A CI provider (`setup ci <provider>`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -301,11 +301,6 @@ fn scalar(text: String, indent: usize) -> String {
     } else {
         serde_json::to_string(&text).unwrap_or(text)
     }
-}
-
-/// A shell word, quoted as `shlex.quote` quotes it.
-pub fn shell_word(text: &str) -> Cow<'_, str> {
-    shlex::try_quote(text).unwrap_or(Cow::Borrowed(text))
 }
 
 /// `pip install "opentide==$OPENTIDE_VERSION"`: every job installs the
