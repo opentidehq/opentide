@@ -27,6 +27,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Eac
 - **Typing in a Tide object no longer re-runs the query engines on every open object** ([#1943](https://github.com/opentidehq/opentide/issues/1943)). The language server keeps each open document's query analysis, highlighting and symbols until that document's text, its folder or what every analysis reads (catalogs, declared datasets, Elastic tenants) changes; a keystroke in one rule re-checks only what `validate` reports across objects for the others. With 10 open rules a keystroke's diagnostics arrive in about half the time, and the diagnostics are the same as before.
 - **The MCP server reads the workspace once, not on every tool call** ([#1942](https://github.com/opentidehq/opentide/issues/1942)). `opentide mcp start` keeps the workspace between calls and re-reads only the files changed, added or deleted on disk since the last one, so `search`, `get_chaining`, `coverage`, `deployment_status`, `validate_rule` and the resources answer without parsing every object again. A `deploy_rule` that is not a dry run reads the workspace afresh.
 
+### Deprecated
+
+- **`Platform::sharer()` and `Platform::state_migrator()`** in the Rust SDK's `opentide::plugins`, and the `Sharer` and `StateMigrator` traits they return, in `opentide-connectors` ([#1961](https://github.com/opentidehq/opentide/issues/1961)). No platform implements either trait and no command calls them: `sharer()` and `state_migrator()` always return `None`. They still compile, with a deprecation warning, and are removed in 2.0. Nothing replaces them: `opentide share` speaks to MISP directly, and a plugin that overrides either method can delete the override.
+
 ### Fixed
 
 - **`deploy` keeps a connector's own failure code in the rule's row.** A failure a connector reports under a code of its own read as its message alone; the row's `error` now starts with the code (`code: message`), as Microsoft Defender's, Bitdefender's and Google SecOps' rows already did ([#1894](https://github.com/opentidehq/opentide/issues/1894)). The rows that change:
