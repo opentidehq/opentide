@@ -783,7 +783,9 @@ fn changed_phase(
         Err(error) => {
             let detail = error.message();
             tracing::warn!(detail = detail.as_str(), "docs_changed_requires_git");
-            run.failure = Some(format!("--changed requires a git repository: {detail}"));
+            run.failure = Some(format!(
+                "--changed could not read the git baseline: {detail}"
+            ));
             run.data = vec![
                 ("changed_paths".into(), Json::Array(Vec::new())),
                 ("changed_uuids".into(), Json::Array(Vec::new())),
