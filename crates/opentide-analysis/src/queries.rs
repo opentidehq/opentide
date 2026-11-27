@@ -1366,6 +1366,16 @@ mod tests {
             ),
             (opentide_core::codes::ECS_UNKNOWN_FIELD, "process.name"),
             (opentide_core::codes::CBC_UNKNOWN_FIELD, "process_name"),
+            (opentide_core::codes::KQL_UNKNOWN_COLUMN, "FileName"),
+            (opentide_core::codes::FALCO_UNKNOWN_FIELD, "proc.name"),
+            (opentide_core::codes::FALCO_UNKNOWN_MACRO, "spawned_process"),
+            (
+                opentide_core::codes::FALCO_UNKNOWN_RULE,
+                "Terminal shell in container",
+            ),
+            (opentide_core::codes::CQL_UNKNOWN_EVENT, "ProcessRollup2"),
+            (opentide_core::codes::CQL_UNKNOWN_PARAMETER, "function"),
+            (opentide_core::codes::ESQL_UNKNOWN_TYPE, "long"),
         ] {
             assert_eq!(
                 engine_help(code, Some(suggestion)),

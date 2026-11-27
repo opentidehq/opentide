@@ -88,14 +88,21 @@ fn help_is_kept(d: &Diagnostic) {
 }
 
 /// Near misses of a known name whose messages named none of the words, so
-/// that they printed `try: …` (#1950).
+/// that they printed `try: …` (#1950): a near miss is a replacement.
 #[cfg(feature = "queries")]
-const NOW_REPLACEMENTS: [&str; 5] = [
+const NOW_REPLACEMENTS: [&str; 12] = [
     "kql_table_misspelt",
+    "kql_unknown_column",
     "spl_unknown_datamodel",
     "spl_unknown_datamodel_field",
     "ecs_unknown_field",
+    "esql_unknown_type",
     "cbc_unknown_field",
+    "falco_unknown_field",
+    "falco_unknown_macro",
+    "falco_unknown_rule",
+    "cql_unknown_event",
+    "cql_unknown_parameter",
 ];
 
 /// Fixes whose messages explain an "unknown command" in places, so that they
@@ -336,6 +343,38 @@ fn sysdig_append_to_rule() {
         "  sysdig:\n    append_to_rule: Terminal shell in containr\n    condition: proc.name = bash\n",
         &["falco_unknown_rule"],
     ));
+}
+
+/// ES|QL's spacing fixes explain an "unknown command" and suggest the text to
+/// write, so their help is `try: …`, not `did you mean …?` (#1950): the
+/// message's words chose the replacement before each code declared its kind.
+#[cfg(feature = "queries")]
+#[test]
+fn an_esql_spacing_fix_is_a_step() {
+    for (text, code, help) in [
+        ("FROM(logs-*)", "esql_unavailable", "try: FROM ("),
+        (
+            "FROM logs-* | WHERE\"é😀\" == b",
+            "esql_parse_error",
+            "try: WHERE \"",
+        ),
+    ] {
+        let found = analyze_query(&QueryRequest {
+            language: LanguageId::Esql,
+            platform: None,
+            stack: None,
+            text: text.to_string(),
+        });
+        let d = found
+            .iter()
+            .find(|d| d.code == code && d.message.contains("unknown command"))
+            .unwrap_or_else(|| panic!("{text}: no {code} on an unknown command: {found:?}"));
+        assert_eq!(
+            opentide_analysis::queries::engine_help(&d.code, d.suggestion.as_deref()),
+            help,
+            "{text}"
+        );
+    }
 }
 
 /// Every query of the parser corpora (`crates/testdata/corpus/`), under each
