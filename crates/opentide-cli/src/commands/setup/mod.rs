@@ -24,6 +24,7 @@ use std::path::{Path, PathBuf};
 
 use indexmap::IndexMap;
 use opentide_compile::ci::{self, Provider};
+use opentide_core::text::unique;
 use opentide_schema::configuration::resolve::Resolved;
 use opentide_schema::node::Value;
 
@@ -1250,16 +1251,6 @@ fn stdout_report(args: &CiArgs, root: &Path, cx: &Context<'_>) -> Report {
     report.body.push(Block::Raw(run.pipeline));
     report.warnings = warnings;
     report
-}
-
-fn unique(items: Vec<String>) -> Vec<String> {
-    let mut out: Vec<String> = Vec::new();
-    for item in items {
-        if !out.contains(&item) {
-            out.push(item);
-        }
-    }
-    out
 }
 
 /// What a written file is for, as the summary lists it.

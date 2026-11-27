@@ -2558,13 +2558,7 @@ fn entry_link(entry: &Enriched, fallback: &str, label: Option<&str>) -> String {
 
 /// `values` each once, in order.
 fn unique(values: &[String]) -> Vec<&String> {
-    let mut out: Vec<&String> = Vec::new();
-    for value in values {
-        if !out.contains(&value) {
-            out.push(value);
-        }
-    }
-    out
+    opentide_core::text::unique(values)
 }
 
 /// Whether detecting `detected` detects `wanted`: the same technique, or

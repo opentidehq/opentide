@@ -16,6 +16,7 @@
 
 use indexmap::IndexMap;
 use opentide_core::datasets::glob_matches;
+use opentide_core::text::unique;
 use opentide_schema::configuration::models::VisibilityConfig;
 use opentide_schema::from_node::{Context, FromNode};
 use opentide_schema::node::{Node, Value};
@@ -159,16 +160,6 @@ fn or_empty(node: Option<&Node>) -> String {
     node.filter(|value| opentide_workspace::index::holds_name(value))
         .map(node_text)
         .unwrap_or_default()
-}
-
-fn unique<T: Clone + PartialEq>(items: impl IntoIterator<Item = T>) -> Vec<T> {
-    let mut out: Vec<T> = Vec::new();
-    for item in items {
-        if !out.contains(&item) {
-            out.push(item);
-        }
-    }
-    out
 }
 
 fn strings(items: &[String]) -> Json {
