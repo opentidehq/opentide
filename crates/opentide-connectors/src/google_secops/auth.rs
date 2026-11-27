@@ -11,7 +11,7 @@
 //!
 //! Every token request is sent on the tenant's own client, so it takes the
 //! tenant's proxy, CA bundles and timeouts: a service-account key signs a JWT
-//! (RS256, [`rs256`]) and exchanges it at the key's `token_uri`; an
+//! (RS256, signed in the private `rs256` module) and exchanges it at the key's `token_uri`; an
 //! `authorized_user` file (gcloud's `application-default login`) exchanges its
 //! refresh token; the metadata server is asked for the default service
 //! account's token. A token is reused until 3 minutes 45 seconds before it
