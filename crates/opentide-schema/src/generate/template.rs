@@ -634,8 +634,8 @@ fn hug(lines: Vec<String>) -> Vec<String> {
             if rest.starts_with('#') {
                 return line;
             }
-            let spaces = line.len() - rest.len();
-            format!("{}#{rest}", &line[..spaces])
+            let indent = " ".repeat(line.len() - rest.len());
+            format!("{indent}#{rest}")
         })
         .collect()
 }
@@ -651,11 +651,11 @@ pub fn uncomment_optional_blocks(text: &str) -> String {
             None => (line, ""),
         };
         let rest = body.trim_start_matches(' ');
-        let spaces = body.len() - rest.len();
+        let indent = body.len() - rest.len();
         if !body.trim().is_empty()
             && let Some(uncommented) = rest.strip_prefix('#')
         {
-            out.push_str(&body[..spaces]);
+            out.extend(std::iter::repeat_n(' ', indent));
             out.push_str(uncommented);
         } else {
             out.push_str(body);

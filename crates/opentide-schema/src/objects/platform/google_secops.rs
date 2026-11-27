@@ -441,7 +441,7 @@ pub fn duration_seconds(value: &str) -> Option<u64> {
         'd' => 86_400,
         _ => return None,
     };
-    yaral::positive_number(&value[..value.len() - 1]).map(|count| count.saturating_mul(factor))
+    yaral::positive_number(value.strip_suffix(unit)?).map(|count| count.saturating_mul(factor))
 }
 
 fn schedule_findings(block: &Node) -> Vec<Finding> {
@@ -623,5 +623,16 @@ mod tests {
                 "meta key \"live\" is of type boolean: a meta value is a string (quote it)",
             ]
         );
+    }
+
+    #[test]
+    fn a_duration_with_a_multi_byte_character_is_none() {
+        // #1946: the unit is stripped, never sliced off by byte.
+        for text in ["😀s", "5é", "é", "", "5😀"] {
+            assert_eq!(duration_seconds(text), None, "{text}");
+            assert_eq!(yaral::window_minutes(text), None, "{text}");
+        }
+        assert_eq!(duration_seconds("10m"), Some(600));
+        assert_eq!(yaral::window_minutes("2h"), Some(120));
     }
 }

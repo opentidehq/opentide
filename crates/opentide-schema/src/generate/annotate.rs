@@ -103,10 +103,8 @@ fn unwrap(text: &str) -> String {
 /// a white space or the end of the text.
 fn sentence_ends(text: &str) -> impl Iterator<Item = regex::Match<'_>> {
     patterns().sentence_end.find_iter(text).filter(|found| {
-        text[found.end()..]
-            .chars()
-            .next()
-            .is_none_or(char::is_whitespace)
+        text.get(found.end()..)
+            .is_some_and(|rest| rest.chars().next().is_none_or(char::is_whitespace))
     })
 }
 
@@ -115,7 +113,10 @@ pub fn first_sentence(text: &str) -> String {
     let p = patterns();
     let flat = collapse(&sub(&p.html_tag, "", &sub(&p.citation, "", text)));
     for found in sentence_ends(&flat) {
-        let head = &flat[..found.start()];
+        let (Some(head), Some(sentence)) = (flat.get(..found.start()), flat.get(..found.end()))
+        else {
+            continue;
+        };
         if ABBREVIATIONS
             .iter()
             .any(|abbreviation| head.ends_with(abbreviation))
@@ -123,7 +124,7 @@ pub fn first_sentence(text: &str) -> String {
         {
             continue;
         }
-        return flat[..found.end()].to_owned();
+        return sentence.to_owned();
     }
     flat
 }
