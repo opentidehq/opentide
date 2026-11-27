@@ -1,4 +1,5 @@
-//! Shared I/O-free types for the opentide language server.
+//! The shared I/O-free types every opentide engine crate builds on: language
+//! ids, positions and spans, diagnostics and their codes.
 //!
 //! Names use `opentide`, never `otide`.
 //!
