@@ -20,10 +20,13 @@
 //!   scalar its core tag does not fit (`!!int abc`);
 //! - an alias to its own, unfinished, anchor (a recursive alias);
 //! - more than one document;
-//! - nesting deeper than [`MAX_DEPTH`].
+//! - nesting deeper than [`MAX_DEPTH`];
+//! - aliases that expand past [`MAX_EXPANDED_NODES`] (a "billion laughs").
 //!
 //! An alias shares its anchor's node ([`Arc`]), so a tree of aliases costs one
-//! node per anchor however many times it is used.
+//! node per anchor however many times it is used. A reader that copies the
+//! tree out (JSON, a model, a Python value) copies every alias in full, so
+//! the loader bounds that copy (#1927).
 //!
 //! What this reads differently from the oracle (opentide 0.23.0, PyYAML's YAML
 //! 1.1 loader) is the table in `crates/opentide-schema/YAML.md`, generated and
@@ -52,6 +55,17 @@ pub use locate::{Locator, Span};
 /// bound keeps every walk over a tree (comparison, cloning, writing) far from
 /// the stack's limit.
 pub const MAX_DEPTH: usize = 512;
+
+/// How many nodes a document may hold once every alias is expanded, unless
+/// [`EXPANSION_FACTOR`] times the nodes written is more. A Tide object holds
+/// a few hundred; nested aliases that repeat each other ten times reach this
+/// at five levels, where copying the tree out takes about half a second
+/// and each further level ten times longer (#1927).
+pub const MAX_EXPANDED_NODES: u64 = 100_000;
+
+/// How many times its written size a document past [`MAX_EXPANDED_NODES`]
+/// may expand to, so a large file without nested aliases still loads.
+pub const EXPANSION_FACTOR: u64 = 10;
 
 pub use mark::Mark;
 
@@ -281,6 +295,8 @@ pub enum LoadErrorKind {
     MultipleDocuments,
     /// Collections nested deeper than [`MAX_DEPTH`].
     TooDeep,
+    /// Aliases that expand past [`MAX_EXPANDED_NODES`] nodes.
+    AliasExpansion,
     /// An integer that does not fit in 64 bits.
     OutOfRange,
 }
@@ -533,6 +549,17 @@ struct Builder {
     anchors: HashMap<usize, Arc<Node>>,
     documents: usize,
     root: Option<Arc<Node>>,
+    /// The expanded size (nodes, every alias counted in full) of each open
+    /// frame's children so far, one per frame.
+    sizes: Vec<u64>,
+    /// The expanded size of each finished anchored node.
+    anchor_sizes: HashMap<usize, u64>,
+    /// The expanded size of the root.
+    root_size: u64,
+    /// The nodes the text writes, an alias counted once.
+    written: u64,
+    /// The alias that expands to the most nodes, and where it is.
+    heaviest_alias: Option<(u64, Mark)>,
     /// Keep every entry of a mapping that repeats a key, instead of failing
     /// with [`LoadErrorKind::DuplicateKey`].
     keep_repeated_keys: bool,
@@ -915,6 +942,7 @@ impl Builder {
                             text,
                         },
                         anchor,
+                        1,
                     )?;
                 }
                 Event::Alias(id) => {
@@ -925,7 +953,15 @@ impl Builder {
                             start,
                         ));
                     };
-                    self.attach(node, start)?;
+                    let size = self.anchor_sizes.get(&id).copied().unwrap_or(1);
+                    if self
+                        .heaviest_alias
+                        .is_none_or(|(heaviest, _)| size > heaviest)
+                    {
+                        self.heaviest_alias = Some((size, start));
+                    }
+                    self.written += 1;
+                    self.attach(node, start, size)?;
                 }
                 Event::SequenceStart(anchor, tag) => {
                     collection_tag_fits(tag.as_ref(), "seq")
@@ -985,9 +1021,21 @@ impl Builder {
                         // The parser pairs every end with its start.
                         None => continue,
                     };
-                    self.finish(node, anchor)?;
+                    let children = self.sizes.pop().unwrap_or_default();
+                    self.finish(node, anchor, children.saturating_add(1))?;
                 }
             }
+        }
+        let limit = MAX_EXPANDED_NODES.max(self.written.saturating_mul(EXPANSION_FACTOR));
+        if self.root_size > limit {
+            return Err(LoadError::new(
+                LoadErrorKind::AliasExpansion,
+                format!(
+                    "the aliases expand to more than {limit} nodes; write the repeated \
+                     content once, or nest fewer aliases"
+                ),
+                self.heaviest_alias.map(|(_, mark)| mark),
+            ));
         }
         Ok(self.root)
     }
@@ -1001,21 +1049,30 @@ impl Builder {
             ));
         }
         self.frames.push(frame);
+        self.sizes.push(0);
         Ok(())
     }
 
-    fn finish(&mut self, node: Node, anchor: usize) -> Result<(), LoadError> {
+    /// Finishes `node`, whose expanded size is `size` (itself and its
+    /// children, every alias in full).
+    fn finish(&mut self, node: Node, anchor: usize, size: u64) -> Result<(), LoadError> {
         let start = node.start;
         let node = Arc::new(node);
+        self.written += 1;
         // Anchor ids start at 1; 0 is no anchor. A later anchor of the same
         // name gets a new id from the parser.
         if anchor > 0 {
             self.anchors.insert(anchor, Arc::clone(&node));
+            self.anchor_sizes.insert(anchor, size);
         }
-        self.attach(node, start)
+        self.attach(node, start, size)
     }
 
-    fn attach(&mut self, node: Arc<Node>, start: Mark) -> Result<(), LoadError> {
+    fn attach(&mut self, node: Arc<Node>, start: Mark, size: u64) -> Result<(), LoadError> {
+        match self.sizes.last_mut() {
+            Some(total) => *total = total.saturating_add(size),
+            None => self.root_size = size,
+        }
         match self.frames.last_mut() {
             None => self.root = Some(node),
             Some(Frame::Seq { items, .. }) => items.push(node),
@@ -1124,6 +1181,42 @@ mod tests {
         let document = load("a: &x [1, 2]\nb: *x\n").unwrap();
         let root = document.root().unwrap();
         assert!(Arc::ptr_eq(root.get("a").unwrap(), root.get("b").unwrap()));
+    }
+
+    /// Nested aliases, each level repeating the one before ten times.
+    fn laughs(levels: usize) -> String {
+        let mut text = "l0: &l0 [a, a, a, a, a, a, a, a, a, a]\n".to_owned();
+        for level in 1..=levels {
+            let previous = format!("*l{}", level - 1);
+            let items = [previous.as_str(); 10].join(", ");
+            text.push_str(&format!("l{level}: &l{level} [{items}]\n"));
+        }
+        text
+    }
+
+    #[test]
+    fn aliases_that_expand_past_the_budget_are_refused() {
+        // #1927: nine levels would copy out a billion nodes.
+        let text = laughs(9);
+        let error = load(&text).unwrap_err();
+        assert_eq!(error.kind, LoadErrorKind::AliasExpansion);
+        let mark = error.mark.unwrap();
+        // The heaviest alias: the first one of the last line.
+        assert_eq!((mark.line(), mark.column()), (10, 10));
+        assert!(error.problem.contains("100000"), "{}", error.problem);
+        // Three levels (about 1,500 nodes) stay well within it.
+        drop(load(&laughs(3)).unwrap());
+    }
+
+    #[test]
+    fn a_large_document_without_nested_aliases_loads() {
+        // Past `MAX_EXPANDED_NODES` written nodes, with one alias used once
+        // each: the budget grows with the text.
+        let mut text = String::from("base: &base {k: v}\nitems:\n");
+        for item in 0..20_000 {
+            text.push_str(&format!("  - {{n: {item}, b: *base}}\n"));
+        }
+        drop(load(&text).unwrap());
     }
 
     #[test]
