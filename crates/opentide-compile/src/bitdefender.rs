@@ -258,7 +258,7 @@ pub fn automatic_actions(kind: Kind, actions: Option<&BitdefenderActions>) -> Ve
 /// The signature with `\n` line endings and one trailing newline
 /// (`yara_query`).
 pub fn yara_query(signature: &str) -> String {
-    let text = signature.replace("\r\n", "\n").replace('\r', "\n");
+    let text = opentide_core::text::universal_newlines(signature).into_owned();
     if text.ends_with('\n') {
         text
     } else {

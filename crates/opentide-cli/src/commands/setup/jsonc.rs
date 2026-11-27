@@ -321,9 +321,7 @@ pub fn has_comments(text: &str) -> bool {
 }
 
 /// The line ending a file uses: CRLF when it has one, else LF.
-pub fn newline(text: &str) -> &'static str {
-    if text.contains("\r\n") { "\r\n" } else { "\n" }
-}
+pub use opentide_core::text::newline_of as newline;
 
 /// `value` as a file: indented by two spaces, UTF-8, every line ending
 /// `newline`, with one after the document.

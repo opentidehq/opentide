@@ -849,13 +849,7 @@ pub fn decode(bytes: &[u8]) -> Result<String, String> {
 
 /// `text` with `\r\n` and a lone `\r` read as `\n`, as a text-mode read reads
 /// a file: the positions the CLI reports count lines so.
-pub fn universal_newlines(text: &str) -> Cow<'_, str> {
-    if text.contains('\r') {
-        Cow::Owned(text.replace("\r\n", "\n").replace('\r', "\n"))
-    } else {
-        Cow::Borrowed(text)
-    }
-}
+pub use opentide_core::text::universal_newlines;
 
 /// An engine finding in the CLI's coordinates: lines and columns from 1,
 /// columns in code points (`opentide tui` places the language server's so).
