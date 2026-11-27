@@ -956,3 +956,34 @@ fn advisories_of_a_block() {
     };
     assert_eq!(ordered_minutes(&sequences), Some(3));
 }
+
+/// #1945: each rule in scope is found by its UUID, not by a scan of every
+/// rule, so the work grows with the rules, not with their square.
+#[test]
+fn name_findings_look_at_each_rule_a_bounded_number_of_times() {
+    let steps = |n: usize| {
+        let nodes: Vec<(String, Node)> = (0..n)
+            .map(|i| {
+                // Every tenth rule shares its name with the one before it.
+                let name = format!("Rule {}", i - usize::from(i % 10 == 9));
+                (
+                    format!("{i:08}"),
+                    rule_node(&rule_with(&name, &json!({"enabled": true}))),
+                )
+            })
+            .collect();
+        let rules: Vec<(&str, &Node)> = nodes
+            .iter()
+            .map(|(uuid, node)| (uuid.as_str(), node))
+            .collect();
+        let before = name_steps();
+        let found = name_findings(&rules, rules.iter().map(|(uuid, _)| *uuid));
+        assert_eq!(found.len(), n / 10 * 2);
+        name_steps() - before
+    };
+    let (small, large) = (steps(500), steps(2_000));
+    assert!(
+        large < small * 8,
+        "{small} steps for 500 rules, {large} for 2,000"
+    );
+}

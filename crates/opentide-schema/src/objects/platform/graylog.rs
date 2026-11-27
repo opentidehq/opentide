@@ -16,7 +16,7 @@
 pub mod condition;
 pub mod cron;
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 
 use garde::Validate;
 use indexmap::IndexMap;
@@ -975,14 +975,48 @@ pub fn definition_title(rule: &Node) -> Option<&str> {
 /// resolves to the same event definition title, sorted
 /// (`graylog_title_issues`). Graylog allows two definitions with one title,
 /// and its alert list cannot tell them apart.
+///
+/// Each call scans every rule: a check over many rules builds [`Titles`]
+/// once and asks it instead (#1945).
 pub fn title_duplicates<'r>(uuid: &str, title: &str, rules: &[(&'r str, &Node)]) -> Vec<&'r str> {
-    let mut others: Vec<&str> = rules
-        .iter()
-        .filter(|(other, rule)| *other != uuid && definition_title(rule) == Some(title))
-        .map(|(other, _)| *other)
-        .collect();
-    others.sort_unstable();
-    others
+    Titles::new(rules).duplicates(uuid, title)
+}
+
+/// The rules of each event definition title ([`definition_title`]), in the
+/// order given: built once for every [`Titles::duplicates`] of a run.
+#[derive(Debug, Default)]
+pub struct Titles<'r, 'n> {
+    by_title: HashMap<&'n str, Vec<&'r str>>,
+}
+
+impl<'r, 'n> Titles<'r, 'n> {
+    /// Groups `rules` (UUID and document) by their title.
+    pub fn new(rules: &[(&'r str, &'n Node)]) -> Self {
+        let mut by_title: HashMap<&str, Vec<&str>> = HashMap::new();
+        for (uuid, rule) in rules {
+            if let Some(title) = definition_title(rule) {
+                by_title.entry(title).or_default().push(*uuid);
+            }
+        }
+        Self { by_title }
+    }
+
+    /// [`title_duplicates`]: the other rules of `title`, sorted.
+    pub fn duplicates(&self, uuid: &str, title: &str) -> Vec<&'r str> {
+        let mut others: Vec<&str> = self
+            .by_title
+            .get(title)
+            .map(|uuids| {
+                uuids
+                    .iter()
+                    .copied()
+                    .filter(|other| *other != uuid)
+                    .collect()
+            })
+            .unwrap_or_default();
+        others.sort_unstable();
+        others
+    }
 }
 
 /// What `graylog_title_duplicate` says, and what to do.
