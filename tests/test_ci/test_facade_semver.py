@@ -152,6 +152,23 @@ def test_only_what_the_facade_exposes_is_kept() -> None:
     assert doc["index"]["5"]["inner"]["module"]["items"] == [6]
 
 
+def test_the_types_of_other_crates_that_kept_items_name_are_collected() -> None:
+    doc = core()
+    # `Detail` gains a field typed by another crate's `Pin`; `Unrelated`,
+    # which the facade does not re-export, one typed by its `Other`.
+    doc["index"]["4"] = struct("Detail", [11, 12])
+    doc["index"]["12"] = field("pin", 50)
+    doc["index"]["9"] = struct("Unrelated", [13])
+    doc["index"]["13"] = field("other", 51)
+    doc["paths"]["50"] = {"crate_id": 3, "path": ["opentide_dataset", "pins", "Pin"]}
+    doc["paths"]["51"] = {"crate_id": 3, "path": ["opentide_dataset", "Other"]}
+    doc["external_crates"] = {"3": {"name": "opentide_dataset"}}
+    foreign: set[tuple[str, tuple[str, ...]]] = set()
+    facade_semver.prune(doc, {("Request",)}, foreign)
+    # Through `Request.detail`, a type the crate defines: followed in turn.
+    assert foreign == {("opentide_dataset", ("pins", "Pin"))}
+
+
 def test_an_item_the_crate_no_longer_defines_is_reported() -> None:
     doc, missing = facade_semver.prune(core(), {("LanguageId",), ("Gone",)})
     assert missing == [("Gone",)]
@@ -238,3 +255,62 @@ def test_an_item_moved_to_a_crate_outside_the_workspace_stays_in_its_old_crate()
     current = facade_semver.reexports(plugins_facade("jiff", ["set_host"]))
     held = facade_semver.by_crate(baseline, current, WORKSPACE)
     assert held == {"opentide_cli": {("plugins", "set_host")}}
+
+
+def test_a_moved_item_is_paired_from_its_old_crate_to_its_new_one() -> None:
+    baseline = facade_semver.reexports(plugins_facade("opentide_cli", ["plugins", "set_host"]))
+    current = facade_semver.reexports(
+        plugins_facade("opentide_connectors", ["plugin", "host", "set_host"])
+    )
+    assert facade_semver.moved(baseline, current, WORKSPACE) == {
+        ("opentide_cli", "opentide_connectors"): {
+            ("plugins", "set_host"): (("plugins", "set_host"), ("plugin", "host", "set_host"))
+        }
+    }
+    # Not moved: the same crate, a crate outside the workspace, or dropped.
+    assert facade_semver.moved(baseline, baseline, WORKSPACE) == {}
+    jiff = facade_semver.reexports(plugins_facade("jiff", ["set_host"]))
+    assert facade_semver.moved(baseline, jiff, WORKSPACE) == {}
+    assert facade_semver.moved(baseline, {}, WORKSPACE) == {}
+
+
+def connectors() -> dict[str, Any]:
+    """`opentide_connectors`: `pub mod plugin { pub mod host { pub fn set_host() } }`."""
+    index = {
+        "0": module("opentide_connectors", [1, 4], is_crate=True),
+        "1": module("plugin", [2]),
+        "2": module("host", [3]),
+        "3": item("set_host", {"function": {}}),
+        "4": item("internal", {"function": {}}),
+    }
+    paths = {
+        "0": {"crate_id": 0, "path": ["opentide_connectors"], "kind": "module"},
+        "3": {"crate_id": 0, "path": ["opentide_connectors", "plugin", "host", "set_host"]},
+        "4": {"crate_id": 0, "path": ["opentide_connectors", "internal"]},
+    }
+    return {"root": 0, "index": index, "paths": paths, "external_crates": {}}
+
+
+def test_a_moved_item_is_exposed_at_its_facade_path_in_either_crate() -> None:
+    for doc, canonical in (
+        (cli(defines=True), ("plugins", "set_host")),
+        (connectors(), ("plugin", "host", "set_host")),
+    ):
+        view, missing = facade_semver.facade_view(doc, {("plugins", "set_host"): canonical})
+        assert missing == []
+        index = view["index"]
+        root = index[str(view["root"])]
+        # The root is the facade's and holds `plugins` alone: the crate's own
+        # modules and its other items are out of reach.
+        assert root["name"] == "opentide"
+        [plugins] = [index[str(child)] for child in root["inner"]["module"]["items"]]
+        assert plugins["name"] == "plugins"
+        [use] = [index[str(child)]["inner"]["use"] for child in plugins["inner"]["module"]["items"]]
+        assert use["name"] == "set_host"
+        assert index[str(use["id"])]["name"] == "set_host"
+
+
+def test_a_moved_item_its_crate_does_not_define_is_reported() -> None:
+    view = {("plugins", "set_host"): ("plugins", "set_host")}
+    _, missing = facade_semver.facade_view(cli(defines=False), view)
+    assert missing == [("plugins", "set_host")]

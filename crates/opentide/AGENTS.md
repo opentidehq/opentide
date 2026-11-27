@@ -54,7 +54,10 @@ facade (`xtask/layers.toml`), above the applications: its features reach opentid
   That run reads the facade's rustdoc JSON alone, where nothing re-exported from another crate is
   present (cargo-semver-checks#638), so `scripts/ci/facade_semver.py` then checks, in each crate
   the facade re-exports from (`FACADE_SOURCES` in `scripts/ci/changes.py`), the items the facade
-  exposes and the types they name (#1911).
+  exposes and the types they name, in their own crate or another workspace crate (#1911, #1985).
+  An item that moved between crates is also compared at its facade path, old crate at the base
+  against new crate at the change. The job runs on a change to a source crate's `src/`,
+  `Cargo.toml` or `build.rs`.
 - **Open sets.** Platforms, query languages and diagnostic codes are open sets. Adding one is a
   minor release; match them with a wildcard arm. Every item of the API that grows with them is
   `#[non_exhaustive]` (`LanguageId`, and `RuleConfigurations`, a field per platform), and every
