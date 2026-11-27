@@ -278,7 +278,7 @@ cwd = "repo"
 
 [[scenario]]
 name = "carbon_black/deploy"
-description = "Carbon Black Cloud: the deployer on the watchlist opentide: a new report added to it, the same rule's IOC replaced, a rule added to another rule's report and retired from it (report kept), the first rule retired (report deleted), a watchlist the org does not hold."
+description = "Carbon Black Cloud: the deployer on the watchlist opentide: a new report added to it, the same rule's IOC replaced, a rule added to another rule's report and retired from it (report kept), the first rule retired (report deleted), a watchlist the org does not hold. Re-recorded from the Rust connector against the same stand-in (#1932): each step reads the watchlists once, where the Python client read them twice."
 client = ["{python}", "tests/cassettes/carbon_black/client.py", "deploy"]
 tenant = ["{python}", "tests/cassettes/carbon_black/tenant.py"]
 routes = ["cbc.invalid"]
@@ -518,7 +518,7 @@ cwd = "repo"
 
 [[scenario]]
 name = "golden/deploy-carbon-black"
-description = "deploy on Carbon Black Cloud's stand-in, the golden cases' cassette: a retired rule whose report the watchlist does not hold, then a rule in a watchlist the org does not hold: the run stops."
+description = "deploy on Carbon Black Cloud's stand-in, the golden cases' cassette, re-recorded with the Rust CLI (#1932: the watchlists read once per rule): a retired rule whose report the watchlist does not hold, then a rule in a watchlist the org does not hold: the run stops."
 client = ["/bin/sh", "-c", "cp -R tests/golden/fixtures/deploy-tenants \"$HOME/ws\" && exec {oracle}/opentide --repo \"$HOME/ws\" --json deploy --platform carbon_black_cloud --strategy PREVIEW --strategy RELEASE --all --keep-deprecated"]
 tenant = ["{python}", "tests/cassettes/carbon_black/tenant.py"]
 routes = ["cbc.invalid"]

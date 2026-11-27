@@ -120,7 +120,7 @@ fn carbon_black_a_single_byte_off_fails() {
     let mismatches = tenant.verify();
     assert_eq!(
         mismatches.first().map(|m| m.index),
-        Some(3),
+        Some(2),
         "{mismatches:?}"
     );
     assert!(mismatches[0].detail.starts_with("bodies differ at byte "));
@@ -281,4 +281,74 @@ fn carbon_black_the_deployer_sends_what_the_python_deployer_sent() {
     let refused = outcomes[5].as_ref().unwrap_err();
     assert_eq!(refused.scope, DeployScope::Rule);
     assert_eq!(refused.failure.code, "tenant_refused");
+}
+
+/// The first step (a new report) reads the watchlists once: the Python
+/// client's `watchlist_list or []` read them twice and dropped the first
+/// answer (#1932).
+#[test]
+fn carbon_black_reads_the_watchlists_once() {
+    let inputs = fixture("carbon_black");
+    let Json::Int(now) = inputs.get("now").unwrap() else {
+        panic!("now is a number")
+    };
+    let step = plan(&items(inputs.get("deploy").unwrap())[0], *now);
+    let mut cassette = support::cassette("carbon_black/deploy");
+    cassette.interactions.truncate(4);
+    let tenant = Replayed::start_with(
+        cassette,
+        carbon_black::PLATFORM,
+        SETUP,
+        "CBC_TOKEN",
+        &carbon_black::http_settings(Duration::from_secs(120)),
+    );
+    let change = block_on(async { CarbonBlack.deploy_report(tenant.cx(), &step).await }).unwrap();
+    assert_eq!(change.ok(), Some(ReportChange::Created));
+    assert_eq!(tenant.verify(), Vec::new());
+    let watchlist_reads = tenant
+        .proxy
+        .requests()
+        .iter()
+        .filter(|request| request.method == "GET" && request.url.ends_with("/watchlists"))
+        .count();
+    assert_eq!(watchlist_reads, 1);
+}
+
+/// A create answered without a report id fails the rule and leaves the
+/// watchlist alone: an empty id is never added to it (#1932).
+#[test]
+fn carbon_black_refuses_a_created_report_without_an_id() {
+    use opentide_cassette::cassette::Body;
+    let inputs = fixture("carbon_black");
+    let Json::Int(now) = inputs.get("now").unwrap() else {
+        panic!("now is a number")
+    };
+    let step = plan(&items(inputs.get("deploy").unwrap())[0], *now);
+    for answer in [r#"{"title": "Carbon Black Lucene Rule"}"#, r#"{"id": ""}"#] {
+        let mut cassette = support::cassette("carbon_black/deploy");
+        // The watchlists, the other rule's report, the create: no watchlist PUT.
+        cassette.interactions.truncate(3);
+        assert_eq!(cassette.interactions[2].request.method, "POST");
+        cassette.interactions[2].response.body = Body::Text(answer.to_owned());
+        let tenant = Replayed::start_with(
+            cassette,
+            carbon_black::PLATFORM,
+            SETUP,
+            "CBC_TOKEN",
+            &carbon_black::http_settings(Duration::from_secs(120)),
+        );
+        let outcome =
+            block_on(async { CarbonBlack.deploy_report(tenant.cx(), &step).await }).unwrap();
+        match outcome {
+            Err(error @ ConnectorError::Refused { .. }) => assert_eq!(
+                error.text(),
+                "Carbon Black created the report \"Carbon Black Lucene Rule\" but its answer \
+                 carries no id, so it was not added to the watchlist opentide: delete the report \
+                 in the console before retriggering deployment."
+            ),
+            other => panic!("{other:?}"),
+        }
+        assert_eq!(tenant.verify(), Vec::new());
+        assert_eq!(tenant.proxy.requests().len(), 3);
+    }
 }

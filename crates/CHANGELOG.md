@@ -12,6 +12,10 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 - If you `match` on `opentide::LanguageId` (or `opentide_core::LanguageId`) without a wildcard arm, add an arm for `LanguageId::Datadog`.
 - If you call `opentide::analysis::analyze_query` with `platform: Some("crowdstrike")` or `Some("exabeam")` to check a rule block's query, check the rule's object with `Workspace::validate` or `Workspace::lint` instead: they still report `cql_correlate_aggregate` and `exabeam_advanced_in_rule` on the block's query.
+- If you build one of the report types with a struct expression, use its constructor instead: `PlatformFinding::new`, `Fix::new`, `TextEdit::new`, or for `Diagnostic` `Diagnostic::new` (or `error` / `warning`) and its builders `at`, `file`, `object`, `with` and `suggest`. For `validate::Summary`, `catalog::PlatformInfo`, `lint::LintSummary` and `catalog::Techniques`, start from `Default::default()` and assign the fields.
+- `Report`, `LintReport`, `Stats`, `Refusal`, `Catalogue` and its rows, `Tenant`, `Variable`, `NextAction` and `Coverage` can no longer be built outside the crate. A test that built one by hand to exercise your own code should produce it from a `Workspace` on an in-memory tree instead.
+- If you destructure one of these structs with a pattern that lists fields and no `..`, add `..` to the pattern.
+- If you `match` on `validate::Check`, `validate::QueriesMode`, `lint::LintCheck` or `lint::LintStatus`, add a wildcard arm; `QueriesMode::as_str` and `LintStatus::as_str` give their names.
 
 #### `opentide-kql`
 
@@ -29,6 +33,7 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 #### `opentide`
 
+- **The report types are `#[non_exhaustive]`, as the crate's stability section promises** ([opentide#1937](https://github.com/opentidehq/opentide/issues/1937)). Code outside the crate can no longer build them with a struct expression (or `..` update), nor destructure them with a pattern that lacks `..`, nor match their enums without a wildcard arm, so a new field or variant is no longer a breaking change. Structs: `Diagnostic`, `Fix`, `TextEdit`, `Report`, `validate::{PlatformFinding, Refusal, Stats, Summary}`, `lint::{LintReport, LintFinding, LintSummary, NextAction}`, `catalog::{Catalogue, Edge, LoadErrorDetail, LoadErrorRow, ObjectRow, PlatformBlock, SignalRow, Summary, Techniques, Coverage, PlatformInfo, Tenant, Variable}`. Enums: `validate::{Check, QueriesMode}`, `lint::{LintCheck, LintStatus}`. `catalog::Row` (an object or a load error) stays exhaustive. See Upgrade.
 - **`LanguageId` has a new variant, `LanguageId::Datadog`** (the Datadog log search syntax, `docs/internal/rfc-datadog-cloud-siem.md`). The enum is exhaustive, so a `match` without a wildcard arm no longer compiles. `LanguageId::QUERY_LANGUAGES` holds twelve languages; `LanguageId::parse` reads `datadog` and `opentide-datadog`, and `LanguageId::from_extension` reads `datadog`.
 - **`QueryRequest.platform` names a dialect, never a profile** ([opentide#1912](https://github.com/opentidehq/opentide/issues/1912), ADR 0015 §4). `analyze_query` checks a query as a file of its language is: an Exabeam or Datadog query under the `search` profile and a CQL query as plain LogScale, whatever the platform. `platform: exabeam` chose Exabeam's `rule` profile, `crowdstrike` the Next-Gen SIEM correlation rule and `datadog` Datadog's `rule`; a rule block's query is still checked as a rule by `Workspace::validate` and `Workspace::lint`, by its field path.
 
@@ -45,6 +50,10 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 - **`Context` is renamed `Profile`** ([opentide#1913](https://github.com/opentidehq/opentide/issues/1913)): a correlation rule or a search is a use of the query, a profile. `opentide_cql::Profile { correlation_rule }`, `Profile::CORRELATION_RULE` and `analyze_with(source, &Profile)` replace `Context`'s.
 
 ### Added
+
+#### `opentide`
+
+- **Constructors for the findings outside code builds** ([opentide#1937](https://github.com/opentidehq/opentide/issues/1937)): `PlatformFinding::new` (a plugin platform's check), `Fix::new` and `TextEdit::new`; `QueriesMode::as_str` and `LintStatus::as_str`; `Default` for `validate::Summary` and `catalog::PlatformInfo`.
 
 #### `opentide-datadog`
 

@@ -7,6 +7,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::FromNode;
+use crate::configuration::repr;
 use crate::from_node::Context;
 use crate::node::{Node, Value};
 use crate::objects::checks::Violation;
@@ -19,7 +20,7 @@ macro_rules! optional_model {
     (
         $(#[$meta:meta])*
         $name:ident = $model:tt {
-            $( $(#[doc = $doc:literal])* $field:ident : $ty:ty, )*
+            $( $(#[$attr:meta])* $field:ident : $ty:ty, )*
         }
     ) => {
         $(#[$meta])*
@@ -42,7 +43,7 @@ macro_rules! optional_model {
         )]
         pub struct $name {
             $(
-                $(#[doc = $doc])*
+                $(#[$attr])*
                 #[serde(default, skip_serializing_if = "Option::is_none")]
                 pub $field: Option<$ty>,
             )*
@@ -64,11 +65,78 @@ optional_model! {
     }
 }
 
+/// A Splunk `lookback` (`Nm`, `Nh`, `Nd`): deploy writes it as an earliest
+/// time in whole minutes (`splunk_timerange`), an `i64`. Validation refuses
+/// a count whose minutes do not fit ([`MAX_LOOKBACK_MINUTES`]:
+/// `9999999999999999d`), which deploy refuses too (#1928); any other shape
+/// stays deploy's to judge, as before.
+pub fn check_lookback(value: &str) -> Result<(), Violation> {
+    let mut chars = value.chars();
+    let minutes_per_unit: i64 = match chars.next_back() {
+        Some('m') => 1,
+        Some('h') => 60,
+        Some('d') => 1_440,
+        _ => return Ok(()),
+    };
+    let count = chars.as_str().trim();
+    let fits = match count.parse::<i64>() {
+        Ok(count) => count.checked_mul(minutes_per_unit).is_some(),
+        // A run of digits too long for an `i64`; any other text is not a count.
+        Err(_) => count.is_empty() || !count.bytes().all(|byte| byte.is_ascii_digit()),
+    };
+    if fits {
+        Ok(())
+    } else {
+        Err(Violation::value_error(format!(
+            "Lookback {} is too long to express in minutes (at most {MAX_LOOKBACK_MINUTES} \
+             minutes)",
+            repr::quote(value)
+        )))
+    }
+}
+
+/// The longest lookback deploy writes, in minutes: `i64::MAX`.
+pub const MAX_LOOKBACK_MINUTES: i64 = i64::MAX;
+
+/// `lookback` in the conversion: `null`, or a string [`check_lookback`]
+/// accepts.
+#[expect(
+    clippy::option_option,
+    reason = "a FromNode `with` function's signature: the outer Option is the conversion's \
+              success, the inner the optional field's own value (as `sentinel::duration`)"
+)]
+fn lookback(node: &Node, cx: &mut Context) -> Option<Option<String>> {
+    if matches!(node.value, Value::Null) {
+        return Some(None);
+    }
+    let value = String::from_node(node, cx)?;
+    match check_lookback(&value) {
+        Ok(()) => Some(Some(value)),
+        Err(violation) => {
+            violation.report(node, cx);
+            None
+        }
+    }
+}
+
+/// garde: [`check_lookback`] on a present value.
+#[expect(
+    clippy::ref_option,
+    reason = "garde's custom validator takes the field by reference as `&Option<T>`"
+)]
+fn garde_lookback(value: &Option<String>, _pins: &Pins) -> garde::Result {
+    value.as_deref().map_or(Ok(()), |value| {
+        check_lookback(value).map_err(Violation::into_garde)
+    })
+}
+
 optional_model! {
     /// The window the search covers (`SplunkTimerange`).
     SplunkTimerange = "SplunkTimerange" {
         /// `Nm`, `Nh`, or `Nd`. Deploy converts it to a Splunk earliest time (`-90m@m`), including the
         /// tenant skew and offset.
+        #[from_node(with = "lookback")]
+        #[garde(custom(garde_lookback))]
         lookback: String,
         /// Raw Splunk earliest time. Wins over `lookback`.
         earliest: String,
@@ -410,4 +478,46 @@ fn garde_saved_search_table(
         .iter()
         .flat_map(IndexMap::keys)
         .try_for_each(|key| check_saved_search_key(key).map_err(Violation::into_garde))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A lookback whose minutes fit an `i64` passes; one more, or a count
+    /// too long for any integer, is refused, as deploy refuses it (#1928).
+    #[test]
+    fn splunk_lookbacks_are_bounded_by_what_deploy_converts() {
+        for text in [
+            "90m",
+            "1h",
+            "30d",
+            "9223372036854775807m",
+            "153722867280912930h",
+            "6405119470038038d",
+            "",
+            "1w",
+            "hourly",
+            "1é",
+            "😀",
+        ] {
+            assert_eq!(check_lookback(text), Ok(()), "{text:?}");
+        }
+        for text in [
+            "9999999999999999d",
+            "6405119470038039d",
+            "153722867280912931h",
+            "9223372036854775808m",
+            "99999999999999999999999999999999999999999d",
+        ] {
+            let violation = check_lookback(text).unwrap_err();
+            assert_eq!(violation.kind, "value_error", "{text:?}");
+            assert!(violation.message.contains("too long"), "{text:?}");
+        }
+        assert_eq!(
+            check_lookback("9999999999999999d").unwrap_err().message,
+            "Lookback \"9999999999999999d\" is too long to express in minutes (at most \
+             9223372036854775807 minutes)"
+        );
+    }
 }
