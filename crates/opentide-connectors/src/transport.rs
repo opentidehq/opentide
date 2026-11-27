@@ -608,9 +608,25 @@ mod certificate_tests {
 /// of filling the memory (#1936). A `Content-Length` past it fails before
 /// the body is read.
 ///
-/// `ReqwestTransport` holds to it; the transport `opentide serve` installs
-/// for the WASI build (`opentide/fetch`) does not yet (#1999).
+/// `ReqwestTransport` holds to it, and so does the transport `opentide
+/// serve` installs for the WASI build (`opentide/fetch`), on the body the
+/// client answers with (#1999).
 pub const MAX_BODY_BYTES: usize = 64 * 1024 * 1024;
+
+/// Why a body of *size* bytes is not read: larger than *max_body*, written
+/// in MiB when it is a whole number of them. Every transport that holds to
+/// [`MAX_BODY_BYTES`] says it in these words.
+pub fn body_too_large(size: impl fmt::Display, max_body: usize) -> TransportFailure {
+    const MIB: usize = 1024 * 1024;
+    let max = if max_body >= MIB && max_body.is_multiple_of(MIB) {
+        format!("{} MiB", max_body / MIB)
+    } else {
+        format!("{max_body} bytes")
+    };
+    TransportFailure::Answer {
+        reason: format!("the answer's body ({size} bytes) is larger than {max}"),
+    }
+}
 
 /// How many read timeouts one exchange may take in all, after its connect
 /// timeout: its deadline is the connect timeout plus this many read
@@ -721,20 +737,6 @@ impl ReqwestTransport {
             .saturating_add(read.saturating_mul(DEADLINE_READ_TIMEOUTS))
     }
 
-    /// Why a body of *size* bytes is not read: larger than *max_body*,
-    /// written in MiB when it is a whole number of them.
-    fn too_large(size: impl fmt::Display, max_body: usize) -> TransportFailure {
-        const MIB: usize = 1024 * 1024;
-        let max = if max_body >= MIB && max_body.is_multiple_of(MIB) {
-            format!("{} MiB", max_body / MIB)
-        } else {
-            format!("{max_body} bytes")
-        };
-        TransportFailure::Answer {
-            reason: format!("the answer's body ({size} bytes) is larger than {max}"),
-        }
-    }
-
     /// Which way *error* failed, as `HttpClient` used to read reqwest's.
     fn failure(error: reqwest::Error) -> TransportFailure {
         if error.is_timeout() && !error.is_connect() {
@@ -767,7 +769,7 @@ impl ReqwestTransport {
         if let Some(length) = response.content_length()
             && usize::try_from(length).map_or(true, |length| length > self.max_body)
         {
-            return Err(Self::too_large(length, self.max_body));
+            return Err(body_too_large(length, self.max_body));
         }
         let mut body = Vec::new();
         loop {
@@ -776,7 +778,7 @@ impl ReqwestTransport {
                 Ok(Ok(Ok(Some(chunk)))) => {
                     let size = body.len().saturating_add(chunk.len());
                     if size > self.max_body {
-                        return Err(Self::too_large(format!("at least {size}"), self.max_body));
+                        return Err(body_too_large(format!("at least {size}"), self.max_body));
                     }
                     body.extend_from_slice(&chunk);
                 }
@@ -931,7 +933,7 @@ mod tests {
         );
         // The real cap reads in MiB.
         assert_eq!(
-            ReqwestTransport::too_large(67_108_865, MAX_BODY_BYTES),
+            body_too_large(67_108_865, MAX_BODY_BYTES),
             TransportFailure::Answer {
                 reason: "the answer's body (67108865 bytes) is larger than 64 MiB".into()
             }

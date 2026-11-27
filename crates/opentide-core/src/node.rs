@@ -28,8 +28,8 @@
 //! tree out (JSON, a model, a Python value) copies every alias in full, so
 //! the loader bounds that copy (#1927).
 //!
-//! What this reads differently from the oracle (opentide 0.23.0, PyYAML's YAML
-//! 1.1 loader) is the table in `crates/opentide-schema/YAML.md`, generated and
+//! What this reads differently from PyYAML's YAML 1.1 loader (the one
+//! opentide 0.23.0 read rules with) is the table in `crates/opentide-schema/YAML.md`, generated and
 //! checked by opentide-schema's `tests/yaml_table.rs` from its
 //! `tests/oracle/yaml_cases.toml`.
 //!

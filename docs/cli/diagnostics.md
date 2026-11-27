@@ -341,6 +341,9 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`kql_join_summarize_before_project`](#kql_join_summarize_before_project) | A `join` runs while the pipeline it sits in still carries every column, and a later `project` would have narrowed it. |
 | [`kql_parse_error`](#kql_parse_error) | The KQL query does not parse. |
 | [`kql_render_not_valid`](#kql_render_not_valid) | render draws a chart; it has no effect in a detection rule. |
+| [`kql_rule_search_star`](#kql_rule_search_star) | A Microsoft Sentinel analytics rule's query contains `search *`, which Microsoft does not allow in a scheduled rule. |
+| [`kql_rule_too_long`](#kql_rule_too_long) | A Microsoft Sentinel analytics rule's query is longer than the 10,000 characters Microsoft allows. |
+| [`kql_rule_union_star`](#kql_rule_union_star) | A Microsoft Sentinel analytics rule's query contains `union *`, which Microsoft does not allow in a scheduled rule. |
 | [`kql_table_misspelt`](#kql_table_misspelt) | A KQL table is not one the engine knows or the workspace declares, but is a near miss of one that is (one edit for a name of up to seven characters, two for a longer one, and not a custom `_CL` table): most likely a typo. |
 | [`kql_table_not_declared`](#kql_table_not_declared) | The table is one the engine knows for the platform, but no log source of the workspace declares it in visibility.toml. |
 | [`kql_type_mismatch`](#kql_type_mismatch) | The operator cannot apply to the column's documented or declared type. |
@@ -444,6 +447,8 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`schema_validation`](#schema_validation) | An object does not match the schema its `metadata.schema` names. |
 | [`schemas_fresh`](#schemas_fresh) | Every JSON schema this opentide version generates exists and matches what `opentide generate schemas` writes now. |
 | [`scope_no_match`](#scope_no_match) | A `--file`, `--uuid` or `--type` selection matched no object, so nothing was validated. |
+| [`sentinel_frequency`](#sentinel_frequency) | A Microsoft Sentinel block's `scheduling.frequency` is shorter than 5 minutes or longer than 14 days. |
+| [`sentinel_lookback`](#sentinel_lookback) | A Microsoft Sentinel block's `scheduling.lookback` is shorter than 5 minutes, longer than 14 days, or shorter than its frequency. |
 | [`share_failed`](#share_failed) | `share` reached the destination, and every object failed. |
 | [`share_partial`](#share_partial) | `share` shared some objects, and others failed. |
 | [`share_unreachable`](#share_unreachable) | `share` could not authenticate to, or reach, any destination. |
@@ -6277,6 +6282,58 @@ opentide validate query
 
 Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [KQL reference](https://learn.microsoft.com/kusto/query/) describes the syntax and the commands the engine checks against.
 
+## kql_rule_search_star
+
+A Microsoft Sentinel analytics rule's query contains `search *`, which Microsoft does not allow in a scheduled rule.
+
+Severity: error. Reported by the analysis engine on the query of a `sentinel` block (the KQL rule profile), at the `search` keyword: `opentide validate` (its `queries` check) and an editor running `opentide lsp start` show it. Microsoft's [scheduled analytics rules docs](https://learn.microsoft.com/en-us/azure/sentinel/scheduled-rules-overview) (read 2026-11-27) say: "The query length should be between 1 and 10,000 characters and can't contain "`search *`" or "`union *`"." It is `search` with no `in (...)` list and a bare `*`. A hunt's search (`response.procedure.searches`) may use it: there, an unscoped `search` is the performance warning `kql_unscoped_search`, which this error replaces in a rule. A Microsoft Defender block is not checked: Defender's custom detection docs set no such limit.
+
+### Example
+
+```yaml
+configurations:
+  sentinel:
+    query: |
+      search * | where Account == "admin"
+```
+
+### How to fix
+
+Start from the tables the rule needs (`SecurityEvent | where Account == "admin"`), or scope the search: `search in (SecurityEvent, SigninLogs) "admin"`.
+
+## kql_rule_too_long
+
+A Microsoft Sentinel analytics rule's query is longer than the 10,000 characters Microsoft allows.
+
+Severity: error. Reported by the analysis engine on the query of a `sentinel` block (the KQL rule profile), on its first line: `opentide validate` (its `queries` check) and an editor running `opentide lsp start` show it. Microsoft's [scheduled analytics rules docs](https://learn.microsoft.com/en-us/azure/sentinel/scheduled-rules-overview) (read 2026-11-27) say: "The query length should be between 1 and 10,000 characters", and suggest user-defined functions to stay under it. The query is counted in characters, not bytes, without the blank lines and spaces around it. The `exclusions` deploy appends for a tenant are not counted, so a query just under the limit passes this check and can still be refused once deploy adds them. A hunt's search is not checked, nor a Microsoft Defender block: Defender's custom detection docs set no such limit.
+
+### Example
+
+A `sentinel` block whose `query` holds 10,001 characters or more.
+
+### How to fix
+
+Move parts of the query into a saved workspace function and call it from the rule ("a single function can replace dozens of lines of code"), or split the rule in two.
+
+## kql_rule_union_star
+
+A Microsoft Sentinel analytics rule's query contains `union *`, which Microsoft does not allow in a scheduled rule.
+
+Severity: error. Reported by the analysis engine on the query of a `sentinel` block (the KQL rule profile), at the `*`: `opentide validate` (its `queries` check) and an editor running `opentide lsp start` show it. Microsoft's [scheduled analytics rules docs](https://learn.microsoft.com/en-us/azure/sentinel/scheduled-rules-overview) (read 2026-11-27) say: "The query length should be between 1 and 10,000 characters and can't contain "`search *`" or "`union *`"." It is a bare `*` among a `union`'s tables; a pattern such as `Sec*` names only the tables it matches and is not reported. A hunt's search (`response.procedure.searches`) may use it: there it is the performance warning `kql_unscoped_union`, which this error replaces in a rule. A Microsoft Defender block is not checked: Defender's custom detection docs set no such limit.
+
+### Example
+
+```yaml
+configurations:
+  sentinel:
+    query: |
+      union * | where EventID == 4625
+```
+
+### How to fix
+
+Name the tables the rule reads: `union SecurityEvent, WindowsEvent | where EventID == 4625`.
+
 ## kql_table_misspelt
 
 A KQL table is not one the engine knows or the workspace declares, but is a near miss of one that is (one edit for a name of up to seven characters, two for a longer one, and not a custom `_CL` table): most likely a typo.
@@ -8153,6 +8210,46 @@ opentide validate --file objects/rules/sentinel-kql-rul.yaml
 ### How to fix
 
 Fix the path, file name or UUID. A `--file` path that does not exist on disk is reported as `file_not_found` instead. A path matches only that file; a bare file name matches every object file with that name. Every `--file` target must match. For `share`, name a target `opentide share targets` lists, and enable it in `sharing.toml`.
+
+## sentinel_frequency
+
+A Microsoft Sentinel block's `scheduling.frequency` is shorter than 5 minutes or longer than 14 days.
+
+Severity: error. Reported by `opentide validate` (its `schema` check) on a `sentinel` block (sentinel-1.0), on `scheduling.frequency`. Microsoft's [scheduled analytics rules docs](https://learn.microsoft.com/en-us/azure/sentinel/scheduled-rules-overview) (read 2026-11-27) say of the query interval and the lookback period: "The allowed range for both of these parameters is from 5 minutes to 14 days." Sentinel refuses a rule outside that range at deploy. A near-real-time rule (`scheduling.nrt: true`) is not checked, because deploy sends no frequency for it. A value that is not a duration is reported by the `schema` check's `value_error` instead.
+
+### Example
+
+```yaml
+configurations:
+  sentinel:
+    scheduling:
+      frequency: 1m
+      lookback: 1h
+```
+
+### How to fix
+
+Run the rule every 5 minutes or more, at most every 14 days (`frequency: 5m`, `PT1H`, `P1D`). For a rule that must fire as events arrive, set `scheduling.nrt: true` instead.
+
+## sentinel_lookback
+
+A Microsoft Sentinel block's `scheduling.lookback` is shorter than 5 minutes, longer than 14 days, or shorter than its frequency.
+
+Severity: error. Reported by `opentide validate` (its `schema` check) on a `sentinel` block (sentinel-1.0), on `scheduling.lookback`. Microsoft's [scheduled analytics rules docs](https://learn.microsoft.com/en-us/azure/sentinel/scheduled-rules-overview) (read 2026-11-27) say: "The allowed range for both of these parameters is from 5 minutes to 14 days", and "The query interval must be shorter than or equal to the lookback period": a lookback shorter than the frequency would leave gaps between runs. Sentinel refuses such a rule at deploy. Durations are compared in seconds (`1h` equals `PT60M`). A near-real-time rule (`scheduling.nrt: true`) is not checked, because deploy sends no lookback for it. A value that is not a duration is reported by the `schema` check's `value_error` instead.
+
+### Example
+
+```yaml
+configurations:
+  sentinel:
+    scheduling:
+      frequency: 1h
+      lookback: 30m
+```
+
+### How to fix
+
+Make the lookback at least the frequency and at most 14 days (`frequency: 1h`, `lookback: 2h`).
 
 ## share_failed
 

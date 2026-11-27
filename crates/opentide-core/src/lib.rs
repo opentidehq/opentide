@@ -757,6 +757,8 @@ pub mod duration;
 pub mod falco;
 pub mod ids;
 pub mod json;
+#[cfg(feature = "markdown")]
+pub mod markdown;
 pub mod node;
 pub mod suggest;
 pub mod text;
@@ -824,6 +826,13 @@ pub mod codes {
             => "A wildcard table name reads every matching table.";
         KQL_JOIN_SUMMARIZE_BEFORE_PROJECT = "kql_join_summarize_before_project"
             => "A `join` runs while the pipeline it sits in still carries every column, and a later `project` would have narrowed it.";
+        // A Microsoft Sentinel analytics rule's query (ADR 0015 §5.1, #1915).
+        KQL_RULE_SEARCH_STAR = "kql_rule_search_star"
+            => "A Microsoft Sentinel analytics rule's query contains `search *`, which Microsoft does not allow in a scheduled rule.";
+        KQL_RULE_UNION_STAR = "kql_rule_union_star"
+            => "A Microsoft Sentinel analytics rule's query contains `union *`, which Microsoft does not allow in a scheduled rule.";
+        KQL_RULE_TOO_LONG = "kql_rule_too_long"
+            => "A Microsoft Sentinel analytics rule's query is longer than the 10,000 characters Microsoft allows.";
         /// A `//` comment in a query that YAML folds into one line, so the
         /// comment swallows the lines after it.
         QUERY_FOLDED_COMMENT = "query_folded_comment"
@@ -1404,6 +1413,11 @@ pub mod codes {
             => "The rule compares `detection.detection.rule_id` with a literal `ru_` id, which differs per tenant: match `detection.detection.rule_name` instead.";
         GOOGLE_SECOPS_LIVE_FREQUENCY_UNAVAILABLE = "google_secops_live_frequency_unavailable"
             => "`run_frequency` is `LIVE` on a multi-event rule: Google stores `LIVE_CUSTOMIZABLE`, so the block differs from the tenant on every deploy.";
+        // The scheduled-rule bounds of sentinel-1.0 (#1916).
+        SENTINEL_FREQUENCY = "sentinel_frequency"
+            => "`scheduling.frequency` is shorter than 5 minutes or longer than 14 days.";
+        SENTINEL_LOOKBACK = "sentinel_lookback"
+            => "`scheduling.lookback` is shorter than 5 minutes, longer than 14 days, or shorter than `frequency`.";
         // The constraints and advisory of microsoft-defender-1.0.
         MICROSOFT_DEFENDER_SCHEMA = "microsoft_defender_schema"
             => "`schema`, when set, is not `platform::microsoft_defender::1.0`.";

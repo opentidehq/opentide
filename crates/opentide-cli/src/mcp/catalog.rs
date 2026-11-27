@@ -22,6 +22,40 @@ pub const FAMILIES: [&str; 3] = ["rule", "threat", "objective"];
 /// ([`super::tools::call`]) the process's warm one, brought up to date with
 /// what changed on disk since the last call.
 pub fn workspace(context: &Context<'_>) -> Result<Workspace, String> {
+    open(context).map_err(|error| error.to_string())
+}
+
+/// Why [`open`] opens no workspace. Its text is `code: message`, what a
+/// tool reports.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum OpenError {
+    /// A configuration file does not parse or cannot be read
+    /// (`config_parse`): the message names its place, `path:line:column`.
+    ConfigParse(String),
+    /// Any other refusal: its failure code and message.
+    Other {
+        /// The failure code (`command_failed`, ...).
+        code: String,
+        /// What went wrong.
+        message: String,
+    },
+}
+
+impl std::fmt::Display for OpenError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::ConfigParse(message) => write!(f, "{}: {message}", crate::commands::CONFIG_PARSE),
+            Self::Other { code, message } => write!(f, "{code}: {message}"),
+        }
+    }
+}
+
+impl std::error::Error for OpenError {}
+
+/// [`workspace`], its refusal typed: a caller that treats a configuration
+/// that does not parse apart matches [`OpenError::ConfigParse`], never the
+/// message's text (#1950).
+pub fn open(context: &Context<'_>) -> Result<Workspace, OpenError> {
     let cwd = context
         .cwd
         .map_or_else(|| PathBuf::from("."), Path::to_path_buf);
@@ -30,7 +64,11 @@ pub fn workspace(context: &Context<'_>) -> Result<Workspace, String> {
     // place, as on the command line (D9, B10).
     crate::commands::open_for("mcp", roots).map_err(|refused| {
         let (code, message, _) = crate::commands::refusal_parts(&refused);
-        format!("{code}: {message}")
+        if code == crate::commands::CONFIG_PARSE {
+            OpenError::ConfigParse(message)
+        } else {
+            OpenError::Other { code, message }
+        }
     })
 }
 

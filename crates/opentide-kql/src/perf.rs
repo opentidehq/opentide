@@ -434,6 +434,81 @@ fn warn_scope(source: &str, lines: &LineIndex, out: &mut Vec<Diagnostic>) {
     }
 }
 
+/// `search *` and `union *` in a Sentinel rule ([`crate::rule_findings`]):
+/// errors at the same places the scope warnings take, the `search` keyword
+/// and the `*` of the union.
+pub(crate) fn rule_scope(source: &str, lines: &LineIndex<'_>, out: &mut Vec<Diagnostic>) {
+    let tokens = tokenize(source);
+    let mut depth = 0i32;
+    let mut at_source = true;
+    let mut after_pipe = false;
+    for (i, tok) in tokens.iter().enumerate() {
+        match &tok.kind {
+            Kind::LParen => depth += 1,
+            Kind::RParen => {
+                depth = (depth - 1).max(0);
+                after_pipe = false;
+            }
+            Kind::Semi if depth == 0 => {
+                at_source = true;
+                after_pipe = false;
+            }
+            Kind::Pipe => {
+                after_pipe = true;
+                at_source = false;
+            }
+            Kind::Word(word) if word == "search" && at_source => {
+                if search_star(&tokens, i) {
+                    out.push(Diagnostic::error(
+                        codes::KQL_RULE_SEARCH_STAR,
+                        "`search *` reads every table: a Microsoft Sentinel analytics rule's \
+                         query cannot contain it; start from the tables the rule needs",
+                        lines.range(ByteSpan::new(tok.start, tok.end)),
+                    ));
+                }
+                at_source = false;
+                after_pipe = false;
+            }
+            Kind::Word(word) if word == "union" && (at_source || after_pipe) => {
+                if let Some((start, end)) = union_star(&tokens, i) {
+                    out.push(Diagnostic::error(
+                        codes::KQL_RULE_UNION_STAR,
+                        "`union *` reads every table: a Microsoft Sentinel analytics rule's \
+                         query cannot contain it; name the tables instead",
+                        lines.range(ByteSpan::new(start, end)),
+                    ));
+                }
+                at_source = false;
+                after_pipe = false;
+            }
+            Kind::Word(_) | Kind::String | Kind::Star => {
+                at_source = false;
+                after_pipe = false;
+            }
+            Kind::Semi => {}
+        }
+    }
+}
+
+/// The `search` at `index` has no `in (...)` list and a bare `*` among its
+/// top-level arguments: `search *`, `search kind=case_sensitive *`.
+fn search_star(tokens: &[Tok], index: usize) -> bool {
+    let mut depth = 0i32;
+    let mut star = false;
+    for (offset, tok) in tokens.iter().enumerate().skip(index + 1) {
+        match &tok.kind {
+            Kind::Pipe | Kind::Semi if depth == 0 => break,
+            Kind::RParen if depth == 0 => break,
+            Kind::LParen => depth += 1,
+            Kind::RParen => depth -= 1,
+            Kind::Word(word) if depth == 0 && word == "in" => return false,
+            Kind::Star if depth == 0 && bare(tokens, offset) => star = true,
+            _ => {}
+        }
+    }
+    star
+}
+
 fn classify_search(tokens: &[Tok], index: usize) -> SearchShape {
     let mut depth = 0i32;
     let mut saw_in = false;

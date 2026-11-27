@@ -165,6 +165,45 @@ fn a_hunt_is_reported_at_its_own_path_on_its_system_s_platform() {
     assert_eq!(json["line"], 10);
 }
 
+/// A Sentinel block's query is a rule, a hunt's search is not (#1915): `union *`
+/// is the error `kql_rule_union_star` in the block, which `validate` fails on,
+/// and stays the scope warning in a Sentinel hunt.
+#[test]
+fn a_sentinel_rule_may_not_union_every_table_but_a_hunt_may() {
+    let text = format!(
+        "{}response:\n  procedure:\n    searches:\n      - purpose: hunt\n        system: \
+         sentinel\n        query: union * | take 1\n",
+        rule("  sentinel:\n    query: union * | take 1\n")
+    );
+    let (errors, warnings, queries) = check(&text, false);
+    assert_eq!(queries, 2);
+    let at = |found: &[Diagnostic], code: &str| -> Vec<serde_json::Value> {
+        found
+            .iter()
+            .filter_map(|d| serde_json::to_value(d).ok())
+            .filter(|json| json["code"] == code)
+            .map(|json| json["field_path"].clone())
+            .collect()
+    };
+    assert_eq!(
+        at(&errors, "kql_rule_union_star"),
+        [json!(["configurations", "sentinel", "query"])],
+        "{errors:#?}"
+    );
+    assert!(at(&warnings, "kql_rule_union_star").is_empty());
+    // `lint` reports style, not `validate`'s errors: the hunt keeps the
+    // performance warning, and the block's has given way to the error.
+    let lint: Vec<(String, String, usize)> = lint_check(&text)
+        .into_iter()
+        .filter(|(code, _, _)| code.starts_with("kql_unscoped") || code.starts_with("kql_rule"))
+        .collect();
+    assert_eq!(
+        lint,
+        [("kql_unscoped_union".to_owned(), "warning".to_owned(), 13)],
+        "{lint:?}"
+    );
+}
+
 #[test]
 fn every_platform_s_query_is_checked_in_its_language() {
     let text = rule(concat!(

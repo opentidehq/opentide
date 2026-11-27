@@ -6,6 +6,7 @@ use opentide_schema::objects::platform::{
     ExabeamConfig, GoogleSecopsConfig, GraylogConfig, HarfangLabConfig, MicrosoftDefenderConfig,
     SentinelConfig, SentinelOneConfig, SplunkConfig, SysdigConfig,
 };
+use opentide_schema::platforms::PlatformId;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
@@ -21,6 +22,20 @@ use crate::{
 /// left out, so the payload is the one any tenant without a tenant-specific
 /// exclusion receives.
 pub const PREVIEW_TENANT: &str = "corpus-tenant";
+
+/// The [`deployers`] as a pattern on [`PlatformId`]: the platforms whose
+/// deploy sends writes compiled from the tenant ([`tenant_writes`]). A test
+/// holds it to the registry's flags.
+macro_rules! deployer {
+    () => {
+        PlatformId::MicrosoftDefender
+            | PlatformId::Splunk
+            | PlatformId::SentinelOne
+            | PlatformId::Crowdstrike
+            | PlatformId::Harfanglab
+            | PlatformId::CarbonBlackCloud
+    };
+}
 
 /// The platforms whose request body opentide builds from the rule alone,
 /// with no tenant (`OFFLINE_COMPILERS`), that this crate compiles: those
@@ -38,22 +53,23 @@ pub fn compile_offline(
     platform: &str,
     rule: &Rule,
 ) -> Option<Result<Json, CompileError>> {
-    match platform {
-        "sentinel" => Some(sentinel::compile(cx, rule, PREVIEW_TENANT)),
-        "elastic" => Some(elastic::compile(cx, rule, &elastic::Setup::none())),
-        "sysdig" => Some(sysdig::compile_body(cx, rule, None)),
-        "bitdefender" => Some(bitdefender_request(cx, rule, None)),
-        "exabeam" => Some(
+    match PlatformId::parse(platform)? {
+        PlatformId::Sentinel => Some(sentinel::compile(cx, rule, PREVIEW_TENANT)),
+        PlatformId::Elastic => Some(elastic::compile(cx, rule, &elastic::Setup::none())),
+        PlatformId::Sysdig => Some(sysdig::compile_body(cx, rule, None)),
+        PlatformId::Bitdefender => Some(bitdefender_request(cx, rule, None)),
+        PlatformId::Exabeam => Some(
             exabeam::compile_deployment(cx, rule, None)
                 .map(|compiled| exabeam::create_request(&compiled)),
         ),
-        "google_secops" => Some(google_secops::compile_offline(cx, rule)),
-        "graylog" => Some(graylog_request(cx, rule, None)),
-        "datadog" => Some(
+        PlatformId::GoogleSecops => Some(google_secops::compile_offline(cx, rule)),
+        PlatformId::Graylog => Some(graylog_request(cx, rule, None)),
+        PlatformId::Datadog => Some(
             datadog::compile_deployment(cx, rule, None)
                 .map(|compiled| datadog::create_request(&compiled)),
         ),
-        _ => None,
+        // Their body needs the tenant: [`compile_tenant`] builds it.
+        deployer!() => None,
     }
 }
 
@@ -130,34 +146,32 @@ pub fn compile_tenant(
     tenant: &str,
     inputs: &Inputs,
 ) -> Option<Result<Json, CompileError>> {
+    let platform_id = PlatformId::parse(platform)?;
     let known = deploy::tenant(cx, platform, tenant);
     let empty = Json::Object(Object::new());
     let config = known.unwrap_or(&empty);
-    if deployers().contains(&platform) {
-        return Some(tenant_writes(cx, platform, rule, tenant, config, inputs));
-    }
     let id = inputs.known.as_deref();
-    match platform {
-        "sentinel" => Some(sentinel::compile(cx, rule, tenant)),
-        "sysdig" => Some(sysdig::compile_body(cx, rule, known)),
-        "bitdefender" => Some(bitdefender_tenant(cx, rule, config, id)),
-        "exabeam" => Some(
+    match platform_id {
+        deployer!() => Some(tenant_writes(cx, platform_id, rule, tenant, config, inputs)),
+        PlatformId::Sentinel => Some(sentinel::compile(cx, rule, tenant)),
+        PlatformId::Sysdig => Some(sysdig::compile_body(cx, rule, known)),
+        PlatformId::Bitdefender => Some(bitdefender_tenant(cx, rule, config, id)),
+        PlatformId::Exabeam => Some(
             exabeam::compile_deployment(cx, rule, known)
                 .map(|compiled| exabeam::create_request(&compiled)),
         ),
         // The text is the same on every tenant: the `rules.create` body,
         // with what the deploy reads beside it (the run state).
-        "google_secops" => Some(google_secops::compile_deployment(cx, rule)),
-        "graylog" => Some(graylog_request(cx, rule, known)),
-        "datadog" => Some(
+        PlatformId::GoogleSecops => Some(google_secops::compile_deployment(cx, rule)),
+        PlatformId::Graylog => Some(graylog_request(cx, rule, known)),
+        PlatformId::Datadog => Some(
             datadog::compile_deployment(cx, rule, known)
                 .map(|compiled| datadog::create_request(&compiled)),
         ),
-        "elastic" => {
+        PlatformId::Elastic => {
             let setup = known.map_or_else(elastic::Setup::none, elastic::Setup::from_tenant);
             Some(elastic::compile(cx, rule, &setup))
         }
-        _ => None,
     }
 }
 
@@ -166,7 +180,7 @@ pub fn compile_tenant(
 /// `[{"method", "url", "body"}]`. `[]` when there is nothing to send.
 fn tenant_writes(
     cx: &Context<'_>,
-    platform: &str,
+    platform: PlatformId,
     rule: &Rule,
     tenant: &str,
     config: &Json,
@@ -174,13 +188,21 @@ fn tenant_writes(
 ) -> Result<Json, CompileError> {
     let id = inputs.known.as_deref();
     let writes = match platform {
-        "microsoft_defender" => microsoft_defender::compile(cx, rule, tenant),
-        "sentinel_one" => sentinel_one::compile(cx, rule, config, id),
-        "crowdstrike" => crowdstrike::compile(cx, rule, config, id),
-        "harfanglab" => harfanglab::compile(cx, rule, config),
-        "splunk" => splunk::compile(cx, rule, config, inputs.clock),
-        "carbon_black_cloud" => carbon_black::compile(cx, rule, config, inputs.timestamp),
-        _ => Ok(Vec::new()),
+        PlatformId::MicrosoftDefender => microsoft_defender::compile(cx, rule, tenant),
+        PlatformId::SentinelOne => sentinel_one::compile(cx, rule, config, id),
+        PlatformId::Crowdstrike => crowdstrike::compile(cx, rule, config, id),
+        PlatformId::Harfanglab => harfanglab::compile(cx, rule, config),
+        PlatformId::Splunk => splunk::compile(cx, rule, config, inputs.clock),
+        PlatformId::CarbonBlackCloud => carbon_black::compile(cx, rule, config, inputs.timestamp),
+        // Not a deployer: a request, never writes (callers never send one).
+        PlatformId::Sentinel
+        | PlatformId::Elastic
+        | PlatformId::Sysdig
+        | PlatformId::Bitdefender
+        | PlatformId::Graylog
+        | PlatformId::Exabeam
+        | PlatformId::GoogleSecops
+        | PlatformId::Datadog => Ok(Vec::new()),
     }?;
     Ok(deploy::writes_json(&writes))
 }
@@ -188,21 +210,31 @@ fn tenant_writes(
 /// The `setup` keys of `platform` a deploy's requests carry, which a dry run
 /// that reaches no tenant shows as `<tenant:KEY>` (a SentinelOne tenant
 /// names its site; one that names its account instead gets `accountIds`).
-fn tenant_keys(platform: &str) -> &'static [&'static str] {
+fn tenant_keys(platform: PlatformId) -> &'static [&'static str] {
     match platform {
-        "sentinel_one" => &["url", "site_id"],
-        "crowdstrike" => &["api", "customer_id"],
-        "harfanglab" => &["url", "source_id"],
-        "splunk" => &["url", "port", "app"],
-        "carbon_black_cloud" => &["url", "org_key", "watchlist"],
-        _ => &[],
+        PlatformId::SentinelOne => &["url", "site_id"],
+        PlatformId::Crowdstrike => &["api", "customer_id"],
+        PlatformId::Harfanglab => &["url", "source_id"],
+        PlatformId::Splunk => &["url", "port", "app"],
+        PlatformId::CarbonBlackCloud => &["url", "org_key", "watchlist"],
+        // Defender's requests carry no `setup` value; the others are not
+        // deployers.
+        PlatformId::MicrosoftDefender
+        | PlatformId::Sentinel
+        | PlatformId::Elastic
+        | PlatformId::Sysdig
+        | PlatformId::Bitdefender
+        | PlatformId::Graylog
+        | PlatformId::Exabeam
+        | PlatformId::GoogleSecops
+        | PlatformId::Datadog => &[],
     }
 }
 
 /// The tenant a dry run that reaches no tenant of `platform` compiles for:
 /// named [`PREVIEW_TENANT`], its `setup` holding each value the requests
 /// carry as its placeholder ([`tenant_keys`]) and nothing else.
-fn unreached_tenant(platform: &str) -> Json {
+fn unreached_tenant(platform: PlatformId) -> Json {
     let mut setup = Object::new();
     for key in tenant_keys(platform) {
         setup.insert((*key).to_owned(), deploy::tenant_value(key).into());
@@ -236,14 +268,16 @@ fn shows(value: &Json, placeholder: &str) -> bool {
 /// and named under `unresolved`.
 fn requests_preview(
     cx: &Context<'_>,
-    platform: &str,
+    platform: PlatformId,
     rule: &Rule,
     tenants: &[String],
     known: &dyn Fn(&str) -> Option<String>,
 ) -> Json {
     let reached: Vec<(&str, &Json)> = tenants
         .iter()
-        .filter_map(|name| deploy::tenant(cx, platform, name).map(|table| (name.as_str(), table)))
+        .filter_map(|name| {
+            deploy::tenant(cx, platform.as_str(), name).map(|table| (name.as_str(), table))
+        })
         .collect();
     let mut entry = Object::new();
     entry.insert("uuid".into(), rule.uuid.clone().into());
@@ -304,7 +338,7 @@ fn requests_preview(
         }
     }
     let Some((name, writes, variables)) = first else {
-        return dump_entry(platform, rule);
+        return dump_entry(platform.as_str(), rule);
     };
     let shown = shown_keys(&writes, variables.iter().map(String::as_str));
     entry.insert("api_request".into(), writes);
@@ -408,22 +442,21 @@ pub fn block_preview(platform: &str, block: &Json) -> Json {
 /// The block read by `platform`'s model, or `None` when the model refuses
 /// it or there is none.
 fn model_config_dump(platform: &str, block: &Json) -> Option<Json> {
-    match platform {
-        "sentinel" => model_dump::<SentinelConfig>(block),
-        "microsoft_defender" => model_dump::<MicrosoftDefenderConfig>(block),
-        "splunk" => model_dump::<SplunkConfig>(block),
-        "sentinel_one" => model_dump::<SentinelOneConfig>(block),
-        "crowdstrike" => model_dump::<CrowdstrikeConfig>(block),
-        "harfanglab" => model_dump::<HarfangLabConfig>(block),
-        "carbon_black_cloud" => model_dump::<CarbonBlackConfig>(block),
-        "elastic" => model_dump::<ElasticConfig>(block),
-        "sysdig" => model_dump::<SysdigConfig>(block),
-        "bitdefender" => model_dump::<BitdefenderConfig>(block),
-        "exabeam" => model_dump::<ExabeamConfig>(block),
-        "google_secops" => model_dump::<GoogleSecopsConfig>(block),
-        "graylog" => model_dump::<GraylogConfig>(block),
-        "datadog" => model_dump::<DatadogConfig>(block),
-        _ => None,
+    match PlatformId::parse(platform)? {
+        PlatformId::Sentinel => model_dump::<SentinelConfig>(block),
+        PlatformId::MicrosoftDefender => model_dump::<MicrosoftDefenderConfig>(block),
+        PlatformId::Splunk => model_dump::<SplunkConfig>(block),
+        PlatformId::SentinelOne => model_dump::<SentinelOneConfig>(block),
+        PlatformId::Crowdstrike => model_dump::<CrowdstrikeConfig>(block),
+        PlatformId::Harfanglab => model_dump::<HarfangLabConfig>(block),
+        PlatformId::CarbonBlackCloud => model_dump::<CarbonBlackConfig>(block),
+        PlatformId::Elastic => model_dump::<ElasticConfig>(block),
+        PlatformId::Sysdig => model_dump::<SysdigConfig>(block),
+        PlatformId::Bitdefender => model_dump::<BitdefenderConfig>(block),
+        PlatformId::Exabeam => model_dump::<ExabeamConfig>(block),
+        PlatformId::GoogleSecops => model_dump::<GoogleSecopsConfig>(block),
+        PlatformId::Graylog => model_dump::<GraylogConfig>(block),
+        PlatformId::Datadog => model_dump::<DatadogConfig>(block),
     }
 }
 
@@ -490,16 +523,20 @@ pub fn preview_planned(
     tenants: &[String],
     known: &dyn Fn(&str) -> Option<String>,
 ) -> Json {
-    match platform {
-        "bitdefender" => bitdefender_preview(cx, rule, tenants),
-        "graylog" => graylog_preview(cx, rule, tenants),
-        "exabeam" => exabeam_preview(cx, rule, tenants),
-        "datadog" => datadog_preview(cx, rule, tenants),
-        "elastic" => elastic_preview(cx, rule, tenants),
-        _ if deployers().contains(&platform) => {
-            requests_preview(cx, platform, rule, tenants, known)
+    let Some(platform_id) = PlatformId::parse(platform) else {
+        return preview(cx, platform, rule);
+    };
+    match platform_id {
+        PlatformId::Bitdefender => bitdefender_preview(cx, rule, tenants),
+        PlatformId::Graylog => graylog_preview(cx, rule, tenants),
+        PlatformId::Exabeam => exabeam_preview(cx, rule, tenants),
+        PlatformId::Datadog => datadog_preview(cx, rule, tenants),
+        PlatformId::Elastic => elastic_preview(cx, rule, tenants),
+        deployer!() => requests_preview(cx, platform_id, rule, tenants, known),
+        // The same request on every tenant.
+        PlatformId::Sentinel | PlatformId::Sysdig | PlatformId::GoogleSecops => {
+            preview(cx, platform, rule)
         }
-        _ => preview(cx, platform, rule),
     }
 }
 
@@ -627,11 +664,15 @@ fn datadog_preview(cx: &Context<'_>, rule: &Rule, tenants: &[String]) -> Json {
 /// [`deployers`] show the writes a deploy sends (`requests_preview`). It
 /// compiles for no tenant: [`preview_on`] compiles for the run's.
 pub fn preview(cx: &Context<'_>, platform: &str, rule: &Rule) -> Json {
-    match platform {
-        "graylog" => graylog_preview(cx, rule, &[]),
+    // A plugin's platform: the block's dump.
+    let Some(platform_id) = PlatformId::parse(platform) else {
+        return dump_entry(platform, rule);
+    };
+    match platform_id {
+        PlatformId::Graylog => graylog_preview(cx, rule, &[]),
         // A compile error the oracle reports with the platform's display
         // name: compile_diagnostic(exc) names Sentinel.
-        "sentinel" => match sentinel::compile_with_warnings(cx, rule, PREVIEW_TENANT) {
+        PlatformId::Sentinel => match sentinel::compile_with_warnings(cx, rule, PREVIEW_TENANT) {
             Ok((body, warnings)) => {
                 let mut entry = compiled(rule, body);
                 if let (Json::Object(fields), false) = (&mut entry, warnings.is_empty()) {
@@ -655,7 +696,7 @@ pub fn preview(cx: &Context<'_>, platform: &str, rule: &Rule) -> Json {
         // The block's own policies, which a deploy takes before the tenant's,
         // beside the body (they are not in it): only when the block names
         // them.
-        "sysdig" => match sysdig::compile_body(cx, rule, None) {
+        PlatformId::Sysdig => match sysdig::compile_body(cx, rule, None) {
             Ok(body) => {
                 let mut entry = compiled(rule, body);
                 if let (Json::Object(fields), Some(policies)) =
@@ -670,20 +711,21 @@ pub fn preview(cx: &Context<'_>, platform: &str, rule: &Rule) -> Json {
             }
             Err(error) => failure(rule, &error),
         },
-        "exabeam" => exabeam_preview(cx, rule, &[]),
-        "datadog" => datadog_preview(cx, rule, &[]),
+        PlatformId::Exabeam => exabeam_preview(cx, rule, &[]),
+        PlatformId::Datadog => datadog_preview(cx, rule, &[]),
         // `_google_secops_compile_preview`: the `rules.create` body with what
         // the deploy reads beside it (`compile_deployment`), or the failure,
         // named for Google SecOps.
-        "google_secops" => match google_secops::compile_deployment(cx, rule) {
+        PlatformId::GoogleSecops => match google_secops::compile_deployment(cx, rule) {
             Ok(body) => compiled(rule, body),
             Err(error) => failure(rule, &error),
         },
-        "elastic" => elastic_preview(cx, rule, &[]),
-        _ if deployers().contains(&platform) => {
-            requests_preview(cx, platform, rule, &[], &|_| None)
-        }
-        _ => dump_entry(platform, rule),
+        PlatformId::Elastic => elastic_preview(cx, rule, &[]),
+        deployer!() => requests_preview(cx, platform_id, rule, &[], &|_| None),
+        // Shown as the block's dump with no tenant, as before #1948 made
+        // this match exhaustive; `preview_on` compiles it for the run's
+        // tenants (`bitdefender_preview`).
+        PlatformId::Bitdefender => dump_entry(platform, rule),
     }
 }
 
@@ -796,6 +838,27 @@ fn graylog_preview(cx: &Context<'_>, rule: &Rule, tenants: &[String]) -> Json {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The `deployer!()` pattern the exhaustive matches route on names the
+    /// registry's deployers exactly, and every other built-in platform
+    /// compiles offline: a new row or a changed flag fails here.
+    #[test]
+    fn the_deployer_pattern_is_the_registrys() {
+        let (deployers, offline) = (deployers(), offline());
+        for platform in PlatformId::ALL {
+            let id = platform.as_str();
+            assert_eq!(
+                matches!(platform, deployer!()),
+                deployers.contains(&id),
+                "{id}"
+            );
+            assert_eq!(
+                !matches!(platform, deployer!()),
+                offline.contains(&id),
+                "{id}"
+            );
+        }
+    }
 
     #[test]
     fn a_block_dumps_in_its_models_order_with_its_defaults() {

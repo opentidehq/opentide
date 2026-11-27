@@ -7,7 +7,7 @@ exit: 0
 view: diagnostics (code, severity, file, line, column and counts; a warning's text; log events by name; no other message text)
 
 ━━━ stdout · json
-findings: 207
+findings: 205
   metadata_recommended | info | objects/objectives/hidden-spray-objective-0004.yaml | 3 | 1
   metadata_recommended | info | objects/rules/elevated-relay-rule-0026.yaml | 3 | 1
   placeholder | warning | objects/rules/rogue-pivot-rule-0028.yaml | 11 | 11
@@ -75,7 +75,6 @@ findings: 207
   microsoft_defender_unprojected_output | info | objects/rules/hidden-relay-rule-0655.yaml | 63 | 9
   microsoft_defender_unprojected_output | info | objects/rules/hidden-spray-rule-0095.yaml | 74 | 9
   microsoft_defender_unprojected_output | info | objects/rules/hidden-spray-rule-0170.yaml | 60 | 9
-  kql_unscoped_union | warning | objects/rules/hidden-spray-rule-0267.yaml | 42 | 13
   lucene_regexp | warning | objects/rules/hidden-spray-rule-0373.yaml | 61 | 21
   microsoft_defender_unprojected_output | info | objects/rules/hidden-spray-rule-0515.yaml | 55 | 9
   microsoft_defender_unprojected_output | info | objects/rules/hidden-tunnel-rule-0284.yaml | 76 | 9
@@ -106,7 +105,6 @@ findings: 207
   falco_field_as_value | warning | objects/rules/persistent-implant-rule-0443.yaml | 47 | 39
   falco_unsafe_na_check | warning | objects/rules/persistent-injection-rule-0583.yaml | 55 | 22
   kql_deprecated_operator | warning | objects/rules/persistent-loader-rule-0166.yaml | 99 | 24
-  kql_unscoped_union | warning | objects/rules/persistent-loader-rule-0211.yaml | 60 | 13
   microsoft_defender_unprojected_output | info | objects/rules/persistent-pivot-rule-0613.yaml | 52 | 9
   microsoft_defender_unprojected_output | info | objects/rules/persistent-relay-rule-0478.yaml | 62 | 9
   elastic_dataset_not_declared | warning | objects/rules/persistent-relay-rule-0478.yaml | 81 | 9
@@ -215,18 +213,18 @@ findings: 207
   filename_mismatch | warning | objects/rules/renamed-1.yaml | - | -
   name_missing | error | objects/rules/scheduled-exfiltration-rule-0027.yaml | - | -
   nested_object_file | warning | objects/rules/nested/rapid-tunnel-rule-0018.yaml | - | -
-count: 207
+count: 205
 exit_code: 0
 fixed: 0
 schema_version: 1
 summary.errors: 5
 summary.files: 879
-summary.findings: 207
+summary.findings: 205
 summary.fixed: 0
 summary.notes: 132
-summary.warnings: 70
+summary.warnings: 68
 checks[]: 4 items
-findings[]: 207 items
+findings[]: 205 items
 next_actions[]: 1 items
 ok: true x1
 status: issues x1

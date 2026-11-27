@@ -10,6 +10,7 @@ use opentide_schema::objects::platform::{
     ExabeamConfig, GoogleSecopsConfig, GraylogConfig, HarfangLabConfig, MicrosoftDefenderConfig,
     SentinelConfig, SentinelOneConfig, SplunkConfig, SysdigConfig,
 };
+use opentide_schema::platforms::PlatformId;
 
 use crate::json::{Json, Object};
 
@@ -17,22 +18,23 @@ use crate::json::{Json, Object};
 /// names (`_typed_platform_config_roots`); empty for a platform it does not
 /// know.
 pub fn typed_roots(platform: &str) -> Vec<&'static str> {
-    let fields: &[(&str, &str)] = match platform {
-        "sentinel" => SentinelConfig::FIELDS,
-        "microsoft_defender" => MicrosoftDefenderConfig::FIELDS,
-        "splunk" => SplunkConfig::FIELDS,
-        "sentinel_one" => SentinelOneConfig::FIELDS,
-        "crowdstrike" => CrowdstrikeConfig::FIELDS,
-        "harfanglab" => HarfangLabConfig::FIELDS,
-        "carbon_black_cloud" => CarbonBlackConfig::FIELDS,
-        "elastic" => ElasticConfig::FIELDS,
-        "sysdig" => SysdigConfig::FIELDS,
-        "bitdefender" => BitdefenderConfig::FIELDS,
-        "exabeam" => ExabeamConfig::FIELDS,
-        "google_secops" => GoogleSecopsConfig::FIELDS,
-        "graylog" => GraylogConfig::FIELDS,
-        "datadog" => DatadogConfig::FIELDS,
-        _ => &[],
+    let fields: &[(&str, &str)] = match PlatformId::parse(platform) {
+        Some(PlatformId::Sentinel) => SentinelConfig::FIELDS,
+        Some(PlatformId::MicrosoftDefender) => MicrosoftDefenderConfig::FIELDS,
+        Some(PlatformId::Splunk) => SplunkConfig::FIELDS,
+        Some(PlatformId::SentinelOne) => SentinelOneConfig::FIELDS,
+        Some(PlatformId::Crowdstrike) => CrowdstrikeConfig::FIELDS,
+        Some(PlatformId::Harfanglab) => HarfangLabConfig::FIELDS,
+        Some(PlatformId::CarbonBlackCloud) => CarbonBlackConfig::FIELDS,
+        Some(PlatformId::Elastic) => ElasticConfig::FIELDS,
+        Some(PlatformId::Sysdig) => SysdigConfig::FIELDS,
+        Some(PlatformId::Bitdefender) => BitdefenderConfig::FIELDS,
+        Some(PlatformId::Exabeam) => ExabeamConfig::FIELDS,
+        Some(PlatformId::GoogleSecops) => GoogleSecopsConfig::FIELDS,
+        Some(PlatformId::Graylog) => GraylogConfig::FIELDS,
+        Some(PlatformId::Datadog) => DatadogConfig::FIELDS,
+        // A plugin's platform: no model here.
+        None => &[],
     };
     let mut roots = Vec::with_capacity(fields.len() * 2);
     for (attribute, serialised) in fields {
