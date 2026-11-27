@@ -152,7 +152,7 @@ Requests beyond LSP, for clients that know them (`crates/opentide-lsp/src/handle
 | `opentide/fs/read` | `{ path }` | `{ text }`: the file as the server sees it: the open buffer, else the copy the server indexed or the host supplied; `""` when there is none. `path` is absolute, or relative to a workspace folder (each folder is tried in order; `./` parts are dropped) |
 | `opentide/didChangeWorkspace` (notification) | `{ documents?, objects?, removed?, visibility? }` | None. The workspace a host supplied on `initialize` changed (below): `documents` and `objects` as on `initialize`, added or replacing what has their URI; `removed`, the URIs of files that are gone (`opentide-object:<uuid>` for an object supplied with no `uri`); `visibility`, the new text of `visibility.toml`, or `null` when it is gone (absent: unchanged). The index is rebuilt, open documents are checked again (or the client asked to pull), and a catalog the client got that changed gets `opentide/catalogChanged`. Params that are not an object are logged and ignored |
 
-Debug builds also answer `opentide/__panic`, `opentide/__sleep` and `opentide/__stats`, for the server's own tests. Release builds do not have them.
+Debug builds also answer `opentide/__panic`, `opentide/__hold`, `opentide/__sleep` and `opentide/__stats`, for the server's own tests. Release builds do not have them.
 
 ### `opentide/catalog`
 

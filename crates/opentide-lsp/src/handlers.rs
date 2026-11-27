@@ -155,11 +155,33 @@ pub mod custom {
         const METHOD: &'static str = "opentide/__sleep";
     }
 
+    /// `until`: a path the sleep ends at as soon as it exists, so a test
+    /// decides when a batch goes on (at most `ms` milliseconds).
     #[cfg(all(debug_assertions, not(fuzzing)))]
     #[derive(Debug, Default, Deserialize, Serialize)]
     #[serde(default)]
     pub struct SleepParams {
         pub ms: u64,
+        pub until: Option<std::path::PathBuf>,
+    }
+
+    /// Debug builds: the batch that takes this request ends exactly
+    /// `frames` frames after it; the source waits for them (#2010). The
+    /// tests queue a batch with it, without a timing window.
+    #[cfg(all(debug_assertions, not(fuzzing)))]
+    pub enum Hold {}
+    #[cfg(all(debug_assertions, not(fuzzing)))]
+    impl lsp_types::request::Request for Hold {
+        type Params = HoldParams;
+        type Result = ();
+        const METHOD: &'static str = "opentide/__hold";
+    }
+
+    #[cfg(all(debug_assertions, not(fuzzing)))]
+    #[derive(Debug, Default, Deserialize, Serialize)]
+    #[serde(default)]
+    pub struct HoldParams {
+        pub frames: u64,
     }
 
     /// Debug builds: how many analyses ran, and what the roots' workspaces
@@ -387,7 +409,18 @@ pub(crate) fn request(session: &mut Session, request: Request) -> Response {
                 },
             })
         })
-        .on::<custom::Sleep>(|_, p| std::thread::sleep(std::time::Duration::from_millis(p.ms)));
+        .on::<custom::Hold>(|_, _| ())
+        .on::<custom::Sleep>(|_, p| {
+            let deadline = std::time::Instant::now() + std::time::Duration::from_millis(p.ms);
+            match p.until {
+                None => std::thread::sleep(std::time::Duration::from_millis(p.ms)),
+                Some(path) => {
+                    while !path.exists() && std::time::Instant::now() < deadline {
+                        std::thread::sleep(std::time::Duration::from_millis(10));
+                    }
+                }
+            }
+        });
     dispatcher
         .on::<Initialize>(|s, p| initialize(s, p, raw.as_ref().unwrap_or(&Value::Null)))
         .on::<Shutdown>(|_, ()| ())

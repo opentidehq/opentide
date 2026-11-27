@@ -76,15 +76,12 @@ fn send(lsp: &mut Lsp, id: i64, method: &str, params: Value) {
     lsp.write(&json!({ "jsonrpc": "2.0", "id": id, "method": method, "params": params }));
 }
 
-/// Have the server sleep, and wait until it does: what is sent next queues
-/// up as one batch. Two windows hold it, so both are wide: the server has
-/// 500 ms to take the sleep alone, and the test then has 2.5 s to write a
-/// few small messages (it was 150 ms and 550 ms). The server tells the
-/// client neither when it took a frame nor how many are queued, so a
-/// handshake would need a new test hook (#1947).
-fn hold(lsp: &mut Lsp, id: i64) {
-    send(lsp, id, "opentide/__sleep", json!({ "ms": 3000 }));
-    std::thread::sleep(std::time::Duration::from_millis(500));
+/// Queue a batch: the batch that takes this request ends exactly `frames`
+/// frames after it (`opentide/__hold`, debug builds). The server waits for
+/// them however long the test takes to write them, and leaves what comes
+/// after them to the next batch, so no timing window holds it (#2010).
+fn hold(lsp: &mut Lsp, id: i64, frames: u64) {
+    send(lsp, id, "opentide/__hold", json!({ "frames": frames }));
 }
 
 fn watch() -> Value {
@@ -190,7 +187,7 @@ fn queued_edits_are_analysed_and_published_once() {
     open(&mut lsp, uri, "kql", "SecurityEvent | take 1");
     published_for(&mut lsp, uri);
     let before = stats(&mut lsp);
-    hold(&mut lsp, 900);
+    hold(&mut lsp, 900, 21);
     for n in 0..20 {
         lsp.notify(
             "textDocument/didChange",
@@ -218,7 +215,7 @@ fn cancelled_and_outdated_requests_are_answered_so() {
     let uri = "file:///tmp/cancel.kql";
     open(&mut lsp, uri, "kql", "SecurityEvent | take 1");
     published_for(&mut lsp, uri);
-    hold(&mut lsp, 800);
+    hold(&mut lsp, 800, 5);
     send(
         &mut lsp,
         801,
@@ -3261,7 +3258,7 @@ fn a_diagnostics_request_before_shutdown_in_one_batch_is_answered() {
     }));
     let uri = file_uri(&scratch.0.join("objects/rules/rule-1.0.yaml"));
     open(&mut lsp, &uri, "opentide-yaml", &fixture(RULE));
-    hold(&mut lsp, 900);
+    hold(&mut lsp, 900, 3);
     send(
         &mut lsp,
         901,
@@ -3299,7 +3296,7 @@ fn a_deferred_diagnostics_request_for_a_document_closed_later_in_the_batch_is_ou
     }));
     let uri = file_uri(&scratch.0.join("objects/rules/rule-1.0.yaml"));
     open(&mut lsp, &uri, "opentide-yaml", &fixture(RULE));
-    hold(&mut lsp, 900);
+    hold(&mut lsp, 900, 3);
     send(
         &mut lsp,
         901,
@@ -3339,7 +3336,7 @@ fn a_batch_answers_diagnostics_after_hovers_and_completions() {
     let uri = file_uri(&scratch.0.join("objects/rules/rule-1.0.yaml"));
     let text = fixture(RULE);
     open(&mut lsp, &uri, "opentide-yaml", &text);
-    hold(&mut lsp, 900);
+    hold(&mut lsp, 900, 4);
     let at = json!({ "textDocument": { "uri": uri }, "position": { "line": 0, "character": 2 } });
     send(
         &mut lsp,
@@ -4006,11 +4003,18 @@ fn a_file_changed_on_disk_within_a_batch_is_read_again_for_its_event() {
     let rule = root.join("objects/rules/rule-1.0.yaml");
     // One batch: a request that reads every object file (the editor's index,
     // from the workspace it loads), a pause in which the rule changes on
-    // disk (2 s for the test to write it once the index is answered), the
-    // watcher's event for it, and the workspace's diagnostics.
-    hold(&mut lsp, 1);
+    // disk (until the test, once the index is answered, writes it and then
+    // the release file), the watcher's event for it, and the workspace's
+    // diagnostics.
+    let release = root.join("released");
+    hold(&mut lsp, 1, 4);
     send(&mut lsp, 2, "workspace/symbol", json!({ "query": "" }));
-    send(&mut lsp, 3, "opentide/__sleep", json!({ "ms": 2000 }));
+    send(
+        &mut lsp,
+        3,
+        "opentide/__sleep",
+        json!({ "ms": 60_000, "until": release }),
+    );
     lsp.notify(
         "workspace/didChangeWatchedFiles",
         json!({ "changes": [{ "uri": file_uri(&rule), "type": 2 }] }),
@@ -4026,6 +4030,7 @@ fn a_file_changed_on_disk_within_a_batch_is_read_again_for_its_event() {
     let changed = text.replacen("tlp: clear", "tlp: clearr", 1);
     assert_ne!(changed, text);
     std::fs::write(&rule, changed).unwrap();
+    std::fs::write(&release, "").unwrap();
     let report = until_response(&mut lsp, 4).pop().unwrap();
     let items = report["result"]["items"]
         .as_array()
@@ -4311,13 +4316,15 @@ fn a_workspace_pull_without_a_file_watcher_never_yields() {
     let (mut lsp, _) = start(json!({ "capabilities": caps, "rootUri": file_uri(root) }));
     let uri = file_uri(&root.join("objects/rules/rule-1.0.yaml"));
     open(&mut lsp, &uri, "opentide-yaml", &fixture(RULE));
+    // The pull is its batch's last frame: the request behind it waits in
+    // the next batch, whatever the timing.
+    hold(&mut lsp, 900, 1);
     send(
         &mut lsp,
         2,
         "workspace/diagnostic",
         json!({ "previousResultIds": [] }),
     );
-    std::thread::sleep(std::time::Duration::from_millis(50));
     send(
         &mut lsp,
         3,
