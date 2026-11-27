@@ -4359,3 +4359,277 @@ fn a_workspace_pull_is_answered_while_the_client_keeps_editing() {
     });
     assert!(in_time, "the pull was not answered within 60 s of edits");
 }
+
+/// #1944: the workspace's symbols are placed from the index, and a code lens
+/// reads each referencing file where it is kept: neither copies a file per
+/// result. An open document is found by its path without comparing the
+/// path of every open document on each lookup.
+#[test]
+fn symbols_and_lenses_copy_no_file_and_find_open_documents_by_path() {
+    const RULES: usize = 10;
+    let scratch = workspace("symbols-shared-text", true);
+    let rules = scratch.0.join("objects/rules");
+    let objective = file_uri(&scratch.0.join("objects/objectives/objective-1.0.yaml"));
+    let rule_uris: Vec<(String, String)> = (0..RULES)
+        .map(|n| {
+            let path = rules.join(format!("rule-{n}.yaml"));
+            let text = fixture(RULE)
+                .replace("8003-000000000001", &format!("8003-0000000001{n:02}"))
+                .replace("name: Sentinel KQL Rule", &format!("name: Rule é😀 {n}"));
+            std::fs::write(&path, &text).unwrap();
+            (file_uri(&path), text)
+        })
+        .collect();
+    let (mut lsp, _) = start(json!({ "capabilities": watch(), "rootUri": file_uri(&scratch.0) }));
+    open(&mut lsp, &objective, "opentide-yaml", &fixture(OBJECTIVE));
+    for (uri, text) in &rule_uris {
+        open(&mut lsp, uri, "opentide-yaml", text);
+    }
+    let counters = |lsp: &mut Lsp| {
+        let stats = lsp.request("opentide/__stats", Value::Null);
+        (
+            stats["result"]["textCopies"].as_u64().unwrap(),
+            stats["result"]["docPathKeys"].as_u64().unwrap(),
+        )
+    };
+
+    let (copies, keys) = counters(&mut lsp);
+    let symbols = lsp.request("workspace/symbol", json!({ "query": "" }));
+    let symbols = symbols["result"].as_array().unwrap();
+    // The rule fixture on disk, its ten copies and the objective.
+    assert_eq!(symbols.len(), RULES + 2, "{symbols:?}");
+    let rule = symbols
+        .iter()
+        .find(|s| s["name"] == "Rule é😀 3")
+        .unwrap_or_else(|| panic!("{symbols:?}"));
+    // `name: Rule é😀 3`: the value from column 6, `😀` two UTF-16 units.
+    assert_eq!(
+        rule["location"]["range"],
+        json!({ "start": { "line": 0, "character": 6 }, "end": { "line": 0, "character": 16 } })
+    );
+
+    let lens = lsp.request(
+        "textDocument/codeLens",
+        json!({ "textDocument": { "uri": objective } }),
+    );
+    let locations = lens["result"][0]["command"]["arguments"][2]
+        .as_array()
+        .unwrap_or_else(|| panic!("{lens}"));
+    assert_eq!(locations.len(), RULES + 1, "{lens}");
+    assert!(
+        locations
+            .iter()
+            .all(|l| l["range"]["start"] == json!({ "line": 16, "character": 17 })),
+        "each at the rule's `detection_model`: {lens}"
+    );
+    let (copies_after, keys_after) = counters(&mut lsp);
+    assert_eq!(copies_after, copies, "a symbol or a lens copied a file");
+    assert!(
+        keys_after - keys <= RULES as u64 + 1,
+        "each lookup of an open document compared every open document's path: {} keys",
+        keys_after - keys
+    );
+}
+
+/// #1943: a keystroke in one open object runs the engine on that object
+/// alone. The analysis of every open object is made again (what `validate`
+/// says of one may change with another), but the engine's analysis of an
+/// object reads no other object, and is kept per text. What each document
+/// is told is what a server that opens the same texts tells it.
+#[test]
+fn a_keystroke_runs_the_engine_on_the_object_it_changed_alone() {
+    const OPEN: usize = 10;
+    let scratch = workspace("engine-analysis-per-text", true);
+    let rules = scratch.0.join("objects/rules");
+    let mut texts: Vec<(String, String)> = (0..OPEN)
+        .map(|n| {
+            let path = rules.join(format!("rule-{n}.yaml"));
+            let text = fixture(RULE)
+                .replace("8003-000000000001", &format!("8003-0000000001{n:02}"))
+                .replace("name: Sentinel KQL Rule", &format!("name: Rule é😀 {n}"));
+            std::fs::write(&path, &text).unwrap();
+            (file_uri(&path), text)
+        })
+        .collect();
+    let session = |texts: &[(String, String)]| {
+        let (mut lsp, _) = start(json!({
+            "capabilities": watching_relative(),
+            "rootUri": file_uri(&scratch.0)
+        }));
+        for (uri, text) in texts {
+            open(&mut lsp, uri, "opentide-yaml", text);
+        }
+        lsp
+    };
+    let pull_all = |lsp: &mut Lsp, texts: &[(String, String)]| -> Vec<Value> {
+        texts
+            .iter()
+            .map(|(uri, _)| {
+                let report = lsp.request(
+                    "textDocument/diagnostic",
+                    json!({ "textDocument": { "uri": uri } }),
+                );
+                report["result"]["items"].clone()
+            })
+            .collect()
+    };
+    let engine = |lsp: &mut Lsp| {
+        lsp.request("opentide/__stats", Value::Null)["result"]["engineAnalyses"]
+            .as_u64()
+            .unwrap()
+    };
+
+    let mut lsp = session(&texts);
+    pull_all(&mut lsp, &texts);
+    assert_eq!(engine(&mut lsp), OPEN as u64, "each object once");
+    let analyses = stats(&mut lsp);
+
+    let typed = format!("{}\n# typé 😀\n", texts[0].1);
+    lsp.notify(
+        "textDocument/didChange",
+        json!({ "textDocument": { "uri": texts[0].0, "version": 2 },
+                "contentChanges": [{ "text": typed }] }),
+    );
+    texts[0].1 = typed;
+    let after = pull_all(&mut lsp, &texts);
+    assert_eq!(
+        engine(&mut lsp),
+        OPEN as u64 + 1,
+        "a keystroke ran the engine on every open object again"
+    );
+    assert_eq!(
+        stats(&mut lsp),
+        analyses + OPEN as u64,
+        "the findings across objects are made again for each"
+    );
+
+    let mut fresh = session(&texts);
+    assert_eq!(after, pull_all(&mut fresh, &texts));
+    assert!(
+        after
+            .iter()
+            .any(|items| !items.as_array().unwrap().is_empty()),
+        "the comparison compares diagnostics: {after:?}"
+    );
+}
+
+/// The `esql_unavailable` diagnostics of the document, pulled now: severity
+/// and message.
+fn esql_unavailable(lsp: &mut Lsp, uri: &str) -> Vec<(u64, String)> {
+    let reply = lsp.request(
+        "textDocument/diagnostic",
+        json!({ "textDocument": { "uri": uri } }),
+    );
+    reply["result"]["items"]
+        .as_array()
+        .unwrap_or_else(|| panic!("{reply}"))
+        .iter()
+        .filter(|d| d["code"] == "esql_unavailable")
+        .map(|d| {
+            (
+                d["severity"].as_u64().unwrap(),
+                d["message"].as_str().unwrap().to_string(),
+            )
+        })
+        .collect()
+}
+
+/// #1943: the engine's analysis is kept per text, so a change to the Elastic
+/// tenants (`elastic.toml`, which the engine reads) must reach an open
+/// Elastic rule whose text did not change: on disk with a watcher, as an
+/// open buffer, when that buffer closes, and when the file is deleted. A
+/// keystroke in another object does not take the finding away.
+#[test]
+fn elastic_tenants_changes_reach_an_open_elastic_rule_under_the_engine_cache() {
+    let tenants = |version: &str| {
+        format!("[[tenants]]\nname = \"é😀\"\n[tenants.setup]\nversion = \"{version}\"\n")
+    };
+    let scratch = workspace("engine-cache-elastic-tenants", true);
+    let root = &scratch.0;
+    let platforms = root.join(".opentide/configurations/platforms");
+    std::fs::create_dir_all(&platforms).unwrap();
+    let elastic = platforms.join("elastic.toml");
+    std::fs::write(&elastic, tenants("9.5")).unwrap();
+    let elastic_uri = file_uri(&elastic);
+
+    let rule_path = root.join("objects/rules/elastic-rule.yaml");
+    let rule = format!(
+        "{}  elastic:\n    type: esql\n    query: 'FROM logs-* | STATS a = ABSENT(host.name)'\n",
+        fixture(RULE)
+            .replace("8003-000000000001", "8003-000000000201")
+            .replace("name: Sentinel KQL Rule", "name: Elastic rule é😀")
+    );
+    std::fs::write(&rule_path, &rule).unwrap();
+    let rule_uri = file_uri(&rule_path);
+    let other = fixture(RULE);
+    let other_uri = file_uri(&root.join("objects/rules/rule-1.0.yaml"));
+
+    let (mut lsp, _) = start(json!({
+        "capabilities": watching_relative(),
+        "rootUri": file_uri(root)
+    }));
+    workspace_pull_codes(&mut lsp);
+    open(&mut lsp, &rule_uri, "opentide-yaml", &rule);
+    open(&mut lsp, &other_uri, "opentide-yaml", &other);
+    assert!(
+        esql_unavailable(&mut lsp, &rule_uri).is_empty(),
+        "9.5 has ABSENT"
+    );
+
+    // (A) On disk, 9.5 to 8.19, with the watcher's event.
+    std::fs::write(&elastic, tenants("8.19")).unwrap();
+    lsp.notify(
+        "workspace/didChangeWatchedFiles",
+        json!({ "changes": [{ "uri": elastic_uri, "type": 2 }] }),
+    );
+    let on_8_19 = esql_unavailable(&mut lsp, &rule_uri);
+    assert_eq!(on_8_19.len(), 1, "{on_8_19:?}");
+    assert_eq!(on_8_19[0].0, 2, "a warning: {on_8_19:?}");
+    assert!(
+        on_8_19[0].1.contains("Elasticsearch 8.19 rejects it"),
+        "{on_8_19:?}"
+    );
+
+    // A keystroke in another open object keeps it.
+    lsp.notify(
+        "textDocument/didChange",
+        json!({ "textDocument": { "uri": other_uri, "version": 2 },
+                "contentChanges": [{ "text": format!("{other}\n# typé 😀\n") }] }),
+    );
+    assert_eq!(esql_unavailable(&mut lsp, &rule_uri), on_8_19);
+
+    // (B) The open buffer wins over the disk: edited to 9.5, the finding goes.
+    open(&mut lsp, &elastic_uri, "toml", &tenants("8.19"));
+    assert_eq!(esql_unavailable(&mut lsp, &rule_uri), on_8_19);
+    lsp.notify(
+        "textDocument/didChange",
+        json!({ "textDocument": { "uri": elastic_uri, "version": 2 },
+                "contentChanges": [{ "text": tenants("9.5") }] }),
+    );
+    assert!(
+        esql_unavailable(&mut lsp, &rule_uri).is_empty(),
+        "the buffer's 9.5 did not reach the rule"
+    );
+
+    // (C) Closed: the disk's 8.19 again.
+    lsp.notify(
+        "textDocument/didClose",
+        json!({ "textDocument": { "uri": elastic_uri } }),
+    );
+    assert_eq!(esql_unavailable(&mut lsp, &rule_uri), on_8_19);
+
+    // (D) Deleted: no declared stack, so every supported line is checked and
+    // the finding names none.
+    std::fs::remove_file(&elastic).unwrap();
+    lsp.notify(
+        "workspace/didChangeWatchedFiles",
+        json!({ "changes": [{ "uri": elastic_uri, "type": 3 }] }),
+    );
+    let undeclared = esql_unavailable(&mut lsp, &rule_uri);
+    assert_eq!(undeclared.len(), 1, "{undeclared:?}");
+    assert_eq!(undeclared[0].0, 3, "information: {undeclared:?}");
+    assert!(
+        !undeclared[0].1.contains("Elasticsearch 8.19 rejects it"),
+        "{undeclared:?}"
+    );
+}

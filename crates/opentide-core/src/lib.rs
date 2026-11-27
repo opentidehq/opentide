@@ -757,6 +757,7 @@ pub mod falco;
 pub mod json;
 pub mod node;
 pub mod suggest;
+pub mod yara;
 
 /// Well-known diagnostic codes. Extra query diagnostics are allowed.
 pub mod codes {
