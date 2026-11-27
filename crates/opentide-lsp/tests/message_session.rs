@@ -667,6 +667,54 @@ fn a_uri_removed_and_added_in_one_change_is_there_with_its_new_text() {
     assert!(hover.to_string().contains("After"), "{hover}");
 }
 
+/// A Sentinel schedule outside the bounds Microsoft documents (#1916): the
+/// editor shows `validate`'s errors, each on its key.
+#[test]
+fn a_sentinel_schedule_out_of_bounds_is_shown() {
+    let mut session = start(Value::Null);
+    let text = "name: Sentinel rule
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000098
+  schema: rule::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: A Sentinel rule.
+configurations:
+  sentinel:
+    enabled: true
+    status: STAGING
+    query: SecurityEvent | take 1
+    scheduling:
+      frequency: 1m
+      lookback: 15d
+    alert:
+      title: Sentinel rule
+";
+    let found = open(
+        &mut session,
+        "objects/rules/sentinel.yaml",
+        "opentide-yaml",
+        text,
+    );
+    let line = |needle: &str| {
+        u64::try_from(text.lines().position(|l| l.contains(needle)).unwrap()).unwrap()
+    };
+    let at = |code: &str| -> Vec<u64> {
+        found
+            .iter()
+            .filter(|d| d["code"] == code)
+            .map(|d| {
+                assert_eq!(d["severity"], 1, "{d}");
+                d["range"]["start"]["line"].as_u64().unwrap()
+            })
+            .collect()
+    };
+    assert_eq!(at("sentinel_frequency"), [line("frequency:")], "{found:#?}");
+    assert_eq!(at("sentinel_lookback"), [line("lookback:")], "{found:#?}");
+}
+
 /// A Microsoft Defender block past the limits Microsoft documents (#1890):
 /// the editor shows the alert's advisories (`validate`'s) and a continuous
 /// rule's NRT finding (the query's analysis), where each is broken.

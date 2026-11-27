@@ -8,6 +8,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Eac
 
 ### Upgrade
 
+1. If CI runs `opentide lint --strict` on Microsoft Defender rules (`opentide setup ci` generates it), it now fails on three new warnings. To keep the previous result while you fix the rules, set each to `"info"` under `[queries.codes]` in `.opentide/configurations/lint.toml`: `microsoft_defender_custom_details_limit`, `microsoft_defender_placeholder_limit` and `microsoft_defender_nrt_query`.
+2. If CI runs `opentide generate docs --changed` in a shallow clone, check out the full history: `fetch-depth: 0` on GitHub Actions' `actions/checkout`, `GIT_DEPTH: "0"` on GitLab, `fetchDepth: 0` on Azure Pipelines. The run now fails where it used to compare with `HEAD` and report nothing changed.
+3. If you deploy to Microsoft Sentinel, run `opentide validate` and fix each `sentinel_frequency` and `sentinel_lookback` it reports: set the frequency and the lookback between `5m` and `14d`, the lookback at least the frequency.
+
+### Breaking
+
+- **`validate` refuses a Sentinel schedule Sentinel refuses at deploy** ([#1916](https://github.com/opentidehq/opentide/issues/1916)). Microsoft allows a scheduled rule's frequency and lookback from 5 minutes to 14 days, the lookback at least the frequency. `validate` and the editor report a value outside these bounds as an error at its key. Near-real-time rules are not checked.
+  - `sentinel_frequency`: `scheduling.frequency` under 5 minutes or over 14 days
+  - `sentinel_lookback`: `scheduling.lookback` under 5 minutes, over 14 days, or shorter than the frequency
 1. If you use the Rust SDK: add a wildcard arm (`_ => …`) where you match on `opentide::analysis::LanguageId`, and build an `opentide::models::RuleConfigurations` from `RuleConfigurations::default()`, not a struct literal. `LanguageId::QUERY_LANGUAGES`, `RuleConfigurations::PLATFORMS` and `opentide::validate::STRICT_EXEMPT_WARNINGS` are slices now (`for &item in …`).
 2. If CI runs `opentide lint --strict` on Microsoft Defender rules (`opentide setup ci` generates it), it now fails on three new warnings. To keep the previous result while you fix the rules, set each to `"info"` under `[queries.codes]` in `.opentide/configurations/lint.toml`: `microsoft_defender_custom_details_limit`, `microsoft_defender_placeholder_limit` and `microsoft_defender_nrt_query`.
 3. If CI runs `opentide generate docs --changed` in a shallow clone, check out the full history: `fetch-depth: 0` on GitHub Actions' `actions/checkout`, `GIT_DEPTH: "0"` on GitLab, `fetchDepth: 0` on Azure Pipelines. The run now fails where it used to compare with `HEAD` and report nothing changed.
