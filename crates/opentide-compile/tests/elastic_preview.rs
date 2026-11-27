@@ -178,3 +178,45 @@ fn a_duration_past_the_deployable_bound_refuses_the_rule() {
         Some("now-18446744073709551614s")
     );
 }
+
+/// Tags, authors and techniques are each sent once, in the order they first
+/// came: opentide's marker, then the tenant's tags, then the rule's (#1957).
+#[test]
+fn tags_authors_and_techniques_are_each_sent_once_in_first_order() {
+    let rule = RULE
+        .replace(
+            "  tlp: clear\n",
+            "  tlp: clear\n  author: é\n  contributors: [😀, é, '', 😀, É]\n",
+        )
+        .replace(
+            "    status: STAGING\n",
+            "    status: STAGING\n    tags: [😀, opentide, é, soc, 😀, e\u{301}]\n",
+        )
+        .replace(
+            "description: A rule.\n",
+            "description: A rule.\ntechniques: [T1059.001, T1003, T1059.001]\n",
+        );
+    let workspace = workspace_with(&rule);
+    let owned = Owned::new(
+        &Vocabularies::bundled(),
+        &workspace.configuration().resolved,
+    );
+    let index = workspace.index().clone();
+    let cx = owned.context(&index);
+    let object = index.get("rule", UUID).unwrap();
+    let rule = Rule::new(object.root().unwrap(), None);
+    let setup = elastic::Setup {
+        tags: vec!["soc".to_owned(), "é".to_owned(), "soc".to_owned()],
+        ..elastic::Setup::none()
+    };
+    let body = elastic::compile(&cx, &rule, &setup).unwrap();
+    assert_eq!(
+        body.get("tags").unwrap().to_compact(),
+        "[\"opentide\",\"soc\",\"é\",\"😀\",\"e\u{301}\"]"
+    );
+    assert_eq!(
+        body.get("author").unwrap().to_compact(),
+        "[\"é\",\"😀\",\"É\"]"
+    );
+    assert_eq!(elastic::rule_techniques(&cx, &rule), ["T1059.001", "T1003"]);
+}
