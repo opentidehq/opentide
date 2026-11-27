@@ -85,8 +85,8 @@ pub struct Args {
     pub queries: Option<QueriesMode>,
     /// `--check-timeout`.
     pub check_timeout: Option<String>,
-    /// `--position`: where a `--file` query will sit.
-    pub position: QueryPosition,
+    /// `--position`, when given: where a `--file` query will sit.
+    pub position: Option<QueryPosition>,
 }
 
 /// Why `validate <options> query` is refused, if it is: an option of
@@ -214,10 +214,10 @@ impl Args {
                 .or(strictness.queries)
                 .map(QueriesMode::from),
             check_timeout: query.check_timeout.clone(),
-            position: match query.position {
-                Some(crate::tree::Position::Rule) => QueryPosition::Rule,
-                Some(crate::tree::Position::Search) | None => QueryPosition::Search,
-            },
+            position: query.position.map(|position| match position {
+                crate::tree::Position::Rule => QueryPosition::Rule,
+                crate::tree::Position::Search => QueryPosition::Search,
+            }),
         }
     }
 }
@@ -442,6 +442,7 @@ pub fn live_usage(args: &Args, env: &Env) -> Option<Report> {
     for (flag, used) in [
         ("--strict", args.strict),
         ("--queries", args.queries.is_some()),
+        ("--position", args.position.is_some()),
     ] {
         if used {
             return Some(usage(
@@ -749,7 +750,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     let queries = args.queries.unwrap_or_default();
     // A rule block is a platform's: there is no rule to check a query file
     // as without one (#1993), and no silent fallback to a search.
-    if args.position == QueryPosition::Rule && platform.is_none() {
+    if args.position == Some(QueryPosition::Rule) && platform.is_none() {
         let mut report = refused(
             platform,
             "--position rule checks a query as a platform's rule block checks its own: pass \
@@ -800,6 +801,21 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
         .iter()
         .filter(|target| is_query_file(target))
         .collect();
+    // A rule block's query is checked as a rule by where it sits: the
+    // position says where a query file's will.
+    if args.position.is_some() && query_files.is_empty() {
+        let mut report = refused(
+            platform,
+            "--position says where a --file query will sit; a rule's own queries are checked as \
+             its blocks check them",
+            USAGE_EXIT_CODE,
+            code::USAGE_ERROR,
+        );
+        if let Some(failure) = &mut report.outcome.failure {
+            failure.argument = Some("--position".into());
+        }
+        return report;
+    }
     let rule_targets: Vec<String> = args
         .files
         .iter()
@@ -1011,8 +1027,13 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
                         offline_languages(name)
                             .is_some_and(|languages| languages.contains(&language.as_str()))
                     });
-                    let findings =
-                        profiles.check_query(&text, language, platform, None, args.position);
+                    let findings = profiles.check_query(
+                        &text,
+                        language,
+                        platform,
+                        None,
+                        args.position.unwrap_or_default(),
+                    );
                     checks.push(Check {
                         file_path: file_path.clone(),
                         path: shown.clone(),

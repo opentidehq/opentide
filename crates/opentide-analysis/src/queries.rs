@@ -486,8 +486,8 @@ pub fn check_query_at(
     let lines = LineStarts::new(&text);
     crate::analyze_query(
         &crate::QueryRequest::new(language, text.clone().into_owned())
-            .with_platform(platform.map(str::to_owned))
-            .with_stack(stack.map(str::to_owned))
+            .with_platform(platform)
+            .with_stack(stack)
             .with_position(position),
     )
     .into_iter()

@@ -610,6 +610,55 @@ fn a_rule_position_without_a_platform_is_a_usage_error() {
     );
 }
 
+/// `--position` says where a query file's query will sit: without a query
+/// file, or with `--live` (which checks rules, as rules), it would do
+/// nothing, so it is refused rather than ignored (#1993).
+#[test]
+fn a_position_without_a_query_file_or_with_live_is_refused() {
+    let (_scratch, ws) = corpus();
+    let ran = opentide(
+        &ws,
+        &[
+            "--json",
+            "validate",
+            "query",
+            "--platform",
+            "exabeam",
+            "--position",
+            "rule",
+        ],
+        &[],
+    );
+    assert_eq!(ran.code, 2, "{}", ran.stdout);
+    assert_eq!(
+        ran.json()["failure"]["argument"],
+        "--position",
+        "{}",
+        ran.stdout
+    );
+    let live = opentide(
+        &ws,
+        &[
+            "--json",
+            "validate",
+            "query",
+            "--live",
+            "--platform",
+            "exabeam",
+            "--position",
+            "rule",
+        ],
+        &[],
+    );
+    assert_eq!(live.code, 2, "{}", live.stdout);
+    assert_eq!(
+        live.json()["failure"]["argument"],
+        "--position",
+        "{}",
+        live.stdout
+    );
+}
+
 #[test]
 fn datadog_queries_and_datadog_files_are_checked_offline() {
     let (_scratch, ws) = corpus();

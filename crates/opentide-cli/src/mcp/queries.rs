@@ -180,6 +180,33 @@ fn known_stack(stack: &str) -> bool {
 /// catalogue's rules for `platform` on its tenants.
 pub fn validate_query(check: &QueryCheck, context: &Context<'_>) -> Result<Json, String> {
     let platform = check.platform.as_str();
+    // The position is read before either check, so a value the tool does not
+    // know is refused live too, and a rule's position is not dropped by one.
+    let position = match check.position.trim() {
+        "" => Some(opentide_analysis::QueryPosition::Search),
+        named => opentide_analysis::QueryPosition::parse(named),
+    };
+    let refusal = match position {
+        None => Some(format!(
+            "position is search (a query file or a hunt) or rule (the query of the platform's \
+             rule block), not {:?}",
+            check.position
+        )),
+        Some(opentide_analysis::QueryPosition::Rule) if check.live => Some(
+            "position rule applies to the offline check of query; live: true checks the \
+             catalogue's rules, which are checked as rules"
+                .to_owned(),
+        ),
+        Some(_) => None,
+    };
+    if let Some(message) = refusal {
+        return Ok(Json::object([
+            ("valid", Json::Null),
+            ("status", Json::str("failed")),
+            ("platform", Json::str(platform)),
+            ("message", Json::Str(message)),
+        ]));
+    }
     let live_platform = live_query_platforms().contains(&platform);
     if !live_platform && (check.live || offline_languages(platform).is_none()) {
         return Ok(Json::object([
@@ -295,21 +322,8 @@ fn offline(check: &QueryCheck, context: &Context<'_>) -> Json {
             "query is empty: pass the query text to check".to_owned(),
         ));
     }
-    let position = match position.trim() {
-        "" => opentide_analysis::QueryPosition::Search,
-        named => match opentide_analysis::QueryPosition::parse(named) {
-            Some(position) => position,
-            None => {
-                return Json::object(failed(
-                    payload,
-                    format!(
-                        "position is search (a query file or a hunt) or rule (the query of the \
-                         platform's rule block), not {named:?}"
-                    ),
-                ));
-            }
-        },
-    };
+    // validate_query refused any other value before calling this.
+    let position = opentide_analysis::QueryPosition::parse(position.trim()).unwrap_or_default();
     if !stack.trim().is_empty() && !known_stack(stack) {
         return Json::object(failed(
             payload,

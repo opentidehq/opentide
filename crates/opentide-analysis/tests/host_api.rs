@@ -341,8 +341,27 @@ fn a_query_at_the_rule_position_is_checked_as_its_rule_block() {
     }
 }
 
-/// A rule block is a platform's: a rule without one is refused, not
-/// checked as a search.
+/// A YARA-L text at `rule` is the rule a Google SecOps block assembles: the
+/// rule profile, whose `meta` deploy writes. As a `.yaral` file (`search`) a
+/// rule needs its own `meta` (#1993).
+#[test]
+fn a_yaral_rule_at_the_rule_position_needs_no_meta() {
+    let text = "rule r {\n  events:\n    $e.metadata.event_type = \"USER_LOGIN\"\n  condition:\n    $e\n}\n";
+    let missing_section = |position: QueryPosition| {
+        analyze_query(
+            &QueryRequest::new(LanguageId::Yaral, text)
+                .with_platform(Some("google_secops"))
+                .with_position(position),
+        )
+        .into_iter()
+        .any(|d| d.code == codes::YARAL_SECTION_MISSING)
+    };
+    assert!(missing_section(QueryPosition::Search));
+    assert!(!missing_section(QueryPosition::Rule));
+}
+
+/// A rule block is a platform's: a rule without one is one error and no
+/// check, not a search.
 #[test]
 fn a_rule_position_needs_a_platform() {
     let rule = QueryRequest::new(LanguageId::Cql, CORRELATE_THEN_AGGREGATE)
@@ -350,6 +369,11 @@ fn a_rule_position_needs_a_platform() {
     assert_eq!(
         rule.validate(),
         Err(opentide_analysis::QueryRequestError::RuleWithoutPlatform)
+    );
+    let found = analyze_query(&rule);
+    assert_eq!(
+        found.iter().map(|d| d.code.as_str()).collect::<Vec<_>>(),
+        [codes::QUERY_POSITION_NEEDS_PLATFORM]
     );
     assert!(rule.clone().with_platform(Some("")).validate().is_err());
     assert!(rule.with_platform(Some("crowdstrike")).validate().is_ok());
@@ -361,7 +385,7 @@ fn a_position_has_a_name() {
     for position in [QueryPosition::Search, QueryPosition::Rule] {
         assert_eq!(QueryPosition::parse(position.as_str()), Some(position));
     }
-    assert_eq!(QueryPosition::parse("RULE"), Some(QueryPosition::Rule));
+    assert_eq!(QueryPosition::parse("RULE"), None);
     assert_eq!(QueryPosition::parse("hunt"), None);
     assert_eq!(QueryPosition::default(), QueryPosition::Search);
 }

@@ -36,7 +36,7 @@ struct Case {
 
 fn query(language: LanguageId, platform: Option<&str>, text: &str) {
     std::hint::black_box(analyze_query(
-        &QueryRequest::new(language, text.to_owned()).with_platform(platform.map(str::to_owned)),
+        &QueryRequest::new(language, text).with_platform(platform),
     ));
 }
 

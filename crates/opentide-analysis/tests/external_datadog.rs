@@ -1,9 +1,9 @@
 //! Datadog's published queries (`crates/testdata/conformance/external/datadog/published.jsonl`,
 //! sources and licences in `SOURCES.md`) and twins of a sample of them with one injected fault
 //! each (`broken.jsonl`: the line of the query it was made from, the fault and the code it must
-//! raise). Under the profile `rule`, as a detection rule's `queries[].query` is checked: by its
-//! position, never by a platform (ADR 0015 §4), so not through `analyze_query`, which checks a
-//! query as a `.datadog` file, a search.
+//! raise). Through `analyze_query` at position `rule` (#1993), as a detection rule's
+//! `queries[].query` is checked: the position, never the platform, picks the profile
+//! (ADR 0015 §4).
 //!
 //! Every published query is free of errors but the reasoned exceptions of `EXCEPTIONS.toml`
 //! (counted per code by `crates/opentide-datadog/tests/published.rs`); every twin's query is
@@ -14,7 +14,7 @@
     reason = "test helpers outside #[test] functions: a panic fails the test"
 )]
 
-use opentide_analysis::Severity;
+use opentide_analysis::{LanguageId, QueryPosition, QueryRequest, Severity, analyze_query};
 
 const DIR: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
@@ -22,7 +22,11 @@ const DIR: &str = concat!(
 );
 
 fn rule(text: &str) -> Vec<opentide_core::Diagnostic> {
-    opentide_datadog::analyze_with(text, &opentide_datadog::Context::RULE).diagnostics
+    analyze_query(
+        &QueryRequest::new(LanguageId::Datadog, text)
+            .with_platform(Some("datadog"))
+            .with_position(QueryPosition::Rule),
+    )
 }
 
 fn errors(text: &str) -> Vec<String> {

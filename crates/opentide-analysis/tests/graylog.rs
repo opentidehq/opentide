@@ -7,8 +7,7 @@ use opentide_analysis::{LanguageId, QueryRequest, analyze_query, codes};
 #[test]
 fn a_query_file_takes_the_platform_dialect() {
     let request = |platform: Option<&str>| {
-        QueryRequest::new(LanguageId::Lucene, "message:/(?i)fail.*/")
-            .with_platform(platform.map(str::to_string))
+        QueryRequest::new(LanguageId::Lucene, "message:/(?i)fail.*/").with_platform(platform)
     };
     let graylog: Vec<String> = analyze_query(&request(Some("graylog")))
         .into_iter()

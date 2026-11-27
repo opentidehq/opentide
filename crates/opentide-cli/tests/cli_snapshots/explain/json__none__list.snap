@@ -1685,6 +1685,10 @@ exit: 0
       "meaning": "A `//` comment in a query that YAML folds into one line comments out the lines after it."
     },
     {
+      "code": "query_position_needs_platform",
+      "meaning": "A query on its own is to be checked as a rule's query, but no platform says whose rule block it is."
+    },
+    {
       "code": "query_rejected",
       "meaning": "`validate query --live` failed because a tenant refused a rule's query as invalid."
     },
@@ -2173,13 +2177,13 @@ exit: 0
   "duration_ms": 0,
   "exit_code": 0,
   "failure": null,
-  "message": "540 diagnostic codes",
+  "message": "541 diagnostic codes",
   "next_actions": [],
   "ok": true,
   "schema_version": 1,
   "status": "completed",
   "summary": {
-    "codes": 540
+    "codes": 541
   }
 }
 

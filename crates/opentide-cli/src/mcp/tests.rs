@@ -1367,6 +1367,14 @@ fn validate_query_takes_a_position() {
         json!({"query": "x", "platform": "exabeam", "position": "hunt"}),
     );
     assert_eq!(unknown["status"], "failed", "{unknown}");
+    // `live: true` checks the catalogue's rules, as rules: a rule position
+    // there would do nothing, so it is refused, not dropped.
+    let live = failed_call(
+        &server,
+        "validate_query",
+        json!({"query": "x", "platform": "exabeam", "position": "rule", "live": true}),
+    );
+    assert_eq!(live["status"], "failed", "{live}");
 }
 
 /// `get_chaining`'s `depth` bounds the hops from the object; a depth that is

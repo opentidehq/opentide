@@ -20,7 +20,6 @@ fn codes() -> Vec<String> {
         LanguageId::Kql,
         "DeviceProcessEvents | take 1",
     ))
-    .unwrap_or_else(|error| panic!("a search needs no platform: {error}"))
     .into_iter()
     .map(|diagnostic| diagnostic.code)
     .collect()

@@ -396,12 +396,16 @@ pub enum QueryPosition {
     /// A search: a query file, a hunt, `opentide query`. The default.
     #[default]
     Search,
-    /// A rule block's query on the request's platform: checked exactly as
-    /// that block's query is. It needs a platform
+    /// A rule block's query on the request's platform: checked as that
+    /// block checks its query's text. It needs a platform
     /// ([`QueryRequest::validate`]). Exabeam's `rule` profile, CQL's
-    /// Next-Gen SIEM correlation rule and Datadog's `rule` profile differ
-    /// from a search; every other language checks a rule's query as a
-    /// search.
+    /// Next-Gen SIEM correlation rule, Datadog's `rule` profile and YARA-L's
+    /// assembled rule (the rule profile, its `meta` deploy's) differ from a
+    /// search; every other language checks a rule's query as a search. The
+    /// checks that read the rest of a block (Elastic's tenants and schedule,
+    /// Sysdig's macros, Defender's alert mapping) need the object: see
+    /// `Workspace::validate`. The platform is not checked to have a block in
+    /// the query's language: the command line and MCP refuse that first.
     Rule,
 }
 
@@ -415,15 +419,14 @@ impl QueryPosition {
         }
     }
 
-    /// The position named `name` (`search` or `rule`, ASCII case ignored).
+    /// The position named `name`: `search` or `rule`, as the command line
+    /// and MCP spell them.
     #[must_use]
     pub fn parse(name: &str) -> Option<Self> {
-        if name.eq_ignore_ascii_case("search") {
-            Some(QueryPosition::Search)
-        } else if name.eq_ignore_ascii_case("rule") {
-            Some(QueryPosition::Rule)
-        } else {
-            None
+        match name {
+            "search" => Some(QueryPosition::Search),
+            "rule" => Some(QueryPosition::Rule),
+            _ => None,
         }
     }
 }
@@ -483,15 +486,15 @@ impl QueryRequest {
 
     /// The request for `platform` (a `configurations` key), or for none.
     #[must_use]
-    pub fn with_platform(mut self, platform: Option<impl Into<String>>) -> Self {
-        self.platform = platform.map(Into::into);
+    pub fn with_platform(mut self, platform: Option<&str>) -> Self {
+        self.platform = platform.map(str::to_owned);
         self
     }
 
     /// The request for an Elastic `stack` (ES|QL), or for every one.
     #[must_use]
-    pub fn with_stack(mut self, stack: Option<impl Into<String>>) -> Self {
-        self.stack = stack.map(Into::into);
+    pub fn with_stack(mut self, stack: Option<&str>) -> Self {
+        self.stack = stack.map(str::to_owned);
         self
     }
 
@@ -503,9 +506,10 @@ impl QueryRequest {
     }
 
     /// Whether the request can be checked: a [`QueryPosition::Rule`] needs a
-    /// platform. Hosts call it before [`analyze_query`] and report the error
-    /// their own way (a usage error, an error value); [`analyze_query`] on a
-    /// request that fails it checks the rule profile without a dialect.
+    /// platform. Hosts that refuse a usage error up front (the command line,
+    /// MCP) call it before [`analyze_query`], which answers a request that
+    /// fails it with one `query_position_needs_platform` error and nothing
+    /// else.
     ///
     /// # Errors
     ///
@@ -521,9 +525,19 @@ impl QueryRequest {
 }
 
 /// Diagnostics for one query, in the query's own coordinates, under its
-/// platform's dialect and its position's profile. It does not refuse a
-/// request [`QueryRequest::validate`] refuses.
+/// platform's dialect and its position's profile. A request
+/// [`QueryRequest::validate`] refuses (a rule with no platform) gets one
+/// error, `query_position_needs_platform`, on the query's start, and is not
+/// checked: there is no rule block to check it as, and a search would be a
+/// silent fallback.
 pub fn analyze_query(request: &QueryRequest) -> Vec<Diagnostic> {
+    if let Err(error) = request.validate() {
+        return vec![Diagnostic::error(
+            codes::QUERY_POSITION_NEEDS_PLATFORM,
+            error.to_string(),
+            Range::point(0, 0),
+        )];
+    }
     let platform = request.platform.as_deref().unwrap_or("");
     match request.language {
         LanguageId::Kql => {
@@ -555,6 +569,16 @@ pub fn analyze_query(request: &QueryRequest) -> Vec<Diagnostic> {
                 QueryPosition::Search => opentide_datadog::Context::SEARCH,
             };
             opentide_datadog::analyze_with(&request.text, &ctx).diagnostics
+        }
+        // At `rule`, the text is the rule a Google SecOps block assembles from
+        // its sections, which deploy gives its `meta`; at `search`, a `.yaral`
+        // file, a rule or a search by its text.
+        LanguageId::Yaral => {
+            let ctx = match request.position {
+                QueryPosition::Rule => opentide_yaral::Context::SECTIONS,
+                QueryPosition::Search => opentide_yaral::Context::FILE,
+            };
+            opentide_yaral::analyze_with(&request.text, &ctx).diagnostics
         }
         LanguageId::Lucene => {
             let dialect = opentide_lucene::Dialect::for_platform(platform);

@@ -33,7 +33,7 @@ fn render_diagnostics(diagnostics: &[Diagnostic]) -> String {
 
 fn query(language: LanguageId, platform: Option<&str>, text: &str) -> String {
     render_diagnostics(&analyze_query(
-        &QueryRequest::new(language, text.to_string()).with_platform(platform.map(str::to_string)),
+        &QueryRequest::new(language, text).with_platform(platform),
     ))
 }
 
