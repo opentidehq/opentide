@@ -146,7 +146,7 @@ These do not change at any step. A change to one is a separate, explicit decisio
 
 ### Crates
 
-Each crate depends only on crates in rows below it. `xtask check-layers` enforces this in CI, from [`xtask/layers.toml`](https://github.com/opentidehq/opentide/blob/integration/unified-core/xtask/layers.toml), the one place the enforced table is written down. It differs from this table in one way: the bindings sit above the facade, since they wrap it (ADR 0005).
+Each crate depends only on crates in rows below it. `xtask check-layers` enforces this in CI, from [`xtask/layers.toml`](https://github.com/opentidehq/opentide/blob/integration/unified-core/xtask/layers.toml), the one place the enforced table is written down. It differs from this table in one way: the bindings sit above the facade, since they wrap it (ADR 0005). The query crates include `-cql` since language-server 0.12.0 (#859).
 
 **Amended ([ADR 0016](./adr/0016-tide-into-analysis.md), #1965).** As first written, the `opentide-workspace` row named language-server's `opentide-analysis` and `opentide-tide` as sources, which reads as folding both crates into the workspace. Both depend on every query engine, so that fold would make `opentide-compile` and `opentide-connectors`, which build on `opentide-workspace`, compile every parser. The workspace took the Tide object checks only; `opentide-tide` folds into `opentide-analysis`, which already depends on it, and `opentide-compile` and `opentide-connectors` never depend on `opentide-analysis`. The query crates include `-cql` since language-server 0.12.0 (#859).
 

@@ -26,13 +26,13 @@ The crates' dependencies today (`Cargo.toml`, `[dependencies]`):
 | `opentide-compile` | `opentide-core`, `opentide-schema`, `opentide-workspace` |
 | `opentide-connectors` | `opentide-core`, `opentide-schema`, `opentide-workspace`, `opentide-compile` |
 | `opentide-tide` | `opentide-core`, `-dataset`, `-schema`, `-highlight`, `-ecs` and all twelve query crates |
-| `opentide-analysis` | the same twelve query crates, `opentide-tide`, and (feature `queries`) `opentide-schema`, `opentide-workspace` |
+| `opentide-analysis` | `opentide-core`, `-highlight`, `-ecs`, the same twelve query crates, `opentide-tide`, and (feature `queries`) `opentide-schema`, `opentide-workspace` |
 
 `opentide-tide` and `opentide-analysis` each depend on every query engine. `opentide-workspace`
 depends on none: the query checks plug in through its narrow trait `QueryCheck` (ADR 0010), which
 `opentide-analysis` implements from above (`opentide_analysis::queries::EngineQueries`). Folding either crate into `opentide-workspace`
 would make `opentide-compile` and `opentide-connectors`, and everything that builds only on them,
-compile every parser and catalog: about 40k lines of engine code in a build that needs none of it,
+compile every parser and catalog: about 120k lines of query-engine code (the twelve query crates' `src/`) in a build that needs none of it,
 and a layering in which the deploy path changes whenever a grammar does.
 
 The Tide object checks have already moved: they are `opentide-workspace`'s `validate` (UC-2.2,
@@ -62,7 +62,7 @@ hints, document links, the vocabularies for hover and completion, and the snippe
   which it already pulls in through `opentide-tide`; no host gains a dependency. It stays I/O-free
   (`scripts/engine/check-io-free.sh`) and takes over `opentide-tide`'s `build.rs` (the compressed
   datasets and the pre-parsed vocabularies, #1743).
-- `opentide-tide` is published on crates.io (1.0.0-rc.1). It is internal, with no stability
+- `opentide-tide` is published on crates.io (releases up to 1.1.0). It is internal, with no stability
   promise (ADR 0005), so retiring it is not a facade change; its last published version gets a
   README pointing to the `opentide` crate, and the release notes (`crates/CHANGELOG.md`) say so.
 - One fewer crate to publish, version and document (`docs/internal/publishing.md`'s list of
