@@ -218,7 +218,7 @@ fn add_line(rc: &Path, line: &str) -> std::io::Result<()> {
         .create(true)
         .append(true)
         .open(rc)?;
-    let newline = if text.contains("\r\n") { "\r\n" } else { "\n" };
+    let newline = opentide_core::text::newline_of(&text);
     let lead = if existing.is_empty() || existing.ends_with(b"\n") {
         ""
     } else {

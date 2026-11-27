@@ -152,7 +152,7 @@ fn is_variable(value: &str) -> bool {
 
 /// Line endings as `\n`.
 pub fn normalise_newlines(text: &str) -> String {
-    text.replace("\r\n", "\n").replace('\r', "\n")
+    opentide_core::text::universal_newlines(text).into_owned()
 }
 
 /// Only whitespace, or nothing.
