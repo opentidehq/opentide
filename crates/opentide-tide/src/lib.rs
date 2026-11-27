@@ -916,7 +916,16 @@ fn analyze_injections(
         let mut extra = Vec::new();
         let (found, query_tokens) = match inj.language {
             LanguageId::Kql => {
-                let r = opentide_kql::analyze(&inj.inner, Dialect::for_platform(&inj.platform));
+                let dialect = Dialect::for_platform(&inj.platform);
+                let mut r = opentide_kql::analyze(&inj.inner, dialect);
+                // A block's query is a rule, a hunt's search is not (ADR 0015 §4).
+                let profile =
+                    if inj.field_path.first().map(String::as_str) == Some("configurations") {
+                        opentide_kql::Profile::Rule
+                    } else {
+                        opentide_kql::Profile::Search
+                    };
+                opentide_kql::apply_profile(&inj.inner, dialect, profile, &mut r.diagnostics);
                 (r.diagnostics, r.tokens)
             }
             LanguageId::Spl => {
