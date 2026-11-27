@@ -26,6 +26,7 @@ use super::interrupt::watched;
 use indexmap::IndexMap;
 use opentide_compile::Json as CJson;
 use opentide_compile::plan::{SelectOptions, Tenant as PlanTenant};
+use opentide_compile::rule_query::rule_queries;
 use opentide_compile::strategy::{self, RunStrategies, StatusStrategy};
 use opentide_connectors::connector::{LiveCheck, QueryRequest, TenantContext, TimeWindow};
 use opentide_connectors::credentials::Mode as Resolve;
@@ -1558,145 +1559,6 @@ fn tenant_host(platform: &str, tenant: &Configured) -> String {
         .unwrap_or_else(|| default_host(platform).to_owned())
 }
 
-/// One query a rule sends (`RuleQuery`).
-#[derive(Clone, Debug)]
-struct RuleQuery {
-    text: String,
-    language: String,
-    label: Option<String>,
-    exclusions: Option<CJson>,
-    /// The streams a Graylog query is checked against (the block's aliases).
-    index: Vec<String>,
-}
-
-impl RuleQuery {
-    fn plain(text: String) -> Self {
-        Self {
-            text,
-            language: String::new(),
-            label: None,
-            exclusions: None,
-            index: Vec::new(),
-        }
-    }
-
-    /// The query as deploy sends it to *tenant* (`text_for`).
-    fn text_for(&self, tenant: &str) -> String {
-        match &self.exclusions {
-            Some(exclusions) => {
-                opentide_compile::kql::compile_query(&self.text, Some(exclusions), tenant)
-            }
-            None => self.text.clone(),
-        }
-    }
-}
-
-/// The rule's query on *platform*, or the refusal (`_required`).
-fn required(block: &CJson, key: &str, name: &str, platform: &str) -> Result<String, String> {
-    let text = block
-        .get(key)
-        .and_then(CJson::as_str)
-        .map(str::trim)
-        .unwrap_or_default();
-    if text.is_empty() {
-        return Err(format!("rule {name:?} has an empty {platform} query"));
-    }
-    Ok(text.to_owned())
-}
-
-/// The queries a deploy of *rule* sends to *platform*, in order
-/// (`query/rules.py` `rule_queries`).
-fn rule_queries(rule: &opentide_compile::Rule, platform: &str) -> Result<Vec<RuleQuery>, String> {
-    let name = rule.name.as_str();
-    let Some(block) = rule.block(platform) else {
-        return Err(format!("rule {name:?} has no {platform} configuration"));
-    };
-    match platform {
-        "sentinel" | "microsoft_defender" => {
-            let text = required(block, "query", name, platform)?;
-            let exclusions = block
-                .get("exclusions")
-                .filter(|exclusions| matches!(exclusions, CJson::Array(items) if !items.is_empty()))
-                .cloned();
-            Ok(vec![RuleQuery {
-                exclusions,
-                ..RuleQuery::plain(text)
-            }])
-        }
-        "carbon_black_cloud" => {
-            let text = required(block, "query", name, platform)?;
-            Ok(vec![RuleQuery::plain(
-                text.split_whitespace().collect::<Vec<_>>().join(" "),
-            )])
-        }
-        "splunk" => {
-            required(block, "query", name, platform)?;
-            Ok(vec![RuleQuery::plain(
-                opentide_compile::splunk::create_query(block),
-            )])
-        }
-        "sentinel_one" => {
-            let condition = block.get("condition");
-            let kind = condition
-                .and_then(|condition| condition.get("type"))
-                .and_then(CJson::as_str)
-                .unwrap_or_default();
-            if kind == "Single Event"
-                && let Some(single) = condition
-                    .and_then(|condition| condition.get("single_event"))
-                    .filter(|single| single.is_filled())
-            {
-                return Ok(vec![RuleQuery::plain(required(
-                    single, "query", name, platform,
-                )?)]);
-            }
-            if kind == "Correlation"
-                && let Some(correlation) = condition
-                    .and_then(|condition| condition.get("correlation"))
-                    .filter(|correlation| correlation.is_filled())
-            {
-                let subs = match correlation.get("sub_queries") {
-                    Some(CJson::Array(items)) if !items.is_empty() => items,
-                    _ => {
-                        return Err(format!("rule {name:?} has no SentinelOne sub-queries"));
-                    }
-                };
-                return subs
-                    .iter()
-                    .enumerate()
-                    .map(|(at, sub)| {
-                        Ok(RuleQuery {
-                            label: Some(format!("sub-query {}", at + 1)),
-                            ..RuleQuery::plain(required(sub, "query", name, platform)?)
-                        })
-                    })
-                    .collect();
-            }
-            Err(format!("rule {name:?} has no SentinelOne query"))
-        }
-        // The event definition's query on its streams, as `query --rule`
-        // runs it (`query/rules.py`'s `graylog`).
-        "graylog" => Ok(crate::commands::query_rule::rule_queries(rule, platform)?
-            .into_iter()
-            .map(|query| RuleQuery {
-                language: query.language.unwrap_or_default(),
-                index: query.index,
-                ..RuleQuery::plain(query.text)
-            })
-            .collect()),
-        // Each sequence's filter (`_exabeam_queries`), as `query --rule` runs it.
-        "exabeam" => Ok(crate::commands::query_rule::rule_queries(rule, platform)?
-            .into_iter()
-            .map(|query| RuleQuery {
-                language: query.language.unwrap_or_default(),
-                label: query.label,
-                ..RuleQuery::plain(query.text)
-            })
-            .collect()),
-        _ => Err(format!("{platform} rules cannot be queried")),
-    }
-}
-
 /// A tenant's connection, made once per batch.
 struct Connection {
     tenant: Tenant,
@@ -1903,8 +1765,11 @@ impl Asking<'_> {
                 }
             };
             for item in queries {
-                let mut request =
-                    QueryRequest::new(item.text_for(&tenant.name), &item.language, self.window);
+                let mut request = QueryRequest::new(
+                    item.text_for(&tenant.name),
+                    item.language.as_deref().unwrap_or_default(),
+                    self.window,
+                );
                 request.limit = 1;
                 request.timeout = seconds(self.timeout);
                 request.index = item.index.clone();
@@ -3237,7 +3102,7 @@ mod tests {
         );
         let gl = rule_queries(&graylog, "graylog").unwrap();
         assert_eq!(gl[0].text, "source:host");
-        assert_eq!(gl[0].language, "lucene");
+        assert_eq!(gl[0].language.as_deref(), Some("lucene"));
         assert_eq!(gl[0].index, ["sysmon", "dns"]);
         let exabeam = rule(
             "name: R\nmetadata: {uuid: 00000000-0000-4000-8000-000000000001}\nconfigurations:\n  \
@@ -3249,7 +3114,7 @@ mod tests {
             .map(|query| {
                 (
                     query.text.as_str(),
-                    query.language.as_str(),
+                    query.language.as_deref().unwrap_or_default(),
                     query.label.as_deref(),
                 )
             })
