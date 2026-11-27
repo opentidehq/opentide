@@ -93,12 +93,7 @@ fn help_is_kept(_: &Diagnostic) {}
 fn queries(language: LanguageId, platform: Option<&str>, codes: &[&str], cases: &[&str]) -> String {
     let mut out = String::new();
     for text in cases {
-        let found = analyze_query(&QueryRequest {
-            language,
-            platform: platform.map(str::to_string),
-            stack: None,
-            text: (*text).to_string(),
-        });
+        let found = analyze_query(&QueryRequest::new(language, *text).with_platform(platform));
         let _ = writeln!(out, "{text}");
         out.push_str(&render(text, &found, codes));
     }

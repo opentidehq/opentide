@@ -6,12 +6,14 @@
 //!
 //! `FAULTS.toml` names each twin's fault and the code it must report. Every
 //! clean query must come out with no finding of any severity under its
-//! profile (`.rule.` or `.search.`). A search is checked through
-//! `analyze_query`, as a `.exabeam` file is, with and without `platform:
-//! exabeam`, which names no profile (ADR 0015 §4). A rule sequence is
-//! checked under the `rule` profile its block's field path gives it.
+//! profile (`.rule.` or `.search.`), through `analyze_query`. A search is
+//! checked as a `.exabeam` file is, with and without `platform: exabeam`,
+//! which names no profile (ADR 0015 §4); a rule sequence at position `rule`
+//! (#1993), as its block's field path checks it.
 
-use opentide_analysis::{Diagnostic, LanguageId, QueryRequest, analyze_query};
+use opentide_analysis::{
+    Diagnostic, LanguageId, QueryPosition, QueryRequest, analyze_query, analyze_query_at,
+};
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
@@ -23,13 +25,13 @@ fn root() -> PathBuf {
 /// is checked, a search's as a file is, whichever platform is named.
 fn check(text: &str, profile: &str) -> Vec<Diagnostic> {
     if profile == "rule" {
-        return opentide_exabeam::analyze_with(text, &opentide_exabeam::Context::RULE).diagnostics;
+        return analyze_query_at(
+            &QueryRequest::new(LanguageId::Exabeam, text).with_platform(Some("exabeam")),
+            QueryPosition::Rule,
+        );
     }
-    let request = |platform: Option<&str>| QueryRequest {
-        language: LanguageId::Exabeam,
-        platform: platform.map(str::to_string),
-        stack: None,
-        text: text.to_string(),
+    let request = |platform: Option<&str>| {
+        QueryRequest::new(LanguageId::Exabeam, text).with_platform(platform)
     };
     let plain = analyze_query(&request(None));
     assert_eq!(plain, analyze_query(&request(Some("exabeam"))), "{text}");

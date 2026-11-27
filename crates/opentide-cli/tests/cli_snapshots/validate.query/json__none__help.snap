@@ -31,6 +31,11 @@ Options:
       --changed
           Check only the rule files this run changed: the pull or merge request, the push, or outside CI the last commit (the files deploy reads)
 
+      --position <search|rule>
+          Where a --file query will sit: search (the default; a query file or a hunt) or rule (the query of the --platform's rule block, checked as that block checks it)
+          
+          [possible values: search, rule]
+
       --file <FILE>
           Check only this rule file, or this query file (.kql, .spl, .esql, .eql, .kuery, .lucene, .falco, .yar, .yara, .yaral, .yl2, .cql, .exabeam, .datadog) offline (repeatable)
 

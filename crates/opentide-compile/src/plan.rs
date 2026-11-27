@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 
 use indexmap::IndexMap;
 use opentide_schema::node::{Node, Value};
+use opentide_schema::platforms::PlatformKey;
 use opentide_workspace::FileSystem;
 
 use crate::json::{Json, Object};
@@ -155,10 +156,10 @@ pub fn enabled_with(config: &Json, plugins: &[String]) -> Vec<String> {
 }
 
 /// A platform's configured tenants, as the file holds them.
-pub fn tenants<'c>(config: &'c Json, platform: &str) -> Vec<&'c Json> {
+pub fn tenants<'c>(config: &'c Json, platform: &PlatformKey) -> Vec<&'c Json> {
     match config
         .get("platforms")
-        .and_then(|platforms| platforms.get(platform))
+        .and_then(|platforms| platforms.get(platform.as_str()))
         .and_then(|table| table.get("tenants"))
     {
         Some(Json::Array(items)) => items
@@ -852,7 +853,7 @@ pub fn unset_variables(
 ) -> Vec<String> {
     let mut names: Vec<String> = Vec::new();
     for (platform, name) in planned {
-        for tenant in tenants(config, platform) {
+        for tenant in tenants(config, &PlatformKey::new(platform)) {
             if tenant.get("name").and_then(Json::as_str) != Some(*name) {
                 continue;
             }

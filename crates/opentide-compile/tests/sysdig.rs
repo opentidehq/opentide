@@ -13,6 +13,7 @@ use std::sync::Arc;
 use opentide_compile::preview;
 use opentide_compile::strategy::StatusStrategy;
 use opentide_compile::{Json, Owned, Rule, sysdig};
+use opentide_schema::platforms::PlatformKey;
 use opentide_schema::vocab::Vocabularies;
 use opentide_workspace::{FileSystem, MemoryFs, Options, RootOptions, Workspace};
 
@@ -361,7 +362,7 @@ fn a_rule_without_a_block_fails() {
     {
         block.insert("status".into(), "NOPE".into());
     }
-    let entry = preview::preview(&cx, "sysdig", &unknown);
+    let entry = preview::preview(&cx, &PlatformKey::new("sysdig"), &unknown);
     assert_eq!(entry.get("status").and_then(Json::as_str), Some("failed"));
     assert!(
         entry
@@ -398,7 +399,7 @@ fn the_preview_lists_the_blocks_own_policies() {
         let cx = owned.context(&index);
         let object = index.get("rule", UUID).unwrap();
         let rule = Rule::new(object.root().unwrap(), None);
-        preview::preview(&cx, "sysdig", &rule)
+        preview::preview(&cx, &PlatformKey::new("sysdig"), &rule)
     };
     let named = entry("    status: STAGING\n    condition: proc.name = x\n    policies: [a, b]\n");
     assert_eq!(
@@ -443,7 +444,11 @@ fn an_empty_policies_list_replaces_the_tenants_policies_with_none() {
     let index = workspace.index().clone();
     let cx = owned.context(&index);
     let object = index.get("rule", UUID).unwrap();
-    let entry = preview::preview(&cx, "sysdig", &Rule::new(object.root().unwrap(), None));
+    let entry = preview::preview(
+        &cx,
+        &PlatformKey::new("sysdig"),
+        &Rule::new(object.root().unwrap(), None),
+    );
     assert_eq!(
         entry.get("policies").map(Json::to_compact).as_deref(),
         Some("[]")
