@@ -772,7 +772,8 @@ fn in_flight_server(at_once: usize, hold: Duration) -> (String, Arc<AtomicUsize>
 /// The server holds each request until three are in flight, so a client that may send three at
 /// once is seen sending three, whatever the timing (the hold of 10 s is only a backstop). A
 /// client held to one request at a time is never seen with two, however its requests are
-/// scheduled; each waits out a short hold instead.
+/// scheduled; each waits out a hold of 1 s instead, so a client that broke the limit is seen
+/// with two unless its requests left more than 1 s apart.
 #[test]
 fn framework_max_in_flight_bounds_a_tenants_requests() {
     let peak = |max_in_flight: usize, hold: Duration| {
@@ -801,7 +802,7 @@ fn framework_max_in_flight_bounds_a_tenants_requests() {
         peak.load(Ordering::SeqCst)
     };
     assert_eq!(peak(3, Duration::from_secs(10)), 3);
-    assert_eq!(peak(1, Duration::from_millis(200)), 1);
+    assert_eq!(peak(1, Duration::from_secs(1)), 1);
 }
 
 #[test]
@@ -856,21 +857,33 @@ fn framework_timeout_per_tenant() {
     assert_eq!(get("long", &long, &env, None, &url).unwrap(), 200);
 
     // An answer whose body stops coming: each read of the body has the
-    // tenant's timeout, as `requests`' read timeout.
+    // tenant's timeout, as `requests`' read timeout. The body comes a byte every 1.5 s: past the
+    // read's own timeout (1 s, named as 1 s), within reqwest's per-read timer (connect + timeout:
+    // 2 s, restarted by each byte), and the exchange's deadline (1 s to connect and four reads:
+    // 5 s) would name 5 s. So only the body's own read timeout can give `seconds: 1`.
     let stalling = TcpListener::bind("127.0.0.1:0").unwrap();
     let stalling_port = stalling.local_addr().unwrap().port();
-    let kept = held.clone();
     std::thread::spawn(move || {
         for mut stream in stalling.incoming().flatten() {
-            use std::io::Read as _;
-            let mut buffer = [0u8; 4096];
-            let _ = stream.read(&mut buffer);
-            let _ = stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 10\r\n\r\nab");
-            let _ = stream.flush();
-            kept.lock().unwrap().push(stream);
+            std::thread::spawn(move || {
+                use std::io::Read as _;
+                let mut buffer = [0u8; 4096];
+                let _ = stream.read(&mut buffer);
+                let mut sent = stream
+                    .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 100\r\n\r\nab")
+                    .and_then(|()| stream.flush());
+                while sent.is_ok() {
+                    std::thread::sleep(Duration::from_millis(1500));
+                    sent = stream.write_all(b"c").and_then(|()| stream.flush());
+                }
+            });
         }
     });
-    let client = HttpClient::new(&label("stall"), &short, &env, None).unwrap();
+    let second = HttpSettings {
+        timeout: Duration::from_secs(1),
+        ..HttpSettings::default()
+    };
+    let client = HttpClient::new(&label("stall"), &second, &env, None).unwrap();
     let cancel = CancellationToken::new();
     let outcome = block_on(async {
         let request = client
@@ -884,10 +897,8 @@ fn framework_timeout_per_tenant() {
         client.bytes(answer, &cancel).await
     })
     .unwrap();
-    // The read's own timeout (200 ms, named as 0 s), not the exchange's deadline (200 ms to
-    // connect and four reads: 1 s): told by what fired, not by a clock.
     assert!(
-        matches!(outcome, Err(ConnectorError::Timeout { seconds: 0, .. })),
+        matches!(outcome, Err(ConnectorError::Timeout { seconds: 1, .. })),
         "{outcome:?}"
     );
 }

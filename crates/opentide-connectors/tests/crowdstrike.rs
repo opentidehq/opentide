@@ -391,23 +391,32 @@ fn crowdstrike_stops_the_search_a_cancelled_run_stops_waiting_for() {
     // Cancel between the first poll and the second (0.5 s apart): once the proxy has the first
     // poll (the third request), not on a timer that could fire before it. A cancel while that
     // poll is still answered stops the search the same way: the poll was sent. The proxy is read
-    // from a thread of its own (it blocks on a runtime of its own).
+    // from a thread of its own (it blocks on a runtime of its own). The watcher stops when the
+    // run ends, even by a panic (`Done` sets the flag on drop, unwinding included), and after
+    // 10 s at most, so a run that never reaches the first poll fails instead of hanging the scope.
+    struct Done<'a>(&'a std::sync::atomic::AtomicBool);
+    impl Drop for Done<'_> {
+        fn drop(&mut self) {
+            self.0.store(true, std::sync::atomic::Ordering::SeqCst);
+        }
+    }
     let done = std::sync::atomic::AtomicBool::new(false);
     let outcome = std::thread::scope(|scope| {
         scope.spawn(|| {
+            let deadline = std::time::Instant::now() + Duration::from_secs(10);
             while !done.load(std::sync::atomic::Ordering::SeqCst)
                 && replay.proxy.requests().len() < 3
+                && std::time::Instant::now() < deadline
             {
                 std::thread::sleep(Duration::from_millis(2));
             }
             cancel.cancel();
         });
-        let outcome = block_on(opentide_connectors::connector::QueryRunner::run(
+        let _done = Done(&done);
+        block_on(opentide_connectors::connector::QueryRunner::run(
             &runner, cx, &request,
         ))
-        .unwrap();
-        done.store(true, std::sync::atomic::Ordering::SeqCst);
-        outcome
+        .unwrap()
     });
     assert!(
         matches!(outcome, Err(ConnectorError::Cancelled)),
