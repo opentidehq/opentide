@@ -8,7 +8,7 @@ Sysdig block's constraints (`falco`: operators, modifiers, priorities, keywords,
 Python's `strip()`), each the one copy opentide-schema's model and opentide-tide's findings share,
 the one "did you mean" rule every caller shares (`suggest`:
 the same word without case or `-`/`_` wins, otherwise the fewest edits, strsim's OSA distance),
-and the YAML node tree (`node`: saphyr-parser's events, saphyr's YAML 1.2 core-schema scalars,
+Markdown as plain text (`markdown`: pulldown-cmark, with per-surface options for links and line breaks; SARIF's `help.text`, the language server's plain-text hovers and the schemas' plain `description` all read Markdown through it, #1957), and the YAML node tree (`node`: saphyr-parser's events, saphyr's YAML 1.2 core-schema scalars,
 every node's position), the one YAML reader of the workspace: `validate`, the models
 (`opentide_schema::node` re-exports it) and opentide-tide read YAML with it (#850).
 
@@ -38,6 +38,8 @@ crate depends on it.
   finding UUIDs in text (`PATTERN`, `finder`). Never another regex, `is_uuid` or hand parse.
 
 [#821]: https://github.com/opentidehq/opentide/issues/821
+- Markdown becomes plain text through `markdown::to_text` only: never a line-by-line or regex
+  stripper in another crate (#1957). A surface that needs another style adds an `Options` field.
 - YAML is read with `node` only: never `serde_yaml`, `serde_yml` or a second parser (#850).
   What it reads differently from the oracle is `crates/opentide-schema/YAML.md`.
 - Codes, severities, field paths and position rules are invariant 3 of the plan: a change is a recorded decision, not a refactor.

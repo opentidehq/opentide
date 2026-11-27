@@ -751,6 +751,7 @@ pub mod duration;
 pub mod falco;
 pub mod ids;
 pub mod json;
+pub mod markdown;
 pub mod node;
 pub mod suggest;
 pub mod yara;

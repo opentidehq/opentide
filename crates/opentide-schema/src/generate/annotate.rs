@@ -8,13 +8,13 @@
 //! - `enumDescriptions` from `markdownEnumDescriptions` when an enum has only
 //!   the Markdown form, and `x-enumDescriptions` mirroring `enumDescriptions`.
 //!
-//! The patterns are the oracle's, run by the `regex` crate. Four of them use
-//! a look-around or a back-reference, which it has not: those match the
-//! rest of the pattern and test the look-arounds by hand
-//! (`replace_emphasis`, `replace_italic`, `break_blocks`, the sentence end
-//! of `first_sentence`). The tests hold each to the oracle's pattern, run by
-//! `fancy-regex` (a dev-dependency only), on every bundled description and
-//! on generated text.
+//! Markdown becomes plain text through `opentide_core::markdown`, the
+//! workspace's one converter (#1957): links read as their text, and each
+//! block is one paragraph of one line. The other patterns are the oracle's,
+//! run by the `regex` crate; the sentence end of `first_sentence` has a
+//! look-ahead, which it has not, so it is tested by hand, and the tests hold
+//! it to the oracle's pattern, run by `fancy-regex` (a dev-dependency only),
+//! on every bundled description and on generated text.
 
 use std::sync::OnceLock;
 
@@ -45,21 +45,8 @@ const SCHEMA_MAPS: &[&str] = &["properties", "patternProperties", "$defs", "defi
 const ABBREVIATIONS: &[&str] = &["e.g", "i.e", "etc", "vs", "cf", "Inc", "Ltd", "No"];
 
 struct Patterns {
-    link: Regex,
-    /// `(\*\*|__)(.+?)\1` without the back-reference: one branch per
-    /// delimiter, the text in group 1 or 2.
-    emphasis: Regex,
-    /// `_([^_\n]+)_`: the candidates of the italic pattern
-    /// (`(?<![\w`])_(?=\S)([^_\n]+?)(?<=\S)_(?![\w`])`), whose look-arounds
-    /// [`replace_italic`] tests.
-    word_or_tick: Regex,
-    /// What follows a line break that starts a block
-    /// (`\n(?=[ \t]*(?:#{1,6}\s|\*\*|[-*+]\s|\d+\.\s))`), anchored.
     citation: Regex,
     html_tag: Regex,
-    heading: Regex,
-    heading_line: Regex,
-    block_start: Regex,
     markdown: Regex,
     paragraph_break: Regex,
     /// `[.!?](?=\s|$)` without the look-ahead, which [`first_sentence`]
@@ -77,14 +64,8 @@ fn patterns() -> &'static Patterns {
     PATTERNS.get_or_init(|| {
         let compile = |pattern: &str| Regex::new(pattern).expect("a literal pattern compiles");
         Patterns {
-            link: compile(r"\[([^\]]+)\]\([^)]*\)"),
-            emphasis: compile(r"\*\*(.+?)\*\*|__(.+?)__"),
-            word_or_tick: compile(r"\A[\w`]\z"),
             citation: compile(r"\s*\(Citation:[^)]*\)"),
             html_tag: compile(r"</?[a-zA-Z][^>]*>"),
-            heading: compile(r"(?m)^#{1,6}\s+"),
-            heading_line: compile(r"(?m)^(#{1,6}\s.*)$"),
-            block_start: compile(r"\A[ \t]*(?:#{1,6}\s|\*\*|[-*+]\s|\d+\.\s)"),
             markdown: compile(r"(?m)`|\*\*|__|\[[^\]]+\]\([^)]*\)|^#{1,6}\s"),
             paragraph_break: compile(r"\n\s*\n"),
             sentence_end: compile(r"[.!?]"),
@@ -100,88 +81,6 @@ fn sub(pattern: &Regex, replacement: &str, text: &str) -> String {
 
 fn is_match(pattern: &Regex, text: &str) -> bool {
     pattern.is_match(text)
-}
-
-/// `(\*\*|__)(.+?)\1` replaced by its text (`$2`).
-fn replace_emphasis(text: &str) -> String {
-    patterns()
-        .emphasis
-        .replace_all(text, |found: &regex::Captures<'_>| {
-            found
-                .get(1)
-                .or_else(|| found.get(2))
-                .map_or_else(String::new, |inner| inner.as_str().to_owned())
-        })
-        .into_owned()
-}
-
-/// Whether `c` is a word character or a backtick (`[\w`]`, Unicode `\w`).
-fn word_or_tick(c: char) -> bool {
-    let mut buffer = [0; 4];
-    patterns().word_or_tick.is_match(c.encode_utf8(&mut buffer))
-}
-
-/// `(?<![\w`])_(?=\S)([^_\n]+?)(?<=\S)_(?![\w`])` replaced by its text
-/// (`$1`). An opening `_` can only close at the next `_` (the text holds
-/// none), so each `_` is tried in turn: it opens when that next `_` comes
-/// before any line break, the text between starts and ends with a
-/// non-space, the `_` is not after a word character or backtick, and the
-/// closing one is not before one.
-fn replace_italic(text: &str) -> String {
-    let mut out = String::with_capacity(text.len());
-    let mut copied = 0;
-    let mut from = 0;
-    while let Some(offset) = text[from..].find('_') {
-        let open = from + offset;
-        from = open + 1;
-        let opens = text[..open]
-            .chars()
-            .next_back()
-            .is_none_or(|c| !word_or_tick(c));
-        let Some(length) = text[open + 1..].find(['_', '\n']) else {
-            break;
-        };
-        let close = open + 1 + length;
-        let inner = &text[open + 1..close];
-        let matched = opens
-            && text[close..].starts_with('_')
-            && inner.chars().next().is_some_and(|c| !c.is_whitespace())
-            && inner
-                .chars()
-                .next_back()
-                .is_some_and(|c| !c.is_whitespace())
-            && text[close + 1..]
-                .chars()
-                .next()
-                .is_none_or(|c| !word_or_tick(c));
-        if matched {
-            out.push_str(&text[copied..open]);
-            out.push_str(inner);
-            copied = close + 1;
-            from = close + 1;
-        }
-    }
-    out.push_str(&text[copied..]);
-    out
-}
-
-/// A second line break before each that starts a block (a heading, a list
-/// item, a bold label): `\n(?=[ \t]*(?:#{1,6}\s|\*\*|[-*+]\s|\d+\.\s))`
-/// replaced by `\n\n`.
-fn break_blocks(text: &str) -> String {
-    let p = patterns();
-    let mut out = String::with_capacity(text.len());
-    let mut copied = 0;
-    for (index, _) in text.match_indices('\n') {
-        out.push_str(&text[copied..=index]);
-        // The look-ahead reads past the line: `\s` matches a line break.
-        if p.block_start.is_match(&text[index + 1..]) {
-            out.push('\n');
-        }
-        copied = index + 1;
-    }
-    out.push_str(&text[copied..]);
-    out
 }
 
 /// Words of `text` joined by one space (`" ".join(text.split())`).
@@ -229,19 +128,17 @@ pub fn first_sentence(text: &str) -> String {
     flat
 }
 
-/// Markdown as plain text: one paragraph per Markdown paragraph, or, with
-/// `one_line`, one line (`plain_text`).
+/// Markdown as plain text: one paragraph per Markdown block, each on one
+/// line, or, with `one_line`, one line (`plain_text`).
 pub fn plain_text(markdown: &str, one_line: bool) -> String {
-    let p = patterns();
-    let text = sub(&p.link, "$1", markdown);
-    // A heading, a list item or a bold label line starts a new block even
-    // without a blank line before it.
-    let text = break_blocks(&text);
-    let text = sub(&p.heading_line, "$1\n\n", &text);
-    let text = sub(&p.heading, "", &text);
-    let text = replace_emphasis(&text);
-    let text = replace_italic(&text);
-    let text = unwrap(&text.replace('`', ""));
+    use opentide_core::markdown::{Lines, Links, Options, to_text};
+    let text = to_text(
+        markdown,
+        Options {
+            links: Links::Text,
+            lines: Lines::Join,
+        },
+    );
     if !one_line {
         return text;
     }
@@ -394,6 +291,45 @@ mod tests {
             "Title. Body line wrapped. - item"
         );
         assert_eq!(plain_text("Ends here:\n\nnext", true), "Ends here: next");
+        // #1957: one block a paragraph, links as their text.
+        for (markdown, text, line) in [
+            (
+                "# Título\n\nUne **règle** et __gras__ avec `code` 😀.\n",
+                "Título\n\nUne règle et gras avec code 😀.",
+                "Título. Une règle et gras avec code 😀.",
+            ),
+            (
+                "Voir [la page](https://exemple.fr/é) et <https://x.y>.",
+                "Voir la page et https://x.y.",
+                "Voir la page et https://x.y.",
+            ),
+            (
+                "- élément un\n- élément *deux*\n\n1. premier\n2. second",
+                "- élément un\n\n- élément deux\n\n1. premier\n\n2. second",
+                "- élément un. - élément deux. 1. premier. 2. second",
+            ),
+            // The fence's info string is not text.
+            (
+                "```kql\nT | where Name == \"é\"\n```\nAprès",
+                "T | where Name == \"é\"\n\nAprès",
+                "T | where Name == \"é\". Après",
+            ),
+            (
+                "_italique_ et snake_case_name et **open",
+                "italique et snake_case_name et **open",
+                "italique et snake_case_name et **open",
+            ),
+            (
+                "## Section\nTexte sous le titre:\n\n**Label:** valeur",
+                "Section\n\nTexte sous le titre:\n\nLabel: valeur",
+                "Section. Texte sous le titre: Label: valeur",
+            ),
+            ("a\\*b &amp; c", "a*b & c", "a*b & c"),
+            ("> cité 😀", "cité 😀", "cité 😀"),
+        ] {
+            assert_eq!(plain_text(markdown, false), text, "{markdown:?}");
+            assert_eq!(plain_text(markdown, true), line, "{markdown:?}");
+        }
     }
 
     #[test]
@@ -552,43 +488,20 @@ mod tests {
         assert_eq!(field.get("x-enumDescriptions"), Some(&plain));
     }
 
-    /// The oracle's patterns as `fancy-regex` runs them, which
-    /// [`replace_emphasis`], [`replace_italic`] and [`break_blocks`] replace,
-    /// and the starts of the sentence ends [`sentence_ends`] finds.
-    fn reference(text: &str) -> ([String; 3], Vec<usize>) {
-        static PATTERNS: OnceLock<[fancy_regex::Regex; 4]> = OnceLock::new();
-        let [emphasis, italic, blocks, sentence_end] = PATTERNS.get_or_init(|| {
-            [
-                r"(\*\*|__)(.+?)\1",
-                r"(?<![\w`])_(?=\S)([^_\n]+?)(?<=\S)_(?![\w`])",
-                r"\n(?=[ \t]*(?:#{1,6}\s|\*\*|[-*+]\s|\d+\.\s))",
-                r"[.!?](?=\s|$)",
-            ]
-            .map(|pattern| fancy_regex::Regex::new(pattern).unwrap())
-        });
-        let sub = |pattern: &fancy_regex::Regex, replacement: &str| {
-            pattern
-                .try_replacen(text, 0, replacement)
-                .unwrap()
-                .into_owned()
-        };
-        let ends = sentence_end
+    /// The starts of the sentence ends of the oracle's pattern, as
+    /// `fancy-regex` runs it, which [`sentence_ends`] finds by hand.
+    fn reference(text: &str) -> Vec<usize> {
+        static SENTENCE_END: OnceLock<fancy_regex::Regex> = OnceLock::new();
+        SENTENCE_END
+            .get_or_init(|| fancy_regex::Regex::new(r"[.!?](?=\s|$)").unwrap())
             .find_iter(text)
             .map(|found| found.unwrap().start())
-            .collect();
-        (
-            [sub(emphasis, "$2"), sub(italic, "$1"), sub(blocks, "\n\n")],
-            ends,
-        )
+            .collect()
     }
 
     fn assert_as_the_patterns(text: &str) {
-        let ([emphasis, italic, blocks], ends) = reference(text);
-        assert_eq!(replace_emphasis(text), emphasis, "emphasis: {text:?}");
-        assert_eq!(replace_italic(text), italic, "italic: {text:?}");
-        assert_eq!(break_blocks(text), blocks, "blocks: {text:?}");
         let found: Vec<usize> = sentence_ends(text).map(|found| found.start()).collect();
-        assert_eq!(found, ends, "sentence ends: {text:?}");
+        assert_eq!(found, reference(text), "sentence ends: {text:?}");
     }
 
     #[test]

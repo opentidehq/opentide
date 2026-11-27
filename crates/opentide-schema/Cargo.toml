@@ -74,8 +74,8 @@ jiff = { workspace = true }
 caseless = "0.2"
 
 [dev-dependencies]
-# The oracle's Markdown patterns, with their look-arounds and back-reference: the
-# tests hold `generate::annotate`'s `regex` matches to them.
+# The oracle's sentence-end pattern, with its look-ahead: the tests hold
+# `generate::annotate`'s hand-written match to it.
 fancy-regex.workspace = true
 insta.workspace = true
 strsim.workspace = true

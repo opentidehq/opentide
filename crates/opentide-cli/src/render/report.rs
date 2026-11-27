@@ -103,40 +103,17 @@ static PAGE_SEVERITY: LazyLock<Regex> = LazyLock::new(|| {
     #[expect(clippy::expect_used, reason = "a literal pattern")]
     Regex::new(r"(?m)^Severity: (error|warning|note)\b").expect("valid regex")
 });
-static HEADING: LazyLock<Regex> = LazyLock::new(|| {
-    #[expect(clippy::expect_used, reason = "a literal pattern")]
-    Regex::new(r"^#{1,6}\s+").expect("valid regex")
-});
-static LINK: LazyLock<Regex> = LazyLock::new(|| {
-    #[expect(clippy::expect_used, reason = "a literal pattern")]
-    Regex::new(r"\[([^\]]*)\]\(([^)\s]*)\)").expect("valid regex")
-});
-
-/// `**x**` and `__x__`: Markdown's strong emphasis, leftmost first.
-static EMPHASIS: LazyLock<Regex> = LazyLock::new(|| {
-    #[expect(clippy::expect_used, reason = "a literal pattern")]
-    Regex::new(r"\*\*(.+?)\*\*|__(.+?)__").expect("valid regex")
-});
-
-/// `**x**` and `__x__` as `x`.
-fn drop_emphasis(line: &str) -> String {
-    EMPHASIS.replace_all(line, "$1$2").into_owned()
-}
-
-/// An explain page as the plain text SARIF wants in `help.text`: no heading
-/// marks, code fences, backticks or emphasis, and a link as `text (url)`.
+/// An explain page as the plain text SARIF wants in `help.text`
+/// (`opentide_core::markdown`): its lines kept, a link as `text (url)`.
 pub fn plain_text(markdown: &str) -> String {
-    let mut lines: Vec<String> = Vec::new();
-    for line in markdown.lines() {
-        if line.trim_start().starts_with("```") {
-            continue;
-        }
-        let line = HEADING.replace(line, "");
-        let line = LINK.replace_all(&line, "$1 ($2)");
-        let line = drop_emphasis(&line);
-        lines.push(line.replace('`', ""));
-    }
-    lines.join("\n").trim().to_owned()
+    use opentide_core::markdown::{Lines, Links, Options, to_text};
+    to_text(
+        markdown,
+        Options {
+            links: Links::TextAndUrl,
+            lines: Lines::Keep,
+        },
+    )
 }
 
 /// `vocab_unknown` as `VocabUnknown`.
@@ -494,17 +471,56 @@ pub fn report_text(
 mod tests {
     use super::*;
 
+    /// SARIF's `help.text` of a page: its lines kept, a link as `text
+    /// (url)`, a code block as written (#1957).
     #[test]
     fn plain_text_drops_markdown() {
         let markdown =
             "# code\n\nA **bold** and __x__ [link](https://x.y) `c`.\n\n```yaml\nk: v\n```\n**open";
         assert_eq!(
             plain_text(markdown),
-            "code\n\nA bold and x link (https://x.y) c.\n\nk: v\n**open"
+            "code\n\nA bold and x link (https://x.y) c.\n\nk: v\n\n**open"
         );
-        assert_eq!(drop_emphasis("****"), "****");
-        assert_eq!(drop_emphasis("**a**b**"), "ab**");
-        assert_eq!(plain_text("# a\r\nb\n"), "a\nb");
+        assert_eq!(plain_text("# a\r\nb\n"), "a\n\nb");
+        for (markdown, text) in [
+            (
+                "# Título\n\nUne **règle** et __gras__ avec `code` 😀.\n",
+                "Título\n\nUne règle et gras avec code 😀.",
+            ),
+            (
+                "Voir [la page](https://exemple.fr/é) et <https://x.y>.",
+                "Voir la page (https://exemple.fr/é) et https://x.y.",
+            ),
+            (
+                "Ligne une\nligne deux\n\nParagraphe 2",
+                "Ligne une\nligne deux\n\nParagraphe 2",
+            ),
+            (
+                "- élément un\n- élément *deux*\n\n1. premier\n2. second",
+                "- élément un\n- élément deux\n\n1. premier\n2. second",
+            ),
+            // A code block keeps its `#` comments and backticks.
+            (
+                "```toml\n# lint.toml\nk = \"`é`\"\n```\nAprès",
+                "# lint.toml\nk = \"`é`\"\n\nAprès",
+            ),
+            (
+                "_italique_ et snake_case_name et **open",
+                "italique et snake_case_name et **open",
+            ),
+            (
+                "## Section\nTexte sous le titre:\n\n**Label:** valeur",
+                "Section\n\nTexte sous le titre:\n\nLabel: valeur",
+            ),
+            ("a\\*b &amp; c", "a*b & c"),
+            (
+                "| a | b |\n|---|---|\n| `x` | y |",
+                "| a | b |\n|---|---|\n| x | y |",
+            ),
+            ("> cité 😀", "cité 😀"),
+        ] {
+            assert_eq!(plain_text(markdown), text, "{markdown:?}");
+        }
     }
 
     #[test]
@@ -645,13 +661,5 @@ mod tests {
             shown(&item),
             "{\"startLine\":3,\"endLine\":4,\"startColumn\":5,\"endColumn\":2}"
         );
-    }
-
-    #[test]
-    fn emphasis_of_either_kind_is_dropped_leftmost_first() {
-        assert_eq!(drop_emphasis("__a__ and **b**"), "a and b");
-        assert_eq!(drop_emphasis("**a__b**__"), "a__b__");
-        assert_eq!(drop_emphasis("__**a**__"), "**a**");
-        assert_eq!(drop_emphasis("a__"), "a__");
     }
 }
