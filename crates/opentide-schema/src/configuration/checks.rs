@@ -84,9 +84,9 @@ fn parts(path: &str) -> Vec<String> {
 }
 
 fn stem(name: &str) -> &str {
-    match name.rfind('.') {
-        Some(0) | None => name,
-        Some(dot) => &name[..dot],
+    match name.rsplit_once('.') {
+        Some(("", _)) | None => name,
+        Some((stem, _)) => stem,
     }
 }
 
@@ -553,13 +553,12 @@ pub fn configurations_directory(path: &str) -> Option<(String, String)> {
         return None;
     }
     let marker = "/.opentide/configurations/";
-    let at = normal.rfind(marker)?;
-    let relative = &normal[at + marker.len()..];
+    let (head, relative) = normal.rsplit_once(marker)?;
     if relative.is_empty() {
         return None;
     }
     Some((
-        normal[..at + marker.len() - 1].to_owned(),
+        format!("{head}{}", marker.trim_end_matches('/')),
         relative.to_owned(),
     ))
 }

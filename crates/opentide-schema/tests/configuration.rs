@@ -599,6 +599,28 @@ fn configuration_file_keys_route_as_the_oracle_routes_them() {
     }
 }
 
+#[test]
+fn configuration_paths_with_multi_byte_names() {
+    // #1946: the file key and the configurations folder never slice inside
+    // a character.
+    assert_eq!(
+        checks::file_key("/é/.opentide/configurations/platforms/😀.toml").as_deref(),
+        Some("platforms/*.toml")
+    );
+    assert_eq!(checks::file_key("/é/.opentide/configurations/é.😀"), None);
+    assert_eq!(
+        checks::configurations_directory("/é/.opentide/configurations/😀é.toml"),
+        Some((
+            "/é/.opentide/configurations".to_owned(),
+            "😀é.toml".to_owned()
+        ))
+    );
+    assert_eq!(
+        checks::configurations_directory("/é/.opentide/configurations/"),
+        None
+    );
+}
+
 mod configuration_never_panics {
     use super::*;
     use proptest::prelude::*;
