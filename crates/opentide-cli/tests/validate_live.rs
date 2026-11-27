@@ -1428,10 +1428,12 @@ fn a_splunk_check_sends_the_query_as_written() {
 /// A Splunk stand-in whose tenants answer after a delay of their own
 /// (`lab` the slowest), counting the searches in flight: in all, and on
 /// each tenant. `lab2` rejects its first rule's query; `unreachable` names
-/// a tenant whose searches cannot connect.
+/// a tenant whose searches cannot connect; `stalled` one whose searches
+/// all time out at once, as a TLS handshake that never completes.
 struct Paced {
     delayed: bool,
     unreachable: Option<&'static str>,
+    stalled: Option<&'static str>,
     flight: std::sync::Mutex<Flight>,
 }
 
@@ -1441,6 +1443,8 @@ struct Flight {
     now: usize,
     most: usize,
     tenants: std::collections::HashMap<String, (usize, usize)>,
+    /// The searches each tenant was asked, by tenant.
+    asked: std::collections::HashMap<String, usize>,
 }
 
 impl Paced {
@@ -1448,8 +1452,25 @@ impl Paced {
         Box::leak(Box::new(Paced {
             delayed,
             unreachable,
+            stalled: None,
             flight: std::sync::Mutex::new(Flight::default()),
         }))
+    }
+
+    /// A [`Paced`], delayed, whose tenant `tenant` stalls.
+    fn stalling(tenant: &'static str) -> &'static Paced {
+        Box::leak(Box::new(Paced {
+            delayed: true,
+            unreachable: None,
+            stalled: Some(tenant),
+            flight: std::sync::Mutex::new(Flight::default()),
+        }))
+    }
+
+    /// The searches *tenant* was asked.
+    fn asked(&self, tenant: &str) -> usize {
+        let flight = self.flight.lock().unwrap();
+        flight.asked.get(tenant).copied().unwrap_or(0)
     }
 
     /// The most searches in flight at once: in all, and on one tenant.
@@ -1475,6 +1496,20 @@ impl LiveValidator for Paced {
                 let mine = flight.tenants.entry(tenant.clone()).or_default();
                 mine.0 += 1;
                 mine.1 = mine.1.max(mine.0);
+                *flight.asked.entry(tenant.clone()).or_default() += 1;
+            }
+            if self.stalled == Some(tenant.as_str()) {
+                let mut flight = self.flight.lock().unwrap();
+                flight.now -= 1;
+                if let Some(mine) = flight.tenants.get_mut(&tenant) {
+                    mine.0 -= 1;
+                }
+                return Err(ConnectorError::Timeout {
+                    platform: "splunk".into(),
+                    tenant: tenant.clone(),
+                    address: format!("https://{tenant}.invalid:8089"),
+                    seconds: 5,
+                });
             }
             if self.delayed {
                 let millis = if tenant == "lab" { 150 } else { 40 };
@@ -1525,13 +1560,18 @@ impl Platform for PacedPlatform {
 /// `lab2` and `lab3`, checked by `validator`; the result, and the time the
 /// run took.
 fn paced(rules: usize, validator: &'static Paced) -> (Live, std::time::Duration) {
+    paced_on(rules, &["lab2", "lab3"], validator)
+}
+
+/// [`paced`] on `lab` and the tenants `more`, in that order.
+fn paced_on(rules: usize, more: &[&str], validator: &'static Paced) -> (Live, std::time::Duration) {
     keep_callsites_enabled();
     let ws = splunk_rules(rules);
     let config = ws
         .path()
         .join(".opentide/configurations/platforms/splunk.toml");
     let mut text = std::fs::read_to_string(&config).unwrap();
-    for tenant in ["lab2", "lab3"] {
+    for tenant in more {
         text.push_str(&format!(
             "\n[[tenants]]\nname = \"{tenant}\"\nstrategies = [\"PREVIEW\"]\n[tenants.setup]\nurl \
              = \"{tenant}.invalid\"\nport = 8089\napp = \"search\"\ntoken = \"$SPLUNK_TOKEN\"\n"
@@ -1606,4 +1646,23 @@ fn a_tenant_that_stops_the_check_hides_the_tenants_after_it() {
     let (concurrent, _) = paced(2, delayed);
     assert_eq!(value(&serial, "tenant"), &Json::str("lab"));
     assert_eq!(concurrent.result, serial.result);
+}
+
+/// A tenant whose every query times out, on fewer queries than the streak
+/// of three needs, is unreachable once its batch ends, and stops the check
+/// there: the tenants after it that had not started are never asked, as in
+/// a serial run (#1941).
+#[test]
+fn a_stalled_tenant_stops_the_tenants_not_yet_started() {
+    let stalled = Paced::stalling("lab");
+    let (live, _) = paced_on(2, &["lab2", "lab3", "lab4", "lab5", "lab6"], stalled);
+    assert_eq!(value(&live, "tenant"), &Json::str("lab"));
+    assert_eq!(stalled.asked("lab"), 2);
+    for later in ["lab5", "lab6"] {
+        assert_eq!(
+            stalled.asked(later),
+            0,
+            "{later} was asked after lab stopped the check"
+        );
+    }
 }
