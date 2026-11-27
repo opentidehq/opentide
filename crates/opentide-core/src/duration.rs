@@ -1,6 +1,5 @@
-//! Elastic Security durations (`platforms/elastic/durations.py`
-//! `duration_seconds`): what the Elastic block's `duration` constraint
-//! accepts.
+//! Elastic Security durations: what the Elastic block's `duration`
+//! constraint accepts, in seconds ([`duration_seconds`]).
 //!
 //! One grammar for both engines: opentide-schema's `elastic_rule_shape` (the
 //! CLI's model) and opentide-tide's `duration_millis` (the language server's
@@ -31,8 +30,9 @@ fn patterns() -> &'static (Regex, Regex) {
         (
             Regex::new(r"^(?:([0-9]+)d)?(?:([0-9]+)h)?(?:([0-9]+)m)?(?:([0-9]+)s)?$")
                 .expect("a valid pattern"),
-            // `T` must be followed by a digit: the oracle's `(?=[0-9])`,
-            // checked below without look-ahead.
+            // A `T` must be followed by a digit (`PT` alone is not a
+            // duration): checked by `iso_time_part_ok`, as the regex crate
+            // has no look-ahead.
             Regex::new(r"^P(?:([0-9]+)D)?(?:T(?:([0-9]+)H)?(?:([0-9]+)M)?(?:([0-9]+)S)?)?$")
                 .expect("a valid pattern"),
         )
@@ -96,7 +96,8 @@ pub fn duration_seconds(value: &str, allow_zero: bool) -> Result<u128, DurationE
     Ok(total)
 }
 
-/// The oracle's `T(?=[0-9])`: a `T` is followed by a digit.
+/// Whether a `T` (the time part) is followed by a digit: `PT` and `P1DT`
+/// are not durations.
 fn iso_time_part_ok(value: &str) -> bool {
     match value.find('T') {
         None => true,
@@ -131,8 +132,14 @@ pub enum Iso8601Error {
     TooLong,
 }
 
-/// The most days a Sentinel duration holds: 999,999,999 (the oracle's
-/// `timedelta`).
+/// The most days a Sentinel duration holds: 999,999,999, Python's
+/// `timedelta.max.days`, the bound rules were accepted under before the
+/// port to Rust, kept so that none that passed then fails now. It is
+/// opentide's own limit, not Microsoft's: Microsoft's documentation of
+/// scheduled analytics rules bounds `queryFrequency` and `queryPeriod` to
+/// 14 days, which the tenant checks at deploy. Past this bound
+/// [`Iso8601::seconds`] returns [`Iso8601Error::TooLong`], so `validate`
+/// reports the value and deploy refuses it.
 pub const SENTINEL_MAX_DAYS: u64 = 999_999_999;
 
 /// The longest Sentinel duration, in seconds: [`SENTINEL_MAX_DAYS`] and a day
