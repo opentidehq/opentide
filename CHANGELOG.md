@@ -32,6 +32,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Eac
 
 ### Added
 
+- **Check a query on its own as a rule's** ([#1993](https://github.com/opentidehq/opentide/issues/1993)). `opentide validate query --platform crowdstrike --position rule --file x.cql` checks the file as the CrowdStrike block's query, a Next-Gen SIEM correlation rule; an Exabeam query at `rule` is a sequence filter, where `SELECT` and pipes are refused, a Datadog query a detection rule's, a YARA-L text the rule a Google SecOps block assembles, and a Sentinel KQL query a scheduled analytics rule, where `search *`, `union *` and more than 10,000 characters are refused. A query file is still a search by default. `rule` needs `--platform`, and `--position` needs a query file and is refused with `--live`, rather than ignored.
+  - MCP `validate_query` takes `position: "rule"`, so an agent drafting a rule's query sees the rule's checks; its result echoes `position`
+  - Python: `opentide.analysis.check_query(..., position="rule")`, which raises `ValueError` without a `platform`
+  - Rust: `opentide::analysis::analyze_query_at(&request, QueryPosition::Rule)`; without a platform its answer is the one error `query_position_needs_platform`
 - **Defender rules are checked against Microsoft's documented limits** ([#1890](https://github.com/opentidehq/opentide/issues/1890)). Each is a warning, so the rule validates and deploys. `validate --strict` reports the first two without failing; `lint --strict` fails on all three.
   - `microsoft_defender_custom_details_limit`: more than 20 custom details, or names past 4 KB, beyond which Defender drops them all from the alert
   - `microsoft_defender_placeholder_limit`: more than three `{{Column}}` columns in the alert title or description

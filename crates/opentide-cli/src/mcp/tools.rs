@@ -122,6 +122,7 @@ fn answer(name: &str, arguments: &Map<String, Value>, context: &Context<'_>) -> 
                 live: args.boolean("live", false)?,
                 language: args.string("language", "")?,
                 stack: args.string("stack", "")?,
+                position: args.string("position", "search")?,
             };
             queries::validate_query(&request, context).map(Payload::One)
         })(),
