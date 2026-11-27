@@ -132,8 +132,14 @@ pub enum Iso8601Error {
     TooLong,
 }
 
-/// The most days a Sentinel duration holds: 999,999,999, the most a
-/// time span holds in the rules opentide has always accepted.
+/// The most days a Sentinel duration holds: 999,999,999, Python's
+/// `timedelta.max.days`, the bound rules were accepted under before the
+/// port to Rust, kept so that none that passed then fails now. It is
+/// opentide's own limit, not Microsoft's: Microsoft's documentation of
+/// scheduled analytics rules bounds `queryFrequency` and `queryPeriod` to
+/// 14 days, which the tenant checks at deploy. Past this bound
+/// [`Iso8601::seconds`] returns [`Iso8601Error::TooLong`], so `validate`
+/// reports the value and deploy refuses it.
 pub const SENTINEL_MAX_DAYS: u64 = 999_999_999;
 
 /// The longest Sentinel duration, in seconds: [`SENTINEL_MAX_DAYS`] and a day

@@ -309,7 +309,10 @@ mod tests {
         values.iter().map(|value| (*value).to_owned()).collect()
     }
 
-    /// The expected texts are Falco's `resolve_list` outputs, item for item.
+    /// The expected texts are the expansion Falco's `resolve_list` performs
+    /// (each list name between delimiters replaced by its items, quoted where
+    /// they hold a blank), as the earlier Python port of it produced them;
+    /// they were not recorded by running Falco.
     #[test]
     fn resolve_list_follows_falco() {
         assert_eq!(

@@ -8,7 +8,9 @@
 //! - **the decomposed HarfangLab form**: `yara.strings`, `yara.condition` and
 //!   `yara.imports` are assembled into the one rule HarfangLab's deploy
 //!   builds: the `import` lines, `rule <name> {`, the generated meta, and
-//!   each body's lines, trimmed, indented by eight spaces. The bodies keep a map
+//!   each body, trimmed once at its start and end, with every one of its
+//!   lines then indented by eight spaces (an inner line keeps its own
+//!   leading blanks). The bodies keep a map
 //!   to their own scalar, so a finding lands where it is written; the text
 //!   deploy generates is marked synthetic.
 //!
