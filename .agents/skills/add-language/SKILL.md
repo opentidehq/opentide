@@ -45,7 +45,7 @@ highlighter is not a language, and a platform whose language is unspecified gets
 | Highlighting: HighlightSpec captures from the tree; a capture is appended, never renamed (a minor bump of `highlights/spec.toml`'s `[meta].version`); the TextMate grammar's keywords come from the `KEYWORDS` table, the Monaco and Helix themes from the spec's captures | [`parser`](../parser/SKILL.md) "Highlighting", [`crates/opentide-highlight/AGENTS.md`](../../../crates/opentide-highlight/AGENTS.md) |
 | I/O and concurrency: no `std::fs` in an engine's `src/`; no `async` or tokio in the engine; CPU work on rayon, network I/O only on the one process runtime (#1558) | [`crates/AGENTS.md`](../../../crates/AGENTS.md) "Hard rules", [`rust-engine`](../rust-engine/SKILL.md) |
 | Errors, panics and lints: no panic on user input, `thiserror` in the engine, `#[expect(..., reason)]` on the narrowest item, `missing_docs` for every new crate | [`rust-engine`](../rust-engine/SKILL.md), [`crates/AGENTS.md`](../../../crates/AGENTS.md) "Lints", [`rust`](../rust/SKILL.md) |
-| The facade's semver: `LanguageId` is exhaustive and re-exported by `opentide` (its `analysis` feature), and platforms and query languages are open sets by policy: adding one is always a minor release, never a major. `LanguageId` and `PlatformId` are `#[non_exhaustive]` from 1.2.0 ([ADR 0015](../../../docs/internal/adr/0015-languages-and-dialects.md) §6, option B as amended; [#1911](https://github.com/opentidehq/opentide/issues/1911)), so a new variant is an **Added** entry, checked by CI's `cargo semver-checks --all-features` | [`crates/opentide/AGENTS.md`](../../../crates/opentide/AGENTS.md) |
+| The facade's semver: platforms and query languages are open sets by policy: adding one is always a minor release, never a major. `LanguageId`, re-exported by `opentide` (its `analysis` feature), is `#[non_exhaustive]` and `QUERY_LANGUAGES` a slice from 1.2.0 ([ADR 0015](../../../docs/internal/adr/0015-languages-and-dialects.md) §6, option B as amended; [#1911](https://github.com/opentidehq/opentide/issues/1911)), so a new variant is an **Added** entry, not a **Breaking** one | [`crates/opentide/AGENTS.md`](../../../crates/opentide/AGENTS.md) |
 
 ## Checklist
 
@@ -59,9 +59,10 @@ script, the WASM smoke sample, the npm client, the editors and the Python stub; 
 the depth floors, the corpus gate's arms and lists, the external and oracle tests, the Tide and
 highlight injection tables, `analyze_query`, the docs and changelogs, or the companions: read
 those boxes with care. Steps 1 to 5
-add arms to exhaustive `match`es across the workspace, so the workspace builds again only at the
-end of step 5: work them on one branch and check each crate as you go
-(`cargo check -p <crate>`). Step 6's proofs run once it builds.
+add arms to `match`es across the workspace. Outside `opentide-core` those `match`es have a
+wildcard arm (`LanguageId` is non-exhaustive), so the compiler does not point at them: the
+wiring test and `default_language` do, and the language works only at the end of step 5. Work
+them on one branch and check each crate as you go (`cargo check -p <crate>`). Step 6's proofs run once it builds.
 
 ### 0. Decide what the language is
 
@@ -244,7 +245,7 @@ end of step 5: work them on one branch and check each crate as you go
   `docs/cli/validate.md` and `docs/usage/concepts/platforms.md`. `docs/cli/diagnostics.md` comes
   from `cargo xtask codegen`.
 - [ ] `CHANGELOG.md` `## [Unreleased]` ([`release-notes`](../release-notes/SKILL.md)) and
-  `crates/CHANGELOG.md`, with the **Breaking** entry for the new `LanguageId` variant
+  `crates/CHANGELOG.md`, with the **Added** entry for the new `LanguageId` variant
   ([`engine-release-notes`](../engine-release-notes/SKILL.md)).
 - [ ] The new crate's name in [`docs/internal/publishing.md`](../../../docs/internal/publishing.md):
   its first publish to crates.io needs the maintainers' token.
@@ -262,9 +263,8 @@ end of step 5: work them on one branch and check each crate as you go
   `cargo run -p opentide-lsp -- generate-highlights --check` pass.
 - `cargo nextest run --workspace --profile ci` and `cargo test --workspace --doc` pass
   ([`rust`](../rust/SKILL.md)); `cargo xtask throughput --check` passes with the new budgets;
-  `cargo semver-checks -p opentide --all-features` (as CI's `facade` job runs it: `LanguageId` is
-  re-exported under the `analysis` feature) reports the new variant, and `crates/CHANGELOG.md`
-  has its **Breaking** entry; the minor bump itself comes with the release.
+  CI's `facade` job passes (`LanguageId` is non-exhaustive, so the new variant is no breaking
+  change), and `crates/CHANGELOG.md` has its **Added** entry; the minor bump comes with the release.
 - `scripts/ci-local.sh --full` passes (the root `AGENTS.md`, "Definition of done").
 - The parser had an independent adversarial review before merging ([`parser`](../parser/SKILL.md),
   "Tests"): the reviews found the 1 MB-stack and quadratic-on-broken-input bugs the corpus did not.

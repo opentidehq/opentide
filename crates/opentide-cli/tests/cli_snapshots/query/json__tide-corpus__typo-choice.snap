@@ -9,16 +9,16 @@ exit: 2
 {
   "command": "query",
   "duration_ms": 0,
-  "error": "invalid value 'sentinal' for '--platform <PLATFORM>' [possible values: sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops]",
+  "error": "invalid value 'sentinal' for '--platform <PLATFORM>' [possible values: sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops, datadog]",
   "exit_code": 2,
   "failure": {
     "argument": "--platform",
     "code": "usage_invalid_choice",
     "crash_log": null,
-    "message": "invalid value 'sentinal' for '--platform <PLATFORM>' [possible values: sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops]",
+    "message": "invalid value 'sentinal' for '--platform <PLATFORM>' [possible values: sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops, datadog]",
     "suggestion": "sentinel"
   },
-  "message": "invalid value 'sentinal' for '--platform <PLATFORM>' [possible values: sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops]",
+  "message": "invalid value 'sentinal' for '--platform <PLATFORM>' [possible values: sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops, datadog]",
   "next_actions": [],
   "ok": false,
   "schema_version": 1,

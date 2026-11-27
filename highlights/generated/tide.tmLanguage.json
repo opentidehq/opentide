@@ -470,7 +470,7 @@
       "name": "comment.line.opentide"
     },
     {
-      "begin": "^(\\s*)(description|signature|analysis|sighting)(\\s*)(:)(\\s*)[|>][-+0-9]*\\s*(?:#.*)?$",
+      "begin": "^(\\s*)(description|signature|analysis|sighting|message)(\\s*)(:)(\\s*)[|>][-+0-9]*\\s*(?:#.*)?$",
       "beginCaptures": {
         "2": {
           "name": "variable.other.property.tide"
@@ -550,7 +550,7 @@
       "patterns": []
     },
     {
-      "begin": "^(\\s*)(-)(\\s)(description|signature|analysis|sighting)(\\s*)(:)(\\s*)[|>][-+0-9]*\\s*(?:#.*)?$",
+      "begin": "^(\\s*)(-)(\\s)(description|signature|analysis|sighting|message)(\\s*)(:)(\\s*)[|>][-+0-9]*\\s*(?:#.*)?$",
       "beginCaptures": {
         "2": {
           "name": "punctuation.definition.list.begin.tide"
@@ -779,6 +779,24 @@
           "name": "variable.other.enummember.tide"
         }
       },
+      "comment": "tide:enum:keep_alive",
+      "match": "^(\\s*)(?:(-)(\\s+))?(keep_alive)(\\s*)(:)([ \\t]+)(10m|12h|15m|30m|1d|1h|1m|2h|3h|5m|6h|0)(?=[ \\t]*(?:#.*)?$)"
+    },
+    {
+      "captures": {
+        "2": {
+          "name": "punctuation.definition.list.begin.tide"
+        },
+        "4": {
+          "name": "variable.other.property.tide"
+        },
+        "6": {
+          "name": "punctuation.separator.key-value.tide"
+        },
+        "8": {
+          "name": "variable.other.enummember.tide"
+        }
+      },
       "comment": "tide:enum:killchain",
       "match": "^(\\s*)(?:(-)(\\s+))?(killchain)(\\s*)(:)([ \\t]+)(Privilege Escalation|Social Engineering|Command \\& Control|Credential Access|Lateral Movement|Defense Evasion|Reconnaissance|Weaponization|Exfiltration|Exploitation|Persistence|Collection|Objectives|Discovery|Execution|Delivery|Pivoting|Impact)(?=[ \\t]*(?:#.*)?$)"
     },
@@ -799,6 +817,42 @@
       },
       "comment": "tide:enum:leverage",
       "match": "^(\\s*)(?:(-)(\\s+))?(leverage)(\\s*)(:)([ \\t]+)(Infrastructure Compromise|Elevation of privilege|Fraudulent transaction|Information Disclosure|Information Gathering|Software installation|Modify configuration|Process Manipulation|Hardware tampering|Denial of Service|Modify privileges|Alter behavior|Log tampering|Safety Bypass|New Accounts|Modify data|Repudiation|Tampering|Dwelling|Spoofing)(?=[ \\t]*(?:#.*)?$)"
+    },
+    {
+      "captures": {
+        "2": {
+          "name": "punctuation.definition.list.begin.tide"
+        },
+        "4": {
+          "name": "variable.other.property.tide"
+        },
+        "6": {
+          "name": "punctuation.separator.key-value.tide"
+        },
+        "8": {
+          "name": "variable.other.enummember.tide"
+        }
+      },
+      "comment": "tide:enum:max_duration",
+      "match": "^(\\s*)(?:(-)(\\s+))?(max_duration)(\\s*)(:)([ \\t]+)(10m|12h|15m|30m|1d|1h|1m|2h|3h|5m|6h|0)(?=[ \\t]*(?:#.*)?$)"
+    },
+    {
+      "captures": {
+        "2": {
+          "name": "punctuation.definition.list.begin.tide"
+        },
+        "4": {
+          "name": "variable.other.property.tide"
+        },
+        "6": {
+          "name": "punctuation.separator.key-value.tide"
+        },
+        "8": {
+          "name": "variable.other.enummember.tide"
+        }
+      },
+      "comment": "tide:enum:method",
+      "match": "^(\\s*)(?:(-)(\\s+))?(method)(\\s*)(:)([ \\t]+)(impossible_travel|new_value|threshold|anomaly)(?=[ \\t]*(?:#.*)?$)"
     },
     {
       "captures": {

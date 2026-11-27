@@ -311,7 +311,7 @@ mod tests {
         ] {
             assert!(has(language, "tm_extras:builtin-call"), "{language}");
         }
-        for language in LanguageId::QUERY_LANGUAGES {
+        for &language in LanguageId::QUERY_LANGUAGES {
             assert!(has(language, "tm_extras:field"), "{language}");
         }
         assert!(has(LanguageId::Kql, "tm_extras:table"));
@@ -338,7 +338,7 @@ mod tests {
             .map(|maps| maps.tm.as_str())
             .chain([LOGICAL_SCOPE])
             .collect();
-        for language in LanguageId::QUERY_LANGUAGES {
+        for &language in LanguageId::QUERY_LANGUAGES {
             let grammar = generate_tm_language(language, &spec);
             for pattern in grammar["patterns"].as_array().expect("patterns") {
                 if !pattern["comment"]

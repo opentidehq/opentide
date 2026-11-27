@@ -226,6 +226,7 @@ pub fn rule_queries(rule: &Rule, platform: &str) -> Result<Vec<RuleQuery>, Strin
         "sentinel_one" => sentinel_one(block, rule),
         "elastic" => elastic(block, rule).map(|query| vec![query]),
         "exabeam" => exabeam(block, rule),
+        "datadog" => datadog(block, rule),
         // The event definition's search: its Lucene query on the block's
         // `streams` (aliases resolved per tenant, as deploy resolves them),
         // else the tenant's own.
@@ -322,6 +323,41 @@ fn exabeam(block: &CJson, rule: &Rule) -> Result<Vec<RuleQuery>, String> {
                      applied"
                         .into()
                 }),
+                ..RuleQuery::default()
+            })
+        })
+        .collect()
+}
+
+/// A Datadog rule's queries: one per `queries[]` entry, its search as deploy
+/// sends it, labelled by the name conditions call it, with a note that the
+/// detection and the cases are not applied.
+fn datadog(block: &CJson, rule: &Rule) -> Result<Vec<RuleQuery>, String> {
+    let queries = match field(block, "queries") {
+        Some(CJson::Array(items)) if !items.is_empty() => items,
+        _ => return Err(format!("rule {:?} has no Datadog queries", rule.name)),
+    };
+    queries
+        .iter()
+        .enumerate()
+        .map(|(at, query)| {
+            let name = query
+                .get("name")
+                .and_then(CJson::as_str)
+                .filter(|name| !name.is_empty())
+                .map_or_else(
+                    || opentide_schema::objects::platform::datadog::default_query_name(at),
+                    str::to_owned,
+                );
+            Ok(RuleQuery {
+                text: required(query.get("query"), rule, "datadog")?,
+                language: Some("datadog".into()),
+                label: Some(format!("query {name}")),
+                note: Some(
+                    "the query's search only: the detection method, its window and the cases \
+                     are not applied"
+                        .into(),
+                ),
                 ..RuleQuery::default()
             })
         })

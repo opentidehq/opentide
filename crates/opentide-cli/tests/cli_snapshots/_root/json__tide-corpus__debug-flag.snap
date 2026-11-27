@@ -154,6 +154,14 @@ exit: 0
       "enabled": false,
       "name": "google_secops",
       "tenants": []
+    },
+    {
+      "can_deploy": true,
+      "can_query": true,
+      "can_validate": true,
+      "enabled": false,
+      "name": "datadog",
+      "tenants": []
     }
   ],
   "repo": "<WS>",

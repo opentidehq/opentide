@@ -31,8 +31,9 @@ opentide-tide and -analysis.
   `datadog_mixed_boolean` says so in its message, and stays a warning.
 - An attribute the catalogue lacks is never a finding: pipelines remap attributes (RFC §14).
   `datadog_unknown_attribute` is a hint on a dotted bare key only.
-- No platform embeds the language yet: the `datadog` platform row is phase 2 of the RFC.
-  `xtask/tests/language_wiring.rs` lists it in `AWAITING_A_PLATFORM` until then.
+- The `datadog` platform embeds the language: a block's `queries[].query` (profile `rule`) and a
+  `system: datadog` hunt (profile `search`), through `opentide-tide`'s `platform_field_language`
+  and `hunt_query_language`. A case's `condition` is the platform model's, not this crate's.
 
 ## Test
 

@@ -8,8 +8,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Eac
 
 ### Upgrade
 
-1. If CI runs `opentide lint --strict` on Microsoft Defender rules (`opentide setup ci` generates it), it now fails on three new warnings. To keep the previous result while you fix the rules, set each to `"info"` under `[queries.codes]` in `.opentide/configurations/lint.toml`: `microsoft_defender_custom_details_limit`, `microsoft_defender_placeholder_limit` and `microsoft_defender_nrt_query`.
-2. If CI runs `opentide generate docs --changed` in a shallow clone, check out the full history: `fetch-depth: 0` on GitHub Actions' `actions/checkout`, `GIT_DEPTH: "0"` on GitLab, `fetchDepth: 0` on Azure Pipelines. The run now fails where it used to compare with `HEAD` and report nothing changed.
+1. If you use the Rust SDK: add a wildcard arm (`_ => …`) where you match on `opentide::analysis::LanguageId`, and build an `opentide::models::RuleConfigurations` from `RuleConfigurations::default()`, not a struct literal. `LanguageId::QUERY_LANGUAGES`, `RuleConfigurations::PLATFORMS` and `opentide::validate::STRICT_EXEMPT_WARNINGS` are slices now (`for &item in …`).
+2. If CI runs `opentide lint --strict` on Microsoft Defender rules (`opentide setup ci` generates it), it now fails on three new warnings. To keep the previous result while you fix the rules, set each to `"info"` under `[queries.codes]` in `.opentide/configurations/lint.toml`: `microsoft_defender_custom_details_limit`, `microsoft_defender_placeholder_limit` and `microsoft_defender_nrt_query`.
+3. If CI runs `opentide generate docs --changed` in a shallow clone, check out the full history: `fetch-depth: 0` on GitHub Actions' `actions/checkout`, `GIT_DEPTH: "0"` on GitLab, `fetchDepth: 0` on Azure Pipelines. The run now fails where it used to compare with `HEAD` and report nothing changed.
+
+### Breaking
+
+- **The Rust SDK's platforms, languages and codes are open sets** ([#1911](https://github.com/opentidehq/opentide/issues/1911)). From this release on, adding one is a minor release, which breaks no code that matches with a wildcard arm. This release makes the switch once: `LanguageId` and `RuleConfigurations` are `#[non_exhaustive]`, so a `match` on `LanguageId` needs a wildcard arm and a `RuleConfigurations` starts from `Default`. `LanguageId::QUERY_LANGUAGES`, `RuleConfigurations::PLATFORMS` and `validate::STRICT_EXEMPT_WARNINGS` are slices, not fixed-size arrays. The command line, the Python package and the npm package are unaffected.
 
 ### Added
 
@@ -17,7 +22,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Eac
   - `microsoft_defender_custom_details_limit`: more than 20 custom details, or names past 4 KB, beyond which Defender drops them all from the alert
   - `microsoft_defender_placeholder_limit`: more than three `{{Column}}` columns in the alert title or description
   - `microsoft_defender_nrt_query`, reported by `lint` and the editor, not `validate`: a `frequency: NRT` query that reads two tables or one off the NRT list, joins, unions, uses `externaldata` or has a comment
-- **Datadog search syntax in the editor.** `opentide lsp start` checks, highlights, hovers and completes `.datadog` files: the log search syntax of Datadog Cloud SIEM detection rules, with 16 `datadog_*` codes (`opentide explain datadog_mixed_boolean`) and Datadog's reserved and standard attributes. `opentide validate` and `opentide validate query` do not take `.datadog` files yet: the `datadog` platform comes next.
+- **Datadog Cloud SIEM support** ([#1920](https://github.com/opentidehq/opentide/issues/1920)). Deploy detection rules to Datadog Cloud SIEM, the fourteenth platform, from a `configurations.datadog` block (`platform::datadog::1.0`): threshold, new value, anomaly and impossible travel rules, written as `queries`, `detection`, `cases` and `signal`.
+  - `opentide validate` checks the block (`datadog_duration`, `datadog_condition` and eight more codes, each at its field path) and its queries in the Datadog search syntax, and warns when a case condition mixes `&&` and `||` (`datadog_condition_mixed`)
+  - `opentide deploy` validates every rule with Datadog before writing it, sends an unchanged rule nothing, never touches a Datadog default rule, and keeps the rule id in `.opentide/states/deployment/`. A `PREVIEW` status deploys the rule without notifications and tags it `opentide_strategy:preview`
+  - `opentide validate query --platform datadog --live` checks a rule whole through Datadog's rule validation; `.datadog` files and `system: datadog` hunts are checked offline
+  - `opentide query --platform datadog` runs a search through Logs Search; `--rule` runs each of a rule's queries
+  - `opentide setup platforms --datadog`, `opentide new rule --platform datadog`, `opentide doctor --live`, MCP `validate_query` and `run_query` take the platform; `opentide explain` has a page for every `datadog_*` code
+- **Datadog search syntax in the editor.** `opentide lsp start` checks, highlights, hovers and completes `.datadog` files and the queries of a `datadog` block: the log search syntax of Datadog Cloud SIEM detection rules, with 16 `datadog_*` codes (`opentide explain datadog_mixed_boolean`) and Datadog's reserved and standard attributes.
 
 ### Changed
 

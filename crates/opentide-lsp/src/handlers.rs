@@ -2942,7 +2942,7 @@ fn requested_language(language: Option<&str>, default: LanguageId) -> Result<Lan
         Some(language) => Ok(language),
         None => {
             let known: Vec<&str> = std::iter::once(LanguageId::TideYaml)
-                .chain(LanguageId::QUERY_LANGUAGES)
+                .chain(LanguageId::QUERY_LANGUAGES.iter().copied())
                 .map(LanguageId::as_str)
                 .collect();
             Err(format!(
