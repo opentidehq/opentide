@@ -269,10 +269,7 @@ async fn an_unchanged_rule_sends_no_put() {
     let outcome = deploy_rule(&stand.session(), &update()).await.unwrap();
     assert_eq!(outcome.failure, None);
     assert_eq!(outcome.state, StateChange::Keep);
-    assert_eq!(
-        outcome.done,
-        Some(("datadog_rule_unchanged", ID.to_owned()))
-    );
+    assert_eq!(outcome.done, Some(("rule_unchanged", ID.to_owned())));
     assert_eq!(outcome.calls, ["GET"]);
     assert!(
         stand
@@ -602,10 +599,7 @@ async fn a_gateway_failure_of_a_read_is_retried_on_the_shared_policy() {
         .await;
     stand.stored(stored(7)).await;
     let outcome = deploy_rule(&stand.session(), &update()).await.unwrap();
-    assert_eq!(
-        outcome.done,
-        Some(("datadog_rule_unchanged", ID.to_owned()))
-    );
+    assert_eq!(outcome.done, Some(("rule_unchanged", ID.to_owned())));
     assert_eq!(
         stand.slept(),
         [Duration::from_millis(500), Duration::from_secs(1)]

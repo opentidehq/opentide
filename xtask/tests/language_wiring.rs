@@ -65,11 +65,7 @@ fn declared_variants() -> BTreeSet<String> {
 /// waits for the row. A language listed here that a platform already checks
 /// offline fails `languages_awaiting_a_platform_have_none`, so the entry is
 /// removed with the change that adds the row.
-const AWAITING_A_PLATFORM: &[(&str, &str)] = &[(
-    "datadog",
-    "the datadog platform is phase 2 of docs/internal/rfc-datadog-cloud-siem.md (§15); \
-     phase 1 ships the language for editors and .datadog files",
-)];
+const AWAITING_A_PLATFORM: &[(&str, &str)] = &[];
 
 /// Whether a variant is a query language. The `match` has no wildcard, so a
 /// new variant does not compile until it is classified here; a query

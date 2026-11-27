@@ -1461,6 +1461,55 @@ configurations:
       #late_arriving_data_adjustment: 
     #meta:
       #key: 
+  #datadog:
+    #enabled: false
+    #name: 
+    #schema: platform::datadog::1.0
+    #status: 
+    #flags:
+      #- 
+    #tenants:
+      #- 
+    #contributors:
+      #- 
+    #queries:
+      #- name: 
+        #query: |
+          #...
+        #from: logs
+        #group_by:
+          #- 
+        #keep_missing_groups: false
+        #count_distinct: 
+        #sum: 
+        #max: 
+        #new_value:
+          #- 
+    #detection:
+      #method: threshold
+      #window: 5m
+      #learning: 
+      #forget_after: 
+      #bucket: 
+      #tolerance: 3
+      #detect_ip_transitions: false
+    #cases:
+      #- name: 
+        #condition: 
+        #severity: info
+        #notify:
+          #- 
+    #signal:
+      #group_by:
+        #- 
+      #keep_alive: 1h
+      #max_duration: 1d
+      #downgrade_non_production: false
+      #group_in_notification_title: false
+    #message: |
+      #...
+    #tags:
+      #- 
 
 ━━━ ws/.opentide/templates/rule.1.1.template.yaml · created 0644
 name: 
@@ -2253,6 +2302,55 @@ configurations:
       #late_arriving_data_adjustment: 
     #meta:
       #key: 
+  #datadog:
+    #enabled: false
+    #name: 
+    #schema: platform::datadog::1.0
+    #status: 
+    #flags:
+      #- 
+    #tenants:
+      #- 
+    #contributors:
+      #- 
+    #queries:
+      #- name: 
+        #query: |
+          #...
+        #from: logs
+        #group_by:
+          #- 
+        #keep_missing_groups: false
+        #count_distinct: 
+        #sum: 
+        #max: 
+        #new_value:
+          #- 
+    #detection:
+      #method: threshold
+      #window: 5m
+      #learning: 
+      #forget_after: 
+      #bucket: 
+      #tolerance: 3
+      #detect_ip_transitions: false
+    #cases:
+      #- name: 
+        #condition: 
+        #severity: info
+        #notify:
+          #- 
+    #signal:
+      #group_by:
+        #- 
+      #keep_alive: 1h
+      #max_duration: 1d
+      #downgrade_non_production: false
+      #group_in_notification_title: false
+    #message: |
+      #...
+    #tags:
+      #- 
 
 ━━━ ws/.opentide/templates/threat.1.0.template.yaml · created 0644
 name: 
@@ -3230,7 +3328,56 @@ threat:
             "      #ensure_enrichment_completeness: false",
             "      #late_arriving_data_adjustment: ",
             "    #meta:",
-            "      #key: "
+            "      #key: ",
+            "  #datadog:",
+            "    #enabled: false",
+            "    #name: ",
+            "    #schema: platform::datadog::1.0",
+            "    #status: ",
+            "    #flags:",
+            "      #- ",
+            "    #tenants:",
+            "      #- ",
+            "    #contributors:",
+            "      #- ",
+            "    #queries:",
+            "      #- name: ",
+            "        #query: |",
+            "          #...",
+            "        #from: logs",
+            "        #group_by:",
+            "          #- ",
+            "        #keep_missing_groups: false",
+            "        #count_distinct: ",
+            "        #sum: ",
+            "        #max: ",
+            "        #new_value:",
+            "          #- ",
+            "    #detection:",
+            "      #method: threshold",
+            "      #window: 5m",
+            "      #learning: ",
+            "      #forget_after: ",
+            "      #bucket: ",
+            "      #tolerance: 3",
+            "      #detect_ip_transitions: false",
+            "    #cases:",
+            "      #- name: ",
+            "        #condition: ",
+            "        #severity: info",
+            "        #notify:",
+            "          #- ",
+            "    #signal:",
+            "      #group_by:",
+            "        #- ",
+            "      #keep_alive: 1h",
+            "      #max_duration: 1d",
+            "      #downgrade_non_production: false",
+            "      #group_in_notification_title: false",
+            "    #message: |",
+            "      #...",
+            "    #tags:",
+            "      #- "
         ]
     },
     "Platform configuration : Carbon Black Cloud Enterprise EDR Template": {

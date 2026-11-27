@@ -27,7 +27,7 @@
 //! - a stored id: `GET /rules/{id}`, then, only when a property opentide
 //!   owns differs from the compiled body ([`differences`]), validation and a
 //!   `PUT` with the `version` the `GET` returned; an unchanged rule is sent
-//!   nothing (`datadog_rule_unchanged`);
+//!   nothing (the shared `rule_unchanged` event);
 //! - a DISABLEMENT is that same update, with `isEnabled: false`;
 //! - a DELETION: `GET`, then `DELETE /rules/{id}`.
 //!
@@ -756,8 +756,8 @@ impl Event {
 pub struct RuleOutcome {
     /// The deployment-state change.
     pub state: StateChange,
-    /// What was done (`datadog_rule_created`, `_updated`, `_unchanged`,
-    /// `_disabled`, `_deleted`), with the rule id, and the properties an
+    /// What was done (`datadog_rule_created`, `_updated`, `_disabled`,
+    /// `_deleted`, or `rule_unchanged`), with the rule id, and the properties an
     /// update changed.
     pub done: Option<(&'static str, String)>,
     /// The properties an update sent because they differed.
@@ -915,7 +915,7 @@ async fn run(
     }
     let changed = differences(&rule.body, &stored);
     if changed.is_empty() {
-        outcome.done = Some(("datadog_rule_unchanged", rule_id.clone()));
+        outcome.done = Some((crate::connector::RULE_UNCHANGED, rule_id.clone()));
         return Ok(());
     }
     outcome.changed = changed;
@@ -1372,8 +1372,8 @@ impl Deployer for Datadog {
 
     /// One rule from the compiled body: a [`Operation::Disable`] disables, a
     /// delete takes no body. What was done is the outcome's event
-    /// (`datadog_rule_created`, `_updated`, `_unchanged`, `_disabled`,
-    /// `_deleted`, with its `rule_id`). A rule Datadog refuses fails with its
+    /// (`datadog_rule_created`, `_updated`, `_disabled`, `_deleted`,
+    /// or `rule_unchanged`, with its `rule_id`). A rule Datadog refuses fails with its
     /// own code ([`RULE_INVALID`], [`RULE_DEFAULT`], [`RATE_LIMITED`], …); a
     /// refused key or no answer fails the tenant.
     fn deploy<'a>(

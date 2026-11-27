@@ -23,9 +23,9 @@ changed_files[]: 0 items
 next_actions[]: 0 items
 warnings[]: 4 items
 warnings[]: entities: "Host::Gizmo" is not a known vocabulary value
-warnings[]: objects/rules/encoded-beacon-rule-0034.yaml: unreadable: while parsing a flow sequence, expected ',' or ']' (line 83, column 1)
-warnings[]: objects/rules/hidden-loader-rule-0024.yaml: unreadable: while scanning a plain scalar, found a tab (line 45, column 1)
-warnings[]: objects/rules/staged-exfiltration-rule-0021.yaml: unreadable: while parsing a flow sequence, expected ',' or ']' (line 72, column 1)
+warnings[]: objects/rules/covert-implant-rule-0021.yaml: unreadable: while parsing a flow sequence, expected ',' or ']' (line 58, column 1)
+warnings[]: objects/rules/covert-tunnel-rule-0022.yaml: unreadable: while scanning a plain scalar, found a tab (line 73, column 1)
+warnings[]: objects/rules/encoded-tunnel-rule-0030.yaml: unreadable: while parsing a flow sequence, expected ',' or ']' (line 70, column 1)
 ok: true x1
 status: issues x1
 

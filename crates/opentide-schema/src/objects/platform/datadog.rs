@@ -241,15 +241,36 @@ macro_rules! model {
     };
 }
 
-/// The schema of a window-valued key: one of [`WINDOWS`], `0` also as a
-/// number, or null.
-fn window_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
-    let values: Vec<&str> = WINDOWS.iter().map(|(text, _)| *text).collect();
+/// The schema of a window-valued key: one of [`WINDOWS`], its default
+/// first (the value a template offers), `0` also as a number, or null.
+fn window_schema_with(default: &str) -> schemars::Schema {
+    let mut values: Vec<&str> = vec![default];
+    values.extend(
+        WINDOWS
+            .iter()
+            .map(|(text, _)| *text)
+            .filter(|text| *text != default),
+    );
     schemars::json_schema!({"anyOf": [
         {"type": "string", "enum": values},
         {"type": "integer", "const": 0},
         {"type": "null"}
     ]})
+}
+
+/// `detection.window`'s schema.
+fn window_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
+    window_schema_with(DEFAULT_WINDOW)
+}
+
+/// `signal.keep_alive`'s schema.
+fn keep_alive_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
+    window_schema_with(DEFAULT_KEEP_ALIVE)
+}
+
+/// `signal.max_duration`'s schema.
+fn max_duration_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
+    window_schema_with(DEFAULT_MAX_DURATION)
 }
 
 /// A duration in the conversion: a string, or the number `0` read as `"0"`
@@ -346,6 +367,7 @@ model! {
         /// Required with `threshold` and `anomaly`; under `anomaly`, the number is a percentile between 0
         /// and 1.
         #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[schemars(extend("tide.template.required" = true))]
         pub condition: Option<String>,
         /// `info`, `low`, `medium`, `high`, or `critical`. Default: from `response.alert_severity`, else
         /// `info`.
@@ -368,13 +390,13 @@ model! {
         /// The signal stays open while a case matches again within this time: a `detection.window` value,
         /// at least the window. Default: `1h`.
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[schemars(schema_with = "window_schema")]
+        #[schemars(schema_with = "keep_alive_schema")]
         #[from_node(with = "duration_text")]
         pub keep_alive: Option<String>,
         /// The signal closes this long after its first match: a `detection.window` value, at least the
         /// window. Default: `1d`.
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[schemars(schema_with = "window_schema")]
+        #[schemars(schema_with = "max_duration_schema")]
         #[from_node(with = "duration_text")]
         pub max_duration: Option<String>,
         /// One severity level lower when the `env` tag starts with `staging`, `test`, or `dev`. Default:

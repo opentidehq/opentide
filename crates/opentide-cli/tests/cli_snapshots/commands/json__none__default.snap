@@ -10867,14 +10867,15 @@ exit: 0
             "bitdefender",
             "graylog",
             "exabeam",
-            "google_secops"
+            "google_secops",
+            "datadog"
           ],
           "default": null,
           "envvars": [],
           "flags": [
             "--platform"
           ],
-          "help": "Check this platform's queries. Offline, default every platform the engine parses: sentinel, microsoft_defender, splunk, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops. --live needs one of: sentinel, microsoft_defender, splunk, sentinel_one, carbon_black_cloud, elastic, graylog, exabeam, google_secops",
+          "help": "Check this platform's queries. Offline, default every platform the engine parses: sentinel, microsoft_defender, splunk, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops, datadog. --live needs one of: sentinel, microsoft_defender, splunk, sentinel_one, carbon_black_cloud, elastic, graylog, exabeam, google_secops, datadog",
           "is_flag": false,
           "multiple": false,
           "name": "platform",
@@ -10949,7 +10950,7 @@ exit: 0
           "flags": [
             "--file"
           ],
-          "help": "Check only this rule file, or this query file (.kql, .spl, .esql, .eql, .kuery, .lucene, .falco, .yar, .yara, .yaral, .yl2, .cql, .exabeam) offline (repeatable)",
+          "help": "Check only this rule file, or this query file (.kql, .spl, .esql, .eql, .kuery, .lucene, .falco, .yar, .yara, .yaral, .yl2, .cql, .exabeam, .datadog) offline (repeatable)",
           "is_flag": false,
           "multiple": true,
           "name": "file",
@@ -11070,14 +11071,15 @@ exit: 0
             "bitdefender",
             "graylog",
             "exabeam",
-            "google_secops"
+            "google_secops",
+            "datadog"
           ],
           "default": null,
           "envvars": [],
           "flags": [
             "--platform"
           ],
-          "help": "Detection platform: sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops",
+          "help": "Detection platform: sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops, datadog",
           "is_flag": false,
           "multiple": false,
           "name": "platform",
@@ -11489,14 +11491,15 @@ exit: 0
             "bitdefender",
             "graylog",
             "exabeam",
-            "google_secops"
+            "google_secops",
+            "datadog"
           ],
           "default": null,
           "envvars": [],
           "flags": [
             "--platform"
           ],
-          "help": "Detection platform: sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops",
+          "help": "Detection platform: sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops, datadog",
           "is_flag": false,
           "multiple": false,
           "name": "platform",
@@ -11730,14 +11733,15 @@ exit: 0
             "bitdefender",
             "graylog",
             "exabeam",
-            "google_secops"
+            "google_secops",
+            "datadog"
           ],
           "default": null,
           "envvars": [],
           "flags": [
             "--platform"
           ],
-          "help": "Add a configuration block for this platform (repeatable): sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops",
+          "help": "Add a configuration block for this platform (repeatable): sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops, datadog",
           "is_flag": false,
           "multiple": true,
           "name": "platform",
@@ -12565,14 +12569,15 @@ exit: 0
             "bitdefender",
             "graylog",
             "exabeam",
-            "google_secops"
+            "google_secops",
+            "datadog"
           ],
           "default": null,
           "envvars": [],
           "flags": [
             "--platform"
           ],
-          "help": "Detection platform: sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops",
+          "help": "Detection platform: sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops, datadog",
           "is_flag": false,
           "multiple": false,
           "name": "platform",
@@ -13572,14 +13577,15 @@ exit: 0
             "bitdefender",
             "graylog",
             "exabeam",
-            "google_secops"
+            "google_secops",
+            "datadog"
           ],
           "default": [],
           "envvars": [],
           "flags": [
             "--platform"
           ],
-          "help": "Enable a detection platform (repeatable): sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops",
+          "help": "Enable a detection platform (repeatable): sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops, datadog",
           "is_flag": false,
           "multiple": true,
           "name": "platform",
@@ -14042,14 +14048,15 @@ exit: 0
             "bitdefender",
             "graylog",
             "exabeam",
-            "google_secops"
+            "google_secops",
+            "datadog"
           ],
           "default": [],
           "envvars": [],
           "flags": [
             "--platform"
           ],
-          "help": "Enable a detection platform (repeatable): sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops",
+          "help": "Enable a detection platform (repeatable): sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops, datadog",
           "is_flag": false,
           "multiple": true,
           "name": "platform",
@@ -14319,6 +14326,21 @@ exit: 0
           "is_flag": true,
           "multiple": false,
           "name": "google_secops",
+          "required": false,
+          "secondary_flags": [],
+          "type": "boolean"
+        },
+        {
+          "choices": null,
+          "default": false,
+          "envvars": [],
+          "flags": [
+            "--datadog"
+          ],
+          "help": "Enable Datadog Cloud SIEM",
+          "is_flag": true,
+          "multiple": false,
+          "name": "datadog",
           "required": false,
           "secondary_flags": [],
           "type": "boolean"

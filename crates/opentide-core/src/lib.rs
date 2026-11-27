@@ -1147,6 +1147,18 @@ pub mod codes {
     pub const DATADOG_CALCULATED_FIELD_IN_RULE: &str = "datadog_calculated_field_in_rule";
     pub const DATADOG_PIPELINES_ONLY: &str = "datadog_pipelines_only";
     pub const DATADOG_UNKNOWN_ATTRIBUTE: &str = "datadog_unknown_attribute";
+    // Datadog block constraint codes and the advisory (rfc-datadog-cloud-siem, §5.9).
+    pub const DATADOG_METHOD_UNSUPPORTED: &str = "datadog_method_unsupported";
+    pub const DATADOG_DURATION: &str = "datadog_duration";
+    pub const DATADOG_WINDOW_ORDER: &str = "datadog_window_order";
+    pub const DATADOG_QUERY_NAME: &str = "datadog_query_name";
+    pub const DATADOG_MEASURE: &str = "datadog_measure";
+    pub const DATADOG_DETECTION_OPTION: &str = "datadog_detection_option";
+    pub const DATADOG_SIGNAL_GROUP_BY: &str = "datadog_signal_group_by";
+    pub const DATADOG_CONDITION: &str = "datadog_condition";
+    pub const DATADOG_SEVERITY: &str = "datadog_severity";
+    pub const DATADOG_TAG: &str = "datadog_tag";
+    pub const DATADOG_CONDITION_MIXED: &str = "datadog_condition_mixed";
 
     /// Every code above, in declaration order.
     pub const ALL: &[&str] = &[
@@ -1495,6 +1507,17 @@ pub mod codes {
         DATADOG_CALCULATED_FIELD_IN_RULE,
         DATADOG_PIPELINES_ONLY,
         DATADOG_UNKNOWN_ATTRIBUTE,
+        DATADOG_METHOD_UNSUPPORTED,
+        DATADOG_DURATION,
+        DATADOG_WINDOW_ORDER,
+        DATADOG_QUERY_NAME,
+        DATADOG_MEASURE,
+        DATADOG_DETECTION_OPTION,
+        DATADOG_SIGNAL_GROUP_BY,
+        DATADOG_CONDITION,
+        DATADOG_SEVERITY,
+        DATADOG_TAG,
+        DATADOG_CONDITION_MIXED,
     ];
 
     /// One sentence on what a code means, for hosts that explain a diagnostic
@@ -2379,6 +2402,37 @@ pub mod codes {
             }
             DATADOG_UNKNOWN_ATTRIBUTE => {
                 "A Datadog search field is a dotted bare key, searched as a tag, where an `@attribute` was probably meant."
+            }
+            DATADOG_METHOD_UNSUPPORTED => {
+                "A Datadog detection method is not threshold, new_value, anomaly or impossible_travel."
+            }
+            DATADOG_DURATION => {
+                "A Datadog duration is not one of the values its key accepts (a window, a bucket, a learning period, forget_after)."
+            }
+            DATADOG_WINDOW_ORDER => {
+                "A Datadog detection window is longer than the signal's keep_alive or max_duration."
+            }
+            DATADOG_QUERY_NAME => {
+                "A Datadog query name is not [a-z][a-z0-9_]*, is a duplicate, or is set on a new_value query."
+            }
+            DATADOG_MEASURE => {
+                "A Datadog query sets more than one measure, or new_value does not match the detection method."
+            }
+            DATADOG_DETECTION_OPTION => {
+                "A Datadog detection key the method does not take, or a new_value rule without forget_after."
+            }
+            DATADOG_SIGNAL_GROUP_BY => "A Datadog signal.group_by field is in no query's group_by.",
+            DATADOG_CONDITION => {
+                "A Datadog case condition does not parse, names an unknown query, or does not suit the detection method."
+            }
+            DATADOG_SEVERITY => {
+                "A Datadog case severity is not info, low, medium, high or critical."
+            }
+            DATADOG_TAG => {
+                "A Datadog tag would be refused or rewritten: upper case, a character outside a-z 0-9 _ - : . /, or longer than 200 characters."
+            }
+            DATADOG_CONDITION_MIXED => {
+                "A Datadog case condition mixes && and ||, whose precedence Datadog does not document."
             }
             _ => return None,
         })

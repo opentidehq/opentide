@@ -1543,6 +1543,130 @@ fn exabeam_records_a_created_rule_and_fails_one_whose_name_is_taken() {
     );
 }
 
+/// A Datadog tenant on `server`, and the environment with its keys.
+fn datadog_stand(server: &wiremock::MockServer) -> (String, Env) {
+    let setup = format!(
+        "site = \"datadoghq.eu\"\napi_key = \"$DD_API_KEY\"\napp_key = \"$DD_APP_KEY\"\napi_url = \
+         \"{}/\"\n[tenants.setup.notifications]\nsoc = \"@slack-soc\"\n",
+        server.uri()
+    );
+    let env = Env::from_pairs([
+        ("DD_API_KEY".to_owned(), "api".to_owned()),
+        ("DD_APP_KEY".to_owned(), "app".to_owned()),
+    ]);
+    (setup, env)
+}
+
+const DATADOG_BLOCK: &str = "  datadog:\n    schema: platform::datadog::1.0\n    status: \
+                             PRODUCTION\n    queries:\n      - query: source:okta \
+                             @evt.outcome:FAILURE\n    cases:\n      - condition: a > 5\n        \
+                             notify: [soc]\n";
+
+/// Datadog through the command line (RFC rfc-datadog-cloud-siem §8.2): a
+/// created rule is validated first and its id recorded; the next run reads
+/// the rule by that id, finds it unchanged and sends no `PUT`, and its row
+/// says `unchanged`.
+#[test]
+fn datadog_records_a_created_rule_and_leaves_an_unchanged_one_alone() {
+    use wiremock::matchers::{body_partial_json, header, method, path};
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let server = rt.block_on(wiremock::MockServer::start());
+    let (setup, env) = datadog_stand(&server);
+    let uuid = "00000000-0000-4000-8099-0000000000d1";
+    let ws = workspace(
+        "datadog",
+        "eu",
+        &setup,
+        &[(
+            "a.yaml",
+            rule("Failed logins", uuid, "Failed logins.", DATADOG_BLOCK),
+        )],
+    );
+    let body: std::sync::Arc<std::sync::Mutex<Option<serde_json::Value>>> =
+        std::sync::Arc::default();
+    let kept = std::sync::Arc::clone(&body);
+    rt.block_on(async {
+        wiremock::Mock::given(method("POST"))
+            .and(path("/api/v2/security_monitoring/rules/validation"))
+            .and(header("DD-API-KEY", "api"))
+            .respond_with(wiremock::ResponseTemplate::new(204))
+            .expect(1)
+            .mount(&server)
+            .await;
+        wiremock::Mock::given(method("POST"))
+            .and(path("/api/v2/security_monitoring/rules"))
+            .and(body_partial_json(serde_json::json!({
+                "name": "Failed logins",
+                "type": "log_detection",
+                "cases": [{"status": "high", "condition": "a > 5",
+                           "notifications": ["@slack-soc"]}],
+            })))
+            .respond_with(move |request: &wiremock::Request| {
+                let sent: serde_json::Value = serde_json::from_slice(&request.body).unwrap();
+                *kept.lock().unwrap() = Some(sent.clone());
+                let mut stored = sent;
+                stored["id"] = "abc-def-ghi".into();
+                stored["version"] = 1.into();
+                wiremock::ResponseTemplate::new(200).set_body_json(stored)
+            })
+            .expect(1)
+            .mount(&server)
+            .await;
+    });
+    let (sent, _) = deploy(
+        ws.path(),
+        "datadog",
+        &env,
+        &opentide_connectors::builtin(),
+        0,
+    );
+    rt.block_on(server.verify());
+    assert_eq!(rows(&sent)[0].0, "deployed", "{:?}", rows(&sent));
+    let state = std::fs::read_to_string(
+        ws.path()
+            .join(format!(".opentide/states/deployment/{uuid}.json")),
+    )
+    .unwrap();
+    assert!(state.contains("\"eu\": \"abc-def-ghi\""), "{state}");
+    // The second run: the rule Datadog holds is the one the run would write.
+    let mut stored = body.lock().unwrap().clone().unwrap();
+    stored["id"] = "abc-def-ghi".into();
+    stored["version"] = 1.into();
+    stored["isDefault"] = false.into();
+    rt.block_on(async {
+        server.reset().await;
+        wiremock::Mock::given(method("GET"))
+            .and(path("/api/v2/security_monitoring/rules/abc-def-ghi"))
+            .respond_with(wiremock::ResponseTemplate::new(200).set_body_json(stored))
+            .expect(1)
+            .mount(&server)
+            .await;
+        for verb in ["PUT", "POST", "DELETE"] {
+            wiremock::Mock::given(method(verb))
+                .respond_with(wiremock::ResponseTemplate::new(500))
+                .expect(0)
+                .mount(&server)
+                .await;
+        }
+    });
+    let (sent, _) = deploy(
+        ws.path(),
+        "datadog",
+        &env,
+        &opentide_connectors::builtin(),
+        0,
+    );
+    rt.block_on(server.verify());
+    let Json::Array(results) = value(&sent, "results") else {
+        panic!("no results")
+    };
+    assert_eq!(
+        results[0].get("action").and_then(Json::as_str),
+        Some("unchanged"),
+        "{results:?}"
+    );
+}
+
 /// An Exabeam rule the tenant lost, while git ignores deployment state: it
 /// is not created again, the run warns that it was missing and fails the
 /// rule with the state's refusal.

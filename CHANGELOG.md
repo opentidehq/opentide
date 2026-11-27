@@ -16,7 +16,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Eac
   - `microsoft_defender_custom_details_limit`: more than 20 custom details, or names past 4 KB, beyond which Defender drops them all from the alert
   - `microsoft_defender_placeholder_limit`: more than three `{{Column}}` columns in the alert title or description
   - `microsoft_defender_nrt_query`, reported by `lint` and the editor, not `validate`: a `frequency: NRT` query that reads two tables or one off the NRT list, joins, unions, uses `externaldata` or has a comment
-- **Datadog search syntax in the editor.** `opentide lsp start` checks, highlights, hovers and completes `.datadog` files: the log search syntax of Datadog Cloud SIEM detection rules, with 16 `datadog_*` codes (`opentide explain datadog_mixed_boolean`) and Datadog's reserved and standard attributes. `opentide validate` and `opentide validate query` do not take `.datadog` files yet: the `datadog` platform comes next.
+- **Datadog Cloud SIEM support** ([#1920](https://github.com/opentidehq/opentide/issues/1920)). Deploy detection rules to Datadog Cloud SIEM, the fourteenth platform, from a `configurations.datadog` block (`platform::datadog::1.0`): threshold, new value, anomaly and impossible travel rules, written as `queries`, `detection`, `cases` and `signal`.
+  - `opentide validate` checks the block (`datadog_duration`, `datadog_condition` and eight more codes, each at its field path) and its queries in the Datadog search syntax, and warns when a case condition mixes `&&` and `||` (`datadog_condition_mixed`)
+  - `opentide deploy` validates every rule with Datadog before writing it, sends an unchanged rule nothing, never touches a Datadog default rule, and keeps the rule id in `.opentide/states/deployment/`. A `PREVIEW` status deploys the rule without notifications and tags it `opentide_strategy:preview`
+  - `opentide validate query --platform datadog --live` checks a rule whole through Datadog's rule validation, and a `.datadog` file or a `system: datadog` hunt as a search; without `--live`, both are checked offline
+  - `opentide query --platform datadog` runs a search through Logs Search; `--rule` runs each of a rule's queries
+  - `opentide setup platforms --datadog`, `opentide new rule --platform datadog`, `opentide doctor --live`, MCP `validate_query` and `run_query` take the platform; `opentide explain` has a page for every `datadog_*` code
+- **Datadog search syntax in the editor.** `opentide lsp start` checks, highlights, hovers and completes `.datadog` files and the queries of a `datadog` block: the log search syntax of Datadog Cloud SIEM detection rules, with 16 `datadog_*` codes (`opentide explain datadog_mixed_boolean`) and Datadog's reserved and standard attributes.
 
 ### Fixed
 
