@@ -1473,9 +1473,9 @@ configurations:
     #contributors:
       #- 
     #queries:
-      #- name: 
-        #query: |
+      #- query: |
           #...
+        #name: 
         #from: logs
         #group_by:
           #- 
@@ -1494,8 +1494,8 @@ configurations:
       #tolerance: 3
       #detect_ip_transitions: false
     #cases:
-      #- name: 
-        #condition: 
+      #- condition: 
+        #name: 
         #severity: info
         #notify:
           #- 
@@ -2314,9 +2314,9 @@ configurations:
     #contributors:
       #- 
     #queries:
-      #- name: 
-        #query: |
+      #- query: |
           #...
+        #name: 
         #from: logs
         #group_by:
           #- 
@@ -2335,8 +2335,8 @@ configurations:
       #tolerance: 3
       #detect_ip_transitions: false
     #cases:
-      #- name: 
-        #condition: 
+      #- condition: 
+        #name: 
         #severity: info
         #notify:
           #- 
@@ -3341,9 +3341,9 @@ threat:
             "    #contributors:",
             "      #- ",
             "    #queries:",
-            "      #- name: ",
-            "        #query: |",
+            "      #- query: |",
             "          #...",
+            "        #name: ",
             "        #from: logs",
             "        #group_by:",
             "          #- ",
@@ -3362,8 +3362,8 @@ threat:
             "      #tolerance: 3",
             "      #detect_ip_transitions: false",
             "    #cases:",
-            "      #- name: ",
-            "        #condition: ",
+            "      #- condition: ",
+            "        #name: ",
             "        #severity: info",
             "        #notify:",
             "          #- ",

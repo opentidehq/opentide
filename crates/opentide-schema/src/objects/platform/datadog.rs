@@ -291,10 +291,6 @@ fn duration_text(node: &Node, cx: &mut Context) -> Option<Option<String>> {
 model! {
     /// One search over a data source (`DatadogQuery`).
     DatadogQuery = "DatadogQuery" {
-        /// What conditions call the query: `[a-z][a-z0-9_]*`, unique in the block. Default: `a`, `b`, …
-        /// by position. Not allowed on a `new_value` query.
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        pub name: Option<String>,
         /// The Datadog search syntax, profile `rule`. Multiline in YAML.
         #[schemars(extend(
             "tide.template.multiline" = true,
@@ -302,6 +298,10 @@ model! {
         ))]
         #[from_node(with = "crate::objects::platform::query_text")]
         pub query: String,
+        /// What conditions call the query: `[a-z][a-z0-9_]*`, unique in the block. Default: `a`, `b`, …
+        /// by position. Not allowed on a `new_value` query.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub name: Option<String>,
         /// `logs`, `audit`, `events`, or `signals` (security signals). Default: `logs`.
         #[serde(default, rename = "from", skip_serializing_if = "Option::is_none")]
         #[schemars(schema_with = "crate::objects::platform::optional_literal::<DatadogSource>")]
@@ -365,15 +365,15 @@ model! {
 model! {
     /// When a match becomes a signal (`DatadogCase`).
     DatadogCase = "DatadogCase" {
-        /// The case's name.
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        pub name: Option<String>,
         /// Comparisons of query names with numbers, joined by `&&` or `||`: `failed > 10 && success > 0`.
         /// Required with `threshold` and `anomaly`; under `anomaly`, the number is a percentile between 0
         /// and 1.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[schemars(extend("tide.template.required" = true))]
         pub condition: Option<String>,
+        /// The case's name.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub name: Option<String>,
         /// `info`, `low`, `medium`, `high`, or `critical`. Default: from `response.alert_severity`, else
         /// `info`.
         #[serde(default, skip_serializing_if = "Option::is_none")]
