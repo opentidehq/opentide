@@ -266,13 +266,7 @@ fn pick_techniques(
     inherited: impl FnOnce() -> Result<Vec<String>, CompileError>,
 ) -> Result<Vec<String>, CompileError> {
     let chosen = if own.is_empty() { inherited()? } else { own };
-    let mut unique: Vec<String> = Vec::with_capacity(chosen.len());
-    for id in chosen {
-        if !unique.contains(&id) {
-            unique.push(id);
-        }
-    }
-    Ok(unique)
+    Ok(opentide_core::text::unique(chosen))
 }
 
 #[cfg(test)]

@@ -1309,6 +1309,10 @@ exit: 0
       "meaning": "The KQL scalar operator is a legacy spelling (containscs); use the current name (contains_cs)."
     },
     {
+      "code": "kql_function_unavailable",
+      "meaning": "A KQL query calls a function that exists in another product's dialect, not in this one: a Microsoft Defender advanced hunting function in a Microsoft Sentinel query."
+    },
+    {
       "code": "kql_join_summarize_before_project",
       "meaning": "A `join` runs while the pipeline it sits in still carries every column, and a later `project` would have narrowed it."
     },
@@ -2173,13 +2177,13 @@ exit: 0
   "duration_ms": 0,
   "exit_code": 0,
   "failure": null,
-  "message": "540 diagnostic codes",
+  "message": "541 diagnostic codes",
   "next_actions": [],
   "ok": true,
   "schema_version": 1,
   "status": "completed",
   "summary": {
-    "codes": 540
+    "codes": 541
   }
 }
 
