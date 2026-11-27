@@ -931,10 +931,13 @@ fn lint_reports_a_defender_function_in_a_sentinel_query() {
             11
         )]
     );
-    let (errors, _, _) = check(&sentinel, false);
+    let (errors, warnings, _) = check(&sentinel, false);
     assert!(
-        errors.iter().all(|d| d.code != "kql_function_unavailable"),
-        "{errors:?}"
+        errors
+            .iter()
+            .chain(&warnings)
+            .all(|d| d.code != "kql_function_unavailable"),
+        "{errors:?} {warnings:?}"
     );
     let defender = rule(&format!(
         "  microsoft_defender:\n    status: STAGING\n    schedule:\n      frequency: 1H\n    {query}"

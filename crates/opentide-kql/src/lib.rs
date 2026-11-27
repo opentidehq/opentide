@@ -423,6 +423,9 @@ impl Catalog {
         self.hand_len = columns.len();
         self.columns = columns;
         self.lazy = lazy;
+        // A dialect's own functions are its alone: a catalog moved from one
+        // dialect to another keeps Kusto's and takes the new dialect's.
+        self.functions.retain(|f| f.profile.is_none());
         if profile == Profile::Defender {
             self.functions.extend(defender_functions().iter().cloned());
         }
@@ -2664,6 +2667,22 @@ mod tests {
         assert!(sentinel.unavailable_function("fileprofile").is_none());
         // Kusto's own functions stay in every dialect.
         assert!(core.functions.iter().all(|f| f.profile.is_none()));
+        // A catalog moved between dialects carries the new one's functions, once.
+        let moved = Catalog::core()
+            .with_profile(Profile::Defender)
+            .with_profile(Profile::Sentinel);
+        assert!(moved.function("FileProfile").is_none());
+        let twice = Catalog::core()
+            .with_profile(Profile::Defender)
+            .with_profile(Profile::Defender);
+        assert_eq!(
+            twice
+                .functions
+                .iter()
+                .filter(|f| f.name == "SeenBy")
+                .count(),
+            1
+        );
     }
 
     /// Under Defender the functions get hover and signature help from their rows; under
@@ -2714,6 +2733,31 @@ mod tests {
         let own =
             "let FileProfile = (T:(SHA1:string)) { T };\nDeviceFileEvents | invoke FileProfile()";
         assert!(codes(own, Profile::Sentinel).is_empty());
+        // A workspace function declared as a log source, by its exact name, is
+        // that function; a pattern (`Device*`, `*`) names tables, not it.
+        let declared = |names: &[&str]| {
+            let toml = names
+                .iter()
+                .map(|n| format!("[[logsources]]\nname = \"{n}\"\nsystem = \"sentinel\"\n"))
+                .collect::<Vec<_>>()
+                .concat();
+            opentide_core::datasets::DeclaredDatasets::from_visibility(&toml).unwrap()
+        };
+        let probe = "DeviceNetworkEvents | project IP = LocalIP | invoke DeviceFromIP()";
+        for (names, reported) in [
+            (&["DeviceFromIP", "DeviceNetworkEvents"][..], false),
+            (&["Device*"][..], true),
+            (&["*"][..], true),
+        ] {
+            let _scope = opentide_core::datasets::scope_thread(Some(declared(names)));
+            assert_eq!(
+                codes(probe, Profile::Sentinel)
+                    .iter()
+                    .any(|(code, _, _)| code == codes::KQL_FUNCTION_UNAVAILABLE),
+                reported,
+                "{names:?}"
+            );
+        }
         assert!(
             codes("SecurityEvent | invoke fileprofile()", Profile::Sentinel)
                 .iter()

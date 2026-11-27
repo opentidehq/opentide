@@ -85,6 +85,21 @@ struct Columns {
     columns: Vec<ColumnRow>,
 }
 
+/// Advanced hunting's own functions, pre-parsed as `kql-defender-functions`.
+fn defender_functions(
+    datasets: &opentide_dataset::build::Datasets,
+    text: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let functions: Functions =
+        toml::from_str(text).map_err(|error| format!("{DEFENDER_FUNCTIONS}: {error}"))?;
+    datasets.value(
+        "kql-defender-functions",
+        &[DEFENDER_FUNCTIONS],
+        &functions.functions,
+    )?;
+    Ok(())
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let datasets = opentide_dataset::build::Datasets::for_crate("data/catalogs")?;
     datasets.text_from_sources()?;
@@ -161,13 +176,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             options.options,
         ),
     )?;
-    let defender_functions: Functions = toml::from_str(&read(DEFENDER_FUNCTIONS)?)
-        .map_err(|error| format!("{DEFENDER_FUNCTIONS}: {error}"))?;
-    datasets.value(
-        "kql-defender-functions",
-        &[DEFENDER_FUNCTIONS],
-        &defender_functions.functions,
-    )?;
+    defender_functions(&datasets, &read(DEFENDER_FUNCTIONS)?)?;
     let hand = |dir: &str| -> Result<(Vec<TableRow>, Vec<ColumnRow>), Box<dyn std::error::Error>> {
         let tables_path = format!("{dir}/tables.toml");
         let columns_path = format!("{dir}/columns.toml");
