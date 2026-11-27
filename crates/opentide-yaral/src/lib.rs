@@ -34,7 +34,10 @@ mod analysis;
 pub mod catalog;
 mod catalog_model;
 pub mod editor;
-mod lexer;
+// The lexer: public but hidden, as the kinds, for the crate's corpus test (`tests/`). Not an
+// API.
+#[doc(hidden)]
+pub mod lexer;
 mod parser;
 #[doc(hidden)]
 pub mod syntax;

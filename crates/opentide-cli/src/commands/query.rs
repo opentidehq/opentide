@@ -89,13 +89,20 @@ pub(crate) fn credential_keys(platform: &str) -> (&'static str, &'static [&'stat
     }
 }
 
+/// Microsoft Graph, which Microsoft Defender's tenants are reached through.
+const GRAPH_HOST: &str = "https://graph.microsoft.com";
+/// CrowdStrike's API in its default cloud (US-1).
+const CROWDSTRIKE_HOST: &str = "https://api.crowdstrike.com";
+/// The Log Analytics API, which Microsoft Sentinel's queries run on.
+const LOG_ANALYTICS_HOST: &str = "https://api.loganalytics.io";
+
 /// The address a transport failure is reported at, for a tenant configured
 /// without a URL (`_DEFAULT_HOSTS`).
 pub(crate) fn default_host(platform: &str) -> &'static str {
     match platform {
-        "microsoft_defender" => "https://graph.microsoft.com",
-        "crowdstrike" => "https://api.crowdstrike.com",
-        "sentinel" => "https://api.loganalytics.io",
+        "microsoft_defender" => GRAPH_HOST,
+        "crowdstrike" => CROWDSTRIKE_HOST,
+        "sentinel" => LOG_ANALYTICS_HOST,
         _ => "",
     }
 }

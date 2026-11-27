@@ -13,6 +13,11 @@ readme = "../COMPONENT.md"
 [lints]
 workspace = true
 
+[features]
+# `text::sha256_hex`: SHA-256 in hex. Opt-in: only the command line and xtask
+# hash, so the engines, the facade and the hosts never build `sha2` (#2018).
+digest = ["dep:sha2"]
+
 [dependencies]
 # Elastic durations (`duration`): linear-time patterns, no look-around.
 regex.workspace = true
@@ -33,6 +38,9 @@ uuid.workspace = true
 strsim.workspace = true
 # `markdown`: Markdown read as plain text, the one converter (#1957).
 pulldown-cmark = { version = "0.13", default-features = false }
+# `text::sha256_hex` (the `digest` feature): the one SHA-256 digest in hex
+# (RustCrypto).
+sha2 = { workspace = true, optional = true }
 # YAML 1.2 (`node`, the node tree every crate reads YAML with, #850):
 # saphyr-parser's events with their spans and saphyr's core-schema scalars.
 saphyr.workspace = true

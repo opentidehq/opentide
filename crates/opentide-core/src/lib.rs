@@ -754,6 +754,7 @@ pub mod json;
 pub mod markdown;
 pub mod node;
 pub mod suggest;
+pub mod text;
 pub mod yara;
 
 /// Well-known diagnostic codes. Extra query diagnostics are allowed.
