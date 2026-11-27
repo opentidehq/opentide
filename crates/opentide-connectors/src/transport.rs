@@ -407,6 +407,14 @@ pub enum TransportFailure {
     },
     /// Connected, then no answer (or no more of it) within the read limit.
     Timeout,
+    /// The whole exchange ran past its deadline
+    /// (`ReqwestTransport`'s [`DEADLINE_READ_TIMEOUTS`]): the answer kept
+    /// coming, but did not finish in time. Reported as a timeout, with the
+    /// deadline's length.
+    Deadline {
+        /// How long the exchange was given.
+        after: Duration,
+    },
     /// The tenant's certificate was refused during the TLS handshake (the
     /// tenant's TLS settings do not trust it): the request was never sent.
     /// Never sent again: it would fail the same way.
@@ -422,7 +430,8 @@ pub enum TransportFailure {
         /// What failed, without the URL.
         reason: String,
     },
-    /// The answer could not be read.
+    /// The answer could not be read, or its body is larger than
+    /// [`MAX_BODY_BYTES`].
     Answer {
         /// What failed, without the URL.
         reason: String,
@@ -593,13 +602,35 @@ mod certificate_tests {
     }
 }
 
+/// The largest answer body a request reads: 64 MiB. No platform answers
+/// one page that large; a body past it (a misrouted download, a gateway that
+/// never stops) fails the request with [`TransportFailure::Answer`] instead
+/// of filling the memory (#1936). A `Content-Length` past it fails before
+/// the body is read.
+///
+/// `ReqwestTransport` holds to it; the transport `opentide serve` installs
+/// for the WASI build (`opentide/fetch`) does not yet (#1999).
+pub const MAX_BODY_BYTES: usize = 64 * 1024 * 1024;
+
+/// How many read timeouts one exchange may take in all, after its connect
+/// timeout: its deadline is the connect timeout plus this many read
+/// timeouts (the request's own timeout when it is longer), 10 minutes with
+/// the default 2-minute timeout. Each read must still bring data within one
+/// read timeout; the deadline stops an answer that trickles in forever
+/// (#1936), with [`TransportFailure::Deadline`].
+pub const DEADLINE_READ_TIMEOUTS: u32 = 4;
+
 /// The native transport: reqwest on rustls.
 #[cfg(not(target_os = "wasi"))]
 #[derive(Debug)]
 pub struct ReqwestTransport {
     client: reqwest::Client,
+    /// The connect limit, the first part of each exchange's deadline.
+    connect_timeout: Duration,
     /// Each read of the answer's body must bring data within it.
     read_timeout: Duration,
+    /// The largest body read ([`MAX_BODY_BYTES`]).
+    max_body: usize,
 }
 
 /// How many redirects one request follows, as reqwest's default.
@@ -674,8 +705,34 @@ impl ReqwestTransport {
         let client = builder.build().map_err(crate::error::describe)?;
         Ok(Self {
             client,
+            connect_timeout,
             read_timeout: settings.timeout,
+            max_body: MAX_BODY_BYTES,
         })
+    }
+
+    /// How long an exchange of *request* may take in all
+    /// ([`DEADLINE_READ_TIMEOUTS`]).
+    fn deadline(&self, request: &Request) -> Duration {
+        let read = request
+            .timeout()
+            .map_or(self.read_timeout, |own| own.max(self.read_timeout));
+        self.connect_timeout
+            .saturating_add(read.saturating_mul(DEADLINE_READ_TIMEOUTS))
+    }
+
+    /// Why a body of *size* bytes is not read: larger than *max_body*,
+    /// written in MiB when it is a whole number of them.
+    fn too_large(size: impl fmt::Display, max_body: usize) -> TransportFailure {
+        const MIB: usize = 1024 * 1024;
+        let max = if max_body >= MIB && max_body.is_multiple_of(MIB) {
+            format!("{} MiB", max_body / MIB)
+        } else {
+            format!("{max_body} bytes")
+        };
+        TransportFailure::Answer {
+            reason: format!("the answer's body ({size} bytes) is larger than {max}"),
+        }
     }
 
     /// Which way *error* failed, as `HttpClient` used to read reqwest's.
@@ -698,17 +755,35 @@ impl ReqwestTransport {
         }
     }
 
+    /// The body of *response*: each read within `read_timeout`, all of it
+    /// by *deadline* (*limit* after the exchange started), at most
+    /// `max_body` bytes.
     async fn body(
+        &self,
         mut response: reqwest::Response,
-        read_timeout: Duration,
+        deadline: tokio::time::Instant,
+        limit: Duration,
     ) -> Result<Vec<u8>, TransportFailure> {
+        if let Some(length) = response.content_length()
+            && usize::try_from(length).map_or(true, |length| length > self.max_body)
+        {
+            return Err(Self::too_large(length, self.max_body));
+        }
         let mut body = Vec::new();
         loop {
-            match tokio::time::timeout(read_timeout, response.chunk()).await {
-                Ok(Ok(Some(chunk))) => body.extend_from_slice(&chunk),
-                Ok(Ok(None)) => return Ok(body),
-                Ok(Err(failure)) => return Err(Self::failure(failure)),
-                Err(_) => return Err(TransportFailure::Timeout),
+            let read = tokio::time::timeout(self.read_timeout, response.chunk());
+            match tokio::time::timeout_at(deadline, read).await {
+                Ok(Ok(Ok(Some(chunk)))) => {
+                    let size = body.len().saturating_add(chunk.len());
+                    if size > self.max_body {
+                        return Err(Self::too_large(format!("at least {size}"), self.max_body));
+                    }
+                    body.extend_from_slice(&chunk);
+                }
+                Ok(Ok(Ok(None))) => return Ok(body),
+                Ok(Ok(Err(failure))) => return Err(Self::failure(failure)),
+                Ok(Err(_)) => return Err(TransportFailure::Timeout),
+                Err(_) => return Err(TransportFailure::Deadline { after: limit }),
             }
         }
     }
@@ -723,17 +798,24 @@ impl Transport for ReqwestTransport {
     ) -> BoxFuture<'a, Result<Response, TransportFailure>> {
         Box::pin(async move {
             let started = Instant::now();
+            let now = tokio::time::Instant::now();
+            // A timeout too long for the clock has no deadline but the far
+            // future (tokio's own, 30 years).
+            let limit = self.deadline(&request);
+            let deadline = now
+                .checked_add(limit)
+                .unwrap_or_else(|| now + Duration::from_hours(24 * 365 * 30));
             let exchange = async {
-                let response = self
-                    .client
-                    .execute(request.into_reqwest())
-                    .await
-                    .map_err(Self::failure)?;
+                let response =
+                    tokio::time::timeout_at(deadline, self.client.execute(request.into_reqwest()))
+                        .await
+                        .map_err(|_| TransportFailure::Deadline { after: limit })?
+                        .map_err(Self::failure)?;
                 let elapsed = started.elapsed();
                 let status = response.status();
                 let headers = response.headers().clone();
                 let url = response.url().clone();
-                let body = Self::body(response, self.read_timeout).await;
+                let body = self.body(response, deadline, limit).await;
                 let reading = started.elapsed().saturating_sub(elapsed);
                 Ok(Response::new(
                     status,
@@ -757,6 +839,179 @@ impl Transport for ReqwestTransport {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A server on a free local port that answers each connection with
+    /// what *answer* writes on the open socket, after reading the request.
+    #[cfg(not(target_os = "wasi"))]
+    fn serve(answer: impl Fn(&mut std::net::TcpStream) + Send + 'static) -> String {
+        use std::io::Read as _;
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        std::thread::spawn(move || {
+            for stream in listener.incoming() {
+                let Ok(mut stream) = stream else {
+                    return;
+                };
+                let mut buffer = [0_u8; 4096];
+                let _ = stream.read(&mut buffer);
+                answer(&mut stream);
+            }
+        });
+        format!("http://{address}/")
+    }
+
+    /// GET *url* through a [`ReqwestTransport`] whose timeouts are *timeout*
+    /// and whose largest body is *max_body*.
+    #[cfg(not(target_os = "wasi"))]
+    fn fetch(url: &str, timeout: Duration, max_body: usize) -> Result<Response, TransportFailure> {
+        let settings = crate::HttpSettings {
+            timeout,
+            ..crate::HttpSettings::default()
+        };
+        let spec = TransportSpec {
+            label: &TenantLabel::new("splunk", "lab"),
+            settings: &settings,
+            proxies: &ProxySettings::default(),
+            env: &Environment::default(),
+        };
+        let mut transport = ReqwestTransport::new(&spec).unwrap();
+        transport.max_body = max_body;
+        let request = Request::new(Method::GET, url::Url::parse(url).unwrap());
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        runtime.block_on(transport.execute(request, &CancellationToken::new()))
+    }
+
+    #[cfg(not(target_os = "wasi"))]
+    fn too_large(outcome: Result<Response, TransportFailure>) -> String {
+        match outcome.map(Response::into_body) {
+            Ok(Err(TransportFailure::Answer { reason })) => reason,
+            other => panic!("not refused as too large: {other:?}"),
+        }
+    }
+
+    /// A body up to the cap is read; a `Content-Length` past it is refused
+    /// before the body, and a body streamed past it is refused once it
+    /// passes (#1936).
+    #[cfg(not(target_os = "wasi"))]
+    #[test]
+    fn a_body_past_the_cap_is_refused() {
+        use std::io::Write as _;
+        let exact = serve(|stream| {
+            let mut answer = b"HTTP/1.1 200 OK\r\nContent-Length: 10\r\n\r\n".to_vec();
+            answer.extend_from_slice("é😀abcd".as_bytes());
+            let _ = stream.write_all(&answer);
+        });
+        let body = fetch(&exact, Duration::from_secs(5), 10)
+            .unwrap()
+            .into_body();
+        assert_eq!(body.unwrap(), "é😀abcd".as_bytes());
+        let declared = serve(|stream| {
+            let _ = stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 11\r\n\r\n0123456789a");
+        });
+        assert_eq!(
+            too_large(fetch(&declared, Duration::from_secs(5), 10)),
+            "the answer's body (11 bytes) is larger than 10 bytes"
+        );
+        // Chunked, without a length, and never ending: refused at the cap.
+        let streamed = serve(|stream| {
+            let _ = stream.write_all(b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n");
+            while stream.write_all(b"4\r\nabcd\r\n").is_ok() {
+                let _ = stream.flush();
+                std::thread::sleep(Duration::from_millis(5));
+            }
+        });
+        let reason = too_large(fetch(&streamed, Duration::from_secs(5), 10));
+        assert!(
+            reason.starts_with("the answer's body (at least "),
+            "{reason}"
+        );
+        assert!(
+            reason.ends_with(" bytes) is larger than 10 bytes"),
+            "{reason}"
+        );
+        // The real cap reads in MiB.
+        assert_eq!(
+            ReqwestTransport::too_large(67_108_865, MAX_BODY_BYTES),
+            TransportFailure::Answer {
+                reason: "the answer's body (67108865 bytes) is larger than 64 MiB".into()
+            }
+        );
+    }
+
+    /// An answer that sends a byte before each read timeout runs out, and
+    /// never ends, stops at the exchange's deadline: the connect timeout
+    /// plus [`DEADLINE_READ_TIMEOUTS`] read timeouts (#1936).
+    #[cfg(not(target_os = "wasi"))]
+    #[test]
+    fn an_answer_that_trickles_forever_stops_at_the_deadline() {
+        use std::io::Write as _;
+        let trickle = serve(|stream| {
+            let _ = stream.write_all(b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n");
+            while stream.write_all(b"1\r\na\r\n").is_ok() {
+                let _ = stream.flush();
+                std::thread::sleep(Duration::from_millis(50));
+            }
+        });
+        let started = Instant::now();
+        let body =
+            fetch(&trickle, Duration::from_millis(200), MAX_BODY_BYTES).map(Response::into_body);
+        let took = started.elapsed();
+        assert_eq!(
+            body,
+            Ok(Err(TransportFailure::Deadline {
+                after: Duration::from_secs(1)
+            })),
+        );
+        // 200 ms + 4 × 200 ms = 1 s, not the minute of trickling.
+        assert!(took >= Duration::from_millis(900), "{took:?}");
+        assert!(took < Duration::from_secs(10), "{took:?}");
+    }
+
+    /// An answer that stalls after its head times out on one read, long
+    /// before the deadline.
+    #[cfg(not(target_os = "wasi"))]
+    #[test]
+    fn an_answer_that_stalls_times_out_on_one_read() {
+        use std::io::Write as _;
+        let stall = serve(|stream| {
+            let _ = stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 10\r\n\r\nab");
+            let _ = stream.flush();
+            std::thread::sleep(Duration::from_secs(5));
+        });
+        let started = Instant::now();
+        let body =
+            fetch(&stall, Duration::from_millis(200), MAX_BODY_BYTES).map(Response::into_body);
+        assert!(
+            matches!(body, Ok(Err(TransportFailure::Timeout))),
+            "{body:?}"
+        );
+        assert!(
+            started.elapsed() < Duration::from_millis(900),
+            "{:?}",
+            started.elapsed()
+        );
+    }
+
+    /// The deadline is the connect timeout plus four read timeouts, of the
+    /// request's own timeout when it is the longer.
+    #[cfg(not(target_os = "wasi"))]
+    #[test]
+    fn the_deadline_follows_the_timeouts() {
+        let spec = TransportSpec {
+            label: &TenantLabel::new("splunk", "lab"),
+            settings: &crate::HttpSettings::default(),
+            proxies: &ProxySettings::default(),
+            env: &Environment::default(),
+        };
+        let transport = ReqwestTransport::new(&spec).unwrap();
+        let url = url::Url::parse("https://splunk.invalid/").unwrap();
+        let mut request = Request::new(Method::GET, url);
+        assert_eq!(transport.deadline(&request), Duration::from_secs(600));
+        request.set_timeout(Some(Duration::from_secs(300)));
+        assert_eq!(transport.deadline(&request), Duration::from_mins(2 + 20));
+        request.set_timeout(Some(Duration::from_secs(1)));
+        assert_eq!(transport.deadline(&request), Duration::from_secs(600));
+    }
 
     /// #1142: a request's credentials are sensitive, and its `Debug` shows
     /// none of them: not the headers, the URL's query or user, or the body.

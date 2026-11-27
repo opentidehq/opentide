@@ -1,15 +1,7 @@
 //! The parser's trees as snapshots: hand-picked queries, valid and broken, and one tree per
-//! corpus file. The parser is private to the crate until the switch, so this test includes its
-//! source.
+//! corpus file.
 
-#![expect(dead_code, reason = "the included modules are used in part")]
-
-#[path = "../src/lexer.rs"]
-mod lexer;
-#[path = "../src/parser.rs"]
-mod parser;
-#[path = "../src/syntax.rs"]
-mod syntax;
+use opentide_eql::parser;
 
 #[test]
 fn trees() {

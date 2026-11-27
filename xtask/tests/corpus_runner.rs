@@ -214,6 +214,42 @@ ops = [{ op = "set", path = "status", value = "NOPE" }]
         assert_eq!(clean(&lab), 1);
     }
 
+    /// `clean --engine rust` runs this checkout's command line, no oracle:
+    /// a clean workspace passes, a broken object fails it.
+    #[test]
+    fn clean_on_the_rust_engine_runs_the_command_line() {
+        let lab = Lab::new("clean-rust");
+        let repo = lab.path("repo");
+        let generate = [
+            "generate",
+            "--seed",
+            "1",
+            "--threats",
+            "2",
+            "--objectives",
+            "2",
+            "--rules",
+            "0",
+            "--out",
+            &repo,
+        ];
+        assert_eq!(run(&generate.map(str::to_string)).unwrap(), 0);
+        let clean = || {
+            let args = ["clean", "--engine", "rust", "--repo", &repo];
+            run(&args.map(str::to_string)).unwrap()
+        };
+        assert_eq!(clean(), 0, "the control passes");
+        let threats = Path::new(&repo).join("objects/threats");
+        let threat = std::fs::read_dir(&threats)
+            .unwrap()
+            .next()
+            .unwrap()
+            .unwrap()
+            .path();
+        std::fs::write(&threat, "name: [unclosed é\n").unwrap();
+        assert_eq!(clean(), 1, "a file that does not parse is a finding");
+    }
+
     #[test]
     fn coverage_check_fails_on_a_missing_code() {
         let lab = Lab::new("coverage");

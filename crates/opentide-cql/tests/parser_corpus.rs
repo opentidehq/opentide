@@ -1,16 +1,7 @@
 //! The parser over every CQL file of the corpora: the tree holds every byte, no toolkit
 //! guard fires, and the pinned regressions keep their verdicts.
-//!
-//! The parser is private to the crate, so this test includes its source.
 
-#![expect(dead_code, reason = "the included modules are used in part")]
-
-#[path = "../src/lexer.rs"]
-mod lexer;
-#[path = "../src/parser.rs"]
-mod parser;
-#[path = "../src/syntax.rs"]
-mod syntax;
+use opentide_cql::parser;
 
 use opentide_parse::ErrorKind;
 use std::path::{Path, PathBuf};

@@ -530,13 +530,24 @@ async fn a_create_with_no_answer_is_unconfirmed_and_not_sent_again() {
         .await;
     let session = stand.session();
     let deploy = create_rule();
-    // The run is cancelled while the create waits for its answer.
-    let cancel = stand.cancel.clone();
-    tokio::spawn(async move {
-        tokio::time::sleep(Duration::from_millis(500)).await;
-        cancel.cancel();
-    });
-    let outcome = deploy_rule(&session, &deploy).await.unwrap();
+    // The run is cancelled while the create waits for its answer: once the stand holds the
+    // POST, never on a timer that could fire before it was sent. The 10 s only keep a deploy
+    // that never sends it from hanging the test; it then fails on the outcome.
+    let cancelled_once_sent = async {
+        let backstop = tokio::time::Instant::now() + Duration::from_secs(10);
+        while tokio::time::Instant::now() < backstop
+            && !stand
+                .requests()
+                .await
+                .iter()
+                .any(|request| request.method.as_str() == "POST" && request.url.path() == RULES)
+        {
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+        stand.cancel.cancel();
+    };
+    let (outcome, ()) = tokio::join!(deploy_rule(&session, &deploy), cancelled_once_sent);
+    let outcome = outcome.unwrap();
     assert_eq!(failure_code(&outcome), Some("exabeam_create_unconfirmed"));
     let failure = outcome.failure.unwrap();
     assert!(

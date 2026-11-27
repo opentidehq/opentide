@@ -52,7 +52,11 @@ pub fn declare_dataset(toml: Option<&str>, platform: &str, name: &str) -> Datase
     }
 }
 
-/// A TOML basic string: `toml_edit` escapes every control character (#1929).
+/// `text` as a TOML string, in the style `toml_edit` picks: a basic string; a
+/// literal one (`'A"B'`) where that spares escaping a `"` or `\`; or a
+/// multi-line basic string (`"""`) when it holds a newline, or both `'` and
+/// `"`. A newline stays a line break there; every other control character is
+/// escaped (#1929).
 fn quote(text: &str) -> String {
     toml_edit::Value::from(text).to_string()
 }

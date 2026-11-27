@@ -13,7 +13,6 @@ use opentide_connectors::misp::{
     GALAXY_ACTOR, GALAXY_ATTACK, GalaxyCluster, Kind, Misp, MispCallError, OPENTIDE_TEMPLATE_UUID,
 };
 use opentide_schema::node::Value;
-use regex::Regex;
 
 use super::document::TideDocument;
 
@@ -33,17 +32,12 @@ pub const REQUIRED_RELATIONS: [&str; 6] = [
 /// The longest `info` MISP takes.
 const INFO_LIMIT: usize = 255;
 
-/// A canonical UUID (`CANONICAL_UUID_PATTERN`).
-#[expect(
-    clippy::expect_used,
-    reason = "a literal pattern, compiled once; it cannot fail"
-)]
-pub fn uuid_pattern() -> &'static Regex {
-    static PATTERN: OnceLock<Regex> = OnceLock::new();
-    PATTERN.get_or_init(|| {
-        Regex::new(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
-            .expect("a valid pattern")
-    })
+/// Whether `text` is a UUID in its canonical form, lower case
+/// (`CANONICAL_UUID_PATTERN`, [`opentide_core::ids::is_canonical`]): what an
+/// event carries as it is written, so an upper-case relation is refused
+/// rather than sent.
+pub fn is_canonical_uuid(text: &str) -> bool {
+    opentide_core::ids::is_canonical(text)
 }
 
 /// A vocabulary's `misp` tags by name (`_vocab_misp`).
@@ -247,13 +241,12 @@ fn version(value: Option<&Json>) -> Option<String> {
 
 /// The objects `document` relates to (`_relations`).
 fn relations(document: &TideDocument, family: &str) -> Result<Vec<String>, &'static str> {
-    let pattern = uuid_pattern();
     match family {
         "threat" => Ok(Vec::new()),
         "rule" => match document.body.get("detection_model") {
             None | Some(Json::Null) => Ok(Vec::new()),
             Some(Json::Str(text)) if text.is_empty() => Ok(Vec::new()),
-            Some(Json::Str(text)) if pattern.is_match(text) => Ok(vec![text.clone()]),
+            Some(Json::Str(text)) if is_canonical_uuid(text) => Ok(vec![text.clone()]),
             Some(_) => Err("relation_uuid"),
         },
         _ => {
@@ -273,7 +266,7 @@ fn relations(document: &TideDocument, family: &str) -> Result<Vec<String>, &'sta
                 match item {
                     Json::Null => {}
                     Json::Str(text) if text.is_empty() => {}
-                    Json::Str(text) if pattern.is_match(text) => {
+                    Json::Str(text) if is_canonical_uuid(text) => {
                         if !found.contains(text) {
                             found.push(text.clone());
                         }

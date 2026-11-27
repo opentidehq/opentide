@@ -279,7 +279,7 @@ impl Workspace {
             },
             load_errors: index.load_errors.len() + index.duplicates.len(),
             platforms: opentide_workspace::info::platforms(
-                self.inner.configuration().resolved.get("systems"),
+                self.inner.configuration().resolved.platforms(),
                 None,
                 &is_set,
             ),

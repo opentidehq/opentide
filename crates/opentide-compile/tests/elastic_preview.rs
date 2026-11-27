@@ -31,10 +31,14 @@ const PLATFORM: &str = "[platform]\nenabled = true\n\n[[tenants]]\nname = \"basi
      \"scheduling.interval\" = \"1h\"\n";
 
 fn workspace() -> Workspace {
+    workspace_with(RULE)
+}
+
+fn workspace_with(rule: &str) -> Workspace {
     let fs = Arc::new(MemoryFs::new());
     fs.create_dir("/ws/.opentide/configurations/platforms");
     fs.create_dir("/ws/objects/rules");
-    fs.write("/ws/objects/rules/r.yaml", RULE.to_owned());
+    fs.write("/ws/objects/rules/r.yaml", rule.to_owned());
     fs.write(
         "/ws/.opentide/configurations/platforms/elastic.toml",
         PLATFORM.to_owned(),
@@ -107,5 +111,70 @@ fn a_dry_run_shows_the_body_a_deploy_compiles_for_the_first_tenant() {
     assert!(
         offline.to_compact().contains("\"interval\":\"5m\""),
         "{offline:?}"
+    );
+}
+
+/// #1982: a duration past `ELASTIC_MAX_SECONDS` saturated into the payload
+/// (`from: now-340282366920938463463374607431768211455s`); the compiler now
+/// refuses the rule, as the model does, naming the field.
+#[test]
+fn a_duration_past_the_deployable_bound_refuses_the_rule() {
+    let huge = "9".repeat(40) + "s";
+    for (field, rule) in [
+        (
+            "lookback",
+            RULE.replace(
+                "interval: 5m\n",
+                &format!("interval: 5m\n      lookback: {huge}\n"),
+            ),
+        ),
+        (
+            "interval",
+            RULE.replace("interval: 5m\n", &format!("interval: {huge}\n")),
+        ),
+        (
+            "interval",
+            RULE.replace("interval: 5m\n", "interval: 9223372036854775808s\n"),
+        ),
+    ] {
+        let workspace = workspace_with(&rule);
+        let owned = Owned::new(
+            &Vocabularies::bundled(),
+            &workspace.configuration().resolved,
+        );
+        let index = workspace.index().clone();
+        let cx = owned.context(&index);
+        let object = index.get("rule", UUID).unwrap();
+        let rule = Rule::new(object.root().unwrap(), None);
+        let error = elastic::compile(&cx, &rule, &elastic::Setup::none()).unwrap_err();
+        assert_eq!(error.code, "compile_invalid_rule", "{error}");
+        assert_eq!(
+            error.field,
+            ["configurations", "elastic", "scheduling", field],
+            "{error}"
+        );
+        assert!(
+            error.reason.contains("at most 9223372036854775807 seconds"),
+            "{error}"
+        );
+    }
+    // At the bound, the window is exact: interval plus lookback, no saturation.
+    let rule = RULE.replace(
+        "interval: 5m\n",
+        "interval: 9223372036854775807s\n      lookback: 9223372036854775807s\n",
+    );
+    let workspace = workspace_with(&rule);
+    let owned = Owned::new(
+        &Vocabularies::bundled(),
+        &workspace.configuration().resolved,
+    );
+    let index = workspace.index().clone();
+    let cx = owned.context(&index);
+    let object = index.get("rule", UUID).unwrap();
+    let rule = Rule::new(object.root().unwrap(), None);
+    let body = elastic::compile(&cx, &rule, &elastic::Setup::none()).unwrap();
+    assert_eq!(
+        body.get("from").and_then(Json::as_str),
+        Some("now-18446744073709551614s")
     );
 }

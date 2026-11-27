@@ -27,10 +27,9 @@ What remains is tracked in open issues, not in this plan:
 | [#838](https://github.com/opentidehq/opentide/issues/838) | UC-5.3: the npm packages (`@opentide/opentide`, `@opentide/wasm`) and their trusted publishers |
 | [opentidehq/vscode-extension#75](https://github.com/opentidehq/vscode-extension/issues/75) | UC-6.1: the VS Code extension without its CPython bundle |
 | [#842](https://github.com/opentidehq/opentide/issues/842) | UC-6.3: archive language-server and publish the migration guide |
-| [#844](https://github.com/opentidehq/opentide/issues/844) | UC-X.2: the mutation-testing baseline |
-| [#1571](https://github.com/opentidehq/opentide/issues/1571) | Analysis faster than the vendors' analyzers, in every language (ADR 0014) |
-| [#1071](https://github.com/opentidehq/opentide/issues/1071) | `validate`'s peak memory against the plan's budget (catalog loading, ADR 0013) |
 | [#1513](https://github.com/opentidehq/opentide/issues/1513) | Supply chain: replace or drop `chrono` and `humantime` |
+
+Closed since this list was written: [#844](https://github.com/opentidehq/opentide/issues/844) (UC-X.2, the mutation-testing baseline), [#1571](https://github.com/opentidehq/opentide/issues/1571) (analysis faster than the vendors' analyzers, ADR 0014) and [#1071](https://github.com/opentidehq/opentide/issues/1071) (`validate`'s peak memory, catalog loading, ADR 0013).
 
 The rest of this page is the plan as it was written, kept for its decisions and its evidence; parts changed as it was carried out (the repository layout of section 9, the golden capture of section 5.1).
 

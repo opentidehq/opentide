@@ -2691,8 +2691,9 @@ pub fn advisories(
         && eql_is_sequence(query)
         && let Some((_, maxspan_ms)) = eql_maxspan(query)
     {
-        // A duration saturates at `u128::MAX` seconds: so do its milliseconds,
-        // never wrapping into a small window (#1928).
+        // `elastic_seconds` bounds a duration at `ELASTIC_MAX_SECONDS` (#1982), so
+        // these stay exact in `u128`; the saturating arithmetic still keeps the
+        // milliseconds from ever wrapping into a small window (#1928).
         let lookback_ms = lookback_secs.saturating_mul(1000);
         let window_ms = interval_secs
             .saturating_add(lookback_secs)
@@ -2930,14 +2931,26 @@ mod tests {
     /// wrapping into a small window that a short maxspan exceeds (#1928).
     #[test]
     fn advisories_saturate_a_huge_lookback() {
-        let days = "9".repeat(40);
-        let block: Json = serde_json::from_str(&format!(
-            r#"{{"type": "eql", "query": "sequence with maxspan=1h [a] [b]", "scheduling": {{"interval": "5m", "lookback": "{days}d"}}}}"#
-        ))
-        .unwrap_or(Json::Null);
+        // #1928: a lookback's milliseconds never wrap into a small window, at the
+        // largest lookback the bound allows (#1982).
+        let block = |lookback: &str| -> Json {
+            serde_json::from_str(&format!(
+                r#"{{"type": "eql", "query": "sequence with maxspan=1h [a] [b]", "scheduling": {{"interval": "5m", "lookback": "{lookback}"}}}}"#
+            ))
+            .unwrap_or(Json::Null)
+        };
         assert_eq!(
-            advisories(&block, "high", true, false).unwrap_or_default(),
+            advisories(&block("9223372036854775807s"), "high", true, false).unwrap_or_default(),
             ["lookback_long"]
+        );
+        // Past the bound the lookback cannot be deployed: an error, not advisories.
+        let huge = "9".repeat(40) + "d";
+        let error = advisories(&block(&huge), "high", true, false)
+            .err()
+            .unwrap_or_default();
+        assert!(
+            error.contains("longer than a rule can be deployed with"),
+            "{error}"
         );
     }
 
