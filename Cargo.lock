@@ -3404,6 +3404,7 @@ dependencies = [
  "compact_str",
  "indexmap",
  "memchr",
+ "pulldown-cmark",
  "regex",
  "saphyr",
  "saphyr-parser",

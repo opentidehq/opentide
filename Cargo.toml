@@ -121,6 +121,9 @@ titlecase = { version = "3.6", default-features = false }
 regex-syntax = "0.8"
 # "did you mean" suggestions (opentide-core `suggest`): edit distances. Also clap's.
 strsim = "0.11"
+# Markdown read as text (opentide-core's `markdown` feature) and parsed for the
+# terminal (opentide-cli `explain`): CommonMark, no extension.
+pulldown-cmark = { version = "0.13", default-features = false }
 # A fast hasher seeded per process for the engine's hot-path maps, keyed by
 # query text among others (ADR 0014 §5b): SipHash cost about a seventh of a
 # KQL analysis.

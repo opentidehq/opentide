@@ -757,6 +757,8 @@ pub mod duration;
 pub mod falco;
 pub mod ids;
 pub mod json;
+#[cfg(feature = "markdown")]
+pub mod markdown;
 pub mod node;
 pub mod suggest;
 pub mod text;

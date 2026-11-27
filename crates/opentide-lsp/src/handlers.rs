@@ -1136,18 +1136,17 @@ fn markup(plain: bool, value: String) -> lsp::MarkupContent {
     }
 }
 
-/// Markdown read as text: emphasis and code marks dropped, a fenced block's
-/// fences dropped and its body kept.
+/// Markdown read as text (`opentide_core::markdown`): its lines kept, a
+/// link as `text (url)`, as SARIF's `help.text` reads.
 fn plain_text(markdown: &str) -> String {
-    markdown
-        .lines()
-        .filter(|line| !line.trim_start().starts_with("```"))
-        .map(|line| {
-            let line = line.trim_start_matches('#').trim_start_matches(' ');
-            line.replace("**", "").replace('`', "")
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
+    use opentide_core::markdown::{Lines, Links, Options, to_text};
+    to_text(
+        markdown,
+        Options {
+            links: Links::TextAndUrl,
+            lines: Lines::Keep,
+        },
+    )
 }
 
 /// The open document a position names, with the byte offset of the position.
@@ -3290,12 +3289,51 @@ mod tests {
         assert!(!wanted(Some(&quick), &fix_all));
     }
 
+    /// A hover for a client that renders no Markdown reads as SARIF's
+    /// `help.text` does (#1957).
     #[test]
     fn plain_text_drops_markdown_marks() {
-        assert_eq!(
-            plain_text("**SecurityEvent**\n\n```kql\nT | take 1\n```\n`x` column"),
-            "SecurityEvent\n\nT | take 1\nx column"
-        );
+        for (markdown, text) in [
+            (
+                "**SecurityEvent**\n\n```kql\nT | take 1\n```\n`x` column",
+                "SecurityEvent\n\nT | take 1\n\nx column",
+            ),
+            (
+                "# Título\n\nUne **règle** et __gras__ avec `code` 😀.\n",
+                "Título\n\nUne règle et gras avec code 😀.",
+            ),
+            (
+                "Voir [la page](https://exemple.fr/é) et <https://x.y>.",
+                "Voir la page (https://exemple.fr/é) et https://x.y.",
+            ),
+            (
+                "Ligne une\nligne deux\n\nParagraphe 2",
+                "Ligne une\nligne deux\n\nParagraphe 2",
+            ),
+            (
+                "- élément un\n- élément *deux*\n\n1. premier\n2. second",
+                "- élément un\n- élément deux\n\n1. premier\n2. second",
+            ),
+            (
+                "```kql\n// é\nT | where Name == \"`é`\"\n```\nAprès",
+                "// é\nT | where Name == \"`é`\"\n\nAprès",
+            ),
+            (
+                "_italique_ et snake_case_name et **open",
+                "italique et snake_case_name et **open",
+            ),
+            (
+                "## Section\nTexte sous le titre:\n\n---\n\n**Label:** valeur",
+                "Section\n\nTexte sous le titre:\n\n---\n\nLabel: valeur",
+            ),
+            ("a\\*b &amp; c", "a*b & c"),
+            (
+                "| a | b |\n|---|---|\n| `x` | y |",
+                "| a | b |\n|---|---|\n| x | y |",
+            ),
+        ] {
+            assert_eq!(plain_text(markdown), text, "{markdown:?}");
+        }
     }
 
     #[test]
