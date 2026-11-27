@@ -86,19 +86,24 @@ mod tests {
 
     use opentide_highlight::{Profile, Setting};
 
-    /// `language`'s engine on `source` under `setting`, as diagnostics and
-    /// tokens.
+    /// What `language`'s engine finds on each of `sources` under `setting`,
+    /// as diagnostics and tokens.
     fn through(
         language: LanguageId,
-        source: &str,
+        sources: &[&str],
         setting: Setting<'_>,
-    ) -> (
+    ) -> Vec<(
         Vec<opentide_core::Diagnostic>,
         Vec<opentide_highlight::HighlightToken>,
-    ) {
-        let r = engine(language).map(|e| e.analyze_for(source, &setting));
-        let r = r.unwrap_or_default();
-        (r.diagnostics, r.tokens)
+    )> {
+        sources
+            .iter()
+            .map(|source| {
+                let r = engine(language).map(|e| e.analyze_for(source, &setting));
+                let r = r.unwrap_or_default();
+                (r.diagnostics, r.tokens)
+            })
+            .collect()
     }
 
     fn setting(platform: &str, profile: Profile) -> Setting<'_> {
@@ -111,160 +116,266 @@ mod tests {
 
     /// Each engine maps a setting onto the dialect, profile and stack its
     /// crate takes, as `analyze_query` and Tide's injections chose them
-    /// before they went through the trait (#1953).
+    /// before they went through the trait (#1953). Each row names the
+    /// behaviour its setting should get; [`assert_classes`] holds two rows
+    /// with the same name to the same findings and two with different names
+    /// to different ones, so the inputs tell every mapping apart.
     #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one table per language, side by side"
+    )]
     fn a_setting_selects_what_the_crate_takes() {
         use opentide_kql::{Dialect, Profile as Kql};
-        let kql = "search * | where x == 'é😀' | take 1";
+        let kql = [
+            // Sentinel's rule refuses `search *`.
+            "search * | where x == 'é😀' | take 1",
+            // A Sentinel table Defender's catalog does not have.
+            "SecurityEvent | where Account == 'é😀' | take 1",
+            // A Defender table.
+            "DeviceProcessEvents | where FileName == 'é😀' | take 1",
+        ];
         let direct = |dialect: Dialect, profile: Option<Kql>| {
-            let mut r = opentide_kql::analyze(kql, dialect);
-            if let Some(profile) = profile {
-                opentide_kql::apply_profile(kql, dialect, profile, &mut r.diagnostics);
-            }
-            (r.diagnostics, r.tokens)
+            kql.iter()
+                .map(|source| {
+                    let mut r = opentide_kql::analyze(source, dialect);
+                    if let Some(profile) = profile {
+                        opentide_kql::apply_profile(source, dialect, profile, &mut r.diagnostics);
+                    }
+                    (r.diagnostics, r.tokens)
+                })
+                .collect::<Vec<_>>()
         };
-        for (platform, dialect) in [
-            ("", Dialect::Sentinel),
-            ("microsoft_defender", Dialect::Defender),
+        let mut seen = Vec::new();
+        // KQL's search profile adds nothing to `analyze` in any dialect, and
+        // Defender's rule takes none of Sentinel's limits (`rule_findings`):
+        // File, Search and Defender's Rule are the same checks, so they share
+        // a class. File applies no profile, as `analyze_query` did.
+        for (platform, dialect, classes) in [
+            (
+                "",
+                Dialect::Sentinel,
+                ["sentinel", "sentinel", "sentinel rule"],
+            ),
+            (
+                "sentinel",
+                Dialect::Sentinel,
+                ["sentinel", "sentinel", "sentinel rule"],
+            ),
+            ("microsoft_defender", Dialect::Defender, ["defender"; 3]),
         ] {
-            for (profile, kql_profile) in [
+            for ((profile, kql_profile), class) in [
                 (Profile::File, None),
                 (Profile::Search, Some(Kql::Search)),
                 (Profile::Rule, Some(Kql::Rule)),
-            ] {
+            ]
+            .into_iter()
+            .zip(classes)
+            {
+                let direct = direct(dialect, kql_profile);
                 assert_eq!(
-                    through(LanguageId::Kql, kql, setting(platform, profile)),
-                    direct(dialect, kql_profile),
+                    through(LanguageId::Kql, &kql, setting(platform, profile)),
+                    direct,
                     "{platform} {profile:?}"
                 );
+                seen.push((class, direct));
             }
         }
-        // The rule profile reaches the engine: Sentinel's rule refuses `search *`.
-        let (rule, _) = through(LanguageId::Kql, kql, setting("", Profile::Rule));
-        let (search, _) = through(LanguageId::Kql, kql, setting("", Profile::Search));
-        assert_ne!(rule, search);
+        assert_classes("kql", &seen);
 
-        let lucene = "process.name:a* and 'é😀' AND cb_field:x";
+        let lucene = [
+            "process.name:a* and 'é😀' AND cb_field:x",
+            // Graylog refuses a leading wildcard.
+            "message:*é😀",
+        ];
         let mut seen = Vec::new();
-        for (platform, dialect) in [
-            ("", opentide_lucene::Dialect::Elastic),
-            ("carbon_black_cloud", opentide_lucene::Dialect::CarbonBlack),
-            ("graylog", opentide_lucene::Dialect::Graylog),
+        for (platform, dialect, class) in [
+            ("", opentide_lucene::Dialect::Elastic, "elastic"),
+            // Every platform but Carbon Black and Graylog is Elastic's.
+            ("elastic", opentide_lucene::Dialect::Elastic, "elastic"),
+            (
+                "carbon_black_cloud",
+                opentide_lucene::Dialect::CarbonBlack,
+                "carbon black",
+            ),
+            ("graylog", opentide_lucene::Dialect::Graylog, "graylog"),
         ] {
-            let r = opentide_lucene::analyze_dialect(lucene, dialect);
-            let direct = (r.diagnostics, r.tokens);
-            let found = through(LanguageId::Lucene, lucene, setting(platform, Profile::Rule));
+            let direct: Vec<_> = lucene
+                .iter()
+                .map(|source| {
+                    let r = opentide_lucene::analyze_dialect(source, dialect);
+                    (r.diagnostics, r.tokens)
+                })
+                .collect();
+            let found = through(
+                LanguageId::Lucene,
+                &lucene,
+                setting(platform, Profile::Rule),
+            );
             assert_eq!(found, direct, "{platform}");
-            seen.push(direct);
+            seen.push((class, direct));
         }
-        assert_distinct("lucene", &seen);
+        assert_classes("lucene", &seen);
 
-        let yara = "rule é { strings: $a = \"😀\" condition: $a and pe.is_dll() }";
+        let yara = [
+            "rule é { strings: $a = \"😀\" condition: $a and pe.is_dll() }",
+            // HarfangLab knows a fixed set of contexts.
+            "rule a { meta: context = \"nowhere\" condition: true }",
+        ];
         let mut seen = Vec::new();
-        for platform in ["", "harfanglab", "bitdefender", "sentinel"] {
+        // A platform with no YARA dialect checks as a raw `.yar` file does.
+        for (platform, class) in [
+            ("", "no dialect"),
+            ("sentinel", "no dialect"),
+            ("harfanglab", "harfanglab"),
+            ("bitdefender", "bitdefender"),
+        ] {
             let ctx = opentide_yara::Dialect::for_platform(platform)
                 .map(opentide_yara::Context::for_profile)
                 .unwrap_or_default();
-            let r = opentide_yara::analyze_with(yara, &ctx);
-            let direct = (r.diagnostics, r.tokens);
-            let found = through(LanguageId::Yara, yara, setting(platform, Profile::Search));
+            let direct: Vec<_> = yara
+                .iter()
+                .map(|source| {
+                    let r = opentide_yara::analyze_with(source, &ctx);
+                    (r.diagnostics, r.tokens)
+                })
+                .collect();
+            let found = through(LanguageId::Yara, &yara, setting(platform, Profile::Search));
             assert_eq!(found, direct, "{platform}");
-            seen.push(direct);
+            seen.push((class, direct));
         }
-        assert_distinct("yara", &seen);
+        assert_classes("yara", &seen);
 
-        let esql = "FROM logs-* | WHERE a == \"é😀\" | LOOKUP JOIN x ON a";
+        let esql = [
+            "FROM logs-* | WHERE a == \"é😀\" | LOOKUP JOIN x ON a",
+            // FORK is new in 9.1.
+            "FROM logs-* | FORK (WHERE a == \"é😀\") (WHERE b > 1)",
+            // DAY is new in 9.6, the newest line: serverless has it.
+            "ROW d = DAY(NOW()) // é😀",
+        ];
         let mut seen = Vec::new();
-        for stack in [
-            None,
-            Some("8.19"),
-            Some("9.5"),
-            Some("serverless"),
-            Some("nine"),
+        // A stack that does not parse is no stack.
+        for (stack, class) in [
+            (None, "every stack"),
+            (Some("nine"), "every stack"),
+            (Some("8.19"), "8.19"),
+            (Some("9.5"), "9.5"),
+            (Some("serverless"), "serverless"),
         ] {
             let target = stack.and_then(opentide_esql::StackTarget::parse);
-            let r = opentide_esql::analyze_for(esql, target);
-            let direct = (r.diagnostics, r.tokens);
+            let direct: Vec<_> = esql
+                .iter()
+                .map(|source| {
+                    let r = opentide_esql::analyze_for(source, target);
+                    (r.diagnostics, r.tokens)
+                })
+                .collect();
             let found = through(
                 LanguageId::Esql,
-                esql,
+                &esql,
                 Setting {
                     stack,
                     ..Setting::default()
                 },
             );
             assert_eq!(found, direct, "{stack:?}");
-            seen.push(direct);
+            seen.push((class, direct));
         }
-        assert_distinct("esql", &seen);
+        assert_classes("esql", &seen);
 
-        let cql = "correlate(A: { #event_simpleName=UserLogon }, B: { #event_simpleName=ProcessRollup2 | aid <=> A.aid }, within=10m) | groupBy(aid) // é😀";
+        // CQL, Exabeam and Datadog have no file profile: a file is checked
+        // as a search, the crate's default.
+        let cql = [
+            "correlate(A: { #event_simpleName=UserLogon }, B: { #event_simpleName=ProcessRollup2 | aid <=> A.aid }, within=10m) | groupBy(aid) // é😀",
+        ];
         let mut seen = Vec::new();
-        for (profile, ctx) in [
-            (Profile::File, opentide_cql::Profile::default()),
-            (Profile::Search, opentide_cql::Profile::default()),
-            (Profile::Rule, opentide_cql::Profile::CORRELATION_RULE),
+        for (profile, ctx, class) in [
+            (Profile::File, opentide_cql::Profile::default(), "search"),
+            (Profile::Search, opentide_cql::Profile::default(), "search"),
+            (
+                Profile::Rule,
+                opentide_cql::Profile::CORRELATION_RULE,
+                "rule",
+            ),
         ] {
-            let r = opentide_cql::analyze_with(cql, &ctx);
-            let direct = (r.diagnostics, r.tokens);
-            assert_eq!(through(LanguageId::Cql, cql, setting("", profile)), direct);
-            seen.push(direct);
+            let r = opentide_cql::analyze_with(cql[0], &ctx);
+            let direct = vec![(r.diagnostics, r.tokens)];
+            assert_eq!(through(LanguageId::Cql, &cql, setting("", profile)), direct);
+            seen.push((class, direct));
         }
-        assert_distinct("cql", &seen);
+        assert_classes("cql", &seen);
 
-        let exabeam = "activity_type:\"process-create\" | select user // é😀";
+        let exabeam = ["activity_type:\"process-create\" | select user // é😀"];
         let mut seen = Vec::new();
-        for (profile, ctx) in [
-            (Profile::File, opentide_exabeam::Context::SEARCH),
-            (Profile::Search, opentide_exabeam::Context::SEARCH),
-            (Profile::Rule, opentide_exabeam::Context::RULE),
+        for (profile, ctx, class) in [
+            (Profile::File, opentide_exabeam::Context::SEARCH, "search"),
+            (Profile::Search, opentide_exabeam::Context::SEARCH, "search"),
+            (Profile::Rule, opentide_exabeam::Context::RULE, "rule"),
         ] {
-            let r = opentide_exabeam::analyze_with(exabeam, &ctx);
-            let direct = (r.diagnostics, r.tokens);
-            let found = through(LanguageId::Exabeam, exabeam, setting("", profile));
+            let r = opentide_exabeam::analyze_with(exabeam[0], &ctx);
+            let direct = vec![(r.diagnostics, r.tokens)];
+            let found = through(LanguageId::Exabeam, &exabeam, setting("", profile));
             assert_eq!(found, direct);
-            seen.push(direct);
+            seen.push((class, direct));
         }
-        assert_distinct("exabeam", &seen);
+        assert_classes("exabeam", &seen);
 
-        let datadog = "*:é😀 #name source:windows";
+        let datadog = ["*:é😀 #name source:windows"];
         let mut seen = Vec::new();
-        for (profile, ctx) in [
-            (Profile::File, opentide_datadog::Context::SEARCH),
-            (Profile::Search, opentide_datadog::Context::SEARCH),
-            (Profile::Rule, opentide_datadog::Context::RULE),
+        for (profile, ctx, class) in [
+            (Profile::File, opentide_datadog::Context::SEARCH, "search"),
+            (Profile::Search, opentide_datadog::Context::SEARCH, "search"),
+            (Profile::Rule, opentide_datadog::Context::RULE, "rule"),
         ] {
-            let r = opentide_datadog::analyze_with(datadog, &ctx);
-            let direct = (r.diagnostics, r.tokens);
-            let found = through(LanguageId::Datadog, datadog, setting("", profile));
+            let r = opentide_datadog::analyze_with(datadog[0], &ctx);
+            let direct = vec![(r.diagnostics, r.tokens)];
+            let found = through(LanguageId::Datadog, &datadog, setting("", profile));
             assert_eq!(found, direct);
-            seen.push(direct);
+            seen.push((class, direct));
         }
-        assert_distinct("datadog", &seen);
+        assert_classes("datadog", &seen);
 
-        let yaral =
-            "$e.metadata.event_type = \"PROCESS_LAUNCH\" and $e.principal.hostname = \"é😀\"";
+        let yaral = [
+            "$e.metadata.event_type = \"PROCESS_LAUNCH\" and $e.principal.hostname = \"é😀\"",
+            // A file reads a `rule` header as a rule, which needs `meta`; a
+            // search does not.
+            "rule r { events: $e.principal.hostname = \"é😀\" condition: $e }",
+        ];
         let mut seen = Vec::new();
-        for (profile, ctx) in [
-            (Profile::File, opentide_yaral::Context::FILE),
-            (Profile::Search, opentide_yaral::Context::SEARCH),
-            (Profile::Rule, opentide_yaral::Context::SECTIONS),
+        for (profile, ctx, class) in [
+            (Profile::File, opentide_yaral::Context::FILE, "file"),
+            (Profile::Search, opentide_yaral::Context::SEARCH, "search"),
+            (Profile::Rule, opentide_yaral::Context::SECTIONS, "sections"),
         ] {
-            let r = opentide_yaral::analyze_with(yaral, &ctx);
-            let direct = (r.diagnostics, r.tokens);
-            let found = through(LanguageId::Yaral, yaral, setting("", profile));
+            let direct: Vec<_> = yaral
+                .iter()
+                .map(|source| {
+                    let r = opentide_yaral::analyze_with(source, &ctx);
+                    (r.diagnostics, r.tokens)
+                })
+                .collect();
+            let found = through(LanguageId::Yaral, &yaral, setting("", profile));
             assert_eq!(found, direct);
-            seen.push(direct);
+            seen.push((class, direct));
         }
-        assert_distinct("yaral", &seen);
+        assert_classes("yaral", &seen);
     }
 
-    /// The input of `language` tells its settings apart: a mapping onto the
-    /// wrong dialect, profile or stack would fail the comparison above.
-    fn assert_distinct<T: PartialEq>(language: &str, seen: &[T]) {
-        assert!(
-            seen.iter().skip(1).any(|other| *other != seen[0]),
-            "{language}: every setting gives the same findings"
-        );
+    /// Two settings of `language` in the same class give the same findings,
+    /// and two in different classes give different ones: a mapping onto the
+    /// wrong dialect, profile or stack fails the comparisons above.
+    fn assert_classes<T: PartialEq + std::fmt::Debug>(language: &str, seen: &[(&str, T)]) {
+        for (i, (class, found)) in seen.iter().enumerate() {
+            for (other_class, other) in &seen[i + 1..] {
+                if class == other_class {
+                    assert_eq!(found, other, "{language}: {class} gives two results");
+                } else {
+                    assert_ne!(
+                        found, other,
+                        "{language}: {class} and {other_class} give the same findings"
+                    );
+                }
+            }
+        }
     }
 }
