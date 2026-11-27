@@ -1879,3 +1879,76 @@ fn configuration_and_branches_are_read_as_git_reads_them() {
     git_cmd(&repo, &["branch", "loose"]);
     assert_eq!(git::local_branches(&repo), ["feature/x", "loose", "main"]);
 }
+
+/// What `git rev-parse --show-toplevel --git-path hooks --git-common-dir`
+/// prints from `dir`, each path resolved.
+fn rev_parse_layout(dir: &Path) -> [PathBuf; 3] {
+    let printed = git_cmd(
+        dir,
+        &[
+            "rev-parse",
+            "--show-toplevel",
+            "--git-path",
+            "hooks",
+            "--git-common-dir",
+        ],
+    );
+    let lines: Vec<PathBuf> = printed
+        .lines()
+        .map(|line| dunce::canonicalize(dir.join(line)).unwrap())
+        .collect();
+    [lines[0].clone(), lines[1].clone(), lines[2].clone()]
+}
+
+/// `hooks_layout` from `dir`, `home` the home folder, each path resolved.
+fn read_layout(dir: &Path, home: &Path) -> [PathBuf; 3] {
+    let home = home.display().to_string();
+    let lookup = |name: &str| match name {
+        "HOME" => Some(home.clone()),
+        "GIT_CONFIG_NOSYSTEM" => Some("1".to_owned()),
+        _ => None,
+    };
+    let layout = git::hooks_layout(dir, &lookup).unwrap();
+    [layout.top, layout.hooks_dir, layout.common_dir].map(|path| dunce::canonicalize(path).unwrap())
+}
+
+/// The hooks layout is what `git rev-parse` prints (#1955): from a
+/// subfolder, with `core.hooksPath` unset, relative, under `~/` and
+/// absolute, and from a linked worktree, whose hooks are the main
+/// repository's. Outside a checkout there is none.
+#[test]
+fn the_hooks_layout_is_read_as_git_rev_parse_prints_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dunce::canonicalize(dir.path()).unwrap();
+    let repo = root.join("dépôt");
+    let deep = repo.join("sous/😀");
+    std::fs::create_dir_all(&deep).unwrap();
+    git_cmd(&repo, &["init", "-q", "-b", "main"]);
+    write(&repo, "a.txt", "a\n");
+    commit(&repo, "a");
+    for folder in [".git/hooks", "mes-hooks", "h", "../absolus"] {
+        std::fs::create_dir_all(repo.join(folder)).unwrap();
+    }
+    assert_eq!(read_layout(&deep, &repo), rev_parse_layout(&deep));
+    let absolute = root.join("absolus").display().to_string();
+    // git_cmd's HOME is the folder it runs in: git runs at the top level,
+    // so `~/h` is the same folder for both.
+    for configured in ["mes-hooks", "~/h", absolute.as_str()] {
+        git_cmd(&repo, &["config", "core.hooksPath", configured]);
+        let expected = rev_parse_layout(&repo);
+        assert_eq!(read_layout(&repo, &repo), expected, "{configured}");
+        assert_eq!(read_layout(&deep, &repo)[1], expected[1], "{configured}");
+    }
+    git_cmd(&repo, &["config", "--unset", "core.hooksPath"]);
+    let linked = root.join("lié");
+    git_cmd(
+        &repo,
+        &["worktree", "add", "-q", "-b", "w", linked.to_str().unwrap()],
+    );
+    let layout = read_layout(&linked, &repo);
+    assert_eq!(layout, rev_parse_layout(&linked));
+    assert_eq!(layout[1], repo.join(".git/hooks"));
+    let outside = root.join("ailleurs");
+    std::fs::create_dir_all(&outside).unwrap();
+    assert_eq!(git::hooks_layout(&outside, &|_: &str| None), None);
+}

@@ -1699,6 +1699,53 @@ fn config_override(key: &str, env: Env<'_>) -> Option<String> {
     })
 }
 
+/// Where a checkout's hooks are, as `git rev-parse --show-toplevel
+/// --git-path hooks --git-common-dir` prints them.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HooksLayout {
+    /// Its work tree.
+    pub top: PathBuf,
+    /// The git directory its worktrees share (a linked worktree's main
+    /// repository).
+    pub common_dir: PathBuf,
+    /// The folder git runs its hooks from: `core.hooksPath`, `~` expanded
+    /// and a relative one taken from the work tree, else the common
+    /// directory's `hooks`.
+    pub hooks_dir: PathBuf,
+}
+
+/// The hooks layout of the checkout at or above `start`, `None` outside one
+/// (or in a bare repository). `core.hooksPath` is read as
+/// [`config_value`] reads it, through `env`.
+pub fn hooks_layout(start: &Path, env: Env<'_>) -> Option<HooksLayout> {
+    let (top, git_dir) = discover(start)?;
+    let common_dir =
+        match gix_discover::path::from_plain_file_relative_to_file(&git_dir.join("commondir")) {
+            Some(Ok(common)) => common,
+            Some(Err(_)) => return None,
+            None => git_dir,
+        };
+    let hooks_dir = match config_value(start, "core.hooksPath", env).filter(|v| !v.is_empty()) {
+        Some(configured) => {
+            let home = || env("HOME").map(PathBuf::from);
+            let path = if configured == "~" {
+                home().unwrap_or_else(|| PathBuf::from(&configured))
+            } else if let Some(rest) = configured.strip_prefix("~/") {
+                home().map_or_else(|| PathBuf::from(&configured), |home| home.join(rest))
+            } else {
+                PathBuf::from(&configured)
+            };
+            top.join(path)
+        }
+        None => common_dir.join("hooks"),
+    };
+    Some(HooksLayout {
+        top,
+        common_dir,
+        hooks_dir,
+    })
+}
+
 /// A file changed against the baseline: where it is, and its bytes at the
 /// baseline, when the baseline has it.
 #[derive(Debug, Clone, PartialEq, Eq)]

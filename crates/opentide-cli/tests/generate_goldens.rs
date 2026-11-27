@@ -941,6 +941,99 @@ fn setup_ci_reads_the_default_branch_without_git() {
     );
 }
 
+/// The first value named `key` anywhere in `value`.
+fn find_key<'a>(value: &'a serde_json::Value, key: &str) -> Option<&'a serde_json::Value> {
+    match value {
+        serde_json::Value::Object(map) => map
+            .get(key)
+            .or_else(|| map.values().find_map(|inner| find_key(inner, key))),
+        serde_json::Value::Array(items) => items.iter().find_map(|inner| find_key(inner, key)),
+        _ => None,
+    }
+}
+
+/// `new` reads its author's `user.name` without the `git` program (#1955):
+/// `PATH` names an empty folder, and the name comes from the global file the
+/// run's environment names, a `GIT_CONFIG_COUNT` override winning over it.
+#[test]
+fn new_reads_the_author_without_git() {
+    let scratch = tempfile::tempdir().unwrap();
+    let root = std::fs::canonicalize(scratch.path()).unwrap();
+    let ws = root.join("ws");
+    fixture("tide-corpus", &ws);
+    let no_git = root.join("empty-path");
+    std::fs::create_dir_all(&no_git).unwrap();
+    let path = no_git.to_str().unwrap();
+    let global = root.join("global.gitconfig");
+    std::fs::write(&global, "[user]\n\tname = Zoë 😀\n").unwrap();
+    let global = global.to_str().unwrap();
+    let author = |name: &str, extra: &[(&str, &str)]| {
+        let extra: Vec<(&str, &str)> = [("PATH", path)]
+            .into_iter()
+            .chain(extra.iter().copied())
+            .collect();
+        let (code, stdout) = run_json_with(&ws, &["new", "threat", "--name", name], &extra);
+        assert_eq!(code, 0, "{stdout}");
+        find_key(&document(&stdout), "author")
+            .cloned()
+            .unwrap_or_else(|| panic!("{stdout}"))
+    };
+    assert_eq!(author("First", &[("GIT_CONFIG_GLOBAL", global)]), "Zoë 😀");
+    let overridden = [
+        ("GIT_CONFIG_GLOBAL", global),
+        ("GIT_CONFIG_COUNT", "1"),
+        ("GIT_CONFIG_KEY_0", "User.Name"),
+        ("GIT_CONFIG_VALUE_0", "Émile"),
+    ];
+    assert_eq!(author("Second", &overridden), "Émile");
+    assert_eq!(author("Third", &[]), serde_json::Value::Null);
+}
+
+/// `setup hooks` finds the repository's layout without the `git` program
+/// (#1955): from a nested workspace, a relative `core.hooksPath` is taken
+/// from the top level, and one outside the repository is shared, so it is
+/// left alone with a warning.
+#[test]
+fn setup_hooks_reads_the_layout_without_git() {
+    if !has_git() {
+        return;
+    }
+    let scratch = tempfile::tempdir().unwrap();
+    let root = std::fs::canonicalize(scratch.path()).unwrap();
+    let repo = root.join("repo");
+    let ws = repo.join("détection");
+    fixture("tide-corpus", &ws);
+    git(&repo, &["init", "-q", "-b", "main"]);
+    git(&repo, &["config", "core.hooksPath", ".githooks"]);
+    let no_git = root.join("empty-path");
+    std::fs::create_dir_all(&no_git).unwrap();
+    let path = no_git.to_str().unwrap();
+    let (code, stdout) = run_json_with(&ws, &["setup", "hooks", "--yes"], &[("PATH", path)]);
+    assert_eq!(code, 0, "{stdout}");
+    let hook = std::fs::read_to_string(repo.join(".githooks/pre-commit")).unwrap();
+    assert!(
+        hook.contains("# opentide-workspace: \"détection\""),
+        "{hook}"
+    );
+    assert!(!repo.join(".git/hooks/pre-commit").exists());
+    let shared = root.join("partagés");
+    let shared = shared.to_str().unwrap();
+    let overridden = [
+        ("PATH", path),
+        ("GIT_CONFIG_COUNT", "1"),
+        ("GIT_CONFIG_KEY_0", "core.hooksPath"),
+        ("GIT_CONFIG_VALUE_0", shared),
+    ];
+    let (code, stdout) = run_json_with(&ws, &["setup", "hooks", "--yes"], &overridden);
+    assert_eq!(code, 0, "{stdout}");
+    assert!(
+        stdout.contains("core.hooksPath points outside this repository"),
+        "{stdout}"
+    );
+    assert!(stdout.contains(shared), "{stdout}");
+    assert!(!root.join("partagés/pre-commit").exists());
+}
+
 /// Only the platforms whose file enables them get validate query jobs; and
 /// two different repository paths are refused before anything is written.
 #[test]
