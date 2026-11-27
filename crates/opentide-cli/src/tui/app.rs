@@ -1745,15 +1745,21 @@ fn query_languages(path: Option<&Path>) -> BTreeMap<String, String> {
         .collect()
 }
 
-/// The first line of hover Markdown with its emphasis marks dropped.
+/// The first line of hover Markdown as text (`opentide_core::markdown`):
+/// its marks dropped, a link as its text.
 fn first_line(markdown: &str) -> String {
-    markdown
-        .lines()
-        .find(|line| !line.trim().is_empty())
+    use opentide_core::markdown::{Lines, Links, Options, to_text};
+    let text = to_text(
+        markdown,
+        Options {
+            links: Links::Text,
+            lines: Lines::Keep,
+        },
+    );
+    text.lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty())
         .unwrap_or_default()
-        .replace("**", "")
-        .replace('`', "")
-        .trim()
         .to_owned()
 }
 
@@ -1841,6 +1847,13 @@ mod tests {
         assert_eq!(first_line("snake_case_name `é`"), "snake_case_name é");
         assert_eq!(first_line(""), "");
         assert_eq!(first_line("\n\n"), "");
+        // What the line-by-line stripper left: a heading's marks, a link's
+        // destination.
+        assert_eq!(first_line("## Champ é\n\ntexte"), "Champ é");
+        assert_eq!(
+            first_line("Voir [la page 😀](https://x.y/é) ici"),
+            "Voir la page 😀 ici"
+        );
     }
 
     #[test]
