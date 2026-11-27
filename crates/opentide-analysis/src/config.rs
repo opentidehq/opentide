@@ -480,23 +480,39 @@ fn is_object(node: &Value) -> bool {
     node.get("type").and_then(Value::as_str) == Some("object") || node.get("properties").is_some()
 }
 
-/// A JSON value written as TOML writes it.
+/// A JSON value written as TOML writes it: `toml_edit` escapes strings and
+/// quotes keys that are not bare (#1929). TOML has no null, so a value that
+/// holds one is written as JSON writes it.
 fn toml_value(value: &Value) -> String {
-    match value {
-        Value::String(text) => format!("\"{}\"", text.replace('\\', "\\\\").replace('"', "\\\"")),
-        Value::Array(items) => format!(
-            "[{}]",
-            items.iter().map(toml_value).collect::<Vec<_>>().join(", ")
-        ),
-        Value::Object(map) => format!(
-            "{{ {} }}",
-            map.iter()
-                .map(|(key, value)| format!("{key} = {}", toml_value(value)))
-                .collect::<Vec<_>>()
-                .join(", ")
-        ),
-        other => other.to_string(),
-    }
+    to_toml(value).map_or_else(|| value.to_string(), |value| value.to_string())
+}
+
+fn to_toml(value: &Value) -> Option<toml_edit::Value> {
+    Some(match value {
+        Value::Null => return None,
+        Value::Bool(flag) => toml_edit::Value::from(*flag),
+        Value::Number(number) => match number.as_i64() {
+            Some(int) => toml_edit::Value::from(int),
+            None => toml_edit::Value::from(number.as_f64()?),
+        },
+        Value::String(text) => toml_edit::Value::from(text.as_str()),
+        Value::Array(items) => {
+            let mut array = items
+                .iter()
+                .map(to_toml)
+                .collect::<Option<toml_edit::Array>>()?;
+            array.fmt();
+            toml_edit::Value::Array(array)
+        }
+        Value::Object(map) => {
+            let mut table = map
+                .iter()
+                .map(|(key, value)| Some((toml_edit::Key::new(key.as_str()), to_toml(value)?)))
+                .collect::<Option<toml_edit::InlineTable>>()?;
+            table.fmt();
+            toml_edit::Value::InlineTable(table)
+        }
+    })
 }
 
 // --- Where the cursor is ------------------------------------------------------
@@ -846,6 +862,32 @@ pub fn configuration_completions(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// What `toml_value` writes parses back as TOML to the same value (#1929).
+    #[test]
+    fn toml_values_escape_control_characters_and_quote_keys() {
+        let value = serde_json::json!({
+            "plain": "line\nbreak\r\u{7f}\u{1}\t\"quoted\" \\ é😀",
+            "dotted.key": ["a\u{0}b", 1, 2.5, true],
+            "spaced key": { "inner key": "x" },
+            "é": "😀",
+        });
+        let text = format!("v = {}", toml_value(&value));
+        let parsed: toml::Table = toml::from_str(&text).unwrap_or_else(|e| panic!("{text}: {e}"));
+        let back = serde_json::to_value(&parsed["v"]).unwrap();
+        assert_eq!(back, value, "{text}");
+    }
+
+    #[test]
+    fn toml_values_keep_their_short_form() {
+        let value = serde_json::json!({"type": "string", "list": ["a", "b"]});
+        assert_eq!(
+            toml_value(&value),
+            r#"{ list = ["a", "b"], type = "string" }"#
+        );
+        assert_eq!(toml_value(&serde_json::json!("a")), r#""a""#);
+        assert_eq!(toml_value(&serde_json::json!(null)), "null");
+    }
 
     #[test]
     fn configuration_paths_are_toml_files_under_the_directory() {
