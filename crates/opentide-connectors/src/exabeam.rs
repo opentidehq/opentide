@@ -907,12 +907,10 @@ pub fn name_matches<'r>(rules: &'r [Object], name: &str) -> Vec<&'r Object> {
         .collect()
 }
 
-/// `str.casefold()`, for the names Exabeam compares.
+/// `str.casefold()` (Unicode full case folding), for the names Exabeam
+/// compares.
 fn caseless_fold(text: &str) -> String {
-    text.chars()
-        .flat_map(char::to_lowercase)
-        .collect::<String>()
-        .replace('ß', "ss")
+    caseless::default_case_fold_str(text)
 }
 
 /// Whether the rule a `PUT` returned keeps a schedule the block no longer
