@@ -2656,7 +2656,7 @@ async fn datadog(
                         Vec::new(),
                     ));
                 }
-                Err(error) => return Err(early(platform, &tenant.name, &host, error)),
+                Err(error) => return Err(early(platform, &tenant.name, &host, &error)),
             }
         }
         streak.finish().map_err(Early::Unreachable)?;
