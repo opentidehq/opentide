@@ -419,8 +419,14 @@ pub struct Options<'a> {
 /// workspace as it was: drop it when anything the checks read changed.
 #[derive(Debug, Default)]
 pub struct ObjectMemo {
-    found: std::sync::Mutex<HashMap<(PathBuf, String), objects::Found>>,
+    /// By file, then UUID: a lookup borrows the subject's path and UUID
+    /// instead of allocating a key, and a hit clones an `Arc` under the lock,
+    /// not the findings (#1945).
+    found: std::sync::Mutex<MemoMap>,
 }
+
+/// [`ObjectMemo`]'s findings, by file and UUID.
+type MemoMap = HashMap<PathBuf, HashMap<String, std::sync::Arc<objects::Found>>>;
 
 impl ObjectMemo {
     /// How many objects it holds.
@@ -429,7 +435,9 @@ impl ObjectMemo {
         self.found
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .len()
+            .values()
+            .map(HashMap::len)
+            .sum()
     }
 
     /// Whether it holds none.
@@ -786,7 +794,7 @@ thread_local! {
 }
 
 /// Counts `n` rules the cross-rule checks (`graylog_title_duplicate`,
-/// `exabeam_name_duplicate`) looked at on this thread, each rule indexed and
+/// `exabeam_name_duplicate`, `google_secops_name_duplicate`) looked at on this thread, each rule indexed and
 /// each UUID looked up counting one: for the test that holds them to linear
 /// (a work count, not a wall clock).
 fn cross_rule_steps(n: usize) {
@@ -872,6 +880,13 @@ fn name_duplicates(index: &Index, work: &[Subject<'_>]) -> Vec<Diagnostic> {
         .iter()
         .filter_map(|(uuid, object)| Some((uuid.as_str(), object.root()?)))
         .collect();
+    // The first rule in `work` with each UUID, as a scan of `work` per
+    // finding would find it, looked up once per finding (#1945).
+    let mut subjects: HashMap<&str, &Subject<'_>> = HashMap::new();
+    for subject in work.iter().filter(|subject| subject.family == "rule") {
+        cross_rule_steps(1);
+        subjects.entry(subject.uuid).or_insert(subject);
+    }
     let in_scope = work
         .iter()
         .filter(|subject| subject.family == "rule")
@@ -879,9 +894,8 @@ fn name_duplicates(index: &Index, work: &[Subject<'_>]) -> Vec<Diagnostic> {
     name_duplicates(all, in_scope)
         .into_iter()
         .map(|duplicate| {
-            let subject = work
-                .iter()
-                .find(|subject| subject.family == "rule" && subject.uuid == duplicate.uuid);
+            cross_rule_steps(1);
+            let subject = subjects.get(duplicate.uuid.as_str());
             let mut diagnostic = Diagnostic::error(NAME_DUPLICATE, duplicate.message())
                 .object(duplicate.uuid.as_str(), "rule")
                 .at(NameDuplicate::field_path())
@@ -1737,7 +1751,6 @@ fn check_in_batches(
     // host with one thread; more on a host with many, so that its threads
     // are not joined every few objects.
     let batch_len = 32.max(4 * rayon::current_num_threads());
-    let key = |subject: &Subject<'_>| (subject.path.to_path_buf(), subject.uuid.to_string());
     let lock = || {
         memo.found
             .lock()
@@ -1748,11 +1761,15 @@ fn check_in_batches(
     // interrupting still goes on, a batch at a time.
     let mut checked = false;
     for batch in work.chunks(batch_len) {
-        let kept: Vec<Option<objects::Found>> = {
+        let kept: Vec<Option<std::sync::Arc<objects::Found>>> = {
             let held = lock();
             batch
                 .iter()
-                .map(|subject| held.get(&key(subject)).cloned())
+                .map(|subject| {
+                    held.get(subject.path)
+                        .and_then(|by_uuid| by_uuid.get(subject.uuid))
+                        .cloned()
+                })
                 .collect()
         };
         let fresh_work = kept.iter().any(Option::is_none);
@@ -1760,18 +1777,35 @@ fn check_in_batches(
             return None;
         }
         checked |= fresh_work;
-        let fresh: Vec<Option<objects::Found>> = batch
+        // Each object's findings, and those to keep when it was checked now;
+        // the findings a run reports are its own, cloned here, on the
+        // batch's threads and outside the lock.
+        let fresh: Vec<(objects::Found, Option<std::sync::Arc<objects::Found>>)> = batch
             .par_iter()
             .zip(kept)
             .map(|(subject, kept)| match kept {
-                Some(found) => Some(found),
-                None => Some(objects::check_object(subject, graph, checks, fs, root)),
+                Some(found) => ((*found).clone(), None),
+                None => {
+                    let found = objects::check_object(subject, graph, checks, fs, root);
+                    let keep = std::sync::Arc::new(found.clone());
+                    (found, Some(keep))
+                }
             })
             .collect();
         let mut held = lock();
-        for (subject, found) in batch.iter().zip(fresh) {
-            let Some(found) = found else { continue };
-            held.entry(key(subject)).or_insert_with(|| found.clone());
+        for (subject, (found, keep)) in batch.iter().zip(fresh) {
+            if let Some(keep) = keep {
+                // A key is allocated only for what is kept, and the first
+                // object checked under a file and UUID stays.
+                if !held.contains_key(subject.path) {
+                    held.insert(subject.path.to_path_buf(), HashMap::new());
+                }
+                if let Some(by_uuid) = held.get_mut(subject.path)
+                    && !by_uuid.contains_key(subject.uuid)
+                {
+                    by_uuid.insert(subject.uuid.to_owned(), keep);
+                }
+            }
             all.push(found);
         }
     }
@@ -2085,8 +2119,8 @@ impl Workspace {
 mod tests {
     use super::*;
 
-    /// #1945: `graylog_title_duplicate` and `exabeam_name_duplicate` index the
-    /// rules once and find each by its UUID, so their work grows with the
+    /// #1945: `graylog_title_duplicate`, `exabeam_name_duplicate` and
+    /// `google_secops_name_duplicate` index the rules once and find each by its UUID, so their work grows with the
     /// rules, not with their square (a scan of every rule per rule).
     #[test]
     fn cross_rule_checks_look_at_each_rule_a_bounded_number_of_times() {
@@ -2108,7 +2142,7 @@ mod tests {
                     format!(
                         "name: {name}\nmetadata:\n  uuid: 00000000-0000-4000-8000-{i:012}\n  \
                          schema: rule::1.1\nconfigurations:\n  graylog:\n    enabled: true\n  \
-                         exabeam:\n    enabled: true\n"
+                         exabeam:\n    enabled: true\n  google_secops:\n    enabled: true\n"
                     ),
                 );
             }
@@ -2136,6 +2170,7 @@ mod tests {
             };
             assert_eq!(found("graylog_title_duplicate"), n / 10 * 2);
             assert_eq!(found("exabeam_name_duplicate"), n / 10 * 2);
+            assert_eq!(found("google_secops_name_duplicate"), n / 10 * 2);
             CROSS_RULE_STEPS.get() - before
         };
         let (small, large) = (steps(100), steps(400));
