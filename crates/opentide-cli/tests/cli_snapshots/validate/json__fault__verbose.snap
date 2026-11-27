@@ -7,7 +7,7 @@ exit: 1
 view: diagnostics (code, severity, file, line, column and counts; a warning's text; log events by name; no other message text)
 
 ━━━ stdout · json
-findings: 107
+findings: 109
   issues_found | - | - | - | -
   unknown_key | error | <WS>/.opentide/configurations/deployment.toml | 1 | 1
   unknown_key | error | <WS>/.opentide/configurations/deployment.toml | 2 | 1
@@ -43,6 +43,7 @@ findings: 107
   falco_output_syntax | error | <WS>/objects/rules/hidden-exfiltration-rule-0433.yaml | 84 | 30
   lucene_fuzzy | error | <WS>/objects/rules/hidden-harvest-rule-0086.yaml | 68 | 23
   esql_unknown_function | error | <WS>/objects/rules/hidden-spray-rule-0170.yaml | 77 | 43
+  kql_rule_union_star | error | <WS>/objects/rules/hidden-spray-rule-0267.yaml | 42 | 13
   kql_control_command_unsupported | error | <WS>/objects/rules/hidden-tunnel-rule-0099.yaml | 53 | 7
   eql_function_arity | error | <WS>/objects/rules/lateral-downgrade-rule-0142.yaml | 78 | 21
   schema_validation | error | <WS>/objects/rules/lateral-dropper-rule-0065.yaml | 42 | 3
@@ -59,6 +60,7 @@ findings: 107
   invalid_uuid | error | <WS>/objects/rules/persistent-harvest-rule-0024.yaml | 4 | 9
   falco_unknown_field | error | <WS>/objects/rules/persistent-injection-rule-0583.yaml | 62 | 54
   falco_unknown_field | error | <WS>/objects/rules/persistent-injection-rule-0583.yaml | 70 | 11
+  kql_rule_union_star | error | <WS>/objects/rules/persistent-loader-rule-0211.yaml | 60 | 13
   falco_unknown_field | error | <WS>/objects/rules/persistent-spray-rule-0400.yaml | 100 | 27
   eql_unknown_function | error | <WS>/objects/rules/persistent-tunnel-rule-0232.yaml | 42 | 21
   schema_missing | error | <WS>/objects/rules/rapid-downgrade-rule-0007.yaml | 3 | 1
@@ -119,15 +121,15 @@ exit_code: 1
 report.stats.objects_checked: 872
 report.stats.queries_checked: 1905
 schema_version: 1
-summary.errors: 100
-summary.files: 91
+summary.errors: 102
+summary.files: 93
 summary.fixable: 0
 summary.objects: 872
 summary.queries: 1905
 summary.warning_files: 2
 summary.warnings: 6
 next_actions[]: 2 items
-report.issues[]: 100 items
+report.issues[]: 102 items
 report.warnings[]: 6 items
 warnings[]: 1 items
 warnings[]: Validation reported warnings

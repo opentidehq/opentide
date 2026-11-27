@@ -15,11 +15,9 @@
 //! `platforms/elastic.toml` (8.19 when none says), and the datasets
 //! `visibility.toml` declares are the ones the engines know.
 //!
-//! This module ports the oracle's `opentide.analysis.check_queries`,
-//! `opentide.validation.queries` and `diagnostic_from_engine`: a query `opentide
-//! new` left as a placeholder is not counted; only the engine's errors are
-//! `validate`'s (its warnings and notes are `lint`'s); `--queries warn`
-//! reports them as warnings with a note.
+//! What counts: a query `opentide new` left as a placeholder is not checked;
+//! only the engine's errors are `validate`'s (its warnings and notes are
+//! `lint`'s); `--queries warn` reports them as warnings with a note.
 //!
 //! The datasets a workspace declares are its [`Profiles`]': each check
 //! enters them on the thread that runs it, so checks of different
@@ -351,8 +349,8 @@ impl Profiles {
 
     /// The Graylog queries of `text` without `graylog_leading_wildcard` when
     /// every tenant the rule's Graylog block reaches sets
-    /// `allow_leading_wildcard = true` (`_graylog_findings`): those servers take
-    /// a leading `*` or `?`. With no tenant the code stays an error.
+    /// `allow_leading_wildcard = true`: those servers take a leading `*` or
+    /// `?`. With no tenant the code stays an error.
     fn allow_leading_wildcards(&self, text: &str, checked: &mut [CheckedQuery]) {
         let wildcard = |finding: &Finding| finding.code == LEADING_WILDCARD;
         if !checked
@@ -487,8 +485,8 @@ pub fn is_stand_in(line: &str) -> bool {
     PLACEHOLDER_MARK.replace(line, "").trim() == "..."
 }
 
-/// Whether `finding` sits in a `...` stand-in under a marked key
-/// (`_in_placeholder`); `marked` holds the 1-based marked lines.
+/// Whether `finding` sits in a `...` stand-in under a marked key; `marked`
+/// holds the 1-based marked lines.
 fn in_placeholder(finding: &Finding, lines: &[&str], marked: &[usize]) -> bool {
     let line = finding.line;
     if !(marked.contains(&line) || marked.contains(&(line.wrapping_sub(1))))
@@ -513,7 +511,7 @@ const ELASTIC_ADVISORIES: [&str; 5] = [
     "technique_not_enterprise",
 ];
 
-/// `lint`'s queries check on the query engines (`_query_findings`): each
+/// `lint`'s queries check on the query engines: each
 /// object's query warnings and notes and its platform blocks' advisories. A
 /// query the engine rejects is `validate`'s; a placeholder query is the
 /// placeholders check's. Build it with [`EngineLintQueries::install`].
@@ -630,7 +628,7 @@ use opentide_schema::objects::platform::harfanglab::yara::{
     ADVISORY_CODES as HARFANGLAB_ADVISORIES, CONTEXT_PATH, SIGNATURE_PATH,
 };
 
-/// The HarfangLab profile's advisories on a rule file (`_harfanglab_yara_findings`):
+/// The HarfangLab profile's advisories on a rule file:
 /// `yara_meta_missing` and `harfanglab_yara_context` are warnings, which
 /// HarfangLab takes, but may not scan where the author meant. opentide's own,
 /// on a `yara.signature` or the decomposed form's `meta.context`, placed in
@@ -794,8 +792,8 @@ fn signature_lines<'v>(
     }
 }
 
-/// The platforms' block advisories of an object file
-/// (`_platform_advisory_findings`): each a `queries` warning at its field
+/// The platforms' block advisories of an object file: each a `queries`
+/// warning at its field
 /// path. A file that does not load as YAML has none: the parse error is
 /// another check's finding.
 fn block_advisories(
@@ -929,7 +927,7 @@ pub fn engine_help(code: &str, message: &str, suggestion: Option<&str>) -> Strin
 }
 
 /// An engine finding in `file` as a diagnostic, placed where the engine
-/// placed it (`diagnostic_from_engine`).
+/// placed it.
 pub fn engine_diagnostic(
     finding: &Finding,
     severity: Severity,

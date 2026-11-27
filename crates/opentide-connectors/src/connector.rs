@@ -949,6 +949,13 @@ pub trait QueryRunner: Send + Sync {
 }
 
 /// Shares objects (MISP).
+///
+/// No platform implements it: `opentide share` speaks to MISP through
+/// [`crate::misp`], not a platform (#1961).
+#[deprecated(
+    since = "1.2.0",
+    note = "no platform implements it and nothing calls it; removed in 2.0"
+)]
 pub trait Sharer: Send + Sync {
     /// Shares *object*, returning the remote identifier.
     fn share<'a>(
@@ -960,6 +967,12 @@ pub trait Sharer: Send + Sync {
 
 /// Moves deployment state between formats with what the tenant knows
 /// (`deploy migrate-state`).
+///
+/// No platform implements it and no command calls it (#1961).
+#[deprecated(
+    since = "1.2.0",
+    note = "no platform implements it and nothing calls it; removed in 2.0"
+)]
 pub trait StateMigrator: Send + Sync {
     /// The tenant's identifier of each rule named in *rule_ids*, in order.
     fn lookup<'a>(
@@ -1012,11 +1025,27 @@ pub trait Platform: Send + Sync {
     fn query_runner(&self) -> Option<&dyn QueryRunner> {
         None
     }
-    /// Its sharer.
+    /// Its sharer: always `None`, since no platform shares.
+    #[deprecated(
+        since = "1.2.0",
+        note = "always `None`: no platform shares and nothing calls it; removed in 2.0"
+    )]
+    #[expect(
+        deprecated,
+        reason = "the accessor of the deprecated trait, deprecated with it"
+    )]
     fn sharer(&self) -> Option<&dyn Sharer> {
         None
     }
-    /// Its state migrator.
+    /// Its state migrator: always `None`, since no platform migrates state.
+    #[deprecated(
+        since = "1.2.0",
+        note = "always `None`: no platform migrates state and nothing calls it; removed in 2.0"
+    )]
+    #[expect(
+        deprecated,
+        reason = "the accessor of the deprecated trait, deprecated with it"
+    )]
     fn state_migrator(&self) -> Option<&dyn StateMigrator> {
         None
     }

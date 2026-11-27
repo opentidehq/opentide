@@ -102,8 +102,9 @@ pub(crate) struct Root {
     /// The batch that last looked at the disk.
     checked: Cell<u64>,
     /// The index the analysis sees: the disk objects, with the open
-    /// documents of this root in place of their files.
-    index: RefCell<Option<Arc<[IndexedObject]>>>,
+    /// documents of this root in place of their files, and its
+    /// [catalog digest](catalog_digest).
+    index: RefCell<Option<DigestedIndex>>,
     /// The editor's `visibility.toml` buffer while the file is open: it wins
     /// over the file on disk.
     pub visibility: Option<String>,
@@ -220,25 +221,33 @@ pub(crate) struct CatalogSent {
 /// The digest of what `opentide/catalog` reports of an index that
 /// `opentide/catalogChanged` follows: each object's file, identity, name and
 /// the UUIDs it names. Ranges are left out: they move with every edit above
-/// them, and the client asks again for them.
-pub(crate) fn catalog_digest(index: &[IndexedObject]) -> u64 {
+/// them, and the client asks again for them. It is the sum of each object's
+/// own digest ([`object_digest`]), so the order the index lists them in
+/// does not count, and an object on disk is digested once, not on every
+/// edit of another (#2002).
+pub(crate) fn catalog_digest(digests: impl IntoIterator<Item = u64>) -> u64 {
+    digests.into_iter().fold(0, u64::wrapping_add)
+}
+
+/// An index and its [`catalog_digest`], built together.
+type DigestedIndex = (Arc<[IndexedObject]>, u64);
+
+/// One object's part of [`catalog_digest`]: its file (by [`path_key`]),
+/// identity, name and references.
+fn object_digest(object: &IndexedObject) -> u64 {
     use std::hash::{Hash, Hasher};
-    // Each object's own digest, keyed by its file and sorted, so the order
-    // the index lists them in does not count.
-    let mut entries: Vec<(String, u64)> = index
-        .iter()
-        .map(|o| {
-            let mut hasher = std::collections::hash_map::DefaultHasher::new();
-            (&o.uuid, &o.name, &o.schema, &o.object_type).hash(&mut hasher);
-            for r in &o.refs {
-                (&r.uuid, &r.field_path).hash(&mut hasher);
-            }
-            (path_key(&o.path), hasher.finish())
-        })
-        .collect();
-    entries.sort();
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    entries.hash(&mut hasher);
+    path_key(&object.path).hash(&mut hasher);
+    (
+        &object.uuid,
+        &object.name,
+        &object.schema,
+        &object.object_type,
+    )
+        .hash(&mut hasher);
+    for r in &object.refs {
+        (&r.uuid, &r.field_path).hash(&mut hasher);
+    }
     hasher.finish()
 }
 
@@ -399,6 +408,8 @@ struct DiskFile {
     path: String,
     text: String,
     indexed: OnceLock<Option<IndexedObject>>,
+    /// Its entry's [`object_digest`], once a catalog digest needed it.
+    digest: OnceLock<u64>,
     /// What the engine's analysis of this text found (the queries it carries),
     /// and the [`Session::env_epoch`] it was made in: a workspace pull
     /// repeats every two seconds for as long as the editor runs, and an
@@ -418,6 +429,7 @@ impl DiskFile {
             path,
             text,
             indexed: OnceLock::new(),
+            digest: OnceLock::new(),
             analysis: Mutex::new(None),
             reported: Mutex::new(None),
             resolved: OnceLock::new(),
@@ -465,6 +477,14 @@ impl DiskFile {
     /// Its index entry, once indexed.
     fn entry(&self) -> Option<&IndexedObject> {
         self.indexed.get().and_then(Option::as_ref)
+    }
+
+    /// Its entry's [`object_digest`], made once; `digested` counts it.
+    fn digest(&self, entry: &IndexedObject, digested: &Cell<u64>) -> u64 {
+        *self.digest.get_or_init(|| {
+            digested.set(digested.get() + 1);
+            object_digest(entry)
+        })
     }
 }
 
@@ -744,6 +764,9 @@ pub(crate) struct Session {
     text_serial: Cell<u64>,
     /// How many analyses ran, for the tests (`opentide/__stats`).
     pub analyses: Cell<u64>,
+    /// How many index entries were digested for [`catalog_digest`], for
+    /// the tests (`opentide/__stats`).
+    pub digested_objects: Cell<u64>,
     /// The open document each path names, by [`path_key`], built when a
     /// lookup by path needs it after the open documents changed
     /// ([`docs_changed`](Self::docs_changed)): a lookup does not compare
@@ -822,7 +845,7 @@ pub(crate) struct Session {
     requests: RefCell<ReqQueue<(), &'static str>>,
     /// The broken-file warning was shown (once per session).
     warned: Cell<bool>,
-    loose_index: RefCell<Option<Arc<[IndexedObject]>>>,
+    loose_index: RefCell<Option<DigestedIndex>>,
     /// The catalog of the documents outside every root, when there is no root.
     loose_catalog: CatalogState,
     /// What the client was told of the catalog (#198).
@@ -946,13 +969,7 @@ impl WorkspaceHost for SessionHost<'_> {
     }
 
     fn indexed_objects(&self) -> Option<Arc<[IndexedObject]>> {
-        let slot = self.slot();
-        if let Some(index) = slot.borrow().as_ref() {
-            return Some(Arc::clone(index));
-        }
-        let index: Arc<[IndexedObject]> = self.collect_index().into();
-        *slot.borrow_mut() = Some(Arc::clone(&index));
-        Some(index)
+        Some(self.indexed().0)
     }
 }
 
@@ -982,8 +999,22 @@ impl SessionHost<'_> {
         (path_key(&elastic.0) == key).then(|| f(&elastic.1))
     }
 
+    /// The root's index ([`indexed_objects`](WorkspaceHost::indexed_objects))
+    /// and its [`catalog_digest`], built together on the first request that
+    /// reads either.
+    pub(crate) fn indexed(&self) -> (Arc<[IndexedObject]>, u64) {
+        let slot = self.slot();
+        if let Some((index, digest)) = slot.borrow().as_ref() {
+            return (Arc::clone(index), *digest);
+        }
+        let (index, digest) = self.collect_index();
+        let index: Arc<[IndexedObject]> = index.into();
+        *slot.borrow_mut() = Some((Arc::clone(&index), digest));
+        (index, digest)
+    }
+
     /// Where the root's index is kept.
-    fn slot(&self) -> &RefCell<Option<Arc<[IndexedObject]>>> {
+    fn slot(&self) -> &RefCell<Option<DigestedIndex>> {
         match self.root {
             Some(i) => &self.session.roots[i].index,
             None => &self.session.loose_index,
@@ -993,8 +1024,9 @@ impl SessionHost<'_> {
     /// The index entries of the root's objects: the files on disk (but the
     /// open ones), the open documents, then what the host supplied that no
     /// file holds. A file on disk is indexed once, whichever call indexes
-    /// it first.
-    fn collect_index(&self) -> Vec<IndexedObject> {
+    /// it first, and digested once ([`DiskFile::digest`]); the open
+    /// documents and what the host supplied are digested on each call.
+    fn collect_index(&self) -> (Vec<IndexedObject>, u64) {
         let session = self.session;
         let open: BTreeMap<String, (String, &String)> = session
             .docs
@@ -1005,6 +1037,8 @@ impl SessionHost<'_> {
                 (path_key(&path), (path, &doc.text))
             })
             .collect();
+        let digested = &session.digested_objects;
+        let mut digests: Vec<u64> = Vec::new();
         let mut index: Vec<IndexedObject> = match self.root {
             Some(i) => {
                 let root = &session.roots[i];
@@ -1019,11 +1053,16 @@ impl SessionHost<'_> {
                     .index_pending(&parses)
                     .iter()
                     .filter(|(path, _)| !open.contains_key(*path))
-                    .filter_map(|(_, file)| file.entry().cloned())
+                    .filter_map(|(_, file)| {
+                        let entry = file.entry()?;
+                        digests.push(file.digest(entry, digested));
+                        Some(entry.clone())
+                    })
                     .collect()
             }
             None => Vec::new(),
         };
+        let fresh = index.len();
         index.extend(
             open.values()
                 .filter_map(|(path, text)| crate::index::index_text(path, text)),
@@ -1052,7 +1091,12 @@ impl SessionHost<'_> {
                 .filter_map(|(_, (_, _, indexed))| indexed.clone())
                 .filter(|o| !known.contains(&o.uuid)),
         );
-        index
+        // The open documents and what the host supplied: digested here.
+        for object in &index[fresh..] {
+            digested.set(digested.get() + 1);
+            digests.push(object_digest(object));
+        }
+        (index, catalog_digest(digests))
     }
 }
 
@@ -2571,14 +2615,14 @@ impl Session {
     /// A root's index for `opentide/catalog`, remembered as what the client
     /// now knows.
     pub(crate) fn catalog_index(&self, root: Option<usize>) -> Arc<[IndexedObject]> {
-        let index = opentide_analysis::workspace_index(&self.host(root));
+        let (index, digest) = self.host(root).indexed();
         if let Some(state) = self.catalog_state(root) {
             state.dirty.set(false);
         }
         self.catalog_sent
             .borrow_mut()
             .digests
-            .insert(self.catalog_key(root), catalog_digest(&index));
+            .insert(self.catalog_key(root), digest);
         index
     }
 
@@ -2654,8 +2698,7 @@ impl Session {
             if !state.dirty.replace(false) && known.is_some() {
                 continue;
             }
-            let index = opentide_analysis::workspace_index(&self.host(root));
-            let digest = catalog_digest(&index);
+            let (_, digest) = self.host(root).indexed();
             // `host` may have read the disk and dropped the index again.
             state.dirty.set(false);
             if known != Some(digest) {

@@ -8,7 +8,10 @@ Sysdig block's constraints (`falco`: operators, modifiers, priorities, keywords,
 Python's `strip()`), each the one copy opentide-schema's model and opentide-tide's findings share,
 the one "did you mean" rule every caller shares (`suggest`:
 the same word without case or `-`/`_` wins, otherwise the fewest edits, strsim's OSA distance),
-and the YAML node tree (`node`: saphyr-parser's events, saphyr's YAML 1.2 core-schema scalars,
+Markdown as plain text (`markdown`, behind the `markdown` feature: pulldown-cmark, with
+per-surface options for links and line breaks; SARIF's `help.text`, the language server's
+plain-text hovers and the schemas' plain `description` all read Markdown through it, #1957), and
+the YAML node tree (`node`: saphyr-parser's events, saphyr's YAML 1.2 core-schema scalars,
 every node's position), the one YAML reader of the workspace: `validate`, the models
 (`opentide_schema::node` re-exports it) and opentide-tide read YAML with it (#850), and the small
 text helpers (`text`: `hex`, the line-ending reads and writes, `unique`, and `sha256_hex` behind
@@ -40,6 +43,14 @@ crate depends on it.
   finding UUIDs in text (`PATTERN`, `finder`). Never another regex, `is_uuid` or hand parse.
 
 [#821]: https://github.com/opentidehq/opentide/issues/821
+- Markdown becomes plain text through `markdown::to_text` only: never a line-by-line or regex
+  stripper in another crate (#1957). A surface that needs another style adds an `Options` field.
+  `markdown` and its `pulldown-cmark` dependency are behind the opt-in `markdown` feature, which
+  only opentide-cli, opentide-schema and opentide-lsp turn on: the query-language engines never
+  build `pulldown-cmark` (`cargo tree -p opentide-kql -i pulldown-cmark` prints nothing, as for
+  every language crate). A crate that depends on opentide-schema (opentide-tide,
+  opentide-analysis, the facade's `analysis` and `lsp` features, opentide-wasm) builds it through
+  the schemas' annotations, which the language server's catalogs read.
 - `text` is the one copy of the small text helpers (#1957): `hex`, `sha256_hex`, the line
   endings, `unique`. Never a second hex encoder, digest, line-ending rule or dedup at a call
   site. `sha256_hex` and its `sha2` dependency are behind the

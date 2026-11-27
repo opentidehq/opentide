@@ -253,14 +253,65 @@ impl<R: Read> Source for Direct<R> {
         let Some(first) = read_frame(&mut self.reader)? else {
             return Ok(None);
         };
+        let mut hold = Hold::default();
+        hold.take(0, &first);
         let mut batch = vec![first];
-        while !self.reader.buffer().is_empty() {
+        loop {
+            // A hold waits for the frames it asks for, and takes none after
+            // them; otherwise the batch is what the buffer holds.
+            match hold.end {
+                Some(end) if batch.len() >= end => break,
+                None if self.reader.buffer().is_empty() => break,
+                _ => {}
+            }
             match read_frame(&mut self.reader)? {
-                Some(frame) => batch.push(frame),
+                Some(frame) => {
+                    hold.take(batch.len(), &frame);
+                    batch.push(frame);
+                }
                 None => break,
             }
         }
         Ok(Some(batch))
+    }
+}
+
+/// Debug builds: where a batch that holds an `opentide/__hold { frames: n }`
+/// request ends, exactly `n` frames after it. The source waits for those
+/// frames and takes none after them, so the tests queue a batch without a
+/// timing window (#2010). Release and fuzz builds never hold: the request
+/// is an unknown method there.
+#[derive(Default)]
+struct Hold {
+    /// The length the batch must have, when a frame in it holds.
+    end: Option<usize>,
+}
+
+impl Hold {
+    /// Note the frame at `index` of the batch.
+    fn take(&mut self, index: usize, frame: &Frame) {
+        #[cfg(not(all(debug_assertions, not(fuzzing))))]
+        let _ = (self, index, frame);
+        #[cfg(all(debug_assertions, not(fuzzing)))]
+        {
+            use lsp_types::request::Request as _;
+            use serde::Deserialize as _;
+            let Frame::Message(Message::Request(request)) = frame else {
+                return;
+            };
+            if request.method != crate::handlers::custom::Hold::METHOD {
+                return;
+            }
+            // The request's own params type, so the source and the
+            // dispatcher read them alike: params it refuses (`-32602`)
+            // hold no frames (#2041).
+            let frames = crate::handlers::custom::HoldParams::deserialize(&request.params)
+                .map_or(0, |params| {
+                    usize::try_from(params.frames).unwrap_or(usize::MAX)
+                });
+            let end = index.saturating_add(1).saturating_add(frames);
+            self.end = Some(self.end.map_or(end, |held| held.max(end)));
+        }
     }
 }
 
@@ -344,11 +395,27 @@ impl Source for Threaded {
         let Some(first) = first else {
             return Ok(None);
         };
+        let mut hold = Hold::default();
+        hold.take(0, &first);
         let mut batch = vec![first];
-        while let Ok(next) = self.frames.try_recv() {
+        loop {
+            // A hold waits for the frames it asks for, and takes none after
+            // them; otherwise the batch is what the reader has sent.
+            let next = match hold.end {
+                Some(end) if batch.len() >= end => break,
+                Some(_) => match self.frames.recv() {
+                    Ok(next) => next,
+                    Err(_) => break,
+                },
+                None => match self.frames.try_recv() {
+                    Ok(next) => next,
+                    Err(_) => break,
+                },
+            };
             match next {
                 Ok(Some(frame)) => {
                     taken(&self.queued);
+                    hold.take(batch.len(), &frame);
                     batch.push(frame);
                 }
                 Ok(None) => {
@@ -900,6 +967,120 @@ mod tests {
         input.extend(framed(r#"{"jsonrpc":"2.0","method":"b"}"#));
         let mut source = Direct::new(&input[..]);
         assert_eq!(source.next_batch().unwrap().unwrap().len(), 2);
+        assert!(source.next_batch().unwrap().is_none());
+    }
+
+    /// #2010: a batch with `opentide/__hold { frames: n }` ends exactly `n`
+    /// frames after it, wherever the buffer ends.
+    #[cfg(all(debug_assertions, not(fuzzing)))]
+    #[test]
+    fn direct_holds_exactly_the_frames_a_hold_asks_for() {
+        let mut input = framed(r#"{"jsonrpc":"2.0","method":"a"}"#);
+        input.extend(framed(
+            r#"{"jsonrpc":"2.0","id":1,"method":"opentide/__hold","params":{"frames":2}}"#,
+        ));
+        for method in ["b", "c", "d"] {
+            input.extend(framed(&format!(
+                r#"{{"jsonrpc":"2.0","method":"{method}"}}"#
+            )));
+        }
+        let mut source = Direct::new(&input[..]);
+        assert_eq!(source.next_batch().unwrap().unwrap().len(), 4);
+        assert_eq!(source.next_batch().unwrap().unwrap().len(), 1);
+        assert!(source.next_batch().unwrap().is_none());
+    }
+
+    /// #2010: the threaded source waits for the frames a hold asks for,
+    /// however late they arrive, and leaves the next one to the next batch.
+    #[cfg(all(debug_assertions, not(fuzzing), not(target_os = "wasi")))]
+    #[test]
+    fn threaded_waits_for_the_frames_a_hold_asks_for() {
+        let (reader, mut writer) = std::io::pipe().unwrap();
+        let mut source = Threaded::spawn(move || BufReader::new(reader)).unwrap();
+        writer
+            .write_all(&framed(
+                r#"{"jsonrpc":"2.0","id":1,"method":"opentide/__hold","params":{"frames":2}}"#,
+            ))
+            .unwrap();
+        writer
+            .write_all(&framed(r#"{"jsonrpc":"2.0","method":"é😀"}"#))
+            .unwrap();
+        let late = std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(100));
+            writer
+                .write_all(&framed(r#"{"jsonrpc":"2.0","method":"b"}"#))
+                .unwrap();
+            writer
+                .write_all(&framed(r#"{"jsonrpc":"2.0","method":"c"}"#))
+                .unwrap();
+        });
+        let batch = source.next_batch().unwrap().unwrap();
+        assert_eq!(batch.len(), 3);
+        assert!(matches!(
+            &batch[2],
+            Frame::Message(Message::Notification(n)) if n.method == "b"
+        ));
+        late.join().unwrap();
+        let rest = source.next_batch().unwrap().unwrap();
+        assert!(matches!(
+            &rest[..],
+            [Frame::Message(Message::Notification(n))] if n.method == "c"
+        ));
+        assert!(source.next_batch().unwrap().is_none());
+    }
+
+    /// #2041: input that ends during a hold ends the batch with what came,
+    /// and the next batch is the end of input: the source does not wait on.
+    #[cfg(all(debug_assertions, not(fuzzing)))]
+    #[test]
+    fn direct_ends_a_hold_at_the_end_of_input() {
+        let mut input =
+            framed(r#"{"jsonrpc":"2.0","id":1,"method":"opentide/__hold","params":{"frames":3}}"#);
+        input.extend(framed(r#"{"jsonrpc":"2.0","method":"é😀"}"#));
+        let mut source = Direct::new(&input[..]);
+        assert_eq!(source.next_batch().unwrap().unwrap().len(), 2);
+        assert!(source.next_batch().unwrap().is_none());
+    }
+
+    /// #2041: the threaded source, the same: the reader's end of input ends
+    /// the held batch.
+    #[cfg(all(debug_assertions, not(fuzzing), not(target_os = "wasi")))]
+    #[test]
+    fn threaded_ends_a_hold_at_the_end_of_input() {
+        let (reader, mut writer) = std::io::pipe().unwrap();
+        let mut source = Threaded::spawn(move || BufReader::new(reader)).unwrap();
+        writer
+            .write_all(&framed(
+                r#"{"jsonrpc":"2.0","id":1,"method":"opentide/__hold","params":{"frames":3}}"#,
+            ))
+            .unwrap();
+        writer
+            .write_all(&framed(r#"{"jsonrpc":"2.0","method":"é😀"}"#))
+            .unwrap();
+        drop(writer);
+        assert_eq!(source.next_batch().unwrap().unwrap().len(), 2);
+        assert!(source.next_batch().unwrap().is_none());
+    }
+
+    /// #2041: the source reads a hold's params as the dispatcher does:
+    /// params it refuses (`-32602`) hold no frames, so the batch is what
+    /// was buffered, and a later frame is the next batch's.
+    #[cfg(all(debug_assertions, not(fuzzing), not(target_os = "wasi")))]
+    #[test]
+    fn a_hold_the_dispatcher_refuses_holds_nothing() {
+        let (reader, mut writer) = std::io::pipe().unwrap();
+        let mut source = Threaded::spawn(move || BufReader::new(reader)).unwrap();
+        writer
+            .write_all(&framed(
+                r#"{"jsonrpc":"2.0","id":1,"method":"opentide/__hold","params":{"frames":"2"}}"#,
+            ))
+            .unwrap();
+        assert_eq!(source.next_batch().unwrap().unwrap().len(), 1);
+        writer
+            .write_all(&framed(r#"{"jsonrpc":"2.0","method":"b"}"#))
+            .unwrap();
+        drop(writer);
+        assert_eq!(source.next_batch().unwrap().unwrap().len(), 1);
         assert!(source.next_batch().unwrap().is_none());
     }
 
