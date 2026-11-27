@@ -77,10 +77,14 @@ fn send(lsp: &mut Lsp, id: i64, method: &str, params: Value) {
 }
 
 /// Have the server sleep, and wait until it does: what is sent next queues
-/// up as one batch.
+/// up as one batch. Two windows hold it, so both are wide: the server has
+/// 500 ms to take the sleep alone, and the test then has 2.5 s to write a
+/// few small messages (it was 150 ms and 550 ms). The server tells the
+/// client neither when it took a frame nor how many are queued, so a
+/// handshake would need a new test hook (#1947).
 fn hold(lsp: &mut Lsp, id: i64) {
-    send(lsp, id, "opentide/__sleep", json!({ "ms": 700 }));
-    std::thread::sleep(std::time::Duration::from_millis(150));
+    send(lsp, id, "opentide/__sleep", json!({ "ms": 3000 }));
+    std::thread::sleep(std::time::Duration::from_millis(500));
 }
 
 fn watch() -> Value {
@@ -4002,10 +4006,11 @@ fn a_file_changed_on_disk_within_a_batch_is_read_again_for_its_event() {
     let rule = root.join("objects/rules/rule-1.0.yaml");
     // One batch: a request that reads every object file (the editor's index,
     // from the workspace it loads), a pause in which the rule changes on
-    // disk, the watcher's event for it, and the workspace's diagnostics.
+    // disk (2 s for the test to write it once the index is answered), the
+    // watcher's event for it, and the workspace's diagnostics.
     hold(&mut lsp, 1);
     send(&mut lsp, 2, "workspace/symbol", json!({ "query": "" }));
-    send(&mut lsp, 3, "opentide/__sleep", json!({ "ms": 400 }));
+    send(&mut lsp, 3, "opentide/__sleep", json!({ "ms": 2000 }));
     lsp.notify(
         "workspace/didChangeWatchedFiles",
         json!({ "changes": [{ "uri": file_uri(&rule), "type": 2 }] }),

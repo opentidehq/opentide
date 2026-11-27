@@ -12,7 +12,7 @@
 //! settings of Elastic's files ([`super::rule_yaml`]): a string that must be
 //! quoted is double-quoted (the approved differences of #834).
 
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use opentide_compile::json::{Json as CJson, Object};
 use opentide_connectors::Environment;
@@ -22,8 +22,8 @@ use opentide_connectors::text::json_text;
 use tokio_util::sync::CancellationToken;
 
 use super::{
-    Context, FieldError, Outcome, Skipped, block_on, configured, fill, json_string, report,
-    sanitize_filename, tenant, under, write_text,
+    Context, FieldError, MICROSOFT_LIST_TIMEOUT, Outcome, Skipped, block_on, configured, fill,
+    json_string, report, sanitize_filename, tenant, under, write_text,
 };
 
 const SENTINEL: &str = "sentinel";
@@ -696,7 +696,7 @@ fn run(cx: &Context<'_>, connector: &Sentinel, written_count: &mut usize) -> Out
         let (tenant, http) = tenant(
             SENTINEL,
             configured,
-            Duration::from_secs(60),
+            MICROSOFT_LIST_TIMEOUT,
             &environment,
             cx.proxy,
         )?;

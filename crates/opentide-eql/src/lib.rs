@@ -29,14 +29,20 @@ mod ast_ext;
 mod builder;
 mod ecs;
 mod highlight;
-mod lexer;
-mod lexical;
+// The lexer, the comment pre-scan, the parser and the kinds: public but hidden, as the typed
+// AST, for the crate's corpus, tree and conformance tests (`tests/`). Not an API.
+#[doc(hidden)]
+pub mod lexer;
+#[doc(hidden)]
+pub mod lexical;
 mod nav;
 mod parsed;
-mod parser;
+#[doc(hidden)]
+pub mod parser;
 mod regex;
 mod semantics;
-mod syntax;
+#[doc(hidden)]
+pub mod syntax;
 
 pub use ecs::ecs_diagnostics;
 
