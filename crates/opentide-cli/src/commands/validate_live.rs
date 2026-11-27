@@ -31,6 +31,7 @@ use opentide_connectors::connector::{LiveCheck, QueryRequest, TenantContext, Tim
 use opentide_connectors::credentials::Mode as Resolve;
 use opentide_connectors::elastic::{Elastic, ElasticError};
 use opentide_connectors::{ConnectorError, Environment, HttpClient, Registry, Tenant};
+use opentide_schema::platforms::PlatformKey;
 use opentide_schema::vocab::Vocabularies;
 use opentide_workspace::{FileSystem as _, OsFs, Workspace};
 use tokio_util::sync::CancellationToken;
@@ -521,7 +522,7 @@ fn with_workspace(args: &Args, platform: &str, workspace: &Workspace, cx: &Conte
     let Some(uuids) = selection.platforms.get(platform) else {
         return Live::of(nothing_selected(platform, &enabled, &runs, label));
     };
-    let tables = opentide_compile::plan::tenants(config, platform);
+    let tables = opentide_compile::plan::tenants(config, &PlatformKey::new(platform));
     if tables.is_empty() {
         return Live::of(no_tenants(platform));
     }
@@ -1128,7 +1129,8 @@ pub(crate) fn batches(
         .iter()
         .map(|table| PlanTenant::from_json(table))
         .collect();
-    let modifiers = opentide_compile::modifiers::of_platform(cx.config, platform);
+    let key = PlatformKey::new(platform);
+    let modifiers = opentide_compile::modifiers::of_platform(cx.config, &key);
     let mut out: IndexMap<String, Batch> = IndexMap::new();
     for uuid in uuids {
         let Some(rule) = rule_of(workspace, uuid) else {
@@ -1136,12 +1138,8 @@ pub(crate) fn batches(
         };
         let (block, strategy) = block_strategy(&rule, platform, cx)?;
         for tenant in opentide_compile::plan::rule_tenants(&tenants, &block, strategy, runs, wide) {
-            let sent = opentide_compile::modifiers::rule_for_tenant(
-                &modifiers,
-                platform,
-                &rule,
-                &tenant.name,
-            );
+            let sent =
+                opentide_compile::modifiers::rule_for_tenant(&modifiers, &key, &rule, &tenant.name);
             let entry = out.entry(tenant.name.clone()).or_insert_with(|| {
                 let position = tenants
                     .iter()

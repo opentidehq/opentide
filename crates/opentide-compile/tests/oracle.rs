@@ -14,7 +14,7 @@ use std::sync::Arc;
 use opentide_compile::json::Json;
 use opentide_compile::preview::{self, Inputs};
 use opentide_compile::{CompileError, Owned, Rule, splunk};
-use opentide_schema::platforms::PlatformId;
+use opentide_schema::platforms::{PlatformId, PlatformKey};
 use opentide_schema::vocab::Vocabularies;
 use opentide_workspace::{FileSystem, Options, OsFs, RootOptions, Workspace};
 use serde_json::Value;
@@ -677,7 +677,9 @@ fn the_compile_corpus_compiles_as_the_oracle_compiles_it() {
                 };
                 let mut recorded = writes.clone();
                 if class("url") {
-                    let table = opentide_compile::deploy::tenant(&cx, platform, name).unwrap();
+                    let table =
+                        opentide_compile::deploy::tenant(&cx, &PlatformKey::new(platform), name)
+                            .unwrap();
                     recorded = recorded_urls(&recorded, platform, table)
                         .unwrap_or_else(|| panic!("{file} {platform} {name}: {mine}"));
                 }
@@ -719,7 +721,8 @@ fn the_compile_corpus_compiles_as_the_oracle_compiles_it() {
             let known = |tenant: &str| {
                 opentide_compile::plan::state_id(&OsFs, &corpus, uuid, platform, tenant)
             };
-            let shown = preview::preview_planned(&cx, platform, &rule, &names, &known);
+            let shown =
+                preview::preview_planned(&cx, &PlatformKey::new(platform), &rule, &names, &known);
             if let Some(problem) = request_problem(&shown, &rule, &sent, &mut send_time) {
                 differences.push(format!(
                     "{uuid} {platform} preview: {problem}\n  candidate: {}",
@@ -731,7 +734,7 @@ fn the_compile_corpus_compiles_as_the_oracle_compiles_it() {
         check(
             "preview".into(),
             entry["preview"].as_str().unwrap().to_owned(),
-            preview::preview(&cx, platform, &rule).to_compact(),
+            preview::preview(&cx, &PlatformKey::new(platform), &rule).to_compact(),
         );
     }
     assert!(differences.is_empty(), "{}", differences.join("\n"));
@@ -869,7 +872,7 @@ fn a_dry_run_without_a_tenant_shows_the_writes_with_tenant_placeholders() {
         };
         let object = index.get("rule", entry["uuid"].as_str().unwrap()).unwrap();
         let rule = Rule::new(object.root().unwrap(), None);
-        let shown = preview::preview(&cx, platform, &rule);
+        let shown = preview::preview(&cx, &PlatformKey::new(platform), &rule);
         if shown.get("status").and_then(Json::as_str) == Some("failed") {
             continue;
         }
@@ -1009,8 +1012,8 @@ fn the_documented_placeholders_are_those_a_dry_run_writes() {
             .map(|tenant| tenant["tenant"].as_str().unwrap().to_owned())
             .collect();
         for shown in [
-            preview::preview(&cx, platform, &rule),
-            preview::preview_on(&cx, platform, &rule, &tenants),
+            preview::preview(&cx, &PlatformKey::new(platform), &rule),
+            preview::preview_on(&cx, &PlatformKey::new(platform), &rule, &tenants),
         ] {
             placeholders_in(
                 shown.get("api_request").unwrap_or(&Json::Null),

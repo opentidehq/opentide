@@ -31,6 +31,7 @@ use opentide_connectors::credentials::Mode as Resolve;
 use opentide_connectors::runtime::block_on;
 use opentide_connectors::splunk::{self, Splunk};
 use opentide_connectors::{Environment, HttpClient, Tenant};
+use opentide_schema::platforms::PlatformKey;
 use opentide_schema::vocab::Vocabularies;
 use opentide_workspace::{FileSystem, MemoryFs, Options, RootOptions, Workspace};
 use tokio_util::sync::CancellationToken;
@@ -106,7 +107,7 @@ fn request(status: &str) -> Result<(String, Operation, Object), Failed> {
         .ok_or("the corpus rule is not indexed")?;
     let root = object.root().ok_or("the corpus rule did not parse")?;
     let rule = Rule::new(root, None);
-    let tenant = opentide_compile::deploy::tenants(&cx, compile::PLATFORM)
+    let tenant = opentide_compile::deploy::tenants(&cx, &PlatformKey::new(compile::PLATFORM))
         .first()
         .copied()
         .ok_or("no Splunk tenant")?;
