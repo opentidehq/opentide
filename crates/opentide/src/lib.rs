@@ -108,14 +108,22 @@
 //! ## Stability
 //!
 //! This crate follows [semantic versioning](https://semver.org) as Cargo reads
-//! it: while it is `0.x`, a release that breaks the API raises the minor
-//! version (0.12 to 0.13) and a patch release never does. Every item this
+//! it: a release that breaks the API raises the major version and a minor or
+//! patch release never does. Every item this
 //! crate exports is covered, re-exported types included; the `opentide-*`
 //! crates are not, and their APIs change with the engine.
 //! `cargo semver-checks` runs on this crate in CI. The `connectors` feature
 //! re-exports `jiff::Timestamp` ([`connectors::Timestamp`], the time of a
 //! query's window): a jiff release that breaks it is a breaking release here. Structs that may gain a
-//! field and enums that may gain a variant are `#[non_exhaustive]`. The
+//! field and enums that may gain a variant are `#[non_exhaustive]`.
+//!
+//! Platforms, query languages and diagnostic codes are open sets. Adding one
+//! is a minor release; match them with a wildcard arm. The enums that name
+//! them (`analysis::LanguageId` among them) are `#[non_exhaustive]`, and the
+//! lists of them are slices (`&'static [_]`), whose type does not change when
+//! one is added.
+//!
+//! The
 //! JSON documents ([`Document`], [`cli::run_json`] when built) follow the
 //! command line's contract (`docs/cli/json-output.md`), which only grows.
 //! The minimum supported Rust version is the `rust-version` of the

@@ -494,7 +494,9 @@ pub struct Summary {
 /// `microsoft_defender_custom_details_limit` and
 /// `microsoft_defender_placeholder_limit`, limits Microsoft documents without
 /// saying what Graph does past them (check 9, #1890).
-pub const STRICT_EXEMPT_WARNINGS: [&str; 4] = [
+///
+/// A slice, not an array, so a code made exempt does not change its type.
+pub const STRICT_EXEMPT_WARNINGS: &[&str] = &[
     "platform_not_enabled",
     opentide_core::codes::MICROSOFT_DEFENDER_IMPACTED_ASSET_IDENTIFIER,
     opentide_core::codes::MICROSOFT_DEFENDER_CUSTOM_DETAILS_LIMIT,
@@ -2195,7 +2197,7 @@ mod tests {
             }
         }
         for code in STRICT_EXEMPT_WARNINGS {
-            assert!(VALIDATION_CODES.contains(&code), "{code}");
+            assert!(VALIDATION_CODES.contains(code), "{code}");
         }
         assert!(VALIDATION_CODES.windows(2).all(|pair| pair[0] < pair[1]));
     }

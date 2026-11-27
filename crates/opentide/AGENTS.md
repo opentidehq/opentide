@@ -46,8 +46,12 @@ facade (`xtask/layers.toml`), above the applications: its features reach opentid
 - **Curate, do not leak.** Add a re-export only for a type the API returns or takes. A function
   here wraps one call of an internal crate; logic belongs in the domain crates.
 - **Semver.** Every exported item is the API, re-exports included. New options structs and enums
-  are `#[non_exhaustive]` with a `Default` and builder methods. A breaking change raises the minor
-  version while 0.x and gets a **Breaking** entry in `crates/CHANGELOG.md`. CI's `facade` job runs
+  are `#[non_exhaustive]` with a `Default` and builder methods. A breaking change raises the major
+  version and gets a **Breaking** entry in `crates/CHANGELOG.md`.
+- **Open sets.** Platforms, query languages and diagnostic codes are open sets. Adding one is a
+  minor release; match them with a wildcard arm. Every enum of the API that grows with them
+  (`LanguageId`, the platform enums) is `#[non_exhaustive]`, and every list of them is a
+  `&'static [_]`, never a `[_; N]` (ADR 0015 §6, #1911). A new such enum or list follows suit. CI's `facade` job runs
   `cargo semver-checks` against the pull request's base (the merge commit's first parent): the
   baseline stays the PR base until the crate is published on crates.io, and only then becomes the
   last published version. Do not switch it earlier; there is no published API to hold to yet.

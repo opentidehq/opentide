@@ -10,17 +10,22 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 #### `opentide`
 
-- If you `match` on `opentide::analysis::LanguageId` (or `opentide_core::LanguageId`), add a wildcard arm (`_ => …`). An arm for `LanguageId::Datadog` alone no longer compiles: the enum is now non-exhaustive.
-- If you name the type of `LanguageId::QUERY_LANGUAGES` (`[LanguageId; 11]`), use `&'static [LanguageId]`. Iterating it yields `&LanguageId`: write `for &language in LanguageId::QUERY_LANGUAGES`, or `.iter().copied()`.
+- Add a wildcard arm (`_ => …`) if you match on `opentide::analysis::LanguageId`. If you build an `opentide::models::RuleConfigurations` with a struct literal, start from `RuleConfigurations::default()` and set its fields. If you name the type of `LanguageId::QUERY_LANGUAGES`, `RuleConfigurations::PLATFORMS` or `opentide::validate::STRICT_EXEMPT_WARNINGS`, write `&'static [_]`; iterate them with `for &item in …` or `.iter().copied()`.
 
 ### Breaking
 
 #### `opentide`
 
-- **`LanguageId` has a new variant, `LanguageId::Datadog`** (the Datadog log search syntax, `docs/internal/rfc-datadog-cloud-siem.md`). `LanguageId::QUERY_LANGUAGES` holds twelve languages; `LanguageId::parse` reads `datadog` and `opentide-datadog`, and `LanguageId::from_extension` reads `datadog`.
-- **`LanguageId` is `#[non_exhaustive]`, and `LanguageId::QUERY_LANGUAGES` is a `&'static [LanguageId]`** ([opentide#1911](https://github.com/opentidehq/opentide/issues/1911), ADR 0015 §6). It was an exhaustive enum and a `[LanguageId; 11]`, so every new language changed both and was a major release. A `match` outside `opentide-core` now needs a wildcard arm. This makes the next release a major; after it, a new query language is a minor release.
+- **Platforms, query languages and diagnostic codes are open sets: adding one is a minor release** ([opentide#1911](https://github.com/opentidehq/opentide/issues/1911), ADR 0015 §6). This release switches the API over once, so the next platform or language changes no type:
+  - `LanguageId` is `#[non_exhaustive]`: a `match` on it outside `opentide-core` needs a wildcard arm
+  - `RuleConfigurations`, which has one field per platform, is `#[non_exhaustive]` and implements `Default`: it cannot be built with a struct literal outside `opentide-schema`
+  - `LanguageId::QUERY_LANGUAGES`, `RuleConfigurations::PLATFORMS` and `validate::STRICT_EXEMPT_WARNINGS` are `&'static [_]`; they were `[_; 12]`, `[_; 13]` and `[_; 4]`
 
 ### Added
+
+#### `opentide`
+
+- **API: `LanguageId::Datadog`**, the Datadog log search syntax (`docs/internal/rfc-datadog-cloud-siem.md`). `LanguageId::QUERY_LANGUAGES` holds twelve languages; `LanguageId::parse` reads `datadog` and `opentide-datadog`, and `LanguageId::from_extension` reads `datadog`.
 
 #### `opentide-datadog`
 

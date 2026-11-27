@@ -8,12 +8,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Eac
 
 ### Upgrade
 
-1. If you use the Rust SDK and `match` on `opentide::analysis::LanguageId`, add a wildcard arm (`_ => …`), and if you name the type of `LanguageId::QUERY_LANGUAGES`, use `&'static [LanguageId]` (iterate it with `for &language in LanguageId::QUERY_LANGUAGES`).
+1. If you use the Rust SDK: add a wildcard arm (`_ => …`) where you match on `opentide::analysis::LanguageId`, and build an `opentide::models::RuleConfigurations` from `RuleConfigurations::default()`, not a struct literal. `LanguageId::QUERY_LANGUAGES`, `RuleConfigurations::PLATFORMS` and `opentide::validate::STRICT_EXEMPT_WARNINGS` are slices now (`for &item in …`).
 2. If CI runs `opentide lint --strict` on Microsoft Defender rules (`opentide setup ci` generates it), it now fails on three new warnings. To keep the previous result while you fix the rules, set each to `"info"` under `[queries.codes]` in `.opentide/configurations/lint.toml`: `microsoft_defender_custom_details_limit`, `microsoft_defender_placeholder_limit` and `microsoft_defender_nrt_query`.
 
 ### Breaking
 
-- **The Rust SDK's `LanguageId` is non-exhaustive, and it has a new variant, `LanguageId::Datadog`** ([#1911](https://github.com/opentidehq/opentide/issues/1911)). A `match` on it without a wildcard arm no longer compiles, and `LanguageId::QUERY_LANGUAGES` is a `&'static [LanguageId]` of twelve languages, not a `[LanguageId; 11]`. This makes the next release a major; after it, a new query language is a minor release. The command line, the Python package and the npm package are unaffected.
+- **In the Rust SDK, platforms, query languages and diagnostic codes are open sets** ([#1911](https://github.com/opentidehq/opentide/issues/1911)). From this release on, adding one is a minor release and changes no type. This release makes the switch once: `LanguageId` and `RuleConfigurations` are `#[non_exhaustive]`, so a `match` on `LanguageId` needs a wildcard arm and a `RuleConfigurations` starts from `Default`. `LanguageId::QUERY_LANGUAGES`, `RuleConfigurations::PLATFORMS` and `validate::STRICT_EXEMPT_WARNINGS` are slices, not fixed-size arrays. The command line, the Python package and the npm package are unaffected.
 
 ### Added
 
