@@ -332,7 +332,9 @@ fn count(text: &str) -> Option<u64> {
 fn short_duration(iso: &str) -> Option<String> {
     let zero = |text: &str| !text.is_empty() && text.bytes().all(|b| b == b'0');
     if let Some(time) = iso.strip_prefix("PT") {
-        let (number, unit) = time.split_at(time.len().checked_sub(1)?);
+        // `None` when the last character is not one byte, so not a unit
+        // (#1926).
+        let (number, unit) = time.split_at_checked(time.len().checked_sub(1)?)?;
         if zero(number) && matches!(unit, "S" | "M" | "H") {
             return Some("NRT".to_owned());
         }
@@ -1055,6 +1057,11 @@ mod tests {
             ("PT90M", None),
             ("PT01H", None),
             ("1H", None),
+            // #1926: a multi-byte last character is no unit, not a panic.
+            ("PT1é", None),
+            ("PT1😀", None),
+            ("PTé", None),
+            ("P1é", None),
         ] {
             assert_eq!(short_duration(iso).as_deref(), short, "{iso}");
         }
