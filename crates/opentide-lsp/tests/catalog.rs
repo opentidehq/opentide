@@ -570,3 +570,56 @@ fn a_catalog_request_without_params_or_with_null_asks_for_every_root() {
     assert_eq!(changes.len(), 1, "{seen:?}");
     assert_eq!(changes[0]["params"]["root"], file_uri(root).as_str());
 }
+
+/// #2002: a keystroke in an open object leaves the part of the index the
+/// files on disk make as it was: no entry of a file on disk is gathered
+/// again, until the open documents or the disk change.
+#[test]
+fn a_keystroke_gathers_no_disk_entry_again() {
+    const RULES: usize = 30;
+    let scratch = workspace("catalog-base");
+    let root = &scratch.0;
+    for n in 0..RULES {
+        let text = rule(DANGLING)
+            .replace(
+                "00000000-0000-4000-8003-000000000001",
+                &format!("00000000-0000-4000-8003-0000000001{n:02}"),
+            )
+            .replace("name: Sentinel KQL Rule", &format!("name: Rule é😀 {n}"));
+        std::fs::write(root.join(format!("objects/rules/rule-{n}.yaml")), text).unwrap();
+    }
+    let rule_uri = file_uri(&root.join("objects/rules/rule-1.0.yaml"));
+    let mut lsp = start(json!({ "capabilities": {}, "rootUri": file_uri(root) }));
+    let gathered = |lsp: &mut Lsp| {
+        lsp.request("opentide/__stats", Value::Null)["result"]["baseObjects"]
+            .as_u64()
+            .unwrap()
+    };
+    let objects = |lsp: &mut Lsp| {
+        lsp.request("opentide/catalog", json!({}))["result"]["roots"][0]["objects"]
+            .as_array()
+            .unwrap()
+            .len()
+    };
+    assert_eq!(objects(&mut lsp), RULES + 2);
+    assert_eq!(gathered(&mut lsp), (RULES + 2) as u64);
+    lsp.notify(
+        "textDocument/didOpen",
+        json!({ "textDocument": { "uri": rule_uri, "languageId": "opentide-yaml", "version": 1, "text": rule(DANGLING) } }),
+    );
+    settle(&mut lsp);
+    // Opening a file on disk leaves it out of the disk's part, gathered
+    // again once.
+    assert_eq!(objects(&mut lsp), RULES + 2);
+    let before = gathered(&mut lsp);
+    assert_eq!(before, (2 * RULES + 3) as u64);
+    for text in [
+        rule(DANGLING).replace("Minimal valid", "A minimal é😀"),
+        rule(MODEL),
+    ] {
+        did_change(&mut lsp, &rule_uri, &text);
+        settle(&mut lsp);
+        assert_eq!(objects(&mut lsp), RULES + 2);
+    }
+    assert_eq!(gathered(&mut lsp), before);
+}

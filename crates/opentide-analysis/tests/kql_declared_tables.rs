@@ -14,15 +14,10 @@ use opentide_analysis::{
 };
 
 fn findings(platform: &str, text: &str) -> Vec<(String, String)> {
-    analyze_query(&QueryRequest {
-        language: LanguageId::Kql,
-        platform: Some(platform.into()),
-        stack: None,
-        text: text.into(),
-    })
-    .into_iter()
-    .map(|d| (d.code, format!("{:?}", d.severity)))
-    .collect()
+    analyze_query(&QueryRequest::new(LanguageId::Kql, text).with_platform(Some(platform)))
+        .into_iter()
+        .map(|d| (d.code, format!("{:?}", d.severity)))
+        .collect()
 }
 
 fn declare(text: Option<&str>) {
@@ -172,12 +167,13 @@ tables = ["Custom_CL"]
         )
         .is_empty()
     );
-    let d = analyze_query(&QueryRequest {
-        language: LanguageId::Kql,
-        platform: Some("sentinel".into()),
-        stack: None,
-        text: "VendorFirewall_CL | where DeviceActon_s == \"deny\"".into(),
-    });
+    let d = analyze_query(
+        &QueryRequest::new(
+            LanguageId::Kql,
+            "VendorFirewall_CL | where DeviceActon_s == \"deny\"",
+        )
+        .with_platform(Some("sentinel")),
+    );
     assert_eq!(d.len(), 1, "{d:?}");
     assert_eq!(d[0].code, codes::KQL_UNKNOWN_COLUMN);
     assert_eq!(d[0].suggestion.as_deref(), Some("DeviceAction_s"));
@@ -242,12 +238,10 @@ tables = ["Custom_CL"]
     // Undeclared and unknown to the catalog, and within two edits of a
     // declared table that does not end in `_CL`: `kql_table_misspelt`, an
     // error, naming the declared table.
-    let d = analyze_query(&QueryRequest {
-        language: LanguageId::Kql,
-        platform: Some("sentinel".into()),
-        stack: None,
-        text: "NTANetAnalytic | take 1".into(),
-    });
+    let d = analyze_query(
+        &QueryRequest::new(LanguageId::Kql, "NTANetAnalytic | take 1")
+            .with_platform(Some("sentinel")),
+    );
     assert_eq!(d.len(), 1, "{d:?}");
     assert_eq!(d[0].code, codes::KQL_TABLE_MISSPELT);
     assert_eq!(d[0].severity, opentide_analysis::Severity::Error);
@@ -255,12 +249,9 @@ tables = ["Custom_CL"]
     // A custom `_CL` near miss is still `kql_unknown_table` at the
     // profile's severity (#147), its help naming the declaration, and a near
     // miss of a declared table suggests it.
-    let d = analyze_query(&QueryRequest {
-        language: LanguageId::Kql,
-        platform: Some("sentinel".into()),
-        stack: None,
-        text: "Custom_C_CL | take 1".into(),
-    });
+    let d = analyze_query(
+        &QueryRequest::new(LanguageId::Kql, "Custom_C_CL | take 1").with_platform(Some("sentinel")),
+    );
     assert_eq!(d.len(), 1, "{d:?}");
     assert_eq!(d[0].code, codes::KQL_UNKNOWN_TABLE);
     assert_eq!(d[0].severity, opentide_analysis::Severity::Warning);
@@ -310,12 +301,10 @@ tables = ["Custom_CL"]
         )
         .is_empty()
     );
-    let d = analyze_query(&QueryRequest {
-        language: LanguageId::Kql,
-        platform: Some("sentinel".into()),
-        stack: None,
-        text: "Contoso_Audit_CL | where Actor_x == \"a\"".into(),
-    });
+    let d = analyze_query(
+        &QueryRequest::new(LanguageId::Kql, "Contoso_Audit_CL | where Actor_x == \"a\"")
+            .with_platform(Some("sentinel")),
+    );
     assert_eq!(d.len(), 1, "{d:?}");
     assert_eq!(d[0].code, codes::KQL_UNKNOWN_COLUMN);
     assert_eq!(d[0].suggestion.as_deref(), Some("Actor_s"));
@@ -394,12 +383,10 @@ system = "microsoft_defender"
         findings("microsoft_defender", "DeviceFileEvents | take 1"),
         warning(codes::KQL_TABLE_NOT_DECLARED)
     );
-    let d = analyze_query(&QueryRequest {
-        language: LanguageId::Kql,
-        platform: Some("microsoft_defender".into()),
-        stack: None,
-        text: "Custom_CL | take 1".into(),
-    });
+    let d = analyze_query(
+        &QueryRequest::new(LanguageId::Kql, "Custom_CL | take 1")
+            .with_platform(Some("microsoft_defender")),
+    );
     assert_eq!(d.len(), 1, "{d:?}");
     assert_eq!(d[0].code, codes::KQL_UNKNOWN_TABLE);
     assert_eq!(d[0].severity, opentide_analysis::Severity::Error);

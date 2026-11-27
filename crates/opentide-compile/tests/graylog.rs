@@ -15,6 +15,7 @@ use opentide_compile::graylog::{
     update_request, validate_body,
 };
 use opentide_compile::{Json, Owned, Rule};
+use opentide_schema::platforms::PlatformKey;
 use opentide_schema::vocab::Vocabularies;
 use opentide_workspace::{FileSystem, MemoryFs, Options, RootOptions, Workspace};
 
@@ -610,7 +611,10 @@ fn preview_entry(rule: &str, tenants: &[&str]) -> serde_json::Value {
     let rule = Rule::new(object.root().unwrap(), None);
     let tenants: Vec<String> = tenants.iter().map(|name| (*name).to_owned()).collect();
     data(&opentide_compile::preview::preview_on(
-        &cx, "graylog", &rule, &tenants,
+        &cx,
+        &PlatformKey::new("graylog"),
+        &rule,
+        &tenants,
     ))
 }
 

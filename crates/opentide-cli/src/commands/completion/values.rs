@@ -23,6 +23,7 @@ use std::sync::{Arc, OnceLock};
 
 use clap::Command;
 use clap_complete::engine::{ArgValueCompleter, CompletionCandidate};
+use opentide_schema::platforms::PlatformKey;
 use opentide_workspace::fs::{FileSystem, OsFs};
 use opentide_workspace::root::{self, Roots};
 use opentide_workspace::{Configuration, RootOptions};
@@ -414,7 +415,7 @@ impl Context {
         let mut seen = HashSet::new();
         let mut found = Vec::new();
         for platform in &platforms {
-            for tenant in opentide_compile::plan::tenants(&tree, platform) {
+            for tenant in opentide_compile::plan::tenants(&tree, &PlatformKey::new(platform)) {
                 let name = opentide_compile::deploy::tenant_name(tenant);
                 if name.is_empty() || !name.starts_with(current) || !seen.insert(name) {
                     continue;

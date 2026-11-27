@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 
 use indexmap::IndexMap;
 use opentide_schema::node::Node;
+use opentide_schema::platforms::PlatformKey;
 use opentide_workspace::{FileSystem, Workspace};
 
 use crate::json::{Json, Object};
@@ -557,7 +558,7 @@ pub fn run(
         .collect();
     let tenantless: Vec<&String> = deployment
         .keys()
-        .filter(|platform| plan::tenants(&config, platform).is_empty())
+        .filter(|platform| plan::tenants(&config, &PlatformKey::new(platform)).is_empty())
         .collect();
     let missing: Object = tenantless
         .iter()
@@ -587,7 +588,7 @@ pub fn run(
         if tenantless.contains(&platform) {
             continue;
         }
-        let tenants: Vec<Tenant> = plan::tenants(&config, platform)
+        let tenants: Vec<Tenant> = plan::tenants(&config, &PlatformKey::new(platform))
             .into_iter()
             .map(Tenant::from_json)
             .collect();
@@ -687,6 +688,7 @@ pub fn run(
     let mut failing: Vec<(String, String)> = Vec::new();
     let mut diagnostics: Vec<Json> = Vec::new();
     for (platform, uuids) in &deployment {
+        let key = PlatformKey::new(platform);
         let mut entries = Vec::new();
         for uuid in uuids {
             let Some(object) = index.get("rule", uuid) else {
@@ -711,7 +713,7 @@ pub fn run(
             // updates or deletes on the platforms that keep one.
             let known =
                 |tenant: &str| plan::state_id(fs, &workspace_root, &canonical, platform, tenant);
-            let entry = preview::preview_planned(&cx, platform, &rule, &tenants, &known);
+            let entry = preview::preview_planned(&cx, &key, &rule, &tenants, &known);
             if entry.get("status").and_then(Json::as_str) == Some("failed") {
                 failing.push((platform.clone(), rule.uuid.clone()));
                 diagnostics.push(diagnostic(platform, &entry, workspace.root()));

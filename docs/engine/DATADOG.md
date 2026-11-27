@@ -70,8 +70,8 @@ follow a field's colon (`env: prod`). A word that is a number, with an optional 
 
 | Profile | Used for | Difference |
 |---------|----------|------------|
-| `rule` | a detection rule's `queries[].query` | `*:term` (`datadog_full_text_in_rule`) and `#name` (`datadog_calculated_field_in_rule`) are warnings |
-| `search` | `.datadog` files; `system: datadog` hunts and `opentide query`; `analyze_query`, whatever its `platform` | everything the syntax allows |
+| `rule` | a detection rule's `queries[].query`; `analyze_query` at position `rule` | `*:term` (`datadog_full_text_in_rule`) and `#name` (`datadog_calculated_field_in_rule`) are warnings |
+| `search` | `.datadog` files; `system: datadog` hunts and `opentide query`; `analyze_query` at position `search`, whatever its `platform` | everything the syntax allows |
 
 ## Diagnostics
 

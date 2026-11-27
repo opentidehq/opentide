@@ -105,6 +105,10 @@ pub(crate) struct Root {
     /// documents of this root in place of their files, and its
     /// [catalog digest](catalog_digest).
     index: RefCell<Option<DigestedIndex>>,
+    /// The part of `index` the files on disk make, kept while the disk and
+    /// the set of open documents are as they were: a keystroke in an open
+    /// document drops `index`, not this (#2002).
+    base: RefCell<Option<DiskBase>>,
     /// The editor's `visibility.toml` buffer while the file is open: it wins
     /// over the file on disk.
     pub visibility: Option<String>,
@@ -128,6 +132,7 @@ impl Root {
             disk: RefCell::default(),
             checked: Cell::new(0),
             index: RefCell::default(),
+            base: RefCell::default(),
             visibility: None,
             catalog: CatalogState::default(),
             good_visibility: RefCell::default(),
@@ -231,6 +236,18 @@ pub(crate) fn catalog_digest(digests: impl IntoIterator<Item = u64>) -> u64 {
 
 /// An index and its [`catalog_digest`], built together.
 type DigestedIndex = (Arc<[IndexedObject]>, u64);
+
+/// A root's index entries of its files on disk but the open ones, in the
+/// order of their [`path_key`]s, with the sum of their [`object_digest`]s:
+/// what a root's index starts from, made again only when the disk
+/// ([`DiskObjects::generation`]) or the open documents it leaves out change.
+struct DiskBase {
+    generation: u64,
+    /// The [`path_key`]s of the root's open Tide documents, in order.
+    open: Vec<String>,
+    objects: Vec<IndexedObject>,
+    digest: u64,
+}
 
 /// One object's part of [`catalog_digest`]: its file (by [`path_key`]),
 /// identity, name and references.
@@ -493,6 +510,9 @@ impl DiskFile {
 struct DiskObjects {
     loaded: bool,
     files: BTreeMap<String, DiskFile>,
+    /// Bumped whenever `files` changes: a [`DiskBase`] of another
+    /// generation is out of date.
+    generation: u64,
     /// How many files the index parsed itself, not reading the workspace's
     /// parse (`opentide/__stats`).
     parsed_here: AtomicUsize,
@@ -528,6 +548,9 @@ impl DiskObjects {
                 }
             }
         }
+        if !changed.is_empty() {
+            self.generation += 1;
+        }
         changed
     }
 
@@ -554,6 +577,7 @@ impl DiskObjects {
     }
 
     fn refresh_path(&mut self, path: &str) {
+        self.generation += 1;
         match std::fs::read_to_string(path) {
             Ok(text) => {
                 let text = opentide_core::strip_bom(&text).to_string();
@@ -567,6 +591,11 @@ impl DiskObjects {
     }
 }
 
+/// A file a host supplied: its path, its text, its index entry, and the
+/// entry's [`object_digest`] once an index needed it (a supplied object is
+/// digested once, not on every rebuild of the index, #2002).
+pub(crate) type SuppliedFile = (String, String, Option<IndexedObject>, OnceLock<u64>);
+
 /// The workspace a host with no filesystem supplies on `initialize`
 /// (`initializationOptions.workspace`): a browser worker
 /// ([`MessageSession`](crate::MessageSession)). Its objects are indexed as
@@ -576,8 +605,8 @@ impl DiskObjects {
 /// that root's datasets. They are never checked or published.
 #[derive(Default)]
 pub(crate) struct Supplied {
-    /// [`path_key`] → (path, text, index entry).
-    pub files: BTreeMap<String, (String, String, Option<IndexedObject>)>,
+    /// [`path_key`] → the file.
+    pub files: BTreeMap<String, SuppliedFile>,
     /// The text of `visibility.toml`, used where no root has one on disk.
     pub visibility: Option<String>,
 }
@@ -608,7 +637,7 @@ impl Supplied {
             let indexed = crate::index::index_text(&path, &text);
             supplied
                 .files
-                .insert(path_key(&path), (path, text, indexed));
+                .insert(path_key(&path), (path, text, indexed, OnceLock::new()));
         };
         for document in entries("documents") {
             let field = |key: &str| document.get(key).and_then(Value::as_str);
@@ -669,7 +698,7 @@ impl Supplied {
             let same = self
                 .files
                 .get(&key)
-                .is_some_and(|(_, text, _)| *text == entry.1);
+                .is_some_and(|(_, text, ..)| *text == entry.1);
             if !same {
                 self.files.insert(key, entry);
                 changed = true;
@@ -767,6 +796,9 @@ pub(crate) struct Session {
     /// How many index entries were digested for [`catalog_digest`], for
     /// the tests (`opentide/__stats`).
     pub digested_objects: Cell<u64>,
+    /// How many disk entries were gathered into a root's [`DiskBase`], for
+    /// the tests (`opentide/__stats`).
+    pub base_objects: Cell<u64>,
     /// The open document each path names, by [`path_key`], built when a
     /// lookup by path needs it after the open documents changed
     /// ([`docs_changed`](Self::docs_changed)): a lookup does not compare
@@ -992,7 +1024,7 @@ impl SessionHost<'_> {
                 return Some(f(&file.text));
             }
         }
-        if let Some((_, text, _)) = session.supplied.files.get(&key) {
+        if let Some((_, text, ..)) = session.supplied.files.get(&key) {
             return Some(f(text));
         }
         let elastic = session.elastic_configuration(self.root)?;
@@ -1023,9 +1055,11 @@ impl SessionHost<'_> {
 
     /// The index entries of the root's objects: the files on disk (but the
     /// open ones), the open documents, then what the host supplied that no
-    /// file holds. A file on disk is indexed once, whichever call indexes
-    /// it first, and digested once ([`DiskFile::digest`]); the open
-    /// documents and what the host supplied are digested on each call.
+    /// file holds. The files on disk come from the root's [`DiskBase`],
+    /// gathered again only when the disk or the open documents changed. A
+    /// file on disk is indexed once, whichever call indexes it first, and a
+    /// file on disk or supplied is digested once; only the open documents
+    /// are indexed and digested on each call.
     fn collect_index(&self) -> (Vec<IndexedObject>, u64) {
         let session = self.session;
         let open: BTreeMap<String, (String, &String)> = session
@@ -1038,65 +1072,103 @@ impl SessionHost<'_> {
             })
             .collect();
         let digested = &session.digested_objects;
-        let mut digests: Vec<u64> = Vec::new();
-        let mut index: Vec<IndexedObject> = match self.root {
-            Some(i) => {
-                let root = &session.roots[i];
-                let parses = || {
-                    root.checks
-                        .try_borrow()
-                        .map(|checks| checks.parses_under(&root.path))
-                        .unwrap_or_default()
-                };
-                root.disk
-                    .borrow()
-                    .index_pending(&parses)
-                    .iter()
-                    .filter(|(path, _)| !open.contains_key(*path))
-                    .filter_map(|(_, file)| {
-                        let entry = file.entry()?;
-                        digests.push(file.digest(entry, digested));
-                        Some(entry.clone())
-                    })
-                    .collect()
-            }
-            None => Vec::new(),
+        let (mut index, base_digest) = match self.root {
+            Some(i) => self.disk_base(i, &open),
+            None => (Vec::new(), 0),
         };
+        let mut digests: Vec<u64> = vec![base_digest];
         let fresh = index.len();
         index.extend(
             open.values()
                 .filter_map(|(path, text)| crate::index::index_text(path, text)),
         );
+        // The open documents: digested here.
+        for object in &index[fresh..] {
+            digested.set(digested.get() + 1);
+            digests.push(object_digest(object));
+        }
         // What the host supplied stands in for objects the session has no
         // file for: an object open or on disk is itself, not a duplicate of
         // its own metadata. A supplied file under a root's folder is that
         // root's alone, as a file on disk would be; one outside every root
         // (an object known by its metadata, `opentide-object:<uuid>`) is
         // every root's.
-        let known: HashSet<String> = index.iter().map(|o| o.uuid.clone()).collect();
+        let known: HashSet<&str> = index.iter().map(|o| o.uuid.as_str()).collect();
         let on_disk = |key: &String| {
             self.root
                 .is_some_and(|i| session.roots[i].disk.borrow().files.contains_key(key))
         };
-        index.extend(
-            session
-                .supplied
-                .files
-                .iter()
-                .filter(|(key, _)| !open.contains_key(*key) && !on_disk(key))
-                .filter(|(_, (path, _, _))| {
-                    let owner = session.owning_root(path);
-                    owner.is_none() || owner == self.root
-                })
-                .filter_map(|(_, (_, _, indexed))| indexed.clone())
-                .filter(|o| !known.contains(&o.uuid)),
-        );
-        // The open documents and what the host supplied: digested here.
-        for object in &index[fresh..] {
-            digested.set(digested.get() + 1);
-            digests.push(object_digest(object));
-        }
+        let supplied: Vec<IndexedObject> = session
+            .supplied
+            .files
+            .iter()
+            .filter(|(key, _)| !open.contains_key(*key) && !on_disk(key))
+            .filter(|(_, (path, ..))| {
+                let owner = session.owning_root(path);
+                owner.is_none() || owner == self.root
+            })
+            .filter_map(|(_, (_, _, indexed, digest))| {
+                let object = indexed
+                    .as_ref()
+                    .filter(|o| !known.contains(o.uuid.as_str()))?;
+                digests.push(*digest.get_or_init(|| {
+                    digested.set(digested.get() + 1);
+                    object_digest(object)
+                }));
+                Some(object.clone())
+            })
+            .collect();
+        index.extend(supplied);
         (index, catalog_digest(digests))
+    }
+
+    /// Root `i`'s [`DiskBase`] for the open documents `open`, its entries
+    /// and their digest: the one kept, else one gathered from the root's
+    /// files on disk (each indexed and digested once) and kept.
+    fn disk_base(
+        &self,
+        i: usize,
+        open: &BTreeMap<String, (String, &String)>,
+    ) -> (Vec<IndexedObject>, u64) {
+        let session = self.session;
+        let root = &session.roots[i];
+        let generation = root.disk.borrow().generation;
+        if let Some(base) = root.base.borrow().as_ref()
+            && base.generation == generation
+            && base.open.iter().eq(open.keys())
+        {
+            return (base.objects.clone(), base.digest);
+        }
+        let parses = || {
+            root.checks
+                .try_borrow()
+                .map(|checks| checks.parses_under(&root.path))
+                .unwrap_or_default()
+        };
+        let digested = &session.digested_objects;
+        let disk = root.disk.borrow();
+        let mut digests = Vec::new();
+        let objects: Vec<IndexedObject> = disk
+            .index_pending(&parses)
+            .iter()
+            .filter(|(path, _)| !open.contains_key(*path))
+            .filter_map(|(_, file)| {
+                let entry = file.entry()?;
+                digests.push(file.digest(entry, digested));
+                Some(entry.clone())
+            })
+            .collect();
+        session
+            .base_objects
+            .set(session.base_objects.get() + objects.len() as u64);
+        let digest = catalog_digest(digests);
+        *root.base.borrow_mut() = Some(DiskBase {
+            generation,
+            open: open.keys().cloned().collect(),
+            objects: objects.clone(),
+            digest,
+        });
+        (objects, digest)
     }
 }
 
@@ -1177,7 +1249,7 @@ impl Session {
                 self.supplied
                     .files
                     .get(&path_key(&r.visibility_path().display().to_string()))
-                    .map(|(_, text, _)| text.clone())
+                    .map(|(_, text, ..)| text.clone())
             })
             .or_else(|| self.supplied.visibility.clone());
         match install_visibility(text.as_deref()) {
@@ -2195,8 +2267,8 @@ impl Session {
             .supplied
             .files
             .values()
-            .filter(|(path, _, _)| !path.starts_with("opentide-object:"))
-            .map(|(path, text, _)| (workspace_path(path), text.clone()))
+            .filter(|(path, ..)| !path.starts_with("opentide-object:"))
+            .map(|(path, text, ..)| (workspace_path(path), text.clone()))
             .collect();
         for (uri, d) in &self.docs {
             if d.root == root && matches!(d.language, LanguageId::TideYaml | LanguageId::Config) {
@@ -2210,7 +2282,7 @@ impl Session {
             .supplied
             .files
             .values()
-            .any(|(path, _, _)| path.starts_with("opentide-object:"));
+            .any(|(path, ..)| path.starts_with("opentide-object:"));
         let index = if supplies_stubs {
             self.host(root).indexed_objects().unwrap_or_default()
         } else {
@@ -2249,7 +2321,7 @@ impl Session {
                     self.supplied
                         .files
                         .get(&key)
-                        .map(|(_, text, _)| text.clone())
+                        .map(|(_, text, ..)| text.clone())
                 })
                 .map(|text| opentide_core::strip_bom(&text).to_string())
         };

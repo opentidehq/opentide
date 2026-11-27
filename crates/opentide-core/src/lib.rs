@@ -832,6 +832,9 @@ pub mod codes {
         CHAINING_RELATION_UNKNOWN = "chaining_relation_unknown"
             => "A threat chaining relation is not in the chaining_relations vocabulary.";
         DEPRECATED_FIELD = "deprecated_field" => "The field is deprecated in its schema revision.";
+        // A query on its own at the `rule` position names no platform (#1993).
+        QUERY_POSITION_NEEDS_PLATFORM = "query_position_needs_platform"
+            => "A query on its own is to be checked as a rule's query, but no platform says whose rule block it is.";
         KQL_CONTROL_COMMAND_UNSUPPORTED = "kql_control_command_unsupported"
             => "A KQL control command (.show, .create, ...) is not a detection query; rules cannot run it.";
         KQL_UNKNOWN_OPERATOR = "kql_unknown_operator" suggests Replacement

@@ -53,7 +53,7 @@ use crate::render::outcome::Console;
 use crate::render::progress::{Step, StepStatus, plural, seconds_text};
 use crate::render::text::Text;
 use anstyle::{AnsiColor, Style};
-use opentide_schema::platforms::PlatformId;
+use opentide_schema::platforms::{PlatformId, PlatformKey};
 
 mod datadog;
 mod exabeam;
@@ -937,7 +937,7 @@ fn deploy(
     let config = &owned.config;
     let tenantless: Vec<&String> = deployment
         .keys()
-        .filter(|platform| plan::tenants(config, platform).is_empty())
+        .filter(|platform| plan::tenants(config, &PlatformKey::new(platform)).is_empty())
         .collect();
     if !tenantless.is_empty() {
         let path = |platform: &str| format!(".opentide/configurations/platforms/{platform}.toml");
@@ -994,7 +994,7 @@ fn deploy(
     let mut unrouted: Vec<(String, String, String)> = Vec::new();
     let index = workspace.index();
     for (platform, uuids) in &deployment {
-        let tables = plan::tenants(config, platform);
+        let tables = plan::tenants(config, &PlatformKey::new(platform));
         let configured: Vec<Configured> = tables
             .iter()
             .map(|table| Configured {
@@ -2824,7 +2824,7 @@ impl Sender<'_, '_> {
 
     /// The tenants' batches of *uuids* (`TideDeployment`).
     fn batches(&self, platform: &str, uuids: &[String]) -> Result<Vec<Batch>, Raised> {
-        let tables = plan::tenants(&self.compile.config.clone(), platform)
+        let tables = plan::tenants(&self.compile.config.clone(), &PlatformKey::new(platform))
             .into_iter()
             .cloned()
             .collect::<Vec<CJson>>();
@@ -3241,10 +3241,11 @@ impl Sender<'_, '_> {
                 tenants.push(&retirement.tenant);
             }
         }
-        let tables: Vec<CJson> = plan::tenants(&self.compile.config.clone(), platform)
-            .into_iter()
-            .cloned()
-            .collect();
+        let tables: Vec<CJson> =
+            plan::tenants(&self.compile.config.clone(), &PlatformKey::new(platform))
+                .into_iter()
+                .cloned()
+                .collect();
         for tenant in tenants {
             // A tenant the platform's own rules stopped: its retirements
             // are not attempted ([`DeployLog::settle`]).
