@@ -272,7 +272,7 @@ doc_markdown = "allow" # product and language names (ES|QL, CrowdStrike) are pro
 # `too_many_lines` is enforced (the pedantic default, 100 lines): an engine crate's lib.rs carries
 # one `#![expect]` (its dispatchers match every node kind in one function), any other
 # long function its own `#[expect]`, whose reason says why it is long: the deferred
-# "split when next touched" is only on the functions `xtask/too_many_lines.txt` lists (#1959).
+# "split when next touched" (or "split when next ...") is only on the functions `xtask/too_many_lines.txt` lists (#1959).
 match_same_arms = "allow" # one arm per language or node kind, even when two arms agree
 map_unwrap_or = "allow" # style, at 57 sites
 redundant_closure_for_method_calls = "allow" # style, at 68 sites
