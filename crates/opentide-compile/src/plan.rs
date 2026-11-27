@@ -703,9 +703,9 @@ pub fn state_ids(
         let stem = name
             .len()
             .checked_sub(5)
-            .filter(|at| name.is_char_boundary(*at))
-            .filter(|at| name[*at..].eq_ignore_ascii_case(".json"))
-            .map(|at| &name[..at]);
+            .and_then(|at| name.split_at_checked(at))
+            .filter(|(_, suffix)| suffix.eq_ignore_ascii_case(".json"))
+            .map(|(stem, _)| stem);
         name != &file && stem.is_some_and(|stem| canonical_uuid(stem) == canonical)
     });
     if variants || !names.contains(&file) {
@@ -1057,6 +1057,9 @@ mod tests {
         let dir = "/ws/.opentide/states/deployment";
         fs.write(format!("{dir}/{uuid}.json"), shard.clone());
         fs.write(format!("{dir}/\u{212a}é.json"), "{}");
+        // #1946: names whose last five bytes split a character are skipped.
+        fs.write(format!("{dir}/é😀"), "{}");
+        fs.write(format!("{dir}/a😀"), "{}");
         let root = Path::new("/ws");
         assert_eq!(
             state_id(&fs, root, uuid, "crowdstrike", "t").as_deref(),

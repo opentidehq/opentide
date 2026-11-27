@@ -406,9 +406,9 @@ pub fn rule_id_of(uuid: &str) -> String {
 fn bare_uuid(id: &str) -> String {
     let trimmed = id.trim();
     let bare = trimmed
-        .get(..RULE_ID_PREFIX.len())
-        .filter(|head| head.eq_ignore_ascii_case(RULE_ID_PREFIX))
-        .map_or(trimmed, |_| &trimmed[RULE_ID_PREFIX.len()..]);
+        .split_at_checked(RULE_ID_PREFIX.len())
+        .filter(|(head, _)| head.eq_ignore_ascii_case(RULE_ID_PREFIX))
+        .map_or(trimmed, |(_, rest)| rest);
     canonical_uuid(bare).to_ascii_lowercase()
 }
 
@@ -553,5 +553,21 @@ mod tests {
             create_body("00000000-0000-4000-8000-000000000001", &Json::Object(body)).to_compact(),
             r#"{"id":"00000000-0000-4000-8000-000000000001","displayName":"x"}"#
         );
+    }
+
+    #[test]
+    fn a_multi_byte_character_where_the_prefix_would_end_is_no_prefix() {
+        // #1946: the prefix is split off only on a char boundary.
+        for id in ["opentid😀x", "opentidé", "😀", "é-8f3c4a7e"] {
+            assert_eq!(
+                rule_id_of(id),
+                format!(
+                    "{RULE_ID_PREFIX}{}",
+                    canonical_uuid(id.trim()).to_ascii_lowercase()
+                ),
+                "{id}"
+            );
+            assert_eq!(uuid_of_rule_id(id), None, "{id}");
+        }
     }
 }
