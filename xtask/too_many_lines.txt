@@ -4,7 +4,6 @@
 # xtask/tests/lint_policy.rs. The list only shrinks: split a function, or give
 # it a reason of its own, and take it off. No new entry.
 crates/opentide-analysis/src/config.rs configuration_completions
-crates/opentide-analysis/src/lib.rs analyze
 crates/opentide-analysis/tests/elastic_detection_rules.rs every_public_elastic_rule_is_free_of_engine_errors
 crates/opentide-analysis/tests/kql_declared_tables.rs declared_tables_are_known_and_undeclared_ones_warn_once_a_workspace_declares_any
 crates/opentide-cassette/src/proxy.rs handle
