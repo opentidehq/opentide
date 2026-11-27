@@ -193,6 +193,30 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 #[doc = include_str!("../../../docs/sdk/rust.md")]
 pub struct RustSdkPage;
 
+/// The report structs are `#[non_exhaustive]` (#1937): code outside the
+/// crate cannot build one with a struct expression, so a new field is not a
+/// breaking change. Each sample compiles once the attribute is removed.
+///
+/// ```compile_fail,E0639
+/// fn edit(found: opentide::Diagnostic) -> opentide::Diagnostic {
+///     opentide::Diagnostic { code: String::new(), ..found }
+/// }
+/// ```
+///
+/// ```compile_fail,E0639
+/// fn edit(report: opentide::Report) -> opentide::Report {
+///     opentide::Report { ok: true, ..report }
+/// }
+/// ```
+///
+/// ```compile_fail,E0639
+/// fn edit(report: opentide::lint::LintReport) -> opentide::lint::LintReport {
+///     opentide::lint::LintReport { exit_code: 0, ..report }
+/// }
+/// ```
+#[cfg(all(doctest, feature = "workspace"))]
+pub struct NonExhaustiveReports;
+
 /// The crate's README, whose sample runs as a doctest.
 #[cfg(doctest)]
 #[doc = include_str!("../README.md")]

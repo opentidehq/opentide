@@ -219,8 +219,10 @@ pub fn join_path(dir: &str, name: &str) -> String {
 /// in the configuration's order, each with its display name
 /// (`enabled_platforms`, `_entry_name`).
 pub fn enabled_platforms(config: &Node) -> Vec<(String, String)> {
-    let Some(Value::Map(platforms)) = table(Some(config), "platforms").map(|node| &node.value)
-    else {
+    let Some(config_platforms) = table(Some(config), "platforms") else {
+        return Vec::new();
+    };
+    let Value::Map(platforms) = &config_platforms.value else {
         return Vec::new();
     };
     let mut enabled = Vec::new();
@@ -235,10 +237,7 @@ pub fn enabled_platforms(config: &Node) -> Vec<(String, String)> {
             continue;
         }
         let section = table(Some(&entry.value), "platform");
-        if matches!(
-            table(section, "enabled").map(|node| &node.value),
-            Some(Value::Bool(true))
-        ) {
+        if crate::configuration::resolve::platform_enabled(Some(config_platforms), identifier) {
             let name = string(section, "name")
                 .filter(|name| !name.is_empty())
                 .unwrap_or(identifier);

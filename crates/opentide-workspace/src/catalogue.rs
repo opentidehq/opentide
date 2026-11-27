@@ -50,6 +50,7 @@ const STRATEGIES: [&str; 6] = [
 
 /// A rule's platform block, as the catalogue lists it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[non_exhaustive]
 pub struct PlatformBlock {
     /// The platform's key.
     pub id: String,
@@ -63,6 +64,7 @@ pub struct PlatformBlock {
 
 /// An object's techniques, kept apart by where they come from.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Default)]
+#[non_exhaustive]
 pub struct Techniques {
     /// Listed by the object.
     pub own: Vec<String>,
@@ -72,6 +74,7 @@ pub struct Techniques {
 
 /// One object that loaded.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[non_exhaustive]
 pub struct ObjectRow {
     /// Its UUID.
     pub uuid: String,
@@ -114,6 +117,7 @@ pub struct ObjectRow {
 
 /// Why a file did not load.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[non_exhaustive]
 pub struct LoadErrorDetail {
     /// `yaml_parse`, `missing_uuid` or `duplicate_id`.
     pub code: String,
@@ -125,6 +129,7 @@ pub struct LoadErrorDetail {
 
 /// A file the index holds no object for: what can be read of it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[non_exhaustive]
 pub struct LoadErrorRow {
     /// The UUID its text names, except for a duplicate (the kept object's).
     pub uuid: Option<String>,
@@ -195,6 +200,7 @@ impl Row {
 
 /// An edge between two objects, or from an object to a technique or log source.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[non_exhaustive]
 pub struct Edge {
     /// Where it starts.
     pub from: String,
@@ -212,6 +218,7 @@ pub struct Edge {
 
 /// A signal of an objective.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[non_exhaustive]
 pub struct SignalRow {
     /// Its UUID.
     pub uuid: String,
@@ -225,6 +232,7 @@ pub struct SignalRow {
 
 /// The catalogue's counts.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[non_exhaustive]
 pub struct Summary {
     /// Rows of `objects`, load errors included.
     pub objects: usize,
@@ -244,6 +252,7 @@ pub struct Summary {
 
 /// The catalogue.
 #[derive(Debug, Clone, PartialEq, Serialize)]
+#[non_exhaustive]
 pub struct Catalogue {
     /// Objects by family (threats, objectives, rules), each by path, then
     /// the files that did not load.

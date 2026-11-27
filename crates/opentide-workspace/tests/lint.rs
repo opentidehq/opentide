@@ -127,12 +127,14 @@ mod lint {
             )
         );
         assert_eq!(report.status, LintStatus::Issues);
+        let next: Vec<(&str, &str)> = report
+            .next_actions
+            .iter()
+            .map(|next: &NextAction| (next.command.as_str(), next.reason.as_str()))
+            .collect();
         assert_eq!(
-            report.next_actions,
-            [NextAction {
-                command: "opentide lint --fix".to_owned(),
-                reason: "rename 1 file to match their names".to_owned(),
-            }]
+            next,
+            [("opentide lint --fix", "rename 1 file to match their names")]
         );
         assert_eq!(report.outcome.as_deref(), Some("1 finding in 1 file"));
     }

@@ -120,6 +120,7 @@ pub fn technique_covers(requested: &str, candidate: &str) -> bool {
 
 /// The rules that cover one technique (`info coverage`'s document).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[non_exhaustive]
 pub struct TechniqueMatch {
     /// The technique asked for, trimmed.
     pub technique: String,
