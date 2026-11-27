@@ -9,6 +9,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Eac
 ### Upgrade
 
 1. If CI runs `opentide lint --strict` on Microsoft Defender rules (`opentide setup ci` generates it), it now fails on three new warnings. To keep the previous result while you fix the rules, set each to `"info"` under `[queries.codes]` in `.opentide/configurations/lint.toml`: `microsoft_defender_custom_details_limit`, `microsoft_defender_placeholder_limit` and `microsoft_defender_nrt_query`.
+2. If you deploy to Microsoft Sentinel, run `opentide validate` and fix each `sentinel_frequency` and `sentinel_lookback` it reports: set the frequency and the lookback between `5m` and `14d`, the lookback at least the frequency.
+
+### Breaking
+
+- **`validate` refuses a Sentinel schedule Sentinel refuses at deploy** ([#1916](https://github.com/opentidehq/opentide/issues/1916)). Microsoft allows a scheduled rule's frequency and lookback from 5 minutes to 14 days, the lookback at least the frequency. `validate` and the editor report a value outside these bounds as an error at its key. Near-real-time rules are not checked.
+  - `sentinel_frequency`: `scheduling.frequency` under 5 minutes or over 14 days
+  - `sentinel_lookback`: `scheduling.lookback` under 5 minutes, over 14 days, or shorter than the frequency
 
 ### Added
 

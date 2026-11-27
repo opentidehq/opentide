@@ -1641,6 +1641,14 @@ exit: 0
       "meaning": "A `--file`, `--uuid` or `--type` selection matched no object, so nothing was validated."
     },
     {
+      "code": "sentinel_frequency",
+      "meaning": "A Microsoft Sentinel block's `scheduling.frequency` is shorter than 5 minutes or longer than 14 days."
+    },
+    {
+      "code": "sentinel_lookback",
+      "meaning": "A Microsoft Sentinel block's `scheduling.lookback` is shorter than 5 minutes, longer than 14 days, or shorter than its frequency."
+    },
+    {
       "code": "share_failed",
       "meaning": "`share` reached the destination, and every object failed."
     },
@@ -2081,13 +2089,13 @@ exit: 0
   "duration_ms": 0,
   "exit_code": 0,
   "failure": null,
-  "message": "517 diagnostic codes",
+  "message": "519 diagnostic codes",
   "next_actions": [],
   "ok": true,
   "schema_version": 1,
   "status": "completed",
   "summary": {
-    "codes": 517
+    "codes": 519
   }
 }
 

@@ -224,13 +224,154 @@ fn garde_suppression(value: &Suppression, _pins: &Pins) -> garde::Result {
     }
 }
 
+/// `scheduling.frequency` is 5 minutes to 14 days.
+pub const FREQUENCY: &str = opentide_core::codes::SENTINEL_FREQUENCY;
+/// `scheduling.lookback` is 5 minutes to 14 days, and at least `frequency`.
+pub const LOOKBACK: &str = opentide_core::codes::SENTINEL_LOOKBACK;
+
+/// Every code [`schedule_findings`] reports.
+pub const CONSTRAINT_CODES: [&str; 2] = [FREQUENCY, LOOKBACK];
+
+/// The shortest frequency and lookback Sentinel takes, in seconds: 5 minutes.
+pub const SCHEDULE_MIN_SECONDS: u64 = 5 * 60;
+
+/// The longest frequency and lookback Sentinel takes, in seconds: 14 days.
+pub const SCHEDULE_MAX_SECONDS: u64 = 14 * 86_400;
+
+/// One broken bound of a scheduled rule: its code, the key under
+/// `scheduling` it is about, and what is wrong.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ScheduleFinding {
+    /// [`FREQUENCY`] or [`LOOKBACK`].
+    pub code: &'static str,
+    /// `frequency` or `lookback`.
+    pub key: &'static str,
+    /// The message.
+    pub message: String,
+}
+
+/// The bounds Microsoft documents for a scheduled rule's "Run query every"
+/// and "Lookup data from the last" (learn.microsoft.com/en-us/azure/sentinel/
+/// scheduled-rules-overview, read 2026-11-27): "The allowed range for both of
+/// these parameters is from 5 minutes to 14 days", and "The query interval
+/// must be shorter than or equal to the lookback period". Sentinel refuses a
+/// rule outside them at deploy.
+///
+/// A near-real-time rule (`nrt: true`) is not judged: deploy sends neither
+/// field. Neither is a value that is empty or not a duration
+/// ([`check_duration`] reports the latter, deploy asks for the former).
+pub fn schedule_findings(
+    nrt: Option<bool>,
+    frequency: Option<&str>,
+    lookback: Option<&str>,
+) -> Vec<ScheduleFinding> {
+    let mut found = Vec::new();
+    if nrt == Some(true) {
+        return found;
+    }
+    let seconds = |value: Option<&str>| match value.map(str::trim) {
+        Some(text) if !text.is_empty() => match duration_seconds(text) {
+            Length::Seconds(seconds) => Some(seconds),
+            Length::NotADuration | Length::TooLong => None,
+        },
+        _ => None,
+    };
+    let every = seconds(frequency);
+    let window = seconds(lookback);
+    for (code, key, value, length) in [
+        (FREQUENCY, "frequency", frequency, every),
+        (LOOKBACK, "lookback", lookback, window),
+    ] {
+        let Some(length) = length else {
+            continue;
+        };
+        let bound = if length < SCHEDULE_MIN_SECONDS {
+            "shorter than 5 minutes"
+        } else if length > SCHEDULE_MAX_SECONDS {
+            "longer than 14 days"
+        } else {
+            continue;
+        };
+        found.push(ScheduleFinding {
+            code,
+            key,
+            message: format!(
+                "scheduling.{key} {} is {bound}: Sentinel takes a scheduled rule's {key} from 5 \
+                 minutes to 14 days",
+                repr::quote(value.unwrap_or_default())
+            ),
+        });
+    }
+    if let (Some(every), Some(window)) = (every, window)
+        && window < every
+        && !found.iter().any(|finding| finding.code == LOOKBACK)
+    {
+        found.push(ScheduleFinding {
+            code: LOOKBACK,
+            key: "lookback",
+            message: format!(
+                "scheduling.lookback {} is shorter than frequency {}: Sentinel requires the \
+                 lookback to be at least the frequency, or the rule's runs leave gaps",
+                repr::quote(lookback.unwrap_or_default()),
+                repr::quote(frequency.unwrap_or_default())
+            ),
+        });
+    }
+    found
+}
+
+/// [`schedule_findings`] as a `mode="after"` validator: each finding an error
+/// typed by its code, at its key.
+fn schedule_bounds(value: &SentinelScheduling, node: &Node, cx: &mut Context) -> bool {
+    let found = schedule_findings(
+        value.nrt,
+        value.frequency.as_deref(),
+        value.lookback.as_deref(),
+    );
+    for finding in &found {
+        let input = match &node.value {
+            crate::node::Value::Map(entries) => entries
+                .iter()
+                .find(|entry| entry.key.value.as_str() == Some(finding.key))
+                .map_or(node, |entry| entry.value.as_ref()),
+            _ => node,
+        };
+        cx.at_key(finding.key, |cx| {
+            cx.error(
+                crate::error::ErrorKind::Constraint(finding.code),
+                finding.message.clone(),
+                input,
+            );
+        });
+    }
+    found.is_empty()
+}
+
+/// garde: [`schedule_findings`] on a value built in memory.
+fn garde_schedule(value: &SentinelScheduling, _pins: &Pins) -> garde::Result {
+    match schedule_findings(
+        value.nrt,
+        value.frequency.as_deref(),
+        value.lookback.as_deref(),
+    )
+    .first()
+    {
+        None => Ok(()),
+        Some(first) => Err(garde::Error::new(format!(
+            "{}: scheduling.{}: {}",
+            first.code, first.key, first.message
+        ))),
+    }
+}
+
 /// Run cadence, or NRT (`SentinelScheduling`).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, Validate, FromNode)]
 #[serde(deny_unknown_fields)]
 #[garde(context(Pins))]
 #[garde(allow_unvalidated)]
+#[garde(custom(garde_schedule))]
 #[schemars(rename = "SentinelScheduling", description = "")]
-#[from_node(model = "SentinelScheduling")]
+#[from_node(model = "SentinelScheduling", after = "schedule_bounds")]
 #[cfg_attr(
     feature = "python",
     pyo3::pyclass(
@@ -724,6 +865,86 @@ platform_block! {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Microsoft's bounds (#1916): 5 minutes to 14 days each, the lookback
+    /// at least the frequency, compared in seconds whatever the spelling.
+    #[test]
+    fn schedule_bounds() {
+        let codes = |nrt: Option<bool>, frequency: Option<&str>, lookback: Option<&str>| {
+            schedule_findings(nrt, frequency, lookback)
+                .into_iter()
+                .map(|finding| (finding.code, finding.key))
+                .collect::<Vec<_>>()
+        };
+        // Inside the bounds, at both ends and across spellings.
+        assert!(codes(None, Some("5m"), Some("PT5M")).is_empty());
+        assert!(codes(None, Some("PT1H"), Some("60m")).is_empty());
+        assert!(codes(None, Some("14d"), Some("P2W")).is_empty());
+        assert!(codes(Some(false), Some("300s"), Some("1209600s")).is_empty());
+        // Below 5 minutes, above 14 days.
+        assert_eq!(
+            codes(None, Some("4m59s"), Some("1h")),
+            [(FREQUENCY, "frequency")]
+        );
+        assert_eq!(
+            codes(None, Some("1h"), Some("14d1s")),
+            [(LOOKBACK, "lookback")]
+        );
+        assert_eq!(
+            codes(None, Some("P15D"), Some("P15D")),
+            [(FREQUENCY, "frequency"), (LOOKBACK, "lookback")]
+        );
+        assert_eq!(codes(None, Some("0m"), None), [(FREQUENCY, "frequency")]);
+        // The lookback shorter than the frequency, once.
+        assert_eq!(
+            codes(None, Some("2h"), Some("PT1H")),
+            [(LOOKBACK, "lookback")]
+        );
+        assert_eq!(
+            codes(None, Some("1h"), Some("1m")),
+            [(LOOKBACK, "lookback")]
+        );
+        // Not judged: NRT, absent, empty, or not a duration.
+        assert!(codes(Some(true), Some("1m"), Some("30d")).is_empty());
+        assert!(codes(None, None, None).is_empty());
+        assert!(codes(None, Some("  "), Some("hourly")).is_empty());
+        // The message names the value and the bounds.
+        let [finding] = schedule_findings(None, Some("1m"), None)
+            .try_into()
+            .unwrap();
+        assert_eq!(
+            finding.message,
+            "scheduling.frequency \"1m\" is shorter than 5 minutes: Sentinel takes a scheduled \
+             rule's frequency from 5 minutes to 14 days"
+        );
+    }
+
+    /// The conversion reports each finding typed by its code, at its key;
+    /// garde reports the first on a value built in memory.
+    #[test]
+    fn schedule_bounds_in_the_conversion_and_garde() {
+        let document = crate::node::load("frequency: 2h\nlookback: 1m\n").unwrap();
+        let root = document.root().unwrap();
+        let mut cx = Context::new();
+        assert!(SentinelScheduling::from_node(root, &mut cx).is_none());
+        let errors = cx.into_errors();
+        assert_eq!(errors.len(), 1, "{errors:?}");
+        assert_eq!(
+            errors[0].kind,
+            crate::error::ErrorKind::Constraint(LOOKBACK)
+        );
+        assert_eq!(
+            errors[0].path,
+            [crate::error::PathSegment::Key("lookback".into())]
+        );
+        let built = SentinelScheduling {
+            nrt: None,
+            frequency: Some("1m".into()),
+            lookback: Some("1h".into()),
+        };
+        let error = built.validate_with(&Pins::default()).unwrap_err();
+        assert!(error.to_string().contains("sentinel_frequency"), "{error}");
+    }
 
     #[test]
     fn sentinel_durations() {

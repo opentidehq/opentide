@@ -7,7 +7,7 @@
     reason = "test helpers outside #[test]: a source that cannot be read fails the test"
 )]
 
-use opentide_schema::objects::platform::{self, graylog, microsoft_defender};
+use opentide_schema::objects::platform::{self, graylog, microsoft_defender, sentinel};
 
 /// Every source file of the crate, by its path from `src/`, with its text.
 fn sources(dir: &std::path::Path, root: &std::path::Path, out: &mut Vec<(String, String)>) {
@@ -55,6 +55,7 @@ fn constraint_codes_read_every_model_that_reports_one() {
             "objects/platform/google_secops.rs",
             "objects/platform/microsoft_defender.rs",
             "objects/platform/mod.rs",
+            "objects/platform/sentinel.rs",
         ],
         "a model reports a constraint code: add its codes to platform::constraint_codes"
     );
@@ -67,6 +68,7 @@ fn constraint_codes_read_every_model_that_reports_one() {
     for code in microsoft_defender::CONSTRAINT_CODES
         .into_iter()
         .chain(graylog::constraint_codes())
+        .chain(sentinel::CONSTRAINT_CODES)
     {
         assert!(unique.contains(code), "{code}");
     }

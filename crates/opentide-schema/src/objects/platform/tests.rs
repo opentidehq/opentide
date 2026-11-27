@@ -1121,7 +1121,9 @@ fn sentinel_frequency_must_be_a_duration_deploy_converts() {
             "sentinel",
             &sentinel_with(
                 &json!({}),
-                &json!({"frequency": frequency, "lookback": "PT2H"}),
+                // At least every frequency: a shorter lookback is
+                // `sentinel_lookback` (#1916).
+                &json!({"frequency": frequency, "lookback": "P2D"}),
             ),
         );
     }

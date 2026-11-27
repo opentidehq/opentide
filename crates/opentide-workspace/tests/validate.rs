@@ -517,6 +517,75 @@ mod validate {
         assert!(!validation.warned, "the limits are exempt from --strict");
     }
 
+    /// Sentinel's documented scheduled-rule bounds (#1916): frequency and
+    /// lookback each 5 minutes to 14 days, the lookback at least the
+    /// frequency. Each is an error at its key that fails the `schema` check;
+    /// a near-real-time rule is not judged.
+    #[test]
+    fn sentinel_schedule_bounds_fail_the_schema_check() {
+        let block = |scheduling: &str| {
+            format!(
+                "configurations:\n  sentinel:\n    status: X\n    query: SecurityEvent\n    \
+                 scheduling:\n{scheduling}    alert:\n      title: T\n"
+            )
+        };
+        let cases = [
+            (
+                "      frequency: 1m\n      lookback: 1h\n",
+                vec![("sentinel_frequency", "frequency")],
+            ),
+            (
+                "      frequency: PT1H\n      lookback: 15d\n",
+                vec![("sentinel_lookback", "lookback")],
+            ),
+            (
+                "      frequency: 2h\n      lookback: PT1H\n",
+                vec![("sentinel_lookback", "lookback")],
+            ),
+            (
+                "      frequency: 4m\n      lookback: 4m\n",
+                vec![
+                    ("sentinel_frequency", "frequency"),
+                    ("sentinel_lookback", "lookback"),
+                ],
+            ),
+            ("      frequency: 5m\n      lookback: P14D\n", vec![]),
+            ("      nrt: true\n      frequency: 1m\n", vec![]),
+        ];
+        for (scheduling, expected) in cases {
+            let fs = workspace();
+            fs.write(
+                "/ws/objects/rules/a.yaml",
+                format!("{}{}", rule(U1, "A"), block(scheduling)),
+            );
+            let validation = run(&fs, &Options::default());
+            let found: Vec<(String, String)> = all(&validation)
+                .into_iter()
+                .filter(|d| d.code.starts_with("sentinel_"))
+                .map(|d| (d.code.clone(), d.field_path.join(".")))
+                .collect();
+            let expected: Vec<(String, String)> = expected
+                .iter()
+                .map(|(code, key)| {
+                    (
+                        (*code).to_owned(),
+                        format!("configurations.sentinel.scheduling.{key}"),
+                    )
+                })
+                .collect();
+            assert_eq!(found, expected, "{scheduling}");
+            if !expected.is_empty() {
+                assert_eq!(status(&validation, Check::Schema), "failed", "{scheduling}");
+                assert!(
+                    with_code(&validation, &expected[0].0)
+                        .iter()
+                        .all(|d| d.severity == Severity::Error),
+                    "{scheduling}"
+                );
+            }
+        }
+    }
+
     #[test]
     fn google_secops_advisories_warn_and_shared_rule_names_fail() {
         let fs = workspace();

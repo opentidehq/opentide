@@ -1043,6 +1043,9 @@ pub mod codes {
     pub const GOOGLE_SECOPS_RULE_ID_LITERAL: &str = "google_secops_rule_id_literal";
     pub const GOOGLE_SECOPS_LIVE_FREQUENCY_UNAVAILABLE: &str =
         "google_secops_live_frequency_unavailable";
+    // The scheduled-rule bounds of sentinel-1.0 (#1916).
+    pub const SENTINEL_FREQUENCY: &str = "sentinel_frequency";
+    pub const SENTINEL_LOOKBACK: &str = "sentinel_lookback";
     // The constraints and advisory of microsoft-defender-1.0.
     pub const MICROSOFT_DEFENDER_SCHEMA: &str = "microsoft_defender_schema";
     pub const MICROSOFT_DEFENDER_FREQUENCY: &str = "microsoft_defender_frequency";
@@ -1456,6 +1459,8 @@ pub mod codes {
         GOOGLE_SECOPS_RULE_ID_LITERAL,
         GOOGLE_SECOPS_LIVE_FREQUENCY_UNAVAILABLE,
         MICROSOFT_DEFENDER_SCHEMA,
+        SENTINEL_FREQUENCY,
+        SENTINEL_LOOKBACK,
         MICROSOFT_DEFENDER_FREQUENCY,
         MICROSOFT_DEFENDER_LOOKBACK,
         MICROSOFT_DEFENDER_SEVERITY,
@@ -2265,6 +2270,12 @@ pub mod codes {
             }
             GOOGLE_SECOPS_LIVE_FREQUENCY_UNAVAILABLE => {
                 "`run_frequency` is `LIVE` on a multi-event rule: Google stores `LIVE_CUSTOMIZABLE`, so the block differs from the tenant on every deploy."
+            }
+            SENTINEL_FREQUENCY => {
+                "`scheduling.frequency` is shorter than 5 minutes or longer than 14 days."
+            }
+            SENTINEL_LOOKBACK => {
+                "`scheduling.lookback` is shorter than 5 minutes, longer than 14 days, or shorter than `frequency`."
             }
             MICROSOFT_DEFENDER_SCHEMA => {
                 "`schema`, when set, is not `platform::microsoft_defender::1.0`."

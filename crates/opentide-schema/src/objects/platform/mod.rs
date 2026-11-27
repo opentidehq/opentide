@@ -457,7 +457,8 @@ pub const NAMED_CHECKS: [NamedCheck; 5] = [
 /// read from each platform's own list: Bitdefender's
 /// ([`bitdefender::checks::CODE_MESSAGES`]), Graylog's
 /// ([`graylog::constraint_codes`]), Exabeam's ([`exabeam::constraint_codes`]),
-/// Microsoft Defender's ([`microsoft_defender::CONSTRAINT_CODES`]) and Google
+/// Microsoft Defender's ([`microsoft_defender::CONSTRAINT_CODES`]), Microsoft
+/// Sentinel's ([`sentinel::CONSTRAINT_CODES`]) and Google
 /// SecOps' ([`google_secops::CONSTRAINT_CODES`], but `extra_forbidden`, which
 /// its model reports as an unknown key). `validate` attributes a finding
 /// under one of them to its `schema` check, which runs the models. The other
@@ -470,6 +471,7 @@ pub fn constraint_codes() -> impl Iterator<Item = &'static str> {
         .chain(graylog::constraint_codes())
         .chain(exabeam::constraint_codes())
         .chain(microsoft_defender::CONSTRAINT_CODES)
+        .chain(sentinel::CONSTRAINT_CODES)
         .chain(
             google_secops::CONSTRAINT_CODES
                 .into_iter()
