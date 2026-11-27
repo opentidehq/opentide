@@ -20,13 +20,12 @@
 
 use std::collections::BTreeSet;
 use std::path::Path;
-use std::process::{Command, Stdio};
 
 use indexmap::IndexMap;
+use opentide_compile::git::GitError;
 
 use super::deploy_state::{Shard, StateError};
 use super::{Report, counted};
-use crate::env::Env;
 use crate::envelope::Failure;
 use crate::json::Json;
 
@@ -65,47 +64,22 @@ impl std::fmt::Display for ReplayError {
     }
 }
 
-fn git(root: &Path, env: &Env, args: &[&str]) -> Result<Vec<u8>, ReplayError> {
-    let output = Command::new("git")
-        .args(args)
-        .current_dir(root)
-        .env_clear()
-        .envs(env.iter())
-        .stdin(Stdio::null())
-        .output()
-        .map_err(|error| ReplayError::Git(format!("git {}: {error}", args.join(" "))))?;
-    if !output.status.success() {
-        return Err(ReplayError::Git(format!(
-            "git {} failed: {}",
-            args.join(" "),
-            String::from_utf8_lossy(&output.stderr).trim()
-        )));
-    }
-    Ok(output.stdout)
-}
-
-/// The shard *path* holds at *revision*, written into *scratch* to be read
-/// with the shard's own checks; an empty state where it has none.
-fn state_at(
-    root: &Path,
-    env: &Env,
-    revision: &str,
-    path: &str,
-    scratch: &Path,
-) -> Result<Shard, ReplayError> {
+/// A shard as one side of the commit held it, written into *scratch* to be
+/// read with the shard's own checks; an empty state where it held nothing.
+fn state_at(bytes: Option<&[u8]>, path: &str, scratch: &Path) -> Result<Shard, ReplayError> {
     let name = Path::new(path)
         .file_name()
         .map(|name| name.to_string_lossy().into_owned())
         .unwrap_or_default();
     let stem = name.strip_suffix(".json").unwrap_or(&name).to_owned();
     let target = scratch.join(&name);
-    match git(root, env, &["show", &format!("{revision}:{path}")]) {
-        Ok(bytes) => {
+    match bytes {
+        Some(bytes) => {
             std::fs::create_dir_all(scratch).map_err(ReplayError::Io)?;
             std::fs::write(&target, bytes).map_err(ReplayError::Io)?;
             Shard::from_file(&target, None).map_err(ReplayError::State)
         }
-        Err(_) => Ok(empty(target, stem)),
+        None => Ok(empty(target, stem)),
     }
 }
 
@@ -169,33 +143,30 @@ impl Drop for Scratch {
     clippy::case_sensitive_file_extension_comparisons,
     reason = "a shard is named <uuid>.json in lower case; git lists the paths as committed"
 )]
-pub fn replay(root: &Path, env: &Env, state_commit: &str) -> Result<Replayed, ReplayError> {
-    let parent = format!("{state_commit}^");
-    let changed = git(
-        root,
-        env,
-        &[
-            "diff",
-            "--name-only",
-            "--no-renames",
-            &parent,
-            state_commit,
-            "--",
-            DEPLOYMENT_STATES,
-        ],
-    )?;
-    let changed = String::from_utf8_lossy(&changed).into_owned();
+pub fn replay(root: &Path, state_commit: &str) -> Result<Replayed, ReplayError> {
+    let changes = opentide_compile::git::commit_changes(root, state_commit, DEPLOYMENT_STATES)
+        .map_err(|error| {
+            ReplayError::Git(match error {
+                GitError::MissingCheckout(searched) => format!(
+                    "no git checkout was found from {}",
+                    dunce::simplified(&searched).display()
+                ),
+                other => other.message(),
+            })
+        })?;
     let scratch = Scratch::new().map_err(ReplayError::Io)?;
     let mut result = Replayed::default();
-    for path in changed.lines().filter(|line| line.ends_with(".json")) {
+    for change in changes
+        .iter()
+        .filter(|change| change.path.ends_with(".json"))
+    {
+        let path = change.path.as_str();
         let base = bindings(&state_at(
-            root,
-            env,
-            &parent,
+            change.before.as_deref(),
             path,
             &scratch.path().join("base"),
         )?);
-        let ours_state = state_at(root, env, state_commit, path, &scratch.path().join("ours"))?;
+        let ours_state = state_at(change.after.as_deref(), path, &scratch.path().join("ours"))?;
         let ours = bindings(&ours_state);
         let tip_path = root.join(path);
         let stem = Path::new(path)
@@ -260,9 +231,9 @@ pub const COMMAND: &str = "deploy replay-state";
 /// removed are the document's `written` and `removed`; each binding a
 /// concurrent run changed too is a `deployment_state_conflict` line in
 /// `conflicts` and `warnings`, so the CI log shows both ids.
-pub fn report(cwd: &Path, env: &Env, state_commit: &str) -> Report {
+pub fn report(cwd: &Path, state_commit: &str) -> Report {
     let paths = |paths: &[String]| Json::Array(paths.iter().map(Json::str).collect());
-    match replay(cwd, env, state_commit) {
+    match replay(cwd, state_commit) {
         Ok(result) => {
             let mut report = Report::completed(
                 COMMAND,
@@ -305,6 +276,8 @@ pub fn report(cwd: &Path, env: &Env, state_commit: &str) -> Report {
 
 #[cfg(test)]
 mod tests {
+    use std::process::Command;
+
     use super::*;
 
     const UUID: &str = "00000000-0000-4000-8003-000000000001";
@@ -333,17 +306,6 @@ mod tests {
         std::fs::write(path, text).unwrap();
     }
 
-    fn env() -> Env {
-        Env::from_pairs(
-            std::env::vars()
-                .chain([
-                    ("GIT_CONFIG_GLOBAL".to_owned(), "/dev/null".to_owned()),
-                    ("GIT_CONFIG_NOSYSTEM".to_owned(), "1".to_owned()),
-                ])
-                .collect::<Vec<_>>(),
-        )
-    }
-
     /// This run added `soc` and changed nothing else; a concurrent run had
     /// given `lab` another id: `soc` is set, `lab` keeps the tip's.
     #[test]
@@ -361,7 +323,7 @@ mod tests {
         git_in(root, &["commit", "-qam", "ours"]);
         // The tip, as a concurrent merge left it.
         write(root, &shard("{\"crowdstrike\": {\"lab\": \"9\"}}"));
-        let result = replay(root, &env(), "HEAD").unwrap();
+        let result = replay(root, "HEAD").unwrap();
         assert_eq!(result.written.len(), 1);
         assert!(result.conflicts.is_empty(), "{:?}", result.conflicts);
         let text =
@@ -384,7 +346,7 @@ mod tests {
         write(root, &shard("{\"crowdstrike\": {\"lab\": \"2\"}}"));
         git_in(root, &["commit", "-qam", "ours"]);
         write(root, &shard("{\"crowdstrike\": {\"lab\": \"3\"}}"));
-        let result = replay(root, &env(), "HEAD").unwrap();
+        let result = replay(root, "HEAD").unwrap();
         assert_eq!(
             result.conflicts,
             [format!(
@@ -398,10 +360,10 @@ mod tests {
         std::fs::remove_file(&path).unwrap();
         git_in(root, &["commit", "-qam", "removed"]);
         write(root, &shard("{\"crowdstrike\": {\"lab\": \"2\"}}"));
-        let result = replay(root, &env(), "HEAD").unwrap();
+        let result = replay(root, "HEAD").unwrap();
         assert_eq!(result.removed.len(), 1);
         assert!(!path.exists());
-        let report = report(root, &env(), "HEAD~1");
+        let report = report(root, "HEAD~1");
         assert_eq!(report.outcome.exit_code, 0);
         assert!(
             report
@@ -411,7 +373,7 @@ mod tests {
             "{}",
             report.outcome.message
         );
-        let failed = super::report(root, &env(), "no-such-commit");
+        let failed = super::report(root, "no-such-commit");
         assert_eq!(failed.outcome.exit_code, 1);
         assert_eq!(failed.outcome.status, "failed");
     }

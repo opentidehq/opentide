@@ -1767,3 +1767,53 @@ fn docs_changes_in_a_shallow_single_branch_clone_say_to_fetch_history() {
         "{error:?}"
     );
 }
+
+/// `commit_changes` lists what `git diff --no-renames <rev>^ <rev> --
+/// <folder>` lists, with both sides' content: a modification, a deletion and
+/// an addition under the folder, not the file beside it; the folder is read
+/// from where the run starts, the paths from the top level (#1955).
+#[test]
+fn a_commits_changes_under_a_folder_carry_both_sides() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().canonicalize().unwrap();
+    git_cmd(&root, &["init", "-q"]);
+    write(&root, "w/états/kept.json", "1");
+    write(&root, "w/états/gone.json", "2");
+    write(&root, "w/other.json", "3");
+    commit(&root, "base");
+    write(&root, "w/états/kept.json", "1é");
+    std::fs::remove_file(root.join("w/états/gone.json")).unwrap();
+    write(&root, "w/états/sub/new 😀.json", "4");
+    write(&root, "w/other.json", "5");
+    commit(&root, "ours");
+    let changes = git::commit_changes(&root.join("w"), "HEAD", "états").unwrap();
+    let seen: Vec<_> = changes
+        .iter()
+        .map(|change| {
+            (
+                change.path.as_str(),
+                change.before.as_deref(),
+                change.after.as_deref(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        seen,
+        [
+            ("w/états/gone.json", Some(&b"2"[..]), None),
+            ("w/états/kept.json", Some(&b"1"[..]), Some("1é".as_bytes())),
+            ("w/états/sub/new 😀.json", None, Some(&b"4"[..])),
+        ]
+    );
+    // A parent step names the commit too; the first commit has no parent.
+    let first = git::commit_changes(&root, "HEAD~1", "w").unwrap_err();
+    assert!(
+        matches!(&first, GitError::Failed(message) if message.contains("no parent")),
+        "{first:?}"
+    );
+    let missing = git::commit_changes(&root, "no-such-commit", "w").unwrap_err();
+    assert!(
+        matches!(&missing, GitError::Failed(message) if message.contains("no-such-commit")),
+        "{missing:?}"
+    );
+}

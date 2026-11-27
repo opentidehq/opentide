@@ -1513,8 +1513,7 @@ impl Run<'_> {
                 if self.interrupted() {
                     return Ok(INTERRUPTED_EXIT_CODE);
                 }
-                let report =
-                    crate::commands::deploy_replay::report(&cwd, self.env, &replay.state_commit);
+                let report = crate::commands::deploy_replay::report(&cwd, &replay.state_commit);
                 self.emit_report(&report, out, err)
             }
             Some(Command::Metadata(metadata)) => {

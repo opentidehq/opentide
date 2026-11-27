@@ -441,7 +441,7 @@ opentide deploy replay-state HEAD
 opentide --json deploy replay-state "$state_commit"
 ```
 
-`<state_commit>` is any commit git resolves in the checkout. Only what it changed under `.opentide/states/deployment/` against its first parent is applied, per platform and tenant, so the ids other runs recorded since are kept:
+`<state_commit>` is a commit in the checkout: its id or a prefix of it, a reference (`HEAD`, a branch, `refs/opentide/deployment-state/<commit>`), or either with parent steps (`HEAD~1`, `<commit>^`). opentide reads the repository itself, so the runner does not need the `git` program. Only what it changed under `.opentide/states/deployment/` against its first parent is applied, per platform and tenant, so the ids other runs recorded since are kept:
 
 - a binding the commit added or changed is set on the checkout's shard;
 - a binding the commit removed is removed, and a shard left with no binding is deleted;

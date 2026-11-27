@@ -732,6 +732,141 @@ fn deleted_between(
     Ok(deleted)
 }
 
+/// A file a commit changed against its first parent, with its content on
+/// each side.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CommitChange {
+    /// Its path, relative to the git top level.
+    pub path: String,
+    /// What the parent held; `None` when the commit added it.
+    pub before: Option<Vec<u8>>,
+    /// What the commit holds; `None` when the commit deleted it.
+    pub after: Option<Vec<u8>>,
+}
+
+/// The files under `folder` (relative to `start`) that the commit `rev`
+/// changed against its first parent, sorted by path, as `git diff
+/// --no-renames <rev>^ <rev> -- <folder>` lists them, each with what `git
+/// show` prints of it on either side. `rev` is read as `git rev-parse` reads
+/// it. A root commit has no parent to compare with, and an object the
+/// checkout cannot read is an error, not an empty side.
+pub fn commit_changes(
+    start: &Path,
+    rev: &str,
+    folder: &str,
+) -> Result<Vec<CommitChange>, GitError> {
+    let (top, _) = discover(start).ok_or_else(|| GitError::MissingCheckout(start.to_path_buf()))?;
+    let repo = open(start)?;
+    let head =
+        commit_id(&repo, rev).ok_or_else(|| failed(format!("Could not find git commit {rev}")))?;
+    let parents = parents(&repo, head).ok_or_else(|| missing_parent(&repo, head))?;
+    let Some(parent) = parents.first().copied() else {
+        return Err(failed(format!(
+            "Commit {rev} has no parent to compare with"
+        )));
+    };
+    if repo.commit(parent).is_none() {
+        return Err(missing_parent(&repo, parent));
+    }
+    let scope = pathspec_scope(start, &top, folder);
+    let within = |path: &str| {
+        scope.is_empty()
+            || path
+                .strip_prefix(scope.as_str())
+                .is_some_and(|rest| rest.is_empty() || rest.starts_with('/'))
+    };
+    let blob = |oid: ObjectId| -> Result<Vec<u8>, GitError> {
+        let mut buf = Vec::new();
+        repo.odb
+            .find_blob(&oid, &mut buf)
+            .map(|blob| blob.data.to_vec())
+            .map_err(|error| failed(format!("Could not find git object {oid}: {error}")))
+    };
+    let mut changes: std::collections::BTreeMap<String, CommitChange> =
+        std::collections::BTreeMap::new();
+    for change in tree_changes(&repo, Some(parent), head)? {
+        use gix_diff::tree::recorder::Change;
+        // A file's side, or none where the entry is a folder (a file that
+        // became a folder, or the reverse, is a deletion and an addition).
+        let side = |mode: gix_object::tree::EntryMode, oid: ObjectId| {
+            if mode.is_tree() || mode.is_commit() {
+                Ok(None)
+            } else {
+                blob(oid).map(Some)
+            }
+        };
+        let (path, before, after) = match change {
+            Change::Addition {
+                entry_mode,
+                oid,
+                path,
+                ..
+            } => (path, None, side(entry_mode, oid)?),
+            Change::Deletion {
+                entry_mode,
+                oid,
+                path,
+                ..
+            } => (path, side(entry_mode, oid)?, None),
+            Change::Modification {
+                previous_entry_mode,
+                previous_oid,
+                entry_mode,
+                oid,
+                path,
+            } => (
+                path,
+                side(previous_entry_mode, previous_oid)?,
+                side(entry_mode, oid)?,
+            ),
+        };
+        if before.is_none() && after.is_none() {
+            continue;
+        }
+        let path = String::from_utf8_lossy(&path).into_owned();
+        if !within(&path) {
+            continue;
+        }
+        let entry = changes.entry(path.clone()).or_insert(CommitChange {
+            path,
+            before: None,
+            after: None,
+        });
+        if before.is_some() {
+            entry.before = before;
+        }
+        if after.is_some() {
+            entry.after = after;
+        }
+    }
+    Ok(changes.into_values().collect())
+}
+
+/// `folder`, a pathspec relative to `start`, as a path from the top level
+/// `top` (`/`-separated, empty for the whole tree).
+fn pathspec_scope(start: &Path, top: &Path, folder: &str) -> String {
+    let below = match (gix_path::realpath(start), gix_path::realpath(top)) {
+        (Ok(start), Ok(top)) => start
+            .strip_prefix(&top)
+            .ok()
+            .map(|relative| {
+                relative
+                    .components()
+                    .map(|part| part.as_os_str().to_string_lossy().into_owned())
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default(),
+        _ => Vec::new(),
+    };
+    let parts: Vec<&str> = below
+        .iter()
+        .map(String::as_str)
+        .chain(folder.split('/'))
+        .filter(|part| !part.is_empty() && *part != ".")
+        .collect();
+    parts.join("/")
+}
+
 /// Every change of a file or folder from `base` to `head`, as gix records
 /// them (no rename tracking: a rename is a deletion and an addition).
 fn tree_changes(
