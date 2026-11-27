@@ -154,6 +154,11 @@ mod position_tests {
             found.iter().any(|d| d.code == "exabeam_advanced_in_rule"),
             "{found:?}"
         );
-        assert!(analyze_query(&rule).is_empty());
+        // As a search, `analyze_query`, Search's operators are allowed.
+        let search = analyze_query(&rule);
+        assert!(
+            !search.iter().any(|d| d.code == "exabeam_advanced_in_rule"),
+            "{search:?}"
+        );
     }
 }
