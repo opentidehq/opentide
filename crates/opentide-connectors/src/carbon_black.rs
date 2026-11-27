@@ -1,13 +1,14 @@
-//! Carbon Black Cloud (UC-4.3, #833): what `platforms/carbon_black/` sends
-//! through cbc_sdk, request for request: the watchlist reports its
-//! `deployer.py` writes (`_deploy_to_org`), `runner.py`'s process searches
-//! (`opentide query`) and its `search_validation` check (`validate query
-//! --live`).
+//! Carbon Black Cloud (UC-4.3, #833): the watchlist reports a deploy writes
+//! ([`CarbonBlack::deploy_report`]), the process searches `opentide query`
+//! runs ([`CarbonBlack::run`]) and the `search_validation` check of
+//! `validate query --live` ([`CarbonBlack::check`]).
 //!
 //! Every call carries `X-Auth-Token: <token>`; a body is compact JSON with
-//! `Content-Type: application/json`. A search is validated, started as a job, polled every
-//! half second until every searcher completed (or the timeout passed), then
-//! read in pages. An error status is the SDK's exception, worded as it is.
+//! `Content-Type: application/json`. A search is validated, started as a
+//! job, polled every half second until every searcher completed (or the
+//! timeout passed), then read in pages. A status outside 2xx (a redirect
+//! too) is an [`SdkError`] whose text names the status, the method and the
+//! URI, then the body's text.
 
 use std::time::{Duration, Instant};
 

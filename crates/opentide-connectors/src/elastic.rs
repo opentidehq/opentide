@@ -1,10 +1,12 @@
 //! Elastic Security: Kibana's detection engine and Elasticsearch (UC-4.2,
-//! #832): `platforms/elastic/client.py` (`ElasticClient`), `deployer.py`
-//! (`ElasticDeploy._deploy_rule`), `es_checks.py` (the pre-flight and mapping
-//! checks of RFC 0007 §6), `runner.py` (ES|QL, EQL and Lucene on
-//! Elasticsearch; KQL through a rule preview, the one write, into the preview
-//! index) and `validator.py` (each rule previewed as deploy would create it;
-//! the RFC 0007 advisories), request for request.
+//! #832). A deploy runs a rule's pre-flight and mapping checks (RFC 0007
+//! §6, [`Elastic::checks`]), then creates, replaces or deletes the rule
+//! ([`Elastic::deploy_rule`]). A query runs ES|QL, EQL and Lucene on
+//! Elasticsearch, and KQL through a rule preview, the one write, into the
+//! preview index ([`Elastic::run`]). `validate query --live` runs a rule's
+//! checks and previews the rule as deploy would create it
+//! ([`Elastic::validate_rule`]), and reports the RFC 0007 advisories
+//! ([`advisories`]).
 //!
 //! Every call carries the session's headers: `Accept` and `Content-Type`
 //! `application/json`, `elastic-api-version: 2023-10-31` and, with a key,
@@ -2361,7 +2363,7 @@ async fn indices(
     ))
 }
 
-// ---- query text (`platforms/elastic/query_text.py`) ----
+// ---- query text: masking, ES|QL sources and aggregates, EQL sequences ----
 
 /// `mask_query`: comments, and the contents of string literals and
 /// backquoted identifiers, blanked; newlines kept. Each blanked character

@@ -2,15 +2,15 @@
 //! (`/api/secure/rules`) and the runtime policies that name them
 //! (`/api/v2/policies`), the endpoints Sysdig's own Terraform provider uses.
 //!
-//! A port of `platforms/sysdig/client.py` (`SysdigClient`: a bearer token,
-//! 30 s, the connectors' retries; a 401 or 403 refuses the whole tenant) and of
-//! `deployer.py`'s `deploy_api`, rule by rule and request for request:
-//! create a rule and add it to the policies the block or the tenant names;
-//! update it with the version the tenant holds, renaming it in those
-//! policies; disable it (out of the policies) or delete it; create again a
-//! recorded rule the tenant lost, or forget one that was to be disabled. The
-//! rule id Sysdig gives is what deployment state records ([`StateChange`]).
-//! Sysdig has no live validation and no query runner (`supported: False`).
+//! Every request carries a bearer token and has 30 s, with the connectors'
+//! retries ([`http_defaults`]); a 401 or 403 refuses the whole tenant. A
+//! deploy works rule by rule: it creates a rule and adds it to the policies
+//! the block or the tenant names; updates it with the version the tenant
+//! holds, renaming it in those policies; disables it (out of the policies)
+//! or deletes it; creates again a recorded rule the tenant lost, or forgets
+//! one that was to be disabled. The rule id Sysdig gives is what deployment
+//! state records ([`StateChange`]). Sysdig has no live validation and no
+//! query runner (`supported: false`).
 //!
 //! The body is `opentide-compile`'s (`sysdig::compile_body`): the Falco rule
 //! with its block's macros and lists expanded into the condition, as Falco's

@@ -1,6 +1,6 @@
-//! Microsoft Sentinel (UC-4.3, #833): the ARM `alertRules` calls of
-//! `platforms/sentinel/client.py`, and its runner's Log Analytics queries,
-//! one REST call each.
+//! Microsoft Sentinel (UC-4.3, #833): the ARM `alertRules` calls a deploy
+//! makes, and the Log Analytics queries `opentide query` and `validate query
+//! --live` run, one REST call each.
 //!
 //! Both sign in to Entra ID with the tenant's app registration
 //! ([`crate::entra`]: `azure_tenant_id`, `azure_client_id`,

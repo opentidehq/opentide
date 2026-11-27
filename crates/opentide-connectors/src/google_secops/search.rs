@@ -1,6 +1,6 @@
 //! `opentide query --platform google_secops`: a YARA-L search through the
 //! Chronicle API v1 `udmSearch` with `queryDialect=YL2`, a read-only search
-//! that saves nothing, ported from 0.28.0's `platforms/google_secops/runner.py`.
+//! that saves nothing.
 //!
 //! A filter search returns UDM events; a search with `match` or `outcome`
 //! returns statistics, one column per grouped or computed value.

@@ -1088,8 +1088,7 @@ impl Splunk {
             return reply.check_failure(&tenant);
         }
         // Another 2xx is neither a refusal nor an acceptance: the query
-        // passes, and nothing is reported (the oracle only logged it, as
-        // `unexpected_splunk_validation_response`).
+        // passes, with no error and no warning.
         Ok(LiveCheck::default())
     }
 }

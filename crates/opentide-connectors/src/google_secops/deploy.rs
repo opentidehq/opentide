@@ -1,5 +1,4 @@
-//! Deploys YARA-L rules to Google Security Operations, ported from 0.28.0's
-//! `platforms/google_secops/deployer.py`, request for request.
+//! Deploys YARA-L rules to Google Security Operations.
 //!
 //! Google assigns every rule an id (`ru_<uuid>`) at create time; deployment
 //! state keeps it, and every create, update, disable, archive and delete is

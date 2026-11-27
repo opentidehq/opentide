@@ -1,7 +1,6 @@
 //! The Exabeam client's pure parts: the pacer on a paused clock, `Retry-After`,
 //! Exabeam's error bodies, the name check, the created id and the `SELECT`
-//! columns, ported from 0.28.0's `test_exabeam_deployer.py` and
-//! `test_exabeam_runner.py`.
+//! columns.
 
 use super::*;
 use tokio::time::Instant;

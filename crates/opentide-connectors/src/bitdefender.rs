@@ -1,8 +1,7 @@
 //! Bitdefender GravityZone (bitdefender-1.0, Deploy): custom detection rules
 //! through the Incidents API, JSON-RPC 2.0 at `<url>/v1.0/jsonrpc/incidents`.
 //!
-//! A port of 0.28.0's `platforms/bitdefender/client.py` and of `deployer.py`,
-//! rule by rule and request for request:
+//! How the client speaks to GravityZone, rule by rule:
 //!
 //! - Every request is a `POST` with a fresh string `id`. A personal API key
 //!   is HTTP Basic (the key as user name), a service key the `X-API-Key`

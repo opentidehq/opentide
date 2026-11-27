@@ -1,12 +1,11 @@
-//! MISP's REST API, the subset `opentide share` speaks (UC-4.4b, #834;
-//! `sharing/client.py`, which spoke it through PyMISP's `_prepare_request`).
+//! MISP's REST API, the subset `opentide share` speaks (UC-4.4b, #834).
 //!
 //! Every request carries the block's key in `Authorization`, asks for and
 //! sends `application/json`, and has 30 seconds; TLS follows the block's
 //! `verify_ssl`. A body is compact JSON in the order it was built; a request
-//! without data sends no body. Answers are
-//! classified as `_decode` does: never recorded, never echoed, a fixed
-//! reason for every failure ([`MispCallError`]).
+//! without data sends no body. Answers are classified by [`decode`]: never
+//! recorded, never echoed, a fixed reason for every failure
+//! ([`MispCallError`]).
 
 use std::collections::HashMap;
 use std::sync::Mutex;
