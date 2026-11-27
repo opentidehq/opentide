@@ -108,7 +108,18 @@ fn deploy(ws: &Path, platform: &str, env: &Env, registry: &Registry, now: i64) -
 
 /// Runs `deploy` with `args` in `ws`, with `env`, at `now`.
 fn deploy_with(ws: &Path, args: &Args, env: &Env, registry: &Registry, now: i64) -> (Sent, String) {
-    let buffer = Buffer::default();
+    deploy_into(ws, args, env, registry, now, &Buffer::default())
+}
+
+/// [`deploy_with`], its lines written to `buffer`.
+fn deploy_into(
+    ws: &Path,
+    args: &Args,
+    env: &Env,
+    registry: &Registry,
+    now: i64,
+    buffer: &Buffer,
+) -> (Sent, String) {
     let lines = Lines {
         sink: Arc::new(Mutex::new(buffer.clone())),
         console: Console {
@@ -6773,4 +6784,201 @@ fn sysdig_stands(
     }
     std::fs::write(&config, text).unwrap();
     (ws, servers)
+}
+
+/// A Sentinel workspace with a tenant for each of `names`, each taking
+/// `rules`.
+fn sentinel_tenants(names: &[&str], rules: &[(&'static str, String)]) -> tempfile::TempDir {
+    let ws = workspace("sentinel", names[0], SENTINEL_SETUP, rules);
+    let config = ws
+        .path()
+        .join(".opentide/configurations/platforms/sentinel.toml");
+    let text = std::fs::read_to_string(&config).unwrap();
+    let first = &text[text.find("[[tenants]]").unwrap()..];
+    let mut all = text.clone();
+    for name in &names[1..] {
+        let tenant = first.replacen(
+            &format!("[[tenants]]\nname = \"{}\"", names[0]),
+            &format!("[[tenants]]\nname = \"{name}\""),
+            1,
+        );
+        all.push('\n');
+        all.push_str(&tenant);
+    }
+    std::fs::write(&config, all).unwrap();
+    ws
+}
+
+/// A deployer that panics on the tenant `t1` and holds every other
+/// tenant's rule until a second after it did (ten at most), keeping the
+/// tenants it was asked to deploy to.
+struct Panicking {
+    opened: Mutex<Vec<String>>,
+    panicked: std::sync::atomic::AtomicBool,
+}
+
+impl Deployer for Panicking {
+    fn deploy<'a>(
+        &'a self,
+        cx: TenantContext<'a>,
+        request: &'a DeployRequest,
+    ) -> BoxFuture<'a, Result<DeployOutcome, DeployError>> {
+        let tenant = cx.tenant.label.tenant.clone();
+        self.opened.lock().unwrap().push(tenant.clone());
+        deploying(async move {
+            use std::sync::atomic::Ordering;
+            if tenant == "t1" {
+                self.panicked.store(true, Ordering::SeqCst);
+                panic!("the stand-in's crash");
+            }
+            let until = std::time::Instant::now() + std::time::Duration::from_secs(10);
+            while !self.panicked.load(Ordering::SeqCst) && std::time::Instant::now() < until {
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            }
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+            Ok(DeployOutcome::new(None, request.operation))
+        })
+    }
+}
+
+/// [`Panicking`] as the Sentinel platform.
+struct Panics(&'static Panicking);
+
+impl Platform for Panics {
+    fn id(&self) -> &'static str {
+        "sentinel"
+    }
+
+    fn deployer(&self) -> Option<&dyn Deployer> {
+        Some(self.0)
+    }
+}
+
+/// A panic on one of the tenants deploying at once stops the run as it
+/// did one tenant after another (#1998): of five Sentinel tenants, the
+/// four first start, `t1` panics, and no tenant starts after it while the
+/// three others finish.
+#[test]
+fn a_panic_on_a_tenant_deploying_at_once_starts_no_other_tenant() {
+    let ws = sentinel_tenants(
+        &["t0", "t1", "t2", "t3", "t4"],
+        &three_rules(SENTINEL_STAGING)[..1],
+    );
+    let panicking: &'static Panicking = Box::leak(Box::new(Panicking {
+        opened: Mutex::new(Vec::new()),
+        panicked: std::sync::atomic::AtomicBool::new(false),
+    }));
+    let mut registry = Registry::new();
+    registry.register(Box::new(Panics(panicking))).unwrap();
+    let env = Env::from_pairs([("AZURE_CLIENT_SECRET", SECRET)]);
+    let (sent, stderr) = deploy(ws.path(), "sentinel", &env, &registry, 0);
+    assert_eq!(
+        value(&sent, "message"),
+        &Json::str("the deploy stopped unexpectedly"),
+        "{stderr}"
+    );
+    let mut opened = panicking.opened.lock().unwrap().clone();
+    opened.sort();
+    assert_eq!(opened, ["t0", "t1", "t2", "t3"], "{stderr}");
+}
+
+/// A deployer that answers the rules of the tenants in `order`, one after
+/// another: the n-th answer waits until n rules' lines are printed in
+/// `buffer`.
+struct Turns {
+    order: &'static [&'static str],
+    asked: Mutex<std::collections::HashMap<String, usize>>,
+    buffer: Buffer,
+}
+
+impl Deployer for Turns {
+    fn deploy<'a>(
+        &'a self,
+        cx: TenantContext<'a>,
+        request: &'a DeployRequest,
+    ) -> BoxFuture<'a, Result<DeployOutcome, DeployError>> {
+        let tenant = cx.tenant.label.tenant.clone();
+        let nth = {
+            let mut asked = self.asked.lock().unwrap();
+            let count = asked.entry(tenant.clone()).or_default();
+            *count += 1;
+            *count
+        };
+        let turn = self
+            .order
+            .iter()
+            .enumerate()
+            .filter(|(_, name)| **name == tenant)
+            .nth(nth - 1)
+            .map(|(turn, _)| turn)
+            .unwrap();
+        deploying(async move {
+            let until = std::time::Instant::now() + std::time::Duration::from_secs(10);
+            while self.buffer.text().matches(" ✓ ").count() < turn
+                && std::time::Instant::now() < until
+            {
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            }
+            Ok(DeployOutcome::new(None, request.operation))
+        })
+    }
+}
+
+/// [`Turns`] as the Sentinel platform.
+struct Takes(&'static Turns);
+
+impl Platform for Takes {
+    fn id(&self) -> &'static str {
+        "sentinel"
+    }
+
+    fn deployer(&self) -> Option<&dyn Deployer> {
+        Some(self.0)
+    }
+}
+
+/// The lines of tenants deploying at once interleave, and each rule's line
+/// stays under its own tenant's header (#1998): a line that follows
+/// another tenant's prints its `Deploying to` header again first.
+#[test]
+fn interleaved_rule_lines_each_come_under_their_tenants_header() {
+    let ws = sentinel_tenants(&["soc", "lab"], &three_rules(SENTINEL_STAGING)[..2]);
+    let buffer = Buffer::default();
+    let turns: &'static Turns = Box::leak(Box::new(Turns {
+        order: &["soc", "lab", "lab", "soc"],
+        asked: Mutex::new(std::collections::HashMap::new()),
+        buffer: buffer.clone(),
+    }));
+    let mut registry = Registry::new();
+    registry.register(Box::new(Takes(turns))).unwrap();
+    let env = Env::from_pairs([("AZURE_CLIENT_SECRET", SECRET)]);
+    let args = Args {
+        strategies: vec!["PREVIEW".into(), "RELEASE".into()],
+        all: true,
+        platform: Some("sentinel".to_owned()),
+        keep_deprecated: Some(true),
+        ..Args::default()
+    };
+    let (sent, stderr) = deploy_into(ws.path(), &args, &env, &registry, 0, &buffer);
+    // Each header, and each rule's line up to its mark.
+    let lines: Vec<&str> = stderr
+        .lines()
+        .skip_while(|line| !line.starts_with("Deploying to"))
+        .filter(|line| !line.is_empty())
+        .map(|line| &line[..line.find(" ✓ ").unwrap_or(line.len())])
+        .collect();
+    assert_eq!(
+        lines[..7],
+        [
+            "Deploying to sentinel / soc · 2 rules",
+            "  [1/2]",
+            "Deploying to sentinel / lab · 2 rules",
+            "  [1/2]",
+            "  [2/2]",
+            "Deploying to sentinel / soc · 2 rules",
+            "  [2/2]",
+        ],
+        "{stderr}"
+    );
+    assert_eq!(rows(&sent).len(), 4, "{stderr}");
 }

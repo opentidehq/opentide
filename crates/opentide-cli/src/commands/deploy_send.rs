@@ -1843,6 +1843,11 @@ struct DeployLog<'l> {
     planned: &'l IndexMap<Key, Vec<Change>>,
     actions: &'l HashMap<(String, Option<String>, String), String>,
     printed: HashMap<Key, usize>,
+    /// While tenants deploy at once: the header the last row was printed
+    /// under, which every log of the run shares, so a row of another tenant
+    /// prints its own header again first. `None` one tenant after another:
+    /// each header prints once.
+    interleaved: Option<std::sync::Arc<std::sync::Mutex<Option<Key>>>>,
 }
 
 impl<'l> DeployLog<'l> {
@@ -1853,6 +1858,7 @@ impl<'l> DeployLog<'l> {
             planned: &plan.planned,
             actions: &plan.actions,
             printed: HashMap::new(),
+            interleaved: None,
         }
     }
 
@@ -1866,7 +1872,15 @@ impl<'l> DeployLog<'l> {
             planned: self.planned,
             actions: self.actions,
             printed: HashMap::new(),
+            interleaved: self.interleaved.clone(),
         }
+    }
+
+    /// From now on, rows may interleave with other tenants': each row whose
+    /// header is not the last printed prints it again first.
+    fn interleave(&mut self) {
+        self.interleaved
+            .get_or_insert_with(|| std::sync::Arc::new(std::sync::Mutex::new(None)));
     }
 
     /// Adds a tenant's log ([`fork`](Self::fork)) after the results here:
@@ -2073,7 +2087,16 @@ impl<'l> DeployLog<'l> {
             .max()
             .unwrap_or(0)
             .min(NAME_WIDTH);
-        if !self.printed.contains_key(&key) {
+        // Held until the row is printed: no other tenant's row comes
+        // between the header and it.
+        let mut last = self.interleaved.as_ref().map(|last| {
+            last.lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+        });
+        let other_tenant = last
+            .as_deref()
+            .is_some_and(|last| last.as_ref() != Some(&key));
+        if !self.printed.contains_key(&key) || other_tenant {
             self.lines.line(&Text::default(), false);
             self.lines.line(
                 &header_line(
@@ -2083,7 +2106,10 @@ impl<'l> DeployLog<'l> {
                 ),
                 false,
             );
-            self.printed.insert(key.clone(), 0);
+            self.printed.entry(key.clone()).or_insert(0);
+        }
+        if let Some(last) = last.as_deref_mut() {
+            *last = Some(key.clone());
         }
         let printed = self.printed.entry(key).or_default();
         *printed += 1;
@@ -2627,6 +2653,9 @@ impl Sender<'_, '_> {
             }
             return Ok(());
         }
+        // Each row says its tenant: its header again whenever the row
+        // before it was another tenant's.
+        log.interleave();
         let next = std::sync::atomic::AtomicUsize::new(0);
         let stopped = std::sync::atomic::AtomicBool::new(false);
         type Ended<'s, 'c, 'l> = (Sender<'s, 'c>, DeployLog<'l>, Result<(), Raised>);
@@ -2656,8 +2685,23 @@ impl Sender<'_, '_> {
                                     };
                                     let mut sender = run.fork();
                                     let mut tenant_log = run_log.fork();
-                                    let outcome = unit(&mut sender, batch, &mut tenant_log);
-                                    if outcome.is_err() {
+                                    // A panic stops the run as it did one
+                                    // tenant after another: no tenant starts
+                                    // after it, and it is raised again on
+                                    // the calling thread with its trace.
+                                    let outcome = match crate::app::catch_panic(|| {
+                                        unit(&mut sender, batch, &mut tenant_log)
+                                    }) {
+                                        Ok(outcome) => outcome,
+                                        Err(caught) => {
+                                            stopped.store(true, Ordering::SeqCst);
+                                            return Some(caught);
+                                        }
+                                    };
+                                    if let Err(raised) = &outcome {
+                                        // Only an interrupt leaves a unit:
+                                        // the tenants in flight go on.
+                                        debug_assert_eq!(raised.stops, Stops::Run, "{raised:?}");
                                         stopped.store(true, Ordering::SeqCst);
                                     }
                                     *slot
@@ -2665,22 +2709,25 @@ impl Sender<'_, '_> {
                                         .unwrap_or_else(std::sync::PoisonError::into_inner) =
                                         Some((sender, tenant_log, outcome));
                                 }
-                            });
+                                None
+                            })
                         })
                     })
                     .collect();
                 let mut panicked = None;
                 for worker in workers {
-                    if let Err(payload) = worker.join() {
-                        panicked.get_or_insert(payload);
+                    let caught = worker.join().unwrap_or_else(|payload| {
+                        Some(crate::app::CaughtPanic::from_payload(payload))
+                    });
+                    if let Some(caught) = caught {
+                        panicked.get_or_insert(caught);
                     }
                 }
                 panicked
             })
         };
-        if let Some(payload) = panicked {
-            // Raised again on this thread: the crash report says its message.
-            std::panic::resume_unwind(payload);
+        if let Some(caught) = panicked {
+            caught.resume();
         }
         let mut stop = Ok(());
         for slot in ended {
@@ -5586,7 +5633,15 @@ impl Sender<'_, '_> {
         let graylog = opentide_connectors::graylog::Graylog::on_version(version);
         let tenant = batch.tenant.name.clone();
         let mut result = RuleResult::new(PLATFORM, Some(&tenant), &rule.uuid, &rule.name);
-        let disable = self.strategy_of(rule, PLATFORM)? == StatusStrategy::Disablement;
+        // A strategy screening missed fails the rule, as on the other
+        // platforms: it does not leave the tenant.
+        let disable = match self.strategy_of(rule, PLATFORM) {
+            Ok(strategy) => strategy == StatusStrategy::Disablement,
+            Err(raised) => {
+                self.close(log, result, Err(raised))?;
+                return Ok(false);
+            }
+        };
         let (operation, stored) = match &action {
             Planned::Create => (Operation::Create, None),
             Planned::Update(id) if disable => (Operation::Disable, Some(id.as_str())),
