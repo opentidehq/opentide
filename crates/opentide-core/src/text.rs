@@ -6,7 +6,9 @@
 //!   (RustCrypto's `sha2`);
 //! - line endings: [`universal_newlines`] reads `\r\n` and a lone `\r` as
 //!   `\n`; [`newline_of`] is the line ending a file writes (CRLF when it has
-//!   one) and [`with_newlines_of`] writes a text in it.
+//!   one) and [`with_newlines_of`] writes a text in it;
+//! - [`unique`]: each item once, in the order it first came (names, ids),
+//!   in linear time.
 //!
 //! A caller that reads only `\r\n` as `\n` (a lone `\r` kept) or that
 //! keeps CRLF only when every line ends in it says so where it does: those
@@ -14,6 +16,9 @@
 
 use std::borrow::Cow;
 use std::fmt::Write as _;
+use std::hash::Hash;
+
+use indexmap::IndexSet;
 
 use sha2::{Digest as _, Sha256};
 
@@ -65,11 +70,30 @@ pub fn with_newlines_of(written: String, original: &str) -> String {
     }
 }
 
+/// `items` each once, in the order each first came.
+#[must_use]
+pub fn unique<T: Hash + Eq>(items: impl IntoIterator<Item = T>) -> Vec<T> {
+    items
+        .into_iter()
+        .collect::<IndexSet<T>>()
+        .into_iter()
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use std::borrow::Cow;
 
-    use super::{hex, newline_of, sha256_hex, universal_newlines, with_newlines_of};
+    use super::{hex, newline_of, sha256_hex, unique, universal_newlines, with_newlines_of};
+
+    #[test]
+    fn unique_keeps_the_first_of_each_in_order() {
+        assert_eq!(
+            unique(["é", "😀", "e", "é", "É", "😀", "e\u{301}"]),
+            ["é", "😀", "e", "É", "e\u{301}"]
+        );
+        assert_eq!(unique(Vec::<String>::new()), Vec::<String>::new());
+    }
 
     #[test]
     fn universal_newlines_reads_crlf_and_a_lone_cr_as_lf() {
