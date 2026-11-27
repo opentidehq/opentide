@@ -410,3 +410,130 @@ impl opentide_cli::serve::Runner for NoRuns {
 
     fn invalidate(&self, _: &[String]) {}
 }
+
+/// The largest input [`semantic`] reads: a rule file of a few kilobytes is
+/// what an author writes, and a bigger one only slows each run.
+pub const SEMANTIC_MAX_INPUT: usize = 16 * 1024;
+
+/// The rule file [`semantic`] writes its input to.
+pub const SEMANTIC_RULE: &str = "/ws/objects/rules/fuzz.yaml";
+
+/// The built-in platforms (`opentide_schema::platforms::PLATFORMS`), each
+/// enabled without a tenant in the template workspace: the dry run compiles
+/// every block a rule has for them.
+pub fn semantic_platforms() -> impl Iterator<Item = &'static str> {
+    opentide_schema::platforms::PLATFORMS
+        .iter()
+        .map(|platform| platform.id)
+}
+
+/// The template workspace in memory, `rule` its one rule file.
+pub fn semantic_workspace(rule: &[u8]) -> Option<opentide_workspace::Workspace> {
+    use opentide_workspace::{FileSystem, MemoryFs, Options, RootOptions, Workspace};
+    use std::path::PathBuf;
+    use std::sync::Arc;
+    let fs = Arc::new(MemoryFs::new());
+    fs.create_dir("/ws/.opentide/configurations/platforms");
+    fs.create_dir("/ws/objects/rules");
+    for platform in semantic_platforms() {
+        fs.write(
+            format!("/ws/.opentide/configurations/platforms/{platform}.toml"),
+            "[platform]\nenabled = true\n",
+        );
+    }
+    fs.write(SEMANTIC_RULE, rule);
+    Workspace::open(
+        fs as Arc<dyn FileSystem>,
+        Options {
+            roots: RootOptions {
+                repo: Some(PathBuf::from("/ws")),
+                cwd: PathBuf::from("/ws"),
+                ..RootOptions::default()
+            },
+        },
+    )
+    .ok()
+}
+
+/// What [`semantic_run`] found: the workspace's validation and the dry run.
+pub struct SemanticRun {
+    /// `opentide validate`: every default check, the compile and the queries.
+    pub validation: opentide_workspace::validate::Validation,
+    /// `opentide deploy --dry-run --all --strategy PREVIEW,RELEASE`.
+    pub dry_run: opentide_compile::dry_run::Outcome,
+}
+
+/// Runs `opentide validate` (the default checks, with the compile check and
+/// the query engines, as the command line does) and the dry run of every
+/// rule for both run strategies, over the template workspace whose rule file
+/// is `data`; `None` for an input over [`SEMANTIC_MAX_INPUT`] or a
+/// workspace that does not open.
+pub fn semantic_run(data: &[u8]) -> Option<SemanticRun> {
+    use opentide_compile::dry_run::{self, Request};
+    use opentide_compile::plan::Scope;
+    use opentide_compile::validate::Compilers;
+    use opentide_schema::vocab::Vocabularies;
+    use opentide_workspace::validate::Options as ValidateOptions;
+    use std::path::PathBuf;
+
+    static VOCABULARIES: std::sync::OnceLock<Vocabularies> = std::sync::OnceLock::new();
+    if data.len() > SEMANTIC_MAX_INPUT {
+        return None;
+    }
+    // The values the dry run copies out of a rule (#1927).
+    if let Ok(document) = opentide_schema::node::load_bytes(data)
+        && let Some(root) = document.root()
+    {
+        let _ = opentide_core::json::Json::from_node(root).to_compact();
+    }
+    let workspace = semantic_workspace(data)?;
+    let validation = workspace.validate(&ValidateOptions {
+        query_check: Some(&opentide_analysis::queries::EngineQueries),
+        compile_check: Some(&Compilers),
+        ..ValidateOptions::default()
+    });
+    let owned = opentide_compile::Owned::new(
+        VOCABULARIES.get_or_init(Vocabularies::bundled),
+        &workspace.configuration().resolved,
+    );
+    let request = Request {
+        strategies: vec!["PREVIEW".to_owned(), "RELEASE".to_owned()],
+        all: true,
+        cwd: PathBuf::from("/ws"),
+        ..Request::default()
+    };
+    let changed =
+        |_: &std::path::Path, _: &str| -> Result<(Scope, Option<String>), dry_run::ScopeError> {
+            Err("no git here".to_owned().into())
+        };
+    // Every variable a tenant names is set: nothing stops before the compile.
+    let dry_run = dry_run::run(&workspace, &owned, &request, &changed, &|_| true);
+    Some(SemanticRun {
+        validation,
+        dry_run,
+    })
+}
+
+/// The semantic layer (#1946): a rule file from arbitrary bytes in a template
+/// workspace that enables every built-in platform, through `validate` (the
+/// models, the platform checks, the compile check, the queries) and the dry
+/// run's compile of each platform block, `Json::from_node` on the way. A
+/// panic is the failure, and so is a dry run that ends in an exit code the
+/// command does not have or a validation issue without a code.
+/// `crates/opentide-cli/tests/semantic_fuzz_regressions.rs` keeps a copy of
+/// this function for the seeds and the saved inputs.
+pub fn semantic(data: &[u8]) {
+    let Some(run) = semantic_run(data) else {
+        return;
+    };
+    let outcome = &run.dry_run;
+    assert!(
+        matches!(outcome.exit_code, 0..=2),
+        "exit {}",
+        outcome.exit_code
+    );
+    let _ = opentide_core::json::Json::Object(outcome.payload.clone()).to_compact();
+    for issue in &run.validation.report.issues {
+        assert!(!issue.code.is_empty(), "{issue:?}");
+    }
+}
