@@ -208,21 +208,139 @@ impl GitError {
 
 /// The checkout at or above `start`: its work tree and its git directory
 /// (for a linked worktree, the worktree's own one). A bare repository is no
-/// checkout. Discovery crosses file systems, as the oracle's did.
+/// checkout. Discovery crosses file systems, as the oracle's did. The
+/// environment steers it as it steers git (#2049): `GIT_DIR`,
+/// `GIT_WORK_TREE` and `GIT_CEILING_DIRECTORIES`, a relative path read
+/// against `start`, the directory opentide ran git in.
 fn discover(start: &Path) -> Option<(PathBuf, PathBuf)> {
+    discover_with(start, &|name| std::env::var_os(name))
+}
+
+/// The environment discovery reads: a variable's raw value, which a path
+/// need not spell in UTF-8. A caller with its own environment (the command
+/// line's, which a test injects) passes it rather than the process's.
+pub type OsEnv<'a> = &'a dyn Fn(&str) -> Option<std::ffi::OsString>;
+
+/// A variable git reads as a path, made absolute against `start`; unset and
+/// empty are the same.
+fn env_path(env: OsEnv<'_>, name: &str, start: &Path) -> Option<PathBuf> {
+    let value = env(name).filter(|value| !value.is_empty())?;
+    Some(absolute(&start.join(value)))
+}
+
+/// `path`, absolute against the working directory (as written when that
+/// cannot be read).
+fn absolute(path: &Path) -> PathBuf {
+    std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf())
+}
+
+/// The checkout at or above `start`, as [`worktree`] finds it, reading
+/// `GIT_DIR`, `GIT_WORK_TREE` and `GIT_CEILING_DIRECTORIES` from `env`
+/// rather than the process: its work tree and its git directory (for a
+/// linked worktree, the worktree's own one). `None` when there is no
+/// checkout, or the repository is bare.
+#[must_use]
+pub fn discover_with(start: &Path, env: OsEnv<'_>) -> Option<(PathBuf, PathBuf)> {
+    let work_tree = env_path(env, "GIT_WORK_TREE", start);
+    if let Some(git_dir) = env_path(env, "GIT_DIR", start) {
+        return named_repository(start, git_dir, work_tree);
+    }
+    let ceilings = env("GIT_CEILING_DIRECTORIES")
+        .map(|dirs| ceiling_dirs(&dirs))
+        .unwrap_or_default();
     let options = gix_discover::upwards::Options {
         cross_fs: true,
         dot_git_only: true,
+        ceiling_dirs: ceilings.clone(),
+        // git ignores the ceilings that are not above `start` rather than
+        // failing.
+        match_ceiling_dir_or_error: false,
         ..Default::default()
     };
     let (path, _trust) = gix_discover::upwards_opts(start, options).ok()?;
     let (git_dir, work_dir) = path.into_repository_and_work_tree_directories();
-    Some((work_dir?, git_dir))
+    // gix stops at a ceiling after looking in it; git stops below it, unless
+    // the ceiling is `start` itself.
+    if !ceilings.is_empty() {
+        let found = work_dir
+            .as_deref()
+            .or_else(|| git_dir.parent())
+            .and_then(|dir| gix_path::realpath(dir).ok());
+        let start = gix_path::realpath(start).ok();
+        if found.is_some_and(|found| Some(&found) != start.as_ref() && ceilings.contains(&found)) {
+            return None;
+        }
+    }
+    // `GIT_WORK_TREE` names the work tree of the repository found.
+    Some((work_tree.or(work_dir)?, git_dir))
+}
+
+/// The repository `GIT_DIR` names, without a search: a file there is a
+/// gitfile (`gitdir: <path>`). Its work tree is `GIT_WORK_TREE`, else none
+/// in a bare repository (`core.bare`), else `core.worktree`, else `start`,
+/// the directory git runs in. `core.worktree` is read only here: git also
+/// applies it to a git directory found by the search (run inside the git
+/// directory, say), a layout opentide does not follow.
+fn named_repository(
+    start: &Path,
+    git_dir: PathBuf,
+    work_tree: Option<PathBuf>,
+) -> Option<(PathBuf, PathBuf)> {
+    let git_dir = if git_dir.is_file() {
+        gix_discover::path::from_gitdir_file(&git_dir).ok()?
+    } else {
+        git_dir
+    };
+    gix_discover::is_git(&git_dir).ok()?;
+    if let Some(work_tree) = work_tree {
+        return Some((work_tree, git_dir));
+    }
+    let config = config(&git_dir);
+    // git reads `core.bare` first: a bare repository has no work tree, even
+    // with `core.worktree` set.
+    let bare = config
+        .as_ref()
+        .and_then(|config| config.boolean("core.bare").ok().flatten())
+        .unwrap_or(false);
+    if bare {
+        return None;
+    }
+    if let Some(configured) = config
+        .as_ref()
+        .and_then(|config| config.path("core.worktree"))
+    {
+        let configured = gix_path::from_bstr(configured.value.as_bstr()).ok()?;
+        return Some((absolute(&git_dir.join(configured)), git_dir));
+    }
+    Some((absolute(start), git_dir))
+}
+
+/// `GIT_CEILING_DIRECTORIES` as git reads it: absolute paths separated as in
+/// `PATH`, relative ones skipped; those before an empty entry have their
+/// symbolic links resolved, those after it are taken as written.
+fn ceiling_dirs(value: &std::ffi::OsStr) -> Vec<PathBuf> {
+    let mut resolve = true;
+    let mut dirs = Vec::new();
+    for dir in std::env::split_paths(value) {
+        if dir.as_os_str().is_empty() {
+            resolve = false;
+        } else if dir.is_absolute() {
+            let resolved = resolve.then(|| gix_path::realpath(&dir).ok()).flatten();
+            dirs.push(resolved.unwrap_or(dir));
+        }
+    }
+    dirs
 }
 
 /// The work tree of the checkout at or above `start`.
 pub fn worktree(start: &Path) -> Option<PathBuf> {
     discover(start).map(|(work_dir, _)| work_dir)
+}
+
+/// [`worktree`], reading the environment from `env` (see [`discover_with`]).
+#[must_use]
+pub fn worktree_with(start: &Path, env: OsEnv<'_>) -> Option<PathBuf> {
+    discover_with(start, env).map(|(work_dir, _)| work_dir)
 }
 
 fn failed(message: impl Into<String>) -> GitError {
@@ -2218,6 +2336,154 @@ mod tests {
                 .find(|(key, _)| key == name)
                 .map(|(_, value)| value.clone())
         }
+    }
+
+    /// `git init` in `dir`, with `args` (`--bare`).
+    fn git_init(dir: &Path, args: &[&str]) {
+        std::fs::create_dir_all(dir).unwrap();
+        let status = std::process::Command::new("git")
+            .arg("init")
+            .arg("-q")
+            .args(args)
+            .current_dir(dir)
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("HOME", dir)
+            // A hook running the tests exports these (a linked worktree's
+            // `GIT_DIR`): `git init --bare` would then rewrite that
+            // repository rather than create one here.
+            .env_remove("GIT_DIR")
+            .env_remove("GIT_WORK_TREE")
+            .env_remove("GIT_INDEX_FILE")
+            .env_remove("GIT_CEILING_DIRECTORIES")
+            .env_remove("GIT_COMMON_DIR")
+            .env_remove("GIT_OBJECT_DIRECTORY")
+            .env_remove("GIT_ALTERNATE_OBJECT_DIRECTORIES")
+            .env_remove("GIT_NAMESPACE")
+            .env_remove("GIT_PREFIX")
+            .status()
+            .expect("git runs");
+        assert!(status.success());
+    }
+
+    /// `git config <key> <value>` in the repository at `git_dir`.
+    fn git_config(git_dir: &Path, key: &str, value: &Path) {
+        let status = std::process::Command::new("git")
+            .arg("--git-dir")
+            .arg(git_dir)
+            .args(["config", key])
+            .arg(value)
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env_remove("GIT_DIR")
+            .env_remove("GIT_WORK_TREE")
+            .env_remove("GIT_COMMON_DIR")
+            .status()
+            .expect("git runs");
+        assert!(status.success());
+    }
+
+    fn os_lookup(pairs: &[(&str, &Path)]) -> impl Fn(&str) -> Option<std::ffi::OsString> + use<> {
+        let pairs: Vec<(String, PathBuf)> = pairs
+            .iter()
+            .map(|(k, v)| ((*k).to_owned(), v.to_path_buf()))
+            .collect();
+        move |name: &str| {
+            pairs
+                .iter()
+                .find(|(key, _)| key == name)
+                .map(|(_, value)| value.clone().into_os_string())
+        }
+    }
+
+    #[test]
+    fn git_dir_and_git_work_tree_name_a_bare_repository_and_its_work_tree() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().canonicalize().unwrap();
+        let bare = root.join("dépôt.git");
+        git_init(&bare, &["--bare"]);
+        let work_tree = root.join("arbre 😀");
+        let sub = work_tree.join("rules");
+        std::fs::create_dir_all(&sub).unwrap();
+        // Discovery alone finds nothing: the work tree has no `.git`.
+        assert_eq!(discover_with(&sub, &os_lookup(&[])), None);
+        let env = os_lookup(&[("GIT_DIR", &bare), ("GIT_WORK_TREE", &work_tree)]);
+        assert_eq!(
+            discover_with(&sub, &env),
+            Some((work_tree.clone(), bare.clone()))
+        );
+        // Relative paths are read against the directory git runs in.
+        let relative = os_lookup(&[
+            ("GIT_DIR", Path::new("../../dépôt.git")),
+            ("GIT_WORK_TREE", Path::new("..")),
+        ]);
+        let (top, git_dir) = discover_with(&sub, &relative).unwrap();
+        assert_eq!(top.canonicalize().unwrap(), work_tree);
+        assert_eq!(git_dir.canonicalize().unwrap(), bare);
+        // A bare repository without `GIT_WORK_TREE` has no work tree.
+        assert_eq!(discover_with(&sub, &os_lookup(&[("GIT_DIR", &bare)])), None);
+        // `core.bare` wins over `core.worktree`, as in git.
+        git_config(&bare, "core.worktree", &work_tree);
+        assert_eq!(discover_with(&sub, &os_lookup(&[("GIT_DIR", &bare)])), None);
+        git_config(&bare, "core.bare", Path::new("false"));
+        assert_eq!(
+            discover_with(&sub, &os_lookup(&[("GIT_DIR", &bare)])),
+            Some((work_tree.clone(), bare.clone()))
+        );
+        // `GIT_DIR` naming no repository finds none, without a search.
+        let missing = os_lookup(&[("GIT_DIR", &root.join("missing"))]);
+        assert_eq!(discover_with(&sub, &missing), None);
+    }
+
+    #[test]
+    fn git_dir_alone_makes_the_running_directory_the_work_tree() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().canonicalize().unwrap();
+        let repo = root.join("repo");
+        git_init(&repo, &[]);
+        let elsewhere = root.join("ailleurs");
+        std::fs::create_dir_all(&elsewhere).unwrap();
+        let git_dir = repo.join(".git");
+        let env = os_lookup(&[("GIT_DIR", &git_dir)]);
+        assert_eq!(
+            discover_with(&elsewhere, &env),
+            Some((elsewhere.clone(), git_dir.clone()))
+        );
+        // `GIT_WORK_TREE` alone names the work tree of the repository found.
+        let env = os_lookup(&[("GIT_WORK_TREE", &elsewhere)]);
+        assert_eq!(discover_with(&repo, &env), Some((elsewhere, git_dir)));
+        // An empty variable is unset.
+        let env = os_lookup(&[("GIT_DIR", Path::new("")), ("GIT_WORK_TREE", Path::new(""))]);
+        assert_eq!(
+            discover_with(&repo, &env),
+            Some((repo.clone(), repo.join(".git")))
+        );
+    }
+
+    #[test]
+    fn a_ceiling_directory_stops_the_search_above_the_start() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().canonicalize().unwrap();
+        let repo = root.join("dépôt");
+        git_init(&repo, &[]);
+        let deep = repo.join("a").join("b");
+        std::fs::create_dir_all(&deep).unwrap();
+        let found = Some((repo.clone(), repo.join(".git")));
+        assert_eq!(discover_with(&deep, &os_lookup(&[])), found);
+        // A ceiling between the start and the repository hides it, and so
+        // does the repository's own top level, which git does not enter.
+        for ceiling in [repo.join("a"), repo.clone()] {
+            let env = os_lookup(&[("GIT_CEILING_DIRECTORIES", &ceiling)]);
+            assert_eq!(discover_with(&deep, &env), None, "{}", ceiling.display());
+        }
+        // The start itself is searched even when it is a ceiling.
+        let env = os_lookup(&[("GIT_CEILING_DIRECTORIES", &repo)]);
+        assert_eq!(discover_with(&repo, &env), found);
+        // A ceiling that is not above the start, or a relative one, is
+        // ignored rather than an error.
+        let joined = std::env::join_paths([root.join("autre"), PathBuf::from("a")]).unwrap();
+        let env = |name: &str| (name == "GIT_CEILING_DIRECTORIES").then(|| joined.clone());
+        assert_eq!(discover_with(&deep, &env), found);
     }
 
     #[test]
