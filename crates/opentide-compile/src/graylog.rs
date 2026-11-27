@@ -140,8 +140,11 @@ pub fn parse_version(text: &str) -> Option<Version> {
             }
             return None;
         }
-        *part = rest[..end].parse().ok()?;
-        rest = &rest[end..];
+        // `end` ends a run of ASCII digits, so it is a char boundary.
+        debug_assert!(rest.is_char_boundary(end), "{rest:?} cut at {end}");
+        let (digits, after) = rest.split_at_checked(end)?;
+        *part = digits.parse().ok()?;
+        rest = after;
     }
     Some(Version(parts[0], parts[1], parts[2]))
 }
@@ -882,6 +885,12 @@ mod tests {
         assert_eq!(parse_version("7"), None);
         assert_eq!(parse_version("v7.2"), None);
         assert_eq!(parse_version(""), None);
+        // #1946: a multi-byte character ends a part, never splits it.
+        assert_eq!(parse_version("é7.2"), None);
+        assert_eq!(parse_version("7.é"), None);
+        assert_eq!(parse_version("7😀.2"), None);
+        assert_eq!(parse_version("7.2.😀"), Some(Version(7, 2, 0)));
+        assert_eq!(parse_version("7.2.3é"), Some(Version(7, 2, 3)));
         assert_eq!(Version(7, 2, 0).to_string(), "7.2.0");
     }
 

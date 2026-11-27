@@ -1,5 +1,5 @@
 //! Threat chaining as `opentide tui` draws it: a path to read and follow
-//! (`cli/services/chains_view.py`, #776).
+//! (#776).
 //!
 //! `threat.chaining` links two threats with a relation from the
 //! `chaining_relations` vocabulary. Each stage has a pair of inverse

@@ -33,11 +33,9 @@ external_py=" scripts/exabeam_language.py "
 VENDOR_ORACLE="as the oracle probes|The oracle the lazy catalog is held to"
 # Mentions of the retired Python CLI each crate still has, until it is swept.
 declare -A RETIRED_BASELINE=(
-  [opentide-cli]=174
+  [opentide-cli]=172
   [opentide-compile]=121
-  [opentide-connectors]=34
   [opentide-schema]=238
-  [opentide-workspace]=49
 )
 tracked_py="$(git -C "$root" ls-files '*.py')"
 py_in_tree() {

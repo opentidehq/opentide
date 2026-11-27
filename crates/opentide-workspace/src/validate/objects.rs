@@ -1,7 +1,6 @@
-//! The checks of one object (`validation/session.py` `_validate_work_item`):
-//! its UUID's format, its schema, its vocabulary values, its configured
-//! values, its deprecated fields, its platform blocks, its vendor ids, its
-//! references and its chaining relations.
+//! The checks of one object: its UUID's format, its schema, its vocabulary
+//! values, its configured values, its deprecated fields, its platform
+//! blocks, its vendor ids, its references and its chaining relations.
 
 use std::collections::{BTreeSet, HashMap};
 use std::path::Path;

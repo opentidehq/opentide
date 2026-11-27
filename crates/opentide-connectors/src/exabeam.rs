@@ -881,7 +881,8 @@ impl TenantFailure {
 /// (`returned_rule_id`).
 pub fn returned_rule_id(result: &Object) -> Option<String> {
     let value = result.get("id")?.as_str()?.trim();
-    // Only the hyphenated 8-4-4-4-12 form, as the oracle's pattern takes it.
+    // Only the hyphenated 8-4-4-4-12 form is an id: a bare 32-digit or a
+    // braced UUID is `None`.
     opentide_core::ids::is_hyphenated(value)
         .then(|| opentide_core::ids::canonical(value))
         .flatten()

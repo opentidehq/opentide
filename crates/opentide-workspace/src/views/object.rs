@@ -1,5 +1,5 @@
 //! An object as `opentide tui` shows it by default: a page, not a file
-//! (`cli/services/object_view.py`, #776).
+//! (#776).
 //!
 //! Each value is placed under the field its schema revision defines, with
 //! the field's title and description, a vocabulary value's meaning, and the

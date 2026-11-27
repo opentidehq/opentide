@@ -1,4 +1,4 @@
-//! Which objects a run validates (`validation/scope.py`): every object, or
+//! Which objects a run validates: every object, or
 //! the ones `--file`, `--uuid` and `--type` select.
 
 use std::collections::BTreeSet;

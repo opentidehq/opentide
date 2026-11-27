@@ -1,24 +1,19 @@
 //! HarfangLab EDR (UC-4.2, #832): the Sigma rules and YARA files a deploy
 //! sends, and the telemetry searches `opentide query` runs.
 //!
-//! A port of `platforms/harfanglab/client.py` (`HarfangLabService`: the
-//! `Token` header, a Sigma rule put by the rule's UUID and created with
-//! `POST` when the tenant does not hold it, a YARA file posted, deletes),
-//! `deployer.py` (each rule's kind picks its endpoint: every tenant takes
-//! Sigma rules and YARA files, platform-harfanglab 1.6) and
-//! `runner.py` (one telemetry source filtered by `field=value` words),
-//! request for request. HarfangLab has no live validation (`supported:
-//! False`) and no query language for a rule: `opentide query` runs a
-//! telemetry search, never a rule's query (no `--rule`).
+//! Every request carries the `Token` header. A Sigma rule is put by the
+//! rule's UUID and created with `POST` when the tenant answers 404; a YARA
+//! file is posted, and the tenant creates or overwrites it; a delete goes to
+//! the endpoint of the rule's kind ([`Client`]). Each rule's kind picks its
+//! endpoint: every tenant takes Sigma rules and YARA files
+//! (platform-harfanglab 1.6). A query reads one telemetry source filtered by
+//! `field=value` words ([`parse_telemetry_query`]). HarfangLab has no live
+//! validation (`supported: false`) and no query language for a rule:
+//! `opentide query` runs a telemetry search, never a rule's query (no
+//! `--rule`).
 //!
 //! The rule bodies are `opentide-compile`'s (`harfanglab::compile`), as
 //! bytes. HarfangLab keeps no deployment state: a rule is known by its UUID.
-//!
-//! The Python service never reaches the tenant: its constructor looks the
-//! platform up in the registry as `HarfangLab`, which the registry reads as
-//! `harfang_lab` and does not find (`AttributeError`), so the oracle's
-//! HarfangLab deploy and query stop before any request. This port builds
-//! the client the constructor meant to build.
 
 use opentide_compile::Json;
 

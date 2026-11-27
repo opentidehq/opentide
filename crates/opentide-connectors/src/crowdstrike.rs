@@ -1,13 +1,12 @@
 //! CrowdStrike Falcon (UC-4.2, #832): the correlation rules a deploy sends
 //! and the Next-Gen SIEM (LogScale) query jobs `opentide query` runs.
 //!
-//! A port of `platforms/crowdstrike/client.py` (`CrowdstrikeService`: the
-//! OAuth2 client-credentials token, then create, update and delete),
-//! `deployer.py` (a token per tenant, then one request per rule)
-//! and `runner.py` (a query job started, polled until done and stopped when
-//! the runner stops waiting for it), request for request. CrowdStrike has no
-//! live validation: the platform has no [`crate::connector::LiveValidator`]
-//! (`supported: False`).
+//! A deploy sends one request per rule: create, update or delete, each on
+//! the tenant's OAuth2 client-credentials token (the first rule signs in).
+//! A query starts a query job, polls it until it is done, and stops it
+//! (`DELETE`) when it outlives the request's timeout or is cancelled
+//! ([`Session::search`]). CrowdStrike has no live validation: the platform
+//! has no [`crate::connector::LiveValidator`] (`supported: false`).
 //!
 //! The token comes from the cloud's own OAuth2 endpoint
 //! (`<api>/oauth2/token`), never Entra ID's, and is kept in the platform's
@@ -290,10 +289,7 @@ impl<'a> Session<'a> {
                 let Json::Array(resources) = id else {
                     return None;
                 };
-                resources
-                    .first()?
-                    .get("id")
-                    .map(opentide_compile::deploy::text)
+                resources.first()?.get("id").map(Json::to_text)
             })
             .ok_or_else(|| {
                 refused(
@@ -398,7 +394,7 @@ impl<'a> Session<'a> {
         let job_id = job
             .get("id")
             .filter(|id| id.is_filled())
-            .map(opentide_compile::deploy::text)
+            .map(Json::to_text)
             .unwrap_or_default();
         let tenant = &self.cx.tenant.label.tenant;
         if job_id.is_empty() {
@@ -430,8 +426,8 @@ impl<'a> Session<'a> {
                 .map(|item| match item {
                     Json::Object(object) => object
                         .get("message")
-                        .map_or_else(|| crate::text::json_text(item), crate::text::json_text),
-                    other => crate::text::json_text(other),
+                        .map_or_else(|| Json::to_text(item), Json::to_text),
+                    other => Json::to_text(other),
                 })
                 .collect(),
             _ => Vec::new(),
