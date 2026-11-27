@@ -20,13 +20,13 @@ parse_external = 16050818
 parse_external_allocations = 10316
 
 [datadog]
-analyze_corpus = 1670334
-analyze_corpus_allocations = 5715
-analyze_external = 73597495
-analyze_external_allocations = 235468
-parse_corpus = 1006776
+analyze_corpus = 1638306
+analyze_corpus_allocations = 5516
+analyze_external = 72489417
+analyze_external_allocations = 227936
+parse_corpus = 1006978
 parse_corpus_allocations = 2286
-parse_external = 47549109
+parse_external = 47546693
 parse_external_allocations = 105003
 
 [datasets]
@@ -46,8 +46,8 @@ falco = 11917618
 falco_allocations = 16851
 hover-attack-technique = 27300372
 hover-attack-technique_allocations = 41637
-kql-defender = 18837360
-kql-defender_allocations = 20743
+kql-defender = 19024338
+kql-defender_allocations = 20862
 kql-sentinel = 30173358
 kql-sentinel_allocations = 55726
 lucene-carbon-black = 2305014
