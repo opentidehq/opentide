@@ -80,7 +80,7 @@ fn stats_rows(stats: &Json) -> (Vec<QueryColumn>, Vec<Row>) {
             QueryColumn::named(
                 item.get("column")
                     .filter(|value| value.is_filled())
-                    .map_or_else(|| format!("column_{index}"), opentide_compile::deploy::text),
+                    .map_or_else(|| format!("column_{index}"), Json::to_text),
             )
         })
         .collect();

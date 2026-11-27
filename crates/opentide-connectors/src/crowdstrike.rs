@@ -290,10 +290,7 @@ impl<'a> Session<'a> {
                 let Json::Array(resources) = id else {
                     return None;
                 };
-                resources
-                    .first()?
-                    .get("id")
-                    .map(opentide_compile::deploy::text)
+                resources.first()?.get("id").map(Json::to_text)
             })
             .ok_or_else(|| {
                 refused(
@@ -398,7 +395,7 @@ impl<'a> Session<'a> {
         let job_id = job
             .get("id")
             .filter(|id| id.is_filled())
-            .map(opentide_compile::deploy::text)
+            .map(Json::to_text)
             .unwrap_or_default();
         let tenant = &self.cx.tenant.label.tenant;
         if job_id.is_empty() {
@@ -430,8 +427,8 @@ impl<'a> Session<'a> {
                 .map(|item| match item {
                     Json::Object(object) => object
                         .get("message")
-                        .map_or_else(|| crate::text::json_text(item), crate::text::json_text),
-                    other => crate::text::json_text(other),
+                        .map_or_else(|| Json::to_text(item), Json::to_text),
+                    other => Json::to_text(other),
                 })
                 .collect(),
             _ => Vec::new(),

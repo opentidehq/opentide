@@ -456,7 +456,7 @@ impl<'a> Client<'a> {
             let message = error
                 .get("message")
                 .filter(|message| message.is_filled())
-                .map(|message| credentials.mask_text(&crate::text::json_text(message)))
+                .map(|message| credentials.mask_text(&Json::to_text(message)))
                 .unwrap_or_default();
             return match code {
                 Some(TOO_MANY_REQUESTS) => Ok(Attempt::RateLimited(retry_after)),
@@ -498,7 +498,7 @@ fn details(data: Option<&Json>) -> Option<String> {
         Json::Object(data) => data
             .get("details")
             .filter(|details| !details.is_null())
-            .map(crate::text::json_text),
+            .map(Json::to_text),
         Json::Str(text) => Some(text.clone()),
         _ => None,
     }

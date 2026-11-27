@@ -81,7 +81,7 @@ fn string<'j>(value: Option<&'j Json>, key: &str) -> Option<&'j str> {
 
 fn strings(value: Option<&Json>) -> Vec<String> {
     match value {
-        Some(Json::Array(items)) => items.iter().map(deploy::text).collect(),
+        Some(Json::Array(items)) => items.iter().map(Json::to_text).collect(),
         _ => Vec::new(),
     }
 }
@@ -318,13 +318,13 @@ fn assembled(rule: &Rule, block: &Json, yara: &Json) -> String {
     for (key, field) in [("created", "date"), ("modified", "modified")] {
         if let Some(value) = deploy::rule_value(rule, &["metadata", key]).filter(|v| v.is_filled())
         {
-            lines.push(format!("        {field} = \"{}\"", deploy::text(value)));
+            lines.push(format!("        {field} = \"{}\"", Json::to_text(value)));
         }
     }
     if let Some(Json::Object(public)) = deploy::rule_value(rule, &["references", "public"])
         && !public.is_empty()
     {
-        let references: Vec<String> = public.values().map(deploy::text).collect();
+        let references: Vec<String> = public.values().map(Json::to_text).collect();
         lines.push(format!(
             "        references = \"{}\"",
             references.join("\\n")
@@ -357,7 +357,7 @@ fn assembled(rule: &Rule, block: &Json, yara: &Json) -> String {
     lines.push(format!("        os = \"{os}\""));
     match meta.and_then(|meta| meta.get("arch")) {
         Some(Json::Array(items)) if !items.is_empty() => {
-            let arch: Vec<String> = items.iter().map(deploy::text).collect();
+            let arch: Vec<String> = items.iter().map(Json::to_text).collect();
             lines.push(format!("        arch = \"{}\"", arch.join(",")));
         }
         Some(Json::Str(arch)) if !arch.is_empty() => {

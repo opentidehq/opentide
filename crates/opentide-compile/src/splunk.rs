@@ -221,21 +221,21 @@ struct Settings {
 
 fn strings(value: Option<&Json>) -> Vec<String> {
     match value {
-        Some(Json::Array(items)) => items.iter().map(deploy::text).collect(),
+        Some(Json::Array(items)) => items.iter().map(Json::to_text).collect(),
         _ => Vec::new(),
     }
 }
 
 fn settings(tenant: &Json) -> Result<Settings, CompileError> {
     let skew = match deploy::setup(tenant, "allow_skew").filter(|value| value.is_filled()) {
-        Some(value) => deploy::text(value)
+        Some(value) => Json::to_text(value)
             .replace('%', "e-2")
             .trim()
             .parse::<f64>()
             .map_err(|_| {
                 invalid(&format!(
                     "allow_skew must be a number or a percentage, got {:?}",
-                    deploy::text(value)
+                    Json::to_text(value)
                 ))
             })?,
         None => 0.0,
@@ -243,10 +243,10 @@ fn settings(tenant: &Json) -> Result<Settings, CompileError> {
     let offset = match deploy::setup(tenant, "schedule_offset") {
         None => 0,
         Some(Json::Int(offset)) => *offset,
-        Some(value) => count(&deploy::text(value)).ok_or_else(|| {
+        Some(value) => count(&Json::to_text(value)).ok_or_else(|| {
             invalid(&format!(
                 "schedule_offset must be an integer, got {:?}",
-                deploy::text(value)
+                Json::to_text(value)
             ))
         })?,
     };
@@ -350,7 +350,7 @@ fn saved_search_settings(
     let mut config = Object::new();
     let name = rule.name.trim();
     if let Some(scheduling) = filled(Some(block), "scheduling") {
-        let kind = filled(Some(scheduling), "type").map(deploy::text);
+        let kind = filled(Some(scheduling), "type").map(Json::to_text);
         let schedule = filled(Some(scheduling), "schedule");
         if kind.as_deref().map(str::to_lowercase).as_deref() == Some("real time") {
             config.insert("dispatch.earliest_time".into(), "rt".into());
@@ -365,7 +365,7 @@ fn saved_search_settings(
             if let Some(cron) = filled(Some(schedule), "cron") {
                 config.insert("cron_schedule".into(), cron.clone());
             } else if let Some(frequency) = filled(Some(schedule), "frequency") {
-                let frequency = deploy::text(frequency);
+                let frequency = Json::to_text(frequency);
                 // A drawn schedule is the rule's own, known without a
                 // clock; the current one is the send's (#1711).
                 let random =
@@ -375,7 +375,7 @@ fn saved_search_settings(
                     Some(custom) => timeframe(
                         &frequency,
                         "custom",
-                        Some(&deploy::text(custom)),
+                        Some(&Json::to_text(custom)),
                         Some(random),
                         now,
                     )?,
@@ -388,7 +388,7 @@ fn saved_search_settings(
             if let Some(lookback) = filled(Some(timerange), "lookback") {
                 config.insert(
                     "dispatch.earliest_time".into(),
-                    splunk_timerange(&deploy::text(lookback), settings.skew, settings.offset)?
+                    splunk_timerange(&Json::to_text(lookback), settings.skew, settings.offset)?
                         .into(),
                 );
             }
@@ -421,7 +421,7 @@ fn saved_search_settings(
             config.insert("alert_condition".into(), value.clone());
         }
         if let Some(kind) = filled(Some(trigger), "type") {
-            let once = deploy::text(kind).to_lowercase() == "once";
+            let once = Json::to_text(kind).to_lowercase() == "once";
             config.insert(
                 "alert.digest_mode".into(),
                 if once { "true" } else { "false" }.into(),
@@ -510,7 +510,7 @@ fn saved_search_settings(
             if let Some(domain) = filled(Some(notable), "security_domain") {
                 config.insert(
                     "action.notable.param.security_domain".into(),
-                    deploy::text(domain).to_lowercase().into(),
+                    Json::to_text(domain).to_lowercase().into(),
                 );
             }
         }
@@ -605,7 +605,7 @@ fn saved_search_value(value: &Json) -> String {
     match value {
         Json::Null => String::new(),
         Json::Bool(flag) => if *flag { "1" } else { "0" }.to_owned(),
-        other => deploy::text(other),
+        other => Json::to_text(other),
     }
 }
 
@@ -728,7 +728,7 @@ fn actions_config(
         if let Some(domain) = config
             .get("action.notable.param.security_domain")
             .filter(|value| value.is_filled())
-            .map(deploy::text)
+            .map(Json::to_text)
         {
             config.insert(
                 "action.notable.param.security_domain".into(),
@@ -766,7 +766,7 @@ pub fn compile(
     };
     let mut config = saved_search_settings(cx, rule, block, &settings, clock, correlation)?;
     let mut name = rule.name.trim().to_owned();
-    let status = block.get("status").map(deploy::text).unwrap_or_default();
+    let status = block.get("status").map(Json::to_text).unwrap_or_default();
     let query = create_query(block);
     if correlation {
         name.push_str(" - Rule");
@@ -795,7 +795,7 @@ pub fn compile(
     }
     let description = first
         .get("description")
-        .map(deploy::text)
+        .map(Json::to_text)
         .unwrap_or_default();
     first.insert(
         "description".into(),
@@ -848,13 +848,13 @@ pub fn saved_searches(tenant: &Json) -> String {
     let port = deploy::setup(tenant, "port").map_or_else(
         || DEFAULT_PORT.to_owned(),
         |port| {
-            let text = deploy::text(port);
+            let text = Json::to_text(port);
             let text = text.trim();
             text.parse::<u16>()
                 .map_or_else(|_| text.to_owned(), |port| port.to_string())
         },
     );
-    let app = deploy::setup(tenant, "app").map_or_else(|| "search".to_owned(), deploy::text);
+    let app = deploy::setup(tenant, "app").map_or_else(|| "search".to_owned(), Json::to_text);
     format!(
         "https://{}:{port}/servicesNS/nobody/{}/saved/searches/",
         host.trim(),
