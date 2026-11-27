@@ -35,6 +35,7 @@ use opentide_schema::generate::workspace::{
     CORE_OBJECT_TYPES, identifiers_for_families, object_template,
 };
 use opentide_schema::node::{Node, Value};
+use opentide_schema::platforms::PlatformId;
 use opentide_workspace::info::env_reference;
 use opentide_workspace::root::{self, RootOptions};
 use opentide_workspace::{OsFs, config};
@@ -56,9 +57,6 @@ const COMMAND: &str = "doctor";
 
 /// `failure.code` when at least one check failed.
 pub const CHECKS_FAILED: &str = "doctor_checks_failed";
-
-/// The platforms, in the order the checklist names them (`SYSTEM_KEYS`).
-const SYSTEM_KEYS: [&str; opentide_schema::platforms::COUNT] = opentide_schema::platforms::IDS;
 
 /// The files `opentide setup mcp` writes, with the host each is for.
 const MCP_OUTPUT_PATHS: [(&str, &str); 4] = [
@@ -1021,18 +1019,12 @@ impl Doctor<'_> {
         )
     }
 
-    /// The platforms whose merged `[platform] enabled` is `true`.
+    /// The built-in platforms whose merged `[platform] enabled` is `true`
+    /// ([`opentide_schema::configuration::resolve::enabled_platforms`]).
     fn enabled_platforms(&self) -> Vec<&'static str> {
-        SYSTEM_KEYS
-            .iter()
-            .copied()
-            .filter(|system| {
-                matches!(
-                    self.node(&["systems", system, "platform", "enabled"])
-                        .map(|node| &node.value),
-                    Some(Value::Bool(true))
-                )
-            })
+        opentide_schema::configuration::resolve::enabled_platforms(self.node(&["platforms"]))
+            .into_iter()
+            .map(PlatformId::as_str)
             .collect()
     }
 
@@ -1061,7 +1053,7 @@ impl Doctor<'_> {
         let mut found = Vec::new();
         for platform in self.enabled_platforms() {
             let tenants: Vec<&Node> = match self
-                .node(&["systems", platform, "tenants"])
+                .node(&["platforms", platform, "tenants"])
                 .map(|node| &node.value)
             {
                 Some(Value::Seq(items)) => items
@@ -2045,6 +2037,57 @@ mod tests {
             text: false,
             proxy: None,
             interrupted: &|| false,
+        }
+    }
+
+    /// The checklist reads the platforms every other command reads: the
+    /// resolved `platforms` table, which the 0.x `systems.toml` merges into
+    /// (#1935).
+    #[test]
+    fn enabled_platforms_and_their_tenants_come_from_the_platforms_table() {
+        use opentide_schema::configuration::resolve::{Folder, Instance, resolve};
+        let env = Env::default();
+        let dir = tempfile::tempdir().unwrap();
+        let cx = context(&env, dir.path());
+        for (file, text) in [
+            (
+                "systems.toml",
+                "[splunk.platform]\nenabled = true\n[[splunk.tenants]]\nname = 'é😀'\n",
+            ),
+            (
+                "platforms/splunk.toml",
+                "[platform]\nenabled = true\n[[tenants]]\nname = 'é😀'\n",
+            ),
+        ] {
+            let folder = Folder {
+                path: "/w/.opentide/configurations".to_owned(),
+                files: vec![(file.to_owned(), text.to_owned())],
+                folders: vec!["platforms".to_owned()],
+            };
+            let mut tree = resolve(&Instance {
+                workspace: Some(&folder),
+                ..Instance::default()
+            })
+            .unwrap()
+            .tree;
+            // Only the `platforms` table counts; the `systems` copy is for
+            // external readers.
+            if let Value::Map(entries) = &mut tree.value {
+                entries.retain(|entry| entry.key.value.as_str() != Some("systems"));
+            }
+            let doctor = Doctor {
+                cx: &cx,
+                workspace: dir.path().to_path_buf(),
+                explicit: false,
+                cwd: dir.path().to_path_buf(),
+                tide_workspace: None,
+                config: Some(tree),
+                expected: None,
+            };
+            assert_eq!(doctor.enabled_platforms(), ["splunk"], "{file}");
+            let tenants = doctor.tenants();
+            assert_eq!(tenants.len(), 1, "{file}");
+            assert_eq!(tenants[0].tenants.len(), 1, "{file}");
         }
     }
 
