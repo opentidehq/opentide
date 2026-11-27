@@ -2674,10 +2674,15 @@ pub fn advisories(
         && eql_is_sequence(query)
         && let Some((_, maxspan_ms)) = eql_maxspan(query)
     {
-        let window_ms = (interval_secs + lookback_secs) * 1000;
+        // A duration saturates at `u128::MAX` seconds: so do its milliseconds,
+        // never wrapping into a small window (#1928).
+        let lookback_ms = lookback_secs.saturating_mul(1000);
+        let window_ms = interval_secs
+            .saturating_add(lookback_secs)
+            .saturating_mul(1000);
         if maxspan_ms > window_ms {
             warnings.push(opentide_core::codes::EQL_MAXSPAN_WINDOW.to_owned());
-        } else if maxspan_ms > lookback_secs * 1000 {
+        } else if maxspan_ms > lookback_ms {
             warnings.push(opentide_core::codes::EQL_MAXSPAN_LOOKBACK.to_owned());
         }
     }
@@ -2901,6 +2906,21 @@ mod tests {
                 "suppression_omitted_basic_license",
                 "technique_not_enterprise"
             ]
+        );
+    }
+
+    /// A lookback too long for its milliseconds saturates instead of
+    /// wrapping into a small window that a short maxspan exceeds (#1928).
+    #[test]
+    fn advisories_saturate_a_huge_lookback() {
+        let days = "9".repeat(40);
+        let block: Json = serde_json::from_str(&format!(
+            r#"{{"type": "eql", "query": "sequence with maxspan=1h [a] [b]", "scheduling": {{"interval": "5m", "lookback": "{days}d"}}}}"#
+        ))
+        .unwrap_or(Json::Null);
+        assert_eq!(
+            advisories(&block, "high", true, false).unwrap_or_default(),
+            ["lookback_long"]
         );
     }
 }
