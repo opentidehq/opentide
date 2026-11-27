@@ -107,7 +107,8 @@ pub fn analyze(source: &str) -> AnalyzeResult {
 /// The Lucene query string [`QueryEngine`](opentide_highlight::QueryEngine) (#1953):
 /// [`analyze`] behind the shared interface.
 ///
-/// Elastic's dialect, the default.
+/// The dialect is the platform's ([`Dialect::for_platform`]): Elastic's, the
+/// default, unless it names Carbon Black Cloud or Graylog.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Engine;
 
@@ -116,8 +117,12 @@ impl opentide_highlight::QueryEngine for Engine {
         opentide_core::LanguageId::Lucene
     }
 
-    fn analyze(&self, source: &str) -> opentide_highlight::AnalyzeResult {
-        let r = analyze(source);
+    fn analyze_for(
+        &self,
+        source: &str,
+        setting: &opentide_highlight::Setting<'_>,
+    ) -> opentide_highlight::AnalyzeResult {
+        let r = analyze_dialect(source, Dialect::for_platform(setting.platform));
         opentide_highlight::AnalyzeResult {
             diagnostics: r.diagnostics,
             tokens: r.tokens,

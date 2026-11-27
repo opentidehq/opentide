@@ -2794,6 +2794,149 @@ fn graylog_deploy_resolves_the_tenants_stream_and_notification_aliases() {
     assert!(shard_of(ws.path(), unknown).is_empty(), "{err}");
 }
 
+/// The `api_request` of each rule `deploy --dry-run --json` shows for
+/// `platform` in `ws`, as compact JSON text (`Json` keeps the members'
+/// order: the text is the bytes a deploy would send), with the tenant the
+/// entry names.
+fn dry_run_requests(ws: &Path, platform: &str) -> Vec<(String, Option<String>)> {
+    let (code, stdout, stderr) = cli(
+        ws,
+        &[
+            "--json",
+            "deploy",
+            "--dry-run",
+            "--platform",
+            platform,
+            "--strategy",
+            "PREVIEW",
+            "--strategy",
+            "RELEASE",
+            "--all",
+            "--keep-deprecated",
+        ],
+        &[],
+    );
+    assert_eq!(code, 0, "{stdout}\n{stderr}");
+    let document = Json::parse(&stdout).unwrap();
+    let result = document.get("result").unwrap_or(&document);
+    result
+        .get("payloads")
+        .and_then(|payloads| payloads.get(platform))
+        .and_then(Json::as_array)
+        .unwrap()
+        .iter()
+        .map(|entry| {
+            let request = entry
+                .get("api_request")
+                .unwrap_or_else(|| panic!("no api_request: {}", entry.to_compact()));
+            (
+                request.to_compact(),
+                entry
+                    .get("tenant")
+                    .and_then(Json::as_str)
+                    .map(str::to_owned),
+            )
+        })
+        .collect()
+}
+
+/// The body a Sentinel deploy sends is, byte for byte, the `api_request` the
+/// dry run shows (#1952: both compile through `compiler::Sentinel`): the
+/// exclusions that apply, their `let` statements, the non-ASCII text of the
+/// query, and an exclusion scoped to a tenant the run does not reach, left
+/// out of both.
+#[test]
+fn a_sentinel_deploy_sends_the_body_its_dry_run_shows() {
+    let block = format!(
+        "{SENTINEL_STAGING}    exclusions:\n      - query: '| where Account != \"é😀\"'\n        \
+         reason: Everywhere\n        let:\n          allowed: \"svc é\"\n      - query: '| \
+         where Computer != \"elsewhere\"'\n        reason: Another tenant\n        tenant: \
+         elsewhere\n"
+    )
+    .replace(
+        "query: SecurityEvent\n",
+        "query: SecurityEvent | where Account == 'é😀'\n",
+    );
+    let text = rule(
+        "Ünïcode rule 😀",
+        "00000000-0000-4000-8099-000000000201",
+        "d.",
+        &block,
+    );
+    let ws = workspace("sentinel", "soc", SENTINEL_SETUP, &[("a.yaml", text)]);
+    let shown = dry_run_requests(ws.path(), "sentinel");
+    let recording: &'static Recording = Box::leak(Box::new(Recording(Mutex::new(Vec::new()))));
+    let mut registry = Registry::new();
+    registry
+        .register(Box::new(Recorded("sentinel", recording)))
+        .unwrap();
+    let env = Env::from_pairs([("AZURE_CLIENT_SECRET", SECRET)]);
+    let (sent, err) = deploy(ws.path(), "sentinel", &env, &registry, 0);
+    assert_eq!(rows(&sent), vec![("deployed".to_owned(), None)], "{err}");
+    let bodies = recording.0.lock().unwrap().clone();
+    assert_eq!(bodies.len(), 1, "{err}");
+    let body = String::from_utf8(bodies[0].clone()).unwrap();
+    assert!(
+        body.contains("é😀") && body.contains("let allowed"),
+        "{body}"
+    );
+    assert!(!body.contains("elsewhere"), "{body}");
+    assert_eq!(shown, vec![(body, None)]);
+}
+
+/// The create body a Graylog deploy sends is, byte for byte, the body of the
+/// `api_request` the dry run shows for that tenant (#1952: both compile
+/// through `compiler::Graylog`), on a server of the version a dry run
+/// compiles for: the tenant's stream and notification ids, its tags, and the
+/// non-ASCII text of the rule.
+#[test]
+fn a_graylog_deploy_sends_the_body_its_dry_run_shows() {
+    const STREAM: &str = "65f1c0de2a3b4c5d6e7f2222";
+    const NOTIFICATION: &str = "65f1c0de2a3b4c5d6e7f3333";
+    let preview = opentide_compile::graylog::PREVIEW_VERSION;
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let server = graylog_stand(&rt, &format!("{}.{}.{}", preview.0, preview.1, preview.2));
+    let setup = format!(
+        "url = \"{}\"\ntoken = \"$GRAYLOG_TOKEN\"\nstreams = [\"endpoint\"]\ntags = \
+         [\"tenant-tag\"]\n[tenants.setup.stream_ids]\nendpoint = \"{STREAM}\"\n\
+         [tenants.setup.notification_ids]\npager = \"{NOTIFICATION}\"\n",
+        server.uri()
+    );
+    let block = format!(
+        "{}    notifications:\n      - pager\n",
+        graylog_block("STAGING", "message:\"é😀\"")
+    );
+    let text = rule(
+        "Ünïcode rule 😀",
+        "00000000-0000-4000-8099-000000000202",
+        "Dé😀.",
+        &block,
+    );
+    let ws = workspace("graylog", "lab", &setup, &[("a.yaml", text)]);
+    let shown = dry_run_requests(ws.path(), "graylog");
+    let (code, err) = graylog_deploy(ws.path());
+    rt.block_on(server.verify());
+    assert_eq!(code, 0, "{err}");
+    let received = rt.block_on(server.received_requests()).unwrap();
+    let created: Vec<&[u8]> = received
+        .iter()
+        .filter(|request| {
+            request.method == wiremock::http::Method::POST
+                && request.url.path() == "/api/events/definitions"
+        })
+        .map(|request| request.body.as_slice())
+        .collect();
+    assert_eq!(created.len(), 1, "{err}");
+    let body = String::from_utf8(created[0].to_vec()).unwrap();
+    for part in [STREAM, NOTIFICATION, "tenant-tag", "é😀"] {
+        assert!(body.contains(part), "{part} not in {body}");
+    }
+    assert_eq!(shown.len(), 1);
+    assert_eq!(shown[0].1.as_deref(), Some("lab"));
+    let request = Json::parse(&shown[0].0).unwrap();
+    assert_eq!(request.get("body").unwrap().to_compact(), body);
+}
+
 /// A definition the tenant lost while git ignores deployment state is not
 /// created again: the warning, then the state's refusal; and a tenant that
 /// refuses the token on a rule stops there.
@@ -4660,7 +4803,7 @@ fn a_tenant_failing_the_unchanged_lookup_follows_the_failure_before_any_rule() {
     assert_eq!(kibana.writes.lock().unwrap().len(), writes, "{text}");
 }
 
-/// A Splunk deployer that keeps the body of each request it receives.
+/// A deployer that keeps the body of each request it receives.
 struct Recording(Mutex<Vec<Vec<u8>>>);
 
 impl Deployer for Recording {
@@ -4674,16 +4817,16 @@ impl Deployer for Recording {
     }
 }
 
-/// [`Recording`] registered as the Splunk platform.
-struct Recorded(&'static Recording);
+/// [`Recording`] registered as the platform it names.
+struct Recorded(&'static str, &'static Recording);
 
 impl Platform for Recorded {
     fn id(&self) -> &'static str {
-        "splunk"
+        self.0
     }
 
     fn deployer(&self) -> Option<&dyn Deployer> {
-        Some(self.0)
+        Some(self.1)
     }
 }
 
@@ -4703,7 +4846,9 @@ fn a_drawn_splunk_schedule_is_the_same_on_every_deploy() {
     );
     let recording: &'static Recording = Box::leak(Box::new(Recording(Mutex::new(Vec::new()))));
     let mut registry = Registry::new();
-    registry.register(Box::new(Recorded(recording))).unwrap();
+    registry
+        .register(Box::new(Recorded("splunk", recording)))
+        .unwrap();
     let env = Env::from_pairs([("SPLUNK_TOKEN", SECRET)]);
     let cron = |body: &[u8]| -> String {
         let settings: serde_json::Value = serde_json::from_slice(body).unwrap();

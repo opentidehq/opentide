@@ -295,6 +295,20 @@ mod tests {
         assert_eq!(displayed, RELEASE_NAMES);
     }
 
+    /// A target written out parses back to itself: Tide hands the stack its
+    /// Elastic tenants share to the engine as text (#1953).
+    #[test]
+    fn a_target_displayed_parses_back() {
+        let targets = RELEASES.iter().copied().map(StackTarget::Version).chain([
+            StackTarget::Serverless,
+            StackTarget::Version(StackVersion::new(8, 7)),
+            StackTarget::Version(StackVersion::new(10, 12)),
+        ]);
+        for target in targets {
+            assert_eq!(StackTarget::parse(&target.to_string()), Some(target));
+        }
+    }
+
     #[test]
     fn target_parses_the_spec_spelling() {
         assert_eq!(

@@ -458,88 +458,37 @@ pub fn analyze_query_at(request: &QueryRequest, position: QueryPosition) -> Vec<
             Range::point(0, 0),
         )];
     }
-    let platform = request.platform.as_deref().unwrap_or("");
-    match request.language {
-        // At `rule`, a Sentinel query gets the scheduled rule's limits
-        // (`kql_rule_*`), as Tide checks a block's query.
-        LanguageId::Kql => {
-            let dialect = Dialect::for_platform(platform);
-            let mut diagnostics = opentide_kql::analyze(&request.text, dialect).diagnostics;
-            let profile = match position {
-                QueryPosition::Rule => opentide_kql::Profile::Rule,
-                QueryPosition::Search => opentide_kql::Profile::Search,
-            };
-            opentide_kql::apply_profile(&request.text, dialect, profile, &mut diagnostics);
-            diagnostics
-        }
-        // The profile comes from the position, never from the platform
-        // (ADR 0015 §4). A search is checked as a file of its language is: a
-        // `.cql` file is plain LogScale, without the correlation rule's
-        // restrictions; a `.exabeam` or `.datadog` file is the `search`
-        // profile. A rule is checked as the platform's block checks its query
-        // (Tide's field paths).
-        LanguageId::Cql => {
-            let profile = match position {
-                QueryPosition::Rule => opentide_cql::Profile::CORRELATION_RULE,
-                QueryPosition::Search => opentide_cql::Profile::default(),
-            };
-            opentide_cql::analyze_with(&request.text, &profile).diagnostics
-        }
-        LanguageId::Exabeam => {
-            let ctx = match position {
-                QueryPosition::Rule => opentide_exabeam::Context::RULE,
-                QueryPosition::Search => opentide_exabeam::Context::SEARCH,
-            };
-            opentide_exabeam::analyze_with(&request.text, &ctx).diagnostics
-        }
-        LanguageId::Datadog => {
-            let ctx = match position {
-                QueryPosition::Rule => opentide_datadog::Context::RULE,
-                QueryPosition::Search => opentide_datadog::Context::SEARCH,
-            };
-            opentide_datadog::analyze_with(&request.text, &ctx).diagnostics
-        }
-        // At `rule`, the text is the rule a Google SecOps block assembles from
-        // its sections, which deploy gives its `meta`; at `search`, a `.yaral`
-        // file, a rule or a search by its text.
-        LanguageId::Yaral => {
-            let ctx = match position {
-                QueryPosition::Rule => opentide_yaral::Context::SECTIONS,
-                QueryPosition::Search => opentide_yaral::Context::FILE,
-            };
-            opentide_yaral::analyze_with(&request.text, &ctx).diagnostics
-        }
-        LanguageId::Lucene => {
-            let dialect = opentide_lucene::Dialect::for_platform(platform);
-            opentide_lucene::analyze_dialect(&request.text, dialect).diagnostics
-        }
-        // `platform: harfanglab` or `bitdefender`: the platform's YARA dialect.
-        LanguageId::Yara => {
-            let ctx = opentide_yara::Dialect::for_platform(platform)
-                .map(opentide_yara::Context::for_profile)
-                .unwrap_or_default();
-            opentide_yara::analyze_with(&request.text, &ctx).diagnostics
-        }
-        LanguageId::Esql => {
-            let target = request
-                .stack
-                .as_deref()
-                .and_then(opentide_esql::StackTarget::parse);
-            opentide_esql::analyze_for(&request.text, target).diagnostics
-        }
-        language => {
-            let host = MemoryWorkspace::default();
-            analyze(
-                &host,
-                AnalyzeRequest {
-                    uri: "query".into(),
-                    language,
-                    text: request.text.clone(),
-                },
-            )
-            .diagnostics
-        }
+    // The platform names the dialect, and the stack ES|QL's target. The
+    // profile comes from the position, never from the platform (ADR 0015
+    // §4). A search is checked as a file of its language is: a `.cql` file
+    // is plain LogScale, without the correlation rule's restrictions; a
+    // `.exabeam` or `.datadog` file is the `search` profile; a `.yaral` file
+    // is a rule or a search by its text; KQL's search profile adds nothing.
+    // A rule is checked as the platform's block checks its query (Tide's
+    // field paths): Sentinel's scheduled rule limits, CQL's correlation
+    // rule, Exabeam's and Datadog's `rule` profile, YARA-L's assembled rule.
+    let profile = match position {
+        QueryPosition::Search => opentide_highlight::Profile::File,
+        QueryPosition::Rule => opentide_highlight::Profile::Rule,
+    };
+    let setting = opentide_highlight::Setting {
+        platform: request.platform.as_deref().unwrap_or(""),
+        profile,
+        stack: request.stack.as_deref(),
+    };
+    if let Some(engine) = engines::engine(request.language) {
+        return engine.analyze_for(&request.text, &setting).diagnostics;
     }
+    let host = MemoryWorkspace::default();
+    analyze(
+        &host,
+        AnalyzeRequest {
+            uri: "query".into(),
+            language: request.language,
+            text: request.text.clone(),
+        },
+    )
+    .diagnostics
 }
 
 /// Workspace catalogs that replace the bundled ones, as `opentide generate

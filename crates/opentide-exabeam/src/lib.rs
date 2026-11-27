@@ -95,8 +95,17 @@ impl opentide_highlight::QueryEngine for Engine {
         opentide_core::LanguageId::Exabeam
     }
 
-    fn analyze(&self, source: &str) -> opentide_highlight::AnalyzeResult {
-        let r = analyze(source);
+    fn analyze_for(
+        &self,
+        source: &str,
+        setting: &opentide_highlight::Setting<'_>,
+    ) -> opentide_highlight::AnalyzeResult {
+        let ctx = if setting.profile == opentide_highlight::Profile::Rule {
+            Context::RULE
+        } else {
+            Context::SEARCH
+        };
+        let r = analyze_with(source, &ctx);
         opentide_highlight::AnalyzeResult {
             diagnostics: r.diagnostics,
             tokens: r.tokens,

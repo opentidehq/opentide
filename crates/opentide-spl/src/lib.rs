@@ -323,7 +323,11 @@ impl opentide_highlight::QueryEngine for Engine {
         opentide_core::LanguageId::Spl
     }
 
-    fn analyze(&self, source: &str) -> opentide_highlight::AnalyzeResult {
+    fn analyze_for(
+        &self,
+        source: &str,
+        _setting: &opentide_highlight::Setting<'_>,
+    ) -> opentide_highlight::AnalyzeResult {
         let r = analyze(source);
         opentide_highlight::AnalyzeResult {
             diagnostics: r.diagnostics,
