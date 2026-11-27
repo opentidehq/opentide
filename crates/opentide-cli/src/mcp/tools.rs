@@ -37,8 +37,25 @@ enum Payload {
     List(Vec<Json>),
 }
 
-/// The `tools/call` result of the tool `name`.
+/// The `tools/call` result of the tool `name`, on the process's warm
+/// workspace (#1942): a call that only reads opens it through the session
+/// ([`opentide_workspace::session`]), which re-reads only the files changed
+/// on disk since the last call. A deploy that is not a dry run may write the
+/// workspace: it opens it afresh, and the session then forgets what it kept,
+/// as `serve` does after a run that may write.
 pub fn call(name: &str, arguments: &Map<String, Value>, context: &Context<'_>) -> Value {
+    let writes = name == "deploy_rule" && Args::new(arguments).boolean("dry_run", true) != Ok(true);
+    if writes {
+        let result = answer(name, arguments, context);
+        opentide_workspace::session::clear();
+        return result;
+    }
+    let _warm = opentide_workspace::session::activate();
+    answer(name, arguments, context)
+}
+
+/// [`call`]'s answer.
+fn answer(name: &str, arguments: &Map<String, Value>, context: &Context<'_>) -> Value {
     let args = Args::new(arguments);
     let payload = match name {
         "explain" => args
