@@ -8,6 +8,8 @@ use indexmap::IndexMap;
 use schemars::{JsonSchema, Schema, SchemaGenerator, json_schema};
 use serde::{Deserialize, Serialize};
 
+use opentide_core::duration::{Iso8601Error, SENTINEL, SENTINEL_MAX_DAYS, SENTINEL_MAX_SECONDS};
+
 use crate::FromNode;
 use crate::configuration::repr;
 use crate::from_node::{Context, Shape};
@@ -89,19 +91,20 @@ pub struct SentinelTrigger {
 /// a value of neither shape (`frequency: hourly`), and one longer than
 /// deploy's `timedelta` holds ([`MAX_DURATION_SECONDS`]: `1000000000d`,
 /// `P99999999999D`), both of which the oracle accepted and deploy refused.
+/// The grammar is [`SENTINEL`], the one deploy reads too (#1934).
 pub fn check_duration(value: &str) -> Result<(), Violation> {
     let text = value.trim();
     if text.is_empty() {
         return Ok(());
     }
-    match duration_seconds(text) {
-        Length::Seconds(_) => Ok(()),
-        Length::TooLong => Err(Violation::value_error(format!(
+    match SENTINEL.seconds(text) {
+        Ok(_) => Ok(()),
+        Err(Iso8601Error::TooLong) => Err(Violation::value_error(format!(
             "Duration {} is longer than a rule can be deployed with (at most {MAX_DURATION_DAYS} \
              days, 23 hours, 59 minutes and 59 seconds)",
             repr::quote(value)
         ))),
-        Length::NotADuration => Err(Violation::value_error(format!(
+        Err(Iso8601Error::Format) => Err(Violation::value_error(format!(
             "Duration {} is not an ISO 8601 duration (PT1H, PT30M, P1D) or a shorthand duration \
              (30m, 1h, 1d, 1h10m)",
             repr::quote(value)
@@ -110,77 +113,11 @@ pub fn check_duration(value: &str) -> Result<(), Violation> {
 }
 
 /// The most days deploy's duration holds: 999,999,999.
-pub const MAX_DURATION_DAYS: u64 = 999_999_999;
+pub const MAX_DURATION_DAYS: u64 = SENTINEL_MAX_DAYS;
 
 /// The longest duration deploy converts, in seconds: [`MAX_DURATION_DAYS`]
 /// and a day less one second, in whole seconds.
-pub const MAX_DURATION_SECONDS: u64 = MAX_DURATION_DAYS * 86_400 + 86_399;
-
-/// What a Sentinel duration's text spells.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Length {
-    /// Neither shape.
-    NotADuration,
-    /// Longer than [`MAX_DURATION_SECONDS`] (a part too long for a `u64`
-    /// included: the sum is checked, so no digit string can overflow it).
-    TooLong,
-    /// The duration, in seconds.
-    Seconds(u64),
-}
-
-/// The duration `text` (stripped) spells.
-#[expect(
-    clippy::expect_used,
-    reason = "regex literals, tested by `sentinel_durations`"
-)]
-fn duration_seconds(text: &str) -> Length {
-    use std::sync::OnceLock;
-    static PATTERNS: OnceLock<(regex::Regex, regex::Regex)> = OnceLock::new();
-    let (short, iso) = PATTERNS.get_or_init(|| {
-        (
-            regex::Regex::new(r"^(?:([0-9]+)d)?(?:([0-9]+)h)?(?:([0-9]+)m)?(?:([0-9]+)s)?$")
-                .expect("a valid pattern"),
-            regex::Regex::new(
-                r"(?i)^P(?:([0-9]+)W)?(?:([0-9]+)D)?(?:T(?:([0-9]+)H)?(?:([0-9]+)M)?(?:([0-9]+)S)?)?$",
-            )
-            .expect("a valid pattern"),
-        )
-    });
-    // Each group's length in seconds, in the pattern's order.
-    let total = |captures: &regex::Captures<'_>, units: &[u64]| -> Option<Length> {
-        if !captures.iter().skip(1).any(|part| part.is_some()) {
-            return None;
-        }
-        let mut sum: Option<u64> = Some(0);
-        for (part, unit) in captures.iter().skip(1).zip(units) {
-            if let Some(part) = part {
-                let seconds = part
-                    .as_str()
-                    .parse::<u64>()
-                    .ok()
-                    .and_then(|count| count.checked_mul(*unit));
-                sum = sum
-                    .zip(seconds)
-                    .and_then(|(sum, seconds)| sum.checked_add(seconds));
-            }
-        }
-        Some(
-            sum.filter(|seconds| *seconds <= MAX_DURATION_SECONDS)
-                .map_or(Length::TooLong, Length::Seconds),
-        )
-    };
-    if let Some(captures) = short.captures(text)
-        && let Some(length) = total(&captures, &[86_400, 3_600, 60, 1])
-    {
-        return length;
-    }
-    if text.to_uppercase().ends_with('T') {
-        return Length::NotADuration;
-    }
-    iso.captures(text)
-        .and_then(|captures| total(&captures, &[604_800, 86_400, 3_600, 60, 1]))
-        .unwrap_or(Length::NotADuration)
-}
+pub const MAX_DURATION_SECONDS: u64 = SENTINEL_MAX_SECONDS;
 
 /// A duration field in the conversion: `null`, or a string [`check_duration`]
 /// accepts.
@@ -270,10 +207,7 @@ pub fn schedule_findings(
         return found;
     }
     let seconds = |value: Option<&str>| match value.map(str::trim) {
-        Some(text) if !text.is_empty() => match duration_seconds(text) {
-            Length::Seconds(seconds) => Some(seconds),
-            Length::NotADuration | Length::TooLong => None,
-        },
+        Some(text) if !text.is_empty() => SENTINEL.seconds(text).ok(),
         _ => None,
     };
     let every = seconds(frequency);

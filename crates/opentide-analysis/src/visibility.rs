@@ -52,19 +52,9 @@ pub fn declare_dataset(toml: Option<&str>, platform: &str, name: &str) -> Datase
     }
 }
 
+/// A TOML basic string: `toml_edit` escapes every control character (#1929).
 fn quote(text: &str) -> String {
-    let mut out = String::with_capacity(text.len() + 2);
-    out.push('"');
-    for c in text.chars() {
-        match c {
-            '"' => out.push_str("\\\""),
-            '\\' => out.push_str("\\\\"),
-            '\n' => out.push_str("\\n"),
-            c => out.push(c),
-        }
-    }
-    out.push('"');
-    out
+    toml_edit::Value::from(text).to_string()
 }
 
 #[expect(
@@ -79,6 +69,19 @@ fn point(line: usize, character: u32) -> Range {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Control characters in a dataset name stay escaped, so the file still
+    /// parses (#1929).
+    #[test]
+    fn names_with_control_characters_write_valid_toml() {
+        let name = "a\rb\u{7f}c\u{1}d\ne\t\"f\" \\ é😀";
+        let edit = declare_dataset(None, "sentinel", name);
+        let parsed: toml::Table =
+            toml::from_str(&edit.new_text).unwrap_or_else(|e| panic!("{}: {e}", edit.new_text));
+        let entry = &parsed["logsources"][0];
+        assert_eq!(entry["name"].as_str(), Some(name));
+        assert_eq!(entry["system"].as_str(), Some("sentinel"));
+    }
 
     fn apply(text: &str, edit: &DatasetEdit) -> String {
         let mut lines: Vec<String> = text.split('\n').map(str::to_string).collect();
@@ -159,7 +162,7 @@ FlowType_s = { type = "string" }
         assert_eq!(edit.range, point(2, 17));
         assert!(
             edit.new_text
-                .starts_with("\n\n[[logsources]]\nname = \"A\\\"B\"\n")
+                .starts_with("\n\n[[logsources]]\nname = 'A\"B'\n")
         );
     }
 }
