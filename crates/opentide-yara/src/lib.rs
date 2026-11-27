@@ -52,8 +52,8 @@ use yara_x_parser::Parser;
 use yara_x_parser::ast::AST;
 
 /// The product a YARA rule runs on (ADR 0015 §1: a dialect, chosen by
-/// platform). yara-1.0 calls these "Platform profiles"; the specification
-/// takes the term in its next revision.
+/// platform). yara-1.0's heading "Platform profiles" becomes "dialects" in
+/// the specification's next revision (ADR 0015 §7, step 2).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Dialect {
     Harfanglab,
@@ -75,7 +75,7 @@ impl Dialect {
         }
     }
 
-    /// The profile of a Tide platform block, by its key under `configurations`.
+    /// The dialect of a Tide platform block, by its key under `configurations`.
     pub fn for_platform(platform: &str) -> Option<Self> {
         match platform {
             "harfanglab" => Some(Dialect::Harfanglab),
@@ -94,7 +94,7 @@ pub struct Context {
 }
 
 impl Context {
-    /// The profile's context, with its `yara_x_syntax` setting.
+    /// The dialect's context, with its `yara_x_syntax` setting.
     pub fn for_profile(profile: Dialect) -> Self {
         let data = &catalog::Catalog::cached().profiles[profile.key()];
         Self {

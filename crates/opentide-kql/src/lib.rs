@@ -149,10 +149,10 @@ pub enum Dialect {
 }
 
 impl Dialect {
-    /// The profile of a detection platform, as a `configurations` key or a
+    /// The dialect of a detection platform, as a `configurations` key or a
     /// hunt's `system`: `microsoft_defender` is Defender's, every other
     /// platform (and none) Sentinel's. The only map from a platform to a KQL
-    /// profile (ADR 0015 §3): Tide and analysis call it and keep no copy.
+    /// dialect (ADR 0015 §3): Tide and analysis call it and keep no copy.
     #[must_use]
     pub fn for_platform(platform: &str) -> Self {
         match platform {
@@ -161,7 +161,7 @@ impl Dialect {
         }
     }
 
-    /// The platform whose `visibility.toml` declarations the profile reads:
+    /// The platform whose `visibility.toml` declarations the dialect reads:
     /// [`Dialect::for_platform`]'s inverse, with `Core` reading Sentinel's.
     #[must_use]
     pub fn platform(self) -> &'static str {
@@ -236,7 +236,7 @@ impl ColumnRow {
     }
 }
 
-/// A profile's KQL catalog: operators, functions, plugins, types, tables and
+/// A dialect's KQL catalog: operators, functions, plugins, types, tables and
 /// columns.
 ///
 /// Reading it builds indexes and schemas once and keeps them on it, for
@@ -246,7 +246,7 @@ impl ColumnRow {
 /// before any read.
 #[derive(Debug, Clone)]
 pub struct Catalog {
-    /// The profile the tables and columns come from.
+    /// The dialect the tables and columns come from.
     pub profile: Dialect,
     pub operators: Vec<OperatorRow>,
     pub functions: Vec<FunctionRow>,
@@ -2231,10 +2231,10 @@ impl<K: PartialEq + Clone> Recent<K, Arc<Catalog>> {
 mod tests {
     use super::*;
 
-    /// Each product's profile reads that product's declarations, and an
+    /// Each product's dialect reads that product's declarations, and an
     /// unknown platform (or none) is Sentinel's (ADR 0015 §3).
     #[test]
-    fn a_platform_and_its_profile_map_both_ways() {
+    fn a_platform_and_its_dialect_map_both_ways() {
         for platform in ["sentinel", "microsoft_defender"] {
             assert_eq!(Dialect::for_platform(platform).platform(), platform);
         }

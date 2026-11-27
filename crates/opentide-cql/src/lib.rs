@@ -117,9 +117,9 @@ pub fn analyze(source: &str) -> AnalyzeResult {
     analyze_with(source, &Profile::default())
 }
 
-/// Analyze a CQL query where `ctx` says it runs.
-pub fn analyze_with(source: &str, ctx: &Profile) -> AnalyzeResult {
-    opentide_core::with_line_index(source, || analyze_lines(source, *ctx))
+/// Analyze a CQL query under `profile`: a correlation rule or a search.
+pub fn analyze_with(source: &str, profile: &Profile) -> AnalyzeResult {
+    opentide_core::with_line_index(source, || analyze_lines(source, *profile))
 }
 
 #[expect(
