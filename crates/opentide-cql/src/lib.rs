@@ -129,6 +129,25 @@ pub fn analyze(source: &str) -> AnalyzeResult {
     analyze_with(source, &Profile::default())
 }
 
+/// The CrowdStrike CQL [`QueryEngine`](opentide_highlight::QueryEngine) (#1953):
+/// [`analyze`] behind the shared interface.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Engine;
+
+impl opentide_highlight::QueryEngine for Engine {
+    fn language(&self) -> opentide_core::LanguageId {
+        opentide_core::LanguageId::Cql
+    }
+
+    fn analyze(&self, source: &str) -> opentide_highlight::AnalyzeResult {
+        let r = analyze(source);
+        opentide_highlight::AnalyzeResult {
+            diagnostics: r.diagnostics,
+            tokens: r.tokens,
+        }
+    }
+}
+
 /// Analyze a CQL query under `profile`: a correlation rule or a search.
 pub fn analyze_with(source: &str, profile: &Profile) -> AnalyzeResult {
     opentide_core::with_line_index(source, || analyze_lines(source, *profile))

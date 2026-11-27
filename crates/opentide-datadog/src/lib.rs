@@ -68,6 +68,25 @@ pub fn analyze(source: &str) -> AnalyzeResult {
     analyze_with(source, &Context::default())
 }
 
+/// The Datadog search [`QueryEngine`](opentide_highlight::QueryEngine) (#1953):
+/// [`analyze`] behind the shared interface.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Engine;
+
+impl opentide_highlight::QueryEngine for Engine {
+    fn language(&self) -> opentide_core::LanguageId {
+        opentide_core::LanguageId::Datadog
+    }
+
+    fn analyze(&self, source: &str) -> opentide_highlight::AnalyzeResult {
+        let r = analyze(source);
+        opentide_highlight::AnalyzeResult {
+            diagnostics: r.diagnostics,
+            tokens: r.tokens,
+        }
+    }
+}
+
 /// Analyzes a query where `ctx` says it runs.
 ///
 /// A query that does not parse gets its first syntax error and nothing else: advice on a tree

@@ -1,8 +1,8 @@
-//! The deployment state shards, read only (`states/deployment.py`): one
-//! `<uuid>.json` per rule under `.opentide/states/deployment/`, each
-//! `(platform, tenant)` bound to the id the platform gave the rule. A shard
-//! that does not pass the oracle's checks is skipped here; `validate`
-//! reports it.
+//! The deployment state shards, read only: one `<uuid>.json` per rule under
+//! `.opentide/states/deployment/`, each `(platform, tenant)` bound to the id
+//! the platform gave the rule. A shard that fails a check of `parse` (its
+//! schema, its `object_uuid`, a platform that keeps ids, each tenant and id
+//! in shape) is skipped here as a whole; `validate` reports it.
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -53,8 +53,11 @@ pub fn is_canonical_uuid(text: &str) -> bool {
     opentide_core::ids::is_canonical(text)
 }
 
-/// The bindings of one shard's text, or `None` when the oracle would refuse
-/// it (`DeploymentState.from_file`).
+/// The bindings of one shard's text, or `None` when any part is refused:
+/// JSON that is not a shard, a `schema` other than [`SCHEMA_ID`], an
+/// `object_uuid` other than the file's stem, a platform that keeps no ids,
+/// a tenant that is blank or padded, or an id that is not a string, is blank
+/// or is not in its platform's shape.
 fn parse(stem: &str, text: &str) -> Option<Vec<Binding>> {
     #[derive(serde::Deserialize)]
     struct Shard {
@@ -169,7 +172,7 @@ mod tests {
     const UUID: &str = "0b4d0e4e-1c33-4f53-8a6b-4c5b6e7f8a9b";
 
     #[test]
-    fn shards_are_read_as_the_oracle_checks_them() {
+    fn a_shard_with_any_part_refused_is_skipped_whole() {
         let fs = MemoryFs::new();
         let dir = Path::new("/ws/.opentide/states/deployment");
         fs.write(

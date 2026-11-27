@@ -1,7 +1,6 @@
 //! `opentide info catalog`: every object, how they relate, and the ATT&CK
 //! skeleton, in one document for an editor's catalogue, coverage graph,
-//! ATT&CK matrix and search (`cli/services/catalog.py`; vscode-extension
-//! `docs/CONTRACTS.md`).
+//! ATT&CK matrix and search (vscode-extension `docs/CONTRACTS.md`).
 //!
 //! It is built in one pass over the index: each edge comes from the field
 //! that holds the reference, so the cost is linear in the catalogue.

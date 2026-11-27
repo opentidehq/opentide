@@ -1,5 +1,4 @@
-//! The Chronicle API v1 client of one Google SecOps instance, ported from
-//! 0.28.0's `platforms/google_secops/client.py`.
+//! The Chronicle API v1 client of one Google SecOps instance.
 //!
 //! Every request goes to `<endpoint>/v1/projects/<project>/locations/
 //! <location>/instances/<instance>` with an access token ([`super::auth`]).
@@ -150,7 +149,7 @@ pub fn error_of(answer: &Answer) -> (String, String) {
 /// A value as text; an empty or `null` one as nothing.
 fn text(value: &Json) -> String {
     if value.is_filled() {
-        opentide_compile::deploy::text(value)
+        Json::to_text(value)
     } else {
         String::new()
     }

@@ -11,6 +11,7 @@
     reason = "imported from language-server with public items undocumented: crates/AGENTS.md, Lints"
 )]
 
+mod engine;
 mod function_names;
 mod keywords;
 mod markdown;
@@ -28,6 +29,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex, OnceLock, RwLock};
 use thiserror::Error;
 
+pub use engine::{AnalyzeResult, QueryEngine};
 pub use keywords::{Capture, Keywords, keywords};
 pub use markdown::highlight_markdown_line;
 use tide_model::Repr;

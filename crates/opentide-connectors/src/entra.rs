@@ -27,7 +27,6 @@ use crate::Secret;
 use crate::answer::{Answer, gateway_answer};
 use crate::connector::TenantContext;
 use crate::error::ConnectorError;
-use crate::text::json_text;
 use crate::token::{Issued, lifetime};
 
 /// The Microsoft identity platform.
@@ -151,7 +150,7 @@ pub async fn sign_in_at(
         body.as_ref()
             .and_then(|body| body.get(name))
             .filter(|value| !value.is_null())
-            .map(json_text)
+            .map(Json::to_text)
             .filter(|text| !text.trim().is_empty())
     };
     // A refusal of the credentials: OAuth 2.0's error answer (RFC 6749

@@ -4863,10 +4863,7 @@ fn a_shown_url_is_the_whole_url_sent() {
 
 /// A value as a Splunk form sends it (`json_text`).
 fn form_text(value: &Json) -> String {
-    match value {
-        Json::Str(text) => text.clone(),
-        other => other.to_compact(),
-    }
+    value.to_text()
 }
 
 /// Whether `shown`, a write's body, is `body`, a request's: the same JSON,

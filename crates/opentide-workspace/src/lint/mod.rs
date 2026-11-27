@@ -1,4 +1,4 @@
-//! `opentide lint`: catalogue hygiene (`cli/services/lint.py`, UC-2.3 #818).
+//! `opentide lint`: catalogue hygiene (UC-2.3, #818).
 //!
 //! Every rule of `LINT_CODES`: a file that does not parse (`yaml_parse`), an
 //! object without a name (`name_missing`), a file name that is not the one

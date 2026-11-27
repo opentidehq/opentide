@@ -1,5 +1,5 @@
 //! `validate --fix`: the safe edits of the findings, applied as text splices
-//! (`cli/ui/fixes.py`, UC-2.3 #818).
+//! (UC-2.3, #818).
 //!
 //! An edit replaces the text from (`line`, `column`) up to (`end_line`,
 //! `end_column`) and keeps every other byte of the file: comments, quoting,
@@ -545,8 +545,7 @@ pub fn apply_reason(count: usize) -> String {
 }
 
 /// `Fixed 3 values in 2 files`, `Would fix 1 value in 1 file`, `No safe fix
-/// to apply`; `unwritten` counts the fixes whose file could not be written
-/// (`validation.py` `fix_phrase`).
+/// to apply`; `unwritten` counts the fixes whose file could not be written.
 pub fn fix_phrase(count: usize, files: usize, dry_run: bool, unwritten: usize) -> String {
     let failed = if unwritten == 1 {
         format!("could not write {unwritten} fix")

@@ -1195,7 +1195,7 @@ fn cell(value: Option<&Json>) -> String {
     let text = match value {
         None | Some(Json::Null) => return String::new(),
         Some(value @ (Json::Object(_) | Json::Array(_))) => compact(value),
-        Some(value) => scalar_text(value),
+        Some(value) => value.to_text(),
     };
     let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
     if text.chars().count() <= CELL_WIDTH {
@@ -1204,16 +1204,6 @@ fn cell(value: Option<&Json>) -> String {
         let mut cut: String = text.chars().take(CELL_WIDTH - 1).collect();
         cut.push('…');
         cut
-    }
-}
-
-/// A row's value as text: a string as is, anything else as its JSON.
-fn scalar_text(value: &Json) -> String {
-    match value {
-        Json::Str(text) => text.clone(),
-        other => crate::json::document_text(other, false)
-            .trim_end()
-            .to_owned(),
     }
 }
 
@@ -1255,7 +1245,7 @@ fn csv_value(value: Option<&Json>) -> String {
     match value {
         None | Some(Json::Null) => String::new(),
         Some(value @ (Json::Object(_) | Json::Array(_))) => compact(value),
-        Some(value) => scalar_text(value),
+        Some(value) => value.to_text(),
     }
 }
 
@@ -1592,6 +1582,9 @@ mod tests {
         assert_eq!(cell(row.get("a")), "x y");
         assert_eq!(cell(row.get("b")), r#"[1,"é"]"#);
         assert_eq!(cell(row.get("c")), "");
+        assert_eq!(cell(row.get("d")), "1.5");
+        assert_eq!(cell(Some(&Json::Bool(false))), "false");
+        assert_eq!(cell(Some(&Json::str("é 😀"))), "é 😀");
         assert_eq!(cell(Some(&Json::str("z".repeat(70)))).chars().count(), 60);
         assert_eq!(csv_field("a,\"b\""), "\"a,\"\"b\"\"\"");
         assert_eq!(csv_value(Some(&Json::Bool(true))), "true");
