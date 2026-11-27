@@ -302,7 +302,7 @@ pub struct Session<'a> {
     cx: TenantContext<'a>,
     base: String,
     api_key: Secret,
-    app_key: Secret,
+    application_key: Secret,
     clock: Arc<dyn Clock>,
 }
 
@@ -325,12 +325,12 @@ impl<'a> Session<'a> {
     /// [`Failure::Tenant`] for a site that is not one.
     pub fn new(cx: TenantContext<'a>, clock: Arc<dyn Clock>) -> Result<Self, Failure> {
         let api_key = cx.tenant.secret("api_key")?.clone();
-        let app_key = cx.tenant.secret("app_key")?.clone();
+        let application_key = cx.tenant.secret("app_key")?.clone();
         Ok(Self {
             cx,
             base: base_url(cx)?,
             api_key,
-            app_key,
+            application_key,
             clock,
         })
     }
@@ -373,28 +373,7 @@ impl<'a> Session<'a> {
         let mut rate_limited = 0;
         let mut failed = 0;
         loop {
-            let mut builder = self
-                .cx
-                .http
-                .request(method.clone(), url.as_str())
-                .header("Accept", "application/json")
-                .header("DD-API-KEY", self.api_key.expose())
-                .header("DD-APPLICATION-KEY", self.app_key.expose());
-            if let Some(bytes) = &bytes {
-                builder = builder
-                    .header("Content-Type", "application/json")
-                    .body(bytes.clone());
-            }
-            if path == LOGS_SEARCH_PATH
-                || path == VALIDATION_PATH
-                || *method == crate::transport::Method::GET
-            {
-                // A search, a validation and a read write no rule.
-                builder = builder.read_only();
-            }
-            if let Some(timeout) = timeout {
-                builder = builder.timeout(timeout);
-            }
+            let builder = self.builder(method, path, &url, bytes.as_deref(), timeout);
             let reply = match self.fetch(builder).await {
                 Ok(reply) => reply,
                 Err(error @ ConnectorError::Unreachable { .. }) if retried_on_failure => {
@@ -456,6 +435,40 @@ impl<'a> Session<'a> {
             }
             return Ok(reply);
         }
+    }
+
+    /// One attempt's request: the keys, the body, and whether it writes.
+    fn builder(
+        &self,
+        method: &crate::transport::Method,
+        path: &str,
+        url: &str,
+        bytes: Option<&[u8]>,
+        timeout: Option<Duration>,
+    ) -> crate::transport::RequestBuilder {
+        let mut builder = self
+            .cx
+            .http
+            .request(method.clone(), url)
+            .header("Accept", "application/json")
+            .header("DD-API-KEY", self.api_key.expose())
+            .header("DD-APPLICATION-KEY", self.application_key.expose());
+        if let Some(bytes) = bytes {
+            builder = builder
+                .header("Content-Type", "application/json")
+                .body(bytes.to_vec());
+        }
+        if path == LOGS_SEARCH_PATH
+            || path == VALIDATION_PATH
+            || *method == crate::transport::Method::GET
+        {
+            // A search, a validation and a read write no rule.
+            builder = builder.read_only();
+        }
+        if let Some(timeout) = timeout {
+            builder = builder.timeout(timeout);
+        }
+        builder
     }
 
     async fn fetch(
@@ -989,6 +1002,16 @@ async fn run(
             return Ok(());
         }
     };
+    if reply.answer.status == 404 {
+        return gone(session, rule, rule_id, outcome).await;
+    }
+    put_answered(&reply, rule, rule_id, outcome);
+    Ok(())
+}
+
+/// What the `PUT`'s answer makes of the rule: updated (or disabled), a
+/// concurrent modification (`401`), or Datadog's refusal.
+fn put_answered(reply: &Reply, rule: &RuleDeploy, rule_id: &str, outcome: &mut RuleOutcome) {
     let action = format!("PUT {RULES_PATH}/{rule_id}");
     match reply.answer.status {
         200..=299 => {
@@ -998,7 +1021,7 @@ async fn run(
                 } else {
                     "datadog_rule_updated"
                 },
-                rule_id.clone(),
+                rule_id.to_owned(),
             ));
         }
         401 => {
@@ -1013,10 +1036,8 @@ async fn run(
                 .with("detail", api_error(&action, &reply.answer).detail),
             );
         }
-        404 => return gone(session, rule, rule_id, outcome).await,
         _ => outcome.failure = Some(failed(&api_error(&action, &reply.answer))),
     }
-    Ok(())
 }
 
 /// The `PUT` body (`SecurityMonitoringRuleUpdatePayload`): the compiled body

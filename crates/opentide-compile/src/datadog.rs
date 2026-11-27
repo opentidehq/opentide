@@ -297,7 +297,6 @@ fn options(block: &Json) -> Result<Json, CompileError> {
     let detection = field(block, "detection");
     let signal = field(block, "signal");
     let method = method(block);
-    let detection_text = |key: &str| detection.and_then(|detection| text(detection, key));
     let mut out = Object::new();
     out.insert("detectionMethod".into(), detection_method(method).into());
     let window = detection
@@ -329,6 +328,19 @@ fn options(block: &Json) -> Result<Json, CompileError> {
                 .is_some_and(Json::is_true),
         ),
     );
+    method_options(method, detection, &mut out)?;
+    Ok(Json::Object(out))
+}
+
+/// The method's own options (RFC §5.4), each in the unit its API property
+/// takes: `newValueOptions`, `anomalyDetectionOptions` (only what the block
+/// sets: the defaults are unverified) or `impossibleTravelOptions`.
+fn method_options(
+    method: &str,
+    detection: Option<&Json>,
+    out: &mut Object,
+) -> Result<(), CompileError> {
+    let detection_text = |key: &str| detection.and_then(|detection| text(detection, key));
     let day_count = |value: &str, low: i64, key: &str| {
         days(value, low)
             .map(Json::Int)
@@ -405,7 +417,7 @@ fn options(block: &Json) -> Result<Json, CompileError> {
         }
         _ => {}
     }
-    Ok(Json::Object(out))
+    Ok(())
 }
 
 /// Markdown text with Datadog's template braces kept literal: a `{{` in a

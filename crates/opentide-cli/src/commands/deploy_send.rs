@@ -5855,60 +5855,90 @@ impl Sender<'_, '_> {
                 log.finished(result);
             }
             Err(error) if error.scope == DeployScope::Rule => {
-                if let Some(done) = &error.partial {
-                    self.datadog_done(&rule.uuid, &tenant, done);
-                }
-                let failure = &error.failure;
-                match recreate_refusal
-                    .as_ref()
-                    .filter(|refusal| refusal.code == failure.code)
-                {
-                    Some(refusal) => {
-                        self.report_failure(refusal, &rule.uuid, platform, &tenant);
-                        result.fail(&refusal.message);
-                    }
-                    None => {
-                        tracing::error!(
-                            code = failure.code,
-                            error = failure.message.as_str(),
-                            detail = failure.field("detail"),
-                            errors = failure.field("errors"),
-                            uuid = rule.uuid.as_str(),
-                            tenant = tenant.as_str(),
-                            "{}",
-                            failure.code
-                        );
-                        self.rule_error(
-                            &mut result,
-                            &format!("{}: {}", failure.code, failure.message),
-                        );
-                    }
-                }
+                self.datadog_rule_failed(
+                    &mut result,
+                    rule,
+                    &tenant,
+                    &error,
+                    recreate_refusal.as_ref(),
+                );
                 log.finished(result);
             }
             Err(error) => {
-                tracing::error!(
-                    code = error.failure.code,
-                    tenant = tenant.as_str(),
-                    error = error.failure.message.as_str(),
-                    critical = true,
-                    "datadog_tenant_deployment_failed"
-                );
-                if self.before_any_rule(connection, platform, &tenant, log) {
-                    self.unused(platform, &tenant, log, &error.failure.message);
-                    return Ok(true);
-                }
-                self.failed = true;
-                result.fail(&error.failure.message);
-                log.finished(result);
-                if self.interrupted() {
-                    return Err(Raised::new("interrupted").stopping(Stops::Run));
-                }
-                self.stop_tenant(platform, &tenant, log);
-                return Ok(true);
+                return self.datadog_tenant_failed(connection, &tenant, &error, result, log);
             }
         }
         Ok(false)
+    }
+
+    /// A Datadog rule the tenant refused: what the deploy did before the
+    /// failure, then the failure, a refused re-creation as its own.
+    fn datadog_rule_failed(
+        &mut self,
+        result: &mut RuleResult,
+        rule: &opentide_compile::Rule,
+        tenant: &str,
+        error: &DeployError,
+        recreate_refusal: Option<&StateError>,
+    ) {
+        let platform = opentide_compile::datadog::PLATFORM;
+        if let Some(done) = &error.partial {
+            self.datadog_done(&rule.uuid, tenant, done);
+        }
+        let failure = &error.failure;
+        match recreate_refusal.filter(|refusal| refusal.code == failure.code) {
+            Some(refusal) => {
+                self.report_failure(refusal, &rule.uuid, platform, tenant);
+                result.fail(&refusal.message);
+            }
+            None => {
+                tracing::error!(
+                    code = failure.code,
+                    error = failure.message.as_str(),
+                    detail = failure.field("detail"),
+                    errors = failure.field("errors"),
+                    uuid = rule.uuid.as_str(),
+                    tenant,
+                    "{}",
+                    failure.code
+                );
+                self.rule_error(result, &format!("{}: {}", failure.code, failure.message));
+            }
+        }
+    }
+
+    /// A Datadog deploy the tenant failed on: the rule fails, an interrupt
+    /// stops the run, and otherwise the tenant's other rules are not
+    /// attempted (`true`). A failure before the tenant took anything leaves
+    /// the rule `not attempted` too.
+    fn datadog_tenant_failed(
+        &mut self,
+        connection: &Connection,
+        tenant: &str,
+        error: &DeployError,
+        mut result: RuleResult,
+        log: &mut DeployLog<'_>,
+    ) -> Result<bool, Raised> {
+        let platform = opentide_compile::datadog::PLATFORM;
+        tracing::error!(
+            code = error.failure.code,
+            tenant,
+            error = error.failure.message.as_str(),
+            critical = true,
+            "datadog_tenant_deployment_failed"
+        );
+        if self.before_any_rule(connection, platform, tenant, log) {
+            self.unused(platform, tenant, log, &error.failure.message);
+            return Ok(true);
+        }
+        self.failed = true;
+        result.fail(&error.failure.message);
+        log.finished(result);
+        if self.interrupted() {
+            return Err(Raised::new("interrupted").stopping(Stops::Run));
+        }
+        self.stop_tenant(platform, tenant, log);
+        Ok(true)
     }
 
     /// What a Datadog deploy did, failed or not: its warnings, then what was

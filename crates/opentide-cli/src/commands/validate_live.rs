@@ -2286,6 +2286,11 @@ async fn google_secops(
 /// tenant (an alias it lacks) fails with the compiler's reason. A refused
 /// key fails the tenant: the check stops there, and no query counts as
 /// rejected.
+#[expect(
+    clippy::too_many_lines,
+    reason = "one loop over the tenants and their rules, sharing the streak and the stop, as \
+              google_secops's"
+)]
 async fn datadog(
     batches: &[Batch],
     timeout: f64,

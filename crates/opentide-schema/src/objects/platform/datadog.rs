@@ -275,6 +275,11 @@ fn max_duration_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
 
 /// A duration in the conversion: a string, or the number `0` read as `"0"`
 /// (`window: 0`), or null.
+#[expect(
+    clippy::option_option,
+    reason = "a FromNode `with` function's signature: the outer Option is the conversion's \
+              success, the inner the optional field's own value (as `optional_query_text`)"
+)]
 fn duration_text(node: &Node, cx: &mut Context) -> Option<Option<String>> {
     match node.value {
         Value::Null => Some(None),
@@ -833,6 +838,97 @@ fn window_key(
     seconds
 }
 
+/// The findings of the method's own `detection` settings: `learning` in the
+/// unit its method takes, `forget_after` (required with `new_value`), and
+/// anomaly's `bucket` and `tolerance`.
+fn method_option_findings(
+    detection: &Node,
+    at: &[PathSegment],
+    method: &str,
+    takes: &[&str],
+    findings: &mut Vec<Finding>,
+) {
+    if let Some(learning) = field(detection, "learning")
+        && takes.contains(&"learning")
+    {
+        let value = text(Some(learning));
+        let (ok, says) = match method {
+            "new_value" => (
+                value.and_then(|value| days(value, 0)).is_some(),
+                "0d to 30d, in whole days",
+            ),
+            "anomaly" => (
+                value.and_then(anomaly_learning_hours).is_some(),
+                "1h, 6h, 12h, 1d, 2d, 7d or 14d",
+            ),
+            _ => (
+                value.and_then(|value| days(value, 1)).is_some(),
+                "1d to 30d, in whole days",
+            ),
+        };
+        if !ok {
+            findings.push(duration_finding(
+                path(at, "learning"),
+                format!(
+                    "learning under {method} is {says}, not {}",
+                    repr::node(learning)
+                ),
+            ));
+        }
+    }
+    if method == "new_value" {
+        match field(detection, "forget_after") {
+            None => findings.push(Finding::new(
+                "datadog_detection_option",
+                at.to_vec(),
+                "method: new_value needs forget_after: how long a learned value stays known, 1d \
+                 to 30d",
+            )),
+            Some(forget) => {
+                if text(Some(forget))
+                    .and_then(|value| days(value, 1))
+                    .is_none()
+                {
+                    findings.push(duration_finding(
+                        path(at, "forget_after"),
+                        format!(
+                            "forget_after is 1d to 30d, in whole days, not {}",
+                            repr::node(forget)
+                        ),
+                    ));
+                }
+            }
+        }
+    }
+    if method == "anomaly" {
+        if let Some(bucket) = field(detection, "bucket")
+            && text(Some(bucket)).and_then(bucket_seconds).is_none()
+        {
+            findings.push(duration_finding(
+                path(at, "bucket"),
+                format!(
+                    "bucket is 5m, 10m, 15m, 30m, 1h or 3h, not {}",
+                    repr::node(bucket)
+                ),
+            ));
+        }
+        if let Some(tolerance) = field(detection, "tolerance")
+            && !matches!(tolerance.value, Value::Int(value) if (TOLERANCE.0..=TOLERANCE.1).contains(&value))
+        {
+            findings.push(Finding::new(
+                "datadog_detection_option",
+                path(at, "tolerance"),
+                format!(
+                    "tolerance is a whole number, {} to {}, not {}",
+                    TOLERANCE.0,
+                    TOLERANCE.1,
+                    repr::node(tolerance)
+                ),
+            ));
+        }
+    }
+}
+
 fn detection_findings(block: &Node, method: Option<&str>) -> (Vec<Finding>, Option<i64>) {
     let at = vec![key("detection")];
     let mut findings = Vec::new();
@@ -883,85 +979,7 @@ fn detection_findings(block: &Node, method: Option<&str>) -> (Vec<Finding>, Opti
             ));
         }
     }
-    if let Some(learning) = field(detection, "learning")
-        && takes.contains(&"learning")
-    {
-        let value = text(Some(learning));
-        let (ok, says) = match method {
-            "new_value" => (
-                value.and_then(|value| days(value, 0)).is_some(),
-                "0d to 30d, in whole days",
-            ),
-            "anomaly" => (
-                value.and_then(anomaly_learning_hours).is_some(),
-                "1h, 6h, 12h, 1d, 2d, 7d or 14d",
-            ),
-            _ => (
-                value.and_then(|value| days(value, 1)).is_some(),
-                "1d to 30d, in whole days",
-            ),
-        };
-        if !ok {
-            findings.push(duration_finding(
-                path(&at, "learning"),
-                format!(
-                    "learning under {method} is {says}, not {}",
-                    repr::node(learning)
-                ),
-            ));
-        }
-    }
-    if method == "new_value" {
-        match field(detection, "forget_after") {
-            None => findings.push(Finding::new(
-                "datadog_detection_option",
-                at.clone(),
-                "method: new_value needs forget_after: how long a learned value stays known, 1d \
-                 to 30d",
-            )),
-            Some(forget) => {
-                if text(Some(forget))
-                    .and_then(|value| days(value, 1))
-                    .is_none()
-                {
-                    findings.push(duration_finding(
-                        path(&at, "forget_after"),
-                        format!(
-                            "forget_after is 1d to 30d, in whole days, not {}",
-                            repr::node(forget)
-                        ),
-                    ));
-                }
-            }
-        }
-    }
-    if method == "anomaly" {
-        if let Some(bucket) = field(detection, "bucket")
-            && text(Some(bucket)).and_then(bucket_seconds).is_none()
-        {
-            findings.push(duration_finding(
-                path(&at, "bucket"),
-                format!(
-                    "bucket is 5m, 10m, 15m, 30m, 1h or 3h, not {}",
-                    repr::node(bucket)
-                ),
-            ));
-        }
-        if let Some(tolerance) = field(detection, "tolerance")
-            && !matches!(tolerance.value, Value::Int(value) if (TOLERANCE.0..=TOLERANCE.1).contains(&value))
-        {
-            findings.push(Finding::new(
-                "datadog_detection_option",
-                path(&at, "tolerance"),
-                format!(
-                    "tolerance is a whole number, {} to {}, not {}",
-                    TOLERANCE.0,
-                    TOLERANCE.1,
-                    repr::node(tolerance)
-                ),
-            ));
-        }
-    }
+    method_option_findings(detection, &at, method, takes, &mut findings);
     (findings, window)
 }
 

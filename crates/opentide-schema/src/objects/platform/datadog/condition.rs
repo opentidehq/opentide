@@ -184,6 +184,83 @@ fn tokenize(text: &str) -> Result<Vec<Token<'_>>, ConditionError> {
     Ok(tokens)
 }
 
+/// The comparison whose query name is the token at `index`: the name, then
+/// a comparison operator, then a number.
+fn comparison(tokens: &[Token<'_>], index: usize) -> Result<Comparison, ConditionError> {
+    let Some(name) = tokens.get(index) else {
+        return Err(error("a comparison is missing".to_owned(), 0, 0));
+    };
+    match name.kind {
+        Kind::Word if query_name(name.text) => {}
+        Kind::Word => {
+            return Err(error(
+                format!("{} is not a query name: [a-z][a-z0-9_]*", quote(name.text)),
+                name.start,
+                name.end(),
+            ));
+        }
+        Kind::Number => {
+            return Err(error(
+                "the query name comes first: Datadog allows `a > 3`, not `3 < a`".to_owned(),
+                name.start,
+                name.end(),
+            ));
+        }
+        Kind::Compare | Kind::Logic => {
+            return Err(error(
+                format!("{} where a query name belongs", quote(name.text)),
+                name.start,
+                name.end(),
+            ));
+        }
+    }
+    let Some(op) = tokens
+        .get(index + 1)
+        .filter(|token| token.kind == Kind::Compare)
+    else {
+        let (start, end) = tokens
+            .get(index + 1)
+            .map_or((name.end(), name.end()), |token| (token.start, token.end()));
+        return Err(error(
+            format!(
+                "{} is compared with a number: >, >=, < or <=",
+                quote(name.text)
+            ),
+            start,
+            end,
+        ));
+    };
+    let Some(value) = tokens
+        .get(index + 2)
+        .filter(|token| token.kind == Kind::Number && number(token.text))
+    else {
+        let (start, end) = tokens
+            .get(index + 2)
+            .map_or((op.end(), op.end()), |token| (token.start, token.end()));
+        return Err(error(
+            format!(
+                "{} {} takes a number: digits, with an optional fraction (10, 0.995)",
+                name.text, op.text
+            ),
+            start,
+            end,
+        ));
+    };
+    let op_text = OPERATORS
+        .iter()
+        .find(|known| **known == op.text)
+        .copied()
+        .unwrap_or(">");
+    Ok(Comparison {
+        query: name.text.to_owned(),
+        op: op_text,
+        number: value.text.to_owned(),
+        value: value.text.parse().unwrap_or(f64::NAN),
+        start: name.start,
+        end: value.end(),
+    })
+}
+
 /// Parses a condition (RFC §5.8). A blank condition, a number before the
 /// query name (`3 < a`), a dangling operator and an unknown character are
 /// errors that name where they are.
@@ -196,83 +273,15 @@ pub fn parse(text: &str) -> Result<Condition, ConditionError> {
     let mut operators = Vec::new();
     let mut index = 0;
     loop {
-        let Some(name) = tokens.get(index) else {
+        if tokens.get(index).is_none() {
             let end = text.len();
             return Err(error(
                 "the condition ends after an operator: a comparison follows it".to_owned(),
                 end,
                 end,
             ));
-        };
-        match name.kind {
-            Kind::Word if query_name(name.text) => {}
-            Kind::Word => {
-                return Err(error(
-                    format!("{} is not a query name: [a-z][a-z0-9_]*", quote(name.text)),
-                    name.start,
-                    name.end(),
-                ));
-            }
-            Kind::Number => {
-                return Err(error(
-                    "the query name comes first: Datadog allows `a > 3`, not `3 < a`".to_owned(),
-                    name.start,
-                    name.end(),
-                ));
-            }
-            Kind::Compare | Kind::Logic => {
-                return Err(error(
-                    format!("{} where a query name belongs", quote(name.text)),
-                    name.start,
-                    name.end(),
-                ));
-            }
         }
-        let Some(op) = tokens
-            .get(index + 1)
-            .filter(|token| token.kind == Kind::Compare)
-        else {
-            let (start, end) = tokens
-                .get(index + 1)
-                .map_or((name.end(), name.end()), |token| (token.start, token.end()));
-            return Err(error(
-                format!(
-                    "{} is compared with a number: >, >=, < or <=",
-                    quote(name.text)
-                ),
-                start,
-                end,
-            ));
-        };
-        let Some(value) = tokens
-            .get(index + 2)
-            .filter(|token| token.kind == Kind::Number && number(token.text))
-        else {
-            let (start, end) = tokens
-                .get(index + 2)
-                .map_or((op.end(), op.end()), |token| (token.start, token.end()));
-            return Err(error(
-                format!(
-                    "{} {} takes a number: digits, with an optional fraction (10, 0.995)",
-                    name.text, op.text
-                ),
-                start,
-                end,
-            ));
-        };
-        let op_text = OPERATORS
-            .iter()
-            .find(|known| **known == op.text)
-            .copied()
-            .unwrap_or(">");
-        comparisons.push(Comparison {
-            query: name.text.to_owned(),
-            op: op_text,
-            number: value.text.to_owned(),
-            value: value.text.parse().unwrap_or(f64::NAN),
-            start: name.start,
-            end: value.end(),
-        });
+        comparisons.push(comparison(&tokens, index)?);
         match tokens.get(index + 3) {
             None => break,
             Some(token) if token.kind == Kind::Logic => {
