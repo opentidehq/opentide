@@ -7,10 +7,10 @@ description: "A written rule for the engine's query languages: a syntax gets its
 
 | | |
 |---|---|
-| Status | Proposed |
-| Date | 2026-11-26 |
-| Decision | None yet: the owner's call on this ADR. It was raised by the [Datadog Cloud SIEM RFC](../rfc-datadog-cloud-siem.md), §6.2 ([#1898](https://github.com/opentidehq/opentide/pull/1898)) |
-| Issues | None yet; the follow-ups in [Migration order](#7-migration-order) each get one |
+| Status | Accepted |
+| Date | 2026-11-26, accepted 2026-11-27 |
+| Decision | Accepted by the owner, with option B of §6: `LanguageId` becomes `#[non_exhaustive]` in the next major. That major is already forced by `LanguageId::Datadog` (#1902). Raised by the [Datadog Cloud SIEM RFC](../rfc-datadog-cloud-siem.md), §6.2 ([#1898](https://github.com/opentidehq/opentide/pull/1898)). Two questions stay open: the `.cql` file profile ([#1912](https://github.com/opentidehq/opentide/issues/1912)) and an editor's platform for raw files ([#1917](https://github.com/opentidehq/opentide/issues/1917)) |
+| Issues | Tracked in [#1910](https://github.com/opentidehq/opentide/issues/1910): step 1 [#1912](https://github.com/opentidehq/opentide/issues/1912), step 2 [#1913](https://github.com/opentidehq/opentide/issues/1913), step 3 [#1914](https://github.com/opentidehq/opentide/issues/1914) and [#1915](https://github.com/opentidehq/opentide/issues/1915), step 4 [#1911](https://github.com/opentidehq/opentide/issues/1911); step 5 is Datadog's phase 2, [#1920](https://github.com/opentidehq/opentide/issues/1920) |
 
 ## Context
 
