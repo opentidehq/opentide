@@ -253,8 +253,6 @@ impl CarbonBlack {
         let org = Org::of(cx)?;
         let watchlists_path = format!("/threathunter/watchlistmgr/v3/orgs/{}/watchlists", org.key);
         let reports_path = format!("/threathunter/watchlistmgr/v3/orgs/{}/reports", org.key);
-        // `watchlist_list or []` counts the watchlists, then the loop reads them.
-        Self::get(cx, &org, &watchlists_path).await?;
         let listed = Self::get(cx, &org, &watchlists_path).await?;
         let mut watchlist: Option<Map<String, Value>> = None;
         for item in listed
@@ -336,11 +334,26 @@ impl CarbonBlack {
                 Ok(value) => value.unwrap_or(Value::Null),
                 Err(error) => return Err(Self::refused(cx, &error)),
             };
-            let id = created
+            // A report without an id cannot be added to the watchlist, and an
+            // empty one would be (#1932): the report exists, unwatched.
+            let Some(id) = created
                 .get("id")
                 .and_then(Value::as_str)
-                .unwrap_or_default()
-                .to_owned();
+                .filter(|id| !id.trim().is_empty())
+                .map(str::to_owned)
+            else {
+                return Err(ConnectorError::refused(
+                    PLATFORM,
+                    &cx.tenant.label.tenant,
+                    format!(
+                        "Carbon Black created the report {:?} but its answer carries no id, so \
+                         it was not added to the watchlist {}: delete the report in the console \
+                         before retriggering deployment.",
+                        plan.report, plan.watchlist
+                    ),
+                    None,
+                ));
+            };
             let mut ids: Vec<Value> = report_ids.into_iter().map(Value::String).collect();
             ids.push(Value::String(id));
             watchlist.insert("report_ids".into(), Value::Array(ids));

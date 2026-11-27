@@ -110,11 +110,7 @@ pub struct Context<'a> {
 
 /// `--queries`'s name.
 pub fn queries_name(queries: QueriesMode) -> &'static str {
-    match queries {
-        QueriesMode::Error => "error",
-        QueriesMode::Warn => "warn",
-        QueriesMode::Off => "off",
-    }
+    queries.as_str()
 }
 
 /// `--queries MODE` when not the default, so a rerun keeps it.
@@ -764,15 +760,10 @@ mod tests {
     use opentide_workspace::validate::Summary;
 
     fn summary() -> Summary {
-        Summary {
-            objects: 3,
-            errors: 0,
-            warnings: 0,
-            files: 0,
-            warning_files: 0,
-            queries: Some(1),
-            fixable: 0,
-        }
+        let mut summary = Summary::default();
+        summary.objects = 3;
+        summary.queries = Some(1);
+        summary
     }
 
     #[test]

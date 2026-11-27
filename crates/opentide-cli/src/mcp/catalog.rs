@@ -18,8 +18,9 @@ use crate::json::Json;
 /// The object families the catalogue tools read, in the order they search them.
 pub const FAMILIES: [&str; 3] = ["rule", "threat", "objective"];
 
-/// The workspace `context` places, opened afresh: the tools answer for the
-/// files as they are now.
+/// The workspace `context` places, as its files are now: under a call
+/// ([`super::tools::call`]) the process's warm one, brought up to date with
+/// what changed on disk since the last call.
 pub fn workspace(context: &Context<'_>) -> Result<Workspace, String> {
     let cwd = context
         .cwd
