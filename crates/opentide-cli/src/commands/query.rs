@@ -772,6 +772,19 @@ fn run_on_tenant(
             ));
             outcome.detail = Some("narrow the window or raise --timeout".into());
         }
+        Err(ConnectorError::Timeout {
+            address,
+            seconds,
+            deadline: true,
+            ..
+        }) => {
+            outcome.error = Some(format!(
+                "{platform} tenant {:?} did not finish its answer within {seconds}s (the answer \
+                 from {address} kept coming)",
+                configured.name,
+            ));
+            outcome.detail = Some("narrow the window or raise --timeout".into());
+        }
         Err(ConnectorError::Timeout { address, .. }) => {
             outcome.error = Some(format!(
                 "{platform} tenant {:?} did not answer the query within {}s (no answer from \

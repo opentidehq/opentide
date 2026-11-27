@@ -405,10 +405,16 @@ pub enum TransportFailure {
         /// What failed, without the URL.
         reason: String,
     },
-    /// Connected, then no answer (or no more of it) within the read limit,
-    /// or the whole exchange ran past its deadline
-    /// (`ReqwestTransport`'s [`DEADLINE_READ_TIMEOUTS`]).
+    /// Connected, then no answer (or no more of it) within the read limit.
     Timeout,
+    /// The whole exchange ran past its deadline
+    /// (`ReqwestTransport`'s [`DEADLINE_READ_TIMEOUTS`]): the answer kept
+    /// coming, but did not finish in time. Reported as a timeout, with the
+    /// deadline's length.
+    Deadline {
+        /// How long the exchange was given.
+        after: Duration,
+    },
     /// The tenant's certificate was refused during the TLS handshake (the
     /// tenant's TLS settings do not trust it): the request was never sent.
     /// Never sent again: it would fail the same way.
@@ -601,6 +607,9 @@ mod certificate_tests {
 /// never stops) fails the request with [`TransportFailure::Answer`] instead
 /// of filling the memory (#1936). A `Content-Length` past it fails before
 /// the body is read.
+///
+/// `ReqwestTransport` holds to it; the transport `opentide serve` installs
+/// for the WASI build (`opentide/fetch`) does not yet (#1999).
 pub const MAX_BODY_BYTES: usize = 64 * 1024 * 1024;
 
 /// How many read timeouts one exchange may take in all, after its connect
@@ -608,7 +617,7 @@ pub const MAX_BODY_BYTES: usize = 64 * 1024 * 1024;
 /// timeouts (the request's own timeout when it is longer), 10 minutes with
 /// the default 2-minute timeout. Each read must still bring data within one
 /// read timeout; the deadline stops an answer that trickles in forever
-/// (#1936), with [`TransportFailure::Timeout`].
+/// (#1936), with [`TransportFailure::Deadline`].
 pub const DEADLINE_READ_TIMEOUTS: u32 = 4;
 
 /// The native transport: reqwest on rustls.
@@ -712,10 +721,17 @@ impl ReqwestTransport {
             .saturating_add(read.saturating_mul(DEADLINE_READ_TIMEOUTS))
     }
 
-    /// Why a body of *size* bytes is not read.
+    /// Why a body of *size* bytes is not read: larger than *max_body*,
+    /// written in MiB when it is a whole number of them.
     fn too_large(size: impl fmt::Display, max_body: usize) -> TransportFailure {
+        const MIB: usize = 1024 * 1024;
+        let max = if max_body >= MIB && max_body.is_multiple_of(MIB) {
+            format!("{} MiB", max_body / MIB)
+        } else {
+            format!("{max_body} bytes")
+        };
         TransportFailure::Answer {
-            reason: format!("the answer's body ({size} bytes) is larger than {max_body} bytes"),
+            reason: format!("the answer's body ({size} bytes) is larger than {max}"),
         }
     }
 
@@ -740,11 +756,13 @@ impl ReqwestTransport {
     }
 
     /// The body of *response*: each read within `read_timeout`, all of it
-    /// by *deadline*, at most `max_body` bytes.
+    /// by *deadline* (*limit* after the exchange started), at most
+    /// `max_body` bytes.
     async fn body(
         &self,
         mut response: reqwest::Response,
         deadline: tokio::time::Instant,
+        limit: Duration,
     ) -> Result<Vec<u8>, TransportFailure> {
         if let Some(length) = response.content_length()
             && usize::try_from(length).map_or(true, |length| length > self.max_body)
@@ -764,7 +782,8 @@ impl ReqwestTransport {
                 }
                 Ok(Ok(Ok(None))) => return Ok(body),
                 Ok(Ok(Err(failure))) => return Err(Self::failure(failure)),
-                Ok(Err(_)) | Err(_) => return Err(TransportFailure::Timeout),
+                Ok(Err(_)) => return Err(TransportFailure::Timeout),
+                Err(_) => return Err(TransportFailure::Deadline { after: limit }),
             }
         }
     }
@@ -782,20 +801,21 @@ impl Transport for ReqwestTransport {
             let now = tokio::time::Instant::now();
             // A timeout too long for the clock has no deadline but the far
             // future (tokio's own, 30 years).
+            let limit = self.deadline(&request);
             let deadline = now
-                .checked_add(self.deadline(&request))
+                .checked_add(limit)
                 .unwrap_or_else(|| now + Duration::from_hours(24 * 365 * 30));
             let exchange = async {
                 let response =
                     tokio::time::timeout_at(deadline, self.client.execute(request.into_reqwest()))
                         .await
-                        .map_err(|_| TransportFailure::Timeout)?
+                        .map_err(|_| TransportFailure::Deadline { after: limit })?
                         .map_err(Self::failure)?;
                 let elapsed = started.elapsed();
                 let status = response.status();
                 let headers = response.headers().clone();
                 let url = response.url().clone();
-                let body = self.body(response, deadline).await;
+                let body = self.body(response, deadline, limit).await;
                 let reading = started.elapsed().saturating_sub(elapsed);
                 Ok(Response::new(
                     status,
@@ -909,6 +929,13 @@ mod tests {
             reason.ends_with(" bytes) is larger than 10 bytes"),
             "{reason}"
         );
+        // The real cap reads in MiB.
+        assert_eq!(
+            ReqwestTransport::too_large(67_108_865, MAX_BODY_BYTES),
+            TransportFailure::Answer {
+                reason: "the answer's body (67108865 bytes) is larger than 64 MiB".into()
+            }
+        );
     }
 
     /// An answer that sends a byte before each read timeout runs out, and
@@ -929,9 +956,11 @@ mod tests {
         let body =
             fetch(&trickle, Duration::from_millis(200), MAX_BODY_BYTES).map(Response::into_body);
         let took = started.elapsed();
-        assert!(
-            matches!(body, Ok(Err(TransportFailure::Timeout))),
-            "{body:?}"
+        assert_eq!(
+            body,
+            Ok(Err(TransportFailure::Deadline {
+                after: Duration::from_secs(1)
+            })),
         );
         // 200 ms + 4 × 200 ms = 1 s, not the minute of trickling.
         assert!(took >= Duration::from_millis(900), "{took:?}");

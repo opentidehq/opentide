@@ -5883,6 +5883,7 @@ mod tests {
                 tenant: t.clone(),
                 address: String::new(),
                 seconds: 1,
+                deadline: false,
             },
             ConnectorError::Answer {
                 platform: p.clone(),

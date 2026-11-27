@@ -700,6 +700,7 @@ mod tests {
                     tenant: tenant.clone(),
                     address: "https://splunk.example:8089".into(),
                     seconds: 5,
+                    deadline: false,
                 },
                 "tenant_timeout",
             ),

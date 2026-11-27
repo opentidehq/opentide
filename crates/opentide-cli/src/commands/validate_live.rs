@@ -1565,9 +1565,12 @@ impl Streak {
                 self.timed_out(message, false).map_err(Early::Unreachable)
             }
             Err(ConnectorError::Timeout {
-                address, seconds, ..
+                address,
+                seconds,
+                deadline,
+                ..
             }) => self
-                .timed_out(&read_timeout_text(address, *seconds), true)
+                .timed_out(&read_timeout_text(address, *seconds, *deadline), true)
                 .map_err(Early::Unreachable),
             Err(error) => Err(early(platform, tenant, &self.host, error)),
         }
@@ -1829,9 +1832,14 @@ fn connect(
     Ok(Connection { tenant, http })
 }
 
-/// A read timeout: the request was sent to *address* and got no answer.
-fn read_timeout_text(address: &str, seconds: u64) -> String {
-    format!("no answer from {address} within {seconds}s")
+/// A read timeout: the request was sent to *address* and got no answer;
+/// or, past the request's overall *deadline*, an answer that did not finish.
+fn read_timeout_text(address: &str, seconds: u64, deadline: bool) -> String {
+    if deadline {
+        format!("the answer from {address} did not finish within {seconds}s")
+    } else {
+        format!("no answer from {address} within {seconds}s")
+    }
 }
 
 /// Runs the checks on every batch on the process's runtime: here, or on a
@@ -2261,8 +2269,11 @@ impl Asked<'_> {
                 rejected(platform, rule, tenant, label.clone(), &refused.text())
             }
             Err(ConnectorError::Timeout {
-                address, seconds, ..
-            }) => timed_out(&read_timeout_text(&address, seconds)),
+                address,
+                seconds,
+                deadline,
+                ..
+            }) => timed_out(&read_timeout_text(&address, seconds, deadline)),
             // [`Streak::step`] stopped the check on any other failure.
             Err(error) => return Err(early(platform, tenant, &streak.host, &error)),
         })
@@ -2473,9 +2484,12 @@ async fn google_secops(
                     break;
                 }
                 Err(ConnectorError::Timeout {
-                    address, seconds, ..
+                    address,
+                    seconds,
+                    deadline,
+                    ..
                 }) => {
-                    let error = read_timeout_text(&address, seconds);
+                    let error = read_timeout_text(&address, seconds, deadline);
                     streak.timed_out(&error, true).map_err(Early::Unreachable)?;
                     report.checks.push(timed_out(
                         platform,
@@ -2951,9 +2965,12 @@ async fn elastic(
                     );
                 }
                 Err(RuleFailure::Connector(ConnectorError::Timeout {
-                    address, seconds, ..
+                    address,
+                    seconds,
+                    deadline,
+                    ..
                 })) => {
-                    let error = read_timeout_text(&address, seconds);
+                    let error = read_timeout_text(&address, seconds, deadline);
                     streak.timed_out(&error, true).map_err(Early::Unreachable)?;
                     report.checks.push(timed_out(
                         "elastic",
@@ -3268,8 +3285,12 @@ mod tests {
         );
         assert_eq!(tenant_host("google_secops", &tenant(&[])), "");
         assert_eq!(
-            read_timeout_text("https://s1.invalid", 5),
+            read_timeout_text("https://s1.invalid", 5, false),
             "no answer from https://s1.invalid within 5s"
+        );
+        assert_eq!(
+            read_timeout_text("https://s1.invalid", 600, true),
+            "the answer from https://s1.invalid did not finish within 600s"
         );
         assert_eq!(seconds(1e300), Duration::MAX);
         assert_eq!(seconds(2.5), Duration::from_millis(2500));
