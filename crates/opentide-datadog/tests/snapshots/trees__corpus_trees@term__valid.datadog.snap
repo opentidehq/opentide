@@ -1,0 +1,21 @@
+---
+source: crates/opentide-datadog/tests/trees.rs
+expression: "debug_tree(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/datadog/term__valid.datadog
+---
+QUERY@0..21
+  AND_EXPR@0..21
+    TERM@0..4
+      WORD@0..3 "web"
+      STAR@3..4 "*"
+    WHITESPACE@4..5 " "
+    TERM@5..8
+      WORD@5..6 "a"
+      QUESTION@6..7 "?"
+      WORD@7..8 "b"
+    WHITESPACE@8..9 " "
+    TERM@9..21
+      WORD@9..16 "waiting"
+      ESCAPE@16..18 "\\ "
+      WORD@18..20 "un"
+      STAR@20..21 "*"

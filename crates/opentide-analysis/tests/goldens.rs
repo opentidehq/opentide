@@ -170,6 +170,16 @@ fn falco_golden() {
 }
 
 #[test]
+fn datadog_golden() {
+    exact_golden(
+        "datadog",
+        "search",
+        LanguageId::Datadog,
+        "source:okta @evt.outcome:FAILURE -@usr.email:*@example.com (@http.status_code:[400 TO 499] OR @duration:>=100ms)\nCIDR(@network.client.ip, 10.0.0.0/8, fc00::/7) \"brute force\" waiting\\ un* #calc:>1",
+    );
+}
+
+#[test]
 fn exabeam_golden() {
     exact_golden(
         "exabeam",

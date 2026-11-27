@@ -20,6 +20,7 @@ fn spelling(language: LanguageId) -> &'static str {
         LanguageId::Yara => "YARA",
         LanguageId::Exabeam => "Exabeam",
         LanguageId::Yaral => "YARA-L",
+        LanguageId::Datadog => "Datadog",
         LanguageId::TideYaml => "Tide YAML",
         LanguageId::Config => "configuration",
     }

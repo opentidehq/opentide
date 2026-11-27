@@ -8,9 +8,37 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Eac
 
 ### Upgrade
 
-- If you deploy to Microsoft Defender, before the next deploy, delete in the Defender portal every custom detection an earlier opentide release created (1.0.0's bare-uuid rules, 0.x's), or rename both its name and its alert title. Graph refuses a new rule while another holds either, even a disabled one.
-- If you deploy to Microsoft Defender, run `opentide validate`: it now reports each `registry_values` mapping without `key` as `microsoft_defender_entity_identifier`.
-- Add `key` to each mapping it reports, set to the column that holds the registry key (`RegistryKey`), and have the query return that column.
+1. If CI runs `opentide lint --strict` on Microsoft Defender rules (`opentide setup ci` generates it), it now fails on three new warnings. To keep the previous result while you fix the rules, set each to `"info"` under `[queries.codes]` in `.opentide/configurations/lint.toml`: `microsoft_defender_custom_details_limit`, `microsoft_defender_placeholder_limit` and `microsoft_defender_nrt_query`.
+
+### Added
+
+- **Defender rules are checked against Microsoft's documented limits** ([#1890](https://github.com/opentidehq/opentide/issues/1890)). Each is a warning, so the rule validates and deploys. `validate --strict` reports the first two without failing; `lint --strict` fails on all three.
+  - `microsoft_defender_custom_details_limit`: more than 20 custom details, or names past 4 KB, beyond which Defender drops them all from the alert
+  - `microsoft_defender_placeholder_limit`: more than three `{{Column}}` columns in the alert title or description
+  - `microsoft_defender_nrt_query`, reported by `lint` and the editor, not `validate`: a `frequency: NRT` query that reads two tables or one off the NRT list, joins, unions, uses `externaldata` or has a comment
+- **Datadog search syntax in the editor.** `opentide lsp start` checks, highlights, hovers and completes `.datadog` files: the log search syntax of Datadog Cloud SIEM detection rules, with 16 `datadog_*` codes (`opentide explain datadog_mixed_boolean`) and Datadog's reserved and standard attributes. `opentide validate` and `opentide validate query` do not take `.datadog` files yet: the `datadog` platform comes next.
+
+### Fixed
+
+- **`deploy` keeps a connector's own failure code in the rule's row.** A failure a connector reports under a code of its own read as its message alone; the row's `error` now starts with the code (`code: message`), as Microsoft Defender's, Bitdefender's and Google SecOps' rows already did ([#1894](https://github.com/opentidehq/opentide/issues/1894)). The rows that change:
+  - Splunk: `splunk_renamed_search_not_deleted`, when a saved search an earlier name of the rule left could not be deleted
+  - HarfangLab: `harfanglab_request_invalid`
+  - SentinelOne: a refusal under its own code (`sentinel_one_rule_invalid: could not create the rule on tenant …`, `sentinel_one_rule_not_found`, `sentinel_one_unauthorized`, `sentinel_one_request_failed`), and the run's `error` that quotes it
+  - a `--prune` retirement on any platform; when it stops the tenant, the run's `error` (`Deployment to <platform> failed on tenant <tenant>: <code>: …`) carries the code too
+- **`validate` fails its `schema` check on a platform block's constraint codes.** A run whose only errors were codes such as `microsoft_defender_severity`, `graylog_priority` or `exabeam_name_duplicate` reported `checks.schema.status: "passed"` beside `ok: false`. Every code a platform model reports under its own name, and `exabeam_name_duplicate`, now fail the check ([#1893](https://github.com/opentidehq/opentide/issues/1893)).
+
+## [1.1.0] — 2026-11-26
+
+Microsoft Defender deploys work for every rule, and `validate` catches Defender blocks that would fail at deploy. Its breaking changes correct 1.0.0 defects.
+
+### Upgrade
+
+1. If you deploy to Microsoft Defender, before the next deploy, delete in the Defender portal every custom detection an earlier opentide release created (1.0.0's bare-uuid rules, 0.x's), or rename both its name and its alert title. Graph refuses a new rule while another holds either, even a disabled one.
+2. If you deploy to Microsoft Defender, run `opentide validate`: it now reports each `registry_values` mapping without `key` as `microsoft_defender_entity_identifier`.
+3. Add `key` to each mapping it reports, set to the column that holds the registry key (`RegistryKey`), and have the query return that column.
+4. Fix each `microsoft_defender_column_not_in_output` and `microsoft_defender_required_columns` the same run reports: correct the column the block names, or add it to the query's final `project`.
+5. If you deploy to Microsoft Defender, run `opentide lint --verbose --check queries` and end each query it reports as `microsoft_defender_unprojected_output` with the `| project` it suggests.
+6. If your CI runs `opentide lint --strict` (the pipeline `opentide setup ci` generates does), fix each `microsoft_defender_impacted_asset_identifier` and `microsoft_defender_column_type` it reports: `validate --strict` passes them, `lint --strict` fails on any warning. To keep the previous result instead, make them notes under `[queries.codes]` in `.opentide/configurations/lint.toml` (`microsoft_defender_column_type = "info"`).
 
 ### Breaking
 
@@ -18,11 +46,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Eac
   - Deploy, disable, delete, `--prune` and the dry run's `api_request` URL use the new id
   - The SDKs' Defender `deploy(rule_id)` always sends `opentide-<uuid>`
   - `generate extract defender` writes one file per uuid, preferring the `opentide-` rule
-- **`validate` refuses a Defender registry value without its `key`.** 1.0.0 passed a `registry_values` mapping that sets `value_name` alone, which Graph refuses with "Entity mapping for type 'RegistryValue' does not include a required identifier", so the rule failed at deploy. `validate` and the editor now report it as an error, `microsoft_defender_entity_identifier`, on `entities.registry_values.<N>` ([#1884](https://github.com/opentidehq/opentide/issues/1884)).
+- **`validate` refuses a Defender registry value without its `key`** ([#1884](https://github.com/opentidehq/opentide/issues/1884)). 1.0.0 passed a `registry_values` mapping with `value_name` alone, which Graph refuses at deploy: "Entity mapping for type 'RegistryValue' does not include a required identifier". `validate` and the editor report it as the error `microsoft_defender_entity_identifier`, on `entities.registry_values.<N>`.
+- **`validate` fails a Defender block whose columns its query does not return** ([#1885](https://github.com/opentidehq/opentide/issues/1885)). opentide works out a `microsoft_defender` query's output offline and reports what Defender would refuse or leave unmapped at deploy. Nothing is reported when it cannot tell what the query returns.
+  - `microsoft_defender_column_not_in_output`: an entity, action, custom detail or alert `{{Column}}` the output lacks, with the column it most likely means
+  - `microsoft_defender_required_columns`: the output lacks `Timestamp`, `DeviceId`, `ReportId` or another column a custom detection needs for the tables it reads
 
 ### Added
 
-- **`validate` warns when a Defender device or user has no strong identifier.** A `hosts` or `accounts` mapping with neither a column Defender maps to an impacted asset (`device_id`, `name`; `aad_user_id`, `sid`, `upn`) nor a strong combination such as an account's `name` with `nt_domain` gets `microsoft_defender_impacted_asset_identifier`, in `validate`, `lint` and the editor. `validate --strict` reports it without failing ([#1884](https://github.com/opentidehq/opentide/issues/1884)).
+- **`validate` warns when a Defender device or user has no strong identifier** ([#1884](https://github.com/opentidehq/opentide/issues/1884)). A `hosts` or `accounts` mapping without a column Defender maps to an impacted asset (`device_id`, `name`; `aad_user_id`, `sid`, `upn`), or a strong combination such as `name` with `nt_domain`, gets `microsoft_defender_impacted_asset_identifier`, in `validate`, `lint` and the editor. `validate --strict` reports it without failing.
+- **`lint` flags Defender queries that return columns the rule does not use** ([#1885](https://github.com/opentidehq/opentide/issues/1885)). Defender derives entity mappings of its own from extra columns: the note `microsoft_defender_unprojected_output` suggests the `| project` to end the query with. The warning `microsoft_defender_column_type` reports an entity mapped from a `dynamic`, `datetime`, `bool` or `timespan` column.
+- **Editor quick fixes for Defender columns** ([#1885](https://github.com/opentidehq/opentide/issues/1885)). The language server replaces a misspelt column with the one the query returns, and appends the suggested `| project` after the query's last operator.
+
+### Fixed
+
+- **Defender queries no longer offer Log Analytics columns** ([#1885](https://github.com/opentidehq/opentide/issues/1885)). Completion and hover on a `microsoft_defender` query leave out `TimeGenerated`, `TenantId`, `Type`, `_BilledSize` and the other columns of a table's Log Analytics copy, which advanced hunting does not have. `Timestamp` stays.
 
 ## [1.0.0] — 2026-11-25
 
@@ -2511,7 +2548,8 @@ export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 opentide validate --strict
 ```
 
-[Unreleased]: https://github.com/opentidehq/opentide/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/opentidehq/opentide/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/opentidehq/opentide/releases/tag/v1.1.0
 [1.0.0]: https://github.com/opentidehq/opentide/releases/tag/v1.0.0
 [0.28.1]: https://github.com/opentidehq/opentide/releases/tag/v0.28.1
 [0.28.0]: https://github.com/opentidehq/opentide/releases/tag/v0.28.0

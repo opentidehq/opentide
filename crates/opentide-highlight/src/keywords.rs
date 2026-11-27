@@ -62,6 +62,7 @@ pub type Keywords = &'static [(&'static str, Capture)];
 
 /// The table of each language, one file each.
 mod cql;
+mod datadog;
 mod eql;
 mod esql;
 mod exabeam;
@@ -89,6 +90,7 @@ pub const fn keywords(language: LanguageId) -> Option<Keywords> {
         LanguageId::Yara => yara::KEYWORDS,
         LanguageId::Exabeam => exabeam::KEYWORDS,
         LanguageId::Yaral => yaral::KEYWORDS,
+        LanguageId::Datadog => datadog::KEYWORDS,
         // Not query languages: no keywords of their own.
         LanguageId::TideYaml | LanguageId::Config => None,
     }
@@ -121,7 +123,7 @@ mod tests {
     use super::*;
     use crate::{HighlightSpec, generate_tm_language, generate_tm_language_from};
 
-    const ALL: [LanguageId; 13] = [
+    const ALL: [LanguageId; 14] = [
         LanguageId::Kql,
         LanguageId::Spl,
         LanguageId::TideYaml,
@@ -135,6 +137,7 @@ mod tests {
         LanguageId::Yara,
         LanguageId::Exabeam,
         LanguageId::Yaral,
+        LanguageId::Datadog,
     ];
 
     #[test]

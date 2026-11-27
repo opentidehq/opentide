@@ -40,7 +40,7 @@ const GROUPS: &[(&str, &[&str], usize)] = &[
         27,
     ),
     ("explain", &["explain"], 7),
-    ("validate", &["validate"], 74),
+    ("validate", &["validate"], 76),
     // The read-only reports, and the protocol commands' help and refusals.
     (
         "reports_and_protocols",
@@ -54,7 +54,7 @@ const GROUPS: &[(&str, &[&str], usize)] = &[
             "lsp.start",
             "mcp.start",
         ],
-        73,
+        75,
     ),
     (
         "generate",

@@ -1,0 +1,19 @@
+---
+source: crates/opentide-datadog/tests/trees.rs
+expression: "debug_tree(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/datadog/range_bound__invalid.datadog
+---
+QUERY@0..27
+  FIELD_CLAUSE@0..27
+    ATTRIBUTE@0..17
+      WORD@0..17 "@http.status_code"
+    COLON@17..18 ":"
+    RANGE@18..27
+      L_BRACK@18..19 "["
+      RANGE_BOUND@19..22
+        NUMBER@19..22 "400"
+      WHITESPACE@22..23 " "
+      TO_KW@23..25 "TO"
+      WHITESPACE@25..26 " "
+      R_BRACK@26..27 "]"
+25..26: expected the range's upper bound (expected R_BRACK, R_BRACE)

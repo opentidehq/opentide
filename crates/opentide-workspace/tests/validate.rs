@@ -466,6 +466,57 @@ mod validate {
         );
     }
 
+    /// #1890: the limits Microsoft's custom detection docs set on an alert
+    /// are warnings `--strict` reports without failing until a tenant
+    /// check says what Graph does past them.
+    #[test]
+    fn defender_documented_limits_warn_without_failing_strict() {
+        let fs = workspace();
+        let details = (1..=21)
+            .map(|n| format!("        Detail{n}: Column{n}\n"))
+            .collect::<Vec<_>>()
+            .concat();
+        fs.write(
+            "/ws/objects/rules/a.yaml",
+            format!(
+                "{}configurations:\n  microsoft_defender:\n    status: X\n    query: Q\n    \
+                 schedule:\n      frequency: 1H\n    entities:\n      hosts:\n        - \
+                 device_id: DeviceId\n    alert:\n      title: '{{{{A}}}} {{{{B}}}} {{{{C}}}} \
+                 {{{{D}}}}'\n      custom_details:\n{details}",
+                rule(U1, "A")
+            ),
+        );
+        let validation = run(
+            &fs,
+            &Options {
+                strict: true,
+                ..Options::default()
+            },
+        );
+        let path = |warning: &Diagnostic| warning.field_path.join(".");
+        let details = with_code(&validation, "microsoft_defender_custom_details_limit");
+        assert_eq!(details.len(), 1, "{:?}", all(&validation));
+        assert_eq!(
+            path(details[0]),
+            "configurations.microsoft_defender.alert.custom_details"
+        );
+        let columns = with_code(&validation, "microsoft_defender_placeholder_limit");
+        assert_eq!(columns.len(), 1, "{:?}", all(&validation));
+        assert_eq!(
+            path(columns[0]),
+            "configurations.microsoft_defender.alert.title"
+        );
+        assert!(
+            validation.report.warnings.iter().all(|warning| {
+                opentide_workspace::validate::STRICT_EXEMPT_WARNINGS
+                    .contains(&warning.code.as_str())
+            }),
+            "{:?}",
+            validation.report.warnings
+        );
+        assert!(!validation.warned, "the limits are exempt from --strict");
+    }
+
     #[test]
     fn google_secops_advisories_warn_and_shared_rule_names_fail() {
         let fs = workspace();
@@ -940,6 +991,64 @@ mod validate {
         let found = all(&validation);
         assert!(found.is_empty(), "{found:#?}");
         assert_eq!(status(&validation, Check::Schema), "passed");
+    }
+
+    /// A rule whose only error is a platform block's constraint code (a
+    /// finding its model reports under its own code, not
+    /// `schema_validation`) fails the `schema` check, which runs the models
+    /// (#1893): a run with `ok: false` never shows every check passed.
+    #[test]
+    fn a_platform_constraint_code_alone_fails_the_schema_check() {
+        let fixture = |path: &str| {
+            std::fs::read_to_string(
+                Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .join("../../tests/fixtures")
+                    .join(path),
+            )
+            .unwrap()
+        };
+        let cases = [
+            (
+                "microsoft_defender/microsoft-defender.yaml",
+                "      severity: High\n",
+                "      severity: Severe\n",
+                "microsoft_defender_severity",
+            ),
+            (
+                "graylog/rule-graylog-aggregation-1.0.yaml",
+                "    streams: sysmon\n",
+                "    streams: sysmon\n    priority: Severe\n",
+                "graylog_priority",
+            ),
+        ];
+        let only = |fs: &Arc<MemoryFs>, code: &str, label: &str| {
+            let validation = run(fs, &Options::default());
+            let codes: std::collections::BTreeSet<&str> = validation
+                .report
+                .issues
+                .iter()
+                .map(|issue| issue.code.as_str())
+                .collect();
+            assert_eq!(codes, [code].into(), "{label}");
+            assert!(validation.failed, "{label}");
+            assert_eq!(status(&validation, Check::Schema), "failed", "{label}");
+        };
+        for (path, find, replace, code) in cases {
+            let text = fixture(path);
+            assert_eq!(text.matches(find).count(), 1, "{path}");
+            let fs = workspace();
+            fs.write("/ws/objects/rules/a.yaml", text.replace(find, replace));
+            only(&fs, code, path);
+        }
+        // Two enabled Exabeam blocks that resolve to one name: the run's
+        // check on the workspace, not a model's, and the `schema` check's.
+        let text = fixture("exabeam/rule-exabeam-threshold-1.0.yaml");
+        let uuid = "00000000-0000-4000-8003-000000000071";
+        assert_eq!(text.matches(uuid).count(), 1);
+        let fs = workspace();
+        fs.write("/ws/objects/rules/a.yaml", text.replace(uuid, U1));
+        fs.write("/ws/objects/rules/b.yaml", text.replace(uuid, U2));
+        only(&fs, "exabeam_name_duplicate", "exabeam");
     }
 
     #[test]

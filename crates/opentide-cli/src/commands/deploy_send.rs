@@ -2364,18 +2364,22 @@ fn scoped(failed: DeployError, raise: impl FnOnce(ConnectorError) -> Raised) -> 
     }
 }
 
-/// A by-uuid rule's failure, raised: a Defender failure with a code of its
-/// own (`microsoft_defender_rule_conflict`) keeps it in the row's error, as
-/// Bitdefender's do, since the refusal's `ConnectorError` has no code (#1886).
-fn by_uuid_failure(id: Option<PlatformId>, failed: DeployError) -> Raised {
-    if id == Some(PlatformId::MicrosoftDefender)
-        && failed.connector.is_none()
-        && failed.failure.code != "tenant_refused"
-    {
-        let code = failed.failure.code;
-        return scoped(failed, |error| raised(&coded(code, error)));
-    }
-    scoped(failed, |error| raised(&error))
+/// A rule's failure on the by-uuid path, or a retirement's, raised. A failure
+/// the connector made with a code of its own (Defender's
+/// `microsoft_defender_rule_conflict`, Splunk's
+/// `splunk_renamed_search_not_deleted`, HarfangLab's
+/// `harfanglab_request_invalid`) keeps it in the row's error
+/// (`code: message`), as Bitdefender's and Google SecOps' do:
+/// [`DeployError::into_connector`] makes it a [`ConnectorError::Refused`],
+/// which has no code (#1886, #1894). A failure that came from a connector
+/// error, or the generic `tenant_refused`, reads as it did.
+fn coded_failure(failed: DeployError) -> Raised {
+    let own = (failed.connector.is_none() && failed.failure.code != "tenant_refused")
+        .then_some(failed.failure.code);
+    scoped(failed, |error| match own {
+        Some(code) => raised(&coded(code, error)),
+        None => raised(&error),
+    })
 }
 
 /// *error* with *code* before its message (`code: message`), as the row's
@@ -3120,7 +3124,7 @@ impl Sender<'_, '_> {
                     result.skip("already gone from the tenant");
                 }
             }
-            Err(failed) => return Err(scoped(failed, |error| raised(&error))),
+            Err(failed) => return Err(coded_failure(failed)),
         }
         if state {
             self.record_deleted(result, platform, tenant);
@@ -3514,7 +3518,7 @@ impl Sender<'_, '_> {
                 result.action = Some(action.to_owned());
             }
         }
-        failed.map_or(Ok(()), |failed| Err(by_uuid_failure(id, failed)))
+        failed.map_or(Ok(()), |failed| Err(coded_failure(failed)))
     }
 
     /// `report_failure`: a coded refusal of one rule on one tenant.
@@ -4066,8 +4070,11 @@ impl Sender<'_, '_> {
             } else {
                 Stops::Rule
             };
+            // Its code leads the row's error, as every coded failure's does
+            // (`coded_failure`, #1894).
             Raised::new(format!(
-                "could not {} the rule on tenant '{tenant}': {}",
+                "{}: could not {} the rule on tenant '{tenant}': {}",
+                failure.code,
                 action_verb(action),
                 failure.message
             ))

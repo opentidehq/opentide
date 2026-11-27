@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # License scan: release artifacts must not contain an oracle reference
 # (Microsoft Kusto.Language, a Splunk SDK, an Elastic or Lucene parser, the
-# YARA-X compiler crate with its wasmtime, yara-python). The oracles are
+# YARA-X compiler crate with its wasmtime, yara-python, VRL's Datadog search
+# grammar, whose rule `multitermlookahead` no opentide grammar has). The oracles are
 # CI-only. `yara-x-parser` and `yara-x-fmt` ship; `yara-x-<version>` is the
 # compiler crate's source path, which they never contain.
 # Usage: license-scan.sh [--product] <file-or-dir>...  (zips, tarballs and .crate files are unpacked)
@@ -15,10 +16,10 @@
 # of the Splunk platform client, not an oracle. Every other oracle reference
 # still fails it.
 set -euo pipefail
-pattern='kusto[._-]language|splunklib|splunk[-_]sdk|@elastic/esql|kbn-es-query|EqlBaseParser|org/apache/lucene/queryparser|yara-x-[0-9]|yara[-_]python|wasmtime'
+pattern='kusto[._-]language|splunklib|splunk[-_]sdk|@elastic/esql|kbn-es-query|EqlBaseParser|org/apache/lucene/queryparser|yara-x-[0-9]|yara[-_]python|wasmtime|multitermlookahead'
 if [[ "${1:-}" == "--product" ]]; then
   shift
-  pattern='kusto[._-]language|splunk[-_]sdk|@elastic/esql|kbn-es-query|EqlBaseParser|org/apache/lucene/queryparser|yara-x-[0-9]|yara[-_]python|wasmtime'
+  pattern='kusto[._-]language|splunk[-_]sdk|@elastic/esql|kbn-es-query|EqlBaseParser|org/apache/lucene/queryparser|yara-x-[0-9]|yara[-_]python|wasmtime|multitermlookahead'
 fi
 if [[ $# -eq 0 ]]; then
   echo "usage: $0 [--product] <file-or-dir>..."

@@ -60,6 +60,17 @@ fn declared_variants() -> BTreeSet<String> {
         .collect()
 }
 
+/// Query languages whose platform row is not in the registry yet, and why.
+/// Every other table applies to them; only "a platform's offline_languages"
+/// waits for the row. A language listed here that a platform already checks
+/// offline fails `languages_awaiting_a_platform_have_none`, so the entry is
+/// removed with the change that adds the row.
+const AWAITING_A_PLATFORM: &[(&str, &str)] = &[(
+    "datadog",
+    "the datadog platform is phase 2 of docs/internal/rfc-datadog-cloud-siem.md (§15); \
+     phase 1 ships the language for editors and .datadog files",
+)];
+
 /// Whether a variant is a query language. The `match` has no wildcard, so a
 /// new variant does not compile until it is classified here; a query
 /// language then belongs in `LanguageId::QUERY_LANGUAGES`, which the test
@@ -77,7 +88,8 @@ const fn is_query_language(id: LanguageId) -> bool {
         | LanguageId::Cql
         | LanguageId::Yara
         | LanguageId::Exabeam
-        | LanguageId::Yaral => true,
+        | LanguageId::Yaral
+        | LanguageId::Datadog => true,
     }
 }
 
@@ -197,7 +209,10 @@ fn every_query_language_is_wired() {
         check(
             PLATFORMS
                 .iter()
-                .any(|platform| platform.offline_languages.contains(&id)),
+                .any(|platform| platform.offline_languages.contains(&id))
+                || AWAITING_A_PLATFORM
+                    .iter()
+                    .any(|(awaiting, _)| *awaiting == id),
             "a platform's offline_languages (crates/opentide-schema/src/platforms.rs)",
         );
         check(
@@ -280,6 +295,30 @@ fn every_query_language_is_wired() {
          .agents/skills/add-language/SKILL.md, says what each one needs):\n  {}",
         missing.join("\n  ")
     );
+}
+
+/// A language that waits for its platform row has none yet: once a platform
+/// checks it offline, its entry in [`AWAITING_A_PLATFORM`] goes.
+#[test]
+fn languages_awaiting_a_platform_have_none() {
+    for (id, why) in AWAITING_A_PLATFORM {
+        assert!(
+            LanguageId::QUERY_LANGUAGES
+                .iter()
+                .any(|l| l.as_str() == *id),
+            "{id} is in AWAITING_A_PLATFORM but is not a query language"
+        );
+        assert!(!why.is_empty());
+        let checked_by: Vec<&str> = PLATFORMS
+            .iter()
+            .filter(|platform| platform.offline_languages.contains(id))
+            .map(|platform| platform.id)
+            .collect();
+        assert!(
+            checked_by.is_empty(),
+            "{id} is checked offline by {checked_by:?}: remove it from AWAITING_A_PLATFORM"
+        );
+    }
 }
 
 /// The registry's query files and its offline languages say the same thing:

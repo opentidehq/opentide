@@ -1,6 +1,6 @@
 ---
 name: parser
-description: Write and change opentide's pure-Rust query parsers (KQL, SPL, ES|QL, EQL, Kibana KQL, Lucene, Falco, CQL, Exabeam, YARA-L) on crates/opentide-parse - a logos lexer, a hand-written recursive-descent or Pratt grammar into a lossless rowan tree, the .ungram and its typed AST (cargo xtask codegen), the KEYWORDS table the TextMate generator reads, the depth and stack limits, recovery, the corpus gate and the parser tests. YARA reads yara-x-parser's CST. Use when editing a language crate's lexer, parser, syntax kinds, .ungram, highlight captures or keyword table, crates/opentide-parse, or crates/opentide-highlight/src/keywords/.
+description: Write and change opentide's pure-Rust query parsers (KQL, SPL, ES|QL, EQL, Kibana KQL, Lucene, Falco, CQL, Exabeam, YARA-L, Datadog) on crates/opentide-parse - a logos lexer, a hand-written recursive-descent or Pratt grammar into a lossless rowan tree, the .ungram and its typed AST (cargo xtask codegen), the KEYWORDS table the TextMate generator reads, the depth and stack limits, recovery, the corpus gate and the parser tests. YARA reads yara-x-parser's CST. Use when editing a language crate's lexer, parser, syntax kinds, .ungram, highlight captures or keyword table, crates/opentide-parse, or crates/opentide-highlight/src/keywords/.
 license: EUPL-1.2
 metadata:
   author: opentidehq
@@ -26,9 +26,9 @@ Read `crates/opentide-parse/AGENTS.md` before changing a parser: the toolkit's i
 | Part | Where |
 |------|-------|
 | `SyntaxKind` (token kinds first, below `TokenSet::CAPACITY`, 512, then node kinds), `Lang` (the `rowan::Language`), `SyntaxNode`/`SyntaxToken` | `src/syntax.rs`; SPL `src/syntax/kind.rs` |
-| The lexer: whitespace and comments are trivia kinds, never `skip`ped | `src/lexer.rs` (KQL, ES\|QL, EQL, CQL, YARA-L); SPL `src/syntax/lexer.rs`; kuery, Lucene, Falco and Exabeam in `src/syntax.rs`. CQL and ES\|QL lex by context (modes), Lucene by hand without logos; Exabeam's lexer is context-free and its parser glues the pieces |
+| The lexer: whitespace and comments are trivia kinds, never `skip`ped | `src/lexer.rs` (KQL, ES\|QL, EQL, CQL, YARA-L, Datadog); SPL `src/syntax/lexer.rs`; kuery, Lucene, Falco and Exabeam in `src/syntax.rs`. CQL and ES\|QL lex by context (modes), Lucene by hand without logos; Exabeam's lexer is context-free and its parser glues the pieces |
 | The grammar: one function per production, `Marker`s, `enter`/`exit` around every recursive rule | `src/parser.rs` or `src/parser/`; SPL `src/syntax/parser.rs`; Falco and Exabeam `src/cst.rs` |
-| `src/<lang>.ungram`, and `src/generated/ast.rs` that `cargo xtask codegen` writes from it (`codegen --check` in CI) | KQL, SPL, ES\|QL, EQL, CQL, YARA-L; kuery, Lucene, Falco and Exabeam have none (small trees, or highlighting only) |
+| `src/<lang>.ungram`, and `src/generated/ast.rs` that `cargo xtask codegen` writes from it (`codegen --check` in CI) | KQL, SPL, ES\|QL, EQL, CQL, YARA-L, Datadog; kuery, Lucene, Falco and Exabeam have none (small trees, or highlighting only) |
 | `KEYWORDS`: the keywords and punctuation the TextMate grammar lists, each with its HighlightSpec capture | `crates/opentide-highlight/src/keywords/<lang>.rs`, every query language |
 
 Falco and Exabeam keep a hand-written verdict parser (the ports of libsinsp's parser and of the
@@ -49,7 +49,7 @@ recovers rather than reports.
   stack (each crate's lexer tests, ES|QL's `a_million_character_token_does_not_overflow_the_stack`).
 - **Linear.** No quadratic walk over broken input (recovery that rescans, an error walk per
   token): `deep_queries.rs` parses 20 000-term chains of every language (`*_CHAIN_FLOOR`), and
-  the `tests/long_runs.rs` of CQL, EQL, Exabeam, Falco, kuery, Lucene and YARA-L time long
+  the `tests/long_runs.rs` of CQL, Datadog, EQL, Exabeam, Falco, kuery, Lucene and YARA-L time long
   inputs.
 - **Recovery.** Kibana and the vendors read nothing past the first error: advice (hints,
   warnings) on a fragment recovery rebuilt is noise. Broken input must not get noisier.

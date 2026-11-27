@@ -193,6 +193,18 @@ const CASES: &[Case] = &[
         name: "exabeam",
         run: || query(LanguageId::Exabeam, None, "process_name = \"cmd.exe\""),
     },
+    // The attribute catalogue serves hover and completion only: the checks never read it.
+    Case {
+        name: "datadog",
+        run: || {
+            std::hint::black_box(opentide_analysis::hover(
+                &MemoryWorkspace::default(),
+                LanguageId::Datadog,
+                "@network.client.ip:10.0.0.1",
+                2,
+            ));
+        },
+    },
     Case {
         name: "yara",
         run: || query(LanguageId::Yara, None, "rule a { condition: true }"),

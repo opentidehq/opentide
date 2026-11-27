@@ -84,6 +84,10 @@ pub enum LanguageId {
     /// `.yl2` files). Not YARA: no code is shared.
     #[serde(rename = "yaral", alias = "opentide-yaral", alias = "yara-l")]
     Yaral,
+    /// The Datadog log search syntax (Datadog Cloud SIEM detection-rule
+    /// queries, `.datadog` files): Datadog's API calls it `event_query`.
+    #[serde(rename = "datadog", alias = "opentide-datadog")]
+    Datadog,
 }
 
 impl LanguageId {
@@ -102,6 +106,7 @@ impl LanguageId {
             Self::Yara => "yara",
             Self::Exabeam => "exabeam",
             Self::Yaral => "yaral",
+            Self::Datadog => "datadog",
         }
     }
 
@@ -120,6 +125,7 @@ impl LanguageId {
             "yara" | "opentide-yara" | "YARA" => Some(Self::Yara),
             "exabeam" | "opentide-exabeam" | "Exabeam" => Some(Self::Exabeam),
             "yaral" | "opentide-yaral" | "yara-l" | "YARA-L" => Some(Self::Yaral),
+            "datadog" | "opentide-datadog" | "Datadog" => Some(Self::Datadog),
             _ => None,
         }
     }
@@ -139,12 +145,13 @@ impl LanguageId {
             "yar" | "yara" => Some(Self::Yara),
             "exabeam" => Some(Self::Exabeam),
             "yaral" | "yl2" => Some(Self::Yaral),
+            "datadog" => Some(Self::Datadog),
             _ => None,
         }
     }
 
     /// Query languages with a tree-sitter grammar and an engine.
-    pub const QUERY_LANGUAGES: [Self; 11] = [
+    pub const QUERY_LANGUAGES: [Self; 12] = [
         Self::Kql,
         Self::Spl,
         Self::Esql,
@@ -156,6 +163,7 @@ impl LanguageId {
         Self::Yara,
         Self::Exabeam,
         Self::Yaral,
+        Self::Datadog,
     ];
 }
 
@@ -1049,11 +1057,22 @@ pub mod codes {
     pub const MICROSOFT_DEFENDER_ACTION_TARGET: &str = "microsoft_defender_action_target";
     pub const MICROSOFT_DEFENDER_ISOLATION_TYPE: &str = "microsoft_defender_isolation_type";
     pub const MICROSOFT_DEFENDER_COLUMN: &str = "microsoft_defender_column";
+    // A block against its query's inferred output (#1885).
+    pub const MICROSOFT_DEFENDER_COLUMN_NOT_IN_OUTPUT: &str =
+        "microsoft_defender_column_not_in_output";
+    pub const MICROSOFT_DEFENDER_REQUIRED_COLUMNS: &str = "microsoft_defender_required_columns";
+    pub const MICROSOFT_DEFENDER_COLUMN_TYPE: &str = "microsoft_defender_column_type";
+    pub const MICROSOFT_DEFENDER_UNPROJECTED_OUTPUT: &str = "microsoft_defender_unprojected_output";
     pub const MICROSOFT_DEFENDER_SCOPE: &str = "microsoft_defender_scope";
     pub const MICROSOFT_DEFENDER_INCIDENT: &str = "microsoft_defender_incident";
     pub const MICROSOFT_DEFENDER_NO_ENTITIES: &str = "microsoft_defender_no_entities";
     pub const MICROSOFT_DEFENDER_IMPACTED_ASSET_IDENTIFIER: &str =
         "microsoft_defender_impacted_asset_identifier";
+    // The limits of Microsoft's custom detection docs (#1890).
+    pub const MICROSOFT_DEFENDER_CUSTOM_DETAILS_LIMIT: &str =
+        "microsoft_defender_custom_details_limit";
+    pub const MICROSOFT_DEFENDER_PLACEHOLDER_LIMIT: &str = "microsoft_defender_placeholder_limit";
+    pub const MICROSOFT_DEFENDER_NRT_QUERY: &str = "microsoft_defender_nrt_query";
 
     // The Exabeam Query Language (specifications exabeam-1.0, language).
     pub const EXABEAM_PARSE_ERROR: &str = "exabeam_parse_error";
@@ -1108,6 +1127,26 @@ pub mod codes {
     pub const EXABEAM_NAME_DUPLICATE: &str = "exabeam_name_duplicate";
     pub const EXABEAM_OUTCOME_SILENT: &str = "exabeam_outcome_silent";
     pub const EXABEAM_CORRELATION_WINDOW: &str = "exabeam_correlation_window";
+
+    // The Datadog search syntax (rfc-datadog-cloud-siem, §6.7). Errors are
+    // datadog_parse_error through datadog_range (a range's mixed bounds are a
+    // warning); datadog_unknown_attribute is a hint; the rest are warnings.
+    pub const DATADOG_PARSE_ERROR: &str = "datadog_parse_error";
+    pub const DATADOG_UNESCAPED_SPECIAL: &str = "datadog_unescaped_special";
+    pub const DATADOG_REGEX: &str = "datadog_regex";
+    pub const DATADOG_CIDR: &str = "datadog_cidr";
+    pub const DATADOG_RANGE: &str = "datadog_range";
+    pub const DATADOG_MIXED_BOOLEAN: &str = "datadog_mixed_boolean";
+    pub const DATADOG_LOWERCASE_OPERATOR: &str = "datadog_lowercase_operator";
+    pub const DATADOG_CURLY_QUOTE: &str = "datadog_curly_quote";
+    pub const DATADOG_WILDCARD_IN_PHRASE: &str = "datadog_wildcard_in_phrase";
+    pub const DATADOG_UNESCAPED_COLON: &str = "datadog_unescaped_colon";
+    pub const DATADOG_SYMBOL_OPERATOR: &str = "datadog_symbol_operator";
+    pub const DATADOG_DETACHED_OPERATOR: &str = "datadog_detached_operator";
+    pub const DATADOG_FULL_TEXT_IN_RULE: &str = "datadog_full_text_in_rule";
+    pub const DATADOG_CALCULATED_FIELD_IN_RULE: &str = "datadog_calculated_field_in_rule";
+    pub const DATADOG_PIPELINES_ONLY: &str = "datadog_pipelines_only";
+    pub const DATADOG_UNKNOWN_ATTRIBUTE: &str = "datadog_unknown_attribute";
 
     /// Every code above, in declaration order.
     pub const ALL: &[&str] = &[
@@ -1429,10 +1468,33 @@ pub mod codes {
         MICROSOFT_DEFENDER_ACTION_TARGET,
         MICROSOFT_DEFENDER_ISOLATION_TYPE,
         MICROSOFT_DEFENDER_COLUMN,
+        MICROSOFT_DEFENDER_COLUMN_NOT_IN_OUTPUT,
+        MICROSOFT_DEFENDER_REQUIRED_COLUMNS,
+        MICROSOFT_DEFENDER_COLUMN_TYPE,
+        MICROSOFT_DEFENDER_UNPROJECTED_OUTPUT,
         MICROSOFT_DEFENDER_SCOPE,
         MICROSOFT_DEFENDER_INCIDENT,
         MICROSOFT_DEFENDER_NO_ENTITIES,
         MICROSOFT_DEFENDER_IMPACTED_ASSET_IDENTIFIER,
+        MICROSOFT_DEFENDER_CUSTOM_DETAILS_LIMIT,
+        MICROSOFT_DEFENDER_PLACEHOLDER_LIMIT,
+        MICROSOFT_DEFENDER_NRT_QUERY,
+        DATADOG_PARSE_ERROR,
+        DATADOG_UNESCAPED_SPECIAL,
+        DATADOG_REGEX,
+        DATADOG_CIDR,
+        DATADOG_RANGE,
+        DATADOG_MIXED_BOOLEAN,
+        DATADOG_LOWERCASE_OPERATOR,
+        DATADOG_CURLY_QUOTE,
+        DATADOG_WILDCARD_IN_PHRASE,
+        DATADOG_UNESCAPED_COLON,
+        DATADOG_SYMBOL_OPERATOR,
+        DATADOG_DETACHED_OPERATOR,
+        DATADOG_FULL_TEXT_IN_RULE,
+        DATADOG_CALCULATED_FIELD_IN_RULE,
+        DATADOG_PIPELINES_ONLY,
+        DATADOG_UNKNOWN_ATTRIBUTE,
     ];
 
     /// One sentence on what a code means, for hosts that explain a diagnostic
@@ -2239,6 +2301,18 @@ pub mod codes {
             MICROSOFT_DEFENDER_COLUMN => {
                 "A column name (an entity field, an action column, a custom detail's value) is blank or not a string."
             }
+            MICROSOFT_DEFENDER_COLUMN_NOT_IN_OUTPUT => {
+                "A column the block names (an entity field, an action column, a custom detail's value, an alert `{{placeholder}}`) is not a column of the query's output."
+            }
+            MICROSOFT_DEFENDER_REQUIRED_COLUMNS => {
+                "The query's output lacks a column a custom detection needs for the tables it reads (`Timestamp`, and `DeviceId` and `ReportId` for a device table)."
+            }
+            MICROSOFT_DEFENDER_COLUMN_TYPE => {
+                "An entity field or action column is mapped from an output column whose type is `dynamic`, `datetime`, `bool` or `timespan`."
+            }
+            MICROSOFT_DEFENDER_UNPROJECTED_OUTPUT => {
+                "The query returns columns no entity, action, custom detail or alert placeholder uses, from which Defender derives entity mappings of its own."
+            }
             MICROSOFT_DEFENDER_SCOPE => {
                 "`scope` is not `{device_groups: [...]}` with a non-empty list of non-blank names."
             }
@@ -2250,6 +2324,61 @@ pub mod codes {
             }
             MICROSOFT_DEFENDER_IMPACTED_ASSET_IDENTIFIER => {
                 "A device or user mapping sets no strong identifier of its impacted asset."
+            }
+            MICROSOFT_DEFENDER_CUSTOM_DETAILS_LIMIT => {
+                "`alert.custom_details` has more than the 20 details Defender documents per rule, or names longer than the 4 KB beyond which Defender drops every detail from the alert."
+            }
+            MICROSOFT_DEFENDER_PLACEHOLDER_LIMIT => {
+                "`alert.title` or `alert.description` references more than the three `{{Column}}` columns Defender documents per field."
+            }
+            MICROSOFT_DEFENDER_NRT_QUERY => {
+                "A `frequency: NRT` rule's query is one Defender documents it cannot run continuously: it reads more than one table or a table outside the NRT list, joins, unions, uses externaldata, has a comment, or reads `EmailEvents`' `LatestDeliveryLocation` or `LatestDeliveryAction`."
+            }
+            DATADOG_PARSE_ERROR => {
+                "The Datadog search does not parse: an unbalanced bracket, a dangling operator, an empty group, a field with no value, two modifiers in a row, or an unclosed phrase."
+            }
+            DATADOG_UNESCAPED_SPECIAL => {
+                "A Datadog search term holds an unescaped `!`, `<` or `>`, or a value starts with an unescaped `-`, which Datadog reads as an exclusion: escape it with `\\`."
+            }
+            DATADOG_REGEX => {
+                "A Datadog search term holds `~` or `^`: the search syntax has no regular expression, fuzzy or boost operator."
+            }
+            DATADOG_CIDR => {
+                "A Datadog `CIDR()` call does not name an `@attribute` first, has no block, or has an argument that is not an IPv4 or IPv6 CIDR block."
+            }
+            DATADOG_RANGE => {
+                "A Datadog range is malformed (a missing bound, a lower-case `to`), or mixes an inclusive and an exclusive bound."
+            }
+            DATADOG_MIXED_BOOLEAN => {
+                "A Datadog search puts OR beside an AND, written or implied, without parentheses: AND binds tighter, as VRL reads it (unverified on Cloud SIEM)."
+            }
+            DATADOG_LOWERCASE_OPERATOR => {
+                "A lower-case `and`, `or` or `not` stands between field clauses or in a value group, where Datadog reads it as a search term, not an operator."
+            }
+            DATADOG_CURLY_QUOTE => {
+                "A Datadog search holds a curly quote, which is not a quote: the words around it are searched as separate terms."
+            }
+            DATADOG_WILDCARD_IN_PHRASE => {
+                "A `*` or `?` touches a word inside a quoted phrase, where it is punctuation, not a wildcard."
+            }
+            DATADOG_UNESCAPED_COLON => {
+                "A Datadog search value holds an unescaped `:`, which Datadog's docs say to escape."
+            }
+            DATADOG_SYMBOL_OPERATOR => {
+                "`&&` or `||` stands between Datadog search clauses: Datadog's docs list them as characters to escape; write AND or OR."
+            }
+            DATADOG_DETACHED_OPERATOR => "A Datadog exclusion `-` is followed by a space.",
+            DATADOG_FULL_TEXT_IN_RULE => {
+                "A detection rule's query searches every attribute with `*:term`, which Datadog documents for monitors, dashboards and notebooks, not for detection rules."
+            }
+            DATADOG_CALCULATED_FIELD_IN_RULE => {
+                "A detection rule's query names a calculated field (`#name`): real-time detection rules have none."
+            }
+            DATADOG_PIPELINES_ONLY => {
+                "A Datadog search uses Observability Pipelines syntax (`_exists_:`, `_missing_:`, a quoted field name), which log search does not read the same way."
+            }
+            DATADOG_UNKNOWN_ATTRIBUTE => {
+                "A Datadog search field is a dotted bare key, searched as a tag, where an `@attribute` was probably meant."
             }
             _ => return None,
         })

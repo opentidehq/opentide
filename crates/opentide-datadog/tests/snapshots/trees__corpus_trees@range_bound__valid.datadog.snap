@@ -1,0 +1,24 @@
+---
+source: crates/opentide-datadog/tests/trees.rs
+expression: "debug_tree(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/datadog/range_bound__valid.datadog
+---
+QUERY@0..37
+  FIELD_CLAUSE@0..37
+    ATTRIBUTE@0..10
+      WORD@0..10 "@timestamp"
+    COLON@10..11 ":"
+    RANGE@11..37
+      L_BRACK@11..12 "["
+      RANGE_BOUND@12..31
+        WORD@12..25 "2024-01-01T00"
+        COLON@25..26 ":"
+        WORD@26..28 "00"
+        COLON@28..29 ":"
+        WORD@29..31 "00"
+      WHITESPACE@31..32 " "
+      TO_KW@32..34 "TO"
+      WHITESPACE@34..35 " "
+      RANGE_BOUND@35..36
+        STAR@35..36 "*"
+      R_BRACK@36..37 "]"

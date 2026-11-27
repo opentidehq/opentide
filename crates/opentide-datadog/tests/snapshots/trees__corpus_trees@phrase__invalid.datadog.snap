@@ -1,0 +1,9 @@
+---
+source: crates/opentide-datadog/tests/trees.rs
+expression: "debug_tree(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/datadog/phrase__invalid.datadog
+---
+QUERY@0..12
+  PHRASE@0..12
+    UNCLOSED_PHRASE@0..12 "\"hello world"
+0..0: the phrase is never closed: missing `"`

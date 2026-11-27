@@ -39,6 +39,7 @@ only.
 | YARA † | 31.4 | 47.0 | 4.0 | 3.0 | 50, 206,242 |
 | Exabeam † | 20.1 | 41.6 | 6.6 | 3.7 | 4, 794 |
 | YARA-L † | 14.4 | 26.4 | 22.3 | 10.3 | 79, 243,055 |
+| Datadog ‡ | 3.9 | 8.7 | 17.3 | 9.1 | 2,895, 148,278 |
 
 How to read the table:
 
@@ -52,6 +53,10 @@ How to read the table:
   understate those languages' parse speed until the table is next recorded. YARA's `parses` drains
   `yara-x-parser`'s events and builds no tree, where the other languages' build their rowan tree,
   so its parse figure is not like for like with theirs.
+- **Datadog (‡)** was measured on 2026-11-26, on another machine, when the language was added;
+  Lucene measured 5.2, 11.6, 10.3 and 4.2 on the same run, so the row compares with the
+  others to within that machine's difference. Its external set is Datadog's 2,895 published
+  queries (`published.jsonl`, one text per query, 51 bytes on average).
 - **Small inputs.** Kibana KQL's and Lucene's external queries are short (12 and 20 bytes on
   average), and Exabeam's set is 794 bytes, so their MB/s is dominated by the per-call floor.
 

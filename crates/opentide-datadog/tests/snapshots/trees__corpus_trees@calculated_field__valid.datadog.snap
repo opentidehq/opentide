@@ -1,0 +1,14 @@
+---
+source: crates/opentide-datadog/tests/trees.rs
+expression: "debug_tree(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/datadog/calculated_field__valid.datadog
+---
+QUERY@0..17
+  FIELD_CLAUSE@0..17
+    CALCULATED_FIELD@0..12
+      WORD@0..12 "#duration_ms"
+    COLON@12..13 ":"
+    COMPARISON@13..17
+      GT@13..14 ">"
+      TERM@14..17
+        NUMBER@14..17 "500"

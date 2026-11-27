@@ -9272,7 +9272,7 @@
   {
    "id": "file:tests/fixtures/tide_corpus/current/Objects/Detection Rules/rule-0002-defender-kql.yaml",
    "family": "rule",
-   "yaml": "name: Defender KQL Rule\n\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000002\n  schema: rule::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n\ndescription: |\n  Simulated Defender rule for CLI E2E corpus.\nstatus: STAGING\nseverity: High\ntechniques:\n  - T1059\ndetection_model: 00000000-0000-4000-8002-000000000001\n\nresponse:\n  alert_severity: High\n\nconfigurations:\n  microsoft_defender:\n    enabled: true\n    name: Defender KQL Rule\n    status: STAGING\n    query: |\n      DeviceProcessEvents\n      | take 1\n    schedule:\n      frequency: 1H\n    alert:\n      title: Defender KQL Rule\n    entities:\n      hosts:\n        - device_id: device_id\n",
+   "yaml": "name: Defender KQL Rule\n\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000002\n  schema: rule::1.0\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: clear\n\ndescription: |\n  Simulated Defender rule for CLI E2E corpus.\nstatus: STAGING\nseverity: High\ntechniques:\n  - T1059\ndetection_model: 00000000-0000-4000-8002-000000000001\n\nresponse:\n  alert_severity: High\n\nconfigurations:\n  microsoft_defender:\n    enabled: true\n    name: Defender KQL Rule\n    status: STAGING\n    query: |\n      DeviceProcessEvents\n      | take 1\n      | project Timestamp, DeviceId, ReportId\n    schedule:\n      frequency: 1H\n    alert:\n      title: Defender KQL Rule\n    entities:\n      hosts:\n        - device_id: DeviceId\n",
    "value": {
     "name": "Defender KQL Rule",
     "metadata": {
@@ -9299,12 +9299,12 @@
       "enabled": true,
       "name": "Defender KQL Rule",
       "status": "STAGING",
-      "query": "DeviceProcessEvents\n| take 1\n",
+      "query": "DeviceProcessEvents\n| take 1\n| project Timestamp, DeviceId, ReportId\n",
       "alert": {
        "category": "Execution"
       },
       "impacted_entities": {
-       "device": "device_id"
+       "device": "DeviceId"
       },
       "scheduling": "1H",
       "scope": {

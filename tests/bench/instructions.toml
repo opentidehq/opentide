@@ -19,11 +19,23 @@ parse_corpus_allocations = 5729
 parse_external = 16050818
 parse_external_allocations = 10316
 
+[datadog]
+analyze_corpus = 1670334
+analyze_corpus_allocations = 5715
+analyze_external = 73597495
+analyze_external_allocations = 235468
+parse_corpus = 1006776
+parse_corpus_allocations = 2286
+parse_external = 47549109
+parse_external_allocations = 105003
+
 [datasets]
 complete-attack-technique = 34019684
 complete-attack-technique_allocations = 55395
 cql = 6816716
 cql_allocations = 11087
+datadog = 600666
+datadog_allocations = 1358
 eql = 2309827
 eql_allocations = 2771
 esql = 4701376
@@ -35,7 +47,7 @@ falco_allocations = 16851
 hover-attack-technique = 27300372
 hover-attack-technique_allocations = 41637
 kql-defender = 18837360
-kql-defender_allocations = 20763
+kql-defender_allocations = 20743
 kql-sentinel = 30173358
 kql-sentinel_allocations = 55726
 lucene-carbon-black = 2305014
@@ -103,7 +115,7 @@ parse_external_allocations = 12922
 analyze_corpus = 12444972
 analyze_corpus_allocations = 29898
 analyze_external = 35371295
-analyze_external_allocations = 77985
+analyze_external_allocations = 77977
 parse_corpus = 2900759
 parse_corpus_allocations = 5463
 parse_external = 9609221

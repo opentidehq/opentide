@@ -16,7 +16,7 @@ Want to author objects from scratch and understand each step? Do the [Tutorial](
 ### Install and point at your repo
 
 ```bash
-pip install 'opentide==1.0.0'
+pip install 'opentide==1.1.0'
 export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 ```
 
@@ -56,7 +56,7 @@ Validation does not need these files: `opentide validate` checks objects against
 
 ```bash
 opentide validate
-opentide validate --strict   # warnings also fail (exit 1), except platform_not_enabled and microsoft_defender_impacted_asset_identifier — use in CI
+opentide validate --strict   # warnings also fail (exit 1), except platform_not_enabled and the Defender advisories waiting on a tenant check — use in CI
 ```
 
 On success the process exits `0`. For structured detail add `--json`, which writes one result document to stdout (see [Exit codes](../cli/exit-codes.md)). If validation fails, see [Troubleshooting](./troubleshooting.md).

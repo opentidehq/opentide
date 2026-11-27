@@ -28,6 +28,7 @@ export const LANGS = {
   exabeam: ['source.exabeam', 'exabeam', ['exabeam']],
   yara: ['source.opentide.yara', 'yara', ['yara']],
   yaral: ['source.yaral', 'yaral', ['yaral']],
+  datadog: ['source.datadog', 'datadog', ['datadog']],
 };
 // Not in the corpus table: the Tide grammar (tide_alignment.test.mjs).
 const EXTRA = { tide: ['source.opentide-yaml', 'tide'] };
@@ -55,6 +56,11 @@ function texts(lang, dirs) {
   if (lang === 'kuery') {
     const tsv = readFileSync(join(corpus, dirs[0], 'cases.tsv'), 'utf8').split('\n');
     return tsv.filter((l) => l.startsWith('accept\t')).map((l) => JSON.parse(l.split('\t')[1]));
+  }
+  // Datadog's published queries are one JSON object per line.
+  if (lang === 'datadog') {
+    const jsonl = readFileSync(join(corpus, dirs[0], 'published.jsonl'), 'utf8').split('\n');
+    return jsonl.filter((l) => l.trim()).map((l) => JSON.parse(l).query);
   }
   return dirs.flatMap((d) => [...files(join(corpus, d))].map((p) => readFileSync(p, 'utf8')));
 }

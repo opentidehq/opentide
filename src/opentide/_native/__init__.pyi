@@ -22,6 +22,7 @@ Language = Literal[
     "yara",
     "exabeam",
     "yaral",
+    "datadog",
     "opentide-yaml",
 ]
 

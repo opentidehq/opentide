@@ -76,7 +76,7 @@ pub const DECLARED_DATASET_CODES: [&str; 3] = [
 
 /// Code prefix, then the language and the reference a finding without a
 /// suggestion points at.
-pub const ENGINE_REFERENCES: [(&str, &str, &str); 13] = [
+pub const ENGINE_REFERENCES: [(&str, &str, &str); 14] = [
     ("kql_", "KQL", "https://learn.microsoft.com/kusto/query/"),
     (
         "spl_",
@@ -134,22 +134,37 @@ pub const ENGINE_REFERENCES: [(&str, &str, &str); 13] = [
         "YARA-L 2.0",
         "https://cloud.google.com/chronicle/docs/detection/yara-l-2-0-syntax",
     ),
+    (
+        "datadog_",
+        "Datadog log search syntax",
+        "https://docs.datadoghq.com/logs/explorer/search_syntax/",
+    ),
 ];
 
 /// Whether `opentide lint` reports an engine warning of `code`: a query
 /// language's (one with a reference), an Elastic advisory, Sysdig's list
-/// self-reference, or an undeclared dataset. 0.28.1 added Graylog's dialect:
+/// self-reference, a continuous Defender rule's NRT finding, or an
+/// undeclared dataset. 0.28.1 added Graylog's dialect:
 /// before, `graylog_analyzed_field` and `graylog_regex_operator` reached the
 /// editor alone.
 pub fn lint_owned(code: &str) -> bool {
     opentide_schema::objects::platform::harfanglab::yara::ADVISORY_CODES.contains(&code)
+        || code == opentide_core::codes::MICROSOFT_DEFENDER_NRT_QUERY
         || ENGINE_REFERENCES
             .iter()
             .any(|(prefix, _, _)| code.starts_with(prefix))
         || ELASTIC_ADVISORIES.contains(&code)
         || code == opentide_core::codes::SYSDIG_LIST_SELF_REFERENCE
         || DECLARED_DATASET_CODES.contains(&code)
+        || DEFENDER_OUTPUT_ADVISORIES.contains(&code)
 }
+
+/// The warnings of a Microsoft Defender block checked against its query's
+/// output (#1885): lint's, as its errors are `validate`'s.
+const DEFENDER_OUTPUT_ADVISORIES: [&str; 2] = [
+    opentide_core::codes::MICROSOFT_DEFENDER_COLUMN_TYPE,
+    opentide_core::codes::MICROSOFT_DEFENDER_UNPROJECTED_OUTPUT,
+];
 
 /// Words in an engine message that make its `suggestion` a replacement name.
 const ENGINE_UNKNOWN: [&str; 3] = ["unknown", "deprecated", "not a command"];
@@ -1239,7 +1254,10 @@ mod tests {
         let reported: Vec<&str> = ELASTIC_ADVISORIES
             .into_iter()
             .chain(DECLARED_DATASET_CODES)
-            .chain([opentide_core::codes::SYSDIG_LIST_SELF_REFERENCE])
+            .chain([
+                opentide_core::codes::SYSDIG_LIST_SELF_REFERENCE,
+                opentide_core::codes::MICROSOFT_DEFENDER_NRT_QUERY,
+            ])
             .chain(graylog::ADVISORY_CODES)
             .chain(harfanglab::yara::ADVISORY_CODES)
             .chain(bitdefender::advisories::ADVISORY_CODES)
@@ -1267,6 +1285,12 @@ mod tests {
             assert!(lint_owned(code), "{code}");
         }
         assert!(lint_owned(opentide_core::codes::SYSDIG_LIST_SELF_REFERENCE));
+        assert!(lint_owned(
+            opentide_core::codes::MICROSOFT_DEFENDER_UNPROJECTED_OUTPUT
+        ));
+        assert!(lint_owned(
+            opentide_core::codes::MICROSOFT_DEFENDER_COLUMN_TYPE
+        ));
         assert!(!lint_owned("vocab_unknown"));
         // A Graylog finding names Graylog's search syntax page.
         assert!(

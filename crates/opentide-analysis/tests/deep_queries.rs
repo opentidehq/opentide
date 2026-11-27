@@ -62,6 +62,8 @@ const EQL_CHAIN_FLOOR: usize = CHAIN_CAP;
 const KUERY_CHAIN_FLOOR: usize = CHAIN_CAP;
 /// lucene passed the cap in 0.3 s.
 const LUCENE_CHAIN_FLOOR: usize = CHAIN_CAP;
+/// datadog: a new pure-Rust parser (rfc-datadog-cloud-siem), held at the cap.
+const DATADOG_CHAIN_FLOOR: usize = CHAIN_CAP;
 
 // Nesting floors: the largest depth with no stack overflow and no parse error,
 // capped at NESTING_CEILING.
@@ -101,6 +103,8 @@ const EQL_NEST_FLOOR: usize = NESTING_CEILING;
 const KUERY_NEST_FLOOR: usize = NESTING_CEILING;
 /// lucene passed the 10,000 cap in 0.04 s; held at the ceiling.
 const LUCENE_NEST_FLOOR: usize = NESTING_CEILING;
+/// datadog: a new language keeps the ceiling (`opentide-datadog` `MAX_DEPTH`, 1,000).
+const DATADOG_NEST_FLOOR: usize = NESTING_CEILING;
 
 /// The stack the floors are measured against: the browser WASM module's 1 MB.
 #[cfg(not(any(coverage, windows)))]
@@ -305,6 +309,49 @@ fn yara_nest_floor() {
 }
 
 #[test]
+fn datadog_chain_floor() {
+    // An implied AND chain and an OR chain: each one flat node.
+    for (term, op) in [("@evt.outcome:FAILURE", " OR "), ("source:okta", " ")] {
+        let q = chain(term, op, DATADOG_CHAIN_FLOOR);
+        analyzes_cleanly("datadog chain", q, |q| {
+            opentide_datadog::analyze(q).diagnostics
+        });
+    }
+}
+
+#[test]
+fn datadog_nest_floor() {
+    for q in [
+        nest("@evt.outcome:FAILURE", DATADOG_NEST_FLOOR),
+        format!("@a:{}", nest("b", DATADOG_NEST_FLOOR)),
+    ] {
+        analyzes_cleanly("datadog nest", q, |q| {
+            opentide_datadog::analyze(q).diagnostics
+        });
+    }
+}
+
+/// Far past the limit: one parse error, no overflow, no quadratic time.
+#[test]
+fn datadog_nest_past_its_limit_is_one_error() {
+    for q in [
+        nest("a", 100_000),
+        "(".repeat(200_000),
+        "@a:(".repeat(50_000),
+        "-(".repeat(100_000),
+    ] {
+        let diagnostics = on_small_stack("datadog nest past the limit", move || {
+            opentide_datadog::analyze(&q).diagnostics
+        });
+        let errors: Vec<_> = diagnostics
+            .iter()
+            .filter(|d| d.code.ends_with("_parse_error"))
+            .collect();
+        assert_eq!(errors.len(), 1, "{errors:?}");
+    }
+}
+
+#[test]
 fn exabeam_chain_floor() {
     let q = chain("vendor:\"x\"", " OR ", EXABEAM_CHAIN_FLOOR);
     analyzes_cleanly("exabeam chain", q, |q| {
@@ -465,6 +512,10 @@ fn stopped(diagnostics: &[Diagnostic]) -> Vec<&str> {
 /// a ladder analyses cleanly at the floor, or at the limit its own grammar sets for the
 /// shape; far past it, the engine stops with one error: never an abort, never more.
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one ladder per language: a table read top to bottom"
+)]
 fn a_precedence_chain_in_each_level_stops_with_one_error() {
     let ladders = [
         Ladder {
@@ -509,6 +560,16 @@ fn a_precedence_chain_in_each_level_stops_with_one_error() {
             atom: "vendor:\"z\"",
             clean: 99,
             analyze: |q| opentide_exabeam::analyze(q).diagnostics,
+        },
+        // Only a group is a level of the Datadog grammar's `max_depth`; a level opens four
+        // nodes (OR, AND, NOT, the group), under the toolkit's budget at the floor.
+        Ladder {
+            name: "datadog",
+            wrap: str::to_string,
+            prefix: "a:1 OR b:2 AND NOT (",
+            atom: "c:3",
+            clean: DATADOG_NEST_FLOOR,
+            analyze: |q| opentide_datadog::analyze(q).diagnostics,
         },
         Ladder {
             name: "falco",

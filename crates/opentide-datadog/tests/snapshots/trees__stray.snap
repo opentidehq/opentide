@@ -1,0 +1,25 @@
+---
+source: crates/opentide-datadog/tests/trees.rs
+expression: "debug_tree(\"a:b) AND : c\")"
+---
+QUERY@0..12
+  FIELD_CLAUSE@0..3
+    TAG_KEY@0..1
+      WORD@0..1 "a"
+    COLON@1..2 ":"
+    TERM@2..3
+      WORD@2..3 "b"
+  ERROR@3..4
+    R_PAREN@3..4 ")"
+  WHITESPACE@4..5 " "
+  ERROR@5..8
+    WORD@5..8 "AND"
+  WHITESPACE@8..9 " "
+  ERROR@9..10
+    COLON@9..10 ":"
+  WHITESPACE@10..11 " "
+  TERM@11..12
+    WORD@11..12 "c"
+3..3: unexpected
+4..5: unexpected
+8..9: unexpected

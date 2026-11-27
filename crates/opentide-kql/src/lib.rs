@@ -17,9 +17,11 @@ use opentide_core::{
     SignatureInformation, codes, suggest,
 };
 use opentide_highlight::HighlightToken;
+pub mod output;
 mod perf;
 mod rows_model;
 pub mod schema;
+pub mod shape;
 pub mod tables;
 mod tables_model;
 
@@ -348,7 +350,8 @@ impl Catalog {
     ///   of the Azure Monitor Logs reference with its columns; ASIM parsers
     ///   are known sources ([`Catalog::asim_parser`]).
     /// - `microsoft_defender`: the advanced hunting tables, with the
-    ///   columns the reference lists for those it has.
+    ///   columns the reference lists for those it has, but the Log Analytics
+    ///   standard columns of its copies (`TimeGenerated`, `TenantId`, ...).
     ///
     /// Hand-written columns keep their docs and are added to the reference's,
     /// never removed: a column either lists is known.
@@ -441,6 +444,17 @@ impl Catalog {
         if let Some((columns_at, citation)) = &lazy.at {
             for column in tables::azure_monitor_columns(*columns_at) {
                 if hand.contains(&*column.name) {
+                    continue;
+                }
+                // The reference describes the Log Analytics copy of an
+                // advanced hunting table: its standard columns
+                // (`TimeGenerated`, `TenantId`, `Type`, `_BilledSize`, ...)
+                // are the workspace's, not advanced hunting's (#1885).
+                if self.profile == Profile::Defender
+                    && tables::STANDARD_COLUMNS
+                        .iter()
+                        .any(|(name, _)| *name == &*column.name)
+                {
                     continue;
                 }
                 if let Some(&j) = at.get(&column.name) {
@@ -2283,6 +2297,13 @@ mod tests {
             }
             let table: Arc<str> = Arc::from(row.name.as_str());
             for column in listed {
+                if profile == Profile::Defender
+                    && tables::STANDARD_COLUMNS
+                        .iter()
+                        .any(|(name, _)| *name == &*column.name)
+                {
+                    continue;
+                }
                 let key = (Arc::clone(&table), Arc::clone(&column.name));
                 if let Some(&i) = hand.get(&key) {
                     if columns[i].type_name.as_deref() != Some(&*column.type_name) {

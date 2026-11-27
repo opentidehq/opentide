@@ -154,6 +154,17 @@ const LANGUAGES: &[Language] = &[
         },
     },
     Language {
+        name: "datadog",
+        id: LanguageId::Datadog,
+        extensions: &["datadog"],
+        corpus: "datadog",
+        external: &["datadog"],
+        skip: &[],
+        parse: |s| {
+            std::hint::black_box(opentide_datadog::parses(s));
+        },
+    },
+    Language {
         name: "yaral",
         id: LanguageId::Yaral,
         extensions: &["yaral", "yl2"],
@@ -196,6 +207,15 @@ fn files(dir: &Path, extensions: &[&str], skip: &[&str]) -> Vec<String> {
         let name = path.file_name().unwrap_or_default().to_string_lossy();
         if name == "cases.tsv" {
             out.extend(cases(&text));
+        } else if name == "published.jsonl" {
+            // One JSON object a line, its `query` the text (Datadog's published queries).
+            out.extend(text.lines().filter_map(|line| {
+                serde_json::from_str::<serde_json::Value>(line)
+                    .ok()?
+                    .get("query")?
+                    .as_str()
+                    .map(str::to_owned)
+            }));
         } else if !name.contains(".broken.")
             && !skip.iter().any(|s| name.contains(s))
             && path

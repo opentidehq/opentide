@@ -160,6 +160,7 @@ RULES: tuple[tuple[str, tuple[str, ...], tuple[str, ...]], ...] = (
 PARSER_CRATES = (
     "opentide-parse",
     "opentide-cql",
+    "opentide-datadog",
     "opentide-eql",
     "opentide-esql",
     "opentide-exabeam",

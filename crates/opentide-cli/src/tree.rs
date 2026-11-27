@@ -1869,7 +1869,7 @@ pub enum RootCommand {
     #[command(
         name = "lsp",
         about = "Serve the language server for editors",
-        long_about = "Serve the language server for editors\n\nThe server is the analysis engine that pip install opentide installs: KQL, SPL, ES|QL, EQL, Kibana KQL, Lucene, Falco, CQL, YARA, Exabeam, YARA-L and Tide YAML. The editor owns the process and speaks the protocol on stdio. On the command line, opentide validate and opentide lint report what it finds.",
+        long_about = "Serve the language server for editors\n\nThe server is the analysis engine that pip install opentide installs: KQL, SPL, ES|QL, EQL, Kibana KQL, Lucene, Falco, CQL, YARA, Exabeam, YARA-L, Datadog and Tide YAML. The editor owns the process and speaks the protocol on stdio. On the command line, opentide validate and opentide lint report what it finds.",
         after_help = "Examples:\n  $ opentide lsp start",
         subcommand_required = true,
         arg_required_else_help = true,

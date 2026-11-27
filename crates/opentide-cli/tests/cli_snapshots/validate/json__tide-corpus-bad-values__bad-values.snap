@@ -59,7 +59,7 @@ exit: 1
         "column": 17,
         "context": {},
         "end_column": 23,
-        "end_line": 34,
+        "end_line": 35,
         "explain": "opentide explain microsoft_defender_severity",
         "field_path": [
           "configurations",
@@ -70,14 +70,14 @@ exit: 1
         "file_path": "<WS>/Objects/Detection Rules/rule-0002-defender-kql.yaml",
         "fix": null,
         "help": null,
-        "line": 34,
+        "line": 35,
         "message": "alert.severity \"Severe\" is not Informational, Low, Medium, High or Critical (exact case)",
         "object_type": "rule",
         "object_uuid": "00000000-0000-4000-8003-000000000002",
         "path": "Objects/Detection Rules/rule-0002-defender-kql.yaml",
         "severity": "error",
         "suggestion": null,
-        "yaml_line": 33
+        "yaml_line": 34
       },
       {
         "code": "schema_validation",

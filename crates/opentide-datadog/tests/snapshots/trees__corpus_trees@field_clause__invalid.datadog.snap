@@ -1,0 +1,11 @@
+---
+source: crates/opentide-datadog/tests/trees.rs
+expression: "debug_tree(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/datadog/field_clause__invalid.datadog
+---
+QUERY@0..10
+  FIELD_CLAUSE@0..10
+    ATTRIBUTE@0..9
+      WORD@0..9 "@evt.name"
+    COLON@9..10 ":"
+10..10: expected a value after `:`

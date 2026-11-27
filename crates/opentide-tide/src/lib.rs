@@ -23,6 +23,8 @@ mod folded;
 mod google_secops;
 mod injection;
 mod intel;
+mod microsoft_defender;
+mod microsoft_defender_nrt;
 mod outline;
 mod placeholder;
 mod refs;
@@ -785,9 +787,11 @@ fn analyze_queries_lines(source: &str, elastic_tenants: &[ElasticTenant]) -> Vec
 }
 
 /// The block findings a query carries: the datasets the Elastic block
-/// reads (`index`, `threat.index`, `data_view_id`) are its query's, and the
+/// reads (`index`, `threat.index`, `data_view_id`) are its query's, the
 /// Sysdig block's event source and exceptions its condition's (Falco
-/// appends the exceptions to the condition when it loads the rule). A
+/// appends the exceptions to the condition when it loads the rule), and the
+/// Microsoft Defender block's columns, checked against what its query
+/// returns, its query's ([`microsoft_defender`]). A
 /// placeholder query carries none: `opentide validate` skips it, and
 /// [`block_diagnostics`] reports them on the block instead.
 fn attach_to_queries(source: &str, configurations: Option<&Arc<Node>>, out: &mut [QueryAnalysis]) {
@@ -803,6 +807,14 @@ fn attach_to_queries(source: &str, configurations: Option<&Arc<Node>>, out: &mut
             .diagnostics
             .extend(elastic::dataset_declarations(source, block));
     }
+    // A continuous Defender block's NRT findings are its query's
+    // ([`microsoft_defender_nrt`], #1890).
+    if let Some(block) = configurations.and_then(|c| c.get("microsoft_defender"))
+        && let Some(at) = carrier(out, microsoft_defender_nrt::QUERY)
+    {
+        let found = microsoft_defender_nrt::nrt_findings(source, block, &out[at].query);
+        out[at].diagnostics.extend(found);
+    }
     if let Some(block) = configurations.and_then(|c| c.get("sysdig"))
         && let Some(at) = carrier(out, SYSDIG_CONDITION)
     {
@@ -812,6 +824,13 @@ fn attach_to_queries(source: &str, configurations: Option<&Arc<Node>>, out: &mut
         out[at]
             .diagnostics
             .extend(exceptions_beyond_the_model(source, block));
+    }
+    // The Defender block's columns against what its query returns (#1885).
+    if let Some(configurations) = configurations
+        && let Some(at) = carrier(out, microsoft_defender::QUERY)
+    {
+        let found = microsoft_defender::output_findings(source, configurations, &out[at].query);
+        out[at].diagnostics.extend(found);
     }
 }
 
@@ -1014,6 +1033,18 @@ fn analyze_injections(
                     opentide_exabeam::Context::SEARCH
                 };
                 let r = opentide_exabeam::analyze_with(&inj.inner, &ctx);
+                (r.diagnostics, r.tokens)
+            }
+            // No platform embeds the Datadog search syntax yet (the `datadog` platform is
+            // phase 2 of rfc-datadog-cloud-siem): a rule block's query would be profile
+            // `rule`, a hunt's `search`.
+            LanguageId::Datadog => {
+                let ctx = if inj.field_path.first().map(String::as_str) == Some("configurations") {
+                    opentide_datadog::Context::RULE
+                } else {
+                    opentide_datadog::Context::SEARCH
+                };
+                let r = opentide_datadog::analyze_with(&inj.inner, &ctx);
                 (r.diagnostics, r.tokens)
             }
             LanguageId::TideYaml | LanguageId::Config => (Vec::new(), Vec::new()),

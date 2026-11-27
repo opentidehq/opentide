@@ -1,0 +1,36 @@
+---
+source: crates/opentide-datadog/tests/trees.rs
+expression: "debug_tree(\"(a:b AND (c:(d OR e)\")"
+---
+QUERY@0..20
+  GROUP@0..20
+    L_PAREN@0..1 "("
+    AND_EXPR@1..20
+      FIELD_CLAUSE@1..4
+        TAG_KEY@1..2
+          WORD@1..2 "a"
+        COLON@2..3 ":"
+        TERM@3..4
+          WORD@3..4 "b"
+      WHITESPACE@4..5 " "
+      AND_KW@5..8 "AND"
+      WHITESPACE@8..9 " "
+      GROUP@9..20
+        L_PAREN@9..10 "("
+        FIELD_CLAUSE@10..20
+          TAG_KEY@10..11
+            WORD@10..11 "c"
+          COLON@11..12 ":"
+          VALUE_GROUP@12..20
+            L_PAREN@12..13 "("
+            VALUE_OR_EXPR@13..19
+              TERM@13..14
+                WORD@13..14 "d"
+              WHITESPACE@14..15 " "
+              OR_KW@15..17 "OR"
+              WHITESPACE@17..18 " "
+              TERM@18..19
+                WORD@18..19 "e"
+            R_PAREN@19..20 ")"
+20..20: missing `)` (expected R_PAREN)
+20..20: missing `)` (expected R_PAREN)

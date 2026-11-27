@@ -1,0 +1,17 @@
+---
+source: crates/opentide-datadog/tests/trees.rs
+expression: "debug_tree(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/datadog/attribute__invalid.datadog
+---
+QUERY@0..20
+  FIELD_CLAUSE@0..18
+    ATTRIBUTE@0..17
+      WORD@0..11 "@user.first"
+      ESCAPE@11..13 "\\ "
+      WORD@13..17 "name"
+    COLON@17..18 ":"
+  WHITESPACE@18..19 " "
+  ERROR@19..20
+    R_PAREN@19..20 ")"
+18..19: expected a value after `:`
+18..19: unexpected

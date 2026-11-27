@@ -9,7 +9,7 @@ The `opentide` crate is opentide's Rust API, and the only opentide crate with a 
 
 ## Install
 
-The `opentide` crate and the engine crates it wraps are on [crates.io](https://crates.io/crates/opentide), and the API is on [docs.rs](https://docs.rs/opentide). Their current version is `1.0.0`, the version `pip install opentide` installs:
+The `opentide` crate and the engine crates it wraps are on [crates.io](https://crates.io/crates/opentide), and the API is on [docs.rs](https://docs.rs/opentide). Their current version is `1.1.0`, the version `pip install opentide` installs:
 
 ```bash
 cargo add opentide

@@ -517,6 +517,65 @@ fn a_deleted_splunk_rule_is_retired_by_its_name_and_marked_uuid() {
     assert!(rows(&sent)[0].3);
 }
 
+/// #1894: a retirement the connector fails with a code of its own (Splunk's
+/// `splunk_renamed_search_not_deleted`) keeps that code in the row's error.
+#[test]
+fn a_retirement_failed_with_its_own_code_keeps_it_in_the_row() {
+    let block = "  splunk:\n    status: PRODUCTION\n    query: index=main\n";
+    let ws = workspace(
+        "splunk",
+        SPLUNK_SETUP,
+        &[("gone.yaml", rule("Gone search", GONE, block))],
+    );
+    deleted_in_last_commit(ws.path(), "gone.yaml");
+    let cleanup = DeployError::rule(DeployFailure::new(
+        "splunk_renamed_search_not_deleted",
+        "saved search \"Gone search\" was deleted (or already absent), but \"Old search\" \
+         could not be deleted",
+    ));
+    let (registry, _) = recorder("splunk", vec![Err(cleanup)]);
+    let (sent, _) = deploy(ws.path(), &release("splunk", true), &registry);
+    let Some(Json::Array(results)) = get(&sent, "results") else {
+        panic!("results")
+    };
+    assert_eq!(results[0].get("status"), Some(&Json::str("failed")));
+    let error = results[0]
+        .get("error")
+        .and_then(Json::as_str)
+        .unwrap_or_default();
+    assert!(
+        error.starts_with("splunk_renamed_search_not_deleted: saved search \"Gone search\""),
+        "{error}"
+    );
+}
+
+/// A retirement refused with the generic `tenant_refused` (not a 404, and
+/// not Defender) reads as the tenant's message, with no code before it.
+#[test]
+fn a_retirement_refused_with_no_code_of_its_own_reads_as_its_message() {
+    let block = "  splunk:\n    status: PRODUCTION\n    query: index=main\n";
+    let ws = workspace(
+        "splunk",
+        SPLUNK_SETUP,
+        &[("gone.yaml", rule("Gone search", GONE, block))],
+    );
+    deleted_in_last_commit(ws.path(), "gone.yaml");
+    let refused = DeployError::rule(
+        DeployFailure::new("tenant_refused", "Splunk refused the delete (HTTP 400)")
+            .with_status(400),
+    );
+    let (registry, _) = recorder("splunk", vec![Err(refused)]);
+    let (sent, _) = deploy(ws.path(), &release("splunk", true), &registry);
+    let Some(Json::Array(results)) = get(&sent, "results") else {
+        panic!("results")
+    };
+    assert_eq!(results[0].get("status"), Some(&Json::str("failed")));
+    assert_eq!(
+        results[0].get("error"),
+        Some(&Json::str("Splunk refused the delete (HTTP 400)"))
+    );
+}
+
 #[test]
 fn a_deleted_elastic_rule_is_retired_by_its_uuid() {
     let block = "  elastic:\n    status: PRODUCTION\n    query: process.name:cmd.exe\n";

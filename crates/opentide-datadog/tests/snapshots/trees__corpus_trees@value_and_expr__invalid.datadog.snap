@@ -1,0 +1,19 @@
+---
+source: crates/opentide-datadog/tests/trees.rs
+expression: "debug_tree(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/datadog/value_and_expr__invalid.datadog
+---
+QUERY@0..19
+  FIELD_CLAUSE@0..19
+    ATTRIBUTE@0..11
+      WORD@0..11 "@user_perms"
+    COLON@11..12 ":"
+    VALUE_GROUP@12..19
+      L_PAREN@12..13 "("
+      VALUE_AND_EXPR@13..18
+        TERM@13..14
+          NUMBER@13..14 "4"
+        WHITESPACE@14..15 " "
+        AND_KW@15..18 "AND"
+      R_PAREN@18..19 ")"
+18..18: expected a search term after the operator
