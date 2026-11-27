@@ -8,7 +8,9 @@
 //!   `\n`; [`newline_of`] is the line ending a file writes (CRLF when it has
 //!   one) and [`with_newlines_of`] writes a text in it;
 //! - [`unique`]: each item once, in the order it first came (names, ids),
-//!   in linear time.
+//!   in linear time;
+//! - `shell_word` and `shell_line` (the opt-in `shell` feature): words
+//!   quoted for a POSIX shell, as a command line the user may paste.
 //!
 //! A caller that reads only `\r\n` as `\n` (a lone `\r` kept), that reads
 //! every YAML line break as `\n`, or that keeps CRLF only when every line
@@ -83,6 +85,30 @@ pub fn unique<T: Hash + Eq>(items: impl IntoIterator<Item = T>) -> Vec<T> {
         .collect()
 }
 
+/// `word` as one POSIX shell word, quoted only when it needs it (the shlex
+/// crate's quoting). A word no shell can carry, one with a NUL byte, is
+/// written as Rust writes a string (`"a\0b"`): visibly not a word to paste,
+/// never a different word or none.
+#[cfg(feature = "shell")]
+#[must_use]
+pub fn shell_word(word: &str) -> Cow<'_, str> {
+    shlex::try_quote(word).unwrap_or_else(|_| Cow::Owned(format!("{word:?}")))
+}
+
+/// `words` as one command line: each a [`shell_word`], space-separated.
+#[cfg(feature = "shell")]
+#[must_use]
+pub fn shell_line<'a>(words: impl IntoIterator<Item = &'a str>) -> String {
+    let mut line = String::new();
+    for word in words {
+        if !line.is_empty() {
+            line.push(' ');
+        }
+        line.push_str(&shell_word(word));
+    }
+    line
+}
+
 #[cfg(test)]
 mod tests {
     use std::borrow::Cow;
@@ -150,6 +176,31 @@ mod tests {
         assert_eq!(
             sha256_hex("é".as_bytes()),
             "4a99557e4033c3539de2eb65472017cad5f9557f7a0625a09f1c3f6e2ba69c4c"
+        );
+    }
+
+    #[cfg(feature = "shell")]
+    #[test]
+    fn a_shell_word_is_quoted_only_when_it_needs_it() {
+        use super::{shell_line, shell_word};
+        assert_eq!(shell_word("--strict"), "--strict");
+        assert_eq!(shell_word("é"), "'é'");
+        assert_eq!(shell_word("😀"), "'😀'");
+        assert_eq!(shell_word("a b"), "'a b'");
+        assert_eq!(shell_word("it's"), "\"it's\"");
+        assert_eq!(shell_word(""), "''");
+        // No shell carries a NUL: shown, never dropped or passed raw.
+        assert_eq!(shell_word("a\0b"), "\"a\\0b\"");
+        assert_eq!(
+            shell_line(["opentide", "validate", "--file", "é 😀.yaml", "a\0b"]),
+            "opentide validate --file 'é 😀.yaml' \"a\\0b\""
+        );
+        assert_eq!(shell_line([]), "");
+        // Without a NUL, the line is shlex's own join.
+        let words = ["x", "é", "a b", "", "it's", "$HOME"];
+        assert_eq!(
+            shell_line(words),
+            shlex::try_join(words).unwrap_or_default()
         );
     }
 }

@@ -587,6 +587,114 @@ impl<'de> serde::Deserialize<'de> for PlatformId {
     }
 }
 
+/// The identifier of a platform plugin: text that names no built-in platform.
+/// Only [`PlatformKey`] makes one, so it never holds a built-in identifier.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct PluginId(String);
+
+impl PluginId {
+    /// The identifier, as the configuration's `platforms` table keys it.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::fmt::Display for PluginId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+/// A platform a run reaches: a built-in one, or a platform plugin's. Code
+/// that serves plugins as well as the built-in platforms (the plan, the dry
+/// run, the deploy, the modifiers) takes it in place of the identifier's
+/// text; code for built-in platforms alone takes [`PlatformId`].
+///
+/// Every text is a key: a built-in identifier reads as
+/// [`PlatformKey::BuiltIn`], any other text (`Sentinel` included) as
+/// [`PlatformKey::Plugin`]. [`FromStr`](std::str::FromStr), `Display` and
+/// serde round-trip the text exactly.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum PlatformKey {
+    /// A row of [`PLATFORMS`].
+    BuiltIn(PlatformId),
+    /// A platform plugin's identifier.
+    Plugin(PluginId),
+}
+
+impl PlatformKey {
+    /// The key `id` names: the built-in platform, else a plugin's.
+    pub fn new(id: &str) -> Self {
+        PlatformId::parse(id).map_or_else(|| Self::Plugin(PluginId(id.to_owned())), Self::BuiltIn)
+    }
+
+    /// The identifier: the key under a rule's `configurations` and the
+    /// configuration's `platforms`.
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::BuiltIn(platform) => platform.as_str(),
+            Self::Plugin(plugin) => plugin.as_str(),
+        }
+    }
+
+    /// The built-in platform, if it is one.
+    pub const fn builtin(&self) -> Option<PlatformId> {
+        match self {
+            Self::BuiltIn(platform) => Some(*platform),
+            Self::Plugin(_) => None,
+        }
+    }
+}
+
+impl From<PlatformId> for PlatformKey {
+    fn from(platform: PlatformId) -> Self {
+        Self::BuiltIn(platform)
+    }
+}
+
+impl std::fmt::Display for PlatformKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl std::str::FromStr for PlatformKey {
+    type Err = std::convert::Infallible;
+
+    /// [`PlatformKey::new`]: every text names a platform.
+    fn from_str(id: &str) -> Result<Self, Self::Err> {
+        Ok(Self::new(id))
+    }
+}
+
+/// Written as its identifier, as [`PlatformId`] is.
+impl serde::Serialize for PlatformKey {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.as_str())
+    }
+}
+
+/// Read from any string ([`PlatformKey::new`]).
+impl<'de> serde::Deserialize<'de> for PlatformKey {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct Visitor;
+
+        impl serde::de::Visitor<'_> for Visitor {
+            type Value = PlatformKey;
+
+            fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.write_str("a platform identifier")
+            }
+
+            fn visit_str<E: serde::de::Error>(self, id: &str) -> Result<PlatformKey, E> {
+                Ok(PlatformKey::new(id))
+            }
+        }
+
+        deserializer.deserialize_str(Visitor)
+    }
+}
+
 /// The platform `id` names, if it is built in.
 pub fn get(id: &str) -> Option<&'static Platform> {
     PLATFORMS.iter().find(|platform| platform.id == id)
@@ -712,6 +820,44 @@ mod tests {
             "\"sentinél\" is not a built-in platform"
         );
         assert!(serde_json::from_str::<PlatformId>("1").is_err());
+    }
+
+    /// A built-in identifier is a built-in key, any other text a plugin's;
+    /// `FromStr`, `Display` and serde round-trip both exactly, non-ASCII
+    /// text included.
+    #[test]
+    fn platform_keys_round_trip_built_in_and_plugin_ids() {
+        use super::{PlatformId, PlatformKey};
+        let round_trip = |text: &str| {
+            let key: PlatformKey = text.parse().unwrap();
+            assert_eq!(key, PlatformKey::new(text));
+            assert_eq!(key.as_str(), text);
+            assert_eq!(key.to_string(), text);
+            let json = serde_json::to_string(&key).unwrap();
+            assert_eq!(json, serde_json::to_string(text).unwrap());
+            assert_eq!(serde_json::from_str::<PlatformKey>(&json).unwrap(), key);
+            key
+        };
+        for platform in PlatformId::ALL {
+            let key = round_trip(platform.as_str());
+            assert_eq!(key, PlatformKey::BuiltIn(platform));
+            assert_eq!(key, PlatformKey::from(platform));
+            assert_eq!(key.builtin(), Some(platform));
+        }
+        for plugin in [
+            "my_plugin",
+            "Sentinel",
+            " sentinel",
+            "sentinel-one",
+            "sentinél",
+            "😀",
+            "",
+        ] {
+            let key = round_trip(plugin);
+            assert!(matches!(&key, PlatformKey::Plugin(id) if id.as_str() == plugin));
+            assert_eq!(key.builtin(), None);
+        }
+        assert!(serde_json::from_str::<PlatformKey>("1").is_err());
     }
 
     use super::{

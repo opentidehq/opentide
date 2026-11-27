@@ -26,11 +26,13 @@ use super::interrupt::watched;
 use indexmap::IndexMap;
 use opentide_compile::Json as CJson;
 use opentide_compile::plan::{SelectOptions, Tenant as PlanTenant};
+use opentide_compile::rule_query::rule_queries;
 use opentide_compile::strategy::{self, RunStrategies, StatusStrategy};
 use opentide_connectors::connector::{LiveCheck, QueryRequest, TenantContext, TimeWindow};
 use opentide_connectors::credentials::Mode as Resolve;
 use opentide_connectors::elastic::{Elastic, ElasticError};
 use opentide_connectors::{ConnectorError, Environment, HttpClient, Registry, Tenant};
+use opentide_schema::platforms::PlatformKey;
 use opentide_schema::vocab::Vocabularies;
 use opentide_workspace::{FileSystem as _, OsFs, Workspace};
 use tokio_util::sync::CancellationToken;
@@ -38,10 +40,11 @@ use tokio_util::sync::CancellationToken;
 use super::query::{
     Configured, default_host, http_settings, log_unset, toml_value, unset_credentials,
 };
+use super::result::CommandResult;
 use super::validate_query::{Args, COMMAND};
 use super::{Report, placement};
 use crate::env::Env;
-use crate::envelope::{Failure, NextAction, Outcome, code};
+use crate::envelope::code;
 use crate::json::{Json, Object};
 use crate::render::diagnostic::{Diagnostic, Severity};
 use crate::render::progress::{Progress, Step, StepStatus};
@@ -147,83 +150,10 @@ impl Live {
     }
 }
 
-/// The envelope of a service's result (`CommandResult.from_payload`):
-/// `message`, `status` and `warnings` leave the data, as do `_exit_code`,
-/// `_summary`, `_next_actions`, `_failure_code`, `_failure_argument` and
-/// `_failure_suggestion`; a run that failed or exits non-zero has a
-/// failure, with `error` (else the message) as its message.
+/// The envelope of a service's result built as keys in order, `_`-keys
+/// included ([`CommandResult::from_fields`]).
 pub fn report_of(command: &str, result: &[(String, Json)]) -> Report {
-    let take = |key: &str| result.iter().find(|(name, _)| name == key).map(|(_, v)| v);
-    let text = |key: &str| match take(key) {
-        Some(Json::Str(text)) => Some(text.clone()),
-        _ => None,
-    };
-    let exit_code = match take("_exit_code") {
-        Some(Json::Int(code)) => i32::try_from(*code).unwrap_or(1),
-        _ => 0,
-    };
-    let message = text("message").unwrap_or_else(|| "Completed successfully".to_owned());
-    let status = text("status").unwrap_or_else(|| "completed".to_owned());
-    let warnings: Vec<String> = match take("warnings") {
-        Some(Json::Array(items)) => items
-            .iter()
-            .map(|item| match item {
-                Json::Str(text) => text.clone(),
-                other => crate::json::document_text(other, false),
-            })
-            .collect(),
-        _ => Vec::new(),
-    };
-    let summary = match take("_summary") {
-        Some(Json::Object(members)) => members.clone().into_iter().collect(),
-        _ => Vec::new(),
-    };
-    let next_actions = match take("_next_actions") {
-        Some(Json::Array(items)) => items
-            .iter()
-            .map(|item| {
-                let field = |key: &str| item.get(key).and_then(Json::as_str).unwrap_or_default();
-                NextAction::new(field("command"), field("reason"))
-            })
-            .collect(),
-        _ => Vec::new(),
-    };
-    let ok = status != "failed";
-    let failure = (!ok || exit_code != 0).then(|| {
-        let default = match status.as_str() {
-            "issues" => super::ISSUES_FOUND,
-            "skipped" => "not_run",
-            _ => super::COMMAND_FAILED,
-        };
-        let failure_code = text("_failure_code").unwrap_or_else(|| default.to_owned());
-        let mut failure = Failure::new(
-            &failure_code,
-            text("error").unwrap_or_else(|| message.clone()),
-        );
-        failure.argument = text("_failure_argument");
-        failure.suggestion = text("_failure_suggestion");
-        failure
-    });
-    let data: Fields = result
-        .iter()
-        .filter(|(key, _)| {
-            !key.starts_with('_') && !matches!(key.as_str(), "message" | "status" | "warnings")
-        })
-        .cloned()
-        .collect();
-    let mut report = Report::completed(command, data);
-    report.outcome = Outcome {
-        command: command.to_owned(),
-        status,
-        message,
-        data: report.outcome.data,
-        exit_code,
-        summary,
-        next_actions,
-        failure,
-    };
-    report.warnings = warnings;
-    report
+    CommandResult::from_fields(result).report(command)
 }
 
 /// The keys every live result starts with.
@@ -593,7 +523,7 @@ fn with_workspace(args: &Args, platform: &str, workspace: &Workspace, cx: &Conte
     let Some(uuids) = selection.platforms.get(platform) else {
         return Live::of(nothing_selected(platform, &enabled, &runs, label));
     };
-    let tables = opentide_compile::plan::tenants(config, platform);
+    let tables = opentide_compile::plan::tenants(config, &PlatformKey::new(platform));
     if tables.is_empty() {
         return Live::of(no_tenants(platform));
     }
@@ -1200,7 +1130,8 @@ pub(crate) fn batches(
         .iter()
         .map(|table| PlanTenant::from_json(table))
         .collect();
-    let modifiers = opentide_compile::modifiers::of_platform(cx.config, platform);
+    let key = PlatformKey::new(platform);
+    let modifiers = opentide_compile::modifiers::of_platform(cx.config, &key);
     let mut out: IndexMap<String, Batch> = IndexMap::new();
     for uuid in uuids {
         let Some(rule) = rule_of(workspace, uuid) else {
@@ -1208,12 +1139,8 @@ pub(crate) fn batches(
         };
         let (block, strategy) = block_strategy(&rule, platform, cx)?;
         for tenant in opentide_compile::plan::rule_tenants(&tenants, &block, strategy, runs, wide) {
-            let sent = opentide_compile::modifiers::rule_for_tenant(
-                &modifiers,
-                platform,
-                &rule,
-                &tenant.name,
-            );
+            let sent =
+                opentide_compile::modifiers::rule_for_tenant(&modifiers, &key, &rule, &tenant.name);
             let entry = out.entry(tenant.name.clone()).or_insert_with(|| {
                 let position = tenants
                     .iter()
@@ -1632,145 +1559,6 @@ fn tenant_host(platform: &str, tenant: &Configured) -> String {
         .unwrap_or_else(|| default_host(platform).to_owned())
 }
 
-/// One query a rule sends (`RuleQuery`).
-#[derive(Clone, Debug)]
-struct RuleQuery {
-    text: String,
-    language: String,
-    label: Option<String>,
-    exclusions: Option<CJson>,
-    /// The streams a Graylog query is checked against (the block's aliases).
-    index: Vec<String>,
-}
-
-impl RuleQuery {
-    fn plain(text: String) -> Self {
-        Self {
-            text,
-            language: String::new(),
-            label: None,
-            exclusions: None,
-            index: Vec::new(),
-        }
-    }
-
-    /// The query as deploy sends it to *tenant* (`text_for`).
-    fn text_for(&self, tenant: &str) -> String {
-        match &self.exclusions {
-            Some(exclusions) => {
-                opentide_compile::kql::compile_query(&self.text, Some(exclusions), tenant)
-            }
-            None => self.text.clone(),
-        }
-    }
-}
-
-/// The rule's query on *platform*, or the refusal (`_required`).
-fn required(block: &CJson, key: &str, name: &str, platform: &str) -> Result<String, String> {
-    let text = block
-        .get(key)
-        .and_then(CJson::as_str)
-        .map(str::trim)
-        .unwrap_or_default();
-    if text.is_empty() {
-        return Err(format!("rule {name:?} has an empty {platform} query"));
-    }
-    Ok(text.to_owned())
-}
-
-/// The queries a deploy of *rule* sends to *platform*, in order
-/// (`query/rules.py` `rule_queries`).
-fn rule_queries(rule: &opentide_compile::Rule, platform: &str) -> Result<Vec<RuleQuery>, String> {
-    let name = rule.name.as_str();
-    let Some(block) = rule.block(platform) else {
-        return Err(format!("rule {name:?} has no {platform} configuration"));
-    };
-    match platform {
-        "sentinel" | "microsoft_defender" => {
-            let text = required(block, "query", name, platform)?;
-            let exclusions = block
-                .get("exclusions")
-                .filter(|exclusions| matches!(exclusions, CJson::Array(items) if !items.is_empty()))
-                .cloned();
-            Ok(vec![RuleQuery {
-                exclusions,
-                ..RuleQuery::plain(text)
-            }])
-        }
-        "carbon_black_cloud" => {
-            let text = required(block, "query", name, platform)?;
-            Ok(vec![RuleQuery::plain(
-                text.split_whitespace().collect::<Vec<_>>().join(" "),
-            )])
-        }
-        "splunk" => {
-            required(block, "query", name, platform)?;
-            Ok(vec![RuleQuery::plain(
-                opentide_compile::splunk::create_query(block),
-            )])
-        }
-        "sentinel_one" => {
-            let condition = block.get("condition");
-            let kind = condition
-                .and_then(|condition| condition.get("type"))
-                .and_then(CJson::as_str)
-                .unwrap_or_default();
-            if kind == "Single Event"
-                && let Some(single) = condition
-                    .and_then(|condition| condition.get("single_event"))
-                    .filter(|single| single.is_filled())
-            {
-                return Ok(vec![RuleQuery::plain(required(
-                    single, "query", name, platform,
-                )?)]);
-            }
-            if kind == "Correlation"
-                && let Some(correlation) = condition
-                    .and_then(|condition| condition.get("correlation"))
-                    .filter(|correlation| correlation.is_filled())
-            {
-                let subs = match correlation.get("sub_queries") {
-                    Some(CJson::Array(items)) if !items.is_empty() => items,
-                    _ => {
-                        return Err(format!("rule {name:?} has no SentinelOne sub-queries"));
-                    }
-                };
-                return subs
-                    .iter()
-                    .enumerate()
-                    .map(|(at, sub)| {
-                        Ok(RuleQuery {
-                            label: Some(format!("sub-query {}", at + 1)),
-                            ..RuleQuery::plain(required(sub, "query", name, platform)?)
-                        })
-                    })
-                    .collect();
-            }
-            Err(format!("rule {name:?} has no SentinelOne query"))
-        }
-        // The event definition's query on its streams, as `query --rule`
-        // runs it (`query/rules.py`'s `graylog`).
-        "graylog" => Ok(crate::commands::query_rule::rule_queries(rule, platform)?
-            .into_iter()
-            .map(|query| RuleQuery {
-                language: query.language.unwrap_or_default(),
-                index: query.index,
-                ..RuleQuery::plain(query.text)
-            })
-            .collect()),
-        // Each sequence's filter (`_exabeam_queries`), as `query --rule` runs it.
-        "exabeam" => Ok(crate::commands::query_rule::rule_queries(rule, platform)?
-            .into_iter()
-            .map(|query| RuleQuery {
-                language: query.language.unwrap_or_default(),
-                label: query.label,
-                ..RuleQuery::plain(query.text)
-            })
-            .collect()),
-        _ => Err(format!("{platform} rules cannot be queried")),
-    }
-}
-
 /// A tenant's connection, made once per batch.
 struct Connection {
     tenant: Tenant,
@@ -1977,8 +1765,11 @@ impl Asking<'_> {
                 }
             };
             for item in queries {
-                let mut request =
-                    QueryRequest::new(item.text_for(&tenant.name), &item.language, self.window);
+                let mut request = QueryRequest::new(
+                    item.text_for(&tenant.name),
+                    item.language.as_deref().unwrap_or_default(),
+                    self.window,
+                );
                 request.limit = 1;
                 request.timeout = seconds(self.timeout);
                 request.index = item.index.clone();
@@ -3311,7 +3102,7 @@ mod tests {
         );
         let gl = rule_queries(&graylog, "graylog").unwrap();
         assert_eq!(gl[0].text, "source:host");
-        assert_eq!(gl[0].language, "lucene");
+        assert_eq!(gl[0].language.as_deref(), Some("lucene"));
         assert_eq!(gl[0].index, ["sysmon", "dns"]);
         let exabeam = rule(
             "name: R\nmetadata: {uuid: 00000000-0000-4000-8000-000000000001}\nconfigurations:\n  \
@@ -3323,7 +3114,7 @@ mod tests {
             .map(|query| {
                 (
                     query.text.as_str(),
-                    query.language.as_str(),
+                    query.language.as_deref().unwrap_or_default(),
                     query.label.as_deref(),
                 )
             })

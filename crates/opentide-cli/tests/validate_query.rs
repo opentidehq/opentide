@@ -550,6 +550,113 @@ fn exabeam_sequences_and_exabeam_files_are_checked_offline() {
         "{}",
         under_platform.stdout
     );
+    // `--position rule` says the query is a sequence filter: checked as the
+    // Exabeam block checks one, where Search's operators are refused (#1993).
+    let rule = opentide(
+        &ws,
+        &[
+            "--json",
+            "validate",
+            "query",
+            "--platform",
+            "exabeam",
+            "--position",
+            "rule",
+            "--file",
+            "x.exabeam",
+        ],
+        &[],
+    );
+    assert_eq!(rule.code, 1, "{}", rule.stdout);
+    let codes: Vec<String> = rule.json()["diagnostics"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|item| item["code"].as_str().map(str::to_owned))
+        .collect();
+    assert_eq!(codes, ["exabeam_advanced_in_rule"], "{}", rule.stdout);
+}
+
+/// A rule block is a platform's: `--position rule` without `--platform` is a
+/// usage error naming `--platform`, never a search (#1993).
+#[test]
+fn a_rule_position_without_a_platform_is_a_usage_error() {
+    let (_scratch, ws) = corpus();
+    std::fs::write(ws.join("x.exabeam"), "SELECT user WHERE vendor:\"x\"\n").unwrap();
+    let ran = opentide(
+        &ws,
+        &[
+            "--json",
+            "validate",
+            "query",
+            "--position",
+            "rule",
+            "--file",
+            "x.exabeam",
+        ],
+        &[],
+    );
+    assert_eq!(ran.code, 2, "{}", ran.stdout);
+    let document = ran.json();
+    assert_eq!(
+        document["failure"]["code"], "usage_missing_option",
+        "{}",
+        ran.stdout
+    );
+    assert_eq!(
+        document["failure"]["argument"], "--platform",
+        "{}",
+        ran.stdout
+    );
+}
+
+/// `--position` says where a query file's query will sit: without a query
+/// file, or with `--live` (which checks rules, as rules), it would do
+/// nothing, so it is refused rather than ignored (#1993).
+#[test]
+fn a_position_without_a_query_file_or_with_live_is_refused() {
+    let (_scratch, ws) = corpus();
+    let ran = opentide(
+        &ws,
+        &[
+            "--json",
+            "validate",
+            "query",
+            "--platform",
+            "exabeam",
+            "--position",
+            "rule",
+        ],
+        &[],
+    );
+    assert_eq!(ran.code, 2, "{}", ran.stdout);
+    assert_eq!(
+        ran.json()["failure"]["argument"],
+        "--position",
+        "{}",
+        ran.stdout
+    );
+    let live = opentide(
+        &ws,
+        &[
+            "--json",
+            "validate",
+            "query",
+            "--live",
+            "--platform",
+            "exabeam",
+            "--position",
+            "rule",
+        ],
+        &[],
+    );
+    assert_eq!(live.code, 2, "{}", live.stdout);
+    assert_eq!(
+        live.json()["failure"]["argument"],
+        "--position",
+        "{}",
+        live.stdout
+    );
 }
 
 #[test]

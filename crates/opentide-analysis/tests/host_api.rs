@@ -2,7 +2,8 @@
 //! queries, code descriptions, and the version.
 
 use opentide_analysis::{
-    LanguageId, MemoryWorkspace, QueryRequest, VERSION, analyze_queries, analyze_query, codes,
+    LanguageId, MemoryWorkspace, QueryPosition, QueryRequest, VERSION, analyze_queries,
+    analyze_query, analyze_query_at, codes, validate_position,
 };
 
 const RULE: &str = r#"name: Two Platforms
@@ -133,16 +134,9 @@ fn a_file_that_is_not_yaml_has_no_queries() {
 
 #[test]
 fn a_single_query_takes_the_platform_profile() {
-    let defender = QueryRequest {
-        language: LanguageId::Kql,
-        platform: Some("microsoft_defender".into()),
-        stack: None,
-        text: "DeviceProcessEvents | take 1".into(),
-    };
-    let sentinel = QueryRequest {
-        platform: Some("sentinel".into()),
-        ..defender.clone()
-    };
+    let defender = QueryRequest::new(LanguageId::Kql, "DeviceProcessEvents | take 1")
+        .with_platform(Some("microsoft_defender"));
+    let sentinel = defender.clone().with_platform(Some("sentinel"));
     let unknown_table = |request: &QueryRequest| {
         analyze_query(request)
             .iter()
@@ -152,20 +146,15 @@ fn a_single_query_takes_the_platform_profile() {
     assert!(!unknown_table(&defender));
     assert!(!unknown_table(&sentinel));
     // A Log Analytics table is not an advanced hunting table.
-    let log_analytics = |platform: &str| QueryRequest {
-        platform: Some(platform.into()),
-        text: "NTANetAnalytics | take 1".into(),
-        ..defender.clone()
+    let log_analytics = |platform: &str| {
+        QueryRequest::new(LanguageId::Kql, "NTANetAnalytics | take 1").with_platform(Some(platform))
     };
     assert!(unknown_table(&log_analytics("microsoft_defender")));
     assert!(!unknown_table(&log_analytics("sentinel")));
 
-    let broken = QueryRequest {
-        language: LanguageId::Esql,
-        platform: Some("elastic".into()),
-        stack: Some("9.5".into()),
-        text: "FROM logs-* | WHER x == 1".into(),
-    };
+    let broken = QueryRequest::new(LanguageId::Esql, "FROM logs-* | WHER x == 1")
+        .with_platform(Some("elastic"))
+        .with_stack(Some("9.5"));
     assert!(
         analyze_query(&broken)
             .iter()
@@ -247,11 +236,8 @@ fn has_correlate_aggregate(diagnostics: &[opentide_analysis::Diagnostic]) -> boo
 /// correlation rule ([`a_crowdstrike_hunt_search_is_not_a_correlation_rule`]).
 #[test]
 fn a_single_cql_query_is_a_search_whatever_the_platform() {
-    let request = |platform: Option<&str>| QueryRequest {
-        language: LanguageId::Cql,
-        platform: platform.map(str::to_string),
-        stack: None,
-        text: CORRELATE_THEN_AGGREGATE.into(),
+    let request = |platform: Option<&str>| {
+        QueryRequest::new(LanguageId::Cql, CORRELATE_THEN_AGGREGATE).with_platform(platform)
     };
     let plain = analyze_query(&request(None));
     assert!(!has_correlate_aggregate(&plain), "{plain:?}");
@@ -265,11 +251,8 @@ fn a_single_cql_query_is_a_search_whatever_the_platform() {
 /// `.datadog` search under a `datadog` platform is a search too.
 #[test]
 fn an_exabeam_or_datadog_search_is_a_search_under_its_platform() {
-    let request = |language: LanguageId, platform: Option<&str>, text: &str| QueryRequest {
-        language,
-        platform: platform.map(str::to_string),
-        stack: None,
-        text: text.into(),
+    let request = |language: LanguageId, platform: Option<&str>, text: &str| {
+        QueryRequest::new(language, text).with_platform(platform)
     };
     let exabeam = "SELECT DISTINCT user, src_ip WHERE vendor:\"Microsoft\"";
     for platform in [None, Some("exabeam")] {
@@ -319,4 +302,108 @@ fn a_crowdstrike_hunt_search_is_not_a_correlation_rule() {
             ("response.procedure.searches.0.query".into(), false),
         ]
     );
+}
+
+/// An explicit position is a position (#1993, ADR 0015 §4): at `rule`, a
+/// query on its own is checked as the platform's rule block checks its own,
+/// so the rule-only codes come back; at `search` (the default) they do not.
+#[test]
+fn a_query_at_the_rule_position_is_checked_as_its_rule_block() {
+    let exabeam = "SELECT DISTINCT user, src_ip WHERE vendor:\"Microsoft\"";
+    let cases = [
+        (
+            LanguageId::Cql,
+            "crowdstrike",
+            CORRELATE_THEN_AGGREGATE,
+            codes::CQL_CORRELATE_AGGREGATE,
+        ),
+        (
+            LanguageId::Exabeam,
+            "exabeam",
+            exabeam,
+            "exabeam_advanced_in_rule",
+        ),
+        (
+            LanguageId::Datadog,
+            "datadog",
+            "*:mimikatz",
+            "datadog_full_text_in_rule",
+        ),
+        (
+            LanguageId::Kql,
+            "sentinel",
+            "union * | take 1",
+            codes::KQL_RULE_UNION_STAR,
+        ),
+    ];
+    for (language, platform, text, code) in cases {
+        let request = QueryRequest::new(language, text).with_platform(Some(platform));
+        assert!(
+            validate_position(&request, QueryPosition::Rule).is_ok(),
+            "{platform}"
+        );
+        let found = |position| {
+            analyze_query_at(&request, position)
+                .iter()
+                .any(|d| d.code == code)
+        };
+        assert!(found(QueryPosition::Rule), "{platform}: {code} at rule");
+        assert!(
+            !found(QueryPosition::Search),
+            "{platform}: {code} at search"
+        );
+        // `analyze_query` is the search.
+        assert_eq!(
+            analyze_query(&request),
+            analyze_query_at(&request, QueryPosition::Search)
+        );
+    }
+}
+
+/// A YARA-L text at `rule` is the rule a Google SecOps block assembles: the
+/// rule profile, whose `meta` deploy writes. As a `.yaral` file (`search`) a
+/// rule needs its own `meta` (#1993).
+#[test]
+fn a_yaral_rule_at_the_rule_position_needs_no_meta() {
+    let text = "rule r {\n  events:\n    $e.metadata.event_type = \"USER_LOGIN\"\n  condition:\n    $e\n}\n";
+    let missing_section = |position: QueryPosition| {
+        analyze_query_at(
+            &QueryRequest::new(LanguageId::Yaral, text).with_platform(Some("google_secops")),
+            position,
+        )
+        .into_iter()
+        .any(|d| d.code == codes::YARAL_SECTION_MISSING)
+    };
+    assert!(missing_section(QueryPosition::Search));
+    assert!(!missing_section(QueryPosition::Rule));
+}
+
+/// A rule block is a platform's: a rule without one is one error and no
+/// check, not a search.
+#[test]
+fn a_rule_position_needs_a_platform() {
+    let rule = QueryPosition::Rule;
+    let request = QueryRequest::new(LanguageId::Cql, CORRELATE_THEN_AGGREGATE);
+    assert_eq!(
+        validate_position(&request, rule),
+        Err(opentide_analysis::QueryRequestError::RuleWithoutPlatform)
+    );
+    let found = analyze_query_at(&request, rule);
+    assert_eq!(
+        found.iter().map(|d| d.code.as_str()).collect::<Vec<_>>(),
+        [codes::QUERY_POSITION_NEEDS_PLATFORM]
+    );
+    assert!(validate_position(&request.clone().with_platform(Some("")), rule).is_err());
+    assert!(validate_position(&request.clone().with_platform(Some("crowdstrike")), rule).is_ok());
+    assert!(validate_position(&request, QueryPosition::Search).is_ok());
+}
+
+#[test]
+fn a_position_has_a_name() {
+    for position in [QueryPosition::Search, QueryPosition::Rule] {
+        assert_eq!(QueryPosition::parse(position.as_str()), Some(position));
+    }
+    assert_eq!(QueryPosition::parse("RULE"), None);
+    assert_eq!(QueryPosition::parse("hunt"), None);
+    assert_eq!(QueryPosition::default(), QueryPosition::Search);
 }

@@ -175,6 +175,16 @@ pub enum Queries {
     Off,
 }
 
+/// The values of `validate query --position`, as the command line spells
+/// them: where a query file's query will sit.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
+pub enum Position {
+    #[value(name = "search")]
+    Search,
+    #[value(name = "rule")]
+    Rule,
+}
+
 /// The values of `ReportFormat`, as the command line spells them.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
 pub enum ReportFormat {
@@ -1732,6 +1742,12 @@ pub struct ValidateQueryArgs {
         help = "Check only the rule files this run changed: the pull or merge request, the push, or outside CI the last commit (the files deploy reads)"
     )]
     pub changed: bool,
+    #[arg(
+        long = "position",
+        help = "Where a --file query will sit: search (the default; a query file or a hunt) or rule (the query of the --platform's rule block, checked as that block checks it)",
+        value_name = "search|rule"
+    )]
+    pub position: Option<Position>,
     #[command(flatten)]
     pub select: QuerySelect,
     #[command(flatten)]

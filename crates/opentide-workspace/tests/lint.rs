@@ -1003,6 +1003,41 @@ mod lint {
         );
     }
 
+    /// #1957: a NUL in a `--file` value once emptied the quoted flags, and
+    /// the rename step fell back to a bare `opentide lint --fix`, which
+    /// renames every file in the workspace. The step keeps the scope.
+    #[test]
+    fn the_rename_step_keeps_a_file_flag_that_holds_a_nul() {
+        let fs = workspace();
+        fs.write(
+            "/ws/objects/rules/é\0😀.yaml",
+            rule(U1, "Sentinel KQL Rule"),
+        );
+        fs.write("/ws/objects/rules/other.yaml", rule(U2, "Other Rule"));
+        let report = run(
+            &fs,
+            &LintConfig::default(),
+            &LintOptions {
+                files: vec!["objects/rules/é\0😀.yaml".to_owned()],
+                ..options()
+            },
+        );
+        assert_eq!(report.scope, Some("selected"));
+        assert_eq!(
+            codes(&report),
+            [("filename_mismatch", "objects/rules/é\0😀.yaml")]
+        );
+        let commands: Vec<&str> = report
+            .next_actions
+            .iter()
+            .map(|next| next.command.as_str())
+            .collect();
+        assert_eq!(
+            commands,
+            [r#"opentide lint --fix --file "objects/rules/é\0😀.yaml""#]
+        );
+    }
+
     #[test]
     fn changed_narrows_to_the_hosts_diff_and_refuses_with_file() {
         let fs = workspace();

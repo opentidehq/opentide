@@ -83,12 +83,13 @@ fn warm_up() {
     let _ = std::thread::Builder::new()
         .name("opentide-lsp-warm-up-kql".to_owned())
         .spawn(|| {
-            let _ = opentide_analysis::analyze_query(&opentide_analysis::QueryRequest {
-                language: opentide_core::LanguageId::Kql,
-                platform: Some("sentinel".to_owned()),
-                stack: None,
-                text: "SecurityEvent | take 1".to_owned(),
-            });
+            let _ = opentide_analysis::analyze_query(
+                &opentide_analysis::QueryRequest::new(
+                    opentide_core::LanguageId::Kql,
+                    "SecurityEvent | take 1".to_owned(),
+                )
+                .with_platform(Some("sentinel")),
+            );
         });
 }
 

@@ -329,16 +329,17 @@ impl Profiles {
         one_secops_rule(checked)
     }
 
-    /// [`check_query_on_stack`] with these profiles' declared datasets.
+    /// [`check_query_at`] with these profiles' declared datasets.
     pub fn check_query(
         &self,
         text: &str,
         language: crate::LanguageId,
         platform: Option<&str>,
         stack: Option<&str>,
+        position: crate::QueryPosition,
     ) -> Vec<Finding> {
         self.datasets
-            .scope(|| check_query_on_stack(text, language, platform, stack))
+            .scope(|| check_query_at(text, language, platform, stack, position))
     }
 
     /// These profiles' declared datasets in use on this thread until the
@@ -449,7 +450,7 @@ pub fn check_query_text(
     language: crate::LanguageId,
     platform: Option<&str>,
 ) -> Vec<Finding> {
-    check_query_on_stack(text, language, platform, None)
+    check_query_at(text, language, platform, None, crate::QueryPosition::Search)
 }
 
 /// [`check_query_text`] for an Elastic `stack` (`9.5`), which ES|QL's
@@ -460,14 +461,33 @@ pub fn check_query_on_stack(
     platform: Option<&str>,
     stack: Option<&str>,
 ) -> Vec<Finding> {
+    check_query_at(
+        text,
+        language,
+        platform,
+        stack,
+        crate::QueryPosition::Search,
+    )
+}
+
+/// [`check_query_on_stack`] at `position`: [`crate::QueryPosition::Rule`]
+/// checks the query as `platform`'s rule block checks its own. The caller
+/// refuses a rule without a platform first ([`crate::validate_position`]).
+pub fn check_query_at(
+    text: &str,
+    language: crate::LanguageId,
+    platform: Option<&str>,
+    stack: Option<&str>,
+    position: crate::QueryPosition,
+) -> Vec<Finding> {
     let text = universal_newlines(text);
     let lines = LineStarts::new(&text);
-    crate::analyze_query(&crate::QueryRequest {
-        language,
-        platform: platform.map(str::to_owned),
-        stack: stack.map(str::to_owned),
-        text: text.clone().into_owned(),
-    })
+    crate::analyze_query_at(
+        &crate::QueryRequest::new(language, text.clone().into_owned())
+            .with_platform(platform)
+            .with_stack(stack),
+        position,
+    )
     .into_iter()
     .map(|diagnostic| finding(&text, &lines, diagnostic))
     .collect()
