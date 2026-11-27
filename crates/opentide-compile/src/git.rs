@@ -438,9 +438,14 @@ fn refused(message: String) -> gix_error::Error {
 /// before (`@{-1}`), a branch's upstream (`@{u}`) and message searches
 /// (`:/fix`, `HEAD^{/fix}`). What names no single commit is refused: ranges,
 /// paths (`HEAD:file`, `:file`), trees and blobs; and `@{push}`, whose
-/// branch depends on the push configuration.
+/// branch depends on the push configuration. Without `every_form`, the
+/// forms that name no commit a CI run diffs (reflogs, earlier branches,
+/// upstreams, message searches) are refused as well.
 struct Resolve<'r> {
     repo: &'r Repo,
+    /// Whether reflogs, earlier branches, upstreams and message searches
+    /// are read (`deploy replay-state`'s commit, which a person may type).
+    every_form: bool,
     current: Option<ObjectId>,
     /// The reference the revision named last (`HEAD`, `refs/heads/main`),
     /// whose reflog and upstream `@{...}` reads.
@@ -480,6 +485,15 @@ impl Resolve<'_> {
 
     fn unsupported(&mut self, what: &str) -> Result<(), gix_error::Error> {
         Err(self.refuse(what.to_owned()))
+    }
+
+    /// Refuses `what` unless every form is read.
+    fn every_form(&mut self, what: &str) -> Result<(), gix_error::Error> {
+        if self.every_form {
+            Ok(())
+        } else {
+            self.unsupported(&format!("{what} names no commit a run diffs"))
+        }
     }
 
     /// The reference `@{...}` applies to: the one named last, else the
@@ -669,6 +683,7 @@ impl delegate::Revision for Resolve<'_> {
     }
 
     fn reflog(&mut self, query: delegate::ReflogLookup) -> Result<(), gix_error::Error> {
+        self.every_form("a reflog entry")?;
         let name = self
             .anchor_ref()
             .ok_or_else(|| self.refuse("HEAD names no reference".to_owned()))?;
@@ -686,6 +701,7 @@ impl delegate::Revision for Resolve<'_> {
     }
 
     fn nth_checked_out_branch(&mut self, branch_no: usize) -> Result<(), gix_error::Error> {
+        self.every_form("a checked-out branch")?;
         let before = self
             .checked_out_before(branch_no)
             .map_err(|message| self.refuse(message))?;
@@ -706,6 +722,7 @@ impl delegate::Revision for Resolve<'_> {
     }
 
     fn sibling_branch(&mut self, kind: delegate::SiblingBranch) -> Result<(), gix_error::Error> {
+        self.every_form("an upstream branch")?;
         if matches!(kind, delegate::SiblingBranch::Push) {
             return self.unsupported(
                 "@{push} is not supported: the branch a push goes to depends on the push \
@@ -789,6 +806,7 @@ impl delegate::Navigate for Resolve<'_> {
     }
 
     fn find(&mut self, regex: &BStr, negated: bool) -> Result<(), gix_error::Error> {
+        self.every_form("a message search")?;
         let pattern = regex
             .to_str()
             .map_err(|_| self.refuse(format!("the message search {regex} is not UTF-8")))?;
@@ -832,14 +850,16 @@ impl gix_revision::spec::parse::Delegate for Resolve<'_> {
 /// The commit `rev` names, as `git rev-parse` reads it (see [`Resolve`]);
 /// an annotated tag peeled.
 fn commit_id(repo: &Repo, rev: &str) -> Option<ObjectId> {
-    resolve_commit(repo, rev).ok()
+    resolve_commit(repo, rev, false).ok()
 }
 
-/// [`commit_id`], or why `rev` names no commit, when opentide knows (`None`
-/// for a revision that names nothing).
-fn resolve_commit(repo: &Repo, rev: &str) -> Result<ObjectId, Option<String>> {
+/// [`commit_id`], reading every form when `every_form`, or why `rev` names
+/// no commit, when opentide knows (`None` for a revision that names
+/// nothing).
+fn resolve_commit(repo: &Repo, rev: &str, every_form: bool) -> Result<ObjectId, Option<String>> {
     let mut resolve = Resolve {
         repo,
+        every_form,
         current: None,
         current_ref: None,
         refusal: None,
@@ -1155,7 +1175,7 @@ pub fn commit_changes(
     let (top, _) =
         discover_with(start, env).ok_or_else(|| GitError::MissingCheckout(start.to_path_buf()))?;
     let repo = open_with(start, env)?;
-    let head = resolve_commit(&repo, rev).map_err(|reason| {
+    let head = resolve_commit(&repo, rev, true).map_err(|reason| {
         failed(match reason {
             Some(reason) => format!("Could not find git commit {rev}: {reason}"),
             None => format!("Could not find git commit {rev}"),
