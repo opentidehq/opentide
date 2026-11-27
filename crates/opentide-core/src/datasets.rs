@@ -276,33 +276,29 @@ impl DeclaredDatasets {
 }
 
 /// `*` in `pattern` matches any run of characters (including none); every
-/// other character matches itself.
+/// other character matches itself, case and all. The one copy: KQL's column
+/// patterns (`project-away Device*`) use it too (#1957).
+///
+/// Each literal piece between the stars is found leftmost in what is left,
+/// the last one at the end: linear, and it allocates only the pieces' list.
 pub fn glob_matches(pattern: &str, text: &str) -> bool {
-    let p: Vec<char> = pattern.chars().collect();
-    let t: Vec<char> = text.chars().collect();
-    let (mut pi, mut ti) = (0usize, 0usize);
-    let mut star: Option<usize> = None;
-    let mut mark = 0usize;
-    while ti < t.len() {
-        if pi < p.len() && p[pi] != '*' && p[pi] == t[ti] {
-            pi += 1;
-            ti += 1;
-        } else if pi < p.len() && p[pi] == '*' {
-            star = Some(pi);
-            mark = ti;
-            pi += 1;
-        } else if let Some(s) = star {
-            pi = s + 1;
-            mark += 1;
-            ti = mark;
-        } else {
-            return false;
+    let mut pieces = pattern.split('*');
+    let first = pieces.next().unwrap_or_default();
+    let Some(mut rest) = text.strip_prefix(first) else {
+        return false;
+    };
+    let pieces: Vec<&str> = pieces.collect();
+    let Some((last, middle)) = pieces.split_last() else {
+        // No `*` at all: the pattern is a plain name.
+        return rest.is_empty();
+    };
+    for piece in middle {
+        match rest.find(piece) {
+            Some(at) => rest = &rest[at + piece.len()..],
+            None => return false,
         }
     }
-    while pi < p.len() && p[pi] == '*' {
-        pi += 1;
-    }
-    pi == p.len()
+    rest.ends_with(last)
 }
 
 fn installed() -> &'static RwLock<Arc<DeclaredDatasets>> {
@@ -386,6 +382,30 @@ mod tests {
         assert!(glob_matches("exact", "exact"));
         assert!(!glob_matches("exact", "Exact"));
         assert!(glob_matches("*", ""));
+        // The KQL column patterns' cases (`opentide-kql`'s copy, #1957).
+        assert!(glob_matches("*", "Anything"));
+        assert!(glob_matches("User*", "UserPrincipalName"));
+        assert!(glob_matches("User*", "User"));
+        assert!(glob_matches("*Id", "TenantId"));
+        assert!(glob_matches("Device*Name", "DeviceName"));
+        assert!(glob_matches("Device*Name", "DeviceHostName"));
+        assert!(glob_matches("a*b*c", "aXbYc"));
+        assert!(!glob_matches("User*", "user"));
+        assert!(!glob_matches("User*", "AppUser"));
+        assert!(!glob_matches("*Id", "Identity"));
+        assert!(!glob_matches("a*a", "a"));
+        assert!(!glob_matches("a*b*c", "acb"));
+        // A `*` is any run of characters, not bytes; everything else,
+        // `é` and `😀` included, matches only itself.
+        assert!(glob_matches("é*😀", "é😀"));
+        assert!(glob_matches("é*😀", "éaé😀😀"));
+        assert!(glob_matches("*😀*", "a😀é"));
+        assert!(!glob_matches("é*", "e\u{301}"));
+        assert!(!glob_matches("é*", "É"));
+        assert!(!glob_matches("😀*😀", "😀"));
+        assert!(glob_matches("😀**😀", "😀😀"));
+        assert!(!glob_matches("", "é"));
+        assert!(glob_matches("", ""));
     }
 
     #[test]
