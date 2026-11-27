@@ -24,7 +24,7 @@ opentide-core.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 toml.workspace = true
-indexmap = { version = "2", features = ["serde"] }
+indexmap = { workspace = true, features = ["serde"] }
 regex.workspace = true
 titlecase.workspace = true
 
@@ -52,7 +52,7 @@ thiserror.workspace = true
 toml.workspace = true
 serde_json.workspace = true
 # Entries in document order, looked up by key. The version Cargo.lock holds.
-indexmap = { version = "2", features = ["serde"] }
+indexmap = { workspace = true, features = ["serde"] }
 serde-saphyr.workspace = true
 opentide-schema-derive.workspace = true
 # Configuration TOML with every item's span (UC-1.5): the version the
@@ -71,7 +71,7 @@ pyo3 = { workspace = true, features = ["abi3-py310", "indexmap"], optional = tru
 jiff = { workspace = true }
 # Exabeam's rule names compare as `str.casefold()` does (`exabeam_name_duplicate`):
 # full Unicode case folding, the crate the Exabeam connector matches names with.
-caseless = "0.2"
+caseless.workspace = true
 
 [dev-dependencies]
 # The oracle's Markdown patterns, with their look-arounds and back-reference: the
