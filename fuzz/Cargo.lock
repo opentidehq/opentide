@@ -2991,10 +2991,12 @@ dependencies = [
  "libfuzzer-sys",
  "opentide-analysis",
  "opentide-cli",
+ "opentide-compile",
  "opentide-core",
  "opentide-lsp",
  "opentide-schema",
  "opentide-tide",
+ "opentide-workspace",
  "serde",
 ]
 
