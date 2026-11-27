@@ -1829,9 +1829,11 @@ fn connect(
     Ok(Connection { tenant, http })
 }
 
-/// A read timeout: the request was sent to *address* and got no answer.
+/// A timeout: the request was sent to *address* and got no complete answer
+/// in *seconds* (nothing, a body that stalled, or one still coming at the
+/// transport's deadline), worded as the connector's `ConnectorError::Timeout`.
 fn read_timeout_text(address: &str, seconds: u64) -> String {
-    format!("no answer from {address} within {seconds}s")
+    format!("no complete answer from {address} within {seconds}s")
 }
 
 /// Runs the checks on every batch on the process's runtime: here, or on a
@@ -3269,7 +3271,7 @@ mod tests {
         assert_eq!(tenant_host("google_secops", &tenant(&[])), "");
         assert_eq!(
             read_timeout_text("https://s1.invalid", 5),
-            "no answer from https://s1.invalid within 5s"
+            "no complete answer from https://s1.invalid within 5s"
         );
         assert_eq!(seconds(1e300), Duration::MAX);
         assert_eq!(seconds(2.5), Duration::from_millis(2500));

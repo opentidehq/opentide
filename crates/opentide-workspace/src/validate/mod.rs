@@ -775,7 +775,7 @@ fn title_duplicates(index: &Index, work: &[Subject<'_>]) -> Vec<Diagnostic> {
 /// `exabeam_name_duplicate` and `exabeam_name_length`: the cross-rule check of
 /// Exabeam rule names (`exabeam::name_findings`), over every rule in the
 /// workspace, reported on the rules this run validates (`work`). Two enabled Exabeam blocks that
-/// resolve to one name (case-insensitively) are a duplicate; a block with no
+/// resolve to one name (under full case folding) are a duplicate; a block with no
 /// `name` whose rule name is over the limit is too long.
 fn exabeam_names(index: &Index, work: &[Subject<'_>]) -> Vec<Diagnostic> {
     use opentide_schema::objects::platform::exabeam;

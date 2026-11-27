@@ -859,6 +859,38 @@ fn duplicate_names_compare_case_insensitively_among_enabled_blocks() {
 }
 
 #[test]
+fn duplicate_names_compare_under_full_case_folding() {
+    // The connector matches names with `caseless` on deploy: lowercasing
+    // keeps `ﬁ` and `fi`, `ß` and `ss` apart, folding does not.
+    let ligature = rule_node(&rule_with("ﬁle Access", &json!({"enabled": true})));
+    let plain = rule_node(&rule_with("file access", &json!({"enabled": true})));
+    let sharp = rule_node(&rule_with("Straße", &json!({"enabled": true})));
+    let double = rule_node(&rule_with("STRASSE", &json!({"enabled": true})));
+    let accent = rule_node(&rule_with("Café 😀", &json!({"enabled": true})));
+    let rules = [
+        ("a", &ligature),
+        ("b", &plain),
+        ("c", &sharp),
+        ("d", &double),
+        ("e", &accent),
+    ];
+    let found = name_findings(&rules, ["a", "b", "c", "d", "e"]);
+    let summary: Vec<(&str, Option<&str>)> = found
+        .iter()
+        .map(|f| (f.uuid.as_str(), f.value.as_deref()))
+        .collect();
+    assert_eq!(
+        summary,
+        [
+            ("a", Some("ﬁle Access")),
+            ("b", Some("file access")),
+            ("c", Some("Straße")),
+            ("d", Some("STRASSE")),
+        ]
+    );
+}
+
+#[test]
 fn advisories_of_a_block() {
     let silent = rule_node(&rule_with("r", &json!({"outcome": "none"})));
     let found = advisories(&silent);

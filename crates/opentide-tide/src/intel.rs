@@ -448,18 +448,10 @@ pub fn inlay_hints(source: &str, workspace: &[IndexedObject]) -> Vec<TideInlay> 
     opentide_core::with_line_index(source, || inlay_hints_lines(source, workspace))
 }
 
-#[expect(
-    clippy::expect_used,
-    reason = "a regex literal: an invalid pattern fails every test that reaches it"
-)]
 fn inlay_hints_lines(source: &str, workspace: &[IndexedObject]) -> Vec<TideInlay> {
     let self_uuid = document_uuid(source);
-    let re = regex::Regex::new(
-        r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
-    )
-    .expect("uuid");
     let mut out = Vec::new();
-    for m in re.find_iter(source) {
+    for m in opentide_core::ids::finder().find_iter(source) {
         if self_uuid.as_deref() == Some(m.as_str()) {
             continue;
         }
@@ -476,11 +468,9 @@ fn inlay_hints_lines(source: &str, workspace: &[IndexedObject]) -> Vec<TideInlay
 }
 
 pub fn extract_uuid(text: &str) -> Option<String> {
-    let re = regex::Regex::new(
-        r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
-    )
-    .ok()?;
-    re.find(text).map(|m| m.as_str().to_string())
+    opentide_core::ids::finder()
+        .find(text)
+        .map(|m| m.as_str().to_string())
 }
 
 #[cfg(test)]

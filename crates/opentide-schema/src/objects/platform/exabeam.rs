@@ -1279,8 +1279,10 @@ pub struct NameFinding {
 
 /// `exabeam_name_duplicate` and `exabeam_name_length` for each rule of
 /// `in_scope`, among `rules` (UUID and document): two enabled blocks that
-/// resolve to one name, compared case-insensitively; a block with no `name`
-/// whose rule name is longer than 128 characters (`exabeam_name_issues`).
+/// resolve to one name, compared under full Unicode case folding as the
+/// connector matches names on deploy (`ﬁle` and `FILE`, `ß` and `ss`, are one
+/// name); a block with no `name` whose rule name is longer than 128 characters
+/// (`exabeam_name_issues`).
 pub fn name_findings<'r>(
     rules: &[(&'r str, &'r Node)],
     in_scope: impl IntoIterator<Item = &'r str>,
@@ -1289,7 +1291,10 @@ pub fn name_findings<'r>(
         std::collections::BTreeMap::new();
     for (uuid, rule) in rules {
         if let Some(name) = rule_exabeam_name(rule, true) {
-            by_name.entry(name.to_lowercase()).or_default().push(uuid);
+            by_name
+                .entry(caseless::default_case_fold_str(&name))
+                .or_default()
+                .push(uuid);
         }
     }
     let mut findings = Vec::new();
@@ -1317,7 +1322,7 @@ pub fn name_findings<'r>(
             continue;
         };
         let mut others: Vec<&str> = by_name
-            .get(&name.to_lowercase())
+            .get(&caseless::default_case_fold_str(&name))
             .map(|uuids| {
                 uuids
                     .iter()

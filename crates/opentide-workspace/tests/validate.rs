@@ -1546,6 +1546,52 @@ mod validate {
         assert!(with_code(&other, "deployment_state_shape").is_empty());
     }
 
+    /// #1938: `validate`'s `states` check reads a shard's name as `deploy`
+    /// does. `deploy` refuses a rule whose shard sits beside another file
+    /// naming the same rule (`{<32 hex digits>}.json`, `uuid:<uuid>.json`);
+    /// `validate` used to read those names with `Uuid::try_parse`, which
+    /// refuses them, so it passed the rule `deploy` then refused.
+    #[test]
+    fn a_shard_named_in_another_uuid_spelling_is_the_mismatch_deploy_reports() {
+        let compact = U1.replace('-', "");
+        for variant in [format!("{{{compact}}}"), format!("uuid:{U1}")] {
+            let fs = workspace();
+            fs.write("/ws/objects/rules/a.yaml", rule(U1, "A"));
+            fs.write(
+                format!("/ws/.opentide/states/deployment/{U1}.json"),
+                format!(
+                    r#"{{"schema":"deployment.state::1.0","object_uuid":"{U1}","platforms":{{}}}}"#
+                ),
+            );
+            fs.write(
+                format!("/ws/.opentide/states/deployment/{variant}.json"),
+                format!(
+                    r#"{{"schema":"deployment.state::1.0","object_uuid":"{U1}","platforms":{{}}}}"#
+                ),
+            );
+            // The rule's own check, as `validate --file` and the editor run it.
+            let own = narrowed(&fs, None, &uuids(&[U1]));
+            let mismatches = with_code(&own, "deployment_state_uuid_mismatch");
+            assert_eq!(mismatches.len(), 1, "{variant}: {mismatches:?}");
+            assert!(
+                mismatches[0].message.contains(&format!(
+                    "holds {variant}.json for rule {U1}; the only valid name is {U1}.json"
+                )),
+                "{}",
+                mismatches[0].message
+            );
+            // A full run names both files as one rule's.
+            let full = run(&fs, &Options::default());
+            assert!(
+                with_code(&full, "deployment_state_uuid_mismatch")
+                    .iter()
+                    .any(|d| d.message.contains(&format!("all name rule {U1}"))),
+                "{variant}: {:?}",
+                with_code(&full, "deployment_state_uuid_mismatch")
+            );
+        }
+    }
+
     /// `Workspace::rule_shard_findings` is what `validate --file` files on
     /// each selected rule for its own shard, placed the same way: the editor
     /// adds it to an open rule when it keeps a full run's findings (#1750).
@@ -2058,6 +2104,41 @@ mod validate {
         assert_eq!(found.len(), 1, "{found:?}");
         assert_eq!(found[0].0, U1);
         assert_eq!(status(&validation, Check::Schema), "failed");
+    }
+
+    #[test]
+    fn exabeam_names_that_are_one_under_full_case_folding_are_a_duplicate() {
+        // Deploy matches names under full case folding (`exabeam_name_conflict`):
+        // `ﬁ` folds to `fi` and `ß` to `ss`, which lowercasing leaves apart.
+        let fs = workspace();
+        let block = |name: &str| format!("    enabled: true\n    name: {name}\n");
+        fs.write(
+            "/ws/objects/rules/a.yaml",
+            rule_with(U1, "A", "exabeam", &block("ﬁle Access")),
+        );
+        fs.write(
+            "/ws/objects/rules/b.yaml",
+            rule_with(U2, "B", "exabeam", &block("file access")),
+        );
+        fs.write(
+            "/ws/objects/rules/c.yaml",
+            rule_with(U3, "C", "exabeam", &block("Straße")),
+        );
+        let validation = run(&fs, &Options::default());
+        assert_eq!(on(&validation, "exabeam_name_duplicate"), [U1, U2]);
+        let finding = with_code(&validation, "exabeam_name_duplicate")[0];
+        assert_eq!(
+            finding.context.get("value").and_then(|v| v.as_str()),
+            Some("ﬁle Access")
+        );
+        fs.write(
+            "/ws/objects/rules/b.yaml",
+            rule_with(U2, "B", "exabeam", &block("STRASSE")),
+        );
+        assert_eq!(
+            on(&run(&fs, &Options::default()), "exabeam_name_duplicate"),
+            [U2, U3]
+        );
     }
 
     #[test]
