@@ -6031,7 +6031,7 @@ impl Sender<'_, '_> {
     /// with no answer stops its batch.
     fn datadog(&mut self, batches: &[Batch], log: &mut DeployLog<'_>) -> Result<(), Raised> {
         let datadog = opentide_connectors::datadog::Datadog::new();
-        self.tenants(batches, log, |sender, batch, log| {
+        self.tenants(TENANTS_AT_ONCE, batches, log, |sender, batch, log| {
             sender.datadog_tenant(&datadog, batch, log)
         })
     }
