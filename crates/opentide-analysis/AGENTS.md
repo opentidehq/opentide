@@ -36,8 +36,8 @@ cargo test -p opentide-analysis --doc
 cargo bench -p opentide-analysis --bench analyze         # informational
 ```
 
-`tests/tide_corpus.rs` runs this checkout's Pydantic models through `.venv` (`uv sync --group
-dev`, or `OPENTIDE_PYTHON`). `tests/snapshots.rs` holds insta snapshots (`tests/snapshots/`).
+`tests/tide_corpus.rs` indexes and analyses the tide_corpus objects, their queries injected and
+checked in their languages. `tests/snapshots.rs` holds insta snapshots (`tests/snapshots/`).
 `tests/elastic_detection_rules.rs` is an opt-in sweep (`OPENTIDE_DETECTION_RULES`).
 
 ## Do not
