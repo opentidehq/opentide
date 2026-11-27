@@ -31,15 +31,10 @@ system = "sentinel"
 
 /// The suggestions on the diagnostics `query` gets.
 fn suggestions(query: &str) -> Vec<String> {
-    analyze_query(&QueryRequest {
-        language: LanguageId::Kql,
-        platform: Some("sentinel".into()),
-        stack: None,
-        text: query.into(),
-    })
-    .into_iter()
-    .filter_map(|d| d.suggestion)
-    .collect()
+    analyze_query(&QueryRequest::new(LanguageId::Kql, query).with_platform(Some("sentinel")))
+        .into_iter()
+        .filter_map(|d| d.suggestion)
+        .collect()
 }
 
 // One test: the declared datasets are process-wide.
@@ -70,12 +65,10 @@ fn declared_tables_are_suggested_and_patterns_are_not() {
     // A declared display name is not a KQL identifier: `Azure Activity` is
     // never offered, so the quick fix cannot break the query. `AzureActivity`
     // is a table the catalog knows: undeclared, not misspelt, so no rename.
-    let known = analyze_query(&QueryRequest {
-        language: LanguageId::Kql,
-        platform: Some("sentinel".into()),
-        stack: None,
-        text: "AzureActivity | take 1".into(),
-    });
+    let known = analyze_query(
+        &QueryRequest::new(LanguageId::Kql, "AzureActivity | take 1")
+            .with_platform(Some("sentinel")),
+    );
     assert_eq!(known.len(), 1, "{known:?}");
     assert_eq!(known[0].code, codes::KQL_TABLE_NOT_DECLARED);
     assert_eq!(known[0].suggestion, None, "{known:?}");

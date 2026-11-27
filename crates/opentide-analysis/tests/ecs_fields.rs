@@ -10,12 +10,7 @@ use opentide_analysis::{
 };
 
 fn raw(language: LanguageId, text: &str) -> Vec<Diagnostic> {
-    analyze_query(&QueryRequest {
-        language,
-        platform: None,
-        stack: None,
-        text: text.into(),
-    })
+    analyze_query(&QueryRequest::new(language, text))
 }
 
 fn rule(block: &str) -> String {

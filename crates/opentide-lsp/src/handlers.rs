@@ -386,6 +386,7 @@ pub(crate) fn request(session: &mut Session, request: Request) -> Response {
             json!({
                 "analyses": s.analyses.get(),
                 "digestedObjects": s.digested_objects.get(),
+                "baseObjects": s.base_objects.get(),
                 "textCopies": s.text_copies.get(),
                 "docPathKeys": s.doc_path_keys.get(),
                 "engineAnalyses": s.engine_analyses.get(),

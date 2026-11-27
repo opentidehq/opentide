@@ -16,12 +16,10 @@ system = "sentinel"
 "#;
 
 fn codes() -> Vec<String> {
-    analysis::analyze_query(&QueryRequest {
-        language: LanguageId::Kql,
-        platform: None,
-        stack: None,
-        text: "DeviceProcessEvents | take 1".to_owned(),
-    })
+    analysis::analyze_query(&QueryRequest::new(
+        LanguageId::Kql,
+        "DeviceProcessEvents | take 1",
+    ))
     .into_iter()
     .map(|diagnostic| diagnostic.code)
     .collect()

@@ -308,7 +308,7 @@ pub fn crash_log_text(error: &Internal, report: &Report<'_>) -> String {
 /// A word as a POSIX shell reads it back (the shlex crate's quoting). A word
 /// no shell can carry (a NUL byte) is shown as Rust writes a string.
 pub fn shell_quote(word: &str) -> String {
-    shlex::try_quote(word).map_or_else(|_| format!("{word:?}"), std::borrow::Cow::into_owned)
+    opentide_core::text::shell_word(word).into_owned()
 }
 
 /// Reports `error`: writes the crash log, prints the report on `err` and, in

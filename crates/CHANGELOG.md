@@ -10,7 +10,7 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 #### `opentide`
 
-- If you call `opentide::analysis::analyze_query` with `platform: Some("crowdstrike")` or `Some("exabeam")` to check a rule block's query, check the rule's object with `Workspace::validate` or `Workspace::lint` instead: they still report `cql_correlate_aggregate` and `exabeam_advanced_in_rule` on the block's query.
+- If you call `opentide::analysis::analyze_query` with `platform: Some("crowdstrike")` or `Some("exabeam")` to check a rule block's query, call `analyze_query_at(&request, QueryPosition::Rule)` instead, or check the rule's object with `Workspace::validate` or `Workspace::lint`: both report `cql_correlate_aggregate` and `exabeam_advanced_in_rule` on the block's query.
 - Add a wildcard arm (`_ => …`) if you match on `opentide::analysis::LanguageId`. If you build an `opentide::models::RuleConfigurations` with a struct literal, start from `RuleConfigurations::default()` and set its fields. If you name the type of `LanguageId::QUERY_LANGUAGES`, `RuleConfigurations::PLATFORMS` or `opentide::validate::STRICT_EXEMPT_WARNINGS`, write `&'static [_]`; iterate them with `for &item in …` or `.iter().copied()`.
 - If you build one of the report types with a struct expression, use its constructor instead: `PlatformFinding::new`, `Fix::new`, `TextEdit::new`, or for `Diagnostic` `Diagnostic::new` (or `error` / `warning`) and its builders `at`, `file`, `object`, `with` and `suggest`. For `validate::Summary`, `catalog::PlatformInfo`, `lint::LintSummary` and `catalog::Techniques`, start from `Default::default()` and assign the fields.
 - `Report`, `LintReport`, `Stats`, `Refusal`, `Catalogue` and its rows, `Tenant`, `Variable`, `NextAction` and `Coverage` can no longer be built outside the crate. A test that built one by hand to exercise your own code should produce it from a `Workspace` on an in-memory tree instead.
@@ -28,6 +28,10 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 #### `opentide-cql`
 
 - If you name `opentide_cql::Context`, rename it `opentide_cql::Profile`.
+
+#### `opentide-analysis`
+
+- If you call `queries::Profiles::check_query`, pass a `QueryPosition` after the stack: `QueryPosition::Search` checks as before.
 
 ### Breaking
 
@@ -52,12 +56,22 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 - **`Context` is renamed `Profile`** ([opentide#1913](https://github.com/opentidehq/opentide/issues/1913)): a correlation rule or a search is a use of the query, a profile. `opentide_cql::Profile { correlation_rule }`, `Profile::CORRELATION_RULE` and `analyze_with(source, &Profile)` replace `Context`'s.
 
+#### `opentide-analysis`
+
+- **`queries::Profiles::check_query` takes a `QueryPosition`** ([opentide#1993](https://github.com/opentidehq/opentide/issues/1993)), after the stack; pass `QueryPosition::Search` for the previous behaviour. The facade does not re-export it.
+
 ### Added
 
 #### `opentide`
 
 - **API: `LanguageId::Datadog`**, the Datadog log search syntax (`docs/internal/rfc-datadog-cloud-siem.md`). `LanguageId::QUERY_LANGUAGES` holds twelve languages; `LanguageId::parse` reads `datadog` and `opentide-datadog`, and `LanguageId::from_extension` reads `datadog`.
 - **Constructors for the findings outside code builds** ([opentide#1937](https://github.com/opentidehq/opentide/issues/1937)): `PlatformFinding::new` (a plugin platform's check), `Fix::new` and `TextEdit::new`; `QueriesMode::as_str` and `LintStatus::as_str`; `Default` for `validate::Summary` and `catalog::PlatformInfo`.
+- **A bare query can be checked as a rule's** ([opentide#1993](https://github.com/opentidehq/opentide/issues/1993), ADR 0015 §4): `analysis::analyze_query_at(&request, position)` with `analysis::QueryPosition { Search, Rule }` (`#[non_exhaustive]`, default `Search`). At `Rule` the query is checked as the platform's rule block checks its own: an Exabeam sequence filter (`exabeam_advanced_in_rule`), a CrowdStrike correlation rule (`cql_correlate_aggregate`), a Datadog detection rule's query, a Google SecOps block's assembled YARA-L rule, a Sentinel scheduled rule (`kql_rule_union_star`, `kql_rule_search_star`, `kql_rule_too_long`); other languages check a rule's query as a search. `analyze_query` is unchanged: the search.
+  - API: `analyze_query_at`, `QueryPosition`, `QueryPosition::{as_str, parse}`, `validate_position`, `QueryRequestError`, `QueryRequest::{new, with_platform, with_stack}`, and `codes::QUERY_POSITION_NEEDS_PLATFORM`: a rule position without a platform is answered with that one error, unchecked, rather than checked as a search
+
+#### `opentide-analysis`
+
+- **Query positions** ([opentide#1993](https://github.com/opentidehq/opentide/issues/1993)): `analyze_query_at`, `QueryPosition`, `validate_position` and `QueryRequestError::RuleWithoutPlatform` (a rule position needs a platform), `QueryRequest::{new, with_platform, with_stack}`, and `queries::check_query_at`, `check_query_on_stack`'s form with a position.
 
 #### `opentide-datadog`
 

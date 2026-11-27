@@ -1285,10 +1285,7 @@ impl Run<'_> {
         if parsed.platform.is_none() {
             // A live check reads one platform's tenants: refused, as the
             // oracle refuses it (a usage failure writes no CI job summary).
-            return validate_live::report_of(
-                validate_query::COMMAND,
-                &validate_query::live_without_platform(),
-            );
+            return validate_query::live_without_platform().report(validate_query::COMMAND);
         }
         let interrupt = &self.host.interrupt;
         let interrupted = || interrupt.requested();
@@ -1513,7 +1510,8 @@ impl Run<'_> {
                 if self.interrupted() {
                     return Ok(INTERRUPTED_EXIT_CODE);
                 }
-                let report = crate::commands::deploy_replay::report(&cwd, &replay.state_commit);
+                let report =
+                    crate::commands::deploy_replay::report(&cwd, self.env, &replay.state_commit);
                 self.emit_report(&report, out, err)
             }
             Some(Command::Metadata(metadata)) => {

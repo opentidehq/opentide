@@ -108,12 +108,8 @@ fn every_broken_twin_is_a_parse_error() {
 /// the `syscall` source.
 #[test]
 fn raw_falco_queries_use_the_syscall_source() {
-    let request = |text: &str| QueryRequest {
-        language: LanguageId::Falco,
-        platform: Some("sysdig".into()),
-        stack: None,
-        text: text.into(),
-    };
+    let request =
+        |text: &str| QueryRequest::new(LanguageId::Falco, text).with_platform(Some("sysdig"));
     assert!(analyze_query(&request("spawned_process and proc.name = bash")).is_empty());
     let found = analyze_query(&request("ka.verb = create"));
     let found: Vec<&str> = found.iter().map(|d| d.code.as_str()).collect();
