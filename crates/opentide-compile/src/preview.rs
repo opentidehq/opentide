@@ -10,12 +10,12 @@ use opentide_schema::platforms::{PlatformId, PlatformKey};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
+use crate::compiler::{Compiler, Graylog, GraylogTarget, Sentinel};
 use crate::json::{Json, Object};
 use crate::rule::{CompileError, Rule};
 use crate::{
     Context, bitdefender, carbon_black, crowdstrike, datadog, deploy, elastic, exabeam,
-    google_secops, graylog, harfanglab, microsoft_defender, plan, sentinel, sentinel_one, splunk,
-    sysdig,
+    google_secops, graylog, harfanglab, microsoft_defender, plan, sentinel_one, splunk, sysdig,
 };
 
 /// The tenant a preview compiles for: exclusions scoped to a tenant name are
@@ -56,7 +56,7 @@ pub fn compile_offline(
     rule: &Rule,
 ) -> Option<Result<Json, CompileError>> {
     match platform {
-        PlatformId::Sentinel => Some(sentinel::compile(cx, rule, PREVIEW_TENANT)),
+        PlatformId::Sentinel => Some(sentinel_body(cx, rule, PREVIEW_TENANT)),
         PlatformId::Elastic => Some(elastic::compile(cx, rule, &elastic::Setup::none())),
         PlatformId::Sysdig => Some(sysdig::compile_body(cx, rule, None)),
         PlatformId::Bitdefender => Some(bitdefender_request(cx, rule, None)),
@@ -83,10 +83,23 @@ fn graylog_request(
     rule: &Rule,
     tenant: Option<&Json>,
 ) -> Result<Json, CompileError> {
-    let setup = tenant.and_then(graylog::tenant_setup);
-    let name = tenant.map(deploy::tenant_name);
-    graylog::compile_definition(cx, rule, graylog::PREVIEW_VERSION, setup, name)
+    Graylog::compile(cx, rule, preview_target(tenant))
         .map(|compiled| graylog::create_request(&compiled))
+}
+
+/// What a Graylog preview compiles for: [`graylog::PREVIEW_VERSION`], since
+/// a preview asks no server, and `tenant` (none: aliases left out).
+fn preview_target(tenant: Option<&Json>) -> GraylogTarget<'_> {
+    GraylogTarget {
+        version: graylog::PREVIEW_VERSION,
+        tenant,
+    }
+}
+
+/// The `alertRules` body a Sentinel deploy sends for `rule` to the tenant
+/// named `tenant`.
+fn sentinel_body(cx: &Context<'_>, rule: &Rule, tenant: &str) -> Result<Json, CompileError> {
+    Sentinel::compile(cx, rule, tenant).map(|compiled| Sentinel::body(&compiled))
 }
 
 /// The `createCustomRule` request a deploy sends for `rule` on `tenant`;
@@ -159,7 +172,7 @@ pub fn compile_tenant(
     let id = inputs.known.as_deref();
     match platform {
         deployer!() => tenant_writes(cx, platform, rule, tenant, config, inputs),
-        PlatformId::Sentinel => sentinel::compile(cx, rule, tenant),
+        PlatformId::Sentinel => sentinel_body(cx, rule, tenant),
         PlatformId::Sysdig => sysdig::compile_body(cx, rule, known),
         PlatformId::Bitdefender => bitdefender_tenant(cx, rule, config, id),
         PlatformId::Exabeam => exabeam::compile_deployment(cx, rule, known)
@@ -684,8 +697,9 @@ pub fn preview(cx: &Context<'_>, platform: &PlatformKey, rule: &Rule) -> Json {
         PlatformId::Graylog => graylog_preview(cx, rule, &[]),
         // A compile error the oracle reports with the platform's display
         // name: compile_diagnostic(exc) names Sentinel.
-        PlatformId::Sentinel => match sentinel::compile_with_warnings(cx, rule, PREVIEW_TENANT) {
-            Ok((body, warnings)) => {
+        PlatformId::Sentinel => match Sentinel::compile(cx, rule, PREVIEW_TENANT) {
+            Ok(sent) => {
+                let (body, warnings) = (Sentinel::body(&sent), sent.1);
                 let mut entry = compiled(rule, body);
                 if let (Json::Object(fields), false) = (&mut entry, warnings.is_empty()) {
                     fields.insert(
@@ -807,9 +821,7 @@ fn graylog_preview(cx: &Context<'_>, rule: &Rule, tenants: &[String]) -> Json {
         found.iter().copied().map(Some).collect()
     };
     for tenant in reached {
-        let setup = tenant.and_then(graylog::tenant_setup);
-        let name = tenant.map(deploy::tenant_name);
-        match graylog::compile_definition(cx, rule, graylog::PREVIEW_VERSION, setup, name) {
+        match Graylog::compile(cx, rule, preview_target(tenant)) {
             Ok(definition) => compiled.push(definition),
             Err(error) => return failure(rule, &error),
         }
