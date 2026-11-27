@@ -363,6 +363,7 @@ pub(crate) fn request(session: &mut Session, request: Request) -> Response {
                 "analyses": s.analyses.get(),
                 "textCopies": s.text_copies.get(),
                 "docPathKeys": s.doc_path_keys.get(),
+                "engineAnalyses": s.engine_analyses.get(),
                 "closedAnalyses": s.closed_analyses.get(),
                 "workspaceReportHits": s.workspace_report_hits.get(),
                 "pullYields": s.pull_yields.get(),
@@ -737,6 +738,7 @@ fn did_open(session: &mut Session, params: lsp::DidOpenTextDocumentParams) {
     // A byte-order mark is not text: the editor counts no column for it.
     let text = opentide_core::strip_bom(&item.text).to_string();
     let root = session.root_for(&path);
+    let serial = session.next_text();
     session.docs.insert(
         uri.to_string(),
         Document {
@@ -744,6 +746,7 @@ fn did_open(session: &mut Session, params: lsp::DidOpenTextDocumentParams) {
             text,
             version: Some(item.version),
             root,
+            serial,
         },
     );
     session.docs_changed();
@@ -777,13 +780,18 @@ fn did_change(session: &mut Session, params: lsp::DidChangeTextDocumentParams) {
             None => return,
         },
     };
+    // The document's text is edited in place, not copied (#1943): it is
+    // replaced below whatever the edits are.
     let current = session
         .docs
-        .get(&uri)
-        .map(|d| d.text.clone())
+        .get_mut(&uri)
+        .map(|d| std::mem::take(&mut d.text))
         .unwrap_or_default();
-    let text = apply_content_changes(&current, &params.content_changes);
-    let text = opentide_core::strip_bom(&text).to_string();
+    let mut text = apply_content_changes(current, params.content_changes);
+    if text.starts_with('\u{feff}') {
+        text.drain(..'\u{feff}'.len_utf8());
+    }
+    let serial = session.next_text();
     session.docs.insert(
         uri.clone(),
         Document {
@@ -791,6 +799,7 @@ fn did_change(session: &mut Session, params: lsp::DidChangeTextDocumentParams) {
             text,
             version: Some(version),
             root,
+            serial,
         },
     );
     if known.is_none() {
@@ -805,6 +814,7 @@ fn did_close(session: &mut Session, params: lsp::DidCloseTextDocumentParams) {
         return;
     };
     session.docs_changed();
+    session.forget_analysis(uri);
     if closed.language == LanguageId::TideYaml {
         session.touch_object();
     } else {
@@ -888,21 +898,20 @@ fn mark_configuration(session: &Session) {
     }
 }
 
-fn apply_content_changes(text: &str, changes: &[lsp::TextDocumentContentChangeEvent]) -> String {
-    let mut current = text.to_string();
+fn apply_content_changes(
+    text: impl Into<String>,
+    changes: impl IntoIterator<Item = lsp::TextDocumentContentChangeEvent>,
+) -> String {
+    let mut current = text.into();
     for change in changes {
-        current = match change.range {
+        match change.range {
             Some(range) => {
                 let start = offset(&current, range.start);
                 let end = offset(&current, range.end).max(start);
-                let mut out = String::with_capacity(current.len() + change.text.len());
-                out.push_str(&current[..start]);
-                out.push_str(&change.text);
-                out.push_str(&current[end..]);
-                out
+                current.replace_range(start..end, &change.text);
             }
-            None => change.text.clone(),
-        };
+            None => current = change.text,
+        }
     }
     current
 }
@@ -3150,9 +3159,9 @@ mod tests {
     fn incremental_edits_apply_in_order_and_full_replace_wins() {
         let text = "name: Rule\n";
         let edited =
-            apply_content_changes(text, &[change(0, 6, 0, 6, "X"), change(0, 7, 0, 7, "Y")]);
+            apply_content_changes(text, [change(0, 6, 0, 6, "X"), change(0, 7, 0, 7, "Y")]);
         assert_eq!(edited, "name: XYRule\n");
-        assert_eq!(apply_content_changes(text, &[whole("other")]), "other");
+        assert_eq!(apply_content_changes(text, [whole("other")]), "other");
     }
 
     #[test]
@@ -3165,19 +3174,16 @@ mod tests {
         // An emoji is two UTF-16 units; column 3 is `b`.
         let src = "a😀b";
         assert_eq!(at(src, 0, 3), 1 + "😀".len());
-        assert_eq!(
-            apply_content_changes(src, &[change(0, 1, 0, 3, "X")]),
-            "aXb"
-        );
+        assert_eq!(apply_content_changes(src, [change(0, 1, 0, 3, "X")]), "aXb");
         let src = "ab\ncd";
         assert_eq!(at(src, 0, 99), 2);
         assert_eq!(at(src, 9, 0), src.len());
         assert_eq!(
-            apply_content_changes(src, &[change(0, 99, 0, 99, "Z")]),
+            apply_content_changes(src, [change(0, 99, 0, 99, "Z")]),
             "abZ\ncd"
         );
         assert_eq!(
-            apply_content_changes("ab", &[change(5, 0, 5, 0, "Z")]),
+            apply_content_changes("ab", [change(5, 0, 5, 0, "Z")]),
             "abZ"
         );
         // The CR stays in the line the splice indexes.
@@ -3190,22 +3196,22 @@ mod tests {
     #[test]
     fn edits_after_multi_byte_characters_land_where_the_editor_put_them() {
         let src = "T | where Name == \"日本\"";
-        let edited = apply_content_changes(src, &[change(0, 20, 0, 20, "x")]);
+        let edited = apply_content_changes(src, [change(0, 20, 0, 20, "x")]);
         assert_eq!(edited, "T | where Name == \"日x本\"");
-        let edited = apply_content_changes(src, &[change(0, 21, 0, 21, "x")]);
+        let edited = apply_content_changes(src, [change(0, 21, 0, 21, "x")]);
         assert_eq!(edited, "T | where Name == \"日本x\"");
         assert_eq!(
-            apply_content_changes("é😀", &[change(0, 3, 0, 3, "!")]),
+            apply_content_changes("é😀", [change(0, 3, 0, 3, "!")]),
             "é😀!"
         );
         // A column inside a surrogate pair moves past the character, never into it.
         assert_eq!(
-            apply_content_changes("😀z", &[change(0, 1, 0, 1, "!")]),
+            apply_content_changes("😀z", [change(0, 1, 0, 1, "!")]),
             "😀!z"
         );
         // A reversed range inserts at its start.
         assert_eq!(
-            apply_content_changes("abc", &[change(0, 2, 0, 1, "!")]),
+            apply_content_changes("abc", [change(0, 2, 0, 1, "!")]),
             "ab!c"
         );
     }
