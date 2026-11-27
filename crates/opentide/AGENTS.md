@@ -51,6 +51,10 @@ facade (`xtask/layers.toml`), above the applications: its features reach opentid
   `cargo semver-checks` against the pull request's base (the merge commit's first parent): the
   baseline stays the PR base until the crate is published on crates.io, and only then becomes the
   last published version. Do not switch it earlier; there is no published API to hold to yet.
+  That run reads the facade's rustdoc JSON alone, where nothing re-exported from another crate is
+  present (cargo-semver-checks#638), so `scripts/ci/facade_semver.py` then checks, in each crate
+  the facade re-exports from (`FACADE_SOURCES` in `scripts/ci/changes.py`), the items the facade
+  exposes and the types they name (#1911).
 - **The bindings' surface.** Every binding and host (`bindings/python`, `bindings/node`,
   `crates/opentide-wasm`) depends on this crate alone from the workspace, which `cargo xtask
   check-layers` enforces (`may_depend_on` in `xtask/layers.toml`). What a binding genuinely needs
@@ -79,4 +83,6 @@ cargo test -p opentide --all-features
 RUSTDOCFLAGS="-D warnings" cargo doc -p opentide --all-features --no-deps
 cargo run -p opentide --example validate -- <workspace>
 cargo semver-checks -p opentide --baseline-rev origin/integration/unified-core
+git worktree add --detach ../opentide-base origin/development
+python3 scripts/ci/facade_semver.py --baseline-root ../opentide-base   # what the facade re-exports
 ```

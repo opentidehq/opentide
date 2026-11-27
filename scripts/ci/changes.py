@@ -173,6 +173,21 @@ PARSER_CRATES = (
     "opentide-yaral",
 )
 
+#: The workspace crates that define what the facade (crates/opentide)
+#: re-exports. cargo semver-checks never sees those items through the facade
+#: (#1911), so the `facade` job checks them in their own crates
+#: (scripts/ci/facade_semver.py), and a change to their sources runs it. That
+#: script fails a full run when the facade re-exports from a crate missing here.
+FACADE_SOURCES = (
+    "opentide-analysis",
+    "opentide-cli",
+    "opentide-connectors",
+    "opentide-core",
+    "opentide-highlight",
+    "opentide-schema",
+    "opentide-workspace",
+)
+
 #: Paths inside crates that run a specialised job. Only the paths a job is
 #: about run it (a change below a crate runs that crate's reverse
 #: dependencies' tests, not every job that builds it): the push to the base
@@ -187,6 +202,7 @@ CRATE_PATHS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("*.py", ("pylint",)),
     # The facade's public API: every feature, rustdoc, cargo semver-checks.
     ("crates/opentide/*", ("facade",)),
+    *((f"crates/{crate}/src/*", ("facade",)) for crate in FACADE_SOURCES),
     # The Node package.
     ("bindings/node/*", ("node",)),
     # The WebAssembly crate (the WASI and the browser build) and the WASI shims
