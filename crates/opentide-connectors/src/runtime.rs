@@ -220,7 +220,7 @@ pub fn sync_call<T: Send>(work: impl FnOnce() -> T + Send) -> std::thread::Resul
 const CANCEL_POLL: Duration = Duration::from_millis(50);
 
 /// Cancels *token* once *requested* returns true, checking every
-/// [`CANCEL_POLL`] until the token is cancelled. For the CLI's Ctrl-C flag.
+/// every 50 ms (`CANCEL_POLL`) until the token is cancelled. For the CLI's Ctrl-C flag.
 pub fn cancel_when(
     token: &CancellationToken,
     requested: impl Fn() -> bool + Send + 'static,

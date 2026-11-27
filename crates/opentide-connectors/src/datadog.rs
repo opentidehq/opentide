@@ -105,7 +105,8 @@ pub const OWNED: [&str; 9] = [
     "hasExtendedTitle",
 ];
 
-/// How long each request to the tenant may take.
+/// The connect timeout and the read timeout of each request to the tenant;
+/// with retries, a whole request can take longer.
 pub const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// How a Datadog tenant is reached: 30 s and no transport retries (the
