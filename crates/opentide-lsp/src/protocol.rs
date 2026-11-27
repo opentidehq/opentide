@@ -295,17 +295,20 @@ impl Hold {
         #[cfg(all(debug_assertions, not(fuzzing)))]
         {
             use lsp_types::request::Request as _;
+            use serde::Deserialize as _;
             let Frame::Message(Message::Request(request)) = frame else {
                 return;
             };
             if request.method != crate::handlers::custom::Hold::METHOD {
                 return;
             }
-            let frames = request
-                .params
-                .get("frames")
-                .and_then(Value::as_u64)
-                .map_or(0, |n| usize::try_from(n).unwrap_or(usize::MAX));
+            // The request's own params type, so the source and the
+            // dispatcher read them alike: params it refuses (`-32602`)
+            // hold no frames (#2041).
+            let frames = crate::handlers::custom::HoldParams::deserialize(&request.params)
+                .map_or(0, |params| {
+                    usize::try_from(params.frames).unwrap_or(usize::MAX)
+                });
             let end = index.saturating_add(1).saturating_add(frames);
             self.end = Some(self.end.map_or(end, |held| held.max(end)));
         }
@@ -1023,6 +1026,61 @@ mod tests {
             &rest[..],
             [Frame::Message(Message::Notification(n))] if n.method == "c"
         ));
+        assert!(source.next_batch().unwrap().is_none());
+    }
+
+    /// #2041: input that ends during a hold ends the batch with what came,
+    /// and the next batch is the end of input: the source does not wait on.
+    #[cfg(all(debug_assertions, not(fuzzing)))]
+    #[test]
+    fn direct_ends_a_hold_at_the_end_of_input() {
+        let mut input =
+            framed(r#"{"jsonrpc":"2.0","id":1,"method":"opentide/__hold","params":{"frames":3}}"#);
+        input.extend(framed(r#"{"jsonrpc":"2.0","method":"é😀"}"#));
+        let mut source = Direct::new(&input[..]);
+        assert_eq!(source.next_batch().unwrap().unwrap().len(), 2);
+        assert!(source.next_batch().unwrap().is_none());
+    }
+
+    /// #2041: the threaded source, the same: the reader's end of input ends
+    /// the held batch.
+    #[cfg(all(debug_assertions, not(fuzzing), not(target_os = "wasi")))]
+    #[test]
+    fn threaded_ends_a_hold_at_the_end_of_input() {
+        let (reader, mut writer) = std::io::pipe().unwrap();
+        let mut source = Threaded::spawn(move || BufReader::new(reader)).unwrap();
+        writer
+            .write_all(&framed(
+                r#"{"jsonrpc":"2.0","id":1,"method":"opentide/__hold","params":{"frames":3}}"#,
+            ))
+            .unwrap();
+        writer
+            .write_all(&framed(r#"{"jsonrpc":"2.0","method":"é😀"}"#))
+            .unwrap();
+        drop(writer);
+        assert_eq!(source.next_batch().unwrap().unwrap().len(), 2);
+        assert!(source.next_batch().unwrap().is_none());
+    }
+
+    /// #2041: the source reads a hold's params as the dispatcher does:
+    /// params it refuses (`-32602`) hold no frames, so the batch is what
+    /// was buffered, and a later frame is the next batch's.
+    #[cfg(all(debug_assertions, not(fuzzing), not(target_os = "wasi")))]
+    #[test]
+    fn a_hold_the_dispatcher_refuses_holds_nothing() {
+        let (reader, mut writer) = std::io::pipe().unwrap();
+        let mut source = Threaded::spawn(move || BufReader::new(reader)).unwrap();
+        writer
+            .write_all(&framed(
+                r#"{"jsonrpc":"2.0","id":1,"method":"opentide/__hold","params":{"frames":"2"}}"#,
+            ))
+            .unwrap();
+        assert_eq!(source.next_batch().unwrap().unwrap().len(), 1);
+        writer
+            .write_all(&framed(r#"{"jsonrpc":"2.0","method":"b"}"#))
+            .unwrap();
+        drop(writer);
+        assert_eq!(source.next_batch().unwrap().unwrap().len(), 1);
         assert!(source.next_batch().unwrap().is_none());
     }
 

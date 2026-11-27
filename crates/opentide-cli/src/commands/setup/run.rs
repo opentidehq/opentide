@@ -17,7 +17,9 @@ use crate::mode::Mode;
 use crate::render::outcome::OutcomeKind;
 use crate::render::table::columns;
 use crate::render::text::Text;
+use crate::tree::Ci;
 use anstyle::Style;
+use opentide_compile::ci::Provider;
 
 /// Where a subcommand writes, as the command line names it.
 #[derive(Clone, Debug, Default)]
@@ -343,7 +345,7 @@ fn interactive(
                         let args = GroupArgs {
                             path: shown_text,
                             repo: answers.repo.clone(),
-                            ci: answers.ci.clone(),
+                            ci: answers.ci,
                             staging: answers.staging,
                             inflight: answers.inflight,
                             sharing: answers.sharing,
@@ -354,7 +356,7 @@ fn interactive(
                             skills: answers.skills.clone().unwrap_or_default(),
                             ..GroupArgs::default()
                         };
-                        let run_ci = args.ci.is_some();
+                        let run_ci = args.ci.and_then(Ci::provider);
                         execute(
                             &args,
                             &root,
@@ -1134,7 +1136,7 @@ pub struct GroupArgs {
     /// `--name`, `--org`, `--description`, `--platform`.
     pub repo: files::RepoOptions,
     /// `--ci`: `github`, `gitlab`, `azure` or `none`.
-    pub ci: Option<String>,
+    pub ci: Option<Ci>,
     /// The pipeline's options, as `setup ci` takes them (its provider unused).
     pub pipeline: Option<CiArgs>,
     /// `--staging/--no-staging`.
@@ -1181,7 +1183,7 @@ pub struct GroupArgs {
 
 /// The CI flags given without a pipeline to write (`_ignored_ci_flag_warnings`).
 fn ignored_ci_flags(args: &GroupArgs) -> Vec<String> {
-    if args.ci.as_deref().is_some_and(|ci| ci != "none") {
+    if args.ci.and_then(Ci::provider).is_some() {
         return Vec::new();
     }
     let mut ignored = Vec::new();
@@ -1271,11 +1273,8 @@ pub fn group(args: &GroupArgs, cx: &Context<'_>) -> Report {
         || !args.repo.platforms.is_empty();
     let answers =
         !args.mcp.is_empty() || !args.skills.is_empty() || args.plugin || args.hooks || args.env;
-    let only_ci_none = args.ci.as_deref() == Some("none")
-        && !args.yes
-        && !has_repo
-        && !args.vscode_setup
-        && !answers;
+    let only_ci_none =
+        args.ci == Some(Ci::None) && !args.yes && !has_repo && !args.vscode_setup && !answers;
     let scripted = args.plan
         || (!only_ci_none
             && (args.yes || has_repo || args.ci.is_some() || args.vscode_setup || answers));
@@ -1307,9 +1306,9 @@ pub fn group(args: &GroupArgs, cx: &Context<'_>) -> Report {
         }
     }
     let consent = args.yes || args.plan;
-    let run_ci = args.ci.as_deref().is_some_and(|ci| ci != "none");
+    let run_ci = args.ci.and_then(Ci::provider);
     // The other steps asked for, like --ci, leave the scaffold alone.
-    let run_repo = has_repo || (consent && !run_ci && !answers && !args.vscode_setup);
+    let run_repo = has_repo || (consent && run_ci.is_none() && !answers && !args.vscode_setup);
     with_catalogue(cx, |catalogue| {
         execute(
             args,
@@ -1348,7 +1347,7 @@ fn execute(
     root: &Path,
     warnings: Vec<String>,
     run_repo: bool,
-    run_ci: bool,
+    run_ci: Option<Provider>,
     name: Option<&str>,
     cx: &Context<'_>,
     catalogue: &Catalogue<'_>,
@@ -1417,7 +1416,7 @@ fn run_steps(
     recorder: &mut Recorder<'_>,
     args: &GroupArgs,
     run_repo: bool,
-    run_ci: bool,
+    run_ci: Option<Provider>,
 ) -> Result<(), Box<Report>> {
     const COMMAND: &str = "setup";
     let cx = recorder.cx;
@@ -1432,7 +1431,9 @@ fn run_steps(
             statuses,
         )
         .map_err(|report| retitled(report, COMMAND))?;
-        if !run_ci && let Some(override_) = override_ {
+        if run_ci.is_none()
+            && let Some(override_) = override_
+        {
             let mut written = Vec::new();
             if let Some(content) = override_.content {
                 recorder.stage.write(&override_.path, content);
@@ -1459,8 +1460,8 @@ fn run_steps(
             files::platforms(&mut recorder.stage, &root, &args.repo.platforms).map_err(failed)?;
         recorder.record("platforms", result).map_err(failed)?;
     }
-    if run_ci {
-        let mut ci_args = base_ci_args(args);
+    if let Some(provider) = run_ci {
+        let mut ci_args = base_ci_args(args, provider);
         ci_args.promotion = args.promotion;
         ci_args.promotion_target.clone_from(&args.promotion_target);
         let result = ci_step(&mut recorder.stage, &ci_args, &root, cx)
@@ -1542,14 +1543,8 @@ fn run_steps(
     Ok(())
 }
 
-/// The group's pipeline options as `setup ci` takes them.
-fn base_ci_args(args: &GroupArgs) -> CiArgs {
-    use opentide_compile::ci::Provider;
-    let provider = match args.ci.as_deref() {
-        Some("gitlab") => Provider::GitLab,
-        Some("azure") => Provider::Azure,
-        _ => Provider::GitHub,
-    };
+/// The group's pipeline options as `setup ci` takes them, for `provider`.
+fn base_ci_args(args: &GroupArgs, provider: Provider) -> CiArgs {
     CiArgs {
         provider,
         path: None,
@@ -1662,7 +1657,7 @@ mod tests {
             ]
         );
         let with_ci = GroupArgs {
-            ci: Some("github".into()),
+            ci: Some(Ci::Github),
             ..args
         };
         assert!(ignored_ci_flags(&with_ci).is_empty());

@@ -40,7 +40,7 @@ toml_edit.workspace = true
 # `queries` feature run. Off for the language server and the browser build.
 opentide-schema = { workspace = true, optional = true }
 opentide-workspace = { workspace = true, optional = true }
-indexmap = { version = "2", optional = true }
+indexmap = { workspace = true, optional = true }
 rayon = { workspace = true, optional = true }
 
 [features]

@@ -15,6 +15,7 @@ use crate::render::brand::pill;
 use crate::render::outcome::Console;
 use crate::render::table::columns;
 use crate::render::text::{Colour, Text};
+use crate::tree::Ci;
 use anstyle::Style;
 
 /// Why a wizard stopped before it was answered.
@@ -74,10 +75,10 @@ pub fn platforms() -> Vec<(&'static str, &'static str)> {
 }
 
 /// The CI choices (`CI_LABELS`), after "Configure later".
-pub const CI: [(&str, &str); 3] = [
-    ("github", "GitHub Actions"),
-    ("gitlab", "GitLab CI"),
-    ("azure", "Azure Pipelines"),
+pub const CI: [(Ci, &str); 3] = [
+    (Ci::Github, "GitHub Actions"),
+    (Ci::Gitlab, "GitLab CI"),
+    (Ci::Azure, "Azure Pipelines"),
 ];
 
 /// The MCP hosts (`MCP_LABELS`).
@@ -136,8 +137,8 @@ fn shown_labels(choices: &[(&str, &str)], keys: &[String]) -> Vec<String> {
 pub struct Setup {
     /// The repository's name, organisation, description and platforms.
     pub repo: RepoOptions,
-    /// The CI provider; `None`: configure later.
-    pub ci: Option<String>,
+    /// The CI provider; `None`: configure later (never [`Ci::None`]).
+    pub ci: Option<Ci>,
     /// Staging deployments on pull requests.
     pub staging: bool,
     /// Inflight preview shards.
@@ -229,20 +230,20 @@ pub fn setup(
     };
     answers.repo = repo_questions(prompter, root)?;
     let mut choices = vec!["Configure later"];
-    choices.extend(labels(&CI));
+    choices.extend(CI.iter().map(|(_, label)| *label));
     let ci = prompter.select("CI/CD platform", &choices, 0)?;
     answers.ci = ci
         .checked_sub(1)
         .and_then(|index| CI.get(index))
-        .map(|(key, _)| (*key).to_owned());
-    if let Some(ci) = answers.ci.as_deref() {
+        .map(|(ci, _)| *ci);
+    if let Some(ci) = answers.ci {
         let mut features: Vec<(&str, &str)> = vec![
             ("Staging deployments on pull requests", "staging"),
             ("Inflight preview shards", "inflight"),
             ("Automatic status promotion", "promotion"),
             ("Sharing on the default branch", "sharing"),
         ];
-        if ci == "github" {
+        if ci == Ci::Github {
             features.push(("Explorer pages", "explorer"));
         }
         let mut checked = vec![0, 1];
@@ -288,8 +289,8 @@ pub fn setup(
         &shown_labels(&platforms(), &answers.repo.platforms),
         answers
             .ci
-            .as_deref()
-            .map(|ci| shown_labels(&CI, &[ci.to_owned()]).join("")),
+            .and_then(|ci| CI.iter().find(|(choice, _)| *choice == ci))
+            .map(|(_, label)| (*label).to_owned()),
         (!answers.mcp.is_empty()).then(|| shown_labels(&MCP, &answers.mcp)),
         answers
             .skills
@@ -847,7 +848,7 @@ pub(crate) mod tests {
         assert_eq!(answers.repo.org.as_deref(), Some("SOC"));
         assert_eq!(answers.repo.description, None);
         assert_eq!(answers.repo.platforms, ["sentinel", "elastic"]);
-        assert_eq!(answers.ci.as_deref(), Some("github"));
+        assert_eq!(answers.ci, Some(Ci::Github));
         assert!(answers.staging && !answers.inflight && !answers.sharing && answers.explorer_pages);
         assert_eq!(answers.promotion, Some(true));
         assert_eq!(answers.mcp, ["cursor"]);
@@ -917,7 +918,7 @@ pub(crate) mod tests {
             panic!();
         };
         assert_eq!(answers.promotion, None);
-        assert_eq!(answers.ci.as_deref(), Some("gitlab"));
+        assert_eq!(answers.ci, Some(Ci::Gitlab));
     }
 
     fn skills_script() -> Script {

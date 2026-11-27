@@ -3381,6 +3381,7 @@ dependencies = [
  "roxmltree",
  "rustls",
  "rustls-native-certs",
+ "rustls-pki-types",
  "serde",
  "serde_json",
  "shlex 2.0.1",

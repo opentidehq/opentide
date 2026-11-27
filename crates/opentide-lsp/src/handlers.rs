@@ -177,6 +177,8 @@ pub mod custom {
         const METHOD: &'static str = "opentide/__hold";
     }
 
+    /// The source reads these params to find where the batch ends
+    /// (`protocol::Hold::take`); the handler only answers.
     #[cfg(all(debug_assertions, not(fuzzing)))]
     #[derive(Debug, Default, Deserialize, Serialize)]
     #[serde(default)]
@@ -412,11 +414,16 @@ pub(crate) fn request(session: &mut Session, request: Request) -> Response {
         })
         .on::<custom::Hold>(|_, _| ())
         .on::<custom::Sleep>(|_, p| {
-            let deadline = std::time::Instant::now() + std::time::Duration::from_millis(p.ms);
+            let wait = std::time::Duration::from_millis(p.ms);
             match p.until {
-                None => std::thread::sleep(std::time::Duration::from_millis(p.ms)),
+                None => std::thread::sleep(wait),
                 Some(path) => {
-                    while !path.exists() && std::time::Instant::now() < deadline {
+                    // A deadline past what `Instant` holds is none: the
+                    // sleep then waits for the path alone (#2041).
+                    let deadline = std::time::Instant::now().checked_add(wait);
+                    while !path.exists()
+                        && deadline.is_none_or(|deadline| std::time::Instant::now() < deadline)
+                    {
                         std::thread::sleep(std::time::Duration::from_millis(10));
                     }
                 }

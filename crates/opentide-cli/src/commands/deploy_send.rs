@@ -4612,8 +4612,7 @@ impl Sender<'_, '_> {
         tenant_state: &mut ElasticTenant,
         tenant: &str,
     ) -> Result<DeployRequest, String> {
-        const PLATFORM: &str = PlatformId::Elastic.as_str();
-        let block = opentide_compile::preview::config_dump(PLATFORM, raw);
+        let block = opentide_compile::preview::config_dump(PlatformId::Elastic, raw);
         if strategy != StatusStrategy::Deletion
             && tenant_state.suppression_off
             && block
