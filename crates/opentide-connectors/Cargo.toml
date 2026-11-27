@@ -46,6 +46,9 @@ percent-encoding = "2"
 # Splunk's XML: the error body's message and the Atom feed of saved searches.
 roxmltree = { version = "0.21", default-features = false, features = ["std"] }
 shlex = "2.0"
+# Exabeam's rule names compare as `str.casefold()` does: full Unicode case
+# folding, the crate opentide-compile sorts exported names with.
+caseless = "0.2"
 # Sentinel (UC-4.3): the request ids MSAL and azure-core stamp their requests with.
 uuid = { workspace = true, features = ["v4"] }
 # Google SecOps: the service-account JWT (RS256) exchanged for an access token

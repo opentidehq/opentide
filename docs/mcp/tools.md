@@ -11,6 +11,8 @@ Each tool below lists its parameters, an example call, and an example response s
 
 The server's `instructions`, sent with the `initialize` response, open with the tagline (*Spec-driven development for agentic detection engineering*) and give the agent its workflow: search, draft from a template, call `validation_report` until it is clean, then preview with `deploy_rule` and `dry_run: true`. People review and merge, and run real deployments.
 
+Every tool and resource answers for the files as they are on disk at the call. The server reads the workspace once and keeps it between calls: each call re-reads only the files changed, added or deleted since the last one. A `deploy_rule` that is not a dry run reads the workspace afresh, and the next call reads it again.
+
 ### Next actions
 
 `validate_rule`, `validation_report` and `validate_query` add a `next_actions` list: the calls worth making next.

@@ -633,7 +633,7 @@ async fn read_caps(
     if answer.status != 200 {
         return Err(ElasticError::Rule(failed(answer.status, answer.text())));
     }
-    let data = answer.json().unwrap_or(Json::Null);
+    let data = json_answer(&answer, cx, "_field_caps")?;
     if matches!(data.get("indices"), Some(Json::Array(items)) if items.is_empty()) {
         return Ok(Caps::NotOnboarded);
     }
@@ -642,6 +642,21 @@ async fn read_caps(
             .cloned()
             .unwrap_or(Json::Object(Object::new())),
     ))
+}
+
+/// The JSON of a 200 answer to *what*; a body that is not JSON (a proxy's
+/// page, a truncated answer) is the tenant's refusal, never an empty answer
+/// (#1936).
+fn json_answer(answer: &Answer, cx: TenantContext<'_>, what: &str) -> Result<Json, ConnectorError> {
+    answer.json().ok_or_else(|| {
+        let tenant = &cx.tenant.label.tenant;
+        ConnectorError::refused(
+            PLATFORM,
+            tenant,
+            format!("Elastic answered {what} on {tenant} with a body that is not JSON"),
+            answer.not_json_detail(),
+        )
+    })
 }
 
 /// `any(isinstance(cap, dict) and cap.get(flag) is True for cap in caps.values())`.
@@ -691,7 +706,7 @@ impl Elastic {
                     answer.status
                 )));
             }
-            let data = answer.json().unwrap_or(Json::Null);
+            let data = json_answer(&answer, cx, "the data view lookup")?;
             let title = data_view_title(&data);
             return Ok((title, true));
         }
@@ -717,12 +732,11 @@ impl Elastic {
             return Err(tenant_error("_query", answer.status));
         }
         if answer.status == 200 {
-            return Ok(
-                match answer.json().as_ref().and_then(|data| data.get("columns")) {
-                    Some(Json::Array(columns)) => columns.clone(),
-                    _ => Vec::new(),
-                },
-            );
+            let data = json_answer(&answer, cx, "the ES|QL pre-flight")?;
+            return Ok(match data.get("columns") {
+                Some(Json::Array(columns)) => columns.clone(),
+                _ => Vec::new(),
+            });
         }
         let (kind, reason, blob) = error_payload(&answer);
         if kind == "parsing_exception" || blob.contains("parsing_exception") {
@@ -738,7 +752,7 @@ impl Elastic {
                     return Err(tenant_error("_resolve/index", resolved.status));
                 }
                 if resolved.status == 200 {
-                    let data = resolved.json().unwrap_or(Json::Null);
+                    let data = json_answer(&resolved, cx, "_resolve/index")?;
                     let empty = |key: &str| !data.get(key).is_some_and(Json::is_filled);
                     if empty("indices") && empty("aliases") && empty("data_streams") {
                         warnings.push(format!("ES|QL sources not onboarded yet: {sources}"));
@@ -2576,7 +2590,10 @@ pub fn eql_maxspan(query: &str) -> Option<(String, u128)> {
         "h" => 3_600_000,
         _ => 86_400_000,
     };
-    Some((found.get(1)?.as_str().to_owned(), amount * unit))
+    Some((
+        found.get(1)?.as_str().to_owned(),
+        amount.saturating_mul(unit),
+    ))
 }
 
 // ---- advisories (`validator._emit_rule_advisories`) ----
@@ -2674,10 +2691,15 @@ pub fn advisories(
         && eql_is_sequence(query)
         && let Some((_, maxspan_ms)) = eql_maxspan(query)
     {
-        let window_ms = (interval_secs + lookback_secs) * 1000;
+        // A duration saturates at `u128::MAX` seconds: so do its milliseconds,
+        // never wrapping into a small window (#1928).
+        let lookback_ms = lookback_secs.saturating_mul(1000);
+        let window_ms = interval_secs
+            .saturating_add(lookback_secs)
+            .saturating_mul(1000);
         if maxspan_ms > window_ms {
             warnings.push(opentide_core::codes::EQL_MAXSPAN_WINDOW.to_owned());
-        } else if maxspan_ms > lookback_secs * 1000 {
+        } else if maxspan_ms > lookback_ms {
             warnings.push(opentide_core::codes::EQL_MAXSPAN_LOOKBACK.to_owned());
         }
     }
@@ -2901,6 +2923,37 @@ mod tests {
                 "suppression_omitted_basic_license",
                 "technique_not_enterprise"
             ]
+        );
+    }
+
+    /// A lookback too long for its milliseconds saturates instead of
+    /// wrapping into a small window that a short maxspan exceeds (#1928).
+    #[test]
+    fn advisories_saturate_a_huge_lookback() {
+        let days = "9".repeat(40);
+        let block: Json = serde_json::from_str(&format!(
+            r#"{{"type": "eql", "query": "sequence with maxspan=1h [a] [b]", "scheduling": {{"interval": "5m", "lookback": "{days}d"}}}}"#
+        ))
+        .unwrap_or(Json::Null);
+        assert_eq!(
+            advisories(&block, "high", true, false).unwrap_or_default(),
+            ["lookback_long"]
+        );
+    }
+
+    #[test]
+    fn a_huge_maxspan_saturates_instead_of_overflowing() {
+        // The multiplication panicked in debug and wrapped in release.
+        let span = format!("{}d", "9".repeat(36));
+        let query = format!("sequence with maxspan={span} [a] [b]");
+        assert_eq!(eql_maxspan(&query), Some((span, u128::MAX)));
+        let block: Json = serde_json::from_str(&format!(
+            r#"{{"type": "eql", "query": "{query}", "scheduling": {{"interval": "5m", "lookback": "1h"}}}}"#
+        ))
+        .unwrap_or(Json::Null);
+        assert_eq!(
+            advisories(&block, "high", true, false).unwrap_or_default(),
+            ["eql_maxspan_window"]
         );
     }
 }

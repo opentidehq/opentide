@@ -178,23 +178,44 @@ pub fn splunk_timerange(time: &str, skew: f64, offset: i64) -> Result<String, Co
             "lookback {time:?} must be a whole number followed by m, h or d"
         ))
     })?;
+    let too_long = || {
+        invalid(&format!(
+            "lookback {time:?} is too long to express in minutes"
+        ))
+    };
     let minutes = match unit {
-        Some('h') => count * 60,
-        Some('d') => count * 1440,
-        Some('m') => count,
+        Some('h') => count.checked_mul(60),
+        Some('d') => count.checked_mul(1440),
+        Some('m') => Some(count),
         _ => {
             return Err(invalid(
                 "Time unit not supported by the Splunk earliest-time converter (expects m, h or d)",
             ));
         }
-    };
+    }
+    .ok_or_else(too_long)?;
     #[expect(
         clippy::cast_precision_loss,
-        clippy::cast_possible_truncation,
-        reason = "a lookback in minutes is far inside f64's exact integers"
+        reason = "a lookback past 2^53 minutes (17 billion years) may round; it cannot wrap"
     )]
-    let stretched = (minutes as f64 * (skew + 1.0)).round_ties_even() as i64;
-    Ok(format!("-{}m@m", offset + stretched))
+    let stretched = (minutes as f64 * (skew + 1.0)).round_ties_even();
+    // `i64::MAX as f64` rounds up to 2^63, itself out of range: the bound is exclusive.
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "the bounds of i64 as f64 are exactly -2^63 and 2^63"
+    )]
+    let in_range =
+        stretched.is_finite() && stretched >= i64::MIN as f64 && stretched < i64::MAX as f64;
+    if !in_range {
+        return Err(too_long());
+    }
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "checked above: a whole number inside i64's range"
+    )]
+    let stretched = stretched as i64;
+    let total = offset.checked_add(stretched).ok_or_else(too_long)?;
+    Ok(format!("-{total}m@m"))
 }
 
 /// The tenant's settings (`use_tenant`).
@@ -947,6 +968,43 @@ mod tests {
         assert_eq!(splunk_timerange("5m", 0.5, 0).unwrap(), "-8m@m");
         assert_eq!(splunk_timerange("3m", 0.5, 0).unwrap(), "-4m@m");
         assert!(splunk_timerange("3s", 0.0, 0).is_err());
+    }
+
+    /// A lookback whose minutes do not fit is an error naming the field,
+    /// never a wrapped number (#1928): release builds do not check
+    /// overflow, so `9999999999999999d` once wrote `--4046744073709553152m@m`.
+    #[test]
+    fn lookbacks_that_overflow_name_the_field() {
+        let reason = |error: CompileError| error.reason;
+        let too_long = |time: &str| {
+            format!(
+                "Splunk cannot compile this rule: lookback {time:?} is too long to \
+                 express in minutes"
+            )
+        };
+        for time in ["9999999999999999d", "9223372036854775807h"] {
+            assert_eq!(
+                reason(splunk_timerange(time, 0.0, 0).unwrap_err()),
+                too_long(time)
+            );
+        }
+        // The stretch and the offset overflow too.
+        let max = i64::MAX.to_string();
+        let minutes = format!("{max}m");
+        assert_eq!(
+            reason(splunk_timerange(&minutes, 1.0, 0).unwrap_err()),
+            too_long(&minutes)
+        );
+        let near = format!("{}m", 1_i64 << 53);
+        assert_eq!(
+            reason(splunk_timerange(&near, 0.0, i64::MAX).unwrap_err()),
+            too_long(&near)
+        );
+        // A long lookback that fits still compiles.
+        assert_eq!(
+            splunk_timerange("1000000000d", 0.0, 0).unwrap(),
+            "-1440000000000m@m"
+        );
     }
 
     /// A count or a setting that does not read as a number names itself
