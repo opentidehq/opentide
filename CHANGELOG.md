@@ -47,6 +47,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Eac
   - a shallow clone that does not hold the merge base with the default branch, or holds no default-branch ref at all (`actions/checkout`'s default depth of 1); the message says to check out the full history (`fetch-depth: 0`)
   - a baseline commit, tree or file git cannot read, which made a folder look empty or a committed file look new
   - an object folder or file in the work tree that cannot be read, whose committed files looked deleted
+- **`validate` compares Exabeam rule names as deploy does.** `exabeam_name_duplicate` grouped names by lowercase while deploy matches them under full Unicode case folding, so two enabled rules named `ﬁle Access` and `file access` (or `Straße` and `STRASSE`) passed `validate` and the second deploy failed with `exabeam_name_conflict`. `validate` now folds names the same way ([#1983](https://github.com/opentidehq/opentide/issues/1983)).
 
 ## [1.1.0] — 2026-11-26
 

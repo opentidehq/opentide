@@ -2030,6 +2030,41 @@ mod validate {
     }
 
     #[test]
+    fn exabeam_names_that_are_one_under_full_case_folding_are_a_duplicate() {
+        // Deploy matches names under full case folding (`exabeam_name_conflict`):
+        // `ﬁ` folds to `fi` and `ß` to `ss`, which lowercasing leaves apart.
+        let fs = workspace();
+        let block = |name: &str| format!("    enabled: true\n    name: {name}\n");
+        fs.write(
+            "/ws/objects/rules/a.yaml",
+            rule_with(U1, "A", "exabeam", &block("ﬁle Access")),
+        );
+        fs.write(
+            "/ws/objects/rules/b.yaml",
+            rule_with(U2, "B", "exabeam", &block("file access")),
+        );
+        fs.write(
+            "/ws/objects/rules/c.yaml",
+            rule_with(U3, "C", "exabeam", &block("Straße")),
+        );
+        let validation = run(&fs, &Options::default());
+        assert_eq!(on(&validation, "exabeam_name_duplicate"), [U1, U2]);
+        let finding = with_code(&validation, "exabeam_name_duplicate")[0];
+        assert_eq!(
+            finding.context.get("value").and_then(|v| v.as_str()),
+            Some("ﬁle Access")
+        );
+        fs.write(
+            "/ws/objects/rules/b.yaml",
+            rule_with(U2, "B", "exabeam", &block("STRASSE")),
+        );
+        assert_eq!(
+            on(&run(&fs, &Options::default()), "exabeam_name_duplicate"),
+            [U2, U3]
+        );
+    }
+
+    #[test]
     fn two_google_secops_blocks_with_one_rule_name_are_a_duplicate() {
         let fs = workspace();
         let block =

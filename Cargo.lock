@@ -3669,6 +3669,7 @@ dependencies = [
 name = "opentide-schema"
 version = "1.1.0"
 dependencies = [
+ "caseless",
  "fancy-regex 0.20.1",
  "garde",
  "indexmap",
