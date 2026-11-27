@@ -1182,7 +1182,6 @@ fn join_field_path(parent: &str, key: &str) -> String {
 /// it runs on every scalar of every file, and compiling them each time was
 /// most of `opentide lint`'s time (#806).
 struct ScalarPatterns {
-    uuid: Regex,
     schema: Regex,
     technique: Regex,
     number: Regex,
@@ -1195,8 +1194,6 @@ struct ScalarPatterns {
 fn scalar_patterns() -> &'static ScalarPatterns {
     static PATTERNS: std::sync::OnceLock<ScalarPatterns> = std::sync::OnceLock::new();
     PATTERNS.get_or_init(|| ScalarPatterns {
-        uuid: Regex::new(r"(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
-            .unwrap(),
         schema: Regex::new(r"^[A-Za-z][A-Za-z0-9_]*::[0-9.]+$").unwrap(),
         technique: Regex::new(r"^T[0-9]{4}(\.[0-9]{3})?$").unwrap(),
         number: Regex::new(r"^-?[0-9]+(\.[0-9]+)?$").unwrap(),
@@ -1229,7 +1226,7 @@ fn highlight_scalar(
             || field.const_value.as_deref() == Some(value)
     });
     let patterns = scalar_patterns();
-    let capture = if patterns.uuid.is_match(value) {
+    let capture = if opentide_core::ids::is_hyphenated(value) {
         "tide.uuid"
     } else if patterns.schema.is_match(value) {
         "tide.schema"

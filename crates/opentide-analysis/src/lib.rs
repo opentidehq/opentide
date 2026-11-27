@@ -66,6 +66,23 @@ pub trait WorkspaceHost {
     fn indexed_objects(&self) -> Option<std::sync::Arc<[IndexedObject]>> {
         None
     }
+
+    /// The text of the Elastic platform configuration
+    /// ([`ELASTIC_CONFIGURATION`]) that [`elastic_tenants`] reads: by
+    /// default the first of [`documents`](Self::documents) at that path. A
+    /// host that holds many documents answers without copying them all.
+    fn elastic_configuration(&self) -> Option<String> {
+        self.documents()
+            .into_iter()
+            .find(|(path, _)| is_elastic_configuration(path))
+            .map(|(_, text)| text)
+    }
+}
+
+/// Whether `path` is the Elastic platform configuration
+/// ([`ELASTIC_CONFIGURATION`]) of a workspace.
+pub fn is_elastic_configuration(path: &str) -> bool {
+    path.replace('\\', "/").ends_with(ELASTIC_CONFIGURATION)
 }
 
 pub use opentide_tide::index_object;
@@ -127,10 +144,8 @@ pub const ELASTIC_CONFIGURATION: &str = ".opentide/configurations/platforms/elas
 /// Elastic tenants declared in the workspace, if the host supplies the
 /// configuration file.
 pub fn elastic_tenants(host: &dyn WorkspaceHost) -> Vec<ElasticTenant> {
-    host.documents()
-        .iter()
-        .find(|(path, _)| path.replace('\\', "/").ends_with(ELASTIC_CONFIGURATION))
-        .map(|(_, text)| opentide_tide::elastic_tenants(text))
+    host.elastic_configuration()
+        .map(|text| opentide_tide::elastic_tenants(&text))
         .unwrap_or_default()
 }
 

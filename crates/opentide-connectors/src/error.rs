@@ -35,9 +35,11 @@ pub enum ConnectorError {
         /// What failed, without the URL.
         reason: String,
     },
-    /// The tenant took the request and sent no answer in time (a read
-    /// timeout: one query outlived the timeout, the tenant is not down).
-    #[error("{platform} tenant '{tenant}' at {address} sent no answer within {seconds}s")]
+    /// The tenant took the request and sent no complete answer in time: no
+    /// answer, or no more of it, within the read timeout (one query outlived
+    /// the timeout, the tenant is not down), or an answer that kept coming
+    /// past the request's overall deadline.
+    #[error("{platform} tenant '{tenant}' at {address} sent no complete answer within {seconds}s")]
     Timeout {
         /// The platform's identifier.
         platform: String,
@@ -45,7 +47,9 @@ pub enum ConnectorError {
         tenant: String,
         /// `scheme://host[:port]` of the request.
         address: String,
-        /// The timeout, in seconds.
+        /// The limit that ran out, in seconds: the read timeout, or the
+        /// request's overall deadline (the connect timeout plus four read
+        /// timeouts) when the answer kept coming.
         seconds: u64,
     },
     /// The request was answered, but the answer could not be read.

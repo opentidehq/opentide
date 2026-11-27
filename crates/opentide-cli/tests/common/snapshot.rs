@@ -1156,16 +1156,9 @@ fn shrink(value: &mut serde_json::Value, limit: usize) {
     }
 }
 
-/// `(N bytes, sha256 HEX)`.
+/// `(N bytes, sha256 <64 lowercase hex digits>)`.
 fn digest_line(bytes: &[u8]) -> String {
-    use sha2::Digest as _;
-    let hex =
-        sha2::Sha256::digest(bytes)
-            .iter()
-            .fold(String::with_capacity(64), |mut hex, byte| {
-                let _ = write!(hex, "{byte:02x}");
-                hex
-            });
+    let hex = opentide_core::text::sha256_hex(bytes);
     format!("({} bytes, sha256 {hex})\n", bytes.len())
 }
 

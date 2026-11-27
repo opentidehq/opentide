@@ -5,7 +5,7 @@
 //! (P1.5).
 
 use crate::server::{host_info, path_to_uri_value};
-use crate::session::{Document, Root, ScopeKind, Session, path_key};
+use crate::session::{Document, Root, ScopeKind, Session, SessionHost, path_key};
 use crate::uri::{path_to_uri, uri_to_path};
 use lsp_server::{ErrorCode, Request, Response};
 use lsp_types as lsp;
@@ -361,6 +361,9 @@ pub(crate) fn request(session: &mut Session, request: Request) -> Response {
             let loading = s.workspace_stats();
             json!({
                 "analyses": s.analyses.get(),
+                "textCopies": s.text_copies.get(),
+                "docPathKeys": s.doc_path_keys.get(),
+                "engineAnalyses": s.engine_analyses.get(),
                 "closedAnalyses": s.closed_analyses.get(),
                 "workspaceReportHits": s.workspace_report_hits.get(),
                 "pullYields": s.pull_yields.get(),
@@ -735,6 +738,7 @@ fn did_open(session: &mut Session, params: lsp::DidOpenTextDocumentParams) {
     // A byte-order mark is not text: the editor counts no column for it.
     let text = opentide_core::strip_bom(&item.text).to_string();
     let root = session.root_for(&path);
+    let serial = session.next_text();
     session.docs.insert(
         uri.to_string(),
         Document {
@@ -742,8 +746,10 @@ fn did_open(session: &mut Session, params: lsp::DidOpenTextDocumentParams) {
             text,
             version: Some(item.version),
             root,
+            serial,
         },
     );
+    session.docs_changed();
     document_changed(session, uri, language, root);
     session.opened(uri);
 }
@@ -774,13 +780,18 @@ fn did_change(session: &mut Session, params: lsp::DidChangeTextDocumentParams) {
             None => return,
         },
     };
+    // The document's text is edited in place, not copied (#1943): it is
+    // replaced below whatever the edits are.
     let current = session
         .docs
-        .get(&uri)
-        .map(|d| d.text.clone())
+        .get_mut(&uri)
+        .map(|d| std::mem::take(&mut d.text))
         .unwrap_or_default();
-    let text = apply_content_changes(&current, &params.content_changes);
-    let text = opentide_core::strip_bom(&text).to_string();
+    let mut text = apply_content_changes(current, params.content_changes);
+    if text.starts_with('\u{feff}') {
+        text.drain(..'\u{feff}'.len_utf8());
+    }
+    let serial = session.next_text();
     session.docs.insert(
         uri.clone(),
         Document {
@@ -788,8 +799,12 @@ fn did_change(session: &mut Session, params: lsp::DidChangeTextDocumentParams) {
             text,
             version: Some(version),
             root,
+            serial,
         },
     );
+    if known.is_none() {
+        session.docs_changed();
+    }
     document_changed(session, &uri, language, root);
 }
 
@@ -798,6 +813,8 @@ fn did_close(session: &mut Session, params: lsp::DidCloseTextDocumentParams) {
     let Some(closed) = session.docs.remove(uri) else {
         return;
     };
+    session.docs_changed();
+    session.forget_analysis(uri);
     if closed.language == LanguageId::TideYaml {
         session.touch_object();
     } else {
@@ -881,21 +898,20 @@ fn mark_configuration(session: &Session) {
     }
 }
 
-fn apply_content_changes(text: &str, changes: &[lsp::TextDocumentContentChangeEvent]) -> String {
-    let mut current = text.to_string();
+fn apply_content_changes(
+    text: impl Into<String>,
+    changes: impl IntoIterator<Item = lsp::TextDocumentContentChangeEvent>,
+) -> String {
+    let mut current = text.into();
     for change in changes {
-        current = match change.range {
+        match change.range {
             Some(range) => {
                 let start = offset(&current, range.start);
                 let end = offset(&current, range.end).max(start);
-                let mut out = String::with_capacity(current.len() + change.text.len());
-                out.push_str(&current[..start]);
-                out.push_str(&change.text);
-                out.push_str(&current[end..]);
-                out
+                current.replace_range(start..end, &change.text);
             }
-            None => change.text.clone(),
-        };
+            None => current = change.text,
+        }
     }
     current
 }
@@ -1165,7 +1181,7 @@ fn duplicates(
     path: &str,
     d: &opentide_core::Diagnostic,
 ) -> Vec<lsp::DiagnosticRelatedInformation> {
-    let Some(uuid) = uuid_pattern()
+    let Some(uuid) = opentide_core::ids::finder()
         .find(&d.message)
         .map(|m| m.as_str().to_string())
     else {
@@ -1177,12 +1193,15 @@ fn duplicates(
         .iter()
         .filter(|o| o.uuid == uuid && crate::session::path_key(&o.path) != own)
         .filter_map(|o| {
-            let text = host.document(&o.path)?;
-            let span = opentide_tide::uuid_span(&text, &uuid)?;
+            let range = host
+                .with_text(&o.path, |text| {
+                    opentide_tide::uuid_span(text, &uuid).map(|span| span_range(text, span))
+                })
+                .flatten()?;
             Some(lsp::DiagnosticRelatedInformation {
                 location: lsp::Location {
                     uri: file_uri(&o.path)?,
-                    range: span_range(&text, span),
+                    range,
                 },
                 message: format!("{} {} also has this UUID", o.object_type, o.name),
             })
@@ -1832,20 +1851,6 @@ fn handle_signature_help(
 // ---------------------------------------------------------------------------
 // Navigation.
 
-#[expect(
-    clippy::expect_used,
-    reason = "a regex literal: an invalid pattern fails every test that reaches it"
-)]
-fn uuid_pattern() -> &'static regex::Regex {
-    static PATTERN: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
-    PATTERN.get_or_init(|| {
-        regex::Regex::new(
-            r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
-        )
-        .expect("UUID pattern")
-    })
-}
-
 /// The UUID under the cursor, the cursor touching either end. A column past
 /// the end of its line is on no UUID.
 pub(crate) fn uuid_at(text: &str, position: lsp::Position) -> Option<String> {
@@ -1854,7 +1859,7 @@ pub(crate) fn uuid_at(text: &str, position: lsp::Position) -> Option<String> {
         return None;
     }
     let at = offset(text, position);
-    uuid_pattern()
+    opentide_core::ids::finder()
         .find_iter(text)
         .find(|m| m.start() <= at && at <= m.end())
         .map(|m| m.as_str().to_string())
@@ -1862,10 +1867,12 @@ pub(crate) fn uuid_at(text: &str, position: lsp::Position) -> Option<String> {
 
 /// Where an object's UUID is in its file (the open buffer first), or its
 /// first line.
-fn object_location(host: &dyn WorkspaceHost, path: &str, uuid: &str) -> Option<lsp::Location> {
-    let source = host.document(path).unwrap_or_default();
-    let range = opentide_tide::uuid_span(&source, uuid)
-        .map(|span| span_range(&source, span))
+fn object_location(host: &SessionHost<'_>, path: &str, uuid: &str) -> Option<lsp::Location> {
+    let range = host
+        .with_text(path, |source| {
+            opentide_tide::uuid_span(source, uuid).map(|span| span_range(source, span))
+        })
+        .flatten()
         .unwrap_or_default();
     Some(lsp::Location {
         uri: file_uri(path)?,
@@ -1929,11 +1936,14 @@ fn handle_references(
         opentide_tide::find_refs(&workspace, &uuid)
             .into_iter()
             .filter_map(|o| {
-                let source = host.document(&o.path)?;
-                let span = opentide_tide::uuid_span(&source, &uuid)?;
+                let range = host
+                    .with_text(&o.path, |source| {
+                        opentide_tide::uuid_span(source, &uuid).map(|span| span_range(source, span))
+                    })
+                    .flatten()?;
                 Some(lsp::Location {
                     uri: file_uri(&o.path)?,
-                    range: span_range(&source, span),
+                    range,
                 })
             })
             .collect(),
@@ -2051,11 +2061,11 @@ fn handle_workspace_symbol(
             if !seen.insert(crate::session::path_key(&o.path)) {
                 continue;
             }
-            // The open buffer, else the file the index read.
-            let text = host.document(&o.path).unwrap_or_default();
             let Some(uri) = file_uri(&o.path) else {
                 continue;
             };
+            // Where the index found the name, in the open buffer or the
+            // file it read: no copy of the file (#1944).
             symbols.push(lsp::SymbolInformation {
                 name: o.name.clone(),
                 kind: lsp::SymbolKind::CLASS,
@@ -2063,22 +2073,13 @@ fn handle_workspace_symbol(
                 deprecated: None,
                 location: lsp::Location {
                     uri,
-                    range: name_token_range(&text, &o.name),
+                    range: lsp_range(o.name_range),
                 },
                 container_name: Some(o.object_type.clone()),
             });
         }
     }
     Some(lsp::WorkspaceSymbolResponse::Flat(symbols))
-}
-
-fn name_token_range(text: &str, name: &str) -> lsp::Range {
-    match text.find(name) {
-        Some(start) if !name.is_empty() => {
-            span_range(text, ByteSpan::new(start, start + name.len()))
-        }
-        _ => lsp::Range::new(lsp::Position::new(0, 0), lsp::Position::new(0, 1)),
-    }
 }
 
 /// ATT&CK ids to their pages, and UUIDs to the object's file (P3.2).
@@ -3144,9 +3145,9 @@ mod tests {
     fn incremental_edits_apply_in_order_and_full_replace_wins() {
         let text = "name: Rule\n";
         let edited =
-            apply_content_changes(text, &[change(0, 6, 0, 6, "X"), change(0, 7, 0, 7, "Y")]);
+            apply_content_changes(text, [change(0, 6, 0, 6, "X"), change(0, 7, 0, 7, "Y")]);
         assert_eq!(edited, "name: XYRule\n");
-        assert_eq!(apply_content_changes(text, &[whole("other")]), "other");
+        assert_eq!(apply_content_changes(text, [whole("other")]), "other");
     }
 
     #[test]
@@ -3159,19 +3160,16 @@ mod tests {
         // An emoji is two UTF-16 units; column 3 is `b`.
         let src = "a😀b";
         assert_eq!(at(src, 0, 3), 1 + "😀".len());
-        assert_eq!(
-            apply_content_changes(src, &[change(0, 1, 0, 3, "X")]),
-            "aXb"
-        );
+        assert_eq!(apply_content_changes(src, [change(0, 1, 0, 3, "X")]), "aXb");
         let src = "ab\ncd";
         assert_eq!(at(src, 0, 99), 2);
         assert_eq!(at(src, 9, 0), src.len());
         assert_eq!(
-            apply_content_changes(src, &[change(0, 99, 0, 99, "Z")]),
+            apply_content_changes(src, [change(0, 99, 0, 99, "Z")]),
             "abZ\ncd"
         );
         assert_eq!(
-            apply_content_changes("ab", &[change(5, 0, 5, 0, "Z")]),
+            apply_content_changes("ab", [change(5, 0, 5, 0, "Z")]),
             "abZ"
         );
         // The CR stays in the line the splice indexes.
@@ -3184,22 +3182,22 @@ mod tests {
     #[test]
     fn edits_after_multi_byte_characters_land_where_the_editor_put_them() {
         let src = "T | where Name == \"日本\"";
-        let edited = apply_content_changes(src, &[change(0, 20, 0, 20, "x")]);
+        let edited = apply_content_changes(src, [change(0, 20, 0, 20, "x")]);
         assert_eq!(edited, "T | where Name == \"日x本\"");
-        let edited = apply_content_changes(src, &[change(0, 21, 0, 21, "x")]);
+        let edited = apply_content_changes(src, [change(0, 21, 0, 21, "x")]);
         assert_eq!(edited, "T | where Name == \"日本x\"");
         assert_eq!(
-            apply_content_changes("é😀", &[change(0, 3, 0, 3, "!")]),
+            apply_content_changes("é😀", [change(0, 3, 0, 3, "!")]),
             "é😀!"
         );
         // A column inside a surrogate pair moves past the character, never into it.
         assert_eq!(
-            apply_content_changes("😀z", &[change(0, 1, 0, 1, "!")]),
+            apply_content_changes("😀z", [change(0, 1, 0, 1, "!")]),
             "😀!z"
         );
         // A reversed range inserts at its start.
         assert_eq!(
-            apply_content_changes("abc", &[change(0, 2, 0, 1, "!")]),
+            apply_content_changes("abc", [change(0, 2, 0, 1, "!")]),
             "ab!c"
         );
     }

@@ -378,7 +378,7 @@ fn percent(lex: &mut logos::Lexer<'_, Tok>) -> bool {
 /// The lexemes of `source`: they tile it, trivia included. As the toolkit's
 /// `lex` (an error is one character, and lexing resumes after it), with the
 /// context of the text before each token.
-pub(crate) fn lex(source: &str) -> Vec<Lexeme> {
+pub fn lex(source: &str) -> Vec<Lexeme> {
     let mut out: Vec<Lexeme> = Vec::new();
     let mut context = Context::default();
     let mut base = 0;

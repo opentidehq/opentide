@@ -209,6 +209,10 @@ fn defender_namespace() -> uuid::Uuid {
 /// de-duplicating suffix and `.yaml`, and file systems cap a name at 255.
 const STEM_LIMIT: usize = 200;
 
+/// How long a request that lists a Microsoft tenant's rules (Sentinel's
+/// analytics rules, Defender's custom detections) may take.
+const MICROSOFT_LIST_TIMEOUT: Duration = Duration::from_secs(60);
+
 /// `name` as a file name on every system: each character Windows refuses
 /// in a file name (`< > : " / \ | ? *`) and each control character is a
 /// space, the stem is cut to [`STEM_LIMIT`] bytes at a character boundary,
@@ -670,9 +674,9 @@ fn defender_uuid(id: &str) -> (String, Addressed) {
         .get(..prefix.len())
         .filter(|head| head.eq_ignore_ascii_case(prefix))
         .map_or(id, |_| &id[prefix.len()..]);
-    match uuid::Uuid::try_parse(held.trim()) {
-        Ok(parsed) => (parsed.hyphenated().to_string(), Addressed::BareUuid),
-        Err(_) => (
+    match opentide_core::ids::canonical(held) {
+        Some(canonical) => (canonical, Addressed::BareUuid),
+        None => (
             uuid::Uuid::new_v5(&defender_namespace(), id.as_bytes())
                 .hyphenated()
                 .to_string(),
@@ -848,7 +852,7 @@ fn defender_run(cx: &Context<'_>, written_count: &mut usize) -> Outcome {
         let (tenant, http) = tenant(
             DEFENDER,
             configured,
-            Duration::from_secs(60),
+            MICROSOFT_LIST_TIMEOUT,
             &environment,
             cx.proxy,
         )?;
@@ -1261,6 +1265,10 @@ configurations:
 // ----------------------------------------------------------------- Elastic
 
 const ELASTIC: &str = "elastic";
+
+/// How long a request of an Elastic extract (the rules of a Kibana space)
+/// may take.
+const ELASTIC_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// The field types RFC 0007's `FieldType` takes (`_VALID_FIELD_TYPES`).
 const VALID_FIELD_TYPES: [&str; 25] = [
@@ -2163,9 +2171,10 @@ fn kibana_to_opentide(rule: &CJson, make_custom: bool) -> Object {
     clean_empty(document.as_object().unwrap_or(&Object::new()))
 }
 
-/// Whether `text` is a UUID: hyphenated, simple, braced or a `urn:uuid:`.
+/// Whether `text` is a UUID: hyphenated, simple, braced or a `urn:uuid:`
+/// ([`opentide_core::ids::parse`]).
 fn is_uuid(text: &str) -> bool {
-    uuid::Uuid::try_parse(text).is_ok()
+    opentide_core::ids::parse(text).is_some()
 }
 
 /// Why `document` must not be written: every file written must load as
@@ -2272,13 +2281,7 @@ fn elastic_run(
         })
         .ok_or_else(|| format!("No Elastic tenant is configured for Kibana space '{space}'"))?;
     let environment = Environment::from_pairs(cx.env.iter());
-    let (tenant, http) = tenant(
-        ELASTIC,
-        configured,
-        Duration::from_secs(30),
-        &environment,
-        cx.proxy,
-    )?;
+    let (tenant, http) = tenant(ELASTIC, configured, ELASTIC_TIMEOUT, &environment, cx.proxy)?;
     let destination = cx.cwd.join("Imported");
     std::fs::create_dir_all(&destination)
         .map_err(|error| format!("{}: {error}", destination.display()))?;

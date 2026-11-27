@@ -344,6 +344,77 @@ fn definition(compiled: &CompiledDefinition) -> serde_json::Value {
     data(&Json::Object(compiled.definition.clone()))
 }
 
+/// #2005: a duration whose milliseconds do not fit an i64 saturated at
+/// `i64::MAX` in the payload; the compiler now refuses the rule, as the model
+/// does, naming the field.
+#[test]
+fn a_duration_past_the_deployable_bound_refuses_the_rule() {
+    let over = "9223372036854776s";
+    let huge = "9".repeat(40) + "s";
+    let cases: [(String, &[&str]); 5] = [
+        (
+            format!("schedule: {{every: {over}}}"),
+            &["schedule", "every"],
+        ),
+        (
+            format!("schedule: {{every: 5m, window: {huge}}}"),
+            &["schedule", "window"],
+        ),
+        (
+            format!("schedule: {{cron: '0 */5 * * * ?', window: {over}}}"),
+            &["schedule", "window"],
+        ),
+        (format!("grace_period: {over}"), &["grace_period"]),
+        (
+            "schedule: {every: 106751991167301d}".to_owned(),
+            &["schedule", "every"],
+        ),
+    ];
+    for (extra, field) in cases {
+        let rule = block_rule(&extra);
+        let workspace = workspace(&rule);
+        let owned = Owned::new(
+            &Vocabularies::bundled(),
+            &workspace.configuration().resolved,
+        );
+        let index = workspace.index().clone();
+        let cx = owned.context(&index);
+        let object = index.get("rule", &uuid_of(&rule)).unwrap();
+        let rule = Rule::new(object.root().unwrap(), None);
+        let Err(error) = compile_definition(&cx, &rule, PREVIEW_VERSION, None, None) else {
+            panic!("{extra} compiled");
+        };
+        assert_eq!(error.code, "compile_invalid_rule", "{error}");
+        let mut path = vec!["configurations", "graylog"];
+        path.extend(field);
+        assert_eq!(error.field, path, "{error}");
+        assert!(
+            error
+                .reason
+                .contains(&format!("configurations.graylog.{}", field.join("."))),
+            "{error}"
+        );
+        assert!(
+            error.reason.contains("at most 9223372036854775 seconds"),
+            "{error}"
+        );
+    }
+    // At the bound, each duration is exact in milliseconds.
+    let max = "9223372036854775s";
+    let rule = block_rule(&format!(
+        "schedule: {{every: {max}, window: {max}}}\ngrace_period: {max}"
+    ));
+    let compiled = compiled(&rule, PREVIEW_VERSION, None).unwrap();
+    let definition = definition(&compiled);
+    let millis = serde_json::json!(9_223_372_036_854_775_000_i64);
+    assert_eq!(definition["config"]["search_within_ms"], millis);
+    assert_eq!(definition["config"]["execute_every_ms"], millis);
+    assert_eq!(
+        definition["notification_settings"]["grace_period_ms"],
+        millis
+    );
+}
+
 #[test]
 fn tags_are_normalised_unique_and_capped() {
     let mut tenant = tenant();

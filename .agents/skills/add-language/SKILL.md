@@ -94,8 +94,9 @@ end of step 5: work them on one branch and check each crate as you go
 
 - [ ] `LanguageId::<Id>` in `crates/opentide-core/src/lib.rs`: `as_str`, `parse`, `Display`, the
   serde rename, `from_extension` for each file suffix, and `QUERY_LANGUAGES`.
-- [ ] Its diagnostic codes in `opentide_core::codes`, prefixed `<id>_`, each in `codes::ALL` and
-  `codes::describe`; an unknown construct gets a stable code, not a free-form message.
+- [ ] Its diagnostic codes in `opentide_core::codes`, prefixed `<id>_`, each a line of the `codes!`
+  table (constant, `codes::ALL` entry and `codes::describe` sentence at once); an unknown
+  construct gets a stable code, not a free-form message.
 - [ ] `scripts/engine/check-names.sh` passes (`opentide`, never `otide`; no `opentide-sql`).
 
 ### 2. The crate and the parser (`crates/opentide-<id>`)

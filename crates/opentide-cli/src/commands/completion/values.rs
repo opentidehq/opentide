@@ -377,8 +377,12 @@ impl Context {
             .config
             .as_ref()
             .map(|config| {
-                let tree = opentide_compile::Json::from_node(&config.resolved.tree);
-                opentide_compile::plan::enabled(&tree)
+                config
+                    .resolved
+                    .enabled_platforms()
+                    .into_iter()
+                    .map(|platform| platform.as_str().to_owned())
+                    .collect()
             })
             .unwrap_or_default()
     }
@@ -403,7 +407,7 @@ impl Context {
         };
         let tree = opentide_compile::Json::from_node(&config.resolved.tree);
         let platforms = if self.platforms.is_empty() {
-            opentide_compile::plan::enabled(&tree)
+            self.enabled_platforms()
         } else {
             self.platforms.clone()
         };
@@ -492,12 +496,7 @@ pub fn header(path: &Path) -> (Option<String>, Option<String>) {
 /// Whether `text` is a UUID, hyphens in place: a hand-mangled header is never
 /// offered.
 fn is_uuid(text: &str) -> bool {
-    let groups: Vec<&str> = text.split('-').collect();
-    groups.len() == 5
-        && groups
-            .iter()
-            .zip([8, 4, 4, 4, 12])
-            .all(|(group, len)| group.len() == len && group.chars().all(|c| c.is_ascii_hexdigit()))
+    opentide_core::ids::is_hyphenated(text)
 }
 
 /// Whether `id` is an ATT&CK technique id: `T1059` or `T1059.001`.
