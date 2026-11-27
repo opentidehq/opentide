@@ -9,7 +9,7 @@ description: "A written rule for the engine's query languages: a syntax gets its
 |---|---|
 | Status | Accepted |
 | Date | 2026-11-26, accepted 2026-11-27 |
-| Decision | Accepted by the owner, with option B of §6: `LanguageId` becomes `#[non_exhaustive]` in the next major. That major is already forced by `LanguageId::Datadog` (#1902). Raised by the [Datadog Cloud SIEM RFC](../rfc-datadog-cloud-siem.md), §6.2 ([#1898](https://github.com/opentidehq/opentide/pull/1898)). Two questions stay open: the `.cql` file profile ([#1912](https://github.com/opentidehq/opentide/issues/1912)) and an editor's platform for raw files ([#1917](https://github.com/opentidehq/opentide/issues/1917)) |
+| Decision | Accepted by the owner, with option B of §6: `LanguageId` becomes `#[non_exhaustive]` in the next major. That major is already forced by `LanguageId::Datadog` (#1902). Raised by the [Datadog Cloud SIEM RFC](../rfc-datadog-cloud-siem.md), §6.2 ([#1898](https://github.com/opentidehq/opentide/pull/1898)). Raw query files keep their default dialect, and platform-specific checks on raw queries go through the crates or the SDK ([#1917](https://github.com/opentidehq/opentide/issues/1917), not planned). The `.cql` file profile is settled in [#1912](https://github.com/opentidehq/opentide/issues/1912) |
 | Issues | Tracked in [#1910](https://github.com/opentidehq/opentide/issues/1910): step 1 [#1912](https://github.com/opentidehq/opentide/issues/1912), step 2 [#1913](https://github.com/opentidehq/opentide/issues/1913), step 3 [#1914](https://github.com/opentidehq/opentide/issues/1914) and [#1915](https://github.com/opentidehq/opentide/issues/1915), step 4 [#1911](https://github.com/opentidehq/opentide/issues/1911); step 5 is Datadog's phase 2, [#1920](https://github.com/opentidehq/opentide/issues/1920) |
 
 ## Context
@@ -298,10 +298,12 @@ semver row is corrected. That edit is made once the ADR is accepted.
 - Names follow the terms: `Dialect` for products, `Profile` for uses, `Context` for inputs. Today
   two crates call a product a profile and one calls a profile a context. Until the renames land,
   this ADR's §5 table is the map.
-- Raw files and editors keep a default dialect. An editor that wants Graylog or Defender behavior
-  for a raw file needs a way to name the platform. `opentide-lsp analyze --platform` already
-  exists, but a running language server has no such setting. That is left open: a setting, or the
-  file's place in the workspace, are both possible, and neither is decided here.
+- Raw files keep their language's default dialect, in the editor and in `validate query --file`. This
+  was decided with the ADR's acceptance ([#1917](https://github.com/opentidehq/opentide/issues/1917),
+  not planned). opentide validates Tide objects, where a block's or hunt's position gives the
+  platform. Anyone who needs platform-specific checks on raw queries uses the crates or the SDK,
+  which already take a platform (`QueryRequest.platform`, `opentide-lsp analyze --platform`). No
+  language-server setting or pragma is planned.
 - What a dialect may not do is now a review item. A dialect check that branches the lexer or parser,
   or a profile chosen from the platform, is a defect under this ADR.
 
