@@ -123,7 +123,7 @@ opentide generate docs index
 `generate docs --changed` fails with a structured result (`status: failed`, exit `1`, an `error` that starts `--changed could not read the git baseline:`) rather than guess which files changed when:
 
 - there is no git worktree, or no first commit;
-- the clone is shallow and does not hold the merge base with the baseline, or holds no ref it can tell is the default branch (`origin/HEAD`, or `development`, `main` or `master`; `actions/checkout` fetches one commit of one ref by default). The message says to check out the full history: `fetch-depth: 0` on GitHub Actions, `GIT_DEPTH: "0"` on GitLab, `fetchDepth: 0` on Azure Pipelines;
+- the clone is shallow and does not hold the merge base with the baseline, or holds no ref it can tell is the default branch (`origin/HEAD`, `development`, `main` or `master`, or the branch's upstream when it tracks another branch; `actions/checkout` fetches one commit of one ref by default). The message says to check out the full history: `fetch-depth: 0` on GitHub Actions, `GIT_DEPTH: "0"` on GitLab, `fetchDepth: 0` on Azure Pipelines;
 - git cannot read a baseline commit, tree or file, or an object folder or file in the work tree cannot be read.
 
 `generate inflight` logs a warning and writes no shards instead.

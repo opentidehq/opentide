@@ -496,7 +496,7 @@ Defender, `--json` names the `tenant` and the `host` that failed, and `message`
 carries the network error; Sentinel does too, where it used to report only a rejected query. The human output prints the same message as an `error:` line,
 with the `advice` as a `help:` line under it. Up to four tenants of a platform are checked at once (Elastic's
 and Google SecOps' one at a time), each one query at a time, and reported in the configuration's order: a tenant's
-log lines (`validating_query`, `valid_query`, `query_validation_warning`, `query_rejected`, `query_check_timed_out`) come out once it and every tenant before it
+log lines (`validating_query`, `valid_query`, `query_validation_warning`, `query_rejected`, `query_check_timed_out` and `tenant_check_refused` among them) come out once it and every tenant before it
 have finished, so a slow tenant holds back the lines of those after it. The check stops at the
 first tenant that cannot be reached, including one whose every query timed out before three did: the tenants not yet started are not
 checked, those running are stopped, and nothing is reported for any tenant after it. The sample is illustrative, because it needs a
