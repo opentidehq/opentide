@@ -85,4 +85,4 @@ tempfile = "3"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["registry", "std"] }
 # Google SecOps: the assertion is cross-checked against jsonwebtoken's, and its
 # signature verified with the test key's public half.
-jsonwebtoken = { version = "9.3", default-features = false, features = ["use_pem"] }
+jsonwebtoken = { version = "10.3", default-features = false, features = ["use_pem"] }
