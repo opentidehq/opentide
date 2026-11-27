@@ -223,6 +223,20 @@ pub struct RustSdkPage;
 ///     opentide::lint::LintReport { exit_code: 0, ..report }
 /// }
 /// ```
+///
+/// The fields those samples name exist and are public, so each fails for the
+/// attribute alone: a renamed field fails here instead (#1985). The error
+/// code of a `compile_fail` sample is checked on nightly only.
+///
+/// ```
+/// fn read(
+///     found: &opentide::Diagnostic,
+///     report: &opentide::Report,
+///     lint: &opentide::lint::LintReport,
+/// ) -> (String, bool, i32) {
+///     (found.code.clone(), report.ok, lint.exit_code)
+/// }
+/// ```
 #[cfg(all(doctest, feature = "workspace"))]
 pub struct NonExhaustiveReports;
 
