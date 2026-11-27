@@ -229,11 +229,43 @@ pub enum GraylogEventField {
     Lookup(GraylogEventLookup),
 }
 
-/// `grace_period`: a duration, zero allowed (`_grace_period_duration`).
+/// The longest Graylog duration, in seconds: deploy writes each duration in
+/// milliseconds (`search_within_ms`, `execute_every_ms`, `grace_period_ms`)
+/// as a JSON integer, at most `i64::MAX`, and this is the longest whose
+/// milliseconds fit (`i64::MAX / 1000`). [`duration_seconds`] reads any
+/// number of digits; past this bound `validate` refuses a duration and so
+/// does deploy's compiler, rather than writing `i64::MAX` milliseconds into
+/// the payload (#2005).
+pub const MAX_DURATION_SECONDS: u128 = 9_223_372_036_854_775;
+
+/// Whether `text` is a duration longer than [`MAX_DURATION_SECONDS`].
+pub fn duration_too_long(text: &str) -> bool {
+    duration_seconds(text, true).is_ok_and(|seconds| seconds > MAX_DURATION_SECONDS)
+}
+
+/// What is wrong with a duration longer than [`MAX_DURATION_SECONDS`]:
+/// `field` and its `value`, quoted.
+pub fn too_long_detail(field: &str, value: &str) -> String {
+    format!(
+        "{field} {} is longer than a rule can be deployed with: at most \
+         {MAX_DURATION_SECONDS} seconds",
+        repr::quote(value)
+    )
+}
+
+/// `grace_period`: a duration, zero allowed (`_grace_period_duration`), at
+/// most [`MAX_DURATION_SECONDS`].
 pub fn check_grace_period(value: &str) -> Result<(), Violation> {
-    duration_seconds(value, true).map(|_| ()).map_err(|_| {
+    let seconds = duration_seconds(value, true).map_err(|_| {
         Violation::value_error(format!("Invalid duration format: {}", repr::quote(value)))
-    })
+    })?;
+    if seconds > MAX_DURATION_SECONDS {
+        return Err(Violation::value_error(too_long_detail(
+            "grace_period",
+            value,
+        )));
+    }
+    Ok(())
 }
 
 /// `grace_period` in the conversion: a duration, zero allowed, or null.
@@ -470,17 +502,20 @@ fn schedule_findings(schedule: &Node, found: &mut Vec<Finding>) {
         ));
     }
     for key in ["every", "window"] {
-        if let Some(value) = get(schedule, key)
-            && !positive_duration(value)
+        let Some(value) = get(schedule, key) else {
+            continue;
+        };
+        // Past `MAX_DURATION_SECONDS` the milliseconds do not fit (#2005).
+        let message = if !positive_duration(value) {
+            format!("{key} is a duration greater than zero (5m, 1h10m, PT15M)")
+        } else if let Some(text) = value.value.as_str()
+            && duration_too_long(text)
         {
-            found.push(finding(
-                "graylog_schedule",
-                &[S, key],
-                Some(format!(
-                    "{key} is a duration greater than zero (5m, 1h10m, PT15M)"
-                )),
-            ));
-        }
+            too_long_detail(key, text)
+        } else {
+            continue;
+        };
+        found.push(finding("graylog_schedule", &[S, key], Some(message)));
     }
     if let Some(cron) = cron {
         if !cron.value.as_str().is_some_and(cron_ok) {

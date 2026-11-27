@@ -16,8 +16,10 @@
 use std::fmt;
 
 use opentide_schema::objects::platform::durations::duration_seconds;
-use opentide_schema::objects::platform::graylog::PRIORITIES;
 use opentide_schema::objects::platform::graylog::condition::compile_condition;
+use opentide_schema::objects::platform::graylog::{
+    MAX_DURATION_SECONDS, PRIORITIES, too_long_detail,
+};
 
 use crate::elastic::rule_techniques;
 use crate::json::{Json, Object};
@@ -409,15 +411,30 @@ pub fn derive_field_spec(block: &Json, ids: &[String], version: Version) -> Obje
     spec
 }
 
-/// Milliseconds in a duration (`duration_ms`).
-fn duration_ms(value: &str, allow_zero: bool) -> Result<i64, CompileError> {
-    duration_seconds(value, allow_zero)
-        .map(|seconds| i64::try_from(seconds.saturating_mul(1000)).unwrap_or(i64::MAX))
-        .map_err(|_| {
-            CompileError::invalid_rule(format!(
-                "Invalid duration format: {}",
-                opentide_schema::configuration::repr::quote(value)
+/// Milliseconds in a duration (`duration_ms`), `field`'s (its path under
+/// `configurations.graylog`, dotted). A duration longer than
+/// [`MAX_DURATION_SECONDS`], which the model refuses too, refuses the rule
+/// naming the field: its milliseconds do not fit the payload's integer
+/// (#2005).
+fn duration_ms(value: &str, allow_zero: bool, field: &str) -> Result<i64, CompileError> {
+    let seconds = duration_seconds(value, allow_zero).map_err(|_| {
+        CompileError::invalid_rule(format!(
+            "Invalid duration format: {}",
+            opentide_schema::configuration::repr::quote(value)
+        ))
+    })?;
+    seconds
+        .checked_mul(1000)
+        .filter(|_| seconds <= MAX_DURATION_SECONDS)
+        .and_then(|millis| i64::try_from(millis).ok())
+        .ok_or_else(|| {
+            let mut path = vec!["configurations", "graylog"];
+            path.extend(field.split('.'));
+            CompileError::invalid_rule(too_long_detail(
+                &format!("configurations.graylog.{field}"),
+                value,
             ))
+            .at(&path)
         })
 }
 
@@ -428,10 +445,13 @@ fn schedule(block: &Json) -> Option<&Json> {
 /// The time range each run searches: `window`, else `every`, else 5 minutes
 /// (`window_ms`).
 pub fn window_ms(block: &Json) -> Result<i64, CompileError> {
-    let value = schedule(block)
-        .and_then(|schedule| set_text(schedule, "window").or_else(|| set_text(schedule, "every")))
-        .unwrap_or(DEFAULT_EVERY);
-    duration_ms(value, false)
+    let window = schedule(block).and_then(|schedule| {
+        set_text(schedule, "window")
+            .map(|value| (value, "schedule.window"))
+            .or_else(|| set_text(schedule, "every").map(|value| (value, "schedule.every")))
+    });
+    let (value, field) = window.unwrap_or((DEFAULT_EVERY, "schedule.every"));
+    duration_ms(value, false, field)
 }
 
 /// The block's `streams`, else the tenant's (`stream_aliases`).
@@ -522,6 +542,7 @@ pub fn derive_config(
                 .and_then(|schedule| set_text(schedule, "every"))
                 .unwrap_or(DEFAULT_EVERY),
             false,
+            "schedule.every",
         )?,
     };
     let mut config = Object::new();
@@ -676,7 +697,7 @@ pub fn compile_definition(
     );
     definition.insert("key_spec".into(), strings(as_list(block.get("event_key"))));
     let grace_period_ms = match set_text(block, "grace_period") {
-        Some(grace) => duration_ms(grace, true)?,
+        Some(grace) => duration_ms(grace, true, "grace_period")?,
         None => 0,
     };
     let backlog = match block.get("backlog") {
