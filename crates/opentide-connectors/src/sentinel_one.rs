@@ -1,9 +1,9 @@
-//! SentinelOne's management API (UC-4.2, #832): `platforms/sentinel_one/
-//! client.py` (`SentinelOneService`: STAR custom detection rules and
-//! `validate_query`), the calls its `deployer.py` makes, and `runner.py`
-//! (PowerQuery, submitted then polled until it finishes), request for
-//! request. `validate query --live` checks a rule's queries with the runner,
-//! for one row over the minute before now (`LiveQueryValidator`).
+//! SentinelOne's management API (UC-4.2, #832): the STAR custom detection
+//! rules a deploy creates, replaces, disables and deletes, and the
+//! PowerQuery searches `opentide query` runs, each submitted then polled
+//! until it finishes. `validate query --live` runs each of a rule's queries
+//! as such a search, for one row over the request's window
+//! ([`SentinelOne::check`]).
 //!
 //! Every call carries `Authorization: ApiToken <api_token>` and `Content-Type:
 //! application/json`; the rule bodies are the compiled STAR rule

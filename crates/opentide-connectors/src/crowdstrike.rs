@@ -1,13 +1,12 @@
 //! CrowdStrike Falcon (UC-4.2, #832): the correlation rules a deploy sends
 //! and the Next-Gen SIEM (LogScale) query jobs `opentide query` runs.
 //!
-//! A port of `platforms/crowdstrike/client.py` (`CrowdstrikeService`: the
-//! OAuth2 client-credentials token, then create, update and delete),
-//! `deployer.py` (a token per tenant, then one request per rule)
-//! and `runner.py` (a query job started, polled until done and stopped when
-//! the runner stops waiting for it), request for request. CrowdStrike has no
-//! live validation: the platform has no [`crate::connector::LiveValidator`]
-//! (`supported: False`).
+//! A deploy sends one request per rule: create, update or delete, each on
+//! the tenant's OAuth2 client-credentials token (the first rule signs in).
+//! A query starts a query job, polls it until it is done, and stops it
+//! (`DELETE`) when it outlives the request's timeout or is cancelled
+//! ([`Session::search`]). CrowdStrike has no live validation: the platform
+//! has no [`crate::connector::LiveValidator`] (`supported: false`).
 //!
 //! The token comes from the cloud's own OAuth2 endpoint
 //! (`<api>/oauth2/token`), never Entra ID's, and is kept in the platform's

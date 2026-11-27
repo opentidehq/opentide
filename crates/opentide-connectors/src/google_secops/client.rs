@@ -1,5 +1,4 @@
-//! The Chronicle API v1 client of one Google SecOps instance, ported from
-//! 0.28.0's `platforms/google_secops/client.py`.
+//! The Chronicle API v1 client of one Google SecOps instance.
 //!
 //! Every request goes to `<endpoint>/v1/projects/<project>/locations/
 //! <location>/instances/<instance>` with an access token ([`super::auth`]).

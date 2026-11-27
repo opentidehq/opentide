@@ -1,5 +1,4 @@
-//! `verifyRuleText` answers, read and put back on the block, ported from
-//! 0.28.0's `platforms/google_secops/diagnostics.py`.
+//! `verifyRuleText` answers, read and put back on the block.
 //!
 //! `verifyRuleText` compiles a rule without creating it. It answers
 //! `success: true` for a rule that compiles; a refused rule answers HTTP 200
