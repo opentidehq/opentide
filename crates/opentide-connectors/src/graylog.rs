@@ -232,22 +232,14 @@ fn errors_of(body: Option<&Json>) -> Vec<(String, Vec<String>)> {
         .iter()
         .map(|(name, messages)| {
             let messages = match messages {
-                Json::Array(items) => items.iter().map(text_of).collect(),
-                other => vec![text_of(other)],
+                Json::Array(items) => items.iter().map(Json::to_text).collect(),
+                other => vec![Json::to_text(other)],
             };
             (name.clone(), messages)
         })
         .collect();
     found.sort_by(|left, right| left.0.cmp(&right.0));
     found
-}
-
-/// A JSON value as text: a string as itself.
-fn text_of(value: &Json) -> String {
-    match value {
-        Json::Str(text) => text.clone(),
-        other => other.to_compact(),
-    }
 }
 
 /// Graylog's `message` and `errors` of an answer; a body that is not JSON is
@@ -262,7 +254,7 @@ fn message_of(answer: &Answer) -> (String, Vec<(String, Vec<String>)>) {
     let message = body
         .get("message")
         .filter(|message| message.is_filled())
-        .map(text_of)
+        .map(Json::to_text)
         .unwrap_or_default();
     (message, errors_of(Some(&body)))
 }
@@ -283,13 +275,13 @@ pub const QUERY_INVALID: &str = "graylog_query_invalid";
 /// column (`explanation_text`).
 pub fn explanation_text(explanation: &Json) -> String {
     let Json::Object(_) = explanation else {
-        return text_of(explanation);
+        return Json::to_text(explanation);
     };
     let field = |key: &str| {
         explanation
             .get(key)
             .filter(|value| value.is_filled())
-            .map(|value| text_of(value).trim().to_owned())
+            .map(|value| Json::to_text(value).trim().to_owned())
             .filter(|text| !text.is_empty())
     };
     let title = field("error_title").or_else(|| field("error_type"));
@@ -321,7 +313,10 @@ pub fn read_verdict(payload: &Json) -> (Vec<String>, Vec<(&'static str, String)>
     let status = payload
         .get("status")
         .filter(|status| status.is_filled())
-        .map_or_else(|| "OK".to_owned(), |status| text_of(status).to_uppercase());
+        .map_or_else(
+            || "OK".to_owned(),
+            |status| Json::to_text(status).to_uppercase(),
+        );
     let explanations = match payload.get("explanations") {
         Some(Json::Array(items)) => items.as_slice(),
         _ => &[],
@@ -332,7 +327,7 @@ pub fn read_verdict(payload: &Json) -> (Vec<String>, Vec<(&'static str, String)>
         let kind = explanation
             .get("error_type")
             .filter(|kind| kind.is_filled())
-            .map(text_of)
+            .map(Json::to_text)
             .unwrap_or_default();
         let warning = WARNING_TYPES
             .iter()
@@ -1008,7 +1003,7 @@ pub fn read_rows(payload: &Json) -> (Vec<QueryColumn>, Vec<Row>) {
                 .get("field")
                 .filter(|name| name.is_filled())
                 .or_else(|| entry.get("name"))
-                .map(text_of)
+                .map(Json::to_text)
                 .unwrap_or_default();
             QueryColumn {
                 name,

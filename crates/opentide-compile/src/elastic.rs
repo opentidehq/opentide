@@ -206,10 +206,7 @@ fn failed(message: String) -> CompileError {
 
 /// The phrase filter of the `field`/`value` shorthand.
 fn phrase(field: &Json, value: &Json, negate: bool) -> Json {
-    let field_name = match field {
-        Json::Str(text) => text.clone(),
-        other => other.to_compact(),
-    };
+    let field_name = field.to_text();
     let mut params = Object::new();
     params.insert("query".into(), value.clone());
     let mut meta = Object::new();
@@ -386,13 +383,7 @@ pub fn is_marker_tag(tag: &str) -> bool {
 
 fn strings(value: Option<&Json>) -> Vec<String> {
     match value {
-        Some(Json::Array(items)) => items
-            .iter()
-            .map(|item| match item {
-                Json::Str(text) => text.clone(),
-                other => other.to_compact(),
-            })
-            .collect(),
+        Some(Json::Array(items)) => items.iter().map(Json::to_text).collect(),
         _ => Vec::new(),
     }
 }
@@ -815,10 +806,7 @@ pub fn compile(cx: &Context<'_>, rule: &Rule, setup: &Setup) -> Result<Json, Com
     let contributors = strings(metadata.and_then(|metadata| get(metadata, "contributors")));
     let candidates = author
         .into_iter()
-        .map(|author| match author {
-            Json::Str(text) => text.clone(),
-            other => other.to_compact(),
-        })
+        .map(Json::to_text)
         .chain(contributors)
         .filter(|name| !name.is_empty());
     let authors = text::unique(candidates);
@@ -852,10 +840,7 @@ pub fn compile(cx: &Context<'_>, rule: &Rule, setup: &Setup) -> Result<Json, Com
         .filter(|value| value.is_filled())
         .or(analysis);
     if let Some(note) = note {
-        let text = match note {
-            Json::Str(text) => text.clone(),
-            other => other.to_compact(),
-        };
+        let text = note.to_text();
         body.insert("note".into(), text.trim_end().into());
     }
     let threat = threat(cx, rule);

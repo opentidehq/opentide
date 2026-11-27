@@ -256,13 +256,7 @@ fn set_text<'a>(block: &'a Json, key: &str) -> Option<&'a str> {
 fn as_list(value: Option<&Json>) -> Vec<String> {
     match value {
         Some(Json::Str(one)) => vec![one.clone()],
-        Some(Json::Array(items)) => items
-            .iter()
-            .map(|item| match item {
-                Json::Str(text) => text.clone(),
-                other => other.to_compact(),
-            })
-            .collect(),
+        Some(Json::Array(items)) => items.iter().map(Json::to_text).collect(),
         _ => Vec::new(),
     }
 }
