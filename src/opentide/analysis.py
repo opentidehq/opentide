@@ -28,6 +28,9 @@ ENGINE_UNAVAILABLE = "engine_unavailable"
 REINSTALL_COMMAND = "pip install --force-reinstall opentide"
 
 Severity = Literal["error", "warning", "note"]
+#: Where a query on its own will sit: ``"search"`` (a query file, a hunt) or ``"rule"``
+#: (the query of a platform's rule block).
+Position = Literal["search", "rule"]
 _SEVERITIES: dict[str, Severity] = {
     "error": "error",
     "warning": "warning",
@@ -133,12 +136,24 @@ class Finding:
 
 
 def check_query(
-    text: str, *, language: str, platform: str | None = None, stack: str | None = None
+    text: str,
+    *,
+    language: str,
+    platform: str | None = None,
+    stack: str | None = None,
+    position: Position = "search",
 ) -> list[Finding]:
-    """One query on its own, in its own coordinates."""
+    """One query on its own, in its own coordinates.
+
+    *position* ``"search"`` (the default) checks it as a query file of its language is;
+    ``"rule"`` checks it as *platform*'s rule block checks its query, and needs a
+    platform: without one it raises :class:`ValueError`.
+    """
     return [
         Finding.from_engine(item, text)
-        for item in engine().analyze_query(text, language, platform=platform, stack=stack)
+        for item in engine().analyze_query(
+            text, language, platform=platform, stack=stack, position=position
+        )
     ]
 
 

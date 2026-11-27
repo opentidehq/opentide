@@ -948,3 +948,51 @@ configurations:
         "{after:?}"
     );
 }
+
+/// #2002: what a host with no filesystem supplied is digested once, not on
+/// every rebuild of the index: a keystroke in an open object digests that
+/// object alone.
+#[test]
+fn a_keystroke_digests_no_supplied_object_again() {
+    const SUPPLIED: usize = 20;
+    let documents: Vec<Value> = (0..SUPPLIED)
+        .map(|n| {
+            json!({
+                "uri": format!("objects/objectives/o-{n}.yaml"),
+                "text": format!(
+                    "name: Objectif é😀 {n}\nmetadata:\n  uuid: 00000000-0000-4000-8002-0000000001{n:02}\n  schema: objective::1.0\n"
+                ),
+            })
+        })
+        .collect();
+    let mut session = start(json!({ "workspace": { "documents": documents } }));
+    let digested = |session: &mut MessageSession, id: u64| {
+        request(session, id, "opentide/__stats", Value::Null)["digestedObjects"]
+            .as_u64()
+            .unwrap()
+    };
+    let count = |catalog: &Value| catalog["roots"][0]["objects"].as_array().unwrap().len();
+    let rule = "objects/rules/process-creation.yaml";
+    open(&mut session, rule, "opentide-yaml", RULE);
+    let catalog = request(&mut session, 2, "opentide/catalog", json!({}));
+    assert_eq!(count(&catalog), SUPPLIED + 1, "{catalog}");
+    let before = digested(&mut session, 3);
+    for version in 2..4 {
+        let text = RULE.replace("Process creation", &format!("Création é😀 {version}"));
+        send(
+            &mut session,
+            json!({
+                "method": "textDocument/didChange",
+                "params": {
+                    "textDocument": { "uri": rule, "version": version },
+                    "contentChanges": [{ "text": text }],
+                },
+            }),
+        );
+        let catalog = request(&mut session, 10 + version, "opentide/catalog", json!({}));
+        assert_eq!(count(&catalog), SUPPLIED + 1, "{catalog}");
+    }
+    // Two keystrokes: the open rule, once per rebuild of the index.
+    let after = digested(&mut session, 20);
+    assert_eq!(after - before, 2, "{before} then {after}");
+}

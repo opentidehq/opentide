@@ -11,6 +11,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use opentide_compile::{Json, Owned, Rule, preview, sentinel};
+use opentide_schema::platforms::PlatformKey;
 use opentide_schema::vocab::Vocabularies;
 use opentide_workspace::{FileSystem, MemoryFs, Options, RootOptions, Workspace};
 
@@ -65,7 +66,7 @@ fn compile(ids: &[&str], alert_techniques: &str) -> (Json, Vec<String>, Json) {
     let object = index.get("rule", RULE).unwrap();
     let rule = Rule::new(object.root().unwrap(), None);
     let (body, warnings) = sentinel::compile_with_warnings(&cx, &rule, "one").unwrap();
-    let entry = preview::preview(&cx, "sentinel", &rule);
+    let entry = preview::preview(&cx, &PlatformKey::new("sentinel"), &rule);
     (
         body,
         warnings.into_iter().map(|(_, message)| message).collect(),

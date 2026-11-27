@@ -1097,7 +1097,7 @@ fn changed_object_files(root: &Path, cx: &Context<'_>) -> Vec<PathBuf> {
     }
     let env = |name: &str| cx.env.get(name).map(str::to_owned);
     if git::ci(&env) == git::Ci::Local {
-        let local = work_tree_changes(cx.env, root);
+        let local = work_tree_changes(root);
         if local.is_empty() {
             tracing::warn!("inflight_no_local_git_diff_found");
         }
@@ -1111,16 +1111,17 @@ fn changed_object_files(root: &Path, cx: &Context<'_>) -> Vec<PathBuf> {
             .collect(),
         Err(error) => {
             tracing::warn!(detail = error.message().as_str(), "inflight_ci_diff_failed");
-            work_tree_changes(cx.env, root)
+            work_tree_changes(root)
         }
     }
 }
 
-/// [`work_tree_changes`] read with gix rather than the `git` program (the
-/// WASI build, which runs no program): the object files of each
-/// `objects/<family>/` folder that differ from the default branch's
-/// baseline, untracked ones included, sorted by path.
-fn work_tree_changes_read(root: &Path) -> Vec<PathBuf> {
+/// The object files changed in the work tree against the default branch,
+/// untracked ones included (`_local_git_changed_paths`): the object files of
+/// each `objects/<family>/` folder that differ from the default branch's
+/// baseline, sorted by path. Read with gix, as `generate docs --changed`
+/// reads it, so the `git` program is not needed (#1955).
+fn work_tree_changes(root: &Path) -> Vec<PathBuf> {
     let Ok(entries) = std::fs::read_dir(root.join("objects")) else {
         return Vec::new();
     };
@@ -1158,44 +1159,6 @@ fn work_tree_changes_read(root: &Path) -> Vec<PathBuf> {
             Vec::new()
         }
     }
-}
-
-/// The object files changed in the work tree against the default branch,
-/// untracked ones included (`_local_git_changed_paths`).
-fn work_tree_changes(env: &Env, root: &Path) -> Vec<PathBuf> {
-    // WASI runs no program: the checkout is read with gix instead.
-    if cfg!(target_os = "wasi") {
-        return work_tree_changes_read(root);
-    }
-    let baseline = match crate::git_baseline::resolve(env, root) {
-        Ok(baseline) => baseline,
-        Err(detail) => {
-            tracing::warn!(detail = detail.as_str(), "inflight_no_git_baseline");
-            return Vec::new();
-        }
-    };
-    let top = crate::git_baseline::toplevel(env, root);
-    let canonical =
-        |path: &Path| std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
-    let prefix = canonical(root)
-        .strip_prefix(canonical(&top))
-        .map(Path::to_path_buf)
-        .unwrap_or_default();
-    let prefix_text = prefix.to_string_lossy().replace('\\', "/");
-    let pathspec = if prefix_text.is_empty() {
-        "objects/".to_owned()
-    } else {
-        format!("{prefix_text}/objects/")
-    };
-    crate::git_baseline::changed(env, root, &baseline, &pathspec)
-        .into_iter()
-        .filter_map(|relative| {
-            let within = Path::new(&relative).strip_prefix(&prefix).ok()?;
-            let absolute = top.join(&relative);
-            (inflight::is_object_yaml(&within.to_string_lossy()) && absolute.is_file())
-                .then_some(absolute)
-        })
-        .collect()
 }
 
 /// `path` from the workspace with `/`, or as given when it is outside it
@@ -1670,11 +1633,11 @@ mod tests {
         assert_eq!(ExplorerOptions::new(&explorer, false).visibility_tlp, None);
     }
 
-    /// The WASI build's reading of the work tree (gix) finds what the `git`
-    /// program finds: a changed, a new and an untracked object file on a
-    /// branch, not a deleted one or a file outside the object folders.
+    /// The work tree read with gix finds what the `git` program finds: a
+    /// changed, a new and an untracked object file on a branch, not a
+    /// deleted one or a file outside the object folders.
     #[test]
-    fn the_work_tree_read_with_gix_matches_the_git_program() {
+    fn the_work_tree_read_with_gix_finds_what_git_finds() {
         let dir = tempfile::tempdir().unwrap();
         let root = std::fs::canonicalize(dir.path()).unwrap();
         let git = |args: &[&str]| {
@@ -1705,14 +1668,13 @@ mod tests {
         git(&["commit", "-qm", "work"]);
         write("objects/rules/untracked.yaml", "a: 1\n");
         write("notes/outside.yaml", "a: 1\n");
-        let native = work_tree_changes(&Env::from_process(), &root);
-        let read = work_tree_changes_read(&root);
+        let read = work_tree_changes(&root);
         let names = |paths: &[PathBuf]| {
             let mut names: Vec<String> = paths
                 .iter()
                 .map(|path| {
-                    // The program's paths are git's (`C:/...` on Windows),
-                    // the root is canonical (`\\?\C:\...`): compare both canonical.
+                    // The root is canonical (`\\?\C:\...` on Windows):
+                    // compare both canonical.
                     std::fs::canonicalize(path)
                         .unwrap()
                         .strip_prefix(&root)
@@ -1725,14 +1687,13 @@ mod tests {
             names
         };
         assert_eq!(
-            names(&native),
+            names(&read),
             [
                 "objects/objectives/committed.yaml",
                 "objects/rules/changed.yaml",
                 "objects/rules/untracked.yaml"
             ]
         );
-        assert_eq!(names(&read), names(&native));
     }
 
     /// The gix reader names the checkout's files from the root it is given,
@@ -1761,7 +1722,7 @@ mod tests {
         let link = dir.path().join("link");
         std::os::unix::fs::symlink(&real, &link).unwrap();
         assert_eq!(
-            work_tree_changes_read(&link),
+            work_tree_changes(&link),
             [link.join("objects/rules/new.yaml")]
         );
     }

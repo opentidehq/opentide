@@ -2196,7 +2196,7 @@ fn changed_in_folders_against(
         for entry in entries.into_iter().flatten() {
             let entry = entry.map_err(|error| unreadable(&real, &error))?;
             // A name that is not UTF-8 is left out with a warning, as
-            // `git_baseline::changed` (and the oracle) leave it out.
+            // the oracle leaves it out.
             let Ok(name) = entry.file_name().into_string() else {
                 tracing::warn!("git_path_not_utf8");
                 continue;

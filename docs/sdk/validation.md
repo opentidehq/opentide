@@ -19,6 +19,14 @@ for finding in findings:
     print(finding.code, finding.severity, finding.line, finding.column, finding.message)
 ```
 
+`position="rule"` checks the query as the platform's rule block checks its own, so a CrowdStrike query is a Next-Gen SIEM correlation rule and an Exabeam query a sequence filter, where a search (`position="search"`, the default) is not; `rule` needs a `platform` and raises `ValueError` without one:
+
+```python
+check_query(query, language="cql", platform="crowdstrike", position="rule")
+```
+
+In Rust, `opentide::analysis::analyze_query_at(&QueryRequest::new(language, text).with_platform(Some(...)), QueryPosition::Rule)` does the same. A rule without a platform is not checked: its answer is one error, `query_position_needs_platform` (`validate_position` says so before the call).
+
 Positions are 1-based lines and columns, in Unicode code points, `end_column` exclusive. A missing engine raises `opentide.analysis.EngineUnavailableError`, never a silent pass.
 
 ## On a tenant

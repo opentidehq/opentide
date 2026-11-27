@@ -61,6 +61,40 @@ def test_the_stack_reaches_esql() -> None:
     assert "esql_metadata_id" in codes
 
 
+CORRELATE_THEN_AGGREGATE = (
+    "correlate(A: { #event_simpleName=UserLogon }, B: { #event_simpleName=ProcessRollup2"
+    " | aid <=> A.aid }, within=10m) | groupBy(aid)"
+)
+EXABEAM_SEARCH = 'SELECT DISTINCT user, src_ip WHERE vendor:"Microsoft"'
+
+
+@pytest.mark.parametrize(
+    ("query", "language", "platform", "code"),
+    [
+        (CORRELATE_THEN_AGGREGATE, "cql", "crowdstrike", "cql_correlate_aggregate"),
+        (EXABEAM_SEARCH, "exabeam", "exabeam", "exabeam_advanced_in_rule"),
+    ],
+)
+def test_the_rule_position_checks_the_query_as_its_rule_block(
+    query: str, language: str, platform: str, code: str
+) -> None:
+    """``position="rule"`` restores the rule-only checks; a search has none (#1993)."""
+    search = analysis.check_query(query, language=language, platform=platform)
+    assert code not in {finding.code for finding in search}
+    rule = analysis.check_query(query, language=language, platform=platform, position="rule")
+    assert code in {finding.code for finding in rule}
+
+
+def test_a_rule_position_needs_a_platform() -> None:
+    with pytest.raises(ValueError, match="needs a platform"):
+        analysis.check_query(CORRELATE_THEN_AGGREGATE, language="cql", position="rule")
+
+
+def test_an_unknown_position_is_refused() -> None:
+    with pytest.raises(ValueError, match="unknown position"):
+        analyze_query("x", "cql", platform="crowdstrike", position="hunt")  # ty: ignore[invalid-argument-type]  # the refusal under test
+
+
 def test_an_unknown_spl_command_points_at_lint_toml_not_a_declaration() -> None:
     [finding] = analysis.check_query("index=main | nosuchcmd", language="spl")
     assert finding.code == "spl_unknown_command"

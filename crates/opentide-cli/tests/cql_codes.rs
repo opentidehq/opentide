@@ -282,4 +282,30 @@ fn validate_reports_correlate_with_an_aggregate_in_a_correlation_rule_only() {
         "{}",
         ran.stdout
     );
+    // `--position rule`: the query of the CrowdStrike block, a correlation
+    // rule, which refuses it (#1993).
+    let ran = opentide(
+        &ws,
+        &[
+            "--json",
+            "validate",
+            "query",
+            "--platform",
+            "crowdstrike",
+            "--position",
+            "rule",
+            "--file",
+            "hunt.cql",
+        ],
+        &[],
+    );
+    assert_eq!(ran.code, 1, "{}{}", ran.stdout, ran.stderr);
+    let document = ran.json();
+    let found: Vec<&str> = document["diagnostics"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|item| item["code"].as_str())
+        .collect();
+    assert_eq!(found, [code], "{}", ran.stdout);
 }

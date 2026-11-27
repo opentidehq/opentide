@@ -532,7 +532,7 @@ pub fn validate_command(
             words.extend([flag, value.as_str()]);
         }
     }
-    shlex::try_join(words).unwrap_or_default()
+    opentide_core::text::shell_line(words)
 }
 
 /// `apply 1 safe fix`, `apply 3 safe fixes`.
@@ -860,6 +860,16 @@ mod tests {
         assert_eq!(
             fix_command(None, None, &crate::validate::Selection::default()),
             "opentide validate --fix"
+        );
+        // A value no shell can carry (a NUL, from an MCP call) is shown, not
+        // dropped with the rest of the command (#1957).
+        let selection = crate::validate::Selection {
+            files: vec!["é 😀.yaml".to_owned(), "a\0b.yaml".to_owned()],
+            ..crate::validate::Selection::default()
+        };
+        assert_eq!(
+            fix_command(None, None, &selection),
+            "opentide validate --fix --file 'é 😀.yaml' --file \"a\\0b.yaml\""
         );
         assert_eq!(apply_reason(1), "apply 1 safe fix");
         assert_eq!(apply_reason(2), "apply 2 safe fixes");

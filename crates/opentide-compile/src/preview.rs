@@ -6,7 +6,7 @@ use opentide_schema::objects::platform::{
     ExabeamConfig, GoogleSecopsConfig, GraylogConfig, HarfangLabConfig, MicrosoftDefenderConfig,
     SentinelConfig, SentinelOneConfig, SplunkConfig, SysdigConfig,
 };
-use opentide_schema::platforms::PlatformId;
+use opentide_schema::platforms::{PlatformId, PlatformKey};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
@@ -153,7 +153,7 @@ pub fn compile_tenant(
     tenant: &str,
     inputs: &Inputs,
 ) -> Result<Json, CompileError> {
-    let known = deploy::tenant(cx, platform.as_str(), tenant);
+    let known = deploy::tenant(cx, &platform.into(), tenant);
     let empty = Json::Object(Object::new());
     let config = known.unwrap_or(&empty);
     let id = inputs.known.as_deref();
@@ -278,7 +278,7 @@ fn requests_preview(
     let reached: Vec<(&str, &Json)> = tenants
         .iter()
         .filter_map(|name| {
-            deploy::tenant(cx, platform.as_str(), name).map(|table| (name.as_str(), table))
+            deploy::tenant(cx, &platform.into(), name).map(|table| (name.as_str(), table))
         })
         .collect();
     let mut entry = Object::new();
@@ -515,7 +515,12 @@ pub fn failure(rule: &Rule, error: &CompileError) -> Json {
 /// request depends on the tenant (Bitdefender, Graylog, Exabeam) compiles it
 /// for each, and shows the first; Elastic compiles it for the first; every
 /// other platform is [`preview`]'s.
-pub fn preview_on(cx: &Context<'_>, platform: &str, rule: &Rule, tenants: &[String]) -> Json {
+pub fn preview_on(
+    cx: &Context<'_>,
+    platform: &PlatformKey,
+    rule: &Rule,
+    tenants: &[String],
+) -> Json {
     preview_planned(cx, platform, rule, tenants, &|_| None)
 }
 
@@ -524,12 +529,12 @@ pub fn preview_on(cx: &Context<'_>, platform: &str, rule: &Rule, tenants: &[Stri
 /// Endpoint, SentinelOne, CrowdStrike) update or delete the rule it names.
 pub fn preview_planned(
     cx: &Context<'_>,
-    platform: &str,
+    platform: &PlatformKey,
     rule: &Rule,
     tenants: &[String],
     known: &dyn Fn(&str) -> Option<String>,
 ) -> Json {
-    let Some(platform_id) = PlatformId::parse(platform) else {
+    let Some(platform_id) = platform.builtin() else {
         return preview(cx, platform, rule);
     };
     match platform_id {
@@ -556,7 +561,7 @@ pub fn preview_planned(
 fn bitdefender_preview(cx: &Context<'_>, rule: &Rule, tenants: &[String]) -> Json {
     let configured: Vec<&Json> = tenants
         .iter()
-        .filter_map(|name| deploy::tenant(cx, bitdefender::PLATFORM, name))
+        .filter_map(|name| deploy::tenant(cx, &PlatformId::Bitdefender.into(), name))
         .collect();
     let mut first = None;
     let attempts: Vec<Option<&Json>> = if configured.is_empty() {
@@ -605,7 +610,7 @@ fn bitdefender_preview(cx: &Context<'_>, rule: &Rule, tenants: &[String]) -> Jso
 /// call, so the name check a create starts with is not made.
 fn exabeam_preview(cx: &Context<'_>, rule: &Rule, tenants: &[String]) -> Json {
     let first = tenants.iter().find_map(|name| {
-        deploy::tenant(cx, exabeam::PLATFORM, name).map(|table| (name.as_str(), table))
+        deploy::tenant(cx, &PlatformId::Exabeam.into(), name).map(|table| (name.as_str(), table))
     });
     match exabeam::compile_deployment(cx, rule, first.map(|(_, table)| table)) {
         Ok(compiled) => {
@@ -633,7 +638,8 @@ fn datadog_preview(cx: &Context<'_>, rule: &Rule, tenants: &[String]) -> Json {
     let reached: Vec<(&str, &Json)> = tenants
         .iter()
         .filter_map(|name| {
-            deploy::tenant(cx, datadog::PLATFORM, name).map(|table| (name.as_str(), table))
+            deploy::tenant(cx, &PlatformId::Datadog.into(), name)
+                .map(|table| (name.as_str(), table))
         })
         .collect();
     let mut first = None;
@@ -669,10 +675,10 @@ fn datadog_preview(cx: &Context<'_>, rule: &Rule, tenants: &[String]) -> Json {
 /// ([`elastic_request`]) or falls back to the block's dump, and the
 /// [`deployers`] show the writes a deploy sends (`requests_preview`). It
 /// compiles for no tenant: [`preview_on`] compiles for the run's.
-pub fn preview(cx: &Context<'_>, platform: &str, rule: &Rule) -> Json {
+pub fn preview(cx: &Context<'_>, platform: &PlatformKey, rule: &Rule) -> Json {
     // A plugin's platform: the block's dump.
-    let Some(platform_id) = PlatformId::parse(platform) else {
-        return dump_entry(platform, rule);
+    let Some(platform_id) = platform.builtin() else {
+        return dump_entry(platform.as_str(), rule);
     };
     match platform_id {
         PlatformId::Graylog => graylog_preview(cx, rule, &[]),
@@ -731,7 +737,7 @@ pub fn preview(cx: &Context<'_>, platform: &str, rule: &Rule) -> Json {
         // Shown as the block's dump with no tenant, as before #1948 made
         // this match exhaustive; `preview_on` compiles it for the run's
         // tenants (`bitdefender_preview`).
-        PlatformId::Bitdefender => dump_entry(platform, rule),
+        PlatformId::Bitdefender => dump_entry(platform.as_str(), rule),
     }
 }
 
@@ -743,17 +749,17 @@ pub fn preview(cx: &Context<'_>, platform: &str, rule: &Rule) -> Json {
 /// compiled without one. A rule that does not compile is shown as its
 /// block's dump.
 fn elastic_preview(cx: &Context<'_>, rule: &Rule, tenants: &[String]) -> Json {
-    let first = tenants
-        .iter()
-        .find_map(|name| deploy::tenant(cx, "elastic", name).map(|table| (name.as_str(), table)));
+    let first = tenants.iter().find_map(|name| {
+        deploy::tenant(cx, &PlatformId::Elastic.into(), name).map(|table| (name.as_str(), table))
+    });
     let setup = first.map_or_else(elastic::Setup::none, |(_, table)| {
         elastic::Setup::from_tenant(table)
     });
     // The rule as the deploy sends it to that tenant: its modifiers applied.
     let sent = first.map(|(name, _)| {
         crate::modifiers::rule_for_tenant(
-            &crate::modifiers::of_platform(cx.config, "elastic"),
-            "elastic",
+            &crate::modifiers::of_platform(cx.config, &PlatformId::Elastic.into()),
+            &PlatformId::Elastic.into(),
             rule,
             name,
         )
@@ -792,7 +798,7 @@ pub fn elastic_request(rule: &Rule, payload: Json) -> Json {
 fn graylog_preview(cx: &Context<'_>, rule: &Rule, tenants: &[String]) -> Json {
     let found: Vec<&Json> = tenants
         .iter()
-        .filter_map(|name| deploy::tenant(cx, graylog::PLATFORM, name))
+        .filter_map(|name| deploy::tenant(cx, &PlatformId::Graylog.into(), name))
         .collect();
     let mut compiled = Vec::new();
     let reached: Vec<Option<&Json>> = if found.is_empty() {
