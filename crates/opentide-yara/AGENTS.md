@@ -20,8 +20,8 @@ foundation, tier 2: depends on opentide-core, -dataset and -highlight, and on `y
 
 - I/O-free: no `std::fs` in `src/`; the catalogs are embedded (`opentide_dataset::text!`) and
   parsed once.
-- The `yara-x` compiler crate is never a dependency: it brings wasmtime and breaks the WASI build.
-  It is an oracle only (`scripts/engine/oracles`, the `yara-x` wheel), as is `yara-python`;
+- The `yara-x` compiler crate is never a dependency: it brings a WebAssembly runtime and breaks the WASI build.
+  It is an oracle only (`scripts/engine/oracles`, the `yara-x` wheel), as are the Python YARA bindings;
   `scripts/engine/ci-oracle.sh` fails if a shipped manifest depends on either.
 - Findings are `opentide_core::Diagnostic`s with codes from `opentide_core::codes`, YARA-X's own
   message kept.
@@ -42,7 +42,7 @@ fast profile). The live `yara-x` wheel runs in `scripts/engine/ci-oracle.sh` (`o
 
 ## Do not
 
-- Add the `yara-x` compiler crate, or `yara-python`, to any shipped manifest.
+- Add the `yara-x` compiler crate, or the Python YARA bindings, to any shipped manifest.
 - Share code, catalogue or grammar with `opentide-yaral`: YARA-L shares only the name.
 
 ## Every engine crate
