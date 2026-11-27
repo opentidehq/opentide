@@ -15,7 +15,7 @@ readme = "../COMPONENT.md"
 workspace = true
 
 [dependencies]
-opentide-core.workspace = true
+opentide-core = { workspace = true, features = ["shell"] }
 opentide-schema.workspace = true
 # generate docs: the catalogue checks each object against its model's constraints.
 garde.workspace = true
@@ -85,8 +85,6 @@ tracing.workspace = true
 # `setup ci`'s pipelines are templates too (UC-3.2c, #916; `custom_syntax`
 # above): `[[ ]]` delimits a value, since GitHub Actions spells its own
 # expressions `${{ }}`.
-# Shell words in the pipelines, quoted as the oracle's `shlex.quote` quotes them.
-shlex.workspace = true
 # `setup ci` reads each enabled platform's tenants for the variables its
 # live query check needs; the oracle test reads its approved differences
 # (tests/golden/payloads/APPROVED.toml) with it too.

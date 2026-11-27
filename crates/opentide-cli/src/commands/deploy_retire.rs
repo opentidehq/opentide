@@ -27,7 +27,7 @@ use std::path::Path;
 use opentide_compile::Json as CJson;
 use opentide_compile::plan::{self, Change};
 use opentide_compile::strategy::{DEPLOYABLE, StatusStrategy};
-use opentide_schema::platforms::PlatformId;
+use opentide_schema::platforms::{PlatformId, PlatformKey};
 use opentide_workspace::Workspace;
 
 use super::deploy_state;
@@ -386,7 +386,7 @@ fn retire_orphan(search: &Search<'_>, enabled: &[String], orphan: &Orphan, found
         if search.platform.is_some_and(|only| only != platform) || !enabled.contains(&platform) {
             continue;
         }
-        let tables = plan::tenants(config, &platform);
+        let tables = plan::tenants(config, &PlatformKey::new(&platform));
         let block = orphan
             .blocks
             .as_ref()

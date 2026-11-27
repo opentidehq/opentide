@@ -21,6 +21,7 @@ use super::interrupt::watched;
 use opentide_connectors::connector::{QueryOutcome, QueryRequest, TenantContext, TimeWindow};
 use opentide_connectors::credentials::Mode as Resolve;
 use opentide_connectors::{ConnectorError, Environment, HttpClient, HttpSettings, Tenant};
+use opentide_schema::platforms::PlatformKey;
 use tokio_util::sync::CancellationToken;
 
 use super::query_rule::RuleQuery;
@@ -487,7 +488,7 @@ fn configured(cx: &Context<'_>, platform: &str) -> (Vec<Configured>, String) {
         return (Vec::new(), shown);
     };
     let config = opentide_compile::Json::from_node(&workspace.configuration().resolved.tree);
-    let tenants = opentide_compile::plan::tenants(&config, platform)
+    let tenants = opentide_compile::plan::tenants(&config, &PlatformKey::new(platform))
         .into_iter()
         .map(|tenant| Configured {
             name: opentide_compile::deploy::tenant_name(tenant).to_owned(),
