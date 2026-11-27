@@ -11,7 +11,8 @@ the same word without case or `-`/`_` wins, otherwise the fewest edits, strsim's
 and the YAML node tree (`node`: saphyr-parser's events, saphyr's YAML 1.2 core-schema scalars,
 every node's position), the one YAML reader of the workspace: `validate`, the models
 (`opentide_schema::node` re-exports it) and opentide-tide read YAML with it (#850), and the small
-text helpers (`text`: `hex`, and `sha256_hex` behind the `digest` feature).
+text helpers (`text`: `hex`, the line-ending reads and writes, and `sha256_hex` behind the
+`digest` feature).
 
 ## Place
 
