@@ -35,7 +35,7 @@ name = "opentide-lsp"
 path = "src/main.rs"
 
 [dependencies]
-opentide-core.workspace = true
+opentide-core = { workspace = true, features = ["markdown"] }
 opentide-analysis.workspace = true
 opentide-highlight.workspace = true
 opentide-tide.workspace = true

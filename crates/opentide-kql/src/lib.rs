@@ -118,6 +118,26 @@ fn core_rows() -> CoreRows {
     opentide_dataset::compiled_value("kql-core-rows", opentide_dataset::blob!("kql-core-rows"))
 }
 
+/// Advanced hunting's own functions (`FileProfile`, `DeviceFromIP`, `SeenBy`,
+/// `AssignedIPAddresses`), as the build script pre-parsed them from
+/// `data/catalogs/kql/defender/functions.toml`: the Defender dialect's catalog lists them, and
+/// the Sentinel dialect reports a call to one as `kql_function_unavailable` (ADR 0015, §5.1).
+pub fn defender_functions() -> &'static [FunctionRow] {
+    static ROWS: OnceLock<Vec<FunctionRow>> = OnceLock::new();
+    ROWS.get_or_init(|| {
+        opentide_dataset::compiled_value(
+            "kql-defender-functions",
+            opentide_dataset::blob!("kql-defender-functions"),
+        )
+    })
+}
+
+/// The compiled-in text of the Defender functions, as the test reads it to compare (ADR 0013).
+#[cfg(test)]
+fn defender_functions_toml() -> &'static str {
+    opentide_dataset::text!("data/catalogs/kql/defender/functions.toml")
+}
+
 /// A profile's hand-written tables and columns, with the types settled against the reference
 /// ([`rows_model::profile_rows`]), as the build script pre-parsed them.
 fn hand_written_rows(profile: Dialect) -> (Vec<TableRow>, Vec<ColumnRow>) {
@@ -170,6 +190,87 @@ impl Dialect {
             Dialect::Core | Dialect::Sentinel => "sentinel",
         }
     }
+}
+
+/// What a KQL query is used as (ADR 0015 §1: a profile), chosen by its
+/// position, never by its platform: a block's query is a [`Profile::Rule`], a
+/// hunt's search or a `.kql` file a [`Profile::Search`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Profile {
+    /// A scheduled detection rule: a `configurations.<platform>.query`.
+    Rule,
+    /// A search run by hand: a hunt, `opentide query`, a `.kql` file.
+    #[default]
+    Search,
+}
+
+/// The longest query a Microsoft Sentinel scheduled analytics rule takes, in
+/// characters ([`rule_findings`]).
+pub const SENTINEL_RULE_MAX_CHARS: usize = 10_000;
+
+/// The findings a query gets only as a [`Profile::Rule`] of `dialect`, on top
+/// of [`analyze`]'s. Under Sentinel, Microsoft's scheduled analytics rules
+/// page (learn.microsoft.com/en-us/azure/sentinel/scheduled-rules-overview,
+/// read 2026-11-27) says "The query length should be between 1 and 10,000
+/// characters and can't contain `search *` or `union *`": each is an error,
+/// `kql_rule_search_star`, `kql_rule_union_star` and `kql_rule_too_long`.
+/// Defender's custom detection page sets none of these limits, so Defender
+/// and Core rules get none; a search gets none in any dialect.
+///
+/// `search *` is a `search` with no `in (...)` list whose predicate is a bare
+/// `*`; `union *` a `union` whose tables include a bare `*` (not `Sec*`).
+/// They take the place of the performance warnings at the same place
+/// (`kql_unscoped_search`, `kql_unscoped_union`), which [`analyze`] reports:
+/// [`apply_profile`] drops those.
+#[must_use]
+pub fn rule_findings(source: &str, dialect: Dialect, profile: Profile) -> Vec<Diagnostic> {
+    if dialect != Dialect::Sentinel || profile != Profile::Rule {
+        return Vec::new();
+    }
+    let lines = opentide_core::LineIndex::new(source);
+    let mut out = Vec::new();
+    perf::rule_scope(source, &lines, &mut out);
+    let length = source.trim().chars().count();
+    if length > SENTINEL_RULE_MAX_CHARS {
+        let start = source.len() - source.trim_start().len();
+        let first_line_end = source[start..]
+            .find('\n')
+            .map_or(source.len(), |at| start + at);
+        out.push(Diagnostic::error(
+            codes::KQL_RULE_TOO_LONG,
+            format!(
+                "the query is {length} characters long: a Microsoft Sentinel analytics rule's \
+                 query is at most {SENTINEL_RULE_MAX_CHARS}; move parts of it into a saved \
+                 workspace function"
+            ),
+            lines.range(ByteSpan::new(start, first_line_end.max(start))),
+        ));
+    }
+    out
+}
+
+/// [`rule_findings`] added to `diagnostics` ([`analyze`]'s for the same
+/// `source`), each in place of the performance warning at the same range.
+pub fn apply_profile(
+    source: &str,
+    dialect: Dialect,
+    profile: Profile,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    let found = rule_findings(source, dialect, profile);
+    if found.is_empty() {
+        return;
+    }
+    let replaces = |code: &str| match code {
+        codes::KQL_UNSCOPED_SEARCH => Some(codes::KQL_RULE_SEARCH_STAR),
+        codes::KQL_UNSCOPED_UNION => Some(codes::KQL_RULE_UNION_STAR),
+        _ => None,
+    };
+    diagnostics.retain(|d| {
+        replaces(&d.code)
+            .is_none_or(|rule| !found.iter().any(|f| f.code == rule && f.range == d.range))
+    });
+    diagnostics.extend(found);
 }
 
 /// The whole file, as the test reads it to compare (ADR 0013).
@@ -383,7 +484,8 @@ impl Catalog {
     ///   are known sources ([`Catalog::asim_parser`]).
     /// - `microsoft_defender`: the advanced hunting tables, with the
     ///   columns the reference lists for those it has, but the Log Analytics
-    ///   standard columns of its copies (`TimeGenerated`, `TenantId`, ...).
+    ///   standard columns of its copies (`TimeGenerated`, `TenantId`, ...),
+    ///   and advanced hunting's own functions ([`defender_functions`]).
     ///
     /// Hand-written columns keep their docs and are added to the reference's,
     /// never removed: a column either lists is known.
@@ -434,6 +536,12 @@ impl Catalog {
         self.hand_len = columns.len();
         self.columns = columns;
         self.lazy = lazy;
+        // A dialect's own functions are its alone: a catalog moved from one
+        // dialect to another keeps Kusto's and takes the new dialect's.
+        self.functions.retain(|f| f.profile.is_none());
+        if profile == Dialect::Defender {
+            self.functions.extend(defender_functions().iter().cloned());
+        }
         self.reindex();
         self
     }
@@ -565,6 +673,16 @@ impl Catalog {
             return None;
         }
         tables::asim().parser(name)
+    }
+
+    /// The function `name` (exactly, as Kusto's names are case-sensitive) when another
+    /// dialect has it and this one does not: under Sentinel, one of advanced hunting's own
+    /// ([`defender_functions`]). `None` under Core, which has no product, and under Defender.
+    pub fn unavailable_function(&self, name: &str) -> Option<&'static FunctionRow> {
+        if self.profile != Dialect::Sentinel {
+            return None;
+        }
+        defender_functions().iter().find(|f| f.name == name)
     }
 
     /// Parsed once per profile for the process. `core()` still reparses for tests.
@@ -2607,6 +2725,306 @@ mod tests {
                 rendered(eager.columns_for_table("SecurityEvent"))
             );
         }
+    }
+
+    /// A Sentinel analytics rule's limits (#1915): `search *`, `union *` and
+    /// a query over 10,000 characters are errors in the rule profile only, and
+    /// only under Sentinel; each takes the place of the scope warning at the
+    /// same place.
+    #[test]
+    fn sentinel_rule_profile_limits() {
+        let found = |source: &str, dialect: Dialect, profile: Profile| {
+            let mut diagnostics = analyze(source, dialect).diagnostics;
+            apply_profile(source, dialect, profile, &mut diagnostics);
+            diagnostics
+                .into_iter()
+                .filter(|d| {
+                    d.code.starts_with("kql_rule_")
+                        || d.code == codes::KQL_UNSCOPED_SEARCH
+                        || d.code == codes::KQL_UNSCOPED_UNION
+                })
+                .map(|d| {
+                    let start = opentide_core::position_to_offset(source, d.range.start);
+                    let end = opentide_core::position_to_offset(source, d.range.end);
+                    (d.code, d.severity, source[start..end].to_owned())
+                })
+                .collect::<Vec<_>>()
+        };
+        let error = |code: &str, at: &str| {
+            (
+                code.to_owned(),
+                opentide_core::Severity::Error,
+                at.to_owned(),
+            )
+        };
+        let warning = |code: &str, at: &str| {
+            (
+                code.to_owned(),
+                opentide_core::Severity::Warning,
+                at.to_owned(),
+            )
+        };
+        let rule = Profile::Rule;
+        let sentinel = Dialect::Sentinel;
+        assert_eq!(
+            found("search * | take 1", sentinel, rule),
+            [error(codes::KQL_RULE_SEARCH_STAR, "search")]
+        );
+        assert_eq!(
+            found("search kind=case_sensitive * | take 1", sentinel, rule),
+            [error(codes::KQL_RULE_SEARCH_STAR, "search")]
+        );
+        assert_eq!(
+            found("union * | take 1", sentinel, rule),
+            [error(codes::KQL_RULE_UNION_STAR, "*")]
+        );
+        assert_eq!(
+            found("union withsource=T * | take 1", sentinel, rule),
+            [error(codes::KQL_RULE_UNION_STAR, "*")]
+        );
+        assert_eq!(
+            found("SecurityEvent | union * | take 1", sentinel, rule),
+            [error(codes::KQL_RULE_UNION_STAR, "*")]
+        );
+        // Not `search *` or `union *`: scoped, a pattern, or a term.
+        for source in [
+            "search in (SecurityEvent) * | take 1",
+            "union Sec* | take 1",
+            "union SecurityEvent, SigninLogs | take 1",
+            "SecurityEvent | where Account == '*' | take 1",
+        ] {
+            assert!(
+                found(source, sentinel, rule)
+                    .iter()
+                    .all(|(code, _, _)| !code.starts_with("kql_rule_")),
+                "{source}"
+            );
+        }
+        // An unscoped search on a term is the warning it was.
+        assert_eq!(
+            found("search \"x\" | take 1", sentinel, rule),
+            [warning(codes::KQL_UNSCOPED_SEARCH, "search")]
+        );
+        // A search, and a Defender or Core rule, keep the warnings.
+        for (dialect, profile) in [
+            (sentinel, Profile::Search),
+            (Dialect::Defender, rule),
+            (Dialect::Core, rule),
+        ] {
+            assert_eq!(
+                found("union * | take 1", dialect, profile),
+                [warning(codes::KQL_UNSCOPED_UNION, "*")],
+                "{dialect:?} {profile:?}"
+            );
+        }
+        assert_eq!(Profile::default(), Profile::Search);
+        // The length: at most 10,000 characters (not bytes), around blanks.
+        let at = |n: usize| format!("SecurityEvent | where Account == \"{}\"", "é".repeat(n));
+        let base = at(0).chars().count();
+        let fits = format!("\n{}\n", at(SENTINEL_RULE_MAX_CHARS - base));
+        assert!(rule_findings(&fits, sentinel, rule).is_empty());
+        let over = at(SENTINEL_RULE_MAX_CHARS - base + 1);
+        let long = rule_findings(&over, sentinel, rule);
+        assert_eq!(long.len(), 1, "{long:?}");
+        assert_eq!(long[0].code, codes::KQL_RULE_TOO_LONG);
+        assert_eq!(long[0].severity, opentide_core::Severity::Error);
+        assert!(
+            long[0]
+                .message
+                .starts_with("the query is 10001 characters long")
+        );
+        assert!(rule_findings(&over, sentinel, Profile::Search).is_empty());
+        assert!(rule_findings(&over, Dialect::Defender, rule).is_empty());
+    }
+
+    /// Advanced hunting's own functions (#1914): pre-parsed as the file reads item by item,
+    /// listed by the Defender dialect only, each with its Learn page's signature.
+    #[test]
+    fn the_defender_functions_are_the_defender_dialects() {
+        let read = rows::<FunctionRow>("defender/", defender_functions_toml(), "functions");
+        assert_eq!(format!("{:?}", defender_functions()), format!("{read:?}"));
+        let names: Vec<&str> = defender_functions()
+            .iter()
+            .map(|f| f.name.as_str())
+            .collect();
+        assert_eq!(
+            names,
+            [
+                "FileProfile",
+                "DeviceFromIP",
+                "SeenBy",
+                "AssignedIPAddresses"
+            ]
+        );
+        for function in defender_functions() {
+            assert_eq!(
+                function.profile.as_deref(),
+                Some("defender"),
+                "{}",
+                function.name
+            );
+            assert_eq!(
+                function.kind.as_deref(),
+                Some("tabular"),
+                "{}",
+                function.name
+            );
+            assert_named_signature(&function.name, function.signature.as_deref());
+            assert!(
+                function
+                    .citation
+                    .as_deref()
+                    .is_some_and(|c| c.starts_with("https://learn.microsoft.com/defender-xdr/")),
+                "{}",
+                function.name
+            );
+        }
+        let defender = Catalog::cached(Dialect::Defender);
+        let sentinel = Catalog::cached(Dialect::Sentinel);
+        let core = Catalog::cached(Dialect::Core);
+        for name in names {
+            assert!(defender.function(name).is_some(), "{name}");
+            assert!(defender.unavailable_function(name).is_none(), "{name}");
+            assert!(sentinel.function(name).is_none(), "{name}");
+            assert!(sentinel.unavailable_function(name).is_some(), "{name}");
+            assert!(core.function(name).is_none(), "{name}");
+            assert!(core.unavailable_function(name).is_none(), "{name}");
+        }
+        // Kusto's names are case-sensitive: another case is not the function.
+        assert!(sentinel.unavailable_function("fileprofile").is_none());
+        // Kusto's own functions stay in every dialect.
+        assert!(core.functions.iter().all(|f| f.profile.is_none()));
+        // A catalog moved between dialects carries the new one's functions, once.
+        let moved = Catalog::core()
+            .with_profile(Dialect::Defender)
+            .with_profile(Dialect::Sentinel);
+        assert!(moved.function("FileProfile").is_none());
+        let twice = Catalog::core()
+            .with_profile(Dialect::Defender)
+            .with_profile(Dialect::Defender);
+        assert_eq!(
+            twice
+                .functions
+                .iter()
+                .filter(|f| f.name == "SeenBy")
+                .count(),
+            1
+        );
+    }
+
+    /// Under Defender the functions get hover and signature help from their rows; under
+    /// Sentinel a call to one is `kql_function_unavailable`, a warning at its name; under Core,
+    /// and wherever the query names its own function so, nothing is reported (#1914).
+    #[test]
+    fn defender_functions_by_dialect() {
+        let codes =
+            |source: &str, profile: Dialect| -> Vec<(String, opentide_core::Severity, String)> {
+                analyze(source, profile)
+                    .diagnostics
+                    .into_iter()
+                    .filter(|d| d.code.starts_with("kql_") && d.code.contains("function"))
+                    .map(|d| {
+                        let start = opentide_core::position_to_offset(source, d.range.start);
+                        let end = opentide_core::position_to_offset(source, d.range.end);
+                        (d.code, d.severity, source[start..end].to_owned())
+                    })
+                    .collect()
+            };
+        let invoked = "DeviceFileEvents\n| project SHA1\n| invoke FileProfile(SHA1, 500)";
+        let sources = [
+            (invoked, "FileProfile"),
+            (
+                "DeviceNetworkEvents | project IP = LocalIP | invoke DeviceFromIP()",
+                "DeviceFromIP",
+            ),
+            ("DeviceInfo | take 10 | invoke SeenBy()", "SeenBy"),
+            (
+                "AssignedIPAddresses('host-1', ago(1d))",
+                "AssignedIPAddresses",
+            ),
+        ];
+        for (source, name) in sources {
+            assert_eq!(
+                codes(source, Dialect::Sentinel),
+                [(
+                    codes::KQL_FUNCTION_UNAVAILABLE.to_owned(),
+                    opentide_core::Severity::Warning,
+                    name.to_owned()
+                )],
+                "{source}"
+            );
+            assert!(codes(source, Dialect::Defender).is_empty(), "{source}");
+            assert!(codes(source, Dialect::Core).is_empty(), "{source}");
+        }
+        // The query's own function of that name, and another case, are not reported.
+        let own =
+            "let FileProfile = (T:(SHA1:string)) { T };\nDeviceFileEvents | invoke FileProfile()";
+        assert!(codes(own, Dialect::Sentinel).is_empty());
+        // A workspace function declared as a log source, by its exact name, is
+        // that function; a pattern (`Device*`, `*`) names tables, not it.
+        let declared = |names: &[&str]| {
+            let toml = names
+                .iter()
+                .map(|n| format!("[[logsources]]\nname = \"{n}\"\nsystem = \"sentinel\"\n"))
+                .collect::<Vec<_>>()
+                .concat();
+            opentide_core::datasets::DeclaredDatasets::from_visibility(&toml).unwrap()
+        };
+        let probe = "DeviceNetworkEvents | project IP = LocalIP | invoke DeviceFromIP()";
+        for (names, reported) in [
+            (&["DeviceFromIP", "DeviceNetworkEvents"][..], false),
+            (&["Device*"][..], true),
+            (&["*"][..], true),
+        ] {
+            let _scope = opentide_core::datasets::scope_thread(Some(declared(names)));
+            assert_eq!(
+                codes(probe, Dialect::Sentinel)
+                    .iter()
+                    .any(|(code, _, _)| code == codes::KQL_FUNCTION_UNAVAILABLE),
+                reported,
+                "{names:?}"
+            );
+        }
+        assert!(
+            codes("SecurityEvent | invoke fileprofile()", Dialect::Sentinel)
+                .iter()
+                .all(|(code, _, _)| code != codes::KQL_FUNCTION_UNAVAILABLE)
+        );
+        let message = analyze(invoked, Dialect::Sentinel)
+            .diagnostics
+            .into_iter()
+            .find(|d| d.code == codes::KQL_FUNCTION_UNAVAILABLE)
+            .map(|d| d.message);
+        assert_eq!(
+            message.as_deref(),
+            Some(
+                "'FileProfile' is a Microsoft Defender advanced hunting function, which a \
+                 Microsoft Sentinel workspace does not have"
+            )
+        );
+        // Signature help and hover under Defender.
+        let at = invoked.find("SHA1, 500").unwrap() + "SHA1, ".len();
+        let help = signature_help(invoked, at, Dialect::Defender).unwrap();
+        assert_eq!(help.signatures[0].label, "invoke FileProfile(x,y)");
+        assert_eq!(help.active_parameter, 1);
+        let labels: Vec<&str> = help.signatures[0]
+            .parameters
+            .iter()
+            .map(|p| p.label.as_str())
+            .collect();
+        assert_eq!(labels, ["x", "y"]);
+        let hover_at = invoked.find("FileProfile").unwrap() + 2;
+        let text = hover(invoked, hover_at, Dialect::Defender).unwrap();
+        assert!(text.contains("enrichment function"), "{text}");
+        assert!(
+            signature_help(invoked, at, Dialect::Sentinel)
+                .is_none_or(|help| help.signatures[0].label != "invoke FileProfile(x,y)")
+        );
+        // Completion offers them under Defender only.
+        let items = completions("DeviceInfo | invoke ", 20, Dialect::Defender);
+        assert!(items.iter().any(|i| i.label == "SeenBy"));
+        let items = completions("DeviceInfo | invoke ", 20, Dialect::Sentinel);
+        assert!(!items.iter().any(|i| i.label == "SeenBy"));
     }
 
     /// What the build pre-parsed (`build.rs`, #1767) is what reading the TOML files item by item

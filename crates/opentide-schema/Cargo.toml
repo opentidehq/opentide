@@ -18,7 +18,7 @@ workspace = true
 
 [build-dependencies]
 opentide-dataset = { workspace = true, features = ["encode"] }
-opentide-core.workspace = true
+opentide-core = { workspace = true, features = ["markdown"] }
 # The offers of the bundled vocabularies are worked out by build.rs from the same modules the crate
 # compiles (`src/vocab/offer.rs` and what it reads: the documents, the Markdown clean-up).
 serde.workspace = true
@@ -43,7 +43,7 @@ stubs = ["python", "pyo3/experimental-inspect"]
 
 [dependencies]
 opentide-dataset.workspace = true
-opentide-core.workspace = true
+opentide-core = { workspace = true, features = ["markdown"] }
 serde.workspace = true
 schemars.workspace = true
 garde.workspace = true
@@ -74,8 +74,8 @@ jiff = { workspace = true }
 caseless.workspace = true
 
 [dev-dependencies]
-# The oracle's Markdown patterns, with their look-arounds and back-reference: the
-# tests hold `generate::annotate`'s `regex` matches to them.
+# The oracle's sentence-end pattern, with its look-ahead: the tests hold
+# `generate::annotate`'s hand-written match to it.
 fancy-regex.workspace = true
 insta.workspace = true
 strsim.workspace = true

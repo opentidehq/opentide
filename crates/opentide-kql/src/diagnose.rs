@@ -569,6 +569,23 @@ fn functions(
                 )
                 .with_suggestion(replacement.clone()),
             );
+        } else if function.is_none() && catalog.unavailable_function(&name).is_some() {
+            // A workspace can save a function of its own under the name, declared as a
+            // log source like any workspace function: then the call is that one's. Only
+            // the exact name counts: a pattern (`Device*`) declares tables.
+            let declared = opentide_core::datasets::current()
+                .names("sentinel")
+                .contains(&name);
+            if !declared {
+                out.push(Diagnostic::warning(
+                    codes::KQL_FUNCTION_UNAVAILABLE,
+                    format!(
+                        "'{name}' is a Microsoft Defender advanced hunting function, which a \
+                         Microsoft Sentinel workspace does not have"
+                    ),
+                    name_range,
+                ));
+            }
         } else if function.is_none() && catalog.operator(&name).is_none() {
             // Only a likely typo of a known function: within two edits. The
             // distance is at least the difference in length, and at least the

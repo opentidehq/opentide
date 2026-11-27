@@ -33,7 +33,9 @@ use opentide_connectors::connector::{
     TenantContext,
 };
 use opentide_connectors::credentials::Mode as Resolve;
-use opentide_connectors::{ConnectorError, Environment, HttpClient, Registry, Tenant};
+use opentide_connectors::{
+    ConnectorError, Environment, HttpClient, Registry, Tenant, tenant_codes,
+};
 use opentide_schema::vocab::Vocabularies;
 use opentide_workspace::{OsFs, Workspace, root};
 use tokio_util::sync::CancellationToken;
@@ -5408,7 +5410,7 @@ impl Sender<'_, '_> {
             .split_once(": ")
             .map(|(code, _)| code)
             .filter(|code| code.starts_with("google_secops_") && !code.contains(' '))
-            .unwrap_or("google_secops_tenant_unreachable");
+            .unwrap_or(tenant_codes::GOOGLE_SECOPS.unreachable);
         tracing::error!(
             code,
             tenant,
@@ -5447,7 +5449,7 @@ impl Sender<'_, '_> {
                 let code = if error.forbidden() {
                     "graylog_forbidden"
                 } else {
-                    "graylog_request_failed"
+                    tenant_codes::GRAYLOG.request_failed
                 };
                 self.unusable(PLATFORM, Some(&tenant), &error.reason());
                 log.unreached_on(
@@ -5469,7 +5471,7 @@ impl Sender<'_, '_> {
                 let code = match &error {
                     ConnectorError::Refused { .. } => "graylog_version_unsupported",
                     ConnectorError::Authentication { .. } => "graylog_tenant_unauthenticated",
-                    _ => "graylog_tenant_unreachable",
+                    _ => tenant_codes::GRAYLOG.unreachable,
                 };
                 self.unusable(PLATFORM, Some(&tenant), &error.text());
                 log.unreached_on(
@@ -5529,7 +5531,7 @@ impl Sender<'_, '_> {
         // The state's refusal is logged as the request it
         // stopped, as before.
         let code = if recreate_refusal.is_some_and(|refusal| refusal.code == failure.code) {
-            "graylog_request_failed"
+            tenant_codes::GRAYLOG.request_failed
         } else {
             failure.code
         };
@@ -5698,7 +5700,7 @@ impl Sender<'_, '_> {
                 let text = error.text();
                 let code = match &error {
                     ConnectorError::Authentication { .. } => "graylog_tenant_unauthenticated",
-                    _ => "graylog_tenant_unreachable",
+                    _ => tenant_codes::GRAYLOG.unreachable,
                 };
                 self.failed = true;
                 tracing::error!(

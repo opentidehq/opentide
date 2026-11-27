@@ -11,7 +11,7 @@
 //!
 //! Every token request is sent on the tenant's own client, so it takes the
 //! tenant's proxy, CA bundles and timeouts: a service-account key signs a JWT
-//! (RS256, [`rs256`]) and exchanges it at the key's `token_uri`; an
+//! (RS256, signed in the private `rs256` module) and exchanges it at the key's `token_uri`; an
 //! `authorized_user` file (gcloud's `application-default login`) exchanges its
 //! refresh token; the metadata server is asked for the default service
 //! account's token. A token is reused until 3 minutes 45 seconds before it
@@ -62,7 +62,7 @@ pub const CREDENTIALS_MISSING: &str = "google_secops_credentials_missing";
 
 /// The code of credentials Google refused, or a token endpoint whose answer
 /// is no token.
-pub const TENANT_UNAUTHORIZED: &str = "google_secops_tenant_unauthorized";
+pub const TENANT_UNAUTHORIZED: &str = crate::tenant_codes::GOOGLE_SECOPS.unauthorized;
 
 /// What time it is, for a token's expiry and an assertion's `iat`: the
 /// system's clock, or a fixed one in a test.

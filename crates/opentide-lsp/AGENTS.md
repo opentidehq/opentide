@@ -3,7 +3,8 @@
 The opentide language server, as a library (`run_stdio`, `serve`, `MessageSession` for a host
 without stdio) and as the `opentide-lsp` binary: the stdio (and TCP) LSP host on `lsp-server` 0.10
 and `lsp-types` 0.97, and a CLI (`analyze`, `highlight`, `generate-highlights`) that prints plain
-JSON or text. The Python package serves it as `opentide lsp start`.
+JSON or text. The command line (`opentide-cli`) serves it as `opentide lsp start`, in every
+distribution: the binary and the Python and npm launchers.
 
 ## Place
 
