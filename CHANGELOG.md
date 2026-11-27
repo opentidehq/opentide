@@ -48,6 +48,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Eac
   - a shallow clone that does not hold the merge base with the default branch, or holds no default-branch ref at all (`actions/checkout`'s default depth of 1); the message says to check out the full history (`fetch-depth: 0`)
   - a baseline commit, tree or file git cannot read, which made a folder look empty or a committed file look new
   - an object folder or file in the work tree that cannot be read, whose committed files looked deleted
+- **Elastic refuses a duration too long to deploy instead of writing a saturated one.** A 40-digit `scheduling.lookback` passed `validate` and deploy wrote `from: now-340282366920938463463374607431768211455s` into the payload. `scheduling.interval`, `scheduling.lookback`, `suppression.duration` and `new_terms.history_window_start` now take at most 9,223,372,036,854,775,807 seconds (the largest JSON integer the payload holds): `validate` reports a longer one under the block's `duration` code, and deploy refuses the rule (`compile_invalid_rule`) naming the field, as it does for Sentinel and Splunk ([#1982](https://github.com/opentidehq/opentide/issues/1982)).
 
 ## [1.1.0] — 2026-11-26
 
