@@ -15,6 +15,7 @@ use crate::duration;
 use crate::json::{Json, Object};
 use crate::rule::{CompileError, Rule, codes};
 use crate::strategy::StatusStrategy;
+use opentide_core::duration::{ELASTIC_MAX_SECONDS, duration_seconds};
 
 /// The platform's display name, in messages.
 pub const DISPLAY: &str = "Elastic";
@@ -152,9 +153,11 @@ fn get<'j>(object: &'j Json, key: &str) -> Option<&'j Json> {
 }
 
 /// A duration field's text; anything but a string refuses the rule, naming
-/// `field` (under `configurations.elastic`).
+/// `field` (under `configurations.elastic`), and so does a duration longer
+/// than [`ELASTIC_MAX_SECONDS`], which the model refuses too (`duration`,
+/// #1982): its seconds would saturate into the payload.
 fn text_of<'j>(value: &'j Json, field: &str) -> Result<&'j str, CompileError> {
-    value.as_str().ok_or_else(|| {
+    let text = value.as_str().ok_or_else(|| {
         let kind = match value {
             Json::Null => "null",
             Json::Bool(_) => "a boolean",
@@ -171,7 +174,17 @@ fn text_of<'j>(value: &'j Json, field: &str) -> Result<&'j str, CompileError> {
             None,
         )
         .at(&path)
-    })
+    })?;
+    if duration_seconds(text, true).is_ok_and(|seconds| seconds > ELASTIC_MAX_SECONDS) {
+        let mut path = vec!["configurations", "elastic"];
+        path.extend(field.split('.'));
+        return Err(CompileError::invalid_rule(format!(
+            "configurations.elastic.{field} {text:?} is longer than a rule can be deployed \
+             with: at most {ELASTIC_MAX_SECONDS} seconds"
+        ))
+        .at(&path));
+    }
+    Ok(text)
 }
 
 /// `configurations.elastic.<field>` is absent.

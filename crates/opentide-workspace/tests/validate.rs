@@ -2134,6 +2134,37 @@ mod validate {
     }
 
     #[test]
+    fn an_elastic_lookback_past_the_deployable_bound_fails_validate() {
+        // #1982: its seconds saturated, `validate` passed it and deploy wrote
+        // `now-340282366920938463463374607431768211455s`.
+        let fs = workspace();
+        let block = |lookback: &str| {
+            format!(
+                "    status: STAGING\n    type: query\n    query: 'process.name: \"é\"'\n    \
+                 scheduling:\n      interval: 5m\n      lookback: {lookback}\n"
+            )
+        };
+        let huge = "9".repeat(40) + "s";
+        fs.write(
+            "/ws/objects/rules/a.yaml",
+            rule_with(U1, "A", "elastic", &block(&huge)),
+        );
+        fs.write(
+            "/ws/objects/rules/b.yaml",
+            rule_with(U2, "B", "elastic", &block("9223372036854775807s")),
+        );
+        let validation = run(&fs, &Options::default());
+        let found: Vec<(&str, &str)> = all(&validation)
+            .into_iter()
+            .filter(|d| d.message.contains("longer than a rule can be deployed"))
+            .map(|d| (d.object_uuid.as_str(), d.code.as_str()))
+            .collect();
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(found[0].0, U1);
+        assert_eq!(status(&validation, Check::Schema), "failed");
+    }
+
+    #[test]
     fn exabeam_names_that_are_one_under_full_case_folding_are_a_duplicate() {
         // Deploy matches names under full case folding (`exabeam_name_conflict`):
         // `ﬁ` folds to `fi` and `ß` to `ss`, which lowercasing leaves apart.
