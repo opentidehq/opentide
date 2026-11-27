@@ -961,10 +961,7 @@ fn enabled_platforms(
         else {
             continue;
         };
-        if matches!(
-            block.get("enabled").map(|e| &e.value),
-            Some(Value::Bool(true))
-        ) {
+        if opentide_schema::configuration::resolve::platform_enabled(platforms, platform) {
             enabled.insert(platform.to_owned());
         }
         if let Value::Map(entries) = &block.value {
