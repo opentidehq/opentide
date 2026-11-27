@@ -3201,6 +3201,7 @@ dependencies = [
  "insta",
  "opentide-core",
  "opentide-cql",
+ "opentide-datadog",
  "opentide-ecs",
  "opentide-eql",
  "opentide-esql",
@@ -3425,6 +3426,22 @@ dependencies = [
  "opentide-parse",
  "rowan",
  "serde",
+ "toml 0.8.23",
+]
+
+[[package]]
+name = "opentide-datadog"
+version = "1.1.0"
+dependencies = [
+ "insta",
+ "logos",
+ "opentide-core",
+ "opentide-dataset",
+ "opentide-highlight",
+ "opentide-parse",
+ "rowan",
+ "serde",
+ "serde_json",
  "toml 0.8.23",
 ]
 
@@ -3707,6 +3724,7 @@ version = "1.1.0"
 dependencies = [
  "opentide-core",
  "opentide-cql",
+ "opentide-datadog",
  "opentide-dataset",
  "opentide-ecs",
  "opentide-eql",

@@ -49,6 +49,10 @@
       "language_servers": ["opentide-lsp"],
       "path_suffixes": ["yaral", "yl2"]
     },
+    "datadog": {
+      "language_servers": ["opentide-lsp"],
+      "path_suffixes": ["datadog"]
+    },
     "opentide-config": {
       "language_servers": ["opentide"],
       "path_globs": [".opentide/configurations/**/*.toml"],

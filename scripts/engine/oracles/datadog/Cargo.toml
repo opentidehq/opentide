@@ -1,0 +1,17 @@
+# The VRL oracle of the Datadog search syntax (scripts/engine/oracles/README.md, "Datadog"):
+# vectordotdev/vrl's `src/datadog/search/grammar.pest` (MPL-2.0), fetched at a pinned commit by
+# `oracle.py` into `.cache/` and compiled here with pest. A standalone tool, outside the
+# workspace: it never ships, and nothing of it reaches a release artifact.
+[package]
+name = "opentide-datadog-vrl-oracle"
+version = "0.0.0"
+edition = "2024"
+publish = false
+license = "EUPL-1.2"
+
+[dependencies]
+pest = "=2.8.3"
+pest_derive = "=2.8.3"
+serde_json = "1"
+
+[workspace]

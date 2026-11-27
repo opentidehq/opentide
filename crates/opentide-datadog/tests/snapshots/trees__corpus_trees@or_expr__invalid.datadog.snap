@@ -1,0 +1,16 @@
+---
+source: crates/opentide-datadog/tests/trees.rs
+expression: "debug_tree(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/datadog/or_expr__invalid.datadog
+---
+QUERY@0..14
+  OR_EXPR@0..14
+    FIELD_CLAUSE@0..11
+      TAG_KEY@0..6
+        WORD@0..6 "source"
+      COLON@6..7 ":"
+      TERM@7..11
+        WORD@7..11 "okta"
+    WHITESPACE@11..12 " "
+    OR_KW@12..14 "OR"
+14..14: expected a search term after the operator

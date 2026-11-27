@@ -234,3 +234,36 @@ The rules are shared under the Detection Rule License 1.1: [`LICENSE.DRL-1.1.md`
 ## YARA-L — chronicle/detection-rules (Apache-2.0)
 
 Licence text: [`LICENSE.Apache-2.0.txt`](LICENSE.Apache-2.0.txt). 79 community rules from `chronicle/detection-rules@a49c3752f3f013e9ead85c7430b8f39369efacbf`, unmodified, each with a `.broken.` twin (a modified copy with one injected fault). The list, and how each twin is made, is [`yaral/SOURCES.md`](yaral/SOURCES.md); `crates/opentide-yaral/tests/external_corpus.rs` requires every public rule to parse with no error but its listed exceptions, and every twin to have an error.
+
+## Datadog search syntax — Datadog's own published queries (BSD-3-Clause, Apache-2.0)
+
+`datadog/published.jsonl` holds 2,895 literal log-search queries that Datadog publishes, one JSON
+object per line: `query`, `context` (`siem_rule`, `monitor`, `saved_view`, `dashboard`,
+`doc_example`, `api_example`, `op`, `suppression`, `signal_search`, `other` for pipeline and
+index filters), `licence` and `source` (a GitHub URL pinned to a commit). They are copied
+unmodified. They were gathered for `docs/internal/rfc-datadog-cloud-siem.md` (§11) and are the
+conformance corpus of the `datadog` language.
+
+`datadog/broken.jsonl` holds twelve twins, one per fault kind, each a published query (`line`)
+with one injected fault and the code it must raise; `datadog/EXCEPTIONS.toml` lists the published
+queries the engine refuses, each with its reason.
+`crates/opentide-analysis/tests/external_datadog.rs` holds both.
+
+| Source | Licence | Licence text | Queries |
+|---|---|---|--:|
+| DataDog/integrations-core@640a412b | BSD-3-Clause | [`LICENSE.BSD-3-Clause-Datadog-integrations-core.txt`](LICENSE.BSD-3-Clause-Datadog-integrations-core.txt) | 1,862 |
+| DataDog/integrations-extras@b9990cf6 | BSD-3-Clause | [`LICENSE.BSD-3-Clause-Datadog-integrations-extras.txt`](LICENSE.BSD-3-Clause-Datadog-integrations-extras.txt) | 437 |
+| DataDog/documentation@12f7b8d3 | BSD-3-Clause | [`LICENSE.BSD-3-Clause-Datadog-documentation.txt`](LICENSE.BSD-3-Clause-Datadog-documentation.txt) | 501 |
+| DataDog/datadog-api-client-python@7a0ca951, datadog-security-playground@32b896ac, security-agent-policies@90d51964 | Apache-2.0 | [`LICENSE.Apache-2.0.txt`](LICENSE.Apache-2.0.txt) | 95 |
+
+Not vendored, and measured from a local checkout instead:
+
+- the 95 queries in the Terraform provider's docs and tests (MPL-2.0);
+- the 239 queries in the Datadog blog and Security Labs (Datadog's site terms);
+- the default rules recorded in the Terraform provider's test cassettes (Datadog's own content).
+
+Set aside, because they are not log search:
+
+- templated dashboard queries (`$var`, `{{…}}`);
+- Monitor Summary searches (`manage_status` widgets);
+- event-stream filters, which use the legacy events syntax.

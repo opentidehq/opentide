@@ -1035,6 +1035,18 @@ fn analyze_injections(
                 let r = opentide_exabeam::analyze_with(&inj.inner, &ctx);
                 (r.diagnostics, r.tokens)
             }
+            // No platform embeds the Datadog search syntax yet (the `datadog` platform is
+            // phase 2 of rfc-datadog-cloud-siem): a rule block's query would be profile
+            // `rule`, a hunt's `search`.
+            LanguageId::Datadog => {
+                let ctx = if inj.field_path.first().map(String::as_str) == Some("configurations") {
+                    opentide_datadog::Context::RULE
+                } else {
+                    opentide_datadog::Context::SEARCH
+                };
+                let r = opentide_datadog::analyze_with(&inj.inner, &ctx);
+                (r.diagnostics, r.tokens)
+            }
             LanguageId::TideYaml | LanguageId::Config => (Vec::new(), Vec::new()),
         };
         // The stand-in `opentide new` wrote is lint's `placeholders` finding,

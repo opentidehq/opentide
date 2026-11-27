@@ -960,9 +960,13 @@ fn generate_tm_language_from(
         // pattern and `docker/* foo=1` is a value and a pair (the engine's
         // lexer reads `/*` as a comment only when it is terminated).
         LanguageId::Cql => Some(concat!(token_start!(), "(?://.*$|/\\*[\\s\\S]*?\\*/)")),
-        // Kibana KQL, Lucene, Falco conditions and the Exabeam Query
-        // Language have no comment syntax.
-        LanguageId::Kuery | LanguageId::Lucene | LanguageId::Falco | LanguageId::Exabeam => None,
+        // Kibana KQL, Lucene, Falco conditions, the Exabeam Query Language
+        // and the Datadog search syntax have no comment syntax.
+        LanguageId::Kuery
+        | LanguageId::Lucene
+        | LanguageId::Falco
+        | LanguageId::Exabeam
+        | LanguageId::Datadog => None,
         LanguageId::Config => Some("(?m)^\\s*#.*$"),
     };
     if let Some(comment_match) = comment_match {
@@ -1042,9 +1046,15 @@ fn generate_tm_language_from(
             "comment": "capture:number",
         }));
     } else {
+        // Datadog's search syntax quotes with `"` only: `'` is a term's character.
+        let string_match = if language == LanguageId::Datadog {
+            "\"(\\\\.|[^\"\\\\])*\"?"
+        } else {
+            "\"(\\\\.|[^\"\\\\])*\"|'(\\\\.|[^'\\\\])*'"
+        };
         patterns.push(serde_json::json!({
             "name": string_tm,
-            "match": "\"(\\\\.|[^\"\\\\])*\"|'(\\\\.|[^'\\\\])*'",
+            "match": string_match,
             "comment": "capture:string",
         }));
         patterns.push(serde_json::json!({

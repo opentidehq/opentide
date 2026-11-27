@@ -1,0 +1,8 @@
+---
+source: crates/opentide-datadog/tests/trees.rs
+expression: "debug_tree(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/datadog/phrase__valid.datadog
+---
+QUERY@0..13
+  PHRASE@0..13
+    PHRASE_TOKEN@0..13 "\"hello world\""

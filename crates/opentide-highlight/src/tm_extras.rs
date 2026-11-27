@@ -45,9 +45,11 @@ fn builtins(language: LanguageId) -> &'static [&'static str] {
 fn comparison(language: LanguageId) -> String {
     let symbols = match language {
         // `field:value`; `:=` assigns in CQL.
-        LanguageId::Kuery | LanguageId::Lucene | LanguageId::Cql | LanguageId::Exabeam => {
-            r"==|!=|=~|!~|<=|>=|:=|=|<|>|:"
-        }
+        LanguageId::Kuery
+        | LanguageId::Lucene
+        | LanguageId::Cql
+        | LanguageId::Exabeam
+        | LanguageId::Datadog => r"==|!=|=~|!~|<=|>=|:=|=|<|>|:",
         _ => r"==|!=|=~|!~|<=|>=|:=|=|<|>",
     };
     let words = match language {
@@ -131,7 +133,8 @@ pub(crate) fn before_keywords(language: LanguageId, spec: &HighlightSpec) -> Vec
     }
     let logical = match language {
         LanguageId::Kuery | LanguageId::Cql => Some(r"(?i)(?<![\w.])(?:and|or|not)(?![\w.])"),
-        LanguageId::Lucene => Some(r"(?<![\w.])(?:AND|OR|NOT)(?![\w.])"),
+        // Upper case only: a lower-case `and` is a search term.
+        LanguageId::Lucene | LanguageId::Datadog => Some(r"(?<![\w.])(?:AND|OR|NOT)(?![\w.])"),
         _ => None,
     };
     if let Some(logical) = logical {
@@ -219,6 +222,7 @@ pub(crate) fn after_keywords(
         LanguageId::Kuery
             | LanguageId::Lucene
             | LanguageId::Exabeam
+            | LanguageId::Datadog
             | LanguageId::TideYaml
             | LanguageId::Config
     ) {
@@ -240,6 +244,9 @@ pub(crate) fn after_keywords(
             "comment": "tm_extras:call",
         }));
     }
+    if language == LanguageId::Datadog {
+        rules.push(datadog_term(spec));
+    }
     if has_identifier_fallback(language) {
         // What is left: a name no rule above placed. The semantic tokens
         // call such a name a variable too.
@@ -250,6 +257,16 @@ pub(crate) fn after_keywords(
         }));
     }
     rules
+}
+
+/// What is left of a Datadog search is a term: a value, as the semantic tokens colour it (a
+/// run of term characters; wildcards, escapes and punctuation stay their own).
+fn datadog_term(spec: &HighlightSpec) -> Value {
+    json!({
+        "name": scope(spec, "string", "string.quoted"),
+        "match": r#"[^\s()\[\]{}":\\!~^<>*?,=+\-][^\s()\[\]{}":\\!~^<>*?,]*"#,
+        "comment": "tm_extras:term",
+    })
 }
 
 /// Languages whose bare names are columns, fields or macros (not values).
@@ -299,7 +316,12 @@ mod tests {
         }
         assert!(has(LanguageId::Kql, "tm_extras:table"));
         assert!(has(LanguageId::Esql, "tm_extras:esql-source"));
-        for language in [LanguageId::Kuery, LanguageId::Lucene, LanguageId::Cql] {
+        for language in [
+            LanguageId::Kuery,
+            LanguageId::Lucene,
+            LanguageId::Cql,
+            LanguageId::Datadog,
+        ] {
             assert!(has(language, "tm_extras:logical"), "{language}");
         }
         // Not query languages: no extras at all.

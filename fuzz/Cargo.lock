@@ -2695,6 +2695,7 @@ dependencies = [
  "indexmap",
  "opentide-core",
  "opentide-cql",
+ "opentide-datadog",
  "opentide-ecs",
  "opentide-eql",
  "opentide-esql",
@@ -2871,6 +2872,20 @@ dependencies = [
 
 [[package]]
 name = "opentide-cql"
+version = "1.1.0"
+dependencies = [
+ "logos",
+ "opentide-core",
+ "opentide-dataset",
+ "opentide-highlight",
+ "opentide-parse",
+ "rowan",
+ "serde",
+ "toml",
+]
+
+[[package]]
+name = "opentide-datadog"
 version = "1.1.0"
 dependencies = [
  "logos",
@@ -3126,6 +3141,7 @@ version = "1.1.0"
 dependencies = [
  "opentide-core",
  "opentide-cql",
+ "opentide-datadog",
  "opentide-dataset",
  "opentide-ecs",
  "opentide-eql",

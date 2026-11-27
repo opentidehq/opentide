@@ -76,7 +76,7 @@ pub const DECLARED_DATASET_CODES: [&str; 3] = [
 
 /// Code prefix, then the language and the reference a finding without a
 /// suggestion points at.
-pub const ENGINE_REFERENCES: [(&str, &str, &str); 13] = [
+pub const ENGINE_REFERENCES: [(&str, &str, &str); 14] = [
     ("kql_", "KQL", "https://learn.microsoft.com/kusto/query/"),
     (
         "spl_",
@@ -133,6 +133,11 @@ pub const ENGINE_REFERENCES: [(&str, &str, &str); 13] = [
         "yaral_",
         "YARA-L 2.0",
         "https://cloud.google.com/chronicle/docs/detection/yara-l-2-0-syntax",
+    ),
+    (
+        "datadog_",
+        "Datadog log search syntax",
+        "https://docs.datadoghq.com/logs/explorer/search_syntax/",
     ),
 ];
 

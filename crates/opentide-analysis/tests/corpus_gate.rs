@@ -362,6 +362,13 @@ fn kind_names(language: LanguageId) -> Box<dyn KindNames> {
             YARAL_TAGS,
             YARAL_TOKENS,
         ),
+        LanguageId::Datadog => rust(
+            opentide_datadog::debug_node_kinds,
+            opentide_datadog::debug_kinds,
+            Some(opentide_datadog::debug_error_kinds),
+            DATADOG_TAGS,
+            DATADOG_TOKENS,
+        ),
         LanguageId::Yara => rust(
             opentide_yara::debug_node_kinds,
             opentide_yara::debug_kinds,
@@ -385,6 +392,10 @@ const FALCO_TAGS: &[(&str, &str)] = &[];
 const FALCO_TOKENS: &[&str] = &["quoted_string"];
 const EXABEAM_TAGS: &[(&str, &str)] = &[];
 const EXABEAM_TOKENS: &[&str] = &[];
+// The Datadog search syntax names every node kind as the corpus tags it, and no token is a
+// production of its own.
+const DATADOG_TAGS: &[(&str, &str)] = &[];
+const DATADOG_TOKENS: &[&str] = &[];
 
 /// EQL: a pipe stage is tree-sitter's `pipe`; the two comment tokens its `comment`.
 const EQL_TAGS: &[(&str, &str)] = &[
@@ -934,6 +945,17 @@ const SPL_UNLOCATED: &[(&str, &str)] = &[
     ("fields_command__invalid.spl", UNFORMED),
     ("tail_command__invalid.spl", BARE),
 ];
+/// A Datadog field is whatever touches its colon: a fault cannot be inside one, so it falls in
+/// the field clause around it.
+const FIELD: &str = "a field is the pieces before its colon: its fault is in the clause";
+const DATADOG_UNLOCATED: &[(&str, &str)] = &[
+    ("all_attributes__invalid.datadog", FIELD),
+    ("attribute__invalid.datadog", FIELD),
+    ("calculated_field__invalid.datadog", FIELD),
+    ("match_all__invalid.datadog", UNFORMED),
+    ("quoted_field__invalid.datadog", UNCLOSED),
+    ("range_bound__invalid.datadog", UNFORMED),
+];
 const YARAL_UNLOCATED: &[(&str, &str)] = &[
     ("comment__invalid.yaral", UNCLOSED),
     ("duration__invalid.yaral", UNFORMED),
@@ -1391,6 +1413,18 @@ fn exabeam_corpus_gate() {
         ],
         unparsed: &[],
         unlocated: EXABEAM_UNLOCATED,
+    });
+}
+
+#[test]
+fn datadog_corpus_gate() {
+    check_gate(&ElasticGate {
+        language: LanguageId::Datadog,
+        id: "datadog",
+        // The root.
+        structural: &["query"],
+        unparsed: &[],
+        unlocated: DATADOG_UNLOCATED,
     });
 }
 

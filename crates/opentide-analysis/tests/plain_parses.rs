@@ -41,7 +41,7 @@ type Pair = (fn(&str) -> bool, fn(&str) -> (bool, Vec<String>));
 
 #[test]
 fn a_plain_parse_gives_the_verdict_of_debug_kinds() {
-    let languages: [(&str, Pair); 6] = [
+    let languages: [(&str, Pair); 7] = [
         ("spl", (opentide_spl::parses, opentide_spl::debug_kinds)),
         ("cql", (opentide_cql::parses, opentide_cql::debug_kinds)),
         (
@@ -56,6 +56,10 @@ fn a_plain_parse_gives_the_verdict_of_debug_kinds() {
         (
             "yaral",
             (opentide_yaral::parses, opentide_yaral::debug_kinds),
+        ),
+        (
+            "datadog",
+            (opentide_datadog::parses, opentide_datadog::debug_kinds),
         ),
     ];
     for (language, (parses, debug_kinds)) in languages {

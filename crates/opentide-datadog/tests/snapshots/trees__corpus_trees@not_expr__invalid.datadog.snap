@@ -1,0 +1,18 @@
+---
+source: crates/opentide-datadog/tests/trees.rs
+expression: "debug_tree(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/datadog/not_expr__invalid.datadog
+---
+QUERY@0..20
+  NOT_EXPR@0..20
+    NOT_KW@0..3 "NOT"
+    WHITESPACE@3..4 " "
+    NOT_KW@4..7 "NOT"
+    WHITESPACE@7..8 " "
+    FIELD_CLAUSE@8..20
+      TAG_KEY@8..14
+        WORD@8..14 "status"
+      COLON@14..15 ":"
+      TERM@15..20
+        WORD@15..20 "debug"
+3..4: two modifiers in a row: `-`, `+` and `NOT` do not stack (write one, or group)

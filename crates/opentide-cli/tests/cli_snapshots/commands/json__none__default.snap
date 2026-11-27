@@ -4896,7 +4896,8 @@ exit: 0
             "yara",
             "exabeam",
             "yaral",
-            "cql"
+            "cql",
+            "datadog"
           ],
           "title": "Language",
           "type": "string"
@@ -15729,7 +15730,7 @@ exit: 0
       "deprecated": false,
       "example": "opentide lsp start",
       "group": true,
-      "help": "Serve the language server for editors\n\nThe server is the analysis engine that pip install opentide installs: KQL, SPL, ES|QL, EQL, Kibana KQL, Lucene, Falco, CQL, YARA, Exabeam, YARA-L and Tide YAML. The editor owns the process and speaks the protocol on stdio. On the command line, opentide validate and opentide lint report what it finds.",
+      "help": "Serve the language server for editors\n\nThe server is the analysis engine that pip install opentide installs: KQL, SPL, ES|QL, EQL, Kibana KQL, Lucene, Falco, CQL, YARA, Exabeam, YARA-L, Datadog and Tide YAML. The editor owns the process and speaks the protocol on stdio. On the command line, opentide validate and opentide lint report what it finds.",
       "name": "lsp",
       "options": [],
       "output_schema": {

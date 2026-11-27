@@ -6,7 +6,25 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ## [Unreleased]
 
+### Upgrade
+
+#### `opentide`
+
+- If you `match` on `opentide::LanguageId` (or `opentide_core::LanguageId`) without a wildcard arm, add an arm for `LanguageId::Datadog`.
+
+### Breaking
+
+#### `opentide`
+
+- **`LanguageId` has a new variant, `LanguageId::Datadog`** (the Datadog log search syntax, `docs/internal/rfc-datadog-cloud-siem.md`). The enum is exhaustive, so a `match` without a wildcard arm no longer compiles. `LanguageId::QUERY_LANGUAGES` holds twelve languages; `LanguageId::parse` reads `datadog` and `opentide-datadog`, and `LanguageId::from_extension` reads `datadog`.
+
 ### Added
+
+#### `opentide-datadog`
+
+- **The Datadog log search syntax** (`datadog`, `.datadog` files): the queries of Datadog Cloud SIEM detection rules, checked, highlighted, hovered and completed as you type ([`docs/engine/DATADOG.md`](../docs/engine/DATADOG.md)). The new crate `opentide-datadog` parses it in pure Rust, with AND (written or implied) binding tighter than OR, as VRL reads it. It reports the 16 `datadog_*` codes (`opentide explain datadog_mixed_boolean`, …), under the profiles `rule` and `search`; a `.datadog` file is a search. Hover and completion know Datadog's reserved and standard attributes. No Tide block embeds the language yet: the `datadog` platform is the RFC's next phase.
+- **API: `opentide_core::LanguageId::Datadog`**, the `datadog_*` codes in `opentide_core::codes`, and the `opentide-datadog` crate.
+- **`highlights/generated/datadog.tmLanguage.json`** (`source.datadog`), and the `datadog` language in the Helix, Neovim and Zed samples and `@opentide/lsp-client`'s `LANGUAGES`.
 
 #### `opentide-schema`
 

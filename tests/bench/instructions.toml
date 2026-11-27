@@ -19,11 +19,23 @@ parse_corpus_allocations = 5729
 parse_external = 16050818
 parse_external_allocations = 10316
 
+[datadog]
+analyze_corpus = 1670334
+analyze_corpus_allocations = 5715
+analyze_external = 73597495
+analyze_external_allocations = 235468
+parse_corpus = 1006776
+parse_corpus_allocations = 2286
+parse_external = 47549109
+parse_external_allocations = 105003
+
 [datasets]
 complete-attack-technique = 34019684
 complete-attack-technique_allocations = 55395
 cql = 6816716
 cql_allocations = 11087
+datadog = 600666
+datadog_allocations = 1358
 eql = 2309827
 eql_allocations = 2771
 esql = 4701376

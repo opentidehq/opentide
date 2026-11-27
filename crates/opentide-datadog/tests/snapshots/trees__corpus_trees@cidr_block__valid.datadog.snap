@@ -1,0 +1,19 @@
+---
+source: crates/opentide-datadog/tests/trees.rs
+expression: "debug_tree(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/datadog/cidr_block__valid.datadog
+---
+QUERY@0..34
+  CIDR_CALL@0..34
+    CIDR_KW@0..4 "CIDR"
+    L_PAREN@4..5 "("
+    ATTRIBUTE@5..23
+      WORD@5..23 "@network.client.ip"
+    COMMA@23..24 ","
+    WHITESPACE@24..25 " "
+    CIDR_BLOCK@25..33
+      WORD@25..29 "fc00"
+      COLON@29..30 ":"
+      COLON@30..31 ":"
+      WORD@31..33 "/7"
+    R_PAREN@33..34 ")"

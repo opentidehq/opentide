@@ -1,0 +1,89 @@
+// The tree of a Datadog log search query (docs/internal/rfc-datadog-cloud-siem.md, §6.3).
+//
+// Quoted names are the lexer's tokens (src/lexer.rs): `word` is a run of term characters;
+// `number` is a word the parser read as a number (an optional duration unit included); `escape`
+// is `\` and the character after it; `phrase` is a closed `"…"`, and `unclosed_phrase` one with
+// no closing quote. `and`, `or`, `not`, `to` and `cidr` are words the parser re-kinds where its
+// grammar reads them (upper case only, but for a range's `to`, whose lower-case spelling is a
+// check's error rather than a parse error); `&&` and `||` are words read as operators.
+//
+// Precedence: a modifier (`-`, `+`, `NOT`) binds tightest, then AND (written or implied), then
+// OR, and the same inside a value group. A run of ANDs and a run of ORs is each one flat node,
+// so a 20,000-term chain is not 20,000 levels deep.
+
+Query = Expr?
+
+Expr =
+  OrExpr | AndExpr | NotExpr | Group | MatchAll | CidrCall | FieldClause
+| Term | Phrase | Comparison | Range
+
+// `a OR b OR c`: one node.
+OrExpr = Expr (('or' | '||') Expr)*
+
+// `a b AND c`: juxtaposition is AND. One node.
+AndExpr = Expr (('and' | '&&')? Expr)*
+
+// One modifier, never two: `-a`, `+a`, `NOT a`, `NOT(a)`.
+NotExpr = ('-' | '+' | 'not') operand:Expr
+
+Group = '(' Expr ')'
+
+// `*:*`, every event.
+MatchAll = '*' ':' '*'
+
+// `CIDR(@network.client.ip, 10.0.0.0/8, fc00::/7)`: the attribute, then the blocks.
+CidrCall = 'cidr' '(' field:Field (',' CidrBlock)* ')'
+
+// A block: the pieces that touch, up to a comma or `)` (`fc00::/7` holds colons).
+CidrBlock = ('word' | 'number' | ':' | 'escape')*
+
+// `field:value`, `field:(value group)`. A space may follow the colon.
+FieldClause = Field ':' value:FieldValue
+
+Field = Attribute | CalculatedField | TagKey | AllAttributes | QuotedField
+
+// The pieces of a field touch one another and its colon: `@user.first\ name`.
+Attribute = ('word' | 'number' | 'escape' | '*' | '?' | '-' | '+' | '=' | ',')*
+
+CalculatedField = ('word' | 'number' | 'escape' | '*' | '?' | '-' | '+' | '=' | ',')*
+
+TagKey = ('word' | 'number' | 'escape' | '*' | '?' | '-' | '+' | '=' | ',')*
+
+// `*:term`: every attribute.
+AllAttributes = '*'
+
+// `"service.status":disabled`: Observability Pipelines only.
+QuotedField = 'phrase'
+
+FieldValue = ValueGroup | Term | Phrase | Comparison | Range
+
+// `env:(prod OR test)`, `@code:(>=400 <500)`, `@a:(-*)`: values only, no fields.
+ValueGroup = '(' ValueExpr ')'
+
+ValueExpr =
+  ValueOrExpr | ValueAndExpr | ValueNotExpr | ValueGroup | Term | Phrase | Comparison | Range
+
+ValueOrExpr = ValueExpr (('or' | '||') ValueExpr)*
+
+ValueAndExpr = ValueExpr (('and' | '&&')? ValueExpr)*
+
+ValueNotExpr = ('-' | 'not') operand:ValueExpr
+
+// The pieces of a term touch: `web*`, `a?b`, `waiting\ un*`, `system:serviceaccount:x`. A
+// character the syntax refuses unescaped (`! < > ~ ^`) is still a piece: a check reports it.
+Term =
+  ( 'word' | 'number' | 'escape' | '*' | '?' | ':' | ',' | '-' | '+' | '=' | '!' | '~' | '^'
+  | '<' | '<=' | '>' | '>=' | 'phrase' | 'unclosed_phrase' )*
+
+Phrase = 'phrase' | 'unclosed_phrase'
+
+// `>=100ms`, `<-1`: the operator touches its operand.
+Comparison = operator:('>' | '>=' | '<' | '<=') Term
+
+// `[400 TO 499]`, `{200 TO 299}`, `[* TO 5]`.
+Range = ('[' | '{') lower:RangeBound 'to' upper:RangeBound (']' | '}')
+
+// A run without whitespace or a closing bracket: `2024-01-01T00:00:00`, `*`.
+RangeBound =
+  ( 'word' | 'number' | 'escape' | '*' | '?' | ':' | ',' | '-' | '+' | '=' | '!' | '~' | '^'
+  | '<' | '<=' | '>' | '>=' | 'phrase' | 'unclosed_phrase' | '(' | ')' | '[' | '{' )*

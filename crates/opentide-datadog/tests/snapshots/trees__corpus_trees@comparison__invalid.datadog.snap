@@ -1,0 +1,13 @@
+---
+source: crates/opentide-datadog/tests/trees.rs
+expression: "debug_tree(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/datadog/comparison__invalid.datadog
+---
+QUERY@0..12
+  FIELD_CLAUSE@0..12
+    ATTRIBUTE@0..9
+      WORD@0..9 "@duration"
+    COLON@9..10 ":"
+    COMPARISON@10..12
+      GT_EQ@10..12 ">="
+12..12: expected a number or a term right after the comparison operator
