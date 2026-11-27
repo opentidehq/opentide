@@ -69,7 +69,7 @@ pub struct PlatformInfo {
     pub can_validate: bool,
     /// Whether `opentide query` runs on it.
     pub can_query: bool,
-    /// Its tenants.
+    /// The tenants its configuration declares.
     pub tenants: Vec<Tenant>,
 }
 
@@ -234,7 +234,7 @@ pub struct Revision {
 pub struct Pin {
     /// The schema revision.
     pub schema: String,
-    /// The field.
+    /// The field of that schema the vocabulary fills.
     pub field: String,
     /// The pinned revision.
     pub revision: String,

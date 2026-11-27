@@ -309,12 +309,12 @@ impl Diagnostic {
         self.headline.as_deref().unwrap_or(&self.message)
     }
 
-    /// An error.
+    /// A finding of severity error, with no location yet.
     pub fn error(code: impl Into<String>, message: impl Into<String>) -> Self {
         Self::new(code, Severity::Error, message)
     }
 
-    /// A warning.
+    /// A finding of severity warning, with no location yet.
     pub fn warning(code: impl Into<String>, message: impl Into<String>) -> Self {
         Self::new(code, Severity::Warning, message)
     }

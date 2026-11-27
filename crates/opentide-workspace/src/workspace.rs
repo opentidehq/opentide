@@ -314,7 +314,7 @@ impl Workspace {
         &self.options.roots.cwd
     }
 
-    /// The roots.
+    /// Where the repository root and the detection workspace are.
     pub fn roots(&self) -> &Roots {
         &self.roots
     }
@@ -329,7 +329,8 @@ impl Workspace {
         &self.config
     }
 
-    /// The index.
+    /// The objects loaded from the object folders, and the files that did
+    /// not load.
     pub fn index(&self) -> &Arc<Index> {
         &self.index
     }

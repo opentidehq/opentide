@@ -25,7 +25,7 @@ pub const WINDOW_POSITIVE: &str = "window must be a positive duration";
 /// A review window: its length and the text it was written as.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Window {
-    /// The count.
+    /// How many `unit`s long it is.
     pub count: u64,
     /// `d`, `h` or `m`.
     pub unit: char,
