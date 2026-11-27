@@ -222,7 +222,7 @@ When no rule the run read has a status mapping to its strategies, the command re
 
 ## A real run
 
-A real run prints the plan's header and tally, then one line for each rule as the platform answers, so a CI log shows progress while a platform is slow, and the last line says which rule it is waiting on. The lines are append-only: no spinner and no carriage return unless stdout is a terminal, where the running rule is also shown on a live row that its result line replaces. The samples below are illustrative, not captured output: a real run needs a live tenant.
+A real run prints the plan's header and tally, then one line for each rule as the platform answers, so a CI log shows progress while a platform is slow, and the last line says which rule it is waiting on. The lines are append-only: no spinner and no carriage return unless stdout is a terminal, where the running rule is also shown on a live row that its result line replaces. Platforms deploy one after another; a platform's tenants deploy up to four at once (a platform plugin's one at a time), so the lines of tenants deploying at the same time may interleave. The `--json` document lists the rows in the plan's order whatever order they ended in. The samples below are illustrative, not captured output: a real run needs a live tenant.
 
 ```text illustrative
 Deploy plan · strategy PREVIEW · 1 platform, 1 tenant

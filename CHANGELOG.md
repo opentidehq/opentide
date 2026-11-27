@@ -18,6 +18,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Eac
   - `microsoft_defender_nrt_query`, reported by `lint` and the editor, not `validate`: a `frequency: NRT` query that reads two tables or one off the NRT list, joins, unions, uses `externaldata` or has a comment
 - **Datadog search syntax in the editor.** `opentide lsp start` checks, highlights, hovers and completes `.datadog` files: the log search syntax of Datadog Cloud SIEM detection rules, with 16 `datadog_*` codes (`opentide explain datadog_mixed_boolean`) and Datadog's reserved and standard attributes. `opentide validate` and `opentide validate query` do not take `.datadog` files yet: the `datadog` platform comes next.
 
+### Changed
+
+- **`deploy` sends to up to four tenants of a platform at once** ([#1940](https://github.com/opentidehq/opentide/issues/1940)). A platform with several tenants took the sum of their deploys; it now takes about as long as its slowest tenant. Platforms still deploy one after another, and a platform plugin's tenants one at a time. The `--json` document, its row order (the plan's), the deployment state files, the exit code and the failure the run reports are the same as before. The progress lines on stderr (one per rule as it ends) and the log lines of tenants deploying at once may now interleave.
+
 ### Fixed
 
 - **`deploy` keeps a connector's own failure code in the rule's row.** A failure a connector reports under a code of its own read as its message alone; the row's `error` now starts with the code (`code: message`), as Microsoft Defender's, Bitdefender's and Google SecOps' rows already did ([#1894](https://github.com/opentidehq/opentide/issues/1894)). The rows that change:

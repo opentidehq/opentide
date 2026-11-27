@@ -6,8 +6,11 @@
 //! The plan is the dry run's (`opentide_compile::plan`): the rules the run
 //! reads, their platforms, the tenants each reaches, with the platform's
 //! `[[modifiers]]` applied per tenant. Each rule is then sent through its
-//! platform's connector, one tenant after another, and each finished rule
-//! prints one line on stderr as it ends (`DeployLog`). A platform that
+//! platform's connector, the platforms one after another and up to
+//! [`TENANTS_AT_ONCE`] tenants of a platform at once, and each finished rule
+//! prints one line on stderr as it ends (`DeployLog`): the lines of tenants
+//! deploying at once may interleave, while the result keeps the plan's order
+//! and deployment state is the same as one tenant after another. A platform that
 //! raises stops the run: the rules it never reached are not attempted. The
 //! ids CrowdStrike, Microsoft Defender, SentinelOne and Sysdig give a
 //! rule are kept in deployment state ([`super::deploy_state`]).
@@ -84,6 +87,10 @@ const VERBS: [(&str, &str); 6] = [
     ("delete", "deleted"),
     ("unchanged", "unchanged"),
 ];
+/// At most this many tenants of a platform deploy at once (#1940); the
+/// platforms still deploy one after another. A platform plugin's tenants
+/// deploy one at a time.
+const TENANTS_AT_ONCE: usize = 4;
 /// The action of a rule the tenant already held as the run would write it.
 const UNCHANGED: &str = "unchanged";
 /// Codes that skip the rule on that tenant without failing the run.
@@ -2589,26 +2596,107 @@ impl Sender<'_, '_> {
             .insert(key)
     }
 
-    /// Each tenant's deploy, `unit`, in the order of `batches`: each on its
-    /// own sender and log ([`fork`](Self::fork), [`DeployLog::fork`]), whose
-    /// results and outcome are added to the run's in that order. A tenant
-    /// that stops the run (an interrupt) is the last one started; its stop
-    /// is returned.
+    /// Each tenant's deploy, `unit`, at most `at_once` tenants at a time
+    /// (#1940): each on its own sender and log ([`fork`](Self::fork),
+    /// [`DeployLog::fork`]), on a thread of its own when several run, whose
+    /// results and outcome are added to the run's in the order of `batches`
+    /// once every tenant ended, whatever order they ended in. Only the lines
+    /// each prints as its rules end may interleave. A tenant that stops the
+    /// run (an interrupt) starts no tenant after it; the first stop in the
+    /// order of `batches` is returned.
     fn tenants<'b, 'l>(
         &mut self,
+        at_once: usize,
         batches: &'b [Batch],
         log: &mut DeployLog<'l>,
-        unit: impl Fn(&mut Self, &'b Batch, &mut DeployLog<'l>) -> Result<(), Raised>,
+        unit: impl Fn(&mut Self, &'b Batch, &mut DeployLog<'l>) -> Result<(), Raised> + Sync,
     ) -> Result<(), Raised> {
-        for batch in batches {
-            let mut sender = self.fork();
-            let mut tenant_log = log.fork();
-            let outcome = unit(&mut sender, batch, &mut tenant_log);
+        let at_once = if crate::threads::AVAILABLE {
+            at_once.min(batches.len())
+        } else {
+            1
+        };
+        if at_once <= 1 {
+            for batch in batches {
+                let mut sender = self.fork();
+                let mut tenant_log = log.fork();
+                let outcome = unit(&mut sender, batch, &mut tenant_log);
+                self.absorb(sender);
+                log.merge(tenant_log);
+                outcome?;
+            }
+            return Ok(());
+        }
+        let next = std::sync::atomic::AtomicUsize::new(0);
+        let stopped = std::sync::atomic::AtomicBool::new(false);
+        type Ended<'s, 'c, 'l> = (Sender<'s, 'c>, DeployLog<'l>, Result<(), Raised>);
+        let ended: Vec<std::sync::Mutex<Option<Ended<'_, '_, 'l>>>> = batches
+            .iter()
+            .map(|_| std::sync::Mutex::new(None))
+            .collect();
+        // The run's log lines go where the calling thread's go.
+        let dispatch = tracing::dispatcher::get_default(Clone::clone);
+        let panicked = {
+            let (run, run_log, unit) = (&*self, &*log, &unit);
+            let (next, stopped, ended, dispatch) = (&next, &stopped, &ended, &dispatch);
+            std::thread::scope(|scope| {
+                let workers: Vec<_> = (0..at_once)
+                    .map(|_| {
+                        scope.spawn(move || {
+                            tracing::dispatcher::with_default(dispatch, || {
+                                use std::sync::atomic::Ordering;
+                                // The next tenant in plan order, until none
+                                // is left or one stopped the run.
+                                while !stopped.load(Ordering::SeqCst) {
+                                    let at = next.fetch_add(1, Ordering::SeqCst);
+                                    let (Some(batch), Some(slot)) =
+                                        (batches.get(at), ended.get(at))
+                                    else {
+                                        break;
+                                    };
+                                    let mut sender = run.fork();
+                                    let mut tenant_log = run_log.fork();
+                                    let outcome = unit(&mut sender, batch, &mut tenant_log);
+                                    if outcome.is_err() {
+                                        stopped.store(true, Ordering::SeqCst);
+                                    }
+                                    *slot
+                                        .lock()
+                                        .unwrap_or_else(std::sync::PoisonError::into_inner) =
+                                        Some((sender, tenant_log, outcome));
+                                }
+                            });
+                        })
+                    })
+                    .collect();
+                let mut panicked = None;
+                for worker in workers {
+                    if let Err(payload) = worker.join() {
+                        panicked.get_or_insert(payload);
+                    }
+                }
+                panicked
+            })
+        };
+        if let Some(payload) = panicked {
+            // Raised again on this thread: the crash report says its message.
+            std::panic::resume_unwind(payload);
+        }
+        let mut stop = Ok(());
+        for slot in ended {
+            let Some((sender, tenant_log, outcome)) = slot
+                .into_inner()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+            else {
+                continue;
+            };
             self.absorb(sender);
             log.merge(tenant_log);
-            outcome?;
+            if stop.is_ok() {
+                stop = outcome;
+            }
         }
-        Ok(())
+        stop
     }
 }
 
@@ -3007,7 +3095,7 @@ impl Sender<'_, '_> {
         batches: &[Batch],
         log: &mut DeployLog<'_>,
     ) -> Result<(), Raised> {
-        self.tenants(batches, log, |sender, batch, log| {
+        self.tenants(TENANTS_AT_ONCE, batches, log, |sender, batch, log| {
             sender.by_uuid_tenant(platform, batch, log)
         })
     }
@@ -3849,7 +3937,7 @@ impl Sender<'_, '_> {
         batches: &[Batch],
         log: &mut DeployLog<'_>,
     ) -> Result<(), Raised> {
-        self.tenants(batches, log, |sender, batch, log| {
+        self.tenants(TENANTS_AT_ONCE, batches, log, |sender, batch, log| {
             sender.with_state_tenant(platform, batch, log)
         })
     }
@@ -3943,7 +4031,10 @@ impl Sender<'_, '_> {
             .get(platform)
             .and_then(opentide_connectors::Platform::deployer)
             .ok_or_else(|| Raised::new(format!("platform plugin {platform} cannot deploy")))?;
-        self.tenants(batches, log, |sender, batch, log| {
+        // One tenant at a time: a plugin's Python code was written for one
+        // call at a time, and nothing says it can take calls from several
+        // threads.
+        self.tenants(1, batches, log, |sender, batch, log| {
             sender.plugin_tenant(deployer, platform, batch, log)
         })
     }
@@ -4283,7 +4374,7 @@ impl Sender<'_, '_> {
     /// Elastic: each rule deleted, or checked then created or updated; a
     /// tenant that refuses the key stops its batch (`ElasticDeploy`).
     fn elastic(&mut self, batches: &[Batch], log: &mut DeployLog<'_>) -> Result<(), Raised> {
-        self.tenants(batches, log, Self::elastic_tenant)
+        self.tenants(TENANTS_AT_ONCE, batches, log, Self::elastic_tenant)
     }
 
     /// One tenant's rules of [`elastic`](Self::elastic).
@@ -4587,7 +4678,7 @@ impl Sender<'_, '_> {
     /// added to its runtime policies, updated, disabled or deleted
     /// (`SysdigDeploy`).
     fn sysdig(&mut self, batches: &[Batch], log: &mut DeployLog<'_>) -> Result<(), Raised> {
-        self.tenants(batches, log, Self::sysdig_tenant)
+        self.tenants(TENANTS_AT_ONCE, batches, log, Self::sysdig_tenant)
     }
 
     /// One tenant's rules of [`sysdig`](Self::sysdig).
@@ -4759,7 +4850,7 @@ impl Sender<'_, '_> {
     /// recorded), updated or disabled with the whole payload, or deleted
     /// (its id forgotten) (`BitdefenderDeploy.deploy_tenant`).
     fn bitdefender(&mut self, batches: &[Batch], log: &mut DeployLog<'_>) -> Result<(), Raised> {
-        self.tenants(batches, log, Self::bitdefender_tenant)
+        self.tenants(TENANTS_AT_ONCE, batches, log, Self::bitdefender_tenant)
     }
 
     /// One tenant's rules of [`bitdefender`](Self::bitdefender).
@@ -5017,7 +5108,7 @@ impl Sender<'_, '_> {
     fn google_secops(&mut self, batches: &[Batch], log: &mut DeployLog<'_>) -> Result<(), Raised> {
         let connector =
             opentide_connectors::google_secops::GoogleSecops::new(self.environment.clone());
-        self.tenants(batches, log, |sender, batch, log| {
+        self.tenants(TENANTS_AT_ONCE, batches, log, |sender, batch, log| {
             sender.google_secops_tenant(&connector, batch, log)
         })
     }
@@ -5285,7 +5376,7 @@ impl Sender<'_, '_> {
     /// created, updated, unscheduled or deleted through the platform's
     /// `Deployer` (`GraylogDeploy`).
     fn graylog(&mut self, batches: &[Batch], log: &mut DeployLog<'_>) -> Result<(), Raised> {
-        self.tenants(batches, log, Self::graylog_tenant)
+        self.tenants(TENANTS_AT_ONCE, batches, log, Self::graylog_tenant)
     }
 
     /// One tenant's rules of [`graylog`](Self::graylog).
@@ -5613,7 +5704,7 @@ impl Sender<'_, '_> {
     /// without the licence or with no answer stops its batch.
     fn exabeam(&mut self, batches: &[Batch], log: &mut DeployLog<'_>) -> Result<(), Raised> {
         let exabeam = opentide_connectors::exabeam::Exabeam::new();
-        self.tenants(batches, log, |sender, batch, log| {
+        self.tenants(TENANTS_AT_ONCE, batches, log, |sender, batch, log| {
             sender.exabeam_tenant(&exabeam, batch, log)
         })
     }
