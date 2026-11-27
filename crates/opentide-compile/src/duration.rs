@@ -6,68 +6,30 @@
 //! The oracle took any Unicode decimal digit; the difference is approved (a
 //! Sentinel duration with non-ASCII digits is `compile_invalid_rule`).
 
-/// Seconds in a minute, an hour, a day and a week.
+/// Seconds in a minute, an hour and a day.
 const MINUTE: u64 = 60;
 const HOUR: u64 = 3600;
 const DAY: u64 = 86_400;
-const WEEK: u64 = 7 * DAY;
-
-/// Reads `text` as a run of `<digits><unit>` parts whose units appear in
-/// `units` order, each at most once. `None` when `text` is not one; the sum of
-/// the parts in seconds, and whether any part was written, otherwise.
-fn parts(text: &str, units: &[(char, u64)]) -> Option<(u64, bool)> {
-    let mut total: u64 = 0;
-    let mut any = false;
-    let mut rest = text;
-    let mut next = 0;
-    while !rest.is_empty() {
-        let digits = rest.bytes().take_while(u8::is_ascii_digit).count();
-        if digits == 0 {
-            return None;
-        }
-        let unit = rest[digits..].chars().next()?;
-        let position = units[next..].iter().position(|(name, _)| *name == unit)?;
-        let size = units[next + position].1;
-        next += position + 1;
-        let amount: u64 = rest[..digits].parse().ok()?;
-        total = total.checked_add(amount.checked_mul(size)?)?;
-        any = true;
-        rest = &rest[digits + unit.len_utf8()..];
-    }
-    Some((total, any))
-}
 
 /// A Sentinel rule duration in seconds (`iso_duration_timedelta`): ISO 8601
 /// (`PT1H`, `PT30M`, `P1D`, any case) or the shorthand older catalogues use
-/// (`30m`, `1h`, `1h10m`, `1d`). The error is the oracle's message.
+/// (`30m`, `1h`, `1h10m`, `1d`), around blanks; read by
+/// [`opentide_core::duration::SENTINEL`], the grammar `validate` reads too
+/// (#1934). The error is the oracle's message.
 pub fn sentinel_seconds(duration: &str) -> Result<u64, String> {
-    let text = duration.trim();
-    if let Some((total, true)) = parts(text, &[('d', DAY), ('h', HOUR), ('m', MINUTE), ('s', 1)]) {
-        return Ok(total);
-    }
-    let upper = text.to_ascii_uppercase();
-    if let Some(body) = upper.strip_prefix('P')
-        && !upper.ends_with('T')
-    {
-        let (date, time) = match body.split_once('T') {
-            Some((date, time)) => (date, Some(time)),
-            None => (body, None),
-        };
-        let date = parts(date, &[('W', WEEK), ('D', DAY)]);
-        let time = match time {
-            Some(time) => parts(time, &[('H', HOUR), ('M', MINUTE), ('S', 1)]),
-            None => Some((0, false)),
-        };
-        if let (Some((days, any_date)), Some((seconds, any_time))) = (date, time)
-            && (any_date || any_time)
-        {
-            return Ok(days + seconds);
-        }
-    }
-    Err(format!(
-        "Duration {duration:?} is not an ISO 8601 duration (PT1H, PT30M, P1D) or a shorthand \
-         duration (30m, 1h, 1d, 1h10m)"
-    ))
+    use opentide_core::duration::{Iso8601Error, SENTINEL, SENTINEL_MAX_DAYS};
+    SENTINEL
+        .seconds(duration.trim())
+        .map_err(|error| match error {
+            Iso8601Error::Format => format!(
+                "Duration {duration:?} is not an ISO 8601 duration (PT1H, PT30M, P1D) or a \
+                 shorthand duration (30m, 1h, 1d, 1h10m)"
+            ),
+            Iso8601Error::TooLong => format!(
+                "Duration {duration:?} is longer than a rule can be deployed with (at most \
+                 {SENTINEL_MAX_DAYS} days, 23 hours, 59 minutes and 59 seconds)"
+            ),
+        })
 }
 
 /// A duration as the Sentinel API takes it (`duration_isoformat`): whole
@@ -191,11 +153,87 @@ mod tests {
         ] {
             assert!(sentinel(text).is_err(), "{text}");
         }
+        // Weeks and hours that each fit a u64 but not their sum: an error,
+        // not an overflow.
+        assert!(sentinel_seconds("P30500568904943WT8H").is_err());
         assert_eq!(
             sentinel("soon").unwrap_err(),
             "Duration \"soon\" is not an ISO 8601 duration (PT1H, PT30M, P1D) or a shorthand \
              duration (30m, 1h, 1d, 1h10m)"
         );
+    }
+
+    /// `validate` (the schema's `check_duration`) and deploy
+    /// (`sentinel_seconds`) accept and refuse the same Sentinel durations
+    /// (#1934): the cases where their two grammars once disagreed included.
+    #[test]
+    fn sentinel_validate_and_deploy_agree() {
+        use opentide_schema::objects::platform::sentinel::check_duration;
+        let accepted = [
+            "PT1H",
+            "pt30m",
+            "P1D",
+            "p1w",
+            "P1W2D",
+            "P1DT2H",
+            "PT90S",
+            "PT0S",
+            "0d",
+            "30m",
+            "1h10m",
+            " 5m ",
+            "\u{a0}PT1H\u{3000}",
+            "P999999999DT23H59M59S",
+            "86399999999999s",
+            "P142857142W",
+        ];
+        for text in accepted {
+            assert_eq!(check_duration(text), Ok(()), "validate {text:?}");
+            assert!(sentinel_seconds(text).is_ok(), "deploy {text:?}");
+        }
+        let format = [
+            "hourly",
+            "1H",
+            "P",
+            "PT",
+            "P1DT",
+            "1x",
+            "5",
+            "-1h",
+            "1h 10m",
+            "PT1H1D",
+            "1m1h",
+            "PTT1H",
+            "P1H",
+            "PT1D",
+            "P１D",
+            "é",
+            "😀",
+            "PT1H😀",
+            // `ſ` folds to `s` in Unicode, not in ASCII: validate's
+            // case-insensitive regex took it.
+            "PT1\u{17f}",
+            "P1DT1\u{17f}",
+        ];
+        let too_long = [
+            "1000000000d",
+            "P99999999999D",
+            "P142857143W",
+            "P999999999DT24H",
+            "99999999999999999999999999999999999999999d",
+            "P99999999999999999999DT1H",
+        ];
+        for (texts, words) in [
+            (&format[..], "not an ISO 8601"),
+            (&too_long[..], "longer than"),
+        ] {
+            for text in texts {
+                let violation = check_duration(text).unwrap_err();
+                assert!(violation.message.contains(words), "validate {text:?}");
+                let refusal = sentinel_seconds(text).unwrap_err();
+                assert!(refusal.contains(words), "deploy {text:?}: {refusal}");
+            }
+        }
     }
 
     #[test]

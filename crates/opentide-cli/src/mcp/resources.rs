@@ -44,6 +44,8 @@ const TEMPLATES: [(&str, bool, bool); 6] = [
 
 /// `resources/read` of `uri`.
 pub fn read(uri: &str, context: &Context<'_>) -> Answer {
+    // A resource only reads: on the process's warm workspace (#1942).
+    let _warm = opentide_workspace::session::activate();
     let text = if let Some((_, needs)) = FIXED.iter().find(|(fixed, _)| *fixed == uri) {
         fixed(uri, *needs, context)
     } else if let Some((prefix, value, needs)) =

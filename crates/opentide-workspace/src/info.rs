@@ -27,6 +27,7 @@ pub const DEPLOYABLE_STRATEGIES: [&str; 2] = ["PREVIEW", "RELEASE"];
 
 /// A variable a tenant's `setup` names.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[non_exhaustive]
 pub struct Variable {
     /// Its name.
     pub name: String,
@@ -36,6 +37,7 @@ pub struct Variable {
 
 /// A tenant as written.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[non_exhaustive]
 pub struct Tenant {
     /// Its name, else `tenant <n>`.
     pub name: String,
@@ -50,11 +52,12 @@ pub struct Tenant {
 }
 
 /// One platform's row.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 #[expect(
     clippy::struct_excessive_bools,
     reason = "the document's four flags (vscode-extension docs/CONTRACTS.md)"
 )]
+#[non_exhaustive]
 pub struct PlatformInfo {
     /// Its key.
     pub name: String,

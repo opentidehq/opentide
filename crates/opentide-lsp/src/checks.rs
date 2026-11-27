@@ -1281,16 +1281,10 @@ mod tests {
     #[test]
     fn a_one_edit_fix_is_the_suggestion_and_the_severity_is_kept() {
         let mut finding = at(1, 6, 12);
-        finding.fix = Some(opentide_workspace::Fix {
-            safe: true,
-            edits: vec![opentide_workspace::TextEdit {
-                line: 1,
-                column: 6,
-                end_line: 1,
-                end_column: 12,
-                replacement: "clear".into(),
-            }],
-        });
+        finding.fix = Some(opentide_workspace::Fix::new(
+            true,
+            vec![opentide_workspace::TextEdit::new(1, 6, 1, 12, "clear")],
+        ));
         finding.field_path = vec!["metadata".into(), "tlp".into()];
         let diagnostic = engine_diagnostic("tlp: clearr\n", &finding);
         assert_eq!(diagnostic.suggestion.as_deref(), Some("clear"));

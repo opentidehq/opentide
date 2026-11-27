@@ -1368,10 +1368,12 @@ impl Run<'_> {
         let terminal = self.terminal();
         let interrupt = &self.host.interrupt;
         let interrupted = || interrupt.requested();
+        // Read as `--query-file` is: bytes, decoded leniently; only a failed
+        // read is an error (#1936).
         let stdin = || {
-            let mut text = String::new();
-            let _ = std::io::Read::read_to_string(&mut std::io::stdin(), &mut text);
-            text
+            let mut bytes = Vec::new();
+            std::io::Read::read_to_end(&mut std::io::stdin(), &mut bytes)?;
+            Ok(String::from_utf8_lossy(&bytes).into_owned())
         };
         run(
             &parsed,

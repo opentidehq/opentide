@@ -108,21 +108,17 @@ impl PlatformConfigurations for PluginBlocks {
         };
         match check.check(block) {
             Ok(found) => found.into_iter().map(finding).collect(),
-            Err(error) => vec![PlatformFinding {
-                field_path: Vec::new(),
-                message: format!("the plugin could not check this block: {}", reason(&error)),
-                warning: false,
-            }],
+            Err(error) => vec![PlatformFinding::new(
+                Vec::new(),
+                format!("the plugin could not check this block: {}", reason(&error)),
+                false,
+            )],
         }
     }
 }
 
 fn finding(found: ConfigurationFinding) -> PlatformFinding {
-    PlatformFinding {
-        field_path: found.path,
-        message: found.message,
-        warning: found.warning,
-    }
+    PlatformFinding::new(found.path, found.message, found.warning)
 }
 
 /// An error's text without the platform and tenant a tenant error names.

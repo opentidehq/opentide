@@ -644,13 +644,13 @@ mod tests {
 
     #[test]
     fn the_version_does_not_widen_the_platform_column() {
-        let platform = |name: &str, enabled: bool| PlatformInfo {
-            name: name.into(),
-            enabled,
-            can_deploy: true,
-            can_validate: false,
-            can_query: true,
-            tenants: Vec::new(),
+        let platform = |name: &str, enabled: bool| {
+            let mut platform = PlatformInfo::default();
+            platform.name = name.into();
+            platform.enabled = enabled;
+            platform.can_deploy = true;
+            platform.can_query = true;
+            platform
         };
         let platforms = [platform("sentinel", false), platform("splunk", true)];
         let plain = |version: &str| -> Vec<String> {
