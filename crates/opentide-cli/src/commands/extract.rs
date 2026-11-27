@@ -670,9 +670,9 @@ fn defender_uuid(id: &str) -> (String, Addressed) {
         .get(..prefix.len())
         .filter(|head| head.eq_ignore_ascii_case(prefix))
         .map_or(id, |_| &id[prefix.len()..]);
-    match uuid::Uuid::try_parse(held.trim()) {
-        Ok(parsed) => (parsed.hyphenated().to_string(), Addressed::BareUuid),
-        Err(_) => (
+    match opentide_core::ids::canonical(held) {
+        Some(canonical) => (canonical, Addressed::BareUuid),
+        None => (
             uuid::Uuid::new_v5(&defender_namespace(), id.as_bytes())
                 .hyphenated()
                 .to_string(),
@@ -2163,9 +2163,10 @@ fn kibana_to_opentide(rule: &CJson, make_custom: bool) -> Object {
     clean_empty(document.as_object().unwrap_or(&Object::new()))
 }
 
-/// Whether `text` is a UUID: hyphenated, simple, braced or a `urn:uuid:`.
+/// Whether `text` is a UUID: hyphenated, simple, braced or a `urn:uuid:`
+/// ([`opentide_core::ids::parse`]).
 fn is_uuid(text: &str) -> bool {
-    uuid::Uuid::try_parse(text).is_ok()
+    opentide_core::ids::parse(text).is_some()
 }
 
 /// Why `document` must not be written: every file written must load as

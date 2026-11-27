@@ -1165,7 +1165,7 @@ fn duplicates(
     path: &str,
     d: &opentide_core::Diagnostic,
 ) -> Vec<lsp::DiagnosticRelatedInformation> {
-    let Some(uuid) = uuid_pattern()
+    let Some(uuid) = opentide_core::ids::finder()
         .find(&d.message)
         .map(|m| m.as_str().to_string())
     else {
@@ -1832,20 +1832,6 @@ fn handle_signature_help(
 // ---------------------------------------------------------------------------
 // Navigation.
 
-#[expect(
-    clippy::expect_used,
-    reason = "a regex literal: an invalid pattern fails every test that reaches it"
-)]
-fn uuid_pattern() -> &'static regex::Regex {
-    static PATTERN: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
-    PATTERN.get_or_init(|| {
-        regex::Regex::new(
-            r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
-        )
-        .expect("UUID pattern")
-    })
-}
-
 /// The UUID under the cursor, the cursor touching either end. A column past
 /// the end of its line is on no UUID.
 pub(crate) fn uuid_at(text: &str, position: lsp::Position) -> Option<String> {
@@ -1854,7 +1840,7 @@ pub(crate) fn uuid_at(text: &str, position: lsp::Position) -> Option<String> {
         return None;
     }
     let at = offset(text, position);
-    uuid_pattern()
+    opentide_core::ids::finder()
         .find_iter(text)
         .find(|m| m.start() <= at && at <= m.end())
         .map(|m| m.as_str().to_string())

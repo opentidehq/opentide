@@ -59,19 +59,10 @@ impl Clock {
 pub fn rule_minute_and_hour(uuid: &str) -> (u32, u32) {
     const OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
     const PRIME: u64 = 0x0100_0000_01b3;
-    let hex: String = uuid
-        .trim()
-        .trim_start_matches("urn:uuid:")
-        .chars()
-        .filter(|c| !matches!(c, '-' | '{' | '}'))
-        .collect();
-    let digits: Vec<u8> = Some(hex)
-        .filter(|hex| hex.len() == 32 && hex.chars().all(|c| c.is_ascii_hexdigit()))
-        .and_then(|hex| u128::from_str_radix(&hex, 16).ok())
-        .map_or_else(
-            || uuid.as_bytes().to_vec(),
-            |value| value.to_be_bytes().to_vec(),
-        );
+    let digits: Vec<u8> = opentide_core::ids::parse(uuid).map_or_else(
+        || uuid.as_bytes().to_vec(),
+        |parsed| parsed.as_bytes().to_vec(),
+    );
     let hash = digits.iter().fold(OFFSET, |hash, byte| {
         (hash ^ u64::from(*byte)).wrapping_mul(PRIME)
     });

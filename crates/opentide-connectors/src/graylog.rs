@@ -1286,7 +1286,7 @@ fn rule_uuid(definition: &opentide_compile::json::Object, rule_id: &str) -> Opti
     let after = tags.iter().position(|tag| *tag == "opentide")? + 1;
     tags.get(after)
         .and_then(|tag| tag.strip_prefix("opentide."))
-        .filter(|rest| uuid::Uuid::parse_str(rest).is_ok())
+        .filter(|rest| opentide_core::ids::parse(rest).is_some())
         .map(str::to_owned)
 }
 
