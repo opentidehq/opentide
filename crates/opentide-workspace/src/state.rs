@@ -48,13 +48,9 @@ pub struct Binding {
 }
 
 /// Whether `text` is a UUID in lowercase canonical form
-/// (`xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`).
+/// (`xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`, [`opentide_core::ids::is_canonical`]).
 pub fn is_canonical_uuid(text: &str) -> bool {
-    text.len() == 36
-        && text.char_indices().all(|(position, ch)| match position {
-            8 | 13 | 18 | 23 => ch == '-',
-            _ => ch.is_ascii_digit() || ('a'..='f').contains(&ch),
-        })
+    opentide_core::ids::is_canonical(text)
 }
 
 /// The bindings of one shard's text, or `None` when the oracle would refuse

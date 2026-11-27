@@ -35,7 +35,7 @@ Do not parse catalogs as YAML. Do not switch catalog files to JSON unless the fi
 | `data/catalogs/kql/asim/asim.toml` | ASIM schemas, columns, parsers and their parameters (generated) |
 | `data/catalogs/spl/` | commands, command options, fields, datamodels, macros |
 
-KQL profiles are `Core`, `Sentinel`, and `Defender`. Sentinel analysis is the default for a raw `.kql` file. Defender is selected when the Tide field path contains `microsoft_defender`. A function that exists only in one profile must not be marked known in the other.
+KQL dialects (`opentide_kql::Dialect`, ADR 0015) are `Core`, `Sentinel`, and `Defender`; `Dialect::for_platform` is the only map from a platform to one. Sentinel analysis is the default for a raw `.kql` file. Defender is selected by the `microsoft_defender` platform (its block, or a hunt's `system`). A function that exists only in one dialect must not be marked known in the other. The catalogs' `profile = "…"` rows keep that key.
 
 Signatures and operator options are copied from public docs (Microsoft Learn for KQL, Splunk Search Reference for SPL). `scripts/engine/sync_kql_learn_signatures.py` is the generator. Do not invent a parameter the Learn page does not list. Cite the page in the catalog `citation` field when the row has one.
 

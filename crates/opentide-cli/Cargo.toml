@@ -77,7 +77,8 @@ opentide-analysis = { workspace = true, features = ["queries"] }
 # the queries check of validate on the query engines (opentide-analysis's
 # `queries`, UC-2.5):
 # the workspace and its one Diagnostic, and the quoting of a suggestion.
-opentide-core.workspace = true
+# `digest`: `text::sha256_hex`.
+opentide-core = { workspace = true, features = ["digest"] }
 # `generate` (UC-3.2): the files it writes; `deploy --dry-run` (UC-3.1c): the
 # plan, the compiled bodies, the git baseline.
 opentide-compile.workspace = true
@@ -127,8 +128,6 @@ regex.workspace = true
 url.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-# SARIF and Code Quality fingerprints (RustCrypto).
-sha2 = "0.11"
 shlex = "2.0"
 terminal_size = "0.4"
 textwrap = { version = "0.16", default-features = false }

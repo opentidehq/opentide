@@ -35,7 +35,7 @@ impl TideDocument {
 
     /// The SHA-256 of the text, lowercase hex (`content_hash`).
     pub fn content_hash(&self) -> String {
-        crate::digest::sha256_hex(self.text.as_bytes())
+        opentide_core::text::sha256_hex(self.text.as_bytes())
     }
 
     /// `metadata`, when it is a mapping.

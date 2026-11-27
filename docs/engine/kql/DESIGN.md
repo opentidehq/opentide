@@ -33,15 +33,18 @@ Citations:
 Control commands (`.show`, `.create`, …) remain **unsupported** in detections
 (`kql_control_command_unsupported`). SQL is out of scope.
 
-## Profiles
+## Dialects
 
-| Profile | When | Time column | Tables |
+A dialect is a product that runs KQL (ADR 0015 §1; `opentide_kql::Dialect`,
+chosen by `Dialect::for_platform`). The catalogs tag their rows `profile = "…"`.
+
+| Dialect | When | Time column | Tables |
 | --- | --- | --- | --- |
 | `sentinel` | `configurations.sentinel.query` or `.kql` default | `TimeGenerated` | Sentinel + streamed Defender tables |
 | `defender` | `configurations.microsoft_defender.query` | `Timestamp` | Advanced hunting schema |
 | `core` | unit tests / no workspace | none | operators + functions only |
 
-A query may mention a table from the active profile. Column lookup prefers
+A query may mention a table from the active dialect. Column lookup prefers
 tables that appear as identifiers in the current source, then falls back to
 any catalog column of that name.
 

@@ -44,6 +44,8 @@ const TEMPLATES: [(&str, bool, bool); 6] = [
 
 /// `resources/read` of `uri`.
 pub fn read(uri: &str, context: &Context<'_>) -> Answer {
+    // A resource only reads: on the process's warm workspace (#1942).
+    let _warm = opentide_workspace::session::activate();
     let text = if let Some((_, needs)) = FIXED.iter().find(|(fixed, _)| *fixed == uri) {
         fixed(uri, *needs, context)
     } else if let Some((prefix, value, needs)) =
@@ -874,25 +876,12 @@ fn vocabulary(objects: Option<&Workspace>, name: &str) -> Json {
 
 /// `opentide://platforms`: what each platform can do here.
 fn platforms(workspace: &Workspace) -> Json {
-    let systems = workspace
-        .configuration()
-        .resolved
-        .tree
-        .get("systems")
-        .cloned();
+    let resolved = &workspace.configuration().resolved;
     Json::Array(
         PLATFORMS
             .iter()
             .map(|name| {
-                let enabled = matches!(
-                    systems
-                        .as_ref()
-                        .and_then(|systems| systems.get(name))
-                        .and_then(|system| system.get("platform"))
-                        .and_then(|platform| platform.get("enabled"))
-                        .map(|node| &node.value),
-                    Some(Value::Bool(true))
-                );
+                let enabled = resolved.platform_enabled(name);
                 Json::object([
                     ("name", Json::str(*name)),
                     ("enabled", Json::Bool(enabled)),

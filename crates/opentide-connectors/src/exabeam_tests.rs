@@ -241,6 +241,28 @@ fn the_name_check_is_exact_and_case_insensitive() {
     assert_eq!(ids("straße"), ["4"]);
 }
 
+/// Names compare under full case folding, as `str.casefold()` does, not
+/// lowercase plus `ß` (#1930): `ﬁ` folds to `fi` and a final `ς` to `σ`.
+#[test]
+fn the_name_check_folds_case_fully() {
+    let rules = vec![
+        object(serde_json::json!({"id": "1", "name": "ﬁle Access 😀"})),
+        object(serde_json::json!({"id": "2", "name": "Final ς"})),
+        object(serde_json::json!({"id": "3", "name": "Straße é"})),
+    ];
+    let ids = |name: &str| -> Vec<String> {
+        name_matches(&rules, name)
+            .iter()
+            .map(|rule| rule.get("id").map(scalar_text).unwrap_or_default())
+            .collect()
+    };
+    assert_eq!(ids("FILE ACCESS 😀"), ["1"]);
+    assert_eq!(ids("final σ"), ["2"]);
+    assert_eq!(ids("FINAL Σ"), ["2"]);
+    assert_eq!(ids("STRASSE É"), ["3"]);
+    assert_eq!(ids("Strasse e"), Vec::<String>::new());
+}
+
 #[test]
 fn the_created_id_is_a_canonical_uuid() {
     let id = |value: serde_json::Value| returned_rule_id(&object(serde_json::json!({"id": value})));

@@ -42,9 +42,14 @@ mod catalog_model;
 mod columns;
 mod ecs;
 mod gates;
-mod lexer;
-mod parser;
-mod syntax;
+// The lexer, the parser and the kinds: public but hidden, as the typed AST, for the crate's
+// corpus, tree and conformance tests (`tests/`). Not an API.
+#[doc(hidden)]
+pub mod lexer;
+#[doc(hidden)]
+pub mod parser;
+#[doc(hidden)]
+pub mod syntax;
 mod tree;
 
 // What the generated typed AST names from the crate root (`use crate::{..}`).

@@ -1,0 +1,23 @@
+# sequence method, which waits for 1.x
+# Expected constraint code: datadog_method_unsupported.
+name: Datadog sequence method, which waits for 1.x
+metadata:
+  uuid: 00000000-0000-4000-8004-000000000103
+  schema: rule::1.0
+  version: 1
+  created: "2026-11-27"
+  modified: "2026-11-27"
+  tlp: clear
+  author: Detection Engineering
+description: |
+  sequence method, which waits for 1.x.
+configurations:
+  datadog:
+    schema: platform::datadog::1.0
+    status: STAGING
+    queries:
+      - query: source:okta @evt.outcome:FAILURE
+    detection:
+      method: sequence
+    cases:
+      - condition: a > 5

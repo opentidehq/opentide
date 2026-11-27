@@ -268,18 +268,6 @@ fn attack_pattern() -> &'static Regex {
     PATTERN.get_or_init(|| Regex::new(r"\b(?:TA\d{4}|T\d{4}(?:\.\d{3})?)\b").expect("ATT&CK id"))
 }
 
-#[expect(
-    clippy::expect_used,
-    reason = "a regex literal: an invalid pattern fails every test that reaches it"
-)]
-fn uuid_pattern() -> &'static Regex {
-    static PATTERN: OnceLock<Regex> = OnceLock::new();
-    PATTERN.get_or_init(|| {
-        Regex::new(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
-            .expect("UUID")
-    })
-}
-
 /// The ATT&CK page of a technique (`T1059`, `T1059.001`) or tactic
 /// (`TA0002`) id.
 pub fn attack_url(id: &str) -> Option<String> {
@@ -311,7 +299,7 @@ pub fn document_links(source: &str, workspace: &[IndexedObject]) -> Vec<TideLink
             });
         }
     }
-    for m in uuid_pattern().find_iter(source) {
+    for m in opentide_core::ids::finder().find_iter(source) {
         if own.as_deref() == Some(m.as_str()) {
             continue;
         }
@@ -347,7 +335,7 @@ fn own_uuid(source: &str) -> Option<(String, ByteSpan)> {
         if key != "uuid" {
             continue;
         }
-        let m = uuid_pattern().find(&line.text[to..])?;
+        let m = opentide_core::ids::finder().find(&line.text[to..])?;
         let start = line.start + to + m.start();
         return Some((
             m.as_str().to_string(),

@@ -37,7 +37,7 @@ pub use opentide_highlight::{HighlightResult, HighlightToken, SemanticTokens};
 pub use opentide_tide::{DocumentSymbol, ElasticTenant, IndexedObject};
 
 use opentide_highlight::{HighlightSpec, encode_lsp_semantic_tokens};
-use opentide_kql::Profile;
+use opentide_kql::Dialect;
 use opentide_tide::TideAnalyzeResult;
 
 // The README's example runs as a doctest, so the crates.io page cannot drift.
@@ -66,6 +66,23 @@ pub trait WorkspaceHost {
     fn indexed_objects(&self) -> Option<std::sync::Arc<[IndexedObject]>> {
         None
     }
+
+    /// The text of the Elastic platform configuration
+    /// ([`ELASTIC_CONFIGURATION`]) that [`elastic_tenants`] reads: by
+    /// default the first of [`documents`](Self::documents) at that path. A
+    /// host that holds many documents answers without copying them all.
+    fn elastic_configuration(&self) -> Option<String> {
+        self.documents()
+            .into_iter()
+            .find(|(path, _)| is_elastic_configuration(path))
+            .map(|(_, text)| text)
+    }
+}
+
+/// Whether `path` is the Elastic platform configuration
+/// ([`ELASTIC_CONFIGURATION`]) of a workspace.
+pub fn is_elastic_configuration(path: &str) -> bool {
+    path.replace('\\', "/").ends_with(ELASTIC_CONFIGURATION)
 }
 
 pub use opentide_tide::index_object;
@@ -127,10 +144,8 @@ pub const ELASTIC_CONFIGURATION: &str = ".opentide/configurations/platforms/elas
 /// Elastic tenants declared in the workspace, if the host supplies the
 /// configuration file.
 pub fn elastic_tenants(host: &dyn WorkspaceHost) -> Vec<ElasticTenant> {
-    host.documents()
-        .iter()
-        .find(|(path, _)| path.replace('\\', "/").ends_with(ELASTIC_CONFIGURATION))
-        .map(|(_, text)| opentide_tide::elastic_tenants(text))
+    host.elastic_configuration()
+        .map(|text| opentide_tide::elastic_tenants(&text))
         .unwrap_or_default()
 }
 
@@ -146,7 +161,7 @@ pub fn elastic_tenants(host: &dyn WorkspaceHost) -> Vec<ElasticTenant> {
 pub fn analyze(host: &dyn WorkspaceHost, request: AnalyzeRequest) -> AnalyzeResponse {
     match request.language {
         LanguageId::Kql => {
-            let r = opentide_kql::analyze(&request.text, Profile::Sentinel);
+            let r = opentide_kql::analyze(&request.text, Dialect::Sentinel);
             AnalyzeResponse {
                 diagnostics: r.diagnostics,
                 tokens: r.tokens,
@@ -264,6 +279,13 @@ pub fn analyze(host: &dyn WorkspaceHost, request: AnalyzeRequest) -> AnalyzeResp
                 symbols: r.symbols,
             }
         }
+        // `LanguageId` is non-exhaustive: a language this crate does not
+        // analyse yet has no findings, tokens or symbols.
+        _ => AnalyzeResponse {
+            diagnostics: Vec::new(),
+            tokens: Vec::new(),
+            symbols: Vec::new(),
+        },
     }
 }
 
@@ -369,11 +391,19 @@ pub fn analyze_tide_parsed(
 #[derive(Debug, Clone)]
 pub struct QueryRequest {
     pub language: LanguageId,
-    /// The detection platform the query is for, as a `configurations` key
-    /// (`microsoft_defender` picks the Defender KQL schema,
-    /// `carbon_black_cloud` the Carbon Black Lucene dialect, `graylog` the
-    /// Graylog one, and `exabeam` the Exabeam `rule` profile of a
-    /// correlation-rule sequence). `None` for the language's default.
+    /// The detection platform the query is for, as a `configurations` key.
+    /// It names the language's dialect, the product's catalogs and checks,
+    /// and nothing else (ADR 0015 §4): `microsoft_defender` picks the
+    /// Defender KQL schema, `carbon_black_cloud` the Carbon Black Lucene
+    /// dialect, `graylog` the Graylog one, and `harfanglab` or `bitdefender`
+    /// that product's YARA checks. `None` for the language's default.
+    ///
+    /// The query is checked as a file of its language is, whatever the
+    /// platform: an Exabeam, CQL or Datadog query is a search, never a
+    /// correlation or detection rule's query, and a YARA-L text is a rule
+    /// when it declares one. A query in a rule block is checked as one with
+    /// its object (the facade's `Workspace::validate` and `Workspace::lint`),
+    /// which knows the block it sits in.
     pub platform: Option<String>,
     /// Elastic stack the query must run on (`"9.5"`, `"serverless"`), for
     /// ES|QL. `None`, or a value that does not parse, checks every supported
@@ -386,41 +416,31 @@ pub struct QueryRequest {
 pub fn analyze_query(request: &QueryRequest) -> Vec<Diagnostic> {
     let platform = request.platform.as_deref().unwrap_or("");
     match request.language {
-        LanguageId::Kql => opentide_kql::analyze(&request.text, kql_profile(platform)).diagnostics,
-        // `platform: crowdstrike` is the query of a CrowdStrike rule block,
-        // which deploys as a Next-Gen SIEM correlation rule. A hunt search is
-        // not one: [`analyze_queries`] checks it without the correlation rules.
-        LanguageId::Cql if platform == "crowdstrike" => {
-            opentide_cql::analyze_with(&request.text, &opentide_cql::Context::CORRELATION_RULE)
+        LanguageId::Kql => {
+            opentide_kql::analyze(&request.text, Dialect::for_platform(platform)).diagnostics
+        }
+        // A query on its own is a search, as a file of its language is: the
+        // profile comes from where the text sits, never from the platform
+        // (ADR 0015 §4). A `.cql` file is plain LogScale, without the
+        // correlation rule's restrictions; a `.exabeam` or `.datadog` file is
+        // the `search` profile. A rule block's query is checked as a rule by
+        // `analyze` on its object, by its field path.
+        LanguageId::Cql => opentide_cql::analyze(&request.text).diagnostics,
+        LanguageId::Exabeam => {
+            opentide_exabeam::analyze_with(&request.text, &opentide_exabeam::Context::SEARCH)
                 .diagnostics
         }
-        // `platform: exabeam` is a correlation-rule sequence query (the
-        // `rule` profile); without it, a search.
-        LanguageId::Exabeam => {
-            let ctx = if platform == "exabeam" {
-                opentide_exabeam::Context::RULE
-            } else {
-                opentide_exabeam::Context::SEARCH
-            };
-            opentide_exabeam::analyze_with(&request.text, &ctx).diagnostics
-        }
-        // `platform: datadog` is a detection rule's query (the `rule`
-        // profile); without it, a search.
         LanguageId::Datadog => {
-            let ctx = if platform == "datadog" {
-                opentide_datadog::Context::RULE
-            } else {
-                opentide_datadog::Context::SEARCH
-            };
-            opentide_datadog::analyze_with(&request.text, &ctx).diagnostics
+            opentide_datadog::analyze_with(&request.text, &opentide_datadog::Context::SEARCH)
+                .diagnostics
         }
         LanguageId::Lucene => {
             let dialect = opentide_lucene::Dialect::for_platform(platform);
             opentide_lucene::analyze_dialect(&request.text, dialect).diagnostics
         }
-        // `platform: harfanglab` or `bitdefender`: the platform's YARA profile.
+        // `platform: harfanglab` or `bitdefender`: the platform's YARA dialect.
         LanguageId::Yara => {
-            let ctx = opentide_yara::Profile::for_platform(platform)
+            let ctx = opentide_yara::Dialect::for_platform(platform)
                 .map(opentide_yara::Context::for_profile)
                 .unwrap_or_default();
             opentide_yara::analyze_with(&request.text, &ctx).diagnostics
@@ -748,16 +768,6 @@ pub fn semantic_tokens(language: LanguageId, text: &str) -> SemanticTokens {
     }
 }
 
-/// The KQL profile of a platform: Defender's schema for
-/// `microsoft_defender`, else Sentinel's.
-fn kql_profile(platform: &str) -> Profile {
-    if platform == "microsoft_defender" {
-        Profile::Defender
-    } else {
-        Profile::Sentinel
-    }
-}
-
 /// Hover at byte `offset` of `text`. A host converts the editor's UTF-16
 /// position once (`opentide_core::position_to_offset`); a byte-order mark at
 /// the start counts as bytes, as in [`completions`].
@@ -784,10 +794,10 @@ pub fn hover(
     }
 }
 
-/// Hover inside one query language. `platform` selects the KQL profile.
+/// Hover inside one query language. `platform` selects the KQL dialect.
 fn query_hover(language: LanguageId, text: &str, offset: usize, platform: &str) -> Option<String> {
     match language {
-        LanguageId::Kql => opentide_kql::hover(text, offset, kql_profile(platform)),
+        LanguageId::Kql => opentide_kql::hover(text, offset, Dialect::for_platform(platform)),
         LanguageId::Spl => opentide_spl::hover(text, offset),
         LanguageId::Esql => opentide_esql::hover(text, offset).or_else(|| ecs::hover(text, offset)),
         LanguageId::Eql => opentide_eql::hover(text, offset).or_else(|| ecs::hover(text, offset)),
@@ -796,7 +806,10 @@ fn query_hover(language: LanguageId, text: &str, offset: usize, platform: &str) 
         }
         // Carbon Black has its own fields (#162), and Graylog its message
         // fields: no ECS.
-        LanguageId::Lucene if matches!(platform, "carbon_black_cloud" | "graylog") => {
+        LanguageId::Lucene
+            if opentide_lucene::Dialect::for_platform(platform)
+                != opentide_lucene::Dialect::Elastic =>
+        {
             opentide_lucene::hover_dialect(
                 text,
                 offset,
@@ -816,6 +829,8 @@ fn query_hover(language: LanguageId, text: &str, offset: usize, platform: &str) 
         LanguageId::Yaral => opentide_yaral::editor::hover(text, offset),
         // Configuration hover needs the file's path: configuration_hover.
         LanguageId::TideYaml | LanguageId::Config => None,
+        // `LanguageId` is non-exhaustive: no hover for a language added later.
+        _ => None,
     }
 }
 
@@ -872,9 +887,12 @@ fn query_completions(
     platform: &str,
 ) -> Vec<CompletionItem> {
     match language {
-        LanguageId::Kql => opentide_kql::completions(text, offset, kql_profile(platform)),
+        LanguageId::Kql => opentide_kql::completions(text, offset, Dialect::for_platform(platform)),
         LanguageId::Spl => opentide_spl::completions(text, offset),
-        LanguageId::Lucene if matches!(platform, "carbon_black_cloud" | "graylog") => {
+        LanguageId::Lucene
+            if opentide_lucene::Dialect::for_platform(platform)
+                != opentide_lucene::Dialect::Elastic =>
+        {
             opentide_lucene::completions_dialect(
                 text,
                 offset,
@@ -901,6 +919,8 @@ fn query_completions(
         LanguageId::Yaral => opentide_yaral::editor::completions(text, offset),
         // Configuration completion needs the file's path: configuration_completions.
         LanguageId::TideYaml | LanguageId::Config => Vec::new(),
+        // `LanguageId` is non-exhaustive: no completion for a language added later.
+        _ => Vec::new(),
     }
 }
 
@@ -945,7 +965,9 @@ fn query_signature_help(
     platform: &str,
 ) -> Option<SignatureHelp> {
     match language {
-        LanguageId::Kql => opentide_kql::signature_help(text, offset, kql_profile(platform)),
+        LanguageId::Kql => {
+            opentide_kql::signature_help(text, offset, Dialect::for_platform(platform))
+        }
         LanguageId::Spl => opentide_spl::signature_help(text, offset),
         LanguageId::Esql => opentide_esql::signature_help(text, offset),
         LanguageId::Eql => opentide_eql::signature_help(text, offset),
@@ -959,12 +981,100 @@ fn query_signature_help(
         | LanguageId::Datadog
         | LanguageId::TideYaml
         | LanguageId::Config => None,
+        // `LanguageId` is non-exhaustive: no signature help for a language
+        // added later.
+        _ => None,
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A query in `language` that parses, and one that does not.
+    /// `LanguageId` is non-exhaustive, so this `match` and the ones in this
+    /// crate have a wildcard arm: a language added to `QUERY_LANGUAGES`
+    /// panics here until it has samples, and then fails
+    /// [`every_query_language_is_analysed`] until its arms are written.
+    fn samples(language: LanguageId) -> (&'static str, &'static str) {
+        match language {
+            LanguageId::Kql => (
+                "SecurityEvent | where EventID == 4688 | take 1",
+                "SecurityEvent | where (",
+            ),
+            LanguageId::Spl => (
+                "index=main | stats count by host",
+                "index=main | stats count by (",
+            ),
+            LanguageId::Esql => ("FROM logs-* | WHERE x == 1", "FROM logs-* | WHERE ("),
+            LanguageId::Eql => (
+                "process where process.name : \"cmd.exe\"",
+                "process where (",
+            ),
+            LanguageId::Kuery => (
+                "event.category:process and not user.name:SYSTEM",
+                "event.category:(process",
+            ),
+            LanguageId::Lucene => (
+                "event.category:process AND process.name:cmd",
+                "event.category:(process",
+            ),
+            LanguageId::Falco => (
+                "spawned_process and proc.name = bash",
+                "spawned_process and (",
+            ),
+            LanguageId::Cql => (
+                "#event_simpleName=ProcessRollup2 | count()",
+                "#event_simpleName=ProcessRollup2 | count(",
+            ),
+            LanguageId::Exabeam => (
+                "activity_type:\"process-create\"",
+                "activity_type:(\"process-create\"",
+            ),
+            LanguageId::Yara => (
+                "rule demo { strings: $a = \"cmd.exe\" condition: $a }",
+                "rule demo { condition: ( }",
+            ),
+            LanguageId::Yaral => (
+                "rule demo { meta: author = \"a\" events: $e.metadata.event_type = \"PROCESS_LAUNCH\" condition: $e }",
+                "rule demo { events: ( }",
+            ),
+            LanguageId::Datadog => ("source:okta @evt.outcome:FAILURE", "source:(okta"),
+            other => panic!("give {other} samples in samples()"),
+        }
+    }
+
+    /// Every query language reaches its engine through each `match` on
+    /// `LanguageId` here: a missing arm falls into a wildcard that reports
+    /// nothing, highlights nothing and completes nothing.
+    #[test]
+    fn every_query_language_is_analysed() {
+        let host = MemoryWorkspace { files: Vec::new() };
+        for &language in LanguageId::QUERY_LANGUAGES {
+            let (valid, broken) = samples(language);
+            assert!(
+                !highlight(language, valid).tokens.is_empty(),
+                "{language}: no tokens"
+            );
+            let response = analyze(
+                &host,
+                AnalyzeRequest {
+                    uri: "memory".into(),
+                    language,
+                    text: broken.to_string(),
+                },
+            );
+            assert!(
+                !response.diagnostics.is_empty(),
+                "{language}: {broken:?} reports nothing"
+            );
+            assert!(
+                !completions(&host, language, valid, valid.len()).is_empty()
+                    || !completions(&host, language, "", 0).is_empty(),
+                "{language}: no completion"
+            );
+        }
+    }
 
     #[test]
     fn memory_workspace_indexes_objects() {

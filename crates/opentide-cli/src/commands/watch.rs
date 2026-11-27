@@ -56,15 +56,12 @@ pub fn describe(run: &WatchRun) -> String {
             run.elapsed.as_secs_f64()
         );
     }
-    let summary = Summary {
-        objects: run.objects,
-        errors: run.errors,
-        warnings: run.warnings,
-        files: run.files,
-        warning_files: 0,
-        queries: None,
-        fixable: run.fixable,
-    };
+    let mut summary = Summary::default();
+    summary.objects = run.objects;
+    summary.errors = run.errors;
+    summary.warnings = run.warnings;
+    summary.files = run.files;
+    summary.fixable = run.fixable;
     outcome_line(&summary, run.failed, run.elapsed.as_secs_f64(), None)
 }
 
@@ -177,7 +174,7 @@ pub fn run(
         validate,
         args.strict,
         args.selection.is_empty(),
-        &STRICT_EXEMPT_WARNINGS,
+        STRICT_EXEMPT_WARNINGS,
     )
     // `--strict` fails a full run that finds no object, as one run does.
     .requiring_objects(

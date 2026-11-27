@@ -1,16 +1,8 @@
 //! The parser on every EQL file of the corpora and every line of one (every tree is lossless),
 //! and on hand-written cases of each construct, which keep the verdicts the tree-sitter engine
-//! gave them when the parser replaced it. The parser is private to the crate, so this test
-//! includes its source.
+//! gave them when the parser replaced it.
 
-#![expect(dead_code, reason = "the included modules are used in part")]
-
-#[path = "../src/lexer.rs"]
-mod lexer;
-#[path = "../src/parser.rs"]
-mod parser;
-#[path = "../src/syntax.rs"]
-mod syntax;
+use opentide_eql::{parser, syntax};
 
 use std::path::{Path, PathBuf};
 

@@ -1117,8 +1117,11 @@ jobs:
 
 
   # The opentide facade crate (UC-5.1, #836), when its public API changes
-  # (crates/opentide/): its docs with every feature, as docs.rs builds them,
-  # and its API against the branch it merges into (cargo-semver-checks). Its
+  # (crates/opentide/, or the sources of a crate it re-exports from:
+  # FACADE_SOURCES in scripts/ci/changes.py): its docs with every feature, as
+  # docs.rs builds them, and its API against the branch it merges into
+  # (cargo-semver-checks, and scripts/ci/facade_semver.py for what it
+  # re-exports). Its
   # tests and doctests run in `build` with the tests'
   # features (every feature but `stubs`, which `native`'s stubs check builds).
   facade:
@@ -1204,6 +1207,14 @@ jobs:
             # crate it is not asked for by name, and still exits 0.
             cargo semver-checks -p opentide --manifest-path crates/opentide/Cargo.toml --all-features \
               --baseline-root "${RUNNER_TEMP}/opentide-baseline/crates/opentide"
+            # The step above reads the facade's rustdoc JSON alone, where an
+            # item it re-exports from another crate is never present
+            # (cargo-semver-checks#638): #1902 added a variant to the exhaustive
+            # LanguageId (opentide-core) and passed. This checks, in each crate
+            # the facade re-exports from, what the facade exposes (#1911).
+            python3 scripts/ci/facade_semver.py \
+              --baseline-root "${RUNNER_TEMP}/opentide-baseline" \
+              --work-dir "${RUNNER_TEMP}/facade-semver"
           else
             echo "::notice::crates/opentide is new in this change: no baseline API to check against"
           fi

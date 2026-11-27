@@ -8,6 +8,10 @@ the Rust connector's tests (``crates/opentide-connectors/tests/carbon_black.rs``
 which must send what this sent, byte for byte. Each step's outcome is printed, one
 JSON line each, for those tests' expectations.
 
+The ``deploy`` scenario's cassette no longer matches this client: it was re-recorded
+from the Rust connector (#1932), which reads the watchlists once where this client
+reads them twice. Re-recording it from this client brings the duplicate GET back.
+
 The SDK stamps a report with ``int(time.time())`` when it is built or updated; the
 deploy scenario fixes that clock at :data:`NOW`, as the Rust test passes it.
 

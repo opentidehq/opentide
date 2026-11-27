@@ -441,8 +441,9 @@ impl Profiles {
     }
 }
 
-/// One query on its own (a query file), in its own coordinates, with
-/// `platform`'s profile when one is given (`check_query`), with the
+/// One query on its own (a query file), in its own coordinates, under
+/// `platform`'s dialect when one is given (`check_query`), checked as a
+/// file of its language is, whatever the platform, with the
 /// datasets in use on this thread: [`Profiles::check_query`] checks it with
 /// a workspace's.
 pub fn check_query_text(
@@ -849,13 +850,7 @@ pub fn decode(bytes: &[u8]) -> Result<String, String> {
 
 /// `text` with `\r\n` and a lone `\r` read as `\n`, as a text-mode read reads
 /// a file: the positions the CLI reports count lines so.
-pub fn universal_newlines(text: &str) -> Cow<'_, str> {
-    if text.contains('\r') {
-        Cow::Owned(text.replace("\r\n", "\n").replace('\r', "\n"))
-    } else {
-        Cow::Borrowed(text)
-    }
-}
+pub use opentide_core::text::universal_newlines;
 
 /// An engine finding in the CLI's coordinates: lines and columns from 1,
 /// columns in code points (`opentide tui` places the language server's so).

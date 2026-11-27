@@ -20,9 +20,9 @@ Arguments:
 
 Options:
       --platform <PLATFORM>
-          Detection platform: sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops
+          Detection platform: sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops, datadog
           
-          [possible values: sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops]
+          [possible values: sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops, datadog]
 
       --tenant <TENANT>
           Run on this tenant (repeatable), or 'all'. Default: the only tenant configured

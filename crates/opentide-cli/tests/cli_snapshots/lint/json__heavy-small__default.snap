@@ -7,26 +7,28 @@ exit: 0
 view: diagnostics (code, severity, file, line, column and counts; a warning's text; log events by name; no other message text)
 
 ━━━ stdout · json
-findings: 7
-  microsoft_defender_unprojected_output | info | objects/rules/covert-beacon-rule-0015.yaml | 59 | 9
-  microsoft_defender_unprojected_output | info | objects/rules/covert-implant-rule-0028.yaml | 42 | 9
-  microsoft_defender_unprojected_output | info | objects/rules/encoded-injection-rule-0046.yaml | 75 | 9
-  microsoft_defender_unprojected_output | info | objects/rules/hidden-pivot-rule-0041.yaml | 43 | 9
+findings: 9
+  microsoft_defender_unprojected_output | info | objects/rules/covert-exfiltration-rule-0025.yaml | 74 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/covert-implant-rule-0016.yaml | 36 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/elevated-spray-rule-0011.yaml | 63 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/encoded-tunnel-rule-0030.yaml | 61 | 9
   microsoft_defender_unprojected_output | info | objects/rules/lateral-pivot-rule-0002.yaml | 60 | 9
-  microsoft_defender_unprojected_output | info | objects/rules/rapid-relay-rule-0007.yaml | 75 | 9
-  microsoft_defender_unprojected_output | info | objects/rules/remote-tunnel-rule-0020.yaml | 56 | 9
-count: 7
+  microsoft_defender_unprojected_output | info | objects/rules/persistent-beacon-rule-0004.yaml | 65 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/remote-pivot-rule-0046.yaml | 57 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/silent-downgrade-rule-0044.yaml | 60 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/staged-spray-rule-0032.yaml | 60 | 9
+count: 9
 exit_code: 0
 fixed: 0
 schema_version: 1
 summary.errors: 0
 summary.files: 110
-summary.findings: 7
+summary.findings: 9
 summary.fixed: 0
-summary.notes: 7
+summary.notes: 9
 summary.warnings: 0
 checks[]: 5 items
-findings[]: 7 items
+findings[]: 9 items
 next_actions[]: 0 items
 ok: true x1
 status: issues x1

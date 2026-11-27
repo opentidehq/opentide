@@ -305,12 +305,36 @@ exit: 0
       "meaning": "A Datadog `CIDR()` call does not name an `@attribute` first, has no block, or has an argument that is not an IPv4 or IPv6 CIDR block."
     },
     {
+      "code": "datadog_concurrent_modification",
+      "meaning": "The Datadog rule changed between deploy's read and its update."
+    },
+    {
+      "code": "datadog_condition",
+      "meaning": "A case's condition does not parse, names an unknown query, or does not suit the method."
+    },
+    {
+      "code": "datadog_condition_mixed",
+      "meaning": "A condition mixes `&&` and `||`, whose precedence Datadog does not document."
+    },
+    {
+      "code": "datadog_create_unconfirmed",
+      "meaning": "A Datadog create got no answer, or a server error, so it may or may not have happened."
+    },
+    {
       "code": "datadog_curly_quote",
       "meaning": "A Datadog search holds a curly quote, which is not a quote: the words around it are searched as separate terms."
     },
     {
       "code": "datadog_detached_operator",
       "meaning": "A Datadog exclusion `-` is followed by a space."
+    },
+    {
+      "code": "datadog_detection_option",
+      "meaning": "A `detection` key the method does not take, or `new_value` without `forget_after`."
+    },
+    {
+      "code": "datadog_duration",
+      "meaning": "A duration is not one of the values its key accepts."
     },
     {
       "code": "datadog_full_text_in_rule",
@@ -321,8 +345,20 @@ exit: 0
       "meaning": "A lower-case `and`, `or` or `not` stands between field clauses or in a value group, where Datadog reads it as a search term, not an operator."
     },
     {
+      "code": "datadog_measure",
+      "meaning": "A query sets more than one measure, or `new_value` does not match the method."
+    },
+    {
+      "code": "datadog_method_unsupported",
+      "meaning": "`detection.method` is not a detection method of `platform::datadog::1.0`."
+    },
+    {
       "code": "datadog_mixed_boolean",
       "meaning": "A Datadog search puts OR beside an AND, written or implied, without parentheses: AND binds tighter, as VRL reads it (unverified on Cloud SIEM)."
+    },
+    {
+      "code": "datadog_notification_alias",
+      "meaning": "A case's `notify` names an alias the tenant does not define."
     },
     {
       "code": "datadog_parse_error",
@@ -333,16 +369,68 @@ exit: 0
       "meaning": "A Datadog search uses Observability Pipelines syntax (`_exists_:`, `_missing_:`, a quoted field name), which log search does not read the same way."
     },
     {
+      "code": "datadog_query_name",
+      "meaning": "A query name is not `[a-z][a-z0-9_]*`, is a duplicate, or is set on a `new_value` query."
+    },
+    {
       "code": "datadog_range",
       "meaning": "A Datadog range is malformed (a missing bound, a lower-case `to`), or mixes an inclusive and an exclusive bound."
+    },
+    {
+      "code": "datadog_rate_limited",
+      "meaning": "Datadog's rate limit held after the waits a deploy allows."
     },
     {
       "code": "datadog_regex",
       "meaning": "A Datadog search term holds `~` or `^`: the search syntax has no regular expression, fuzzy or boost operator."
     },
     {
+      "code": "datadog_request_failed",
+      "meaning": "Datadog answered a rule's request with an error other than a refusal of the rule."
+    },
+    {
+      "code": "datadog_rule_default",
+      "meaning": "The id a deployment state names is a Datadog default rule, which opentide never changes."
+    },
+    {
+      "code": "datadog_rule_invalid",
+      "meaning": "Datadog refused the rule: its validation, or a write, answered `400`."
+    },
+    {
+      "code": "datadog_rule_missing",
+      "meaning": "The rule a deployment state names no longer exists on the Datadog tenant."
+    },
+    {
+      "code": "datadog_rule_recreated",
+      "meaning": "The rule a deployment state names was gone, and deploy created it again."
+    },
+    {
+      "code": "datadog_severity",
+      "meaning": "A case severity is not one of Datadog's five statuses."
+    },
+    {
+      "code": "datadog_signal_group_by",
+      "meaning": "A `signal.group_by` field is in no query's `group_by`."
+    },
+    {
+      "code": "datadog_site",
+      "meaning": "A tenant's `site` is not a Datadog site, and no `api_url` is set."
+    },
+    {
       "code": "datadog_symbol_operator",
       "meaning": "`&&` or `||` stands between Datadog search clauses: Datadog's docs list them as characters to escape; write AND or OR."
+    },
+    {
+      "code": "datadog_tag",
+      "meaning": "A tag Datadog would refuse or rewrite."
+    },
+    {
+      "code": "datadog_tenant_unauthorized",
+      "meaning": "Datadog refused the tenant's API or application key."
+    },
+    {
+      "code": "datadog_tenant_unreachable",
+      "meaning": "The Datadog tenant did not answer."
     },
     {
       "code": "datadog_unescaped_colon",
@@ -359,6 +447,10 @@ exit: 0
     {
       "code": "datadog_wildcard_in_phrase",
       "meaning": "A `*` or `?` touches a word inside a quoted phrase, where it is punctuation, not a wildcard."
+    },
+    {
+      "code": "datadog_window_order",
+      "meaning": "`detection.window` is longer than `signal.keep_alive` or `signal.max_duration`."
     },
     {
       "code": "defender_output_columns",
@@ -2085,13 +2177,13 @@ exit: 0
   "duration_ms": 0,
   "exit_code": 0,
   "failure": null,
-  "message": "518 diagnostic codes",
+  "message": "541 diagnostic codes",
   "next_actions": [],
   "ok": true,
   "schema_version": 1,
   "status": "completed",
   "summary": {
-    "codes": 518
+    "codes": 541
   }
 }
 

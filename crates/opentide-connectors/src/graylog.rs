@@ -1286,8 +1286,7 @@ fn rule_uuid(definition: &opentide_compile::json::Object, rule_id: &str) -> Opti
     let after = tags.iter().position(|tag| *tag == "opentide")? + 1;
     tags.get(after)
         .and_then(|tag| tag.strip_prefix("opentide."))
-        .filter(|rest| uuid::Uuid::parse_str(rest).is_ok())
-        .map(str::to_owned)
+        .and_then(opentide_core::ids::canonical)
 }
 
 /// The tenant's version (`GET /api/system`).
@@ -1634,6 +1633,44 @@ mod tests {
         assert_eq!(rows.len(), 2);
         assert!(!rows[0].contains_key("user"));
         assert_eq!(rows[1]["user"], Json::Str("bob".to_owned()));
+    }
+
+    /// The tag after the bare `opentide` one is read as any UUID spelling
+    /// and returned canonical (lower case, hyphenated), as a rule's UUID is
+    /// recorded; one that is no UUID names nothing.
+    #[test]
+    fn the_rule_uuid_from_a_tag_is_canonical() {
+        let with_tags = |tags: &[&str]| {
+            let mut definition = opentide_compile::json::Object::new();
+            definition.insert(
+                "tags".into(),
+                Json::Array(
+                    tags.iter()
+                        .map(|tag| Json::Str((*tag).to_owned()))
+                        .collect(),
+                ),
+            );
+            definition
+        };
+        let canonical = "0000000a-0000-4000-8003-00000000000b";
+        for written in [
+            canonical,
+            "0000000A-0000-4000-8003-00000000000B",
+            "{0000000a-0000-4000-8003-00000000000b}",
+            " 0000000a-0000-4000-8003-00000000000b",
+            "uuid:0000000a00004000800300000000000b",
+        ] {
+            let tag = format!("opentide.{written}");
+            assert_eq!(
+                rule_uuid(&with_tags(&["opentide", &tag]), "other").as_deref(),
+                Some(canonical),
+                "{tag}"
+            );
+        }
+        assert_eq!(
+            rule_uuid(&with_tags(&["opentide", "opentide.é-not-a-uuid"]), "other"),
+            None
+        );
     }
 
     #[test]

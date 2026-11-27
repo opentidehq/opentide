@@ -118,9 +118,15 @@ opentide generate docs index
 
 ### Changed-object baseline
 
-`--changed` and `generate inflight` resolve the same baseline, in order: the current branch's upstream, then `origin/development`, `origin/main`, `origin/master`, then the local `development`, `main`, `master`. The current branch is never its own baseline. A single-branch repository with no upstream falls back to `HEAD`, so uncommitted and untracked object files still count as changed.
+`--changed` and `generate inflight` resolve the same baseline, in order: the current branch's upstream, then `origin/development`, `origin/main`, `origin/master`, then the local `development`, `main`, `master`. The current branch is never its own baseline. A full single-branch clone with no other baseline falls back to `HEAD`, so uncommitted and untracked object files still count as changed.
 
-Without a git worktree or without a first commit, `generate docs --changed` fails with a structured result (`status: failed`, exit `1`) instead of raising a `CalledProcessError`; `generate inflight` logs a warning and writes no shards.
+`generate docs --changed` fails with a structured result (`status: failed`, exit `1`, an `error` that starts `--changed could not read the git baseline:`) rather than guess which files changed when:
+
+- there is no git worktree, or no first commit;
+- the clone is shallow and does not hold the merge base with the baseline, or holds no ref it can tell is the default branch (`origin/HEAD`, `development`, `main` or `master`, or the branch's upstream when it tracks another branch; `actions/checkout` fetches one commit of one ref by default). The message says to check out the full history: `fetch-depth: 0` on GitHub Actions, `GIT_DEPTH: "0"` on GitLab, `fetchDepth: 0` on Azure Pipelines;
+- git cannot read a baseline commit, tree or file, or an object folder or file in the work tree cannot be read.
+
+`generate inflight` logs a warning and writes no shards instead.
 
 Subcommands `rules`, `objectives`, `threats`, and `index` accept the same `--output` and `--flavor` flags.
 

@@ -154,11 +154,7 @@ pub fn append_gitignore_lines(
     if missing.is_empty() {
         return Ok(Vec::new());
     }
-    let newline = if existing.contains("\r\n") {
-        "\r\n"
-    } else {
-        "\n"
-    };
+    let newline = opentide_core::text::newline_of(&existing);
     let lead = if existing.is_empty() || existing.ends_with(['\n', '\r']) {
         ""
     } else {
@@ -277,11 +273,7 @@ pub fn enable_platform_toml(content: &str) -> Result<String, toml_edit::TomlErro
     }
     let written = document.to_string();
     // A key toml_edit adds ends in `\n`: a CRLF file keeps CRLF throughout.
-    Ok(if content.contains("\r\n") {
-        written.replace("\r\n", "\n").replace('\n', "\r\n")
-    } else {
-        written
-    })
+    Ok(opentide_core::text::with_newlines_of(written, content))
 }
 
 /// Sets `enabled = true` in `table`, the value's comments and spacing kept;
@@ -470,7 +462,7 @@ fn readme_no_platform() -> String {
 /// [`readme`] writes; `None` when nothing is missing or the section is not
 /// that list (a heading other than the last, a line other than `- <platform>`).
 fn readme_with_platforms(text: &str, chosen: &[String]) -> Option<String> {
-    let newline = if text.contains("\r\n") { "\r\n" } else { "\n" };
+    let newline = opentide_core::text::newline_of(text);
     let heading = format!("{newline}## Platforms{newline}{newline}");
     let at = text.rfind(&heading)? + heading.len();
     let section = &text[at..];
@@ -686,11 +678,7 @@ fn organisation(stage: &mut Stage, target: &Path, org: &str) -> Result<Organisat
     document["name"] = toml_edit::value(org);
     let written = document.to_string();
     // A key toml_edit adds ends in `\n`: a CRLF file keeps CRLF throughout.
-    let written = if text.contains("\r\n") {
-        written.replace("\r\n", "\n").replace('\n', "\r\n")
-    } else {
-        written
-    };
+    let written = opentide_core::text::with_newlines_of(written, &text);
     if written == text {
         return Ok(Organisation::Unchanged);
     }

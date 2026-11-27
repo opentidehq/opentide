@@ -419,13 +419,7 @@ fn bare_uuid(id: &str) -> String {
 /// any other id (`OPENTIDE-<UUID>`, a braced uuid, a bare uuid).
 pub fn uuid_of_rule_id(id: &str) -> Option<String> {
     let rest = id.strip_prefix(RULE_ID_PREFIX)?;
-    let canonical = canonical_uuid(rest).to_ascii_lowercase();
-    let hex = canonical.chars().filter(|c| *c != '-').count();
-    (canonical.len() == 36
-        && hex == 32
-        && canonical.chars().all(|c| c == '-' || c.is_ascii_hexdigit())
-        && rule_id_of(&canonical) == id)
-        .then_some(canonical)
+    opentide_core::ids::canonical(rest).filter(|canonical| rule_id_of(canonical) == id)
 }
 
 /// The create body: `id` first, then the update `body`.

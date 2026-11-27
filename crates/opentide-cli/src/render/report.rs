@@ -222,7 +222,7 @@ fn fingerprint(diagnostic: &Diagnostic, path: &str, seen: &mut HashMap<String, u
     ]
     .join("\u{1f}");
     let occurrence = seen.entry(key.clone()).or_insert(0);
-    let digest = crate::digest::sha256_hex(format!("{key}\u{1f}{occurrence}").as_bytes());
+    let digest = opentide_core::text::sha256_hex(format!("{key}\u{1f}{occurrence}").as_bytes());
     *occurrence += 1;
     digest
 }

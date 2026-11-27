@@ -51,6 +51,7 @@ fn constraint_codes_read_every_model_that_reports_one() {
         reporting,
         [
             "objects/platform/bitdefender/checks.rs",
+            "objects/platform/datadog.rs",
             "objects/platform/exabeam.rs",
             "objects/platform/google_secops.rs",
             "objects/platform/microsoft_defender.rs",

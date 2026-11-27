@@ -406,6 +406,45 @@ fn an_unknown_stack_or_object_type_is_refused() {
     );
 }
 
+/// #1938: `search` looks up a query written as a version 4 UUID whatever
+/// its variant digit (`metadata.uuid` is any v4 UUID): it used to need
+/// `[89ab]` there and searched every other v4 UUID as text, so a rule whose
+/// description mentions the threat came back too.
+#[test]
+fn search_looks_up_a_v4_uuid_whatever_its_variant_digit() {
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = corpus(scratch.path());
+    for threat in [
+        "44444444-4444-4444-0444-444444444444",
+        "55555555-5555-4555-c555-555555555555",
+    ] {
+        std::fs::write(
+            ws.join("objects/threats/variant.yaml"),
+            format!(
+                "name: Variant\nmetadata: {{uuid: {threat}, schema: threat::1.0}}\nthreat:\n  \
+                 mitre_attack: [T1003]\n"
+            ),
+        )
+        .unwrap();
+        std::fs::write(
+            ws.join("objects/rules/mentions.yaml"),
+            format!(
+                "name: Mentions\nmetadata: {{uuid: 66666666-6666-4666-8666-666666666666, schema: \
+                 rule::1.0}}\ndescription: Follows up threat {threat}\n"
+            ),
+        )
+        .unwrap();
+        let hits = call(&server(&ws), "search", json!({"query": threat}));
+        let found: Vec<&str> = hits
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|hit| hit["uuid"].as_str())
+            .collect();
+        assert_eq!(found, [threat], "{hits}");
+    }
+}
+
 /// A live `validate_query` answers the command's document: `status` says it
 /// failed, and no `_exit_code` is added (smoke C7).
 #[test]
@@ -1254,6 +1293,27 @@ fn a_tool_that_fails_reports_is_error_and_one_that_finds_something_does_not() {
         json!({"query": "SecurityEvent | where EventID == 4688", "platform": "sentinel"}),
     );
     assert_eq!(valid["valid"], true, "{valid}");
+    // A query is checked as a file of its language is: an Exabeam search with
+    // Search's operators, and plain LogScale after `correlate()`, are valid
+    // under their platforms (#1912, ADR 0015 §4).
+    for (query, platform) in [
+        (
+            "SELECT DISTINCT user, src_ip WHERE vendor:\"Microsoft\"",
+            "exabeam",
+        ),
+        (
+            "correlate(A: { #event_simpleName=UserLogon }, B: { #event_simpleName=ProcessRollup2 | aid <=> A.aid }, within=10m) | groupBy(aid)",
+            "crowdstrike",
+        ),
+    ] {
+        let search = call(
+            &server,
+            "validate_query",
+            json!({"query": query, "platform": platform}),
+        );
+        assert_eq!(search["valid"], true, "{search}");
+        assert_eq!(search["diagnostics"], json!([]), "{search}");
+    }
     let preview = call(
         &server,
         "deploy_rule",

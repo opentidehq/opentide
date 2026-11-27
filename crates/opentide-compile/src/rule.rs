@@ -80,29 +80,11 @@ impl Rule {
     }
 }
 
-/// A UUID in its canonical form: lowercase, hyphenated (surrounding blanks,
-/// braces and a `urn:uuid:` prefix dropped). Text that is not a UUID stays as
-/// written.
+/// A UUID in its canonical form: lowercase, hyphenated, read as
+/// [`opentide_core::ids::canonical`] reads it. Text that is not a UUID stays
+/// as written.
 pub fn canonical_uuid(text: &str) -> String {
-    let trimmed = text.trim();
-    let bare = trimmed
-        .strip_prefix("urn:uuid:")
-        .unwrap_or(trimmed)
-        .trim_start_matches('{')
-        .trim_end_matches('}');
-    let hex: String = bare.chars().filter(|c| *c != '-').collect();
-    if hex.len() != 32 || !hex.chars().all(|c| c.is_ascii_hexdigit()) {
-        return text.to_owned();
-    }
-    let hex = hex.to_ascii_lowercase();
-    format!(
-        "{}-{}-{}-{}-{}",
-        &hex[0..8],
-        &hex[8..12],
-        &hex[12..16],
-        &hex[16..20],
-        &hex[20..32]
-    )
+    opentide_core::ids::canonical(text).unwrap_or_else(|| text.to_owned())
 }
 
 /// The codes a compile failure carries, each with its `opentide explain` page
