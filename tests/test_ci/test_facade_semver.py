@@ -135,7 +135,12 @@ def test_the_facade_re_exports_are_found_by_their_defining_crate() -> None:
         },
         "external_crates": {"7": {"name": "opentide_core"}},
     }
-    assert facade_semver.reexports(facade) == {"opentide_core": {("LanguageId",), ("codes",)}}
+    found = facade_semver.reexports(facade)
+    assert found == {
+        ("LanguageId",): ("opentide_core", ("LanguageId",)),
+        ("codes",): ("opentide_core", ("codes",)),
+    }
+    assert facade_semver.by_crate(found) == {"opentide_core": {("LanguageId",), ("codes",)}}
 
 
 def test_only_what_the_facade_exposes_is_kept() -> None:
@@ -151,3 +156,85 @@ def test_an_item_the_crate_no_longer_defines_is_reported() -> None:
     doc, missing = facade_semver.prune(core(), {("LanguageId",), ("Gone",)})
     assert missing == [("Gone",)]
     assert root_items(doc) == {"LanguageId"}
+
+
+def plugins_facade(crate: str, path: list[str]) -> dict[str, Any]:
+    """The facade's `pub mod plugins { pub use <crate>::<path>::set_host; }`."""
+    return {
+        "root": 0,
+        "index": {
+            "0": module("opentide", [1], is_crate=True),
+            "1": module("plugins", [2]),
+            "2": item(
+                None,
+                {
+                    "use": {
+                        "source": "::".join([crate, *path]),
+                        "name": path[-1],
+                        "id": 30,
+                        "is_glob": False,
+                    }
+                },
+            ),
+        },
+        "paths": {"30": {"crate_id": 4, "path": [crate, *path], "kind": "function"}},
+        "external_crates": {"4": {"name": crate}},
+    }
+
+
+def cli(*, defines: bool) -> dict[str, Any]:
+    """`opentide_cli`: `pub mod plugins { pub fn set_host() }`, or no `set_host`."""
+    index = {
+        "0": module("opentide_cli", [1], is_crate=True),
+        "1": module("plugins", [2] if defines else []),
+    }
+    paths = {
+        "0": {"crate_id": 0, "path": ["opentide_cli"], "kind": "module"},
+        "1": {"crate_id": 0, "path": ["opentide_cli", "plugins"], "kind": "module"},
+    }
+    if defines:
+        index["2"] = item("set_host", {"function": {}})
+        paths["2"] = {"crate_id": 0, "path": ["opentide_cli", "plugins", "set_host"]}
+    return {"root": 0, "index": index, "paths": paths, "external_crates": {}}
+
+
+WORKSPACE = {"opentide_cli", "opentide_connectors"}
+
+
+def test_an_item_that_moved_between_workspace_crates_is_held_in_its_new_crate() -> None:
+    baseline = facade_semver.reexports(plugins_facade("opentide_cli", ["plugins", "set_host"]))
+    current = facade_semver.reexports(
+        plugins_facade("opentide_connectors", ["plugin", "host", "set_host"])
+    )
+    # One facade path, two defining crates.
+    assert set(baseline) == set(current) == {("plugins", "set_host")}
+    held = facade_semver.by_crate(baseline, current, WORKSPACE)
+    assert held == {"opentide_connectors": {("plugin", "host", "set_host")}}
+    # The old crate holds nothing: its change no longer defining the item is no failure.
+    _, missing = facade_semver.prune(cli(defines=False), held.get("opentide_cli", set()))
+    assert missing == []
+
+
+def test_an_item_removed_at_its_facade_path_is_still_held_in_its_old_crate() -> None:
+    baseline = facade_semver.reexports(plugins_facade("opentide_cli", ["plugins", "set_host"]))
+    # The change drops the re-export and the function: no new crate takes it.
+    current = facade_semver.reexports(
+        {"root": 0, "index": {"0": module("opentide", [], is_crate=True)}, "paths": {}}
+        | {"external_crates": {}}
+    )
+    held = facade_semver.by_crate(baseline, current, WORKSPACE)
+    assert held == {"opentide_cli": {("plugins", "set_host")}}
+    # The baseline keeps the function and the change does not define it:
+    # cargo semver-checks reads that pair as function_missing.
+    doc, missing = facade_semver.prune(cli(defines=True), held["opentide_cli"])
+    assert missing == []
+    assert doc["index"]["1"]["inner"]["module"]["items"] == [2]
+    _, missing = facade_semver.prune(cli(defines=False), held["opentide_cli"])
+    assert missing == [("plugins", "set_host")]
+
+
+def test_an_item_moved_to_a_crate_outside_the_workspace_stays_in_its_old_crate() -> None:
+    baseline = facade_semver.reexports(plugins_facade("opentide_cli", ["plugins", "set_host"]))
+    current = facade_semver.reexports(plugins_facade("jiff", ["set_host"]))
+    held = facade_semver.by_crate(baseline, current, WORKSPACE)
+    assert held == {"opentide_cli": {("plugins", "set_host")}}
