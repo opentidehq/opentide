@@ -34,7 +34,7 @@ pub use opentide_core::{
     CompletionItem, Diagnostic, LanguageId, Position, Range, Severity, SignatureHelp, codes,
 };
 pub use opentide_highlight::{HighlightResult, HighlightToken, SemanticTokens};
-pub use opentide_tide::{DocumentSymbol, ElasticTenant, IndexedObject};
+pub use opentide_tide::{DocumentSymbol, ElasticTenant, IndexEntry, IndexedObject};
 
 use opentide_highlight::{HighlightSpec, encode_lsp_semantic_tokens};
 use opentide_kql::Dialect;
