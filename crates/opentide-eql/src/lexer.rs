@@ -420,7 +420,7 @@ fn find_block_end(bytes: &[u8], from: usize) -> Option<usize> {
 /// too many open paths, or one that runs the `fuel` of the whole source out (the work is a
 /// state per character: a source of many openers would otherwise rescan the rest of itself for
 /// each), is left to the grammar (the first `*/`).
-pub(crate) fn es_comment_end(bytes: &[u8], start: usize, fuel: &mut usize) -> Option<usize> {
+pub fn es_comment_end(bytes: &[u8], start: usize, fuel: &mut usize) -> Option<usize> {
     const NORMAL: u8 = 0;
     const STAR: u8 = 1;
     const SLASH: u8 = 2;
@@ -478,7 +478,7 @@ fn push(state: (u32, u8), next: &mut Vec<(u32, u8)>) {
 // ---- The lexer -----------------------------------------------------------------------------
 
 /// Lexes `source`: every byte is in exactly one lexeme.
-pub(crate) fn lex(source: &str) -> Vec<Lexeme> {
+pub fn lex(source: &str) -> Vec<Lexeme> {
     opentide_parse::lex::<Token>(source, |token, _| match token {
         Ok(token) => token.kind().raw(),
         Err(()) => K::ERROR_TOKEN.raw(),

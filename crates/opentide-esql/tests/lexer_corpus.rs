@@ -1,15 +1,7 @@
 //! The lexer over every ES|QL file of the corpora: it tiles them, and a valid
 //! one has no error token.
-//!
-//! The lexer is private to the crate, so
-//! this test includes its source.
 
-#![expect(dead_code, reason = "the included modules are used in part")]
-
-#[path = "../src/lexer.rs"]
-mod lexer;
-#[path = "../src/syntax.rs"]
-mod syntax;
+use opentide_esql::{lexer, syntax};
 
 use std::path::{Path, PathBuf};
 use syntax::SyntaxKind as K;

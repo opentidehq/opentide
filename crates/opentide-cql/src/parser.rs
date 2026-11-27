@@ -23,24 +23,23 @@ use opentide_parse::{CompletedMarker, Grammar, Input, Parse, Parser, TokenSet, b
 /// (`f(a == b + c * !`) is up to seven nodes a level: the toolkit charges a level the nodes
 /// it opens, so that shape stops at about 570 levels with one `TooDeep` naming its budget
 /// (`TREE_BUDGET`), never `TreeTooDeep` or an overflow (`parser_depth`, #1427).
-pub(crate) const MAX_DEPTH: u32 = 1_000;
+pub const MAX_DEPTH: u32 = 1_000;
 
-pub(crate) const UNEXPECTED: &str = "unexpected";
-pub(crate) const MISSING_PAREN: &str = "missing `)`";
-pub(crate) const MISSING_BRACE: &str = "missing `}`";
-pub(crate) const MISSING_BRACK: &str = "missing `]`";
-pub(crate) const EXPECTED_FILTER: &str = "expected a filter";
-pub(crate) const EXPECTED_STEP: &str = "expected a step";
-pub(crate) const EXPECTED_VALUE: &str = "expected a value";
-pub(crate) const EXPECTED_EXPR: &str = "expected an expression";
-pub(crate) const EXPECTED_CALL: &str = "expected a function call";
-pub(crate) const EXPECTED_FIELD: &str = "expected a field";
-pub(crate) const EXPECTED_ARGUMENT: &str = "expected an argument";
-pub(crate) const EXPECTED_REGEX: &str = "expected a regular expression";
-pub(crate) const EXPECTED_NAME: &str = "expected a name";
-pub(crate) const EXPECTED_BRANCH: &str = "expected a match branch (`guard => pipeline`)";
-pub(crate) const FILTER_AFTER_ASSIGNMENT: &str =
-    "a filter cannot follow an assignment without a pipe";
+pub const UNEXPECTED: &str = "unexpected";
+pub const MISSING_PAREN: &str = "missing `)`";
+pub const MISSING_BRACE: &str = "missing `}`";
+pub const MISSING_BRACK: &str = "missing `]`";
+pub const EXPECTED_FILTER: &str = "expected a filter";
+pub const EXPECTED_STEP: &str = "expected a step";
+pub const EXPECTED_VALUE: &str = "expected a value";
+pub const EXPECTED_EXPR: &str = "expected an expression";
+pub const EXPECTED_CALL: &str = "expected a function call";
+pub const EXPECTED_FIELD: &str = "expected a field";
+pub const EXPECTED_ARGUMENT: &str = "expected an argument";
+pub const EXPECTED_REGEX: &str = "expected a regular expression";
+pub const EXPECTED_NAME: &str = "expected a name";
+pub const EXPECTED_BRANCH: &str = "expected a match branch (`guard => pipeline`)";
+pub const FILTER_AFTER_ASSIGNMENT: &str = "a filter cannot follow an assignment without a pipe";
 
 /// What can follow a pipeline step inside brackets.
 const NESTED_END: TokenSet = K::set(&[K::R_PAREN, K::R_BRACE, K::R_BRACK, K::SEMI]);
@@ -59,7 +58,7 @@ const MULTIPLICATIVE: TokenSet = K::set(&[K::STAR, K::SLASH, K::PERCENT]);
 const PATTERN_TOKENS: TokenSet = K::set(&[K::PATTERN, K::WORD, K::TAG_TOKEN, K::NUMBER_TOKEN]);
 
 /// The toolkit's kinds for CQL.
-pub(crate) const GRAMMAR: Grammar = Grammar {
+pub const GRAMMAR: Grammar = Grammar {
     eof: K::EOF.raw(),
     error: K::ERROR.raw(),
     trivia: K::set(&[K::WHITESPACE, K::LINE_COMMENT, K::BLOCK_COMMENT]),
@@ -67,7 +66,7 @@ pub(crate) const GRAMMAR: Grammar = Grammar {
 };
 
 /// Parses `source`.
-pub(crate) fn parse(source: &str) -> (SyntaxNode, Parse) {
+pub fn parse(source: &str) -> (SyntaxNode, Parse) {
     let input = Input::new(source, lexer::lex(source), GRAMMAR);
     let mut p = Parser::new(&input);
     let root = p.start();
