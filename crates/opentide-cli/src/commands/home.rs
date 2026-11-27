@@ -231,15 +231,28 @@ fn platforms(folder: &Path) -> Vec<(String, usize)> {
     found
 }
 
+/// How long `home` waits for `git status`: the count is a nicety, and a
+/// large work tree must not hold the screen up.
+const GIT_STATUS_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// How often `home` checks whether `git status` has finished.
+const GIT_STATUS_POLL: std::time::Duration = std::time::Duration::from_millis(10);
+
 /// The branch and the state of the work tree at `path` (`main, clean`,
-/// `main, 3 changed`), or `None` when git does not answer in time.
+/// `main, 3 changed`); `None` outside a checkout or before its first
+/// commit.
 fn git_state(path: &Path) -> Option<String> {
-    let branch = git(path, &["rev-parse", "--abbrev-ref", "HEAD"])?;
-    let name = match branch.trim() {
-        "" => "no branch".to_owned(),
-        name => name.to_owned(),
-    };
-    let Some(status) = git(path, &["status", "--porcelain"]) else {
+    git_state_with(path, std::ffi::OsStr::new("git"))
+}
+
+/// [`git_state`], `program` counting the changes. The branch is read with
+/// gix (`HEAD` when detached), so it shows without git; the count needs a
+/// work-tree status (the index against HEAD and the disk, untracked files
+/// with the ignore rules), which `program status --porcelain` gives. When
+/// it is missing or slower than [`GIT_STATUS_TIMEOUT`], the branch alone.
+fn git_state_with(path: &Path, program: &std::ffi::OsStr) -> Option<String> {
+    let name = opentide_compile::git::head_name(path)?;
+    let Some(status) = git(program, path, &["status", "--porcelain"]) else {
         // git did not answer: nothing about the tree.
         return Some(name);
     };
@@ -255,9 +268,10 @@ fn git_state(path: &Path) -> Option<String> {
     Some(format!("{name}, {state}"))
 }
 
-/// What `git <args>` prints in `path`, if it exits 0 within two seconds.
-fn git(path: &Path, args: &[&str]) -> Option<String> {
-    let mut child = std::process::Command::new("git")
+/// What `program <args>` prints in `path`, if it exits 0 within
+/// [`GIT_STATUS_TIMEOUT`].
+fn git(program: &std::ffi::OsStr, path: &Path, args: &[&str]) -> Option<String> {
+    let mut child = std::process::Command::new(program)
         .args(args)
         .current_dir(path)
         .stdin(std::process::Stdio::null())
@@ -265,7 +279,7 @@ fn git(path: &Path, args: &[&str]) -> Option<String> {
         .stderr(std::process::Stdio::null())
         .spawn()
         .ok()?;
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    let deadline = std::time::Instant::now() + GIT_STATUS_TIMEOUT;
     loop {
         match child.try_wait() {
             Ok(Some(status)) => {
@@ -276,7 +290,7 @@ fn git(path: &Path, args: &[&str]) -> Option<String> {
                 return status.success().then_some(text);
             }
             Ok(None) if std::time::Instant::now() < deadline => {
-                std::thread::sleep(std::time::Duration::from_millis(10));
+                std::thread::sleep(GIT_STATUS_POLL);
             }
             _ => {
                 let _ignored = child.kill();
@@ -746,5 +760,58 @@ mod tests {
         assert!(facts.workspace.is_some());
         assert_eq!(facts.catalogue[1], ("threats".to_owned(), 1));
         assert_eq!(gather("1", &root, &Env::default()).workspace, None);
+    }
+
+    /// Runs git in `dir`, without the host's configuration.
+    fn git_in(dir: &Path, args: &[&str]) {
+        let status = std::process::Command::new("git")
+            .args(["-c", "user.name=t", "-c", "user.email=t@example.com"])
+            .args(args)
+            .current_dir(dir)
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .status()
+            .unwrap();
+        assert!(status.success(), "git {args:?}");
+    }
+
+    /// The branch is read without the `git` program (#1955): a program that
+    /// is not there still gives the branch, with no count. With git, the
+    /// count; a detached HEAD reads `HEAD`; no line before the first commit
+    /// or outside a checkout.
+    #[test]
+    fn the_git_line_names_the_branch_without_git() {
+        if std::process::Command::new("git")
+            .arg("--version")
+            .output()
+            .is_err()
+        {
+            return;
+        }
+        let folder = tempfile::tempdir().unwrap();
+        let outside = folder.path().join("ailleurs");
+        std::fs::create_dir_all(&outside).unwrap();
+        assert_eq!(git_state(&outside), None);
+        let repo = folder.path().join("dépôt");
+        std::fs::create_dir_all(&repo).unwrap();
+        git_in(&repo, &["init", "-q", "-b", "fonctionnalité/é"]);
+        assert_eq!(git_state(&repo), None, "no commit yet");
+        std::fs::write(repo.join("a 😀.txt"), "a\n").unwrap();
+        git_in(&repo, &["add", "-A"]);
+        git_in(&repo, &["commit", "-q", "-m", "a"]);
+        let missing = std::ffi::OsStr::new("no-such-git-é");
+        assert_eq!(
+            git_state_with(&repo, missing).as_deref(),
+            Some("fonctionnalité/é")
+        );
+        assert_eq!(git_state(&repo).as_deref(), Some("fonctionnalité/é, clean"));
+        std::fs::write(repo.join("b.txt"), "b\n").unwrap();
+        assert_eq!(
+            git_state(&repo).as_deref(),
+            Some("fonctionnalité/é, 1 changed")
+        );
+        git_in(&repo, &["checkout", "-q", "--detach"]);
+        assert_eq!(git_state_with(&repo, missing).as_deref(), Some("HEAD"));
+        assert_eq!(git_state(&repo).as_deref(), Some("HEAD, 1 changed"));
     }
 }
