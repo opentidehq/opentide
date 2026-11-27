@@ -876,7 +876,7 @@ fn system_name(config: &CJson, platform: &str) -> String {
         .and_then(|table| table.get("platform"))
         .and_then(|block| block.get("name"))
         .filter(|name| name.is_filled())
-        .map_or_else(|| platform.to_owned(), opentide_compile::deploy::text)
+        .map_or_else(|| platform.to_owned(), Json::to_text)
 }
 
 /// The strategies a run checked with and the queries it sends each tenant.
@@ -1175,10 +1175,7 @@ pub(crate) fn block_strategy(
     cx: &opentide_compile::Context<'_>,
 ) -> Result<(CJson, StatusStrategy), String> {
     let block = rule.block(platform).cloned().unwrap_or(CJson::Null);
-    let status = block
-        .get("status")
-        .map(opentide_compile::deploy::text)
-        .unwrap_or_default();
+    let status = block.get("status").map(Json::to_text).unwrap_or_default();
     let strategy = cx.statuses.strategy(&status).map_err(|error| match error {
         strategy::StatusError::Invalid(message) => message,
         other @ strategy::StatusError::Unknown(_) => other.to_string(),
@@ -1603,7 +1600,7 @@ fn timeout_text(reason: &str, timeout: f64) -> String {
 
 /// The address an unreachable tenant is reported at (`LiveQueryValidator.host`).
 fn tenant_host(platform: &str, tenant: &Configured) -> String {
-    let text = |key: &str| tenant.setup.get(key).map(opentide_compile::deploy::text);
+    let text = |key: &str| tenant.setup.get(key).map(Json::to_text);
     if platform == "splunk" {
         let url = text("url").unwrap_or_default();
         return match text("port") {
@@ -2765,7 +2762,7 @@ fn log_advisory(code: &str, rule: &str, block: &CJson, tenant: &str, uuid: &str,
         scheduling
             .and_then(|s| s.get(key))
             .filter(|value| !value.is_null())
-            .map_or_else(|| default.to_owned(), opentide_compile::deploy::text)
+            .map_or_else(|| default.to_owned(), Json::to_text)
     };
     let interval = text("interval", "5m");
     let lookback = text("lookback", "1m");
@@ -2835,10 +2832,7 @@ fn log_advisory(code: &str, rule: &str, block: &CJson, tenant: &str, uuid: &str,
             );
         }
         "eql_maxspan_window" | "eql_maxspan_lookback" => {
-            let query = block
-                .get("query")
-                .map(opentide_compile::deploy::text)
-                .unwrap_or_default();
+            let query = block.get("query").map(Json::to_text).unwrap_or_default();
             let maxspan = opentide_connectors::elastic::eql_maxspan(&query)
                 .map(|(text, _)| text)
                 .unwrap_or_default();
@@ -2983,7 +2977,7 @@ async fn elastic_rule(
         for entry in logs.iter().filter(|entry| entry.as_object().is_some()) {
             if let Some(CJson::Array(items)) = entry.get("warnings") {
                 for item in items {
-                    let warning = opentide_connectors::text::json_text(item);
+                    let warning = Json::to_text(item);
                     tracing::warn!(
                         rule = rule.name.as_str(),
                         warning = warning.as_str(),
@@ -2994,7 +2988,7 @@ async fn elastic_rule(
             }
             if let Some(CJson::Array(items)) = entry.get("errors") {
                 for item in items {
-                    let error = opentide_connectors::text::json_text(item);
+                    let error = Json::to_text(item);
                     if error.contains("preview-index") || error.contains("preview.alerts") {
                         return Err(RuleFailure::Tenant(format!(
                             "Tenant configuration error: missing preview-index privilege ({error})"

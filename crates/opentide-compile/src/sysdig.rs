@@ -579,7 +579,7 @@ pub fn tenant_tags(tenant: &Json) -> Vec<String> {
 /// takes before the tenant's; `None` when it names none.
 pub fn block_policies(rule: &Rule) -> Option<Vec<String>> {
     match rule.block("sysdig")?.get("policies")? {
-        Json::Array(items) => Some(items.iter().map(crate::deploy::text).collect()),
+        Json::Array(items) => Some(items.iter().map(Json::to_text).collect()),
         _ => None,
     }
 }

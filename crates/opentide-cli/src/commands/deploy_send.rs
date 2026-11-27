@@ -3389,7 +3389,7 @@ impl Sender<'_, '_> {
         let status = rule
             .block(platform)
             .and_then(|block| block.get("status"))
-            .map(opentide_compile::deploy::text)
+            .map(Json::to_text)
             .unwrap_or_default();
         self.compile
             .statuses
@@ -4381,7 +4381,7 @@ impl Sender<'_, '_> {
                 let context = detail
                     .as_deref()
                     .and_then(|text| serde_json::from_str::<CJson>(text).ok())
-                    .map(|value| opentide_connectors::text::json_text(&value))
+                    .map(|value| Json::to_text(&value))
                     .unwrap_or_default();
                 tracing::error!(
                     detail = message.as_str(),
@@ -4517,10 +4517,7 @@ impl Sender<'_, '_> {
             log.finished(result);
             return Ok(false);
         };
-        let status = raw
-            .get("status")
-            .map(opentide_compile::deploy::text)
-            .unwrap_or_default();
+        let status = raw.get("status").map(Json::to_text).unwrap_or_default();
         let strategy = match self.compile.statuses.strategy(&status) {
             Ok(strategy) => strategy,
             Err(error) => {
@@ -4744,9 +4741,7 @@ impl Sender<'_, '_> {
         };
         let tenant_policies: Vec<String> =
             match opentide_compile::deploy::setup(&batch.table, "policies") {
-                Some(CJson::Array(items)) => {
-                    items.iter().map(opentide_compile::deploy::text).collect()
-                }
+                Some(CJson::Array(items)) => items.iter().map(Json::to_text).collect(),
                 _ => Vec::new(),
             };
         for (rule, action) in planned {

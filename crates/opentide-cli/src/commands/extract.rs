@@ -1349,7 +1349,7 @@ fn flag(rule: &CJson, key: &str) -> bool {
 
 /// `value` as text: a string as it is, anything else as its compact JSON.
 fn text_of(value: &CJson) -> String {
-    opentide_connectors::text::json_text(value)
+    Json::to_text(value)
 }
 
 fn object(members: Vec<(&str, CJson)>) -> CJson {

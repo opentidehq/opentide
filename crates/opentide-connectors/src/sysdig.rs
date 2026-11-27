@@ -310,15 +310,9 @@ impl<'a> Client<'a> {
         &self,
         policy: &Object,
     ) -> Result<Result<Json, ApiError>, ConnectorError> {
-        let name = policy
-            .get("name")
-            .map(opentide_compile::deploy::text)
-            .unwrap_or_default();
+        let name = policy.get("name").map(Json::to_text).unwrap_or_default();
         let action = format!("update policy '{name}'");
-        let id = policy
-            .get("id")
-            .map(opentide_compile::deploy::text)
-            .unwrap_or_default();
+        let id = policy.get("id").map(Json::to_text).unwrap_or_default();
         let bytes = self.serialise(&Json::Object(policy.clone()))?;
         let answer = self
             .send(
@@ -492,7 +486,7 @@ async fn create(
             message: "create rule: the response carries no rule id".to_owned(),
         }));
     };
-    outcome.state = StateChange::Record(opentide_compile::deploy::text(id));
+    outcome.state = StateChange::Record(Json::to_text(id));
     join_policies(client, &rule.name, policies(rule)).await
 }
 
@@ -529,13 +523,10 @@ async fn recreate(
 async fn named(client: &Client<'_>, names: &[String]) -> Result<Vec<Object>, Failure> {
     let listed = client.list_policies().await??;
     let by_name = |name: &str| {
-        listed.iter().rev().find(|policy| {
-            policy
-                .get("name")
-                .map(opentide_compile::deploy::text)
-                .as_deref()
-                == Some(name)
-        })
+        listed
+            .iter()
+            .rev()
+            .find(|policy| policy.get("name").map(Json::to_text).as_deref() == Some(name))
     };
     let missing: Vec<String> = names
         .iter()

@@ -129,7 +129,7 @@ pub fn body(cx: &Context<'_>, rule: &Rule, tenant: &Json) -> Result<Json, Compil
             "@every {}",
             schedule
                 .and_then(|schedule| schedule.get("frequency"))
-                .map(deploy::text)
+                .map(Json::to_text)
                 .unwrap_or_default()
         )
         .into(),
@@ -140,7 +140,7 @@ pub fn body(cx: &Context<'_>, rule: &Rule, tenant: &Json) -> Result<Json, Compil
         operation.insert(
             to.into(),
             filled(schedule, from).map_or(Json::Null, |value| {
-                fix_datetime(&deploy::text(value)).into()
+                fix_datetime(&Json::to_text(value)).into()
             }),
         );
     }
@@ -148,7 +148,7 @@ pub fn body(cx: &Context<'_>, rule: &Rule, tenant: &Json) -> Result<Json, Compil
         Some(Json::Array(items)) => items
             .iter()
             .filter(|item| item.is_filled())
-            .map(deploy::text)
+            .map(Json::to_text)
             .collect(),
         _ => deploy::rule_text(rule, &["metadata", "author"])
             .map(str::to_owned)

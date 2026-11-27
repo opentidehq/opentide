@@ -230,12 +230,12 @@ pub fn body(cx: &Context<'_>, rule: &Rule, tenant: &Json) -> Result<Json, Compil
         filter.insert("accountIds".into(), Json::Null);
         filter.insert(
             "siteIds".into(),
-            Json::Array(vec![Json::Str(deploy::text(site))]),
+            Json::Array(vec![Json::Str(Json::to_text(site))]),
         );
     } else if let Some(account) = deploy::setup(tenant, "account_id").filter(|id| id.is_filled()) {
         filter.insert(
             "accountIds".into(),
-            Json::Array(vec![Json::Str(deploy::text(account))]),
+            Json::Array(vec![Json::Str(Json::to_text(account))]),
         );
         filter.insert("siteIds".into(), Json::Null);
     } else {

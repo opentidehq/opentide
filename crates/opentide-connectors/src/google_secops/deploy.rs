@@ -173,7 +173,7 @@ fn etag(remote: &Json) -> Option<String> {
     remote
         .get("etag")
         .filter(|value| value.is_filled())
-        .map(opentide_compile::deploy::text)
+        .map(Json::to_text)
 }
 
 /// `RuleDeployment.executionState` values under which Google does not run
@@ -418,7 +418,7 @@ async fn update(
         return Ok(());
     }
     let mut allowed: Vec<String> = match remote.get("allowedRunFrequencies") {
-        Some(Json::Array(items)) => items.iter().map(opentide_compile::deploy::text).collect(),
+        Some(Json::Array(items)) => items.iter().map(Json::to_text).collect(),
         _ => Vec::new(),
     };
     let text = &rule.assembled.text;
@@ -472,7 +472,7 @@ async fn update(
     let current = remote
         .get("scope")
         .filter(|value| value.is_filled())
-        .map(opentide_compile::deploy::text)
+        .map(Json::to_text)
         .unwrap_or_default();
     if scope_id(&current) != scope_id(&wanted)
         && let Err(failure) = client.update_scope(rule_id, &wanted, tag.as_deref()).await
