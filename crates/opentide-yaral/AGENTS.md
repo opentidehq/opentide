@@ -24,8 +24,8 @@ engine (`xtask/layers.toml`). Used by opentide-tide and -analysis.
   are never reported unknown.
 - Keywords are case-insensitive and reserved: a keyword is never a name.
 - The typed AST (`src/generated/ast.rs`) is written by `cargo xtask codegen` from `yaral.ungram`:
-  never edit it by hand. The kinds and the typed AST are public but hidden, for the crate's tests;
-  they are no API.
+  never edit it by hand. The lexer, the kinds and the typed AST are public but hidden, for the
+  crate's tests; they are no API.
 
 ## Test
 

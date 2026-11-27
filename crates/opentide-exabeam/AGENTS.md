@@ -12,7 +12,7 @@ Two profiles: `rule` and `search`. Design and conformance: `docs/engine/EXABEAM.
 ## Place
 
 foundation, tier 2: depends on opentide-core, -dataset, -highlight and -parse; on no other query
-engine (`xtask/layers.toml`). Used by opentide-tide (the block constraints, `src/exabeam.rs`) and
+engine (`xtask/layers.toml`). Used by opentide-tide (the block constraints, in `src/lib.rs`) and
 -analysis.
 
 ## Invariants
