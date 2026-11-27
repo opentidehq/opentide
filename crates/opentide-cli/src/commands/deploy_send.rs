@@ -7,7 +7,7 @@
 //! reads, their platforms, the tenants each reaches, with the platform's
 //! `[[modifiers]]` applied per tenant. Each rule is then sent through its
 //! platform's connector, the platforms one after another and up to
-//! [`TENANTS_AT_ONCE`] tenants of a platform at once, and each finished rule
+//! `TENANTS_AT_ONCE` tenants of a platform at once, and each finished rule
 //! prints one line on stderr as it ends (`DeployLog`): the lines of tenants
 //! deploying at once may interleave, while the result keeps the plan's order
 //! and deployment state is the same as one tenant after another. A platform that
