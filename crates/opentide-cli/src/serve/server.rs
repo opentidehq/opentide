@@ -20,6 +20,9 @@ use super::runner::{EventSink, Job, RunOutcome, RunRequest, Runner, compact, fai
 use crate::envelope::INTERRUPTED_EXIT_CODE;
 use crate::json::{Json, Object};
 
+/// How long the loop waits for a message before it checks `stop` again.
+const STOP_POLL: Duration = Duration::from_millis(100);
+
 /// `initialize`'s `protocol`: bumped only when a message changes meaning.
 pub const PROTOCOL_VERSION: i64 = 1;
 
@@ -599,7 +602,7 @@ impl Server {
                     queue = self
                         .inner
                         .ready
-                        .wait_timeout(queue, Duration::from_millis(100))
+                        .wait_timeout(queue, STOP_POLL)
                         .unwrap_or_else(PoisonError::into_inner)
                         .0;
                 }
