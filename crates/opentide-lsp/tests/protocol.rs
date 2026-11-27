@@ -4360,6 +4360,77 @@ fn a_workspace_pull_is_answered_while_the_client_keeps_editing() {
     assert!(in_time, "the pull was not answered within 60 s of edits");
 }
 
+/// #1944: the workspace's symbols are placed from the index, and a code lens
+/// reads each referencing file where it is kept: neither copies a file per
+/// result. An open document is found by its path without comparing the
+/// path of every open document on each lookup.
+#[test]
+fn symbols_and_lenses_copy_no_file_and_find_open_documents_by_path() {
+    const RULES: usize = 10;
+    let scratch = workspace("symbols-shared-text", true);
+    let rules = scratch.0.join("objects/rules");
+    let objective = file_uri(&scratch.0.join("objects/objectives/objective-1.0.yaml"));
+    let rule_uris: Vec<(String, String)> = (0..RULES)
+        .map(|n| {
+            let path = rules.join(format!("rule-{n}.yaml"));
+            let text = fixture(RULE)
+                .replace("8003-000000000001", &format!("8003-0000000001{n:02}"))
+                .replace("name: Sentinel KQL Rule", &format!("name: Rule é😀 {n}"));
+            std::fs::write(&path, &text).unwrap();
+            (file_uri(&path), text)
+        })
+        .collect();
+    let (mut lsp, _) = start(json!({ "capabilities": watch(), "rootUri": file_uri(&scratch.0) }));
+    open(&mut lsp, &objective, "opentide-yaml", &fixture(OBJECTIVE));
+    for (uri, text) in &rule_uris {
+        open(&mut lsp, uri, "opentide-yaml", text);
+    }
+    let counters = |lsp: &mut Lsp| {
+        let stats = lsp.request("opentide/__stats", Value::Null);
+        (
+            stats["result"]["textCopies"].as_u64().unwrap(),
+            stats["result"]["docPathKeys"].as_u64().unwrap(),
+        )
+    };
+
+    let (copies, keys) = counters(&mut lsp);
+    let symbols = lsp.request("workspace/symbol", json!({ "query": "" }));
+    let symbols = symbols["result"].as_array().unwrap();
+    // The rule fixture on disk, its ten copies and the objective.
+    assert_eq!(symbols.len(), RULES + 2, "{symbols:?}");
+    let rule = symbols
+        .iter()
+        .find(|s| s["name"] == "Rule é😀 3")
+        .unwrap_or_else(|| panic!("{symbols:?}"));
+    // `name: Rule é😀 3`: the value from column 6, `😀` two UTF-16 units.
+    assert_eq!(
+        rule["location"]["range"],
+        json!({ "start": { "line": 0, "character": 6 }, "end": { "line": 0, "character": 16 } })
+    );
+
+    let lens = lsp.request(
+        "textDocument/codeLens",
+        json!({ "textDocument": { "uri": objective } }),
+    );
+    let locations = lens["result"][0]["command"]["arguments"][2]
+        .as_array()
+        .unwrap_or_else(|| panic!("{lens}"));
+    assert_eq!(locations.len(), RULES + 1, "{lens}");
+    assert!(
+        locations
+            .iter()
+            .all(|l| l["range"]["start"] == json!({ "line": 16, "character": 17 })),
+        "each at the rule's `detection_model`: {lens}"
+    );
+    let (copies_after, keys_after) = counters(&mut lsp);
+    assert_eq!(copies_after, copies, "a symbol or a lens copied a file");
+    assert!(
+        keys_after - keys <= RULES as u64 + 1,
+        "each lookup of an open document compared every open document's path: {} keys",
+        keys_after - keys
+    );
+}
+
 /// #1943: a keystroke in one open object runs the engine on that object
 /// alone. The analysis of every open object is made again (what `validate`
 /// says of one may change with another), but the engine's analysis of an
