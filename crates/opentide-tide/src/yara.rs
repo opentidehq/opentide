@@ -28,6 +28,8 @@ use crate::yaml::{YamlNode, number_text};
 use crate::yaml_scalar::{Scalar, YamlKey, scalar_at};
 use crate::{InjectedQuery, InjectionPart};
 use opentide_core::node::{Node, Value};
+// A string inside a YARA `meta` value, as the compiler writes it.
+use opentide_core::yara::escape_string as escape;
 use opentide_core::{ByteSpan, Diagnostic, LanguageId, codes};
 use opentide_schema::objects::platform::harfanglab::yara::{
     OS_FILE_CONTEXT, derived_rule_name, rule_name_problem,
@@ -41,13 +43,6 @@ const SCORES: &[(&str, &str)] = &[
     ("High", "70"),
     ("Critical", "90"),
 ];
-
-fn escape(s: &str) -> String {
-    s.replace('\\', "\\\\")
-        .replace('"', "\\\"")
-        .replace('\n', "\\n")
-        .replace('\r', "")
-}
 
 /// The assembled text and its map, built part by part.
 pub(crate) struct Builder {
@@ -904,6 +899,13 @@ mod tests {
         assert!(rule_name_problem("Cmd String").is_none());
         assert!(rule_name_problem(&"a".repeat(128)).is_none());
         assert!(rule_name_problem(&"a".repeat(129)).is_some());
+    }
+
+    /// The assembled rule escapes a `meta` value as the compiler does: no
+    /// raw tab or control character (#1939).
+    #[test]
+    fn meta_values_escape_control_characters() {
+        assert_eq!(escape("é\t😀\u{1b}\r\n"), "é\\t😀\\x1b\\n");
     }
 
     /// The model's YARA lists (0.28.1's, copied so `opentide-schema` needs no

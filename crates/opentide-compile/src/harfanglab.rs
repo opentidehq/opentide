@@ -14,6 +14,8 @@ use crate::deploy::{self, Write};
 use crate::json::{Json, Object};
 use crate::rule::{CompileError, Rule};
 use crate::strategy::StatusStrategy;
+// A string inside a YARA `meta` value (`escape_yara_string`).
+use opentide_core::yara::escape_string as escape;
 
 /// The platform's key under `configurations`.
 pub const PLATFORM: &str = "harfanglab";
@@ -224,14 +226,6 @@ fn sigma(
     body.insert("rule_level_override".into(), settings.level.into());
     body.insert("overwrite".into(), Json::Bool(true));
     Ok(crate::sentinel_one::without_nulls(Json::Object(body)))
-}
-
-/// A string inside a YARA `meta` value (`escape_yara_string`).
-fn escape(text: &str) -> String {
-    text.replace('\\', "\\\\")
-        .replace('"', "\\\"")
-        .replace('\n', "\\n")
-        .replace('\r', "")
 }
 
 /// The YARA rule name of a rule name: lowercase, every character but a
@@ -518,6 +512,8 @@ mod tests {
         assert_eq!(score("Critical"), Some(90));
         assert_eq!(score("x"), None);
         assert_eq!(escape("a\"b\\c\nd\r"), "a\\\"b\\\\c\\nd");
+        // No raw tab or control character in a meta value (#1939).
+        assert_eq!(escape("é\t😀\u{7}"), "é\\t😀\\x07");
     }
 
     /// The YARA content of a rule whose `meta.arch` is written `arch`.
