@@ -1,0 +1,23 @@
+# window of seven minutes
+# Expected constraint code: datadog_duration.
+name: Datadog window of seven minutes
+metadata:
+  uuid: 00000000-0000-4000-8004-000000000102
+  schema: rule::1.0
+  version: 1
+  created: "2026-11-27"
+  modified: "2026-11-27"
+  tlp: clear
+  author: Detection Engineering
+description: |
+  window of seven minutes.
+configurations:
+  datadog:
+    schema: platform::datadog::1.0
+    status: STAGING
+    queries:
+      - query: source:okta @evt.outcome:FAILURE
+    detection:
+      window: 7m
+    cases:
+      - condition: a > 5
