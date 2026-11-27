@@ -391,11 +391,19 @@ pub fn analyze_tide_parsed(
 #[derive(Debug, Clone)]
 pub struct QueryRequest {
     pub language: LanguageId,
-    /// The detection platform the query is for, as a `configurations` key
-    /// (`microsoft_defender` picks the Defender KQL schema,
-    /// `carbon_black_cloud` the Carbon Black Lucene dialect, `graylog` the
-    /// Graylog one, and `exabeam` the Exabeam `rule` profile of a
-    /// correlation-rule sequence). `None` for the language's default.
+    /// The detection platform the query is for, as a `configurations` key.
+    /// It names the language's dialect, the product's catalogs and checks,
+    /// and nothing else (ADR 0015 §4): `microsoft_defender` picks the
+    /// Defender KQL schema, `carbon_black_cloud` the Carbon Black Lucene
+    /// dialect, `graylog` the Graylog one, and `harfanglab` or `bitdefender`
+    /// that product's YARA checks. `None` for the language's default.
+    ///
+    /// The query is checked as a file of its language is, whatever the
+    /// platform: an Exabeam, CQL or Datadog query is a search, never a
+    /// correlation or detection rule's query, and a YARA-L text is a rule
+    /// when it declares one. A query in a rule block is checked as one with
+    /// its object (the facade's `Workspace::validate` and `Workspace::lint`),
+    /// which knows the block it sits in.
     pub platform: Option<String>,
     /// Elastic stack the query must run on (`"9.5"`, `"serverless"`), for
     /// ES|QL. `None`, or a value that does not parse, checks every supported
@@ -408,33 +416,23 @@ pub struct QueryRequest {
 pub fn analyze_query(request: &QueryRequest) -> Vec<Diagnostic> {
     let platform = request.platform.as_deref().unwrap_or("");
     match request.language {
-        LanguageId::Kql => opentide_kql::analyze(&request.text, kql_profile(platform)).diagnostics,
-        // `platform: crowdstrike` is the query of a CrowdStrike rule block,
-        // which deploys as a Next-Gen SIEM correlation rule. A hunt search is
-        // not one: [`analyze_queries`] checks it without the correlation rules.
-        LanguageId::Cql if platform == "crowdstrike" => {
-            opentide_cql::analyze_with(&request.text, &opentide_cql::Context::CORRELATION_RULE)
+        LanguageId::Kql => {
+            opentide_kql::analyze(&request.text, Profile::for_platform(platform)).diagnostics
+        }
+        // A query on its own is a search, as a file of its language is: the
+        // profile comes from where the text sits, never from the platform
+        // (ADR 0015 §4). A `.cql` file is plain LogScale, without the
+        // correlation rule's restrictions; a `.exabeam` or `.datadog` file is
+        // the `search` profile. A rule block's query is checked as a rule by
+        // `analyze` on its object, by its field path.
+        LanguageId::Cql => opentide_cql::analyze(&request.text).diagnostics,
+        LanguageId::Exabeam => {
+            opentide_exabeam::analyze_with(&request.text, &opentide_exabeam::Context::SEARCH)
                 .diagnostics
         }
-        // `platform: exabeam` is a correlation-rule sequence query (the
-        // `rule` profile); without it, a search.
-        LanguageId::Exabeam => {
-            let ctx = if platform == "exabeam" {
-                opentide_exabeam::Context::RULE
-            } else {
-                opentide_exabeam::Context::SEARCH
-            };
-            opentide_exabeam::analyze_with(&request.text, &ctx).diagnostics
-        }
-        // `platform: datadog` is a detection rule's query (the `rule`
-        // profile); without it, a search.
         LanguageId::Datadog => {
-            let ctx = if platform == "datadog" {
-                opentide_datadog::Context::RULE
-            } else {
-                opentide_datadog::Context::SEARCH
-            };
-            opentide_datadog::analyze_with(&request.text, &ctx).diagnostics
+            opentide_datadog::analyze_with(&request.text, &opentide_datadog::Context::SEARCH)
+                .diagnostics
         }
         LanguageId::Lucene => {
             let dialect = opentide_lucene::Dialect::for_platform(platform);
@@ -770,16 +768,6 @@ pub fn semantic_tokens(language: LanguageId, text: &str) -> SemanticTokens {
     }
 }
 
-/// The KQL profile of a platform: Defender's schema for
-/// `microsoft_defender`, else Sentinel's.
-fn kql_profile(platform: &str) -> Profile {
-    if platform == "microsoft_defender" {
-        Profile::Defender
-    } else {
-        Profile::Sentinel
-    }
-}
-
 /// Hover at byte `offset` of `text`. A host converts the editor's UTF-16
 /// position once (`opentide_core::position_to_offset`); a byte-order mark at
 /// the start counts as bytes, as in [`completions`].
@@ -809,7 +797,7 @@ pub fn hover(
 /// Hover inside one query language. `platform` selects the KQL profile.
 fn query_hover(language: LanguageId, text: &str, offset: usize, platform: &str) -> Option<String> {
     match language {
-        LanguageId::Kql => opentide_kql::hover(text, offset, kql_profile(platform)),
+        LanguageId::Kql => opentide_kql::hover(text, offset, Profile::for_platform(platform)),
         LanguageId::Spl => opentide_spl::hover(text, offset),
         LanguageId::Esql => opentide_esql::hover(text, offset).or_else(|| ecs::hover(text, offset)),
         LanguageId::Eql => opentide_eql::hover(text, offset).or_else(|| ecs::hover(text, offset)),
@@ -818,7 +806,10 @@ fn query_hover(language: LanguageId, text: &str, offset: usize, platform: &str) 
         }
         // Carbon Black has its own fields (#162), and Graylog its message
         // fields: no ECS.
-        LanguageId::Lucene if matches!(platform, "carbon_black_cloud" | "graylog") => {
+        LanguageId::Lucene
+            if opentide_lucene::Dialect::for_platform(platform)
+                != opentide_lucene::Dialect::Elastic =>
+        {
             opentide_lucene::hover_dialect(
                 text,
                 offset,
@@ -896,9 +887,12 @@ fn query_completions(
     platform: &str,
 ) -> Vec<CompletionItem> {
     match language {
-        LanguageId::Kql => opentide_kql::completions(text, offset, kql_profile(platform)),
+        LanguageId::Kql => opentide_kql::completions(text, offset, Profile::for_platform(platform)),
         LanguageId::Spl => opentide_spl::completions(text, offset),
-        LanguageId::Lucene if matches!(platform, "carbon_black_cloud" | "graylog") => {
+        LanguageId::Lucene
+            if opentide_lucene::Dialect::for_platform(platform)
+                != opentide_lucene::Dialect::Elastic =>
+        {
             opentide_lucene::completions_dialect(
                 text,
                 offset,
@@ -971,7 +965,9 @@ fn query_signature_help(
     platform: &str,
 ) -> Option<SignatureHelp> {
     match language {
-        LanguageId::Kql => opentide_kql::signature_help(text, offset, kql_profile(platform)),
+        LanguageId::Kql => {
+            opentide_kql::signature_help(text, offset, Profile::for_platform(platform))
+        }
         LanguageId::Spl => opentide_spl::signature_help(text, offset),
         LanguageId::Esql => opentide_esql::signature_help(text, offset),
         LanguageId::Eql => opentide_eql::signature_help(text, offset),

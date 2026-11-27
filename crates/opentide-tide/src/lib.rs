@@ -916,12 +916,7 @@ fn analyze_injections(
         let mut extra = Vec::new();
         let (found, query_tokens) = match inj.language {
             LanguageId::Kql => {
-                let profile = if inj.platform == "microsoft_defender" {
-                    Profile::Defender
-                } else {
-                    Profile::Sentinel
-                };
-                let r = opentide_kql::analyze(&inj.inner, profile);
+                let r = opentide_kql::analyze(&inj.inner, Profile::for_platform(&inj.platform));
                 (r.diagnostics, r.tokens)
             }
             LanguageId::Spl => {

@@ -411,11 +411,11 @@ The engine is [opentidehq/language-server](https://github.com/opentidehq/languag
 | `elastic` | ES\|QL, EQL, Kibana KQL or Lucene, by the block's `type` and `language`; ES\|QL against the lowest `setup.version` of the block's tenants |
 | `carbon_black_cloud` | Lucene, Carbon Black dialect |
 | `sysdig` | Falco: the block's `condition`, its `exceptions`, and the macros and lists of the block (and of the Falco default rules) it names |
-| `crowdstrike` | CQL, with the Next-Gen SIEM correlation-rule checks (`cql_correlate_aggregate`): the block's `query` |
+| `crowdstrike` | CQL, with the Next-Gen SIEM correlation-rule checks (`cql_correlate_aggregate`): the block's `query`; a `system: crowdstrike` hunt and a `.cql` file as plain LogScale, without them, `--platform crowdstrike` or not |
 | `harfanglab` | YARA, HarfangLab profile: the block's `yara.signature` or the rule its decomposed form assembles, and `.yar` and `.yara` files |
 | `bitdefender` | YARA, Bitdefender profile: the block's `yara.signature`, and `.yar` and `.yara` files |
 | `graylog` | Lucene, Graylog dialect: the block's query |
-| `exabeam` | The Exabeam Query Language: each sequence's filter under the `rule` profile, where Search's advanced operators (SELECT, GROUP-BY, pipes) are refused (`exabeam_advanced_in_rule`); a `system: exabeam` hunt and a `.exabeam` file under the `search` profile |
+| `exabeam` | The Exabeam Query Language: each sequence's filter under the `rule` profile, where Search's advanced operators (SELECT, GROUP-BY, pipes) are refused (`exabeam_advanced_in_rule`); a `system: exabeam` hunt and a `.exabeam` file under the `search` profile, `--platform exabeam` or not |
 | `google_secops` | YARA-L 2.0: the block's sections as the one rule deploy assembles, and `.yaral` and `.yl2` files |
 | `datadog` | The Datadog search syntax: each `queries[].query` under the `rule` profile, where full-text `*:term` and a calculated field `#name` are warnings; a `system: datadog` hunt and a `.datadog` file under the `search` profile |
 
@@ -457,7 +457,7 @@ error[kql_unknown_operator]: unknown tabular operator 'wher'
 
 It reports the engine's errors, as `validate` does: they fail the run with exit `1` (`failure.code` `issues_found`), or, with `--queries warn`, print as warnings and exit `0` unless `--strict`. The engine's warnings and notes, such as a slow query shape (`kql_where_not_first`, `spl_wildcard`), are style: [`opentide lint`](./lint.md#queries) reports them. A passing run ends `✓ 3 queries valid`; one under `--queries warn` with rejected queries `! 2 warnings in 1 file · 3 queries checked`. With no query to check, the result is `skipped` with exit `0`. When the engine does not load, the run fails with exit `1` and `failure.code` `engine_unavailable`: it never skips.
 
-A query file (`--file hunting/lsass.kql`) holds one query in the language its extension names, in any case (`.KQL` too). With `--platform` it is checked with that platform's profile (`--platform microsoft_defender` knows Defender's tables) and `platform` names it; without, with the language alone, and `platform` is empty. `field_path` is empty for it, and given alone it checks no rule. A query file that does not exist, or whose language the `--platform` does not use (a `.kql` file with `--platform splunk`), exits `2`; one that is not UTF-8 or holds no query fails with exit `1`.
+A query file (`--file hunting/lsass.kql`) holds one query in the language its extension names, in any case (`.KQL` too). With `--platform` it is checked under that platform's dialect (`--platform microsoft_defender` knows Defender's tables, `--platform graylog` reads Graylog's Lucene) and `platform` names it, but it stays a file: a `.cql` file is plain LogScale and a `.exabeam` file a search, never a rule's query; without, with the language alone, and `platform` is empty. `field_path` is empty for it, and given alone it checks no rule. A query file that does not exist, or whose language the `--platform` does not use (a `.kql` file with `--platform splunk`), exits `2`; one that is not UTF-8 or holds no query fails with exit `1`.
 
 `--json` reports `mode` `offline`, `queries_validated`, one entry per query under `queries` (`path`, `platform`, `language`, `field_path`, `line`, `column`, `errors`), every finding under `diagnostics` with the [diagnostic fields](#diagnostic-fields), `engine` (the engine version), and `summary` (`queries`, `files`, `errors`, `warnings`, `notes`, `error_files`, `warning_files`).
 
