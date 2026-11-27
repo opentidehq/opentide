@@ -25,7 +25,10 @@ pub const VERSION: &str = opentide_analysis::VERSION;
 /// `request`'s `platform` selects a schema or dialect and its `stack` an
 /// Elastic stack for ES|QL (see [`QueryRequest`]). The query is checked as
 /// a file of its language is, whatever the platform: an Exabeam, CQL or
-/// Datadog query is a search, not a rule's query.
+/// Datadog query is a search, not a rule's query: a rule block's query is
+/// checked as a rule by [`Workspace::validate`](crate::Workspace::validate)
+/// and [`Workspace::lint`](crate::Workspace::lint), by its place in the
+/// object.
 ///
 /// ```
 /// use opentide::analysis::{LanguageId, QueryRequest};

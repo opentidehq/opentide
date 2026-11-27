@@ -1254,6 +1254,27 @@ fn a_tool_that_fails_reports_is_error_and_one_that_finds_something_does_not() {
         json!({"query": "SecurityEvent | where EventID == 4688", "platform": "sentinel"}),
     );
     assert_eq!(valid["valid"], true, "{valid}");
+    // A query is checked as a file of its language is: an Exabeam search with
+    // Search's operators, and plain LogScale after `correlate()`, are valid
+    // under their platforms (#1912, ADR 0015 §4).
+    for (query, platform) in [
+        (
+            "SELECT DISTINCT user, src_ip WHERE vendor:\"Microsoft\"",
+            "exabeam",
+        ),
+        (
+            "correlate(A: { #event_simpleName=UserLogon }, B: { #event_simpleName=ProcessRollup2 | aid <=> A.aid }, within=10m) | groupBy(aid)",
+            "crowdstrike",
+        ),
+    ] {
+        let search = call(
+            &server,
+            "validate_query",
+            json!({"query": query, "platform": platform}),
+        );
+        assert_eq!(search["valid"], true, "{search}");
+        assert_eq!(search["diagnostics"], json!([]), "{search}");
+    }
     let preview = call(
         &server,
         "deploy_rule",

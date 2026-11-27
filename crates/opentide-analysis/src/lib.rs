@@ -379,8 +379,9 @@ pub struct QueryRequest {
     /// The query is checked as a file of its language is, whatever the
     /// platform: an Exabeam, CQL or Datadog query is a search, never a
     /// correlation or detection rule's query, and a YARA-L text is a rule
-    /// when it declares one. A query in a rule block is checked as one by
-    /// [`analyze`] on its Tide object, which knows the block it sits in.
+    /// when it declares one. A query in a rule block is checked as one with
+    /// its object (the facade's `Workspace::validate` and `Workspace::lint`),
+    /// which knows the block it sits in.
     pub platform: Option<String>,
     /// Elastic stack the query must run on (`"9.5"`, `"serverless"`), for
     /// ES|QL. `None`, or a value that does not parse, checks every supported
@@ -745,13 +746,6 @@ pub fn semantic_tokens(language: LanguageId, text: &str) -> SemanticTokens {
     }
 }
 
-/// The Lucene dialect of `platform` ([`opentide_lucene::Dialect::for_platform`],
-/// the only map): hover and completion read Carbon Black's and Graylog's own
-/// fields, and Elastic's ECS.
-fn lucene_dialect(platform: &str) -> opentide_lucene::Dialect {
-    opentide_lucene::Dialect::for_platform(platform)
-}
-
 /// Hover at byte `offset` of `text`. A host converts the editor's UTF-16
 /// position once (`opentide_core::position_to_offset`); a byte-order mark at
 /// the start counts as bytes, as in [`completions`].
@@ -790,8 +784,15 @@ fn query_hover(language: LanguageId, text: &str, offset: usize, platform: &str) 
         }
         // Carbon Black has its own fields (#162), and Graylog its message
         // fields: no ECS.
-        LanguageId::Lucene if lucene_dialect(platform) != opentide_lucene::Dialect::Elastic => {
-            opentide_lucene::hover_dialect(text, offset, lucene_dialect(platform))
+        LanguageId::Lucene
+            if opentide_lucene::Dialect::for_platform(platform)
+                != opentide_lucene::Dialect::Elastic =>
+        {
+            opentide_lucene::hover_dialect(
+                text,
+                offset,
+                opentide_lucene::Dialect::for_platform(platform),
+            )
         }
         LanguageId::Lucene => {
             opentide_lucene::hover(text, offset).or_else(|| ecs::hover(text, offset))
@@ -864,8 +865,15 @@ fn query_completions(
     match language {
         LanguageId::Kql => opentide_kql::completions(text, offset, Profile::for_platform(platform)),
         LanguageId::Spl => opentide_spl::completions(text, offset),
-        LanguageId::Lucene if lucene_dialect(platform) != opentide_lucene::Dialect::Elastic => {
-            opentide_lucene::completions_dialect(text, offset, lucene_dialect(platform))
+        LanguageId::Lucene
+            if opentide_lucene::Dialect::for_platform(platform)
+                != opentide_lucene::Dialect::Elastic =>
+        {
+            opentide_lucene::completions_dialect(
+                text,
+                offset,
+                opentide_lucene::Dialect::for_platform(platform),
+            )
         }
         LanguageId::Esql | LanguageId::Eql | LanguageId::Kuery | LanguageId::Lucene => {
             let mut items = match language {

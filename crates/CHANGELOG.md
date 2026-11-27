@@ -11,12 +11,14 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 #### `opentide`
 
 - If you `match` on `opentide::LanguageId` (or `opentide_core::LanguageId`) without a wildcard arm, add an arm for `LanguageId::Datadog`.
+- If you call `opentide::analysis::analyze_query` with `platform: Some("crowdstrike")` or `Some("exabeam")` to check a rule block's query, check the rule's object with `Workspace::validate` or `Workspace::lint` instead: they still report `cql_correlate_aggregate` and `exabeam_advanced_in_rule` on the block's query.
 
 ### Breaking
 
 #### `opentide`
 
 - **`LanguageId` has a new variant, `LanguageId::Datadog`** (the Datadog log search syntax, `docs/internal/rfc-datadog-cloud-siem.md`). The enum is exhaustive, so a `match` without a wildcard arm no longer compiles. `LanguageId::QUERY_LANGUAGES` holds twelve languages; `LanguageId::parse` reads `datadog` and `opentide-datadog`, and `LanguageId::from_extension` reads `datadog`.
+- **`QueryRequest.platform` names a dialect, never a profile** ([opentide#1912](https://github.com/opentidehq/opentide/issues/1912), ADR 0015 §4). `analyze_query` checks a query as a file of its language is: an Exabeam or Datadog query under the `search` profile and a CQL query as plain LogScale, whatever the platform. `platform: exabeam` chose Exabeam's `rule` profile, `crowdstrike` the Next-Gen SIEM correlation rule and `datadog` Datadog's `rule`; a rule block's query is still checked as a rule by `Workspace::validate` and `Workspace::lint`, by its field path.
 
 ### Added
 
@@ -52,20 +54,13 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 ### Changed
 
-#### `opentide`
-
-- **`QueryRequest.platform` names a dialect, never a profile** ([opentide#1912](https://github.com/opentidehq/opentide/issues/1912), ADR 0015 §4). `analyze_query` checks a query as a file of its language is: an Exabeam or Datadog query under the `search` profile and a CQL query as plain LogScale, whatever the platform. `platform: exabeam` chose Exabeam's `rule` profile, `crowdstrike` the Next-Gen SIEM correlation rule and `datadog` Datadog's `rule`; a rule block's query is still checked as a rule by `Workspace::validate` and `Workspace::lint`, by its field path.
-
-#### `opentide-analysis`
-
-- **`analyze_query` takes the profile from the file, not from `QueryRequest.platform`** ([opentide#1912](https://github.com/opentidehq/opentide/issues/1912)), as the `opentide` entry above says. A valid `.exabeam` search, `SELECT DISTINCT user, src_ip WHERE vendor:"Microsoft"`, no longer reports `exabeam_advanced_in_rule` under `platform: exabeam`.
-
 #### `opentide-workspace`
 
 - **`validate --strict` spares the two Defender limit advisories** ([opentide#1890](https://github.com/opentidehq/opentide/issues/1890)). `opentide_workspace::validate::STRICT_EXEMPT_WARNINGS` holds `microsoft_defender_custom_details_limit` and `microsoft_defender_placeholder_limit`, and is now `[&str; 4]`; `VALIDATION_CODES` holds both.
 
 #### `opentide-analysis`
 
+- **`analyze_query` takes the profile from the file, not from `QueryRequest.platform`** ([opentide#1912](https://github.com/opentidehq/opentide/issues/1912)), as the `opentide` entry under Breaking says. A valid `.exabeam` search, `SELECT DISTINCT user, src_ip WHERE vendor:"Microsoft"`, no longer reports `exabeam_advanced_in_rule` under `platform: exabeam`.
 - **`lint_owned` claims `microsoft_defender_nrt_query`** ([opentide#1890](https://github.com/opentidehq/opentide/issues/1890)), so `opentide lint` reports it and `validate` does not.
 
 ### Fixed
