@@ -6810,27 +6810,38 @@ fn sentinel_tenants(names: &[&str], rules: &[(&'static str, String)]) -> tempfil
 }
 
 /// A deployer that panics on the tenant `t1` once the four tenants deploying
-/// at once have all started, and holds every other tenant's rule until
-/// `t1`'s deploy has unwound (ten seconds at most), keeping the tenants it
-/// was asked to deploy to.
+/// at once have all started, and holds every other tenant's rule until the
+/// worker thread that ran `t1` has ended (a minute at most), keeping the
+/// tenants it was asked to deploy to.
 struct Panicking {
     opened: Mutex<Vec<String>>,
-    unwound: std::sync::atomic::AtomicBool,
 }
 
-/// Owned by `t1`'s deploy: its drop, while the panic unwinds the worker
-/// that polls the deploy, says the unwind has left the deploy.
-struct Unwinding<'a>(&'a std::sync::atomic::AtomicBool);
+/// Set when the worker thread that panicked on `t1` has ended: [`Exited`].
+static T1_WORKER_EXITED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
-impl Drop for Unwinding<'_> {
+/// Sets [`T1_WORKER_EXITED`] when dropped.
+struct Exited;
+
+impl Drop for Exited {
     fn drop(&mut self) {
-        self.0.store(true, std::sync::atomic::Ordering::SeqCst);
+        T1_WORKER_EXITED.store(true, std::sync::atomic::Ordering::SeqCst);
     }
 }
 
-/// Waits until `ready` says so, ten seconds at most.
+thread_local! {
+    /// `t1`'s [`Exited`], kept by the worker thread that polls `t1`'s deploy
+    /// (`runtime::block_on` polls it on the calling thread). A thread-local's
+    /// destructor runs when its thread exits: by then the worker caught the
+    /// panic, stopped the run and returned, so what waits for it needs no
+    /// margin.
+    static T1_WORKER: std::cell::RefCell<Option<Exited>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Waits until `ready` says so. The minute only keeps a broken run from
+/// hanging the test; a passing one ends on the event.
 async fn wait_until(ready: impl Fn() -> bool) {
-    let until = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    let until = std::time::Instant::now() + std::time::Duration::from_secs(60);
     while !ready() && std::time::Instant::now() < until {
         tokio::time::sleep(std::time::Duration::from_millis(5)).await;
     }
@@ -6850,14 +6861,12 @@ impl Deployer for Panicking {
                 // A barrier: every worker has taken its tenant, so none
                 // finds the run stopped before it took one.
                 wait_until(|| self.opened.lock().unwrap().len() >= 4).await;
-                let _unwinding = Unwinding(&self.unwound);
+                T1_WORKER.with(|worker| *worker.borrow_mut() = Some(Exited));
                 panic!("the stand-in's crash");
             }
-            wait_until(|| self.unwound.load(Ordering::SeqCst)).await;
-            // What is left of the unwind, `catch_panic` returning and the
-            // worker stopping the run, makes no system call: the margin is
-            // for the scheduler alone.
-            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+            // Once `t1`'s worker has exited, it had stopped the run: the
+            // worker that finishes this tenant finds it stopped. No margin.
+            wait_until(|| T1_WORKER_EXITED.load(Ordering::SeqCst)).await;
             Ok(DeployOutcome::new(None, request.operation))
         })
     }
@@ -6888,7 +6897,6 @@ fn a_panic_on_a_tenant_deploying_at_once_starts_no_other_tenant() {
     );
     let panicking: &'static Panicking = Box::leak(Box::new(Panicking {
         opened: Mutex::new(Vec::new()),
-        unwound: std::sync::atomic::AtomicBool::new(false),
     }));
     let mut registry = Registry::new();
     registry.register(Box::new(Panics(panicking))).unwrap();
