@@ -56,6 +56,7 @@ pub mod sentinel_one;
 pub mod splunk;
 pub mod sysdig;
 pub mod tenant;
+pub mod tenant_codes;
 pub mod text;
 pub mod tls;
 pub mod token;

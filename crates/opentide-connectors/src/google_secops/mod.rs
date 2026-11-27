@@ -572,8 +572,8 @@ fn tenant_failure(error: ConnectorError) -> DeployError {
         Some("google_secops_credentials_missing") => {
             failed.failure.code = "google_secops_credentials_missing";
         }
-        Some("google_secops_tenant_unauthorized") => {
-            failed.failure.code = "google_secops_tenant_unauthorized";
+        Some(auth::TENANT_UNAUTHORIZED) => {
+            failed.failure.code = auth::TENANT_UNAUTHORIZED;
         }
         _ => {}
     }

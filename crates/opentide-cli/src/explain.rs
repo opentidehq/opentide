@@ -698,6 +698,28 @@ mod tests {
         }
     }
 
+    /// Every tenant code `opentide_connectors::tenant_codes` builds from a
+    /// platform's prefix has its own page, which names the code and the
+    /// platform's deploy (#1960).
+    #[test]
+    fn every_platform_tenant_code_has_its_own_page() {
+        for codes in opentide_connectors::tenant_codes::ALL {
+            for code in codes.codes() {
+                let (_, markdown) = pages::PAGES
+                    .iter()
+                    .find(|(page, _)| *page == code)
+                    .unwrap_or_else(|| panic!("{code}: no page of its own"));
+                let markdown = markdown();
+                assert!(markdown.starts_with(&format!("# {code}\n")), "{code}");
+                assert!(
+                    markdown.contains(&format!("`{}` ", codes.platform)),
+                    "{code}: the page does not name `{}`",
+                    codes.platform
+                );
+            }
+        }
+    }
+
     /// `build.rs` compiles in every page of the package's folder.
     #[test]
     fn every_page_of_the_package_is_compiled_in() {
