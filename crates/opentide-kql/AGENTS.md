@@ -1,8 +1,8 @@
 # opentide-kql — agent guide
 
 The Microsoft Kusto (KQL) engine for Sentinel and Defender rules: parse, HIR, the operator,
-function and table catalogs (`data/catalogs/kql/`, Azure Monitor and ASIM tables), profiles
-(core, Sentinel, Defender), diagnostics, highlighting, hover and completion. `kql` is Kusto;
+function and table catalogs (`data/catalogs/kql/`, Azure Monitor and ASIM tables), dialects
+(`Dialect`: core, Sentinel, Defender), diagnostics, highlighting, hover and completion. `kql` is Kusto;
 Kibana's KQL is `opentide-kuery`.
 
 ## Place
@@ -27,7 +27,8 @@ cargo nextest run --profile fast -p opentide-kql
 package is licence-scanned for oracle names (`scripts/engine/license-scan.sh`): never name the
 oracle's library in a file the crate ships. Catalog syncs:
 `scripts/engine/sync_kql_learn_signatures.py`, `sync_azure_monitor_tables.py`,
-`sync_asim_schemas.py`.
+`sync_asim_schemas.py`, `sync_defender_functions.py` (advanced hunting's own functions, the
+Defender dialect's).
 
 ## Do not
 

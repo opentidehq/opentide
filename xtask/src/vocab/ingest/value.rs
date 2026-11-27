@@ -81,7 +81,7 @@ pub fn parse_json(bytes: &[u8]) -> Result<Value> {
 /// or time is refused: no vocabulary holds one, and JSON has none to carry
 /// it to the writer.
 pub fn parse_toml(text: &str) -> Result<Table> {
-    let text = text.replace("\r\n", "\n").replace('\r', "\n");
+    let text = opentide_core::text::universal_newlines(text);
     let document: toml::Table = toml::from_str(&text)?;
     table_of(document)
 }

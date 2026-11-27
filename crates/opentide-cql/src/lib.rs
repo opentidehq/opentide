@@ -47,16 +47,19 @@ use opentide_parse::{ErrorKind, SyntaxError};
 use rowan::TextRange;
 use syntax::SyntaxKind as K;
 
-/// Where the query runs.
+/// The use of the query (ADR 0015 §1: a profile, chosen by where the text
+/// sits, never by the platform). The default is a search: a raw `.cql` file
+/// or a hunt.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct Context {
+pub struct Profile {
     /// A Next-Gen SIEM correlation rule (`configurations.crowdstrike.query`),
     /// which adds CrowdStrike's correlation-rule restrictions.
     pub correlation_rule: bool,
 }
 
-impl Context {
-    pub const CORRELATION_RULE: Context = Context {
+impl Profile {
+    /// A CrowdStrike block's `query`.
+    pub const CORRELATION_RULE: Profile = Profile {
         correlation_rule: true,
     };
 }
@@ -123,19 +126,19 @@ pub fn debug_productions() -> Vec<String> {
 
 /// Analyze a CQL query on its own (a raw `.cql` file or a hunt search).
 pub fn analyze(source: &str) -> AnalyzeResult {
-    analyze_with(source, &Context::default())
+    analyze_with(source, &Profile::default())
 }
 
-/// Analyze a CQL query where `ctx` says it runs.
-pub fn analyze_with(source: &str, ctx: &Context) -> AnalyzeResult {
-    opentide_core::with_line_index(source, || analyze_lines(source, *ctx))
+/// Analyze a CQL query under `profile`: a correlation rule or a search.
+pub fn analyze_with(source: &str, profile: &Profile) -> AnalyzeResult {
+    opentide_core::with_line_index(source, || analyze_lines(source, *profile))
 }
 
 #[expect(
     clippy::expect_used,
     reason = "loads the HighlightSpec compiled in (highlights/spec.toml): a bad spec fails the tests, never a user's document"
 )]
-fn analyze_lines(source: &str, ctx: Context) -> AnalyzeResult {
+fn analyze_lines(source: &str, ctx: Profile) -> AnalyzeResult {
     let spec = HighlightSpec::shared().expect("highlight spec");
     let (root, parse) = parser::parse(source);
     let mut diagnostics = Vec::new();

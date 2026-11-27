@@ -100,6 +100,7 @@ fn empty_configurations() -> RuleConfigurations {
         exabeam: None,
         google_secops: None,
         graylog: None,
+        datadog: None,
     }
 }
 

@@ -13,7 +13,7 @@
 )]
 
 use opentide_core::codes;
-use opentide_kql::{Profile, analyze as analyze_kql};
+use opentide_kql::{Dialect, analyze as analyze_kql};
 use opentide_spl::analyze as analyze_spl;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -23,7 +23,7 @@ fn repo_root() -> PathBuf {
 }
 
 fn kql_parses(text: &str) -> bool {
-    analyze_kql(text, Profile::Sentinel)
+    analyze_kql(text, Dialect::Sentinel)
         .diagnostics
         .iter()
         .all(|d| d.code != codes::KQL_PARSE_ERROR)
@@ -81,7 +81,7 @@ fn external_kql_prefixes_catch_injected_operators() {
             "{name} broken twin has no injected fault"
         );
         assert!(
-            !analyze_kql(&broken, Profile::Sentinel)
+            !analyze_kql(&broken, Dialect::Sentinel)
                 .diagnostics
                 .is_empty(),
             "{name} broken full query produced no diagnostic"
@@ -94,7 +94,7 @@ fn external_kql_prefixes_catch_injected_operators() {
         } else {
             format!("{prefix}\n| frobnicate x")
         };
-        let result = analyze_kql(&mutated, Profile::Sentinel);
+        let result = analyze_kql(&mutated, Dialect::Sentinel);
         assert!(
             result
                 .diagnostics

@@ -46,11 +46,22 @@ facade (`xtask/layers.toml`), above the applications: its features reach opentid
 - **Curate, do not leak.** Add a re-export only for a type the API returns or takes. A function
   here wraps one call of an internal crate; logic belongs in the domain crates.
 - **Semver.** Every exported item is the API, re-exports included. New options structs and enums
-  are `#[non_exhaustive]` with a `Default` and builder methods. A breaking change raises the minor
-  version while 0.x and gets a **Breaking** entry in `crates/CHANGELOG.md`. CI's `facade` job runs
+  are `#[non_exhaustive]` with a `Default` and builder methods. A breaking change raises the major
+  version and gets a **Breaking** entry in `crates/CHANGELOG.md`. CI's `facade` job runs
   `cargo semver-checks` against the pull request's base (the merge commit's first parent): the
   baseline stays the PR base until the crate is published on crates.io, and only then becomes the
   last published version. Do not switch it earlier; there is no published API to hold to yet.
+  That run reads the facade's rustdoc JSON alone, where nothing re-exported from another crate is
+  present (cargo-semver-checks#638), so `scripts/ci/facade_semver.py` then checks, in each crate
+  the facade re-exports from (`FACADE_SOURCES` in `scripts/ci/changes.py`), the items the facade
+  exposes and the types they name (#1911).
+- **Open sets.** Platforms, query languages and diagnostic codes are open sets. Adding one is a
+  minor release; match them with a wildcard arm. Every item of the API that grows with them is
+  `#[non_exhaustive]` (`LanguageId`, and `RuleConfigurations`, a field per platform), and every
+  list of them is a `&'static [_]`, never a `[_; N]` (`LanguageId::QUERY_LANGUAGES`,
+  `RuleConfigurations::PLATFORMS`, `validate::STRICT_EXEMPT_WARNINGS`; #1911). A new such item
+  follows suit: `opentide_schema::platforms::PlatformId` and `IDS` are exhaustive and an array,
+  so they are converted before the facade ever re-exports them.
 - **The bindings' surface.** Every binding and host (`bindings/python`, `bindings/node`,
   `crates/opentide-wasm`) depends on this crate alone from the workspace, which `cargo xtask
   check-layers` enforces (`may_depend_on` in `xtask/layers.toml`). What a binding genuinely needs
@@ -79,4 +90,6 @@ cargo test -p opentide --all-features
 RUSTDOCFLAGS="-D warnings" cargo doc -p opentide --all-features --no-deps
 cargo run -p opentide --example validate -- <workspace>
 cargo semver-checks -p opentide --baseline-rev origin/integration/unified-core
+git worktree add --detach ../opentide-base origin/development
+python3 scripts/ci/facade_semver.py --baseline-root ../opentide-base   # what the facade re-exports
 ```

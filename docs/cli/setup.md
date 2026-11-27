@@ -168,6 +168,7 @@ opentide setup platforms --sentinel --microsoft-defender --yes
 | `--graylog` | Graylog |
 | `--exabeam` | Exabeam New-Scale SIEM |
 | `--google-secops` | Google Security Operations (YARA-L) |
+| `--datadog` | Datadog Cloud SIEM (Datadog search syntax) |
 
 ### setup ci
 

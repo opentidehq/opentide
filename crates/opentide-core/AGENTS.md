@@ -14,7 +14,8 @@ plain-text hovers and the schemas' plain `description` all read Markdown through
 the YAML node tree (`node`: saphyr-parser's events, saphyr's YAML 1.2 core-schema scalars,
 every node's position), the one YAML reader of the workspace: `validate`, the models
 (`opentide_schema::node` re-exports it) and opentide-tide read YAML with it (#850), and the small
-text helpers (`text`: `hex`, and `sha256_hex` behind the `digest` feature).
+text helpers (`text`: `hex`, the line-ending reads and writes, `unique`, and `sha256_hex` behind
+the `digest` feature).
 
 ## Place
 
@@ -50,8 +51,9 @@ crate depends on it.
   every language crate). A crate that depends on opentide-schema (opentide-tide,
   opentide-analysis, the facade's `analysis` and `lsp` features, opentide-wasm) builds it through
   the schemas' annotations, which the language server's catalogs read.
-- `text` is the one copy of the small text helpers (#1957): `hex`, `sha256_hex`. Never a second
-  hex encoder or digest at a call site. `sha256_hex` and its `sha2` dependency are behind the
+- `text` is the one copy of the small text helpers (#1957): `hex`, `sha256_hex`, the line
+  endings, `unique`. Never a second hex encoder, digest, line-ending rule or dedup at a call
+  site. `sha256_hex` and its `sha2` dependency are behind the
   opt-in `digest` feature, which only opentide-cli and xtask turn on: the engines, the facade and
   the hosts never build `sha2` (`cargo tree -p opentide-wasm -i sha2` prints nothing).
 - YAML is read with `node` only: never `serde_yaml`, `serde_yml` or a second parser (#850).

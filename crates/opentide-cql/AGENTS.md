@@ -17,7 +17,7 @@ foundation, tier 2: depends on opentide-core, -syntax, -highlight. Used by opent
 - I/O-free: no `std::fs` in `src/`; the catalogs are compiled in (`include_str!`) and parsed once (`OnceLock`).
 - CQL findings are `opentide_core::Diagnostic`s with `cql_*` codes from `opentide_core::codes`; no error enum of its own.
 - Errors are what LogScale refuses to compile; a field, saved search, lookup file or repository is never reported unknown: they live in the tenant.
-- A correlation rule (`Context::CORRELATION_RULE`) adds `cql_correlate_aggregate`; a hunt or a `.cql` file does not.
+- A correlation rule (`Profile::CORRELATION_RULE`) adds `cql_correlate_aggregate`; a hunt or a `.cql` file does not.
 - CrowdStrike's `offline_languages` is `["cql"]` in the platform registry (`PLATFORMS`, `crates/opentide-schema/src/platforms.rs`), so `opentide validate`, `opentide validate query --platform crowdstrike`, `opentide lint` and MCP `validate_query` report the `cql_*` codes offline, as the editor and `opentide tui` do. `--live` stays `supported: false` for CrowdStrike (`live_check: false`): there is no live validation.
 
 ## Test

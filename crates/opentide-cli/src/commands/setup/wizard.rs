@@ -831,7 +831,7 @@ pub(crate) mod tests {
                 "text Repository name [detections] Some(\"a name\")",
                 "text Organisation / team (optional) [] None",
                 "text Description (optional) [] None",
-                "checkbox Detection platforms [\"Microsoft Sentinel\", \"Microsoft Defender\", \"Splunk Enterprise Security\", \"SentinelOne\", \"CrowdStrike Falcon\", \"HarfangLab\", \"Carbon Black Cloud\", \"Elastic Security\", \"Sysdig Secure\", \"Bitdefender GravityZone\", \"Graylog\", \"Exabeam New-Scale SIEM\", \"Google Security Operations\"] [] required=true",
+                "checkbox Detection platforms [\"Microsoft Sentinel\", \"Microsoft Defender\", \"Splunk Enterprise Security\", \"SentinelOne\", \"CrowdStrike Falcon\", \"HarfangLab\", \"Carbon Black Cloud\", \"Elastic Security\", \"Sysdig Secure\", \"Bitdefender GravityZone\", \"Graylog\", \"Exabeam New-Scale SIEM\", \"Google Security Operations\", \"Datadog Cloud SIEM\"] [] required=true",
                 "select CI/CD platform [\"Configure later\", \"GitHub Actions\", \"GitLab CI\", \"Azure Pipelines\"] [0]",
                 "checkbox CI workflow features [\"Staging deployments on pull requests\", \"Inflight preview shards\", \"Automatic status promotion\", \"Sharing on the default branch\", \"Explorer pages\"] [0, 1] required=false",
                 "confirm Configure opentide MCP? [false]",

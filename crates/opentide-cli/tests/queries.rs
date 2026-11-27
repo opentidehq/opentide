@@ -911,6 +911,93 @@ fn lint_reports_the_exabeam_block_advisories() {
     );
 }
 
+#[test]
+fn lint_reports_the_datadog_block_advisories() {
+    let text = rule(
+        "  datadog:\n    status: PREVIEW\n    queries:\n      - query: source:a\n      - query: \
+         source:b\n      - query: source:c\n    cases:\n      - condition: a > 1 || b > 1 && c > \
+         1\n",
+    );
+    let found = lint_check(&text);
+    let advisories: Vec<(String, String)> = found
+        .into_iter()
+        .filter(|(code, _, _)| code.starts_with("datadog_condition"))
+        .map(|(code, severity, _)| (code, severity))
+        .collect();
+    assert_eq!(
+        advisories,
+        [("datadog_condition_mixed".to_owned(), "warning".to_owned())]
+    );
+}
+
+/// A block's query is a detection rule's (profile `rule`): full-text
+/// `*:term` is a warning there; the same text in a `system: datadog` hunt is
+/// a search (profile `search`), where it is not (RFC rfc-datadog-cloud-siem
+/// §6.1).
+#[test]
+fn lint_checks_a_datadog_block_query_as_a_rule_and_a_hunt_as_a_search() {
+    let text = format!(
+        "{}response:\n  procedure:\n    searches:\n      - purpose: p\n        system: \
+         datadog\n        query: '*:mimikatz'\n",
+        rule(
+            "  datadog:\n    status: PREVIEW\n    queries:\n      - query: '*:mimikatz'\n    \
+             cases:\n      - condition: a > 0\n"
+        )
+    );
+    let found: Vec<(String, String, usize)> = lint_check(&text)
+        .into_iter()
+        .filter(|(code, _, _)| code == "datadog_full_text_in_rule")
+        .collect();
+    assert_eq!(
+        found,
+        [(
+            "datadog_full_text_in_rule".to_owned(),
+            "warning".to_owned(),
+            9
+        )]
+    );
+}
+
+/// Advanced hunting's own functions (#1914): a Sentinel block that calls one
+/// gets lint's warning `kql_function_unavailable` at the function's name; a
+/// Defender block that calls it gets nothing, and `validate` fails neither.
+#[test]
+fn lint_reports_a_defender_function_in_a_sentinel_query() {
+    let query =
+        "query: |\n      DeviceFileEvents\n      | project SHA1\n      | invoke FileProfile()\n";
+    let sentinel = rule(&format!("  sentinel:\n    status: STAGING\n    {query}"));
+    let found: Vec<(String, String, usize)> = lint_check(&sentinel)
+        .into_iter()
+        .filter(|(code, _, _)| code == "kql_function_unavailable")
+        .collect();
+    assert_eq!(
+        found,
+        [(
+            "kql_function_unavailable".to_owned(),
+            "warning".to_owned(),
+            11
+        )]
+    );
+    let (errors, warnings, _) = check(&sentinel, false);
+    assert!(
+        errors
+            .iter()
+            .chain(&warnings)
+            .all(|d| d.code != "kql_function_unavailable"),
+        "{errors:?} {warnings:?}"
+    );
+    let defender = rule(&format!(
+        "  microsoft_defender:\n    status: STAGING\n    schedule:\n      frequency: 1H\n    {query}"
+    ));
+    assert!(
+        lint_check(&defender)
+            .iter()
+            .all(|(code, _, _)| code != "kql_function_unavailable"),
+        "{:?}",
+        lint_check(&defender)
+    );
+}
+
 /// Microsoft's documented custom detection limits (#1890): the alert's are
 /// block advisories, which lint reports like `validate`; a continuous rule's
 /// query is the engine's warning, lint's and not `validate`'s.

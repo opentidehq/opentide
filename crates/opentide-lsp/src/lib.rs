@@ -1,6 +1,7 @@
 //! The opentide language server as a library, for hosts that run it in their
-//! own process. The `opentide` Python package serves it as `opentide lsp start`
-//! through its bindings; the `opentide-lsp` binary is the other host.
+//! own process. The command line (`opentide-cli`) serves it as `opentide lsp
+//! start`, in the binary and the Python and npm launchers alike; the
+//! `opentide-lsp` binary is the other host.
 //!
 //! [`run_stdio`] speaks LSP on the process's stdin and stdout until the client
 //! sends `exit` or closes stdin. Nothing else may write to stdout meanwhile.

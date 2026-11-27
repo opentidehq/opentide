@@ -15,7 +15,7 @@
     reason = "test helpers outside #[test] functions: a panic fails the test"
 )]
 
-use opentide_kql::{Catalog, Profile, analyze_with_catalog, columns, hover};
+use opentide_kql::{Catalog, Dialect, analyze_with_catalog, columns, hover};
 
 /// Runs `run` on a thread with a stack of `size` bytes; an overflow aborts.
 fn on_stack<T: Send + 'static>(size: usize, run: impl FnOnce() -> T + Send + 'static) -> T {
@@ -31,14 +31,14 @@ fn on_stack<T: Send + 'static>(size: usize, run: impl FnOnce() -> T + Send + 'st
 /// diagnostics.
 fn analyze_small(source: String) -> Vec<String> {
     on_stack(1 << 20, move || {
-        let catalog = Catalog::for_workspace(Profile::Sentinel, &source);
+        let catalog = Catalog::for_workspace(Dialect::Sentinel, &source);
         let codes = analyze_with_catalog(&source, &catalog)
             .diagnostics
             .into_iter()
             .map(|d| d.code)
             .collect();
-        let _ = columns(&source, Profile::Sentinel);
-        let _ = hover(&source, source.len() / 2, Profile::Sentinel);
+        let _ = columns(&source, Dialect::Sentinel);
+        let _ = hover(&source, source.len() / 2, Dialect::Sentinel);
         codes
     })
 }

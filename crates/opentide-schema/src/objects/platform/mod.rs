@@ -29,6 +29,7 @@
 pub mod bitdefender;
 pub mod carbon_black;
 pub mod crowdstrike;
+pub mod datadog;
 pub mod deprecation;
 pub mod microsoft_defender;
 /// Elastic Security durations: `opentide_core::duration`, the grammar the
@@ -62,6 +63,7 @@ use crate::objects::checks::Violation;
 pub use bitdefender::BitdefenderConfig;
 pub use carbon_black::CarbonBlackConfig;
 pub use crowdstrike::CrowdstrikeConfig;
+pub use datadog::DatadogConfig;
 pub use elastic::ElasticConfig;
 pub use exabeam::ExabeamConfig;
 pub use google_secops::GoogleSecopsConfig;
@@ -273,6 +275,7 @@ pub const PLATFORM_CONFIG_MODELS: [Registered; crate::platforms::COUNT] = [
     registered::<GraylogConfig>("graylog", "GraylogConfig"),
     registered::<ExabeamConfig>("exabeam", "ExabeamConfig"),
     registered::<GoogleSecopsConfig>("google_secops", "GoogleSecopsConfig"),
+    registered::<DatadogConfig>("datadog", "DatadogConfig"),
 ];
 
 const fn registered<T: PlatformBlock>(key: &'static str, model: &'static str) -> Registered {
@@ -306,6 +309,7 @@ pub const LEGACY_KEYS: &[(&str, LegacyKeys)] = &[
     ("BitdefenderConfig", &[]),
     ("ExabeamConfig", &[]),
     ("GoogleSecopsConfig", &[]),
+    ("DatadogConfig", &[]),
 ];
 
 /// The legacy keys of `model` ([`LEGACY_KEYS`]); a model that declares none
@@ -459,7 +463,8 @@ pub const NAMED_CHECKS: [NamedCheck; 5] = [
 /// ([`graylog::constraint_codes`]), Exabeam's ([`exabeam::constraint_codes`]),
 /// Microsoft Defender's ([`microsoft_defender::CONSTRAINT_CODES`]) and Google
 /// SecOps' ([`google_secops::CONSTRAINT_CODES`], but `extra_forbidden`, which
-/// its model reports as an unknown key). `validate` attributes a finding
+/// its model reports as an unknown key), then Datadog's
+/// ([`datadog::constraint_codes`]). `validate` attributes a finding
 /// under one of them to its `schema` check, which runs the models. The other
 /// platforms' named checks report their codes in one `schema_validation`
 /// finding ([`codes_message`]).
@@ -469,6 +474,7 @@ pub fn constraint_codes() -> impl Iterator<Item = &'static str> {
         .map(|(code, _)| *code)
         .chain(graylog::constraint_codes())
         .chain(exabeam::constraint_codes())
+        .chain(datadog::constraint_codes())
         .chain(microsoft_defender::CONSTRAINT_CODES)
         .chain(
             google_secops::CONSTRAINT_CODES
@@ -483,7 +489,8 @@ pub fn constraint_codes() -> impl Iterator<Item = &'static str> {
 /// ([`bitdefender::advisories::advisories`]), Graylog's
 /// ([`graylog::advisories`], which read the workspace's Graylog tenants:
 /// `graylog_tenants`), Exabeam's ([`exabeam::advisories`]), then Google
-/// SecOps' ([`google_secops::advisories::advisories`]), as lint orders them.
+/// SecOps' ([`google_secops::advisories::advisories`]), then Datadog's
+/// ([`datadog::advisories`]), as lint orders them.
 pub fn block_advisories(rule: &Node, graylog_tenants: &[graylog::TenantView<'_>]) -> Vec<Advisory> {
     let convert = |code, field_path, message| Advisory {
         code,
@@ -502,6 +509,7 @@ pub fn block_advisories(rule: &Node, graylog_tenants: &[graylog::TenantView<'_>]
     found.extend(exabeam::advisories(rule));
     found.extend(microsoft_defender::advisories(rule));
     found.extend(google_secops::advisories::advisories(rule));
+    found.extend(datadog::advisories(rule));
     found
 }
 
@@ -855,6 +863,8 @@ pub enum PlatformConfig {
     GoogleSecops(GoogleSecopsConfig),
     /// `graylog`.
     Graylog(GraylogConfig),
+    /// `datadog`.
+    Datadog(DatadogConfig),
 }
 
 /// Why [`parse_platform_config`] refused a block.
@@ -895,6 +905,7 @@ pub fn parse_platform_config(platform: &str, node: &Node) -> Result<PlatformConf
         "exabeam" => read(node, PlatformConfig::Exabeam),
         "google_secops" => read(node, PlatformConfig::GoogleSecops),
         "graylog" => read(node, PlatformConfig::Graylog),
+        "datadog" => read(node, PlatformConfig::Datadog),
         other => Err(ParseError::UnknownPlatform(format!(
             "Unknown platform {}",
             repr::quote(other)

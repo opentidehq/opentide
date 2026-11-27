@@ -3,9 +3,23 @@
 //!
 //! - [`hex`]: bytes as lowercase hex digits;
 //! - `sha256_hex` (the opt-in `digest` feature): the SHA-256 of bytes as 64
-//!   lowercase hex digits (RustCrypto's `sha2`).
+//!   lowercase hex digits (RustCrypto's `sha2`);
+//! - line endings: [`universal_newlines`] reads `\r\n` and a lone `\r` as
+//!   `\n`; [`newline_of`] is the line ending a file writes (CRLF when it has
+//!   one) and [`with_newlines_of`] writes a text in it;
+//! - [`unique`]: each item once, in the order it first came (names, ids),
+//!   in linear time.
+//!
+//! A caller that reads only `\r\n` as `\n` (a lone `\r` kept), that reads
+//! every YAML line break as `\n`, or that keeps CRLF only when every line
+//! ends in it says so where it does, with a one-line pointer here: those
+//! are different rules, not copies of these.
 
+use std::borrow::Cow;
 use std::fmt::Write as _;
+use std::hash::Hash;
+
+use indexmap::IndexSet;
 
 #[cfg(feature = "digest")]
 use sha2::{Digest as _, Sha256};
@@ -28,9 +42,91 @@ pub fn sha256_hex(bytes: &[u8]) -> String {
     hex(&Sha256::digest(bytes))
 }
 
+/// `text` with `\r\n` and a lone `\r` read as `\n`, as a text-mode read
+/// reads a file (Python's universal newlines). Borrowed when `text` has no
+/// `\r`.
+#[must_use]
+pub fn universal_newlines(text: &str) -> Cow<'_, str> {
+    if text.contains('\r') {
+        Cow::Owned(text.replace("\r\n", "\n").replace('\r', "\n"))
+    } else {
+        Cow::Borrowed(text)
+    }
+}
+
+/// The line ending a file uses: `"\r\n"` when it has one CRLF, else
+/// `"\n"`.
+#[must_use]
+pub fn newline_of(text: &str) -> &'static str {
+    if text.contains("\r\n") { "\r\n" } else { "\n" }
+}
+
+/// `written`, text an editor produced from `original`, in `original`'s line
+/// ending: when `original` has a CRLF, every line break of `written` (`\n`
+/// or `\r\n`) becomes `\r\n`; otherwise `written` as it is.
+#[must_use]
+pub fn with_newlines_of(written: String, original: &str) -> String {
+    if original.contains("\r\n") {
+        written.replace("\r\n", "\n").replace('\n', "\r\n")
+    } else {
+        written
+    }
+}
+
+/// `items` each once, in the order each first came.
+#[must_use]
+pub fn unique<T: Hash + Eq>(items: impl IntoIterator<Item = T>) -> Vec<T> {
+    items
+        .into_iter()
+        .collect::<IndexSet<T>>()
+        .into_iter()
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
-    use super::hex;
+    use std::borrow::Cow;
+
+    use super::{hex, newline_of, unique, universal_newlines, with_newlines_of};
+
+    #[test]
+    fn unique_keeps_the_first_of_each_in_order() {
+        assert_eq!(
+            unique(["é", "😀", "e", "é", "É", "😀", "e\u{301}"]),
+            ["é", "😀", "e", "É", "e\u{301}"]
+        );
+        assert_eq!(unique(Vec::<String>::new()), Vec::<String>::new());
+    }
+
+    #[test]
+    fn universal_newlines_reads_crlf_and_a_lone_cr_as_lf() {
+        assert_eq!(universal_newlines("é\r\n😀\rü\n\r\r\nx"), "é\n😀\nü\n\n\nx");
+        assert!(matches!(
+            universal_newlines("é\n😀"),
+            Cow::Borrowed("é\n😀")
+        ));
+        assert_eq!(universal_newlines(""), "");
+    }
+
+    #[test]
+    fn one_crlf_makes_a_file_crlf() {
+        assert_eq!(newline_of("é\n😀\r\n"), "\r\n");
+        assert_eq!(newline_of("é\n😀\r"), "\n");
+        assert_eq!(newline_of(""), "\n");
+    }
+
+    #[test]
+    fn written_text_takes_the_original_line_ending() {
+        assert_eq!(
+            with_newlines_of("é\r\n😀\nü".to_owned(), "a\r\nb\n"),
+            "é\r\n😀\r\nü"
+        );
+        // An LF original leaves the text alone, a CRLF in it included.
+        assert_eq!(
+            with_newlines_of("é\r\n😀\n".to_owned(), "a\nb\r"),
+            "é\r\n😀\n"
+        );
+    }
 
     #[test]
     fn hex_is_two_lowercase_digits_per_byte() {

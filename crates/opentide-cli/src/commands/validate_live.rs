@@ -1622,6 +1622,14 @@ fn tenant_host(platform: &str, tenant: &Configured) -> String {
             })
             .unwrap_or_default();
     }
+    if platform == "datadog" {
+        // `api_url`, else the site's API host.
+        return opentide_schema::configuration::models::datadog_base_url(
+            text("site").as_deref(),
+            text("api_url").as_deref(),
+        )
+        .unwrap_or_default();
+    }
     text("url")
         .filter(|url| !url.is_empty())
         .unwrap_or_else(|| default_host(platform).to_owned())
@@ -1860,6 +1868,8 @@ fn check_batches(
                     elastic(batches, timeout, cx, compile, &refusals, &mut report).await
                 } else if platform == "google_secops" {
                     google_secops(batches, timeout, cx, compile, &refusals, &mut report).await
+                } else if platform == "datadog" {
+                    datadog(batches, timeout, cx, compile, &refusals, &mut report).await
                 } else {
                     generic(platform, batches, timeout, cx, &refusals, &mut report).await
                 }
@@ -2461,6 +2471,165 @@ async fn google_secops(
                     );
                     // An answer: a refusal after timeouts is not an
                     // unreachable tenant.
+                    streak.answered();
+                    refuse(
+                        refusals,
+                        platform,
+                        Refused::with_message(
+                            &tenant.name,
+                            &host,
+                            format!("{platform} tenant '{}': {text}", tenant.name),
+                        ),
+                        true,
+                    );
+                    break;
+                }
+                Err(ConnectorError::Timeout {
+                    address, seconds, ..
+                }) => {
+                    let error = read_timeout_text(&address, seconds);
+                    streak.timed_out(&error, true).map_err(Early::Unreachable)?;
+                    report.checks.push(timed_out(
+                        platform,
+                        rule,
+                        &tenant.name,
+                        None,
+                        &error,
+                        timeout,
+                        Vec::new(),
+                    ));
+                }
+                Err(error) => return Err(early(platform, &tenant.name, &host, &error)),
+            }
+        }
+        streak.finish().map_err(Early::Unreachable)?;
+    }
+    Ok(())
+}
+
+/// A Datadog rule checked whole (RFC rfc-datadog-cloud-siem §8.2): each
+/// rule compiled for every tenant deploy would send it to, then
+/// `POST /security_monitoring/rules/validation`. Datadog's `errors[]` fail
+/// the rule (`datadog_rule_invalid`); a rule that does not compile for the
+/// tenant (an alias it lacks) fails with the compiler's reason. A refused
+/// key fails the tenant: the check stops there, and no query counts as
+/// rejected.
+#[expect(
+    clippy::too_many_lines,
+    reason = "one loop over the tenants and their rules, sharing the streak and the stop, as \
+              google_secops's"
+)]
+async fn datadog(
+    batches: &[Batch],
+    timeout: f64,
+    cx: &Context<'_>,
+    compile: &opentide_compile::Context<'_>,
+    refusals: &Refusals,
+    report: &mut CheckReport,
+) -> Result<(), Early> {
+    use opentide_connectors::datadog::{Datadog, check_rule};
+    let platform = "datadog";
+    let environment = Environment::from_pairs(cx.env.iter());
+    let connector = Datadog::new();
+    let cancel = CancellationToken::new();
+    for batch in batches {
+        let tenant = &batch.tenant;
+        let rules: Vec<&opentide_compile::Rule> = batch
+            .rules
+            .iter()
+            .map(|sent| &sent.rule)
+            .filter(|rule| rule.block(platform).is_some())
+            .collect();
+        if rules.is_empty() {
+            continue;
+        }
+        let host = tenant_host(platform, tenant);
+        let conn = connect(platform, tenant, timeout, cx, &environment).map_err(Early::from)?;
+        let context = TenantContext {
+            tenant: &conn.tenant,
+            http: &conn.http,
+            cancel: &cancel,
+        };
+        let session = match connector.session(context) {
+            Ok(session) => session,
+            Err(failure) => {
+                let text = match failure {
+                    opentide_connectors::datadog::Failure::Tenant(error) => error.to_string(),
+                    opentide_connectors::datadog::Failure::NoAnswer(error) => error.text(),
+                    other => format!("{other:?}"),
+                };
+                refuse(
+                    refusals,
+                    platform,
+                    Refused::with_message(
+                        &tenant.name,
+                        &host,
+                        format!("{platform} tenant '{}': {text}", tenant.name),
+                    ),
+                    false,
+                );
+                continue;
+            }
+        };
+        let mut streak = Streak::new(platform, &tenant.name, &host, timeout);
+        for rule in rules {
+            tracing::info!(
+                rule_name = rule.name.as_str(),
+                uuid = rule.uuid.as_str(),
+                tenant = tenant.name.as_str(),
+                "validating_query"
+            );
+            let compiled = match opentide_compile::datadog::compile_deployment(
+                compile,
+                rule,
+                Some(&batch.table),
+            ) {
+                Ok(compiled) => compiled,
+                Err(error) => {
+                    report
+                        .checks
+                        .push(rejected(platform, rule, &tenant.name, None, &error.reason));
+                    continue;
+                }
+            };
+            let found = watched(
+                check_rule(&session, &compiled.body),
+                &cancel,
+                cx.interrupted,
+            )
+            .await;
+            match found {
+                Ok(check) => {
+                    streak.answered();
+                    for error in &check.errors {
+                        log_rejected(platform, rule, &tenant.name, error);
+                    }
+                    if check.errors.is_empty() {
+                        tracing::info!(
+                            rule_name = rule.name.as_str(),
+                            tenant = tenant.name.as_str(),
+                            "valid_query"
+                        );
+                    }
+                    report.checks.push(RuleCheck {
+                        rule: rule.uuid.clone(),
+                        place: Place::of(rule, platform),
+                        name: rule.name.clone(),
+                        tenant: tenant.name.clone(),
+                        label: None,
+                        errors: check.errors,
+                        warnings: check.warnings,
+                        code: None,
+                    });
+                }
+                Err(refused @ ConnectorError::Authentication { .. }) => {
+                    let text = refused.text();
+                    tracing::error!(
+                        tenant = tenant.name.as_str(),
+                        error = text.as_str(),
+                        critical = true,
+                        "datadog_tenant_validation_failed"
+                    );
                     streak.answered();
                     refuse(
                         refusals,

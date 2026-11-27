@@ -360,7 +360,7 @@ impl QueryHighlighter {
             return by_line;
         };
         // As a text file is read: every line break a `\n`.
-        let text = text.replace("\r\n", "\n").replace('\r', "\n");
+        let text = opentide_core::text::universal_newlines(text);
         for token in opentide_analysis::highlight(language, &text).tokens {
             let Some(style) = query_style(&token.capture) else {
                 continue;

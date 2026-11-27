@@ -550,11 +550,11 @@ fn push(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Profile, analyze};
+    use crate::{Dialect, analyze};
     use opentide_core::Severity;
 
     fn warnings(src: &str) -> Vec<Diagnostic> {
-        analyze(src, Profile::Sentinel)
+        analyze(src, Dialect::Sentinel)
             .diagnostics
             .into_iter()
             .filter(|d| d.severity == Severity::Warning)
@@ -581,7 +581,7 @@ mod tests {
         }
         src.push_str("f499(1) | where c > 2");
         crate::schema::tests::PIPELINES_SCANNED.with(|n| n.set(0));
-        let _ = analyze(&src, Profile::Sentinel);
+        let _ = analyze(&src, Dialect::Sentinel);
         let scanned = crate::schema::tests::PIPELINES_SCANNED.with(std::cell::Cell::get);
         assert_eq!(scanned, 0, "pipelines scanned by `Analysis::pipeline`");
     }
@@ -799,7 +799,7 @@ mod tests {
     #[test]
     fn no_cardinality_or_shufflekey_warning() {
         let src = "SecurityEvent | join hint.shufflekey=EventID SecurityAlert on EventID";
-        let r = analyze(src, Profile::Sentinel);
+        let r = analyze(src, Dialect::Sentinel);
         assert!(r.diagnostics.iter().all(|d| {
             let msg = d.message.to_ascii_lowercase();
             !msg.contains("shuffle")
@@ -817,7 +817,7 @@ SecurityEvent
 | where EventID == 4688 and TimeGenerated > ago(1d)
 | project Computer, EventID, TimeGenerated
 | summarize count() by Computer";
-        let r = analyze(src, Profile::Sentinel);
+        let r = analyze(src, Dialect::Sentinel);
         assert!(
             r.diagnostics.iter().all(|d| {
                 !matches!(

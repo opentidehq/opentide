@@ -24,11 +24,12 @@ behind Datadog's Observability Pipelines.
 | Highlighting | RFC §6.8 (existing HighlightSpec captures only) | `src/check.rs` (the same walk as the checks) |
 | Accept-or-reject differential | VRL's `src/datadog/search/grammar.pest` at `1e3e2e8a` (MPL-2.0), CI only | `scripts/engine/oracles/datadog/` |
 
-This is phase 1 of the RFC: the language. The `datadog` platform (its Tide block, deploy, the
-tenant check and `opentide query`) is phase 2, so no block embeds the language yet, `opentide
-validate query` does not take `.datadog` files, and hunts with `system: datadog` wait for the
-platform's identifier. The language server (`opentide lsp start`, `opentide-lsp`) reads `.datadog`
-files today.
+Phase 1 of the RFC brought the language; phase 2 brought the `datadog` platform: a block's
+`queries[].query` is checked under the `rule` profile (`platform_field_language`), a hunt with
+`system: datadog` and a `.datadog` file under the `search` profile, in `opentide validate`,
+`opentide validate query` and the language server. A case's `condition` is not this language: the
+platform model parses it (`opentide-schema`'s `platform/datadog/condition.rs`), and it gets no
+tokens, as Graylog's conditions get none.
 
 ## A new grammar, not a Lucene dialect
 
@@ -69,8 +70,8 @@ follow a field's colon (`env: prod`). A word that is a number, with an optional 
 
 | Profile | Used for | Difference |
 |---------|----------|------------|
-| `rule` | a detection rule's `queries[].query` (phase 2); `analyze_query` with `platform: datadog` | `*:term` (`datadog_full_text_in_rule`) and `#name` (`datadog_calculated_field_in_rule`) are warnings |
-| `search` | `.datadog` files; `system: datadog` hunts and `opentide query` (phase 2); `analyze_query` without a platform | everything the syntax allows |
+| `rule` | a detection rule's `queries[].query` | `*:term` (`datadog_full_text_in_rule`) and `#name` (`datadog_calculated_field_in_rule`) are warnings |
+| `search` | `.datadog` files; `system: datadog` hunts and `opentide query`; `analyze_query`, whatever its `platform` | everything the syntax allows |
 
 ## Diagnostics
 

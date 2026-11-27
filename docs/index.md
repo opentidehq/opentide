@@ -1,6 +1,6 @@
 ---
 title: opentide
-description: Spec-driven development for agentic detection engineering — validate, generate, deploy, and document detection rules across thirteen security platforms.
+description: Spec-driven development for agentic detection engineering — validate, generate, deploy, and document detection rules across fourteen security platforms.
 ---
 
 # opentide
@@ -32,7 +32,7 @@ opentide deploy --platform sentinel --dry-run --strategy PREVIEW --all
 
 ## Platform coverage
 
-opentide deploys to **thirteen platforms**, checks queries on the tenant on **nine** of them and offline, with no tenant, on **twelve**. CrowdStrike, HarfangLab, Sysdig and Bitdefender deploy but have no live query check — opentide never fakes validation for those platforms; the offline engine checks their queries (CQL, YARA and Falco conditions) without a tenant. SentinelOne's queries are checked on the tenant only.
+opentide deploys to **fourteen platforms**, checks queries on the tenant on **ten** of them and offline, with no tenant, on **thirteen**. CrowdStrike, HarfangLab, Sysdig and Bitdefender deploy but have no live query check — opentide never fakes validation for those platforms; the offline engine checks their queries (CQL, YARA and Falco conditions) without a tenant. SentinelOne's queries are checked on the tenant only.
 
 See [Platforms](./usage/concepts/platforms.md) for the capability matrix.
 

@@ -62,10 +62,11 @@ test('a workspace lists its tenants in file order', () => {
 })
 
 test('the platforms and what each can do', () => {
-  assert.equal(platforms().length, 13)
+  assert.equal(platforms().length, 14)
   assert.deepEqual(capabilities('sysdig'), { deploy: true, liveValidation: false, query: false })
   assert.deepEqual(capabilities('bitdefender'), { deploy: true, liveValidation: false, query: false })
   assert.deepEqual(capabilities('exabeam'), { deploy: true, liveValidation: true, query: true })
+  assert.deepEqual(capabilities('datadog'), { deploy: true, liveValidation: true, query: true })
   assert.equal(capabilities('nowhere'), null)
 })
 

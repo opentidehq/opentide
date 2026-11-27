@@ -44,6 +44,10 @@ pub struct FunctionRow {
     /// The function that replaces this deprecated alias.
     #[serde(default)]
     pub deprecated: Option<String>,
+    /// The one dialect that has the function (`defender`: advanced hunting's own,
+    /// `data/catalogs/kql/defender/functions.toml`); `None` for Kusto's, which every dialect has.
+    #[serde(default)]
+    pub profile: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

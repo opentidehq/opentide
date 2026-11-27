@@ -1,4 +1,5 @@
-//! Shared I/O-free types for the opentide language server.
+//! The shared I/O-free types every opentide engine crate builds on: language
+//! ids, positions and spans, diagnostics and their codes.
 //!
 //! Names use `opentide`, never `otide`.
 //!
@@ -37,8 +38,12 @@ const fn reported_version(from_build: Option<&'static str>, package: &'static st
 }
 
 /// Language identifier advertised to editors and WASM hosts.
+///
+/// Non-exhaustive (ADR 0015 §6): a new query language is a new variant and a
+/// minor release, so a `match` outside this crate needs a wildcard arm.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
+#[non_exhaustive]
 pub enum LanguageId {
     #[serde(rename = "kql", alias = "opentide-kql")]
     Kql,
@@ -150,8 +155,9 @@ impl LanguageId {
         }
     }
 
-    /// Query languages with a tree-sitter grammar and an engine.
-    pub const QUERY_LANGUAGES: [Self; 12] = [
+    /// Query languages with a grammar and an engine. A slice, not an array,
+    /// so a new language does not change the constant's type.
+    pub const QUERY_LANGUAGES: &'static [Self] = &[
         Self::Kql,
         Self::Spl,
         Self::Esql,
@@ -799,6 +805,8 @@ pub mod codes {
             => "The KQL function is not in the Kusto function catalog.";
         KQL_DEPRECATED_FUNCTION = "kql_deprecated_function"
             => "The KQL function is a deprecated alias; Microsoft Learn names its replacement.";
+        KQL_FUNCTION_UNAVAILABLE = "kql_function_unavailable"
+            => "The KQL function is another dialect's: a Microsoft Defender advanced hunting function in a Microsoft Sentinel query.";
         KQL_DEPRECATED_OPERATOR = "kql_deprecated_operator"
             => "The KQL scalar operator is a legacy spelling (containscs); use the current name (contains_cs).";
         KQL_UNKNOWN_TABLE = "kql_unknown_table"
@@ -1485,6 +1493,29 @@ pub mod codes {
             => "A Datadog search uses Observability Pipelines syntax (`_exists_:`, `_missing_:`, a quoted field name), which log search does not read the same way.";
         DATADOG_UNKNOWN_ATTRIBUTE = "datadog_unknown_attribute"
             => "A Datadog search field is a dotted bare key, searched as a tag, where an `@attribute` was probably meant.";
+        // Datadog block constraint codes and the advisory (rfc-datadog-cloud-siem, §5.9).
+        DATADOG_METHOD_UNSUPPORTED = "datadog_method_unsupported"
+            => "A Datadog detection method is not threshold, new_value, anomaly or impossible_travel.";
+        DATADOG_DURATION = "datadog_duration"
+            => "A Datadog duration is not one of the values its key accepts (a window, a bucket, a learning period, forget_after).";
+        DATADOG_WINDOW_ORDER = "datadog_window_order"
+            => "A Datadog detection window is longer than the signal's keep_alive or max_duration.";
+        DATADOG_QUERY_NAME = "datadog_query_name"
+            => "A Datadog query name is not [a-z][a-z0-9_]*, is a duplicate, or is set on a new_value query.";
+        DATADOG_MEASURE = "datadog_measure"
+            => "A Datadog query sets more than one measure, or new_value does not match the detection method.";
+        DATADOG_DETECTION_OPTION = "datadog_detection_option"
+            => "A Datadog detection key the method does not take, or a new_value rule without forget_after.";
+        DATADOG_SIGNAL_GROUP_BY = "datadog_signal_group_by"
+            => "A Datadog signal.group_by field is in no query's group_by.";
+        DATADOG_CONDITION = "datadog_condition"
+            => "A Datadog case condition does not parse, names an unknown query, or does not suit the detection method.";
+        DATADOG_SEVERITY = "datadog_severity"
+            => "A Datadog case severity is not info, low, medium, high or critical.";
+        DATADOG_TAG = "datadog_tag"
+            => "A Datadog tag would be refused or rewritten: upper case, a character outside a-z 0-9 _ - : . /, or longer than 200 characters.";
+        DATADOG_CONDITION_MIXED = "datadog_condition_mixed"
+            => "A Datadog case condition mixes && and ||, whose precedence Datadog does not document.";
     }
 }
 
@@ -1665,7 +1696,8 @@ mod tests {
     #[test]
     fn language_id_roundtrip() {
         for id in LanguageId::QUERY_LANGUAGES
-            .into_iter()
+            .iter()
+            .copied()
             .chain([LanguageId::TideYaml])
         {
             assert_eq!(LanguageId::parse(id.as_str()), Some(id));
