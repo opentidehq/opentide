@@ -836,21 +836,6 @@ pub fn tenant_setup(tenant: &Json) -> Option<&Json> {
     tenant.get("setup").filter(|setup| !setup.is_null())
 }
 
-/// The create body `rule` deploys on `tenant` at [`PREVIEW_VERSION`] (none
-/// for a dry run: aliases are left unresolved), the body a preview shows.
-pub fn compile_body(
-    cx: &Context<'_>,
-    rule: &Rule,
-    tenant: Option<&Json>,
-) -> Result<Json, CompileError> {
-    let setup = tenant.and_then(tenant_setup);
-    let name = tenant
-        .and_then(|tenant| tenant.get("name"))
-        .and_then(Json::as_str);
-    let compiled = compile_definition(cx, rule, PREVIEW_VERSION, setup, name)?;
-    Ok(create_body(&compiled))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

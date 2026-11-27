@@ -157,8 +157,17 @@ impl opentide_highlight::QueryEngine for Engine {
         opentide_core::LanguageId::Yaral
     }
 
-    fn analyze(&self, source: &str) -> opentide_highlight::AnalyzeResult {
-        let r = analyze(source);
+    fn analyze_for(
+        &self,
+        source: &str,
+        setting: &opentide_highlight::Setting<'_>,
+    ) -> opentide_highlight::AnalyzeResult {
+        let ctx = match setting.profile {
+            opentide_highlight::Profile::File => Context::FILE,
+            opentide_highlight::Profile::Search => Context::SEARCH,
+            opentide_highlight::Profile::Rule => Context::SECTIONS,
+        };
+        let r = analyze_with(source, &ctx);
         opentide_highlight::AnalyzeResult {
             diagnostics: r.diagnostics,
             tokens: r.tokens,

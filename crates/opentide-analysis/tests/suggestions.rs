@@ -39,6 +39,7 @@ fn render(source: &str, diagnostics: &[Diagnostic], codes: &[&str]) -> String {
         if d.suggestion.is_none() && !codes.contains(&d.code.as_str()) {
             continue;
         }
+        help_is_kept(d);
         let _ = writeln!(
             out,
             "  {} {} `{}` => {}",
@@ -50,6 +51,43 @@ fn render(source: &str, diagnostics: &[Diagnostic], codes: &[&str]) -> String {
     }
     out
 }
+
+/// The help a finding with a suggestion gets is the one the message's words
+/// chose before each code declared its kind (#1950), and its code declares
+/// one: every case of this file passes through here. The help is the
+/// `queries` feature's (`engine_help`); the workspace's run turns it on.
+#[cfg(feature = "queries")]
+fn help_is_kept(d: &Diagnostic) {
+    let Some(suggestion) = d.suggestion.as_deref().filter(|s| !s.is_empty()) else {
+        return;
+    };
+    let lower = d.message.to_lowercase();
+    let words = ["unknown", "deprecated", "not a command"];
+    let before = if words.iter().any(|word| lower.contains(word)) {
+        format!(
+            "did you mean {}?",
+            opentide_schema::vocab::quote(suggestion)
+        )
+    } else {
+        format!("try: {suggestion}")
+    };
+    let help = opentide_analysis::queries::engine_help(&d.code, &d.message, Some(suggestion));
+    assert_eq!(help, before, "{} {}", d.code, d.message);
+    assert!(
+        opentide_core::codes::suggestion_kind(&d.code).is_some()
+            || UNDECLARED.contains(&d.code.as_str()),
+        "{} suggests but declares no kind (`suggests` in opentide-core's codes!)",
+        d.code
+    );
+}
+
+/// The codes whose suggestions are a replacement in some messages and a step
+/// in others: their help still follows the message's words (#1950).
+#[cfg(feature = "queries")]
+const UNDECLARED: [&str; 2] = ["esql_parse_error", "esql_unavailable"];
+
+#[cfg(not(feature = "queries"))]
+fn help_is_kept(_: &Diagnostic) {}
 
 /// Each query of `cases`, analysed on its own, and what it suggests.
 fn queries(language: LanguageId, platform: Option<&str>, codes: &[&str], cases: &[&str]) -> String {
@@ -281,4 +319,42 @@ fn sysdig_append_to_rule() {
         "  sysdig:\n    append_to_rule: Terminal shell in containr\n    condition: proc.name = bash\n",
         &["falco_unknown_rule"],
     ));
+}
+
+/// Every query of the parser corpora (`crates/testdata/corpus/`), under each
+/// of its language's dialects, keeps its help (#1950).
+#[cfg(feature = "queries")]
+#[test]
+fn every_corpus_query_keeps_its_help() {
+    let corpus = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../testdata/corpus");
+    let mut checked = 0;
+    for &language in LanguageId::QUERY_LANGUAGES {
+        let platforms: &[Option<&str>] = match language {
+            LanguageId::Kql => &[None, Some("microsoft_defender")],
+            LanguageId::Lucene => &[None, Some("carbon_black_cloud"), Some("graylog")],
+            LanguageId::Yara => &[None, Some("harfanglab"), Some("bitdefender")],
+            _ => &[None],
+        };
+        let Ok(entries) = std::fs::read_dir(corpus.join(language.as_str())) else {
+            continue;
+        };
+        for entry in entries {
+            let path = entry.expect("a corpus entry").path();
+            let Ok(text) = std::fs::read_to_string(&path) else {
+                continue;
+            };
+            for platform in platforms {
+                for d in analyze_query(&QueryRequest {
+                    language,
+                    platform: platform.map(str::to_string),
+                    stack: None,
+                    text: text.clone(),
+                }) {
+                    help_is_kept(&d);
+                    checked += usize::from(d.suggestion.is_some());
+                }
+            }
+        }
+    }
+    assert!(checked > 0, "no corpus finding carried a suggestion");
 }
