@@ -11,14 +11,20 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 #### `opentide`
 
 - If you `match` on `opentide::LanguageId` (or `opentide_core::LanguageId`) without a wildcard arm, add an arm for `LanguageId::Datadog`.
+- If you build an `opentide::PlatformFinding`, `Fix` or `TextEdit` with a struct expression, call `PlatformFinding::new`, `Fix::new` or `TextEdit::new` instead. If you `match` on `validate::Check`, `validate::QueriesMode`, `lint::LintCheck` or `lint::LintStatus`, add a wildcard arm; `QueriesMode::as_str` and `LintStatus::as_str` give their names.
 
 ### Breaking
 
 #### `opentide`
 
+- **The report types are `#[non_exhaustive]`, as the crate's stability section promises** ([opentide#1937](https://github.com/opentidehq/opentide/issues/1937)). Code outside the crate can no longer build them with a struct expression (or `..` update), nor match their enums without a wildcard arm, so a new field or variant is no longer a breaking change. Structs: `Diagnostic`, `Fix`, `TextEdit`, `Report`, `validate::{PlatformFinding, Refusal, Stats, Summary}`, `lint::{LintReport, LintFinding, LintSummary, NextAction}`, `catalog::{Catalogue, Edge, LoadErrorDetail, LoadErrorRow, ObjectRow, PlatformBlock, SignalRow, Summary, Techniques, Coverage, PlatformInfo, Tenant, Variable}`. Enums: `validate::{Check, QueriesMode}`, `lint::{LintCheck, LintStatus}`. `catalog::Row` (an object or a load error) stays exhaustive. See Upgrade.
 - **`LanguageId` has a new variant, `LanguageId::Datadog`** (the Datadog log search syntax, `docs/internal/rfc-datadog-cloud-siem.md`). The enum is exhaustive, so a `match` without a wildcard arm no longer compiles. `LanguageId::QUERY_LANGUAGES` holds twelve languages; `LanguageId::parse` reads `datadog` and `opentide-datadog`, and `LanguageId::from_extension` reads `datadog`.
 
 ### Added
+
+#### `opentide`
+
+- **Constructors for the findings outside code builds** ([opentide#1937](https://github.com/opentidehq/opentide/issues/1937)): `PlatformFinding::new` (a plugin platform's check), `Fix::new` and `TextEdit::new`; `QueriesMode::as_str` and `LintStatus::as_str`; `Default` for `validate::Summary` and `catalog::PlatformInfo`.
 
 #### `opentide-datadog`
 

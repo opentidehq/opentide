@@ -1825,18 +1825,18 @@ mod validate {
             assert_eq!(platform, "acme");
             let mut found = Vec::new();
             if !block["severity"].is_i64() {
-                found.push(opentide_workspace::validate::PlatformFinding {
-                    field_path: vec!["severity".to_owned()],
-                    message: "Input should be a valid integer".to_owned(),
-                    warning: false,
-                });
+                found.push(opentide_workspace::validate::PlatformFinding::new(
+                    vec!["severity".to_owned()],
+                    "Input should be a valid integer",
+                    false,
+                ));
             }
             if block.get("note").is_some() {
-                found.push(opentide_workspace::validate::PlatformFinding {
-                    field_path: vec!["note".to_owned()],
-                    message: "note is deprecated".to_owned(),
-                    warning: true,
-                });
+                found.push(opentide_workspace::validate::PlatformFinding::new(
+                    vec!["note".to_owned()],
+                    "note is deprecated",
+                    true,
+                ));
             }
             found
         }
