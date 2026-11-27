@@ -38,10 +38,11 @@ use tokio_util::sync::CancellationToken;
 use super::query::{
     Configured, default_host, http_settings, log_unset, toml_value, unset_credentials,
 };
+use super::result::CommandResult;
 use super::validate_query::{Args, COMMAND};
 use super::{Report, placement};
 use crate::env::Env;
-use crate::envelope::{Failure, NextAction, Outcome, code};
+use crate::envelope::code;
 use crate::json::{Json, Object};
 use crate::render::diagnostic::{Diagnostic, Severity};
 use crate::render::progress::{Progress, Step, StepStatus};
@@ -147,83 +148,10 @@ impl Live {
     }
 }
 
-/// The envelope of a service's result (`CommandResult.from_payload`):
-/// `message`, `status` and `warnings` leave the data, as do `_exit_code`,
-/// `_summary`, `_next_actions`, `_failure_code`, `_failure_argument` and
-/// `_failure_suggestion`; a run that failed or exits non-zero has a
-/// failure, with `error` (else the message) as its message.
+/// The envelope of a service's result built as keys in order, `_`-keys
+/// included ([`CommandResult::from_fields`]).
 pub fn report_of(command: &str, result: &[(String, Json)]) -> Report {
-    let take = |key: &str| result.iter().find(|(name, _)| name == key).map(|(_, v)| v);
-    let text = |key: &str| match take(key) {
-        Some(Json::Str(text)) => Some(text.clone()),
-        _ => None,
-    };
-    let exit_code = match take("_exit_code") {
-        Some(Json::Int(code)) => i32::try_from(*code).unwrap_or(1),
-        _ => 0,
-    };
-    let message = text("message").unwrap_or_else(|| "Completed successfully".to_owned());
-    let status = text("status").unwrap_or_else(|| "completed".to_owned());
-    let warnings: Vec<String> = match take("warnings") {
-        Some(Json::Array(items)) => items
-            .iter()
-            .map(|item| match item {
-                Json::Str(text) => text.clone(),
-                other => crate::json::document_text(other, false),
-            })
-            .collect(),
-        _ => Vec::new(),
-    };
-    let summary = match take("_summary") {
-        Some(Json::Object(members)) => members.clone().into_iter().collect(),
-        _ => Vec::new(),
-    };
-    let next_actions = match take("_next_actions") {
-        Some(Json::Array(items)) => items
-            .iter()
-            .map(|item| {
-                let field = |key: &str| item.get(key).and_then(Json::as_str).unwrap_or_default();
-                NextAction::new(field("command"), field("reason"))
-            })
-            .collect(),
-        _ => Vec::new(),
-    };
-    let ok = status != "failed";
-    let failure = (!ok || exit_code != 0).then(|| {
-        let default = match status.as_str() {
-            "issues" => super::ISSUES_FOUND,
-            "skipped" => "not_run",
-            _ => super::COMMAND_FAILED,
-        };
-        let failure_code = text("_failure_code").unwrap_or_else(|| default.to_owned());
-        let mut failure = Failure::new(
-            &failure_code,
-            text("error").unwrap_or_else(|| message.clone()),
-        );
-        failure.argument = text("_failure_argument");
-        failure.suggestion = text("_failure_suggestion");
-        failure
-    });
-    let data: Fields = result
-        .iter()
-        .filter(|(key, _)| {
-            !key.starts_with('_') && !matches!(key.as_str(), "message" | "status" | "warnings")
-        })
-        .cloned()
-        .collect();
-    let mut report = Report::completed(command, data);
-    report.outcome = Outcome {
-        command: command.to_owned(),
-        status,
-        message,
-        data: report.outcome.data,
-        exit_code,
-        summary,
-        next_actions,
-        failure,
-    };
-    report.warnings = warnings;
-    report
+    CommandResult::from_fields(result).report(command)
 }
 
 /// The keys every live result starts with.

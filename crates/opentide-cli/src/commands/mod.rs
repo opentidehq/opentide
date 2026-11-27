@@ -34,6 +34,7 @@ pub mod plugin;
 pub mod promotion_preview;
 pub mod query;
 pub mod query_rule;
+pub mod result;
 pub mod rules;
 pub mod setup;
 pub mod share;
