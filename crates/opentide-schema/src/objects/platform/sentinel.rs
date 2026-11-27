@@ -358,8 +358,8 @@ fn garde_schedule(value: &SentinelScheduling, _pins: &Pins) -> garde::Result {
     {
         None => Ok(()),
         Some(first) => Err(garde::Error::new(format!(
-            "{}: scheduling.{}: {}",
-            first.code, first.key, first.message
+            "{}: {}",
+            first.code, first.message
         ))),
     }
 }

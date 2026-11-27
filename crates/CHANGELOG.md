@@ -28,6 +28,9 @@ Each version's first paragraph is its summary: the GitHub Release and [opentide.
 
 #### `opentide-schema`
 
+- **Sentinel schedules are checked against the bounds Microsoft documents** ([opentide#1916](https://github.com/opentidehq/opentide/issues/1916)). A scheduled rule's frequency and lookback are each 5 minutes to 14 days, the lookback at least the frequency; outside them, `SentinelScheduling` reports an error typed by its code at the key. A near-real-time rule is not checked.
+  - `sentinel_frequency` on `scheduling.frequency`, `sentinel_lookback` on `scheduling.lookback`
+  - API: `sentinel::schedule_findings`, `ScheduleFinding`, `CONSTRAINT_CODES`, `FREQUENCY`, `LOOKBACK`, `SCHEDULE_MIN_SECONDS`, `SCHEDULE_MAX_SECONDS`; `platform::constraint_codes` lists the two codes
 - **Defender blocks are checked against Microsoft's documented limits** ([opentide#1890](https://github.com/opentidehq/opentide/issues/1890)). Two advisories, warnings on the block's `alert`:
   - `microsoft_defender_custom_details_limit`: more than 20 custom details, or names past 4 KB
   - `microsoft_defender_placeholder_limit`: more than three `{{Column}}` columns in `alert.title` or `alert.description`
