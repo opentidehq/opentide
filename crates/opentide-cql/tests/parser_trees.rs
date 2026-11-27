@@ -1,14 +1,7 @@
 //! The parser's trees as snapshots: one tree per corpus file (valid and invalid alike) and the
 //! recovery cases, each with its errors. A changed tree is a reviewed snapshot diff.
 
-#![expect(dead_code, reason = "the included modules are used in part")]
-
-#[path = "../src/lexer.rs"]
-mod lexer;
-#[path = "../src/parser.rs"]
-mod parser;
-#[path = "../src/syntax.rs"]
-mod syntax;
+use opentide_cql::{parser, syntax};
 
 use opentide_parse::{debug_errors, debug_tree};
 use syntax::{Lang, SyntaxKind};

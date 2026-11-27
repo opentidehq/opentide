@@ -1,17 +1,9 @@
 //! The parser's depth guards, on the 1 MB stack of the browser module: the floors
 //! `crates/opentide-analysis/tests/deep_queries.rs` holds for EQL (1,000 nesting levels, a
 //! 20,000-term chain) parse without a diagnostic, every construct that recurses survives deeper
-//! nesting as one diagnostic, never an overflow, and chains stay flat. The parser is private to
-//! the crate until the switch, so this test includes its source.
+//! nesting as one diagnostic, never an overflow, and chains stay flat.
 
-#![expect(dead_code, reason = "the included modules are used in part")]
-
-#[path = "../src/lexer.rs"]
-mod lexer;
-#[path = "../src/parser.rs"]
-mod parser;
-#[path = "../src/syntax.rs"]
-mod syntax;
+use opentide_eql::{parser, syntax};
 
 use opentide_parse::{ErrorKind, MAX_TREE_DEPTH};
 

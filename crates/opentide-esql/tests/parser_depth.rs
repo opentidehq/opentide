@@ -3,18 +3,8 @@
 //! floors `crates/opentide-analysis/tests/deep_queries.rs` holds for ES|QL
 //! (1,000 nesting levels, a 10,000-term chain) must parse without a
 //! diagnostic, and deeper nesting is one diagnostic, never an overflow.
-//!
-//! The parser is private to the crate, so
-//! this test includes its source.
 
-#![expect(dead_code, reason = "the included modules are used in part")]
-
-#[path = "../src/lexer.rs"]
-mod lexer;
-#[path = "../src/parser/mod.rs"]
-mod parser;
-#[path = "../src/syntax.rs"]
-mod syntax;
+use opentide_esql::parser;
 
 /// The stack the depth checks run on: the browser WASM module's 1 MB.
 #[cfg(not(any(coverage, windows)))]
