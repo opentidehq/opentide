@@ -1379,4 +1379,79 @@ mod tests {
         assert!(decode(b"\xff").is_err());
         assert!(matches!(universal_newlines("a\nb"), Cow::Borrowed(_)));
     }
+
+    /// #1962: the queries check spreads its objects over rayon's pool, and a
+    /// thread-local scope does not follow work to a pool thread. Each job
+    /// enters the profiles' datasets itself, so the check run in parallel
+    /// reports what it reports run serially, whatever catalog the calling
+    /// thread entered.
+    #[test]
+    fn a_parallel_check_sees_the_datasets_a_serial_one_sees() {
+        use rayon::prelude::*;
+        let declares = |table: &str| {
+            format!(
+                "[[logsources]]\nname = \"{table}\"\ndescription = \"x\"\nsystem = \"sentinel\"\n"
+            )
+        };
+        let profiles = |visibility: Option<&str>| Profiles {
+            host: MemoryWorkspace { files: Vec::new() },
+            datasets: crate::Datasets::of_workspace(visibility).unwrap(),
+            visibility_problem: None,
+            graylog_tenants: Vec::new(),
+        };
+        let workspace = profiles(Some(&declares("Declared_CL")));
+        let objects: Vec<String> = (0..64)
+            .map(|i| {
+                let table = if i % 2 == 0 {
+                    "Declared_CL"
+                } else {
+                    "Other_CL"
+                };
+                format!(
+                    "name: Rule {i}\nconfigurations:\n  sentinel:\n    query: |\n      \
+                     {table} | take {i}\n"
+                )
+            })
+            .collect();
+        let codes = |checked: Vec<CheckedQuery>| -> Vec<String> {
+            checked
+                .into_iter()
+                .flat_map(|query| query.findings)
+                .map(|finding| finding.code)
+                .collect()
+        };
+        // The calling thread uses another catalog, which declares the
+        // other table: neither run may see it.
+        let _caller = crate::enter_catalog(&crate::Catalog {
+            visibility: Some(declares("Other_CL")),
+            ..crate::Catalog::default()
+        })
+        .unwrap();
+        let serial: Vec<Vec<String>> = objects
+            .iter()
+            .map(|text| codes(workspace.check_object(text)))
+            .collect();
+        let parallel: Vec<Vec<String>> = objects
+            .par_iter()
+            .map(|text| codes(workspace.check_object(text)))
+            .collect();
+        assert_eq!(parallel, serial);
+        // The workspace's datasets are the ones in use: the table it
+        // declares is known, the other is not, and with no declarations
+        // neither is.
+        let unknown = |codes: &[String]| codes.iter().any(|code| code == "kql_unknown_table");
+        assert!(!unknown(&serial[0]), "{serial:?}");
+        assert!(unknown(&serial[1]), "{serial:?}");
+        let undeclared = profiles(None);
+        assert!(unknown(&codes(undeclared.check_object(&objects[0]))));
+        // What the jobs enter is what makes them agree: a pool thread does
+        // not see the calling thread's scope.
+        let on_the_pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(2)
+            .build()
+            .unwrap()
+            .install(|| crate::declared_datasets().declares("sentinel"));
+        assert!(crate::declared_datasets().declares("sentinel"));
+        assert!(!on_the_pool);
+    }
 }
