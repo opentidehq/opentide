@@ -1634,3 +1634,95 @@ fn a_shallow_clone_cannot_list_what_it_deleted() {
         GitError::Failed(message) if message.contains("the checkout is shallow")
     ));
 }
+
+/// The loose object file of `id`, made unreadable by git: its bytes no
+/// longer inflate.
+fn corrupt_object(root: &Path, id: &str) {
+    let path = root.join(".git/objects").join(&id[..2]).join(&id[2..]);
+    let mut permissions = std::fs::metadata(&path).unwrap().permissions();
+    #[expect(
+        clippy::permissions_set_readonly_false,
+        reason = "git writes loose objects read-only; the test overwrites one"
+    )]
+    permissions.set_readonly(false);
+    std::fs::set_permissions(&path, permissions).unwrap();
+    std::fs::write(&path, b"not a zlib stream").unwrap();
+}
+
+/// A baseline object that cannot be read is the run's failure, never an
+/// empty folder or a file without its committed text (#1931): the baseline
+/// decides which rules a run reads and retires.
+#[test]
+fn docs_changes_fail_on_a_baseline_object_that_cannot_be_read() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dunce::canonicalize(dir.path()).unwrap();
+    git_cmd(&root, &["init", "-q", "-b", "main"]);
+    write(&root, "rules/kept é.yaml", "name: kept 😀\n");
+    write(&root, "rules/edited.yaml", "name: edited\n");
+    commit(&root, "base");
+    write(
+        &root,
+        "rules/edited.yaml",
+        "name: edited in the work tree\n",
+    );
+    let keep = |_: &str| true;
+    // The edited file's committed text cannot be read: not an added file.
+    let blob = git_cmd(&root, &["rev-parse", "HEAD:rules/edited.yaml"]);
+    corrupt_object(&root, &blob);
+    let error = git::changed_in_folders(&root, &[root.join("rules")], &keep).unwrap_err();
+    assert!(
+        matches!(&error, GitError::Failed(message) if message.starts_with(&format!("Could not find git object {blob}"))),
+        "{error:?}"
+    );
+    // The folder's tree cannot be read: not an empty folder whose files are all new.
+    let tree = git_cmd(&root, &["rev-parse", "HEAD:rules"]);
+    corrupt_object(&root, &tree);
+    let error = git::changed_in_folders(&root, &[root.join("rules")], &keep).unwrap_err();
+    assert!(
+        matches!(&error, GitError::Failed(message) if message.starts_with(&format!("Could not find git object {tree}"))),
+        "{error:?}"
+    );
+}
+
+/// A shallow clone that does not hold the merge base with the default
+/// branch says to fetch more history, not compare with HEAD or an empty
+/// tree (#1931).
+#[test]
+fn docs_changes_in_a_shallow_clone_without_the_merge_base_say_to_fetch_history() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dunce::canonicalize(dir.path()).unwrap();
+    let origin = root.join("origin");
+    std::fs::create_dir_all(&origin).unwrap();
+    git_cmd(&origin, &["init", "-q", "-b", "main"]);
+    write(&origin, "rules/a.yaml", "a: 1\n");
+    commit(&origin, "a");
+    git_cmd(&origin, &["checkout", "-q", "-b", "feature"]);
+    write(&origin, "rules/b.yaml", "b: 1\n");
+    commit(&origin, "on the branch");
+    git_cmd(&origin, &["checkout", "-q", "main"]);
+    write(&origin, "rules/a.yaml", "a: 2\n");
+    commit(&origin, "main moves on");
+    let path = origin.to_string_lossy().replace('\\', "/");
+    let url = format!("file:///{}", path.trim_start_matches('/'));
+    let shallow = root.join("shallow");
+    git_cmd(
+        &root,
+        &[
+            "clone",
+            "-q",
+            "--depth",
+            "1",
+            "--no-single-branch",
+            "--branch",
+            "feature",
+            &url,
+            &shallow.to_string_lossy(),
+        ],
+    );
+    let keep = |_: &str| true;
+    let error = git::changed_in_folders(&shallow, &[shallow.join("rules")], &keep).unwrap_err();
+    assert!(
+        matches!(&error, GitError::Failed(message) if message.contains("the checkout is shallow") && message.contains("fetch-depth: 0")),
+        "{error:?}"
+    );
+}
