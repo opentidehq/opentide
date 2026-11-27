@@ -21,8 +21,8 @@ use std::time::Duration;
 use base64::Engine as _;
 use opentide_connectors::connector::BoxFuture;
 use opentide_connectors::transport::{
-    HeaderMap, HeaderName, HeaderValue, Request, Response, StatusCode, Transport, TransportFactory,
-    TransportFailure, TransportSpec,
+    HeaderMap, HeaderName, HeaderValue, MAX_BODY_BYTES, Request, Response, StatusCode, Transport,
+    TransportFactory, TransportFailure, TransportSpec, body_too_large,
 };
 use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
@@ -354,11 +354,13 @@ fn failure(error: &Json) -> TransportFailure {
     }
 }
 
-/// The tenant's answer in a client's result, or why it does not read.
+/// The tenant's answer in a client's result, or why it does not read: a
+/// body larger than *max_body* ([`MAX_BODY_BYTES`]) does not.
 fn response(
     result: &Json,
     request_url: &url::Url,
     measured: Duration,
+    max_body: usize,
 ) -> Result<Response, TransportFailure> {
     let unreadable = |what: &str| TransportFailure::Answer {
         reason: format!("the client's answer to {METHOD} has no valid {what}"),
@@ -390,9 +392,24 @@ fn response(
     };
     let body = match result.get("body") {
         None | Some(Json::Null) => Vec::new(),
-        Some(Json::Str(text)) => base64::engine::general_purpose::STANDARD
-            .decode(text)
-            .map_err(|_| unreadable("body"))?,
+        Some(Json::Str(text)) => {
+            // Refused before it is decoded when its text is longer than
+            // the cap's base64 (#1999); padding and whitespace make that
+            // bound loose, so the decoded length is held to the cap too.
+            if text.len() > max_body.div_ceil(3).saturating_mul(4) {
+                // Padded base64 decodes to at most two bytes fewer than
+                // three for every four characters.
+                let least = (text.len() / 4 * 3).saturating_sub(2);
+                return Err(body_too_large(format!("at least {least}"), max_body));
+            }
+            let body = base64::engine::general_purpose::STANDARD
+                .decode(text)
+                .map_err(|_| unreadable("body"))?;
+            if body.len() > max_body {
+                return Err(body_too_large(body.len(), max_body));
+            }
+            body
+        }
         Some(_) => return Err(unreadable("body")),
     };
     let elapsed = result
@@ -463,7 +480,9 @@ impl Transport for ClientTransport {
                         drop(pending);
                         return match answer {
                             Err(error) => Err(failure(&error)),
-                            Ok(result) => response(&result, &url, started.elapsed()),
+                            Ok(result) => {
+                                response(&result, &url, started.elapsed(), MAX_BODY_BYTES)
+                            }
                         };
                     }
                     Err(oneshot::error::TryRecvError::Closed) => {
@@ -495,7 +514,7 @@ impl Transport for ClientTransport {
                     reason: fetcher.wire.gone.to_owned(),
                 }),
                 Ok(Ok(Err(error))) => Err(failure(&error)),
-                Ok(Ok(Ok(result))) => response(&result, &url, started.elapsed()),
+                Ok(Ok(Ok(result))) => response(&result, &url, started.elapsed(), MAX_BODY_BYTES),
             }
         })
     }
@@ -522,6 +541,63 @@ mod tests {
     fn request() -> Request {
         let url = url::Url::parse("https://lab.invalid/_query").unwrap();
         Request::new(opentide_connectors::transport::Method::GET, url)
+    }
+
+    /// The client's answer with *body* (base64) as its body.
+    fn answer(body: &str) -> Json {
+        Json::object([("status", Json::Int(200)), ("body", Json::str(body))])
+    }
+
+    fn read(result: &Json, max_body: usize) -> Result<Response, TransportFailure> {
+        let url = url::Url::parse("https://lab.invalid/_query").unwrap();
+        response(result, &url, Duration::ZERO, max_body)
+    }
+
+    /// #1999: the body a client answers with is held to the cap, as the
+    /// native transport's is: one byte past it is refused, with the native
+    /// transport's words, and a body of exactly the cap is read.
+    #[test]
+    fn a_body_past_the_cap_is_refused_and_one_at_it_is_read() {
+        let engine = base64::engine::general_purpose::STANDARD;
+        // 10 bytes, of which `é` is two and `😀` four.
+        let exact = "é😀abcd".as_bytes();
+        assert_eq!(exact.len(), 10);
+        let read_whole = read(&answer(&engine.encode(exact)), 10);
+        assert!(read_whole.is_ok(), "{read_whole:?}");
+        // One byte past: its base64 is no longer than the cap's (16
+        // characters), so the decoded length refuses it.
+        let past = [exact, b"e"].concat();
+        assert_eq!(engine.encode(&past).len(), 16);
+        assert_eq!(
+            read(&answer(&engine.encode(&past)), 10).unwrap_err(),
+            TransportFailure::Answer {
+                reason: "the answer's body (11 bytes) is larger than 10 bytes".into()
+            }
+        );
+        // Far past: refused from the text's length, before it is decoded
+        // (it would not even decode).
+        let text = "A".repeat(4000);
+        assert_eq!(
+            read(&answer(&text), 10).unwrap_err(),
+            TransportFailure::Answer {
+                reason: "the answer's body (at least 2998 bytes) is larger than 10 bytes".into()
+            }
+        );
+        let long = engine.encode([0_u8; 13]);
+        assert_eq!(long.len(), 20);
+        assert_eq!(
+            read(&answer(&long), 10).unwrap_err(),
+            TransportFailure::Answer {
+                reason: "the answer's body (at least 13 bytes) is larger than 10 bytes".into()
+            }
+        );
+        // The real cap is the native transport's, in MiB.
+        assert_eq!(
+            read(&answer(&"A".repeat(90_000_000)), MAX_BODY_BYTES).unwrap_err(),
+            TransportFailure::Answer {
+                reason: "the answer's body (at least 67499998 bytes) is larger than 64 MiB".into()
+            }
+        );
     }
 
     /// A call that was cancelled sends nothing more: a request carries the
