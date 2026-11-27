@@ -155,6 +155,7 @@ pub type Context = IndexMap<String, ContextValue>;
 
 /// Replace the text from (`line`, `column`) up to (`end_line`, `end_column`).
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct TextEdit {
     /// 1-based.
     pub line: usize,
@@ -168,9 +169,30 @@ pub struct TextEdit {
     pub replacement: String,
 }
 
+impl TextEdit {
+    /// Replace the text from (`line`, `column`) up to (`end_line`,
+    /// `end_column`) with `replacement`.
+    pub fn new(
+        line: usize,
+        column: usize,
+        end_line: usize,
+        end_column: usize,
+        replacement: impl Into<String>,
+    ) -> Self {
+        Self {
+            line,
+            column,
+            end_line,
+            end_column,
+            replacement: replacement.into(),
+        }
+    }
+}
+
 /// Edits that resolve a finding; `safe` ones `validate --fix` applies
 /// without review.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct Fix {
     /// Whether the fix is certainly what the author meant.
     pub safe: bool,
@@ -178,8 +200,17 @@ pub struct Fix {
     pub edits: Vec<TextEdit>,
 }
 
+impl Fix {
+    /// A fix of `edits`, in order; `safe` when it is certainly what the
+    /// author meant.
+    pub fn new(safe: bool, edits: Vec<TextEdit>) -> Self {
+        Self { safe, edits }
+    }
+}
+
 /// One finding.
 #[derive(Clone, Debug, PartialEq, Deserialize)]
+#[non_exhaustive]
 pub struct Diagnostic {
     /// The stable code, with its `opentide explain` page.
     pub code: String,
