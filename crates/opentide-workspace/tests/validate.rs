@@ -2035,6 +2035,64 @@ mod validate {
     }
 
     #[test]
+    fn graylog_durations_past_the_deployable_bound_fail_validate() {
+        // #2005: their milliseconds saturated at `i64::MAX`, `validate` passed
+        // them and deploy wrote `9223372036854775807` into the payload.
+        let fs = workspace();
+        let block = |every: &str, grace: &str| {
+            format!(
+                "    enabled: true\n    status: STAGING\n    query: 'message:\"é\"'\n    \
+                 schedule:\n      every: {every}\n    grace_period: {grace}\n"
+            )
+        };
+        let over = "9223372036854776s";
+        let max = "9223372036854775s";
+        fs.write(
+            "/ws/objects/rules/a.yaml",
+            rule_with(U1, "A", "graylog", &block(over, "0s")),
+        );
+        fs.write(
+            "/ws/objects/rules/b.yaml",
+            rule_with(U2, "B", "graylog", &block("5m", &("9".repeat(40) + "s"))),
+        );
+        fs.write(
+            "/ws/objects/rules/c.yaml",
+            rule_with(U3, "C", "graylog", &block(max, max)),
+        );
+        let validation = run(&fs, &Options::default());
+        let mut found: Vec<(&str, &str, String)> = all(&validation)
+            .into_iter()
+            .filter(|d| d.message.contains("longer than a rule can be deployed"))
+            .map(|d| {
+                (
+                    d.object_uuid.as_str(),
+                    d.code.as_str(),
+                    d.field_path.join("."),
+                )
+            })
+            .collect();
+        found.sort();
+        assert_eq!(
+            found,
+            [
+                (
+                    U1,
+                    "graylog_schedule",
+                    "configurations.graylog.schedule.every".to_owned()
+                ),
+                (
+                    U2,
+                    "schema_validation",
+                    "configurations.graylog.grace_period".to_owned()
+                ),
+            ],
+            "{:?}",
+            all(&validation)
+        );
+        assert_eq!(status(&validation, Check::Schema), "failed");
+    }
+
+    #[test]
     fn two_exabeam_blocks_with_one_name_are_a_duplicate_whatever_its_case() {
         let fs = workspace();
         let block =
@@ -2073,6 +2131,37 @@ mod validate {
             rule_with(U2, "B", "exabeam", &block("SAME", false)),
         );
         assert!(on(&run(&fs, &Options::default()), "exabeam_name_duplicate").is_empty());
+    }
+
+    #[test]
+    fn an_elastic_lookback_past_the_deployable_bound_fails_validate() {
+        // #1982: its seconds saturated, `validate` passed it and deploy wrote
+        // `now-340282366920938463463374607431768211455s`.
+        let fs = workspace();
+        let block = |lookback: &str| {
+            format!(
+                "    status: STAGING\n    type: query\n    query: 'process.name: \"é\"'\n    \
+                 scheduling:\n      interval: 5m\n      lookback: {lookback}\n"
+            )
+        };
+        let huge = "9".repeat(40) + "s";
+        fs.write(
+            "/ws/objects/rules/a.yaml",
+            rule_with(U1, "A", "elastic", &block(&huge)),
+        );
+        fs.write(
+            "/ws/objects/rules/b.yaml",
+            rule_with(U2, "B", "elastic", &block("9223372036854775807s")),
+        );
+        let validation = run(&fs, &Options::default());
+        let found: Vec<(&str, &str)> = all(&validation)
+            .into_iter()
+            .filter(|d| d.message.contains("longer than a rule can be deployed"))
+            .map(|d| (d.object_uuid.as_str(), d.code.as_str()))
+            .collect();
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(found[0].0, U1);
+        assert_eq!(status(&validation, Check::Schema), "failed");
     }
 
     #[test]

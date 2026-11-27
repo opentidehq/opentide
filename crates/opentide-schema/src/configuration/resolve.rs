@@ -8,9 +8,9 @@
 //! [`super::sharing`]) under its name without `.toml`, and each folder at the
 //! top that is not hidden (`.x`) or private (`__x`) as a table of its
 //! `.toml` files by stem. `systems`, the name 0.x used, is read as an alias
-//! of `platforms`; the resolved tree keeps a `systems` copy for plugins and
-//! other external readers, but opentide itself reads only `platforms`, and
-//! which platforms are on only through [`platform_enabled`] and
+//! of `platforms`: a layer's `systems` table merges into `platforms`, and the
+//! resolved tree holds only `platforms` (#1996). Which platforms are on is
+//! read only through [`platform_enabled`] and
 //! [`Resolved::enabled_platforms`].
 //!
 //! Resolution happens once per run: every file is parsed once
@@ -378,19 +378,6 @@ pub fn resolve(instance: &Instance<'_>) -> Result<Resolved, ResolveError> {
         merge_layer(&mut unified, &layer);
     }
     reject_retired_proxy(&unified)?;
-    if let Some(platforms) = unified.get("platforms").map(|node| (**node).clone()) {
-        let Value::Map(entries) = &mut unified.value else {
-            return Ok(Resolved {
-                tree: unified,
-                parsed,
-            });
-        };
-        entries.retain(|entry| entry.key.value.as_str() != Some("systems"));
-        entries.push(Entry {
-            key: key_node("systems"),
-            value: Arc::new(platforms),
-        });
-    }
     Ok(Resolved {
         tree: unified,
         parsed,
@@ -434,10 +421,10 @@ mod tests {
     }
 
     #[test]
-    fn the_bundled_folder_resolves_with_platforms_twice() {
+    fn the_bundled_folder_resolves_with_platforms_once() {
         let resolved = resolve(&Instance::default()).unwrap();
         let json = resolved.to_json();
-        assert_eq!(json["platforms"], json["systems"]);
+        assert!(json.get("systems").is_none());
         assert!(json["platforms"]["splunk"].is_object());
         assert!(json.get("sharing").is_none());
         assert_eq!(resolved.parsed, bundled::FILES.len() - 1);
@@ -475,6 +462,10 @@ mod tests {
             &["platforms"],
         );
         for resolved in [&by_systems, &by_platforms] {
+            // `systems` is an input alias only: the tree holds `platforms`.
+            let json = resolved.to_json();
+            assert!(json.get("systems").is_none());
+            assert_eq!(json["platforms"]["splunk"]["platform"]["enabled"], true);
             assert_eq!(resolved.enabled_platforms(), [PlatformId::Splunk]);
             assert!(resolved.platform_enabled("acme"));
             assert!(!resolved.platform_enabled("elastic"));
@@ -522,7 +513,7 @@ mod tests {
         let json = resolved.to_json();
         assert_eq!(json["deployment"]["default_responders"], "cert");
         assert_eq!(json["platforms"]["splunk"]["platform"]["enabled"], true);
-        assert_eq!(json["systems"]["splunk"]["platform"]["enabled"], true);
+        assert!(json.get("systems").is_none());
         assert_eq!(json["empty"], serde_json::json!({}));
         assert!(json.get(".hidden").is_none());
         assert_eq!(resolved.parsed, bundled::FILES.len() - 1 + 3);

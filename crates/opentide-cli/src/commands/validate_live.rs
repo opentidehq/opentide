@@ -3483,6 +3483,7 @@ mod in_order_tests {
         type Output = usize;
 
         fn poll(mut self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<usize> {
+            assert!(!self.done, "gate {} polled after it finished", self.id);
             let id = self.id;
             let ready = {
                 let mut seen = self.seen.borrow_mut();
