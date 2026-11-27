@@ -639,7 +639,6 @@ fn engine_diagnostic(
     diagnostic.field_path.clone_from(&finding.field_path);
     diagnostic.help = Some(crate::queries::engine_help(
         &finding.code,
-        &finding.message,
         finding.suggestion.as_deref(),
     ));
     if warn {

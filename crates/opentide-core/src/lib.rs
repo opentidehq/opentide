@@ -849,7 +849,7 @@ pub mod codes {
             => "The KQL scalar operator is a legacy spelling (containscs); use the current name (contains_cs).";
         KQL_UNKNOWN_TABLE = "kql_unknown_table" suggests Replacement
             => "The table is neither one the engine knows for the platform nor one the workspace declares in visibility.toml: a warning under Sentinel, whose workspaces hold tables no catalog lists; an error under Defender's advanced hunting schema. Declaring it in visibility.toml makes it known.";
-        KQL_TABLE_MISSPELT = "kql_table_misspelt" suggests Step
+        KQL_TABLE_MISSPELT = "kql_table_misspelt" suggests Replacement
             => "A KQL table is not one the engine knows or the workspace declares, but is a near miss of one that is (one edit for a name of up to seven characters, two for a longer one, and not a custom `_CL` table): most likely a typo.";
         KQL_RENDER_NOT_VALID = "kql_render_not_valid"
             => "render draws a chart; it has no effect in a detection rule.";
@@ -897,12 +897,12 @@ pub mod codes {
         /// for the word.
         SPL_COMMAND_WITHOUT_PIPE = "spl_command_without_pipe" suggests Step
             => "The query starts with a command name but no |, so Splunk searches for the word instead of running the command.";
-        ESQL_PARSE_ERROR = "esql_parse_error" => "The ES|QL query does not parse.";
+        ESQL_PARSE_ERROR = "esql_parse_error" suggests Step => "The ES|QL query does not parse.";
         ESQL_UNKNOWN_COMMAND = "esql_unknown_command" suggests Replacement
             => "The ES|QL command is not one Elasticsearch knows.";
         ESQL_UNKNOWN_FUNCTION = "esql_unknown_function" suggests Replacement
             => "The ES|QL function is not in the Elasticsearch function catalog.";
-        ESQL_UNAVAILABLE = "esql_unavailable"
+        ESQL_UNAVAILABLE = "esql_unavailable" suggests Step
             => "The command, function or form is missing or in preview on a targeted stack version.";
         ESQL_METADATA_ID = "esql_metadata_id" suggests Step
             => "A non-aggregating ES|QL rule query has no METADATA _id, so alerts cannot be deduplicated.";
@@ -1001,7 +1001,7 @@ pub mod codes {
         DEFENDER_OUTPUT_COLUMNS = "defender_output_columns"
             => "A Defender custom detection must return the columns Defender requires.";
         /// `::type` names no Elasticsearch release can cast to.
-        ESQL_UNKNOWN_TYPE = "esql_unknown_type" suggests Step
+        ESQL_UNKNOWN_TYPE = "esql_unknown_type" suggests Replacement
             => "The ::type cast names a type no Elasticsearch release can cast to.";
         ESQL_GROUP_BY_COLUMN = "esql_group_by_column"
             => "A suppression group_by field is not a column the ES|QL query returns.";
@@ -1013,34 +1013,34 @@ pub mod codes {
         // Dataset knowledge (#110): known schemas, then visibility.toml, then warn.
         KQL_TABLE_NOT_DECLARED = "kql_table_not_declared"
             => "The engine knows the table, but the workspace, which declares its tables for the platform in visibility.toml, does not declare it.";
-        KQL_UNKNOWN_COLUMN = "kql_unknown_column" suggests Step
+        KQL_UNKNOWN_COLUMN = "kql_unknown_column" suggests Replacement
             => "The column is not in the documented schema of the table or ASIM parser it comes from, or in the columns visibility.toml declares for the table.";
         KQL_TYPE_MISMATCH = "kql_type_mismatch"
             => "The operator cannot apply to the column's documented or declared type.";
-        SPL_UNKNOWN_DATAMODEL = "spl_unknown_datamodel" suggests Step
+        SPL_UNKNOWN_DATAMODEL = "spl_unknown_datamodel" suggests Replacement
             => "The CIM data model or dataset is not one Splunk CIM defines.";
-        SPL_UNKNOWN_DATAMODEL_FIELD = "spl_unknown_datamodel_field" suggests Step
+        SPL_UNKNOWN_DATAMODEL_FIELD = "spl_unknown_datamodel_field" suggests Replacement
             => "The field is not in the CIM data model the search reads.";
         SPL_DATASET_NOT_DECLARED = "spl_dataset_not_declared"
             => "The sourcetype is not one the workspace's Splunk log sources name in visibility.toml.";
         ECS_TYPE_MISMATCH = "ecs_type_mismatch"
             => "The operation cannot apply to the field's type, from ECS or from the columns visibility.toml declares for the index.";
-        ECS_UNKNOWN_FIELD = "ecs_unknown_field" suggests Step
+        ECS_UNKNOWN_FIELD = "ecs_unknown_field" suggests Replacement
             => "The field is not in the Elastic Common Schema, on indices that use it, nor declared for the index in visibility.toml; ECS allows custom fields.";
         ELASTIC_DATASET_NOT_DECLARED = "elastic_dataset_not_declared"
             => "The index pattern is not one the workspace's elastic log sources name, or cover, in visibility.toml.";
         /// A Carbon Black Cloud query field one edit or two from a catalog field
         /// (#162).
-        CBC_UNKNOWN_FIELD = "cbc_unknown_field" suggests Step
+        CBC_UNKNOWN_FIELD = "cbc_unknown_field" suggests Replacement
             => "A field in a Carbon Black Cloud query is a near miss of a process search field.";
         /// The host's configuration checker failed on a configuration file.
         CONFIG_CHECK_FAILED = "config_check_failed"
             => "opentide could not check this configuration file; the message says why. Its other findings are missing.";
         // Falco conditions (sysdig-1.0, "Falco language").
         FALCO_PARSE_ERROR = "falco_parse_error" => "The Falco condition does not parse.";
-        FALCO_UNKNOWN_FIELD = "falco_unknown_field" suggests Step
+        FALCO_UNKNOWN_FIELD = "falco_unknown_field" suggests Replacement
             => "The field is not one Falco or its plugins define for the rule's event source; a plugin the engine does not know may add it.";
-        FALCO_UNKNOWN_MACRO = "falco_unknown_macro" suggests Step
+        FALCO_UNKNOWN_MACRO = "falco_unknown_macro" suggests Replacement
             => "The name is not a macro of the block or of the Falco default rules; the tenant may define it, as Sysdig does for its managed macros.";
         FALCO_UNKNOWN_LIST = "falco_unknown_list"
             => "The name after a list operator, without parentheses, is not a list of the block or of the Falco default rules, so it is compared as a single value.";
@@ -1081,7 +1081,7 @@ pub mod codes {
             => "The event source is not one Falco or its published plugins define, so its fields are not checked.";
         FALCO_APPEND_CONDITION = "falco_append_condition"
             => "A tuning's condition is appended to the tuned rule's condition and must start with `and` or `or`; a new rule's condition must not.";
-        FALCO_UNKNOWN_RULE = "falco_unknown_rule" suggests Step
+        FALCO_UNKNOWN_RULE = "falco_unknown_rule" suggests Replacement
             => "A tuning (`append_to_rule`) names a rule the Falco default rules do not define: Falco refuses the append, and on Sysdig the tenant must have that rule.";
         // Sysdig block constraint codes (sysdig-1.0, Constraints), as opentide names them.
         SYSDIG_RULE_SHAPE = "sysdig_rule_shape"
@@ -1166,7 +1166,7 @@ pub mod codes {
             => "The CQL function was removed from LogScale and Next-Gen SIEM no longer runs it.";
         CQL_DEPRECATED_FUNCTION = "cql_deprecated_function"
             => "CrowdStrike's reference marks the CQL function deprecated.";
-        CQL_UNKNOWN_PARAMETER = "cql_unknown_parameter" suggests Step
+        CQL_UNKNOWN_PARAMETER = "cql_unknown_parameter" suggests Replacement
             => "The CQL function has no parameter with this name.";
         CQL_DUPLICATE_PARAMETER = "cql_duplicate_parameter"
             => "A CQL function parameter is given more than once.";
@@ -1186,7 +1186,7 @@ pub mod codes {
             => "A CQL assignment names the output field and the function's as= parameter names it again.";
         CQL_LINK_OUTSIDE_CORRELATE = "cql_link_outside_correlate"
             => "The CQL link operator <=> appears outside the queries of correlate(), the only place it links fields.";
-        CQL_UNKNOWN_EVENT = "cql_unknown_event" suggests Step
+        CQL_UNKNOWN_EVENT = "cql_unknown_event" suggests Replacement
             => "The #event_simpleName value is not a Falcon sensor event the engine knows.";
         CQL_EVENT_FUNCTION_AFTER_AGGREGATE = "cql_event_function_after_aggregate"
             => "A CQL eventSize(), eventInternals() or eventFieldCount() call comes after the first aggregate function, which LogScale refuses since 1.190.";
