@@ -244,6 +244,7 @@ pub fn page(code: &str) -> Option<Page> {
 /// made LF: a checkout that converted the file to CRLF (Windows) builds a
 /// binary whose summary and Markdown are the same as an LF checkout's.
 fn file_page(code: &str, markdown: &str) -> Page {
+    // Only CRLF: not `opentide_core::text::universal_newlines` (a lone `\r` is kept).
     let markdown = markdown.replace("\r\n", "\n");
     Page {
         code: code.to_owned(),

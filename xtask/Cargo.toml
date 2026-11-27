@@ -37,7 +37,8 @@ opentide-cli.workspace = true
 # engine's own analysis it adds to validate's findings.
 opentide-lsp.workspace = true
 opentide-analysis = { workspace = true, features = ["queries"] }
-opentide-core.workspace = true
+# `digest`: `text::sha256_hex`.
+opentide-core = { workspace = true, features = ["digest"] }
 schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true

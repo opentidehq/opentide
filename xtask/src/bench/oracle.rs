@@ -64,6 +64,7 @@ pub fn pinned_version(requirements: &str) -> Result<String> {
 /// (what `--require-hashes` needs, checked here for a clearer message).
 pub fn every_pin_is_hashed(requirements: &str) -> Result<()> {
     // A checkout with CRLF line endings (Windows) must read the same.
+    // Only CRLF: not `opentide_core::text::universal_newlines` (a lone `\r` is kept).
     let joined = requirements.replace("\r\n", "\n").replace("\\\n", " ");
     for line in joined.lines() {
         let line = line.trim();
