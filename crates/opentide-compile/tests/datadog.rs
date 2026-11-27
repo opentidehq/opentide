@@ -123,11 +123,18 @@ fn the_complete_block_compiles_to_the_rfc_s_request() {
     // The key order is the RFC's, at every level.
     let body = request.get("body").unwrap();
     assert_eq!(keys(body), keys(golden.get("body").unwrap()));
-    for key in ["options"] {
-        assert_eq!(
-            keys(body.get(key).unwrap()),
-            keys(golden.get("body").unwrap().get(key).unwrap())
-        );
+    let golden_body = golden.get("body").unwrap();
+    assert_eq!(
+        keys(body.get("options").unwrap()),
+        keys(golden_body.get("options").unwrap())
+    );
+    for list in ["queries", "cases"] {
+        let ours = body.get(list).unwrap().as_array().unwrap();
+        let theirs = golden_body.get(list).unwrap().as_array().unwrap();
+        assert_eq!(ours.len(), theirs.len());
+        for (ours, theirs) in ours.iter().zip(theirs) {
+            assert_eq!(keys(ours), keys(theirs), "{list}");
+        }
     }
 }
 
@@ -190,6 +197,19 @@ fn an_alias_the_tenant_lacks_fails_and_a_dry_run_shows_a_placeholder() {
         json(compiled.get("cases").unwrap())[0]["notifications"],
         serde_json::json!(["@pagerduty-sec"])
     );
+}
+
+#[test]
+fn a_block_tag_a_modifier_could_have_written_is_checked_as_sent() {
+    let text = block_rule(
+        "    queries:\n      - query: source:x\n    cases:\n      - condition: a > 1\n    tags: \
+         [\"Upper:Case\"]\n",
+        "",
+    );
+    let error = with_rule(&text, |cx, rule| {
+        compile_rule(cx, rule, StatusStrategy::Release, None).unwrap_err()
+    });
+    assert_eq!(error.code, "datadog_tag");
 }
 
 #[test]
@@ -424,6 +444,10 @@ fn the_calls_around_the_body() {
             "/api/v2/security_monitoring/rules/abc-def-ghi"
         );
         assert_eq!(update["body"]["version"], 4);
+        assert!(
+            update["body"].get("type").is_none(),
+            "the update takes no type"
+        );
         assert_eq!(update["body"]["name"], "Console login failures");
     });
 }

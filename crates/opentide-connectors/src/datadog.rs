@@ -256,7 +256,11 @@ pub struct Reply {
 /// rate-limits page documents; `None` when it is not a number.
 pub fn rate_limit_reset(value: &str) -> Option<Duration> {
     let seconds: f64 = value.trim().parse().ok()?;
-    (seconds.is_finite() && seconds >= 0.0).then(|| Duration::from_secs_f64(seconds))
+    if !seconds.is_finite() || seconds < 0.0 {
+        return None;
+    }
+    // A reset too large for a `Duration` is past any wait a deploy takes.
+    Some(Duration::try_from_secs_f64(seconds).unwrap_or(Duration::MAX))
 }
 
 // ---------------------------------------------------------------------------
@@ -607,7 +611,8 @@ impl<'a> Session<'a> {
 /// an empty list, text or object, or null.
 fn default_like(value: &Json) -> bool {
     match value {
-        Json::Null | Json::Bool(false) => true,
+        Json::Null | Json::Bool(false) | Json::Int(0) => true,
+        Json::Float(number) => *number == 0.0,
         Json::Str(text) => text.is_empty(),
         Json::Array(items) => items.is_empty(),
         Json::Object(fields) => fields.is_empty(),
@@ -661,12 +666,47 @@ fn tag_set(value: Option<&Json>) -> std::collections::BTreeSet<String> {
     }
 }
 
+/// The compiled body with the defaults Datadog holds for what it leaves out
+/// written in (RFC §8.2, "absent equals default"): every query's
+/// `hasOptionalGroupByFields: false`, `groupSignalsBy: []`, and an
+/// impossible travel rule's `detectIpTransition: false`. The comparison reads
+/// it, so a value set on the tenant (a signal grouping, an optional group-by
+/// field turned on in the UI) is a difference; the update sends it, so the
+/// difference is cleared and the next deploy finds the rule unchanged.
+pub fn with_defaults(compiled: &Json) -> Json {
+    let Json::Object(fields) = compiled else {
+        return compiled.clone();
+    };
+    let mut fields = fields.clone();
+    if let Some(Json::Array(queries)) = fields.get_mut("queries") {
+        for query in queries {
+            if let Json::Object(query) = query {
+                query
+                    .entry("hasOptionalGroupByFields".to_owned())
+                    .or_insert(Json::Bool(false));
+            }
+        }
+    }
+    if let Some(Json::Object(options)) = fields.get_mut("options")
+        && let Some(Json::Object(travel)) = options.get_mut("impossibleTravelOptions")
+    {
+        travel
+            .entry("detectIpTransition".to_owned())
+            .or_insert(Json::Bool(false));
+    }
+    fields
+        .entry("groupSignalsBy".to_owned())
+        .or_insert_with(|| Json::Array(Vec::new()));
+    Json::Object(fields)
+}
+
 /// The properties opentide owns ([`OWNED`]) whose value on the tenant's rule
 /// differs from the compiled body, in [`OWNED`]'s order: empty when the rule
 /// is unchanged. Tags are a set; queries and cases keep their order; a
 /// property the body leaves out equals Datadog's default, and what the
 /// answer adds (`id`, `version`, `defaultTags`, …) is not compared.
 pub fn differences(compiled: &Json, stored: &Object) -> Vec<&'static str> {
+    let compiled = &with_defaults(compiled);
     OWNED
         .iter()
         .copied()
@@ -913,23 +953,34 @@ async fn run(
         outcome.state = StateChange::Forget;
         return Ok(());
     }
-    let changed = differences(&rule.body, &stored);
-    if changed.is_empty() {
-        outcome.done = Some((crate::connector::RULE_UNCHANGED, rule_id.clone()));
-        return Ok(());
-    }
-    outcome.changed = changed;
-    outcome.calls.push("POST validation");
-    if let Err(failure) = session.validate_rule(&rule.body).await {
-        outcome.failure = Some(rule_failure(failure)?);
-        return Ok(());
-    }
     let version = stored.get("version").cloned().unwrap_or(Json::Null);
-    let mut body = match &rule.body {
-        Json::Object(fields) => fields.clone(),
-        _ => Object::new(),
+    let body = if rule.disable {
+        // A DISABLEMENT turns the rule off and nothing else (RFC §8.2): it is
+        // neither compared nor validated, so a rule whose content Datadog
+        // would now refuse is still disabled.
+        if stored.get("isEnabled") == Some(&Json::Bool(false)) {
+            outcome.done = Some((crate::connector::RULE_UNCHANGED, rule_id.clone()));
+            return Ok(());
+        }
+        outcome.changed = vec!["isEnabled"];
+        let mut body = Object::new();
+        body.insert("isEnabled".into(), Json::Bool(false));
+        body.insert("version".into(), version);
+        body
+    } else {
+        let changed = differences(&rule.body, &stored);
+        if changed.is_empty() {
+            outcome.done = Some((crate::connector::RULE_UNCHANGED, rule_id.clone()));
+            return Ok(());
+        }
+        outcome.changed = changed;
+        outcome.calls.push("POST validation");
+        if let Err(failure) = session.validate_rule(&rule.body).await {
+            outcome.failure = Some(rule_failure(failure)?);
+            return Ok(());
+        }
+        update_body(&rule.body, version)
     };
-    body.insert("version".into(), version);
     outcome.calls.push("PUT");
     let reply = match session.update_rule(rule_id, &Json::Object(body)).await {
         Ok(reply) => reply,
@@ -966,6 +1017,19 @@ async fn run(
         _ => outcome.failure = Some(failed(&api_error(&action, &reply.answer))),
     }
     Ok(())
+}
+
+/// The `PUT` body (`SecurityMonitoringRuleUpdatePayload`): the compiled body
+/// with Datadog's defaults written in ([`with_defaults`]), without `type`,
+/// which the update does not take, and with the `version` the `GET` read.
+pub fn update_body(compiled: &Json, version: Json) -> Object {
+    let mut body = match with_defaults(compiled) {
+        Json::Object(fields) => fields,
+        _ => Object::new(),
+    };
+    body.shift_remove("type");
+    body.insert("version".into(), version);
+    body
 }
 
 fn missing(rule_id: &str) -> Event {
@@ -1087,6 +1151,16 @@ pub async fn check_rule(session: &Session<'_>, body: &Json) -> Result<LiveCheck,
                     .map(|error| format!("{RULE_INVALID}: {error}"))
                     .collect()
             },
+            ..LiveCheck::default()
+        }),
+        // Any other answer, or a rate limit that outlasts the waits, fails
+        // this rule only, never a pass.
+        Err(Failure::Api(error)) => Ok(LiveCheck {
+            errors: vec![format!("{REQUEST_FAILED}: {error}")],
+            ..LiveCheck::default()
+        }),
+        Err(Failure::RateLimited(message)) => Ok(LiveCheck {
+            errors: vec![format!("{RATE_LIMITED}: {message}")],
             ..LiveCheck::default()
         }),
         Err(failure) => Err(connector_error(failure, &tenant, "validate the rule")),
@@ -1228,7 +1302,7 @@ pub async fn run_query(
     }
     let shown: Vec<Row> = rows.iter().take(request.limit).cloned().collect();
     let mut warnings = Vec::new();
-    if request.limit >= MAX_ROWS {
+    if request.limit >= MAX_ROWS && rows.len() >= MAX_ROWS {
         warnings.push(format!(
             "opentide reads at most {MAX_ROWS} Datadog events per search"
         ));

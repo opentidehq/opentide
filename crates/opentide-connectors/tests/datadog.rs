@@ -287,7 +287,13 @@ async fn a_changed_rule_is_validated_and_put_with_the_version_read() {
     drifted["tags"] = serde_json::json!(["added-in-the-ui"]);
     stand.stored(drifted).await;
     stand.validation(204, 1).await;
+    // The update takes no `type`, and writes in the defaults the body leaves
+    // out (RFC §8.2), so they are cleared on the tenant too.
     let mut expected = as_json(&golden());
+    expected.as_object_mut().unwrap().remove("type");
+    for query in expected["queries"].as_array_mut().unwrap() {
+        query["hasOptionalGroupByFields"] = false.into();
+    }
     expected["version"] = 7.into();
     Mock::given(method("PUT"))
         .and(path(format!("{RULES}/{ID}")))
@@ -307,11 +313,15 @@ async fn a_changed_rule_is_validated_and_put_with_the_version_read() {
 #[tokio::test]
 async fn a_disable_puts_is_enabled_false_and_keeps_the_binding() {
     let stand = Stand::start().await;
-    stand.stored(stored(2)).await;
-    stand.validation(204, 1).await;
+    // Content Datadog would now refuse does not keep the rule enabled: a
+    // disable is neither compared nor validated (RFC §8.2).
+    let mut drifted = stored(2);
+    drifted["message"] = "edited in the UI".into();
+    stand.stored(drifted).await;
+    stand.validation(400, 0).await;
     Mock::given(method("PUT"))
         .and(path(format!("{RULES}/{ID}")))
-        .and(body_partial_json(
+        .and(body_json(
             serde_json::json!({"isEnabled": false, "version": 2}),
         ))
         .respond_with(ResponseTemplate::new(200).set_body_json(stored(3)))
@@ -331,6 +341,94 @@ async fn a_disable_puts_is_enabled_false_and_keeps_the_binding() {
     assert_eq!(outcome.done, Some(("datadog_rule_disabled", ID.to_owned())));
     assert_eq!(outcome.changed, ["isEnabled"]);
     assert_eq!(outcome.state, StateChange::Keep);
+}
+
+#[tokio::test]
+async fn a_rule_already_disabled_is_sent_nothing() {
+    let stand = Stand::start().await;
+    let mut disabled = stored(2);
+    disabled["isEnabled"] = false.into();
+    stand.stored(disabled).await;
+    stand.validation(204, 0).await;
+    stand.no_writes().await;
+    let outcome = deploy_rule(
+        &stand.session(),
+        &RuleDeploy {
+            disable: true,
+            ..update()
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(outcome.done, Some(("rule_unchanged", ID.to_owned())));
+}
+
+/// A signal grouping set in the UI, which the block does not set, is
+/// cleared by the update, so the next deploy finds the rule unchanged
+/// instead of sending the same `PUT` on every run.
+#[tokio::test]
+async fn a_grouping_the_block_does_not_set_is_cleared_once() {
+    let stand = Stand::start().await;
+    let mut body = golden();
+    if let Json::Object(fields) = &mut body {
+        fields.shift_remove("groupSignalsBy");
+    }
+    let mut on_tenant = stored(3);
+    on_tenant.as_object_mut().unwrap().remove("groupSignalsBy");
+    on_tenant["groupSignalsBy"] = serde_json::json!(["@usr.id"]);
+    stand.stored(on_tenant).await;
+    stand.validation(204, 1).await;
+    Mock::given(method("PUT"))
+        .and(body_partial_json(
+            serde_json::json!({"groupSignalsBy": [], "version": 3}),
+        ))
+        .respond_with(ResponseTemplate::new(200).set_body_json(stored(4)))
+        .expect(1)
+        .mount(&stand.server)
+        .await;
+    let outcome = deploy_rule(
+        &stand.session(),
+        &RuleDeploy {
+            body: body.clone(),
+            ..update()
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(outcome.changed, ["groupSignalsBy"]);
+    // Datadog now holds the empty grouping: nothing differs.
+    let mut after = stored(4);
+    after["groupSignalsBy"] = serde_json::json!([]);
+    let Json::Object(after) = serde_json::from_value::<Json>(after).unwrap() else {
+        panic!("an object")
+    };
+    assert!(datadog::differences(&body, &after).is_empty());
+}
+
+/// An optional group-by field turned on in the UI is a difference, though
+/// the body leaves the key out (its default is `false`, RFC §8.2).
+#[tokio::test]
+async fn a_default_changed_on_the_tenant_is_a_difference() {
+    let mut on_tenant = stored(3);
+    on_tenant["queries"][1]["hasOptionalGroupByFields"] = true.into();
+    let Json::Object(on_tenant) = serde_json::from_value::<Json>(on_tenant).unwrap() else {
+        panic!("an object")
+    };
+    assert_eq!(datadog::differences(&golden(), &on_tenant), ["queries"]);
+}
+
+#[tokio::test]
+async fn a_reset_too_large_for_a_duration_is_not_waited_for() {
+    assert_eq!(datadog::rate_limit_reset("1e20"), Some(Duration::MAX));
+    let stand = Stand::start().await;
+    Mock::given(method("GET"))
+        .respond_with(ResponseTemplate::new(429).insert_header("X-RateLimit-Reset", "1e20"))
+        .expect(1)
+        .mount(&stand.server)
+        .await;
+    let outcome = deploy_rule(&stand.session(), &update()).await.unwrap();
+    assert_eq!(failure_code(&outcome), Some("datadog_rate_limited"));
+    assert!(stand.slept().is_empty());
 }
 
 #[tokio::test]
@@ -717,6 +815,18 @@ async fn a_block_s_rule_is_validated_whole() {
     assert!(
         matches!(refused, ConnectorError::Authentication { .. }),
         "{refused:?}"
+    );
+    // Any other answer fails this rule only, never a pass.
+    let stand = Stand::start().await;
+    Mock::given(method("POST"))
+        .respond_with(ResponseTemplate::new(500))
+        .mount(&stand.server)
+        .await;
+    let check = check_rule(&stand.session(), &golden()).await.unwrap();
+    assert_eq!(check.errors.len(), 1);
+    assert!(
+        check.errors[0].starts_with("datadog_request_failed: "),
+        "{check:?}"
     );
 }
 

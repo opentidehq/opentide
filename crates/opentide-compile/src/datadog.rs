@@ -520,11 +520,13 @@ pub fn sources(block: &Json) -> Vec<String> {
                 .chars()
                 .take_while(|ch| !ch.is_whitespace() && !matches!(ch, '(' | ')' | '"' | '\\'))
                 .collect();
-            if starts_a_term
-                && !value.is_empty()
-                && !value.contains(['*', '?'])
-                && !rest[..at].ends_with('-')
-            {
+            let negated = rest[..at].ends_with('-')
+                || rest[..at]
+                    .trim_end()
+                    .rsplit(|ch: char| ch.is_whitespace() || ch == '(')
+                    .next()
+                    == Some("NOT");
+            if starts_a_term && !value.is_empty() && !value.contains(['*', '?']) && !negated {
                 let value = value.to_lowercase();
                 if !found.contains(&value) {
                     found.push(value);
@@ -542,9 +544,12 @@ pub fn sources(block: &Json) -> Vec<String> {
 /// from the rule and the objectives it inherits, sub-techniques as their
 /// parents.
 pub fn derived_tags(cx: &Context<'_>, rule: &Rule, block: &Json) -> Vec<String> {
+    // A source Datadog would rewrite as a tag is left out: the tag the rule
+    // holds would never equal the one compiled.
     let mut tags: Vec<String> = sources(block)
         .into_iter()
         .map(|source| format!("source:{source}"))
+        .filter(|tag| tag_problem(tag).is_none())
         .collect();
     let mut techniques: Vec<String> = Vec::new();
     for id in rule_techniques(cx, rule) {
@@ -594,6 +599,15 @@ fn tags(
     tenant: Option<&Json>,
 ) -> Result<Vec<String>, CompileError> {
     let mut all: Vec<String> = items(block, "tags").iter().map(deploy::text).collect();
+    // The block's tags are the model's to check, but a `[[modifiers]]` entry
+    // rewrites them after validation: they are checked as sent.
+    if let Some(problem) = all.iter().find_map(|tag| tag_problem(tag)) {
+        return Err(CompileError::new(
+            "datadog_tag",
+            format!("{DISPLAY}: rule {}: tag {problem}", rule.uuid),
+            Some("Fix the tag in the block's tags, or in the modifier that sets them"),
+        ));
+    }
     all.extend(derived_tags(cx, rule, block));
     if let Some(tenant) = tenant {
         for tag in deploy::strings(deploy::setup(tenant, "tags")) {
@@ -734,13 +748,16 @@ pub fn validation_request(compiled: &DatadogRule) -> Json {
     request("POST", VALIDATION_PATH.to_owned(), compiled.body.clone())
 }
 
-/// The update body: the compiled body with the `version` the `GET` returned
-/// (RFC §8.2).
+/// The update body: the compiled body without `type`, which Datadog's update
+/// payload does not take, and with the `version` the `GET` returned (RFC
+/// §8.2). The connector also writes in the defaults Datadog holds for what
+/// the body leaves out (`opentide_connectors::datadog::update_body`).
 pub fn update_body(compiled: &DatadogRule, version: Json) -> Json {
     let mut body = match &compiled.body {
         Json::Object(fields) => fields.clone(),
         _ => Object::new(),
     };
+    body.shift_remove("type");
     body.insert("version".into(), version);
     Json::Object(body)
 }
@@ -856,6 +873,10 @@ mod tests {
         assert_eq!(
             sources(&block(&["source:web* @x:source:y", "source:(a OR b)"])),
             Vec::<String>::new()
+        );
+        assert_eq!(
+            sources(&block(&["NOT source:gcp source:aws", "(NOT source:x)"])),
+            vec!["aws"]
         );
     }
 

@@ -5801,14 +5801,15 @@ impl Sender<'_, '_> {
         let compiled = if matches!(action, Planned::Delete(_)) {
             Ok(None)
         } else {
-            opentide_compile::datadog::compile_rule(
-                self.compile,
-                rule,
-                strategy,
-                Some(&batch.table),
-            )
-            .map(Some)
-            .map_err(|error| Raised::new(format!("Rule {} ({}): {error}", rule.uuid, rule.name)))
+            // A disable sends `isEnabled: false` alone (RFC §8.2): the body is
+            // compiled without the tenant, so an alias it lacks cannot keep
+            // the rule enabled.
+            let tenant = (strategy != StatusStrategy::Disablement).then_some(&batch.table);
+            opentide_compile::datadog::compile_rule(self.compile, rule, strategy, tenant)
+                .map(Some)
+                .map_err(|error| {
+                    Raised::new(format!("Rule {} ({}): {error}", rule.uuid, rule.name))
+                })
         };
         let compiled = match compiled {
             Ok(compiled) => compiled,
