@@ -873,6 +873,74 @@ fn setup_ci_detects_the_default_branch() {
     );
 }
 
+/// The default branch is read without the `git` program (#1955): `PATH`
+/// names an empty folder. Outside a repository it is `init.defaultBranch`
+/// from the global file the run's environment names, a `GIT_CONFIG_COUNT`
+/// override winning over it, else `main` with the not-a-repository warning;
+/// in one whose branches are packed, the checked-out branch with the
+/// warning that others exist.
+#[test]
+fn setup_ci_reads_the_default_branch_without_git() {
+    let scratch = tempfile::tempdir().unwrap();
+    let root = std::fs::canonicalize(scratch.path()).unwrap();
+    let ws = root.join("ws");
+    fixture("tide-corpus", &ws);
+    let no_git = root.join("empty-path");
+    std::fs::create_dir_all(&no_git).unwrap();
+    let path = no_git.to_str().unwrap();
+    let global = root.join("global.gitconfig");
+    std::fs::write(&global, "[init]\n\tdefaultBranch = trunk\n").unwrap();
+    let global = global.to_str().unwrap();
+    let branch = |extra: &[(&str, &str)]| {
+        let extra: Vec<(&str, &str)> = [("PATH", path)]
+            .into_iter()
+            .chain(extra.iter().copied())
+            .collect();
+        let (code, stdout) = run_json_with(&ws, &["setup", "ci", "github", "--yes"], &extra);
+        assert_eq!(code, 0, "{stdout}");
+        let written = document(&stdout);
+        (
+            written["default_branch"].as_str().unwrap().to_owned(),
+            written["warnings"].clone(),
+        )
+    };
+    let (found, _) = branch(&[("GIT_CONFIG_GLOBAL", global)]);
+    assert_eq!(found, "trunk");
+    let overridden = [
+        ("GIT_CONFIG_GLOBAL", global),
+        ("GIT_CONFIG_COUNT", "1"),
+        ("GIT_CONFIG_KEY_0", "Init.DefaultBranch"),
+        ("GIT_CONFIG_VALUE_0", "release"),
+    ];
+    assert_eq!(branch(&overridden).0, "release");
+    let (found, warnings) = branch(&[]);
+    assert_eq!(found, "main");
+    assert!(
+        warnings[0]
+            .as_str()
+            .unwrap()
+            .starts_with("This folder is not a git repository yet"),
+        "{warnings}"
+    );
+    if !has_git() {
+        return;
+    }
+    git(&ws, &["init", "-q", "-b", "main"]);
+    git(&ws, &["add", "-A"]);
+    git(&ws, &["commit", "-q", "-m", "catalogue"]);
+    git(&ws, &["checkout", "-q", "-b", "feature/x"]);
+    git(&ws, &["pack-refs", "--all"]);
+    let (found, warnings) = branch(&[]);
+    assert_eq!(found, "feature/x");
+    assert!(
+        warnings[0]
+            .as_str()
+            .unwrap()
+            .starts_with("origin/HEAD is not set, so the pipeline targets the checked-out branch"),
+        "{warnings}"
+    );
+}
+
 /// Only the platforms whose file enables them get validate query jobs; and
 /// two different repository paths are refused before anything is written.
 #[test]

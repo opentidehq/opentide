@@ -219,6 +219,8 @@ Without `--default-branch`, GitHub and Azure pipelines target the first of:
 3. the `init.defaultBranch` Git setting, for a target outside any Git repository or on a detached `HEAD`;
 4. `main`.
 
+opentide reads these from the repository and the Git configuration files itself, so the `git` program need not be installed. It finds the configuration files as Git does, from `HOME`, `XDG_CONFIG_HOME`, `GIT_CONFIG_GLOBAL`, `GIT_CONFIG_SYSTEM` and `GIT_CONFIG_NOSYSTEM`, and applies `GIT_CONFIG_COUNT` overrides. Conditional includes (`includeIf`) are not followed.
+
 The JSON result reports the branch used as `default_branch`. It adds a `warnings` entry, and logs a warning, when the pipeline falls back to a `main` branch the repository does not have, or targets the checked-out branch while other local branches exist. Pass `--default-branch` in either case. A name the pipelines cannot hold unquoted (spaces, shell characters, or a value YAML reads as a number or boolean such as `2024` or `on`) is rejected with exit code 2.
 
 The pipeline has no promotion job: `opentide deploy --strategy RELEASE` promotes rules as the merged `deployment.toml` [configures](../usage/configuration.md#promotion). Omitting the flags keeps that setting. An explicit flag writes the `[promotion]` table of `.opentide/configurations/deployment.toml` when the value differs from the bundled default and the file has no `[promotion]` table yet, and the result lists that file under `files`. The same flags on `opentide setup` without `--ci` write that table too:
