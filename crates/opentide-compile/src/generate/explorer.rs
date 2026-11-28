@@ -1,4 +1,4 @@
-//! `opentide generate explorer` (`export/explorer_export.py`): the static
+//! `opentide generate explorer`: the static
 //! explorer site's two documents, `explorer.bundle.json` (every object, a
 //! summary of each, the threat chains and the deployment statuses) and
 //! `explorer.search.json` (one search document per summary), and, when asked
@@ -64,7 +64,7 @@ fn section<'j>(body: &'j Json, key: &str) -> Option<&'j Object> {
     body.get(key).and_then(Json::as_object)
 }
 
-/// The type an object's body says it is (`_infer_type`): its schema's prefix,
+/// The type an object's body says it is: its schema's prefix,
 /// else the first section it has.
 fn infer_type(body: &Json) -> Option<String> {
     if let Some(Json::Str(schema)) = section(body, "metadata").and_then(|m| m.get("schema")) {
@@ -84,7 +84,7 @@ fn infer_type(body: &Json) -> Option<String> {
     }
 }
 
-/// A rule's deployment status (`_status`): `PRODUCTION` when one platform
+/// A rule's deployment status: `PRODUCTION` when one platform
 /// says so, else `STAGING`, else the first platform's.
 fn status(body: &Json) -> Json {
     let statuses: Vec<String> = section(body, "configurations")
@@ -106,7 +106,7 @@ fn status(body: &Json) -> Json {
     statuses.into_iter().next().map_or(Json::Null, Json::Str)
 }
 
-/// A threat's actors' names (`_actors`), as written.
+/// A threat's actors' names, as written.
 fn actors(body: &Json) -> Vec<Json> {
     let from_threat = section(body, "threat")
         .and_then(|threat| threat.get("actors"))
@@ -145,7 +145,7 @@ fn holds(list: Option<&Json>, uuid: &str) -> bool {
     }
 }
 
-/// How many objects `uuid` is linked to (`_count_relations`): the threats an
+/// How many objects `uuid` is linked to: the threats an
 /// objective names, a signal's or rule's parent, and every object that names
 /// it as one of those.
 fn related_count(uuid: &str, flat: &Object) -> i64 {
@@ -298,7 +298,7 @@ fn strings(items: Vec<String>) -> Json {
     Json::Array(items.into_iter().map(Json::Str).collect())
 }
 
-/// One object's summary, its fields in the oracle's order.
+/// One object's summary, its fields in a fixed order.
 fn summary(
     index: &Index,
     uuid: &str,
@@ -318,7 +318,8 @@ fn summary(
         .filter(|name| name.is_name())
         .cloned()
         .unwrap_or_else(|| Json::from(uuid));
-    // The walk that fails on an object it cannot read, as the oracle's does.
+    // Resolved for every object, rules included (their techniques are read
+    // below instead), so an object the walk cannot read fails the run.
     let resolved = crate::attack::techniques(index, uuid).map_err(Cause::from)?;
     // A rule covers its own techniques and those it inherits, as `info coverage` counts them.
     let techniques = match rules.get(uuid).filter(|_| kind == "rule") {
@@ -363,12 +364,12 @@ fn summary(
     Ok(Json::Object(entry))
 }
 
-/// The bundle (`ExplorerExport.build_bundle`), made at `generated_at`.
+/// The bundle, made at `generated_at`.
 ///
 /// # Errors
 ///
 /// An object whose techniques cannot be resolved (an objective without its
-/// `objective` section), named as the oracle names it.
+/// `objective` section): ``missing key `objective` while rendering <uuid>``.
 pub fn bundle(index: &Index, generated_at: &str) -> Result<Json, PhaseError> {
     let models = models(index);
     let mut flat = Object::new();

@@ -1,6 +1,5 @@
 //! Exabeam New-Scale SIEM (exabeam-1.0): an opentide rule's `exabeam` block
-//! as a correlation rule body, a port of 0.28.0's
-//! `platforms/exabeam/compile.py`.
+//! as a correlation rule body.
 //!
 //! The author writes the sequences and the response settings; the rest is
 //! derived from the rule: the Exabeam rule name, the description (with the
@@ -103,7 +102,7 @@ fn block_of(rule: &Rule) -> Result<&Json, CompileError> {
     })
 }
 
-/// The strategy the block's status maps to (`_strategy`).
+/// The strategy the block's status maps to.
 pub fn strategy(cx: &Context<'_>, rule: &Rule) -> Result<StatusStrategy, CompileError> {
     let status = block_of(rule)?
         .get("status")
@@ -502,7 +501,7 @@ pub fn update_request(compiled: &ExabeamRule, rule_id: &str) -> Json {
     )
 }
 
-/// `at` as `YYYY-MM-DDThh:mm:ssZ`, in UTC (`_utc`).
+/// `at` as `YYYY-MM-DDThh:mm:ssZ`, in UTC.
 pub fn utc(at: jiff::Timestamp) -> String {
     at.strftime("%Y-%m-%dT%H:%M:%SZ").to_string()
 }

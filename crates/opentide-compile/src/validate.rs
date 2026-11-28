@@ -1,4 +1,4 @@
-//! `validate`'s compile check (#660; UC-2.2, #817; `validation/compile_check.py`):
+//! `validate`'s compile check (#660; UC-2.2, #817):
 //! what a deploy would compile must compile.
 //!
 //! A platform's compiler has requirements its schema does not state (Sentinel
@@ -83,7 +83,7 @@ pub fn failures(
     found
 }
 
-/// Whether a deploy compiles `block` (`_deploys`): a mapping whose status
+/// Whether a deploy compiles `block`: a mapping whose status
 /// maps to a compiled strategy. An unknown status is the schema's finding.
 fn deploys(cx: &Context<'_>, block: Option<&Json>) -> bool {
     let Some(Json::Object(block)) = block else {

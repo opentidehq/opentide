@@ -1,13 +1,10 @@
-//! HarfangLab: the Sigma rule or YARA file a deploy sends to one tenant
-//! (`platforms/harfanglab/deployer.py` `compile_sigma_deployment`,
-//! `compile_yara_deployment`, its deploy, and the client's
-//! `create_or_update_sigma_rule`, `create_or_update_yara_rule` and its
-//! deletes). The rule's UUID is its id on the platform: no deployment state.
+//! HarfangLab: the Sigma rule or YARA file a deploy sends to one tenant to
+//! create, update or delete it. The rule's UUID is its id on the platform:
+//! no deployment state.
 //!
 //! The Sigma rule is written as YAML by serde-saphyr (four-space indents,
 //! lists indented under their key, a multi-line string as a `|` block, no
-//! folding), not by PyYAML: the text differs where the two emitters quote
-//! or lay out a scalar differently, and reads back to the same document.
+//! folding), and reads back to the same document.
 
 use crate::Context;
 use crate::deploy::{self, Write};
@@ -252,7 +249,7 @@ pub fn yara_name(name: &str) -> String {
 /// The lines of `text` stripped, each indented eight spaces.
 #[expect(
     clippy::str_split_at_newline,
-    reason = "the oracle splits at `\\n` alone: a `\\r` stays in the line, as `lines` would not keep it"
+    reason = "split at `\\n` alone: a CRLF line keeps its `\\r`, which `lines` would drop"
 )]
 fn indented(lines: &mut Vec<String>, text: &str) {
     for line in text.trim().split('\n') {
@@ -291,7 +288,7 @@ fn yara(rule: &Rule, block: &Json, yara: &Json, tenant: &Json) -> Json {
     Json::Object(body)
 }
 
-/// The one YARA rule the decomposed form builds (`_assemble_yara`): imports,
+/// The one YARA rule the decomposed form builds: imports,
 /// the derived name, the meta deploy generates, and the bodies.
 fn assembled(rule: &Rule, block: &Json, yara: &Json) -> String {
     let settings = common(block, rule);
@@ -503,7 +500,7 @@ mod tests {
     }
 
     #[test]
-    fn mappings_default_as_the_oracle_does() {
+    fn unknown_values_map_to_their_defaults() {
         assert_eq!(global_state("Alert & Block"), "block");
         assert_eq!(global_state("other"), "alert");
         assert_eq!(hl_status("Testing"), "testing");
@@ -560,7 +557,7 @@ mod tests {
         let os_then = |arch: &str| format!("\n        os = \"Linux\"\n        arch = \"{arch}\"\n");
         let content = yara_content("[x64, arm64]");
         assert!(content.contains(&os_then("x64,arm64")), "{content}");
-        // One string, as the oracle's deployer takes it (`isinstance`).
+        // One string: the architecture as written.
         let content = yara_content("x86");
         assert!(content.contains(&os_then("x86")), "{content}");
         // Empty: no `arch` line.

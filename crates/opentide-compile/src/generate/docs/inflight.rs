@@ -1,8 +1,7 @@
 //! The inflight preview: open pull requests' objects, published as shards in
-//! `.opentide/inflight/`, overlaid on the index for documentation
-//! (`indexing/inflight.py` `inflight_preview`, `apply_inflight_overlay`,
-//! `indexing/inflight_shard.py`). Only preview output reads them: deploy and
-//! validate read the object files alone.
+//! `.opentide/inflight/`, overlaid on the index for documentation. Only
+//! preview output reads them: deploy and validate read the object files
+//! alone.
 
 use std::path::Path;
 use std::sync::Arc;
@@ -51,7 +50,7 @@ fn object_uuid(object: &JsonValue) -> Option<String> {
         .or_else(|| object.get("metadata")?.get("uuid").and_then(json_text))
 }
 
-/// An object's family (`_object_family`): its schema's, else by the block it
+/// An object's family: its schema's, else by the block it
 /// has.
 fn object_family(object: &JsonValue) -> Option<String> {
     if let Some(schema) = object

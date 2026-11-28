@@ -1,6 +1,6 @@
 //! Carbon Black Cloud: the watchlist report a deploy creates on one tenant
-//! for a rule (`platforms/carbon_black/deployer.py` `_deploy_to_org`, through
-//! the Carbon Black SDK's `Report.create(...).build().save_watchlist()`).
+//! for a rule, the body the Carbon Black SDK's
+//! `Report.create(...).build().save_watchlist()` sends.
 //!
 //! What else a deploy does depends on what the org already holds (a report
 //! of the same title is updated in place, its IOCs replaced or removed), so

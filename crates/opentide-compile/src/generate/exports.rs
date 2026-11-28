@@ -1,7 +1,5 @@
-//! `opentide generate exports`: the ATT&CK Navigator layer
-//! (`export/attack_navigator_layer.py`), the objects table
-//! (`export/table_export.py`) and the revisions snapshot
-//! (`export/revisions_export.py`).
+//! `opentide generate exports`: the ATT&CK Navigator layer, the objects table
+//! and the revisions snapshot.
 //!
 //! The layer is laid out at four spaces in its keys' order; the table and the
 //! snapshot at two, keys sorted, so a run writes the same file whatever order
@@ -185,7 +183,8 @@ fn techniques_of(
     let label = family.to_uppercase();
     let mut mapping: IndexMap<String, Vec<String>> = IndexMap::new();
     for (_, uuid, root) in ordered {
-        // The walk that fails on an object it cannot read, as the oracle's does.
+        // Resolved for every object, rules included (their techniques are read
+        // below instead), so an object the walk cannot read fails the run.
         let resolved = crate::attack::techniques(index, uuid)
             .map_err(|missing| PhaseError::rendering(uuid, &Cause::from(missing)))?;
         let techniques = if family == "rule" {
@@ -275,7 +274,7 @@ fn navigator(relations: &Relations<'_>, settings: &Settings) -> Result<Output, P
     ))
 }
 
-/// The value of `key`, or the oracle's `KeyError`.
+/// The value of `key`, or [`Cause::MissingKey`] naming it.
 fn required<'n>(node: &'n Node, key: &str) -> Result<&'n Node, Cause> {
     node.get(key)
         .map(AsRef::as_ref)
@@ -379,8 +378,9 @@ fn joined(node: &Node) -> String {
     }
 }
 
-/// One row of the objects table (`TableExporter._create_entry`), its
-/// fields read in the oracle's order so the first missing one is named.
+/// One row of the objects table, its fields read in a fixed order (name,
+/// then the metadata), so a run with several missing always names the same
+/// first one.
 fn row(
     relations: &Relations<'_>,
     uuid: &str,

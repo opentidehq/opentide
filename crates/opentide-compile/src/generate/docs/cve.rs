@@ -1,5 +1,5 @@
-//! CVE references as links to a Vulnerability-Lookup instance
-//! (`vulnerability_lookup.py`: identifiers, `page_url_for`, `[cve]`).
+//! CVE references as links to a Vulnerability-Lookup instance, as `[cve]`
+//! in the configuration sets it.
 //!
 //! With `[cve] retrieve_details` off, a page lists each identifier as a link
 //! to its record page. With it on (its default) a page is a table of each
@@ -461,8 +461,8 @@ impl CveFindings {
     }
 }
 
-/// A probability as a percentage that never rounds to a certainty
-/// (`_share`): `>99.9%`, `<0.1%`.
+/// A probability as a percentage that never rounds to a certainty: `>99.9%`,
+/// `<0.1%`.
 pub fn share(value: f64) -> String {
     let percent = value * 100.0;
     if percent >= 99.95 {
@@ -474,7 +474,7 @@ pub fn share(value: f64) -> String {
     }
 }
 
-/// The Exploitation cell of a record (`_exploitation`).
+/// The Exploitation cell of a record.
 pub fn exploitation(record: &CveRecord) -> String {
     if let Some(added) = &record.kev_added {
         return format!("**Known exploited**<br>CISA KEV, {added}");
@@ -497,8 +497,7 @@ pub fn exploitation(record: &CveRecord) -> String {
 /// Affected products listed under a CVE; the rest are counted.
 pub const AFFECTED_SHOWN: usize = 4;
 
-/// One line per CVE: what it is, what it affects, how it scores
-/// (`_cve_detail`).
+/// One line per CVE: what it is, what it affects, how it scores.
 pub fn detail_line(record: &CveRecord) -> String {
     let source = record
         .title

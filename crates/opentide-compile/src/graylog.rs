@@ -1,4 +1,4 @@
-//! Graylog event definitions (`platforms/graylog/compile.py`, graylog-1.0):
+//! Graylog event definitions (graylog-1.0):
 //! the definition a rule's Graylog block deploys, and its requests.
 //!
 //! The author writes the query, the aggregation, the schedule, the event
@@ -377,7 +377,7 @@ fn template_provider(template: String) -> Json {
     Json::Object(provider)
 }
 
-/// An event field value's provider (`_provider`): a lookup, a template, or
+/// An event field value's provider: a lookup, a template, or
 /// a bare field name as `${source.<field>}`.
 fn provider(value: &GraylogEventField) -> Json {
     match value {
@@ -475,7 +475,7 @@ pub const ALIAS_UNKNOWN: &str = "graylog_alias_unknown";
 pub const ALIAS_HINT: &str = "add the alias to the tenant's stream_ids or notification_ids table, \
                               or change the block's streams or notifications";
 
-/// Each alias's id in the tenant's `table` (`_resolve`), or
+/// Each alias's id in the tenant's `table`, or
 /// `graylog_alias_unknown` naming the aliases it lacks.
 fn resolve(
     aliases: &[String],

@@ -1,4 +1,4 @@
-//! Inflight preview shards (`indexing/inflight.py`, `inflight_shard.py`):
+//! Inflight preview shards:
 //! open pull requests' objects, one `<uuid>.json` per object under
 //! `.opentide/inflight/`, published to the default branch so the explorer
 //! and the documentation can preview them.
@@ -64,8 +64,9 @@ impl Shard {
     }
 }
 
-/// `int(metadata.version)`, 0 when it is missing or not a number
-/// (`_object_version`).
+/// `metadata.version` as an integer: a float truncated toward zero, a
+/// boolean as 0 or 1, a string parsed after trimming; 0 when it is missing
+/// or not a number.
 pub fn object_version(body: &Node) -> i64 {
     let Some(metadata) = body
         .get("metadata")
@@ -77,7 +78,7 @@ pub fn object_version(body: &Node) -> i64 {
         Some(Value::Int(version)) => *version,
         #[expect(
             clippy::cast_possible_truncation,
-            reason = "int() of a float truncates toward zero, as this cast does; out of range saturates"
+            reason = "a float version truncates toward zero, as this cast does; out of range saturates"
         )]
         Some(Value::Float(version)) if version.is_finite() => version.trunc() as i64,
         Some(Value::Bool(flag)) => i64::from(*flag),
@@ -86,7 +87,7 @@ pub fn object_version(body: &Node) -> i64 {
     }
 }
 
-/// An object's UUID (`_object_uuid`): `uuid`, else `metadata.uuid`.
+/// An object's UUID: `uuid`, else `metadata.uuid`.
 pub fn object_uuid(body: &Node) -> Option<String> {
     let named = |node: &&Arc<Node>| opentide_workspace::index::holds_name(node);
     body.get("uuid")
@@ -100,7 +101,7 @@ pub fn object_uuid(body: &Node) -> Option<String> {
         .map(|uuid| node_text(uuid))
 }
 
-/// The family an object says it is (`_object_family`): its schema's prefix,
+/// The family an object says it is: its schema's prefix,
 /// else the first section it has.
 pub fn object_family(body: &Node) -> Option<String> {
     if let Some(schema) = body
@@ -817,7 +818,7 @@ mod tests {
     }
 
     #[test]
-    fn versions_read_as_python_int_reads_them() {
+    fn versions_read_as_integers() {
         let version =
             |text: &str| object_version(opentide_schema::node::load(text).unwrap().root().unwrap());
         assert_eq!(version("metadata: {version: 3}"), 3);

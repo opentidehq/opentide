@@ -1,5 +1,5 @@
-//! The Bitdefender GravityZone JSON-RPC params (bitdefender-1.0, Deploy;
-//! 0.28.0's `platforms/bitdefender/compile.py`): what a block deploys,
+//! The Bitdefender GravityZone JSON-RPC params (bitdefender-1.0, Deploy):
+//! what a block deploys,
 //! derived from the rule (the GravityZone name, description, severity and
 //! tags) and the tenant (targets, tags, the partner company), as the
 //! `params` of `createCustomRule`, `updateCustomRule` and `deleteCustomRule`.
@@ -152,7 +152,7 @@ pub fn block_of(rule: &Rule) -> Result<BitdefenderConfig, CompileError> {
     serde_json::from_value(value).map_err(|error| CompileError::failed(DISPLAY, &error.to_string()))
 }
 
-/// The strategy the block's status maps to (`_strategy`).
+/// The strategy the block's status maps to.
 pub fn strategy(cx: &Context<'_>, rule: &Rule) -> Result<StatusStrategy, CompileError> {
     let status = block_of(rule)?.status;
     crate::deploy::strategy(cx, DISPLAY, &status)
@@ -525,7 +525,7 @@ pub fn create_params(compiled: &GravityZoneRule) -> Json {
 }
 
 /// `settings` with `filters: []` on a Basic rule without `alert`, where a
-/// create puts `filters`: before the actions (`_update_settings`).
+/// create puts `filters`: before the actions.
 fn update_settings(compiled: &GravityZoneRule) -> Object {
     if compiled.kind != Kind::Detection || compiled.settings.contains_key("filters") {
         return compiled.settings.clone();

@@ -1,5 +1,5 @@
-//! Pages from the catalogue (`documentation/objects/`, `parts/`,
-//! `publish/index.py`).
+//! Pages from the catalogue: each object's page, the folders' indexes and
+//! the root README.
 //!
 //! Every page has one layout ([`super::page`]): a breadcrumb, the title, a
 //! subtitle (kind, schema, version, modification date, TLP), a TLP banner
@@ -1571,7 +1571,7 @@ impl Pages<'_, '_> {
         join(parts)
     }
 
-    /// One record's row of the CVE table (`_cve_row`).
+    /// One record's row of the CVE table.
     fn cve_row(record: &cve::CveRecord, id: &str, link: &dyn Fn(&str) -> String) -> [String; 6] {
         let ident = if record.identifier.is_empty() {
             id

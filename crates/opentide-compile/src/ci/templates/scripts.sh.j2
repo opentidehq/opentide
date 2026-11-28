@@ -1,10 +1,9 @@
-{#- The shell every provider's pipeline runs (`ci/writeback.py`,
-    `ci/inflight.py`): each macro is one script, its lines without a final
-    newline. The provider templates place them with `indent`. -#}
+{#- The shell every provider's pipeline runs, for the production write-back
+    and the inflight shards: each macro is one script, its lines without a
+    final newline. The provider templates place them with `indent`. -#}
 
 {#- Replace the checkout's deployment state with the default branch's, and
-    record it as a local commit the write-back builds on
-    (`overlay_default_branch_state`). -#}
+    record it as a local commit the write-back builds on. -#}
 {% macro overlay(fetch) -%}
 [[ fetch ]]
 rm -rf -- .opentide/states/deployment
@@ -20,7 +19,7 @@ fi
 echo "$state_base" > "$(git rev-parse --git-path opentide-state-base)"
 {%- endmacro %}
 
-{#- Stage the deployment state folder, deletions included (`_stage_states`). -#}
+{#- Stage the deployment state folder, deletions included. -#}
 {% macro stage_states(pad="") -%}
 [[ pad ]]if [ -d .opentide/states/deployment ] || [ -n "$(git ls-files -- .opentide/states/deployment)" ]; then
 [[ pad ]]  git add -A -- .opentide/states/deployment
@@ -28,8 +27,8 @@ echo "$state_base" > "$(git rev-parse --git-path opentide-state-base)"
 {%- endmacro %}
 
 {#- Commit the production write-backs on the overlay commit and push them;
-    the deployment state is published whatever happens to the rule files
-    (`production_writeback`). `rules` is the rules folder as a shell word,
+    the deployment state is published whatever happens to the rule files.
+    `rules` is the rules folder as a shell word,
     `side_push` the push with its refspec replaced by the per-commit side
     ref. -#}
 {% macro writeback(rules, push, fetch, side_push) -%}
@@ -102,8 +101,7 @@ exit "$writeback_status"
 {%- endmacro %}
 
 {#- Deploy, always write back, and keep the deploy's exit status, for a
-    provider whose script stops at the first failing line
-    (`deploy_then_writeback`). -#}
+    provider whose script stops at the first failing line. -#}
 {% macro deploy_then_writeback(deploy, rules, push, fetch, side_push) -%}
 deploy_status=0
 touch "$(git rev-parse --git-path opentide-deploy-started)"
@@ -125,8 +123,8 @@ fi
 exit "$writeback_exit"
 {%- endmacro %}
 
-{#- GitLab's `after_script`: the write-back of a job cancelled mid-deploy
-    (`writeback_after_cancel`). -#}
+{#- GitLab's `after_script`: the write-back of a job cancelled mid-deploy,
+    run only when the deploy started and its write-back never finished. -#}
 {% macro writeback_after_cancel(rules, push, fetch, side_push) -%}
 if [ -f "$(git rev-parse --git-path opentide-deploy-started)" ] && [ ! -f "$(git rev-parse --git-path opentide-writeback-done)" ]; then
   echo "The job stopped after the deploy started and before its write-back: committing what the deploy recorded." >&2
@@ -139,7 +137,7 @@ fi
 {%- endmacro %}
 
 {#- Stage the inflight shards, commit when something changed, and push onto
-    the latest default branch, retrying on a moved tip (`_commit_and_push`). -#}
+    the latest default branch, trying at most five times in all when the tip moved. -#}
 {% macro commit_and_push(message, empty_note, push, fetch) -%}
 mkdir -p .opentide/inflight
 git add .opentide/inflight/
@@ -160,7 +158,8 @@ until [[ push ]]; do
 done
 {%- endmacro %}
 
-{#- Start from exactly the default branch's shards (`_default_branch_shards`). -#}
+{#- Start from exactly the default branch's shards, and record the commit
+    they came from for `publish_shards`. -#}
 {% macro default_branch_shards(ref) -%}
 rm -rf .opentide/inflight
 git rev-parse "[[ ref ]]" > "$(git rev-parse --git-path opentide-inflight-base)"
@@ -168,7 +167,7 @@ git checkout "$(cat "$(git rev-parse --git-path opentide-inflight-base)")" -- .o
 {%- endmacro %}
 
 {#- Commit the regenerated shards in a worktree of the default branch, never
-    on the pull request (`_publish_on_default_branch`). -#}
+    on the pull request. -#}
 {% macro publish_shards(push, fetch) -%}
 shards_repo="$PWD"
 shards_base="$(mktemp -d)"
@@ -181,8 +180,8 @@ cd "$shards_base" || exit
 [[ commit_and_push("ci: update inflight preview shards [skip ci]", "No inflight shard changes", push, fetch) ]]
 {%- endmacro %}
 
-{#- Push and sign with the SSH key in OPENTIDE_PUSH_SSH_KEY, when it is set
-    (`gitlab_push_setup`). -#}
+{#- Push and sign with the SSH key in OPENTIDE_PUSH_SSH_KEY, when it is set,
+    checking the host against OPENTIDE_PUSH_SSH_KNOWN_HOSTS. -#}
 {% macro gitlab_push_setup() -%}
 if [ -n "${OPENTIDE_PUSH_SSH_KEY:-}" ]; then
   if [ ! -f "$OPENTIDE_PUSH_SSH_KEY" ]; then

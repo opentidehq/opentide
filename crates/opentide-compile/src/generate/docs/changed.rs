@@ -1,6 +1,5 @@
 //! `generate docs --changed`: the objects whose files changed against the
-//! default branch, and the pages to write for them (`documentation/cli.py`
-//! `_changed_object_paths_and_uuids`, `_expand_referrer_closure`).
+//! default branch, and the pages to write for them (see [`changes`]).
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
@@ -22,7 +21,7 @@ pub struct Changes {
 }
 
 /// Whether `name` is an object file: `*.yaml` or `*.yml`, case-sensitive,
-/// not a `*.debug.yaml` (`is_object_file_name`).
+/// not a `*.debug.yaml`.
 #[expect(
     clippy::case_sensitive_file_extension_comparisons,
     reason = "case-sensitive as the catalogue reads object files: `r.YAML` is no object"

@@ -1,6 +1,6 @@
 //! A rule as the compilers read it: its document as ordered JSON, with the
 //! few fields every compiler needs, and the error a compiler gives for a rule
-//! it cannot compile (`deployment/preview.py` `compile_diagnostic`).
+//! it cannot compile.
 
 use std::fmt;
 
@@ -14,7 +14,7 @@ pub struct Rule {
     /// The document as read, for a compiler that needs a scalar as written
     /// (Falco reads list items and exception values as text).
     pub node: std::sync::Arc<opentide_schema::node::Node>,
-    /// `metadata.uuid`, written as the oracle's `UUID` writes it.
+    /// `metadata.uuid`, in its canonical form ([`canonical_uuid`]).
     pub uuid: String,
     /// `name`; empty when it is unset or not a string.
     pub name: String,
@@ -173,7 +173,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn uuids_are_written_as_python_writes_them() {
+    fn uuids_are_written_in_canonical_form() {
         assert_eq!(
             canonical_uuid("0000000A-0000-4000-8003-00000000000B"),
             "0000000a-0000-4000-8003-00000000000b"

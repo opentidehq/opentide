@@ -1,7 +1,5 @@
-//! CrowdStrike Falcon: the correlation rule a deploy sends to one tenant
-//! (`platforms/crowdstrike/deployer.py` `compile_deployment`, the client's
-//! `create_detection_rule`, `update_detection_rule` and
-//! `delete_detection_rule`): the body with its `null` values left out.
+//! CrowdStrike Falcon: the correlation rule a deploy sends to one tenant to
+//! create, update or delete it: the body with its `null` values left out.
 
 use crate::Context;
 use crate::deploy::{self, Action, Write};
@@ -16,7 +14,7 @@ pub const PLATFORM: &str = "crowdstrike";
 /// The platform's display name, in messages.
 pub const DISPLAY: &str = "CrowdStrike";
 
-/// The API of a tenant's `api` cloud (`_get_base_api`).
+/// The API of a tenant's `api` cloud.
 pub fn base_api(domain: &str) -> Result<&'static str, CompileError> {
     Ok(match domain {
         "US-1" => "https://api.crowdstrike.com",
@@ -111,7 +109,7 @@ pub fn body(cx: &Context<'_>, rule: &Rule, tenant: &Json) -> Result<Json, Compil
     if !matches!(outcome.as_str(), "detection" | "incident")
         || !matches!(trigger_mode.as_str(), "verbose" | "summary")
     {
-        // The oracle says `outcome` for a bad trigger too.
+        // One message for both: a bad trigger is reported as an outcome too.
         return Err(CompileError::failed(
             DISPLAY,
             "Invalid Crowdstrike outcome value",

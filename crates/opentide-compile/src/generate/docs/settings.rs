@@ -1,4 +1,4 @@
-//! Every setting a platform block carries (`documentation/facts/settings.py`).
+//! Every setting a platform block carries.
 //!
 //! The block is walked as the model holds it ([`Json::from_serialize`]: the
 //! fields in declaration order, the model's defaults filled in), beside the

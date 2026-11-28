@@ -10,7 +10,7 @@
 //! run macros of `scripts.sh.j2`; [`render`] fills it from [`Options`]. A
 //! value is `[[ value ]]` in a template, since GitHub Actions writes its own
 //! expressions `${{ }}`. The commands and conditions the jobs share are
-//! built here once, as `ci/stages.py` and `ci/gates.py` build them.
+//! built here once, so every provider runs the same ones.
 
 use std::sync::LazyLock;
 
