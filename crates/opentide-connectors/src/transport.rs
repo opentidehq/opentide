@@ -134,7 +134,7 @@ impl Request {
         &mut self.headers
     }
 
-    /// Its body.
+    /// Its body; `None` for a request without one.
     pub fn body(&self) -> Option<&[u8]> {
         self.body.as_deref()
     }
