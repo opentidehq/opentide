@@ -324,7 +324,7 @@ impl<'fs, V: Validate> Watcher<'fs, V> {
         self
     }
 
-    /// The validator.
+    /// What validates each pass, as given to [`Watcher::new`].
     pub fn validator(&self) -> &V {
         &self.validate
     }

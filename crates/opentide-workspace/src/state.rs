@@ -37,7 +37,7 @@ pub fn stores_ids(platform: &str) -> bool {
 /// One binding, as `info catalog` lists it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Binding {
-    /// The platform.
+    /// The platform the rule is deployed to (`sentinel`).
     pub platform: String,
     /// The tenant's name.
     pub tenant: String,

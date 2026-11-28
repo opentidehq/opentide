@@ -169,6 +169,9 @@ fn is_empty(value: &Json) -> bool {
     }
 }
 
+/// The read timeout of a deploy (it takes no `--timeout`).
+pub const DEPLOY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
 /// The HTTP settings of an Elastic tenant: the connectors' retries and
 /// *timeout* (whole seconds, at least one).
 pub fn http_settings(timeout: std::time::Duration) -> HttpSettings {
