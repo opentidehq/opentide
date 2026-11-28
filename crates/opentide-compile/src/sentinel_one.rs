@@ -263,13 +263,15 @@ fn numeric(id: &str) -> Result<i64, CompileError> {
 /// The writes a deploy sends for `rule` to `tenant`, whose recorded id is
 /// `known`: a create (`POST`), an update (`PUT`) or a delete (`DELETE` with
 /// a filter on the id), or none for a rule to retire that the tenant never
-/// received.
+/// received. The body is the one the deploy sends
+/// ([`crate::compiler::SentinelOne`]).
 pub fn compile(
     cx: &Context<'_>,
     rule: &Rule,
     tenant: &Json,
     known: Option<&str>,
 ) -> Result<Vec<Write>, CompileError> {
+    use crate::compiler::{Compiler, SentinelOne};
     let status = rule
         .block(PLATFORM)
         .and_then(|block| block.get("status"))
@@ -278,7 +280,7 @@ pub fn compile(
     let Some(action) = deploy::action(cx, DISPLAY, status, known)? else {
         return Ok(Vec::new());
     };
-    let body = body(cx, rule, tenant)?;
+    let body = SentinelOne::body(&SentinelOne::compile(cx, rule, tenant)?);
     let endpoint = format!(
         "{}/web/api/v2.1/cloud-detection/rules",
         deploy::setup_text(tenant, "url")

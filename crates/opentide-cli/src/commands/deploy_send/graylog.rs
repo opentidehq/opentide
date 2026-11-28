@@ -41,7 +41,8 @@ impl Sender<'_, '_> {
         };
         // The version is read once, before any write. A refused token, an
         // unsupported version or an unreachable tenant stops the tenant.
-        let version = match self.block(Client::new(self.context(&connection)).version()) {
+        let client = Client::new(self.context(&connection));
+        let version = match self.block(async { Ok(client.version().await?) }) {
             Ok(Ok(version)) => version,
             Ok(Err(error)) => {
                 let code = if error.forbidden() {

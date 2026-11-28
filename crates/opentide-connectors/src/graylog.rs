@@ -31,7 +31,7 @@ use regex::Regex;
 
 use crate::answer::Answer;
 use crate::connector::{
-    BoxFuture, DeployError, DeployEvent, DeployFailure, DeployOutcome, DeployRequest, DeployScope,
+    BoxFuture, CodedError, DeployError, DeployEvent, DeployFailure, DeployOutcome, DeployRequest,
     DeployWarning, Deployer, LiveCheck, LiveValidator, Operation, Platform, Prober, QueryColumn,
     QueryOutcome, QueryRequest, QueryRunner, Row, TenantContext,
 };
@@ -211,12 +211,18 @@ enum Failure {
     Rule(ApiError),
     /// The tenant refused the token, runs a version opentide cannot deploy
     /// to, or could not be reached.
-    Tenant(ConnectorError),
+    Tenant(CodedError),
+}
+
+impl From<CodedError> for Failure {
+    fn from(error: CodedError) -> Self {
+        Self::Tenant(error)
+    }
 }
 
 impl From<ConnectorError> for Failure {
     fn from(error: ConnectorError) -> Self {
-        Self::Tenant(error)
+        Self::Tenant(error.into())
     }
 }
 
@@ -392,7 +398,7 @@ impl<'a> Client<'a> {
         path: &str,
         body: Option<&Json>,
         timeout: Option<Duration>,
-    ) -> Result<Result<Answer, ApiError>, ConnectorError> {
+    ) -> Result<Result<Answer, ApiError>, CodedError> {
         let base = self
             .cx
             .tenant
@@ -426,15 +432,18 @@ impl<'a> Client<'a> {
             .map_err(|error| self.setup_error(error.describe()))?;
         let answer = Answer::fetch(self.cx.http, request, self.cx.cancel).await?;
         if answer.status == 401 {
-            return Err(ConnectorError::Authentication {
-                platform: PLATFORM.to_owned(),
-                tenant: self.tenant().to_owned(),
-                message: format!(
-                    "{TENANT_UNAUTHORIZED}: tenant {} refused the access token: HTTP 401",
-                    self.tenant()
-                ),
-                detail: None,
-            });
+            return Err(CodedError::new(
+                TENANT_UNAUTHORIZED,
+                ConnectorError::Authentication {
+                    platform: PLATFORM.to_owned(),
+                    tenant: self.tenant().to_owned(),
+                    message: format!(
+                        "{TENANT_UNAUTHORIZED}: tenant {} refused the access token: HTTP 401",
+                        self.tenant()
+                    ),
+                    detail: None,
+                },
+            ));
         }
         if !(200..300).contains(&answer.status) {
             let (message, errors) = message_of(&answer);
@@ -471,7 +480,7 @@ impl<'a> Client<'a> {
     ///
     /// A version below 6.3, or none, refuses the tenant
     /// (`graylog_version_unsupported`).
-    pub async fn version(&self) -> Result<Result<Version, ApiError>, ConnectorError> {
+    pub async fn version(&self) -> Result<Result<Version, ApiError>, CodedError> {
         let method = crate::transport::Method::GET;
         let answer = match self.send(method.clone(), SYSTEM_PATH, None, None).await? {
             Ok(answer) => answer,
@@ -498,16 +507,19 @@ impl<'a> Client<'a> {
                         other => other.to_compact(),
                     },
                 );
-                Err(ConnectorError::Refused {
-                    platform: PLATFORM.to_owned(),
-                    tenant: self.tenant().to_owned(),
-                    message: format!(
-                        "graylog_version_unsupported: tenant {} runs Graylog {shown}; opentide \
-                         deploys to Graylog 6.3 and later",
-                        self.tenant()
-                    ),
-                    detail: None,
-                })
+                Err(CodedError::new(
+                    VERSION_UNSUPPORTED,
+                    ConnectorError::Refused {
+                        platform: PLATFORM.to_owned(),
+                        tenant: self.tenant().to_owned(),
+                        message: format!(
+                            "{VERSION_UNSUPPORTED}: tenant {} runs Graylog {shown}; opentide \
+                             deploys to Graylog 6.3 and later",
+                            self.tenant()
+                        ),
+                        detail: None,
+                    },
+                ))
             }
         }
     }
@@ -518,7 +530,7 @@ impl<'a> Client<'a> {
         &self,
         body: &Json,
         timeout: Option<Duration>,
-    ) -> Result<Result<Json, ApiError>, ConnectorError> {
+    ) -> Result<Result<Json, ApiError>, CodedError> {
         let method = crate::transport::Method::POST;
         let answer = match self
             .send(method.clone(), VALIDATE_PATH, Some(body), timeout)
@@ -546,7 +558,7 @@ impl<'a> Client<'a> {
         &self,
         body: &Json,
         timeout: Option<Duration>,
-    ) -> Result<Result<Json, ApiError>, ConnectorError> {
+    ) -> Result<Result<Json, ApiError>, CodedError> {
         let method = crate::transport::Method::POST;
         let answer = match self
             .send(method.clone(), MESSAGES_PATH, Some(body), timeout)
@@ -565,10 +577,7 @@ impl<'a> Client<'a> {
     /// page): the definition may exist, so the caller reports it
     /// unconfirmed, never as a failed request a later run would create
     /// again.
-    pub async fn create(
-        &self,
-        body: &Json,
-    ) -> Result<Result<Option<Json>, ApiError>, ConnectorError> {
+    pub async fn create(&self, body: &Json) -> Result<Result<Option<Json>, ApiError>, CodedError> {
         let answer = match self
             .send(
                 crate::transport::Method::POST,
@@ -591,7 +600,7 @@ impl<'a> Client<'a> {
         definition_id: &str,
         body: &Json,
         enabled: bool,
-    ) -> Result<Result<(), ApiError>, ConnectorError> {
+    ) -> Result<Result<(), ApiError>, CodedError> {
         let path = update_path(definition_id, enabled);
         Ok(self
             .send(crate::transport::Method::PUT, &path, Some(body), None)
@@ -601,10 +610,7 @@ impl<'a> Client<'a> {
 
     /// `DELETE /api/events/definitions/{id}`: any 2xx, 204 for an id Graylog
     /// does not have (`delete`).
-    pub async fn delete(
-        &self,
-        definition_id: &str,
-    ) -> Result<Result<(), ApiError>, ConnectorError> {
+    pub async fn delete(&self, definition_id: &str) -> Result<Result<(), ApiError>, CodedError> {
         let path = delete_path(definition_id);
         Ok(self
             .send(crate::transport::Method::DELETE, &path, None, None)
@@ -715,7 +721,7 @@ fn failed(error: &ApiError) -> RuleFailure {
 pub async fn deploy_rule(
     cx: TenantContext<'_>,
     rule: &RuleDeploy,
-) -> Result<RuleOutcome, ConnectorError> {
+) -> Result<RuleOutcome, CodedError> {
     let client = Client::new(cx);
     let mut outcome = RuleOutcome::new();
     match run(&client, rule, &mut outcome).await {
@@ -806,11 +812,14 @@ async fn create(
         Ok(Err(error)) => return Err(Failure::Rule(error)),
         // No answer: the create may have happened. Titles are not unique, so
         // a retry could create a second definition; it is never retried.
-        Err(
-            error @ (ConnectorError::Unreachable { .. }
-            | ConnectorError::Timeout { .. }
-            | ConnectorError::Answer { .. }),
-        ) => {
+        Err(error)
+            if matches!(
+                *error.error,
+                ConnectorError::Unreachable { .. }
+                    | ConnectorError::Timeout { .. }
+                    | ConnectorError::Answer { .. }
+            ) =>
+        {
             outcome.failure = Some(create_unconfirmed(compiled, &error.to_string()));
             return Ok(());
         }
@@ -1308,25 +1317,11 @@ fn failed_with(error: &ApiError) -> DeployFailure {
         .with_field("detail", error.detail())
 }
 
-/// A tenant's failure, with its own code when it names one
-/// ([`VERSION_UNSUPPORTED`], [`TENANT_UNAUTHORIZED`]): each of its rules
-/// would fail the same way.
-fn tenant_failure(error: ConnectorError) -> DeployError {
-    let own = match &error {
-        ConnectorError::Refused { message, .. }
-        | ConnectorError::Authentication { message, .. } => {
-            [VERSION_UNSUPPORTED, TENANT_UNAUTHORIZED]
-                .into_iter()
-                .find(|code| message.starts_with(&format!("{code}: ")))
-        }
-        _ => None,
-    };
-    let mut failed = DeployError::from(error);
-    failed.scope = DeployScope::Tenant;
-    if let Some(code) = own {
-        failed.failure.code = code;
-    }
-    failed
+/// A tenant's failure, with its own code when the request that raised it
+/// names one ([`VERSION_UNSUPPORTED`], [`TENANT_UNAUTHORIZED`]): each of its
+/// rules would fail the same way.
+fn tenant_failure(error: CodedError) -> DeployError {
+    error.into_tenant_failure()
 }
 
 /// What a deploy on a tenant running `version` raised: the warning of a
