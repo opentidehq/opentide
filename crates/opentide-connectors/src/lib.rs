@@ -27,12 +27,6 @@
 //! [`opentide`](https://docs.rs/opentide) crate, its Rust SDK, instead (its
 //! `connectors` feature, and `plugins` for the plugin host).
 
-// Slicing a `str` by byte index panics off a char boundary, and this crate
-// reads tenant answers and user files: every slice is checked or says why it
-// is safe (#1946; the lint moves to `[workspace.lints]` once every crate is
-// clean).
-#![warn(clippy::string_slice)]
-
 pub mod answer;
 pub mod bitdefender;
 pub mod carbon_black;

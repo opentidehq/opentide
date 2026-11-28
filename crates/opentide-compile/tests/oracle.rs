@@ -5,6 +5,9 @@
 //! the dry run's payload entry, byte for byte.
 #![expect(
     clippy::string_slice,
+    reason = "a test: a slice off a char boundary panics, and a panic is a failed test"
+)]
+#![expect(
     clippy::unwrap_used,
     reason = "test helpers: the corpus and the record are in the repository"
 )]

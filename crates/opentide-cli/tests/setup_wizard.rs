@@ -5,6 +5,9 @@
 
 #![expect(
     clippy::string_slice,
+    reason = "a test: a slice off a char boundary panics, and a panic is a failed test"
+)]
+#![expect(
     clippy::unwrap_used,
     clippy::expect_used,
     reason = "a test: a session that does not go as scripted is a failure"

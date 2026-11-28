@@ -7,6 +7,9 @@
 #![cfg(unix)]
 #![expect(
     clippy::string_slice,
+    reason = "a test: a slice off a char boundary panics, and a panic is a failed test"
+)]
+#![expect(
     clippy::unwrap_used,
     reason = "a test helper: a broken fixture is a failure"
 )]

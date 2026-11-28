@@ -6,9 +6,9 @@
 
 #![expect(
     clippy::string_slice,
-    clippy::unwrap_used,
-    reason = "a test: a failed set-up is a failure"
+    reason = "a test: a slice off a char boundary panics, and a panic is a failed test"
 )]
+#![expect(clippy::unwrap_used, reason = "a test: a failed set-up is a failure")]
 
 use std::collections::BTreeSet;
 use std::path::Path;

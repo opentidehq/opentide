@@ -5,6 +5,9 @@
 
 #![expect(
     clippy::string_slice,
+    reason = "a test: a slice off a char boundary panics, and a panic is a failed test"
+)]
+#![expect(
     clippy::cast_possible_truncation,
     reason = "a char is one or two UTF-16 units"
 )]

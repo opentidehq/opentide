@@ -5,6 +5,9 @@
 //! the progress events, the CI summary, and the refusals.
 #![expect(
     clippy::string_slice,
+    reason = "a test: a slice off a char boundary panics, and a panic is a failed test"
+)]
+#![expect(
     clippy::unwrap_used,
     reason = "test helpers: every workspace here is written to a fresh folder"
 )]
