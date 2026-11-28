@@ -89,7 +89,7 @@ pub enum Command {
     Run(Action),
     /// Read the catalogue again.
     Reload,
-    /// Quit.
+    /// Leave the terminal UI.
     Quit,
 }
 

@@ -74,7 +74,7 @@ pub struct Setting {
 /// A finding of `validate --check configuration` on one file.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConfigFinding {
-    /// The code.
+    /// The diagnostic code (`config_parse`).
     pub code: String,
     /// `error` or `warning`.
     pub severity: String,
@@ -107,7 +107,7 @@ pub struct ConfigFile {
 /// One `setup` key of a tenant: never its value.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Credential {
-    /// The key.
+    /// The setup key (`api_token`).
     pub key: String,
     /// The variable it names, when it is a reference.
     pub variable: Option<String>,
@@ -132,7 +132,8 @@ pub struct TenantCard {
     pub rules: Vec<String>,
 }
 
-/// A platform's card.
+/// A platform on the Configuration tab: whether it is enabled, its tenants
+/// and its rules.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlatformCard {
     /// The platform's key.

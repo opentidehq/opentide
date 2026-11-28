@@ -171,7 +171,7 @@ pub enum Error {
 }
 
 impl Error {
-    /// The message.
+    /// The text of either kind, as the command reports it.
     pub fn message(&self) -> &str {
         match self {
             Error::Usage(message) | Error::Failed(message) => message,

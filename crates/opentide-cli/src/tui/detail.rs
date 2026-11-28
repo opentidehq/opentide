@@ -19,7 +19,8 @@ use super::text::{WHITE, inside, slashed};
 /// The frame's blue.
 const FRAME: Color = Color::Blue;
 
-/// A severity's style.
+/// The style a severity is shown in: bold, and red for an error, yellow for a
+/// warning, blue for a note.
 pub fn severity_style(severity: &str) -> Style {
     let bold = Style::new().add_modifier(Modifier::BOLD);
     match severity {

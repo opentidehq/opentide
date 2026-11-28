@@ -35,15 +35,15 @@ pub struct Filters {
 /// One object on one destination (`ShareRecord`).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Record {
-    /// The object.
+    /// The UUID of the object shared.
     pub object_uuid: String,
     /// The destination.
     pub target: String,
     /// What happened (`created`, `skipped_tlp`, `failed`, ...).
     pub action: String,
-    /// The remote event's UUID.
+    /// The UUID of the destination's event for the object, when it has one.
     pub remote_event_uuid: Option<String>,
-    /// The remote event's id.
+    /// The destination's numeric id for that event, when it has one.
     pub remote_event_id: Option<i64>,
     /// Why it was skipped or failed.
     pub reason: Option<String>,
@@ -124,7 +124,7 @@ impl Record {
 /// A run's result (`ShareRun`).
 #[derive(Clone, Debug, Default)]
 pub struct ShareRun {
-    /// The records.
+    /// What happened to each object on each destination.
     pub records: Vec<Record>,
     /// The preflight that stopped the run.
     pub preflight: Option<String>,
@@ -298,7 +298,7 @@ impl Validator {
 pub struct Options<'a> {
     /// `push`, `preview`, `status` or `retract`.
     pub mode: Mode,
-    /// The filters.
+    /// `--uuid`, `--type` and `--file`: the objects to share; `None` for all.
     pub filters: Option<&'a Filters>,
     /// `--publish` / `--no-publish`.
     pub publish: Option<bool>,
