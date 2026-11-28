@@ -611,6 +611,7 @@ pub fn show(name: &str, repo: &Path, refresh: bool, network: Network<'_>, json: 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::commands::result::ExitCode;
 
     fn parsed(json: &str) -> Manifest {
         let value: serde_json::Value = serde_json::from_str(json).unwrap();
@@ -817,7 +818,7 @@ mod tests {
                 network(&failing.env),
                 80,
             );
-            assert_eq!(report.outcome.exit_code, 1);
+            assert_eq!(report.outcome.exit(), ExitCode::Failure);
             let failure = report.outcome.failure.as_ref().unwrap();
             assert_eq!(failure.code, "command_failed");
             assert!(
@@ -856,7 +857,7 @@ mod tests {
             network(&served.env),
             80,
         );
-        assert_eq!(report.outcome.exit_code, 0);
+        assert_eq!(report.outcome.exit(), ExitCode::Success);
         let Json::Array(listed) = data(&report, "skills") else {
             panic!("skills is not a list")
         };
@@ -922,7 +923,7 @@ mod tests {
         let repo = tempfile::tempdir().unwrap();
         for name in ["Fancy Name", " fancy name ", "FANCY-SKILL"] {
             let report = show(name, repo.path(), false, network(&served.env), true);
-            assert_eq!(report.outcome.exit_code, 0, "{name}");
+            assert_eq!(report.outcome.exit(), ExitCode::Success, "{name}");
             assert_eq!(
                 data(&report, "skill").get("slug"),
                 Some(&Json::str("fancy-skill")),
@@ -930,6 +931,6 @@ mod tests {
             );
         }
         let report = show("Fancy", repo.path(), false, network(&served.env), true);
-        assert_eq!(report.outcome.exit_code, 1);
+        assert_eq!(report.outcome.exit(), ExitCode::Failure);
     }
 }

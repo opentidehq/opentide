@@ -37,8 +37,9 @@ use self::scaffold::{FieldPath, Fill, Model, Scalar, collect_fields, fill_templa
 use super::setup::files::ORGANISATION_FILE;
 use super::setup::wizard::{Prompter, Stop};
 use super::{COMMAND_FAILED, Report, placement};
+use crate::commands::result::ExitCode;
 use crate::env::Env;
-use crate::envelope::{Failure, USAGE_EXIT_CODE, code};
+use crate::envelope::{Failure, code};
 use crate::json::Json;
 
 /// `failure.code` when neither `.opentide/` nor `objects/` marks a workspace.
@@ -219,7 +220,7 @@ fn stopped(command: &str, stop: Stop, cx: &Context<'_>) -> Report {
             }
             let mut report = Report::failed(
                 command,
-                crate::envelope::INTERRUPTED_EXIT_CODE,
+                ExitCode::Interrupted.code(),
                 Failure::new("interrupted", "Interrupted"),
             );
             report.outcome.message = "Interrupted".into();
@@ -637,7 +638,7 @@ fn needs_input(command: &str, family: &str, missing: &str) -> Report {
         ),
     );
     failure.argument = Some(missing.to_owned());
-    Report::failed(command, USAGE_EXIT_CODE, failure)
+    Report::failed(command, ExitCode::Usage.code(), failure)
 }
 
 /// A name that is empty or only spaces, given or answered: `message`.
@@ -646,7 +647,7 @@ fn empty_name(command: &str, message: &str) -> Report {
         command,
         message.to_owned(),
         code::USAGE_INVALID_VALUE,
-        USAGE_EXIT_CODE,
+        ExitCode::Usage.code(),
         Some("--name"),
     )
 }
@@ -822,7 +823,7 @@ pub fn run(args: &NewArgs, cx: &Context<'_>) -> Report {
                     &command,
                     format!("{argument} takes a UUID, got {value:?}"),
                     code::USAGE_INVALID_VALUE,
-                    USAGE_EXIT_CODE,
+                    ExitCode::Usage.code(),
                     Some(argument),
                 ),
                 &steps,
@@ -854,7 +855,7 @@ pub fn run(args: &NewArgs, cx: &Context<'_>) -> Report {
                         folder_shown(&folder, cx.cwd, &root)
                     ),
                     REFERENCE_NOT_FOUND,
-                    USAGE_EXIT_CODE,
+                    ExitCode::Usage.code(),
                     Some(argument),
                 ),
                 &steps,
@@ -892,7 +893,13 @@ pub fn run(args: &NewArgs, cx: &Context<'_>) -> Report {
         Ok(lint) => lint,
         Err(error) => {
             return with_steps(
-                new_error(&command, error.0, COMMAND_FAILED, USAGE_EXIT_CODE, None),
+                new_error(
+                    &command,
+                    error.0,
+                    COMMAND_FAILED,
+                    ExitCode::Usage.code(),
+                    None,
+                ),
                 &steps,
             );
         }

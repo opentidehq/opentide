@@ -24,6 +24,7 @@ use opentide_schema::platforms::PlatformKey;
 use tokio_util::sync::CancellationToken;
 
 use super::{Report, open, placement};
+use crate::commands::result::{ExitCode, Status};
 use crate::env::Env;
 use crate::envelope::{Failure, Outcome};
 use crate::json::Json;
@@ -200,24 +201,24 @@ fn finished(
     failed: Option<String>,
     message: String,
 ) -> Report {
-    let mut report = Report::failed(command, 1, Failure::new("", ""));
+    let mut report = Report::failed(command, ExitCode::Failure.code(), Failure::new("", ""));
     report.outcome = match failed {
         Some(first) => Outcome {
             command: command.to_owned(),
-            status: "failed".into(),
+            status: Status::Failed.as_str().into(),
             message: first.clone(),
             data,
-            exit_code: 1,
+            exit_code: ExitCode::Failure.code(),
             summary,
             next_actions: Vec::new(),
             failure: Some(Failure::new(super::COMMAND_FAILED, first)),
         },
         None => Outcome {
             command: command.to_owned(),
-            status: "completed".into(),
+            status: Status::Completed.as_str().into(),
             message,
             data,
-            exit_code: 0,
+            exit_code: ExitCode::Success.code(),
             summary,
             next_actions: Vec::new(),
             failure: None,
@@ -248,7 +249,7 @@ pub fn validate_live(
     else {
         let mut report = Report::failed(
             COMMAND,
-            1,
+            ExitCode::Failure.code(),
             Failure::new(
                 super::COMMAND_FAILED,
                 format!("query validation not supported for {platform}"),

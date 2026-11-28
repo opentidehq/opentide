@@ -17,6 +17,7 @@ use super::{
     Block, ISSUES_FOUND, Report, USAGE_INVALID_CHOICE, USAGE_INVALID_VALUE, USAGE_MISSING_OPTION,
     counted, json, placement,
 };
+use crate::commands::result::{ExitCode, Status};
 use crate::env::Env;
 use crate::envelope::Failure;
 use crate::json::Json;
@@ -283,12 +284,12 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     report.outcome_line = Some(outcome);
     if load_errors > 0 {
         report.next("opentide validate", "show where each object failed to load");
-        report.outcome.status = "issues".into();
+        report.outcome.set_status(Status::Issues);
     }
     if args.strict && load_errors > 0 {
-        report.outcome.status = "failed".into();
+        report.outcome.set_status(Status::Failed);
         report.outcome.message = "Repository has objects that failed to load".into();
-        report.outcome.exit_code = 1;
+        report.outcome.set_exit(ExitCode::Failure);
         report.outcome.failure = Some(Failure::new(
             ISSUES_FOUND,
             "Repository has objects that failed to load",
@@ -750,7 +751,7 @@ mod tests {
             },
             &cx,
         );
-        assert_eq!(report.outcome.exit_code, 2);
+        assert_eq!(report.outcome.exit(), ExitCode::Usage);
         assert_eq!(report.outcome.failure.unwrap().code, USAGE_INVALID_VALUE);
     }
 }
