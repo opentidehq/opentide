@@ -24,7 +24,7 @@ use opentide_connectors::{Environment, HttpClient, Tenant};
 use opentide_schema::platforms::PlatformKey;
 use tokio_util::sync::CancellationToken;
 
-use super::query::{Configured, http_settings, toml_value};
+use super::query::{Configured, http_settings};
 use super::template::fill;
 use super::{Report, open, placement};
 use crate::env::Env;
@@ -94,17 +94,12 @@ fn tenant(
     environment: &Environment,
     proxy: Option<&str>,
 ) -> Result<(Tenant, HttpClient), String> {
-    let setup: toml::Table = configured
-        .setup
-        .iter()
-        .filter_map(|(key, value)| toml_value(value).map(|value| (key.clone(), value)))
-        .collect();
     let mut settings = http_settings(platform, timeout);
     settings.timeout = timeout;
     let tenant = Tenant::from_setup(
         platform,
         &configured.name,
-        &setup,
+        &configured.setup,
         environment,
         Resolve::Counting,
         &settings,

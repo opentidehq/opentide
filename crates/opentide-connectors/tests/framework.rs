@@ -1230,7 +1230,7 @@ fn framework_credentials_placeholders_and_errors() {
     }
 
     // A tenant's setup: ssl words, $VAR ssl, credentials.
-    let setup: toml::Table = toml::from_str(
+    let setup: opentide_core::json::Object = toml::from_str(
         "ssl = \"$MOCK_SSL\"\nurl = \"https://tenant.invalid\"\ntoken = \"$MOCK_TOKEN\"\n",
     )
     .unwrap();
@@ -1250,7 +1250,7 @@ fn framework_credentials_placeholders_and_errors() {
     let counted =
         Tenant::from_setup("mock", "prod", &setup, &env, Resolve::Counting, &defaults).unwrap();
     assert!(counted.http.tls.verify);
-    let bad: toml::Table = toml::from_str("ssl = \"maybe\"").unwrap();
+    let bad: opentide_core::json::Object = toml::from_str("ssl = \"maybe\"").unwrap();
     assert!(
         Tenant::from_setup("mock", "prod", &bad, &env, Resolve::Counting, &defaults)
             .unwrap_err()
@@ -1258,8 +1258,8 @@ fn framework_credentials_placeholders_and_errors() {
             .ends_with("ssl must be true or false, got \"maybe\"")
     );
     // Two tenants of one platform keep their own ssl (#742).
-    let first: toml::Table = toml::from_str("ssl = false").unwrap();
-    let second: toml::Table = toml::from_str("ssl = \"yes\"").unwrap();
+    let first: opentide_core::json::Object = toml::from_str("ssl = false").unwrap();
+    let second: opentide_core::json::Object = toml::from_str("ssl = \"yes\"").unwrap();
     let a = Tenant::from_setup("mock", "a", &first, &env, Resolve::Required, &defaults).unwrap();
     let b = Tenant::from_setup("mock", "b", &second, &env, Resolve::Required, &defaults).unwrap();
     assert!(!a.http.tls.verify);
@@ -1273,7 +1273,8 @@ fn framework_credentials_placeholders_and_errors() {
         (" On", true),
         ("0 ", false),
     ] {
-        let literal: toml::Table = toml::from_str(&format!("ssl = {written:?}")).unwrap();
+        let literal: opentide_core::json::Object =
+            toml::from_str(&format!("ssl = {written:?}")).unwrap();
         let tenant =
             Tenant::from_setup("mock", "w", &literal, &env, Resolve::Required, &defaults).unwrap();
         assert_eq!(tenant.http.tls.verify, verify, "ssl = {written:?}");

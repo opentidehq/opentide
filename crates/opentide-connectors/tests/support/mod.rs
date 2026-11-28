@@ -98,7 +98,7 @@ impl Replayed {
         ca.write_all(proxy.ca_pem().as_bytes()).unwrap();
         let env = Environment::from_pairs(proxy.client_env(ca.path().to_str().unwrap()))
             .with(variable, SECRET);
-        let setup: toml::Table = toml::from_str(setup).unwrap();
+        let setup: opentide_core::json::Object = toml::from_str(setup).unwrap();
         let tenant = Tenant::from_setup(
             platform,
             "replayed",

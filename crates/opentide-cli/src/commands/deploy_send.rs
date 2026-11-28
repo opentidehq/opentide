@@ -39,7 +39,7 @@ use opentide_workspace::{OsFs, Workspace, root};
 use tokio_util::sync::CancellationToken;
 
 use super::deploy_state::{self, ExternalId, StateError};
-use super::query::{Configured, log_unset, toml_value};
+use super::query::{Configured, log_unset};
 use super::validate_live::{Batch, batches};
 use super::{Report, placement};
 use crate::env::Env;
@@ -2802,17 +2802,11 @@ impl Sender<'_, '_> {
 
     /// The tenant's connection (`Tenant.from_setup`, one client per tenant).
     fn connect(&self, platform: &str, batch: &Batch) -> Result<Connection, Raised> {
-        let setup: toml::Table = batch
-            .tenant
-            .setup
-            .iter()
-            .filter_map(|(key, value)| toml_value(value).map(|value| (key.clone(), value)))
-            .collect();
         let settings = opentide_connectors::deploy_http_settings(platform);
         let tenant = Tenant::from_setup(
             platform,
             &batch.tenant.name,
-            &setup,
+            &batch.tenant.setup,
             &self.environment,
             Resolve::Counting,
             &settings,

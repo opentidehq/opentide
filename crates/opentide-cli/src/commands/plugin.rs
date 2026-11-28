@@ -88,7 +88,7 @@ struct Rule {
 /// One configured tenant.
 struct Configured {
     name: String,
-    setup: toml::Table,
+    setup: opentide_compile::json::Object,
 }
 
 /// The workspace's rules with the platform's block that *selection* takes,
@@ -136,14 +136,7 @@ fn read(
             setup: tenant
                 .get("setup")
                 .and_then(Compiled::as_object)
-                .map(|setup| {
-                    setup
-                        .iter()
-                        .filter_map(|(key, value)| {
-                            super::query::toml_value(value).map(|value| (key.clone(), value))
-                        })
-                        .collect()
-                })
+                .cloned()
                 .unwrap_or_default(),
         })
         .collect();

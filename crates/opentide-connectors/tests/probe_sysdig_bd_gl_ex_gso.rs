@@ -30,7 +30,7 @@ async fn probe(
     env: &Environment,
     settings: &HttpSettings,
 ) -> Result<(), DeployError> {
-    let setup: toml::Table = toml::from_str(setup).unwrap();
+    let setup: opentide_core::json::Object = toml::from_str(setup).unwrap();
     let tenant =
         Tenant::from_setup(platform.id(), name, &setup, env, Mode::Counting, settings).unwrap();
     let http = HttpClient::new(&tenant.label, &tenant.http, env, None).unwrap();

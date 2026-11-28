@@ -249,28 +249,69 @@ mod tests {
         assert_eq!(names, ["prod", "lab"]);
         let setup = &tenants[0].1;
         assert_eq!(setup["url"].as_str(), Some("$SPLUNK_URL"));
-        assert_eq!(setup["port"].as_integer(), Some(8089));
+        assert_eq!(setup["port"].as_i64(), Some(8089));
         assert_eq!(setup["ssl"].as_bool(), Some(false));
-        assert_eq!(setup["ratio"].as_float(), Some(0.5));
+        assert_eq!(setup["ratio"], opentide_compile::Json::Float(0.5));
         assert_eq!(
             setup["index"],
-            toml::Value::Array(vec![
-                toml::Value::String("main".into()),
-                toml::Value::Integer(3)
-            ])
+            opentide_compile::Json::Array(vec!["main".into(), 3_i64.into()])
         );
         // A table is kept, for the tenant's string tables (Graylog's
-        // `stream_ids`); a null has no TOML form and is left out.
+        // `stream_ids`); a null is kept as written.
         assert_eq!(
             setup["nested"],
-            toml::Value::Table(toml::map::Map::from_iter([(
-                "a".to_owned(),
-                toml::Value::Integer(1)
-            )]))
+            opentide_compile::Json::object([("a", 1_i64.into())])
         );
-        assert!(!setup.contains_key("none"));
+        assert!(setup["none"].is_null());
+        // File order, not name order.
+        let keys: Vec<&str> = setup.keys().map(String::as_str).collect();
+        assert_eq!(
+            keys,
+            ["url", "port", "ssl", "index", "nested", "none", "ratio"]
+        );
         assert!(tenants[1].1.is_empty());
         assert!(super::tenant::configured(&config, "elastic").is_empty());
+    }
+
+    /// #1967: the setup used to reach the tenant through a `toml::Table`,
+    /// which has no null and no integer past `i64`: the null was dropped and
+    /// `u64::MAX` became the float `18446744073709552000.0`.
+    #[test]
+    fn a_setup_keeps_its_nulls_and_its_integers_digit_for_digit() {
+        let config: opentide_compile::Json = serde_json::from_str(
+            r#"{"platforms": {"splunk": {"tenants": [{"name": "prod", "setup": {
+                "url": "https://splunk.example", "token": "$TOKEN", "unset": null,
+                "account": 18446744073709551615, "id": 9007199254740993, "ratio": 2.0,
+                "ssl": null
+            }}]}}}"#,
+        )
+        .expect("JSON");
+        let tenants = super::tenant::configured(&config, "splunk");
+        let (name, setup) = &tenants[0];
+        assert!(setup.contains_key("unset"), "the null is kept: {setup:?}");
+        let env = super::Environment::from_pairs([("TOKEN", "t0ken")]);
+        let tenant = super::Tenant::from_setup(
+            "splunk",
+            name,
+            setup,
+            &env,
+            super::credentials::Mode::Required,
+            &super::HttpSettings::default(),
+        )
+        .expect("the tenant");
+        let secret = |key: &str| {
+            tenant
+                .secret(key)
+                .ok()
+                .map(|secret| secret.expose().to_owned())
+        };
+        assert_eq!(secret("account").as_deref(), Some("18446744073709551615"));
+        assert_eq!(secret("id").as_deref(), Some("9007199254740993"));
+        assert_eq!(secret("ratio").as_deref(), Some("2.0"));
+        assert_eq!(secret("token").as_deref(), Some("t0ken"));
+        // A null is unset: no credential, and a null `ssl` keeps verifying.
+        assert!(secret("unset").is_none());
+        assert!(tenant.http.tls.verify);
     }
 
     #[test]

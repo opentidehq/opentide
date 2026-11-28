@@ -172,7 +172,7 @@ fn deploy() -> Result<(), Failed> {
         return Err("the fixture has no deploy steps".into());
     };
     let env = Environment::process();
-    let setup: toml::Table = toml::from_str(SETUP)?;
+    let setup: opentide_core::json::Object = toml::from_str(SETUP)?;
     let tenant = Tenant::from_setup(
         splunk::PLATFORM,
         "splunk",

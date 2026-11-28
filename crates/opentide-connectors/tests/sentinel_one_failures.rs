@@ -27,7 +27,7 @@ const TOKEN: &str = "s1-token-never-in-a-message";
 
 /// Runs `body` with a tenant whose console is `api`.
 fn with_tenant<T>(api: &MockServer, body: impl FnOnce(TenantContext<'_>) -> T) -> T {
-    let setup: toml::Table = toml::from_str(&format!(
+    let setup: opentide_core::json::Object = toml::from_str(&format!(
         "url = \"{}\"\napi_token = \"$S1_TOKEN\"\naccount_id = 4242\nsite_id = 0\n",
         api.uri()
     ))

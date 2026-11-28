@@ -54,7 +54,7 @@ fn tenant(url: &str) -> (Tenant, HttpClient) {
 
 /// The fixture tenant, pointed at `url`, reached with `settings`.
 fn tenant_with(url: &str, settings: &opentide_connectors::HttpSettings) -> (Tenant, HttpClient) {
-    let setup: toml::Table = toml::from_str(&format!(
+    let setup: opentide_core::json::Object = toml::from_str(&format!(
         r#"
 ssl = true
 url = "{url}"

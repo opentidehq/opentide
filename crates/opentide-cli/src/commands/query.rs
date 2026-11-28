@@ -536,11 +536,6 @@ fn select<'t>(
         .collect())
 }
 
-/// A setup value as `toml` holds it, for [`Tenant::from_setup`]: the
-/// connectors' own, so every command builds a tenant alike (a table such as
-/// Graylog's `stream_ids` kept).
-pub(crate) use opentide_connectors::tenant::toml_value;
-
 /// The `$NAME` (or `${NAME}`) a setup value names, when it is one.
 fn reference(value: &opentide_compile::Json) -> Option<&str> {
     value
@@ -637,11 +632,6 @@ fn run_on_tenant(
         outcome.error = Some(message);
         return finish(outcome);
     }
-    let setup: toml::Table = configured
-        .setup
-        .iter()
-        .filter_map(|(key, value)| toml_value(value).map(|value| (key.clone(), value)))
-        .collect();
     let settings = http_settings(platform, request.timeout);
     // A plugin reads its setup itself: an unset variable fails here, before
     // the plugin is called, as no built-in pre-check names its keys.
@@ -653,7 +643,7 @@ fn run_on_tenant(
     let tenant = match Tenant::from_setup(
         platform,
         &configured.name,
-        &setup,
+        &configured.setup,
         environment,
         resolve,
         &settings,
@@ -1427,20 +1417,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn an_integer_beyond_i64_is_the_nearest_float_in_a_setup_value() {
-        use opentide_compile::Json as J;
-        // TOML integers are signed 64-bit: u64::MAX is 2^64 as the nearest float.
-        let Some(toml::Value::Float(float)) = toml_value(&J::UInt(u64::MAX)) else {
-            panic!("a UInt is a TOML float");
-        };
-        assert_eq!(float.to_bits(), 2f64.powi(64).to_bits());
-        assert_eq!(
-            toml_value(&J::Int(i64::MAX)),
-            Some(toml::Value::Integer(i64::MAX))
-        );
-    }
-
-    #[test]
     fn every_platform_mounts_the_connectors_http_settings() {
         // A platform the command line listed apart drifted: Google SecOps
         // left --timeout unread, Exabeam waited 120 s for 30 s.
@@ -2147,36 +2123,8 @@ mod tests {
     }
 
     #[test]
-    fn setup_values_become_toml_and_references_are_named() {
+    fn setup_references_are_named() {
         use opentide_compile::Json as J;
-        assert_eq!(
-            toml_value(&J::Str("x".into())),
-            Some(toml::Value::String("x".into()))
-        );
-        assert_eq!(toml_value(&J::Int(3)), Some(toml::Value::Integer(3)));
-        assert_eq!(toml_value(&J::Float(1.5)), Some(toml::Value::Float(1.5)));
-        assert_eq!(toml_value(&J::Bool(true)), Some(toml::Value::Boolean(true)));
-        assert_eq!(
-            toml_value(&J::Array(vec![J::Int(1), J::Null, J::Str("a".into())])),
-            Some(toml::Value::Array(vec![
-                toml::Value::Integer(1),
-                toml::Value::String("a".into())
-            ]))
-        );
-        assert_eq!(toml_value(&J::Null), None);
-        // A table is kept (Graylog's `stream_ids`), its nulls left out.
-        let mut ids = opentide_compile::json::Object::new();
-        ids.insert("endpoint".into(), J::Str("65f0c0ffee0123456789abcd".into()));
-        ids.insert("gone".into(), J::Null);
-        let mut expected = toml::Table::new();
-        expected.insert(
-            "endpoint".into(),
-            toml::Value::String("65f0c0ffee0123456789abcd".into()),
-        );
-        assert_eq!(
-            toml_value(&J::Object(ids)),
-            Some(toml::Value::Table(expected))
-        );
         assert_eq!(reference(&J::Str("$TOKEN".into())), Some("TOKEN"));
         assert_eq!(reference(&J::Str("${TOKEN}".into())), Some("TOKEN"));
         assert_eq!(reference(&J::Str("plain".into())), None);
