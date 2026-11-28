@@ -235,6 +235,44 @@ fn hover_shows_the_schema_and_never_the_value() {
     assert!(header.contains("MISP instances"), "{header}");
 }
 
+/// #1946: multi-byte text before, around and inside the cursor gives the
+/// hover and the completions ASCII text gives.
+#[test]
+fn multi_byte_text_around_the_cursor_reads_the_same_schema() {
+    let schemas = schemas();
+    let path = "/w/é😀/.opentide/configurations/sharing.toml";
+    let text = "# é😀\n[[misp]]\nname = \"é😀\" # 😀\napi_key = \"😀\"\nmax_tlp = ";
+    assert_eq!(
+        labels(&schemas, path, text),
+        [
+            "\"clear\"",
+            "\"green\"",
+            "\"amber\"",
+            "\"amber+strict\"",
+            "\"red\""
+        ]
+    );
+    let keys = labels(&schemas, path, "# é😀\n[[misp]]\nname = \"é😀\" # 😀\n");
+    assert!(keys.contains(&"url".to_string()), "{keys:?}");
+    assert!(!keys.contains(&"name".to_string()), "name is already set");
+
+    let on_key = text.find("api_key").unwrap() + 2;
+    let hover = configuration_hover(&schemas, path, text, on_key).expect("hover");
+    assert!(hover.contains("Api Key"), "{hover}");
+    // Inside the `😀` of the value: the key's schema, never the value.
+    let inside = text.find("😀\"\nmax").unwrap() + 1;
+    let hover = configuration_hover(&schemas, path, text, inside).expect("hover");
+    assert!(
+        hover.contains("Api Key") && !hover.contains('😀'),
+        "{hover}"
+    );
+    // Every offset, on a boundary or not, answers without a panic.
+    for offset in 0..=text.len() {
+        let _ = configuration_hover(&schemas, path, text, offset);
+        let _ = configuration_completions(&schemas, path, text, offset);
+    }
+}
+
 #[test]
 fn files_route_through_the_router() {
     let schemas = schemas();
