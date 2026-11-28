@@ -73,7 +73,6 @@ crates/opentide-compile/src/graylog.rs compile_definition
 crates/opentide-compile/src/harfanglab.rs sigma
 crates/opentide-compile/src/plan.rs select
 crates/opentide-compile/src/promotion.rs promote_block_statuses
-crates/opentide-compile/src/sentinel.rs compile_with_warnings
 crates/opentide-compile/src/sentinel_one.rs body
 crates/opentide-compile/tests/generate_docs.rs the_flavour_comes_from_ci_then_origin_then_the_configuration
 crates/opentide-compile/tests/oracle.rs the_compile_corpus_compiles_as_the_oracle_compiles_it

@@ -3,10 +3,18 @@
 //! `compile_deployment`): `kind` and camelCase `properties`, unset fields left
 //! out, in the oracle's key order.
 
+use std::sync::Arc;
+
+use opentide_schema::node::{Entry, Mark, Node, Value};
+use opentide_schema::objects::platform::SentinelConfig;
+use opentide_schema::objects::platform::sentinel::{
+    SentinelAlert, SentinelAlertGrouping, SentinelEntityMapping, Suppression,
+};
 use opentide_schema::vocab::sentinel::SentinelAttack;
+use opentide_schema::{ErrorKind, FromNode, SchemaError};
 
 use crate::Context;
-use crate::deploy::{self, strings};
+use crate::deploy;
 use crate::duration;
 use crate::json::{Json, Object};
 use crate::kql;
@@ -104,14 +112,6 @@ fn iso(value: &str) -> Result<String, CompileError> {
     duration::sentinel(value).map_err(CompileError::invalid_rule)
 }
 
-/// A string the block sets, not empty.
-fn text<'j>(object: Option<&'j Json>, key: &str) -> Option<&'j str> {
-    object
-        .and_then(|object| object.get(key))
-        .and_then(Json::as_str)
-        .filter(|text| !text.is_empty())
-}
-
 /// The code of the warning a technique newer than ATT&CK v18 earns.
 pub const TECHNIQUE_NEWER_CODE: &str = "technique_newer_than_sentinel_attack";
 
@@ -166,276 +166,187 @@ fn v18_techniques(
     out
 }
 
-/// [`compile`], with the warnings the body earned.
-#[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
-pub fn compile_with_warnings(
-    cx: &Context<'_>,
-    rule: &Rule,
-    tenant: &str,
-) -> Result<Compiled, CompileError> {
-    let mut warnings: Vec<(&'static str, String)> = Vec::new();
+/// The rule's Sentinel block, read by the model `opentide validate` checks it
+/// with (`SentinelConfig`, #1951), through the same conversion
+/// (`FromNode`), so a refusal reads as `validate`'s `schema` finding does:
+/// the field path the rule wrote and the model's reason
+/// (`configurations.sentinel.alert: Field required`), every one the block
+/// earns, at the first one's field.
+///
+/// Only the block's shape is refused here (a missing field, an unknown key,
+/// a wrong type). A block whose only faults are values a field's or the
+/// block's own check refuses (a duration it cannot read, a technique newer
+/// than ATT&CK v18, a schedule outside Sentinel's bounds: `sentinel_frequency`,
+/// `sentinel_lookback`) is read as before (serde, which runs no check) and
+/// the compile deals with those values as it always has (`compile_invalid_rule`
+/// for an unreadable duration, the v18 mapping and its warning for the
+/// technique, the schedule sent as written); `validate` reports them.
+///
+/// The block is the one the deploy sends (`modifiers::rule_for_tenant` may
+/// have changed it), so it is read from the rule's JSON, not its node.
+fn block_of(rule: &Rule) -> Result<SentinelConfig, CompileError> {
     let Some(block) = rule.block("sentinel").filter(|block| block.is_filled()) else {
         return Err(CompileError::invalid_rule(format!(
             "Rule {} ({}): configurations.sentinel is missing",
             rule.uuid, rule.name
         )));
     };
-    let grouping = block
-        .get("grouping")
-        .filter(|grouping| grouping.is_filled());
-    let Some(grouping) = grouping else {
+    let node = json_node(block);
+    let mut cx = opentide_schema::from_node::Context::new();
+    let config = cx.at_key("configurations", |cx| {
+        cx.at_key("sentinel", |cx| SentinelConfig::from_node(&node, cx))
+    });
+    let errors = cx.into_errors();
+    if let (Some(config), true) = (config, errors.is_empty()) {
+        return Ok(config);
+    }
+    if !errors.is_empty() && errors.iter().all(is_field_check) {
+        // Through the block's text, not `serde_json::Value`, so the order of
+        // an exclusion's `let` bindings is kept.
+        return serde_json::from_str(&block.to_compact())
+            .map_err(|error| CompileError::failed(DISPLAY, &error.to_string()));
+    }
+    let field = errors
+        .first()
+        .map(SchemaError::field_path)
+        .unwrap_or_default();
+    let field: Vec<&str> = field.iter().map(String::as_str).collect();
+    let reasons: Vec<String> = errors.iter().map(ToString::to_string).collect();
+    let mut error = CompileError::failed(DISPLAY, &reasons.join("; "));
+    error.hint = Some(REFUSED_HINT.to_owned());
+    Err(error.at(&field))
+}
+
+/// Whether the model refused a value a field's or the block's own check
+/// reads (a duration, an ATT&CK id, the schedule's bounds), not the block's
+/// shape: a missing or unknown key, a type, a value outside a closed set.
+fn is_field_check(error: &SchemaError) -> bool {
+    match error.kind {
+        ErrorKind::InvalidValue(kind) => kind != "literal_error" && kind != "enum",
+        ErrorKind::Constraint(_) => true,
+        _ => false,
+    }
+}
+
+/// The block's exclusions as written (`[{query, tenant, let}]`), which
+/// [`kql::compile_query`] reads, once the model has read them. A `let`
+/// value is taken from the rule, not the model: through serde a non-finite
+/// float (`.inf`, `.nan`) would become `null`, and its `let` statement be
+/// dropped.
+fn exclusions<'a>(rule: &'a Rule, block: &SentinelConfig) -> Option<&'a Json> {
+    block.exclusions.as_ref()?;
+    rule.block("sentinel")?.get("exclusions")
+}
+
+/// What to do about a block the model refuses.
+const REFUSED_HINT: &str =
+    "run `opentide validate` and fix what its schema check reports on this block";
+
+/// A JSON value as a node without positions, for the model's conversion. A
+/// rule's JSON comes from its YAML, whose loader refuses an integer past
+/// `i64`, so a `UInt` does not occur; it would read as a float.
+fn json_node(value: &Json) -> Node {
+    let value = match value {
+        Json::Null => Value::Null,
+        Json::Bool(flag) => Value::Bool(*flag),
+        Json::Int(integer) => Value::Int(*integer),
+        #[expect(
+            clippy::cast_precision_loss,
+            reason = "a rule read from YAML holds no integer past i64; a node has no wider integer"
+        )]
+        Json::UInt(integer) => Value::Float(*integer as f64),
+        Json::Float(float) => Value::Float(*float),
+        Json::Str(text) => Value::Str(text.as_str().into()),
+        Json::Array(items) => {
+            Value::Seq(items.iter().map(|item| Arc::new(json_node(item))).collect())
+        }
+        Json::Object(members) => Value::Map(
+            members
+                .iter()
+                .map(|(key, item)| Entry {
+                    key: Arc::new(json_node(&Json::Str(key.clone()))),
+                    value: Arc::new(json_node(item)),
+                })
+                .collect(),
+        ),
+    };
+    Node {
+        value,
+        start: Mark::default(),
+        end: Mark::default(),
+        text: None,
+    }
+}
+
+/// [`compile`], with the warnings the body earned.
+pub fn compile_with_warnings(
+    cx: &Context<'_>,
+    rule: &Rule,
+    tenant: &str,
+) -> Result<Compiled, CompileError> {
+    let mut warnings: Vec<(&'static str, String)> = Vec::new();
+    let block = block_of(rule)?;
+    let Some(grouping) = &block.grouping else {
         return Err(missing(
             "grouping",
             "Sentinel deploy requires grouping.event and grouping.alert",
         ));
     };
-    let Some(alert_grouping) = grouping.get("alert").filter(|alert| alert.is_filled()) else {
+    let Some(alert_grouping) = &grouping.alert else {
         return Err(missing(
             "grouping.alert",
             "Sentinel deploy requires incident grouping (grouping.alert.enabled)",
         ));
     };
-    let mut kind = "Scheduled";
     let mut properties = Object::new();
     properties.insert("enabled".into(), Json::Bool(true));
-    let query = block
-        .get("query")
-        .and_then(Json::as_str)
-        .unwrap_or_default();
+    let exclusions = exclusions(rule, &block);
     properties.insert(
         "query".into(),
-        Json::Str(kql::compile_query(query, block.get("exclusions"), tenant)),
+        Json::Str(kql::compile_query(&block.query, exclusions, tenant)),
     );
-    let status = block
-        .get("status")
-        .and_then(Json::as_str)
-        .unwrap_or_default();
     let strategy = cx
         .statuses
-        .strategy(status)
+        .strategy(&block.status)
         .map_err(|error| CompileError::failed(DISPLAY, &error.to_string()))?;
     if strategy == StatusStrategy::Disablement {
         properties.insert("enabled".into(), Json::Bool(false));
     }
-    if let Some(template) = block
-        .get("template")
-        .filter(|template| template.is_filled())
-    {
+    if let Some(template) = &block.template {
         properties.insert(
             "alertRuleTemplateName".into(),
-            template.get("uuid").cloned().unwrap_or(Json::Null),
+            template.uuid.as_str().into(),
         );
-        properties.insert(
-            "templateVersion".into(),
-            template.get("version").cloned().unwrap_or(Json::Null),
-        );
+        properties.insert("templateVersion".into(), template.version.as_str().into());
     }
-    let alert = block.get("alert");
-    match alert.and_then(|alert| alert.get("suppression")) {
-        Some(Json::Str(suppression)) => {
-            properties.insert("suppressionEnabled".into(), Json::Bool(true));
-            properties.insert("suppressionDuration".into(), Json::Str(iso(suppression)?));
-        }
-        None | Some(Json::Bool(false) | Json::Null) => {
-            properties.insert("suppressionEnabled".into(), Json::Bool(false));
-            properties.insert("suppressionDuration".into(), Json::Str(iso("1h")?));
-        }
-        Some(_) => {
-            return Err(CompileError::new(
-                codes::COMPILE_INVALID_VALUE,
-                "configurations.sentinel.alert.suppression is true",
-                Some("set it to false or a duration such as PT1H"),
-            )
-            .at(&["configurations", "sentinel", "alert", "suppression"]));
-        }
-    }
-    let scheduling = block.get("scheduling");
-    let nrt = matches!(
-        scheduling.and_then(|scheduling| scheduling.get("nrt")),
-        Some(Json::Bool(true))
+    let alert = &block.alert;
+    suppression(alert, &mut properties)?;
+    let kind = schedule(&block, &mut properties)?;
+    properties.insert(
+        "alertDetailsOverride".into(),
+        Json::Object(details_override(alert)),
     );
-    if nrt {
-        kind = "NRT";
-    } else {
-        let frequency = scheduling
-            .and_then(|scheduling| scheduling.get("frequency"))
-            .filter(|value| value.is_filled());
-        let Some(frequency) = frequency else {
-            return Err(missing(
-                "scheduling.frequency",
-                "required unless scheduling.nrt is true",
-            ));
-        };
-        let lookback = scheduling
-            .and_then(|scheduling| scheduling.get("lookback"))
-            .filter(|value| value.is_filled());
-        let Some(lookback) = lookback else {
-            return Err(missing(
-                "scheduling.lookback",
-                "required unless scheduling.nrt is true",
-            ));
-        };
-        properties.insert(
-            "queryFrequency".into(),
-            Json::Str(iso(&Json::to_text(frequency))?),
-        );
-        properties.insert(
-            "queryPeriod".into(),
-            Json::Str(iso(&Json::to_text(lookback))?),
-        );
-        if let Some(trigger) = block.get("trigger").filter(|trigger| trigger.is_filled()) {
-            properties.insert(
-                "triggerThreshold".into(),
-                trigger.get("threshold").cloned().unwrap_or(Json::Null),
-            );
-            properties.insert(
-                "triggerOperator".into(),
-                trigger.get("operator").cloned().unwrap_or(Json::Null),
-            );
-        }
-    }
-    let mut overrides = Object::new();
-    if let Some(title) = text(alert, "title") {
-        overrides.insert("alertDisplayNameFormat".into(), title.into());
-    }
-    if let Some(description) = text(alert, "description") {
-        overrides.insert("alertDescriptionFormat".into(), description.into());
-    }
-    if let Some(Json::Array(dynamic)) = alert.and_then(|alert| alert.get("dynamic_properties")) {
-        let mut properties_list = Vec::new();
-        for property in dynamic {
-            let name = property.get("property").cloned().unwrap_or(Json::Null);
-            let column = property.get("column").cloned().unwrap_or(Json::Null);
-            match name.as_str() {
-                Some("Tactics") => {
-                    overrides.insert("alertTacticsColumnName".into(), column);
-                }
-                Some("Severity") => {
-                    overrides.insert("alertSeverityColumnName".into(), column);
-                }
-                _ => {
-                    let mut entry = Object::new();
-                    entry.insert("alertProperty".into(), name);
-                    entry.insert("value".into(), column);
-                    properties_list.push(Json::Object(entry));
-                }
-            }
-        }
-        if !properties_list.is_empty() {
-            overrides.insert(
-                "alertDynamicProperties".into(),
-                Json::Array(properties_list),
-            );
-        }
-    }
-    properties.insert("alertDetailsOverride".into(), Json::Object(overrides));
-    if let Some(Json::Array(details)) = alert.and_then(|alert| alert.get("custom_details"))
-        && !details.is_empty()
-    {
+    if let Some(details) = alert.custom_details.as_ref().filter(|d| !d.is_empty()) {
         let mut custom = Object::new();
         for detail in details {
-            let key = match detail.get("key") {
-                Some(Json::Str(key)) => key.clone(),
-                Some(other) => other.to_compact(),
-                None => "null".to_owned(),
-            };
-            custom.insert(key, detail.get("column").cloned().unwrap_or(Json::Null));
+            custom.insert(detail.key.clone(), detail.column.as_str().into());
         }
         properties.insert("customDetails".into(), Json::Object(custom));
     }
     let mut event = Object::new();
-    event.insert(
-        "aggregationKind".into(),
-        grouping.get("event").cloned().unwrap_or(Json::Null),
-    );
+    event.insert("aggregationKind".into(), grouping.event.as_str().into());
     properties.insert("eventGroupingSettings".into(), Json::Object(event));
-    let create_incident = alert
-        .and_then(|alert| alert.get("create_incident"))
-        .cloned()
-        .unwrap_or(Json::Bool(true));
-    let enabled = alert_grouping.get("enabled").cloned().unwrap_or(Json::Null);
-    let lookback = alert_grouping
-        .get("grouping_lookback")
-        .filter(|value| value.is_filled());
-    if enabled.is_true() && lookback.is_none() {
-        return Err(missing(
-            "grouping.alert.grouping_lookback",
-            "required when grouping.alert.enabled is true",
-        ));
-    }
-    let mut configuration = Object::new();
-    configuration.insert("enabled".into(), enabled);
-    configuration.insert(
-        "lookbackDuration".into(),
-        Json::Str(iso(
-            &lookback.map_or_else(|| "1h".to_owned(), Json::to_text)
-        )?),
-    );
-    configuration.insert(
-        "reopenClosedIncident".into(),
-        alert_grouping
-            .get("reopen_closed_incidents")
-            .filter(|value| value.is_true())
-            .cloned()
-            .unwrap_or(Json::Bool(false)),
-    );
-    configuration.insert(
-        "matchingMethod".into(),
-        alert_grouping
-            .get("matching")
-            .filter(|value| value.is_filled())
-            .cloned()
-            .unwrap_or_else(|| "AllEntities".into()),
-    );
-    for (key, field) in [
-        ("groupByEntities", "group_by_entities"),
-        ("groupByAlertDetails", "group_by_alert_details"),
-        ("groupByCustomDetails", "group_by_custom_details"),
-    ] {
-        if let Some(value) = alert_grouping.get(field).filter(|value| !value.is_null()) {
-            configuration.insert(key.into(), value.clone());
-        }
-    }
     let mut incident = Object::new();
-    incident.insert("createIncident".into(), create_incident);
-    incident.insert("groupingConfiguration".into(), Json::Object(configuration));
+    incident.insert("createIncident".into(), Json::Bool(alert.create_incident));
+    incident.insert(
+        "groupingConfiguration".into(),
+        Json::Object(grouping_configuration(alert_grouping)?),
+    );
     properties.insert("incidentConfiguration".into(), Json::Object(incident));
-    if let Some(Json::Array(entities)) = block.get("entities")
-        && !entities.is_empty()
-    {
-        let mappings = entities
-            .iter()
-            .map(|entity| {
-                let fields = match entity.get("mappings") {
-                    Some(Json::Array(fields)) => fields
-                        .iter()
-                        .map(|field| {
-                            let mut mapping = Object::new();
-                            mapping.insert(
-                                "identifier".into(),
-                                field.get("identifier").cloned().unwrap_or(Json::Null),
-                            );
-                            mapping.insert(
-                                "columnName".into(),
-                                field.get("column").cloned().unwrap_or(Json::Null),
-                            );
-                            Json::Object(mapping)
-                        })
-                        .collect(),
-                    _ => Vec::new(),
-                };
-                let mut mapping = Object::new();
-                mapping.insert(
-                    "entityType".into(),
-                    entity.get("entity").cloned().unwrap_or(Json::Null),
-                );
-                mapping.insert("fieldMappings".into(), Json::Array(fields));
-                Json::Object(mapping)
-            })
-            .collect();
-        properties.insert("entityMappings".into(), Json::Array(mappings));
+    if let Some(entities) = block.entities.as_ref().filter(|e| !e.is_empty()) {
+        properties.insert("entityMappings".into(), entity_mappings(entities));
     }
-    let alert_severity = text(alert, "severity");
+    let alert_severity = alert.severity.as_deref().filter(|text| !text.is_empty());
     if alert_severity.is_none() && rule.response().is_none() {
         return Err(CompileError::new(
             codes::COMPILE_EMPTY_BLOCK,
@@ -451,24 +362,61 @@ pub fn compile_with_warnings(
     properties.insert("severity".into(), severity.into());
     properties.insert("displayName".into(), rule.name.clone().into());
     properties.insert("description".into(), rule.description().into());
-    let resolved = deploy::platform_techniques(
-        cx,
-        DISPLAY,
-        rule,
-        strings(alert.and_then(|alert| alert.get("techniques"))),
-    )?;
+    techniques(cx, rule, alert, &mut properties, &mut warnings)?;
+    let mut body = Object::new();
+    body.insert("kind".into(), kind.into());
+    body.insert("properties".into(), Json::Object(properties));
+    Ok((Json::Object(body), warnings))
+}
+
+/// `suppressionEnabled` and `suppressionDuration` from `alert.suppression`.
+fn suppression(alert: &SentinelAlert, properties: &mut Object) -> Result<(), CompileError> {
+    match &alert.suppression {
+        Suppression::Duration(suppression) => {
+            properties.insert("suppressionEnabled".into(), Json::Bool(true));
+            properties.insert("suppressionDuration".into(), Json::Str(iso(suppression)?));
+            Ok(())
+        }
+        Suppression::Flag(false) => {
+            properties.insert("suppressionEnabled".into(), Json::Bool(false));
+            properties.insert("suppressionDuration".into(), Json::Str(iso("1h")?));
+            Ok(())
+        }
+        Suppression::Flag(true) => Err(CompileError::new(
+            codes::COMPILE_INVALID_VALUE,
+            "configurations.sentinel.alert.suppression is true",
+            Some("set it to false or a duration such as PT1H"),
+        )
+        .at(&["configurations", "sentinel", "alert", "suppression"])),
+    }
+}
+
+/// `tactics`, `techniques` and `subTechniques`: the ATT&CK ids Sentinel
+/// takes (the block's, else the objective's, each newer than v18 replaced
+/// with a warning), and the block's tactics, else those of the ids sent.
+fn techniques(
+    cx: &Context<'_>,
+    rule: &Rule,
+    alert: &SentinelAlert,
+    properties: &mut Object,
+    warnings: &mut Vec<(&'static str, String)>,
+) -> Result<(), CompileError> {
+    let own = alert
+        .techniques
+        .iter()
+        .flatten()
+        .map(|technique| technique.0.clone())
+        .collect();
+    let resolved = deploy::platform_techniques(cx, DISPLAY, rule, own)?;
     let sendable = v18_techniques(
         &format!("Rule {} ({})", rule.uuid, rule.name),
         &resolved,
-        &mut warnings,
+        warnings,
     );
     // The block's `alert.tactics` are sent when set; otherwise the tactics are
     // those of the techniques that are sent.
-    if let Some(tactics) = alert
-        .and_then(|alert| alert.get("tactics"))
-        .filter(|tactics| tactics.is_filled())
-    {
-        properties.insert("tactics".into(), tactics.clone());
+    if let Some(tactics) = alert.tactics.as_ref().filter(|t| !t.is_empty()) {
+        properties.insert("tactics".into(), tactics.clone().into());
     } else if !sendable.is_empty() {
         let mut tactics: Vec<String> = Vec::new();
         for technique in &sendable {
@@ -485,25 +433,317 @@ pub fn compile_with_warnings(
     if !sendable.is_empty() {
         let (techniques, subs) = split_techniques(&sendable);
         properties.insert("techniques".into(), techniques.into());
-        properties.insert(
-            "subTechniques".into(),
-            if subs.is_empty() {
-                Json::Null
-            } else {
-                subs.into()
-            },
-        );
+        if !subs.is_empty() {
+            properties.insert("subTechniques".into(), subs.into());
+        }
     }
-    properties.retain(|_, value| !value.is_null());
-    let mut body = Object::new();
-    body.insert("kind".into(), kind.into());
-    body.insert("properties".into(), Json::Object(properties));
-    Ok((Json::Object(body), warnings))
+    Ok(())
+}
+
+/// The rule's `kind`, NRT or Scheduled; a scheduled rule's frequency,
+/// lookback and trigger written into `properties`.
+fn schedule(block: &SentinelConfig, properties: &mut Object) -> Result<&'static str, CompileError> {
+    let scheduling = &block.scheduling;
+    if scheduling.nrt == Some(true) {
+        return Ok("NRT");
+    }
+    let set = |value: &Option<String>| {
+        value
+            .as_deref()
+            .filter(|text| !text.is_empty())
+            .map(str::to_owned)
+    };
+    let Some(frequency) = set(&scheduling.frequency) else {
+        return Err(missing(
+            "scheduling.frequency",
+            "required unless scheduling.nrt is true",
+        ));
+    };
+    let Some(lookback) = set(&scheduling.lookback) else {
+        return Err(missing(
+            "scheduling.lookback",
+            "required unless scheduling.nrt is true",
+        ));
+    };
+    properties.insert("queryFrequency".into(), Json::Str(iso(&frequency)?));
+    properties.insert("queryPeriod".into(), Json::Str(iso(&lookback)?));
+    if let Some(trigger) = &block.trigger {
+        properties.insert("triggerThreshold".into(), Json::Int(trigger.threshold));
+        properties.insert("triggerOperator".into(), trigger.operator.as_str().into());
+    }
+    Ok("Scheduled")
+}
+
+/// `alertDetailsOverride`: the alert's title and description formats, and
+/// its dynamic properties (Tactics and Severity by their own column keys).
+fn details_override(alert: &SentinelAlert) -> Object {
+    let mut overrides = Object::new();
+    if let Some(title) = alert.title.as_deref().filter(|text| !text.is_empty()) {
+        overrides.insert("alertDisplayNameFormat".into(), title.into());
+    }
+    if let Some(description) = alert.description.as_deref().filter(|text| !text.is_empty()) {
+        overrides.insert("alertDescriptionFormat".into(), description.into());
+    }
+    if let Some(dynamic) = &alert.dynamic_properties {
+        let mut properties_list = Vec::new();
+        for property in dynamic {
+            let column = Json::Str(property.column.clone());
+            match property.property.as_str() {
+                "Tactics" => {
+                    overrides.insert("alertTacticsColumnName".into(), column);
+                }
+                "Severity" => {
+                    overrides.insert("alertSeverityColumnName".into(), column);
+                }
+                name => {
+                    let mut entry = Object::new();
+                    entry.insert("alertProperty".into(), name.into());
+                    entry.insert("value".into(), column);
+                    properties_list.push(Json::Object(entry));
+                }
+            }
+        }
+        if !properties_list.is_empty() {
+            overrides.insert(
+                "alertDynamicProperties".into(),
+                Json::Array(properties_list),
+            );
+        }
+    }
+    overrides
+}
+
+/// `incidentConfiguration.groupingConfiguration` from `grouping.alert`.
+fn grouping_configuration(grouping: &SentinelAlertGrouping) -> Result<Object, CompileError> {
+    let lookback = grouping
+        .grouping_lookback
+        .as_deref()
+        .filter(|text| !text.is_empty());
+    if grouping.enabled && lookback.is_none() {
+        return Err(missing(
+            "grouping.alert.grouping_lookback",
+            "required when grouping.alert.enabled is true",
+        ));
+    }
+    let mut configuration = Object::new();
+    configuration.insert("enabled".into(), Json::Bool(grouping.enabled));
+    configuration.insert(
+        "lookbackDuration".into(),
+        Json::Str(iso(lookback.unwrap_or("1h"))?),
+    );
+    configuration.insert(
+        "reopenClosedIncident".into(),
+        Json::Bool(grouping.reopen_closed_incidents == Some(true)),
+    );
+    configuration.insert(
+        "matchingMethod".into(),
+        grouping
+            .matching
+            .as_deref()
+            .filter(|text| !text.is_empty())
+            .unwrap_or("AllEntities")
+            .into(),
+    );
+    for (key, field) in [
+        ("groupByEntities", &grouping.group_by_entities),
+        ("groupByAlertDetails", &grouping.group_by_alert_details),
+        ("groupByCustomDetails", &grouping.group_by_custom_details),
+    ] {
+        if let Some(values) = field {
+            configuration.insert(key.into(), values.clone().into());
+        }
+    }
+    Ok(configuration)
+}
+
+/// `entityMappings`: each entity's type and its column mappings.
+fn entity_mappings(entities: &[SentinelEntityMapping]) -> Json {
+    Json::Array(
+        entities
+            .iter()
+            .map(|entity| {
+                let fields = entity
+                    .mappings
+                    .iter()
+                    .map(|field| {
+                        let mut mapping = Object::new();
+                        mapping.insert("identifier".into(), field.identifier.as_str().into());
+                        mapping.insert("columnName".into(), field.column.as_str().into());
+                        Json::Object(mapping)
+                    })
+                    .collect();
+                let mut mapping = Object::new();
+                mapping.insert("entityType".into(), entity.entity.as_str().into());
+                mapping.insert("fieldMappings".into(), Json::Array(fields));
+                Json::Object(mapping)
+            })
+            .collect(),
+    )
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A rule of the Sentinel `block` (YAML, indented under `sentinel:`).
+    fn rule_of(block: &str) -> Rule {
+        let text = format!(
+            "name: R\nmetadata:\n  uuid: 00000000-0000-4000-8099-000000000001\n\
+             response:\n  alert_severity: High\nconfigurations:\n  sentinel:\n{block}"
+        );
+        let document = opentide_schema::node::load(&text).unwrap();
+        Rule::new(document.root().unwrap(), None)
+    }
+
+    const VALID: &str = "    status: STAGING\n    query: SecurityEvent\n    scheduling:\n      \
+                         frequency: PT1H\n      lookback: PT1H\n    alert:\n      suppression: \
+                         false\n";
+
+    /// The block is read by `SentinelConfig` (#1951); an exclusion's `let`
+    /// bindings keep their written order and their non-ASCII text.
+    #[test]
+    fn the_block_is_read_by_its_model_in_its_order() {
+        let block = format!(
+            "{VALID}    exclusions:\n      - query: '| where A != zeta'\n        reason: é\n        \
+             let:\n          zeta: \"é😀\"\n          alpha: 1\n"
+        );
+        let rule = rule_of(&block);
+        let config = block_of(&rule).unwrap();
+        let exclusions = exclusions(&rule, &config);
+        assert_eq!(
+            exclusions.map(Json::to_compact).as_deref(),
+            Some(r#"[{"query":"| where A != zeta","reason":"é","let":{"zeta":"é😀","alpha":1}}]"#)
+        );
+        assert_eq!(
+            kql::compile_query(&config.query, exclusions, "t"),
+            "let zeta = \"é😀\";\nlet alpha = 1;\nSecurityEvent\n| where A != zeta"
+        );
+    }
+
+    /// The refusal of a block the model refuses: its code, field and reason.
+    fn refusal(block: &str) -> CompileError {
+        let error = block_of(&rule_of(block)).unwrap_err();
+        assert_eq!(error.code, codes::COMPILE_FAILED, "{error}");
+        assert_eq!(error.hint.as_deref(), Some(REFUSED_HINT));
+        // Nothing of an intermediate text or of serde's enum handling.
+        assert!(!error.reason.contains("line 1"), "{error}");
+        assert!(!error.reason.contains("untagged"), "{error}");
+        error
+    }
+
+    /// A block the model refuses fails the compile, before any deploy check,
+    /// at the field path the rule wrote and with the reason `validate`'s
+    /// `schema` check gives (#1951); the old compile read past these.
+    #[test]
+    fn a_missing_alert_is_refused_at_its_path() {
+        let error = refusal(&VALID.replace("    alert:\n      suppression: false\n", ""));
+        assert_eq!(
+            error.reason,
+            "Sentinel cannot compile this rule: configurations.sentinel.alert: Field required"
+        );
+        assert_eq!(error.field, ["configurations", "sentinel", "alert"]);
+    }
+
+    #[test]
+    fn an_unknown_key_is_refused_at_its_path() {
+        let error = refusal(&format!(
+            "{VALID}    grouping:\n      event: SingleAlert\n      alert:\n        enabled: false\n        \
+             sevérity: 1\n"
+        ));
+        assert_eq!(
+            error.reason,
+            "Sentinel cannot compile this rule: configurations.sentinel.grouping.alert.sevérity: \
+             Extra inputs are not permitted"
+        );
+        assert_eq!(
+            error.field,
+            [
+                "configurations",
+                "sentinel",
+                "grouping",
+                "alert",
+                "sevérity"
+            ]
+        );
+    }
+
+    #[test]
+    fn a_bad_suppression_is_refused_at_its_path() {
+        let error = refusal(&VALID.replace("suppression: false", "suppression: 5"));
+        assert!(
+            error.reason.starts_with(
+                "Sentinel cannot compile this rule: configurations.sentinel.alert.suppression: "
+            ),
+            "{error}"
+        );
+        assert_eq!(
+            error.field,
+            ["configurations", "sentinel", "alert", "suppression"]
+        );
+    }
+
+    /// A value only a field's own check refuses is left to the compile,
+    /// which refuses a duration it cannot read with its own code and words,
+    /// as before.
+    #[test]
+    fn a_bad_duration_is_left_to_the_compile() {
+        let config = block_of(&rule_of(
+            &VALID.replace("frequency: PT1H", "frequency: bientôt"),
+        ))
+        .unwrap();
+        let error = iso(&config.scheduling.frequency.unwrap()).unwrap_err();
+        assert_eq!(error.code, codes::COMPILE_INVALID_RULE, "{error}");
+        assert!(
+            error.reason.starts_with("Duration \"bientôt\" is not"),
+            "{error}"
+        );
+    }
+
+    /// Every error the block earns is named, in the model's order.
+    #[test]
+    fn every_refusal_is_named() {
+        let block = VALID.replace("    alert:\n      suppression: false\n", "") + "    bogus: 1\n";
+        let error = refusal(&block);
+        assert_eq!(
+            error.reason,
+            "Sentinel cannot compile this rule: configurations.sentinel.alert: Field required; \
+             configurations.sentinel.bogus: Extra inputs are not permitted"
+        );
+        assert_eq!(error.field, ["configurations", "sentinel", "alert"]);
+    }
+
+    /// No block at all keeps its own error.
+    #[test]
+    fn no_block_keeps_its_own_error() {
+        assert_eq!(
+            block_of(&rule_of("    {}\n")).unwrap_err().code,
+            codes::COMPILE_INVALID_RULE
+        );
+    }
+
+    /// A non-finite `let` value keeps its `let` statement, as `real(...)`,
+    /// as it did before the typed conversion, and so do a `-0.0` and a
+    /// timestamp (a string in YAML 1.2). An integer past `i64` never gets
+    /// here: the YAML loader refuses it.
+    #[test]
+    fn non_finite_let_values_are_kept() {
+        let block = format!(
+            "{VALID}    exclusions:\n      - query: '| where A != a'\n        reason: r\n        \
+             let:\n          a: .inf\n          b: -.inf\n          c: .nan\n          d: -0.0\n          \
+             f: 2024-01-01T00:00:00Z\n"
+        );
+        let rule = rule_of(&block);
+        let config = block_of(&rule).unwrap();
+        let old = kql::compile_query(&config.query, exclusions(&rule, &config), "t");
+        assert!(
+            old.starts_with(
+                "let a = real(+inf);\nlet b = real(-inf);\nlet c = real(nan);\nlet d = -0.0;\n"
+            ),
+            "{old}"
+        );
+        assert!(old.contains("let f = \"2024-01-01T00:00:00Z\";"), "{old}");
+        assert_eq!(old.matches("let ").count(), 5, "{old}");
+    }
 
     #[test]
     fn stages_become_sentinel_tactics() {
