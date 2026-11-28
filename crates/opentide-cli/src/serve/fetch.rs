@@ -21,8 +21,8 @@ use std::time::Duration;
 use base64::Engine as _;
 use opentide_connectors::connector::BoxFuture;
 use opentide_connectors::transport::{
-    HeaderMap, HeaderName, HeaderValue, MAX_BODY_BYTES, Request, Response, StatusCode, Transport,
-    TransportFactory, TransportFailure, TransportSpec, body_too_large,
+    HeaderMap, HeaderName, HeaderValue, MAX_BODY_BYTES, Request, Response, SetupError, StatusCode,
+    Transport, TransportFactory, TransportFailure, TransportSpec, body_too_large,
 };
 use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
@@ -245,7 +245,7 @@ impl ClientFetch {
 }
 
 impl TransportFactory for ClientFetch {
-    fn make(&self, spec: &TransportSpec<'_>) -> Result<Arc<dyn Transport>, String> {
+    fn make(&self, spec: &TransportSpec<'_>) -> Result<Arc<dyn Transport>, SetupError> {
         let settings = spec.settings;
         // The tenant's own bundle must read; one the environment names is
         // skipped when it does not, as the native transport does.
@@ -255,10 +255,10 @@ impl TransportFactory for ClientFetch {
             match std::fs::read_to_string(&path) {
                 Ok(text) => bundles.push(Json::Str(text)),
                 Err(error) if own.as_ref() == Some(&path) => {
-                    return Err(format!(
-                        "cannot read the CA bundle {}: {error}",
-                        path.display()
-                    ));
+                    return Err(SetupError::CaBundleUnreadable {
+                        path,
+                        reason: error.to_string(),
+                    });
                 }
                 Err(_) => {}
             }

@@ -20,6 +20,7 @@
 //! way an exchange failed ([`TransportFailure`]).
 
 use std::fmt;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 #[cfg(not(target_os = "wasi"))]
@@ -451,6 +452,46 @@ pub trait Transport: Send + Sync + fmt::Debug {
     ) -> BoxFuture<'a, Result<Response, TransportFailure>>;
 }
 
+/// Why a tenant's transport cannot be made: a setting it cannot honour. Its
+/// text is the tenant's setup failure ([`crate::ConnectorError::Setup`]).
+#[derive(Debug, thiserror::Error)]
+pub enum SetupError {
+    /// The tenant's own CA bundle cannot be read (an environment's bundle
+    /// that cannot is skipped).
+    #[error("cannot read the CA bundle {}: {reason}", path.display())]
+    CaBundleUnreadable {
+        /// The bundle's path.
+        path: PathBuf,
+        /// Why it cannot be read.
+        reason: String,
+    },
+    /// The tenant's own CA bundle holds no certificate.
+    #[error("the CA bundle {} holds no certificate", path.display())]
+    CaBundleEmpty {
+        /// The bundle's path.
+        path: PathBuf,
+    },
+    /// rustls refused the TLS configuration.
+    #[cfg(not(target_os = "wasi"))]
+    #[error(transparent)]
+    Tls(rustls::Error),
+    /// A proxy setting is not a proxy URL.
+    #[error("the proxy is not a proxy URL: {reason}")]
+    Proxy {
+        /// Why, in words that never repeat any part of the URL
+        /// ([`crate::proxy::parse`]).
+        reason: String,
+    },
+    /// The HTTP client cannot be built: the error's text without the
+    /// request's URL ([`crate::error::describe`]).
+    #[error("{0}")]
+    Client(String),
+    /// Another setting the transport cannot honour, in its own words: an
+    /// installed [`TransportFactory`]'s.
+    #[error("{0}")]
+    Unsupported(String),
+}
+
 /// What a transport is made for: the tenant, its settings and its route.
 #[derive(Debug)]
 pub struct TransportSpec<'a> {
@@ -470,9 +511,9 @@ pub trait TransportFactory: Send + Sync {
     ///
     /// # Errors
     ///
-    /// The transport cannot be made (a setting it cannot honour): the text
-    /// of the tenant's setup failure.
-    fn make(&self, spec: &TransportSpec<'_>) -> Result<Arc<dyn Transport>, String>;
+    /// The transport cannot be made (a setting it cannot honour): its
+    /// text is the tenant's setup failure.
+    fn make(&self, spec: &TransportSpec<'_>) -> Result<Arc<dyn Transport>, SetupError>;
 }
 
 static INSTALLED: Mutex<Option<Arc<dyn TransportFactory>>> = Mutex::new(None);
@@ -509,8 +550,8 @@ impl Drop for Installed {
 /// Why a tenant's transport could not be made.
 #[derive(Debug)]
 pub(crate) enum MakeError {
-    /// A setting the transport cannot honour: the setup failure's text.
-    Setup(String),
+    /// A setting the transport cannot honour.
+    Setup(SetupError),
     /// The WASI build with no transport installed: no network at all.
     #[cfg_attr(
         not(target_os = "wasi"),
@@ -697,7 +738,7 @@ impl ReqwestTransport {
     /// # Errors
     ///
     /// A CA bundle that does not read, or a proxy that does not parse.
-    pub fn new(spec: &TransportSpec<'_>) -> Result<Self, String> {
+    pub fn new(spec: &TransportSpec<'_>) -> Result<Self, SetupError> {
         let settings = spec.settings;
         let mut tls = crate::tls::client_config(&settings.tls, spec.env)?;
         // A preconfigured TLS backend offers only the protocols it names:
@@ -718,7 +759,9 @@ impl ReqwestTransport {
         for proxy in spec.proxies.proxies()? {
             builder = builder.proxy(proxy);
         }
-        let client = builder.build().map_err(crate::error::describe)?;
+        let client = builder
+            .build()
+            .map_err(|error| SetupError::Client(crate::error::describe(error)))?;
         Ok(Self {
             client,
             connect_timeout,
@@ -1129,9 +1172,11 @@ mod tests {
     struct Stubs;
 
     impl TransportFactory for Stubs {
-        fn make(&self, spec: &TransportSpec<'_>) -> Result<Arc<dyn Transport>, String> {
+        fn make(&self, spec: &TransportSpec<'_>) -> Result<Arc<dyn Transport>, SetupError> {
             if spec.label.tenant == "refused" {
-                return Err("a setting the stub cannot honour".to_owned());
+                return Err(SetupError::Unsupported(
+                    "a setting the stub cannot honour".to_owned(),
+                ));
             }
             Ok(Arc::new(Stub(spec.label.tenant.clone())))
         }

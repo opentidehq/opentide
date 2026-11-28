@@ -109,11 +109,13 @@ impl ProxySettings {
     /// unless [`bypassed`](Self::bypassed) sends it direct, so the transport
     /// and `doctor` read `no_proxy` the same way.
     #[cfg(not(target_os = "wasi"))]
-    pub fn proxies(&self) -> Result<Vec<reqwest::Proxy>, String> {
+    pub fn proxies(&self) -> Result<Vec<reqwest::Proxy>, crate::transport::SetupError> {
         let mut parsed = [None, None];
         for (slot, url) in parsed.iter_mut().zip([&self.https, &self.http]) {
             if let Some(url) = url {
-                *slot = Some(parse(url).map_err(|_| invalid(url))?);
+                *slot = Some(
+                    parse(url).map_err(|reason| crate::transport::SetupError::Proxy { reason })?,
+                );
             }
         }
         if parsed.iter().all(Option::is_none) {
@@ -170,15 +172,6 @@ fn split_port(entry: &str) -> Option<(&str, u16)> {
         return Some((inner.strip_suffix(']')?, port));
     }
     (!host.is_empty() && !host.contains([':', '/'])).then_some((host, port))
-}
-
-#[cfg(not(target_os = "wasi"))]
-/// The message for a proxy URL that is not one, without its credentials.
-fn invalid(url: &str) -> String {
-    match parse(url) {
-        Ok(parsed) => format!("{} is not a proxy URL", crate::error::origin(&parsed)),
-        Err(reason) => format!("the proxy is not a proxy URL: {reason}"),
-    }
 }
 
 /// A proxy URL as the transport reads it: one written without a scheme
@@ -304,9 +297,18 @@ mod tests {
             #[cfg(not(target_os = "wasi"))]
             {
                 let refused = proxies.proxies().unwrap_err();
+                let text = refused.to_string();
                 assert!(
-                    refused.starts_with("the proxy is not a proxy URL: an `@` follows"),
-                    "{refused}"
+                    matches!(
+                        &refused,
+                        crate::transport::SetupError::Proxy { reason }
+                            if reason.starts_with("an `@` follows")
+                    ),
+                    "{refused:?}"
+                );
+                assert!(
+                    text.starts_with("the proxy is not a proxy URL: an `@` follows"),
+                    "{text}"
                 );
             }
         }
