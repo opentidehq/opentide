@@ -146,35 +146,24 @@ struct GitLayout {
     hooks_shared: bool,
 }
 
-/// Asks Git where the repository around `target` is (`_git_layout`).
+/// Where the repository around `target` is (`_git_layout`): its top level,
+/// the folder git runs hooks from (`core.hooksPath`, read through `env`) and
+/// its common directory, read with gix, so git need not be installed.
 fn git_layout(env: &Env, target: &Path) -> Option<GitLayout> {
     let probe = target
         .ancestors()
         .find(|candidate| candidate.is_dir())?
         .to_path_buf();
-    let output = crate::git_baseline::stdout(
-        env,
-        &probe,
-        &[
-            "rev-parse",
-            "--show-toplevel",
-            "--git-path",
-            "hooks",
-            "--git-common-dir",
-        ],
-    )?;
-    let lines: Vec<&str> = output.lines().collect();
-    let [top, hooks, common] = lines.as_slice() else {
-        return None;
-    };
-    let top_level = super::real(Path::new(top));
+    let lookup = |name: &str| env.get(name).map(str::to_owned);
+    let found = opentide_compile::git::hooks_layout(&probe, &lookup)?;
+    let top_level = super::real(&found.top);
     let relative = super::real(target)
         .strip_prefix(&top_level)
         .ok()?
         .to_string_lossy()
         .replace('\\', "/");
-    let hooks_dir = super::real(&probe.join(hooks));
-    let common_dir = super::real(&probe.join(common));
+    let hooks_dir = super::real(&found.hooks_dir);
+    let common_dir = super::real(&found.common_dir);
     Some(GitLayout {
         hooks_shared: !(hooks_dir.starts_with(&top_level) || hooks_dir.starts_with(&common_dir)),
         top_level,

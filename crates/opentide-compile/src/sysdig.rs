@@ -114,9 +114,10 @@ pub struct FalcoRule {
     pub priority: String,
     /// The event source.
     pub source: String,
-    /// The tags.
+    /// The block's tags, then ATT&CK, maturity and tenant tags, each once;
+    /// empty when the block appends to another rule.
     pub tags: Vec<String>,
-    /// `minimumEngineVersion`.
+    /// The block's `minimum_engine_version`, sent as `minimumEngineVersion`.
     pub minimum_engine_version: Option<i64>,
 }
 

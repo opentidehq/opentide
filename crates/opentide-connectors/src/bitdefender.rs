@@ -123,7 +123,7 @@ pub fn http_defaults() -> HttpSettings {
 /// A JSON-RPC call that failed for this rule only (`BitdefenderApiError`).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ApiError {
-    /// The method.
+    /// The JSON-RPC method that failed (`createCustomRule`).
     pub method: String,
     /// The JSON-RPC error code, when there was one.
     pub code: Option<i64>,
@@ -566,7 +566,7 @@ pub enum Failure {
     /// `_name_conflict`, `_create_unconfirmed`, `_create_no_id`,
     /// `_kind_changed`), the error, and the request's own text.
     Request {
-        /// The code.
+        /// Which of the codes above.
         code: &'static str,
         /// What failed, for the reader.
         error: String,

@@ -256,8 +256,36 @@ struct PlatformTenants {
     tenants: Vec<TenantEnv>,
 }
 
+/// Which network checks `opentide doctor` makes: `--offline` and `--live`
+/// conflict, so a run is in one of three modes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DoctorMode {
+    /// Neither flag: the PyPI release and the proxy are checked, the tenants
+    /// are not reached.
+    Default,
+    /// `--offline`: no network check.
+    Offline,
+    /// `--live`: each tenant whose credentials are set is reached too.
+    Live,
+}
+
+impl From<&crate::tree::DoctorArgs> for DoctorMode {
+    fn from(args: &crate::tree::DoctorArgs) -> Self {
+        // clap refuses `--offline --live` together.
+        if args.live {
+            Self::Live
+        } else if args.offline {
+            Self::Offline
+        } else {
+            Self::Default
+        }
+    }
+}
+
 /// Runs `opentide doctor`.
-pub fn run(offline: bool, live: bool, cx: &Context<'_>) -> Report {
+pub fn run(mode: DoctorMode, cx: &Context<'_>) -> Report {
+    let offline = mode == DoctorMode::Offline;
+    let live = mode == DoctorMode::Live;
     let (shown, options) = placement(cx.repo, cx.env, cx.cwd);
     let cwd = resolve(cx.cwd);
     let workspace = resolve(&cx.cwd.join(&shown));
@@ -2110,6 +2138,14 @@ mod tests {
     }
 
     #[test]
+    fn the_flags_pick_one_mode() {
+        let mode = |offline, live| DoctorMode::from(&crate::tree::DoctorArgs { offline, live });
+        assert_eq!(mode(false, false), DoctorMode::Default);
+        assert_eq!(mode(true, false), DoctorMode::Offline);
+        assert_eq!(mode(false, true), DoctorMode::Live);
+    }
+
+    #[test]
     fn a_build_without_a_network_skips_the_pypi_check() {
         // The WASI build outside a serve whose client makes its requests.
         let check = latest_check(Err(network::Failed::NoNetwork), "1.0.0");
@@ -2139,7 +2175,7 @@ mod tests {
         drop(listener);
         let env = Env::from_pairs([("HTTPS_PROXY".to_owned(), proxy.clone())]);
         let dir = tempfile::tempdir().unwrap();
-        let report = run(false, false, &context(&env, dir.path()));
+        let report = run(DoctorMode::Default, &context(&env, dir.path()));
         let found = checks(&report);
         let latest = found
             .iter()
@@ -2302,7 +2338,7 @@ mod tests {
     fn an_empty_folder_fails_the_workspace_check() {
         let env = Env::from_pairs(Vec::<(String, String)>::new());
         let dir = tempfile::tempdir().unwrap();
-        let report = run(true, false, &context(&env, dir.path()));
+        let report = run(DoctorMode::Offline, &context(&env, dir.path()));
         let found = checks(&report);
         let workspace = found.iter().find(|(code, ..)| code == "workspace").unwrap();
         assert_eq!(workspace.1, "fail");
@@ -2335,7 +2371,7 @@ mod tests {
         )
         .unwrap();
         let env = Env::from_pairs(Vec::<(String, String)>::new());
-        let report = run(true, false, &context(&env, dir.path()));
+        let report = run(DoctorMode::Offline, &context(&env, dir.path()));
         let found = checks(&report);
         let get = |code: &str| {
             found
@@ -2380,7 +2416,7 @@ mod tests {
             std::fs::write(templates.join(template_artifact_name(&id)), text).unwrap();
         }
         let env = Env::from_pairs(Vec::<(String, String)>::new());
-        let found = checks(&run(true, false, &context(&env, dir.path())));
+        let found = checks(&run(DoctorMode::Offline, &context(&env, dir.path())));
         let fresh = found
             .iter()
             .find(|(code, ..)| code == "templates_fresh")
@@ -2392,7 +2428,7 @@ mod tests {
         let mut text = std::fs::read_to_string(&path).unwrap();
         text.push('\n');
         std::fs::write(&path, text).unwrap();
-        let found = checks(&run(true, false, &context(&env, dir.path())));
+        let found = checks(&run(DoctorMode::Offline, &context(&env, dir.path())));
         let stale = found
             .iter()
             .find(|(code, ..)| code == "templates_fresh")
@@ -2435,7 +2471,7 @@ mod tests {
 
     fn find_check(dir: &Path, code: &str) -> (String, String, String) {
         let env = Env::from_pairs(Vec::<(String, String)>::new());
-        checks(&run(true, false, &context(&env, dir)))
+        checks(&run(DoctorMode::Offline, &context(&env, dir)))
             .into_iter()
             .find(|(found, ..)| found == code)
             .unwrap()
@@ -2510,7 +2546,7 @@ mod tests {
         std::fs::create_dir_all(&config).unwrap();
         std::fs::write(config.join("lint.toml"), "[metadata]\nrequired = [\n").unwrap();
         let env = Env::from_pairs(Vec::<(String, String)>::new());
-        let found = checks(&run(true, false, &context(&env, dir.path())));
+        let found = checks(&run(DoctorMode::Offline, &context(&env, dir.path())));
         let configuration = found
             .iter()
             .find(|(code, ..)| code == "configuration")
@@ -2667,7 +2703,7 @@ mod tests {
         )
         .unwrap();
         let env = Env::from_pairs([("PATH", "/nonexistent")]);
-        let found = checks(&run(true, false, &context(&env, dir.path())));
+        let found = checks(&run(DoctorMode::Offline, &context(&env, dir.path())));
         let settings = found.iter().find(|(c, ..)| c == "vscode_settings").unwrap();
         assert_eq!(settings.1, "pass");
         let mcp = found.iter().find(|(c, ..)| c == "mcp_config").unwrap();
@@ -2689,7 +2725,7 @@ mod tests {
         )
         .unwrap();
         let env = Env::from_pairs(Vec::<(String, String)>::new());
-        let found = checks(&run(true, false, &context(&env, dir.path())));
+        let found = checks(&run(DoctorMode::Offline, &context(&env, dir.path())));
         let settings = found.iter().find(|(c, ..)| c == "vscode_settings").unwrap();
         assert_eq!(settings.1, "warn");
         assert!(

@@ -223,7 +223,7 @@ pub enum TenantScope {
 pub struct TenantTarget {
     /// The tenant.
     pub name: String,
-    /// Its description.
+    /// The tenant's `description`, as [`TenantInfo`] holds it.
     pub description: String,
     /// The runs that deploy the block there.
     pub runs: Vec<StatusStrategy>,
@@ -238,7 +238,7 @@ pub struct TenantTarget {
 pub struct PlatformDeployment {
     /// The platform's key.
     pub platform: String,
-    /// Its label.
+    /// The platform's display name ([`platform_label`]).
     pub label: String,
     /// The block's `enabled`.
     pub enabled: bool,

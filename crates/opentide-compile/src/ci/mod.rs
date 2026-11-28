@@ -115,7 +115,7 @@ pub const DEFAULT_RULES_FOLDER: &str = "objects/rules";
     reason = "the switches of `setup ci`, one field each"
 )]
 pub struct Options {
-    /// The provider.
+    /// The provider whose template renders the pipeline.
     pub provider: Provider,
     /// The platforms the repository enables, as `configurations` keys.
     pub platforms: Vec<String>,

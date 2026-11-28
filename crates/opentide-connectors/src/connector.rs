@@ -1007,7 +1007,7 @@ pub trait ConfigurationCheck: Send + Sync {
 pub trait Platform: Send + Sync {
     /// Its identifier (`sentinel`, `elastic`, a plugin's entry-point name).
     fn id(&self) -> &str;
-    /// Its deployer.
+    /// Its deployer; `None` where the platform cannot deploy.
     fn deployer(&self) -> Option<&dyn Deployer> {
         None
     }
@@ -1021,7 +1021,8 @@ pub trait Platform: Send + Sync {
     fn live_validator(&self) -> Option<&dyn LiveValidator> {
         None
     }
-    /// Its query runner.
+    /// Its query runner (`opentide query`); `None` where the platform runs no
+    /// queries.
     fn query_runner(&self) -> Option<&dyn QueryRunner> {
         None
     }

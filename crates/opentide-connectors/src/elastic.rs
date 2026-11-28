@@ -215,7 +215,8 @@ pub struct ElasticRule {
     pub rule_id: String,
     /// Its name.
     pub name: String,
-    /// Its strategy.
+    /// What its deploy does: create or update it, enabled or disabled, or
+    /// delete it.
     pub strategy: Strategy,
     /// Its `elastic` block, as the model dumps it (`by_alias`, nulls kept).
     pub block: Json,
@@ -398,7 +399,7 @@ impl Client {
         )
     }
 
-    /// `get_rule`.
+    /// `get_rule`: `GET` the rule by its `rule_id`.
     async fn get_rule(
         &self,
         cx: TenantContext<'_>,
@@ -414,7 +415,7 @@ impl Client {
         .await
     }
 
-    /// `create_rule`.
+    /// `create_rule`: `POST` the payload to the rules endpoint.
     async fn create_rule(
         &self,
         cx: TenantContext<'_>,
@@ -444,7 +445,7 @@ impl Client {
             .await
     }
 
-    /// `delete_rule`.
+    /// `delete_rule`: `DELETE` the rule by its `rule_id`.
     async fn delete_rule(
         &self,
         cx: TenantContext<'_>,
@@ -493,7 +494,7 @@ impl Client {
         format!("{}{endpoint}", self.elasticsearch)
     }
 
-    /// `esql_query`.
+    /// `esql_query`: `POST` *query* to Elasticsearch's `/_query`.
     async fn esql_query(
         &self,
         cx: TenantContext<'_>,
@@ -511,7 +512,8 @@ impl Client {
         .await
     }
 
-    /// `resolve_index`.
+    /// `resolve_index`: `GET /_resolve/index/<pattern>`; a pattern that matches
+    /// nothing is not an error.
     async fn resolve_index(
         &self,
         cx: TenantContext<'_>,
@@ -525,7 +527,8 @@ impl Client {
             .await
     }
 
-    /// `field_caps`.
+    /// `field_caps`: `GET /<sources>/_field_caps` for *fields*; missing indices
+    /// are not an error.
     async fn field_caps(
         &self,
         cx: TenantContext<'_>,
@@ -1767,7 +1770,8 @@ fn gateway(cx: TenantContext<'_>, answer: &Answer, status: u16, step: &str) -> E
     })
 }
 
-/// `_is_prebuilt_rule`.
+/// Whether *remote* is an Elastic prebuilt rule: `immutable`, or a
+/// `rule_source.type` of `external` (`_is_prebuilt_rule`).
 fn is_prebuilt_rule(remote: &Json) -> bool {
     if matches!(remote.get("immutable"), Some(Json::Bool(true))) {
         return true;
@@ -2582,7 +2586,8 @@ pub fn esql_has_metadata_id(query: &str) -> bool {
     false
 }
 
-/// `eql_is_sequence`.
+/// Whether the EQL *query*, comments and literals masked, starts with
+/// `sequence` (`eql_is_sequence`).
 pub fn eql_is_sequence(query: &str) -> bool {
     static SEQUENCE: std::sync::OnceLock<Option<regex::Regex>> = std::sync::OnceLock::new();
     SEQUENCE
