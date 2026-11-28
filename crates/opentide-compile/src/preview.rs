@@ -10,7 +10,7 @@ use opentide_schema::platforms::{PlatformId, PlatformKey};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
-use crate::compiler::{Compiler, Graylog, GraylogTarget, Sentinel};
+use crate::compiler::{Compiler, Datadog, Exabeam, Graylog, GraylogTarget, Sentinel};
 use crate::json::{Json, Object};
 use crate::rule::{CompileError, Rule};
 use crate::{
@@ -61,14 +61,12 @@ pub fn compile_offline(
         PlatformId::Sysdig => Some(sysdig::compile_body(cx, rule, None)),
         PlatformId::Bitdefender => Some(bitdefender_request(cx, rule, None)),
         PlatformId::Exabeam => Some(
-            exabeam::compile_deployment(cx, rule, None)
-                .map(|compiled| exabeam::create_request(&compiled)),
+            Exabeam::compile(cx, rule, None).map(|compiled| exabeam::create_request(&compiled)),
         ),
         PlatformId::GoogleSecops => Some(google_secops::compile_offline(cx, rule)),
         PlatformId::Graylog => Some(graylog_request(cx, rule, None)),
         PlatformId::Datadog => Some(
-            datadog::compile_deployment(cx, rule, None)
-                .map(|compiled| datadog::create_request(&compiled)),
+            Datadog::compile(cx, rule, None).map(|compiled| datadog::create_request(&compiled)),
         ),
         // Their body needs the tenant: [`compile_tenant`] builds it.
         deployer!() => None,
@@ -175,14 +173,16 @@ pub fn compile_tenant(
         PlatformId::Sentinel => sentinel_body(cx, rule, tenant),
         PlatformId::Sysdig => sysdig::compile_body(cx, rule, known),
         PlatformId::Bitdefender => bitdefender_tenant(cx, rule, config, id),
-        PlatformId::Exabeam => exabeam::compile_deployment(cx, rule, known)
-            .map(|compiled| exabeam::create_request(&compiled)),
+        PlatformId::Exabeam => {
+            Exabeam::compile(cx, rule, known).map(|compiled| exabeam::create_request(&compiled))
+        }
         // The text is the same on every tenant: the `rules.create` body,
         // with what the deploy reads beside it (the run state).
         PlatformId::GoogleSecops => google_secops::compile_deployment(cx, rule),
         PlatformId::Graylog => graylog_request(cx, rule, known),
-        PlatformId::Datadog => datadog::compile_deployment(cx, rule, known)
-            .map(|compiled| datadog::create_request(&compiled)),
+        PlatformId::Datadog => {
+            Datadog::compile(cx, rule, known).map(|compiled| datadog::create_request(&compiled))
+        }
         PlatformId::Elastic => {
             let setup = known.map_or_else(elastic::Setup::none, elastic::Setup::from_tenant);
             elastic::compile(cx, rule, &setup)
@@ -680,7 +680,7 @@ fn exabeam_preview(cx: &Context<'_>, rule: &Rule, tenants: &[String]) -> Json {
     let first = tenants.iter().find_map(|name| {
         deploy::tenant(cx, &PlatformId::Exabeam.into(), name).map(|table| (name.as_str(), table))
     });
-    match exabeam::compile_deployment(cx, rule, first.map(|(_, table)| table)) {
+    match Exabeam::compile(cx, rule, first.map(|(_, table)| table)) {
         Ok(compiled) => {
             let mut entry = Object::new();
             entry.insert("uuid".into(), rule.uuid.clone().into());
@@ -699,9 +699,11 @@ fn exabeam_preview(cx: &Context<'_>, rule: &Rule, tenants: &[String]) -> Json {
 /// compiled for each tenant the run sends the rule to, so a tenant that lacks
 /// a notification alias the block names fails the dry run, naming it; the
 /// request shown is the first tenant's. With no tenant, an alias is shown as
-/// `<tenant:notifications.ALIAS>` and the tenant's tags are left out. A dry
-/// run makes no call: the validation every write starts with, and the
-/// comparison that leaves an unchanged rule alone, are not made.
+/// `<tenant:notifications.ALIAS>` and the tenant's tags are left out, as
+/// they are from a rule to disable, which a deploy compiles without the
+/// tenant ([`Datadog`]). A dry run makes no call: the validation every write
+/// starts with, and the comparison that leaves an unchanged rule alone, are
+/// not made.
 fn datadog_preview(cx: &Context<'_>, rule: &Rule, tenants: &[String]) -> Json {
     let reached: Vec<(&str, &Json)> = tenants
         .iter()
@@ -717,7 +719,7 @@ fn datadog_preview(cx: &Context<'_>, rule: &Rule, tenants: &[String]) -> Json {
         reached.iter().map(|(_, table)| Some(*table)).collect()
     };
     for tenant in attempts {
-        match datadog::compile_deployment(cx, rule, tenant) {
+        match Datadog::compile(cx, rule, tenant) {
             Ok(compiled) => {
                 first.get_or_insert(compiled);
             }

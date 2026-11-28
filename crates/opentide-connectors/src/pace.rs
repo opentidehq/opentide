@@ -99,7 +99,7 @@ impl Pacer {
         self.limit
     }
 
-    /// The window.
+    /// The span of time [`limit`](Self::limit) calls are allowed in.
     pub fn window(&self) -> Duration {
         self.window
     }

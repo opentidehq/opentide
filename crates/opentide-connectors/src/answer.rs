@@ -27,7 +27,7 @@ pub struct Answer {
     pub status: u16,
     /// The `Content-Type` header.
     pub content_type: Option<String>,
-    /// The body.
+    /// The response body as received; the quoting methods mask credentials in it.
     pub body: Vec<u8>,
     /// From sending the request to its headers (`requests`' `elapsed`).
     pub elapsed: Duration,
