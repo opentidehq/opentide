@@ -962,10 +962,9 @@ impl<'a> Parser<'a> {
                 );
             }
             let body: String = self.s[start..self.pos - 1].iter().collect();
-            return match body.find('-') {
+            return match body.split_once('-') {
                 None => Ok(Re::Automaton(body)),
-                Some(i) => {
-                    let (lo, hi) = (&body[..i], &body[i + 1..]);
+                Some((lo, hi)) => {
                     let int = |s: &str| {
                         let digits = s.strip_prefix('+').unwrap_or(s);
                         !digits.is_empty()

@@ -420,7 +420,7 @@ mod tests {
             .filter(|t| t.len() < 400)
             .flat_map(|t| {
                 t.char_indices()
-                    .map(|(i, _)| t[..i].to_owned())
+                    .map(|(i, _)| t.get(..i).unwrap().to_owned())
                     .collect::<Vec<_>>()
             })
             .collect();
