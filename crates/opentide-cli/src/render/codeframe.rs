@@ -176,9 +176,11 @@ const MAX_SOURCE: usize = 400;
 
 /// `text` cut to `limit` characters, `…` marking the cut.
 pub fn shortened(text: &str, limit: usize) -> std::borrow::Cow<'_, str> {
-    match text.char_indices().nth(limit) {
-        Some((at, _)) => format!("{}…", &text[..at]).into(),
-        None => text.into(),
+    if text.chars().nth(limit).is_some() {
+        let kept: String = text.chars().take(limit).collect();
+        format!("{kept}…").into()
+    } else {
+        text.into()
     }
 }
 
@@ -384,10 +386,14 @@ impl QueryHighlighter {
 /// The 1-based line and code-point column of byte `offset` in `text`.
 fn position(text: &str, offset: usize) -> (usize, usize) {
     let offset = text.floor_char_boundary(offset);
+    #[expect(
+        clippy::string_slice,
+        reason = "`floor_char_boundary` returns a char boundary of `text`"
+    )]
     let before = &text[..offset];
     let line = before.matches('\n').count() + 1;
-    let start = before.rfind('\n').map_or(0, |at| at + 1);
-    (line, text[start..offset].chars().count() + 1)
+    let head = before.rsplit_once('\n').map_or(before, |(_, head)| head);
+    (line, head.chars().count() + 1)
 }
 
 /// `opentide-yaml` for an object file, a query language for its extension.
@@ -1189,6 +1195,21 @@ mod tests {
         }
         assert_eq!(position("é名\nx", "é名".len()), (1, 3));
         assert_eq!(position("é名", 1), (1, 1));
+    }
+
+    #[test]
+    fn multi_byte_text_is_shortened_and_located_by_characters() {
+        // #1946: the cut and the column count characters, never bytes.
+        assert_eq!(shortened("é😀ab", 2), "é😀…");
+        assert_eq!(shortened("é😀", 2), "é😀");
+        assert_eq!(shortened("😀", 0), "…");
+        assert_eq!(shortened("", 0), "");
+        let text = "😀é\né😀x\n";
+        assert_eq!(position(text, text.find('x').unwrap()), (2, 3));
+        // Inside `😀`: its start.
+        assert_eq!(position(text, "😀é\né".len() + 2), (2, 2));
+        assert_eq!(position(text, text.len()), (3, 1));
+        assert_eq!(position(text, text.len() + 5), (3, 1));
     }
 
     #[test]

@@ -86,13 +86,7 @@ impl From<&crate::tree::DeployArgs> for Args {
             skip_promotion: args.skip_promotion,
             prune: args.prune,
             wide: args.wide,
-            keep_deprecated: if args.keep_deprecated {
-                Some(true)
-            } else if args.drop_deprecated {
-                Some(false)
-            } else {
-                None
-            },
+            keep_deprecated: args.keep_deprecated.get(),
         }
     }
 }
@@ -708,18 +702,17 @@ fn from_outcome(outcome: dry_run::Outcome, at_root: bool) -> DryRun {
 fn quoted(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     let mut rest = text;
-    while let Some(start) = rest.find('`') {
-        let after = &rest[start + 1..];
-        match after.find('`') {
-            Some(end) if end > 0 => {
-                out.push_str(&rest[..start]);
+    while let Some((head, after)) = rest.split_once('`') {
+        out.push_str(head);
+        match after.split_once('`') {
+            Some((code, tail)) if !code.is_empty() => {
                 out.push('\'');
-                out.push_str(&after[..end]);
+                out.push_str(code);
                 out.push('\'');
-                rest = &after[end + 1..];
+                rest = tail;
             }
             _ => {
-                out.push_str(&rest[..=start]);
+                out.push('`');
                 rest = after;
             }
         }
@@ -947,6 +940,10 @@ mod tests {
         assert_eq!(quoted("set `response` and `x`"), "set 'response' and 'x'");
         assert_eq!(quoted("a lone ` stays"), "a lone ` stays");
         assert_eq!(quoted("``"), "``");
+        // #1946: code spans among multi-byte text.
+        assert_eq!(quoted("é `réponse😀` et `x` 😀"), "é 'réponse😀' et 'x' 😀");
+        assert_eq!(quoted("😀`é"), "😀`é");
+        assert_eq!(quoted("é``😀`x`"), "é`'😀'x`");
     }
 
     #[test]
@@ -1080,5 +1077,18 @@ mod from_cli_tests {
             parse(&["deploy", "--drop-deprecated", "--keep-deprecated"]).keep_deprecated,
             Some(true)
         );
+        // #1967: every spelling the command line accepts, repeats included.
+        for (typed, want) in crate::tree::toggle::spellings::SPELLINGS {
+            let matches = crate::tree::toggle::spellings::matches::<crate::tree::KeepDeprecated>(
+                &["deploy"],
+                typed,
+            );
+            let Ok(Some(RootCommand::Deploy(deploy))) =
+                <Cli as clap::FromArgMatches>::from_arg_matches(&matches).map(|cli| cli.command)
+            else {
+                panic!("not a deploy command: {typed:?}");
+            };
+            assert_eq!(Args::from(&deploy).keep_deprecated, want, "{typed:?}");
+        }
     }
 }

@@ -1539,9 +1539,10 @@ mod tests {
             r#"{"_tenant":"lab","a":"x  y","b":[1,"é"],"c":null,"d":1.5}"#
         );
         lab.label = Some("sub-query 1".into());
-        assert_eq!(
-            compact(&Json::object(labelled(&lab, &row)))[..40],
-            *r#"{"_tenant":"lab","_label":"sub-query 1","#
+        let labelled_row = compact(&Json::object(labelled(&lab, &row)));
+        assert!(
+            labelled_row.starts_with(r#"{"_tenant":"lab","_label":"sub-query 1","#),
+            "{labelled_row}"
         );
         assert_eq!(cell(row.get("a")), "x y");
         assert_eq!(cell(row.get("b")), r#"[1,"é"]"#);

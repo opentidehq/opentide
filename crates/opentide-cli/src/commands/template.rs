@@ -7,20 +7,23 @@
 pub(crate) fn fill(template: &str, values: &[(&str, &str)]) -> String {
     let mut out = String::with_capacity(template.len());
     let mut rest = template;
-    while let Some(start) = rest.find('{') {
-        out.push_str(&rest[..start]);
-        let after = &rest[start + 1..];
-        let Some(end) = after.find('}') else {
-            out.push_str(&rest[start..]);
+    while let Some((head, after)) = rest.split_once('{') {
+        out.push_str(head);
+        let Some((name, tail)) = after.split_once('}') else {
+            out.push('{');
+            out.push_str(after);
             rest = "";
             break;
         };
-        let name = &after[..end];
         match values.iter().find(|(key, _)| *key == name) {
             Some((_, value)) => out.push_str(value),
-            None => out.push_str(&rest[start..start + end + 2]),
+            None => {
+                out.push('{');
+                out.push_str(name);
+                out.push('}');
+            }
         }
-        rest = &after[end + 1..];
+        rest = tail;
     }
     out.push_str(rest);
     out
@@ -38,5 +41,11 @@ mod tests {
         );
         assert_eq!(fill("a {", &[]), "a {");
         assert_eq!(fill("{a}{b}", &[("b", "B")]), "{a}B");
+        // #1946: placeholders among multi-byte text.
+        assert_eq!(
+            fill("é{😀}é {nom} 😀{", &[("😀", "é"), ("x", "y")]),
+            "ééé {nom} 😀{"
+        );
+        assert_eq!(fill("{é}😀}", &[("é", "{😀}")]), "{😀}😀}");
     }
 }
