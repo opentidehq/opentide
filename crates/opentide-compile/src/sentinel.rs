@@ -173,11 +173,14 @@ fn v18_techniques(
 /// (`configurations.sentinel.alert: Field required`), every one the block
 /// earns, at the first one's field.
 ///
-/// A block whose only faults are values a field's own check refuses (a
-/// duration it cannot read, a technique newer than ATT&CK v18) is not
-/// refused here: it is read as before (serde, which runs no field check) and
+/// Only the block's shape is refused here (a missing field, an unknown key,
+/// a wrong type). A block whose only faults are values a field's or the
+/// block's own check refuses (a duration it cannot read, a technique newer
+/// than ATT&CK v18, a schedule outside Sentinel's bounds: `sentinel_frequency`,
+/// `sentinel_lookback`) is read as before (serde, which runs no check) and
 /// the compile deals with those values as it always has (`compile_invalid_rule`
-/// for the duration, the v18 mapping and its warning for the technique).
+/// for an unreadable duration, the v18 mapping and its warning for the
+/// technique, the schedule sent as written); `validate` reports them.
 ///
 /// The block is the one the deploy sends (`modifiers::rule_for_tenant` may
 /// have changed it), so it is read from the rule's JSON, not its node.
@@ -214,11 +217,15 @@ fn block_of(rule: &Rule) -> Result<SentinelConfig, CompileError> {
     Err(error.at(&field))
 }
 
-/// Whether the model refused a value a field's own check reads (a duration,
-/// an ATT&CK id), not the block's shape: a missing or unknown key, a type,
-/// a value outside a closed set.
+/// Whether the model refused a value a field's or the block's own check
+/// reads (a duration, an ATT&CK id, the schedule's bounds), not the block's
+/// shape: a missing or unknown key, a type, a value outside a closed set.
 fn is_field_check(error: &SchemaError) -> bool {
-    matches!(error.kind, ErrorKind::InvalidValue(kind) if kind != "literal_error" && kind != "enum")
+    match error.kind {
+        ErrorKind::InvalidValue(kind) => kind != "literal_error" && kind != "enum",
+        ErrorKind::Constraint(_) => true,
+        _ => false,
+    }
 }
 
 /// The block's exclusions as written (`[{query, tenant, let}]`), which
