@@ -55,6 +55,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypeVar
@@ -101,6 +102,7 @@ def rustdoc_path(root: Path, target: Path, package: str) -> Path:
     env = dict(os.environ, RUSTC_BOOTSTRAP="1", CARGO_TARGET_DIR=str(target))
     # Warnings are not this check's concern: the docs job denies them.
     env.pop("RUSTDOCFLAGS", None)
+    started = time.monotonic()
     subprocess.run(
         [
             "cargo",
@@ -122,6 +124,7 @@ def rustdoc_path(root: Path, target: Path, package: str) -> Path:
         env=env,
         check=True,
     )
+    print(f"==> {package}: rustdoc JSON built in {time.monotonic() - started:.0f}s", flush=True)
     built = target / "doc" / name
     if root in SAVES:
         SAVES[root].mkdir(parents=True, exist_ok=True)
@@ -456,6 +459,7 @@ def close_over(
 
 def semver_checks(current: Path, baseline: Path) -> bool:
     """Whether cargo semver-checks finds no major change from `baseline` to `current`."""
+    started = time.monotonic()
     result = subprocess.run(
         [
             "cargo",
@@ -469,6 +473,7 @@ def semver_checks(current: Path, baseline: Path) -> bool:
         ],
         check=False,
     )
+    print(f"==> semver-checks took {time.monotonic() - started:.0f}s", flush=True)
     return result.returncode == 0
 
 
