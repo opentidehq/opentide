@@ -11,7 +11,7 @@
 //! [`Compiler::compile`] and takes the body a deploy sends from
 //! [`Compiler::body`].
 //!
-//! The platforms move here one by one; the issue's checklist lists the rest.
+//! Every platform implements it; the issue's checklist lists what is left.
 
 use opentide_schema::platforms::PlatformId;
 
@@ -19,8 +19,9 @@ use crate::json::Json;
 use crate::rule::{CompileError, Rule};
 use crate::strategy::StatusStrategy;
 use crate::{
-    Context, bitdefender, crowdstrike, datadog, deploy, elastic, exabeam, google_secops, graylog,
-    harfanglab, microsoft_defender, preview, sentinel, sentinel_one, splunk, sysdig,
+    Context, bitdefender, carbon_black, crowdstrike, datadog, deploy, elastic, exabeam,
+    google_secops, graylog, harfanglab, microsoft_defender, preview, sentinel, sentinel_one,
+    splunk, sysdig,
 };
 
 /// The compile of one platform's rules, shared by the dry run and the deploy.
@@ -449,5 +450,35 @@ impl Compiler for Harfanglab {
 
     fn body(compiled: &harfanglab::Compiled) -> Json {
         harfanglab::deploy_body(compiled)
+    }
+}
+
+/// Carbon Black Cloud: the watchlist report a deploy hands the Deployer for
+/// one tenant, whose `setup` gives the watchlist a block names none of
+/// ([`carbon_black::report`]); `None` for a block with no query. The dry run
+/// shows the writes of a deploy to an org that holds no report of its title
+/// ([`carbon_black::compile`]). Its body is the report's fields
+/// ([`carbon_black::deploy_body`]).
+#[derive(Debug, Clone, Copy)]
+pub struct CarbonBlack;
+
+impl Compiler for CarbonBlack {
+    const PLATFORM: PlatformId = PlatformId::CarbonBlackCloud;
+
+    /// The tenant's table, its variables resolved in a deploy.
+    type Target<'t> = &'t Json;
+
+    type Compiled = carbon_black::Compiled;
+
+    fn compile(
+        cx: &Context<'_>,
+        rule: &Rule,
+        tenant: &Json,
+    ) -> Result<carbon_black::Compiled, CompileError> {
+        carbon_black::report(cx, rule, tenant)
+    }
+
+    fn body(compiled: &carbon_black::Compiled) -> Json {
+        carbon_black::deploy_body(compiled)
     }
 }
