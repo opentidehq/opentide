@@ -100,7 +100,7 @@ The file is per user, outside the repository: `~/Library/Application Support/Cla
 }
 ```
 
-`command` is the `opentide` that ran setup (when no `opentide` script can be found, its Python, with `-m opentide` in `args`). An existing `opentide` entry is replaced: run setup again from another workspace to point Claude Desktop at that one. Then restart Claude Desktop, or choose **Developer → Reload MCP Configuration**. A file that is not a JSON object is left unchanged, with a warning. Details: [`setup mcp`](../cli/setup.md#claude-desktop).
+`command` is the `opentide` that ran setup, found as [`setup mcp`](../cli/setup.md#claude-desktop) describes. An existing `opentide` entry is replaced: run setup again from another workspace to point Claude Desktop at that one. Then quit and reopen Claude Desktop. A file that is not a JSON object is left unchanged, with a warning. Details: [`setup mcp`](../cli/setup.md#claude-desktop).
 
 ### Generic
 

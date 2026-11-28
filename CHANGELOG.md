@@ -47,6 +47,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Eac
   - `opentide query --platform datadog` runs a search through Logs Search; `--rule` runs each of a rule's queries
   - `opentide setup platforms --datadog`, `opentide new rule --platform datadog`, `opentide doctor --live`, MCP `validate_query` and `run_query` take the platform; `opentide explain` has a page for every `datadog_*` code
 - **Datadog search syntax in the editor.** `opentide lsp start` checks, highlights, hovers and completes `.datadog` files and the queries of a `datadog` block: the log search syntax of Datadog Cloud SIEM detection rules, with 16 `datadog_*` codes (`opentide explain datadog_mixed_boolean`) and Datadog's reserved and standard attributes.
+- **`opentide setup mcp --claude-desktop` adds opentide to Claude Desktop** ([#1036](https://github.com/opentidehq/opentide/issues/1036)). Claude Desktop's chat does not start a plugin's local MCP servers, so this merges an `opentide` server into your `claude_desktop_config.json`, keeping your other servers and settings, with the absolute path of `opentide` and of the workspace. `setup --mcp claude-desktop` and the wizard offer it too; `--plan` lists the file and writes nothing there. Quit and reopen Claude Desktop afterwards. `opentide doctor` counts it when its server is for the workspace it checks.
 
 ### Changed
 
@@ -853,7 +854,6 @@ Optional fields such as `author` are notes, not warnings: `lint --strict` no lon
 ### Added
 
 - **`--verbose` prints notes.** A note is a finding worth knowing that is not wrong, such as a missing optional field. `validate`, `lint` and `validate query` now hide notes by default, count them on the outcome line, and suggest the same command with `--verbose`. `validate --watch` still shows every finding. `--json` and reports always include them. `--verbose` and `--quiet` cannot be combined ([#1028](https://github.com/opentidehq/opentide/issues/1028)).
-- **`opentide setup mcp --claude-desktop` adds opentide to Claude Desktop.** It merges an `opentide` server into your `claude_desktop_config.json`, keeping your other servers, with the absolute path of `opentide` and of the workspace. Restart Claude Desktop, or choose Developer → Reload MCP Configuration. `opentide doctor` lists it ([#1036](https://github.com/opentidehq/opentide/issues/1036)).
 - **`opentide lint` reports a rule without `configurations` or `response` as a note.** The new `recommended` check reports the fields the templates ask for and `validate` does not require, as the editor already did. It needs no analysis engine. Turn it off or raise it with `[recommended]` in `lint.toml` ([#1028](https://github.com/opentidehq/opentide/issues/1028)).
 
 ### Changed
