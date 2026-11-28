@@ -35,13 +35,29 @@ impl LineStarts {
     /// The byte offset of 1-based `line` and code-point `column`, clamped to
     /// the line's end and to the text.
     pub fn offset(&self, text: &str, line: usize, column: usize) -> usize {
-        let index = line.saturating_sub(1).min(self.0.len() - 1);
-        let start = self.0[index];
-        let end = self.0.get(index + 1).map_or(text.len(), |next| next - 1);
-        text[start..end]
+        let (start, content) = self.line(text, line.saturating_sub(1));
+        content
             .char_indices()
             .nth(column.saturating_sub(1))
-            .map_or(end, |(at, _)| start + at)
+            .map_or(start + content.len(), |(at, _)| start + at)
+    }
+
+    /// Where 0-based line `index` (clamped to the last line) starts, and its
+    /// text without the `\n`. A `text` other than the one the starts were
+    /// read from can cut a line off a char boundary: that line reads as
+    /// empty, at the text's end.
+    fn line<'t>(&self, text: &'t str, index: usize) -> (usize, &'t str) {
+        let index = index.min(self.0.len() - 1);
+        let start = self.0[index];
+        let end = self.0.get(index + 1).map_or(text.len(), |next| next - 1);
+        // Each start follows a `\n` of the text the starts were read from,
+        // and each end is one: char boundaries of that text.
+        let content = text.get(start..end);
+        debug_assert!(content.is_some(), "line {index} of another text");
+        match content {
+            Some(content) => (start, content),
+            None => (text.len(), ""),
+        }
     }
 
     #[expect(
@@ -50,9 +66,7 @@ impl LineStarts {
     )]
     fn position(&self, text: &str, line: u32, utf16: u32) -> (usize, usize) {
         let index = (line as usize).min(self.0.len() - 1);
-        let start = self.0[index];
-        let end = self.0.get(index + 1).map_or(text.len(), |next| next - 1);
-        let content = &text[start..end];
+        let (_, content) = self.line(text, index);
         let mut units = 0u32;
         let mut points = 0usize;
         for ch in content.chars() {
@@ -89,8 +103,8 @@ mod tests {
     fn one_based_code_point_positions_become_byte_offsets() {
         let text = "a: 🔥é x\nnext\n";
         let lines = LineStarts::new(text);
-        assert_eq!(&text[lines.offset(text, 1, 7)..], "x\nnext\n");
-        assert_eq!(&text[lines.offset(text, 2, 2)..], "ext\n");
+        assert_eq!(text.get(lines.offset(text, 1, 7)..), Some("x\nnext\n"));
+        assert_eq!(text.get(lines.offset(text, 2, 2)..), Some("ext\n"));
         // Past the line: its end; past the text: the last line.
         assert_eq!(lines.offset(text, 1, 99), text.find('\n').unwrap());
         assert_eq!(lines.offset(text, 99, 1), text.len());

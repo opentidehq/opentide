@@ -19,33 +19,35 @@ fn prefix_at(text: &str, offset: usize) -> &str {
     let Some(before) = text.get(..offset.min(text.len())) else {
         return "";
     };
-    let start = before
-        .char_indices()
-        .rev()
-        .take_while(|(_, c)| is_field_char(*c))
-        .last()
-        .map_or(before.len(), |(i, _)| i);
-    &before[start..]
+    trailing_field(before)
+}
+
+/// The field characters `text` ends with.
+fn trailing_field(text: &str) -> &str {
+    // `rsplit` yields at least one piece: the last, after any other character.
+    text.rsplit(|c| !is_field_char(c))
+        .next()
+        .unwrap_or_default()
 }
 
 /// The dotted field name under `offset`: empty for an offset inside a
 /// character (a decoded escape).
 fn word_at(text: &str, offset: usize) -> &str {
-    let offset = offset.min(text.len());
-    let Some(before) = text.get(..offset) else {
+    let Some((before, after)) = text.split_at_checked(offset.min(text.len())) else {
         return "";
     };
-    let start = before
-        .char_indices()
-        .rev()
-        .take_while(|(_, c)| is_field_char(*c))
-        .last()
-        .map_or(offset, |(i, _)| i);
-    let end = text[offset..]
-        .char_indices()
-        .find(|(_, c)| !is_field_char(*c))
-        .map_or(text.len(), |(i, _)| offset + i);
-    text[start..end].trim_end_matches('.')
+    let head = trailing_field(before);
+    let tail = after
+        .split(|c| !is_field_char(c))
+        .next()
+        .unwrap_or_default();
+    // `head` ends `before` and `tail` starts `after`: both ends are char
+    // boundaries of `text`.
+    let (start, end) = (before.len() - head.len(), before.len() + tail.len());
+    debug_assert!(text.is_char_boundary(start) && text.is_char_boundary(end));
+    text.get(start..end)
+        .unwrap_or_default()
+        .trim_end_matches('.')
 }
 
 pub(crate) fn hover(text: &str, offset: usize) -> Option<String> {
@@ -132,7 +134,8 @@ pub(crate) fn complete(
     let prefix = prefix_at(text, offset);
     let known: BTreeSet<String> = items.iter().map(|i| i.label.clone()).collect();
     if prefix.contains('.') {
-        let parent = &prefix[..=prefix.rfind('.').unwrap_or(0)];
+        // Up to and including the last `.`.
+        let parent = prefix.trim_end_matches(|c| c != '.');
         for field in opentide_ecs::with_prefix(parent) {
             if !known.contains(&field.name) {
                 items.push(field_item(field));
@@ -211,6 +214,30 @@ mod tests {
             "{md}"
         );
         assert!(hover("my.custom.field:1", 3).is_none());
+    }
+
+    #[test]
+    fn multi_byte_text_around_a_field_reads_the_field() {
+        // #1946: the field is cut out of the text by its characters, never
+        // by a byte index.
+        assert_eq!(
+            word_at("é😀process.name😀", "é😀".len() + 3),
+            "process.name"
+        );
+        assert_eq!(word_at("process.😀", 3), "process");
+        assert_eq!(
+            prefix_at("😀process.pa", "😀process.pa".len()),
+            "process.pa"
+        );
+        assert_eq!(prefix_at("process.pa😀", "process.pa😀".len()), "");
+        let text = "é😀 event.category:process 😀";
+        let md = hover(text, text.find("category").unwrap()).expect("hover");
+        assert!(md.contains("`keyword`"), "{md}");
+        let found = labels(LanguageId::Kuery, "message:\"é😀\" and process.pa");
+        assert!(
+            found.iter().any(|l| l == "process.parent.name"),
+            "{found:?}"
+        );
     }
 
     #[test]

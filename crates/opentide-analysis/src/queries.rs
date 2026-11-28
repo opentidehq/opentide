@@ -802,7 +802,14 @@ fn signature_lines<'v>(
     let first = node.start.line().saturating_sub(1);
     move |offset: usize| {
         if literal {
-            first + value[..offset.min(value.len())].matches('\n').count()
+            // Newlines are single bytes, so an offset inside a character
+            // counts the same as the character's start.
+            first
+                + value
+                    .bytes()
+                    .take(offset)
+                    .filter(|byte| *byte == b'\n')
+                    .count()
         } else {
             first
         }
@@ -1233,6 +1240,27 @@ mod tests {
             queries.iter().all(|query| !query.placeholder),
             "{queries:?}"
         );
+    }
+
+    #[test]
+    fn a_signature_offset_inside_a_character_is_on_that_character_s_line() {
+        // #1946: an advisory's offset into a literal block counts the
+        // newlines before it, wherever it falls in a multi-byte character.
+        let text = "yara:\n  signature: |\n    é😀\n    rule x {}\n";
+        let document = opentide_schema::node::load(text).unwrap();
+        let signature = document
+            .root()
+            .unwrap()
+            .get("yara")
+            .unwrap()
+            .get("signature")
+            .unwrap();
+        let value = signature.value.as_str().unwrap();
+        let line_of = signature_lines(text, signature, value);
+        assert_eq!(line_of(0), 2);
+        assert_eq!(line_of("é".len() + 1), 2, "inside 😀");
+        assert_eq!(line_of(value.find("rule").unwrap()), 3);
+        assert_eq!(line_of(value.len() + 10), 4);
     }
 
     #[test]
