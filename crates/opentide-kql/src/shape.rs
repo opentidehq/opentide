@@ -203,7 +203,10 @@ mod tests {
                       | union (externaldata (a: string) [\"https://x\"] with (format = \"csv\"))";
         let found = shape(source).unwrap();
         let text = |spans: &[ByteSpan]| -> Vec<&str> {
-            spans.iter().map(|s| &source[s.start..s.end]).collect()
+            spans
+                .iter()
+                .map(|s| source.get(s.start..s.end).unwrap())
+                .collect()
         };
         assert_eq!(text(&found.joins), ["join"]);
         assert_eq!(text(&found.unions), ["union"]);

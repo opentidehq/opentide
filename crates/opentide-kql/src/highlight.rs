@@ -272,7 +272,7 @@ mod tests {
         let root = SyntaxNode::new_root(parse(source).green);
         highlight_spans(&root)
             .into_iter()
-            .map(|(span, capture)| (&source[span.start..span.end], capture))
+            .map(|(span, capture)| (source.get(span.start..span.end).unwrap(), capture))
             .collect()
     }
 

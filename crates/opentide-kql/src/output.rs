@@ -295,7 +295,9 @@ mod tests {
         let query = "DeviceEvents\n| where ActionType == 'x' // note\n";
         let out = output(query, Dialect::Defender).unwrap();
         assert_eq!(
-            &query[out.last_operator.start..out.last_operator.end],
+            query
+                .get(out.last_operator.start..out.last_operator.end)
+                .unwrap(),
             "where ActionType == 'x'"
         );
         let bare = output("DeviceEvents", Dialect::Defender).unwrap();

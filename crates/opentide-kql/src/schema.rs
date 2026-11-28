@@ -1091,7 +1091,7 @@ pub(crate) fn primary_type(primary: &Primary<'_>, input: &Schema) -> Option<Stri
         Primary::Dynamic => Some("dynamic".into()),
         // `datetime(2024-01-01)`, `long(null)`: the literal's type.
         Primary::Typed(text) => {
-            let name = text[..text.find('(')?].trim().to_ascii_lowercase();
+            let name = text.split_once('(')?.0.trim().to_ascii_lowercase();
             Some(match name.as_str() {
                 "date" => "datetime".into(),
                 "time" => "timespan".into(),

@@ -306,10 +306,15 @@ fn tokenize(source: &str) -> Vec<Tok> {
             {
                 i += 1;
             }
+            #[expect(
+                clippy::string_slice,
+                reason = "`start..i` is a run of ASCII name bytes: char boundaries"
+            )]
+            let word = &source[start..i];
             out.push(Tok {
                 start,
                 end: i,
-                kind: Kind::Word(source[start..i].to_string()),
+                kind: Kind::Word(word.to_string()),
             });
             continue;
         }
