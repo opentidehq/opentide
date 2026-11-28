@@ -88,6 +88,10 @@ fn text<'j>(value: Option<&'j Json>, key: &str) -> Option<&'j str> {
 /// A block's warnings: `(code, message)`.
 pub type Warnings = Vec<(&'static str, String)>;
 
+/// A rule compiled for one tenant ([`crate::compiler::MicrosoftDefender`]):
+/// its update body ([`body_with_warnings`]), and the warnings it earned.
+pub type Compiled = (Json, Warnings);
+
 /// The alert's `tactics`, derived from `ids` (microsoft-defender-1.0,
 /// ATT&CK), and the warnings of the ids left out; `None` when no technique
 /// is left.
@@ -376,11 +380,6 @@ pub fn body_with_warnings(
     Ok((Json::Object(body), warnings))
 }
 
-/// The update body of `rule` for `tenant` ([`body_with_warnings`]).
-pub fn body(cx: &Context<'_>, rule: &Rule, tenant: &str) -> Result<Json, CompileError> {
-    body_with_warnings(cx, rule, tenant).map(|(body, _)| body)
-}
-
 /// What every Defender rule id opentide gives a rule starts with (#1886):
 /// Graph refuses a rule id that does not begin with a letter, and a UUID
 /// begins with a digit ten times in sixteen.
@@ -442,9 +441,11 @@ pub fn rule_url(id: &str) -> String {
 /// The first call a deploy of `rule` to `tenant` makes (microsoft-defender-1.0,
 /// Deploy): `PATCH {base}/{id}` with the body for an active or DISABLEMENT
 /// status, `DELETE {base}/{id}` for a DELETION, none for an INERT one, `id`
-/// being the rule's [`rule_id`]. The `POST` a `404` leads to is not shown: a
-/// dry run reaches no tenant.
+/// being the rule's [`rule_id`]. The body is the one the deploy sends
+/// ([`crate::compiler::MicrosoftDefender`]). The `POST` a `404` leads to is
+/// not shown: a dry run reaches no tenant.
 pub fn compile(cx: &Context<'_>, rule: &Rule, tenant: &str) -> Result<Vec<Write>, CompileError> {
+    use crate::compiler::{Compiler, MicrosoftDefender};
     let block = block(rule)?;
     let status = block
         .get("status")
@@ -454,7 +455,14 @@ pub fn compile(cx: &Context<'_>, rule: &Rule, tenant: &str) -> Result<Vec<Write>
     Ok(match deploy::strategy(cx, DISPLAY, status)? {
         StatusStrategy::Inert => Vec::new(),
         StatusStrategy::Deletion => vec![Write::new("DELETE", rule_url(&id), Json::Null)],
-        _ => vec![Write::new("PATCH", rule_url(&id), body(cx, rule, tenant)?)],
+        _ => {
+            let compiled = MicrosoftDefender::compile(cx, rule, tenant)?;
+            vec![Write::new(
+                "PATCH",
+                rule_url(&id),
+                MicrosoftDefender::body(&compiled),
+            )]
+        }
     })
 }
 

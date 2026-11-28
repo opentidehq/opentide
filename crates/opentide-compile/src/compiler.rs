@@ -19,8 +19,8 @@ use crate::json::Json;
 use crate::rule::{CompileError, Rule};
 use crate::strategy::StatusStrategy;
 use crate::{
-    Context, bitdefender, datadog, deploy, elastic, exabeam, google_secops, graylog, preview,
-    sentinel, sysdig,
+    Context, bitdefender, datadog, deploy, elastic, exabeam, google_secops, graylog,
+    microsoft_defender, preview, sentinel, sysdig,
 };
 
 /// The compile of one platform's rules, shared by the dry run and the deploy.
@@ -302,5 +302,33 @@ impl Compiler for Elastic {
 
     fn body(compiled: &elastic::ElasticRule) -> Json {
         elastic::deploy_body(compiled)
+    }
+}
+
+/// Microsoft Defender: the custom detection rule's update body for one
+/// tenant, whose name selects the exclusions scoped to it, with the warnings
+/// it earned. The dry run shows it in the `PATCH` write
+/// ([`microsoft_defender::compile`]); create adds the rule's `id`.
+#[derive(Debug, Clone, Copy)]
+pub struct MicrosoftDefender;
+
+impl Compiler for MicrosoftDefender {
+    const PLATFORM: PlatformId = PlatformId::MicrosoftDefender;
+
+    /// The tenant's name.
+    type Target<'t> = &'t str;
+
+    type Compiled = microsoft_defender::Compiled;
+
+    fn compile(
+        cx: &Context<'_>,
+        rule: &Rule,
+        tenant: &str,
+    ) -> Result<microsoft_defender::Compiled, CompileError> {
+        microsoft_defender::body_with_warnings(cx, rule, tenant)
+    }
+
+    fn body(compiled: &microsoft_defender::Compiled) -> Json {
+        compiled.0.clone()
     }
 }

@@ -163,15 +163,19 @@ impl Sender<'_, '_> {
         rule: &opentide_compile::Rule,
         strategy: StatusStrategy,
     ) -> Result<DeployRequest, Raised> {
-        use opentide_compile::microsoft_defender::{body_with_warnings, rule_id};
+        use opentide_compile::compiler::{Compiler, MicrosoftDefender};
+        use opentide_compile::microsoft_defender::rule_id;
         let tenant = batch.tenant.name.as_str();
         self.deployer(platform)?;
         let id = rule_id(rule);
         if strategy == StatusStrategy::Deletion {
             return Ok(DeployRequest::delete(id));
         }
-        let (body, warnings) = body_with_warnings(self.compile, rule, tenant)
+        // The body the dry run shows in its `PATCH` write.
+        let compiled = MicrosoftDefender::compile(self.compile, rule, tenant)
             .map_err(|error| Raised::new(format!("Rule {} ({}): {error}", rule.uuid, rule.name)))?;
+        let body = MicrosoftDefender::body(&compiled);
+        let warnings = compiled.1;
         if !warnings.is_empty() && self.warn_once(format!("{platform}:{}", rule.uuid)) {
             self.warned = true;
             for (code, message) in warnings {
