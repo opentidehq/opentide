@@ -17,7 +17,8 @@ use opentide_schema::platforms::PlatformId;
 
 use crate::json::Json;
 use crate::rule::{CompileError, Rule};
-use crate::{Context, deploy, graylog, sentinel};
+use crate::strategy::StatusStrategy;
+use crate::{Context, datadog, deploy, exabeam, google_secops, graylog, sentinel};
 
 /// The compile of one platform's rules, shared by the dry run and the deploy.
 pub trait Compiler {
@@ -109,5 +110,90 @@ impl Compiler for Graylog {
 
     fn body(compiled: &graylog::CompiledDefinition) -> Json {
         graylog::create_body(compiled)
+    }
+}
+
+/// Exabeam: the correlation rule for one tenant, whose `test_mode` the body
+/// reads, under its block's status.
+#[derive(Debug, Clone, Copy)]
+pub struct Exabeam;
+
+impl Compiler for Exabeam {
+    const PLATFORM: PlatformId = PlatformId::Exabeam;
+
+    /// The tenant's table. `None` in a dry run that reaches no tenant:
+    /// `testMode` is then the block's, else `false`.
+    type Target<'t> = Option<&'t Json>;
+
+    type Compiled = exabeam::ExabeamRule;
+
+    fn compile(
+        cx: &Context<'_>,
+        rule: &Rule,
+        tenant: Option<&Json>,
+    ) -> Result<exabeam::ExabeamRule, CompileError> {
+        exabeam::compile_deployment(cx, rule, tenant)
+    }
+
+    fn body(compiled: &exabeam::ExabeamRule) -> Json {
+        compiled.body.clone()
+    }
+}
+
+/// Datadog: the detection rule for one tenant, whose `notifications` resolve
+/// the cases' aliases and whose tags it carries, under its block's status.
+#[derive(Debug, Clone, Copy)]
+pub struct Datadog;
+
+impl Compiler for Datadog {
+    const PLATFORM: PlatformId = PlatformId::Datadog;
+
+    /// The tenant's table. `None` in a dry run that reaches no tenant: an
+    /// alias is shown as `<tenant:notifications.ALIAS>` and the tenant's tags
+    /// are left out.
+    type Target<'t> = Option<&'t Json>;
+
+    type Compiled = datadog::DatadogRule;
+
+    /// A rule to disable is compiled without the tenant (RFC
+    /// rfc-datadog-cloud-siem §8.2): a deploy sends `isEnabled: false`
+    /// alone, so an alias the tenant lacks cannot keep the rule enabled.
+    fn compile(
+        cx: &Context<'_>,
+        rule: &Rule,
+        tenant: Option<&Json>,
+    ) -> Result<datadog::DatadogRule, CompileError> {
+        let strategy = datadog::strategy(cx, rule)?;
+        let tenant = tenant.filter(|_| strategy != StatusStrategy::Disablement);
+        datadog::compile_rule(cx, rule, strategy, tenant)
+    }
+
+    fn body(compiled: &datadog::DatadogRule) -> Json {
+        compiled.body.clone()
+    }
+}
+
+/// Google SecOps: what a deploy of the rule reads, the same on every tenant:
+/// the `rules.create` text, and beside it the rule's name, the sections the
+/// text was assembled from, the run state its status deploys and the
+/// block's run frequency ([`google_secops::compile_deployment`]). The
+/// tenant's scope is added as the rule is sent.
+#[derive(Debug, Clone, Copy)]
+pub struct GoogleSecops;
+
+impl Compiler for GoogleSecops {
+    const PLATFORM: PlatformId = PlatformId::GoogleSecops;
+
+    /// Nothing: the text is the same on every tenant.
+    type Target<'t> = ();
+
+    type Compiled = Json;
+
+    fn compile(cx: &Context<'_>, rule: &Rule, (): ()) -> Result<Json, CompileError> {
+        google_secops::compile_deployment(cx, rule)
+    }
+
+    fn body(compiled: &Json) -> Json {
+        compiled.clone()
     }
 }

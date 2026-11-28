@@ -147,7 +147,7 @@ fn list_in_order(value: Option<&Json>, fields: Fields) -> Vec<Json> {
     }
 }
 
-/// The value at `key`, unless absent or `null` (the model dump drops `None`).
+/// The value at `key`, unless absent or `null`: an explicit `null` reads as unset.
 fn get<'j>(object: &'j Json, key: &str) -> Option<&'j Json> {
     object.get(key).filter(|value| !value.is_null())
 }
@@ -323,9 +323,11 @@ fn alert_level(block: &Json, rule: &Rule) -> &'static str {
 /// tenant does (`index` and `tags` unset, suppression on).
 #[derive(Debug, Clone, Default)]
 pub struct Setup {
-    /// `index`.
+    /// `index`: the index patterns of a block that sets neither `index` nor
+    /// `data_view_id` and is neither ES|QL nor machine learning.
     pub index: Option<Vec<String>>,
-    /// `tags`.
+    /// `tags`: added to every rule's tags, after the marker tag and before the
+    /// block's own.
     pub tags: Vec<String>,
     /// `suppression`: whether the tenant sends alert suppression.
     pub suppression: bool,

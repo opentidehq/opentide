@@ -43,7 +43,7 @@ pub const RETRY_INFO: &str = "type.googleapis.com/google.rpc.RetryInfo";
 /// `error.message`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ApiError {
-    /// The method.
+    /// The HTTP method (`GET`).
     pub method: String,
     /// The path relative to the instance (`rules/ru_…`, `:verifyRuleText`).
     pub path: String,

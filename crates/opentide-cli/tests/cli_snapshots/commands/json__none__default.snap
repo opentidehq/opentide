@@ -6115,7 +6115,7 @@ exit: 0
             }
           ],
           "default": null,
-          "description": "The tenant the request was resolved against (Bitdefender, Graylog, Exabeam)",
+          "description": "The tenant the request was compiled for, the first the run sends the rule to: Sentinel (its exclusions scoped to that tenant), Elastic, Bitdefender, Graylog, Exabeam, Datadog and the platforms whose api_request is a list; absent when the run reaches no tenant",
           "title": "Tenant"
         },
         "unresolved": {

@@ -32,7 +32,7 @@ use std::path::PathBuf;
 pub struct Output {
     /// Where it goes.
     pub path: PathBuf,
-    /// Its bytes.
+    /// The contents to write.
     pub bytes: Vec<u8>,
 }
 

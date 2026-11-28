@@ -33,7 +33,7 @@ pub const PATH_SEGMENT: &percent_encoding::AsciiSet = &percent_encoding::CONTROL
 pub struct Write {
     /// `POST`, `PUT`, `PATCH` or `DELETE`.
     pub method: &'static str,
-    /// The URL.
+    /// The URL, or the REST path for an SDK that builds the URL itself.
     pub url: String,
     /// The JSON body, `null` when the request has none.
     pub body: Json,
@@ -146,7 +146,7 @@ pub fn setup<'t>(tenant: &'t Json, key: &str) -> Option<&'t Json> {
         .filter(|value| !value.is_null())
 }
 
-/// A tenant's `name`.
+/// A tenant's `name`; empty when it is unset or not a string.
 pub fn tenant_name(tenant: &Json) -> &str {
     tenant
         .get("name")

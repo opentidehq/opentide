@@ -634,7 +634,8 @@ fn data(answer: &Answer, tenant: &str) -> Result<Json, ConnectorError> {
     })
 }
 
-/// A column's name (`_column_name`).
+/// A column's `name`, else its `title`, else empty; a column that is not an
+/// object, as text (`_column_name`).
 fn column_name(column: &Json) -> String {
     match column {
         Json::Object(_) => column

@@ -12,7 +12,7 @@ pub struct Enriched {
     pub label: String,
     /// The description, newlines kept.
     pub description: String,
-    /// The link.
+    /// The vocabulary entry's `link`.
     pub link: String,
     /// The entry's `id`, when it has one (TLP: `TLP:CLEAR`).
     pub id: String,

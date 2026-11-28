@@ -16,7 +16,7 @@ pub struct Rule {
     pub node: std::sync::Arc<opentide_schema::node::Node>,
     /// `metadata.uuid`, in its canonical form ([`canonical_uuid`]).
     pub uuid: String,
-    /// `name`.
+    /// `name`; empty when it is unset or not a string.
     pub name: String,
     /// The file it was read from, when it was read from one.
     pub file: Option<String>,
@@ -71,7 +71,7 @@ impl Rule {
             .unwrap_or(opentide_schema::objects::response::DEFAULT_ALERT_SEVERITY)
     }
 
-    /// `description`.
+    /// `description`; empty when it is unset or not a string.
     pub fn description(&self) -> &str {
         self.data
             .get("description")

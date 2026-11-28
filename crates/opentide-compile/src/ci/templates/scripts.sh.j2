@@ -137,7 +137,7 @@ fi
 {%- endmacro %}
 
 {#- Stage the inflight shards, commit when something changed, and push onto
-    the latest default branch, retrying on a moved tip up to five times. -#}
+    the latest default branch, trying at most five times in all when the tip moved. -#}
 {% macro commit_and_push(message, empty_note, push, fetch) -%}
 mkdir -p .opentide/inflight
 git add .opentide/inflight/
