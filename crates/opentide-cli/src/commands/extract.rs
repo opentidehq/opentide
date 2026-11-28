@@ -672,9 +672,9 @@ fn defender_uuid(id: &str) -> (String, Addressed) {
     }
     let prefix = opentide_compile::microsoft_defender::RULE_ID_PREFIX;
     let held = id
-        .get(..prefix.len())
-        .filter(|head| head.eq_ignore_ascii_case(prefix))
-        .map_or(id, |_| &id[prefix.len()..]);
+        .split_at_checked(prefix.len())
+        .filter(|(head, _)| head.eq_ignore_ascii_case(prefix))
+        .map_or(id, |(_, rest)| rest);
     match opentide_core::ids::canonical(held) {
         Some(canonical) => (canonical, Addressed::BareUuid),
         None => (
@@ -1097,6 +1097,15 @@ mod tests {
                 Addressed::BareUuid
             )
         );
+        // #1946: an id with a multi-byte character where the prefix would
+        // end is no `opentide-` id: it gets a derived uuid.
+        for id in [
+            "opentid😀2594bf5e-0000-4000-8000-000000000201",
+            "é",
+            "opentidé-x",
+        ] {
+            assert_eq!(defender_uuid(id).1, Addressed::Derived, "{id}");
+        }
         let (derived, addressed) = defender_uuid("7506");
         assert_eq!(addressed, Addressed::Derived);
         assert_eq!(
@@ -2487,12 +2496,10 @@ mod elastic_tests {
             true,
         );
         let text = rule_yaml(&converted).unwrap();
-        let start = text.find("    tags:\n").expect("a tags key");
-        text[start..]
-            .lines()
-            .skip(1)
-            .take_while(|line| line.starts_with("      - "))
-            .map(|line| line["      - ".len()..].to_owned())
+        let (_, tags) = text.split_once("    tags:\n").expect("a tags key");
+        tags.lines()
+            .map_while(|line| line.strip_prefix("      - "))
+            .map(str::to_owned)
             .collect()
     }
 

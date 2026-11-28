@@ -640,7 +640,7 @@ mod tests {
                             if at == 0 {
                                 row.as_str()
                             } else {
-                                &row[indent.len()..]
+                                row.strip_prefix(indent).expect("an indented row")
                             }
                         })
                         .collect();

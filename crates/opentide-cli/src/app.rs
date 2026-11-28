@@ -2896,7 +2896,7 @@ mod tests {
         ];
         for ((iso, stamp, clock), want_iso, want_stamp) in table {
             assert_eq!((iso.as_str(), stamp.as_str()), (want_iso, want_stamp));
-            assert_eq!(clock, &want_iso[11..19]);
+            assert_eq!(Some(clock.as_str()), want_iso.get(11..19));
         }
     }
 

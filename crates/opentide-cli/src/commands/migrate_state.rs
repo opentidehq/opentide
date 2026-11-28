@@ -306,7 +306,16 @@ fn collect(rule: &mut RuleIds, source: &Source, root: &Node) {
                     );
                     continue;
                 }
-                let tenant = &key[LEGACY_TENANT_PREFIX.len()..];
+                // `is_legacy_key` lets through the map keys, handled above,
+                // and `rule_id::<tenant>`.
+                debug_assert!(key.starts_with(LEGACY_TENANT_PREFIX), "{key:?}");
+                let Some(tenant) = key.strip_prefix(LEGACY_TENANT_PREFIX) else {
+                    rule.fail(
+                        "external_id_shape",
+                        format!("configurations.{platform}.{key} is not an id key"),
+                    );
+                    continue;
+                };
                 bind(
                     rule,
                     &platform,
@@ -877,6 +886,19 @@ mod tests {
         let again = migrate(dir.path(), &rules(&dir));
         assert_eq!(again.outcome.message, "No vendor rule ids left on rules");
         assert_eq!(again.outcome.exit_code, 0);
+    }
+
+    #[test]
+    fn a_tenant_named_in_any_script_keeps_its_name() {
+        // #1946: the tenant is what follows `rule_id::`, multi-byte or not.
+        let text = rule("  sentinel_one:\n    rule_id::prodé😀: 12345\n    query: é😀\n");
+        let dir = workspace(&[("objects/rules/é😀.yaml", &text)]);
+        let report = migrate(dir.path(), &rules(&dir));
+        assert_eq!(report.outcome.exit_code, 0, "{report:?}");
+        let shard = Shard::load(dir.path(), UUID).unwrap();
+        assert_eq!(shard.get("sentinel_one", "prodé😀"), Some("12345"));
+        let edited = std::fs::read_to_string(rules(&dir).join("é😀.yaml")).unwrap();
+        assert_eq!(edited, rule("  sentinel_one:\n    query: é😀\n"));
     }
 
     #[test]
