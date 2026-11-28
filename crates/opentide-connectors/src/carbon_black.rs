@@ -164,6 +164,47 @@ impl Org {
     }
 }
 
+/// The body of a call that sends none (a `GET`, a `DELETE`).
+const NO_BODY: Option<&Value> = None;
+
+// The bodies built here, rather than read from the tenant and sent back. Each
+// struct lists its keys in sorted order, the order the `serde_json::Map` they
+// replace wrote them in, so the bytes sent are unchanged.
+
+/// A new watchlist report: the rule's IOC alone (`Report.create`).
+#[derive(serde::Serialize)]
+struct NewReport<'a> {
+    description: &'a str,
+    iocs_v2: [&'a Value; 1],
+    severity: i64,
+    tags: Vec<&'a str>,
+    timestamp: i64,
+    title: &'a str,
+}
+
+/// A query for `search_validation`.
+#[derive(serde::Serialize)]
+struct SearchValidation<'a> {
+    query: &'a str,
+}
+
+/// A process search job (`search_jobs`).
+#[derive(serde::Serialize)]
+struct SearchJob<'a> {
+    query: &'a str,
+    rows: i64,
+    /// Always `null`: the SDK asks for no sort.
+    sort: Option<&'a str>,
+    time_range: TimeRange<'a>,
+}
+
+/// A search job's window, as UTC timestamps (`utc_z`).
+#[derive(serde::Serialize)]
+struct TimeRange<'a> {
+    end: &'a str,
+    start: &'a str,
+}
+
 impl CarbonBlack {
     /// One request (`api_json_request`): the answer, or the SDK's
     /// exception for an error status.
@@ -172,7 +213,7 @@ impl CarbonBlack {
         org: &Org,
         method: crate::transport::Method,
         path: &str,
-        body: Option<&Value>,
+        body: Option<&(impl serde::Serialize + ?Sized)>,
     ) -> Result<Result<Answer, SdkError>, ConnectorError> {
         let uri = format!("{}{path}", org.server);
         let mut builder = cx
@@ -203,7 +244,7 @@ impl CarbonBlack {
         org: &Org,
         method: crate::transport::Method,
         path: &str,
-        body: Option<&Value>,
+        body: Option<&(impl serde::Serialize + ?Sized)>,
     ) -> Result<Result<Option<Value>, SdkError>, ConnectorError> {
         let answer = match Self::call(cx, org, method, path, body).await? {
             Ok(answer) => answer,
@@ -224,7 +265,7 @@ impl CarbonBlack {
 
     /// `get_object` in a deploy: the JSON, or the SDK's exception raised.
     async fn get(cx: TenantContext<'_>, org: &Org, path: &str) -> Result<Value, ConnectorError> {
-        match Self::json(cx, org, crate::transport::Method::GET, path, None).await? {
+        match Self::json(cx, org, crate::transport::Method::GET, path, NO_BODY).await? {
             Ok(value) => Ok(value.unwrap_or(Value::Null)),
             Err(error) => Err(Self::refused(cx, &error)),
         }
@@ -297,14 +338,12 @@ impl CarbonBlack {
                 report = Some(object.clone());
             }
         }
-        let mut ioc = Map::new();
-        ioc.insert("id".into(), Value::String(plan.uuid.clone()));
-        ioc.insert("match_type".into(), Value::String("query".into()));
-        ioc.insert(
-            "values".into(),
-            Value::Array(vec![Value::String(plan.query.replace('\n', " "))]),
-        );
-        let ioc = Value::Object(ioc);
+        // A value, not a struct: an update adds it to the report's own list.
+        let ioc = serde_json::json!({
+            "id": plan.uuid,
+            "match_type": "query",
+            "values": [plan.query.replace('\n', " ")],
+        });
         let own_report = plan.report == plan.name;
         let tags =
             |tags: &[String]| Value::Array(tags.iter().cloned().map(Value::String).collect());
@@ -312,23 +351,20 @@ impl CarbonBlack {
             if !plan.deployment {
                 return Ok(ReportChange::Absent);
             }
-            let mut body = Map::new();
-            body.insert("title".into(), Value::String(plan.report.clone()));
-            body.insert(
-                "description".into(),
-                Value::String(plan.description.clone()),
-            );
-            body.insert("severity".into(), Value::from(plan.severity));
-            body.insert("timestamp".into(), Value::from(plan.now));
-            let stripped: Vec<String> = plan.tags.iter().map(|tag| tag.trim().to_owned()).collect();
-            body.insert("tags".into(), tags(&stripped));
-            body.insert("iocs_v2".into(), Value::Array(vec![ioc]));
+            let body = NewReport {
+                description: &plan.description,
+                iocs_v2: [&ioc],
+                severity: plan.severity,
+                tags: plan.tags.iter().map(|tag| tag.trim()).collect(),
+                timestamp: plan.now,
+                title: &plan.report,
+            };
             let created = match Self::json(
                 cx,
                 &org,
                 crate::transport::Method::POST,
                 &reports_path,
-                Some(&Value::Object(body)),
+                Some(&body),
             )
             .await?
             {
@@ -414,7 +450,7 @@ impl CarbonBlack {
                     &org,
                     crate::transport::Method::DELETE,
                     &report_path,
-                    None,
+                    NO_BODY,
                 )
                 .await?
                 {
@@ -428,7 +464,7 @@ impl CarbonBlack {
                     &org,
                     crate::transport::Method::DELETE,
                     &report_path,
-                    None,
+                    NO_BODY,
                 )
                 .await?
                 {
@@ -516,14 +552,14 @@ impl CarbonBlack {
         let processes = format!("/api/investigate/v2/orgs/{}/processes", org.key);
         let start = utc_z(request.window.start);
         let end = utc_z(request.window.end);
-        let mut validation = Map::new();
-        validation.insert("query".into(), Value::String(request.text.clone()));
         let validated = Self::json(
             cx,
             &org,
             crate::transport::Method::POST,
             &format!("{processes}/search_validation"),
-            Some(&Value::Object(validation)),
+            Some(&SearchValidation {
+                query: &request.text,
+            }),
         )
         .await?
         .map_err(refused)?
@@ -542,20 +578,21 @@ impl CarbonBlack {
                 "Invalid query: {sent}: {message}"
             ))));
         }
-        let mut window = Map::new();
-        window.insert("end".into(), Value::String(end));
-        window.insert("start".into(), Value::String(start));
-        let mut job = Map::new();
-        job.insert("query".into(), Value::String(request.text.clone()));
-        job.insert("rows".into(), Value::from(JOB_ROWS));
-        job.insert("sort".into(), Value::Null);
-        job.insert("time_range".into(), Value::Object(window));
+        let job = SearchJob {
+            query: &request.text,
+            rows: JOB_ROWS,
+            sort: None,
+            time_range: TimeRange {
+                end: &end,
+                start: &start,
+            },
+        };
         let started = Self::json(
             cx,
             &org,
             crate::transport::Method::POST,
             &format!("{processes}/search_jobs"),
-            Some(&Value::Object(job)),
+            Some(&job),
         )
         .await?
         .map_err(refused)?
@@ -569,7 +606,7 @@ impl CarbonBlack {
                 &org,
                 crate::transport::Method::GET,
                 &format!("{results}?start=0&rows=0"),
-                None,
+                NO_BODY,
             )
             .await?
             .map_err(refused)?
@@ -610,7 +647,7 @@ impl CarbonBlack {
                 &org,
                 crate::transport::Method::GET,
                 &format!("{results}?start={current}&rows={wanted}"),
-                None,
+                NO_BODY,
             )
             .await?
             .map_err(refused)?;
@@ -675,8 +712,6 @@ impl CarbonBlack {
     ) -> Result<LiveCheck, ConnectorError> {
         let tenant = cx.tenant.label.tenant.clone();
         let org = Org::of(cx)?;
-        let mut body = Map::new();
-        body.insert("query".into(), Value::String(request.text.clone()));
         let answer = Self::json(
             cx,
             &org,
@@ -685,7 +720,9 @@ impl CarbonBlack {
                 "/api/investigate/v2/orgs/{}/processes/search_validation",
                 org.key
             ),
-            Some(&Value::Object(body)),
+            Some(&SearchValidation {
+                query: &request.text,
+            }),
         )
         .await?;
         let validated = match answer {
@@ -873,6 +910,58 @@ impl Platform for CarbonBlack {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // The bodies' bytes, keys in the sorted order the `serde_json::Map`s that
+    // built them before wrote: the cassettes compare JSON bodies as data, so
+    // these pin the order.
+    #[test]
+    fn a_new_report_is_sent_with_its_keys_sorted() {
+        let ioc = serde_json::json!({
+            "id": "6a1f-é",
+            "match_type": "query",
+            "values": ["process_name:😀.exe"],
+        });
+        let body = NewReport {
+            description: "Détecte 😀",
+            iocs_v2: [&ioc],
+            severity: 7,
+            tags: vec!["status:é", "technique:T1059"],
+            timestamp: 1_793_088_000,
+            title: "Rapport é",
+        };
+        assert_eq!(
+            serde_json::to_string(&body).unwrap(),
+            r#"{"description":"Détecte 😀","iocs_v2":[{"id":"6a1f-é","match_type":"query","values":["process_name:😀.exe"]}],"severity":7,"tags":["status:é","technique:T1059"],"timestamp":1793088000,"title":"Rapport é"}"#
+        );
+    }
+
+    #[test]
+    fn a_search_validation_sends_the_query_alone() {
+        let body = SearchValidation {
+            query: "process_name:é😀",
+        };
+        assert_eq!(
+            serde_json::to_string(&body).unwrap(),
+            r#"{"query":"process_name:é😀"}"#
+        );
+    }
+
+    #[test]
+    fn a_search_job_is_sent_with_its_keys_sorted() {
+        let body = SearchJob {
+            query: "process_name:é😀",
+            rows: JOB_ROWS,
+            sort: None,
+            time_range: TimeRange {
+                end: "2026-11-28T00:00:00Z",
+                start: "2026-11-27T00:00:00Z",
+            },
+        };
+        assert_eq!(
+            serde_json::to_string(&body).unwrap(),
+            r#"{"query":"process_name:é😀","rows":10000,"sort":null,"time_range":{"end":"2026-11-28T00:00:00Z","start":"2026-11-27T00:00:00Z"}}"#
+        );
+    }
 
     fn answer(status: u16, body: &[u8]) -> Answer {
         Answer {
