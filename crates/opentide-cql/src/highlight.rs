@@ -146,29 +146,30 @@ fn node_capture(node: &SyntaxNode, source: &str) -> Option<Capture> {
 
 /// `^-?[0-9]+([.][0-9]+)?([eE][+-]?[0-9]+)?$`.
 fn is_number(text: &str) -> bool {
-    let digits = |s: &str| -> usize { s.bytes().take_while(u8::is_ascii_digit).count() };
     let s = text.strip_prefix('-').unwrap_or(text);
-    let n = digits(s);
-    if n == 0 {
+    let Some(mut rest) = after_digits(s) else {
         return false;
-    }
-    let mut rest = &s[n..];
+    };
     if let Some(r) = rest.strip_prefix('.') {
-        let n = digits(r);
-        if n == 0 {
+        let Some(r) = after_digits(r) else {
             return false;
-        }
-        rest = &r[n..];
+        };
+        rest = r;
     }
     if let Some(r) = rest.strip_prefix(['e', 'E']) {
         let r = r.strip_prefix(['+', '-']).unwrap_or(r);
-        let n = digits(r);
-        if n == 0 {
+        let Some(r) = after_digits(r) else {
             return false;
-        }
-        rest = &r[n..];
+        };
+        rest = r;
     }
     rest.is_empty()
+}
+
+/// What follows the ASCII digits `s` starts with, when it starts with one.
+fn after_digits(s: &str) -> Option<&str> {
+    let rest = s.trim_start_matches(|c: char| c.is_ascii_digit());
+    (rest.len() < s.len()).then_some(rest)
 }
 
 /// A bareword duration such as `5min`: digits, then one of LogScale's time units.
@@ -213,8 +214,7 @@ fn is_duration(text: &str) -> bool {
         "year",
         "years",
     ];
-    let n = text.bytes().take_while(u8::is_ascii_digit).count();
-    n > 0 && UNITS.contains(&&text[n..])
+    after_digits(text).is_some_and(|unit| UNITS.contains(&unit))
 }
 
 #[cfg(test)]
@@ -234,6 +234,9 @@ mod tests {
         }
         for no in ["min", "5", "5minutesx", "5 min", "5M"] {
             assert!(!is_duration(no), "{no}");
+        }
+        for no in ["é", "1é", "1.é", "1e😀", "😀1", "5é😀", "é5min"] {
+            assert!(!is_number(no) && !is_duration(no), "{no}");
         }
     }
 }
