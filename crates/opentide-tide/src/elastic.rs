@@ -231,7 +231,8 @@ pub(crate) fn path_range(source: &str, path: &[&str]) -> Range {
         let want = &path[..depth];
         if let Some(k) = keys.iter().find(|k| k.path_is(want)) {
             let key = want[depth - 1];
-            let start = source[k.key_start..]
+            let start = k
+                .tail(source)
                 .find(key)
                 .map_or(k.key_start, |i| k.key_start + i);
             return span_to_range(source, ByteSpan::new(start, start + key.len()));
@@ -297,7 +298,8 @@ fn item_range(source: &str, path: &[&str], item: &str) -> Range {
     if let Some(i) = keys.iter().position(|k| k.path_is(path)) {
         let key = &keys[i];
         // Past the key itself, so a value equal to the key name is not hit.
-        let from = source[key.key_start..]
+        let from = key
+            .tail(source)
             .find(':')
             .map_or(key.key_start, |c| key.key_start + c + 1);
         let end = keys.get(i + 1).map_or(source.len(), |next| next.key_start);
@@ -814,7 +816,7 @@ ssl = true
         assert_eq!(inj[0].language, LanguageId::Kuery);
         assert_eq!(inj[0].inner, "event.category : \"process\" and x:'y'");
         let at = inj[0].host_map[0];
-        assert_eq!(&src[at..at + 5], "event");
+        assert_eq!(src.get(at..at + 5).unwrap(), "event");
     }
 
     #[test]
@@ -904,5 +906,15 @@ response:
     fn no_type_means_no_injection() {
         let src = "configurations:\n  elastic:\n    query: x\n";
         assert!(crate::extract_injections(src).is_empty());
+    }
+
+    /// #1946: a key's range after multi-byte text.
+    #[test]
+    fn a_key_range_after_multi_byte_text() {
+        let source = "# é😀\nconfigurations:\n  elastic:\n    clé: é\n    index: [é😀]\n";
+        let range = path_range(source, &["configurations", "elastic", "index"]);
+        assert_eq!((range.start.line, range.start.character), (4, 4));
+        let range = item_range(source, &["configurations", "elastic", "index"], "é😀");
+        assert_eq!((range.start.line, range.start.character), (4, 12));
     }
 }

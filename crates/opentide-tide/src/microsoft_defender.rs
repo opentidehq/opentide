@@ -431,21 +431,20 @@ fn placeholders(
 ) -> Vec<Named> {
     let text = &scalar.text;
     let mut out = Vec::new();
-    let mut from = 0;
-    while let Some(open) = text.get(from..).and_then(|rest| rest.find("{{")) {
-        let inner_start = from + open + 2;
-        let Some(close) = text.get(inner_start..).and_then(|rest| rest.find("}}")) else {
+    let mut rest = text.as_str();
+    while let Some((_, opened)) = rest.split_once("{{") {
+        let inner_start = text.len() - opened.len();
+        let Some((inner, after)) = opened.split_once("}}") else {
             break;
         };
-        let inner_end = inner_start + close;
-        from = inner_end + 2;
-        let inner = &text[inner_start..inner_end];
+        rest = after;
+        let column = inner.trim();
         let start = inner_start + (inner.len() - inner.trim_start().len());
-        let end = inner_start + inner.trim_end().len();
-        if start >= end || text[start..end].contains(['{', '}']) {
+        let end = start + column.len();
+        if column.is_empty() || column.contains(['{', '}']) {
             continue;
         }
-        let label = format!("alert.{field}'s placeholder {{{{{}}}}}", &text[start..end]);
+        let label = format!("alert.{field}'s placeholder {{{{{column}}}}}");
         out.extend(named(scalar, start, end, field_path.to_vec(), label, false));
     }
     out
@@ -503,7 +502,8 @@ mod tests {
 
     fn covered<'s>(yaml: &'s str, d: &Diagnostic) -> &'s str {
         let lines = LineIndex::new(yaml);
-        &yaml[lines.offset(d.range.start)..lines.offset(d.range.end)]
+        yaml.get(lines.offset(d.range.start)..lines.offset(d.range.end))
+            .unwrap()
     }
 
     const PROJECTED: &str = "DeviceEvents\n| where ActionType == 'x'\n\
@@ -772,7 +772,11 @@ mod tests {
             .unwrap_or_else(|| panic!("{found:?}"));
         let suggestion = d.suggestion.clone().unwrap_or_else(|| panic!("{d:?}"));
         let at = LineIndex::new(yaml).offset(d.range.end);
-        format!("{} {suggestion}{}", &yaml[..at], &yaml[at..])
+        format!(
+            "{} {suggestion}{}",
+            yaml.get(..at).unwrap(),
+            yaml.get(at..).unwrap()
+        )
     }
 
     #[test]
@@ -939,5 +943,20 @@ mod tests {
         assert_eq!(kql_name("a b").as_deref(), Some("['a b']"));
         assert_eq!(kql_name("it's"), None);
         assert_eq!(kql_name(""), None);
+    }
+
+    /// #1946: placeholders among multi-byte text keep their source spans.
+    #[test]
+    fn placeholders_among_multi_byte_text() {
+        let source = "t: é {{ Compté😀 }} 😀 {{}} {{a{b}} {{ X }}";
+        let scalar = crate::yaml_scalar::scalar_at(source, 3, 0).unwrap();
+        let found = placeholders(&scalar, &["t".into()], "title");
+        let columns: Vec<_> = found.iter().map(|n| n.column.as_str()).collect();
+        assert_eq!(columns, ["Compté😀", "X"]);
+        assert_eq!(
+            source.get(found[0].span.start..found[0].span.end),
+            Some("Compté😀")
+        );
+        assert_eq!(found[0].label, "alert.title's placeholder {{Compté😀}}");
     }
 }

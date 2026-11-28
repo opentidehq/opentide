@@ -30,37 +30,40 @@ const STAND_IN: &str = "...";
 /// new` wrote under its marker. `source` is the text the query's offsets are
 /// in (after a byte-order mark).
 pub fn is_placeholder_query(source: &str, query: &InjectedQuery) -> bool {
-    let start = query.host_span.start;
-    let Some(before) = source.get(..start) else {
+    let Some((before, from_query)) = source.split_at_checked(query.host_span.start) else {
         return false;
     };
-    let line_start = before.rfind('\n').map_or(0, |i| i + 1);
-    let line_end = source[start..]
-        .find('\n')
-        .map_or(source.len(), |i| start + i);
-    let line = &source[line_start..line_end];
-    let above = line_start.checked_sub(1).map(|newline| {
-        let above_start = source[..newline].rfind('\n').map_or(0, |i| i + 1);
-        &source[above_start..newline]
-    });
-    let marked = marker_start(line).is_some() || above.is_some_and(|l| marker_start(l).is_some());
-    marked && is_stand_in(&source[start..line_end])
+    let (earlier, head) = before
+        .rsplit_once('\n')
+        .map_or((None, before), |(earlier, head)| (Some(earlier), head));
+    let value = from_query
+        .split_once('\n')
+        .map_or(from_query, |(value, _)| value);
+    let line = format!("{head}{value}");
+    let above = earlier.map(|earlier| earlier.rsplit_once('\n').map_or(earlier, |(_, line)| line));
+    let marked = marker_start(&line).is_some() || above.is_some_and(|l| marker_start(l).is_some());
+    marked && is_stand_in(value)
 }
 
 /// Whether `value`, a line from where a value starts, is the stand-in, with or
 /// without the marker after it.
 fn is_stand_in(value: &str) -> bool {
-    let value = marker_start(value).map_or(value, |at| &value[..at]);
-    value.trim() == STAND_IN
+    before_marker(value).unwrap_or(value).trim() == STAND_IN
 }
 
 /// Where the marker that ends `line` starts: opentide's
 /// `\s#\s*opentide:placeholder\s*$`, from the blank before the `#`.
 fn marker_start(line: &str) -> Option<usize> {
+    before_marker(line).map(str::len)
+}
+
+/// `line` before the marker that ends it ([`marker_start`]).
+fn before_marker(line: &str) -> Option<&str> {
     let rest = line.trim_end().strip_suffix(MARKER)?;
     let rest = rest.trim_end().strip_suffix('#')?;
-    let blank = rest.chars().next_back().filter(|c| c.is_whitespace())?;
-    Some(rest.len() - blank.len_utf8())
+    let mut chars = rest.chars();
+    chars.next_back().filter(|c| c.is_whitespace())?;
+    Some(chars.as_str())
 }
 
 #[cfg(test)]
@@ -100,5 +103,17 @@ mod tests {
         let queries = crate::extract_injections(source);
         assert_eq!(queries.len(), 2);
         assert!(queries.iter().all(|q| is_placeholder_query(source, q)));
+    }
+
+    /// #1946: the stand-in and its marker among multi-byte text.
+    #[test]
+    fn the_stand_in_among_multi_byte_text() {
+        assert!(is_stand_in("... \u{a0}# opentide:placeholder"));
+        assert!(!is_stand_in("é... # opentide:placeholder"));
+        assert_eq!(
+            before_marker("é😀\u{2003}#opentide:placeholder"),
+            Some("é😀")
+        );
+        assert_eq!(before_marker("é😀#opentide:placeholder"), None);
     }
 }

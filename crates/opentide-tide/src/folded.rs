@@ -71,8 +71,24 @@ pub(crate) fn folded_comments(
 /// `line`'s first 40 characters, with `…` when it is longer.
 fn shorten(line: &str) -> String {
     const MAX: usize = 40;
-    match line.char_indices().nth(MAX) {
-        Some((at, _)) => format!("{}…", &line[..at]),
-        None => line.to_owned(),
+    let mut chars = line.chars();
+    let head: String = chars.by_ref().take(MAX).collect();
+    if chars.next().is_some() {
+        format!("{head}…")
+    } else {
+        head
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// #1946: a long line is cut after 40 characters, not bytes.
+    #[test]
+    fn shorten_counts_characters() {
+        assert_eq!(shorten(&"é".repeat(40)), "é".repeat(40));
+        assert_eq!(shorten(&"😀".repeat(41)), format!("{}…", "😀".repeat(40)));
+        assert_eq!(shorten("é😀"), "é😀");
     }
 }

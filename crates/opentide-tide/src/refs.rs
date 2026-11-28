@@ -166,7 +166,10 @@ fn locate(
         .find_map(|n| key_span_in(source, &keys[..n]).or_else(|| key_span(source, &names[..n])))
         .map_or(0, |span| span.end);
     let free = |from: usize, alone: bool, used: &BTreeSet<usize>| {
-        source[from..]
+        // `from` is 0 or the end of a key's span: a char boundary.
+        debug_assert!(source.is_char_boundary(from), "{from}");
+        source
+            .get(from..)?
             .match_indices(uuid)
             .map(|(i, _)| from + i)
             .find(|start| {
@@ -188,12 +191,19 @@ fn locate(
 /// line is read like any other, so a line that is nothing but the UUID
 /// passes.
 fn stands_alone(source: &str, start: usize, len: usize) -> bool {
-    let line_start = source[..start].rfind('\n').map_or(0, |i| i + 1);
-    let line_end = source[start..]
-        .find('\n')
-        .map_or(source.len(), |i| start + i);
-    let before = &source[line_start..start];
-    let after = source[start + len..line_end].trim_end_matches('\r');
+    // `start` is where a match of the value starts: a char boundary.
+    debug_assert!(source.is_char_boundary(start), "{start}");
+    let Some((head, tail)) = source.split_at_checked(start) else {
+        return false;
+    };
+    let before = head.rsplit_once('\n').map_or(head, |(_, line)| line);
+    let rest = tail.split_once('\n').map_or(tail, |(line, _)| line);
+    // A value that runs past the end of its line (a string value with a
+    // line feed, found where the text spells it out) is not alone on it.
+    let Some(after) = rest.get(len..) else {
+        return false;
+    };
+    let after = after.trim_end_matches('\r');
     // Where a quoted scalar opened, if one is open at `start`.
     let mut quote: Option<(char, usize)> = None;
     let mut chars = before.char_indices().peekable();
@@ -243,7 +253,8 @@ mod tests {
 
     fn text_at(source: &str, range: Range) -> &str {
         let line = source.lines().nth(range.start.line as usize).unwrap();
-        &line[range.start.character as usize..range.end.character as usize]
+        line.get(range.start.character as usize..range.end.character as usize)
+            .unwrap()
     }
 
     #[test]
@@ -367,7 +378,7 @@ mod tests {
         assert_eq!(found.len(), 1);
         let line = source.lines().nth(1).unwrap();
         let byte = line.find(MODEL).unwrap();
-        let utf16 = line[..byte].encode_utf16().count() as u32;
+        let utf16 = line.get(..byte).unwrap().encode_utf16().count() as u32;
         assert_eq!(found[0].range.start.character, utf16);
     }
 
@@ -479,5 +490,23 @@ mod tests {
             nameless.name_range.start,
             opentide_core::Position::new(0, 0)
         );
+    }
+
+    /// #1946: a value with a line feed, spelled out across a comment and the
+    /// line under it, ran past that comment's line and panicked.
+    #[test]
+    fn a_value_found_across_a_line_break_does_not_panic() {
+        for (source, value) in [
+            (
+                "# a\ndetection_model: \"a\\ndetection_model\"\n",
+                "a\ndetection_model",
+            ),
+            ("# é\n😀: x\ndetection_model: \"é\\n😀\"\n", "é\n😀"),
+        ] {
+            let found = refs(source);
+            assert_eq!(found.len(), 1, "{source:?} {found:?}");
+            assert_eq!(found[0].field_path, "detection_model");
+            assert_eq!(found[0].uuid, value);
+        }
     }
 }
