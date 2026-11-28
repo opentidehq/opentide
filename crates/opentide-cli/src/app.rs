@@ -874,9 +874,11 @@ impl Run<'_> {
             }
             Some(Command::Docs(docs)) => generate::docs(&docs.into(), &cx),
             Some(Command::Extract(extraction)) => match &extraction.command {
-                Some(Extract::Elastic(elastic)) => {
-                    extract::elastic(&extract_cx, &elastic.space, elastic.include_prebuilt)
-                }
+                Some(Extract::Elastic(elastic)) => extract::elastic(
+                    &extract_cx,
+                    &elastic.space,
+                    elastic.include_prebuilt.or(false),
+                ),
                 Some(Extract::Sentinel(_)) => extract::sentinel(&extract_cx),
                 Some(Extract::Defender(_)) => extract::defender(&extract_cx),
                 // `generate extract` needs a subcommand: clap refused it.
@@ -974,7 +976,7 @@ impl Run<'_> {
             }
             Some(Command::Hooks(hooks)) => {
                 let step = Step::Hooks {
-                    install: !hooks.no_install,
+                    install: hooks.install.or(true),
                 };
                 self.setup_step(args, group, step, &hooks.target, &hooks.confirm)
             }
@@ -1034,17 +1036,17 @@ impl Run<'_> {
                 .is_some_and(|own| given(own, "path"))
                 .then(|| ci.path.clone()),
             group_path: given(group, "path").then(|| args.path.clone()),
-            staging: !pipeline.no_staging,
-            inflight: !pipeline.no_inflight,
-            sharing: pipeline.sharing,
-            lint_changed: pipeline.lint_changed,
-            promotion: pipeline.promotion_choice(),
+            staging: pipeline.staging.or(true),
+            inflight: pipeline.inflight.or(true),
+            sharing: pipeline.sharing.or(false),
+            lint_changed: pipeline.lint_changed.or(false),
+            promotion: pipeline.promotion.get(),
             promotion_target: pipeline.promotion_target.clone(),
             python_version: pipeline.python_version.clone(),
-            explorer_pages: pipeline.explorer_pages,
+            explorer_pages: pipeline.explorer_pages.or(false),
             variable_group: pipeline.variable_group.clone(),
-            app_token: pipeline.app_token_choice(),
-            prune: pipeline.prune_choice(),
+            app_token: pipeline.app_token.get(),
+            prune: pipeline.prune.get(),
             stdout: ci.stdout,
             default_branch: pipeline.default_branch.clone(),
             plan: ci.confirm.plan || args.plan,
