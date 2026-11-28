@@ -18,6 +18,10 @@
     clippy::too_many_lines,
     reason = "engine dispatchers match every node kind in one function"
 )]
+// Slicing a `str` by byte index panics off a char boundary, and this crate
+// reads user queries: every slice is checked or says why it is safe (#1946;
+// the lint moves to `[workspace.lints]` once every crate is clean).
+#![warn(clippy::string_slice)]
 pub mod assist;
 pub mod catalog;
 mod catalog_model;
@@ -46,6 +50,15 @@ use opentide_highlight::{HighlightSpec, HighlightToken};
 use opentide_parse::{ErrorKind, SyntaxError};
 use rowan::TextRange;
 use syntax::SyntaxKind as K;
+
+/// `text[start..end]`, a range this crate computes: a token's bounds, a
+/// character's, or an ASCII byte's, so its ends are char boundaries. A range
+/// that is not fails a debug assertion and reads as empty.
+pub(crate) fn cut(text: &str, start: usize, end: usize) -> &str {
+    let piece = text.get(start..end);
+    debug_assert!(piece.is_some(), "{start}..{end} in {} bytes", text.len());
+    piece.unwrap_or_default()
+}
 
 /// The use of the query (ADR 0015 §1: a profile, chosen by where the text
 /// sits, never by the platform). The default is a search: a raw `.cql` file
@@ -220,7 +233,8 @@ fn parse_error(root: &SyntaxNode, err: &SyntaxError, source: &str) -> (String, B
     });
     // Text pasted from a web page often carries U+00A0, which CQL does not
     // read as a space: blame it when it is where the parser stopped.
-    let before = source[..at].chars().next_back();
+    // The anchor is a gap's bound: a token's.
+    let before = cut(source, 0, at).chars().next_back();
     let here = source.get(span.start..span.end).unwrap_or("");
     if before == Some('\u{a0}') || here.contains('\u{a0}') {
         return (
