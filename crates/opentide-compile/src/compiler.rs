@@ -20,7 +20,7 @@ use crate::rule::{CompileError, Rule};
 use crate::strategy::StatusStrategy;
 use crate::{
     Context, bitdefender, datadog, deploy, elastic, exabeam, google_secops, graylog,
-    microsoft_defender, preview, sentinel, splunk, sysdig,
+    microsoft_defender, preview, sentinel, sentinel_one, splunk, sysdig,
 };
 
 /// The compile of one platform's rules, shared by the dry run and the deploy.
@@ -366,5 +366,29 @@ impl Compiler for Splunk {
 
     fn body(compiled: &splunk::Compiled) -> Json {
         splunk::settings_body(compiled)
+    }
+}
+
+/// SentinelOne: the detection rule's body (`data` and `filter`) for one
+/// tenant, whose `setup` gives its scope (`site_id` or `account_id`), with
+/// `null` values left out. The dry run shows it in the create or update
+/// write ([`sentinel_one::compile`]).
+#[derive(Debug, Clone, Copy)]
+pub struct SentinelOne;
+
+impl Compiler for SentinelOne {
+    const PLATFORM: PlatformId = PlatformId::SentinelOne;
+
+    /// The tenant's table, its variables resolved in a deploy.
+    type Target<'t> = &'t Json;
+
+    type Compiled = Json;
+
+    fn compile(cx: &Context<'_>, rule: &Rule, tenant: &Json) -> Result<Json, CompileError> {
+        sentinel_one::body(cx, rule, tenant)
+    }
+
+    fn body(compiled: &Json) -> Json {
+        compiled.clone()
     }
 }
