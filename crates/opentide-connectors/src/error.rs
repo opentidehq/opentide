@@ -141,7 +141,7 @@ pub enum ConnectorError {
         message: String,
         /// What to do about it.
         detail: Option<String>,
-        /// The timeout.
+        /// The timeout the search outlived.
         timeout: std::time::Duration,
     },
     /// A gateway or proxy in front of the tenant answered for it (HTTP 502,

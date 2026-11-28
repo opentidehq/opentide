@@ -39,7 +39,7 @@ pub struct CredentialNames {
     pub tenant_id: &'static str,
     /// The application (client) id.
     pub client_id: &'static str,
-    /// The client secret.
+    /// The client secret's key (`azure_client_secret` for Sentinel).
     pub client_secret: &'static str,
 }
 

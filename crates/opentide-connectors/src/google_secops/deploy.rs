@@ -75,7 +75,7 @@ pub enum StateChange {
 /// keeping (`google_secops_compile_warning`).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Warning {
-    /// The code.
+    /// The code (`google_secops_rule_missing`, `google_secops_compile_warning`, …).
     pub code: &'static str,
     /// What happened.
     pub detail: String,

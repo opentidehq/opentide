@@ -736,8 +736,7 @@ impl Run<'_> {
                 let interrupt = self.host.interrupt.clone();
                 let interrupted = || interrupt.requested();
                 let report = crate::commands::doctor::run(
-                    args.offline,
-                    args.live,
+                    args.into(),
                     &crate::commands::doctor::Context {
                         repo: self.globals.repo.as_deref(),
                         env: self.env,
