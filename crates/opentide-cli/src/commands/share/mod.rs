@@ -1,11 +1,11 @@
 //! `opentide share` and its `push`, `preview`, `status`, `retract` and
-//! `targets` (UC-4.4b, #834; `cli/services/share.py` and `sharing/`): one
+//! `targets` (UC-4.4b, #834): one
 //! MISP Event per Tide object, over MISP's REST API
 //! (`opentide_connectors::misp`).
 //!
 //! The run checks its options, loads `sharing.toml` ([`config`]), picks the
 //! destinations, reads the catalogue ([`document`]) and runs the engine
-//! ([`engine`]); the result is the oracle's payload: `preflight` codes for a
+//! ([`engine`]); the result's payload holds `preflight` codes for a
 //! run stopped before any object, records per object and destination, and
 //! the exit status sharing 1.0 defines (0, 1, 2 for authentication or
 //! connectivity failures, 3 for a partial run). A secret never reaches the
@@ -267,7 +267,7 @@ impl Payload {
         }
     }
 
-    /// `_failed`: a usage error the run found itself.
+    /// A usage error the run found itself.
     fn usage(message: &str, code: &str, argument: &str) -> Self {
         let mut payload = Self::result(message, USAGE_EXIT_CODE, "failed", Vec::new());
         payload.put("error", Json::str(message));
@@ -276,7 +276,7 @@ impl Payload {
         payload
     }
 
-    /// `_preflight`: a run stopped before any object.
+    /// A run stopped before any object.
     fn preflight(code: &str, sharing: &Sharing, records: &[Record], message: Option<&str>) -> Self {
         let mut payload = Self::result(
             message.unwrap_or_else(|| preflight_message(code)),
@@ -290,7 +290,7 @@ impl Payload {
         payload
     }
 
-    /// `_quiet`: nothing to do, and that is fine.
+    /// Nothing to do, and that is fine.
     fn quiet(message: &str, sharing: &Sharing) -> Self {
         let mut payload = Self::result(message, 0, "completed", sharing.warnings());
         payload.put("records", Json::Array(Vec::new()));
@@ -302,7 +302,7 @@ impl Payload {
         self
     }
 
-    /// Every string with each secret replaced (`_redact`).
+    /// Every string with each secret replaced.
     fn redacted(mut self, secrets: &[String]) -> Self {
         if secrets.is_empty() {
             return self;
@@ -593,7 +593,7 @@ fn shared(args: &Args, cx: &Context<'_>, workspace: &Workspace, sharing: &Sharin
     from_run(&outcome, sharing, effective, &names).with_warnings(&nested)
 }
 
-/// The destinations the run uses (`_select_blocks`); `None` is
+/// The destinations the run uses; `None` is
 /// `scope_no_match`.
 fn select_blocks(blocks: &[Block], targets: &[String]) -> Option<Vec<Block>> {
     if !targets.is_empty() {
@@ -617,8 +617,8 @@ fn select_blocks(blocks: &[Block], targets: &[String]) -> Option<Vec<Block>> {
     (!enabled.is_empty()).then_some(enabled)
 }
 
-/// Narrows `filters` to the push's diff, read up to the checkout's HEAD
-/// (`_changed_files`): the diff starts where the production deploy's starts,
+/// Narrows `filters` to the push's diff, read up to the checkout's HEAD:
+/// the diff starts where the production deploy's starts,
 /// or at `since`. `Ok(None)` when the diff selects nothing; the error is the
 /// message of the `changed_diff` preflight.
 fn changed_files(
@@ -694,8 +694,7 @@ fn changed_files(
     }))
 }
 
-/// The object folder of each family sharing knows, resolved
-/// (`_object_directories`).
+/// The object folder of each family sharing knows, resolved.
 fn object_directories(workspace: &Workspace) -> Vec<(String, PathBuf)> {
     let configuration = workspace.configuration();
     OBJECT_FAMILIES
@@ -709,8 +708,7 @@ fn object_directories(workspace: &Workspace) -> Vec<(String, PathBuf)> {
 }
 
 /// The changed paths that are object files directly in an object folder,
-/// each once, resolved (`_direct_object_files`): a relative path is read from
-/// the workspace, as the oracle joined it.
+/// each once, resolved: a relative path is read from the workspace root.
 fn direct_object_files(
     workspace: &Path,
     changed: &[String],
@@ -743,7 +741,7 @@ fn direct_object_files(
     selected
 }
 
-/// The filters the run's options make (`_filters`); `None` when none narrows.
+/// The filters the run's options make; `None` when none narrows.
 fn filters(
     workspace: &Path,
     uuids: &[String],
@@ -774,7 +772,7 @@ fn filters(
     })
 }
 
-/// The objects' names by UUID (`_object_names`).
+/// The objects' names by UUID.
 fn object_names(workspace: &Workspace) -> BTreeMap<String, String> {
     let mut names = BTreeMap::new();
     for family in workspace.index().objects.values() {
@@ -792,7 +790,7 @@ fn object_names(workspace: &Workspace) -> BTreeMap<String, String> {
     names
 }
 
-/// `share targets`' payload (`_targets_payload`).
+/// `share targets`' payload.
 fn targets_payload(sharing: &Sharing) -> Payload {
     let rows: Vec<Json> = sharing
         .blocks
@@ -949,7 +947,7 @@ fn share_outcome(mode: Mode, records: &[Record]) -> (String, Vec<(String, Json)>
     (message, summary)
 }
 
-/// The payload of a run that reached the engine (`_from_run`).
+/// The payload of a run that reached the engine.
 fn from_run(
     outcome: &ShareRun,
     sharing: &Sharing,
@@ -986,7 +984,7 @@ fn from_run(
     }
     // A preview sends nothing, with or without a failure: its rows always
     // use the planned words and the dry-run note, even when a failure makes
-    // the run a result rather than a plan (`_outcome_kind`). Status sends
+    // the run a result rather than a plan. Status sends
     // nothing either: its rows compare each object with the local ledger
     // (#1661).
     let words = if payload.plan || mode == Mode::Preview {

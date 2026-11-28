@@ -1,5 +1,4 @@
-//! Deployment state shards, read and written as `states/deployment.py` and
-//! `deployment/external_ids.py` do (UC-4.6, #979): one
+//! Deployment state shards (UC-4.6, #979): one
 //! `.opentide/states/deployment/<uuid>.json` per rule, each `(platform,
 //! tenant)` bound to the id the platform gave the rule.
 //!
@@ -788,7 +787,7 @@ mod tests {
     }
 
     #[test]
-    fn ids_are_stored_as_the_oracle_stores_them() {
+    fn ids_are_stored_in_their_canonical_form() {
         assert_eq!(
             normalise_external_id("sentinel_one", &ExternalId::Int(17)).unwrap(),
             "17"

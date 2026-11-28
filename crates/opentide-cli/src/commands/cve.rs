@@ -1,6 +1,5 @@
-//! The online CVE lookup of `validate --check cve` (UC-4.4, #834;
-//! `validation/cve_check.py`, `vulnerability_lookup.py`'s settings): the
-//! host side of `opentide_workspace::validate::CveCheck`, on the connectors'
+//! The online CVE lookup of `validate --check cve` (UC-4.4, #834): the host
+//! side of `opentide_workspace::validate::CveCheck`, on the connectors'
 //! Vulnerability-Lookup client.
 
 use std::time::Duration;
@@ -91,7 +90,8 @@ impl Settings {
     }
 }
 
-/// `validate --check cve`'s lookups, each logged as the oracle logs it.
+/// `validate --check cve`'s lookups, each logged: a record found at debug, a
+/// CVE not found or a lookup that failed as a warning naming the threat.
 #[derive(Debug)]
 pub struct OnlineCve {
     lookup: VulnerabilityLookup,

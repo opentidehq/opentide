@@ -1,4 +1,4 @@
-//! `opentide tui` (`cli/commands/tui.py`): whether the terminal UI can open.
+//! `opentide tui`: whether the terminal UI can open.
 //!
 //! The UI reads keys from stdin and draws on stdout, so it opens only in
 //! `human` mode with a terminal on both. Anywhere else it is refused with

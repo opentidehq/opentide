@@ -1,15 +1,12 @@
-//! `opentide generate extract defender|elastic` (UC-4.4b, #834;
-//! `cli/services/extraction.py`, `extraction/mde_importer.py`,
-//! `extraction/elastic_importer.py`): the rules of a tenant pulled through
+//! `opentide generate extract defender|elastic` (UC-4.4b, #834): the rules
+//! of a tenant pulled through
 //! the connectors and written as opentide rule files under `Imported/`.
 //!
 //! Both write the rule document with serde-saphyr's emitter: Defender's
 //! from Graph's beta custom detection shape (microsoft-defender-1.0);
 //! Elastic's are the rule document written by serde-saphyr's emitter
-//! (`rule_yaml`): the same data, keys in the importer's order, formatted
-//! as serde-saphyr formats YAML where the oracle used PyYAML's
-//! `IndentedYamlDumper` (the approved differences of #834). The run is one
-//! checklist step,
+//! (`rule_yaml`): keys in the importer's order, formatted as serde-saphyr
+//! formats YAML (#834). The run is one checklist step,
 //! `import from <platform>`, counting the YAML files it wrote under the
 //! repository.
 
@@ -1414,7 +1411,7 @@ fn extract_techniques(threats: Option<&CJson>) -> Vec<CJson> {
     found
 }
 
-/// `None`s, empty mappings and empty lists left out (`_clean_empty`).
+/// `None`s, empty mappings and empty lists left out.
 fn clean_empty(value: &Object) -> Object {
     let mut out = Object::new();
     for (key, value) in value {
@@ -1448,7 +1445,7 @@ fn is_prebuilt(rule: &CJson) -> bool {
             == Some("external")
 }
 
-/// Kibana's `now-<n><unit>` as an RFC 0007 duration (`_date_math_duration`).
+/// Kibana's `now-<n><unit>` as an RFC 0007 duration.
 fn date_math_duration(value: &CJson) -> String {
     let text = text_of(value);
     let text = text.trim();
@@ -1501,10 +1498,10 @@ fn extract_filter(entry: &CJson) -> CJson {
     CJson::Object(raw)
 }
 
-/// An exported Kibana rule as an opentide rule (`kibana_to_opentide`).
+/// An exported Kibana rule as an opentide rule.
 #[expect(
     clippy::too_many_lines,
-    reason = "the oracle's `kibana_to_opentide`, block by block, in one place"
+    reason = "one block of the rule after another, kept in one place"
 )]
 fn kibana_to_opentide(rule: &CJson, make_custom: bool) -> Object {
     let rule_type = match rule.get("type") {
@@ -2230,9 +2227,9 @@ fn unwritable_reason(document: &Object, text: &str, platform: &str, model: &str)
     Some(format!("does not validate as {model}: {first}{more}"))
 }
 
-/// An extracted rule as YAML (#834), written by serde-saphyr's emitter, not
-/// a port of PyYAML's: keys in the importer's order, two-space indents with
-/// a list indented under its key (`IndentedYamlDumper`), a multi-line string
+/// An extracted rule as YAML (#834), written by serde-saphyr's emitter: keys
+/// in the importer's order, two-space indents with a list indented under its
+/// key, a multi-line string
 /// as a `|` block, and every other scalar on one line, never folded.
 fn rule_yaml(document: &Object) -> Result<String, String> {
     let options = serde_saphyr::ser_options! {
@@ -2437,7 +2434,7 @@ mod elastic_tests {
     }
 
     #[test]
-    fn a_kibana_rule_converts_as_the_oracle_converts_it() {
+    fn a_kibana_rule_converts_field_by_field() {
         let converted = kibana_to_opentide(
             &rule(
                 r#"{"rule_id": "11111111-1111-4111-8111-111111111111", "name": "Encoded",
@@ -2576,7 +2573,7 @@ mod elastic_tests {
     }
 
     /// A rule that would not load is skipped with the first error, by its
-    /// path, and a count of the others, not a Pydantic summary line.
+    /// path, and a count of the others.
     #[test]
     fn an_unwritable_rule_names_its_first_error() {
         let kibana = r#"{"rule_id": "11111111-1111-4111-8111-111111111111", "name": "One",

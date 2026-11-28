@@ -1,4 +1,4 @@
-//! `deploy migrate-state` (UC-4.4, #834; `cli/services/migrate_state.py`):
+//! `deploy migrate-state` (UC-4.4, #834):
 //! move vendor rule ids off rules into deployment state (RFC 0010 §3).
 //!
 //! SentinelOne and CrowdStrike ids found on a rule are
@@ -139,7 +139,7 @@ impl Source {
         }
     }
 
-    /// The zero-based last line `node` occupies (`_last_line`).
+    /// The zero-based last line `node` occupies.
     fn last_line(&self, node: &Node) -> usize {
         let (start, end) = (
             node.start.line().saturating_sub(1),
@@ -197,7 +197,7 @@ fn rule_files(rules_dir: &Path) -> Vec<PathBuf> {
     found
 }
 
-/// Binds one tenant's id (`_bind`).
+/// Binds one tenant's id.
 fn bind(
     rule: &mut RuleIds,
     platform: &str,
@@ -250,7 +250,7 @@ fn bind(
     });
 }
 
-/// Every legacy key under `configurations` (`_collect`).
+/// Every legacy key under `configurations`.
 fn collect(rule: &mut RuleIds, source: &Source, root: &Node) {
     let Some(configurations) = root.get("configurations") else {
         return;
@@ -330,7 +330,7 @@ fn collect(rule: &mut RuleIds, source: &Source, root: &Node) {
 }
 
 /// `text` without the lines of `spans`; lines split after each LF, so a
-/// CRLF line keeps its CR (`_strip_lines`).
+/// CRLF line keeps its CR.
 fn strip_lines(text: &str, spans: &[(usize, usize)]) -> String {
     text.split_inclusive('\n')
         .enumerate()
@@ -344,7 +344,7 @@ fn strip_lines(text: &str, spans: &[(usize, usize)]) -> String {
 }
 
 /// The document as plain values, with every legacy key removed from the
-/// platform blocks when `strip` (`_expected_document`).
+/// platform blocks when `strip`.
 fn plain(document: &node::Document, strip: bool) -> serde_json::Value {
     let Some(root) = document.root() else {
         return serde_json::Value::Null;
@@ -373,7 +373,7 @@ fn unsupported_breaks(text: &str) -> bool {
     false
 }
 
-/// Finds the ids in one file and computes its edited text (`_plan_rule`).
+/// Finds the ids in one file and computes its edited text.
 #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn plan_rule(path: &Path) -> (RuleIds, Option<String>) {
     let mut rule = RuleIds::default();
@@ -479,7 +479,7 @@ fn plan_rule(path: &Path) -> (RuleIds, Option<String>) {
     (rule, Some(edited))
 }
 
-/// Loads the shard and refuses ids that disagree with it (`_check_shard`).
+/// Loads the shard and refuses ids that disagree with it.
 fn check_shard(rule: &mut RuleIds, workspace: &Path) -> Option<Shard> {
     let uuid = rule.object_uuid.clone()?;
     rule.shard_bindings().next()?;
@@ -511,7 +511,7 @@ fn check_shard(rule: &mut RuleIds, workspace: &Path) -> Option<Shard> {
     Some(shard)
 }
 
-/// `path` relative to `workspace`, with `/` (`_display`).
+/// `path` relative to `workspace`, with `/`.
 fn display(path: &Path, workspace: &Path) -> String {
     let resolved = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
     let base = std::fs::canonicalize(workspace).unwrap_or_else(|_| workspace.to_path_buf());

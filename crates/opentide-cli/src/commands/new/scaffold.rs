@@ -1,4 +1,4 @@
-//! The text of a new object (`cli/services/new.py`): the generated template,
+//! The text of a new object: the generated template,
 //! line by line. Required keys are uncommented and filled in place, every
 //! other line is kept as the template writes it, so the comments that list
 //! the optional keys stay in the new file. YAML is never parsed and written
@@ -207,7 +207,7 @@ impl<'s> Model<'s> {
             .is_some_and(|map| !map.is_empty())
     }
 
-    /// What a field holds (`_shape`): `Option` unwrapped; a union of several
+    /// What a field holds: `Option` unwrapped; a union of several
     /// types is a plain value.
     pub fn shape(&self, spec: &'s Value) -> Shape {
         let mut node = spec;
@@ -542,11 +542,11 @@ fn json_matches(value: &Value, scalar: &Scalar) -> bool {
 }
 
 /// Uncomments the keys in `fill.fields`, fills their values, keeps every
-/// other line (`fill_template`). A required field with no answer gets a
+/// other line. A required field with no answer gets a
 /// placeholder; every placeholder line ends in [`PLACEHOLDER_MARKER`].
 #[expect(
     clippy::too_many_lines,
-    reason = "one pass over the template, as the oracle's, kept in one place"
+    reason = "one pass over the template, kept in one place"
 )]
 pub fn fill_template(template: &str, fill: &Fill<'_>) -> Scaffold {
     let mut lines: Vec<String> = template.lines().map(str::to_owned).collect();
@@ -850,7 +850,7 @@ pub fn fill_template(template: &str, fill: &Fill<'_>) -> Scaffold {
                 && let Scalar::Text(body) = given
             {
                 // A block scalar keeps its `|`: the text replaces its lines,
-                // one block line per line of the text (`_fill_template`).
+                // one block line per line of the text.
                 let text = block_text(&entries, at);
                 let head = text.first().map_or_else(
                     || " ".repeat(entries[at].column + 2),

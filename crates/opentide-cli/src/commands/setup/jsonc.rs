@@ -2,8 +2,8 @@
 //! configuration), made on jsonc-parser's concrete syntax tree: only the
 //! members setup merges change, and every other byte stays as it was:
 //! comments, layout, trailing commas, CRLF line endings and a byte-order
-//! mark (#743). The oracle parsed these files with comments stripped and
-//! wrote them back with `json.dumps`, which dropped all of that.
+//! mark (#743). Nothing is parsed and serialised back whole, which would
+//! drop all of that.
 
 use jsonc_parser::ParseOptions;
 use jsonc_parser::cst::{CstInputValue, CstObject, CstRootNode};

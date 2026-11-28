@@ -1,6 +1,6 @@
 //! A rule's query, as `opentide query --rule` and `--file` run it
-//! (UC-4.4c, #834): the rule is read (`cli/services/query.py`
-//! `_load_rule`), then the queries a deploy of it sends to the platform are
+//! (UC-4.4c, #834): the rule is read, then the queries a deploy of it sends
+//! to the platform are
 //! taken from its block ([`rule_queries`], opentide-compile's).
 
 use std::path::{Path, PathBuf};
@@ -12,7 +12,7 @@ use super::{open, placement};
 use crate::env::Env;
 
 /// Why the rule cannot be read: the message, the flag at fault and the
-/// closest UUID (`_refusal`).
+/// closest UUID.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Refusal {
     /// The message.
@@ -34,7 +34,7 @@ impl Refusal {
 }
 
 /// The rule `--rule` (by UUID, in the workspace) or `--file` (a path from
-/// the working directory, else from the repository) names (`_load_rule`).
+/// the working directory, else from the repository) names.
 ///
 /// # Errors
 ///

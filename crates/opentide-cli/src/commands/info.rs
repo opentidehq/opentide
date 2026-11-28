@@ -1,6 +1,6 @@
 //! `opentide info`: the repository and the platforms; with a section, the
 //! objects of a family, a technique's coverage, the vocabularies or the
-//! catalogue (`cli/commands/info.py`, `cli/services/info.py`).
+//! catalogue.
 
 use std::collections::{BTreeSet, HashMap};
 use std::path::Path;

@@ -1,5 +1,4 @@
-//! `opentide validate` (`cli/commands/validate.py`,
-//! `cli/services/validation.py`): the checks of `opentide-workspace`, the
+//! `opentide validate`: the checks of `opentide-workspace`, the
 //! queries check on the query engines ([`crate::queries::EngineQueries`]),
 //! `--fix` and `--dry-run` as text splices, `--format`/`--output` reports,
 //! the CI sinks and `--watch` ([`super::watch`]).
@@ -206,7 +205,7 @@ pub fn refuse(args: &Args, mode: Mode) -> Option<Report> {
 }
 
 /// `path` as `validate` shows a workspace: `./` or `./sub` from inside,
-/// `../` above, absolute elsewhere (`_shown_directory`).
+/// `../` above, absolute elsewhere.
 pub fn shown_directory(path: &Path, cwd: &Path) -> String {
     let path = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
     let cwd = std::fs::canonicalize(cwd).unwrap_or_else(|_| cwd.to_path_buf());
@@ -413,7 +412,7 @@ fn change_json(change: &opentide_workspace::fix::FixChange) -> Json {
 /// `opentide validate`.
 #[expect(
     clippy::too_many_lines,
-    reason = "the command's phases in the oracle's order (validate.py validate_group), read top to bottom"
+    reason = "the command's phases in order, read top to bottom"
 )]
 pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     let started = Instant::now();

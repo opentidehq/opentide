@@ -82,11 +82,11 @@ pub struct Report {
     /// The checklist's steps, printed on stderr before anything else.
     pub steps: Vec<crate::render::progress::Step>,
     /// The checklist's total when each finished step writes its
-    /// `OPENTIDE_PROGRESS=json` event (`Checklist._finished`, in every mode):
+    /// `OPENTIDE_PROGRESS=json` event (in every mode):
     /// `generate`, with its phases named or none.
     pub step_events: Option<usize>,
-    /// Log lines the run writes once its checklist rows are printed, where
-    /// the oracle logs them after its last step.
+    /// Log lines the run writes once its checklist rows are printed, after
+    /// its last step, so they are not drawn inside the checklist.
     pub after_steps: Vec<AfterSteps>,
     /// The whole of stdout in the text modes, instead of the body and the
     /// outcome (a `--format` report printed without `--output`).
@@ -101,11 +101,11 @@ pub struct Report {
     /// sequence the reader follows step by step (`setup`).
     pub numbered_next: bool,
     /// The CI job summary's section (Markdown), appended in a text mode
-    /// before the result is printed (`publish_summary`).
+    /// before the result is printed.
     pub ci_summary: Option<String>,
     /// The run ends with its exit code and prints nothing more, in every
-    /// mode: no document, no outcome line (the oracle's `sys.exit` in the
-    /// middle of a run, `deploy`'s invalid promotion target).
+    /// mode: no document, no outcome line (`deploy`'s invalid promotion
+    /// target, which stops the run in the middle).
     pub bare_exit: bool,
     /// A usage error the command found once it ran (a value refused
     /// after parsing): printed as clap prints a parse error, with the
@@ -357,11 +357,11 @@ pub fn json<T: serde::Serialize>(value: &T) -> Json {
         .unwrap_or(Json::Null)
 }
 
-/// Where a run's workspace is, as the oracle's context places it: the
-/// repository (`--repo`, else `OPENTIDE_REPO_ROOT`, else the nearest
-/// workspace root) as it prints it, and the options that open it, with
-/// `OPENTIDE_REPO_ROOT` and `OPENTIDE_TIDE_WORKSPACE` set as
-/// `apply_environment` sets them.
+/// Where a run's workspace is: the repository (`--repo`, else
+/// `OPENTIDE_REPO_ROOT`, else the nearest workspace root) as it prints it,
+/// and the options that open it: `OPENTIDE_REPO_ROOT` is the repository, and
+/// `OPENTIDE_TIDE_WORKSPACE` the repository too unless the environment names
+/// one and `--repo` is not given.
 pub fn placement(repo: Option<&str>, env: &Env, cwd: &Path) -> (String, RootOptions) {
     let from_env = |name: &str| env.get(name).filter(|value| !value.is_empty());
     let given = repo.or_else(|| from_env("OPENTIDE_REPO_ROOT"));

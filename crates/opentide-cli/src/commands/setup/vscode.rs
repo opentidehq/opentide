@@ -1,5 +1,5 @@
-//! `opentide setup vscode` and the `vscode` step of `setup --vscode-setup`
-//! (`services/setup/vscode.py`): an alternative to the opentide VS Code
+//! `opentide setup vscode` and the `vscode` step of `setup --vscode-setup`:
+//! an alternative to the opentide VS Code
 //! extension, which is the recommended way to use opentide in VS Code. The
 //! step runs `generate templates` and `generate schemas`
 //! first, recommends the extension in `.vscode/extensions.json`, removes the
@@ -83,7 +83,7 @@ impl Options {
 /// What the step did.
 #[derive(Clone, Debug)]
 pub struct Done {
-    /// Its result's members, in the oracle's order.
+    /// Its result's members, in a fixed order.
     pub result: StepResult,
     /// The snippets were asked for and could not be written: the run fails
     /// (exit 1), the files it wrote kept.
@@ -192,7 +192,7 @@ pub fn run(
 
 // ---------------------------------------------------------------- snippets
 
-/// Whether `.opentide/templates/` holds a template (`_templates_ready`).
+/// Whether `.opentide/templates/` holds a template.
 fn templates_ready(stage: &Stage, root: &Path) -> bool {
     let dir = root.join(OPENTIDE_DIR).join("templates");
     stage.entries(&dir).iter().any(|name| {
@@ -250,7 +250,7 @@ fn write_snippets(stage: &mut Stage, root: &Path, workspace: &Workspace) -> Opti
 // ---------------------------------------------------------------- the JSON files
 
 /// A file that cannot be read is left as it is, with a warning and a log
-/// line (`_unreadable`).
+/// line.
 fn unreadable(path: &Path, error: &str, warnings: &mut Vec<String>, advice: &str) {
     let shown = path.to_string_lossy();
     tracing::warn!(path = shown.as_ref(), error, "vscode_file_unreadable");
@@ -281,7 +281,7 @@ fn read_source(stage: &Stage, path: &Path) -> Result<(String, Json), String> {
 /// Writes `edited` (the edit of `text`) to `path` when it reads back as
 /// `expected`; else `expected` whole in the file's line endings, unless the
 /// file has comments that would be lost, which leaves it unchanged with a
-/// warning (`_write_edited`). Whether it was written.
+/// warning. Whether it was written.
 fn write_edited(
     stage: &mut Stage,
     path: &Path,
@@ -546,7 +546,7 @@ impl Mappings {
     }
 
     /// The glob over the object folders: one under their common parent, or
-    /// one per folder when they share none (`_object_glob`).
+    /// one per folder when they share none.
     fn object_glob(&self) -> Vec<String> {
         let parent = |folder: &str| -> String {
             match folder.rsplit_once('/') {
@@ -578,7 +578,7 @@ impl Mappings {
     }
 
     /// Whether `schema` mapped to `globs` is a per-folder revision mapping
-    /// an earlier release wrote (`_is_stale_revision_mapping`).
+    /// an earlier release wrote.
     fn stale_revision(&self, schema: &str, globs: &Json) -> bool {
         let schema = schema.strip_prefix("./").unwrap_or(schema);
         let Some(rest) = schema.strip_prefix(&format!("{OPENTIDE_DIR}/schemas/")) else {
@@ -609,7 +609,7 @@ impl Mappings {
     }
 
     /// What of the entry `schema` → `globs` to keep: all of it, the user's
-    /// globs of the router's mapping, or `None` (`_without_opentide_mapping`).
+    /// globs of the router's mapping, or `None`.
     pub fn without_opentide(&self, schema: &str, globs: &Json) -> Option<Json> {
         if schema.strip_prefix("./").unwrap_or(schema) == self.router {
             let mut generated = self.object_glob();

@@ -164,7 +164,7 @@ fn written(value: Option<&serde_json::Value>) -> bool {
         .is_some_and(|text| !text.is_empty())
 }
 
-/// The catalogue a manifest document describes (`_parse_manifest`), the
+/// The catalogue a manifest document describes, the
 /// bundled skills it does not list added.
 pub fn parse_manifest(
     data: &serde_json::Map<String, serde_json::Value>,
@@ -256,7 +256,7 @@ pub const API_HOST: &str = "api.github.com";
 
 /// `path` when it is a plain relative path in the repository: no leading
 /// `/`, no backslash, no `?`, `#` or line break, no empty, `.` or `..`
-/// segment (`_repo_file_path`).
+/// segment.
 pub fn repo_file_path(path: &str) -> Option<&str> {
     if path.is_empty()
         || path.starts_with('/')
@@ -327,7 +327,7 @@ pub fn fetch_file(path: &str, git_ref: &str, network: Network<'_>) -> Option<Vec
 }
 
 /// Every blob path of the skills repository at `git_ref`, from one call of
-/// GitHub's trees API (`_fetch_github_blobs`); `None` when it cannot be
+/// GitHub's trees API; `None` when it cannot be
 /// read, or GitHub cut it short (`truncated`): a skill is never installed
 /// with files missing.
 pub fn fetch_tree(git_ref: &str, network: Network<'_>) -> Option<Vec<String>> {
@@ -412,7 +412,7 @@ fn source_of(manifest: &Manifest) -> String {
     format!("{}@{}", manifest.source, manifest.git_ref)
 }
 
-/// *text* cut at the last word that fits in *width*, then the ellipsis (`_shorten`).
+/// *text* cut at the last word that fits in *width*, then the ellipsis.
 pub fn shorten(text: &str, width: usize, ellipsis: &str) -> String {
     let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
     let chars: Vec<char> = text.chars().collect();

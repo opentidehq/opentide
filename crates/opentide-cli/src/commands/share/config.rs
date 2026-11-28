@@ -1,5 +1,4 @@
-//! `sharing.toml`, loaded as `sharing/config.py` `load_sharing` loads it: the
-//! bundled file, the workspace's, then the parent
+//! `sharing.toml`, loaded: the bundled file, the workspace's, then the parent
 //! instance's, merged block by block by `opentide-schema`
 //! ([`merge_sharing`]); each block's `api_key` resolved from the environment
 //! (`${NAME}` only: anything else is a literal, reported and still used).

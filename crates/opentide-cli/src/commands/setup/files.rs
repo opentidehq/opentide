@@ -1,8 +1,7 @@
-//! The setup steps that write files from what opentide bundles: `setup env`
-//! (`services/setup/env.py`), `setup platforms` (`platforms.py`), `setup
-//! repo` (`repo.py`) and `setup mcp` (`mcp.py`). Each reads and writes
-//! through the [`Stage`] and returns its result's members in the oracle's
-//! order.
+//! The setup steps that write files from what opentide bundles: `setup env`,
+//! `setup platforms`, `setup repo` and `setup mcp`. Each reads and writes
+//! through the [`Stage`] and returns its result's members in a fixed order,
+//! as its `--json` document lists them.
 
 use std::path::{Path, PathBuf};
 
@@ -236,8 +235,8 @@ pub fn platform_file(platform: &str) -> Option<String> {
     opentide_schema::platforms::is_builtin(platform).then(|| format!("{platform}.toml"))
 }
 
-/// `content` with `enabled = true` in its `[platform]` table
-/// (`_enable_platform_toml`), everything else in the file kept: comments,
+/// `content` with `enabled = true` in its `[platform]` table,
+/// everything else in the file kept: comments,
 /// the other tables and keys (another table's `enabled` untouched), and CRLF
 /// line endings. A file with no `[platform]` table, or one already enabled,
 /// comes back as it is.
