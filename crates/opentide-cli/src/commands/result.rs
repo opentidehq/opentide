@@ -3,10 +3,10 @@
 //! the command's own.
 //!
 //! [`CommandResult::report`] is the one place a result becomes a [`Report`].
-//! `deploy`'s final result is still built as keys in order, with
-//! `_exit_code`, `_summary` and the other `_`-keys among them:
-//! [`CommandResult::from_fields`] reads those, until it builds a
-//! [`CommandResult`] itself.
+//! Every command builds its [`CommandResult`] itself; no result is read
+//! back from `_`-keys. The tests keep that reader
+//! (`CommandResult::from_fields`) as the reference the typed results are
+//! compared against.
 
 use super::Report;
 use crate::envelope::{
@@ -45,6 +45,7 @@ impl Status {
     /// The status `text` names, else [`Status::Failed`]: every producer is
     /// in this crate, so an unknown status is a programming error, and it
     /// must not read as a success.
+    #[cfg(test)]
     fn parse_or_failed(text: &str) -> Status {
         Status::parse(text).unwrap_or(Status::Failed)
     }
@@ -98,6 +99,7 @@ impl ExitCode {
 
     /// The exit code `code` is, else [`ExitCode::Failure`]: non-zero stays
     /// non-zero.
+    #[cfg(test)]
     fn from_code_or_failure(code: i64) -> ExitCode {
         ExitCode::from_code(code).unwrap_or(ExitCode::Failure)
     }
@@ -205,8 +207,9 @@ impl CommandResult {
         Json::object(members)
     }
 
-    /// A result built as keys in order (`CommandResult.from_payload`):
-    /// `message`, `status` and `warnings` leave the data, as do
+    /// A result built as keys in order, as `deploy` and the live check built
+    /// theirs before #1949: `message`, `status` and `warnings` leave the
+    /// data, as do
     /// `_exit_code`, `_summary`, `_next_actions`, `_failure_code`,
     /// `_failure_argument`, `_failure_suggestion` and every other `_`-key.
     ///
@@ -214,7 +217,11 @@ impl CommandResult {
     /// behind a `debug_assert!` that names it: a `status` that is not one of
     /// [`Status`]'s is [`Status::Failed`] (exiting 1 unless `_exit_code`
     /// says otherwise), and an `_exit_code` other than 0, 1, 2 or 130 is 1.
-    pub fn from_fields(result: &[(String, Json)]) -> CommandResult {
+    ///
+    /// Tests only: the reference the typed results are compared against, key
+    /// for key.
+    #[cfg(test)]
+    pub(crate) fn from_fields(result: &[(String, Json)]) -> CommandResult {
         let take = |key: &str| result.iter().find(|(name, _)| name == key).map(|(_, v)| v);
         let text = |key: &str| match take(key) {
             Some(Json::Str(text)) => Some(text.clone()),
