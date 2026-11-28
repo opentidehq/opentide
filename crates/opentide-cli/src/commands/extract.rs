@@ -46,7 +46,7 @@ pub struct Context<'a> {
 
 /// A run's result before it is a report: the importer's keys, or the
 /// message it failed with.
-type Outcome = Result<Vec<(String, Json)>, String>;
+type Outcome = Result<Object, String>;
 
 /// The run's refusal when a configuration file does not parse: `config_parse`
 /// with its place and diagnostic (#1659), as every command that reads the
@@ -146,25 +146,25 @@ fn report(platform: &str, started: Instant, written: usize, outcome: Outcome) ->
         Ok(keys) => {
             step.status = StepStatus::Ok;
             step.count = Some(written);
-            let mut data = vec![("import".to_owned(), Json::str(platform))];
+            let mut data = Object::from([("import".to_owned(), Json::str(platform))]);
             data.extend(keys);
-            let count = match data.iter().find(|(key, _)| key == "extracted_count") {
-                Some((_, Json::Int(count))) => usize::try_from(*count).unwrap_or(written),
+            let count = match data.get("extracted_count") {
+                Some(Json::Int(count)) => usize::try_from(*count).unwrap_or(written),
                 _ => written,
             };
-            let skipped = match data.iter().find(|(key, _)| key == "skipped") {
-                Some((_, Json::Array(items))) => items.len(),
+            let skipped = match data.get("skipped") {
+                Some(Json::Array(items)) => items.len(),
                 _ => 0,
             };
             let mut message = format!("Imported {} from {platform}", plural(count, "rule", None));
             if skipped > 0 {
                 message.push_str(&format!(" · {skipped} skipped"));
             }
-            let status = match data.iter().find(|(key, _)| key == "status") {
-                Some((_, Json::Str(status))) => status.clone(),
+            let status = match data.get("status") {
+                Some(Json::Str(status)) => status.clone(),
                 _ => "completed".to_owned(),
             };
-            data.retain(|(key, _)| key != "status");
+            data.shift_remove("status");
             let mut report = Report::completed(&command, data);
             report.outcome.message = message;
             report.outcome.status = Status::from_text(&status);
@@ -1014,11 +1014,11 @@ impl Skipped {
     }
 
     /// The result's keys: `skipped`, when a rule was.
-    pub(crate) fn into_keys(self) -> Vec<(String, Json)> {
+    pub(crate) fn into_keys(self) -> Object {
         if self.rules.is_empty() {
-            Vec::new()
+            Object::new()
         } else {
-            vec![("skipped".to_owned(), Json::Array(self.rules))]
+            Object::from([("skipped".to_owned(), Json::Array(self.rules))])
         }
     }
 }
@@ -1031,10 +1031,10 @@ mod tests {
     /// printed as it came and is not a failure (#1949).
     #[test]
     fn an_importers_own_status_is_kept_and_does_not_fail() {
-        let keys = vec![
+        let keys = Object::from([
             ("status".to_owned(), Json::str("success")),
             ("extracted_count".to_owned(), Json::Int(2)),
-        ];
+        ]);
         let report = report("elastic", Instant::now(), 2, Ok(keys));
         assert_eq!(report.outcome.status, Status::Other("success".to_owned()));
         assert!(report.outcome.ok());
@@ -2378,7 +2378,7 @@ fn elastic_run(
         }
         page += 1;
     }
-    Ok(vec![
+    Ok(Object::from([
         ("status".into(), Json::str("success")),
         ("tenant".into(), Json::str(&configured.name)),
         ("space".into(), Json::str(space)),
@@ -2388,7 +2388,7 @@ fn elastic_run(
             "destination".into(),
             Json::str(destination.to_string_lossy()),
         ),
-    ])
+    ]))
 }
 
 #[cfg(test)]

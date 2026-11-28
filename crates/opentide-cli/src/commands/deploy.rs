@@ -576,7 +576,7 @@ fn failed(message: String) -> DryRun {
 /// failure or the status names `failure.code`.
 fn from_outcome(outcome: dry_run::Outcome, at_root: bool) -> DryRun {
     let result = Json::Object(outcome.payload.clone());
-    let mut data: Vec<(String, Json)> = Vec::new();
+    let mut data = Object::new();
     let mut message = "Deployment completed".to_owned();
     let mut status = "completed".to_owned();
     let mut warnings: Vec<String> = Vec::new();
@@ -596,7 +596,9 @@ fn from_outcome(outcome: dry_run::Outcome, at_root: bool) -> DryRun {
                         })
                         .collect();
                 }
-                _ => data.push((key.clone(), value.clone())),
+                _ => {
+                    data.insert(key.clone(), value.clone());
+                }
             }
         }
     }
@@ -614,9 +616,8 @@ fn from_outcome(outcome: dry_run::Outcome, at_root: bool) -> DryRun {
             _ => COMMAND_FAILED,
         };
         let error = data
-            .iter()
-            .find(|(key, _)| key == "error")
-            .and_then(|(_, value)| match value {
+            .get("error")
+            .and_then(|value| match value {
                 Json::Str(text) if !text.is_empty() => Some(text.clone()),
                 _ => None,
             })
@@ -630,8 +631,8 @@ fn from_outcome(outcome: dry_run::Outcome, at_root: bool) -> DryRun {
         next_actions.push(NextAction::new(NO_WORKSPACE_STEP.0, NO_WORKSPACE_STEP.1));
     }
     let summary = match outcome.summary.clone() {
-        Some(Json::Object(members)) => members.into_iter().collect(),
-        _ => Vec::new(),
+        Some(Json::Object(members)) => members,
+        _ => Object::new(),
     };
     let diagnostics = result
         .get("diagnostics")

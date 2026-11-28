@@ -219,12 +219,12 @@ pub fn commands_digest(document: &Json) -> String {
     fn sorted(value: &Json) -> Json {
         match value {
             Json::Object(members) => {
-                let mut members: Vec<(String, Json)> = members
+                let mut members: Object = members
                     .iter()
                     .map(|(key, value)| (key.clone(), sorted(value)))
                     .collect();
-                members.sort_by(|a, b| a.0.cmp(&b.0));
-                Json::object(members)
+                members.sort_keys();
+                Json::Object(members)
             }
             Json::Array(items) => Json::Array(items.iter().map(sorted).collect()),
             other => other.clone(),

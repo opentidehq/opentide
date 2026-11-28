@@ -411,25 +411,25 @@ pub fn document(words: &[String], text: &str, exit_code: i32) -> RunOutcome {
 /// `command`, `duration_ms`, `exit_code`, `summary`, `next_actions` and
 /// `failure`.
 fn envelope(
-    mut payload: Vec<(String, Json)>,
+    mut payload: Object,
     words: &[String],
     exit_code: i32,
     failure: Option<Failure>,
 ) -> Json {
-    payload.push((
+    payload.insert(
         "schema_version".into(),
         Json::Int(crate::envelope::SCHEMA_VERSION),
-    ));
-    payload.push(("command".into(), Json::str(words.join(" "))));
-    payload.push(("duration_ms".into(), Json::Int(0)));
-    payload.push(("exit_code".into(), Json::Int(i64::from(exit_code))));
-    payload.push(("summary".into(), Json::Object(Object::new())));
-    payload.push(("next_actions".into(), Json::Array(Vec::new())));
-    payload.push((
+    );
+    payload.insert("command".into(), Json::str(words.join(" ")));
+    payload.insert("duration_ms".into(), Json::Int(0));
+    payload.insert("exit_code".into(), Json::Int(i64::from(exit_code)));
+    payload.insert("summary".into(), Json::Object(Object::new()));
+    payload.insert("next_actions".into(), Json::Array(Vec::new()));
+    payload.insert(
         "failure".into(),
         failure.as_ref().map_or(Json::Null, Failure::to_json),
-    ));
-    Json::object(payload)
+    );
+    Json::Object(payload)
 }
 
 fn text_document(words: &[String], text: &str, exit_code: i32) -> RunOutcome {
@@ -441,15 +441,15 @@ fn text_document(words: &[String], text: &str, exit_code: i32) -> RunOutcome {
         .trim()
         .to_owned();
     let status = if ok { "completed" } else { "failed" };
-    let mut payload = vec![
+    let mut payload = Object::from([
         ("ok".to_owned(), Json::Bool(ok)),
         ("status".to_owned(), Json::str(status)),
         ("message".to_owned(), Json::str(&message)),
         ("text".to_owned(), Json::str(text)),
-    ];
+    ]);
     let failure = (!ok).then(|| Failure::new(COMMAND_FAILED, message.clone()));
     if !ok {
-        payload.push(("error".to_owned(), Json::str(&message)));
+        payload.insert("error".to_owned(), Json::str(&message));
     }
     RunOutcome::Built {
         document: envelope(payload, words, exit_code, failure),
@@ -464,12 +464,12 @@ pub fn failure(words: &[String], message: &str, exit_code: i32) -> RunOutcome {
     } else {
         COMMAND_FAILED
     };
-    let payload = vec![
+    let payload = Object::from([
         ("error".to_owned(), Json::str(message)),
         ("ok".to_owned(), Json::Bool(false)),
         ("status".to_owned(), Json::str("failed")),
         ("message".to_owned(), Json::str(message)),
-    ];
+    ]);
     RunOutcome::Built {
         document: envelope(payload, words, exit_code, Some(Failure::new(code, message))),
         exit_code,
@@ -478,12 +478,12 @@ pub fn failure(words: &[String], message: &str, exit_code: i32) -> RunOutcome {
 
 /// A run the server refuses: a usage error, exit 2.
 pub fn usage(words: &[String], message: &str) -> RunOutcome {
-    let payload = vec![
+    let payload = Object::from([
         ("error".to_owned(), Json::str(message)),
         ("ok".to_owned(), Json::Bool(false)),
         ("status".to_owned(), Json::str("failed")),
         ("message".to_owned(), Json::str(message)),
-    ];
+    ]);
     RunOutcome::Built {
         document: envelope(
             payload,
