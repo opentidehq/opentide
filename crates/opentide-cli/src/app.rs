@@ -201,6 +201,10 @@ struct Run<'a> {
     indent: bool,
     env: &'a Env,
     host: &'a Host,
+    /// The working directory the commands read: [`Host::cwd`], or an empty
+    /// path, which the commands take as the process's own, when the host
+    /// gave none. Resolved once here so no command repeats it.
+    cwd: PathBuf,
     started: Instant,
 }
 
@@ -454,8 +458,7 @@ impl Run<'_> {
         );
         let outcome = match installed {
             Ok(installed) => {
-                let cwd = self.host.cwd.clone().unwrap_or_default();
-                let shown = completion::person_path(&installed.path, &cwd, home.as_deref());
+                let shown = completion::person_path(&installed.path, &self.cwd, home.as_deref());
                 let next = if installed.reload.is_empty() {
                     NextAction::new(installed.reason, "")
                 } else {
@@ -665,12 +668,11 @@ impl Run<'_> {
             Some(RootCommand::Migrate(crate::tree::MigrateArgs {
                 command: Some(crate::tree::MigrateCommand::VocabScope(args)),
             })) => {
-                let cwd = self.host.cwd.clone().unwrap_or_default();
                 let report = crate::commands::migrate::run(
                     &crate::commands::migrate::Args::from(args),
                     self.globals.repo.as_deref(),
                     self.env,
-                    &cwd,
+                    &self.cwd,
                 );
                 return self.emit_report(&report, out, err);
             }
@@ -732,7 +734,6 @@ impl Run<'_> {
                 };
             }
             Some(RootCommand::Doctor(args)) => {
-                let cwd = self.host.cwd.clone().unwrap_or_default();
                 let interrupt = self.host.interrupt.clone();
                 let interrupted = || interrupt.requested();
                 let report = crate::commands::doctor::run(
@@ -740,7 +741,7 @@ impl Run<'_> {
                     &crate::commands::doctor::Context {
                         repo: self.globals.repo.as_deref(),
                         env: self.env,
-                        cwd: &cwd,
+                        cwd: &self.cwd,
                         version: &self.host.version,
                         text: self.mode != Mode::Json && !self.globals.quiet,
                         proxy: self.globals.proxy.as_deref(),
@@ -752,12 +753,11 @@ impl Run<'_> {
             Some(RootCommand::Rules(crate::tree::RulesArgs {
                 command: Some(crate::tree::RulesCommand::Unreviewed(args)),
             })) => {
-                let cwd = self.host.cwd.clone().unwrap_or_default();
                 let report = crate::commands::rules::run(
                     &args.older_than,
                     self.globals.repo.as_deref(),
                     self.env,
-                    &cwd,
+                    &self.cwd,
                     jiff::Timestamp::now(),
                     self.mode != Mode::Json,
                 );
@@ -804,7 +804,7 @@ impl Run<'_> {
             let launch = crate::tui::Launch {
                 repo: self.globals.repo.clone(),
                 env: self.env.clone(),
-                cwd: self.host.cwd.clone().unwrap_or_default(),
+                cwd: self.cwd.clone(),
                 version: self.host.version.clone(),
             };
             // A configuration file that does not parse is refused as every
@@ -839,18 +839,17 @@ impl Run<'_> {
             GenerateCommand as Command, GenerateExtractCommand as Extract,
             GenerateInflightCommand as Inflight,
         };
-        let cwd = self.host.cwd.clone().unwrap_or_default();
         let cx = generate::Context {
             repo: self.globals.repo.as_deref(),
             env: self.env,
-            cwd: &cwd,
+            cwd: &self.cwd,
             proxy: self.globals.proxy.as_deref(),
             version: &self.host.version,
         };
         let extract_cx = extract::Context {
             repo: self.globals.repo.as_deref(),
             env: self.env,
-            cwd: &cwd,
+            cwd: &self.cwd,
             proxy: self.globals.proxy.as_deref(),
         };
         if !args.phases.is_empty() && args.command.is_some() {
@@ -909,7 +908,6 @@ impl Run<'_> {
         if let Some(report) = report {
             return self.emit_report(&report, out, err);
         }
-        let cwd = self.host.cwd.clone().unwrap_or_default();
         let terminal = self.terminal();
         let interrupt = self.host.interrupt.clone();
         let code = crate::commands::watch::run(
@@ -917,7 +915,7 @@ impl Run<'_> {
             &crate::commands::validate::Context {
                 repo: self.globals.repo.as_deref(),
                 env: self.env,
-                cwd: &cwd,
+                cwd: &self.cwd,
                 version: &self.host.version,
                 terminal: &terminal,
                 proxy: self.globals.proxy.as_deref(),
@@ -935,7 +933,6 @@ impl Run<'_> {
     fn new_object(&self, command: &crate::tree::NewCommand) -> crate::commands::Report {
         use crate::commands::new::{Context, NewArgs, run, stdin_is_terminal};
         let parsed = NewArgs::from(command);
-        let cwd = self.host.cwd.clone().unwrap_or_default();
         let can_prompt = self.mode == Mode::Human && stdin_is_terminal();
         // The questions are the setup wizards': drawn on stderr.
         let prompter = std::cell::RefCell::new(crate::commands::setup::wizard::Inquire::new(
@@ -946,7 +943,7 @@ impl Run<'_> {
             &Context {
                 repo: self.globals.repo.as_deref(),
                 env: self.env,
-                cwd: &cwd,
+                cwd: &self.cwd,
                 version: &self.host.version,
                 can_prompt,
                 prompter: Some(&prompter),
@@ -964,11 +961,10 @@ impl Run<'_> {
         let Some(group) = matches.subcommand_matches("setup") else {
             return crate::commands::Report::error("setup", "no setup command");
         };
-        let cwd = self.host.cwd.clone().unwrap_or_default();
         match &args.command {
             None => crate::commands::setup::run::group(
                 &crate::commands::setup::run::GroupArgs::from(args),
-                &self.setup_context(&cwd),
+                &self.setup_context(),
             ),
             Some(Command::Ci(ci)) => self.setup_ci(args, ci, group),
             Some(Command::Env(env)) => {
@@ -1053,8 +1049,7 @@ impl Run<'_> {
             yes: ci.confirm.yes || args.yes,
             group_only: self.setup_group_only(group),
         };
-        let cwd = self.host.cwd.clone().unwrap_or_default();
-        run(&parsed, &self.setup_context(&cwd))
+        run(&parsed, &self.setup_context())
     }
 
     /// The `setup` group's own options given on the command line before a
@@ -1098,14 +1093,11 @@ impl Run<'_> {
     }
 
     /// The setup commands' context.
-    fn setup_context<'a>(
-        &'a self,
-        cwd: &'a std::path::Path,
-    ) -> crate::commands::setup::Context<'a> {
+    fn setup_context(&self) -> crate::commands::setup::Context<'_> {
         crate::commands::setup::Context {
             repo: self.globals.repo.as_deref(),
             env: self.env,
-            cwd,
+            cwd: &self.cwd,
             mode: self.mode,
             version: &self.host.version,
             quiet: self.globals.quiet,
@@ -1142,13 +1134,12 @@ impl Run<'_> {
             both: flag_given && positional_given,
             group_only: self.setup_group_only(group),
         };
-        let cwd = self.host.cwd.clone().unwrap_or_default();
         subcommand(
             &step,
             &paths,
             confirm.yes || args.yes,
             confirm.plan || args.plan,
-            &self.setup_context(&cwd),
+            &self.setup_context(),
         )
     }
 
@@ -1174,20 +1165,18 @@ impl Run<'_> {
             yes: skills.yes || args.yes,
             plan: skills.plan || args.plan,
         };
-        let cwd = self.host.cwd.clone().unwrap_or_default();
-        install(&parsed, &paths, &self.setup_context(&cwd))
+        install(&parsed, &paths, &self.setup_context())
     }
 
     /// `opentide info`, from its parsed arguments.
     fn info(&self, args: &crate::tree::InfoArgs) -> crate::commands::Report {
-        let cwd = self.host.cwd.clone().unwrap_or_default();
         let parsed = crate::commands::info::Args::from(args);
         crate::commands::info::run(
             &parsed,
             &crate::commands::info::Context {
                 repo: self.globals.repo.as_deref(),
                 env: self.env,
-                cwd: &cwd,
+                cwd: &self.cwd,
                 version: &self.host.version,
                 text: self.mode != Mode::Json,
             },
@@ -1208,14 +1197,13 @@ impl Run<'_> {
         if parsed.watch && crate::commands::validate::refuse(&parsed, self.mode).is_none() {
             return (parsed, None);
         }
-        let cwd = self.host.cwd.clone().unwrap_or_default();
         let terminal = self.terminal();
         let report = run(
             &parsed,
             &Context {
                 repo: self.globals.repo.as_deref(),
                 env: self.env,
-                cwd: &cwd,
+                cwd: &self.cwd,
                 version: &self.host.version,
                 terminal: &terminal,
                 proxy: self.globals.proxy.as_deref(),
@@ -1238,13 +1226,12 @@ impl Run<'_> {
             return crate::commands::Report::failed(COMMAND, USAGE_EXIT_CODE, failure);
         }
         let parsed = Args::from_cli(validate, query);
-        let cwd = self.host.cwd.clone().unwrap_or_default();
         let plugin = parsed
             .platform
             .clone()
             .filter(|platform| crate::plugins::is_plugin(platform));
         if parsed.live && plugin.is_none() {
-            return self.validate_query_live(&parsed, &cwd);
+            return self.validate_query_live(&parsed);
         }
         let terminal = self.terminal();
         let interrupt = &self.host.interrupt;
@@ -1252,7 +1239,7 @@ impl Run<'_> {
         let cx = Context {
             repo: self.globals.repo.as_deref(),
             env: self.env,
-            cwd: &cwd,
+            cwd: &self.cwd,
             terminal: &terminal,
             proxy: self.globals.proxy.as_deref(),
             interrupted: &interrupted,
@@ -1271,7 +1258,6 @@ impl Run<'_> {
     fn validate_query_live(
         &self,
         parsed: &crate::commands::validate_query::Args,
-        cwd: &std::path::Path,
     ) -> crate::commands::Report {
         use crate::commands::{validate_live, validate_query};
         use crate::render::summary;
@@ -1296,7 +1282,7 @@ impl Run<'_> {
             &validate_live::Context {
                 repo: self.globals.repo.as_deref(),
                 env: self.env,
-                cwd,
+                cwd: &self.cwd,
                 proxy: self.globals.proxy.as_deref(),
                 interrupted: &interrupted,
                 now: jiff::Timestamp::now(),
@@ -1326,14 +1312,13 @@ impl Run<'_> {
     /// `opentide lint`, from its parsed arguments.
     fn lint(&self, args: &crate::tree::LintArgs) -> crate::commands::Report {
         let parsed = crate::commands::lint::Args::from(args);
-        let cwd = self.host.cwd.clone().unwrap_or_default();
         let terminal = self.terminal();
         crate::commands::lint::run(
             &parsed,
             &crate::commands::lint::Context {
                 repo: self.globals.repo.as_deref(),
                 env: self.env,
-                cwd: &cwd,
+                cwd: &self.cwd,
                 version: &self.host.version,
                 terminal: &terminal,
             },
@@ -1358,7 +1343,6 @@ impl Run<'_> {
     fn query(&self, args: &crate::tree::QueryArgs) -> crate::commands::Report {
         use crate::commands::query::{Args, Context, run};
         let parsed = Args::from(args);
-        let cwd = self.host.cwd.clone().unwrap_or_default();
         let terminal = self.terminal();
         let interrupt = &self.host.interrupt;
         let interrupted = || interrupt.requested();
@@ -1374,7 +1358,7 @@ impl Run<'_> {
             &Context {
                 repo: self.globals.repo.as_deref(),
                 env: self.env,
-                cwd: &cwd,
+                cwd: &self.cwd,
                 proxy: self.globals.proxy.as_deref(),
                 terminal: &terminal,
                 interrupted: &interrupted,
@@ -1388,13 +1372,12 @@ impl Run<'_> {
     /// `opentide deploy --dry-run`, from its parsed arguments.
     fn deploy(&self, args: &crate::tree::DeployArgs) -> crate::commands::deploy::DryRun {
         let parsed = crate::commands::deploy::Args::from(args);
-        let cwd = self.host.cwd.clone().unwrap_or_default();
         crate::commands::deploy::run(
             &parsed,
             &crate::commands::deploy::Context {
                 repo: self.globals.repo.as_deref(),
                 env: self.env,
-                cwd: &cwd,
+                cwd: &self.cwd,
                 debug: self.globals.debug || self.env.opentide_debug(),
             },
         )
@@ -1422,7 +1405,6 @@ impl Run<'_> {
             persist_state_externally: args.persist_state_externally,
             prune: parsed.prune,
         };
-        let cwd = self.host.cwd.clone().unwrap_or_default();
         let interrupt = &self.host.interrupt;
         let interrupted = || interrupt.requested();
         // The built-in platforms, then the platform plugins (UC-4.5b).
@@ -1444,7 +1426,7 @@ impl Run<'_> {
             &Context {
                 repo: self.globals.repo.as_deref(),
                 env: self.env,
-                cwd: &cwd,
+                cwd: &self.cwd,
                 proxy: self.globals.proxy.as_deref(),
                 interrupted: &interrupted,
                 now: jiff::Timestamp::now(),
@@ -1505,14 +1487,16 @@ impl Run<'_> {
         err: &mut dyn Write,
     ) -> std::io::Result<i32> {
         use crate::tree::DeployCommand as Command;
-        let cwd = self.host.cwd.clone().unwrap_or_default();
         match &deploy.command {
             Some(Command::ReplayState(replay)) => {
                 if self.interrupted() {
                     return Ok(INTERRUPTED_EXIT_CODE);
                 }
-                let report =
-                    crate::commands::deploy_replay::report(&cwd, self.env, &replay.state_commit);
+                let report = crate::commands::deploy_replay::report(
+                    &self.cwd,
+                    self.env,
+                    &replay.state_commit,
+                );
                 self.emit_report(&report, out, err)
             }
             Some(Command::Metadata(metadata)) => {
@@ -1534,7 +1518,7 @@ impl Run<'_> {
                 let report = crate::commands::migrate_state::run(
                     self.globals.repo.as_deref(),
                     self.env,
-                    &cwd,
+                    &self.cwd,
                 );
                 self.emit_report(&report, out, err)
             }
@@ -1613,7 +1597,7 @@ impl Run<'_> {
                 links: self.mode == Mode::Human && self.host.stderr_tty,
                 columns: stderr.width,
                 highlight: self.mode == Mode::Human,
-                cwd: self.host.cwd.clone().unwrap_or_default(),
+                cwd: self.cwd.clone(),
                 env: self.env.clone(),
             };
             let mut sources = crate::render::diagnostic::SourceFiles::default();
@@ -1629,8 +1613,7 @@ impl Run<'_> {
                 &summary::deploy_summary(&run.result, None, Some(true)),
                 summary::MAX_SUMMARY_BYTES,
             );
-            let cwd = self.host.cwd.clone().unwrap_or_default();
-            let written = ci::append_summary(&markdown, "deploy", self.mode, self.env, &cwd);
+            let written = ci::append_summary(&markdown, "deploy", self.mode, self.env, &self.cwd);
             for line in &written.stdout {
                 out.write_all(format!("{line}\n").as_bytes())?;
             }
@@ -1806,9 +1789,8 @@ impl Run<'_> {
         {
             use crate::render::{ci, summary};
             let markdown = summary::fit(markdown, summary::MAX_SUMMARY_BYTES);
-            let cwd = self.host.cwd.clone().unwrap_or_default();
             let written =
-                ci::append_summary(&markdown, &outcome.command, self.mode, self.env, &cwd);
+                ci::append_summary(&markdown, &outcome.command, self.mode, self.env, &self.cwd);
             for line in &written.stdout {
                 out.write_all(format!("{line}\n").as_bytes())?;
             }
@@ -2010,14 +1992,13 @@ impl Run<'_> {
             }
         }
         let parsed = Args::from_cli(share, |id| typed(group, id));
-        let cwd = self.host.cwd.clone().unwrap_or_default();
         Ok(run(
             &parsed,
             &Context {
                 command: path,
                 repo: self.globals.repo.as_deref(),
                 env: self.env,
-                cwd: &cwd,
+                cwd: &self.cwd,
                 proxy: self.globals.proxy.as_deref(),
                 version: &self.host.version,
             },
@@ -2034,7 +2015,6 @@ impl Run<'_> {
         skills_command: SkillsCommand<'_>,
     ) -> crate::commands::Report {
         use crate::commands::skills;
-        let cwd = self.host.cwd.clone().unwrap_or_default();
         let path = match skills_command {
             SkillsCommand::Discover(_) => "setup skills discover",
             SkillsCommand::Show(_) => "setup skills show",
@@ -2145,18 +2125,20 @@ impl Run<'_> {
             match self.globals.repo.as_deref() {
                 Some(repo)
                     if candidate == std::path::Path::new(".")
-                        && crate::commands::setup::resolved(&cwd, std::path::Path::new(repo))
-                            != crate::commands::setup::resolved(&cwd, &cwd) =>
+                        && crate::commands::setup::resolved(
+                            &self.cwd,
+                            std::path::Path::new(repo),
+                        ) != crate::commands::setup::resolved(&self.cwd, &self.cwd) =>
                 {
-                    cwd.join(repo)
+                    self.cwd.join(repo)
                 }
-                _ => cwd.join(candidate),
+                _ => self.cwd.join(candidate),
             }
         };
         let named: Vec<String> = group_paths.into_iter().chain(own).collect();
         let mut targets: Vec<std::path::PathBuf> = named
             .iter()
-            .map(|given| crate::commands::setup::resolved(&cwd, &setup_path(given)))
+            .map(|given| crate::commands::setup::resolved(&self.cwd, &setup_path(given)))
             .collect();
         targets.dedup();
         if targets.len() > 1 {
@@ -2458,6 +2440,7 @@ fn run_with(
         globals,
         mode,
         env,
+        cwd: host.cwd.clone().unwrap_or_default(),
         host,
         started,
     };
