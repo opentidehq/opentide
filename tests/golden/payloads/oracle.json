@@ -1,0 +1,954 @@
+{
+ "rules": [
+  {
+   "uuid": "00000000-0000-4000-8005-000000000704",
+   "file": "<WS>/objects/rules/carbon-black-disabled.yaml",
+   "platform": "carbon_black_cloud",
+   "compile": {},
+   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000704\",\"name\":\"Carbon Black Disabled\",\"api_request\":{\"enabled\":false,\"name\":\"\",\"schema\":null,\"status\":\"DISABLED\",\"flags\":null,\"tenants\":null,\"contributors\":null,\"query\":\"process_name:powershell.exe\",\"organizations\":null,\"watchlist\":null,\"report\":null,\"tags\":null}}",
+   "tenants": [
+    {
+     "tenant": "org1",
+     "body": "[]"
+    },
+    {
+     "tenant": "org2",
+     "error": {
+      "code": "compile_failed",
+      "message": "Carbon Black Cloud cannot compile this rule: The CBC Deployer cannot create a detection in a nonexistent Watchlist: . Create it on the console before retriggering deployment.",
+      "help": null
+     }
+    }
+   ]
+  },
+  {
+   "uuid": "00000000-0000-4000-8005-000000000701",
+   "file": "<WS>/objects/rules/carbon-black-full.yaml",
+   "platform": "carbon_black_cloud",
+   "compile": {},
+   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000701\",\"name\":\"Carbon Black Full\",\"api_request\":{\"enabled\":false,\"name\":\"\",\"schema\":null,\"status\":\"STAGING\",\"flags\":null,\"tenants\":null,\"contributors\":null,\"query\":\"process_name:powershell.exe\\nAND process_cmdline:-enc\\n\",\"organizations\":null,\"watchlist\":\"Rule Watchlist\",\"report\":\"Shared Report\",\"tags\":[\"powershell\",\"encoded\"]}}",
+   "tenants": [
+    {
+     "tenant": "org1",
+     "body": "[{\"method\":\"POST\",\"url\":\"/threathunter/watchlistmgr/v3/orgs/ORG1KEY/reports\",\"body\":{\"title\":\"Shared Report\",\"description\":\"Carbon Black Full for the compile corpus.\",\"severity\":8,\"timestamp\":1767225600,\"tags\":[\"STAGING\",\"00000000-0000-4000-8099-000000000001\",\"T1059\",\"powershell\",\"encoded\"],\"iocs_v2\":[{\"id\":\"00000000-0000-4000-8005-000000000701\",\"match_type\":\"query\",\"values\":[\"process_name:powershell.exe AND process_cmdline:-enc \"]}]}}]"
+    },
+    {
+     "tenant": "org2",
+     "body": "[{\"method\":\"POST\",\"url\":\"/threathunter/watchlistmgr/v3/orgs/ORG2KEY/reports\",\"body\":{\"title\":\"Shared Report\",\"description\":\"Carbon Black Full for the compile corpus.\",\"severity\":8,\"timestamp\":1767225600,\"tags\":[\"STAGING\",\"00000000-0000-4000-8099-000000000001\",\"T1059\",\"powershell\",\"encoded\"],\"iocs_v2\":[{\"id\":\"00000000-0000-4000-8005-000000000701\",\"match_type\":\"query\",\"values\":[\"process_name:powershell.exe AND process_cmdline:-enc \"]}]}}]"
+    }
+   ]
+  },
+  {
+   "uuid": "00000000-0000-4000-8005-000000000702",
+   "file": "<WS>/objects/rules/carbon-black-minimal.yaml",
+   "platform": "carbon_black_cloud",
+   "compile": {},
+   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000702\",\"name\":\"Carbon Black Minimal\",\"api_request\":{\"enabled\":false,\"name\":\"\",\"schema\":null,\"status\":\"PRODUCTION\",\"flags\":null,\"tenants\":null,\"contributors\":null,\"query\":\"process_name:cmd.exe\",\"organizations\":null,\"watchlist\":null,\"report\":null,\"tags\":null}}",
+   "tenants": [
+    {
+     "tenant": "org1",
+     "body": "[{\"method\":\"POST\",\"url\":\"/threathunter/watchlistmgr/v3/orgs/ORG1KEY/reports\",\"body\":{\"title\":\"Carbon Black Minimal\",\"description\":\"Carbon Black Minimal for the compile corpus.\",\"severity\":3,\"timestamp\":1767225600,\"tags\":[\"PRODUCTION\"],\"iocs_v2\":[{\"id\":\"00000000-0000-4000-8005-000000000702\",\"match_type\":\"query\",\"values\":[\"process_name:cmd.exe\"]}]}}]"
+    },
+    {
+     "tenant": "org2",
+     "error": {
+      "code": "compile_failed",
+      "message": "Carbon Black Cloud cannot compile this rule: The CBC Deployer cannot create a detection in a nonexistent Watchlist: . Create it on the console before retriggering deployment.",
+      "help": null
+     }
+    }
+   ]
+  },
+  {
+   "uuid": "00000000-0000-4000-8005-000000000703",
+   "file": "<WS>/objects/rules/carbon-black-removed.yaml",
+   "platform": "carbon_black_cloud",
+   "compile": {},
+   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000703\",\"name\":\"Carbon Black Removed\",\"api_request\":{\"enabled\":false,\"name\":\"\",\"schema\":null,\"status\":\"REMOVED\",\"flags\":null,\"tenants\":null,\"contributors\":null,\"query\":\"process_name:cmd.exe\",\"organizations\":null,\"watchlist\":null,\"report\":null,\"tags\":null}}",
+   "tenants": [
+    {
+     "tenant": "org1",
+     "body": "[]"
+    },
+    {
+     "tenant": "org2",
+     "error": {
+      "code": "compile_failed",
+      "message": "Carbon Black Cloud cannot compile this rule: The CBC Deployer cannot create a detection in a nonexistent Watchlist: . Create it on the console before retriggering deployment.",
+      "help": null
+     }
+    }
+   ]
+  },
+  {
+   "uuid": "00000000-0000-4000-8005-000000000503",
+   "file": "<WS>/objects/rules/crowdstrike-bad-outcome.yaml",
+   "platform": "crowdstrike",
+   "compile": {},
+   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000503\",\"name\":\"CrowdStrike Bad Outcome\",\"api_request\":{\"enabled\":false,\"name\":\"\",\"schema\":null,\"status\":\"STAGING\",\"flags\":null,\"tenants\":null,\"contributors\":null,\"details\":{\"trigger\":\"summary\",\"outcome\":\"alert\",\"name\":null,\"description\":null,\"severity\":null,\"tactic\":null,\"technique\":null},\"schedule\":{\"frequency\":\"30m\",\"lookback\":\"1h\",\"start\":null,\"end\":null},\"query\":\"#event_simpleName=DnsRequest\"}}",
+   "tenants": [
+    {
+     "tenant": "eu",
+     "error": {
+      "code": "compile_failed",
+      "message": "CrowdStrike cannot compile this rule: Invalid Crowdstrike outcome value",
+      "help": null
+     }
+    },
+    {
+     "tenant": "us",
+     "error": {
+      "code": "compile_failed",
+      "message": "CrowdStrike cannot compile this rule: Invalid Crowdstrike outcome value",
+      "help": null
+     }
+    }
+   ]
+  },
+  {
+   "uuid": "00000000-0000-4000-8005-000000000505",
+   "file": "<WS>/objects/rules/crowdstrike-bad-trigger.yaml",
+   "platform": "crowdstrike",
+   "compile": {},
+   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000505\",\"name\":\"CrowdStrike Bad Trigger\",\"api_request\":{\"enabled\":false,\"name\":\"\",\"schema\":null,\"status\":\"STAGING\",\"flags\":null,\"tenants\":null,\"contributors\":null,\"details\":{\"trigger\":\"always\",\"outcome\":\"detection\",\"name\":null,\"description\":null,\"severity\":null,\"tactic\":null,\"technique\":null},\"schedule\":{\"frequency\":\"30m\",\"lookback\":\"1h\",\"start\":null,\"end\":null},\"query\":\"#event_simpleName=DnsRequest\"}}",
+   "tenants": [
+    {
+     "tenant": "eu",
+     "error": {
+      "code": "compile_failed",
+      "message": "CrowdStrike cannot compile this rule: Invalid Crowdstrike outcome value",
+      "help": null
+     }
+    },
+    {
+     "tenant": "us",
+     "error": {
+      "code": "compile_failed",
+      "message": "CrowdStrike cannot compile this rule: Invalid Crowdstrike outcome value",
+      "help": null
+     }
+    }
+   ]
+  },
+  {
+   "uuid": "00000000-0000-4000-8005-000000000501",
+   "file": "<WS>/objects/rules/crowdstrike-full.yaml",
+   "platform": "crowdstrike",
+   "compile": {},
+   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000501\",\"name\":\"CrowdStrike Full\",\"api_request\":{\"enabled\":false,\"name\":\"\",\"schema\":null,\"status\":\"STAGING\",\"flags\":null,\"tenants\":null,\"contributors\":[\"Analyst One\",\"Analyst Two\"],\"details\":{\"trigger\":\"Verbose\",\"outcome\":\"Detection\",\"name\":\"CS Override\",\"description\":\"Overridden description\",\"severity\":\"High\",\"tactic\":\"TA0002\",\"technique\":\"T1059\"},\"schedule\":{\"frequency\":\"1h\",\"lookback\":\"2h\",\"start\":\"2025-04-15T19:00:00Z\",\"end\":\"2026-01-01 10:00:00+00:00\"},\"query\":\"#event_simpleName=ProcessRollup2 | CommandLine=/-enc/i\"}}",
+   "tenants": [
+    {
+     "tenant": "eu",
+     "body": "[{\"method\":\"PATCH\",\"url\":\"https://api.eu-1.crowdstrike.com/correlation-rules/entities/rules/v1\",\"body\":[{\"name\":\"CS Override\",\"description\":\"Overridden description\",\"customer_id\":\"abcdef0123\",\"severity\":70,\"search\":{\"outcome\":\"detection\",\"filter\":\"#event_simpleName=ProcessRollup2 | CommandLine=/-enc/i\",\"lookback\":\"2h\",\"trigger_mode\":\"verbose\"},\"operation\":{\"schedule\":{\"definition\":\"@every 1h\"},\"start_on\":\"2025-04-15T19:00:00Z\",\"stop_on\":\"2026-01-01T10:00:00Z\"},\"status\":\"active\",\"tactic\":\"TA0002\",\"technique\":\"T1059\",\"comment\":\"Updated by opentide Crowdstrike Deployer - Author(s) : Analyst One, Analyst Two\",\"id\":\"abc123\"}]}]"
+    },
+    {
+     "tenant": "us",
+     "body": "[{\"method\":\"POST\",\"url\":\"https://api.crowdstrike.com/correlation-rules/entities/rules/v1\",\"body\":{\"name\":\"CS Override\",\"description\":\"Overridden description\",\"customer_id\":\"fedcba9876\",\"severity\":70,\"search\":{\"outcome\":\"detection\",\"filter\":\"#event_simpleName=ProcessRollup2 | CommandLine=/-enc/i\",\"lookback\":\"2h\",\"trigger_mode\":\"verbose\"},\"operation\":{\"schedule\":{\"definition\":\"@every 1h\"},\"start_on\":\"2025-04-15T19:00:00Z\",\"stop_on\":\"2026-01-01T10:00:00Z\"},\"status\":\"active\",\"tactic\":\"TA0002\",\"technique\":\"T1059\",\"comment\":\"Updated by opentide Crowdstrike Deployer - Author(s) : Analyst One, Analyst Two\"}}]"
+    }
+   ]
+  },
+  {
+   "uuid": "00000000-0000-4000-8005-000000000502",
+   "file": "<WS>/objects/rules/crowdstrike-minimal.yaml",
+   "platform": "crowdstrike",
+   "compile": {},
+   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000502\",\"name\":\"CrowdStrike Minimal\",\"api_request\":{\"enabled\":false,\"name\":\"\",\"schema\":null,\"status\":\"DISABLED\",\"flags\":null,\"tenants\":null,\"contributors\":null,\"details\":{\"trigger\":\"summary\",\"outcome\":\"incident\",\"name\":null,\"description\":null,\"severity\":null,\"tactic\":null,\"technique\":null},\"schedule\":{\"frequency\":\"30m\",\"lookback\":\"1h\",\"start\":null,\"end\":null},\"query\":\"#event_simpleName=DnsRequest\"}}",
+   "tenants": [
+    {
+     "tenant": "eu",
+     "body": "[]"
+    },
+    {
+     "tenant": "us",
+     "body": "[{\"method\":\"PATCH\",\"url\":\"https://api.crowdstrike.com/correlation-rules/entities/rules/v1\",\"body\":[{\"name\":\"CrowdStrike Minimal\",\"description\":\"CrowdStrike Minimal for the compile corpus.\",\"customer_id\":\"fedcba9876\",\"severity\":10,\"search\":{\"outcome\":\"incident\",\"filter\":\"#event_simpleName=DnsRequest\",\"lookback\":\"1h\",\"trigger_mode\":\"summary\"},\"operation\":{\"schedule\":{\"definition\":\"@every 30m\"}},\"status\":\"inactive\",\"comment\":\"Updated by opentide Crowdstrike Deployer - Author(s) : Solo Author\",\"id\":\"def456\"}]}]"
+    }
+   ]
+  },
+  {
+   "uuid": "00000000-0000-4000-8005-000000000504",
+   "file": "<WS>/objects/rules/crowdstrike-removed.yaml",
+   "platform": "crowdstrike",
+   "compile": {},
+   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000504\",\"name\":\"CrowdStrike Removed\",\"api_request\":{\"enabled\":false,\"name\":\"\",\"schema\":null,\"status\":\"REMOVED\",\"flags\":null,\"tenants\":null,\"contributors\":null,\"details\":{\"trigger\":\"summary\",\"outcome\":\"incident\",\"name\":null,\"description\":null,\"severity\":null,\"tactic\":null,\"technique\":null},\"schedule\":{\"frequency\":\"30m\",\"lookback\":\"1h\",\"start\":null,\"end\":null},\"query\":\"#event_simpleName=DnsRequest\"}}",
+   "tenants": [
+    {
+     "tenant": "eu",
+     "body": "[]"
+    },
+    {
+     "tenant": "us",
+     "body": "[{\"method\":\"DELETE\",\"url\":\"https://api.crowdstrike.com/correlation-rules/entities/rules/v1?ids=ghi789\",\"body\":null}]"
+    }
+   ]
+  },
+  {
+   "uuid": "00000000-0000-4000-8006-000000000004",
+   "file": "<WS>/objects/rules/elastic-eql.yaml",
+   "platform": "elastic",
+   "compile": {
+    "body": "{\"rule_id\":\"00000000-0000-4000-8006-000000000004\",\"type\":\"eql\",\"name\":\"Elastic EQL\",\"description\":\"Elastic EQL for the compile corpus.\\nSecond line.\",\"enabled\":true,\"severity\":\"high\",\"risk_score\":73,\"interval\":\"5m\",\"from\":\"now-6m\",\"to\":\"now\",\"language\":\"eql\",\"query\":\"process where process.name == \\\"cmd.exe\\\"\",\"timestamp_field\":\"@timestamp\",\"event_category_override\":\"event.type\",\"tiebreaker_field\":\"event.sequence\",\"tags\":[\"OpenTide\"],\"author\":[\"Detection Team\",\"Analyst One\"]}"
+   },
+   "preview": "{\"uuid\":\"00000000-0000-4000-8006-000000000004\",\"name\":\"Elastic EQL\",\"api_request\":{\"rule_id\":\"00000000-0000-4000-8006-000000000004\",\"type\":\"eql\",\"name\":\"Elastic EQL\",\"description\":\"Elastic EQL for the compile corpus.\\nSecond line.\",\"enabled\":true,\"severity\":\"high\",\"risk_score\":73,\"interval\":\"5m\",\"from\":\"now-6m\",\"to\":\"now\",\"language\":\"eql\",\"query\":\"process where process.name == \\\"cmd.exe\\\"\",\"timestamp_field\":\"@timestamp\",\"event_category_override\":\"event.type\",\"tiebreaker_field\":\"event.sequence\",\"tags\":[\"OpenTide\"],\"author\":[\"Detection Team\",\"Analyst One\"]}}",
+   "tenants": [
+    {
+     "tenant": "indexed",
+     "body": "{\"rule_id\":\"00000000-0000-4000-8006-000000000004\",\"type\":\"eql\",\"name\":\"Elastic EQL\",\"description\":\"Elastic EQL for the compile corpus.\\nSecond line.\",\"enabled\":true,\"severity\":\"high\",\"risk_score\":73,\"interval\":\"5m\",\"from\":\"now-6m\",\"to\":\"now\",\"language\":\"eql\",\"query\":\"process where process.name == \\\"cmd.exe\\\"\",\"index\":[\"tenant-*\"],\"timestamp_field\":\"@timestamp\",\"event_category_override\":\"event.type\",\"tiebreaker_field\":\"event.sequence\",\"tags\":[\"OpenTide\",\"Tenant\"],\"author\":[\"Detection Team\",\"Analyst One\"]}"
+    },
+    {
+     "tenant": "unsuppressed",
+     "body": "{\"rule_id\":\"00000000-0000-4000-8006-000000000004\",\"type\":\"eql\",\"name\":\"Elastic EQL\",\"description\":\"Elastic EQL for the compile corpus.\\nSecond line.\",\"enabled\":true,\"severity\":\"high\",\"risk_score\":73,\"interval\":\"5m\",\"from\":\"now-6m\",\"to\":\"now\",\"language\":\"eql\",\"query\":\"process where process.name == \\\"cmd.exe\\\"\",\"timestamp_field\":\"@timestamp\",\"event_category_override\":\"event.type\",\"tiebreaker_field\":\"event.sequence\",\"tags\":[\"OpenTide\"],\"author\":[\"Detection Team\",\"Analyst One\"]}"
+    }
+   ]
+  },
+  {
+   "uuid": "00000000-0000-4000-8006-000000000007",
+   "file": "<WS>/objects/rules/elastic-esql.yaml",
+   "platform": "elastic",
+   "compile": {
+    "body": "{\"rule_id\":\"00000000-0000-4000-8006-000000000007\",\"type\":\"esql\",\"name\":\"Elastic ESQL\",\"description\":\"Elastic ESQL for the compile corpus.\\nSecond line.\",\"enabled\":true,\"severity\":\"medium\",\"risk_score\":47,\"interval\":\"1h\",\"from\":\"now-1h\",\"to\":\"now\",\"language\":\"esql\",\"query\":\"FROM logs-* | WHERE process.name == \\\"cmd.exe\\\"\",\"tags\":[\"OpenTide\"],\"author\":[\"Detection Team\",\"Analyst One\"]}"
+   },
+   "preview": "{\"uuid\":\"00000000-0000-4000-8006-000000000007\",\"name\":\"Elastic ESQL\",\"api_request\":{\"rule_id\":\"00000000-0000-4000-8006-000000000007\",\"type\":\"esql\",\"name\":\"Elastic ESQL\",\"description\":\"Elastic ESQL for the compile corpus.\\nSecond line.\",\"enabled\":true,\"severity\":\"medium\",\"risk_score\":47,\"interval\":\"1h\",\"from\":\"now-1h\",\"to\":\"now\",\"language\":\"esql\",\"query\":\"FROM logs-* | WHERE process.name == \\\"cmd.exe\\\"\",\"tags\":[\"OpenTide\"],\"author\":[\"Detection Team\",\"Analyst One\"]}}",
+   "tenants": [
+    {
+     "tenant": "indexed",
+     "body": "{\"rule_id\":\"00000000-0000-4000-8006-000000000007\",\"type\":\"esql\",\"name\":\"Elastic ESQL\",\"description\":\"Elastic ESQL for the compile corpus.\\nSecond line.\",\"enabled\":true,\"severity\":\"medium\",\"risk_score\":47,\"interval\":\"1h\",\"from\":\"now-1h\",\"to\":\"now\",\"language\":\"esql\",\"query\":\"FROM logs-* | WHERE process.name == \\\"cmd.exe\\\"\",\"tags\":[\"OpenTide\",\"Tenant\"],\"author\":[\"Detection Team\",\"Analyst One\"]}"
+    },
+    {
+     "tenant": "unsuppressed",
+     "body": "{\"rule_id\":\"00000000-0000-4000-8006-000000000007\",\"type\":\"esql\",\"name\":\"Elastic ESQL\",\"description\":\"Elastic ESQL for the compile corpus.\\nSecond line.\",\"enabled\":true,\"severity\":\"medium\",\"risk_score\":47,\"interval\":\"1h\",\"from\":\"now-1h\",\"to\":\"now\",\"language\":\"esql\",\"query\":\"FROM logs-* | WHERE process.name == \\\"cmd.exe\\\"\",\"tags\":[\"OpenTide\"],\"author\":[\"Detection Team\",\"Analyst One\"]}"
+    }
+   ]
+  },
+  {
+   "uuid": "00000000-0000-4000-8006-000000000001",
+   "file": "<WS>/objects/rules/elastic-full.yaml",
+   "platform": "elastic",
+   "compile": {
+    "body": "{\"rule_id\":\"00000000-0000-4000-8006-000000000001\",\"type\":\"query\",\"name\":\"Elastic Full Override\",\"description\":\"Elastic Full for the compile corpus.\\nSecond line.\",\"enabled\":true,\"severity\":\"medium\",\"risk_score\":50,\"interval\":\"10m\",\"from\":\"now-12m\",\"to\":\"now\",\"language\":\"lucene\",\"query\":\"process.name:cmd.exe\",\"index\":[\"logs-endpoint.*\"],\"filters\":[{\"meta\":{\"key\":\"host.os.type\",\"negate\":true,\"disabled\":false,\"type\":\"phrase\",\"params\":{\"query\":\"windows\"}},\"query\":{\"match_phrase\":{\"host.os.type\":\"windows\"}}},{\"negate\":false,\"meta\":{\"alias\":\"custom\"},\"query\":{\"match_all\":{}}}],\"severity_mapping\":[{\"field\":\"user.name\",\"value\":\"admin\",\"operator\":\"equals\",\"severity\":\"high\"}],\"risk_score_mapping\":[{\"field\":\"event.risk_score\",\"operator\":\"equals\",\"value\":\"\"}],\"rule_name_override\":\"rule.name\",\"timestamp_override\":\"event.ingested\",\"timestamp_override_fallback_disabled\":true,\"actions\":[{\"action_type_id\":\".slack\",\"id\":\"slack-connector\",\"params\":{\"message\":\"Alert\"}}],\"response_actions\":[{\"action_type_id\":\".endpoint\",\"params\":{\"command\":\"kill-process\",\"config\":{\"field\":\"process.entity_id\",\"overwrite\":true}}},{\"action_type_id\":\".endpoint\",\"params\":{\"command\":\"isolate\",\"comment\":\"Isolated by OpenTide\",\"config\":{\"field\":\"host.id\",\"overwrite\":false}}},{\"action_type_id\":\".osquery\",\"params\":{\"query\":\"select 1\"}}],\"timeline_id\":\"timeline-1\",\"timeline_title\":\"Investigation\",\"max_signals\":50,\"alert_suppression\":{\"group_by\":[\"host.name\"],\"duration\":{\"value\":1,\"unit\":\"h\"},\"missing_fields_strategy\":\"doNotSuppress\"},\"investigation_fields\":{\"field_names\":[\"process.name\"]},\"required_fields\":[{\"name\":\"host.name\",\"type\":\"keyword\"},{\"name\":\"process.name\",\"type\":\"keyword\"}],\"related_integrations\":[{\"package\":\"endpoint\",\"version\":\"*\"},{\"package\":\"windows\",\"integration\":\"sysmon\",\"version\":\"^8.0.0\"}],\"setup\":\"Install the endpoint integration.\",\"false_positives\":[\"Admin tooling\"],\"building_block_type\":\"default\",\"exceptions_list\":[{\"id\":\"shared-list-id\",\"list_id\":\"shared-list\",\"namespace_type\":\"single\",\"type\":\"detection\"},{\"id\":\"endpoint_list\",\"list_id\":\"endpoint_list\",\"namespace_type\":\"agnostic\",\"type\":\"endpoint\"}],\"tags\":[\"OpenTide\",\"Block Tag\"],\"author\":[\"Detection Team\",\"Analyst One\"],\"references\":[\"https://example.org/one\",\"https://example.org/two\",\"https://example.org/ten\"],\"note\":\"Investigate the host.\",\"threat\":[{\"framework\":\"MITRE ATT&CK\",\"tactic\":{\"id\":\"TA0002\",\"name\":\"Execution\",\"reference\":\"https://attack.mitre.org/tactics/TA0002/\"},\"technique\":[{\"id\":\"T1059\",\"name\":\"Command and Scripting Interpreter\",\"reference\":\"https://attack.mitre.org/techniques/T1059\",\"subtechnique\":[{\"id\":\"T1059.001\",\"name\":\"PowerShell\",\"reference\":\"https://attack.mitre.org/techniques/T1059/001\"}]}]},{\"framework\":\"MITRE ATT&CK\",\"tactic\":{\"id\":\"TA0006\",\"name\":\"Credential Access\",\"reference\":\"https://attack.mitre.org/tactics/TA0006/\"},\"technique\":[{\"id\":\"T1003\",\"name\":\"OS Credential Dumping\",\"reference\":\"https://attack.mitre.org/techniques/T1003\",\"subtechnique\":[{\"id\":\"T1003.001\",\"name\":\"LSASS Memory\",\"reference\":\"https://attack.mitre.org/techniques/T1003/001\"}]}]}]}"
+   },
+   "preview": "{\"uuid\":\"00000000-0000-4000-8006-000000000001\",\"name\":\"Elastic Full\",\"api_request\":{\"rule_id\":\"00000000-0000-4000-8006-000000000001\",\"type\":\"query\",\"name\":\"Elastic Full Override\",\"description\":\"Elastic Full for the compile corpus.\\nSecond line.\",\"enabled\":true,\"severity\":\"medium\",\"risk_score\":50,\"interval\":\"10m\",\"from\":\"now-12m\",\"to\":\"now\",\"language\":\"lucene\",\"query\":\"process.name:cmd.exe\",\"index\":[\"logs-endpoint.*\"],\"filters\":[{\"meta\":{\"key\":\"host.os.type\",\"negate\":true,\"disabled\":false,\"type\":\"phrase\",\"params\":{\"query\":\"windows\"}},\"query\":{\"match_phrase\":{\"host.os.type\":\"windows\"}}},{\"negate\":false,\"meta\":{\"alias\":\"custom\"},\"query\":{\"match_all\":{}}}],\"severity_mapping\":[{\"field\":\"user.name\",\"value\":\"admin\",\"operator\":\"equals\",\"severity\":\"high\"}],\"risk_score_mapping\":[{\"field\":\"event.risk_score\",\"operator\":\"equals\",\"value\":\"\"}],\"rule_name_override\":\"rule.name\",\"timestamp_override\":\"event.ingested\",\"timestamp_override_fallback_disabled\":true,\"actions\":[{\"action_type_id\":\".slack\",\"id\":\"slack-connector\",\"params\":{\"message\":\"Alert\"}}],\"response_actions\":[{\"action_type_id\":\".endpoint\",\"params\":{\"command\":\"kill-process\",\"config\":{\"field\":\"process.entity_id\",\"overwrite\":true}}},{\"action_type_id\":\".endpoint\",\"params\":{\"command\":\"isolate\",\"comment\":\"Isolated by OpenTide\",\"config\":{\"field\":\"host.id\",\"overwrite\":false}}},{\"action_type_id\":\".osquery\",\"params\":{\"query\":\"select 1\"}}],\"timeline_id\":\"timeline-1\",\"timeline_title\":\"Investigation\",\"max_signals\":50,\"alert_suppression\":{\"group_by\":[\"host.name\"],\"duration\":{\"value\":1,\"unit\":\"h\"},\"missing_fields_strategy\":\"doNotSuppress\"},\"investigation_fields\":{\"field_names\":[\"process.name\"]},\"required_fields\":[{\"name\":\"host.name\",\"type\":\"keyword\"},{\"name\":\"process.name\",\"type\":\"keyword\"}],\"related_integrations\":[{\"package\":\"endpoint\",\"version\":\"*\"},{\"package\":\"windows\",\"integration\":\"sysmon\",\"version\":\"^8.0.0\"}],\"setup\":\"Install the endpoint integration.\",\"false_positives\":[\"Admin tooling\"],\"building_block_type\":\"default\",\"exceptions_list\":[{\"id\":\"shared-list-id\",\"list_id\":\"shared-list\",\"namespace_type\":\"single\",\"type\":\"detection\"},{\"id\":\"endpoint_list\",\"list_id\":\"endpoint_list\",\"namespace_type\":\"agnostic\",\"type\":\"endpoint\"}],\"tags\":[\"OpenTide\",\"Block Tag\"],\"author\":[\"Detection Team\",\"Analyst One\"],\"references\":[\"https://example.org/one\",\"https://example.org/two\",\"https://example.org/ten\"],\"note\":\"Investigate the host.\",\"threat\":[{\"framework\":\"MITRE ATT&CK\",\"tactic\":{\"id\":\"TA0002\",\"name\":\"Execution\",\"reference\":\"https://attack.mitre.org/tactics/TA0002/\"},\"technique\":[{\"id\":\"T1059\",\"name\":\"Command and Scripting Interpreter\",\"reference\":\"https://attack.mitre.org/techniques/T1059\",\"subtechnique\":[{\"id\":\"T1059.001\",\"name\":\"PowerShell\",\"reference\":\"https://attack.mitre.org/techniques/T1059/001\"}]}]},{\"framework\":\"MITRE ATT&CK\",\"tactic\":{\"id\":\"TA0006\",\"name\":\"Credential Access\",\"reference\":\"https://attack.mitre.org/tactics/TA0006/\"},\"technique\":[{\"id\":\"T1003\",\"name\":\"OS Credential Dumping\",\"reference\":\"https://attack.mitre.org/techniques/T1003\",\"subtechnique\":[{\"id\":\"T1003.001\",\"name\":\"LSASS Memory\",\"reference\":\"https://attack.mitre.org/techniques/T1003/001\"}]}]}]}}",
+   "tenants": [
+    {
+     "tenant": "indexed",
+     "body": "{\"rule_id\":\"00000000-0000-4000-8006-000000000001\",\"type\":\"query\",\"name\":\"Elastic Full Override\",\"description\":\"Elastic Full for the compile corpus.\\nSecond line.\",\"enabled\":true,\"severity\":\"medium\",\"risk_score\":50,\"interval\":\"10m\",\"from\":\"now-12m\",\"to\":\"now\",\"language\":\"lucene\",\"query\":\"process.name:cmd.exe\",\"index\":[\"logs-endpoint.*\"],\"filters\":[{\"meta\":{\"key\":\"host.os.type\",\"negate\":true,\"disabled\":false,\"type\":\"phrase\",\"params\":{\"query\":\"windows\"}},\"query\":{\"match_phrase\":{\"host.os.type\":\"windows\"}}},{\"negate\":false,\"meta\":{\"alias\":\"custom\"},\"query\":{\"match_all\":{}}}],\"severity_mapping\":[{\"field\":\"user.name\",\"value\":\"admin\",\"operator\":\"equals\",\"severity\":\"high\"}],\"risk_score_mapping\":[{\"field\":\"event.risk_score\",\"operator\":\"equals\",\"value\":\"\"}],\"rule_name_override\":\"rule.name\",\"timestamp_override\":\"event.ingested\",\"timestamp_override_fallback_disabled\":true,\"actions\":[{\"action_type_id\":\".slack\",\"id\":\"slack-connector\",\"params\":{\"message\":\"Alert\"}}],\"response_actions\":[{\"action_type_id\":\".endpoint\",\"params\":{\"command\":\"kill-process\",\"config\":{\"field\":\"process.entity_id\",\"overwrite\":true}}},{\"action_type_id\":\".endpoint\",\"params\":{\"command\":\"isolate\",\"comment\":\"Isolated by OpenTide\",\"config\":{\"field\":\"host.id\",\"overwrite\":false}}},{\"action_type_id\":\".osquery\",\"params\":{\"query\":\"select 1\"}}],\"timeline_id\":\"timeline-1\",\"timeline_title\":\"Investigation\",\"max_signals\":50,\"alert_suppression\":{\"group_by\":[\"host.name\"],\"duration\":{\"value\":1,\"unit\":\"h\"},\"missing_fields_strategy\":\"doNotSuppress\"},\"investigation_fields\":{\"field_names\":[\"process.name\"]},\"required_fields\":[{\"name\":\"host.name\",\"type\":\"keyword\"},{\"name\":\"process.name\",\"type\":\"keyword\"}],\"related_integrations\":[{\"package\":\"endpoint\",\"version\":\"*\"},{\"package\":\"windows\",\"integration\":\"sysmon\",\"version\":\"^8.0.0\"}],\"setup\":\"Install the endpoint integration.\",\"false_positives\":[\"Admin tooling\"],\"building_block_type\":\"default\",\"exceptions_list\":[{\"id\":\"shared-list-id\",\"list_id\":\"shared-list\",\"namespace_type\":\"single\",\"type\":\"detection\"},{\"id\":\"endpoint_list\",\"list_id\":\"endpoint_list\",\"namespace_type\":\"agnostic\",\"type\":\"endpoint\"}],\"tags\":[\"OpenTide\",\"Tenant\",\"Block Tag\"],\"author\":[\"Detection Team\",\"Analyst One\"],\"references\":[\"https://example.org/one\",\"https://example.org/two\",\"https://example.org/ten\"],\"note\":\"Investigate the host.\",\"threat\":[{\"framework\":\"MITRE ATT&CK\",\"tactic\":{\"id\":\"TA0002\",\"name\":\"Execution\",\"reference\":\"https://attack.mitre.org/tactics/TA0002/\"},\"technique\":[{\"id\":\"T1059\",\"name\":\"Command and Scripting Interpreter\",\"reference\":\"https://attack.mitre.org/techniques/T1059\",\"subtechnique\":[{\"id\":\"T1059.001\",\"name\":\"PowerShell\",\"reference\":\"https://attack.mitre.org/techniques/T1059/001\"}]}]},{\"framework\":\"MITRE ATT&CK\",\"tactic\":{\"id\":\"TA0006\",\"name\":\"Credential Access\",\"reference\":\"https://attack.mitre.org/tactics/TA0006/\"},\"technique\":[{\"id\":\"T1003\",\"name\":\"OS Credential Dumping\",\"reference\":\"https://attack.mitre.org/techniques/T1003\",\"subtechnique\":[{\"id\":\"T1003.001\",\"name\":\"LSASS Memory\",\"reference\":\"https://attack.mitre.org/techniques/T1003/001\"}]}]}]}"
+    },
+    {
+     "tenant": "unsuppressed",
+     "body": "{\"rule_id\":\"00000000-0000-4000-8006-000000000001\",\"type\":\"query\",\"name\":\"Elastic Full Override\",\"description\":\"Elastic Full for the compile corpus.\\nSecond line.\",\"enabled\":true,\"severity\":\"medium\",\"risk_score\":50,\"interval\":\"10m\",\"from\":\"now-12m\",\"to\":\"now\",\"language\":\"lucene\",\"query\":\"process.name:cmd.exe\",\"index\":[\"logs-endpoint.*\"],\"filters\":[{\"meta\":{\"key\":\"host.os.type\",\"negate\":true,\"disabled\":false,\"type\":\"phrase\",\"params\":{\"query\":\"windows\"}},\"query\":{\"match_phrase\":{\"host.os.type\":\"windows\"}}},{\"negate\":false,\"meta\":{\"alias\":\"custom\"},\"query\":{\"match_all\":{}}}],\"severity_mapping\":[{\"field\":\"user.name\",\"value\":\"admin\",\"operator\":\"equals\",\"severity\":\"high\"}],\"risk_score_mapping\":[{\"field\":\"event.risk_score\",\"operator\":\"equals\",\"value\":\"\"}],\"rule_name_override\":\"rule.name\",\"timestamp_override\":\"event.ingested\",\"timestamp_override_fallback_disabled\":true,\"actions\":[{\"action_type_id\":\".slack\",\"id\":\"slack-connector\",\"params\":{\"message\":\"Alert\"}}],\"response_actions\":[{\"action_type_id\":\".endpoint\",\"params\":{\"command\":\"kill-process\",\"config\":{\"field\":\"process.entity_id\",\"overwrite\":true}}},{\"action_type_id\":\".endpoint\",\"params\":{\"command\":\"isolate\",\"comment\":\"Isolated by OpenTide\",\"config\":{\"field\":\"host.id\",\"overwrite\":false}}},{\"action_type_id\":\".osquery\",\"params\":{\"query\":\"select 1\"}}],\"timeline_id\":\"timeline-1\",\"timeline_title\":\"Investigation\",\"max_signals\":50,\"investigation_fields\":{\"field_names\":[\"process.name\"]},\"required_fields\":[{\"name\":\"host.name\",\"type\":\"keyword\"},{\"name\":\"process.name\",\"type\":\"keyword\"}],\"related_integrations\":[{\"package\":\"endpoint\",\"version\":\"*\"},{\"package\":\"windows\",\"integration\":\"sysmon\",\"version\":\"^8.0.0\"}],\"setup\":\"Install the endpoint integration.\",\"false_positives\":[\"Admin tooling\"],\"building_block_type\":\"default\",\"exceptions_list\":[{\"id\":\"shared-list-id\",\"list_id\":\"shared-list\",\"namespace_type\":\"single\",\"type\":\"detection\"},{\"id\":\"endpoint_list\",\"list_id\":\"endpoint_list\",\"namespace_type\":\"agnostic\",\"type\":\"endpoint\"}],\"tags\":[\"OpenTide\",\"Block Tag\"],\"author\":[\"Detection Team\",\"Analyst One\"],\"references\":[\"https://example.org/one\",\"https://example.org/two\",\"https://example.org/ten\"],\"note\":\"Investigate the host.\",\"threat\":[{\"framework\":\"MITRE ATT&CK\",\"tactic\":{\"id\":\"TA0002\",\"name\":\"Execution\",\"reference\":\"https://attack.mitre.org/tactics/TA0002/\"},\"technique\":[{\"id\":\"T1059\",\"name\":\"Command and Scripting Interpreter\",\"reference\":\"https://attack.mitre.org/techniques/T1059\",\"subtechnique\":[{\"id\":\"T1059.001\",\"name\":\"PowerShell\",\"reference\":\"https://attack.mitre.org/techniques/T1059/001\"}]}]},{\"framework\":\"MITRE ATT&CK\",\"tactic\":{\"id\":\"TA0006\",\"name\":\"Credential Access\",\"reference\":\"https://attack.mitre.org/tactics/TA0006/\"},\"technique\":[{\"id\":\"T1003\",\"name\":\"OS Credential Dumping\",\"reference\":\"https://attack.mitre.org/techniques/T1003\",\"subtechnique\":[{\"id\":\"T1003.001\",\"name\":\"LSASS Memory\",\"reference\":\"https://attack.mitre.org/techniques/T1003/001\"}]}]}]}"
+    }
+   ]
+  },
+  {
+   "uuid": "00000000-0000-4000-8006-000000000006",
+   "file": "<WS>/objects/rules/elastic-ml.yaml",
+   "platform": "elastic",
+   "compile": {
+    "body": "{\"rule_id\":\"00000000-0000-4000-8006-000000000006\",\"type\":\"machine_learning\",\"name\":\"Elastic Machine Learning\",\"description\":\"Elastic Machine Learning for the compile corpus.\\nSecond line.\",\"enabled\":true,\"severity\":\"critical\",\"risk_score\":99,\"interval\":\"5m\",\"from\":\"now-6m\",\"to\":\"now\",\"machine_learning_job_id\":[\"rare-process\",\"rare-user\"],\"anomaly_threshold\":70,\"tags\":[\"OpenTide\"],\"author\":[\"Detection Team\",\"Analyst One\"]}"
+   },
+   "preview": "{\"uuid\":\"00000000-0000-4000-8006-000000000006\",\"name\":\"Elastic Machine Learning\",\"api_request\":{\"rule_id\":\"00000000-0000-4000-8006-000000000006\",\"type\":\"machine_learning\",\"name\":\"Elastic Machine Learning\",\"description\":\"Elastic Machine Learning for the compile corpus.\\nSecond line.\",\"enabled\":true,\"severity\":\"critical\",\"risk_score\":99,\"interval\":\"5m\",\"from\":\"now-6m\",\"to\":\"now\",\"machine_learning_job_id\":[\"rare-process\",\"rare-user\"],\"anomaly_threshold\":70,\"tags\":[\"OpenTide\"],\"author\":[\"Detection Team\",\"Analyst One\"]}}",
+   "tenants": [
+    {
+     "tenant": "indexed",
+     "body": "{\"rule_id\":\"00000000-0000-4000-8006-000000000006\",\"type\":\"machine_learning\",\"name\":\"Elastic Machine Learning\",\"description\":\"Elastic Machine Learning for the compile corpus.\\nSecond line.\",\"enabled\":true,\"severity\":\"critical\",\"risk_score\":99,\"interval\":\"5m\",\"from\":\"now-6m\",\"to\":\"now\",\"machine_learning_job_id\":[\"rare-process\",\"rare-user\"],\"anomaly_threshold\":70,\"tags\":[\"OpenTide\",\"Tenant\"],\"author\":[\"Detection Team\",\"Analyst One\"]}"
+    },
+    {
+     "tenant": "unsuppressed",
+     "body": "{\"rule_id\":\"00000000-0000-4000-8006-000000000006\",\"type\":\"machine_learning\",\"name\":\"Elastic Machine Learning\",\"description\":\"Elastic Machine Learning for the compile corpus.\\nSecond line.\",\"enabled\":true,\"severity\":\"critical\",\"risk_score\":99,\"interval\":\"5m\",\"from\":\"now-6m\",\"to\":\"now\",\"machine_learning_job_id\":[\"rare-process\",\"rare-user\"],\"anomaly_threshold\":70,\"tags\":[\"OpenTide\"],\"author\":[\"Detection Team\",\"Analyst One\"]}"
+    }
+   ]
+  },
+  {
+   "uuid": "00000000-0000-4000-8006-000000000003",
+   "file": "<WS>/objects/rules/elastic-new-terms.yaml",
+   "platform": "elastic",
+   "compile": {
+    "body": "{\"rule_id\":\"00000000-0000-4000-8006-000000000003\",\"type\":\"new_terms\",\"name\":\"Elastic New Terms\",\"description\":\"Elastic New Terms for the compile corpus.\\nSecond line.\",\"enabled\":false,\"severity\":\"low\",\"risk_score\":1,\"interval\":\"5m\",\"from\":\"now-6m\",\"to\":\"now\",\"language\":\"kuery\",\"query\":\"host.name:*\",\"data_view_id\":\"logs-view\",\"new_terms_fields\":[\"user.name\"],\"history_window_start\":\"now-7d\",\"tags\":[\"OpenTide\"],\"author\":[\"Detection Team\",\"Analyst One\"]}"
+   },
+   "preview": "{\"uuid\":\"00000000-0000-4000-8006-000000000003\",\"name\":\"Elastic New Terms\",\"api_request\":{\"rule_id\":\"00000000-0000-4000-8006-000000000003\",\"type\":\"new_terms\",\"name\":\"Elastic New Terms\",\"description\":\"Elastic New Terms for the compile corpus.\\nSecond line.\",\"enabled\":false,\"severity\":\"low\",\"risk_score\":1,\"interval\":\"5m\",\"from\":\"now-6m\",\"to\":\"now\",\"language\":\"kuery\",\"query\":\"host.name:*\",\"data_view_id\":\"logs-view\",\"new_terms_fields\":[\"user.name\"],\"history_window_start\":\"now-7d\",\"tags\":[\"OpenTide\"],\"author\":[\"Detection Team\",\"Analyst One\"]}}",
+   "tenants": [
+    {
+     "tenant": "indexed",
+     "body": "{\"rule_id\":\"00000000-0000-4000-8006-000000000003\",\"type\":\"new_terms\",\"name\":\"Elastic New Terms\",\"description\":\"Elastic New Terms for the compile corpus.\\nSecond line.\",\"enabled\":false,\"severity\":\"low\",\"risk_score\":1,\"interval\":\"5m\",\"from\":\"now-6m\",\"to\":\"now\",\"language\":\"kuery\",\"query\":\"host.name:*\",\"data_view_id\":\"logs-view\",\"new_terms_fields\":[\"user.name\"],\"history_window_start\":\"now-7d\",\"tags\":[\"OpenTide\",\"Tenant\"],\"author\":[\"Detection Team\",\"Analyst One\"]}"
+    },
+    {
+     "tenant": "unsuppressed",
+     "body": "{\"rule_id\":\"00000000-0000-4000-8006-000000000003\",\"type\":\"new_terms\",\"name\":\"Elastic New Terms\",\"description\":\"Elastic New Terms for the compile corpus.\\nSecond line.\",\"enabled\":false,\"severity\":\"low\",\"risk_score\":1,\"interval\":\"5m\",\"from\":\"now-6m\",\"to\":\"now\",\"language\":\"kuery\",\"query\":\"host.name:*\",\"data_view_id\":\"logs-view\",\"new_terms_fields\":[\"user.name\"],\"history_window_start\":\"now-7d\",\"tags\":[\"OpenTide\"],\"author\":[\"Detection Team\",\"Analyst One\"]}"
+    }
+   ]
+  },
+  {
+   "uuid": "00000000-0000-4000-8006-000000000005",
+   "file": "<WS>/objects/rules/elastic-threat-match.yaml",
+   "platform": "elastic",
+   "compile": {
+    "body": "{\"rule_id\":\"00000000-0000-4000-8006-000000000005\",\"type\":\"threat_match\",\"name\":\"Elastic Threat Match\",\"description\":\"Elastic Threat Match for the compile corpus.\\nSecond line.\",\"enabled\":true,\"severity\":\"medium\",\"risk_score\":47,\"interval\":\"5m\",\"from\":\"now-6m\",\"to\":\"now\",\"language\":\"kuery\",\"query\":\"source.ip:*\",\"threat_index\":[\"threat-intel-*\"],\"threat_query\":\"threat.indicator.type:ip\",\"threat_language\":\"kuery\",\"threat_filters\":[{\"meta\":{\"key\":\"threat.feed.name\",\"negate\":false,\"disabled\":false,\"type\":\"phrase\",\"params\":{\"query\":\"abuse\"}},\"query\":{\"match_phrase\":{\"threat.feed.name\":\"abuse\"}}},{\"meta\":{\"alias\":\"all\"},\"query\":{\"match_all\":{}}}],\"threat_indicator_path\":\"threat.indicator\",\"threat_mapping\":[{\"entries\":[{\"type\":\"mapping\",\"field\":\"source.ip\",\"value\":\"threat.indicator.ip\"},{\"type\":\"mapping\",\"field\":\"source.port\",\"value\":\"threat.indicator.port\",\"negate\":true}]}],\"tags\":[\"OpenTide\"],\"author\":[\"Detection Team\",\"Analyst One\"]}"
+   },
+   "preview": "{\"uuid\":\"00000000-0000-4000-8006-000000000005\",\"name\":\"Elastic Threat Match\",\"api_request\":{\"rule_id\":\"00000000-0000-4000-8006-000000000005\",\"type\":\"threat_match\",\"name\":\"Elastic Threat Match\",\"description\":\"Elastic Threat Match for the compile corpus.\\nSecond line.\",\"enabled\":true,\"severity\":\"medium\",\"risk_score\":47,\"interval\":\"5m\",\"from\":\"now-6m\",\"to\":\"now\",\"language\":\"kuery\",\"query\":\"source.ip:*\",\"threat_index\":[\"threat-intel-*\"],\"threat_query\":\"threat.indicator.type:ip\",\"threat_language\":\"kuery\",\"threat_filters\":[{\"meta\":{\"key\":\"threat.feed.name\",\"negate\":false,\"disabled\":false,\"type\":\"phrase\",\"params\":{\"query\":\"abuse\"}},\"query\":{\"match_phrase\":{\"threat.feed.name\":\"abuse\"}}},{\"meta\":{\"alias\":\"all\"},\"query\":{\"match_all\":{}}}],\"threat_indicator_path\":\"threat.indicator\",\"threat_mapping\":[{\"entries\":[{\"type\":\"mapping\",\"field\":\"source.ip\",\"value\":\"threat.indicator.ip\"},{\"type\":\"mapping\",\"field\":\"source.port\",\"value\":\"threat.indicator.port\",\"negate\":true}]}],\"tags\":[\"OpenTide\"],\"author\":[\"Detection Team\",\"Analyst One\"]}}",
+   "tenants": [
+    {
+     "tenant": "indexed",
+     "body": "{\"rule_id\":\"00000000-0000-4000-8006-000000000005\",\"type\":\"threat_match\",\"name\":\"Elastic Threat Match\",\"description\":\"Elastic Threat Match for the compile corpus.\\nSecond line.\",\"enabled\":true,\"severity\":\"medium\",\"risk_score\":47,\"interval\":\"5m\",\"from\":\"now-6m\",\"to\":\"now\",\"language\":\"kuery\",\"query\":\"source.ip:*\",\"index\":[\"tenant-*\"],\"threat_index\":[\"threat-intel-*\"],\"threat_query\":\"threat.indicator.type:ip\",\"threat_language\":\"kuery\",\"threat_filters\":[{\"meta\":{\"key\":\"threat.feed.name\",\"negate\":false,\"disabled\":false,\"type\":\"phrase\",\"params\":{\"query\":\"abuse\"}},\"query\":{\"match_phrase\":{\"threat.feed.name\":\"abuse\"}}},{\"meta\":{\"alias\":\"all\"},\"query\":{\"match_all\":{}}}],\"threat_indicator_path\":\"threat.indicator\",\"threat_mapping\":[{\"entries\":[{\"type\":\"mapping\",\"field\":\"source.ip\",\"value\":\"threat.indicator.ip\"},{\"type\":\"mapping\",\"field\":\"source.port\",\"value\":\"threat.indicator.port\",\"negate\":true}]}],\"tags\":[\"OpenTide\",\"Tenant\"],\"author\":[\"Detection Team\",\"Analyst One\"]}"
+    },
+    {
+     "tenant": "unsuppressed",
+     "body": "{\"rule_id\":\"00000000-0000-4000-8006-000000000005\",\"type\":\"threat_match\",\"name\":\"Elastic Threat Match\",\"description\":\"Elastic Threat Match for the compile corpus.\\nSecond line.\",\"enabled\":true,\"severity\":\"medium\",\"risk_score\":47,\"interval\":\"5m\",\"from\":\"now-6m\",\"to\":\"now\",\"language\":\"kuery\",\"query\":\"source.ip:*\",\"threat_index\":[\"threat-intel-*\"],\"threat_query\":\"threat.indicator.type:ip\",\"threat_language\":\"kuery\",\"threat_filters\":[{\"meta\":{\"key\":\"threat.feed.name\",\"negate\":false,\"disabled\":false,\"type\":\"phrase\",\"params\":{\"query\":\"abuse\"}},\"query\":{\"match_phrase\":{\"threat.feed.name\":\"abuse\"}}},{\"meta\":{\"alias\":\"all\"},\"query\":{\"match_all\":{}}}],\"threat_indicator_path\":\"threat.indicator\",\"threat_mapping\":[{\"entries\":[{\"type\":\"mapping\",\"field\":\"source.ip\",\"value\":\"threat.indicator.ip\"},{\"type\":\"mapping\",\"field\":\"source.port\",\"value\":\"threat.indicator.port\",\"negate\":true}]}],\"tags\":[\"OpenTide\"],\"author\":[\"Detection Team\",\"Analyst One\"]}"
+    }
+   ]
+  },
+  {
+   "uuid": "00000000-0000-4000-8006-000000000002",
+   "file": "<WS>/objects/rules/elastic-threshold.yaml",
+   "platform": "elastic",
+   "compile": {
+    "body": "{\"rule_id\":\"00000000-0000-4000-8006-000000000002\",\"type\":\"threshold\",\"name\":\"Elastic Threshold\",\"description\":\"Elastic Threshold for the compile corpus.\\nSecond line.\",\"enabled\":true,\"severity\":\"critical\",\"risk_score\":30,\"interval\":\"5m\",\"from\":\"now-6m\",\"to\":\"now\",\"language\":\"kuery\",\"query\":\"event.category:authentication\",\"threshold\":{\"field\":[\"user.name\"],\"value\":5,\"cardinality\":[{\"field\":\"source.ip\",\"value\":2}]},\"alert_suppression\":{\"duration\":{\"value\":90,\"unit\":\"m\"}},\"tags\":[\"OpenTide\"],\"author\":[\"Detection Team\",\"Analyst One\"]}"
+   },
+   "preview": "{\"uuid\":\"00000000-0000-4000-8006-000000000002\",\"name\":\"Elastic Threshold\",\"api_request\":{\"rule_id\":\"00000000-0000-4000-8006-000000000002\",\"type\":\"threshold\",\"name\":\"Elastic Threshold\",\"description\":\"Elastic Threshold for the compile corpus.\\nSecond line.\",\"enabled\":true,\"severity\":\"critical\",\"risk_score\":30,\"interval\":\"5m\",\"from\":\"now-6m\",\"to\":\"now\",\"language\":\"kuery\",\"query\":\"event.category:authentication\",\"threshold\":{\"field\":[\"user.name\"],\"value\":5,\"cardinality\":[{\"field\":\"source.ip\",\"value\":2}]},\"alert_suppression\":{\"duration\":{\"value\":90,\"unit\":\"m\"}},\"tags\":[\"OpenTide\"],\"author\":[\"Detection Team\",\"Analyst One\"]}}",
+   "tenants": [
+    {
+     "tenant": "indexed",
+     "body": "{\"rule_id\":\"00000000-0000-4000-8006-000000000002\",\"type\":\"threshold\",\"name\":\"Elastic Threshold\",\"description\":\"Elastic Threshold for the compile corpus.\\nSecond line.\",\"enabled\":true,\"severity\":\"critical\",\"risk_score\":30,\"interval\":\"5m\",\"from\":\"now-6m\",\"to\":\"now\",\"language\":\"kuery\",\"query\":\"event.category:authentication\",\"index\":[\"tenant-*\"],\"threshold\":{\"field\":[\"user.name\"],\"value\":5,\"cardinality\":[{\"field\":\"source.ip\",\"value\":2}]},\"alert_suppression\":{\"duration\":{\"value\":90,\"unit\":\"m\"}},\"tags\":[\"OpenTide\",\"Tenant\"],\"author\":[\"Detection Team\",\"Analyst One\"]}"
+    },
+    {
+     "tenant": "unsuppressed",
+     "body": "{\"rule_id\":\"00000000-0000-4000-8006-000000000002\",\"type\":\"threshold\",\"name\":\"Elastic Threshold\",\"description\":\"Elastic Threshold for the compile corpus.\\nSecond line.\",\"enabled\":true,\"severity\":\"critical\",\"risk_score\":30,\"interval\":\"5m\",\"from\":\"now-6m\",\"to\":\"now\",\"language\":\"kuery\",\"query\":\"event.category:authentication\",\"threshold\":{\"field\":[\"user.name\"],\"value\":5,\"cardinality\":[{\"field\":\"source.ip\",\"value\":2}]},\"tags\":[\"OpenTide\"],\"author\":[\"Detection Team\",\"Analyst One\"]}"
+    }
+   ]
+  },
+  {
+   "uuid": "00000000-0000-4000-8005-000000000604",
+   "file": "<WS>/objects/rules/harfanglab-removed.yaml",
+   "platform": "harfanglab",
+   "compile": {},
+   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000604\",\"name\":\"3 HarfangLab Removed\",\"api_request\":{\"enabled\":false,\"name\":\"\",\"schema\":null,\"status\":\"REMOVED\",\"flags\":null,\"tenants\":null,\"contributors\":null,\"maturity\":\"Experimental\",\"confidence\":\"Moderate\",\"action\":\"Alert\",\"tags\":null,\"sigma\":null,\"yara\":{\"signature\":null,\"meta\":{\"context\":[\"process\"],\"os\":\"Linux\",\"arch\":null,\"score\":null,\"classification\":null},\"strings\":\"$a = \\\"x\\\"\",\"condition\":\"$a\",\"imports\":null}}}",
+   "tenants": [
+    {
+     "tenant": "sigma",
+     "body": "[]"
+    },
+    {
+     "tenant": "yara",
+     "fault": "AttributeError: HarfangLab",
+     "body": "[{\"method\":\"DELETE\",\"url\":\"https://hl-yara.example.org/api/data/threat_intelligence/YaraFile/00000000-0000-4000-8005-000000000604/\",\"body\":null}]"
+    }
+   ]
+  },
+  {
+   "uuid": "00000000-0000-4000-8005-000000000602",
+   "file": "<WS>/objects/rules/harfanglab-sigma-disabled.yaml",
+   "platform": "harfanglab",
+   "compile": {},
+   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000602\",\"name\":\"HarfangLab Sigma Disabled\",\"api_request\":{\"enabled\":false,\"name\":\"\",\"schema\":null,\"status\":\"DISABLED\",\"flags\":null,\"tenants\":null,\"contributors\":null,\"maturity\":\"Experimental\",\"confidence\":\"Moderate\",\"action\":\"Alert, Block & Quarantine\",\"tags\":null,\"sigma\":{\"logsource\":{\"category\":\"network_connection\",\"product\":\"linux\"},\"selections\":[{\"name\":\"selection\",\"field\":\"DestinationPort\",\"value\":4444,\"modifiers\":null}],\"condition\":\"selection\",\"false_positives\":null},\"yara\":null}}",
+   "tenants": [
+    {
+     "tenant": "sigma",
+     "fault": "AttributeError: HarfangLab",
+     "body": "[{\"method\":\"PUT\",\"url\":\"https://hl.example.org/api/data/threat_intelligence/SigmaRule/00000000-0000-4000-8005-000000000602/\",\"body\":{\"name\":\"HarfangLab Sigma Disabled\",\"content\":\"title: HarfangLab Sigma Disabled\\nid: 00000000-0000-4000-8005-000000000602\\ndescription: |\\n    HarfangLab Sigma Disabled for the compile corpus.\\n    Second line.\\nstatus: experimental\\nlogsource:\\n    category: network_connection\\n    product: linux\\ndetection:\\n    selection:\\n        DestinationPort: 4444\\n    condition: selection\\nlevel: informational\\n\",\"source_id\":\"sigma-source\",\"enabled\":false,\"global_state\":\"disabled\",\"hl_status\":\"experimental\",\"block_on_agent\":false,\"quarantine_on_agent\":false,\"rule_confidence_override\":\"moderate\",\"rule_level_override\":\"informational\",\"overwrite\":true}}]"
+    },
+    {
+     "tenant": "yara",
+     "body": "[]"
+    }
+   ]
+  },
+  {
+   "uuid": "00000000-0000-4000-8005-000000000605",
+   "file": "<WS>/objects/rules/harfanglab-sigma-quarantine.yaml",
+   "platform": "harfanglab",
+   "compile": {},
+   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000605\",\"name\":\"HarfangLab Sigma Quarantine\",\"api_request\":{\"enabled\":false,\"name\":\"\",\"schema\":null,\"status\":\"PRODUCTION\",\"flags\":null,\"tenants\":null,\"contributors\":null,\"maturity\":\"Experimental\",\"confidence\":\"Moderate\",\"action\":\"Alert, Block & Quarantine\",\"tags\":null,\"sigma\":{\"logsource\":{\"category\":\"network_connection\",\"product\":\"linux\"},\"selections\":[{\"name\":\"selection\",\"field\":\"DestinationPort\",\"value\":4444,\"modifiers\":null}],\"condition\":\"selection\",\"false_positives\":null},\"yara\":null}}",
+   "tenants": [
+    {
+     "tenant": "sigma",
+     "fault": "AttributeError: HarfangLab",
+     "body": "[{\"method\":\"PUT\",\"url\":\"https://hl.example.org/api/data/threat_intelligence/SigmaRule/00000000-0000-4000-8005-000000000605/\",\"body\":{\"name\":\"HarfangLab Sigma Quarantine\",\"content\":\"title: HarfangLab Sigma Quarantine\\nid: 00000000-0000-4000-8005-000000000605\\ndescription: HarfangLab Sigma Quarantine for the compile corpus.\\nstatus: experimental\\nlogsource:\\n    category: network_connection\\n    product: linux\\ndetection:\\n    selection:\\n        DestinationPort: 4444\\n    condition: selection\\nlevel: informational\\n\",\"source_id\":\"sigma-source\",\"enabled\":true,\"global_state\":\"quarantine\",\"hl_status\":\"experimental\",\"block_on_agent\":true,\"quarantine_on_agent\":true,\"rule_confidence_override\":\"moderate\",\"rule_level_override\":\"informational\",\"overwrite\":true}}]"
+    },
+    {
+     "tenant": "yara",
+     "body": "[]"
+    }
+   ]
+  },
+  {
+   "uuid": "00000000-0000-4000-8005-000000000601",
+   "file": "<WS>/objects/rules/harfanglab-sigma.yaml",
+   "platform": "harfanglab",
+   "compile": {},
+   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000601\",\"name\":\"HarfangLab Sigma: Encoded\",\"api_request\":{\"enabled\":false,\"name\":\"\",\"schema\":null,\"status\":\"STAGING\",\"flags\":null,\"tenants\":null,\"contributors\":null,\"maturity\":\"Stable\",\"confidence\":\"Strong\",\"action\":\"Alert & Block\",\"tags\":[\"attack.execution\",\"attack.t1059.001\"],\"sigma\":{\"logsource\":{\"category\":\"process_creation\",\"product\":\"windows\"},\"selections\":[{\"name\":\"selection_img\",\"field\":\"Image\",\"value\":\"\\\\powershell.exe\",\"modifiers\":[\"endswith\"]},{\"name\":\"selection_img\",\"field\":\"OriginalFileName\",\"value\":\"PowerShell.EXE\",\"modifiers\":null},{\"name\":\"selection_cli\",\"field\":\"CommandLine\",\"value\":[\" -enc\",\"yes\"],\"modifiers\":[\"contains\",\"all\"]}],\"condition\":\"all of selection_*\",\"false_positives\":[\"Administration scripts\"]},\"yara\":null}}",
+   "tenants": [
+    {
+     "tenant": "sigma",
+     "fault": "AttributeError: HarfangLab",
+     "body": "[{\"method\":\"PUT\",\"url\":\"https://hl.example.org/api/data/threat_intelligence/SigmaRule/00000000-0000-4000-8005-000000000601/\",\"body\":{\"name\":\"HarfangLab Sigma: Encoded\",\"content\":\"title: 'HarfangLab Sigma: Encoded'\\nid: 00000000-0000-4000-8005-000000000601\\ndescription: HarfangLab Sigma for the compile corpus.\\nauthor: Detection Team\\nstatus: stable\\ntags:\\n    - attack.execution\\n    - attack.t1059.001\\nlogsource:\\n    category: process_creation\\n    product: windows\\ndetection:\\n    selection_img:\\n        Image|endswith: \\\\powershell.exe\\n        OriginalFileName: PowerShell.EXE\\n    selection_cli:\\n        CommandLine|contains|all:\\n            - ' -enc'\\n            - 'yes'\\n    condition: all of selection_*\\nfalsepositives:\\n    - Administration scripts\\nlevel: high\\n\",\"source_id\":\"sigma-source\",\"enabled\":true,\"global_state\":\"block\",\"hl_status\":\"stable\",\"block_on_agent\":true,\"quarantine_on_agent\":false,\"rule_confidence_override\":\"strong\",\"rule_level_override\":\"high\",\"overwrite\":true}}]"
+    },
+    {
+     "tenant": "yara",
+     "body": "[]"
+    }
+   ]
+  },
+  {
+   "uuid": "00000000-0000-4000-8005-000000000603",
+   "file": "<WS>/objects/rules/harfanglab-yara.yaml",
+   "platform": "harfanglab",
+   "compile": {},
+   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000603\",\"name\":\"HarfangLab YARA Loader\",\"api_request\":{\"enabled\":false,\"name\":\"\",\"schema\":null,\"status\":\"STAGING\",\"flags\":null,\"tenants\":null,\"contributors\":null,\"maturity\":\"Experimental\",\"confidence\":\"Moderate\",\"action\":\"Alert\",\"tags\":[\"loader\"],\"sigma\":null,\"yara\":{\"signature\":null,\"meta\":{\"context\":[\"file\",\"memory\"],\"os\":\"Windows\",\"arch\":[\"x64\"],\"score\":\"Critical\",\"classification\":\"Loader \\\"family\\\"\"},\"strings\":\"$a = \\\"loader\\\" ascii\\n$b = { 4D 5A }\\n\",\"condition\":\"$a and $b\\n\",\"imports\":[\"pe\"]}}}",
+   "tenants": [
+    {
+     "tenant": "sigma",
+     "body": "[]"
+    },
+    {
+     "tenant": "yara",
+     "fault": "AttributeError: HarfangLab",
+     "body": "[{\"method\":\"POST\",\"url\":\"https://hl-yara.example.org/api/data/threat_intelligence/YaraFile/\",\"body\":{\"name\":\"HarfangLab YARA Loader\",\"content\":\"import \\\"pe\\\"\\n\\nrule harfanglab_yara_loader {\\n    meta:\\n        id = \\\"00000000-0000-4000-8005-000000000603\\\"\\n        title = \\\"HarfangLab YARA Loader\\\"\\n        description = \\\"HarfangLab \\\\\\\"YARA\\\\\\\" for the compile corpus.\\\"\\n        author = \\\"Detection Team\\\"\\n        date = \\\"2026-01-01\\\"\\n        modified = \\\"2026-01-02\\\"\\n        references = \\\"https://example.org/report\\\\nhttps://example.org/other\\\"\\n        tags = \\\"loader\\\"\\n        context = \\\"file.pe,memory\\\"\\n        os = \\\"Windows\\\"\\n        arch = \\\"x64\\\"\\n        classification = \\\"Loader \\\\\\\"family\\\\\\\"\\\"\\n        score = 90\\n        confidence = \\\"moderate\\\"\\n    strings:\\n        $a = \\\"loader\\\" ascii\\n        $b = { 4D 5A }\\n    condition:\\n        $a and $b\\n}\",\"source_id\":\"yara-source\",\"global_state\":\"alert\",\"hl_status\":\"experimental\",\"rule_confidence_override\":\"moderate\",\"rule_level_override\":\"medium\",\"overwrite\":true}}]"
+    }
+   ]
+  },
+  {
+   "uuid": "00000000-0000-4000-8005-000000000403",
+   "file": "<WS>/objects/rules/s1-bad-cool-off.yaml",
+   "platform": "sentinel_one",
+   "compile": {},
+   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000403\",\"name\":\"SentinelOne Bad Cool Off\",\"api_request\":{\"enabled\":false,\"name\":\"\",\"schema\":null,\"status\":\"STAGING\",\"flags\":null,\"tenants\":null,\"contributors\":null,\"condition\":{\"type\":\"Single Event\",\"single_event\":{\"query\":\"EventType = \\\"Login\\\"\"},\"correlation\":null,\"cool_off\":\"30s\"},\"response\":null,\"details\":null}}",
+   "tenants": [
+    {
+     "tenant": "site",
+     "error": {
+      "code": "compile_failed",
+      "message": "SentinelOne cannot compile this rule: SentinelOne expects a duration in minutes (30m) or hours (2h), got '30s'",
+      "help": null
+     }
+    },
+    {
+     "tenant": "account",
+     "error": {
+      "code": "compile_failed",
+      "message": "SentinelOne cannot compile this rule: SentinelOne expects a duration in minutes (30m) or hours (2h), got '30s'",
+      "help": null
+     }
+    }
+   ]
+  },
+  {
+   "uuid": "00000000-0000-4000-8005-000000000402",
+   "file": "<WS>/objects/rules/s1-correlation.yaml",
+   "platform": "sentinel_one",
+   "compile": {},
+   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000402\",\"name\":\"SentinelOne Correlation\",\"api_request\":{\"enabled\":false,\"name\":\"\",\"schema\":null,\"status\":\"DISABLED\",\"flags\":null,\"tenants\":null,\"contributors\":null,\"condition\":{\"type\":\"Correlation\",\"single_event\":null,\"correlation\":{\"entity\":\"Endpoint\",\"match_in_order\":true,\"time_window\":\"2h\",\"sub_queries\":[{\"query\":\"EventType = \\\"Login\\\"\",\"matches_required\":5},{\"query\":\"EventType = \\\"Process Creation\\\"\",\"matches_required\":1}]},\"cool_off\":\"2h\"},\"response\":{\"treat_as_threat\":false,\"network_quarantine\":false},\"details\":null}}",
+   "tenants": [
+    {
+     "tenant": "site",
+     "body": "[]"
+    },
+    {
+     "tenant": "account",
+     "body": "[{\"method\":\"PUT\",\"url\":\"https://s1-account.example.org/web/api/v2.1/cloud-detection/rules/888\",\"body\":{\"data\":{\"expirationMode\":\"Permanent\",\"name\":\"SentinelOne Correlation\",\"description\":\"SentinelOne Correlation for the compile corpus.\",\"queryType\":\"correlation\",\"severity\":\"Low\",\"status\":\"Disabled\",\"networkQuarantine\":false,\"treatAsThreat\":\"UNDEFINED\",\"queryLang\":\"2.0\",\"coolOffSetting\":{\"renotifyMinutes\":120},\"correlationParams\":{\"entity\":\"Endpoint\",\"matchInOrder\":true,\"subQueries\":[{\"matchesRequired\":5,\"subQuery\":\"EventType = \\\"Login\\\"\"},{\"matchesRequired\":1,\"subQuery\":\"EventType = \\\"Process Creation\\\"\"}],\"timeWindow\":{\"windowMinutes\":120}}},\"filter\":{\"accountIds\":[\"7\"]}}}]"
+    }
+   ]
+  },
+  {
+   "uuid": "00000000-0000-4000-8005-000000000404",
+   "file": "<WS>/objects/rules/s1-removed.yaml",
+   "platform": "sentinel_one",
+   "compile": {},
+   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000404\",\"name\":\"SentinelOne Removed\",\"api_request\":{\"enabled\":false,\"name\":\"\",\"schema\":null,\"status\":\"REMOVED\",\"flags\":null,\"tenants\":null,\"contributors\":null,\"condition\":{\"type\":\"Single Event\",\"single_event\":{\"query\":\"EventType = \\\"Login\\\"\"},\"correlation\":null,\"cool_off\":null},\"response\":null,\"details\":null}}",
+   "tenants": [
+    {
+     "tenant": "site",
+     "body": "[{\"method\":\"DELETE\",\"url\":\"https://s1.example.org/web/api/v2.1/cloud-detection/rules\",\"body\":{\"filter\":{\"ids\":[999]}}}]"
+    },
+    {
+     "tenant": "account",
+     "body": "[]"
+    }
+   ]
+  },
+  {
+   "uuid": "00000000-0000-4000-8005-000000000401",
+   "file": "<WS>/objects/rules/s1-single.yaml",
+   "platform": "sentinel_one",
+   "compile": {},
+   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000401\",\"name\":\"SentinelOne Single\",\"api_request\":{\"enabled\":false,\"name\":\"\",\"schema\":null,\"status\":\"STAGING\",\"flags\":null,\"tenants\":null,\"contributors\":null,\"condition\":{\"type\":\"Single Event\",\"single_event\":{\"query\":\"EventType = \\\"Process Creation\\\" AND TgtProcName = \\\"rundll32.exe\\\"\"},\"correlation\":null,\"cool_off\":\"30m\"},\"response\":{\"treat_as_threat\":\"Malicious\",\"network_quarantine\":true},\"details\":{\"name\":\"S1 Single Override\",\"description\":\"Overridden description\",\"severity\":\"Critical\",\"expiration\":\"2027-01-01T00:00:00.000000Z\"}}}",
+   "tenants": [
+    {
+     "tenant": "site",
+     "body": "[{\"method\":\"PUT\",\"url\":\"https://s1.example.org/web/api/v2.1/cloud-detection/rules/777\",\"body\":{\"data\":{\"expirationMode\":\"Temporary\",\"name\":\"S1 Single Override\",\"description\":\"Overridden description\",\"queryType\":\"events\",\"severity\":\"Critical\",\"status\":\"Active\",\"networkQuarantine\":true,\"treatAsThreat\":\"Malicious\",\"queryLang\":\"2.0\",\"s1ql\":\"EventType = \\\"Process Creation\\\" AND TgtProcName = \\\"rundll32.exe\\\"\",\"expiration\":\"2027-01-01T00:00:00.000000Z\",\"coolOffSetting\":{\"renotifyMinutes\":30}},\"filter\":{\"siteIds\":[\"42\"]}}}]"
+    },
+    {
+     "tenant": "account",
+     "body": "[{\"method\":\"POST\",\"url\":\"https://s1-account.example.org/web/api/v2.1/cloud-detection/rules\",\"body\":{\"data\":{\"expirationMode\":\"Temporary\",\"name\":\"S1 Single Override\",\"description\":\"Overridden description\",\"queryType\":\"events\",\"severity\":\"Critical\",\"status\":\"Active\",\"networkQuarantine\":true,\"treatAsThreat\":\"Malicious\",\"queryLang\":\"2.0\",\"s1ql\":\"EventType = \\\"Process Creation\\\" AND TgtProcName = \\\"rundll32.exe\\\"\",\"expiration\":\"2027-01-01T00:00:00.000000Z\",\"coolOffSetting\":{\"renotifyMinutes\":30}},\"filter\":{\"accountIds\":[\"7\"]}}}]"
+    }
+   ]
+  },
+  {
+   "uuid": "00000000-0000-4000-8005-000000000008",
+   "file": "<WS>/objects/rules/sentinel-bad-duration.yaml",
+   "platform": "sentinel",
+   "compile": {
+    "error": {
+     "code": "compile_invalid_rule",
+     "message": "Duration 'soon' is not an ISO 8601 duration (PT1H, PT30M, P1D) or a shorthand duration (30m, 1h, 1d, 1h10m)",
+     "help": null
+    }
+   },
+   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000008\",\"name\":\"Sentinel Bad Duration\",\"status\":\"failed\",\"code\":\"compile_invalid_rule\",\"error\":\"Duration 'soon' is not an ISO 8601 duration (PT1H, PT30M, P1D) or a shorthand duration (30m, 1h, 1d, 1h10m)\",\"help\":null,\"file\":\"<WS>/objects/rules/sentinel-bad-duration.yaml\",\"api_request\":null}",
+   "tenants": [
+    {
+     "tenant": "one",
+     "error": {
+      "code": "compile_invalid_rule",
+      "message": "Duration 'soon' is not an ISO 8601 duration (PT1H, PT30M, P1D) or a shorthand duration (30m, 1h, 1d, 1h10m)",
+      "help": null
+     }
+    },
+    {
+     "tenant": "two",
+     "error": {
+      "code": "compile_invalid_rule",
+      "message": "Duration 'soon' is not an ISO 8601 duration (PT1H, PT30M, P1D) or a shorthand duration (30m, 1h, 1d, 1h10m)",
+      "help": null
+     }
+    }
+   ]
+  },
+  {
+   "uuid": "00000000-0000-4000-8005-000000000001",
+   "file": "<WS>/objects/rules/sentinel-full.yaml",
+   "platform": "sentinel",
+   "compile": {
+    "body": "{\"kind\":\"Scheduled\",\"properties\":{\"enabled\":true,\"query\":\"let limit = 7;\\nSecurityEvent\\n| where EventID == 4688\\n\\n| where Computer != \\\"lab\\\"\",\"alertRuleTemplateName\":\"11111111-2222-4333-8444-555555555555\",\"templateVersion\":\"1.0.2\",\"suppressionEnabled\":true,\"suppressionDuration\":\"PT05H00M00S\",\"queryFrequency\":\"PT30M00S\",\"queryPeriod\":\"PT02H00M00S\",\"triggerThreshold\":3,\"triggerOperator\":\"GreaterThan\",\"alertDetailsOverride\":{\"alertDisplayNameFormat\":\"Full {{Account}}\",\"alertDescriptionFormat\":\"Seen on {{Computer}}\",\"alertTacticsColumnName\":\"TacticColumn\",\"alertSeverityColumnName\":\"SeverityColumn\",\"alertDynamicProperties\":[{\"alertProperty\":\"AlertLink\",\"value\":\"LinkColumn\"}]},\"techniques\":[\"T1059\"],\"tactics\":[\"Execution\"],\"customDetails\":{\"Account\":\"TargetUserName\",\"Host\":\"Computer\"},\"eventGroupingSettings\":{\"aggregationKind\":\"AlertPerResult\"},\"incidentConfiguration\":{\"createIncident\":false,\"groupingConfiguration\":{\"enabled\":true,\"lookbackDuration\":\"P1D\",\"reopenClosedIncident\":true,\"matchingMethod\":\"Selected\",\"groupByEntities\":[\"Account\"],\"groupByAlertDetails\":[]}},\"entityMappings\":[{\"entityType\":\"Account\",\"fieldMappings\":[{\"identifier\":\"Name\",\"columnName\":\"TargetUserName\"}]},{\"entityType\":\"Host\",\"fieldMappings\":[{\"identifier\":\"HostName\",\"columnName\":\"Computer\"}]}],\"severity\":\"High\",\"displayName\":\"Sentinel Full\",\"description\":\"Sentinel Full for the compile corpus.\\nSecond line.\\n\"}}"
+   },
+   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000001\",\"name\":\"Sentinel Full\",\"api_request\":{\"kind\":\"Scheduled\",\"properties\":{\"enabled\":true,\"query\":\"let limit = 7;\\nSecurityEvent\\n| where EventID == 4688\\n\\n| where Computer != \\\"lab\\\"\",\"alertRuleTemplateName\":\"11111111-2222-4333-8444-555555555555\",\"templateVersion\":\"1.0.2\",\"suppressionEnabled\":true,\"suppressionDuration\":\"PT05H00M00S\",\"queryFrequency\":\"PT30M00S\",\"queryPeriod\":\"PT02H00M00S\",\"triggerThreshold\":3,\"triggerOperator\":\"GreaterThan\",\"alertDetailsOverride\":{\"alertDisplayNameFormat\":\"Full {{Account}}\",\"alertDescriptionFormat\":\"Seen on {{Computer}}\",\"alertTacticsColumnName\":\"TacticColumn\",\"alertSeverityColumnName\":\"SeverityColumn\",\"alertDynamicProperties\":[{\"alertProperty\":\"AlertLink\",\"value\":\"LinkColumn\"}]},\"techniques\":[\"T1059\"],\"tactics\":[\"Execution\"],\"customDetails\":{\"Account\":\"TargetUserName\",\"Host\":\"Computer\"},\"eventGroupingSettings\":{\"aggregationKind\":\"AlertPerResult\"},\"incidentConfiguration\":{\"createIncident\":false,\"groupingConfiguration\":{\"enabled\":true,\"lookbackDuration\":\"P1D\",\"reopenClosedIncident\":true,\"matchingMethod\":\"Selected\",\"groupByEntities\":[\"Account\"],\"groupByAlertDetails\":[]}},\"entityMappings\":[{\"entityType\":\"Account\",\"fieldMappings\":[{\"identifier\":\"Name\",\"columnName\":\"TargetUserName\"}]},{\"entityType\":\"Host\",\"fieldMappings\":[{\"identifier\":\"HostName\",\"columnName\":\"Computer\"}]}],\"severity\":\"High\",\"displayName\":\"Sentinel Full\",\"description\":\"Sentinel Full for the compile corpus.\\nSecond line.\\n\"}}}",
+   "tenants": [
+    {
+     "tenant": "one",
+     "body": "{\"kind\":\"Scheduled\",\"properties\":{\"enabled\":true,\"query\":\"let allowed = \\\"svc\\\\\\\\one\\\\t\\\\\\\"x\\\\\\\"\\\";\\nlet limit = 7;\\nlet ratio = 0.5;\\nlet strict = true;\\nSecurityEvent\\n| where EventID == 4688\\n\\n| where Account !in (allowed)\\n| where Computer != \\\"lab\\\"\",\"alertRuleTemplateName\":\"11111111-2222-4333-8444-555555555555\",\"templateVersion\":\"1.0.2\",\"suppressionEnabled\":true,\"suppressionDuration\":\"PT05H00M00S\",\"queryFrequency\":\"PT30M00S\",\"queryPeriod\":\"PT02H00M00S\",\"triggerThreshold\":3,\"triggerOperator\":\"GreaterThan\",\"alertDetailsOverride\":{\"alertDisplayNameFormat\":\"Full {{Account}}\",\"alertDescriptionFormat\":\"Seen on {{Computer}}\",\"alertTacticsColumnName\":\"TacticColumn\",\"alertSeverityColumnName\":\"SeverityColumn\",\"alertDynamicProperties\":[{\"alertProperty\":\"AlertLink\",\"value\":\"LinkColumn\"}]},\"techniques\":[\"T1059\"],\"tactics\":[\"Execution\"],\"customDetails\":{\"Account\":\"TargetUserName\",\"Host\":\"Computer\"},\"eventGroupingSettings\":{\"aggregationKind\":\"AlertPerResult\"},\"incidentConfiguration\":{\"createIncident\":false,\"groupingConfiguration\":{\"enabled\":true,\"lookbackDuration\":\"P1D\",\"reopenClosedIncident\":true,\"matchingMethod\":\"Selected\",\"groupByEntities\":[\"Account\"],\"groupByAlertDetails\":[]}},\"entityMappings\":[{\"entityType\":\"Account\",\"fieldMappings\":[{\"identifier\":\"Name\",\"columnName\":\"TargetUserName\"}]},{\"entityType\":\"Host\",\"fieldMappings\":[{\"identifier\":\"HostName\",\"columnName\":\"Computer\"}]}],\"severity\":\"High\",\"displayName\":\"Sentinel Full\",\"description\":\"Sentinel Full for the compile corpus.\\nSecond line.\\n\"}}"
+    },
+    {
+     "tenant": "two",
+     "body": "{\"kind\":\"Scheduled\",\"properties\":{\"enabled\":true,\"query\":\"let limit = 7;\\nSecurityEvent\\n| where EventID == 4688\\n\\n| where Computer != \\\"lab\\\"\",\"alertRuleTemplateName\":\"11111111-2222-4333-8444-555555555555\",\"templateVersion\":\"1.0.2\",\"suppressionEnabled\":true,\"suppressionDuration\":\"PT05H00M00S\",\"queryFrequency\":\"PT30M00S\",\"queryPeriod\":\"PT02H00M00S\",\"triggerThreshold\":3,\"triggerOperator\":\"GreaterThan\",\"alertDetailsOverride\":{\"alertDisplayNameFormat\":\"Full {{Account}}\",\"alertDescriptionFormat\":\"Seen on {{Computer}}\",\"alertTacticsColumnName\":\"TacticColumn\",\"alertSeverityColumnName\":\"SeverityColumn\",\"alertDynamicProperties\":[{\"alertProperty\":\"AlertLink\",\"value\":\"LinkColumn\"}]},\"techniques\":[\"T1059\"],\"tactics\":[\"Execution\"],\"customDetails\":{\"Account\":\"TargetUserName\",\"Host\":\"Computer\"},\"eventGroupingSettings\":{\"aggregationKind\":\"AlertPerResult\"},\"incidentConfiguration\":{\"createIncident\":false,\"groupingConfiguration\":{\"enabled\":true,\"lookbackDuration\":\"P1D\",\"reopenClosedIncident\":true,\"matchingMethod\":\"Selected\",\"groupByEntities\":[\"Account\"],\"groupByAlertDetails\":[]}},\"entityMappings\":[{\"entityType\":\"Account\",\"fieldMappings\":[{\"identifier\":\"Name\",\"columnName\":\"TargetUserName\"}]},{\"entityType\":\"Host\",\"fieldMappings\":[{\"identifier\":\"HostName\",\"columnName\":\"Computer\"}]}],\"severity\":\"High\",\"displayName\":\"Sentinel Full\",\"description\":\"Sentinel Full for the compile corpus.\\nSecond line.\\n\"}}"
+    }
+   ]
+  },
+  {
+   "uuid": "00000000-0000-4000-8005-000000000005",
+   "file": "<WS>/objects/rules/sentinel-grouping-no-lookback.yaml",
+   "platform": "sentinel",
+   "compile": {
+    "error": {
+     "code": "compile_missing_field",
+     "message": "configurations.sentinel.grouping.alert.grouping_lookback is missing",
+     "help": "required when grouping.alert.enabled is true"
+    }
+   },
+   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000005\",\"name\":\"Sentinel Grouping Without Lookback\",\"status\":\"failed\",\"code\":\"compile_missing_field\",\"error\":\"configurations.sentinel.grouping.alert.grouping_lookback is missing\",\"help\":\"required when grouping.alert.enabled is true\",\"file\":\"<WS>/objects/rules/sentinel-grouping-no-lookback.yaml\",\"api_request\":null}",
+   "tenants": [
+    {
+     "tenant": "one",
+     "error": {
+      "code": "compile_missing_field",
+      "message": "configurations.sentinel.grouping.alert.grouping_lookback is missing",
+      "help": "required when grouping.alert.enabled is true"
+     }
+    },
+    {
+     "tenant": "two",
+     "error": {
+      "code": "compile_missing_field",
+      "message": "configurations.sentinel.grouping.alert.grouping_lookback is missing",
+      "help": "required when grouping.alert.enabled is true"
+     }
+    }
+   ]
+  },
+  {
+   "uuid": "00000000-0000-4000-8005-000000000007",
+   "file": "<WS>/objects/rules/sentinel-no-frequency.yaml",
+   "platform": "sentinel",
+   "compile": {
+    "error": {
+     "code": "compile_missing_field",
+     "message": "configurations.sentinel.scheduling.frequency is missing",
+     "help": "required unless scheduling.nrt is true"
+    }
+   },
+   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000007\",\"name\":\"Sentinel No Frequency\",\"status\":\"failed\",\"code\":\"compile_missing_field\",\"error\":\"configurations.sentinel.scheduling.frequency is missing\",\"help\":\"required unless scheduling.nrt is true\",\"file\":\"<WS>/objects/rules/sentinel-no-frequency.yaml\",\"api_request\":null}",
+   "tenants": [
+    {
+     "tenant": "one",
+     "error": {
+      "code": "compile_missing_field",
+      "message": "configurations.sentinel.scheduling.frequency is missing",
+      "help": "required unless scheduling.nrt is true"
+     }
+    },
+    {
+     "tenant": "two",
+     "error": {
+      "code": "compile_missing_field",
+      "message": "configurations.sentinel.scheduling.frequency is missing",
+      "help": "required unless scheduling.nrt is true"
+     }
+    }
+   ]
+  },
+  {
+   "uuid": "00000000-0000-4000-8005-000000000003",
+   "file": "<WS>/objects/rules/sentinel-no-grouping.yaml",
+   "platform": "sentinel",
+   "compile": {
+    "error": {
+     "code": "compile_missing_field",
+     "message": "configurations.sentinel.grouping is missing",
+     "help": "Sentinel deploy requires grouping.event and grouping.alert"
+    }
+   },
+   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000003\",\"name\":\"Sentinel No Grouping\",\"status\":\"failed\",\"code\":\"compile_missing_field\",\"error\":\"configurations.sentinel.grouping is missing\",\"help\":\"Sentinel deploy requires grouping.event and grouping.alert\",\"file\":\"<WS>/objects/rules/sentinel-no-grouping.yaml\",\"api_request\":null}",
+   "tenants": [
+    {
+     "tenant": "one",
+     "error": {
+      "code": "compile_missing_field",
+      "message": "configurations.sentinel.grouping is missing",
+      "help": "Sentinel deploy requires grouping.event and grouping.alert"
+     }
+    },
+    {
+     "tenant": "two",
+     "error": {
+      "code": "compile_missing_field",
+      "message": "configurations.sentinel.grouping is missing",
+      "help": "Sentinel deploy requires grouping.event and grouping.alert"
+     }
+    }
+   ]
+  },
+  {
+   "uuid": "00000000-0000-4000-8005-000000000006",
+   "file": "<WS>/objects/rules/sentinel-no-response.yaml",
+   "platform": "sentinel",
+   "compile": {
+    "error": {
+     "code": "compile_empty_block",
+     "message": "`response` is empty, so Sentinel cannot read `alert_severity`",
+     "help": "set response.alert_severity, or configurations.sentinel.alert.severity"
+    }
+   },
+   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000006\",\"name\":\"Sentinel No Response\",\"status\":\"failed\",\"code\":\"compile_empty_block\",\"error\":\"`response` is empty, so Sentinel cannot read `alert_severity`\",\"help\":\"set response.alert_severity, or configurations.sentinel.alert.severity\",\"file\":\"<WS>/objects/rules/sentinel-no-response.yaml\",\"api_request\":null}",
+   "tenants": [
+    {
+     "tenant": "one",
+     "error": {
+      "code": "compile_empty_block",
+      "message": "`response` is empty, so Sentinel cannot read `alert_severity`",
+      "help": "set response.alert_severity, or configurations.sentinel.alert.severity"
+     }
+    },
+    {
+     "tenant": "two",
+     "error": {
+      "code": "compile_empty_block",
+      "message": "`response` is empty, so Sentinel cannot read `alert_severity`",
+      "help": "set response.alert_severity, or configurations.sentinel.alert.severity"
+     }
+    }
+   ]
+  },
+  {
+   "uuid": "00000000-0000-4000-8005-000000000002",
+   "file": "<WS>/objects/rules/sentinel-nrt.yaml",
+   "platform": "sentinel",
+   "compile": {
+    "body": "{\"kind\":\"NRT\",\"properties\":{\"enabled\":false,\"query\":\"SigninLogs | take 1\",\"suppressionEnabled\":false,\"suppressionDuration\":\"PT01H00M00S\",\"alertDetailsOverride\":{},\"eventGroupingSettings\":{\"aggregationKind\":\"SingleAlert\"},\"incidentConfiguration\":{\"createIncident\":true,\"groupingConfiguration\":{\"enabled\":false,\"lookbackDuration\":\"PT01H00M00S\",\"reopenClosedIncident\":false,\"matchingMethod\":\"AllEntities\"}},\"severity\":\"Low\",\"displayName\":\"Sentinel NRT\",\"description\":\"Sentinel NRT for the compile corpus.\\nSecond line.\\n\"}}"
+   },
+   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000002\",\"name\":\"Sentinel NRT\",\"api_request\":{\"kind\":\"NRT\",\"properties\":{\"enabled\":false,\"query\":\"SigninLogs | take 1\",\"suppressionEnabled\":false,\"suppressionDuration\":\"PT01H00M00S\",\"alertDetailsOverride\":{},\"eventGroupingSettings\":{\"aggregationKind\":\"SingleAlert\"},\"incidentConfiguration\":{\"createIncident\":true,\"groupingConfiguration\":{\"enabled\":false,\"lookbackDuration\":\"PT01H00M00S\",\"reopenClosedIncident\":false,\"matchingMethod\":\"AllEntities\"}},\"severity\":\"Low\",\"displayName\":\"Sentinel NRT\",\"description\":\"Sentinel NRT for the compile corpus.\\nSecond line.\\n\"}}}",
+   "tenants": [
+    {
+     "tenant": "one",
+     "body": "{\"kind\":\"NRT\",\"properties\":{\"enabled\":false,\"query\":\"SigninLogs | take 1\",\"suppressionEnabled\":false,\"suppressionDuration\":\"PT01H00M00S\",\"alertDetailsOverride\":{},\"eventGroupingSettings\":{\"aggregationKind\":\"SingleAlert\"},\"incidentConfiguration\":{\"createIncident\":true,\"groupingConfiguration\":{\"enabled\":false,\"lookbackDuration\":\"PT01H00M00S\",\"reopenClosedIncident\":false,\"matchingMethod\":\"AllEntities\"}},\"severity\":\"Low\",\"displayName\":\"Sentinel NRT\",\"description\":\"Sentinel NRT for the compile corpus.\\nSecond line.\\n\"}}"
+    },
+    {
+     "tenant": "two",
+     "body": "{\"kind\":\"NRT\",\"properties\":{\"enabled\":false,\"query\":\"SigninLogs | take 1\",\"suppressionEnabled\":false,\"suppressionDuration\":\"PT01H00M00S\",\"alertDetailsOverride\":{},\"eventGroupingSettings\":{\"aggregationKind\":\"SingleAlert\"},\"incidentConfiguration\":{\"createIncident\":true,\"groupingConfiguration\":{\"enabled\":false,\"lookbackDuration\":\"PT01H00M00S\",\"reopenClosedIncident\":false,\"matchingMethod\":\"AllEntities\"}},\"severity\":\"Low\",\"displayName\":\"Sentinel NRT\",\"description\":\"Sentinel NRT for the compile corpus.\\nSecond line.\\n\"}}"
+    }
+   ]
+  },
+  {
+   "uuid": "00000000-0000-4000-8005-000000000004",
+   "file": "<WS>/objects/rules/sentinel-suppression-true.yaml",
+   "platform": "sentinel",
+   "compile": {
+    "error": {
+     "code": "compile_invalid_value",
+     "message": "configurations.sentinel.alert.suppression is true",
+     "help": "set it to false or a duration such as PT1H"
+    }
+   },
+   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000004\",\"name\":\"Sentinel Suppression True\",\"status\":\"failed\",\"code\":\"compile_invalid_value\",\"error\":\"configurations.sentinel.alert.suppression is true\",\"help\":\"set it to false or a duration such as PT1H\",\"file\":\"<WS>/objects/rules/sentinel-suppression-true.yaml\",\"api_request\":null}",
+   "tenants": [
+    {
+     "tenant": "one",
+     "error": {
+      "code": "compile_invalid_value",
+      "message": "configurations.sentinel.alert.suppression is true",
+      "help": "set it to false or a duration such as PT1H"
+     }
+    },
+    {
+     "tenant": "two",
+     "error": {
+      "code": "compile_invalid_value",
+      "message": "configurations.sentinel.alert.suppression is true",
+      "help": "set it to false or a duration such as PT1H"
+     }
+    }
+   ]
+  },
+  {
+   "uuid": "00000000-0000-4000-8005-000000000305",
+   "file": "<WS>/objects/rules/splunk-cron.yaml",
+   "platform": "splunk",
+   "compile": {},
+   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000305\",\"name\":\"Splunk Cron\",\"api_request\":{\"enabled\":false,\"name\":\"\",\"schema\":null,\"status\":\"STAGING\",\"flags\":null,\"tenants\":null,\"contributors\":null,\"query\":\"index=main cron\",\"scheduling\":{\"type\":null,\"expires\":null,\"schedule\":{\"frequency\":null,\"cron\":\"*/5 * * * *\",\"custom_time\":null},\"timerange\":null},\"trigger\":null,\"actions\":{\"notable\":{\"event\":null,\"drilldown\":null,\"security_domain\":\"Identity\"},\"risk\":null,\"email\":null},\"correlation_search\":true,\"advanced\":null}}",
+   "tenants": [
+    {
+     "tenant": "es",
+     "body": "[{\"method\":\"POST\",\"url\":\"saved/searches\",\"body\":{\"name\":\"Splunk Cron - Rule\",\"search\":\"index=main cron\\n| eval MDR_UUID=\\\"00000000-0000-4000-8005-000000000305\\\", MDR_status=\\\"STAGING\\\" \\n|`soc_macro_auto_mdr_mapping(MDR_UUID)`\"}},{\"method\":\"POST\",\"url\":\"saved/searches/Splunk Cron - Rule\",\"body\":{\"cron_schedule\":\"*/5 * * * *\",\"alert.severity\":2,\"action.correlationsearch.enabled\":\"true\",\"action.correlationsearch.label\":\"Splunk Cron - Rule\",\"action.notable.param.security_domain\":\"identity\",\"alert.managedBy\":\"\",\"description\":\"Splunk Cron for the compile corpus.\",\"dispatch.latest_time\":\"now\",\"alert.track\":\"1\",\"alert.digest_mode\":\"false\",\"action.notable\":1,\"action.notable.param.rule_title\":\"Splunk Cron - Rule\",\"action.notable.param.rule_description\":\"Splunk Cron for the compile corpus.\",\"action.notable.param.severity\":\"informational\"}},{\"method\":\"POST\",\"url\":\"saved/searches/Splunk Cron - Rule\",\"body\":{\"is_scheduled\":1,\"actions\":\"notable\",\"search\":\"index=main cron\\n| eval MDR_UUID=\\\"00000000-0000-4000-8005-000000000305\\\", MDR_status=\\\"STAGING\\\" \\n|`soc_macro_auto_mdr_mapping(MDR_UUID)`\"}}]"
+    },
+    {
+     "tenant": "core",
+     "body": "[{\"method\":\"POST\",\"url\":\"saved/searches\",\"body\":{\"name\":\"Splunk Cron - Rule\",\"search\":\"index=main cron\\n| eval MDR_UUID=\\\"00000000-0000-4000-8005-000000000305\\\", MDR_status=\\\"STAGING\\\" \\n|`soc_macro_auto_mdr_mapping(MDR_UUID)`\"}},{\"method\":\"POST\",\"url\":\"saved/searches/Splunk Cron - Rule\",\"body\":{\"cron_schedule\":\"*/5 * * * *\",\"alert.severity\":2,\"action.correlationsearch.enabled\":\"true\",\"action.correlationsearch.label\":\"Splunk Cron - Rule\",\"alert.managedBy\":\"\",\"description\":\"Splunk Cron for the compile corpus.\",\"dispatch.latest_time\":\"now\",\"alert.track\":\"1\",\"alert.digest_mode\":\"false\",\"alert.expires\":\"7d\"}},{\"method\":\"POST\",\"url\":\"saved/searches/Splunk Cron - Rule\",\"body\":{\"is_scheduled\":1,\"actions\":\"\",\"search\":\"index=main cron\\n| eval MDR_UUID=\\\"00000000-0000-4000-8005-000000000305\\\", MDR_status=\\\"STAGING\\\" \\n|`soc_macro_auto_mdr_mapping(MDR_UUID)`\"}}]"
+    }
+   ]
+  },
+  {
+   "uuid": "00000000-0000-4000-8005-000000000301",
+   "file": "<WS>/objects/rules/splunk-full.yaml",
+   "platform": "splunk",
+   "compile": {},
+   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000301\",\"name\":\"Splunk Full\",\"api_request\":{\"enabled\":false,\"name\":\"\",\"schema\":null,\"status\":\"STAGING\",\"flags\":null,\"tenants\":null,\"contributors\":null,\"query\":\"index=main sourcetype=WinEventLog EventCode=4688\\n| stats count by host\\n\",\"scheduling\":{\"type\":\"Scheduled\",\"expires\":\"24h\",\"schedule\":{\"frequency\":\"2h\",\"cron\":null,\"custom_time\":null},\"timerange\":{\"lookback\":\"1h\",\"earliest\":null,\"latest\":\"now\"}},\"trigger\":{\"condition\":\"number of events\",\"comparator\":\"greater than\",\"threshold\":0,\"severity\":4,\"custom_condition\":\"search count > 10\",\"type\":\"Once\",\"throttling\":{\"fields\":[\"host\",\"user\"],\"duration\":\"1h\",\"group_name\":\"hosts\"}},\"actions\":{\"notable\":{\"event\":{\"title\":\"Encoded command on $host$\",\"description\":\"A host ran an encoded command.\"},\"drilldown\":{\"name\":\"Host events\",\"search\":\"index=main host=$host$\"},\"security_domain\":\"Endpoint\"},\"risk\":{\"message\":\"Encoded command on $host$\",\"risk_objects\":[{\"field\":\"host\",\"type\":\"system\",\"score\":40}],\"threat_objects\":[{\"field\":\"process\",\"type\":\"process_name\"}]},\"email\":{\"to\":\"soc@example.org\",\"cc\":\"lead@example.org\",\"bcc\":\"audit@example.org\",\"priority\":\"2\",\"subject\":\"Alert $name$\",\"message\":\"See $results_link$\",\"content_type\":\"html\",\"send_csv\":true,\"send_pdf\":false,\"inline_results\":true,\"include\":{\"results_link\":true,\"search_string\":false,\"trigger_condition\":true,\"trigger_time\":false}}},\"correlation_search\":null,\"advanced\":null}}",
+   "tenants": [
+    {
+     "tenant": "es",
+     "body": "[{\"method\":\"POST\",\"url\":\"saved/searches\",\"body\":{\"name\":\"Splunk Full - Rule\",\"search\":\"index=main sourcetype=WinEventLog EventCode=4688\\n| stats count by host\\n| eval MDR_UUID=\\\"00000000-0000-4000-8005-000000000301\\\", MDR_status=\\\"STAGING\\\" \\n|`soc_macro_auto_mdr_mapping(MDR_UUID)`\"}},{\"method\":\"POST\",\"url\":\"saved/searches/Splunk Full - Rule\",\"body\":{\"alert.expires\":\"24h\",\"cron_schedule\":\"04 */2 * * *\",\"dispatch.earliest_time\":\"-68m@m\",\"dispatch.latest_time\":\"now\",\"alert_type\":\"number of events\",\"alert_comparator\":\"greater than\",\"alert_threshold\":0,\"alert.severity\":4,\"alert_condition\":\"search count > 10\",\"alert.digest_mode\":\"false\",\"alert.suppress.period\":\"1h\",\"alert.suppress.fields\":\"host, user\",\"alert.suppress.group_name\":\"hosts\",\"action.correlationsearch.enabled\":\"true\",\"action.correlationsearch.label\":\"Splunk Full - Rule\",\"action.correlationsearch.annotations.mitre_attack\":\"T1059.001, T1003, T1059\",\"action.notable.param.rule_title\":\"Encoded command on $host$\",\"action.notable.param.rule_description\":\"A host ran an encoded command.\",\"action.notable.param.drilldown_name\":\"Host events\",\"action.notable.param.drilldown_search\":\"index=main host=$host$\",\"action.notable.param.security_domain\":\"endpoint\",\"action.risk.param._risk\":\"[{\\\"risk_object_field\\\": \\\"host\\\", \\\"risk_object_type\\\": \\\"system\\\", \\\"risk_score\\\": 40}, {\\\"threat_object_field\\\": \\\"process\\\", \\\"threat_object_type\\\": \\\"process_name\\\"}]\",\"action.risk.param._risk_message\":\"Encoded command on $host$\",\"action.email.to\":\"soc@example.org\",\"action.email.cc\":\"lead@example.org\",\"action.email.bcc\":\"audit@example.org\",\"action.email.priority\":\"2\",\"action.email.subject\":\"Alert $name$\",\"action.email.message.alert\":\"See $results_link$\",\"action.email.content_type\":\"html\",\"action.email.sendcsv\":1,\"action.email.sendpdf\":0,\"action.email.inline\":1,\"action.email.include.results_link\":1,\"action.email.include.search\":0,\"action.email.include.trigger\":1,\"action.email.include.trigger_time\":0,\"alert.managedBy\":\"Blue Team\",\"description\":\"Splunk Full for the compile corpus.\\n\",\"alert.track\":\"1\",\"action.notable\":1}},{\"method\":\"POST\",\"url\":\"saved/searches/Splunk Full - Rule\",\"body\":{\"alert.suppress\":\"true\",\"is_scheduled\":1,\"actions\":\"notable\",\"search\":\"index=main sourcetype=WinEventLog EventCode=4688\\n| stats count by host\\n| eval MDR_UUID=\\\"00000000-0000-4000-8005-000000000301\\\", MDR_status=\\\"STAGING\\\" \\n|`soc_macro_auto_mdr_mapping(MDR_UUID)`\"}}]"
+    },
+    {
+     "tenant": "core",
+     "body": "[{\"method\":\"POST\",\"url\":\"saved/searches\",\"body\":{\"name\":\"Splunk Full\",\"search\":\"index=main sourcetype=WinEventLog EventCode=4688\\n| stats count by host\\n| eval MDR_UUID=\\\"00000000-0000-4000-8005-000000000301\\\", MDR_status=\\\"STAGING\\\" \\n|`soc_macro_auto_mdr_mapping(MDR_UUID)`\"}},{\"method\":\"POST\",\"url\":\"saved/searches/Splunk Full\",\"body\":{\"alert.expires\":\"7d\",\"cron_schedule\":\"7 */2 * * *\",\"dispatch.earliest_time\":\"-60m@m\",\"dispatch.latest_time\":\"now\",\"alert_type\":\"number of events\",\"alert_comparator\":\"greater than\",\"alert_threshold\":0,\"alert.severity\":4,\"alert_condition\":\"search count > 10\",\"alert.digest_mode\":\"false\",\"alert.suppress.period\":\"1h\",\"alert.suppress.fields\":\"host, user\",\"alert.suppress.group_name\":\"hosts\",\"action.email.to\":\"soc@example.org\",\"action.email.cc\":\"lead@example.org\",\"action.email.bcc\":\"audit@example.org\",\"action.email.priority\":\"2\",\"action.email.subject\":\"Alert $name$\",\"action.email.message.alert\":\"See $results_link$\",\"action.email.content_type\":\"html\",\"action.email.sendcsv\":1,\"action.email.sendpdf\":0,\"action.email.inline\":1,\"action.email.include.results_link\":1,\"action.email.include.search\":0,\"action.email.include.trigger\":1,\"action.email.include.trigger_time\":0,\"alert.managedBy\":\"Blue Team\",\"description\":\"Splunk Full for the compile corpus.\\n\",\"alert.track\":\"1\"}},{\"method\":\"POST\",\"url\":\"saved/searches/Splunk Full\",\"body\":{\"alert.suppress\":\"true\",\"is_scheduled\":1,\"actions\":\"\",\"search\":\"index=main sourcetype=WinEventLog EventCode=4688\\n| stats count by host\\n| eval MDR_UUID=\\\"00000000-0000-4000-8005-000000000301\\\", MDR_status=\\\"STAGING\\\" \\n|`soc_macro_auto_mdr_mapping(MDR_UUID)`\"}}]"
+    }
+   ]
+  },
+  {
+   "uuid": "00000000-0000-4000-8005-000000000307",
+   "file": "<WS>/objects/rules/splunk-high.yaml",
+   "platform": "splunk",
+   "compile": {},
+   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000307\",\"name\":\"Splunk High\",\"api_request\":{\"enabled\":false,\"name\":\"\",\"schema\":null,\"status\":\"STAGING\",\"flags\":null,\"tenants\":null,\"contributors\":null,\"query\":\"index=main high\",\"scheduling\":{\"type\":null,\"expires\":null,\"schedule\":{\"frequency\":null,\"cron\":\"0 * * * *\",\"custom_time\":null},\"timerange\":null},\"trigger\":null,\"actions\":null,\"correlation_search\":null,\"advanced\":null}}",
+   "tenants": [
+    {
+     "tenant": "es",
+     "body": "[{\"method\":\"POST\",\"url\":\"saved/searches\",\"body\":{\"name\":\"Splunk High - Rule\",\"search\":\"index=main high\\n| eval MDR_UUID=\\\"00000000-0000-4000-8005-000000000307\\\", MDR_status=\\\"STAGING\\\" \\n|`soc_macro_auto_mdr_mapping(MDR_UUID)`\"}},{\"method\":\"POST\",\"url\":\"saved/searches/Splunk High - Rule\",\"body\":{\"cron_schedule\":\"0 * * * *\",\"alert.severity\":5,\"action.correlationsearch.enabled\":\"true\",\"action.correlationsearch.label\":\"Splunk High - Rule\",\"alert.managedBy\":\"\",\"description\":\"Splunk High for the compile corpus.\",\"dispatch.latest_time\":\"now\",\"alert.track\":\"1\",\"alert.digest_mode\":\"false\",\"action.notable.param.rule_title\":\"Splunk High - Rule\",\"action.notable.param.rule_description\":\"Splunk High for the compile corpus.\",\"action.notable.param.severity\":\"high\"}},{\"method\":\"POST\",\"url\":\"saved/searches/Splunk High - Rule\",\"body\":{\"is_scheduled\":1,\"actions\":\"notable\",\"search\":\"index=main high\\n| eval MDR_UUID=\\\"00000000-0000-4000-8005-000000000307\\\", MDR_status=\\\"STAGING\\\" \\n|`soc_macro_auto_mdr_mapping(MDR_UUID)`\"}}]"
+    },
+    {
+     "tenant": "core",
+     "body": "[{\"method\":\"POST\",\"url\":\"saved/searches\",\"body\":{\"name\":\"Splunk High\",\"search\":\"index=main high\\n| eval MDR_UUID=\\\"00000000-0000-4000-8005-000000000307\\\", MDR_status=\\\"STAGING\\\" \\n|`soc_macro_auto_mdr_mapping(MDR_UUID)`\"}},{\"method\":\"POST\",\"url\":\"saved/searches/Splunk High\",\"body\":{\"cron_schedule\":\"0 * * * *\",\"alert.severity\":5,\"alert.managedBy\":\"\",\"description\":\"Splunk High for the compile corpus.\",\"dispatch.latest_time\":\"now\",\"alert.track\":\"1\",\"alert.digest_mode\":\"false\",\"alert.expires\":\"7d\"}},{\"method\":\"POST\",\"url\":\"saved/searches/Splunk High\",\"body\":{\"is_scheduled\":1,\"actions\":\"\",\"search\":\"index=main high\\n| eval MDR_UUID=\\\"00000000-0000-4000-8005-000000000307\\\", MDR_status=\\\"STAGING\\\" \\n|`soc_macro_auto_mdr_mapping(MDR_UUID)`\"}}]"
+    }
+   ]
+  },
+  {
+   "uuid": "00000000-0000-4000-8005-000000000304",
+   "file": "<WS>/objects/rules/splunk-noisy.yaml",
+   "platform": "splunk",
+   "compile": {},
+   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000304\",\"name\":\"Splunk Noisy\",\"api_request\":{\"enabled\":false,\"name\":\"\",\"schema\":null,\"status\":\"PRODUCTION\",\"flags\":[\"noisy\"],\"tenants\":null,\"contributors\":null,\"query\":\"index=main noisy\",\"scheduling\":{\"type\":null,\"expires\":null,\"schedule\":{\"frequency\":\"15m\",\"cron\":null,\"custom_time\":null},\"timerange\":{\"lookback\":\"1d\",\"earliest\":null,\"latest\":null}},\"trigger\":{\"condition\":null,\"comparator\":null,\"threshold\":null,\"severity\":null,\"custom_condition\":null,\"type\":\"For each result\",\"throttling\":null},\"actions\":{\"notable\":{\"event\":null,\"drilldown\":null,\"security_domain\":\"Network\"},\"risk\":null,\"email\":null},\"correlation_search\":null,\"advanced\":null}}",
+   "tenants": [
+    {
+     "tenant": "es",
+     "body": "[{\"method\":\"POST\",\"url\":\"saved/searches\",\"body\":{\"name\":\"Splunk Noisy - Rule\",\"search\":\"index=main noisy\\n| eval MDR_UUID=\\\"00000000-0000-4000-8005-000000000304\\\", MDR_status=\\\"PRODUCTION\\\" \\n|`soc_macro_auto_mdr_mapping(MDR_UUID)`\"}},{\"method\":\"POST\",\"url\":\"saved/searches/Splunk Noisy - Rule\",\"body\":{\"cron_schedule\":\"*/15 * * * *\",\"dispatch.earliest_time\":\"-1586m@m\",\"alert.digest_mode\":\"false\",\"alert.severity\":3,\"action.correlationsearch.enabled\":\"true\",\"action.correlationsearch.label\":\"Splunk Noisy - Rule\",\"action.notable.param.security_domain\":\"network\",\"alert.managedBy\":\"\",\"description\":\"Splunk Noisy for the compile corpus.\\n\",\"dispatch.latest_time\":\"now\",\"alert.track\":\"1\"}},{\"method\":\"POST\",\"url\":\"saved/searches/Splunk Noisy - Rule\",\"body\":{\"is_scheduled\":1,\"actions\":\"\",\"search\":\"index=main noisy\\n| eval MDR_UUID=\\\"00000000-0000-4000-8005-000000000304\\\", MDR_status=\\\"PRODUCTION\\\" \\n|`soc_macro_auto_mdr_mapping(MDR_UUID)`\"}}]"
+    },
+    {
+     "tenant": "core",
+     "body": "[{\"method\":\"POST\",\"url\":\"saved/searches\",\"body\":{\"name\":\"Splunk Noisy\",\"search\":\"index=main noisy\\n| eval MDR_UUID=\\\"00000000-0000-4000-8005-000000000304\\\", MDR_status=\\\"PRODUCTION\\\" \\n|`soc_macro_auto_mdr_mapping(MDR_UUID)`\"}},{\"method\":\"POST\",\"url\":\"saved/searches/Splunk Noisy\",\"body\":{\"cron_schedule\":\"*/15 * * * *\",\"dispatch.earliest_time\":\"-1440m@m\",\"alert.digest_mode\":\"false\",\"alert.severity\":3,\"alert.managedBy\":\"\",\"description\":\"Splunk Noisy for the compile corpus.\\n\",\"dispatch.latest_time\":\"now\",\"alert.track\":\"1\",\"alert.expires\":\"7d\"}},{\"method\":\"POST\",\"url\":\"saved/searches/Splunk Noisy\",\"body\":{\"is_scheduled\":1,\"actions\":\"\",\"search\":\"index=main noisy\\n| eval MDR_UUID=\\\"00000000-0000-4000-8005-000000000304\\\", MDR_status=\\\"PRODUCTION\\\" \\n|`soc_macro_auto_mdr_mapping(MDR_UUID)`\"}}]"
+    }
+   ]
+  },
+  {
+   "uuid": "00000000-0000-4000-8005-000000000302",
+   "file": "<WS>/objects/rules/splunk-realtime.yaml",
+   "platform": "splunk",
+   "compile": {},
+   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000302\",\"name\":\"Splunk Real Time\",\"api_request\":{\"enabled\":false,\"name\":\"\",\"schema\":null,\"status\":\"DISABLED\",\"flags\":null,\"tenants\":null,\"contributors\":null,\"query\":\"index=main error\",\"scheduling\":{\"type\":\"Real Time\",\"expires\":null,\"schedule\":null,\"timerange\":null},\"trigger\":null,\"actions\":null,\"correlation_search\":false,\"advanced\":null}}",
+   "tenants": [
+    {
+     "tenant": "es",
+     "body": "[{\"method\":\"POST\",\"url\":\"saved/searches\",\"body\":{\"name\":\"Splunk Real Time\",\"search\":\"index=main error\\n| eval MDR_UUID=\\\"00000000-0000-4000-8005-000000000302\\\", MDR_status=\\\"DISABLED\\\" \\n|`soc_macro_auto_mdr_mapping(MDR_UUID)`\"}},{\"method\":\"POST\",\"url\":\"saved/searches/Splunk Real Time\",\"body\":{\"dispatch.earliest_time\":\"rt\",\"dispatch.latest_time\":\"rt\",\"disabled\":\"true\",\"alert.managedBy\":\"\",\"description\":\"Splunk Real Time for the compile corpus.\",\"alert.track\":\"1\",\"action.notable.param.rule_title\":\"Splunk Real Time\",\"action.notable.param.rule_description\":\"Splunk Real Time for the compile corpus.\"}},{\"method\":\"POST\",\"url\":\"saved/searches/Splunk Real Time\",\"body\":{\"actions\":\"notable\",\"search\":\"index=main error\\n| eval MDR_UUID=\\\"00000000-0000-4000-8005-000000000302\\\", MDR_status=\\\"DISABLED\\\" \\n|`soc_macro_auto_mdr_mapping(MDR_UUID)`\"}}]"
+    },
+    {
+     "tenant": "core",
+     "body": "[{\"method\":\"POST\",\"url\":\"saved/searches\",\"body\":{\"name\":\"Splunk Real Time\",\"search\":\"index=main error\\n| eval MDR_UUID=\\\"00000000-0000-4000-8005-000000000302\\\", MDR_status=\\\"DISABLED\\\" \\n|`soc_macro_auto_mdr_mapping(MDR_UUID)`\"}},{\"method\":\"POST\",\"url\":\"saved/searches/Splunk Real Time\",\"body\":{\"dispatch.earliest_time\":\"rt\",\"dispatch.latest_time\":\"rt\",\"disabled\":\"true\",\"alert.managedBy\":\"\",\"description\":\"Splunk Real Time for the compile corpus.\",\"alert.track\":\"1\",\"alert.expires\":\"7d\"}},{\"method\":\"POST\",\"url\":\"saved/searches/Splunk Real Time\",\"body\":{\"actions\":\"\",\"search\":\"index=main error\\n| eval MDR_UUID=\\\"00000000-0000-4000-8005-000000000302\\\", MDR_status=\\\"DISABLED\\\" \\n|`soc_macro_auto_mdr_mapping(MDR_UUID)`\"}}]"
+    }
+   ]
+  },
+  {
+   "uuid": "00000000-0000-4000-8005-000000000303",
+   "file": "<WS>/objects/rules/splunk-removed.yaml",
+   "platform": "splunk",
+   "compile": {},
+   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000303\",\"name\":\"Splunk Custom Time\",\"api_request\":{\"enabled\":false,\"name\":\"\",\"schema\":null,\"status\":\"REMOVED\",\"flags\":null,\"tenants\":null,\"contributors\":null,\"query\":\"index=main warn\",\"scheduling\":{\"type\":null,\"expires\":null,\"schedule\":{\"frequency\":\"1d\",\"cron\":null,\"custom_time\":\"06h30\"},\"timerange\":{\"lookback\":null,\"earliest\":\"-2d@d\",\"latest\":null}},\"trigger\":null,\"actions\":null,\"correlation_search\":null,\"advanced\":null}}",
+   "tenants": [
+    {
+     "tenant": "es",
+     "body": "[]"
+    },
+    {
+     "tenant": "core",
+     "body": "[]"
+    }
+   ]
+  },
+  {
+   "uuid": "00000000-0000-4000-8005-000000000306",
+   "file": "<WS>/objects/rules/splunk-risk.yaml",
+   "platform": "splunk",
+   "compile": {},
+   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000306\",\"name\":\"Splunk Risk\",\"api_request\":{\"enabled\":false,\"name\":\"\",\"schema\":null,\"status\":\"PRODUCTION\",\"flags\":null,\"tenants\":null,\"contributors\":null,\"query\":\"index=main risk\",\"scheduling\":{\"type\":null,\"expires\":null,\"schedule\":{\"frequency\":\"1d\",\"cron\":null,\"custom_time\":\"06h30\"},\"timerange\":{\"lookback\":null,\"earliest\":\"-2d@d\",\"latest\":null}},\"trigger\":null,\"actions\":{\"notable\":null,\"risk\":{\"message\":\"Risk on $host$\",\"risk_objects\":[{\"field\":\"host\",\"type\":\"system\",\"score\":20}],\"threat_objects\":null},\"email\":null},\"correlation_search\":null,\"advanced\":null}}",
+   "tenants": [
+    {
+     "tenant": "es",
+     "body": "[{\"method\":\"POST\",\"url\":\"saved/searches\",\"body\":{\"name\":\"Splunk Risk - Rule\",\"search\":\"index=main risk\\n| eval MDR_UUID=\\\"00000000-0000-4000-8005-000000000306\\\", MDR_status=\\\"PRODUCTION\\\" \\n|`soc_macro_auto_mdr_mapping(MDR_UUID)`\"}},{\"method\":\"POST\",\"url\":\"saved/searches/Splunk Risk - Rule\",\"body\":{\"cron_schedule\":\"30 06 */1 * *\",\"dispatch.earliest_time\":\"-2d@d\",\"alert.severity\":4,\"action.correlationsearch.enabled\":\"true\",\"action.correlationsearch.label\":\"Splunk Risk - Rule\",\"action.risk.param._risk\":\"[{\\\"risk_object_field\\\": \\\"host\\\", \\\"risk_object_type\\\": \\\"system\\\", \\\"risk_score\\\": 20}]\",\"action.risk.param._risk_message\":\"Risk on $host$\",\"alert.managedBy\":\"\",\"description\":\"Splunk Risk for the compile corpus.\",\"dispatch.latest_time\":\"now\",\"alert.track\":\"1\",\"action.risk\":1,\"action.risk.param._risk_score\":0}},{\"method\":\"POST\",\"url\":\"saved/searches/Splunk Risk - Rule\",\"body\":{\"is_scheduled\":1,\"actions\":\"risk\",\"search\":\"index=main risk\\n| eval MDR_UUID=\\\"00000000-0000-4000-8005-000000000306\\\", MDR_status=\\\"PRODUCTION\\\" \\n|`soc_macro_auto_mdr_mapping(MDR_UUID)`\"}}]"
+    },
+    {
+     "tenant": "core",
+     "body": "[{\"method\":\"POST\",\"url\":\"saved/searches\",\"body\":{\"name\":\"Splunk Risk\",\"search\":\"index=main risk\\n| eval MDR_UUID=\\\"00000000-0000-4000-8005-000000000306\\\", MDR_status=\\\"PRODUCTION\\\" \\n|`soc_macro_auto_mdr_mapping(MDR_UUID)`\"}},{\"method\":\"POST\",\"url\":\"saved/searches/Splunk Risk\",\"body\":{\"cron_schedule\":\"30 06 */1 * *\",\"dispatch.earliest_time\":\"-2d@d\",\"alert.severity\":4,\"alert.managedBy\":\"\",\"description\":\"Splunk Risk for the compile corpus.\",\"dispatch.latest_time\":\"now\",\"alert.track\":\"1\",\"alert.expires\":\"7d\"}},{\"method\":\"POST\",\"url\":\"saved/searches/Splunk Risk\",\"body\":{\"is_scheduled\":1,\"actions\":\"\",\"search\":\"index=main risk\\n| eval MDR_UUID=\\\"00000000-0000-4000-8005-000000000306\\\", MDR_status=\\\"PRODUCTION\\\" \\n|`soc_macro_auto_mdr_mapping(MDR_UUID)`\"}}]"
+    }
+   ]
+  },
+  {
+   "uuid": "00000000-0000-4000-8005-000000000104",
+   "file": "<WS>/objects/rules/sysdig-cloudtrail.yaml",
+   "platform": "sysdig",
+   "compile": {
+    "body": "{\"name\":\"Sysdig Cloudtrail\",\"description\":\"Sysdig Cloudtrail for the compile corpus. Indented second line.\",\"tags\":[\"maturity_sandbox\"],\"details\":{\"ruleType\":\"FALCO\",\"append\":false,\"source\":\"aws_cloudtrail\",\"condition\":{\"condition\":\"ct.name = ConsoleLogin and ct.error exists\",\"components\":[]},\"output\":\"Sysdig Cloudtrail | user=%ct.user region=%ct.region event=%ct.name source_ip=%ct.srcip account=%ct.user.accountid\",\"priority\":\"critical\"}}"
+   },
+   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000104\",\"name\":\"Sysdig Cloudtrail\",\"api_request\":{\"name\":\"Sysdig Cloudtrail\",\"description\":\"Sysdig Cloudtrail for the compile corpus. Indented second line.\",\"tags\":[\"maturity_sandbox\"],\"details\":{\"ruleType\":\"FALCO\",\"append\":false,\"source\":\"aws_cloudtrail\",\"condition\":{\"condition\":\"ct.name = ConsoleLogin and ct.error exists\",\"components\":[]},\"output\":\"Sysdig Cloudtrail | user=%ct.user region=%ct.region event=%ct.name source_ip=%ct.srcip account=%ct.user.accountid\",\"priority\":\"critical\"}}}",
+   "tenants": [
+    {
+     "tenant": "tagged",
+     "body": "{\"name\":\"Sysdig Cloudtrail\",\"description\":\"Sysdig Cloudtrail for the compile corpus. Indented second line.\",\"tags\":[\"maturity_sandbox\",\"tenant_tag\",\"container\"],\"details\":{\"ruleType\":\"FALCO\",\"append\":false,\"source\":\"aws_cloudtrail\",\"condition\":{\"condition\":\"ct.name = ConsoleLogin and ct.error exists\",\"components\":[]},\"output\":\"Sysdig Cloudtrail | user=%ct.user region=%ct.region event=%ct.name source_ip=%ct.srcip account=%ct.user.accountid\",\"priority\":\"critical\"}}"
+    },
+    {
+     "tenant": "plain",
+     "body": "{\"name\":\"Sysdig Cloudtrail\",\"description\":\"Sysdig Cloudtrail for the compile corpus. Indented second line.\",\"tags\":[\"maturity_sandbox\"],\"details\":{\"ruleType\":\"FALCO\",\"append\":false,\"source\":\"aws_cloudtrail\",\"condition\":{\"condition\":\"ct.name = ConsoleLogin and ct.error exists\",\"components\":[]},\"output\":\"Sysdig Cloudtrail | user=%ct.user region=%ct.region event=%ct.name source_ip=%ct.srcip account=%ct.user.accountid\",\"priority\":\"critical\"}}"
+    }
+   ]
+  },
+  {
+   "uuid": "00000000-0000-4000-8005-000000000101",
+   "file": "<WS>/objects/rules/sysdig-full.yaml",
+   "platform": "sysdig",
+   "compile": {
+    "body": "{\"name\":\"Sysdig Full\",\"description\":\"Sysdig Full for the compile corpus. Indented second line.\",\"tags\":[\"container\",\"shell\",\"T1059.004\",\"T1059\",\"mitre_execution\",\"maturity_incubating\"],\"details\":{\"ruleType\":\"FALCO\",\"append\":false,\"source\":\"syscall\",\"condition\":{\"condition\":\"(evt.type in (execve, execveat) and evt.dir=<) and container and proc.name in ( sh, bash, zsh, \\\"fish shell\\\", ksh ) and not (proc.pname in ( gitlab-runner, buildkite-agent ) or (evt.type in (execve, execveat) and evt.dir=<) and proc.pname = make) and not proc.pname in ( gitlab-runner, buildkite-agent   ) and fd.name = sh, bash, zsh, \\\"fish shell\\\", ksh \",\"components\":[]},\"output\":\"Shell spawned in a container | user=%user.name command=%proc.cmdline\",\"priority\":\"error\",\"exceptions\":[{\"name\":\"single_field\",\"fields\":\"proc.name\",\"comps\":\"in\",\"values\":[\"gitlab-runner\",\"buildkite-agent\",\"bash\",5]},{\"name\":\"tuple_form\",\"fields\":[\"proc.name\",\"proc.pname\"],\"comps\":[\"=\",\"in\"],\"values\":[[\"zsh\",[\"gitlab-runner\",\"buildkite-agent\"]],[\"fish\",[\"gitlab-runner\",\"buildkite-agent\",\"make\"]],[\"ksh\",\"sudo\"]]},{\"name\":\"default_comps\",\"fields\":[\"container.image.repository\"],\"values\":[[\"registry.example.org/build\"]]}],\"minimumEngineVersion\":26}}"
+   },
+   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000101\",\"name\":\"Sysdig Full\",\"api_request\":{\"name\":\"Sysdig Full\",\"description\":\"Sysdig Full for the compile corpus. Indented second line.\",\"tags\":[\"container\",\"shell\",\"T1059.004\",\"T1059\",\"mitre_execution\",\"maturity_incubating\"],\"details\":{\"ruleType\":\"FALCO\",\"append\":false,\"source\":\"syscall\",\"condition\":{\"condition\":\"(evt.type in (execve, execveat) and evt.dir=<) and container and proc.name in ( sh, bash, zsh, \\\"fish shell\\\", ksh ) and not (proc.pname in ( gitlab-runner, buildkite-agent ) or (evt.type in (execve, execveat) and evt.dir=<) and proc.pname = make) and not proc.pname in ( gitlab-runner, buildkite-agent   ) and fd.name = sh, bash, zsh, \\\"fish shell\\\", ksh \",\"components\":[]},\"output\":\"Shell spawned in a container | user=%user.name command=%proc.cmdline\",\"priority\":\"error\",\"exceptions\":[{\"name\":\"single_field\",\"fields\":\"proc.name\",\"comps\":\"in\",\"values\":[\"gitlab-runner\",\"buildkite-agent\",\"bash\",5]},{\"name\":\"tuple_form\",\"fields\":[\"proc.name\",\"proc.pname\"],\"comps\":[\"=\",\"in\"],\"values\":[[\"zsh\",[\"gitlab-runner\",\"buildkite-agent\"]],[\"fish\",[\"gitlab-runner\",\"buildkite-agent\",\"make\"]],[\"ksh\",\"sudo\"]]},{\"name\":\"default_comps\",\"fields\":[\"container.image.repository\"],\"values\":[[\"registry.example.org/build\"]]}],\"minimumEngineVersion\":26}}}",
+   "tenants": [
+    {
+     "tenant": "tagged",
+     "body": "{\"name\":\"Sysdig Full\",\"description\":\"Sysdig Full for the compile corpus. Indented second line.\",\"tags\":[\"container\",\"shell\",\"T1059.004\",\"T1059\",\"mitre_execution\",\"maturity_incubating\",\"tenant_tag\"],\"details\":{\"ruleType\":\"FALCO\",\"append\":false,\"source\":\"syscall\",\"condition\":{\"condition\":\"(evt.type in (execve, execveat) and evt.dir=<) and container and proc.name in ( sh, bash, zsh, \\\"fish shell\\\", ksh ) and not (proc.pname in ( gitlab-runner, buildkite-agent ) or (evt.type in (execve, execveat) and evt.dir=<) and proc.pname = make) and not proc.pname in ( gitlab-runner, buildkite-agent   ) and fd.name = sh, bash, zsh, \\\"fish shell\\\", ksh \",\"components\":[]},\"output\":\"Shell spawned in a container | user=%user.name command=%proc.cmdline\",\"priority\":\"error\",\"exceptions\":[{\"name\":\"single_field\",\"fields\":\"proc.name\",\"comps\":\"in\",\"values\":[\"gitlab-runner\",\"buildkite-agent\",\"bash\",5]},{\"name\":\"tuple_form\",\"fields\":[\"proc.name\",\"proc.pname\"],\"comps\":[\"=\",\"in\"],\"values\":[[\"zsh\",[\"gitlab-runner\",\"buildkite-agent\"]],[\"fish\",[\"gitlab-runner\",\"buildkite-agent\",\"make\"]],[\"ksh\",\"sudo\"]]},{\"name\":\"default_comps\",\"fields\":[\"container.image.repository\"],\"values\":[[\"registry.example.org/build\"]]}],\"minimumEngineVersion\":26}}"
+    },
+    {
+     "tenant": "plain",
+     "body": "{\"name\":\"Sysdig Full\",\"description\":\"Sysdig Full for the compile corpus. Indented second line.\",\"tags\":[\"container\",\"shell\",\"T1059.004\",\"T1059\",\"mitre_execution\",\"maturity_incubating\"],\"details\":{\"ruleType\":\"FALCO\",\"append\":false,\"source\":\"syscall\",\"condition\":{\"condition\":\"(evt.type in (execve, execveat) and evt.dir=<) and container and proc.name in ( sh, bash, zsh, \\\"fish shell\\\", ksh ) and not (proc.pname in ( gitlab-runner, buildkite-agent ) or (evt.type in (execve, execveat) and evt.dir=<) and proc.pname = make) and not proc.pname in ( gitlab-runner, buildkite-agent   ) and fd.name = sh, bash, zsh, \\\"fish shell\\\", ksh \",\"components\":[]},\"output\":\"Shell spawned in a container | user=%user.name command=%proc.cmdline\",\"priority\":\"error\",\"exceptions\":[{\"name\":\"single_field\",\"fields\":\"proc.name\",\"comps\":\"in\",\"values\":[\"gitlab-runner\",\"buildkite-agent\",\"bash\",5]},{\"name\":\"tuple_form\",\"fields\":[\"proc.name\",\"proc.pname\"],\"comps\":[\"=\",\"in\"],\"values\":[[\"zsh\",[\"gitlab-runner\",\"buildkite-agent\"]],[\"fish\",[\"gitlab-runner\",\"buildkite-agent\",\"make\"]],[\"ksh\",\"sudo\"]]},{\"name\":\"default_comps\",\"fields\":[\"container.image.repository\"],\"values\":[[\"registry.example.org/build\"]]}],\"minimumEngineVersion\":26}}"
+    }
+   ]
+  },
+  {
+   "uuid": "00000000-0000-4000-8005-000000000103",
+   "file": "<WS>/objects/rules/sysdig-k8s.yaml",
+   "platform": "sysdig",
+   "compile": {
+    "body": "{\"name\":\"K8s exec into pod\",\"description\":\"Sysdig K8s Defaults for the compile corpus. Indented second line.\",\"tags\":[\"T1609\",\"T1078.004\",\"mitre_initial_access\",\"mitre_execution\",\"mitre_persistence\",\"mitre_privilege_escalation\",\"mitre_stealth\",\"maturity_stable\"],\"details\":{\"ruleType\":\"FALCO\",\"append\":false,\"source\":\"k8s_audit\",\"condition\":{\"condition\":\"ka.verb = create and ka.target.subresource in (exec, attach)\",\"components\":[]},\"output\":\"K8s exec into pod | user=%ka.user.name verb=%ka.verb uri=%ka.uri resource=%ka.target.resource namespace=%ka.target.namespace name=%ka.target.name response=%ka.response.code\",\"priority\":\"info\"}}"
+   },
+   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000103\",\"name\":\"Sysdig K8s Defaults\",\"api_request\":{\"name\":\"K8s exec into pod\",\"description\":\"Sysdig K8s Defaults for the compile corpus. Indented second line.\",\"tags\":[\"T1609\",\"T1078.004\",\"mitre_initial_access\",\"mitre_execution\",\"mitre_persistence\",\"mitre_privilege_escalation\",\"mitre_stealth\",\"maturity_stable\"],\"details\":{\"ruleType\":\"FALCO\",\"append\":false,\"source\":\"k8s_audit\",\"condition\":{\"condition\":\"ka.verb = create and ka.target.subresource in (exec, attach)\",\"components\":[]},\"output\":\"K8s exec into pod | user=%ka.user.name verb=%ka.verb uri=%ka.uri resource=%ka.target.resource namespace=%ka.target.namespace name=%ka.target.name response=%ka.response.code\",\"priority\":\"info\"}}}",
+   "tenants": [
+    {
+     "tenant": "tagged",
+     "body": "{\"name\":\"K8s exec into pod\",\"description\":\"Sysdig K8s Defaults for the compile corpus. Indented second line.\",\"tags\":[\"T1609\",\"T1078.004\",\"mitre_initial_access\",\"mitre_execution\",\"mitre_persistence\",\"mitre_privilege_escalation\",\"mitre_stealth\",\"maturity_stable\",\"tenant_tag\",\"container\"],\"details\":{\"ruleType\":\"FALCO\",\"append\":false,\"source\":\"k8s_audit\",\"condition\":{\"condition\":\"ka.verb = create and ka.target.subresource in (exec, attach)\",\"components\":[]},\"output\":\"K8s exec into pod | user=%ka.user.name verb=%ka.verb uri=%ka.uri resource=%ka.target.resource namespace=%ka.target.namespace name=%ka.target.name response=%ka.response.code\",\"priority\":\"info\"}}"
+    },
+    {
+     "tenant": "plain",
+     "body": "{\"name\":\"K8s exec into pod\",\"description\":\"Sysdig K8s Defaults for the compile corpus. Indented second line.\",\"tags\":[\"T1609\",\"T1078.004\",\"mitre_initial_access\",\"mitre_execution\",\"mitre_persistence\",\"mitre_privilege_escalation\",\"mitre_stealth\",\"maturity_stable\"],\"details\":{\"ruleType\":\"FALCO\",\"append\":false,\"source\":\"k8s_audit\",\"condition\":{\"condition\":\"ka.verb = create and ka.target.subresource in (exec, attach)\",\"components\":[]},\"output\":\"K8s exec into pod | user=%ka.user.name verb=%ka.verb uri=%ka.uri resource=%ka.target.resource namespace=%ka.target.namespace name=%ka.target.name response=%ka.response.code\",\"priority\":\"info\"}}"
+    }
+   ]
+  },
+  {
+   "uuid": "00000000-0000-4000-8005-000000000105",
+   "file": "<WS>/objects/rules/sysdig-okta.yaml",
+   "platform": "sysdig",
+   "compile": {
+    "body": "{\"name\":\"Sysdig Plugin Source\",\"description\":\"Sysdig Plugin Source for the compile corpus. Indented second line.\",\"tags\":[\"maturity_incubating\"],\"details\":{\"ruleType\":\"FALCO\",\"append\":false,\"source\":\"okta\",\"condition\":{\"condition\":\"okta.evt.type = user.session.start\",\"components\":[]},\"output\":\"Sysdig Plugin Source\",\"priority\":\"emergency\"}}"
+   },
+   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000105\",\"name\":\"Sysdig Plugin Source\",\"api_request\":{\"name\":\"Sysdig Plugin Source\",\"description\":\"Sysdig Plugin Source for the compile corpus. Indented second line.\",\"tags\":[\"maturity_incubating\"],\"details\":{\"ruleType\":\"FALCO\",\"append\":false,\"source\":\"okta\",\"condition\":{\"condition\":\"okta.evt.type = user.session.start\",\"components\":[]},\"output\":\"Sysdig Plugin Source\",\"priority\":\"emergency\"}}}",
+   "tenants": [
+    {
+     "tenant": "tagged",
+     "body": "{\"name\":\"Sysdig Plugin Source\",\"description\":\"Sysdig Plugin Source for the compile corpus. Indented second line.\",\"tags\":[\"maturity_incubating\",\"tenant_tag\",\"container\"],\"details\":{\"ruleType\":\"FALCO\",\"append\":false,\"source\":\"okta\",\"condition\":{\"condition\":\"okta.evt.type = user.session.start\",\"components\":[]},\"output\":\"Sysdig Plugin Source\",\"priority\":\"emergency\"}}"
+    },
+    {
+     "tenant": "plain",
+     "body": "{\"name\":\"Sysdig Plugin Source\",\"description\":\"Sysdig Plugin Source for the compile corpus. Indented second line.\",\"tags\":[\"maturity_incubating\"],\"details\":{\"ruleType\":\"FALCO\",\"append\":false,\"source\":\"okta\",\"condition\":{\"condition\":\"okta.evt.type = user.session.start\",\"components\":[]},\"output\":\"Sysdig Plugin Source\",\"priority\":\"emergency\"}}"
+    }
+   ]
+  },
+  {
+   "uuid": "00000000-0000-4000-8005-000000000102",
+   "file": "<WS>/objects/rules/sysdig-tuning.yaml",
+   "platform": "sysdig",
+   "compile": {
+    "body": "{\"name\":\"Terminal shell in container\",\"description\":\"\",\"tags\":[],\"details\":{\"ruleType\":\"FALCO\",\"append\":true,\"condition\":{\"condition\":\"and not proc.pname in ( gitlab-runner, buildkite-agent )\",\"components\":[]},\"exceptions\":[{\"name\":\"build_namespaces\",\"fields\":\"k8s.ns.name\",\"comps\":\"in\",\"values\":[\"ci\",\"builds\"]}],\"minimumEngineVersion\":30}}"
+   },
+   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000102\",\"name\":\"Sysdig Tuning\",\"api_request\":{\"name\":\"Terminal shell in container\",\"description\":\"\",\"tags\":[],\"details\":{\"ruleType\":\"FALCO\",\"append\":true,\"condition\":{\"condition\":\"and not proc.pname in ( gitlab-runner, buildkite-agent )\",\"components\":[]},\"exceptions\":[{\"name\":\"build_namespaces\",\"fields\":\"k8s.ns.name\",\"comps\":\"in\",\"values\":[\"ci\",\"builds\"]}],\"minimumEngineVersion\":30}}}",
+   "tenants": [
+    {
+     "tenant": "tagged",
+     "body": "{\"name\":\"Terminal shell in container\",\"description\":\"\",\"tags\":[],\"details\":{\"ruleType\":\"FALCO\",\"append\":true,\"condition\":{\"condition\":\"and not proc.pname in ( gitlab-runner, buildkite-agent )\",\"components\":[]},\"exceptions\":[{\"name\":\"build_namespaces\",\"fields\":\"k8s.ns.name\",\"comps\":\"in\",\"values\":[\"ci\",\"builds\"]}],\"minimumEngineVersion\":30}}"
+    },
+    {
+     "tenant": "plain",
+     "body": "{\"name\":\"Terminal shell in container\",\"description\":\"\",\"tags\":[],\"details\":{\"ruleType\":\"FALCO\",\"append\":true,\"condition\":{\"condition\":\"and not proc.pname in ( gitlab-runner, buildkite-agent )\",\"components\":[]},\"exceptions\":[{\"name\":\"build_namespaces\",\"fields\":\"k8s.ns.name\",\"comps\":\"in\",\"values\":[\"ci\",\"builds\"]}],\"minimumEngineVersion\":30}}"
+    }
+   ]
+  },
+  {
+   "uuid": "00000000-0000-4000-8005-000000000106",
+   "file": "<WS>/objects/rules/sysdig-unknown-status.yaml",
+   "platform": "sysdig",
+   "compile": {
+    "error": {
+     "code": "compile_failed",
+     "message": "Sysdig cannot compile this rule: \"Status 'NOT_A_STATUS' is not defined in deployment configuration. Available statuses: DESIGN, DEVELOPMENT, IMPROVING, STAGING, ACCEPTANCE, PRODUCTION, DISABLED, REMOVED.\"",
+     "help": null
+    }
+   },
+   "preview": "{\"uuid\":\"00000000-0000-4000-8005-000000000106\",\"name\":\"Sysdig Unknown Status\",\"status\":\"failed\",\"code\":\"compile_failed\",\"error\":\"Sysdig cannot compile this rule: \\\"Status 'NOT_A_STATUS' is not defined in deployment configuration. Available statuses: DESIGN, DEVELOPMENT, IMPROVING, STAGING, ACCEPTANCE, PRODUCTION, DISABLED, REMOVED.\\\"\",\"help\":null,\"file\":\"<WS>/objects/rules/sysdig-unknown-status.yaml\",\"api_request\":null}",
+   "tenants": [
+    {
+     "tenant": "tagged",
+     "error": {
+      "code": "compile_failed",
+      "message": "Sysdig cannot compile this rule: \"Status 'NOT_A_STATUS' is not defined in deployment configuration. Available statuses: DESIGN, DEVELOPMENT, IMPROVING, STAGING, ACCEPTANCE, PRODUCTION, DISABLED, REMOVED.\"",
+      "help": null
+     }
+    },
+    {
+     "tenant": "plain",
+     "error": {
+      "code": "compile_failed",
+      "message": "Sysdig cannot compile this rule: \"Status 'NOT_A_STATUS' is not defined in deployment configuration. Available statuses: DESIGN, DEVELOPMENT, IMPROVING, STAGING, ACCEPTANCE, PRODUCTION, DISABLED, REMOVED.\"",
+      "help": null
+     }
+    }
+   ]
+  }
+ ],
+ "unloadable": []
+}

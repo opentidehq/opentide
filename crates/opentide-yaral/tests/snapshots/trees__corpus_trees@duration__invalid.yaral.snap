@@ -1,0 +1,39 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/duration__invalid.yaral
+---
+SOURCE_FILE@0..61
+  COMMENT@0..24 "// prod:duration invalid"
+  WHITESPACE@24..25 "\n"
+  RULE_DECLARATION@25..60
+    RULE_KW@25..29 "rule"
+    WHITESPACE@29..30 " "
+    RULE_NAME@30..31
+      IDENT@30..31 "r"
+    WHITESPACE@31..32 " "
+    L_BRACE@32..33 "{"
+    WHITESPACE@33..36 "\n  "
+    MATCH_SECTION@36..56
+      MATCH_KW@36..41 "match"
+      COLON@41..42 ":"
+      WHITESPACE@42..47 "\n    "
+      MATCH_CLAUSE@47..56
+        VARIABLE@47..49
+          VAR_TOKEN@47..49 "$u"
+        WHITESPACE@49..50 " "
+        MATCH_WINDOW@50..56
+          BY_KW@50..52 "by"
+          WHITESPACE@52..53 " "
+          INTEGER@53..54 "2"
+          WHITESPACE@54..55 " "
+          TIME_UNIT@55..56
+            IDENT@55..56 "h"
+    WHITESPACE@56..57 " "
+    ERROR@57..58
+      IDENT@57..58 "h"
+    WHITESPACE@58..59 "\n"
+    R_BRACE@59..60 "}"
+  WHITESPACE@60..61 "\n"
+errors:
+56..57: expected a section such as `events:` (expected `rule`, `before`, `after`, `}`)

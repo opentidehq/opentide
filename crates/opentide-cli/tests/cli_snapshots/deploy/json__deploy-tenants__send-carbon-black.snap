@@ -1,0 +1,107 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: deploy/json/deploy-tenants/send-carbon-black
+---
+args: opentide --json deploy --platform carbon_black_cloud --strategy PREVIEW --strategy RELEASE --all --keep-deprecated
+exit: 1
+
+━━━ stdout · json, 1 lines
+{
+  "changes": [
+    {
+      "action": "delete",
+      "name": "Carbon Black retire rule",
+      "platform": "carbon_black_cloud",
+      "status": "REMOVED",
+      "tenant": "lab",
+      "uuid": "00000000-0000-4000-8047-000000000061"
+    },
+    {
+      "action": "upsert",
+      "name": "Carbon Black rule in a missing watchlist",
+      "platform": "carbon_black_cloud",
+      "status": "STAGING",
+      "tenant": "lab",
+      "uuid": "00000000-0000-4000-8047-000000000062"
+    }
+  ],
+  "command": "deploy",
+  "deployed": [
+    "carbon_black_cloud"
+  ],
+  "dry_run": false,
+  "duration_ms": 0,
+  "error": "Deployment to carbon_black_cloud failed on Carbon Black rule in a missing watchlist: The CBC Deployer cannot create a detection in a nonexistent Watchlist: missing. Create it on the console before retriggering deployment.",
+  "exit_code": 1,
+  "failure": {
+    "argument": null,
+    "code": "issues_found",
+    "crash_log": null,
+    "message": "Deployment to carbon_black_cloud failed on Carbon Black rule in a missing watchlist: The CBC Deployer cannot create a detection in a nonexistent Watchlist: missing. Create it on the console before retriggering deployment.",
+    "suggestion": null
+  },
+  "failures": [
+    {
+      "error": "The CBC Deployer cannot create a detection in a nonexistent Watchlist: missing. Create it on the console before retriggering deployment.",
+      "id": "00000000-0000-4000-8047-000000000062",
+      "name": "Carbon Black rule in a missing watchlist",
+      "platform": "carbon_black_cloud",
+      "tenant": "lab"
+    }
+  ],
+  "message": "Deployment failed · 1 deleted, 1 failed, 0 not attempted · <SECONDS>",
+  "next_actions": [],
+  "ok": false,
+  "plan": {
+    "carbon_black_cloud": [
+      "00000000-0000-4000-8047-000000000061",
+      "00000000-0000-4000-8047-000000000062"
+    ]
+  },
+  "results": [
+    {
+      "action": "delete",
+      "error": null,
+      "id": "00000000-0000-4000-8047-000000000061",
+      "name": "Carbon Black retire rule",
+      "platform": "carbon_black_cloud",
+      "reason": null,
+      "seconds": 0.0,
+      "status": "deployed",
+      "tenant": "lab"
+    },
+    {
+      "action": "upsert",
+      "error": "The CBC Deployer cannot create a detection in a nonexistent Watchlist: missing. Create it on the console before retriggering deployment.",
+      "id": "00000000-0000-4000-8047-000000000062",
+      "name": "Carbon Black rule in a missing watchlist",
+      "platform": "carbon_black_cloud",
+      "reason": null,
+      "seconds": 0.0,
+      "status": "failed",
+      "tenant": "lab"
+    }
+  ],
+  "schema_version": 1,
+  "status": "failed",
+  "strategies": [
+    "PREVIEW",
+    "RELEASE"
+  ],
+  "summary": {
+    "create": 0,
+    "delete": 1,
+    "disable": 0,
+    "failed": 1,
+    "not_attempted": 0,
+    "platforms": 1,
+    "seconds": 0.0,
+    "skipped": 0,
+    "tenants": 1,
+    "unchanged": 0,
+    "update": 0,
+    "upsert": 0
+  }
+}
+
+━━━ stderr · empty

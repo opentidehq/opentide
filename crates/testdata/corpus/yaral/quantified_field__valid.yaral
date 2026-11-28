@@ -1,0 +1,3 @@
+// prod:quantified_field valid
+any $e.principal.ip = "10.0.0.1"
+all $e.security_result.action != "BLOCK"

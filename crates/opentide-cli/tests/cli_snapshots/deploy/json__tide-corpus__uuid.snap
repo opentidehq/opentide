@@ -1,0 +1,102 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: deploy/json/tide-corpus/uuid
+---
+args: opentide --json deploy --dry-run --strategy PREVIEW --uuid 00000000-0000-4000-8003-000000000001
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "advice": "add (or uncomment) a [[tenants]] entry in .opentide/configurations/platforms/sentinel.toml",
+  "changes": [
+    {
+      "action": "upsert",
+      "name": "Sentinel KQL Rule",
+      "platform": "sentinel",
+      "status": "STAGING",
+      "tenant": null,
+      "uuid": "00000000-0000-4000-8003-000000000001"
+    }
+  ],
+  "command": "deploy",
+  "deployed": [],
+  "dry_run": true,
+  "duration_ms": 0,
+  "exit_code": 0,
+  "failure": null,
+  "message": "Plan: 0 to create, 0 to update, 1 to create or update, 0 to disable, 0 to delete",
+  "missing_tenants": {
+    "sentinel": ".opentide/configurations/platforms/sentinel.toml"
+  },
+  "next_actions": [],
+  "ok": true,
+  "payloads": {
+    "sentinel": [
+      {
+        "api_request": {
+          "kind": "Scheduled",
+          "properties": {
+            "alertDetailsOverride": {
+              "alertDisplayNameFormat": "Sentinel KQL Rule"
+            },
+            "description": "Simulated Sentinel rule for CLI E2E corpus.\n",
+            "displayName": "Sentinel KQL Rule",
+            "enabled": true,
+            "eventGroupingSettings": {
+              "aggregationKind": "SingleAlert"
+            },
+            "incidentConfiguration": {
+              "createIncident": true,
+              "groupingConfiguration": {
+                "enabled": false,
+                "lookbackDuration": "PT01H00M00S",
+                "matchingMethod": "AllEntities",
+                "reopenClosedIncident": false
+              }
+            },
+            "query": "SecurityEvent\n| where EventID == 4688\n| take 1\n",
+            "queryFrequency": "PT01H00M00S",
+            "queryPeriod": "PT02H00M00S",
+            "severity": "High",
+            "suppressionDuration": "PT01H00M00S",
+            "suppressionEnabled": false,
+            "tactics": [
+              "Execution"
+            ],
+            "techniques": [
+              "T1059"
+            ]
+          }
+        },
+        "name": "Sentinel KQL Rule",
+        "uuid": "00000000-0000-4000-8003-000000000001"
+      }
+    ]
+  },
+  "plan": {
+    "sentinel": [
+      "00000000-0000-4000-8003-000000000001"
+    ]
+  },
+  "schema_version": 1,
+  "scope": "selected",
+  "status": "completed",
+  "strategies": [
+    "PREVIEW"
+  ],
+  "summary": {
+    "create": 0,
+    "delete": 0,
+    "disable": 0,
+    "platforms": 1,
+    "tenants": 0,
+    "update": 0,
+    "upsert": 1
+  },
+  "tenants": {},
+  "warnings": [
+    "sentinel has no tenants configured in .opentide/configurations/platforms/sentinel.toml, so a real deploy would stop"
+  ]
+}
+
+━━━ stderr · empty

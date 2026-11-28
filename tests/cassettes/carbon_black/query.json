@@ -1,0 +1,391 @@
+{
+  "format": 1,
+  "scenario": "carbon_black/query",
+  "recorded_from": [
+    "{python}",
+    "tests/cassettes/carbon_black/client.py",
+    "query"
+  ],
+  "digest": "sha256:dbd0f4a69eef871b8a855a8552054c8e0c88fc4c9cc59dfd5a5a29355405d879",
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://cbc.invalid/api/investigate/v2/orgs/ORGKEY01/processes/search_validation",
+        "headers": [
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "x-auth-token",
+            "REDACTED"
+          ]
+        ],
+        "body": "{\"query\": \"process_name:cmd.exe AND device_name:ws-*\"}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "cbc-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"valid\": true, \"value_search_query\": true}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://cbc.invalid/api/investigate/v2/orgs/ORGKEY01/processes/search_jobs",
+        "headers": [
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "x-auth-token",
+            "REDACTED"
+          ]
+        ],
+        "body": "{\"query\": \"process_name:cmd.exe AND device_name:ws-*\", \"rows\": 10000, \"sort\": null, \"time_range\": {\"end\": \"2026-10-27T08:00:00.000Z\", \"start\": \"2026-10-26T08:00:00.000Z\"}}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "cbc-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"job_id\": \"job-1\"}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://cbc.invalid/api/investigate/v2/orgs/ORGKEY01/processes/search_jobs/job-1/results?start=0&rows=0",
+        "headers": [
+          [
+            "x-auth-token",
+            "REDACTED"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "cbc-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"num_found\": 3, \"num_available\": 3, \"contacted\": 5, \"completed\": 0, \"approximate_unaggregated\": 3, \"num_aggregated\": 3, \"results\": []}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://cbc.invalid/api/investigate/v2/orgs/ORGKEY01/processes/search_jobs/job-1/results?start=0&rows=0",
+        "headers": [
+          [
+            "x-auth-token",
+            "REDACTED"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "cbc-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"num_found\": 3, \"num_available\": 3, \"contacted\": 5, \"completed\": 5, \"approximate_unaggregated\": 3, \"num_aggregated\": 3, \"results\": []}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://cbc.invalid/api/investigate/v2/orgs/ORGKEY01/processes/search_jobs/job-1/results?start=0&rows=3",
+        "headers": [
+          [
+            "x-auth-token",
+            "REDACTED"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "cbc-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"num_found\": 3, \"num_available\": 3, \"contacted\": 5, \"completed\": 5, \"approximate_unaggregated\": 3, \"num_aggregated\": 3, \"results\": [{\"process_name\": \"c:\\\\windows\\\\system32\\\\cmd.exe\", \"process_pid\": [4001], \"device_name\": \"ws-1\", \"device_timestamp\": \"2026-10-27T07:51:00.000Z\", \"process_guid\": \"ORGKEY01-00000001-00000fa0-00000000-1dc0000000000000\", \"backend_timestamp\": \"2026-10-27T07:51:01.000Z\", \"process_hash\": [\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"], \"parent\": {\"name\": \"explorer.exe\", \"pid\": 101}}, {\"process_name\": \"c:\\\\windows\\\\system32\\\\cmd.exe\", \"process_pid\": [4002], \"device_name\": \"ws-2\", \"device_timestamp\": \"2026-10-27T07:52:00.000Z\", \"process_guid\": \"ORGKEY01-00000002-00000fa0-00000000-1dc0000000000000\", \"backend_timestamp\": \"2026-10-27T07:52:01.000Z\", \"process_hash\": [\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"], \"parent\": {\"name\": \"explorer.exe\", \"pid\": 102}}, {\"process_name\": \"c:\\\\windows\\\\system32\\\\cmd.exe\", \"process_pid\": [4003], \"device_name\": \"ws-3\", \"device_timestamp\": \"2026-10-27T07:53:00.000Z\", \"process_guid\": \"ORGKEY01-00000003-00000fa0-00000000-1dc0000000000000\", \"backend_timestamp\": \"2026-10-27T07:53:01.000Z\", \"process_hash\": [\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"], \"parent\": {\"name\": \"explorer.exe\", \"pid\": 103}}]}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://cbc.invalid/api/investigate/v2/orgs/ORGKEY01/processes/search_validation",
+        "headers": [
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "x-auth-token",
+            "REDACTED"
+          ]
+        ],
+        "body": "{\"query\": \"process_name:x\"}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "cbc-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"valid\": true, \"value_search_query\": true}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://cbc.invalid/api/investigate/v2/orgs/ORGKEY01/processes/search_jobs",
+        "headers": [
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "x-auth-token",
+            "REDACTED"
+          ]
+        ],
+        "body": "{\"query\": \"process_name:x\", \"rows\": 10000, \"sort\": null, \"time_range\": {\"end\": \"2026-10-27T08:00:00.000Z\", \"start\": \"2026-10-26T08:00:00.000Z\"}}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "cbc-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"job_id\": \"job-2\"}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://cbc.invalid/api/investigate/v2/orgs/ORGKEY01/processes/search_jobs/job-2/results?start=0&rows=0",
+        "headers": [
+          [
+            "x-auth-token",
+            "REDACTED"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "cbc-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"num_found\": 0, \"num_available\": 0, \"contacted\": 5, \"completed\": 0, \"approximate_unaggregated\": 0, \"num_aggregated\": 0, \"results\": []}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://cbc.invalid/api/investigate/v2/orgs/ORGKEY01/processes/search_jobs/job-2/results?start=0&rows=0",
+        "headers": [
+          [
+            "x-auth-token",
+            "REDACTED"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "cbc-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"num_found\": 0, \"num_available\": 0, \"contacted\": 5, \"completed\": 5, \"approximate_unaggregated\": 0, \"num_aggregated\": 0, \"results\": []}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://cbc.invalid/api/investigate/v2/orgs/ORGKEY01/processes/search_jobs/job-2/results?start=0&rows=101",
+        "headers": [
+          [
+            "x-auth-token",
+            "REDACTED"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "cbc-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"num_found\": 0, \"num_available\": 0, \"contacted\": 5, \"completed\": 5, \"approximate_unaggregated\": 0, \"num_aggregated\": 0, \"results\": []}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://cbc.invalid/api/investigate/v2/orgs/ORGKEY01/processes/search_validation",
+        "headers": [
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "x-auth-token",
+            "REDACTED"
+          ]
+        ],
+        "body": "{\"query\": \"process_name:(cmd.exe\"}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "cbc-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"valid\": false, \"invalid_message\": \"unbalanced parenthesis\", \"value_search_query\": false}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://cbc.invalid/api/investigate/v2/orgs/ORGKEY01/processes/search_validation",
+        "headers": [
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "x-auth-token",
+            "REDACTED"
+          ]
+        ],
+        "body": "{\"query\": \"process_name:denied.exe\"}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "cbc-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"valid\": true, \"value_search_query\": true}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://cbc.invalid/api/investigate/v2/orgs/ORGKEY01/processes/search_jobs",
+        "headers": [
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "x-auth-token",
+            "REDACTED"
+          ]
+        ],
+        "body": "{\"query\": \"process_name:denied.exe\", \"rows\": 10000, \"sort\": null, \"time_range\": {\"end\": \"2026-10-27T08:00:00.000Z\", \"start\": \"2026-10-26T08:00:00.000Z\"}}"
+      },
+      "response": {
+        "status": 403,
+        "headers": [
+          [
+            "server",
+            "cbc-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"error_code\": \"FORBIDDEN\", \"message\": \"Access denied to process search\"}"
+      }
+    }
+  ]
+}

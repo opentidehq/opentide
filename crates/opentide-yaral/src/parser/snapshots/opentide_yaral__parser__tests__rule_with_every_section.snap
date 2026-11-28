@@ -1,0 +1,168 @@
+---
+source: crates/opentide-yaral/src/parser/tests.rs
+expression: "show(\"rule r {\\n meta: author = \\\"a\\\" n = 1 d = 5m ok = true ref = x\\n events: $e.a = 1\\n match: $e.u over 5m before $e\\n outcome: $risk_score = max($e.s)\\n condition: #e > 1 and $e\\n options: allow_zero_values = true\\n export: $e.a\\n}\")"
+---
+SOURCE_FILE@0..219
+  RULE_DECLARATION@0..219
+    RULE_KW@0..4 "rule"
+    WHITESPACE@4..5 " "
+    RULE_NAME@5..6
+      IDENT@5..6 "r"
+    WHITESPACE@6..7 " "
+    L_BRACE@7..8 "{"
+    WHITESPACE@8..10 "\n "
+    META_SECTION@10..59
+      META_KW@10..14 "meta"
+      COLON@14..15 ":"
+      WHITESPACE@15..16 " "
+      META_ENTRY@16..28
+        META_KEY@16..22
+          IDENT@16..22 "author"
+        WHITESPACE@22..23 " "
+        EQ@23..24 "="
+        WHITESPACE@24..25 " "
+        LITERAL@25..28
+          STRING@25..28 "\"a\""
+      WHITESPACE@28..29 " "
+      META_ENTRY@29..34
+        META_KEY@29..30
+          IDENT@29..30 "n"
+        WHITESPACE@30..31 " "
+        EQ@31..32 "="
+        WHITESPACE@32..33 " "
+        LITERAL@33..34
+          INTEGER@33..34 "1"
+      WHITESPACE@34..35 " "
+      META_ENTRY@35..41
+        META_KEY@35..36
+          IDENT@35..36 "d"
+        WHITESPACE@36..37 " "
+        EQ@37..38 "="
+        WHITESPACE@38..39 " "
+        LITERAL@39..41
+          DURATION@39..41 "5m"
+      WHITESPACE@41..42 " "
+      META_ENTRY@42..51
+        META_KEY@42..44
+          IDENT@42..44 "ok"
+        WHITESPACE@44..45 " "
+        EQ@45..46 "="
+        WHITESPACE@46..47 " "
+        LITERAL@47..51
+          TRUE_KW@47..51 "true"
+      WHITESPACE@51..52 " "
+      META_ENTRY@52..59
+        META_KEY@52..55
+          IDENT@52..55 "ref"
+        WHITESPACE@55..56 " "
+        EQ@56..57 "="
+        WHITESPACE@57..58 " "
+        NAME_REF@58..59
+          IDENT@58..59 "x"
+    WHITESPACE@59..61 "\n "
+    EVENTS_SECTION@61..77
+      EVENTS_KW@61..67 "events"
+      COLON@67..68 ":"
+      WHITESPACE@68..69 " "
+      COMPARISON@69..77
+        UDM_FIELD@69..73
+          VARIABLE@69..71
+            VAR_TOKEN@69..71 "$e"
+          MEMBER@71..73
+            ACCESS_DOT@71..72 "."
+            FIELD_NAME@72..73 "a"
+        WHITESPACE@73..74 " "
+        EQ@74..75 "="
+        WHITESPACE@75..76 " "
+        LITERAL@76..77
+          INTEGER@76..77 "1"
+    WHITESPACE@77..79 "\n "
+    MATCH_SECTION@79..108
+      MATCH_KW@79..84 "match"
+      COLON@84..85 ":"
+      WHITESPACE@85..86 " "
+      MATCH_CLAUSE@86..108
+        UDM_FIELD@86..90
+          VARIABLE@86..88
+            VAR_TOKEN@86..88 "$e"
+          MEMBER@88..90
+            ACCESS_DOT@88..89 "."
+            FIELD_NAME@89..90 "u"
+        WHITESPACE@90..91 " "
+        MATCH_WINDOW@91..108
+          OVER_KW@91..95 "over"
+          WHITESPACE@95..96 " "
+          DURATION@96..98 "5m"
+          WHITESPACE@98..99 " "
+          BEFORE_KW@99..105 "before"
+          WHITESPACE@105..106 " "
+          VARIABLE@106..108
+            VAR_TOKEN@106..108 "$e"
+    WHITESPACE@108..110 "\n "
+    OUTCOME_SECTION@110..142
+      OUTCOME_KW@110..117 "outcome"
+      COLON@117..118 ":"
+      WHITESPACE@118..119 " "
+      COMPARISON@119..142
+        VARIABLE@119..130
+          VAR_TOKEN@119..130 "$risk_score"
+        WHITESPACE@130..131 " "
+        EQ@131..132 "="
+        WHITESPACE@132..133 " "
+        FUNCTION_CALL@133..142
+          FUNCTION_NAME@133..136
+            IDENT@133..136 "max"
+          L_PAREN@136..137 "("
+          ARGUMENTS@137..141
+            UDM_FIELD@137..141
+              VARIABLE@137..139
+                VAR_TOKEN@137..139 "$e"
+              MEMBER@139..141
+                ACCESS_DOT@139..140 "."
+                FIELD_NAME@140..141 "s"
+          R_PAREN@141..142 ")"
+    WHITESPACE@142..144 "\n "
+    CONDITION_SECTION@144..168
+      CONDITION_KW@144..153 "condition"
+      COLON@153..154 ":"
+      WHITESPACE@154..155 " "
+      AND_EXPR@155..168
+        COMPARISON@155..161
+          COUNT_REF@155..157
+            COUNT_TOKEN@155..157 "#e"
+          WHITESPACE@157..158 " "
+          GT@158..159 ">"
+          WHITESPACE@159..160 " "
+          LITERAL@160..161
+            INTEGER@160..161 "1"
+        WHITESPACE@161..162 " "
+        AND_KW@162..165 "and"
+        WHITESPACE@165..166 " "
+        VARIABLE@166..168
+          VAR_TOKEN@166..168 "$e"
+    WHITESPACE@168..170 "\n "
+    OPTIONS_SECTION@170..203
+      OPTIONS_KW@170..177 "options"
+      COLON@177..178 ":"
+      WHITESPACE@178..179 " "
+      OPTION_ENTRY@179..203
+        OPTION_KEY@179..196
+          IDENT@179..196 "allow_zero_values"
+        WHITESPACE@196..197 " "
+        EQ@197..198 "="
+        WHITESPACE@198..199 " "
+        LITERAL@199..203
+          TRUE_KW@199..203 "true"
+    WHITESPACE@203..205 "\n "
+    EXPORT_SECTION@205..217
+      EXPORT_KW@205..211 "export"
+      COLON@211..212 ":"
+      WHITESPACE@212..213 " "
+      UDM_FIELD@213..217
+        VARIABLE@213..215
+          VAR_TOKEN@213..215 "$e"
+        MEMBER@215..217
+          ACCESS_DOT@215..216 "."
+          FIELD_NAME@216..217 "a"
+    WHITESPACE@217..218 "\n"
+    R_BRACE@218..219 "}"

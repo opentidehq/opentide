@@ -1,0 +1,27 @@
+name: Sysdig K8s Defaults
+
+metadata:
+  uuid: 00000000-0000-4000-8005-000000000103
+  schema: rule::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+  author: Detection Team
+
+description: |
+  Sysdig K8s Defaults for the compile corpus.
+    Indented second line.
+techniques:
+  - T1609
+  - T1078.004
+
+configurations:
+  sysdig:
+    enabled: true
+    schema: platform::sysdig::1.0
+    status: PRODUCTION
+    name: K8s exec into pod
+    source: k8s_audit
+    priority: " info "
+    condition: ka.verb = create and ka.target.subresource in (exec, attach)

@@ -1,0 +1,103 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: validate/json/vscode-folded-comment/folded-comment
+---
+args: opentide --json validate --check queries --file detections/rules/custom-folder-rule.yaml
+exit: 1
+
+━━━ stdout · json, 1 lines
+{
+  "check": "queries",
+  "checks": {
+    "queries": {
+      "check": "queries",
+      "status": "failed"
+    }
+  },
+  "command": "validate",
+  "duration_ms": 0,
+  "error": "Validation failed",
+  "exit_code": 1,
+  "failure": {
+    "argument": null,
+    "code": "issues_found",
+    "crash_log": null,
+    "message": "Validation failed",
+    "suggestion": null
+  },
+  "message": "Validation failed",
+  "next_actions": [
+    {
+      "command": "opentide --json explain query_folded_comment",
+      "reason": "how to fix it"
+    },
+    {
+      "command": "opentide --json validate --check queries --file detections/rules/custom-folder-rule.yaml",
+      "reason": "check again"
+    }
+  ],
+  "ok": false,
+  "report": {
+    "issues": [
+      {
+        "code": "query_folded_comment",
+        "column": 7,
+        "context": {
+          "language": "kql",
+          "platform": "sentinel",
+          "position": {
+            "column": 7,
+            "end_column": 23,
+            "end_line": 11,
+            "line": 11
+          },
+          "source": "engine"
+        },
+        "end_column": 23,
+        "end_line": 11,
+        "explain": "opentide explain query_folded_comment",
+        "field_path": [
+          "configurations",
+          "sentinel",
+          "query"
+        ],
+        "file_path": "<WS>/detections/rules/custom-folder-rule.yaml",
+        "fix": null,
+        "help": "opentide explain query_folded_comment describes it",
+        "line": 11,
+        "message": "YAML folds this query's lines into one, so this `//` comment runs on and comments out the lines after it, from `| where FileName =~ \"procdump.exe\"`: the platform runs the query without them; write the query as a literal block (`|` or `|-`), which keeps its lines, or remove the comment",
+        "object_type": "rule",
+        "object_uuid": "ff8bf67e-64dc-460d-b5df-48db643f3560",
+        "path": "detections/rules/custom-folder-rule.yaml",
+        "severity": "error",
+        "suggestion": null,
+        "yaml_line": 10
+      }
+    ],
+    "ok": false,
+    "stats": {
+      "id_workers": "<CORES>",
+      "object_workers": "<CORES>",
+      "objects_checked": 1,
+      "parallel": "<CORES>",
+      "queries_checked": 1,
+      "wall_ms": 0.0,
+      "workers": "<CORES>"
+    },
+    "warnings": []
+  },
+  "schema_version": 1,
+  "status": "failed",
+  "summary": {
+    "errors": 1,
+    "files": 1,
+    "fixable": 0,
+    "objects": 1,
+    "queries": 1,
+    "warning_files": 0,
+    "warnings": 0
+  },
+  "workspace": "<WS>"
+}
+
+━━━ stderr · empty

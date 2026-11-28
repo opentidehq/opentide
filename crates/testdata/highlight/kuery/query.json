@@ -1,0 +1,324 @@
+{
+  "language_id": "kuery",
+  "tokens": [
+    {
+      "span": {
+        "start": 0,
+        "end": 14
+      },
+      "range": {
+        "start": {
+          "line": 0,
+          "character": 0
+        },
+        "end": {
+          "line": 0,
+          "character": 14
+        }
+      },
+      "capture": "property",
+      "token_type": 8
+    },
+    {
+      "span": {
+        "start": 14,
+        "end": 15
+      },
+      "range": {
+        "start": {
+          "line": 0,
+          "character": 14
+        },
+        "end": {
+          "line": 0,
+          "character": 15
+        }
+      },
+      "capture": "operator",
+      "token_type": 2
+    },
+    {
+      "span": {
+        "start": 15,
+        "end": 22
+      },
+      "range": {
+        "start": {
+          "line": 0,
+          "character": 15
+        },
+        "end": {
+          "line": 0,
+          "character": 22
+        }
+      },
+      "capture": "string",
+      "token_type": 9
+    },
+    {
+      "span": {
+        "start": 23,
+        "end": 26
+      },
+      "range": {
+        "start": {
+          "line": 0,
+          "character": 23
+        },
+        "end": {
+          "line": 0,
+          "character": 26
+        }
+      },
+      "capture": "keyword",
+      "token_type": 1
+    },
+    {
+      "span": {
+        "start": 27,
+        "end": 30
+      },
+      "range": {
+        "start": {
+          "line": 0,
+          "character": 27
+        },
+        "end": {
+          "line": 0,
+          "character": 30
+        }
+      },
+      "capture": "keyword",
+      "token_type": 1
+    },
+    {
+      "span": {
+        "start": 31,
+        "end": 43
+      },
+      "range": {
+        "start": {
+          "line": 0,
+          "character": 31
+        },
+        "end": {
+          "line": 0,
+          "character": 43
+        }
+      },
+      "capture": "property",
+      "token_type": 8
+    },
+    {
+      "span": {
+        "start": 43,
+        "end": 44
+      },
+      "range": {
+        "start": {
+          "line": 0,
+          "character": 43
+        },
+        "end": {
+          "line": 0,
+          "character": 44
+        }
+      },
+      "capture": "operator",
+      "token_type": 2
+    },
+    {
+      "span": {
+        "start": 44,
+        "end": 45
+      },
+      "range": {
+        "start": {
+          "line": 0,
+          "character": 44
+        },
+        "end": {
+          "line": 0,
+          "character": 45
+        }
+      },
+      "capture": "punctuation.bracket",
+      "token_type": 14
+    },
+    {
+      "span": {
+        "start": 45,
+        "end": 54
+      },
+      "range": {
+        "start": {
+          "line": 0,
+          "character": 45
+        },
+        "end": {
+          "line": 0,
+          "character": 54
+        }
+      },
+      "capture": "string",
+      "token_type": 9
+    },
+    {
+      "span": {
+        "start": 55,
+        "end": 57
+      },
+      "range": {
+        "start": {
+          "line": 0,
+          "character": 55
+        },
+        "end": {
+          "line": 0,
+          "character": 57
+        }
+      },
+      "capture": "keyword",
+      "token_type": 1
+    },
+    {
+      "span": {
+        "start": 58,
+        "end": 69
+      },
+      "range": {
+        "start": {
+          "line": 0,
+          "character": 58
+        },
+        "end": {
+          "line": 0,
+          "character": 69
+        }
+      },
+      "capture": "string",
+      "token_type": 9
+    },
+    {
+      "span": {
+        "start": 69,
+        "end": 70
+      },
+      "range": {
+        "start": {
+          "line": 0,
+          "character": 69
+        },
+        "end": {
+          "line": 0,
+          "character": 70
+        }
+      },
+      "capture": "punctuation.bracket",
+      "token_type": 14
+    },
+    {
+      "span": {
+        "start": 71,
+        "end": 74
+      },
+      "range": {
+        "start": {
+          "line": 0,
+          "character": 71
+        },
+        "end": {
+          "line": 0,
+          "character": 74
+        }
+      },
+      "capture": "keyword",
+      "token_type": 1
+    },
+    {
+      "span": {
+        "start": 75,
+        "end": 86
+      },
+      "range": {
+        "start": {
+          "line": 0,
+          "character": 75
+        },
+        "end": {
+          "line": 0,
+          "character": 86
+        }
+      },
+      "capture": "property",
+      "token_type": 8
+    },
+    {
+      "span": {
+        "start": 87,
+        "end": 89
+      },
+      "range": {
+        "start": {
+          "line": 0,
+          "character": 87
+        },
+        "end": {
+          "line": 0,
+          "character": 89
+        }
+      },
+      "capture": "operator",
+      "token_type": 2
+    },
+    {
+      "span": {
+        "start": 90,
+        "end": 94
+      },
+      "range": {
+        "start": {
+          "line": 0,
+          "character": 90
+        },
+        "end": {
+          "line": 0,
+          "character": 94
+        }
+      },
+      "capture": "number",
+      "token_type": 10
+    }
+  ],
+  "legend": [
+    "comment",
+    "keyword",
+    "operator",
+    "operator.pipe",
+    "function",
+    "function.builtin",
+    "type",
+    "variable",
+    "property",
+    "string",
+    "number",
+    "boolean",
+    "constant",
+    "punctuation",
+    "punctuation.bracket",
+    "punctuation.delimiter",
+    "error",
+    "tide.keyword",
+    "tide.property",
+    "tide.uuid",
+    "tide.schema",
+    "markdown.heading",
+    "markdown.emphasis",
+    "markdown.strong",
+    "markdown.code",
+    "markdown.link",
+    "markdown.list",
+    "markdown.quote",
+    "macro"
+  ]
+}

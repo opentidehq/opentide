@@ -1,0 +1,37 @@
+//! The artifacts generated from the model (UC-1.8, #814; plan D-2): what
+//! `opentide generate` writes into a workspace and what is committed for
+//! editors, from the Rust model.
+//!
+//! - [`json`]: documents with their keys in insertion order, indented by
+//!   four spaces, every character as UTF-8;
+//! - [`annotate`]: the editor annotations of every generated schema;
+//! - [`router`]: the router, `opentide.schema.json`;
+//! - [`models`]: each model's field order, which the schemas schemars
+//!   derives do not keep;
+//! - [`template`]: YAML skeletons;
+//! - [`snippets`]: VS Code snippets;
+//! - [`schema`]: the editor schema of each object revision and of
+//!   `visibility.toml` (UC-1.8b, #900), schemars' schema with opentide's
+//!   transforms;
+//! - [`configuration`]: each configuration file's schema and their router;
+//! - [`workspace`]: the files of the `schemas`, `templates` and `snippets`
+//!   phases, from a workspace's resolved configuration;
+//! - [`catalog`]: the language server's field catalog (`fields.json`,
+//!   `deprecations.json`), from each revision's model and editor schema.
+//!
+//! The module is I/O-free: hosts (`cargo xtask codegen`, the CLI) write the
+//! files.
+
+pub mod annotate;
+pub mod catalog;
+pub mod configuration;
+pub mod json;
+pub mod models;
+pub mod router;
+pub mod schema;
+pub mod snippets;
+pub mod template;
+pub mod workspace;
+
+#[cfg(test)]
+mod tests;

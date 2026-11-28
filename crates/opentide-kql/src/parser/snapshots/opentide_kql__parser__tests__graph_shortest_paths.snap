@@ -1,0 +1,52 @@
+---
+source: crates/opentide-kql/src/parser/tests.rs
+expression: "show(\"T | graph-shortest-paths output=any (a)-[e*1..5]->(b) project a\")"
+---
+SOURCE_FILE@0..63
+  QUERY@0..63
+    TABULAR_EXPRESSION@0..63
+      TABULAR_SOURCE@0..1
+        TABLE_REF@0..1
+          IDENT@0..1 "T"
+      WHITESPACE@1..2 " "
+      PIPE@2..3 "|"
+      WHITESPACE@3..4 " "
+      GRAPH_SHORTEST_PATHS_OPERATOR@4..63
+        GRAPH_SHORTEST_PATHS_KW@4..24 "graph-shortest-paths"
+        WHITESPACE@24..25 " "
+        OPERATOR_OPTION@25..35
+          IDENT@25..31 "output"
+          EQ@31..32 "="
+          OPTION_VALUE@32..35
+            IDENT@32..35 "any"
+        WHITESPACE@35..36 " "
+        GRAPH_PATTERN@36..53
+          GRAPH_PATH@36..53
+            GRAPH_NODE@36..39
+              L_PAREN@36..37 "("
+              IDENT@37..38 "a"
+              R_PAREN@38..39 ")"
+            GRAPH_EDGE@39..50
+              MINUS@39..40 "-"
+              L_BRACKET@40..41 "["
+              IDENT@41..42 "e"
+              GRAPH_RANGE@42..47
+                STAR@42..43 "*"
+                LITERAL@43..44
+                  NUMBER@43..44 "1"
+                DOT_DOT@44..46 ".."
+                LITERAL@46..47
+                  NUMBER@46..47 "5"
+              R_BRACKET@47..48 "]"
+              MINUS@48..49 "-"
+              CMP_OP@49..50 ">"
+            GRAPH_NODE@50..53
+              L_PAREN@50..51 "("
+              IDENT@51..52 "b"
+              R_PAREN@52..53 ")"
+        WHITESPACE@53..54 " "
+        GRAPH_PROJECT@54..63
+          PROJECT_KW@54..61 "project"
+          WHITESPACE@61..62 " "
+          NAME_REF@62..63
+            IDENT@62..63 "a"

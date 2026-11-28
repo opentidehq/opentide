@@ -1,0 +1,2 @@
+# prod:parenthesized_expression valid
+(evt.type in (open, openat, openat2) and evt.is_open_write = true)

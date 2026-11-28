@@ -1,0 +1,1 @@
+from * metadata _id, _index, _version | frobnicate type=="EXECVE" and a0=="arecord" and a1=="-vv" and a2=="-fdat" or type=="SYSCALL" and ends_with(exe, "/ecasound") and SYSCALL=="memfd_create"

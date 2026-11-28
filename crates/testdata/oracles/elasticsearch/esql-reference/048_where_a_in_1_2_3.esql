@@ -1,0 +1,1 @@
+FROM logs | WHERE a IN (1, 2, 3)

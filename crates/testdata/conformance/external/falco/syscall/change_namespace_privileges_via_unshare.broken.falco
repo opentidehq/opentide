@@ -1,0 +1,1 @@
+evt.type=unshare and proc.name in (oops and container and not thread.cap_permitted contains CAP_SYS_ADMIN

@@ -1,0 +1,1 @@
+index=main | join type=left host [ search index=main | fields host ]

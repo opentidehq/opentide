@@ -1,0 +1,23 @@
+---
+source: crates/opentide-kql/src/parser/tests.rs
+expression: "show(\"T | scan with ()\")"
+---
+SOURCE_FILE@0..16
+  QUERY@0..16
+    TABULAR_EXPRESSION@0..16
+      TABULAR_SOURCE@0..1
+        TABLE_REF@0..1
+          IDENT@0..1 "T"
+      WHITESPACE@1..2 " "
+      PIPE@2..3 "|"
+      WHITESPACE@3..4 " "
+      SCAN_OPERATOR@4..16
+        SCAN_KW@4..8 "scan"
+        WHITESPACE@8..9 " "
+        WITH_KW@9..13 "with"
+        WHITESPACE@13..14 " "
+        L_PAREN@14..15 "("
+        SCAN_STEP@15..15
+        R_PAREN@15..16 ")"
+errors:
+15..15: expected `step` (expected `step`)

@@ -1,0 +1,55 @@
+name: Microsoft Defender block
+metadata:
+  uuid: 00000000-0000-4000-8003-0000000000d0
+  schema: rule::1.1
+  version: 1
+  created: "2026-11-24"
+  modified: "2026-11-24"
+  tlp: clear
+description: |
+  Encoded PowerShell started by a valid cloud account, on the Graph beta custom detection contract.
+status: STAGING
+response:
+  alert_severity: High
+configurations:
+  microsoft_defender:
+    enabled: true
+    schema: platform::microsoft_defender::1.0
+    status: STAGING
+    query: |
+      DeviceProcessEvents
+      | where FileName =~ "powershell.exe" and ProcessCommandLine has "-enc"
+    schedule:
+      frequency: 1H
+      lookback: 4H
+    alert:
+      title: Encoded PowerShell
+      severity: High
+      recommendation: Review the command line and isolate the device if it is malicious.
+      techniques: [T1059.001, T1078.004]
+      custom_details:
+        CommandLine: ProcessCommandLine
+      grouping: single_alert
+    entities:
+      hosts:
+        - device_id: DeviceId
+          name: DeviceName
+      accounts:
+        - sid: AccountSid
+          name: AccountName
+          nt_domain: AccountDomain
+      processes:
+        - sha256: SHA256
+    actions:
+      isolate_devices:
+        - device_id: DeviceId
+          isolation_type: full
+      collect_investigation_packages:
+        - device_id: DeviceId
+      block_files:
+        - sha256: SHA256
+          device_groups: [Tier 0]
+    scope:
+      device_groups: [Tier 0]
+    incident:
+      exclude_from_correlation: true

@@ -1,0 +1,64 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: info/json/tide-corpus/vocab-surface
+---
+args: opentide --json info vocab surface
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "command": "info",
+  "duration_ms": 0,
+  "exit_code": 0,
+  "failure": null,
+  "message": "Completed successfully",
+  "next_actions": [],
+  "ok": true,
+  "schema_version": 1,
+  "status": "completed",
+  "summary": {
+    "load_errors": 0,
+    "objectives": 1,
+    "rules": 10,
+    "threats": 1
+  },
+  "vocabulary": {
+    "entries": 895,
+    "key": "name",
+    "latest_revision": "1.0",
+    "name": "surface",
+    "pins": [
+      {
+        "admitted": 895,
+        "defined": true,
+        "field": "threat.surface",
+        "revision": "1.0",
+        "schema": "threat::1.0",
+        "scoped": true
+      }
+    ],
+    "removed": 0,
+    "revisions": [
+      {
+        "admitted": 895,
+        "introduced": 895,
+        "removed": 0,
+        "revision": "1.0"
+      }
+    ],
+    "staged": true,
+    "stages": [
+      "OS",
+      "Application",
+      "Authentication",
+      "Cloud",
+      "Infrastructure",
+      "Security",
+      "IoT",
+      "Protocol"
+    ],
+    "title": "Threat Surface"
+  }
+}
+
+━━━ stderr · empty

@@ -1,0 +1,190 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: validate/json/tide-corpus-bad-values/bad-values
+---
+args: opentide --json validate
+exit: 1
+
+━━━ stdout · json, 1 lines
+{
+  "checks": {
+    "configuration": {
+      "check": "configuration",
+      "status": "passed"
+    },
+    "id-uniqueness": {
+      "check": "id-uniqueness",
+      "status": "passed"
+    },
+    "queries": {
+      "check": "queries",
+      "status": "passed"
+    },
+    "schema": {
+      "check": "schema",
+      "status": "failed"
+    },
+    "uuid-format": {
+      "check": "uuid-format",
+      "status": "passed"
+    }
+  },
+  "command": "validate",
+  "duration_ms": 0,
+  "error": "Validation failed",
+  "exit_code": 1,
+  "failure": {
+    "argument": null,
+    "code": "issues_found",
+    "crash_log": null,
+    "message": "Validation failed",
+    "suggestion": null
+  },
+  "message": "Validation failed",
+  "next_actions": [
+    {
+      "command": "opentide --json explain microsoft_defender_severity",
+      "reason": "how to fix it"
+    },
+    {
+      "command": "opentide --json validate",
+      "reason": "check again"
+    }
+  ],
+  "ok": false,
+  "report": {
+    "issues": [
+      {
+        "code": "microsoft_defender_severity",
+        "column": 17,
+        "context": {},
+        "end_column": 23,
+        "end_line": 35,
+        "explain": "opentide explain microsoft_defender_severity",
+        "field_path": [
+          "configurations",
+          "microsoft_defender",
+          "alert",
+          "severity"
+        ],
+        "file_path": "<WS>/Objects/Detection Rules/rule-0002-defender-kql.yaml",
+        "fix": null,
+        "help": null,
+        "line": 35,
+        "message": "alert.severity \"Severe\" is not Informational, Low, Medium, High or Critical (exact case)",
+        "object_type": "rule",
+        "object_uuid": "00000000-0000-4000-8003-000000000002",
+        "path": "Objects/Detection Rules/rule-0002-defender-kql.yaml",
+        "severity": "error",
+        "suggestion": null,
+        "yaml_line": 34
+      },
+      {
+        "code": "schema_validation",
+        "column": 24,
+        "context": {
+          "expected": "false, \"Malicious\" or \"Suspicious\""
+        },
+        "end_column": 29,
+        "end_line": 37,
+        "explain": "opentide explain schema_validation",
+        "field_path": [
+          "configurations",
+          "sentinel_one",
+          "response",
+          "treat_as_threat"
+        ],
+        "file_path": "<WS>/Objects/Detection Rules/rule-0004-sentinel-one-s1ql.yaml",
+        "fix": null,
+        "help": "write false, \"Malicious\" or \"Suspicious\"",
+        "line": 37,
+        "message": "Input should be False, 'Malicious' or 'Suspicious'",
+        "object_type": "rule",
+        "object_uuid": "00000000-0000-4000-8003-000000000004",
+        "path": "Objects/Detection Rules/rule-0004-sentinel-one-s1ql.yaml",
+        "severity": "error",
+        "suggestion": null,
+        "yaml_line": 36
+      },
+      {
+        "code": "schema_validation",
+        "column": 16,
+        "context": {
+          "expected": "verbose or summary"
+        },
+        "end_column": 25,
+        "end_line": 29,
+        "explain": "opentide explain schema_validation",
+        "field_path": [
+          "configurations",
+          "crowdstrike",
+          "details",
+          "trigger"
+        ],
+        "file_path": "<WS>/Objects/Detection Rules/rule-0006-crowdstrike-deploy-only.yaml",
+        "fix": null,
+        "help": "write verbose or summary",
+        "line": 29,
+        "message": "deploy takes verbose or summary (any case), not \"sometimes\"",
+        "object_type": "rule",
+        "object_uuid": "00000000-0000-4000-8003-000000000006",
+        "path": "Objects/Detection Rules/rule-0006-crowdstrike-deploy-only.yaml",
+        "severity": "error",
+        "suggestion": null,
+        "yaml_line": 28
+      },
+      {
+        "code": "schema_validation",
+        "column": 17,
+        "context": {
+          "expected": "Informational, Low, Medium, High or Critical"
+        },
+        "end_column": 20,
+        "end_line": 31,
+        "explain": "opentide explain schema_validation",
+        "field_path": [
+          "configurations",
+          "crowdstrike",
+          "details",
+          "severity"
+        ],
+        "file_path": "<WS>/Objects/Detection Rules/rule-0006-crowdstrike-deploy-only.yaml",
+        "fix": null,
+        "help": "write Informational, Low, Medium, High or Critical",
+        "line": 31,
+        "message": "deploy takes Informational, Low, Medium, High or Critical (exact case), not \"low\"; did you mean \"Low\"?",
+        "object_type": "rule",
+        "object_uuid": "00000000-0000-4000-8003-000000000006",
+        "path": "Objects/Detection Rules/rule-0006-crowdstrike-deploy-only.yaml",
+        "severity": "error",
+        "suggestion": null,
+        "yaml_line": 30
+      }
+    ],
+    "ok": false,
+    "stats": {
+      "id_workers": "<CORES>",
+      "object_workers": "<CORES>",
+      "objects_checked": 12,
+      "parallel": "<CORES>",
+      "queries_checked": 8,
+      "wall_ms": 0.0,
+      "workers": "<CORES>"
+    },
+    "warnings": []
+  },
+  "schema_version": 1,
+  "status": "failed",
+  "summary": {
+    "errors": 4,
+    "files": 3,
+    "fixable": 0,
+    "objects": 12,
+    "queries": 8,
+    "warning_files": 0,
+    "warnings": 0
+  },
+  "workspace": "<WS>"
+}
+
+━━━ stderr · empty

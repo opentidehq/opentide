@@ -1,39 +1,44 @@
 ---
 title: Platforms
-description: Thirteen deployment platforms, nine query validators (eight offline), eleven query runners, the offline query checks, and where each platform block schema is specified.
+description: Fourteen deployment platforms, ten query validators on a tenant and thirteen offline, twelve query runners, and where each platform block schema is specified.
 ---
 
 # Platforms
 
-opentide integrates with **thirteen detection platforms** through built-in adapters registered at import time (`opentide.platforms` entry points). All ship in the base PyPI package.
+opentide integrates with **fourteen detection platforms** through connectors built into its Rust core. All ship in the base PyPI package; a Python package can add another as a [platform plugin](../../sdk/platforms.md#platform-plugins).
 
 ## Capability matrix
 
 | Platform | CLI `--platform` | Deploy | Query validate (live) | Offline query check | [Query](../../cli/query.md) | Query language |
 |----------|------------------|:------:|:--------------:|:------------:|:-----:|----------------|
 | Microsoft Sentinel | `sentinel` | yes | yes | yes | yes | KQL |
-| Defender for Endpoint | `defender_for_endpoint` | yes | yes | yes | yes | KQL |
+| Microsoft Defender | `microsoft_defender` | yes | yes | yes | yes | KQL |
 | Elastic Security | `elastic` | yes | yes | yes | yes | Kuery / Lucene / EQL / ES\|QL |
 | Splunk Enterprise Security | `splunk` | yes | yes | yes | yes | SPL |
 | SentinelOne | `sentinel_one` | yes | yes | no | yes | S1QL |
 | Carbon Black Cloud | `carbon_black_cloud` | yes | yes | yes | yes | Lucene |
-| CrowdStrike Falcon | `crowdstrike` | yes | no | no | yes | correlation filter (CQL) |
+| CrowdStrike Falcon | `crowdstrike` | yes | no | yes | yes | correlation rule (CQL) |
 | HarfangLab | `harfanglab` | yes | no | YARA | telemetry filters | Sigma or YARA |
 | Sysdig Secure (Falco) | `sysdig` | yes | no | yes | no | Falco condition |
-| Bitdefender GravityZone | `bitdefender` | yes | no | YARA | no | GravityZone criteria or YARA |
-| Graylog | `graylog` | yes | yes | yes | yes | Graylog search syntax (Lucene) |
-| Exabeam New-Scale SIEM | `exabeam` | yes | yes (the filter) | yes* | yes | Exabeam Query Language |
+| Bitdefender GravityZone | `bitdefender` | yes | no | YARA | no | Basic criteria or YARA |
+| Graylog | `graylog` | yes | yes | yes | yes | Lucene (Graylog dialect) |
+| Exabeam New-Scale SIEM | `exabeam` | yes | yes (the filter) | yes | yes | Exabeam Query Language |
 | Google Security Operations | `google_secops` | yes | yes (`verifyRuleText`) | yes (YARA-L) | yes (`udmSearch`) | YARA-L 2.0 |
-
-\* Through the analysis engine: each sequence under the Exabeam Query Language's `rule` profile, a `system: exabeam` hunt or a `.exabeam` file under `search`.
+| Datadog Cloud SIEM | `datadog` | yes | yes (`rules/validation`) | yes | yes (Logs Search) | Datadog search syntax |
 
 The offline check is the analysis engine that ships with `pip install opentide` (`opentide validate`, `opentide validate query`, `opentide lint`, [`opentide lsp`](../../cli/lsp.md)): it parses each query in its language, with the platform's tables or dialect, and needs no tenant.
 
-CLI `--platform` uses **registry keys** (`defender_for_endpoint`, `carbon_black_cloud`, `sentinel_one`). These are runtime identifiers; every platform ships with `pip install opentide`.
+CLI `--platform` uses **registry keys** (`microsoft_defender`, `carbon_black_cloud`, `sentinel_one`). These are runtime identifiers; every platform ships with `pip install opentide`.
 
-CrowdStrike stores a correlation filter, which is not syntax-checked: `opentide validate query` reports `supported: false`. HarfangLab stores a Sigma rule or a YARA rule. Its YARA is checked offline, as libyara 4.5 compiles it, and Sigma is not; `--live` reports `supported: false`.
+A Sentinel deploy reads each analytics rule before it writes it, so a rule the workspace already holds reads `unchanged` and is not written; see [`opentide deploy`](../../cli/deploy.md#unchanged-rules).
 
-A HarfangLab block is one kind: `sigma` or `yara`, never both (`harfanglab_rule_kind`). A `yara` block is either `signature`, a whole YARA text deploy sends verbatim, or the decomposed `meta`, `strings`, `condition` and `imports` deploy assembles into one rule, never both (`harfanglab_yara_form`):
+`opentide validate` checks a scheduled Sentinel rule's `scheduling.frequency` and `scheduling.lookback` against the bounds Sentinel enforces at deploy: each from 5 minutes to 14 days, the lookback at least the frequency (`sentinel_frequency`, `sentinel_lookback`). A near-real-time rule (`nrt: true`) is not checked: deploy sends neither.
+
+A `sentinel` block's query is checked as an analytics rule: `search *`, `union *` and a query over 10,000 characters are errors (`kql_rule_search_star`, `kql_rule_union_star`, `kql_rule_too_long`), as Microsoft does not allow them in a scheduled rule. A Sentinel hunt's search may use them, and keeps the performance warnings `kql_unscoped_search` and `kql_unscoped_union`.
+
+CrowdStrike stores a Next-Gen SIEM correlation rule, whose `query` is CrowdStrike Query Language (CQL, Falcon LogScale's language). The analysis engine checks it offline; opentide calls no CrowdStrike query check, so `validate query --platform crowdstrike --live` reports `supported: false`. HarfangLab stores a Sigma rule or a YARA rule. Its YARA is checked offline, as YARA-X 1.x compiles it (the HarfangLab profile also refuses syntax only YARA-X has), and Sigma is not; `--live` reports `supported: false`.
+
+A HarfangLab block is one kind: `sigma` or `yara`, never both (`harfanglab_rule_kind`). A tenant takes both kinds: each rule goes to the endpoint of its own block's kind (`SigmaRule` or `YaraFile`), for a create, an update and a delete. A tenant has no `type` (removed in platform-harfanglab 1.6): `opentide validate` refuses a leftover one at its key, and `deploy`, `query` and the SDKs fail the tenant for it; delete it. One tenant per HarfangLab manager: two tenants on one manager (one per kind, as before 1.6) would each deploy every rule, posting each YARA file twice. Its `source_id` takes the Sigma rules and the YARA files alike. A rule whose block changes from `sigma` to `yara` leaves its Sigma rule on the tenant: delete it there. A `yara` block is either `signature`, a whole YARA text deploy sends verbatim, or the decomposed `meta`, `strings`, `condition` and `imports` deploy assembles into one rule, never both (`harfanglab_yara_form`):
 
 ```yaml
 configurations:
@@ -56,15 +61,23 @@ configurations:
 
 `opentide validate` checks `signature`, and the rule the decomposed form assembles, against the YARA language (its `queries` check, the `yara_*` codes): a YARA error fails the rule. Its `schema` check fails an `include` (`yara_include`), a signature with no rule that is neither private nor global (`yara_empty_signature`), a rule name used twice (`yara_duplicate_rule`), a signature written as a YAML alias (`yara_signature_alias`), and, in the decomposed form, a section or rule header in `strings` or `condition`, an unknown module in `imports`, and a rule `name` that derives a YARA keyword, a non-ASCII rule name or one over 128 characters. `opentide lint` reports YARA warnings, and warns when a rule in a signature has no meta `context` (`yara_meta_missing`), or when a rule's `context`, written in a signature or deployed by the decomposed form, is not a comma-joined list of `file`, `memory`, `file.pe`, `file.elf` and `file.macho` (`harfanglab_yara_context`). An empty `meta.context: []` in the decomposed form deploys the rule with no `context` and is `yara_meta_missing`. A `.yar` or `.yara` file is checked with `opentide validate query --file`.
 
-Every platform but Sysdig and Bitdefender answers [`opentide query`](../../cli/query.md), which runs a read-only query on its tenants and returns the rows. CrowdStrike queries run on Next-Gen SIEM. HarfangLab has no query language for telemetry: a query names a telemetry source and field filters, and a HarfangLab rule has no query to run.
+### CrowdStrike: the offline CQL checks
+
+`opentide validate`, `validate query --platform crowdstrike`, `lint`, [`opentide lsp`](../../cli/lsp.md) and MCP `validate_query` parse `configurations.crowdstrike.query`, a hunt's query with `system: crowdstrike`, and a `.cql` file, following CrowdStrike's published grammar and function reference:
+
+- A query that does not parse is a `cql_parse_error`.
+- A function call is checked against the function reference: an unknown (`cql_unknown_function`, with the nearest name) or removed function, an unknown, repeated or missing parameter, a second unnamed argument, and a literal outside a parameter's allowed values are errors; a deprecated function is a warning.
+- A correlation rule may not combine `correlate()` with another aggregate function (`cql_correlate_aggregate`), and `<=>` links fields only inside `correlate()`.
+- A `#event_simpleName` no Falcon sensor event has is a warning, with the nearest event name.
+
+Fields, saved searches (`$falcon/...()`), lookup files and repositories live in the tenant, so none is ever reported unknown, and the check cannot tell whether Next-Gen SIEM allows a function in a correlation rule. [Diagnostic codes](../../cli/diagnostics.md) lists every `cql_` code; each finding links [CrowdStrike's CQL reference](https://library.humio.com/crowdstrike-query-language/).
+
+Every platform but Sysdig answers [`opentide query`](../../cli/query.md), which runs a read-only query on its tenants and returns the rows. CrowdStrike queries run on Next-Gen SIEM. HarfangLab has no query language for telemetry: a query names a telemetry source and field filters, and a HarfangLab rule has no query to run.
 
 `validate query --platform elastic --live` previews the compiled rule in Kibana and runs the Elasticsearch pre-flight (ES|QL `LIMIT 0`, then `_field_caps` on aggregation fields). The same pre-flight runs before every Elastic deploy. Offline, the engine parses Kuery, Lucene, EQL and ES|QL, ES|QL against the stack versions of the block's tenants. See [Validate](../../cli/validate.md#elastic-live-validation-and-deploy).
 
 Sysdig Secure runs Falco. A `sysdig` block is a Falco rule (a condition, its exceptions, and the macros and lists only that rule uses), which deploy creates through the Sysdig Secure runtime API and adds to the runtime policies the tenant or block names, keeping Sysdig's rule id in [deployment state](deployment-state.md). Deploy expands the block's own macros and lists into the condition and derives the Falco `desc`, `priority`, MITRE tags and a default `output` from the rule. The analysis engine checks the Falco condition offline; Sysdig has no rule preview, so `validate query --platform sysdig --live` reports `supported: false`. `deploy --dry-run` shows the API body.
 
-Bitdefender GravityZone takes custom detection rules. A `bitdefender` block is one rule of one kind: `detection`, a list of criteria on a process, file, connection, registry or XDR event, or `yara`, a YARA signature written out in the block. Deploy calls the Incidents API (JSON-RPC `createCustomRule`, `updateCustomRule`, `deleteCustomRule`), sends the whole payload on every update, and keeps GravityZone's 24-hex rule id in [deployment state](deployment-state.md); it never lists rules, and never creates, updates or deletes an exclusion rule. It derives the GravityZone name, description, severity and tags from the rule, and resolves `targets` aliases with the tenant's `endpoint_tags` and `companies` tables. `opentide validate` checks the criteria catalogue, the actions each kind allows, and the YARA signature, and warns (as does `opentide lint`) on a full registry hive name, a `contains` value without a wildcard, and a `Critical` or `Informational` severity GravityZone collapses; The analysis engine checks `yara.signature` offline under its Bitdefender profile, as `opentide validate` (its `queries` check), `opentide validate query --platform bitdefender` and the editor do: a YARA error, a character that is not ASCII (`bitdefender_yara_ascii`) or a signature over 30,000 characters (`bitdefender_yara_size`) fails the rule, each reported once, at its place in the signature, and `opentide lint` warns on a module GravityZone has not confirmed (`yara_module_unconfirmed`). GravityZone has no dry run, so `validate query --platform bitdefender --live` reports `supported: false`. `deploy --dry-run` shows the `createCustomRule` request.
-
-Graylog takes event definitions of the Filter & Aggregation type, on Graylog 6.3, 7.0, 7.1 and 7.2, Open included. A `graylog` block is one definition: a query in Graylog's search syntax, and optionally an `aggregation` (group-by fields and a condition such as `count() >= 3 OR card(parent_image_lc) >= 2`), streams and notifications named by aliases from the tenant's tables, a schedule, event fields, a summary and remediation steps. Deploy reads the server version (`GET /api/system`) once per tenant and builds every request for it, checks the query with `POST /api/search/validate` before every create and update (a query Graylog reports as `ERROR` is never saved; a `DISABLEMENT` skips the check, so a rule stays disableable), and keeps Graylog's 24-hex event definition id in [deployment state](deployment-state.md); it never lists definitions. It derives the title, description, priority, tags and ATT&CK ids from the rule: `tags` and `tactics_techniques` on 7.2 and later, a description line and an `attack_techniques` event field before. `opentide validate` checks the block's constraints and warns on a filter whose window overlaps its interval, a definition with no stream, and two rules with one title. Offline, the analysis engine checks the query as Lucene in its Graylog dialect; `validate query --platform graylog --live` asks each tenant's `/api/search/validate`, and `opentide query --platform graylog` searches messages read-only. Graylog keyword fields are case-sensitive: the [spec](/docs/specifications/specs/platforms/graylog-1.0/) documents the lower-cased-copy pipeline pattern for case-insensitive rules.
 Exabeam New-Scale SIEM takes correlation rules. An `exabeam` block is one rule: one or more `sequences`, each a filter in the Exabeam Query Language (profile `rule`) that triggers on any matching event or on a `threshold` (`count`, `unique_count`, `value`, `max`, `min`, `sum` or `average` with `more_than`, `less_than`, `in` or `not_in`, within a window). Two or more sequences correlate within `correlation.within`, optionally on common fields, in the order they are written. `outcome` is `alert` (the default), `case` or `none`, with an optional `email`, `suppression`, `delay` (7 to 180 minutes) and `schedule`. Durations are a whole number and one unit (`30m`, `4h`, `1d`, and `2w` for `suppression.for`).
 
 ```yaml
@@ -92,7 +105,7 @@ configurations:
 
 Deploy derives the Exabeam rule name (the block's `name`, else the rule's), the description (whitespace collapsed, then an `ATT&CK:` line and an `opentide: <uuid>` line) and the severity (`none` to `critical`, from `response.alert_severity` unless the block sets it). It creates, updates and deletes through the Correlation Rules API, always sending the whole rule; `DISABLEMENT` is the same `PUT` with `enabled: false`. The rule UUID is kept in [deployment state](deployment-state.md). Before a create, deploy checks that no Exabeam rule has the name, case-insensitively, and fails with `exabeam_name_conflict` rather than adopt one; a create with no answer, or a server error, is never sent again (`exabeam_create_unconfirmed`). Requests are paced to 100 a minute across every Exabeam tenant of a run, and a `429` is waited out. A tenant names its API `region` (`us-west`, `us-east`, `ca`, `eu`, `sa`, `sg`, `ch`, `jp`, `au` or `uk`; calls go to `https://api.<region>.exabeam.cloud`), or an `api_url`, and its `client_id` and `client_secret` as `$VAR`s; `test_mode = true` deploys every block that does not set `test_mode` in test mode.
 
-`opentide validate` checks the block (the `exabeam_*` codes), two enabled blocks sharing a name (`exabeam_name_duplicate`), and warns (as does `opentide lint`) on `outcome: none` without an email and on a correlation window shorter than a sequence's. `validate query --platform exabeam --live` sends each sequence filter to Exabeam Search over the last 15 minutes: Exabeam has no rule preview, so the condition, windows and grouping are checked offline only. [`opentide query --platform exabeam`](../../cli/query.md) runs a `system: exabeam` hunt through Search, at most 3,000 rows. `deploy --dry-run` shows the create request.
+`opentide validate` checks the block (the `exabeam_*` codes) and two enabled blocks sharing a name (`exabeam_name_duplicate`). It warns, as `opentide lint` does, on `outcome: none` without an `email` (`exabeam_outcome_silent`: nobody is told when the rule triggers) and on a `correlation.within` that is not more than the ordered sequences need, their windows plus a minute between sequences (`exabeam_correlation_window`). `validate query --platform exabeam --live` sends each sequence filter to Exabeam Search over the last 15 minutes: Exabeam has no rule preview, so the condition, windows and grouping are not checked on the tenant. [`opentide query --platform exabeam`](../../cli/query.md) runs a `system: exabeam` hunt through Search, at most 3,000 rows. `deploy --dry-run` shows the create request.
 
 Google Security Operations (Google SecOps, formerly Chronicle) takes YARA-L 2.0 custom rules. A `google_secops` block carries the rule's sections as keys: `events`, `outcome` and `condition` (and `setup`, `export`) as YARA-L text, written as block scalars, and `match` and `options` as YAML objects. Deploy assembles the rule from them: `rule <name> {`, a `meta` section it derives from the rule (author, description, severity, priority, the ATT&CK `technique` list Google's coverage matrix reads, `opentide_uuid` and `opentide_version`, then the block's own `meta`), then each section under its label. The rule name is the block's `name`, else the rule's title in `snake_case`.
 
@@ -120,9 +133,46 @@ configurations:
       suppression_window: 1h
 ```
 
-`condition` is a block scalar on purpose: `condition: #fail >= 10 and $success` as a plain scalar is a YAML comment, loads as null, and fails with `yaral_section_empty`. `opentide validate` checks the block's constraints (`google_secops_rule_name`, `google_secops_severity`, `google_secops_run_frequency`, `google_secops_schedule`, `google_secops_meta_key`), the sections' structure (`yaral_section_missing`, `yaral_section_empty`, `yaral_section_header`, `yaral_section_alias`, `yaral_match_shape`, `yaral_match_window`, `yaral_option`), and that no two enabled blocks share a rule name, ignoring case (`google_secops_name_duplicate`). It warns, as `opentide lint` does, when `outcome` assigns no `$risk_score` (Google then gives every detection the instance's default score, 40 for an alert and 15 otherwise unless the instance's settings change them), when a rule matches a producer by a literal `ru_…` id, and on `run_frequency: LIVE` for a rule with two or more event variables, which deploy refuses because Google allows `LIVE` for single-event rules only (write `LIVE_CUSTOMIZABLE`).
+`condition` is a block scalar on purpose: `condition: #fail >= 10 and $success` as a plain scalar is a YAML comment, loads as null, and fails with `yaral_section_empty`. `opentide validate` checks the block's constraints (`google_secops_rule_name`, `google_secops_severity`, `google_secops_run_frequency`, `google_secops_schedule`, `google_secops_meta_key`) and the sections' structure (`yaral_section_missing`, `yaral_section_empty`, `yaral_section_header`, `yaral_match_shape`, `yaral_match_window`, `yaral_option`), each at its field path, and that no two enabled blocks share a rule name, ignoring case (`google_secops_name_duplicate`). It warns, as `opentide lint` does, when `outcome` assigns no `$risk_score` (Google then gives every detection the instance's default score, 40 for an alert and 15 otherwise unless the instance's settings change them), when a rule matches a producer by a literal `ru_…` id, and on `run_frequency: LIVE` for a rule with two or more event variables, which deploy refuses because Google allows `LIVE` for single-event rules only (write `LIVE_CUSTOMIZABLE`).
 
-Deploy goes through the Chronicle API v1 and keeps Google's rule id (`ru_<uuid>`) in [deployment state](deployment-state.md); it never lists rules. Every create and every changed text is compiled by `verifyRuleText` first, and an unchanged text is not sent again, so the rule keeps its revision (a new revision is re-initialised for about an hour). A bound rule is read with its deployment, unarchived first when archived, then its text, its `scope` and its run state are each updated only where they differ. A `PREVIEW` rule runs without alerting, `RELEASE` and `UNIVERSAL` alert, `DISABLEMENT` disables, even when the rule's new text fails `verifyRuleText` or its update (the failure is still reported, and an archived rule is left archived), and `DELETION` archives the rule, or deletes it without `force` when the tenant's `deletion = "delete"`, archiving it instead when Google refuses (any 4xx but 401, 403, 404 and 429): deploy never deletes a rule's detections. `runFrequency` is sent only when the block names `run_frequency`: otherwise Google keeps the rule's frequency, or gives a new rule its default, and never moves a rule off a legacy schedule, which it cannot undo. A block `schedule` is compared as Google stores it, and removed from the rule when removed from the block. `data_access_scope` is a data access scope id or its full resource name; a changed or removed one reaches every rule. Credentials are applied as google-auth applies them, so user Application Default Credentials send their quota project; a token that cannot be obtained stops the tenant before any request (`google_secops_tenant_unauthorized`). A 429, or a 503 on any call but a create, is waited out (`Retry-After`, else Google's `RetryInfo`, else 5, 15 and 60 seconds, three resends at most); a create is never resent after a 5xx or no answer (`google_secops_create_unconfirmed`). Deploy warns when Google reports a bound rule's execution as limited or paused (`google_secops_rule_execution_limited`) or its compilation as failed (`google_secops_rule_compilation_failed`). It manages custom rules and their deployment only: curated rules, rule exclusions, reference lists, data tables, retrohunts and rule tests stay in the console. `validate query --platform google_secops --live` sends each rule to `verifyRuleText`, which compiles it with the instance's reference lists and data tables and creates nothing, and places each diagnostic on its section key and line. [`opentide query`](../../cli/query.md) runs a YARA-L search through `udmSearch`; `--rule` is not supported. The analysis engine checks the sections offline as the one rule deploy assembles (the `yaral_*` codes: UDM fields and enum values, functions, scope across sections, windows, outcomes, condition shape), in `opentide validate`, in `validate query --platform google_secops` without `--live`, and in editors; a `.yaral` or `.yl2` file is checked with `opentide validate query --file`. Hunts with `system: google_secops` are checked as YARA-L searches. `deploy --dry-run` shows the assembled rule.
+Deploy goes through the Chronicle API v1 and keeps Google's rule id (`ru_<uuid>`) in [deployment state](deployment-state.md); it never lists rules. Every create and every changed text is compiled by `verifyRuleText` first, and an unchanged text is not sent again, so the rule keeps its revision (a new revision is re-initialised for about an hour). A bound rule is read with its deployment, unarchived first when archived, then its text, its `scope` and its run state are each updated only where they differ. A `PREVIEW` rule runs without alerting, `RELEASE` and `UNIVERSAL` alert, `DISABLEMENT` disables, even when the rule's new text fails `verifyRuleText` or its update (the failure is still reported, and an archived rule is left archived), and `DELETION` archives the rule, or deletes it without `force` when the tenant's `deletion = "delete"`, archiving it instead when Google refuses (any 4xx but 401, 403, 404 and 429): deploy never deletes a rule's detections. `runFrequency` is sent only when the block names `run_frequency`: otherwise Google keeps the rule's frequency, or gives a new rule its default, and never moves a rule off a legacy schedule, which it cannot undo. A block `schedule` is compared as Google stores it, and removed from the rule when removed from the block. `data_access_scope` is a data access scope id or its full resource name; a changed or removed one reaches every rule. Credentials are a service-account key, or Application Default Credentials (a service-account key, a gcloud user login or the metadata server), applied with their quota project; a token that cannot be obtained stops the tenant before any request (`google_secops_tenant_unauthorized`). A 429, or a 503 on any call but a create, is waited out (`Retry-After`, else Google's `RetryInfo`, else 5, 15 and 60 seconds, three resends at most); a create is never resent after a 5xx or no answer (`google_secops_create_unconfirmed`). Deploy warns when Google reports a bound rule's execution as limited or paused (`google_secops_rule_execution_limited`) or its compilation as failed (`google_secops_rule_compilation_failed`). It manages custom rules and their deployment only: curated rules, rule exclusions, reference lists, data tables, retrohunts and rule tests stay in the console. `validate query --platform google_secops --live` sends each rule to `verifyRuleText`, which compiles it with the instance's reference lists and data tables and creates nothing, and places each diagnostic on its section key and line. [`opentide query`](../../cli/query.md) runs a YARA-L search through `udmSearch`; `--rule` is not supported. The analysis engine checks the sections offline as the one rule deploy assembles (the `yaral_*` codes: UDM fields and enum values, functions, scope across sections, windows, outcomes, condition shape), in `opentide validate`, in `validate query --platform google_secops` without `--live`, and in editors; a `.yaral` or `.yl2` file is checked with `opentide validate query --file`. Hunts with `system: google_secops` are checked as YARA-L searches. `deploy --dry-run` shows the assembled rule.
+
+### Datadog Cloud SIEM
+
+Datadog Cloud SIEM takes real-time detection rules (`log_detection`) through the v2 Security Monitoring API. A `datadog` block groups the rule by meaning rather than by the API's layout: `queries` (what to look at), `detection` (how the queries become a match), `cases` (when a match becomes a signal) and `signal` (what happens to the signal). 1.0 covers the `threshold`, `new_value`, `anomaly` and `impossible_travel` methods; sequence rules and cross-rule correlation wait for 1.x, and Datadog no longer accepts new `signal_correlation` rules.
+
+```yaml
+configurations:
+  datadog:
+    schema: platform::datadog::1.0
+    status: PRODUCTION
+    queries:
+      - name: failed
+        query: source:okta @evt.name:user.session.start @evt.outcome:FAILURE
+        group_by: ["@usr.email"]
+      - name: success
+        query: source:okta @evt.name:user.session.start @evt.outcome:SUCCESS
+        group_by: ["@usr.email"]
+    detection:
+      method: threshold
+      window: 5m
+    cases:
+      - name: brute force then success
+        condition: failed > 10 && success > 0
+        severity: high
+        notify: [soc]
+    signal:
+      group_by: ["@usr.email"]
+      keep_alive: 1h
+      max_duration: 1d
+    tags: ["team:identity"]
+```
+
+Each query is the Datadog search syntax, checked offline under the `rule` profile. A query is named `a`, `b`, … by its position unless it sets `name`, and measures events unless it sets one of `count_distinct`, `sum`, `max` or (with `method: new_value`) `new_value`. A case's `condition` compares query names with numbers, joined by `&&` or `||`; under `anomaly` the number is a percentile between 0 and 1 (`denied > 0.995`). A case's `severity` defaults to `response.alert_severity`, and its `notify` entries are tenant aliases (`[tenants.setup.notifications]`) or raw `@handles`. Left out, the method is `threshold`, the window `5m`, `keep_alive` `1h` and `max_duration` `1d`. The block's `message` defaults to Goal, Strategy and Triage and response sections derived from the rule, with any `{{` in its text escaped. Deploy adds lower-case tags: `source:` for each source the queries name, `tactic:` and `technique:` from the rule's ATT&CK techniques (a sub-technique as its parent), `security:attack`, `opentide_uuid:<uuid>` and the tenant's `tags`. `opentide validate` checks the block's constraints (`datadog_method_unsupported`, `datadog_duration`, `datadog_window_order`, `datadog_query_name`, `datadog_measure`, `datadog_detection_option`, `datadog_signal_group_by`, `datadog_condition`, `datadog_severity`, `datadog_tag`), each at its field path, and warns when a condition mixes `&&` and `||`, whose precedence Datadog does not document (`datadog_condition_mixed`). The anomaly defaults (`bucket`, `learning`, `tolerance`) and `detect_ip_transitions` are sent only as the block writes them: what Datadog does without them is not documented.
+
+Deploy keeps Datadog's rule id in [deployment state](deployment-state.md) and never lists rules. Every create and update is first sent to `POST /security_monitoring/rules/validation`, so an invalid rule is reported before anything changes (`datadog_rule_invalid`, with Datadog's `errors[]`). A recorded rule is read first (`GET`): it is updated only when a property opentide writes differs from the compiled body (tags compared as a set, defaults Datadog adds ignored), with the `version` the read returned, so an unchanged rule is sent nothing; Datadog's `401` to a stale version is `datadog_concurrent_modification`, not a refused key. A default rule (`isDefault: true`) is never changed or deleted (`datadog_rule_default`). A rule gone (`404`, or `isDeleted`) is created again (`datadog_rule_recreated`), or forgotten under a DISABLEMENT or a DELETION (`datadog_rule_missing`). `PREVIEW` deploys the rule enabled with no notifications on its cases and the tag `opentide_strategy:preview`; Datadog has no mode that runs a rule without signals, and its notification rules route signals whatever a rule's own notifications say, so exclude `opentide_strategy:preview` from them. A CI run other than the production job creates no rule (`deployment_state_unpersisted`). Datadog's docs say a modified rule's learning restarts at day 0, so promoting a `new_value` or `impossible_travel` rule from `PREVIEW` may restart its learning (whether a change of notifications and tags alone does is not documented). `RELEASE` and `UNIVERSAL` deploy the rule enabled with its notifications, `DISABLEMENT` sends `isEnabled: false` alone (with the `version`), neither compared nor validated, and `DELETION` deletes the rule. A 429 is waited out for the seconds `X-RateLimit-Reset` gives, three resends at most, and never for more than 120 seconds (`datadog_rate_limited`); a create is never resent after a 5xx or no answer (`datadog_create_unconfirmed`). A rule managed by Terraform as well is changed back and forth on every run: remove it from Terraform's state before opentide takes it over. To adopt a rule made in Datadog, write its block and record its id in the rule's shard before the first deploy.
+
+The tenant names its `site` (`datadoghq.com`, `us3.datadoghq.com`, `us5.datadoghq.com`, `datadoghq.eu`, `ap1.datadoghq.com`, `ap2.datadoghq.com`, `uk1.datadoghq.com`, `ddog-gov.com`, `us2.ddog-gov.com`), or an `api_url`; another site is `datadog_site`. `api_key` and `app_key` are `$NAME` placeholders, sent as `DD-API-KEY` and `DD-APPLICATION-KEY`; use a service account's application key scoped to `security_monitoring_rules_read` and `security_monitoring_rules_write` (validation needs write), and `logs_read_data` for searches. `validate query --platform datadog --live` validates each rule whole through `rules/validation`; a `.datadog` file and a `system: datadog` hunt are checked offline. [`opentide query`](../../cli/query.md) runs a search through Logs Search, paged by its cursor; `--rule` runs each of a block's queries. `deploy --dry-run` shows the body, an alias as `<tenant:notifications.ALIAS>` when no tenant is reached. The specification (`specs/platforms/datadog-1.0.md`) is drafted with the platform's tenant probes; until then the RFC is the contract.
 
 Normative capability flags and the shared block: [Platforms spec](/docs/specifications/specs/platforms/).
 
@@ -133,15 +183,13 @@ Every key on `configurations.<platform>`, required and optional, is specified un
 <Cards>
   <Card title="Platforms" href="/docs/specifications/specs/platforms/" description="Shared fields, external rule ids, and the three checks: validate, load, deploy." />
   <Card title="Sentinel" href="/docs/specifications/specs/platforms/sentinel-1.0/" description="KQL analytics rule. Grouping is optional at validate and required at deploy." />
-  <Card title="Defender for Endpoint" href="/docs/specifications/specs/platforms/defender-for-endpoint-1.0/" description="KQL custom detection, response actions, and the scope the loader requires." />
+  <Card title="Microsoft Defender" href="/docs/specifications/specs/platforms/microsoft-defender-1.0/" description="KQL custom detection on the Graph beta API: schedule, alert, entities, automated actions, device-group scope." />
   <Card title="Splunk" href="/docs/specifications/specs/platforms/splunk-1.0/" description="SPL saved search." />
   <Card title="SentinelOne" href="/docs/specifications/specs/platforms/sentinel-one-1.0/" description="STAR rule: one S1QL query or a correlation of sub-queries." />
   <Card title="Carbon Black Cloud" href="/docs/specifications/specs/platforms/carbon-black-cloud-1.0/" description="Lucene IOC on an existing watchlist report." />
-  <Card title="CrowdStrike" href="/docs/specifications/specs/platforms/crowdstrike-1.0/" description="Correlation filter. No query validator." />
-  <Card title="HarfangLab" href="/docs/specifications/specs/platforms/harfanglab-1.0/" description="Sigma or YARA, never both. YARA as a whole signature or decomposed, checked offline." />
+  <Card title="CrowdStrike" href="/docs/specifications/specs/platforms/crowdstrike-1.0/" description="Next-Gen SIEM correlation rule in CQL. Checked offline; no tenant query check." />
+  <Card title="HarfangLab" href="/docs/specifications/specs/platforms/harfanglab-1.0/" description="Sigma or YARA. No query validator. Sigma wins when both are set." />
   <Card title="Sysdig Secure" href="/docs/specifications/specs/platforms/sysdig-1.0/" description="Custom Falco rule through the Sysdig Secure API. Block macros and lists are expanded at deploy." />
-  <Card title="Bitdefender GravityZone" href="/docs/specifications/specs/platforms/bitdefender-1.0/" description="Custom detection rule: Basic criteria or a YARA signature, through the Incidents API." />
-  <Card title="Graylog" href="/docs/specifications/specs/platforms/graylog-1.0/" description="Event definition (Filter & Aggregation) on Graylog 6.3 to 7.2, each request built for the server's version." />
   <Card title="Exabeam New-Scale SIEM" href="/docs/specifications/specs/platforms/exabeam-1.0/" description="Correlation rule: sequences of Exabeam Query Language filters, through the Correlation Rules API." />
   <Card title="Google Security Operations" href="/docs/specifications/specs/platforms/google-secops-1.0/" description="YARA-L 2.0 rule written as sections, assembled with derived meta, through the Chronicle API v1." />
 </Cards>
@@ -156,21 +204,27 @@ opentide --json info --platform sentinel
 MCP resource: `opentide://platforms`
 
 ```python
-from opentide import Opentide
-Opentide.initialise()
-for name, plat in Opentide.Platforms.items():
-    print(name, plat.enabled, plat.can_deploy, plat.can_validate)
+from opentide import Workspace
+ws = Workspace.open(".")
+for platform in ws.info()["platforms"]:
+    print(platform["name"], platform["enabled"], platform["can_deploy"], platform["can_validate"])
 ```
+
+## ATT&CK techniques
+
+On every platform whose block holds a technique list, the block's list wins; otherwise the rule's objective supplies the techniques. Sentinel (`alert.techniques`, `alert.tactics`) and Microsoft Defender (`alert.techniques`, sent as a tactics tree) have such lists: when the block sets one (an empty list counts as unset), deploy sends it, and only when it does not are the techniques resolved from the rule's `detection_model` sent. The two lists are never merged. Sentinel holds what it sends to ATT&CK v18 and warns about each id it changes. CrowdStrike is the exception: its `details.tactic` and `details.technique` hold one value each, so they are sent only when set and never inherited. The platforms with no block field send the rule's own `techniques` with the objective's (Carbon Black the objective's only; SentinelOne and HarfangLab none). See [ATT&CK techniques](../../cli/deploy.md#attck-techniques) for each platform.
 
 ## Query validation policy
 
-Only platforms with `can_validate=True` run live validation. For CrowdStrike, HarfangLab, Sysdig and Bitdefender, CLI and MCP return `supported: false` for `--live` — **never fake validation**. HarfangLab's and Bitdefender's YARA and Sysdig's Falco are checked offline; Bitdefender's criteria are checked by `opentide validate`.
+Only platforms with `can_validate=True` check queries on the tenant. CrowdStrike, HarfangLab, Sysdig and Bitdefender have no tenant check: CLI and MCP return `supported: false` for them with `--live` (`live: true`) — **never fake validation**. CrowdStrike's CQL, Sysdig's Falco conditions and HarfangLab's and Bitdefender's YARA are checked offline only. SentinelOne is checked on the tenant only: without `--live`, `validate query --platform sentinel_one` exits `2` and names `--live`. Graylog and Exabeam are checked both ways: offline by default, on the tenant with `--live`.
 
 ```bash
-opentide validate query --platform crowdstrike   # reports unsupported
+opentide validate query --platform crowdstrike          # the offline CQL check
+opentide validate query --platform crowdstrike --live   # reports unsupported
+opentide validate query --platform harfanglab           # reports unsupported
 ```
 
-For the eight that can, `opentide validate query` checks each query offline with
+For the six that can, `opentide validate query` checks each query offline with
 the analysis engine (every platform but SentinelOne, whose S1QL it does not
 parse), and `--live` submits the catalogue queries to the tenants, which
 requires credentials; every vendor SDK ships with `pip install opentide`. A
@@ -196,7 +250,13 @@ configurations:
       action.misp_alert_create_event.param.tags:
 ```
 
-`opentide deploy` sends each key as written: a `null` value as the empty value, a boolean as `1` or `0`, any other value as text. A list or table is refused, as `savedsearches.conf` cannot hold one. A key the block also sets (`alert_threshold`, `cron_schedule`) takes the `advanced` value; the `[[modifiers]]` of `platforms/splunk.toml` still apply after it. An action whose parameters are set here is triggered when it is in the tenant's `[tenants.setup] actions_enabled`. The table is left out of the generated templates.
+`opentide deploy` sends each key as written: a `null` value as the empty value, a boolean as `1` or `0`, any other value as text. A list or table is refused, as `savedsearches.conf` cannot hold one, and so is a blank key. A key the block also sets (`alert_threshold`, `cron_schedule`) takes the `advanced` value; the `[[modifiers]]` of `platforms/splunk.toml` still apply after it. An action whose parameters are set here is triggered when it is in the tenant's `[tenants.setup] actions_enabled`. The table is left out of the generated templates and of editor completion.
+
+### Splunk's saved search
+
+The saved search's `search` is the block's `query` as you wrote it, trimmed, with nothing appended: `opentide query --rule` and `validate query --live` send the same text. Its `description` is the rule's, followed by a last line, `opentide rule <uuid>`, that names the rule, so a deploy can find and delete the saved search an earlier name of the rule left ([Splunk's renamed rules](../../cli/deploy.md#splunks-renamed-rules)). opentide writes `alert.managedBy` empty, Splunk's default; set it, or any other `savedsearches.conf` key, in the `advanced` table.
+
+Through 0.28.1 every search ended with `| eval MDR_UUID="<uuid>", MDR_status="<status>"` and a call to the `soc_macro_auto_mdr_mapping(MDR_UUID)` macro, and `alert.managedBy` held the rule's `response.responders` (else `[deployment] default_responders`). A saved search deployed again loses all three: its `search` is replaced and its `alert.managedBy` emptied. A dashboard, lookup or alert that reads `MDR_UUID` or `MDR_status` from its results needs another source, such as an `eval` in the rule's own `query`.
 
 ### Upgrading to 0.4.0
 
@@ -212,12 +272,12 @@ Every row that now fails was already a rule that never reached the platform. Run
 
 ## Platform configuration
 
-Per-platform settings live under `.opentide/configurations/platforms/`. Enable platforms with `opentide setup platforms` or the parent `opentide setup --platform` flags; the registry loads deployers and validators for enabled systems only.
+Per-platform settings live under `.opentide/configurations/platforms/`. Enable platforms with `opentide setup platforms` or the parent `opentide setup --platform` flags; only enabled platforms are deployed to and validated.
 
 ## Live deploy dependencies
 
-Validate, generate, and dry-run deploy work with `pip install opentide` alone. **Live** API deploy to Splunk or Carbon Black may require additional vendor SDKs — see [Installation](../installation.md).
+Validate, generate, dry-run deploy and live deploy all work with `pip install opentide` alone: no vendor SDK is needed.
 
 ## SDK access
 
-Deploy and validate programmatically via `Opentide.Platforms` — see [SDK platforms](../../sdk/platforms.md).
+Deploy and validate programmatically with [`opentide.Workspace`](../../sdk/workspace.md) and its tenant operations — see [SDK platforms](../../sdk/platforms.md).

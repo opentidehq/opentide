@@ -1,0 +1,84 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: deploy/json/tide-corpus/elastic-tenant
+---
+args: opentide --json deploy --strategy PREVIEW --platform elastic --all
+exit: 1
+
+━━━ stdout · json, 1 lines
+{
+  "changes": [
+    {
+      "action": "upsert",
+      "name": "Elastic KQL Rule",
+      "platform": "elastic",
+      "status": "STAGING",
+      "tenant": "staging",
+      "uuid": "00000000-0000-4000-8003-000000000009"
+    }
+  ],
+  "command": "deploy",
+  "deployed": [],
+  "dry_run": false,
+  "duration_ms": 0,
+  "error": "Deployment to elastic failed on tenant staging: elastic tenant 'staging' setup: api_key names the environment variable ELASTIC_API_KEY, which is unset",
+  "exit_code": 1,
+  "failure": {
+    "argument": null,
+    "code": "command_failed",
+    "crash_log": null,
+    "message": "Deployment to elastic failed on tenant staging: elastic tenant 'staging' setup: api_key names the environment variable ELASTIC_API_KEY, which is unset",
+    "suggestion": null
+  },
+  "failures": [
+    {
+      "error": "elastic tenant 'staging' setup: api_key names the environment variable ELASTIC_API_KEY, which is unset",
+      "platform": "elastic",
+      "tenant": "staging"
+    }
+  ],
+  "message": "Deployment to elastic failed on tenant staging: elastic tenant 'staging' setup: api_key names the environment variable ELASTIC_API_KEY, which is unset",
+  "next_actions": [],
+  "ok": false,
+  "plan": {
+    "elastic": [
+      "00000000-0000-4000-8003-000000000009"
+    ]
+  },
+  "results": [
+    {
+      "action": "upsert",
+      "error": null,
+      "id": "00000000-0000-4000-8003-000000000009",
+      "name": "Elastic KQL Rule",
+      "platform": "elastic",
+      "reason": "not attempted: tenant staging failed",
+      "seconds": 0.0,
+      "status": "not_attempted",
+      "tenant": "staging"
+    }
+  ],
+  "schema_version": 1,
+  "status": "failed",
+  "strategies": [
+    "PREVIEW"
+  ],
+  "summary": {
+    "create": 0,
+    "delete": 0,
+    "disable": 0,
+    "failed": 0,
+    "not_attempted": 1,
+    "platforms": 1,
+    "seconds": 0.0,
+    "skipped": 0,
+    "tenants": 1,
+    "unchanged": 0,
+    "update": 0,
+    "upsert": 0
+  }
+}
+
+━━━ stderr
+{"detail":"Unset configuration variables: $ELASTIC_API_KEY","advice":"Set those environment variables before a deploy.","event":"environment_variable_missing","level":"critical","timestamp":"0000-00-00 00:00:00"}
+{"platform":"elastic","tenant":"***","error":"elastic tenant '***' setup: api_key names the environment variable ELASTIC_API_KEY, which is unset","event":"tenant_deployment_failed","level":"critical","timestamp":"0000-00-00 00:00:00"}

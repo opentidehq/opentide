@@ -1,0 +1,44 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/parameter__invalid.esql
+---
+SOURCE_FILE@0..75
+  COMMENT@0..25 "// prod:parameter invalid"
+  WHITESPACE@25..26 "\n"
+  QUERY@26..74
+    FROM_COMMAND@26..50
+      FROM_KW@26..30 "FROM"
+      WHITESPACE@30..31 " "
+      INDEX_PATTERN@31..37
+        INDEX_NAME@31..37
+          SOURCE_TEXT@31..37 "logs-*"
+      WHITESPACE@37..38 " "
+      METADATA@38..50
+        METADATA_KW@38..46 "METADATA"
+        WHITESPACE@46..47 " "
+        METADATA_FIELD@47..50
+          SOURCE_TEXT@47..50 "_id"
+    WHITESPACE@50..51 "\n"
+    PIPE@51..52 "|"
+    WHITESPACE@52..53 " "
+    WHERE_COMMAND@53..74
+      WHERE_KW@53..58 "WHERE"
+      WHITESPACE@58..59 " "
+      COMPARISON@59..74
+        QUALIFIED_NAME@59..68
+          IDENTIFIER@59..63
+            IDENT@59..63 "host"
+          DOT@63..64 "."
+          IDENTIFIER@64..68
+            IDENT@64..68 "name"
+        WHITESPACE@68..69 " "
+        EQ_EQ@69..71 "=="
+        WHITESPACE@71..72 " "
+        BINARY_EXPRESSION@72..74
+          PARAMETER@72..73
+            PARAM@72..73 "?"
+          MINUS@73..74 "-"
+  WHITESPACE@74..75 "\n"
+--- errors
+74..75: expected an expression (expected PLUS, MINUS)

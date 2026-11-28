@@ -1,0 +1,1 @@
+spawned_process and proc.name in (oops and container and proc.is_exe_upper_layer=true and not container.image.repository in (known_drop_and_execute_containers) and not known_drop_and_execute_activities

@@ -1,0 +1,8 @@
+bin.name = "opentide"
+args = ["validate", "--json", "--quiet"]
+env.inherit = false
+fs.cwd = "../../../../tests/fixtures/tide_corpus/current"
+stdout = '''
+{"checks":{[..]},"report":{"ok":true,[..]"status":"passed",[..]"command":"validate",[..]"exit_code":0,[..]
+'''
+stderr = ""

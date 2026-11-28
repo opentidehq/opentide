@@ -1,0 +1,172 @@
+// The tree of a CQL query (CrowdStrike Query Language): the named nodes of the tree-sitter
+// grammar (grammars/tree-sitter-opentide-cql/grammar.js) it replaces, one node per named
+// production, with its labels as the grammar's fields. Hidden rules (`_filter`, `_field`,
+// `_value`, `_expression`, ...) are enums or are written inline.
+//
+// Quoted names are the lexer's tokens (src/lexer.rs): `word` is any run of field characters
+// (a field name, an argument name, an identifier, a keyword: CQL's `case`, `match`, `like`,
+// `true` and `false` are contextual, and `and`, `or`, `not` are reserved but still lexed as
+// words, in any case, and re-kinded by the parser); `pattern` is an unquoted pattern (a run
+// that holds `* + - : /`); `number`, `tag`, `string` are one token each. The punctuation is
+// quoted as written.
+//
+// A node that tree-sitter made of one token (`string`, `number`, `tag`, `field_name`, ...) is
+// a node here too, wrapping that token, so the analysis keeps its `kind()` tests.
+
+SourceFile = Pipeline?
+
+// A step is separated from the next by `|`, which may be left out (`A B` is `A | B`). The
+// whole query may end with `|`.
+Pipeline = ('|' | step:Step)*
+
+Step =
+  Filter | FunctionCall | NegatedFunctionCall | FieldShorthand | StatsShorthand
+| CaseStatement | MatchStatement | SavedQuery | LinkConstraint | Assignment
+
+// ---- Filters (pattern mode) --------------------------------------------------------------
+
+// `not` binds tightest, then `or`, then `and` and juxtaposition: `foo and not bar or baz` is
+// `foo and ((not bar) or baz)`.
+Filter = AndFilter | OrFilter | NotFilter | ParenthesizedFilter | FieldFilter | FreeText | Boolean
+
+// A run of filters, joined by `and` or by juxtaposition: one flat node.
+AndFilter = Filter (And? Filter)*
+
+OrFilter = Filter (Or Filter)*
+
+NotFilter = (Not | '!') operand:Filter
+
+ParenthesizedFilter = '(' filter:Filter ')'
+
+// The field and the value are both a word, a tag or a string by shape: one type, told apart by
+// position (`field` first, `value` second).
+FieldFilter =
+  field:FilterOperand operator:('=' | '!=' | 'like' | '<' | '<=' | '>' | '>=') value:FilterOperand
+
+Field = FieldName | Tag | String
+
+FilterOperand =
+  FieldName | Tag | String | UnquotedPattern | Number | Regex | QueryParameter
+
+FreeText = value:FreeTextValue
+
+FreeTextValue = UnquotedPattern | String | Regex | QueryParameter
+
+FieldName = 'word'
+
+UnquotedPattern = 'pattern' | 'word' | 'tag' | 'number'
+
+Tag = 'tag'
+
+String = 'string'
+
+Number = 'number'
+
+Boolean = 'true' | 'false'
+
+And = 'and'
+
+Or = 'or'
+
+Not = 'not'
+
+// ---- Steps other than filters ---------------------------------------------------------------
+
+CallStep = FunctionCall | NegatedFunctionCall
+
+NegatedFunctionCall = (Not | '!') function:FunctionCall
+
+Assignment = field:Field 'colon_eq' value:Expr
+
+FieldShorthand = field:Field 'eq_tilde' function:CallStep
+
+StatsShorthand = '[' (ArrayElement (',' ArrayElement)*)? ']'
+
+LinkConstraint = left:Field 'lt_eq_gt' right:Field
+
+CaseStatement = 'case' '{' (CaseBranch (';' CaseBranch)* ';'?)? '}'
+
+CaseBranch = pipeline:Pipeline
+
+MatchStatement = field:Field 'match' '{' MatchBranch (';' MatchBranch)* ';'? '}'
+
+MatchBranch = guard:MatchGuard '=>' body:Pipeline
+
+MatchGuard =
+  UnquotedPattern | String | Regex | FunctionCall | NegatedFunctionCall | QueryParameter | Boolean
+
+SavedQuery =
+  '$' name:SavedQueryTarget '(' (SavedQueryArgument (',' SavedQueryArgument)*)? ')'
+
+SavedQueryTarget = SavedQueryName | String
+
+SavedQueryName = 'saved_query_name'
+
+SavedQueryArgument = name:ArgumentOperand '=' value:ArgumentOperand
+
+ArgumentOperand = ArgumentName | String | UnquotedPattern | QueryParameter | Array
+
+ArgumentName = 'word'
+
+// `?name`, `?"quoted name"`, `?{name=default}`.
+QueryParameter =
+  ('?' | 'question_l_brace') name:ParameterTarget default:ParameterDefault?
+
+// The `=default}` of `?{name=default}`: a node of its own, so the two values are told apart.
+ParameterDefault = '=' value:ParameterOperand '}'
+
+ParameterTarget = ParameterName | String
+
+ParameterOperand = UnquotedPattern | String
+
+ParameterName = 'parameter_name' | 'word' | 'pattern'
+
+Regex = '/' pattern:RegexPattern '/' flags:RegexFlags?
+
+RegexPattern = 'regex_pattern'
+
+RegexFlags = 'regex_flags'
+
+// ---- Function calls and expressions --------------------------------------------------------------
+
+FunctionCall = name:FunctionName '(' arguments:ArgumentList? ')'
+
+FunctionName = 'function_name'
+
+ArgumentList = (Argument | NamedArgument) (',' (Argument | NamedArgument))*
+
+Argument = value:AttributedExpr
+
+NamedArgument = name:NamedArgumentOperand '=' value:NamedArgumentOperand
+
+NamedArgumentOperand = ArgumentName | AttributedExpr
+
+AttributedExpr = Expr | AttributedExpression
+
+// `{ ... } include: [a, b] after: "Login"` (correlate()).
+AttributedExpression = expression:Expr ExpressionAttribute*
+
+ExpressionAttribute = name:Identifier ':' value:Expr
+
+Identifier = 'word'
+
+Expr =
+  BinaryExpression | UnaryExpression | ParenthesizedExpression | Subquery | NamedSubquery
+| FunctionCall | Array | QueryParameter | Number | Boolean | String | FieldName | Tag
+| UnquotedPattern
+
+// One flat node per run of operators of one precedence level (`a + b - c`).
+BinaryExpression =
+  Expr (('==' | '!=' | '<' | '<=' | '>' | '>=' | 'lt_eq_gt' | '+' | '-' | '*' | '/' | '%') Expr)*
+
+UnaryExpression = operator:('-' | '!') operand:Expr
+
+ParenthesizedExpression = '(' expression:AttributedExpr ')'
+
+Subquery = '{' pipeline:Pipeline? '}'
+
+NamedSubquery = name:Identifier ':' query:Subquery
+
+Array = '[' (ArrayElement (',' ArrayElement)*)? ']'
+
+ArrayElement = Assignment | AttributedExpr

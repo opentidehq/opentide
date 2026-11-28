@@ -1,0 +1,2 @@
+# prod:not_expression valid
+NOT dest_port:null AND NOT (user:"a" OR user:"b")

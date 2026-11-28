@@ -1,0 +1,2 @@
+// prod:term_option invalid
+sequence [process where true] with repeats=2 [file where true]

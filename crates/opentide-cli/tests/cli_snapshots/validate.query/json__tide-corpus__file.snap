@@ -1,0 +1,57 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: validate.query/json/tide-corpus/file
+---
+args: opentide --json validate query --file objects/rules/rule-0001-sentinel-kql.yaml --queries warn
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "command": "validate query",
+  "diagnostics": [],
+  "duration_ms": 0,
+  "engine": {
+    "engine": "1.1.0"
+  },
+  "exit_code": 0,
+  "failure": null,
+  "message": "1 query valid",
+  "mode": "offline",
+  "next_actions": [],
+  "ok": true,
+  "platform": null,
+  "platforms": [
+    "sentinel"
+  ],
+  "queries": [
+    {
+      "column": 7,
+      "errors": 0,
+      "field_path": [
+        "configurations",
+        "sentinel",
+        "query"
+      ],
+      "language": "kql",
+      "line": 28,
+      "path": "Objects/Detection Rules/rule-0001-sentinel-kql.yaml",
+      "platform": "sentinel"
+    }
+  ],
+  "queries_validated": 1,
+  "schema_version": 1,
+  "scope": "selected",
+  "status": "passed",
+  "summary": {
+    "error_files": 0,
+    "errors": 0,
+    "files": 1,
+    "notes": 0,
+    "queries": 1,
+    "warning_files": 0,
+    "warnings": 0
+  },
+  "supported": true
+}
+
+━━━ stderr · empty

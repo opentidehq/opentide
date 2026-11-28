@@ -1,0 +1,1 @@
+sequence with maxspan=1m [process where true] [file where true] until ![network where true]

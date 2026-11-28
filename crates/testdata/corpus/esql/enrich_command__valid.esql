@@ -1,0 +1,3 @@
+// prod:enrich_command valid
+FROM logs-* METADATA _id
+| ENRICH hosts-policy ON host.name WITH os = host.os.name, host.ip

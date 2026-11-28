@@ -1,17 +1,28 @@
-# Vocabulary generation scripts
+# Vocabulary ingest
 
-Runnable scripts for fetching canonical sources and regenerating canonical
-`{field}.vocab.toml` files under `specifications/vocabularies/`, then syncing
-the bundled copy in `src/opentide/data/vocabulary/`.
+`cargo xtask vocab ingest` ([`xtask/src/vocab/ingest/`](../../xtask/src/vocab/ingest/))
+fetches the canonical upstream sources and regenerates the canonical
+`{field}.vocab.toml` files under `specifications/vocabularies/`. It is the Rust
+port (UC-6.3) of the Python package's `opentide.vocabulary` and of the scripts
+that were in this directory, removed with the Python implementation (UC-6.2,
+[#841](https://github.com/opentidehq/opentide/issues/841)), and from the same
+inputs it writes the same data, laid out by the `toml` crate
+([below](#the-port-and-the-python-ingest)).
 
-By default, scripts expect a sibling clone at `../specifications`. Override with:
+It writes into specifications, then syncs the bundled copy in
+`src/opentide/data/vocabulary/` and `data/specifications.lock.json`
+(`cargo xtask vocab sync`).
+
+By default it expects a sibling clone at `../specifications`. Override with
+`--specifications DIR` or:
 
 ```bash
 export OPENTIDE_SPECIFICATIONS_ROOT="/absolute/path/to/specifications"
 ```
 
-STIX downloads default to the workspace resources path. In CI they go to a
-scratch directory:
+The STIX bundles are downloaded into `--stix-dir DIR`, else
+`$OPENTIDE_ATTACK_STIX_DIR`, else a scratch directory that goes when the run
+ends. CI keeps them in a scratch directory of the runner:
 
 ```bash
 export OPENTIDE_ATTACK_STIX_DIR="/tmp/attack-stix"
@@ -23,11 +34,24 @@ Weekly GitHub Actions (`.github/workflows/vocab-upstream.yml`) plus:
 
 ```bash
 # Dry-run: exit 1 when vocabularies would change
-uv run python scripts/vocabulary/sync_upstream.py --check
+cargo xtask vocab ingest --check
 
 # Fetch latest ATT&CK STIX + MISP galaxy, merge, sync bundle
-uv run python scripts/vocabulary/sync_upstream.py --apply
+cargo xtask vocab ingest --apply
+
+# Reuse bundles already on disk (DIR holds enterprise-attack.json, mobile-attack.json,
+# ics-attack.json and the fetch's manifest.json); a MISP galaxy from a file
+cargo xtask vocab ingest --check --no-fetch --stix-dir DIR --misp-url file:///path/threat-actor.json
 ```
+
+It downloads with `curl` (HTTPS only): the latest release of
+[`mitre-attack/attack-stix-data`](https://github.com/mitre-attack/attack-stix-data)
+through GitHub's API, its three bundles, and the MISP galaxy named by
+`misp.galaxies.threat_actors` in
+[`src/opentide/data/configurations/resources.toml`](../../src/opentide/data/configurations/resources.toml)
+(or `--misp-url`). `--now TIMESTAMP` writes that time where the run would read
+the clock (`generated_at`, and `source_fetched_at` without a fetch manifest),
+for a reproducible run.
 
 `--apply` writes:
 
@@ -59,48 +83,55 @@ companion PR (bundle, lockfile).
 | Id gone | `removed` = next major | none |
 | First fill of an empty file | `version = "1.0"` | none (pins already `::1.0`) |
 
-## ATT&CK (STIX) only
+## The port and the Python ingest
 
-```bash
-uv run python scripts/vocabulary/fetch_attack_stix.py
-uv run python scripts/vocabulary/generate_attack.py
-uv run python scripts/vocabulary/generate_attack.py --fetch
-```
+The vocabularies are written with the `toml` crate (`ingest/value.rs`), not in
+the layout `tomli_w` gave the Python ingest: a TOML file is right when it reads
+back as the same data. The order of a list is data and is kept: `[[keys]]`
+follow the merge order (existing keys first, in their order, then the new ones,
+in source order), and `stages` keep the matrix's order. The order of keys inside
+a table is not data, and the crate writes them sorted. What is left of Python's
+semantics decides values, not layout: truthiness in the `x or default` and
+`removed`/`version` rules, `str.strip()` on an identity, `str.title()` on a
+tactic without a display name.
 
-`bump_versions.py` now delegates to `sync_upstream.py` (ATT&CK **and** actors).
+The first `--apply` after this change therefore reformats the five files it
+writes in specifications (`att&ck`, `att&ck.groups`, `mitigations`,
+`datasources`, `actors`) once, with no change to their data; later runs change
+only what upstream changed.
 
-## Threat actors
+The comparison (UC-6.3) ran both on the same inputs: the Python ingest from
+`ca32f5558d95fd77d5550084ee0f9d0681397fdc` (the last commit that has it, in a
+worktree of its own, its clock fixed and its bundle sync left out) and
+`cargo xtask vocab ingest --apply --no-fetch --now ...`, each on its own copy of
+the specifications vocabularies, with the same ATT&CK bundles and the same MISP
+galaxy file. In each case every file of `vocabularies/` held the same data and
+the printed summary was identical. That run compared the files byte for byte,
+when the port still copied `tomli_w`'s layout; the data, and with it the claim,
+are unchanged now that the layout comes from the crate:
 
-```bash
-uv run python scripts/vocabulary/generate_actors.py
-```
+| Case | Vocabularies | ATT&CK | What it exercises |
+|------|--------------|--------|-------------------|
+| A | specifications `main` (ATT&CK 20.0) | 20.1 | a weekly run: 163 techniques updated |
+| B | specifications `main` | 18.1 | 65 techniques and 6 groups removed, a new contract (`att&ck::1.3`) |
+| C | specifications at `7c3d742` (the first per-key versions) | 20.1 | additions to every vocabulary, 280 new actors |
+| D | specifications at `7c3d742` | 18.1 | the same, from another release |
+| E | A's output | 20.1 | a second run: nothing to write |
+| F | `main`, three vocabularies emptied of keys | 20.1 | the first fill (`1.0`, no contract) |
 
-Requires STIX bundles (enterprise/mobile/ics) and fetches MISP galaxy from
-`resources.toml` by default. Output is written to
-`$OPENTIDE_SPECIFICATIONS_ROOT/vocabularies` and then synced into the opentide
-bundle.
+## MalAPI (removed)
 
-## MalAPI
+The `malapi` vocabulary and its scrape, `cargo xtask vocab malapi`, were removed
+([#1753](https://github.com/opentidehq/opentide/issues/1753)): no licence for
+malapi.io's content was found, no object field validated against it, and the
+site is down. `vocab sync` does not copy `malapi.vocab.toml` from a
+specifications checkout that still has it (`NOT_BUNDLED` in
+[`xtask/src/vocab/sync.rs`](../../xtask/src/vocab/sync.rs)).
 
-```bash
-uv run --with beautifulsoup4 --with lxml python scripts/vocabulary/generate_malapi.py
-```
+## Not ported
 
-Scrapes [malapi.io](https://malapi.io), one page per API, and merges the result
-into `$OPENTIDE_SPECIFICATIONS_ROOT/vocabularies/malapi.vocab.toml` with the
-per-key rules above, then syncs the bundle. The first run also reformats that
-file into the layout the generators write, so expect a whole-file diff once.
-The site rate-limits to roughly one page a minute after a short burst; the
-script backs off and retries, so a full run of ~370 APIs takes hours. If the
-retries run out or the connection drops, it still writes what it fetched,
-leaves the APIs it did not reach as they were, skips the bundle sync and exits
-with status 1. BeautifulSoup is not an opentide dependency, hence `--with`.
-
-## Migration
-
-```bash
-uv run python scripts/vocabulary/migrate_yaml_to_toml.py --delete-yaml
-```
+- **`migrate_yaml_to_toml.py`**: the one-shot YAML to TOML migration, done;
+  no YAML vocabulary is left.
 
 ## Keying model
 

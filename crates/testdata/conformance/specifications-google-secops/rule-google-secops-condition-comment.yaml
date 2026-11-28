@@ -1,0 +1,28 @@
+# A plain YAML scalar that starts with # is a YAML comment: condition loads as null.
+# Expected code: yaral_section_empty.
+name: Google SecOps condition lost to a YAML comment
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000064
+  schema: rule::1.0
+  version: 1
+  created: "2026-01-01"
+  modified: "2026-01-02"
+  tlp: clear
+  author: Detection Engineering
+description: |
+  A condition written as a plain scalar starting with a count.
+status: STAGING
+severity: Medium
+configurations:
+  google_secops:
+    enabled: true
+    schema: platform::google_secops::1.0
+    status: STAGING
+    events: |
+      $e.metadata.event_type = "USER_LOGIN"
+      $e.security_result.action = "BLOCK"
+      $user = $e.target.user.userid
+    match:
+      group_by: [$user]
+      window: 10m
+    condition: #e > 5

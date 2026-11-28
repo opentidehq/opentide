@@ -1,0 +1,42 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(query(&file))
+input_file: crates/testdata/corpus/cql/free_text__valid.cql
+---
+SOURCE_FILE@0..98
+  PIPELINE@0..97
+    AND_FILTER@0..97
+      FREE_TEXT@0..3
+        UNQUOTED_PATTERN@0..3
+          WORD@0..3 "foo"
+      WHITESPACE@3..4 " "
+      FREE_TEXT@4..17
+        STRING@4..17
+          STRING_TOKEN@4..17 "\"Lorem ipsum\""
+      WHITESPACE@17..18 " "
+      FREE_TEXT@18..56
+        REGEX@18..56
+          SLASH@18..19 "/"
+          REGEX_PATTERN@19..55
+            REGEX_PATTERN_TOKEN@19..55 "Service exited due to (?<signal>\\S+)"
+          SLASH@55..56 "/"
+      WHITESPACE@56..57 " "
+      FREE_TEXT@57..58
+        UNQUOTED_PATTERN@57..58
+          PATTERN@57..58 "*"
+      WHITESPACE@58..59 " "
+      FREE_TEXT@59..83
+        UNQUOTED_PATTERN@59..83
+          PATTERN@59..83 "https://www.example.com/"
+      WHITESPACE@83..84 " "
+      FREE_TEXT@84..97
+        QUERY_PARAMETER@84..97
+          QUESTION_L_BRACE@84..86 "?{"
+          PARAMETER_NAME@86..92
+            WORD@86..92 "signal"
+          PARAMETER_DEFAULT@92..97
+            EQ@92..93 "="
+            STRING@93..96
+              STRING_TOKEN@93..96 "\"*\""
+            R_BRACE@96..97 "}"
+  WHITESPACE@97..98 "\n"

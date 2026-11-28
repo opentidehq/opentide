@@ -1,0 +1,1 @@
+| tstats count where index=main status==200 by host

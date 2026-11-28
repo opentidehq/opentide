@@ -1,8 +1,8 @@
 # workspace_not_found
 
-`opentide new` ran outside a workspace: neither `.opentide/` nor `objects/` is there. Or the MCP server was started in an Agent Plugin's directory, which is not a workspace, and nothing named one.
+`opentide new`, `opentide generate` or `opentide migrate vocab-scope` ran outside a workspace: neither `.opentide/` nor `objects/` is there. Or the MCP server has no workspace to serve: it was started in an Agent Plugin's directory, or in any folder that is not in a workspace, and nothing named one, or `OPENTIDE_REPO_ROOT` names a folder that does not exist.
 
-Exit 1, as `failure.code`. `new` writes only into a workspace, the folder `--repo` names or the one discovery finds, so a stray run in your home directory cannot make it a workspace that every folder below it would discover.
+Exit 1, as `failure.code`. `new`, `generate` and `migrate` write only into a workspace, the folder `--repo` names or the one discovery finds, so a stray run in your home directory cannot make it a workspace that every folder below it would discover.
 
 The MCP server reports it as an error from every tool and resource that reads the catalogue (`search`, `validation_report`, `deploy_rule`, `opentide://rules`, ...). An Agent Plugins client starts a plugin's server in the plugin's directory; the server never serves that directory, such as the opentidehq/skills package, as the catalogue. `explain` and offline `validate_query` still answer.
 

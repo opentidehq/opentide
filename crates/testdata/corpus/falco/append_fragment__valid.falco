@@ -1,0 +1,2 @@
+# prod:append_fragment valid
+and not proc.pname in (gitlab-runner, buildkite-agent)

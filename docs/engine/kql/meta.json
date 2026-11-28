@@ -1,0 +1,20 @@
+{
+  "title": "KQL",
+  "pages": [
+    "DESIGN",
+    "syntax",
+    "types",
+    "operators",
+    "operators-scalar",
+    "scalar-functions",
+    "scalar-functions-geo-series",
+    "aggregation-functions",
+    "evaluate-plugins",
+    "control-commands",
+    "columns",
+    "sentinel-tables",
+    "defender-tables",
+    "coverage-gap",
+    "IMPLEMENTATION-GAPS"
+  ]
+}

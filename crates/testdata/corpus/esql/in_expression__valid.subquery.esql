@@ -1,0 +1,3 @@
+// prod:in_expression valid (IN subquery, 9.5 and later)
+FROM logs-* METADATA _id
+| WHERE user.name NOT IN (FROM admins | WHERE active | KEEP user.name)

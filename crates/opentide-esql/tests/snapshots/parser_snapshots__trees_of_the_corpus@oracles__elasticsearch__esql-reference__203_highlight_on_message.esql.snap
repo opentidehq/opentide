@@ -1,0 +1,26 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/oracles/elasticsearch/esql-reference/203_highlight_on_message.esql
+---
+SOURCE_FILE@0..33
+  QUERY@0..32
+    FROM_COMMAND@0..9
+      FROM_KW@0..4 "FROM"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..9
+        INDEX_NAME@5..9
+          SOURCE_TEXT@5..9 "logs"
+    WHITESPACE@9..10 " "
+    PIPE@10..11 "|"
+    WHITESPACE@11..12 " "
+    HIGHLIGHT_COMMAND@12..32
+      HIGHLIGHT_KW@12..21 "HIGHLIGHT"
+      WHITESPACE@21..22 " "
+      ON_KW@22..24 "ON"
+      WHITESPACE@24..25 " "
+      NAME_PATTERN@25..32
+        ID_PATTERN@25..32
+          ID_PATTERN_TEXT@25..32 "message"
+  WHITESPACE@32..33 "\n"
+--- errors

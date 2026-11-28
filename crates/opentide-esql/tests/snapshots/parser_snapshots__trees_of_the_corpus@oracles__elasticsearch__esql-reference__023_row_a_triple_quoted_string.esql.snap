@@ -1,0 +1,21 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/oracles/elasticsearch/esql-reference/023_row_a_triple_quoted_string.esql
+---
+SOURCE_FILE@0..37
+  QUERY@0..36
+    ROW_COMMAND@0..36
+      ROW_KW@0..3 "ROW"
+      WHITESPACE@3..4 " "
+      FIELD_ASSIGNMENT_OR_EXPRESSION@4..36
+        QUALIFIED_NAME@4..5
+          IDENTIFIER@4..5
+            IDENT@4..5 "a"
+        WHITESPACE@5..6 " "
+        EQ@6..7 "="
+        WHITESPACE@7..8 " "
+        STRING@8..36
+          STRING_LIT@8..36 "\"\"\"triple \"quoted\" string\"\"\""
+  WHITESPACE@36..37 "\n"
+--- errors

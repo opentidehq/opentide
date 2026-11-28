@@ -1,0 +1,1 @@
+from * metadata _id, _index, _version | frobnicate (TargetFilename=="/etc/sudoers" or starts_with(TargetFilename, "/etc/sudoers.d/")) and not (ends_with(Image, "/usr/bin/dpkg") and TargetFilename=="/etc/sudoers.d/README.dpkg-new")

@@ -1,0 +1,46 @@
+---
+source: crates/opentide-eql/tests/parser_trees.rs
+expression: "parser::debug(&source)"
+input_file: crates/testdata/corpus/eql/field__valid.eql
+---
+SOURCE_FILE@0..86
+  LINE_COMMENT@0..19 "// prod:field valid"
+  WHITESPACE@19..20 "\n"
+  EVENT_QUERY@20..85
+    EVENT_CATEGORY@20..27
+      IDENTIFIER@20..27
+        WORD@20..27 "process"
+    WHITESPACE@27..28 " "
+    WHERE_KW@28..33 "where"
+    WHITESPACE@33..34 " "
+    AND_EXPRESSION@34..85
+      COMPARISON@34..62
+        FIELD@34..54
+          OPTIONAL_MARKER@34..35
+            QUESTION@34..35 "?"
+          IDENTIFIER@35..42
+            WORD@35..42 "process"
+          DOT@42..43 "."
+          IDENTIFIER@43..49
+            WORD@43..49 "parent"
+          DOT@49..50 "."
+          IDENTIFIER@50..54
+            WORD@50..54 "name"
+        WHITESPACE@54..55 " "
+        EQ_EQ@55..57 "=="
+        WHITESPACE@57..58 " "
+        NULL@58..62
+          NULL_KW@58..62 "null"
+      WHITESPACE@62..63 " "
+      AND_KW@63..66 "and"
+      WHITESPACE@66..67 " "
+      COMPARISON@67..85
+        FIELD@67..78
+          QUOTED_IDENTIFIER@67..78
+            QUOTED_IDENT_TOKEN@67..78 "`odd field`"
+        WHITESPACE@78..79 " "
+        NOT_EQ@79..81 "!="
+        WHITESPACE@81..82 " "
+        STRING@82..85
+          STRING_TOKEN@82..85 "\"x\""
+  WHITESPACE@85..86 "\n"

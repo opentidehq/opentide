@@ -1,0 +1,28 @@
+---
+source: crates/opentide-kql/src/parser/tests.rs
+expression: "show(\"search in (A, B) c == 1\")"
+---
+SOURCE_FILE@0..23
+  QUERY@0..23
+    TABULAR_EXPRESSION@0..23
+      TABULAR_SOURCE@0..23
+        SEARCH_SOURCE@0..23
+          SEARCH_KW@0..6 "search"
+          WHITESPACE@6..7 " "
+          IN_KW@7..9 "in"
+          WHITESPACE@9..10 " "
+          L_PAREN@10..11 "("
+          IDENT@11..12 "A"
+          COMMA@12..13 ","
+          WHITESPACE@13..14 " "
+          IDENT@14..15 "B"
+          R_PAREN@15..16 ")"
+          WHITESPACE@16..17 " "
+          COMPARISON_EXPR@17..23
+            NAME_REF@17..18
+              IDENT@17..18 "c"
+            WHITESPACE@18..19 " "
+            CMP_OP@19..21 "=="
+            WHITESPACE@21..22 " "
+            LITERAL@22..23
+              NUMBER@22..23 "1"

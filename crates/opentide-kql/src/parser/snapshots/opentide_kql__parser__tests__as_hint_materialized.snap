@@ -1,0 +1,30 @@
+---
+source: crates/opentide-kql/src/parser/tests.rs
+expression: "show(\"T | as hint.materialized=true T2 | take 1\")"
+---
+SOURCE_FILE@0..41
+  QUERY@0..41
+    TABULAR_EXPRESSION@0..41
+      TABULAR_SOURCE@0..1
+        TABLE_REF@0..1
+          IDENT@0..1 "T"
+      WHITESPACE@1..2 " "
+      PIPE@2..3 "|"
+      WHITESPACE@3..4 " "
+      AS_OPERATOR@4..32
+        AS_KW@4..6 "as"
+        WHITESPACE@6..7 " "
+        HINT_OPTION@7..29
+          HINT_NAME@7..24 "hint.materialized"
+          EQ@24..25 "="
+          OPTION_VALUE@25..29
+            BOOLEAN@25..29 "true"
+        WHITESPACE@29..30 " "
+        IDENT@30..32 "T2"
+      WHITESPACE@32..33 " "
+      PIPE@33..34 "|"
+      WHITESPACE@34..35 " "
+      TAKE_OPERATOR@35..41
+        TAKE_KW@35..39 "take"
+        WHITESPACE@39..40 " "
+        NUMBER@40..41 "1"

@@ -1,0 +1,3 @@
+// prod:change_point_command invalid
+FROM metrics-*
+| CHANGE_POINT

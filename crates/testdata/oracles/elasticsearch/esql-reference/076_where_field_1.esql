@@ -1,0 +1,1 @@
+FROM logs | WHERE ??field == 1

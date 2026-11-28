@@ -27,7 +27,7 @@ Serial output is easier to read: `PYTEST_WORKERS=0 scripts/ci-local.sh`.
   PEP 695 generics). The package supports `>=3.10`.
 - **Only on Windows** — `\` paths, CRLF (`write_text` without `newline=`), case-insensitive
   names (`Objects` vs `objects`), console encoding.
-- **Only in one E2E shard** — run that shard; then `PYTEST_WORKERS=0` on the single test. A
+- **Only under xdist** (the `python` job runs the E2E suite with workers) — run the file; then `PYTEST_WORKERS=0` on the single test. A
   test that passes serially and fails under xdist leaks global state (registry caches,
   `os.environ` flags such as `DEPLOYMENT_ERROR_RAISED`, cwd) — fix the leak, don't pin order.
 - **Coverage gate** — the gate reads the 3.14 cell. Cover the new lines; do not add
@@ -36,7 +36,7 @@ Serial output is easier to read: `PYTEST_WORKERS=0 scripts/ci-local.sh`.
   change is the intended one, and say so in the commit body.
 - **ty after a ty bump** — usually a rule rename; see [`uv`](../uv/SKILL.md) "Dependency upgrades".
 - **Vocab drift gate** — bundled vocabulary is generated from `opentidehq/specifications`;
-  fix it upstream and re-sync with `scripts/build/sync_vocabularies.py`, never by hand.
+  fix it upstream and re-sync with `cargo xtask vocab sync`, never by hand.
 - **Fails on `development` too** — not this PR's. Say so once on the PR with the failing
   check and link the fix if one exists; port the fix into this PR when it is small.
 
@@ -48,7 +48,7 @@ runner lost) and treat a second failure as real.
 - Skip, `xfail`, quarantine or loosen a test to get green.
 - `git push --no-verify`, empty commits or close/reopen to re-trigger CI.
 - Force-push, rebase or amend a branch someone else is working on; merge the base in instead.
-- Hand-edit `uv.lock`, `src/opentide/_version.py`, generated schemas or bundled vocabulary.
+- Hand-edit `uv.lock`, generated schemas or bundled vocabulary.
 - Bump the package version — releases are tags ([`release-management`](../release-management/SKILL.md)).
 
 ## Every push
@@ -73,3 +73,7 @@ before building anything for it, and say why when you decline.
 A conflict with `development`: merge `origin/development` into the branch, regenerate
 `uv.lock` with `uv lock` if it conflicts, re-run `scripts/ci-local.sh`, push. Stacked PRs
 (base is another branch) merge in the order the stack comment shows.
+
+When several sessions feed one base, the steward's loop (update one PR at a time, merge,
+message every owner the merge unblocks, close an issue the PR fully fixes) is in
+[`orchestration`](../orchestration/SKILL.md).

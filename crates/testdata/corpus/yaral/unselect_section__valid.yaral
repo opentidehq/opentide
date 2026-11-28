@@ -1,0 +1,4 @@
+// prod:unselect_section valid
+metadata.event_type = "USER_LOGIN"
+unselect:
+  metadata.id

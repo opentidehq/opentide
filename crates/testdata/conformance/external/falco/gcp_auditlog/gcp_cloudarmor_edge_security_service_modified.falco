@@ -1,0 +1,1 @@
+is_compute_service and (gcp.methodName contains "compute.networkEdgeSecurityServices.delete"  or gcp.methodName contains "compute.networkEdgeSecurityServices.create"  or gcp.methodName contains "compute.networkEdgeSecurityServices.update")

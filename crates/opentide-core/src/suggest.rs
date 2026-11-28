@@ -1,0 +1,858 @@
+//! "Did you mean" suggestions: the allowed value a mistyped one most likely
+//! means.
+//!
+//! One rule for every caller (vocabulary values, configuration choices, CLI
+//! commands and options), so the editor, `validate` and the CLI never suggest
+//! different things for the same typo:
+//!
+//! 1. **The same word wins outright.** A candidate equal to the value once
+//!    case, whitespace, `-` and `_` are ignored (`AMBER` → `amber`,
+//!    `localised_incident` → `Localised incident`) is the answer
+//!    (`docs/internal/cli-experience.md`, "Forgiving input").
+//! 2. **Otherwise the fewest edits.** The optimal string alignment distance
+//!    ([`strsim::osa_distance`]: insertions, deletions, substitutions and
+//!    transpositions of adjacent characters, each one edit) between the
+//!    lower-cased spellings, counted in characters. A candidate qualifies when
+//!    it is at most [`max_edits`] away (a third of the length, at least one
+//!    edit: the bound rustc uses for its own suggestions), measured twice: over
+//!    the whole value, and over the words that hold the part that differs
+//!    once the prefix and suffix both spellings share are set aside. A typo
+//!    is a few edits in one word, adjacent or not (`SecurityEve` →
+//!    `SecurityEvent`, two letters cut); a different word is many, and
+//!    sharing ` incident` with it does not make `Big incident` a typo of
+//!    `Minor incident` (`big`/`minor`: four edits in a five-letter word).
+//!    A caller with its own bound ([`closest_within`], [`ranked`]) caps both.
+//! 3. **Ties** go to the candidate whose start matches best
+//!    ([`strsim::jaro_winkler`]), then to the one that sorts first, so the
+//!    result never depends on the order the candidates came in.
+//!
+//! [`best`] applies rules 1 and 3, with the fewest edits between them, and no
+//! bound: for a check whose own threshold decides whether a near miss is
+//! reported at all.
+//!
+//! This is deliberately an edit distance, not a ratio of matching blocks
+//! (`difflib.get_close_matches`): such a ratio suggests unrelated words that
+//! share letters (`Big incident` → `Substantial incident`).
+
+use std::cmp::Ordering;
+
+/// The most edits a candidate may be from a value of `len` characters and
+/// still be suggested: a third of the length, at least one.
+pub fn max_edits(len: usize) -> usize {
+    len.max(3) / 3
+}
+
+/// `value` without case, whitespace, `-` or `_`: two spellings that fold to
+/// the same string are the same word.
+pub fn fold(value: &str) -> String {
+    value
+        .chars()
+        .filter(|c| !c.is_whitespace() && *c != '-' && *c != '_')
+        .flat_map(char::to_lowercase)
+        .collect()
+}
+
+/// The candidate `value` most likely means, if any is close enough
+/// ([`max_edits`]).
+pub fn closest<'a>(value: &str, candidates: impl IntoIterator<Item = &'a str>) -> Option<&'a str> {
+    suggestions(value, candidates, 1).into_iter().next()
+}
+
+/// The candidate `value` most likely means, within `edits` edits.
+pub fn closest_within<'a>(
+    value: &str,
+    candidates: impl IntoIterator<Item = &'a str>,
+    edits: usize,
+) -> Option<&'a str> {
+    ranked(value, candidates, edits, 1).into_iter().next()
+}
+
+/// Up to `limit` candidates `value` may mean, best first ([`max_edits`]).
+pub fn suggestions<'a>(
+    value: &str,
+    candidates: impl IntoIterator<Item = &'a str>,
+    limit: usize,
+) -> Vec<&'a str> {
+    ranked(value, candidates, max_edits(value.chars().count()), limit)
+}
+
+/// Up to `limit` candidates within `edits` edits of `value`, best first.
+/// A candidate equal to `value` once folded ([`fold`]) qualifies whatever
+/// `edits` is, and ranks before every other.
+pub fn ranked<'a>(
+    value: &str,
+    candidates: impl IntoIterator<Item = &'a str>,
+    edits: usize,
+    limit: usize,
+) -> Vec<&'a str> {
+    let candidates: Vec<&'a str> = candidates.into_iter().collect();
+    Candidates::new(candidates.iter().copied())
+        .ranked(value, edits, limit)
+        .into_iter()
+        .map(|index| candidates[index])
+        .collect()
+}
+
+/// The candidate the shared order (rules 1 and 3, with the fewest edits
+/// between) puts first, with no bound on the edits: for a check whose own
+/// threshold decides whether a near miss is reported at all, and which only
+/// needs this rule to choose among the candidates it accepted.
+///
+/// Whether a diagnostic is reported, and at what severity, is a contract
+/// (plan §3, invariant 3), so a check that reports only near misses (an ECS
+/// field, a CIM data model, a KQL column of a documented table) keeps its own
+/// threshold; what it suggests comes from here, as everywhere else. `Some`
+/// whenever `candidates` is not empty, even when the value itself is among
+/// them.
+pub fn best<'a>(value: &str, candidates: impl IntoIterator<Item = &'a str>) -> Option<&'a str> {
+    let lower = value.to_lowercase();
+    let folded = fold(value);
+    candidates
+        .into_iter()
+        .map(|candidate| {
+            let other = candidate.to_lowercase();
+            let (a, b) = middles(&lower, &other);
+            Scored {
+                candidate,
+                index: 0,
+                same_word: fold(candidate) == folded,
+                distance: strsim::osa_distance(a, b),
+                prefix: strsim::jaro_winkler(&lower, &other),
+            }
+        })
+        .min_by(Scored::order)
+        .map(|s| s.candidate)
+}
+
+/// Candidates prepared once (lower-cased, folded, measured) for many
+/// lookups: a field's allowed values, checked for every value of a
+/// workspace. Results are indices into the candidates as given.
+#[derive(Debug, Clone, Default)]
+pub struct Candidates {
+    items: Vec<Prepared>,
+}
+
+#[derive(Debug, Clone)]
+struct Prepared {
+    index: usize,
+    text: String,
+    lower: String,
+    folded: String,
+    length: usize,
+}
+
+impl Candidates {
+    /// Prepares `candidates`; a repeated one keeps its first index.
+    pub fn new<'a>(candidates: impl IntoIterator<Item = &'a str>) -> Self {
+        let mut seen = std::collections::HashSet::new();
+        let items = candidates
+            .into_iter()
+            .enumerate()
+            .filter(|(_, text)| seen.insert(*text))
+            .map(|(index, text)| {
+                let lower = text.to_lowercase();
+                Prepared {
+                    index,
+                    text: text.to_owned(),
+                    length: lower.chars().count(),
+                    folded: fold(text),
+                    lower,
+                }
+            })
+            .collect();
+        Self { items }
+    }
+
+    /// The index of the candidate `value` most likely means ([`max_edits`]).
+    pub fn closest(&self, value: &str) -> Option<usize> {
+        self.ranked(value, max_edits(value.chars().count()), 1)
+            .into_iter()
+            .next()
+    }
+
+    /// The indices of up to `limit` candidates within `edits` edits of
+    /// `value`, best first ([`ranked`]).
+    pub fn ranked(&self, value: &str, edits: usize, limit: usize) -> Vec<usize> {
+        let folded = fold(value);
+        let lower = value.to_lowercase();
+        let length = lower.chars().count();
+        // The value's letters, counted once for every candidate's bag
+        // distance (ADR 0014, rule 1).
+        let value_bag = Bag::new(&lower);
+        let mut scored: Vec<Scored<'_>> = Vec::new();
+        for item in &self.items {
+            if item.text == value {
+                continue;
+            }
+            let same_word = item.folded == folded;
+            // The distance is at least the difference in length: skip the rest.
+            if !same_word && item.length.abs_diff(length) > edits {
+                continue;
+            }
+            // Nor fewer than the characters one has that the other lacks,
+            // the same over the whole spellings as over what lies between
+            // their shared prefix and suffix: measured first, as most
+            // candidates of a near length stop here, before the distance
+            // (most of what an unknown name cost).
+            let bag = match &value_bag {
+                Some(value) => value.distance(&item.lower),
+                None => bag_distance(&lower, &item.lower),
+            };
+            if !same_word && bag.is_some_and(|d| d > edits) {
+                continue;
+            }
+            // A common prefix and suffix cost no edit: measure what lies
+            // between, against a third of the words it falls in.
+            let (a, b) = middles(&lower, &item.lower);
+            let (wa, wb) = words(&lower, &item.lower);
+            let differing = wa.chars().count().max(wb.chars().count());
+            let bound = edits.min(max_edits(differing));
+            if !same_word && a.chars().count().abs_diff(b.chars().count()) > bound {
+                continue;
+            }
+            if !same_word && bag.is_some_and(|d| d > bound) {
+                continue;
+            }
+            #[cfg(test)]
+            tests::DISTANCES.with(|n| n.set(n.get() + 1));
+            let distance = strsim::osa_distance(a, b);
+            if !same_word && distance > bound {
+                continue;
+            }
+            scored.push(Scored {
+                candidate: &item.text,
+                index: item.index,
+                same_word,
+                distance,
+                prefix: strsim::jaro_winkler(&lower, &item.lower),
+            });
+        }
+        scored.sort_by(Scored::order);
+        scored.into_iter().take(limit).map(|s| s.index).collect()
+    }
+}
+
+/// What is left of `a` and `b` once the prefix and the suffix they share are
+/// set aside: the part an edit has to change.
+fn middles<'s>(a: &'s str, b: &'s str) -> (&'s str, &'s str) {
+    shared(a, b).middles
+}
+
+/// `a` and `b` around the prefix and the suffix they share, cut by whole
+/// characters.
+struct Shared<'s> {
+    /// The shared prefix's length in bytes.
+    prefix: usize,
+    /// The shared suffix's length in bytes, taken from what the prefix
+    /// leaves, so the two never overlap.
+    suffix: usize,
+    /// What is left of `a` and of `b` between them.
+    middles: (&'s str, &'s str),
+}
+
+fn shared<'s>(a: &'s str, b: &'s str) -> Shared<'s> {
+    let (mut x, mut y) = (a.chars(), b.chars());
+    skip_same(&mut x, &mut y, Iterator::next);
+    let prefix = a.len() - x.as_str().len();
+    let after_prefix = x.as_str().len();
+    skip_same(&mut x, &mut y, DoubleEndedIterator::next_back);
+    Shared {
+        prefix,
+        suffix: after_prefix - x.as_str().len(),
+        middles: (x.as_str(), y.as_str()),
+    }
+}
+
+/// Steps `x` and `y` on, with `step`, while they read the same character.
+fn skip_same<'s>(
+    x: &mut std::str::Chars<'s>,
+    y: &mut std::str::Chars<'s>,
+    step: fn(&mut std::str::Chars<'s>) -> Option<char>,
+) {
+    loop {
+        let (before_x, before_y) = (x.clone(), y.clone());
+        match (step(x), step(y)) {
+            (Some(p), Some(q)) if p == q => {}
+            _ => {
+                (*x, *y) = (before_x, before_y);
+                return;
+            }
+        }
+    }
+}
+
+/// The whole words of `a` and `b` that hold their differing part
+/// ([`middles`]): the middles widened, through the shared prefix and suffix,
+/// to the nearest whitespace on each side. A typo is bound by the length of
+/// the word it is in, so `SecurityEve` (two letters cut from a thirteen-letter
+/// name) is a typo of `SecurityEvent`, while `Big incident` is not one of
+/// `Minor incident`: its differing word, `big`/`minor`, is too short for four
+/// edits.
+#[expect(
+    clippy::string_slice,
+    reason = "`shared` measures the prefix and the suffix in whole characters, and the cuts inside them follow or start at a whitespace character"
+)]
+fn words<'s>(a: &'s str, b: &'s str) -> (&'s str, &'s str) {
+    let Shared { prefix, suffix, .. } = shared(a, b);
+    // The prefix and the suffix are the same text in both spellings.
+    let start = a[..prefix]
+        .char_indices()
+        .rev()
+        .find(|(_, c)| c.is_whitespace())
+        .map_or(0, |(i, c)| i + c.len_utf8());
+    let tail = &a[a.len() - suffix..];
+    let end = suffix
+        - tail
+            .char_indices()
+            .find(|(_, c)| c.is_whitespace())
+            .map_or(suffix, |(i, _)| i);
+    (&a[start..a.len() - end], &b[start..b.len() - end])
+}
+
+/// The characters `a` has that `b` lacks, or the reverse, whichever is more,
+/// counting repeats: a lower bound of the edit distance, Levenshtein's or
+/// the optimal string alignment's (an insertion or a deletion changes it by
+/// one, a substitution by at most one, a transposition not at all), and far
+/// cheaper to measure. `None` when either is not ASCII.
+#[must_use]
+pub fn bag_distance(a: &str, b: &str) -> Option<usize> {
+    if !a.is_ascii() || !b.is_ascii() {
+        return None;
+    }
+    #[cfg(test)]
+    tests::VALUES_COUNTED.with(|n| n.set(n.get() + 1));
+    // The characters both share, counting repeats: `a` has `a.len() -
+    // shared` the other lacks, and `b` has `b.len() - shared`. One pass over
+    // each spelling, where summing all 128 counts cost more than the
+    // spellings themselves on the short names it measures (ADR 0014).
+    let mut counts = [0u32; 128];
+    for byte in a.bytes() {
+        counts[usize::from(byte)] += 1;
+    }
+    let mut shared = 0usize;
+    for byte in b.bytes() {
+        let count = &mut counts[usize::from(byte)];
+        if *count > 0 {
+            *count -= 1;
+            shared += 1;
+        }
+    }
+    Some(a.len().max(b.len()) - shared)
+}
+
+/// One spelling's letters, counted once, for its [`bag_distance`] to many
+/// others: each measure copies the 128 counts instead of counting the
+/// spelling again. `None` for a spelling that is not ASCII, or too long for
+/// a count to fit a byte.
+struct Bag {
+    counts: [u8; 128],
+    len: usize,
+}
+
+impl Bag {
+    fn new(a: &str) -> Option<Self> {
+        if !a.is_ascii() || a.len() > usize::from(u8::MAX) {
+            return None;
+        }
+        #[cfg(test)]
+        tests::VALUES_COUNTED.with(|n| n.set(n.get() + 1));
+        let mut counts = [0u8; 128];
+        for byte in a.bytes() {
+            counts[usize::from(byte)] += 1;
+        }
+        Some(Self {
+            counts,
+            len: a.len(),
+        })
+    }
+
+    /// [`bag_distance`] from this spelling to `b`.
+    fn distance(&self, b: &str) -> Option<usize> {
+        if !b.is_ascii() {
+            return None;
+        }
+        let mut counts = self.counts;
+        let mut shared = 0usize;
+        for byte in b.bytes() {
+            let count = &mut counts[usize::from(byte)];
+            if *count > 0 {
+                *count -= 1;
+                shared += 1;
+            }
+        }
+        Some(self.len.max(b.len()) - shared)
+    }
+}
+
+struct Scored<'a> {
+    candidate: &'a str,
+    index: usize,
+    same_word: bool,
+    distance: usize,
+    prefix: f64,
+}
+
+impl Scored<'_> {
+    fn order(a: &Self, b: &Self) -> Ordering {
+        b.same_word
+            .cmp(&a.same_word)
+            .then(a.distance.cmp(&b.distance))
+            .then(b.prefix.total_cmp(&a.prefix))
+            .then(a.candidate.cmp(b.candidate))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    thread_local! {
+        /// The edit distances [`Candidates::ranked`] measured on this thread.
+        pub(super) static DISTANCES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+        /// The spellings whose letters a bag distance counted on this thread.
+        pub(super) static VALUES_COUNTED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    }
+
+    /// [`Candidates::ranked`] without the bag-distance cut: what it must
+    /// equal.
+    fn ranked_by_distance(candidates: &[&str], value: &str, edits: usize) -> Vec<usize> {
+        let folded = fold(value);
+        let lower = value.to_lowercase();
+        let mut scored = Vec::new();
+        for (index, text) in candidates.iter().enumerate() {
+            let other = text.to_lowercase();
+            let same_word = fold(text) == folded;
+            if *text == value {
+                continue;
+            }
+            let (a, b) = middles(&lower, &other);
+            let (wa, wb) = words(&lower, &other);
+            let bound = edits.min(max_edits(wa.chars().count().max(wb.chars().count())));
+            let distance = strsim::osa_distance(a, b);
+            if !same_word
+                && (other.chars().count().abs_diff(lower.chars().count()) > edits
+                    || distance > bound)
+            {
+                continue;
+            }
+            scored.push(Scored {
+                candidate: text,
+                index,
+                same_word,
+                distance,
+                prefix: strsim::jaro_winkler(&lower, &other),
+            });
+        }
+        scored.sort_by(Scored::order);
+        scored.into_iter().map(|s| s.index).collect()
+    }
+
+    /// The cut changes no result: over typos, swaps, words and unrelated
+    /// names of the KQL tables, ranked against every table name.
+    #[test]
+    fn the_bag_distance_cut_keeps_every_result() {
+        let names = [
+            "SecurityEvent",
+            "SigninLogs",
+            "AuditLogs",
+            "DeviceProcessEvents",
+            "Syslog",
+            "CommonSecurityLog",
+            "AADNonInteractiveUserSignInLogs",
+            "Heartbeat",
+            "Event",
+            "AzureActivity",
+            "OfficeActivity",
+            "DnsEvents",
+            "W3CIISLog",
+            "SecurityAlert",
+            "SecurityIncident",
+            "ThreatIntelligenceIndicator",
+            "Device_Events",
+            "device events",
+            "Événement",
+            "Usage",
+            "Update",
+            "Perf",
+            "Alert",
+            "AlertEvidence",
+        ];
+        let probes = [
+            "SecurityEvnt",
+            "SecuirtyEvent",
+            "SignInLogs",
+            "signinlog",
+            "Syslgo",
+            "Hearbteat",
+            "AzureActivty",
+            "Cisco_Umbrella",
+            "imAuthentication",
+            "Evnet",
+            "Alrt",
+            "DeviceEvents",
+            "device-events",
+            "Evenement",
+            "Événemnt",
+            "xyz",
+            "",
+            "Perf",
+            "Updtae",
+            "ThreatIntel",
+        ];
+        let prepared = Candidates::new(names);
+        for probe in probes {
+            for edits in [0, 1, 2, 3, 4, max_edits(probe.chars().count())] {
+                assert_eq!(
+                    prepared.ranked(probe, edits, names.len()),
+                    ranked_by_distance(&names, probe, edits),
+                    "{probe:?} within {edits}"
+                );
+            }
+        }
+    }
+
+    /// A name near none of a thousand candidates measures the distance to a
+    /// few of them, not to each of a near length.
+    #[test]
+    fn an_unrelated_name_measures_few_distances() {
+        let names: Vec<String> = (0..1000)
+            .map(|i| {
+                format!(
+                    "Table{}Logs{}",
+                    ["Signin", "Audit", "Device", "Security"][i % 4],
+                    i
+                )
+            })
+            .collect();
+        let prepared = Candidates::new(names.iter().map(String::as_str));
+        DISTANCES.with(|n| n.set(0));
+        assert_eq!(prepared.closest("Cisco_Umbrella_Proxy"), None);
+        let measured = DISTANCES.with(std::cell::Cell::get);
+        assert!(measured <= 20, "{measured} distances measured");
+    }
+
+    const TLP: [&str; 4] = ["clear", "green", "amber", "red"];
+
+    #[test]
+    fn the_same_word_wins_outright() {
+        assert_eq!(closest("AMBER", TLP), Some("amber"));
+        assert_eq!(
+            closest(
+                "localised_incident",
+                ["Localised incident", "Local incident"]
+            ),
+            Some("Localised incident")
+        );
+        assert_eq!(closest("high", ["High", "Higher"]), Some("High"));
+        assert_eq!(closest("dry-run", ["dry_run", "dry"]), Some("dry_run"));
+    }
+
+    /// The same word ranks first even when another candidate is fewer edits
+    /// away: `a_b_c` is `abc` (two edits) before it is `a_b_x` (one).
+    #[test]
+    fn the_same_word_ranks_before_a_closer_spelling() {
+        assert_eq!(closest("a_b_c", ["a_b_x", "abc"]), Some("abc"));
+        assert_eq!(suggestions("a_b_c", ["abc", "a_b_x"], 2), ["abc", "a_b_x"]);
+    }
+
+    #[test]
+    fn one_edit_finds_the_value() {
+        assert_eq!(closest("clearr", TLP), Some("clear"));
+        assert_eq!(closest("ambr", TLP), Some("amber"));
+        assert_eq!(closest("rde", TLP), Some("red"));
+        assert_eq!(closest("gren", TLP), Some("green"));
+    }
+
+    #[test]
+    fn a_different_word_finds_nothing() {
+        assert_eq!(closest("whitish", TLP), None);
+        assert_eq!(
+            closest("Big incident", ["Substantial incident", "Minor incident"]),
+            None
+        );
+        assert_eq!(closest("", TLP), None);
+        assert_eq!(
+            closest("Host::Gizmo", ["Host::File", "Host::Process"]),
+            None
+        );
+    }
+
+    #[test]
+    fn typos_in_long_phrases_are_found() {
+        let severities = [
+            "Localised incident",
+            "Moderate incident",
+            "Substantial incident",
+        ];
+        assert_eq!(
+            closest("Localised incidnet", severities),
+            Some("Localised incident")
+        );
+        assert_eq!(
+            closest("Localsed incidnet", severities),
+            Some("Localised incident")
+        );
+        assert_eq!(
+            closest("Moderat incident", severities),
+            Some("Moderate incident")
+        );
+        assert_eq!(middles("big incident", "minor incident"), ("big", "minor"));
+        assert_eq!(middles("clearr", "clear"), ("r", ""));
+        assert_eq!(middles("aa", "aaa"), ("", "a"));
+        assert_eq!(middles("zürich", "zürch"), ("i", ""));
+    }
+
+    /// Two edits side by side, or two characters cut or added at one place,
+    /// are bound by the word they are in, not by the two characters that
+    /// differ: a long name keeps its suggestion.
+    #[test]
+    fn adjacent_edits_and_truncations_are_found() {
+        assert_eq!(
+            closest("SecurityEve", ["SecurityEvent", "Event"]),
+            Some("SecurityEvent")
+        );
+        assert_eq!(closest("summari", ["summarize"]), Some("summarize"));
+        assert_eq!(
+            closest("DeviceProcessEven", ["DeviceProcessEvents"]),
+            Some("DeviceProcessEvents")
+        );
+        assert_eq!(closest("plXYet", ["planet"]), Some("planet"));
+        let uuid = "00000000-0000-0000-0000-000000000001";
+        for typo in [
+            "00000000-0000-0000-0000-0000000000ab",
+            "00000000-0000-0000-0000-0000000001",
+            "00000000-0000-0000-0000-00000000000100",
+        ] {
+            assert_eq!(closest_within(typo, [uuid], 2), Some(uuid), "{typo}");
+        }
+        // The caller's bound still caps it.
+        assert_eq!(
+            closest_within("00000000-0000-0000-0000-000000000abc", [uuid], 2),
+            None
+        );
+        // Only the words that differ count: a short differing word in a
+        // phrase is still bound by its own length.
+        assert_eq!(words("big incident", "minor incident"), ("big", "minor"));
+        assert_eq!(
+            words("severe planet incident", "severe glands incident"),
+            ("planet", "glands")
+        );
+        assert_eq!(
+            words("securityeve", "securityevent"),
+            ("securityeve", "securityevent")
+        );
+        assert_eq!(words("a bc d", "a bxc d"), ("bc", "bxc"));
+        assert_eq!(words("one two", "one two"), ("two", "two"));
+    }
+
+    #[test]
+    fn the_bound_is_a_third_of_the_length() {
+        assert_eq!(max_edits(0), 1);
+        assert_eq!(max_edits(3), 1);
+        assert_eq!(max_edits(5), 1);
+        assert_eq!(max_edits(6), 2);
+        assert_eq!(max_edits(9), 3);
+        assert_eq!(
+            closest_within("T1059.01", ["T1059.001", "T1059"], 1),
+            Some("T1059.001")
+        );
+        assert_eq!(closest_within("T1234.567", ["T1059.001"], 1), None);
+    }
+
+    /// The bound is inclusive and exact: a six-letter word takes two edits,
+    /// never three, over the whole value and over the part that differs.
+    #[test]
+    fn the_bound_is_exact() {
+        assert_eq!(max_edits("planet".len()), 2);
+        // p→g, t→s: two edits, no shared prefix or suffix.
+        assert_eq!(closest("planet", ["glanes"]), Some("glanes"));
+        // p→g, e→d, t→s: three.
+        assert_eq!(closest("planet", ["glands"]), None);
+        // In a phrase, the differing middle (`planet`, six letters) is bound
+        // to two edits, though the whole phrase would allow seven.
+        assert_eq!(
+            closest("Severe planet incident", ["Severe glanes incident"]),
+            Some("Severe glanes incident")
+        );
+        assert_eq!(
+            closest("Severe planet incident", ["Severe glands incident"]),
+            None
+        );
+    }
+
+    #[test]
+    fn ties_do_not_depend_on_the_order_of_the_candidates() {
+        let forward = suggestions("bat", ["cat", "bad", "hat"], 3);
+        let backward = suggestions("bat", ["hat", "bad", "cat"], 3);
+        assert_eq!(forward, backward);
+        // `bad` keeps the first two characters; the rest sort by name.
+        assert_eq!(forward, ["bad", "cat", "hat"]);
+    }
+
+    #[test]
+    fn the_value_itself_and_duplicates_are_not_suggested() {
+        assert_eq!(suggestions("red", ["red", "rad", "rad"], 5), ["rad"]);
+    }
+
+    #[test]
+    fn best_orders_without_a_bound() {
+        // The same word first, then the fewest edits, then the best start.
+        assert_eq!(
+            best("Process_Name", ["process_title", "process_name"]),
+            Some("process_name")
+        );
+        assert_eq!(best("stast", ["stash", "stats"]), Some("stats"));
+        assert_eq!(best("bat", ["hat", "cat", "bad"]), Some("bad"));
+        assert_eq!(best("bat", ["hat", "cat"]), Some("cat"));
+        // The same word beats a closer spelling: `a_b_c` is `abc` (two
+        // edits) before it is `a_b_x` (one).
+        assert_eq!(best("a_b_c", ["a_b_x", "abc"]), Some("abc"));
+        // No bound: a far candidate is still the best of one.
+        assert_eq!(best("planet", ["glands"]), Some("glands"));
+        // The value itself is not skipped: the caller's check chose it.
+        assert_eq!(best("red", ["red"]), Some("red"));
+        assert_eq!(best("red", []), None);
+        // The order of the candidates does not matter.
+        assert_eq!(
+            best("tabel", ["label", "table"]),
+            best("tabel", ["table", "label"])
+        );
+    }
+
+    #[test]
+    fn prepared_candidates_give_indices() {
+        let candidates = Candidates::new(["clear", "amber", "clear", "red"]);
+        assert_eq!(candidates.closest("ambr"), Some(1));
+        assert_eq!(candidates.closest("CLEAR"), Some(0));
+        assert_eq!(candidates.closest("rde"), Some(3));
+        assert_eq!(candidates.closest("violet"), None);
+        assert_eq!(Candidates::default().closest("red"), None);
+    }
+
+    #[test]
+    fn counts_characters_not_bytes() {
+        assert_eq!(closest("Zürch", ["Zürich", "Zug"]), Some("Zürich"));
+        // Five characters (one edit) in ten bytes (three): the candidate,
+        // two edits away, is out of reach.
+        assert_eq!("äöüßé".len(), 10);
+        assert_eq!(closest("äöüßé", ["xöüßéy"]), None);
+        assert_eq!(closest("äöüßé", ["xöüßé"]), Some("xöüßé"));
+        // The same through the prepared candidates vocabularies suggest from.
+        assert_eq!(Candidates::new(["xöüßéy"]).closest("äöüßé"), None);
+        assert_eq!(Candidates::new(["xöüßé"]).closest("äöüßé"), Some(0));
+        assert_eq!(fold("Straße-Nord"), "straßenord");
+    }
+
+    /// The bag distance as first written: the 128 counts summed each way.
+    fn bag_distance_by_counts(a: &str, b: &str) -> Option<usize> {
+        if !a.is_ascii() || !b.is_ascii() {
+            return None;
+        }
+        let mut counts = [0i32; 128];
+        for byte in a.bytes() {
+            counts[usize::from(byte)] += 1;
+        }
+        for byte in b.bytes() {
+            counts[usize::from(byte)] -= 1;
+        }
+        let (mut more, mut fewer) = (0usize, 0usize);
+        for count in counts {
+            match count.cmp(&0) {
+                Ordering::Greater => more += count.unsigned_abs() as usize,
+                Ordering::Less => fewer += count.unsigned_abs() as usize,
+                Ordering::Equal => {}
+            }
+        }
+        Some(more.max(fewer))
+    }
+
+    /// The one-pass bag distance is the counted one, over every pair of a
+    /// set of spellings and of generated ones (repeats, empties, non-ASCII).
+    #[test]
+    fn the_bag_distance_is_the_counted_one() {
+        let mut words: Vec<String> = [
+            "",
+            "a",
+            "aa",
+            "ab",
+            "ba",
+            "aab",
+            "abb",
+            "SecurityEvent",
+            "securityevent",
+            "SecurityEvnt",
+            "DeviceProcessEvents",
+            "Événement",
+            "src_ip",
+            "dest_ip",
+            "process.name",
+            "AAAAAAAA",
+            "~!@#$%^&*()",
+            "zzz zzz",
+        ]
+        .map(str::to_owned)
+        .to_vec();
+        // A fixed linear congruential sequence over printable ASCII.
+        let mut seed: u32 = 7;
+        for _ in 0..400 {
+            let mut word = String::new();
+            seed = seed.wrapping_mul(1_103_515_245).wrapping_add(12_345);
+            for _ in 0..(seed >> 16) % 14 {
+                seed = seed.wrapping_mul(1_103_515_245).wrapping_add(12_345);
+                word.push(char::from(
+                    b'a' + u8::try_from((seed >> 16) % 6).unwrap_or(0),
+                ));
+            }
+            words.push(word);
+        }
+        for a in &words {
+            for b in &words {
+                assert_eq!(
+                    bag_distance(a, b),
+                    bag_distance_by_counts(a, b),
+                    "{a:?} {b:?}"
+                );
+                if let Some(bag) = Bag::new(a) {
+                    assert_eq!(bag.distance(b), bag_distance(a, b), "{a:?} {b:?}");
+                }
+            }
+        }
+        // A spelling too long for a byte's count is measured as before.
+        let long = "a".repeat(300);
+        assert!(Bag::new(&long).is_none());
+        assert!(Bag::new(&"a".repeat(255)).is_some());
+    }
+
+    /// A value's letters are counted once for all the candidates it is
+    /// measured against, not once for each (ADR 0014, rule 1).
+    #[test]
+    fn a_value_is_counted_once() {
+        let names: Vec<String> = (0..200).map(|i| format!("proc.field{i}")).collect();
+        let prepared = Candidates::new(names.iter().map(String::as_str));
+        VALUES_COUNTED.with(|n| n.set(0));
+        let _ = prepared.closest("proc.fielx");
+        let counted = VALUES_COUNTED.with(std::cell::Cell::get);
+        assert_eq!(counted, 1, "{counted} spellings counted");
+    }
+
+    /// The shared prefix and suffix are cut by whole characters, whatever
+    /// their width.
+    #[test]
+    fn multi_byte_spellings_are_cut_by_characters() {
+        assert_eq!(middles("é😀a😀é", "é😀b😀é"), ("a", "b"));
+        assert_eq!(middles("😀", "😀😀"), ("", "😀"));
+        assert_eq!(middles("éa", "èa"), ("é", "è"));
+        assert_eq!(middles("", "é"), ("", "é"));
+        assert_eq!(
+            words("é😀 grand incidént", "é😀 grond incidént"),
+            ("grand", "grond")
+        );
+        assert_eq!(words("😀 é", "😀 è"), ("é", "è"));
+        let Shared { prefix, suffix, .. } = shared("aé😀", "aè😀");
+        assert_eq!((prefix, suffix), (1, "😀".len()));
+        assert_eq!(
+            closest("Évènement😀", ["Évènemant😀", "Autre"]),
+            Some("Évènemant😀")
+        );
+    }
+}

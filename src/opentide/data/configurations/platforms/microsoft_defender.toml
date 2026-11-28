@@ -1,0 +1,29 @@
+[platform]
+enabled = false
+name = "Microsoft Defender"
+description = """Microsoft Defender XDR custom detection rules, deployed through the
+Microsoft Graph beta custom detection API. The rules query advanced hunting across
+Defender for Endpoint, Office 365, Identity and Cloud Apps.
+"""
+
+#[[modifiers]]
+#name = "Modifier Demo"
+#description = "Example of using modifiers as a development lifecycle automation"
+#[modifiers.conditions]
+#status = ["STAGING"]
+#[modifiers.modifications]
+#alert.severity = "Informational"
+#alert.title = "prefix::Staging "
+
+#[[tenants]]
+#name = "Name"
+#description = "Tenant Description"
+#strategies = ["PREVIEW", "RELEASE"] # status strategies this tenant accepts; omit for both
+#manual = false # true: only rules whose block lists this tenant
+#[tenants.setup]
+#ssl = true
+#tenant_id = "$MDE_TENANT_ID"
+#client_id = "$MDE_CLIENT_ID"
+#client_secret = "$MDE_CLIENT_SECRET"
+#[tenants.parameters]
+#device_groups = [""]

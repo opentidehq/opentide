@@ -1,0 +1,1 @@
+index=a | search | stats count by host

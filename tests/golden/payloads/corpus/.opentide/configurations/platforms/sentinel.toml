@@ -1,0 +1,29 @@
+[platform]
+enabled = true
+
+[[tenants]]
+name = "one"
+description = "Takes the tenant-scoped exclusion"
+[tenants.setup]
+ssl = true
+resource_group = "rg"
+workspace_name = "ws"
+workspace_id = "$AZURE_WORKSPACE_ID"
+azure_tenant_id = "$AZURE_TENANT_ID"
+azure_subscription_id = "$AZURE_SUBSCRIPTION_ID"
+azure_client_id = "$AZURE_CLIENT_ID"
+azure_client_secret = "$AZURE_CLIENT_SECRET"
+
+[[tenants]]
+name = "two"
+description = "Another tenant"
+strategies = ["RELEASE"]
+[tenants.setup]
+ssl = true
+resource_group = "rg"
+workspace_name = "ws2"
+workspace_id = "$AZURE_WORKSPACE_ID"
+azure_tenant_id = "$AZURE_TENANT_ID"
+azure_subscription_id = "$AZURE_SUBSCRIPTION_ID"
+azure_client_id = "$AZURE_CLIENT_ID"
+azure_client_secret = "$AZURE_CLIENT_SECRET"

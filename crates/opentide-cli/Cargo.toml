@@ -1,0 +1,224 @@
+[package]
+name = "opentide-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+# Published by the release train (publish.yml, UC-5.5), for the facade's `cli`
+# feature. Its explain pages and MCP templates come from src/opentide/data
+# (build.rs, OPENTIDE_ASSETS), which `release.py vendor` copies into the package.
+# The renderers' oracle data (tests/render.rs) is CI-only, like the vendor
+# oracles: the explain pages it holds quote vendor SDK names the licence scan
+# keeps out of release artifacts (scripts/engine/license-scan.sh).
+# `generate extract sentinel`'s oracle files (tests/extract_sentinel.rs) are
+# CI-only too: the test replays a cassette of the repository's tests/.
+exclude = [
+    "tests/render/",
+    "tests/render.rs",
+    "tests/extract_sentinel/",
+    "tests/extract_sentinel.rs",
+    # The command line's snapshots (#1139): megabytes, and their manifest and
+    # fixtures are the repository's tests/golden/.
+    "tests/cli_snapshots/",
+    "tests/cli_snapshots.rs",
+]
+description = "opentide engine component: the command line (command tree, output modes, JSON envelope, exit codes, crash handler). Internal: depend on the opentide facade (its `cli` feature)."
+readme = "README.md"
+
+# The explain pages build.rs compiles in, which `scripts/engine/release.py
+# vendor` copies into the published crate (its `include_str!`s of
+# OPENTIDE_ASSETS, the MCP host templates, are found in the sources).
+[package.metadata.opentide]
+assets = ["src/opentide/data/diagnostics"]
+
+[lints]
+workspace = true
+
+[build-dependencies]
+opentide-dataset = { workspace = true, features = ["encode"] }
+
+[lib]
+name = "opentide_cli"
+path = "src/lib.rs"
+
+# Named `opentide-cli`, not `opentide`: the facade's binary (crates/opentide,
+# with `cli`) is `opentide`, and on Windows two packages linking one
+# `target/debug/deps/opentide.exe` at once fail with LNK1104 (cargo#6313).
+# It runs the same `main(argv)`, so it prints `opentide` as its name.
+[[bin]]
+name = "opentide-cli"
+path = "src/main.rs"
+# Not documented: its page would take the path of the opentide facade's
+# library (target/doc/opentide, cargo#6313), whose docs are the binary's too.
+doc = false
+
+[dependencies]
+opentide-dataset.workspace = true
+clap = { workspace = true, features = ["env", "string"] }
+# The renderers' styles (render::text) and the console streams they reach.
+anstyle.workspace = true
+anstream.workspace = true
+# Shell completion (#841): `--show-completion` and `--install-completion`
+# write clap_complete's registration for each shell, and a Tab press runs the
+# binary with `_OPENTIDE_COMPLETE` set (`CompleteEnv`), which completes the
+# command line from the clap tree and the workspace's values from the
+# completers in `commands/completion/values.rs`. `unstable-dynamic` is the
+# feature that holds `CompleteEnv` and `ArgValueCompleter`: outside
+# clap_complete's semver promise, so the version is pinned to the minor.
+clap_complete = { version = "~4.6.11", features = ["unstable-dynamic"] }
+# The boxed tables of `info` (the rows, columns and wrapping are the crate's).
+# The query lines of a code frame, coloured as the editor colours them.
+opentide-analysis = { workspace = true, features = ["queries"] }
+# The commands ported onto the framework (UC-2.4): the workspace, its
+# catalogue, coverage, tenants and review dates, and the one suggestion rule;
+# the queries check of validate on the query engines (opentide-analysis's
+# `queries`, UC-2.5):
+# the workspace and its one Diagnostic, and the quoting of a suggestion.
+# `digest`: `text::sha256_hex`.
+opentide-core = { workspace = true, features = ["digest", "markdown", "shell"] }
+# `generate` (UC-3.2): the files it writes; `deploy --dry-run` (UC-3.1c): the
+# plan, the compiled bodies, the git baseline.
+opentide-compile.workspace = true
+opentide-schema.workspace = true
+opentide-workspace.workspace = true
+# `explain` (#1015): the YARA codes the engine only ever reports as warnings.
+opentide-yara.workspace = true
+# `lsp start` (UC-3.6b, #947): the language server the command line hosts,
+# the tier below this crate in xtask/layers.toml.
+opentide-lsp.workspace = true
+anyhow.workspace = true
+# `opentide tui` (UC-3.6d, #951) uses the same tier for what the language
+# server reports on each object file (`ObjectFindings`, the findings
+# `opentide lsp start` publishes).
+# `opentide tui`'s terminal UI: ratatui, drawn through crossterm; and the
+# output of a command run from it, printed by the renderers as SGR runs at a
+# terminal, read back into ratatui's text for the Results tab.
+ratatui = { version = "0.30", default-features = false, features = ["crossterm", "underline-color"], optional = true }
+ansi-to-tui = { version = "8.0", default-features = false, optional = true }
+# ratatui's own conversion of the renderers' anstyle styles (the query
+# highlights the Detail pane shares with the code frames).
+ratatui-core = { version = "0.1", default-features = false, features = ["anstyle"], optional = true }
+indexmap.workspace = true
+# `validate`'s queries check analyses the objects on every core (#817).
+rayon.workspace = true
+jiff.workspace = true
+form_urlencoded.workspace = true
+# `doctor` (UC-3.5c): VS Code's and the MCP hosts' JSON with comments and
+# trailing commas, as VS Code reads them.
+jsonc-parser = { version = "0.26", features = ["cst", "serde"] }
+# `setup`'s paths: a path shown relative to another (`os.path.relpath`), and
+# a path resolved where it exists and kept where it does not (`Path.resolve()`).
+pathdiff = "0.2"
+soft-canonicalize = { version = "0.5", default-features = false, features = ["dunce"] }
+# A path resolved without Windows' `\\?\` prefix where it can be written
+# without one (`new`'s printed and written paths).
+dunce.workspace = true
+# The folder walks on disk (`new`, `migrate`, `doctor`, `setup skills`):
+# sorted siblings, links to folders not followed, or followed with loops cut.
+# The workspace's `FileSystem` (opentide-workspace) walks its own trees.
+walkdir.workspace = true
+# Percent-encoded paths in links and SARIF URIs.
+percent-encoding.workspace = true
+# `opentide explain <code>` in human mode: the page's Markdown, parsed for the terminal.
+pulldown-cmark.workspace = true
+regex.workspace = true
+url.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+shlex.workspace = true
+terminal_size = "0.4"
+textwrap = { version = "0.16", default-features = false }
+toml.workspace = true
+# `setup platforms` sets `enabled` in a configuration's `[platform]` table,
+# every other byte of the file kept.
+toml_edit.workspace = true
+tracing.workspace = true
+unicode-segmentation = "1.13"
+unicode-width = "0.2"
+# The `setup` wizard (UC-3.6c, #951): its questions at a terminal, on
+# crossterm (Linux, macOS and Windows consoles).
+inquire = { version = "0.9", default-features = false, features = ["crossterm"], optional = true }
+# `new`'s fresh object identifiers, and `generate extract elastic
+# --include-prebuilt` (UC-4.4b, #834): the UUIDv5 a prebuilt rule's id derives.
+uuid = { workspace = true, features = ["v4", "v5"] }
+# `generate extract elastic` (UC-4.4b, #834): the extracted rule written as
+# YAML by serde-saphyr's emitter, as `opentide-compile` writes Sigma rules.
+serde-saphyr.workspace = true
+# `doctor`'s opentide_latest (UC-4.4, #834): PEP 440 versions ordered as
+# `packaging.version.Version` orders them.
+pep440_rs = { version = "0.7", default-features = false }
+# `doctor` (UC-3.5c): whether git and an MCP server's command are on PATH.
+which = "7"
+tracing-subscriber.workspace = true
+# `mcp start` (UC-3.7, #829): the official Rust MCP SDK serves the protocol on
+# stdio, on a current-thread tokio runtime (stdin, and the duplicate of stdout
+# the frames go to).
+rmcp = { version = "3.9", default-features = false, features = ["server"] }
+# Only the features tokio builds on wasm32 here; `fs` and `io-std`, which
+# `mcp start`'s native transport needs, are added off WASI below.
+tokio = { workspace = true, features = ["rt", "io-util", "sync", "time", "macros"] }
+# `setup skills` (UC-4.1, #831): the opentidehq/skills catalogue, fetched with
+# the connectors' HTTP client, through the proxy and CA bundle the
+# environment names. Under WASI the connectors answer every request with
+# their network-unavailable failure (wasm32-wasip1 has no sockets).
+opentide-connectors.workspace = true
+tokio-util = { workspace = true, features = ["rt"] }
+# `opentide serve`'s `opentide/fetch` (src/serve/fetch.rs): request and answer bodies.
+base64.workspace = true
+
+[features]
+default = ["terminal"]
+# The terminal UI (`tui`) and the `setup` wizard's questions, on crossterm.
+# Off, as in the WASI build, they refuse as they do without a terminal.
+terminal = ["dep:ratatui", "dep:ratatui-core", "dep:ansi-to-tui", "dep:inquire"]
+
+[target.'cfg(not(target_os = "wasi"))'.dependencies]
+# Ctrl-C (`app::install_interrupt_handler`). WASI delivers no signals.
+ctrlc = "3.4"
+# `mcp start`'s transport on stdin and a duplicate of stdout. WASI has
+# neither tokio's `fs` nor its `io-std` (tokio refuses them on wasm32); the
+# WASI build reads and writes the standard streams through blocking adapters.
+tokio = { workspace = true, features = ["io-std", "fs"] }
+
+[target.'cfg(unix)'.dependencies]
+# `mcp start` points descriptor 1 at stderr while it serves, so nothing but a
+# frame reaches stdout (`dup2`, safely).
+rustix = { workspace = true, features = ["std", "stdio"] }
+# `serve` (UC-3.8, #830): SIGTERM and SIGHUP end the session as the end of
+# input does, so the run in progress is cancelled and cleans up.
+signal-hook = { version = "0.3", default-features = false, features = ["iterator"] }
+
+[target.'cfg(unix)'.dev-dependencies]
+# `tests/tui_terminal.rs`: the pseudo-terminals `tui` runs in at a terminal;
+# `tests/lsp_start.rs`: the Ctrl-C (SIGINT) a person sends `lsp start`.
+rustix = { workspace = true, features = ["std", "fs", "process", "pty", "termios"] }
+# `tests/tui_pty.rs`: `opentide tui` driven in a pseudo-terminal (open, run
+# validate, quit) through portable-pty, as a person at a terminal runs it.
+# vt100 reads what the UI drew back into a screen: ratatui writes only the
+# cells that changed.
+vt100 = "0.18"
+
+[dev-dependencies]
+# The goldens' recorded HTTP (UC-4.1): the replaying proxy of a cassette case.
+opentide-cassette.workspace = true
+# A stand-in Google SecOps instance (tests/google_secops.rs): its rules are
+# deployed and checked through the CLI flow against wiremock, no recording
+# of a real instance being shareable.
+wiremock.workspace = true
+tempfile.workspace = true
+# `tests/deploy_payload_schema.rs`: the published `deploy` output schema
+# against the dry-run documents it describes (the validator `xtask` uses).
+jsonschema.workspace = true
+# A scratch folder's canonical path without Windows' `\\?\` prefix, which
+# git and the binary print otherwise (tests/workspace_e2e.rs).
+dunce.workspace = true
+# The pseudo-terminal tests (tests/setup_wizard.rs, tests/tui_pty.rs), on
+# wezterm's portable-pty: a pty on Unix, ConPTY on Windows. The one crate
+# that drives a run at a terminal.
+portable-pty = "0.9"
+# The renderers' snapshots (tests/render.rs, tests/cli_snapshots.rs).
+insta.workspace = true
+trycmd.workspace = true

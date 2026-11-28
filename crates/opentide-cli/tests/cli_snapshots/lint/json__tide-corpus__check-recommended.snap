@@ -1,0 +1,36 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: lint/json/tide-corpus/check-recommended
+---
+args: opentide --json lint --check recommended
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "checks": [
+    "recommended"
+  ],
+  "command": "lint",
+  "count": 0,
+  "duration_ms": 0,
+  "exit_code": 0,
+  "failure": null,
+  "findings": [],
+  "fixed": 0,
+  "message": "Catalogue lint passed",
+  "next_actions": [],
+  "ok": true,
+  "path": "<WS>",
+  "schema_version": 1,
+  "status": "completed",
+  "summary": {
+    "errors": 0,
+    "files": 12,
+    "findings": 0,
+    "fixed": 0,
+    "notes": 0,
+    "warnings": 0
+  }
+}
+
+━━━ stderr · empty

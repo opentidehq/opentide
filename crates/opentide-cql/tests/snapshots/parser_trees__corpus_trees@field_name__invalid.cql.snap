@@ -1,0 +1,18 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(query(&file))
+input_file: crates/testdata/corpus/cql/field_name__invalid.cql
+---
+SOURCE_FILE@0..12
+  PIPELINE@0..11
+    FREE_TEXT@0..9
+      UNQUOTED_PATTERN@0..9
+        PATTERN@0..9 "host-name"
+    ERROR@9..10
+      EQ@9..10 "="
+    FREE_TEXT@10..11
+      UNQUOTED_PATTERN@10..11
+        PATTERN@10..11 "*"
+  WHITESPACE@11..12 "\n"
+
+9..9: unexpected

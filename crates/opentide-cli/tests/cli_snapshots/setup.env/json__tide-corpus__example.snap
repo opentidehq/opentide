@@ -1,0 +1,36 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: setup.env/json/tide-corpus/example
+---
+args: opentide --json setup env --yes
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "command": "setup env",
+  "duration_ms": 0,
+  "exit_code": 0,
+  "failure": null,
+  "files": [
+    ".env.example",
+    ".gitignore"
+  ],
+  "message": "Wrote 2 files",
+  "next_actions": [],
+  "ok": true,
+  "path": "<WS>",
+  "schema_version": 1,
+  "skipped": [],
+  "status": "completed",
+  "summary": {}
+}
+
+━━━ stderr · empty
+
+━━━ ws/.env.example · created 0644
+# opentide environment template. Copy to .env and adjust as needed.
+# The CLI, MCP server, and SDK honour OPENTIDE_REPO_ROOT (same as --repo).
+OPENTIDE_REPO_ROOT=.
+
+━━━ ws/.gitignore · created 0644
+.env

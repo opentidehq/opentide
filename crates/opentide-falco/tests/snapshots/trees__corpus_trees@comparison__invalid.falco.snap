@@ -1,0 +1,14 @@
+---
+source: crates/opentide-falco/tests/trees.rs
+expression: "debug_parse(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/falco/comparison__invalid.falco
+---
+source_file@0..10
+  comparison@0..10
+    field@0..8
+      field_name@0..8 "fd.sport"
+    whitespace@8..9 " "
+    comparison_operator@9..10
+      other@9..10 ">"
+errors:
+10..10: expected a value (expected quoted_string)

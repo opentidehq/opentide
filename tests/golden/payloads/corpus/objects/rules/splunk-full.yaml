@@ -1,0 +1,83 @@
+name: Splunk Full
+
+metadata:
+  uuid: 00000000-0000-4000-8005-000000000301
+  schema: rule::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+  author: Detection Team
+
+description: |
+  Splunk Full for the compile corpus.
+techniques:
+  - T1059.001
+  - T1003
+detection_model: 00000000-0000-4000-8099-000000000001
+
+response:
+  alert_severity: High
+  responders: Blue Team
+
+configurations:
+  splunk:
+    status: STAGING
+    query: |
+      index=main sourcetype=WinEventLog EventCode=4688
+      | stats count by host
+    scheduling:
+      type: Scheduled
+      expires: 24h
+      schedule:
+        frequency: 2h
+      timerange:
+        lookback: 1h
+        latest: now
+    trigger:
+      condition: number of events
+      comparator: greater than
+      threshold: 0
+      severity: 4
+      custom_condition: search count > 10
+      type: Once
+      throttling:
+        duration: 1h
+        fields:
+          - host
+          - user
+        group_name: hosts
+    actions:
+      notable:
+        event:
+          title: Encoded command on $host$
+          description: A host ran an encoded command.
+        drilldown:
+          name: Host events
+          search: index=main host=$host$
+        security_domain: Endpoint
+      risk:
+        message: Encoded command on $host$
+        risk_objects:
+          - field: host
+            type: system
+            score: 40
+        threat_objects:
+          - field: process
+            type: process_name
+      email:
+        to: soc@example.org
+        cc: lead@example.org
+        bcc: audit@example.org
+        priority: "2"
+        subject: Alert $name$
+        message: See $results_link$
+        content_type: html
+        send_csv: true
+        send_pdf: false
+        inline_results: true
+        include:
+          results_link: true
+          search_string: false
+          trigger_condition: true
+          trigger_time: false

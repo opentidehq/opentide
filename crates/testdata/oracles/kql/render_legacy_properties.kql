@@ -1,0 +1,1 @@
+SigninLogs | summarize count() by bin(TimeGenerated, 1h), AppDisplayName | render timechart kind=stacked title="Sign-ins"

@@ -1,0 +1,9 @@
+spawned_process and proc.name in (oops and spawned_by_web_server and (proc.cmdline contains "/dev/tcp/" or
+     proc.cmdline contains "nc -e" or
+     proc.cmdline contains "ncat -e" or
+     proc.cmdline contains "bash -i" or
+     proc.cmdline contains "python -c 'import socket" or
+     proc.cmdline contains "python3 -c 'import socket" or
+     proc.cmdline contains "perl -e 'use Socket" or
+     proc.cmdline contains "ruby -rsocket" or
+     (proc.cmdline contains "mkfifo" and proc.cmdline contains "/tmp"))

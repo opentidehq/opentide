@@ -1,0 +1,65 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: validate.query/json/none/help
+---
+args: opentide --json validate query --help
+exit: 0
+
+━━━ stdout
+Check rule queries offline with the analysis engine, or on the tenants (--live).
+
+Offline, the engine reports the queries the platform would reject, as
+`opentide validate` does; `opentide lint` reports their style.
+
+Usage: opentide validate query [OPTIONS]
+
+Options:
+      --platform <PLATFORM>
+          Check this platform's queries. Offline, default every platform the engine parses: sentinel, microsoft_defender, splunk, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops, datadog. --live needs one of: sentinel, microsoft_defender, splunk, sentinel_one, carbon_black_cloud, elastic, graylog, exabeam, google_secops, datadog
+          
+          [possible values: sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops, datadog]
+
+      --strategy <STRATEGY>
+          Check only rules a run with this strategy deploys (repeatable), on the tenants that accept it. Default: PREVIEW and RELEASE
+
+      --wide
+          Check every status strategy but DISABLEMENT and DELETION (--live)
+
+      --live
+          Check the queries on the platform's tenants (needs credentials)
+
+      --changed
+          Check only the rule files this run changed: the pull or merge request, the push, or outside CI the last commit (the files deploy reads)
+
+      --position <search|rule>
+          Where a --file query will sit: search (the default; a query file or a hunt) or rule (the query of the --platform's rule block, checked as that block checks it)
+          
+          [possible values: search, rule]
+
+      --file <FILE>
+          Check only this rule file, or this query file (.kql, .spl, .esql, .eql, .kuery, .lucene, .falco, .yar, .yara, .yaral, .yl2, .cql, .exabeam, .datadog) offline (repeatable)
+
+      --uuid <UUID>
+          Check only the rule with this UUID (repeatable)
+
+      --strict
+          Fail on warnings too
+
+      --queries <error|warn>
+          How a rejected query is reported offline: error (the default) or warn
+          
+          [possible values: error, warn, off]
+
+      --check-timeout <SECONDS>
+          Seconds each query may take on a tenant before its check fails (--live; default: OPENTIDE_QUERY_CHECK_TIMEOUT, else 120)
+
+      --help
+          Print help
+
+Examples:
+  $ opentide validate query
+  $ opentide validate query --platform splunk --changed
+  $ opentide validate query --file hunting/lsass.kql
+  $ opentide validate query --platform sentinel --live
+
+━━━ stderr · empty

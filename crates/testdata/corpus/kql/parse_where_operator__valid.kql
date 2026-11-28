@@ -1,0 +1,2 @@
+// prod:parse_where_operator valid
+Syslog | parse-where SyslogMessage with * "user=" User " port=" Port:long

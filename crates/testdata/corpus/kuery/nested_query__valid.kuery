@@ -1,0 +1,2 @@
+# prod:nested_query valid
+user:{ first:Alice and last:Smith }

@@ -1,0 +1,1 @@
+SecurityEvent | extend Kind = iff(EventID == 4624, "logon", case(EventID == 4625, "failure", "other"))

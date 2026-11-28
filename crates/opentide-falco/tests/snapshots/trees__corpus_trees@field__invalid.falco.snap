@@ -1,0 +1,21 @@
+---
+source: crates/opentide-falco/tests/trees.rs
+expression: "debug_parse(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/falco/field__invalid.falco
+---
+source_file@0..17
+  comparison@0..12
+    field@0..12
+      field_name@0..9 "proc.name"
+      field_argument@9..12
+        [@9..10 "["
+        whitespace@10..11 " "
+        argument_value@11..12
+          =@11..12 "="
+  whitespace@12..13 " "
+  ERROR@13..17
+    identifier@13..17 "bash"
+errors:
+12..13: missing `]` (expected ])
+12..13: expected an operator (expected ])
+12..13: unexpected (expected ])

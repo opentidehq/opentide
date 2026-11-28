@@ -1,0 +1,2 @@
+# prod:value_and_expr valid
+@user_perms:(4 AND 6)

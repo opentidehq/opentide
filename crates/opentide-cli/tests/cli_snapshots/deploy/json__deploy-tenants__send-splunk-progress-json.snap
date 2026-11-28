@@ -1,0 +1,97 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: deploy/json/deploy-tenants/send-splunk-progress-json
+---
+args: opentide --json deploy --platform splunk --strategy PREVIEW --strategy RELEASE --all --keep-deprecated
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "changes": [
+    {
+      "action": "upsert",
+      "name": "Splunk create rule",
+      "platform": "splunk",
+      "status": "STAGING",
+      "tenant": "lab",
+      "uuid": "00000000-0000-4000-8047-000000000041"
+    },
+    {
+      "action": "delete",
+      "name": "Splunk retire rule",
+      "platform": "splunk",
+      "status": "REMOVED",
+      "tenant": "lab",
+      "uuid": "00000000-0000-4000-8047-000000000042"
+    }
+  ],
+  "command": "deploy",
+  "deployed": [
+    "splunk"
+  ],
+  "dry_run": false,
+  "duration_ms": 0,
+  "exit_code": 0,
+  "failure": null,
+  "message": "Deployed 2 rules to 1 tenant · 1 created or updated, 1 deleted · 0 failed, 0 not attempted · <SECONDS>",
+  "next_actions": [],
+  "ok": true,
+  "plan": {
+    "splunk": [
+      "00000000-0000-4000-8047-000000000041",
+      "00000000-0000-4000-8047-000000000042"
+    ]
+  },
+  "results": [
+    {
+      "action": "upsert",
+      "error": null,
+      "id": "00000000-0000-4000-8047-000000000041",
+      "name": "Splunk create rule",
+      "platform": "splunk",
+      "reason": null,
+      "seconds": 0.0,
+      "status": "deployed",
+      "tenant": "lab"
+    },
+    {
+      "action": "delete",
+      "error": null,
+      "id": "00000000-0000-4000-8047-000000000042",
+      "name": "Splunk retire rule",
+      "platform": "splunk",
+      "reason": null,
+      "seconds": 0.0,
+      "status": "deployed",
+      "tenant": "lab"
+    }
+  ],
+  "schema_version": 1,
+  "status": "completed",
+  "strategies": [
+    "PREVIEW",
+    "RELEASE"
+  ],
+  "summary": {
+    "create": 0,
+    "delete": 1,
+    "disable": 0,
+    "failed": 0,
+    "not_attempted": 0,
+    "platforms": 1,
+    "seconds": 0.0,
+    "skipped": 0,
+    "tenants": 1,
+    "unchanged": 0,
+    "update": 0,
+    "upsert": 1
+  }
+}
+
+━━━ stderr · json, 1 lines
+{
+  "done": 1,
+  "event": "progress",
+  "step": "splunk",
+  "total": 1
+}

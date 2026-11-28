@@ -1,0 +1,6 @@
+event_platform=Win #event_simpleName=/^(ProcessRollup2|DnsRequest)$/
+| falconPID := TargetProcessId
+| falconPID := ContextProcessId
+| slefJoinFilter([aid, falconPID], where=[{#event_simpleName=ProcessRollup2}, {#event_simpleName=DnsRequest}], prefilter=true)
+| groupBy([aid, falconPID], function=([count(#event_simpleName, distinct=true, as=eventCount), collect([ParentBaseFileName, ImageFileName, CommandLine])]))
+| test(eventCount==2)

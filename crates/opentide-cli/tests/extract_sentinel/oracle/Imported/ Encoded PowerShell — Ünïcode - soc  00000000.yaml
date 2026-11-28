@@ -1,0 +1,96 @@
+name: "Encoded PowerShell — Ünïcode - soc"
+
+#references:
+  #public:
+    #1: 
+  #internal:
+    #a: 
+
+metadata:
+  uuid: 00000000-0000-4000-8044-000000000004
+  schema: rule::1.0
+  version: 
+  created: 2026-07-08
+  modified: 2026-07-08
+  tlp: amber
+  author: opentide Sentinel Importer 
+  #contributors:
+    #-
+
+description: |
+  The same name: written beside the first, its file suffixed.
+#detection_model: 
+
+response:
+  alert_severity: Informational
+  #playbook: https://
+  #responders: 
+  #procedure:
+    #analysis: |
+      #...
+    #searches:
+      #- purpose: |
+          #...
+        #system: 
+        #query: |
+          #...
+    #containment: |
+      #...
+
+configurations:
+  sentinel: 
+    schema: platform::sentinel::1.0
+    status: PRODUCTION
+    tenants:
+      - soc
+    #contributors:
+      #-
+   
+    trigger:
+      operator: Equal
+      threshold: 5
+    
+    scheduling:
+      #nrt: false
+      frequency: 30m 
+      lookback: 2h
+    
+    alert:
+      create_incident: True
+      suppression: false
+      #title:  
+      description: |2
+          {{Account}} signed in
+      custom_details:
+        - key: '1' 
+          column: 'yes'
+        - key: Empty 
+          column: ''
+        - key: Path 
+          column: C:\Windows\Temp
+      #dynamic_properties:
+        #- property: 
+          #column: 
+      techniques:
+        - T1003.001
+  
+    grouping:
+      event: SingleAlert
+    
+      alert:
+        enabled: true
+        reopen_closed_incidents: True
+        grouping_lookback: 1d
+        matching: AnyAlert
+  
+    #entities:
+    #entities:
+      #- entity: 
+        #mappings:
+          #- identifier: 
+            #column: 
+    
+    query: |2
+        SecurityEvent
+        | take 1
+  

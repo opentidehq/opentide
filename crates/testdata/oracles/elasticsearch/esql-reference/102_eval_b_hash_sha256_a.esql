@@ -1,0 +1,1 @@
+FROM logs | EVAL b = HASH("sha256", a)

@@ -1,0 +1,36 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: setup.hooks/json/none/help
+---
+args: opentide --json setup hooks --help
+exit: 0
+
+━━━ stdout
+Configure validate-on-commit hooks (pre-commit config + Git hook).
+
+Usage: opentide setup hooks [OPTIONS]
+
+Options:
+  -C, --path <PATH_FLAG>
+          Repository path
+          
+          [default: .]
+
+      --install, --no-install
+          Install .git/hooks/pre-commit when this path is a Git repository
+          
+          [default: install]
+
+      --plan
+          List the files each step would write, and write nothing
+
+  -y, --yes
+          Write without asking for confirmation
+
+      --help
+          Print help
+
+Examples:
+  $ opentide setup hooks --yes
+
+━━━ stderr · empty

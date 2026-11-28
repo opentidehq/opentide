@@ -18,7 +18,7 @@ The document is indented when stdout is a terminal, and one compact line otherwi
 
 ## The envelope
 
-Every document carries these keys next to the command's own. Keys that existed before keep their name, type and meaning; new information is only ever added under new keys.
+Every document carries these keys next to the command's own. From 1.0 on, the envelope's keys keep their name, type and meaning; new information is only ever added under new keys. A command's own keys follow the same promise from 1.0.
 
 | Key | Type | Meaning |
 |-----|------|---------|
@@ -31,7 +31,7 @@ Every document carries these keys next to the command's own. Keys that existed b
 | `command` | str | The command that ran: `validate`, `validate query`, `generate docs rules`. Empty when no command was recognised |
 | `duration_ms` | int | Wall time of the command |
 | `exit_code` | int | The process exit code, the same as `$?` |
-| `summary` | object | Counts behind the outcome, such as `files` or `errors`. Empty when the command reports none yet |
+| `summary` | object | Counts behind the outcome, such as `files` or `errors`. Empty when the command reports none yet. A `deploy`'s counts its rules by action, `unchanged` included ([deploy](./deploy.md#unchanged-rules)) |
 | `next_actions` | list | Commands worth running next, as a JSON reader runs them: `[{ "command": "opentide --json lint --fix", "reason": "…" }]` |
 | `failure` | object or null | Why the command did not exit `0`. `null` exactly when `exit_code` is `0` |
 
@@ -59,6 +59,10 @@ Every document carries these keys next to the command's own. Keys that existed b
 | `usage_error` | 2 | Another usage error, such as options that cannot be combined, or a command group named without its subcommand (`opentide --json mcp`) |
 | `usage_watch_needs_tty` | 2 | `validate --watch` under `--json`, a coding agent or `OPENTIDE_OUTPUT=agent`: it redraws a terminal until Ctrl-C, and nobody would see it |
 | `no_tenant_reached` | 2 | `validate query --live` sent no query because no configured tenant takes the rules |
+| `query_rejected` | 1 | `validate query --live`: a tenant refused at least one query as invalid. `rejected` lists them, each with the rule's `file` and `line` |
+| `credential_unset` | 1 | `validate query --live`: a tenant's setup names an environment variable that is not set |
+| `tenant_unreachable` | 1 | `validate query --live`: a tenant did not answer, so nothing was checked on it |
+| `authentication_failed` | 1 | `validate query --live`: a tenant refused the check itself (its credential or the account's rights), not a query |
 | `query_check_timeout` | 1 | `validate query --live`: every failed check got no answer within `--check-timeout`. `timed_out` lists them |
 | `needs_human_decision` | 2 | `migrate vocab-scope` left values only a person can place |
 | `not_implemented` | 2 | A reserved command, such as `deploy metadata` |
@@ -67,6 +71,7 @@ Every document carries these keys next to the command's own. Keys that existed b
 | `share_failed` | 1 | `share`: objects failed and none succeeded |
 | `scope_no_match`, `api_key_unset`, … | 1 | `share` preflight failures; the code is the `preflight` value |
 | `reference_not_found` | 2 | `new`: `--objective` or `--threat` names no object in the catalogue |
+| `workspace_not_found` | 1 | `new`, `generate`, `migrate vocab-scope`: neither `.opentide/` nor `objects/` is in the folder or above it, so nothing is written |
 | `path_exists` | 1 | `new`: the file it would write already exists; it never overwrites |
 | `path_not_writable` | 1 | `new`: the folder or the file it would write cannot be written (read-only checkout, permissions) |
 | `template_missing` | 1 | `new`: generation ran but wrote no template or schema for the family |
@@ -117,7 +122,7 @@ Without `--json` the same error is one line on stderr, with the suggestion under
 
 ```text output-of="opentide info rulez" exit=2
 error: Unknown info section: rulez. Choose rules, threats, objectives, coverage, vocab, catalog.
-  help: did you mean 'rules'?
+  help: did you mean "rules"?
 ```
 
 ## An unexpected error
@@ -143,6 +148,12 @@ An exception no command handles is a bug in opentide. The run exits `1` and, und
 ```
 
 Where the log goes, what it holds and how to report the bug: [Troubleshooting](../usage/troubleshooting.md#opentide-stops-with-errorinternal).
+
+## The implementation
+
+Every command runs on opentide's Rust core, compiled into the package: `opentide` and `python -m opentide` hand their arguments to it in the process you started, with nothing in between, so Ctrl-C (`error: interrupted`, exit `130`) and SIGTERM reach the command itself (`opentide serve` exits `143`, `opentide mcp start` ends). The same core is the `opentide` binary of the npm package and of `cargo install opentide --features cli`.
+
+The Python implementation each command had is gone, and the variable that chose between the two with it ([#841](https://github.com/opentidehq/opentide/issues/841)). Each command was compared with the Python release it replaced (opentide 0.23.0, and since the 0.28 catch-up opentide 0.28.1) on every documented corpus before its Python implementation went; where the two differ on purpose, the changelog says so. The documents on this site are the contract.
 
 ## Progress events
 
@@ -174,14 +185,14 @@ opentide decides once per command who is reading. The first rule that matches wi
 | 2 | `--json` | `json`: one document on stdout |
 | 3 | `OPENTIDE_OUTPUT` is `json`, `agent`, `plain` or `human` | that mode |
 | 4 | A coding agent is detected | `agent` |
-| 5 | stdout is not a terminal, `NO_COLOR` or `--no-color`, `TERM=dumb`, or CI | `plain` |
+| 5 | stdout is not a terminal, `NO_COLOR`, `FORCE_COLOR=0` or `--no-color`, `TERM=dumb`, or CI | `plain` |
 | 6 | Otherwise | `human` |
 
 `OPENTIDE_OUTPUT=json` is the same as passing `--json` to every command.
 
-`plain` is `human` without colour or animation. Lines are never wrapped, so a long path stays on one line.
+`plain` is `human` without colour or animation. Off a terminal (a pipe, a file, CI), its lines are never wrapped, so a long path stays on one line, and it writes no escape codes. At a terminal, which selects `plain` with `NO_COLOR`, `FORCE_COLOR=0`, `--no-color` or `TERM=dumb`, its lines wrap at the terminal's width, as `human` lines do, and it keeps bold and dim text, as [NO_COLOR](https://no-color.org/) allows (those switches turn colour off, not emphasis); under `TERM=dumb` it writes no escape codes.
 
-`agent` is `plain`, plus: a command that would prompt exits `2` at once with `usage_needs_input` and names the flags that answer the prompt, and a failure ends with `tip: add --json for machine-readable output`. Agents are detected from `AI_AGENT` first, then `CLAUDECODE`, `CURSOR_AGENT`, `GEMINI_CLI`, `CODEX_CI`, `COPILOT_AGENT`, `COPILOT_CLI`, `OPENCODE`, `AMP_CURRENT_THREAD_ID`, `AUGMENT_AGENT` and `CLINE_ACTIVE`. Detection changes presentation only: it never relaxes a confirmation, a `--yes` requirement or a strategy check.
+`agent` is `plain` that never wraps, at a terminal too, plus: a command that would prompt exits `2` at once with `usage_needs_input` and names the flags that answer the prompt, and a failure ends with `tip: add --json for machine-readable output`. Agents are detected from `AI_AGENT` first, then `CLAUDECODE`, `CURSOR_AGENT`, `GEMINI_CLI`, `CODEX_CI`, `COPILOT_AGENT`, `COPILOT_CLI`, `OPENCODE`, `AMP_CURRENT_THREAD_ID`, `AUGMENT_AGENT` and `CLINE_ACTIVE`. Detection changes presentation only: it never relaxes a confirmation, a `--yes` requirement or a strategy check.
 
 ## Human output
 
@@ -204,7 +215,7 @@ In JSON, every `validate`, `validate query` and `lint` finding carries `path`, `
 | `error: …` | Failed (stderr), followed by indented `note:` and `help:` lines |
 | `→ …` | A next step: the command to run, and why |
 
-A console that cannot encode `✓`, `✗` or `→` (a Windows code page, `PYTHONIOENCODING=ascii`) gets `ok`, `x` and `->`.
+opentide writes UTF-8 on every stream (the Windows console through its wide API): the glyphs print as shown whatever the console's code page.
 
 ## The command tree
 
@@ -212,7 +223,7 @@ A console that cannot encode `✓`, `✗` or `→` (a Windows code page, `PYTHON
 
 ## Output schemas
 
-Each command in `opentide --json commands` carries `output_schema`: the [JSON Schema](https://json-schema.org/draft/2020-12) of the document it prints, generated from the typed result models in `src/opentide/cli/ui/results/`. It is a `$ref` into the `$defs` of the same document, `anyOf` the command's own result and `CommandError`, the document of a usage error. To check a document against its command's schema:
+Each command in `opentide --json commands` carries `output_schema`: the [JSON Schema](https://json-schema.org/draft/2020-12) of the document it prints, generated from the command line's result models (`crates/opentide-cli/src/catalog.rs`). It is a `$ref` into the `$defs` of the same document, `anyOf` the command's own result and `CommandError`, the document of a usage error. To check a document against its command's schema:
 
 ```bash
 opentide --json commands > commands.json
@@ -223,6 +234,25 @@ check-jsonschema --schemafile validate.schema.json validate.json
 ```
 
 The schemas allow keys they do not name, because new keys are added without notice. A key a schema names keeps its type.
+
+## Placeholders
+
+A value a command cannot know when it prints is a placeholder in its place. `deploy --dry-run` writes them in the requests a deploy would send ([Payloads](./deploy.md#payloads)).
+
+A placeholder is `<KIND:NAME>`, where `KIND` is `send-time`, `tenant-read` or `tenant` and `NAME` is lowercase letters, digits and underscores. It can sit anywhere inside a string, alone or among other text, as in `"<send-time:minute> */2 * * *"` or `"<tenant:url>/web/api/v2.1/cloud-detection/rules"`. Find placeholders with the pattern `<(send-time|tenant-read|tenant):[a-z0-9_]+>`, anywhere in every string. Do not test whether a whole string starts with `<` and ends with `>`: that misses the placeholders inside longer strings, and it takes a real value written as markup (a description such as `<b>`) for one.
+
+Only a placeholder that is the whole string can stand for a value of another type: `<send-time:timestamp>` stands for a number and `<tenant-read:watchlist>` for an object. Every other placeholder stands for text.
+
+| Placeholder | What a deploy sends in its place |
+|---|---|
+| `<send-time:minute>`, `<send-time:hour>` | Splunk: the minute and hour of a `frequency` schedule read from the clock as the request is sent (`frequency_scheduling = "current"`); a drawn schedule's come from the rule's UUID and are shown |
+| `<send-time:timestamp>` | Carbon Black Cloud: the report's `timestamp`, the time it is sent, a number |
+| `<tenant-read:watchlist_id>` | Carbon Black Cloud: the id of the watchlist the new report joins, read from the tenant |
+| `<tenant-read:watchlist>` | Carbon Black Cloud: that watchlist as the tenant holds it, an object, with the report's id added to `report_ids` |
+| `<tenant:url>`, `<tenant:port>`, `<tenant:app>`, `<tenant:api>`, `<tenant:customer_id>`, `<tenant:site_id>`, `<tenant:source_id>`, `<tenant:org_key>` | The tenant's `setup` value of that key, when the run reaches no tenant of the platform |
+| `<tenant:KEY>`, any `setup` key | The tenant's `setup.KEY` when it names an environment variable (`$NAME` or `${NAME}`): a dry run resolves no variable, set or not |
+
+The entry that holds a `<tenant:KEY>` placeholder lists its keys in `unresolved.setup`, with the reason in `unresolved.reason`.
 
 ## Related
 

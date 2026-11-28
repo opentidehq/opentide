@@ -1,0 +1,70 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: migrate.vocab-scope/json/vscode-ambiguous/rewrite-force
+---
+args: opentide --json migrate vocab-scope --apply --force
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "applied": true,
+  "changed_files": [
+    "objects/objectives/detect-lsass-access.yaml"
+  ],
+  "command": "migrate vocab-scope",
+  "duration_ms": 0,
+  "exit_code": 0,
+  "failed_files": {},
+  "failure": null,
+  "fields": {
+    "entities": {
+      "blocked": {
+        "Account": "\"Account\" is defined under several stages: \"Host::Account\", \"Cloud::Account\""
+      },
+      "by_status": {
+        "ambiguous": 1,
+        "prefixed": 1
+      },
+      "rewrites": {
+        "Process": "Host::Process"
+      },
+      "values": 2,
+      "vocab": "signal.entities"
+    },
+    "surface": {
+      "blocked": {},
+      "by_status": {},
+      "rewrites": {},
+      "values": 0,
+      "vocab": "surface"
+    }
+  },
+  "message": "Rewrote 1 file · 2 scanned",
+  "next_actions": [],
+  "ok": true,
+  "scanned": 2,
+  "schema_version": 1,
+  "status": "completed",
+  "summary": {
+    "files": 1,
+    "scanned": 2
+  },
+  "warnings": [
+    "entities: \"Account\" is defined under several stages: \"Host::Account\", \"Cloud::Account\""
+  ]
+}
+
+━━━ stderr · empty
+
+━━━ ws/objects/objectives/detect-lsass-access.yaml · modified 0644
+name: Detect LSASS access
+metadata:
+  uuid: 04149254-2a5b-4c1e-9f0e-3c1d2b5a6e7f
+  schema: objective::1.0
+  tlp: amber
+objective:
+  signals:
+    - name: LSASS handle
+      entities:
+        - Account
+        - Host::Process

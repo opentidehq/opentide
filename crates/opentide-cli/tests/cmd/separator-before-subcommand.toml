@@ -1,0 +1,8 @@
+bin.name = "opentide"
+args = ["--json", "validate", "--", "query"]
+env.inherit = false
+status.code = 2
+stdout = """
+{"error":"unexpected argument 'query' found","ok":false,"status":"failed","message":"unexpected argument 'query' found","schema_version":1,"command":"validate","duration_ms":[..],"exit_code":2,"summary":{},"next_actions":[],"failure":{"code":"usage_unknown_command","message":"unexpected argument 'query' found","argument":"query","suggestion":null,"crash_log":null}}
+"""
+stderr = ""

@@ -1,0 +1,1213 @@
+# The release train (UC-5.5, #840): one version and one tag publish everything
+# opentide ships, with trusted publishing, SBOMs and attestations.
+#
+#   - the PyPI wheels (cp310-abi3: manylinux_2_28 x86_64 and aarch64, macOS
+#     Intel and Apple silicon, Windows x64 and Arm64) and the sdist;
+#   - the crates, in dependency order (scripts/engine/release.py publish), the
+#     `opentide` facade with them;
+#   - the npm packages: @opentide/opentide, its native packages (napi-rs), the
+#     `opentide` alias, @opentide/lsp-client, @opentide/lsp-worker and @opentide/wasi-host, with
+#     provenance: a release under the dist-tag `latest`, a public candidate
+#     (X.Y.Z-rc.N) under `next`, never `latest`;
+#   - the GitHub Release: the `opentide` and `opentide-lsp` binaries for Linux
+#     and macOS with their installer (no Windows binary: Windows installs from
+#     PyPI or npm), the engine assets editors pin
+#     (highlights-<v>.zip, the WebAssembly builds, THIRD-PARTY-LICENSES.html,
+#     NOTICE, WASI-LIBC-LICENSES.txt, THIRD-PARTY-DATA-LICENSES.txt), the CycloneDX SBOMs and SHA256SUMS
+#     (release-pipeline.yml), with the notes the notes PR wrote.
+#
+# Run workflow on development (Actions > Publish > Run workflow, or
+# workflow_dispatch through the API) with:
+#
+#   - no input: a release. The guard reads the version from the newest dated
+#     CHANGELOG.md heading (scripts/build/release.py) and refuses unless the
+#     notes PR merged, the crates are at that version (lockstep:
+#     scripts/engine/release.py bump), and the tag does not exist yet.
+#   - internal_candidate: N, an internal candidate of the workspace version
+#     (Cargo.toml, set by `release.py bump`; 1.0.0-rc.N), which the maintainer
+#     tests before anything reaches a package manager: run on
+#     integration/unified-core or development, it builds and smoke-tests
+#     everything as a release does, pushes the tag vX.Y.Z-rc.N on the commit
+#     built, and creates a DRAFT GitHub pre-release (never Latest) carrying
+#     every binary and release asset (with SHA256SUMS and the SBOMs), every
+#     wheel, the sdist, every crate package and every npm tarball, with
+#     PACKAGES-SHA256SUMS over the packages (`internal-release`). It publishes
+#     nothing to PyPI, crates.io or npm and mints no OIDC token: no attest,
+#     verify-assets, registry or smoke-registries job runs. It cannot be
+#     combined with release_candidate, dry_run or checkout_ref.
+#   - release_candidate: N, a PUBLIC release candidate (pre-releases on GitHub,
+#     PyPI as X.Y.ZrcN, crates.io as X.Y.Z-rc.N and npm as X.Y.Z-rc.N under the
+#     dist-tag `next`). Every npm package must already exist on npm, which the
+#     guard checks before anything is built, let alone published
+#     (docs/internal/publishing.md, "npm", step 10.5). Enabled
+#     for 1.0.0-rc.N (`public_candidates=true` in the guard); set it to false
+#     to refuse public candidates again (a dry run aside) and keep only the
+#     internal channel.
+#   - dry_run: build and smoke-test everything, publish nothing: no tag, no
+#     release, no attestation, no upload. Any branch.
+#   - checkout_ref: vX.Y.Z (or vX.Y.Z-rc.N, while public candidates are on): resume an existing release whose
+#     publishing failed partway. It builds from that tag, uploads nothing to
+#     its GitHub Release (consumers pinned those digests), checks the
+#     published assets, and publishes only what each registry lacks.
+#     Run it on development (`gh workflow run publish.yml --ref development
+#     -f checkout_ref=vX.Y.Z`, or the API's `actions_run_trigger`).
+#     repository_dispatch (event `publish`, client_payload.checkout_ref) is
+#     the same, for GitHub App tokens without actions: write; GitHub runs it
+#     from development's copy of this file.
+#
+# Jobs: the guard; `build` (release-pipeline.yml, the one release pipeline:
+# every artifact built once per platform, assembled, smoke-tested on its
+# platform and scanned by the antivirus gate, so no job below runs on an
+# artifact a smoke test or a scanner failed; `dry_run` stops here); then for an internal candidate
+# `internal-release` (the tag and the draft, nothing else), and for a release
+# (or a public candidate) `attest`
+# (GitHub artifact attestations of every artifact), `release` (the tag and the
+# GitHub Release, created with GITHUB_TOKEN, which starts no other workflow),
+# `verify-assets` (the published assets, their sums and attestations), the
+# registries (`pypi`, `crates` and `npm`) and
+# `smoke-registries` (installs what they now serve).
+#
+# Only attest, pypi, crates and npm may mint an OIDC token: crates.io and npm
+# trust this workflow file as a whole, so a token from any of its jobs could
+# publish. Each of them, and every job after them, runs for channel `release`
+# or `rc` only: none runs for `internal` or `dry-run`. Nothing restores a cache: a release builds from nothing.
+#
+# The registries' trusted publishers name this file, `publish.yml`, and PyPI's
+# the environment `pypi`: docs/internal/publishing.md,
+# "The release train", lists every setting.
+name: Publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      internal_candidate:
+        description: "Internal candidate number N: build and smoke-test vX.Y.Z-rc.N of the workspace version, push its tag and create a DRAFT GitHub pre-release with every asset and package. Nothing reaches PyPI, crates.io or npm. Run on integration/unified-core or development. Empty: not an internal candidate."
+        required: false
+        default: ""
+        type: string
+      release_candidate:
+        description: "Public release candidate number N: vX.Y.Z-rc.N as pre-releases on PyPI, crates.io and npm (dist-tag next, never latest), from integration/unified-core or development. Every npm package must exist on npm first. Empty: a release."
+        required: false
+        default: ""
+        type: string
+      dry_run:
+        description: "Build and smoke-test everything; tag, release and publish nothing."
+        required: false
+        default: false
+        type: boolean
+      checkout_ref:
+        description: "An existing release tag (vX.Y.Z) to resume: publish what the registries lack. Empty: release development."
+        required: false
+        default: ""
+        type: string
+  repository_dispatch:
+    types: [publish]
+
+permissions:
+  contents: read
+
+# One release at a time; never cancel one that may have uploaded already.
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
+jobs:
+  # What this run releases, and whether it may. Nothing is built, let alone
+  # published, from a commit that is not development ready to release (or the
+  # tag being resumed).
+  guard:
+    name: Release guard
+    runs-on: ubuntu-latest
+    env:
+      CHECKOUT_REF: ${{ github.event.inputs.checkout_ref || github.event.client_payload.checkout_ref }}
+      RELEASE_CANDIDATE: ${{ github.event.inputs.release_candidate }}
+      INTERNAL_CANDIDATE: ${{ github.event.inputs.internal_candidate }}
+      DRY_RUN: ${{ github.event.inputs.dry_run }}
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+      version: ${{ steps.version.outputs.version }}
+      base: ${{ steps.version.outputs.base }}
+      pypi_version: ${{ steps.version.outputs.pypi_version }}
+      channel: ${{ steps.version.outputs.channel }}
+      # The commit every later job checks out and builds: the guard's
+      # checkout, resolved once to its 40-hex SHA (a moved tag or a new push
+      # cannot change what the run builds after this point).
+      revision: ${{ steps.version.outputs.revision }}
+      create_release: ${{ steps.version.outputs.create_release }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
+          ref: ${{ github.event.inputs.checkout_ref || github.event.client_payload.checkout_ref || github.sha }}
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - name: What this run releases
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          create_release=true
+          # Public release candidates (PyPI and crates.io pre-releases) are
+          # enabled for 1.0.0-rc.N. Setting this to false refuses them again
+          # (a dry run aside), leaving only the internal channel.
+          public_candidates=true
+          if [[ -n "${RELEASE_CANDIDATE}" && ! "${RELEASE_CANDIDATE}" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::release_candidate is a number from 1, not ${RELEASE_CANDIDATE}." >&2
+            exit 1
+          fi
+          if [[ -n "${INTERNAL_CANDIDATE}" && ! "${INTERNAL_CANDIDATE}" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::internal_candidate is a number from 1, not ${INTERNAL_CANDIDATE}." >&2
+            exit 1
+          fi
+          if [[ -n "${INTERNAL_CANDIDATE}" ]]; then
+            # An internal candidate builds, tags and drafts; it never combines
+            # with another mode.
+            if [[ -n "${RELEASE_CANDIDATE}" || "${DRY_RUN}" == "true" || -n "${CHECKOUT_REF}" ]]; then
+              echo "::error::internal_candidate cannot be combined with release_candidate, dry_run or checkout_ref: pass internal_candidate alone." >&2
+              exit 1
+            fi
+            if [[ "${GITHUB_REF}" != "refs/heads/integration/unified-core" && "${GITHUB_REF}" != "refs/heads/development" ]]; then
+              echo "::error::Run an internal candidate from integration/unified-core or development, not ${GITHUB_REF_NAME}." >&2
+              exit 1
+            fi
+            tag="$(python scripts/engine/release.py tag)-rc.${INTERNAL_CANDIDATE}"
+            python scripts/build/release.py check-candidate "${tag}"
+            if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null \
+              || gh release view "${tag}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+              echo "::error::${tag} is already tagged. Cut the next internal candidate (internal_candidate=$((INTERNAL_CANDIDATE + 1))), or delete the draft and its tag first." >&2
+              exit 1
+            fi
+            create_release=false
+            channel=internal
+          elif [[ -n "${CHECKOUT_REF}" ]]; then
+            # Resume: the tag exists, with its GitHub Release, and is this checkout.
+            if [[ ! "${CHECKOUT_REF}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[1-9][0-9]*)?$ ]] \
+              || ! git tag --points-at HEAD | grep -qx "${CHECKOUT_REF}"; then
+              echo "::error::checkout_ref must be an existing release tag (vX.Y.Z or vX.Y.Z-rc.N), not ${CHECKOUT_REF}." >&2
+              exit 1
+            fi
+            if ! gh release view "${CHECKOUT_REF}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+              echo "::error::${CHECKOUT_REF} has no GitHub Release to resume: release it from development instead." >&2
+              exit 1
+            fi
+            tag="${CHECKOUT_REF}"
+            create_release=false
+            if [[ "${tag}" == *-rc.* ]]; then
+              # Resuming a candidate publishes it to PyPI and crates.io: an
+              # internal candidate's tag must never get there.
+              if [[ "${public_candidates}" != "true" ]]; then
+                echo "::error::public release candidates are disabled while the internal channel exists: ${tag} cannot be resumed to the registries." >&2
+                exit 1
+              fi
+              # A resumed candidate publishes to npm under `next`: one older than
+              # the first npm candidate (v1.0.0-rc.3) would move `next` backwards.
+              if python3 -c 'import re,sys; m = re.fullmatch(r"v(\d+)\.(\d+)\.(\d+)-rc\.(\d+)", sys.argv[1]); sys.exit(0 if m and tuple(map(int, m.groups())) < (1, 0, 0, 3) else 1)' "${tag}"; then
+                echo "::error::${tag} is older than v1.0.0-rc.3, the first candidate that publishes to npm: resuming it would publish an old version under npm's next tag. Cut the next candidate instead." >&2
+                exit 1
+              fi
+              channel=rc
+            else
+              channel=release
+            fi
+          elif [[ "${DRY_RUN}" == "true" ]]; then
+            # A rehearsal, from any branch: the workspace version's tag.
+            tag="$(python scripts/engine/release.py tag)"
+            if [[ -n "${RELEASE_CANDIDATE}" ]]; then
+              tag="${tag}-rc.${RELEASE_CANDIDATE}"
+            fi
+            create_release=false
+            channel=dry-run
+          else
+            if [[ -z "${RELEASE_CANDIDATE}" ]]; then
+              # A release, from development only: the version the notes PR
+              # dated in CHANGELOG.md.
+              if [[ "${GITHUB_REF}" != "refs/heads/development" ]]; then
+                echo "::error::Run the release from development, not ${GITHUB_REF_NAME}, or pass checkout_ref to resume a tag." >&2
+                exit 1
+              fi
+              tag="v$(python scripts/build/release.py version)"
+              python scripts/build/release.py check "${tag}"
+              channel=release
+            else
+              if [[ "${public_candidates}" != "true" ]]; then
+                echo "::error::public release candidates are disabled while the internal channel exists: run internal_candidate=${RELEASE_CANDIDATE} instead (or release_candidate with dry_run, as a rehearsal)." >&2
+                exit 1
+              fi
+              # A candidate of the next version: the workspace's, bumped past
+              # the last release. From integration/unified-core (or
+              # development), for the Rust-core transition.
+              if [[ "${GITHUB_REF}" != "refs/heads/integration/unified-core" && "${GITHUB_REF}" != "refs/heads/development" ]]; then
+                echo "::error::Run a release candidate from integration/unified-core or development, not ${GITHUB_REF_NAME}." >&2
+                exit 1
+              fi
+              tag="$(python scripts/engine/release.py tag)-rc.${RELEASE_CANDIDATE}"
+              python scripts/build/release.py check-candidate "${tag}"
+              channel=rc
+            fi
+            # An untagged draft is what a release job that failed partway
+            # leaves (never published): the GitHub Release job deletes it
+            # (release.py stale-draft). A tag, or a published release, refuses.
+            if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null \
+              || [ "$(gh release view "${tag}" --repo "${GITHUB_REPOSITORY}" --json isDraft --jq .isDraft 2>/dev/null)" = "false" ]; then
+              echo "::error::${tag} is already tagged. Release the next version (or candidate), or resume it with checkout_ref=${tag}." >&2
+              exit 1
+            fi
+          fi
+          version="${tag#v}"
+          base="${version%%-rc.*}"
+          # One product version: the crates (and their pins) are at it.
+          python scripts/engine/release.py lockstep "${base}"
+          revision="$(git rev-parse --verify 'HEAD^{commit}')"
+          if [[ ! "${revision}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::the checkout resolved to ${revision}, not a commit SHA." >&2
+            exit 1
+          fi
+          {
+            echo "revision=${revision}"
+            echo "tag=${tag}"
+            echo "version=${version}"
+            echo "base=${base}"
+            # PEP 440 spells a candidate 0.24.0rc1.
+            echo "pypi_version=${version/-rc./rc}"
+            echo "channel=${channel}"
+            echo "create_release=${create_release}"
+          } >> "$GITHUB_OUTPUT"
+          echo "### ${tag} (${channel})" >> "$GITHUB_STEP_SUMMARY"
+
+      # npm cannot create a package through trusted publishing, and PyPI and
+      # crates.io are permanent: so before anything is built, let alone
+      # published, every npm package of the train must exist on npm (the
+      # maintainer publishes each once by hand and registers publish.yml on it:
+      # docs/internal/publishing.md, step 10.5). Without this, a run would
+      # publish PyPI and crates.io and then fail on npm. A dry run reports
+      # what is missing as a warning; an internal candidate publishes nothing
+      # and does not look. What no request without a token can see, whether
+      # `publish.yml` is registered as each package's trusted publisher
+      # (npm's package settings, or `npm trust list <package>`, which needs
+      # the maintainer's login), is not checked: a missing one fails the
+      # `npm` job with E404 or ENEEDAUTH after PyPI and crates.io, and the run
+      # is resumed (checkout_ref) once it is registered.
+      #
+      # Inline, like the PyPI check: a resumed run checks out an older tag,
+      # which would not contain a helper added after it. The packages are the
+      # ones this checkout's tree holds.
+      - name: Every npm package exists on npm
+        if: steps.version.outputs.channel == 'release' || steps.version.outputs.channel == 'rc' || steps.version.outputs.channel == 'dry-run'
+        env:
+          CHANNEL: ${{ steps.version.outputs.channel }}
+          NPM_REGISTRY: https://registry.npmjs.org
+        run: |
+          python3 - <<'PY'
+          import glob
+          import http.client
+          import json
+          import os
+          import sys
+          import time
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+
+          # Every package of the train, as release.py npm_packages() lists them.
+          manifests = [
+              "bindings/node/package.json",
+              *sorted(glob.glob("bindings/node/npm/*/package.json")),
+              "bindings/node/alias/package.json",
+              "packages/lsp-client/package.json",
+              "packages/lsp-worker/package.json",
+              "packages/wasi-host/package.json",
+          ]
+          names = []
+          for path in manifests:
+              with open(path, encoding="utf-8") as handle:
+                  names.append(json.load(handle)["name"])
+          registry = os.environ["NPM_REGISTRY"].rstrip("/")
+          missing = []
+          unreachable = []
+          for name in names:
+              # The registry's package document: @scope%2fname, no authentication.
+              url = f"{registry}/{urllib.parse.quote(name, safe='@')}"
+              request = urllib.request.Request(url, headers={"Accept": "application/vnd.npm.install-v1+json"})
+              status = None
+              for attempt in range(1, 4):
+                  try:
+                      with urllib.request.urlopen(request, timeout=30) as response:
+                          status = response.status
+                  except urllib.error.HTTPError as error:
+                      status = error.code
+                  except (OSError, http.client.HTTPException) as error:
+                      # A refused or reset connection, a server that hangs up
+                      # (RemoteDisconnected), a short body (IncompleteRead), a timeout.
+                      status = f"{type(error).__name__}: {error}"
+                  if status == 200 or status == 404:
+                      break
+                  time.sleep(float(os.environ.get("NPM_RETRY_SECONDS", "5")) * attempt)
+              print(f"{name}: {status}")
+              if status == 404:
+                  missing.append(name)
+              elif status != 200:
+                  # An outage is not "missing": say so, and still stop.
+                  unreachable.append(f"{name} ({status})")
+          level = "warning" if os.environ["CHANNEL"] == "dry-run" else "error"
+          print(
+              "Not checked (it needs the maintainer's npm login): publish.yml registered as "
+              "each package's trusted publisher; npm trust list <package> shows it."
+          )
+          if unreachable:
+              print(f"::{level}::Could not read {', '.join(unreachable)} from {registry}: not checked, so not released.")
+          if missing:
+              print(
+                  f"::{level}::These npm packages do not exist on npm yet: {', '.join(missing)}. "
+                  "npm trusted publishing cannot create a package. Publish each once by hand, "
+                  "then register publish.yml as its trusted publisher "
+                  "(docs/internal/publishing.md, step 10.5: npm), before this run. "
+                  "Nothing was built or published."
+              )
+          sys.exit(1 if (missing or unreachable) and level == "error" else 0)
+          PY
+
+  # Everything this run ships, from the guard's commit, through the one
+  # release pipeline ci.yml's release tier and the nightly run too
+  # (release-pipeline.yml): built once per platform, assembled (the GitHub
+  # Release's assets with SHA256SUMS, the npm packages, the PyPI dist's shape),
+  # smoke-tested on each platform and from source, and scanned by the
+  # antivirus gate before any job below tags, attests or publishes. No token,
+  # no cache: a release builds from nothing.
+  build:
+    name: Build and smoke-test
+    needs: guard
+    permissions:
+      contents: read
+    uses: ./.github/workflows/release-pipeline.yml
+    with:
+      revision: ${{ needs.guard.outputs.revision }}
+      tag: ${{ needs.guard.outputs.tag }}
+      pypi-version: ${{ needs.guard.outputs.pypi_version }}
+      npm-version: ${{ needs.guard.outputs.version }}
+      crates-version: ${{ needs.guard.outputs.version }}
+      # The antivirus gate (release-pipeline.yml's av-scan and av-defender): ClamAV, YARA, Microsoft Defender and the marker and
+      # size checks over every artifact, before any job below tags, attests or publishes.
+      av-gate: true
+
+  # --- An internal candidate: a tag and a draft, no registry ---------------
+
+  # The tag vX.Y.Z-rc.N on the commit built, then a DRAFT GitHub pre-release
+  # (never Latest) carrying everything a release would publish: the Release's
+  # assets (with their SHA256SUMS and SBOMs), every wheel and the sdist, every
+  # crate package and every npm tarball, with PACKAGES-SHA256SUMS over the
+  # packages. GITHUB_TOKEN only (contents: write here alone, starting no other
+  # workflow): no OIDC token, no attestation, nothing on PyPI, crates.io or
+  # npm. A draft does not create its tag, so the job pushes it first.
+  internal-release:
+    name: Internal candidate (draft GitHub pre-release)
+    needs: [guard, build]
+    if: needs.guard.outputs.channel == 'internal'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ needs.guard.outputs.tag }}
+      VERSION: ${{ needs.guard.outputs.version }}
+      REVISION: ${{ needs.guard.outputs.revision }}
+    steps:
+      # The notes quote CHANGELOG.md at the commit built.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ needs.guard.outputs.revision }}
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-assets
+          path: ${{ runner.temp }}/dist/release
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: ${{ runner.temp }}/dist/python
+          pattern: wheels-*
+          merge-multiple: true
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: sdist
+          path: ${{ runner.temp }}/dist/python
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: crates
+          path: ${{ runner.temp }}/dist/crates
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: npm-packages
+          path: ${{ runner.temp }}/dist/npm
+      # One flat directory: the Release's assets as built, then each package
+      # under its own name (the npm artifact's subdirectories flattened). Two
+      # files of one name fail the job rather than one replacing the other.
+      - name: Gather the assets and the packages, and PACKAGES-SHA256SUMS
+        run: |
+          set -euo pipefail
+          shopt -s failglob
+          dist="${RUNNER_TEMP}/dist"
+          upload="${RUNNER_TEMP}/upload"
+          mkdir "${upload}"
+          cp -- "${dist}"/release/* "${upload}/"
+          packages=()
+          for file in "${dist}"/python/* "${dist}"/crates/*.crate "${dist}"/npm/*/*.tgz; do
+            name="$(basename -- "${file}")"
+            if [[ -e "${upload}/${name}" || "${name}" == "PACKAGES-SHA256SUMS" ]]; then
+              echo "::error::two assets are named ${name}: refusing to replace one with the other." >&2
+              exit 1
+            fi
+            cp -- "${file}" "${upload}/${name}"
+            packages+=("${name}")
+          done
+          if [[ -e "${upload}/PACKAGES-SHA256SUMS" ]]; then
+            echo "::error::the release assets already hold a PACKAGES-SHA256SUMS." >&2
+            exit 1
+          fi
+          (cd "${upload}" && sha256sum -- "${packages[@]}" > PACKAGES-SHA256SUMS)
+          ls -l "${upload}"
+      - name: Push the tag and create the draft pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 scripts/build/release.py notes --internal "${TAG}" > "${RUNNER_TEMP}/notes.md"
+          # A re-run finds the tag it pushed: the same commit is fine, another is not.
+          if existing="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${TAG}" --jq .object.sha 2>/dev/null)"; then
+            if [[ "${existing}" != "${REVISION}" ]]; then
+              echo "::error::${TAG} already points at ${existing}, not ${REVISION}." >&2
+              exit 1
+            fi
+          else
+            gh api "repos/${GITHUB_REPOSITORY}/git/refs" -f ref="refs/tags/${TAG}" -f sha="${REVISION}"
+          fi
+          gh release create "${TAG}" "${RUNNER_TEMP}"/upload/* \
+            --repo "${GITHUB_REPOSITORY}" \
+            --verify-tag \
+            --draft \
+            --prerelease \
+            --latest=false \
+            --title "${VERSION} (internal)" \
+            --notes-file "${RUNNER_TEMP}/notes.md"
+          echo "### Draft ${TAG}: Releases > Drafts, nothing on a registry" >> "$GITHUB_STEP_SUMMARY"
+
+  # --- Publishing: a release (or a public candidate) only -------------------
+
+  # Sigstore-signed SLSA build provenance for every artifact: the GitHub
+  # Release's assets (SHA256SUMS and the SBOMs included), the wheels and the
+  # sdist, the crates and the npm tarballs. It downloads them and runs the
+  # attest action, nothing else.
+  attest:
+    name: Attestations
+    needs: [guard, build]
+    # A release or a public candidate only: never a dry run or an internal
+    # candidate, which mint no OIDC token.
+    if: needs.guard.outputs.channel == 'release' || needs.guard.outputs.channel == 'rc'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-assets
+          path: dist/release
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: dist/python
+          pattern: wheels-*
+          merge-multiple: true
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: sdist
+          path: dist/python
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: crates
+          path: dist/crates
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: npm-packages
+          path: dist/npm
+      - name: attest build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            dist/release/*
+            dist/python/*
+            dist/crates/*.crate
+            dist/npm/*/*.tgz
+
+  # The tag and the GitHub Release, on the commit this run built, with every asset, before anything reaches a registry. A
+  # release's notes are the file the notes PR wrote
+  # (.github/release-notes/vX.Y.Z.md); a candidate's, its own short file
+  # (.github/release-notes/vX.Y.Z-rc.N.md) when it has one, else CHANGELOG.md's
+  # [Unreleased] (scripts/build/release.py notes). A candidate is a
+  # pre-release, never Latest; a release is published with --latest.
+  release:
+    name: GitHub Release
+    needs: [guard, attest]
+    if: needs.guard.outputs.create_release == 'true' && (needs.guard.outputs.channel == 'release' || needs.guard.outputs.channel == 'rc')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ needs.guard.outputs.tag }}
+      VERSION: ${{ needs.guard.outputs.version }}
+      CHANNEL: ${{ needs.guard.outputs.channel }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-assets
+          path: dist
+      - name: Create the tag and the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 scripts/build/release.py notes "${TAG}" > "${RUNNER_TEMP}/notes.md"
+          flags=()
+          if [ "${CHANNEL}" = "rc" ]; then
+            flags+=(--prerelease --latest=false)
+          fi
+          # A draft this job left on an earlier attempt (no tag, never
+          # published) is deleted; then never upload over assets a release
+          # already has: consumers pinned their digests.
+          python3 scripts/engine/release.py stale-draft "${TAG}"
+          python3 scripts/engine/release.py unpublished "${TAG}"
+          # Draft first, each asset uploaded with retries (GitHub's upload
+          # endpoint answers 5xx at times), then published, which creates the
+          # tag on the built commit. A failure leaves an untagged draft, which
+          # a re-run of this job deletes and creates again.
+          gh release create "${TAG}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --target "${GITHUB_SHA}" \
+            --title "${VERSION}" \
+            --notes-file "${RUNNER_TEMP}/notes.md" \
+            --draft \
+            "${flags[@]}"
+          for asset in dist/*; do
+            for attempt in 1 2 3 4 5 6; do
+              if gh release upload "${TAG}" "${asset}" --repo "${GITHUB_REPOSITORY}" --clobber; then
+                break
+              fi
+              if [ "${attempt}" = 6 ]; then
+                echo "::error::Could not upload ${asset} after ${attempt} attempts; re-run this job." >&2
+                exit 1
+              fi
+              sleep $((attempt * 15))
+            done
+          done
+          publish=(--draft=false)
+          if [ "${CHANNEL}" = "rc" ]; then
+            publish+=(--prerelease --latest=false)
+          else
+            publish+=(--latest)
+          fi
+          for attempt in 1 2 3 4 5; do
+            if gh release edit "${TAG}" --repo "${GITHUB_REPOSITORY}" "${publish[@]}"; then
+              break
+            fi
+            if [ "${attempt}" = 5 ]; then
+              echo "::error::Could not publish the ${TAG} draft; re-run this job." >&2
+              exit 1
+            fi
+            sleep $((attempt * 15))
+          done
+
+  # What a consumer downloads checks out: the sums, the asset set, and each
+  # asset's attestation, signed by this workflow run from development (a
+  # candidate's: development or integration/unified-core). It runs
+  # after the release, and on its own when resuming one (checkout_ref): the
+  # registries publish only once it passed.
+  verify-assets:
+    name: Verify the published assets
+    needs: [guard, attest, release]
+    if: ${{ !cancelled() && (needs.guard.outputs.channel == 'release' || needs.guard.outputs.channel == 'rc') && needs.attest.result == 'success' && (needs.release.result == 'success' || needs.release.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    # `gh attestation verify` reads the repository's attestations with this
+    # job's token.
+    permissions:
+      contents: read
+      attestations: read
+    env:
+      TAG: ${{ needs.guard.outputs.tag }}
+      CHANNEL: ${{ needs.guard.outputs.channel }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: verify the published assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p published
+          gh release download "${TAG}" --repo "${GITHUB_REPOSITORY}" --dir published
+          # sha256sum checks the names SHA256SUMS lists; verify-sums also fails on
+          # an asset it leaves out, and check-assets on a set that differs from
+          # the one editors pin.
+          (cd published && sha256sum --check --strict SHA256SUMS)
+          python3 scripts/engine/release.py verify-sums published
+          python3 scripts/engine/release.py check-assets published "${TAG}"
+          # --repo alone accepts an attestation any workflow of the repository
+          # signed, on any branch: each asset's must come from publish.yml run
+          # from development (a candidate's, from development or
+          # integration/unified-core: the branches the guard runs one from).
+          repo_re="${GITHUB_REPOSITORY//./\\.}"
+          branch_re="development"
+          if [ "${CHANNEL}" = "rc" ]; then branch_re="(development|integration/unified-core)"; fi
+          identity="^https://github\\.com/${repo_re}/\\.github/workflows/publish\\.yml@refs/heads/${branch_re}\$"
+          for asset in published/*; do
+            gh attestation verify "${asset}" --repo "${GITHUB_REPOSITORY}" --cert-identity-regex "${identity}"
+          done
+
+  # PyPI, a release or a candidate's pre-release, with trusted publishing: the
+  # environment `pypi` names the publisher. The uploads are the
+  # wheels and the sdist this run built and smoke-tested.
+  pypi:
+    name: Publish to PyPI
+    needs: [guard, verify-assets]
+    if: needs.guard.outputs.channel == 'release' || needs.guard.outputs.channel == 'rc'
+    runs-on: ubuntu-latest
+    # A candidate is a PyPI pre-release (X.Y.ZrcN): pip and uv install it only
+    # when asked (`pip install --pre`, `uv pip install --prerelease=allow`) or
+    # pinned exactly. One environment, one trusted publisher.
+    environment:
+      name: pypi
+      url: https://pypi.org/p/opentide
+    permissions:
+      contents: read
+      id-token: write
+    # Promote secret presence to env: `secrets` is not allowed in `steps.if`.
+    env:
+      HAS_WEBSITE_APP: ${{ secrets.GH_APP_ID != '' && secrets.GH_APP_KEY != '' }}
+      RELEASE_TAG: ${{ needs.guard.outputs.tag }}
+      CHANNEL: ${{ needs.guard.outputs.channel }}
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: dist
+          pattern: wheels-*
+          merge-multiple: true
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: sdist
+          path: dist
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - name: Twine check
+        run: |
+          python -m pip install twine
+          python -m twine check dist/*
+
+      # Every platform's wheel and the sdist, of the version the guard approved.
+      - name: Reject another version, and missing platforms
+        env:
+          EXPECTED_VERSION: ${{ needs.guard.outputs.pypi_version }}
+        run: |
+          set -euo pipefail
+          ls -l dist
+          python3 - <<'PY'
+          import os
+          import sys
+          from pathlib import Path
+
+          built = sorted(p.name for p in Path("dist").iterdir() if p.is_file())
+          wheels = [name for name in built if name.endswith(".whl")]
+          sdists = [name for name in built if name.endswith(".tar.gz")]
+          versions = {name.split("-")[1] for name in wheels} | {
+              name.removesuffix(".tar.gz").rsplit("-", 1)[1] for name in sdists
+          }
+          problems = []
+          if len(sdists) != 1:
+              problems.append(f"expected one sdist, found {sdists}")
+          if len(versions) != 1 or any("dev" in v or "+" in v for v in versions):
+              problems.append(f"expected one release version, found {sorted(versions)}")
+          elif versions != {os.environ["EXPECTED_VERSION"]}:
+              problems.append(f"built {sorted(versions)}, but the guard approved {os.environ['EXPECTED_VERSION']}")
+          # manylinux_2_28 images (pyproject.toml); auditwheel may tag a
+          # wheel for an older glibc still, which pip installs on 2.28 too.
+          for platform, arch in (
+              ("manylinux", "x86_64"),
+              ("manylinux", "aarch64"),
+              ("macosx", "x86_64"),
+              ("macosx", "arm64"),
+              ("win", "amd64"),
+              ("win", "arm64"),
+          ):
+              if not any(f"{platform}_" in name and name.endswith(f"_{arch}.whl") for name in wheels):
+                  problems.append(f"no {platform} {arch} wheel")
+          # No musl builds: the maintainer's decision (docs/internal/publishing.md).
+          if any("musllinux" in name for name in wheels):
+              problems.append(f"a musllinux wheel: {wheels}")
+          if not all("-cp310-abi3-" in name for name in wheels):
+              problems.append(f"a wheel is not cp310-abi3: {wheels}")
+          for problem in problems:
+              print(f"::error::Refusing to publish: {problem}")
+          sys.exit(1 if problems else 0)
+          PY
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
+        with:
+          packages-dir: dist/
+          skip-existing: true
+
+      # Inline on purpose: a resumed run checks out an older tag, which would
+      # not contain a helper script added after it.
+      - name: Verify PyPI lists every built file
+        env:
+          PYPI_JSON_BASE: https://pypi.org/pypi
+          VERIFY_TIMEOUT_SECONDS: "600"
+          VERIFY_INTERVAL_SECONDS: "15"
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import sys
+          import time
+          import urllib.error
+          import urllib.request
+          from pathlib import Path
+
+          built = sorted(p.name for p in Path("dist").iterdir() if p.is_file())
+          wheels = [name for name in built if name.endswith(".whl")]
+          sdists = [name for name in built if name.endswith(".tar.gz")]
+          if not wheels or len(sdists) != 1:
+              print(f"::error::Expected wheels and one sdist in dist/, found {built}")
+              sys.exit(1)
+          project, version = wheels[0].split("-")[:2]
+          expected = set(wheels + sdists)
+          url = f"{os.environ['PYPI_JSON_BASE'].rstrip('/')}/{project}/{version}/json"
+          deadline = time.monotonic() + float(os.environ["VERIFY_TIMEOUT_SECONDS"])
+          interval = float(os.environ["VERIFY_INTERVAL_SECONDS"])
+          while True:
+              try:
+                  request = urllib.request.Request(url, headers={"Cache-Control": "no-cache"})
+                  with urllib.request.urlopen(request, timeout=30) as response:
+                      listed = {item["filename"] for item in json.load(response).get("urls", [])}
+                  status = f"the index lists {sorted(listed)}"
+              except (urllib.error.URLError, TimeoutError, ValueError) as exc:
+                  listed = set()
+                  status = f"{url}: {exc}"
+              missing = sorted(expected - listed)
+              if not missing:
+                  print(f"The index lists every built file for {project} {version}: {sorted(expected)}")
+                  sys.exit(0)
+              if time.monotonic() >= deadline:
+                  print(f"::error::The index is missing {missing} for {project} {version} ({status}).")
+                  # First choice: re-run this run's failed jobs, which reuse its
+                  # artifacts (no rebuild). Otherwise a resume runs development's
+                  # publish.yml: Run workflow, or the repository_dispatch trigger
+                  # for a token without actions: write; it rebuilds from the tag.
+                  run_id = os.environ.get("GITHUB_RUN_ID", "<run id>")
+                  print(
+                      "Re-run this run's failed jobs once the index has caught up; they reuse its\n"
+                      "artifacts, nothing is rebuilt, and skip-existing uploads only the missing files:\n"
+                      f"  gh run rerun {run_id} --failed --repo opentidehq/opentide\n"
+                      "If this run cannot be re-run (its artifacts expired, or publish.yml needs a fix),\n"
+                      "resume without retagging (this rebuilds from the tag):\n"
+                      "  gh workflow run publish.yml --repo opentidehq/opentide --ref development \\\n"
+                      f"    -f checkout_ref=v{version}\n"
+                      f"or Actions > Publish > Run workflow on development with checkout_ref=v{version}"
+                      " (a candidate's tag is vX.Y.Z-rc.N),\n"
+                      "or gh api repos/opentidehq/opentide/dispatches -f event_type=publish \\\n"
+                      f"    -f client_payload[checkout_ref]=v{version}"
+                  )
+                  sys.exit(1)
+              print(f"Waiting for {missing}; {status}")
+              time.sleep(interval)
+          PY
+
+      - name: Token to notify the website
+        id: website
+        continue-on-error: true
+        if: env.HAS_WEBSITE_APP == 'true' && env.CHANNEL == 'release'
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
+        with:
+          app-id: ${{ secrets.GH_APP_ID }}
+          private-key: ${{ secrets.GH_APP_KEY }}
+          owner: opentidehq
+          repositories: website
+
+      - name: Notify website to sync docs
+        id: notify
+        if: steps.website.outcome == 'success' && steps.website.outputs.token != ''
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ steps.website.outputs.token }}
+        run: |
+          set -euo pipefail
+          gh api repos/opentidehq/website/dispatches \
+            -f event_type=opentide-released \
+            -f client_payload[source]=publish \
+            -f client_payload[tag]="${RELEASE_TAG}"
+
+      # Both notify steps are continue-on-error so the website never fails a
+      # publish that already succeeded, and a skipped notify looks identical to
+      # a working one in the run summary (#540). Say so. A candidate notifies
+      # nobody. No status function in `if`: GitHub prepends success(), so a
+      # failed publish adds no warning.
+      - name: Warn when the website was not notified
+        if: steps.notify.outcome != 'success' && env.CHANNEL == 'release'
+        env:
+          HAS_GH_APP_ID: ${{ secrets.GH_APP_ID != '' }}
+          HAS_GH_APP_KEY: ${{ secrets.GH_APP_KEY != '' }}
+          WEBSITE_TOKEN_OUTCOME: ${{ steps.website.outcome }}
+          NOTIFY_OUTCOME: ${{ steps.notify.outcome }}
+        run: |
+          set -euo pipefail
+          if [[ "${HAS_WEBSITE_APP}" != "true" ]]; then
+            if [[ "${HAS_GH_APP_ID}" == "true" ]]; then
+              reason="GH_APP_KEY is not set for this workflow"
+            elif [[ "${HAS_GH_APP_KEY}" == "true" ]]; then
+              reason="GH_APP_ID is not set for this workflow"
+            else
+              reason="GH_APP_ID and GH_APP_KEY are not set for this workflow"
+            fi
+          elif [[ "${WEBSITE_TOKEN_OUTCOME}" == "failure" ]]; then
+            reason="it could not mint a GitHub App token for opentidehq/website (is the App installed there?)"
+          elif [[ "${NOTIFY_OUTCOME}" == "failure" ]]; then
+            reason="the dispatch to opentidehq/website failed (the App needs contents: write there)"
+          else
+            reason="the GitHub App token was empty"
+          fi
+          echo "::warning title=Website not notified::${RELEASE_TAG} is on PyPI, but ${reason}. The website's hourly sync will pick it up; to rebuild sooner, run the command in this step's log."
+          echo "gh api repos/opentidehq/website/dispatches -f event_type=opentide-released"
+
+  # crates.io is permanent: a release's crates go up once the GitHub Release
+  # exists and its assets verified, in dependency order, each pinned to this
+  # version; a crate already published is skipped, so a resumed run picks up
+  # where it stopped. `cargo publish --no-verify` builds nothing here, where
+  # the OIDC token and the registry tokens are: a build runs every
+  # dependency's build script. `build` (release-pipeline.yml's `sources`) built each package, without them.
+  #
+  # Trusted publishing: `release.py trust publish.yml` registers this workflow
+  # as each crate's trusted publisher (with CARGO_REGISTRY_TOKEN, which needs
+  # the trusted-publishing scope), and later releases log in with the
+  # workflow's OIDC identity. The token then only publishes a crate that does
+  # not exist yet (NEW_CRATE_TOKEN), which crates.io requires. Once every
+  # crate trusts this workflow the maintainer deletes the secret; the trust
+  # step runs only when the trusted login failed or a crate was created with
+  # the stored token, and a failure there is a warning.
+  crates:
+    name: Publish to crates.io
+    needs: [guard, verify-assets]
+    if: needs.guard.outputs.channel == 'release' || needs.guard.outputs.channel == 'rc'
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ needs.guard.outputs.revision }}
+      # The release rust-toolchain.toml pins (`rustup toolchain install` with no name).
+      - name: Set up Rust
+        run: rustup toolchain install --profile minimal --no-self-update
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      # A candidate's crates are crates.io pre-releases, X.Y.Z-rc.N: this
+      # checkout only (the branch keeps X.Y.Z) carries that version and pins.
+      - name: A candidate's crates at its pre-release version
+        if: needs.guard.outputs.version != needs.guard.outputs.base
+        env:
+          VERSION: ${{ needs.guard.outputs.version }}
+        run: python3 scripts/engine/release.py bump "${VERSION}"
+      - run: python3 scripts/engine/release.py vendor
+      # Fails until trusted publishing is registered; the token covers that.
+      - name: crates.io login (trusted publishing)
+        id: trusted
+        continue-on-error: true
+        uses: rust-lang/crates-io-auth-action@3268eb413133e2960fa4ae0e963ca76380c54cd9 # v1.0.6
+      - name: publish to crates.io
+        id: publish
+        env:
+          # Log lines in the order they happen (the rate-limit waits print as they start).
+          PYTHONUNBUFFERED: "1"
+          TRUSTED_TOKEN: ${{ steps.trusted.outputs.token }}
+          STORED_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          # Trusted publishing cannot create a crate: release.py publishes a crate
+          # crates.io does not have yet with the stored token.
+          NEW_CRATE_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -n "${TRUSTED_TOKEN}" ]; then
+            echo "Publishing with trusted publishing"
+            export CARGO_REGISTRY_TOKEN="${TRUSTED_TOKEN}"
+          elif [ -n "${STORED_TOKEN}" ]; then
+            echo "Publishing with CARGO_REGISTRY_TOKEN"
+            export CARGO_REGISTRY_TOKEN="${STORED_TOKEN}"
+          else
+            echo "::error::No trusted publishing and no CARGO_REGISTRY_TOKEN; the crates were not published"
+            exit 1
+          fi
+          python3 scripts/engine/release.py publish
+      # Only when the trusted login failed (a crate does not trust this
+      # workflow yet), or this run created a crate with the stored token
+      # (release.py publish says so in `created_with_token`). Every crate trusts
+      # publish.yml and the token is deleted after the first publish, so a
+      # later run skips this step, and a secret that is gone or revoked cannot
+      # fail it: a failure here is a warning, never an error. `!cancelled()`:
+      # it runs even when the publish step failed after creating a crate with
+      # the token, or that crate would never trust publish.yml (a resume finds
+      # it on crates.io and does not create it again).
+      - name: register trusted publishing
+        if: ${{ !cancelled() && (steps.trusted.outcome != 'success' || steps.publish.outputs.created_with_token == 'true') }}
+        env:
+          PYTHONUNBUFFERED: "1"
+          CRATES_IO_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          if ! python3 scripts/engine/release.py trust publish.yml; then
+            echo "::warning::Trusted publishing was not registered for every crate (CARGO_REGISTRY_TOKEN deleted, revoked or without the trusted-publishing scope?). The crates are published; register publish.yml on the crates' settings pages (docs/internal/publishing.md, step 10)."
+          fi
+
+  # npm, with trusted publishing (the workflow's OIDC identity, no token) and
+  # provenance: the tarballs release-pipeline.yml packed and smoke-installed, in
+  # order. A release goes under the dist-tag `latest`; a public candidate
+  # (X.Y.Z-rc.N) under `next`, never `latest`: the tag is chosen from the
+  # channel and checked against the version of each tarball. The guard has
+  # already checked that every package exists on npm. A version npm has is
+  # skipped, so a resumed run picks up where it stopped. Trusted publishing
+  # needs npm 11.5.1 or later on Node 22.14.0 or later.
+  npm:
+    name: Publish to npm
+    needs: [guard, verify-assets]
+    if: needs.guard.outputs.channel == 'release' || needs.guard.outputs.channel == 'rc'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      CHANNEL: ${{ needs.guard.outputs.channel }}
+    steps:
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+          # A release restores no cache (setup-node may turn one on by itself).
+          package-manager-cache: false
+      - name: npm 11.5.1 or later
+        run: npm install --global npm@11.21.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: npm-packages
+          path: npm
+      # A candidate never moves `next` backwards (a resumed older candidate, a
+      # run of an older branch): `next` of @opentide/opentide, read from the
+      # registry without a login, must not be a newer SemVer than this version.
+      # A release does not look: it publishes `latest`.
+      - name: next never moves backwards
+        if: env.CHANNEL == 'rc'
+        env:
+          VERSION: ${{ needs.guard.outputs.version }}
+          NPM_REGISTRY: https://registry.npmjs.org
+        run: |
+          python3 - <<'PY'
+          import http.client
+          import json
+          import os
+          import re
+          import sys
+          import time
+          import urllib.error
+          import urllib.request
+
+          def key(version):
+              """SemVer order for X.Y.Z and X.Y.Z-rc.N: a release is above its candidates."""
+              match = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)(?:-rc\.(\d+))?", version)
+              if match is None:
+                  sys.exit(f"::error::{version} is not X.Y.Z or X.Y.Z-rc.N: cannot compare it with next.")
+              major, minor, patch, rc = match.groups()
+              return (int(major), int(minor), int(patch), float("inf") if rc is None else int(rc))
+
+          version = os.environ["VERSION"]
+          url = os.environ["NPM_REGISTRY"].rstrip("/") + "/@opentide%2Fopentide"
+          request = urllib.request.Request(url, headers={"Accept": "application/vnd.npm.install-v1+json"})
+          document = None
+          for attempt in range(1, 4):
+              try:
+                  with urllib.request.urlopen(request, timeout=30) as response:
+                      document = json.load(response)
+                  break
+              except (OSError, http.client.HTTPException, ValueError) as error:
+                  print(f"@opentide/opentide: {type(error).__name__}: {error}")
+                  time.sleep(float(os.environ.get("NPM_RETRY_SECONDS", "5")) * attempt)
+          if document is None:
+              sys.exit(f"::error::Could not read @opentide/opentide's dist-tags from {url}: not checked, so not published.")
+          current = document.get("dist-tags", {}).get("next")
+          print(f"next is {current}; this run publishes {version}")
+          if current is not None and key(current) > key(version):
+              sys.exit(
+                  f"::error::npm's next is already {current}, newer than {version}: publishing "
+                  f"{version} under next would move it backwards. Nothing was published to npm."
+              )
+          PY
+      # Every tarball is checked against the channel before the first publish, so
+      # a version that does not fit leaves nothing half published.
+      - name: publish
+        run: |
+          set -euo pipefail
+          # A candidate is a SemVer pre-release and goes under `next`; a release
+          # under `latest`. A candidate never publishes under `latest`, and a
+          # release never carries a pre-release version.
+          dist_tag=latest
+          if [ "${CHANNEL}" = "rc" ]; then dist_tag=next; fi
+          tarballs=()
+          names=()
+          versions=()
+          # The directories sort in publishing order: native, package, alias, lsp.
+          for tarball in npm/*/*.tgz; do
+            manifest="$(tar -xzOf "${tarball}" package/package.json)"
+            name="$(node -p 'JSON.parse(process.argv[1]).name' "${manifest}")"
+            version="$(node -p 'JSON.parse(process.argv[1]).version' "${manifest}")"
+            if [ "${dist_tag}" = "next" ] && [[ ! "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+-rc\.[1-9][0-9]*$ ]]; then
+              echo "::error::${name}@${version} is not a release candidate version: refusing to publish it under next." >&2
+              exit 1
+            fi
+            if [ "${dist_tag}" = "latest" ] && [[ ! "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "::error::${name}@${version} is a pre-release: refusing to publish it under latest." >&2
+              exit 1
+            fi
+            tarballs+=("${tarball}")
+            names+=("${name}")
+            versions+=("${version}")
+          done
+          for i in "${!tarballs[@]}"; do
+            if npm view "${names[i]}@${versions[i]}" version >/dev/null 2>&1; then
+              echo "${names[i]}@${versions[i]} is already published"
+              continue
+            fi
+            npm publish "${tarballs[i]}" --provenance --access public --tag "${dist_tag}"
+          done
+      # What the registry now says about every package, not only the first:
+      # a candidate is each package's `next` and never its `latest`; a release is
+      # each package's `latest`. After a release `next` must not trail `latest`:
+      # npm's trusted publishing covers `npm publish` only, so moving `next` is
+      # the maintainer's `npm dist-tag add` (docs/internal/publishing.md, "After
+      # the final release"), and this step names the packages that need it.
+      - name: dist-tags of every package
+        run: |
+          set -euo pipefail
+          lagging=()
+          for tarball in npm/*/*.tgz; do
+            manifest="$(tar -xzOf "${tarball}" package/package.json)"
+            name="$(node -p 'JSON.parse(process.argv[1]).name' "${manifest}")"
+            version="$(node -p 'JSON.parse(process.argv[1]).version' "${manifest}")"
+            tags='{}'
+            for attempt in $(seq 1 20); do
+              if tags="$(npm view "${name}" dist-tags --json)"; then
+                if [ "${CHANNEL}" = "rc" ]; then
+                  wanted="$(node -p 'JSON.parse(process.argv[1]).next' "${tags}")"
+                else
+                  wanted="$(node -p 'JSON.parse(process.argv[1]).latest' "${tags}")"
+                fi
+                if [ "${wanted}" = "${version}" ]; then break; fi
+              fi
+              if [ "${attempt}" = 20 ]; then
+                echo "::error::${name}: the registry's dist-tags are ${tags}, not ${CHANNEL} ${version}." >&2
+                exit 1
+              fi
+              sleep 15
+            done
+            latest="$(node -p 'JSON.parse(process.argv[1]).latest' "${tags}")"
+            next="$(node -p 'JSON.parse(process.argv[1]).next' "${tags}")"
+            echo "${name}: latest ${latest}, next ${next}"
+            if [ "${CHANNEL}" = "rc" ] && [ "${latest}" = "${version}" ]; then
+              echo "::error::${name}@${version} is also latest: a candidate must not be." >&2
+              exit 1
+            fi
+            if [ "${CHANNEL}" = "release" ] && [ "${next}" != "${version}" ]; then
+              lagging+=("${name}@${version}")
+            fi
+          done
+          if [ "${#lagging[@]}" -gt 0 ]; then
+            echo "::warning::next trails latest for ${#lagging[@]} packages. Trusted publishing cannot move a dist-tag: as a maintainer, signed in to npm, run: for p in ${lagging[*]}; do npm dist-tag add \"\$p\" next; done (docs/internal/publishing.md, After the final release)."
+          fi
+
+  # What the registries now serve installs and runs: pip from PyPI (a
+  # candidate's pre-release by its exact version, which pip installs without
+  # --pre), `cargo install opentide --features cli` from crates.io, and npx
+  # from npm (a candidate by its exact version too; the dist-tags of every
+  # package are the npm job's). Each waits out the registry's cache.
+  smoke-registries:
+    name: Smoke the registries
+    needs: [guard, pypi, npm, crates]
+    if: ${{ !cancelled() && (needs.guard.outputs.channel == 'release' || needs.guard.outputs.channel == 'rc') && needs.pypi.result == 'success' && needs.crates.result == 'success' && needs.npm.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      CHANNEL: ${{ needs.guard.outputs.channel }}
+      # The release's version, or a candidate's X.Y.Z-rc.N (the crates).
+      VERSION: ${{ needs.guard.outputs.version }}
+      PYPI_VERSION: ${{ needs.guard.outputs.pypi_version }}
+    steps:
+      # Only the toolchain pin: `cargo install` runs here with the release
+      # rust-toolchain.toml (`rustup toolchain install` with no name).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ needs.guard.outputs.revision }}
+          sparse-checkout: rust-toolchain.toml
+          sparse-checkout-cone-mode: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          package-manager-cache: false
+      - name: pip install opentide, then opentide --version
+        run: |
+          set -euo pipefail
+          python -m venv "${RUNNER_TEMP}/venv"
+          for attempt in $(seq 1 40); do
+            if "${RUNNER_TEMP}/venv/bin/python" -m pip install --quiet --no-cache-dir "opentide==${PYPI_VERSION}"; then
+              break
+            fi
+            if [ "${attempt}" = 40 ]; then echo "::error::opentide==${PYPI_VERSION} does not install from PyPI"; exit 1; fi
+            sleep 30
+          done
+          out="$("${RUNNER_TEMP}/venv/bin/opentide" --version)"
+          echo "${out}"
+          grep -qF "${PYPI_VERSION}" <<< "${out}"
+          # --version checks nothing (#1072): a command proves the engine loads.
+          "${RUNNER_TEMP}/venv/bin/opentide" --json explain yaml_parse > /dev/null
+      # A candidate by its exact version (npx @opentide/opentide@1.0.0-rc.N):
+      # a version range or the bare name would resolve `latest`, which a
+      # candidate never takes.
+      - name: npx @opentide/opentide --version
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 20); do
+            if out="$(npx --yes "@opentide/opentide@${VERSION}" --version)"; then
+              break
+            fi
+            if [ "${attempt}" = 20 ]; then echo "::error::npx @opentide/opentide@${VERSION} does not run"; exit 1; fi
+            sleep 30
+          done
+          echo "${out}"
+          grep -qF "${VERSION}" <<< "${out}"
+      - name: Set up Rust
+        run: rustup toolchain install --profile minimal --no-self-update
+      - name: cargo install opentide --features cli, then opentide --version
+        run: |
+          set -euo pipefail
+          cargo install opentide --version "=${VERSION}" --features cli --locked --root "${RUNNER_TEMP}/cargo"
+          out="$("${RUNNER_TEMP}/cargo/bin/opentide" --version)"
+          echo "${out}"
+          grep -qF "${VERSION}" <<< "${out}"

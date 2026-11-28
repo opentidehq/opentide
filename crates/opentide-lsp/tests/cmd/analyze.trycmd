@@ -1,0 +1,27 @@
+`analyze` prints a query file's diagnostics as a JSON array (analyze.in/):
+an unknown KQL operator is an error at its range; a clean SPL search has none.
+
+```console
+$ opentide-lsp analyze broken.kql
+[
+  {
+    "code": "kql_unknown_operator",
+    "severity": "error",
+    "message": "unknown tabular operator 'frobnicate'",
+    "range": {
+      "start": {
+        "line": 2,
+        "character": 2
+      },
+      "end": {
+        "line": 2,
+        "character": 12
+      }
+    }
+  }
+]
+
+$ opentide-lsp analyze clean.spl
+[]
+
+```

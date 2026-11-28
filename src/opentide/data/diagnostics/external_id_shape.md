@@ -7,7 +7,7 @@ Severity: error. Reported by `opentide validate` (schema check).
 ## Example
 
 ```json
-{"object_uuid": "…", "platforms": {"defender_for_endpoint": {"prod": "-12"}}}
+{"object_uuid": "…", "platforms": {"microsoft_defender": {"prod": "-12"}}}
 ```
 
 ## How to fix

@@ -1,0 +1,86 @@
+{
+  "_comment": "The TextMate scopes each language-server token type maps to in opentide-yaml (semanticTokenScopes of the VS Code extension, contrib/highlighting.json of opentidehq/vscode-extension, copied here): a theme colours a token of the type like these scopes, so a grammar scope under one of them does not change colour when the server's token lands.",
+  "scopes": {
+    "namespace": [
+      "entity.name.namespace"
+    ],
+    "type": [
+      "entity.name.type.schema.tide",
+      "entity.name.type",
+      "support.type"
+    ],
+    "class": [
+      "entity.name.type.class",
+      "support.class"
+    ],
+    "enum": [
+      "entity.name.type.enum"
+    ],
+    "interface": [
+      "entity.name.type.interface"
+    ],
+    "struct": [
+      "entity.name.type.struct"
+    ],
+    "typeParameter": [
+      "entity.name.type.parameter"
+    ],
+    "parameter": [
+      "variable.parameter"
+    ],
+    "variable": [
+      "variable.other.readwrite",
+      "entity.name.variable"
+    ],
+    "property": [
+      "variable.other.property.tide",
+      "variable.other.property"
+    ],
+    "enumMember": [
+      "variable.other.enummember.tide",
+      "variable.other.enummember"
+    ],
+    "event": [
+      "variable.other.event"
+    ],
+    "function": [
+      "entity.name.function",
+      "support.function"
+    ],
+    "method": [
+      "entity.name.function.member",
+      "support.function"
+    ],
+    "macro": [
+      "entity.name.function.preprocessor"
+    ],
+    "keyword": [
+      "keyword.control"
+    ],
+    "modifier": [
+      "storage.modifier"
+    ],
+    "comment": [
+      "comment"
+    ],
+    "string": [
+      "string.unquoted.plain.tide",
+      "string"
+    ],
+    "number": [
+      "constant.numeric"
+    ],
+    "regexp": [
+      "variable.other.constant.markdown.tide",
+      "variable.other.constant"
+    ],
+    "operator": [
+      "keyword.operator.key-value.tide",
+      "keyword.operator"
+    ],
+    "decorator": [
+      "entity.name.decorator",
+      "entity.name.function"
+    ]
+  }
+}

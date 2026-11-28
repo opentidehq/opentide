@@ -1,0 +1,31 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(query(&file))
+input_file: crates/testdata/corpus/cql/parenthesized_filter__invalid.cql
+---
+SOURCE_FILE@0..64
+  PIPELINE@0..63
+    AND_FILTER@0..63
+      FIELD_FILTER@0..32
+        TAG@0..17
+          TAG_TOKEN@0..17 "#event_simpleName"
+        EQ@17..18 "="
+        UNQUOTED_PATTERN@18..32
+          WORD@18..32 "ProcessRollup2"
+      WHITESPACE@32..33 " "
+      PARENTHESIZED_FILTER@33..63
+        L_PAREN@33..34 "("
+        FIELD_FILTER@34..63
+          FIELD_NAME@34..47
+            WORD@34..47 "ImageFileName"
+          EQ@47..48 "="
+          REGEX@48..63
+            SLASH@48..49 "/"
+            REGEX_PATTERN@49..61
+              REGEX_PATTERN_TOKEN@49..61 "\\\\net1?\\.exe"
+            SLASH@61..62 "/"
+            REGEX_FLAGS@62..63
+              REGEX_FLAGS_TOKEN@62..63 "i"
+  WHITESPACE@63..64 "\n"
+
+63..64: missing `)` (expected R_PAREN)

@@ -1,0 +1,5 @@
+// prod:options_section invalid
+rule r {
+  options:
+    allow_zero_values true
+}

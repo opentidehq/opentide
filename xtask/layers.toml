@@ -1,0 +1,134 @@
+# The crate layer table: plan §4 (docs/internal/unified-core.md, "Crates"), as
+# `cargo xtask check-layers` enforces it. This file is the one place the table
+# is written down; AGENTS.md and the crates' guides cite it.
+#
+# Layers go from the bottom up, and each layer's tiers from the bottom up. A
+# crate may depend only on a crate of a lower layer, or of a lower tier of its
+# own layer: never on one of its own tier, nor on one above it. Normal, build
+# and dev dependencies all count, on every target. Every workspace member is
+# placed exactly once, and every crate placed here is a member, so a new crate
+# fails the check until a change places it here and says why.
+#
+# The mapping of today's crates is a decision for the maintainer (UC-0.4, #802):
+#
+# - The plan names no tiers. Foundation crates depend on one another today (the
+#   query engines on core, parse and highlight; Lucene on kuery; ES|QL and
+#   EQL on Lucene), so
+#   foundation has five tiers read off `cargo metadata`, and a sixth, from the
+#   plan's row order, for opentide-schema (below); domain has two.
+# - opentide-tide and opentide-analysis are Domain: the plan folds both into
+#   opentide-workspace (UC-2.x), and opentide-analysis depends on opentide-tide.
+# - Bindings sit above the facade, not at the bottom where the plan's table
+#   lists them: they wrap the facade (D-5), and the facade alone, which the
+#   layer's `may_depend_on` enforces (UC-5.1, #836).
+# - xtask is Tooling, the top layer: it may read any crate, and no crate may
+#   depend on it.
+# - bindings/python is the package `opentide-native` (the plan's bindings/python, UC-5.2, #837).
+# - bindings/node is the package `opentide-node` (UC-5.3, #838), compiled into
+#   the npm package @opentide/opentide: it depends on the facade alone.
+# - opentide-compare (UC-0.7, #805), the differential comparator, was deleted
+#   with the oracle's recordings (#1142).
+# - opentide-schema (UC-1.1, #807) is the top foundation tier: the plan's
+#   table puts it in the row above core, parse, highlight and the query
+#   crates, so it may build on any of them (spans, UC-1.2) and none of them
+#   may depend on the model; every domain crate may.
+# - opentide-cli (UC-3.3, #825) is an application, the host the plan and
+#   ADR 0003 make it: the command line, which owns the terminal, the process
+#   and the filesystem. It is the application tier above opentide-lsp
+#   (UC-3.6b, #947, decided on #828): `opentide lsp start` hosts the language
+#   server, a library the command line serves on stdio, as the plan and
+#   ADR 0003 describe it; the server never reaches back into the command
+#   line. The bindings (`main(argv)` from Python and npm, ADR 0003) sit above
+#   both.
+# - opentide-schema-derive (UC-1.2, #808) is foundation tier 0: the
+#   `#[derive(FromNode)]` proc-macro opentide-schema uses depends on no
+#   workspace crate (syn, quote), and its expansion names opentide-schema's
+#   paths, which only opentide-schema and the crates above it use.
+# - opentide-workspace (UC-2.1, #816) is domain tier 0, beside opentide-tide:
+#   the plan's domain crate that loads a workspace builds on opentide-schema
+#   (the node tree, the configuration) and on no other domain crate. The
+#   language server (UC-2.6, #821) and the command line come to it from above;
+#   opentide-analysis and opentide-tide fold into it later (plan §4).
+# - opentide-compile (UC-3.1, #823) is domain tier 1, beside
+#   opentide-analysis: the plan's domain crate that compiles request bodies and
+#   the deploy plan reads the workspace opentide-workspace loads.
+# - opentide-connectors (UC-4.1, #831) is domain tier 2: the plan's domain
+#   crate that sends to tenants builds on opentide-workspace (credentials'
+#   placeholders) today and on opentide-compile's bodies from UC-4.2.
+# - opentide-cassette (UC-4.1, #831) is foundation tier 0: the recorded-HTTP
+#   harness depends on no workspace crate; opentide-connectors' and
+#   opentide-cli's tests and xtask (`cargo xtask cassettes`) use it. Never
+#   shipped (publish = false).
+# - opentide-yara, opentide-yaral and opentide-exabeam (language-server
+#   0.13.0 to 0.16.0, E1) are foundation tier 2, beside opentide-cql: query
+#   engines like it, they depend on opentide-core, -parse and -highlight (and
+#   yara-x-parser, yara-x-fmt or regex-syntax) and on no other query engine.
+#   opentide-datadog (rfc-datadog-cloud-siem) joins them for the same reason:
+#   a grammar of its own, not a Lucene dialect (the RFC's section 6.2).
+# - opentide-lucene (#1231) is foundation tier 3, above opentide-kuery: each
+#   Elastic query string engine tells a rule written for the other language
+#   partly by whether the other grammar accepts the text. The Lucene engine
+#   asks `opentide_kuery::parses`; the KQL engine takes the Lucene verdict as
+#   an argument of `analyze`, which opentide-analysis and opentide-tide pass.
+#   ES|QL and EQL (Lucene's regular expressions) sit above it.
+# - opentide-dataset (#1743) is foundation tier 0: the embedded datasets'
+#   container and its pure-Rust decoder depend on no workspace crate; every
+#   crate that compiles a dataset in uses it (at run time, and its encoder in
+#   build.rs), and none of them may be below it.
+# - opentide-parse (ADR 0012, #1221) is foundation tier 1, where
+#   opentide-syntax (tree-sitter, deleted in #1231) stood: the pure-Rust
+#   parsers' toolkit (logos, rowan) depends on no workspace crate, and every
+#   query engine above it builds on it.
+
+[[layer]]
+name = "foundation"
+tiers = [
+    ["opentide-core", "opentide-dataset", "opentide-schema-derive", "opentide-cassette"],
+    ["opentide-parse", "opentide-highlight", "opentide-ecs"],
+    ["opentide-kql", "opentide-spl", "opentide-kuery", "opentide-falco", "opentide-cql",
+     "opentide-yara", "opentide-yaral", "opentide-exabeam", "opentide-datadog"],
+    ["opentide-lucene"],
+    ["opentide-esql", "opentide-eql"],
+    ["opentide-schema"],
+]
+
+[[layer]]
+name = "domain"
+tiers = [
+    ["opentide-tide", "opentide-workspace"],
+    ["opentide-analysis", "opentide-compile"],
+    ["opentide-connectors"],
+]
+
+[[layer]]
+name = "application"
+tiers = [
+    ["opentide-lsp"],
+    ["opentide-cli"],
+]
+
+# The `opentide` facade crate (UC-5.1, #836): the public Rust API over the
+# applications and the domain (ADR 0005). Its features reach opentide-cli
+# (`queries`, `cli`) and opentide-lsp (`lsp`), so it sits above both.
+[[layer]]
+name = "facade"
+tiers = [
+    ["opentide"],
+]
+
+# The bindings and hosts wrap the facade and nothing else from the workspace
+# (ADR 0005, UC-5.1 #836): what one needs goes into the facade's API, behind a
+# feature when it is heavy. Their build tooling (pyo3, napi, wasm-bindgen) is
+# outside the workspace, so the rule does not reach it.
+[[layer]]
+name = "bindings"
+tiers = [
+    ["opentide-native", "opentide-wasm", "opentide-node"],
+]
+may_depend_on = ["opentide"]
+
+[[layer]]
+name = "tooling"
+tiers = [
+    ["xtask"],
+]

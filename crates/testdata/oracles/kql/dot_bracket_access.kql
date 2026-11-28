@@ -1,0 +1,1 @@
+AuditLogs | extend Ip = tostring(InitiatedBy.user.["ipAddress"]), Name = tostring(TargetResources.[0].displayName)

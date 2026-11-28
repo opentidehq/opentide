@@ -1,0 +1,837 @@
+"""The opentide SDK: a Tide workspace, opened once, and what you do with it.
+
+:class:`Workspace` wraps the ``opentide`` Rust crate (the facade, UC-5.1) one to
+one, through ``opentide._native.sdk`` (UC-5.2, #837): ``open``, ``validate``,
+``lint``, ``info``, ``rules``, ``objectives``, ``threats``, ``catalog``,
+``coverage``, ``deploy_plan``, ``tenants`` and ``run_json``. The Rust SDK, the
+npm package and this module run the same code and hand back the same documents:
+the command line's ``--json`` data, keys in its order.
+
+:class:`Connection` wraps the facade's tenant operations (UC-5.2b): a query run,
+a live query check and a rule deploy, ``async`` methods that run on the Rust
+core's tokio runtime (through pyo3-async-runtimes) without the GIL while the
+``asyncio`` event loop awaits them.
+
+``import opentide`` does not import this module; ``opentide.Workspace``,
+``opentide.Connection`` and the other names load it on first use. The async
+runtime starts on the first tenant operation, never on import.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+from collections.abc import Awaitable, Callable, Mapping, Sequence
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Literal, TypeVar
+
+if TYPE_CHECKING:
+    from opentide._native import sdk as _sdk
+
+__all__ = [
+    "Canceller",
+    "Capabilities",
+    "Connection",
+    "DeployOutcome",
+    "DeployPlan",
+    "DeployWarning",
+    "LintReport",
+    "LiveCheck",
+    "OpentideError",
+    "QueryResult",
+    "TenantConfig",
+    "Validation",
+    "Workspace",
+    "capabilities",
+    "platforms",
+    "run_json",
+]
+
+#: A JSON document as the command line writes it, parsed.
+Document = dict[str, Any]
+
+ValidateCheck = Literal[
+    "id-uniqueness", "uuid-format", "schema", "cve", "sharing-config", "configuration", "queries"
+]
+LintCheckName = Literal["filenames", "metadata", "placeholders", "queries"]
+QueriesMode = Literal["error", "warn", "off"]
+StrategyName = Literal["PREVIEW", "RELEASE"]
+OperationName = Literal["create", "update", "disable", "delete"]
+
+#: Rows a query returns when the caller names no limit (the command line's).
+DEFAULT_LIMIT = 100
+#: Seconds an asynchronous search may run when the caller names no timeout.
+DEFAULT_TIMEOUT = 120.0
+
+_T = TypeVar("_T")
+
+
+class OpentideError(Exception):
+    """A call the SDK could not run.
+
+    ``code`` is stable: ``configuration_invalid`` or the configuration check's
+    own code (``config_parse``, ...), ``io_error``, ``usage_invalid_choice``
+    for an option the command line would refuse, ``no_json_document`` when
+    :func:`run_json`'s command writes no document (``--version``). A tenant
+    operation's codes are the connectors' (``credential_unset``,
+    ``tenant_refused``, ``tenant_unreachable``, ``operation_unsupported``,
+    ``interrupted``, ...); ``detail`` is then the vendor's own words, when the
+    tenant gave a reason. Match on the code, not the message. Findings about
+    the workspace are not errors: they are in the report.
+
+    A failed deploy (:meth:`Connection.deploy`) also says what it stops:
+    ``scope`` is ``"rule"`` (the tenant refused this rule; its other rules can
+    deploy) or ``"tenant"`` (the tenant cannot take any rule); ``status`` is
+    the HTTP status the tenant answered with, when it answered; ``fields``
+    locate the failure (``platform``, ``tenant``, ``address``, ``detail``), in
+    order; ``partial`` is what it did before failing, when the caller must keep
+    it: a :class:`DeployOutcome` whose ``remote_id`` is an id the tenant gave the
+    rule (record it), with the warnings and events raised first;
+    ``more_failures`` are the rule's further failures, in order, each an
+    :class:`OpentideError` of the same scope, when the deploy failed more than
+    once (this error is the first). Any other error's ``scope``, ``status`` and
+    ``partial`` are ``None`` and its ``fields`` and ``more_failures`` empty.
+    """
+
+    def __init__(
+        self,
+        code: str,
+        message: str,
+        detail: str | None = None,
+        *,
+        scope: str | None = None,
+        status: int | None = None,
+        fields: dict[str, str] | None = None,
+        partial: DeployOutcome | None = None,
+        more_failures: Sequence[OpentideError] = (),
+    ) -> None:
+        super().__init__(f"{code}: {message}")
+        self.code = code
+        self.message = message
+        self.detail = detail
+        self.scope = scope
+        self.status = status
+        self.fields: dict[str, str] = dict(fields or {})
+        self.partial = partial
+        self.more_failures: list[OpentideError] = list(more_failures)
+
+    def __reduce__(self) -> tuple[Any, ...]:
+        """Pickles and copies with every field: the error is rebuilt from its
+        ``args`` and its attributes, without calling ``__init__``, so a subclass
+        with a constructor of its own round-trips too."""
+        return (_rebuilt_error, (type(self), self.args), self.__dict__)
+
+
+def _rebuilt_error(cls: type[OpentideError], args: tuple[Any, ...]) -> OpentideError:
+    """An :class:`OpentideError` (or *cls*) unpickled: its ``args``, then its
+    attributes from the pickle's state."""
+    error = cls.__new__(cls)
+    error.args = args
+    return error
+
+
+def _load() -> None:
+    """Loads ``opentide._native`` through the one door to the engine, which
+    raises :class:`opentide.analysis.EngineUnavailableError` when it does not load."""
+    from opentide.analysis import engine
+
+    engine()
+
+
+def _error(exc: BaseException) -> OpentideError:
+    """The ``SdkError`` *exc* as :class:`OpentideError`."""
+    code, message, detail, scope, status, fields, partial, more = exc.args
+    return OpentideError(
+        str(code),
+        str(message),
+        None if detail is None else str(detail),
+        scope=None if scope is None else str(scope),
+        status=None if status is None else int(status),
+        fields={str(key): str(value) for key, value in fields},
+        partial=None if partial is None else _deploy_outcome(json.loads(partial)),
+        more_failures=[
+            OpentideError(
+                str(further_code),
+                str(further_message),
+                next((str(value) for key, value in further_fields if key == "detail"), None),
+                scope=None if scope is None else str(scope),
+                status=None if further_status is None else int(further_status),
+                fields={str(key): str(value) for key, value in further_fields},
+            )
+            for further_code, further_message, further_status, further_fields in more
+        ],
+    )
+
+
+def _call(function: Callable[..., _T], *args: object, **kwargs: object) -> _T:
+    """*function*'s result; its ``SdkError`` as :class:`OpentideError`."""
+    from opentide._native.sdk import SdkError
+
+    try:
+        return function(*args, **kwargs)
+    except SdkError as exc:
+        raise _error(exc) from None
+
+
+async def _document(
+    function: Callable[..., Awaitable[str]], *args: object, **kwargs: object
+) -> Any:
+    """The document *function*'s awaitable resolves to; its ``SdkError`` as
+    :class:`OpentideError`, whether the call or the operation raised it."""
+    from opentide._native.sdk import SdkError
+
+    try:
+        return json.loads(await function(*args, **kwargs))
+    except SdkError as exc:
+        raise _error(exc) from None
+
+
+@dataclass(frozen=True)
+class Validation:
+    """What :meth:`Workspace.validate` returns: ``validate --json``'s data.
+
+    ``report`` holds ``issues`` and ``warnings``, each finding with its
+    ``code``, ``severity``, ``path``, 1-based ``line`` and ``column``,
+    ``field_path``, ``suggestion`` and ``fix``.
+    """
+
+    #: Each check that ran, by name: ``{"check": name, "status": ...}``.
+    checks: dict[str, dict[str, str]]
+    report: Document
+    summary: Document
+    #: Whether the run fails (an error, or a warning under ``strict``).
+    failed: bool
+    warned: bool
+    #: The command line's exit code for this run.
+    exit_code: int
+
+
+@dataclass(frozen=True)
+class LintReport:
+    """What :meth:`Workspace.lint` returns: ``lint --json``'s data."""
+
+    path: str
+    checks: list[str]
+    findings: list[Document]
+    #: ``completed``, ``issues`` or ``failed``.
+    status: str
+    message: str
+    exit_code: int
+    failure_code: str | None
+    summary: Document | None
+    outcome: str | None
+    unmatched: list[str]
+    warnings: list[str]
+    next_actions: list[Document]
+
+
+@dataclass(frozen=True)
+class DeployPlan:
+    """What :meth:`Workspace.deploy_plan` returns.
+
+    ``document`` is ``deploy --dry-run --json``'s ``result``; ``summary`` its
+    counts, when the run planned; ``ok`` whether the dry run completed.
+    """
+
+    document: Document
+    summary: Document | None
+    ok: bool
+
+
+class Workspace:
+    """A Tide workspace: its configuration, resolved once, and every object
+    file, read and parsed once into one index.
+
+    Opening is the expensive step; each method then reads the index, so keep
+    the ``Workspace`` and call as many methods on it as you need. Methods
+    release the GIL while they run.
+    """
+
+    __slots__ = ("_inner",)
+
+    def __init__(self, inner: _sdk.Workspace) -> None:
+        """Wraps an opened workspace: use :meth:`open` or :meth:`from_files`."""
+        self._inner = inner
+
+    @classmethod
+    def open(
+        cls, path: str | os.PathLike[str], *, cwd: str | os.PathLike[str] | None = None
+    ) -> Workspace:
+        """Opens the workspace at *path*: a repository holding ``.opentide/``
+        or ``objects/``, or a folder inside one. Paths in findings are shown
+        from *cwd* (default: the workspace's own folder).
+
+        Raises :class:`OpentideError` (``usage_invalid_value`` for a *path* that
+        is not a folder, as ``--repo`` refuses it; ``io_error``,
+        ``configuration_invalid``).
+        """
+        _load()
+        from opentide._native.sdk import Workspace as NativeWorkspace
+
+        return cls(
+            _call(
+                NativeWorkspace.open,
+                os.fspath(path),
+                None if cwd is None else os.fspath(cwd),
+            )
+        )
+
+    @classmethod
+    def from_files(cls, root: str | os.PathLike[str], files: Mapping[str, str]) -> Workspace:
+        """Opens a workspace held in memory, rooted at *root*: each key of
+        *files* is a path (relative to *root*, or absolute), each value its
+        text. Nothing is read from or written to the disk."""
+        _load()
+        from opentide._native.sdk import Workspace as NativeWorkspace
+
+        return cls(_call(NativeWorkspace.from_files, os.fspath(root), list(files.items())))
+
+    @property
+    def root(self) -> Path:
+        """The workspace folder: the one that holds ``.opentide/`` and ``objects/``."""
+        return Path(self._inner.root)
+
+    def validate(
+        self,
+        *,
+        check: ValidateCheck | None = None,
+        files: Sequence[str] = (),
+        uuids: Sequence[str] = (),
+        types: Sequence[str] = (),
+        strict: bool = False,
+        queries: QueriesMode = "error",
+    ) -> Validation:
+        """Runs every check of ``opentide validate`` (or *check* alone).
+
+        The options are the command's flags: ``--file``, ``--uuid``,
+        ``--type``, ``--strict`` and ``--queries``. Raises
+        :class:`OpentideError` ``usage_invalid_choice`` for an option the
+        command refuses: a *types* entry that is not ``rule``, ``threat`` or
+        ``objective``, an unknown *check* or *queries* mode.
+        """
+        data = json.loads(
+            _call(
+                self._inner.validate,
+                check=check,
+                files=list(files),
+                uuids=list(uuids),
+                types=list(types),
+                strict=strict,
+                queries=queries,
+            )
+        )
+        return Validation(**data)
+
+    def lint(
+        self,
+        *,
+        checks: Sequence[LintCheckName] = (),
+        files: Sequence[str] = (),
+        strict: bool = False,
+    ) -> LintReport:
+        """Runs ``opentide lint`` (its ``lint.toml``, or *checks*) without
+        fixing anything."""
+        data = json.loads(
+            _call(self._inner.lint, checks=list(checks), files=list(files), strict=strict)
+        )
+        return LintReport(**data)
+
+    def info(self, *, environment: Mapping[str, str] | None = None) -> Document:
+        """``opentide info``: the object counts, the files that did not load and
+        each platform with its tenants (the variables each reads and whether
+        each is set, never their values). *environment* is where the variables
+        are looked up, as :meth:`Connection.open`'s names the one a connection
+        reads; ``None``: the process's."""
+        return json.loads(
+            _call(
+                self._inner.info,
+                None if environment is None else list(environment.items()),
+            )
+        )
+
+    def rules(self) -> list[Document]:
+        """The detection rules: their rows of the catalogue (``uuid``, ``type``,
+        ``schema``, ``name``, ``path``, ``techniques``, ...), in index order."""
+        return json.loads(_call(self._inner.rules))
+
+    def objectives(self) -> list[Document]:
+        """The detection objectives: their rows of the catalogue."""
+        return json.loads(_call(self._inner.objectives))
+
+    def threats(self) -> list[Document]:
+        """The threat vectors: their rows of the catalogue."""
+        return json.loads(_call(self._inner.threats))
+
+    def catalog(self) -> Document:
+        """``opentide info catalog``: every object with its techniques and
+        platforms, every edge, the signals and the ATT&CK matrix."""
+        return json.loads(_call(self._inner.catalog))
+
+    def coverage(self, technique: str) -> Document:
+        """``opentide info coverage --technique``: the rules that cover the
+        ATT&CK *technique*, their own techniques or inherited ones."""
+        return json.loads(_call(self._inner.coverage, technique))
+
+    def deploy_plan(
+        self,
+        *,
+        strategies: Sequence[StrategyName] = ("RELEASE",),
+        uuids: Sequence[str] = (),
+        files: Sequence[str] = (),
+        platform: str | None = None,
+        keep_deprecated: bool | None = None,
+        environment: Mapping[str, str] | None = None,
+    ) -> DeployPlan:
+        """``opentide deploy --dry-run``: the rules the strategies select, the
+        tenants each reaches and the requests a real run would send.
+        Nothing is sent and nothing is written. Without *uuids* or *files* it
+        plans every rule file (``--all``). *environment* is where the tenants'
+        ``$NAME`` credentials are looked up, to say which are unset, as
+        :meth:`Connection.open`'s names the one a connection reads; ``None``:
+        the process's.
+
+        Raises :class:`OpentideError` ``usage_invalid_choice`` for a *strategy*
+        the configured statuses refuse, or a *platform* ``--platform`` refuses
+        (neither built in nor a loaded platform plugin's)."""
+        document, summary, ok = _call(
+            self._inner.deploy_plan,
+            strategies=list(strategies),
+            uuids=list(uuids),
+            files=list(files),
+            platform=platform,
+            keep_deprecated=keep_deprecated,
+            environment=None if environment is None else list(environment.items()),
+        )
+        return DeployPlan(
+            document=json.loads(document),
+            summary=None if summary is None else json.loads(summary),
+            ok=ok,
+        )
+
+    def tenants(self, platform: str) -> list[TenantConfig]:
+        """The tenants the workspace configures for *platform* (its
+        ``[[tenants]]`` in ``.opentide/configurations/platforms/<platform>.toml``),
+        in file order; empty when it configures none. Open one with
+        :meth:`Connection.open`. Raises :class:`OpentideError`
+        ``usage_invalid_choice`` for a *platform* ``--platform`` refuses
+        (neither built in nor a loaded platform plugin's)."""
+        return [TenantConfig._wrap(tenant) for tenant in _call(self._inner.tenants, platform)]
+
+    def run_json(self, argv: Sequence[str]) -> Any:
+        """:func:`run_json` on this workspace: ``opentide --json --repo
+        <root> <argv>``."""
+        return run_json(["--repo", str(self.root), *argv])
+
+    def __repr__(self) -> str:
+        return f"Workspace({str(self.root)!r})"
+
+
+@dataclass(frozen=True)
+class Capabilities:
+    """What a platform's connector can do: :meth:`Connection.deploy`,
+    :meth:`Connection.validate_query` (``validate query --live``) and
+    :meth:`Connection.query` (``opentide query``)."""
+
+    deploy: bool
+    live_validation: bool
+    query: bool
+
+
+@dataclass(frozen=True)
+class QueryResult:
+    """What :meth:`Connection.query` returns: at most the request's ``limit``
+    rows, each a dict of its columns in the order they came."""
+
+    #: Each column's ``name`` and the vendor's ``type`` (``None`` when it names none).
+    columns: list[Document]
+    rows: list[Document]
+    #: More rows matched than the limit let through.
+    truncated: bool
+    #: The platform stopped early and says the rows are incomplete.
+    partial: bool
+    #: The platform's reservations about the result.
+    warnings: list[str]
+    #: The platform's id of the search (CrowdStrike's job id).
+    vendor_query_id: str | None
+    #: What was sent, when the connector changed the query (a limit it added).
+    sent: str | None
+    #: The language the connector used.
+    language: str | None
+
+
+@dataclass(frozen=True)
+class LiveCheck:
+    """What :meth:`Connection.validate_query` returns for a query the tenant
+    accepted. ``errors`` are why validation still fails it (Defender's
+    required columns); a query the tenant refuses raises ``tenant_refused``."""
+
+    #: The search's answer, when the check ran one.
+    result: QueryResult | None
+    errors: list[str]
+    warnings: list[str]
+
+
+@dataclass(frozen=True)
+class DeployWarning:
+    """A warning a deploy raised: the rule is deployed, with something to check."""
+
+    #: The event ``opentide deploy`` logs it as (``sysdig_rule_recreated``).
+    code: str
+    #: What happened.
+    message: str
+    #: Whether it raises the run's warnings, as ``opentide deploy`` ends with its
+    #: warnings exit code; ``False`` for one that only says what was done
+    #: (``splunk_alert_deleted``).
+    raised: bool = True
+
+
+@dataclass(frozen=True)
+class DeployEvent:
+    """Something a deploy did, as the event ``opentide deploy`` logs at info level."""
+
+    #: The event's name (``sysdig_rule_created``).
+    name: str
+    #: Its fields, in order (``rule_id``).
+    fields: dict[str, str] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class DeployOutcome:
+    """What :meth:`Connection.deploy` did."""
+
+    #: The platform's identifier of the rule, which a deploy keeps in its state.
+    remote_id: str | None
+    operation: OperationName
+    #: What the deploy raised without failing (a rule created again because the
+    #: tenant lost it, a partial deployment), as ``opentide deploy`` warns of them.
+    warnings: list[DeployWarning]
+    #: What the deploy did (a rule created, with its id): nothing to act on.
+    events: list[DeployEvent] = field(default_factory=list)
+
+
+def _deploy_outcome(data: Document) -> DeployOutcome:
+    return DeployOutcome(
+        remote_id=data["remote_id"],
+        operation=data["operation"],
+        warnings=[DeployWarning(**warning) for warning in data["warnings"]],
+        events=[
+            DeployEvent(event["name"], dict(event["fields"])) for event in data.get("events", [])
+        ],
+    )
+
+
+def _capabilities(flags: tuple[bool, bool, bool]) -> Capabilities:
+    deploy, live_validation, query = flags
+    return Capabilities(deploy=deploy, live_validation=live_validation, query=query)
+
+
+def _query_result(data: Document) -> QueryResult:
+    return QueryResult(**data)
+
+
+def _instant(name: str, at: object) -> str | None:
+    """*at*, a ``start`` or ``end`` argument, as the RFC 3339 instant the
+    engine reads: a datetime written out (a naive one taken as UTC), a string
+    passed as it is (the engine parses it as the Node SDK's does, and refuses
+    one that is no RFC 3339 instant with ``usage_invalid_value``), ``None`` as
+    ``None``. Any other type is refused with ``usage_invalid_value``."""
+    if at is None or isinstance(at, str):
+        return at
+    if isinstance(at, datetime):
+        if at.tzinfo is None:
+            at = at.replace(tzinfo=timezone.utc)
+        return at.isoformat()
+    raise OpentideError(
+        "usage_invalid_value",
+        f"{name}: a datetime or an RFC 3339 string, not {type(at).__name__}",
+    )
+
+
+def platforms() -> list[str]:
+    """The platforms with a connector, in the order opentide lists them."""
+    _load()
+    from opentide._native.sdk import platforms as native_platforms
+
+    return native_platforms()
+
+
+def capabilities(platform: str) -> Capabilities | None:
+    """What the connector of *platform* can do; ``None`` for a platform without one."""
+    _load()
+    from opentide._native.sdk import capabilities as native_capabilities
+
+    flags = native_capabilities(platform)
+    return None if flags is None else _capabilities(flags)
+
+
+class TenantConfig:
+    """A tenant: its platform, its name and its ``setup`` (``$NAME`` values
+    unresolved until it connects). :meth:`Workspace.tenants` reads them from the
+    workspace; construct one to configure a tenant in code."""
+
+    __slots__ = ("_inner",)
+
+    def __init__(self, platform: str, name: str, setup: Mapping[str, str]) -> None:
+        """The tenant *name* of *platform*; each value of *setup* is a string, a
+        ``$NAME`` one read from the environment when it connects."""
+        _load()
+        from opentide._native.sdk import TenantConfig as NativeTenantConfig
+
+        self._inner = NativeTenantConfig(platform, name, list(setup.items()))
+
+    @classmethod
+    def _wrap(cls, inner: _sdk.TenantConfig) -> TenantConfig:
+        tenant = cls.__new__(cls)
+        tenant._inner = inner
+        return tenant
+
+    @property
+    def platform(self) -> str:
+        """The platform's identifier (``splunk``, ``sentinel_one``)."""
+        return self._inner.platform
+
+    @property
+    def name(self) -> str:
+        """The tenant's name."""
+        return self._inner.name
+
+    @property
+    def setup_keys(self) -> list[str]:
+        """The keys of its ``setup``, in name order; never their values."""
+        return self._inner.setup_keys
+
+    def __repr__(self) -> str:
+        return f"TenantConfig({self.platform!r}, {self.name!r})"
+
+
+class Canceller:
+    """Cancels a :class:`Connection`'s operations from elsewhere: the one
+    running raises ``interrupted``, and so does every later one."""
+
+    __slots__ = ("_inner",)
+
+    def __init__(self, inner: _sdk.Canceller) -> None:
+        """Wraps a connection's canceller: use :meth:`Connection.canceller`."""
+        self._inner = inner
+
+    def cancel(self) -> None:
+        """Cancels."""
+        self._inner.cancel()
+
+    @property
+    def is_cancelled(self) -> bool:
+        """Whether :meth:`cancel` was called."""
+        return self._inner.is_cancelled
+
+
+class Connection:
+    """One tenant's client, built from that tenant's own settings (TLS, CA
+    bundle, proxy, timeout, credentials). Secrets never reach a message or a
+    ``repr``.
+
+    ``query``, ``validate_query`` and ``deploy`` are ``async``: each runs on the
+    Rust core's tokio runtime without the GIL while the event loop awaits it.
+    Cancelling the task that awaits one stops it, and a search it stops waiting
+    for is stopped on the tenant where the API allows it. One connection serves
+    many operations, at once or in turn.
+    """
+
+    __slots__ = ("_inner",)
+
+    def __init__(self, inner: _sdk.Connection) -> None:
+        """Wraps an opened connection: use :meth:`open`."""
+        self._inner = inner
+
+    @classmethod
+    def open(
+        cls,
+        tenant: TenantConfig,
+        *,
+        environment: Mapping[str, str] | None = None,
+        proxy: str | None = None,
+        timeout: float | None = None,
+    ) -> Connection:
+        """Connects to *tenant*: resolves its credentials and builds its client.
+        Nothing is sent until an operation runs.
+
+        *environment* replaces the process's environment for the tenant's
+        ``$NAME`` credentials, CA bundles and proxies; *proxy* is used before
+        the environment's; *timeout* is how long, in seconds, the tenant may
+        take to answer a read (Elastic, Splunk, Carbon Black Cloud, Sentinel,
+        Google SecOps). A deploy waits as long as ``opentide deploy`` does,
+        whatever *timeout* is.
+
+        Raises :class:`OpentideError` (``credential_unset``,
+        ``tenant_setup_invalid``, ``operation_unsupported``).
+        """
+        _load()
+        from opentide._native.sdk import Connection as NativeConnection
+
+        return cls(
+            _call(
+                NativeConnection.open,
+                tenant._inner,
+                environment=None if environment is None else list(environment.items()),
+                proxy=proxy,
+                timeout=timeout,
+            )
+        )
+
+    @property
+    def platform(self) -> str:
+        """The platform's identifier."""
+        return self._inner.platform
+
+    @property
+    def tenant(self) -> str:
+        """The tenant's name."""
+        return self._inner.tenant
+
+    @property
+    def capabilities(self) -> Capabilities:
+        """What this tenant's connector can do."""
+        return _capabilities(self._inner.capabilities)
+
+    def canceller(self) -> Canceller:
+        """A handle that cancels this connection's operations from elsewhere
+        (another task, a signal handler)."""
+        return Canceller(self._inner.canceller())
+
+    async def query(
+        self,
+        text: str,
+        language: str = "",
+        *,
+        start: datetime | str | None = None,
+        end: datetime | str | None = None,
+        limit: int = DEFAULT_LIMIT,
+        index: Sequence[str] = (),
+        data_view: str | None = None,
+        timeout: float = DEFAULT_TIMEOUT,
+    ) -> QueryResult:
+        """Runs *text* on the tenant (``opentide query``) over *start* to *end*
+        (default: the 24 hours before now) and returns at most *limit* rows.
+        Nothing is saved on the tenant.
+
+        *language* is the query's (``kql``, ``esql``, ``s1ql``); empty takes the
+        platform's first. *index* is the Elastic indices, the HarfangLab
+        telemetry source or the CrowdStrike repository; *data_view* Elastic's;
+        *timeout* how long, in seconds, an asynchronous search may run. *start*
+        and *end* are datetimes (a naive one is taken as UTC) or RFC 3339
+        strings (``"2026-11-12T09:00:00Z"``). *limit* is 1 to 5000, as
+        ``opentide query --limit`` takes it.
+
+        Raises :class:`OpentideError` (``tenant_refused``, ``query_timed_out``,
+        ``tenant_unreachable``, ``authentication_failed``, ``interrupted``,
+        ``operation_unsupported``, ...; ``usage_invalid_value`` for a *start*,
+        *end* or *limit* the command line would refuse).
+        """
+        data = await _document(
+            self._inner.query,
+            text,
+            language,
+            start=_instant("start", start),
+            end=_instant("end", end),
+            limit=limit,
+            index=list(index),
+            data_view=data_view,
+            timeout=timeout,
+        )
+        return _query_result(data)
+
+    async def validate_query(
+        self,
+        text: str,
+        language: str = "",
+        *,
+        start: datetime | str | None = None,
+        end: datetime | str | None = None,
+        limit: int = DEFAULT_LIMIT,
+        index: Sequence[str] = (),
+        data_view: str | None = None,
+        timeout: float = DEFAULT_TIMEOUT,
+    ) -> LiveCheck:
+        """Checks *text* on the tenant (``opentide validate query --live``): by
+        default a search for one row over the minute before *end* (now). The
+        options are :meth:`query`'s.
+
+        Raises :class:`OpentideError`: ``tenant_refused`` for a query the
+        tenant refuses (the vendor's words in ``detail``), the other codes of
+        :meth:`query`, and ``operation_unsupported`` on a platform that cannot
+        check a query live (CrowdStrike, HarfangLab, Sysdig): never a faked
+        verdict.
+        """
+        data = await _document(
+            self._inner.validate_query,
+            text,
+            language,
+            start=_instant("start", start),
+            end=_instant("end", end),
+            limit=limit,
+            index=list(index),
+            data_view=data_view,
+            timeout=timeout,
+        )
+        result = data["result"]
+        return LiveCheck(
+            result=None if result is None else _query_result(result),
+            errors=data["errors"],
+            warnings=data["warnings"],
+        )
+
+    async def deploy(
+        self,
+        rule_id: str,
+        operation: OperationName,
+        body: bytes | None = None,
+        *,
+        policies: Sequence[str] | None = None,
+    ) -> DeployOutcome:
+        """Applies *operation* to the rule *rule_id* on the tenant, sending
+        *body* (a deploy plan's payload for this tenant) as its bytes. Returns
+        the platform's identifier of the rule, and the warnings the deploy
+        raised without failing. A ``delete`` takes no *body*, but on
+        HarfangLab, whose body always names the rule's kind
+        (``{"kind": "Sigma"}``); the other operations raise
+        ``usage_invalid_value`` without one.
+
+        *policies* are a Sysdig rule's runtime policies (the plan entry's
+        ``policies``, which a block that names its own carries); ``None``
+        takes the tenant's, as ``opentide deploy`` does.
+
+        A whole deploy run (the plan, the deployment state, the retirements) is
+        ``Workspace.run_json(["deploy", ...])``; this deploys one compiled rule.
+
+        Raises :class:`OpentideError`: ``tenant_refused``, and the other codes
+        of :meth:`query`.
+        """
+        data = await _document(
+            self._inner.deploy,
+            rule_id,
+            operation,
+            None if body is None else bytes(body),
+            policies=None if policies is None else list(policies),
+        )
+        return _deploy_outcome(data)
+
+    def __repr__(self) -> str:
+        return f"Connection({self.platform!r}, {self.tenant!r})"
+
+
+def run_json(argv: Sequence[str]) -> Any:
+    """Runs ``opentide --json <argv>`` in this process and returns its document:
+    the envelope (``ok``, ``command``, ``result``, ``failure``, ...) or, for
+    ``commands``, the command tree. A command that fails still returns its
+    document, with ``ok: false`` and ``failure.code``.
+
+    It reads the process's environment and working directory as the command
+    line does (``--repo`` names a workspace elsewhere) and writes nothing to
+    the process's streams. Raises :class:`OpentideError`
+    (``no_json_document``) when the command writes no document.
+    """
+    _load()
+    from opentide._native.sdk import run_json as native_run_json
+
+    return json.loads(_call(native_run_json, list(argv)))

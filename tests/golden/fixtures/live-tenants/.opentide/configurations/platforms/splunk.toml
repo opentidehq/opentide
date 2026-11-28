@@ -1,0 +1,13 @@
+[platform]
+enabled = true
+name = "Splunk Enterprise"
+
+[[tenants]]
+name = "lab"
+strategies = ["PREVIEW"]
+[tenants.setup]
+ssl = true
+url = "splunk.invalid"
+port = 8089
+app = "search"
+token = "$SPLUNK_TOKEN"

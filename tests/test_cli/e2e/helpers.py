@@ -5,7 +5,7 @@ from __future__ import annotations
 import importlib
 import re
 import sys
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from importlib.machinery import ModuleSpec
 from pathlib import Path
@@ -55,7 +55,9 @@ def hidden_modules(*prefixes: str, purge: Sequence[str] = ()) -> Iterator[None]:
 
     ``purge`` drops modules from the cache without blocking them, so a module
     that binds a hidden SDK at import time is re-imported under the block
-    rather than served from an earlier, successful import.
+    rather than served from an earlier, successful import. Afterwards the
+    modules from before the block are back, on ``sys.modules`` and on their
+    parent packages alike.
     """
     blocker = _Blocker(prefixes)
     purge_all = _Blocker(purge)
@@ -71,9 +73,33 @@ def hidden_modules(*prefixes: str, purge: Sequence[str] = ()) -> Iterator[None]:
         yield
     finally:
         sys.meta_path.remove(blocker)  # type: ignore[arg-type]
-        for name in [n for n in sys.modules if purge_all._blocks(n)]:
+        imported = {name: module for name, module in sys.modules.items() if purge_all._blocks(name)}
+        for name in imported:
             del sys.modules[name]
         sys.modules.update(saved)
+        _unbind_from_parents(imported)
+
+
+def _unbind_from_parents(dropped: Mapping[str, ModuleType]) -> None:
+    """Undo the parent bindings of modules imported in a ``hidden_modules`` block.
+
+    Importing ``a.b`` also sets ``a.b`` as an attribute of ``a``. When ``a`` was not
+    purged, the copy of ``b`` imported in the block stayed reachable from it after
+    ``sys.modules`` was restored, without the submodules of the original ``b``:
+    ``monkeypatch.setattr("a.b.c.X", ...)`` in any later test of that process then
+    raised ``AttributeError``, or patched a copy no code used. Each such binding
+    points at the restored module again, or goes when there is none.
+    """
+    for name, module in dropped.items():
+        parent_name, _, child = name.rpartition(".")
+        parent = sys.modules.get(parent_name)
+        if parent is None or getattr(parent, child, None) is not module:
+            continue
+        restored = sys.modules.get(name)
+        if restored is None:
+            delattr(parent, child)
+        else:
+            setattr(parent, child, restored)
 
 
 def uncomment_tenants(config: Path) -> None:

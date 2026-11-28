@@ -1,0 +1,3 @@
+// prod:comparison valid
+$e.target.port >= 1024
+$e.principal.hostname != "web01" nocase

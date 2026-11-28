@@ -1,0 +1,37 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/mmr_command__invalid.esql
+---
+SOURCE_FILE@0..76
+  COMMENT@0..27 "// prod:mmr_command invalid"
+  WHITESPACE@27..28 "\n"
+  QUERY@28..75
+    FROM_COMMAND@28..50
+      FROM_KW@28..32 "FROM"
+      WHITESPACE@32..33 " "
+      INDEX_PATTERN@33..37
+        INDEX_NAME@33..37
+          SOURCE_TEXT@33..37 "docs"
+      WHITESPACE@37..38 " "
+      METADATA@38..50
+        METADATA_KW@38..46 "METADATA"
+        WHITESPACE@46..47 " "
+        METADATA_FIELD@47..50
+          SOURCE_TEXT@47..50 "_id"
+    WHITESPACE@50..51 "\n"
+    PIPE@51..52 "|"
+    WHITESPACE@52..53 " "
+    MMR_COMMAND@53..75
+      MMR_KW@53..56 "MMR"
+      WHITESPACE@56..57 " "
+      ON_KW@57..59 "ON"
+      WHITESPACE@59..60 " "
+      QUALIFIED_NAME@60..69
+        IDENTIFIER@60..69
+          IDENT@60..69 "embedding"
+      WHITESPACE@69..70 " "
+      LIMIT_KW@70..75 "LIMIT"
+  WHITESPACE@75..76 "\n"
+--- errors
+75..76: expected a constant

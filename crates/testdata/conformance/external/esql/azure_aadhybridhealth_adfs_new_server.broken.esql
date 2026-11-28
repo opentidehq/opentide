@@ -1,0 +1,1 @@
+from * metadata _id, _index, _version | frobnicate category=="Administrative" and resourceId like "*AdFederationService*" and operationName=="MICROSOFT.ADHYBRIDHEALTHSERVICE/SERVICES/SERVICEMEMBERS/ACTION"

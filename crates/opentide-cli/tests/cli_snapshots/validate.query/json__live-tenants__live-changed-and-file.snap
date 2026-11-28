@@ -1,0 +1,32 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: validate.query/json/live-tenants/live-changed-and-file
+---
+args: opentide --json validate query --live --platform splunk --changed --uuid 00000000-0000-4000-8046-000000000001
+exit: 2
+
+━━━ stdout · json, 1 lines
+{
+  "command": "validate query",
+  "duration_ms": 0,
+  "error": "--changed cannot be combined with --file or --uuid",
+  "exit_code": 2,
+  "failure": {
+    "argument": null,
+    "code": "usage_error",
+    "crash_log": null,
+    "message": "--changed cannot be combined with --file or --uuid",
+    "suggestion": null
+  },
+  "message": "--changed cannot be combined with --file or --uuid",
+  "mode": "live",
+  "next_actions": [],
+  "ok": false,
+  "platform": "splunk",
+  "schema_version": 1,
+  "status": "failed",
+  "summary": {},
+  "supported": true
+}
+
+━━━ stderr · empty

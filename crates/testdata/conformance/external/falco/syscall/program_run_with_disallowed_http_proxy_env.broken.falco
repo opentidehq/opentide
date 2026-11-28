@@ -1,0 +1,1 @@
+spawned_process and proc.name in (oops and http_proxy_procs and proc.env icontains HTTP_PROXY and not allowed_ssh_proxy_env

@@ -1,0 +1,2 @@
+// prod:number invalid
+process where a == 0x10

@@ -1,0 +1,3 @@
+// prod:udm_field valid
+$e.security_result.detection_fields["status"] = "7"
+$e.target.ip[0] = "10.0.0.1"

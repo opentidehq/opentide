@@ -1,0 +1,21 @@
+---
+source: crates/opentide-falco/tests/trees.rs
+expression: "debug_parse(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/falco/list_reference__invalid.falco
+---
+source_file@0..24
+  comparison@0..17
+    field@0..8
+      field_name@0..8 "evt.type"
+    whitespace@8..9 " "
+    list_operator@9..11
+      identifier@9..11 "in"
+    whitespace@11..12 " "
+    list_reference@12..17
+      identifier@12..17 "shell"
+  ERROR@17..18
+    other@17..18 "-"
+  macro_reference@18..24
+    identifier@18..24 "events"
+errors:
+17..17: unexpected

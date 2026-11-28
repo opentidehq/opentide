@@ -1,0 +1,3 @@
+// prod:sort_command valid
+FROM logs-* METADATA _id
+| SORT @timestamp DESC NULLS LAST, host.name

@@ -5,7 +5,7 @@ description: Output-first generation pipeline — docs, exports, vocabs, templat
 
 # opentide generate
 
-Builds client-visible outputs first, then framework internals from Pydantic models and bundled vocabulary.
+Builds client-visible outputs first, then framework internals from the Tide models and bundled vocabulary.
 
 ```bash
 opentide generate                    # full pipeline (no extract)
@@ -46,11 +46,13 @@ When run without a subcommand, phases execute in this order:
 
 `extract` is **not** part of the default run — it calls live platform APIs and writes `Imported/` in the working directory. Use `opentide generate extract sentinel`, `opentide generate extract defender` or `opentide generate extract elastic` explicitly when importing rules.
 
+`generate` writes only into a workspace: when neither `.opentide/` nor `objects/` is in the directory `--repo` names, or the one discovery finds, `opentide generate` and its subcommands (but `extract`) exit `1` with `workspace_not_found`, write nothing, and suggest `opentide setup`, as [`opentide new`](./new.md) does.
+
 A freshly scaffolded repository (no objects yet) is a valid generate target. Docs and exports write empty artifacts. Snippet conversion requires the YAML templates from the templates phase and fails if a core or enabled-platform template is missing. Snippet prefixes are `tide-threat`, `tide-objective`, `tide-rule`, and `tide-<platform>` for enabled platforms, with `scope: "yaml,opentide-yaml"` (plain YAML files and the opentide VS Code extension's object files) and tabstops on empty values.
 
 ## When a phase fails
 
-A phase fails the run when it raises, and also when it logs an error and carries on, for example after skipping an object file it could not parse. The run stops at that phase and exits `1`. The result names the phase in `phase` and at the start of `message`. The message keeps the exception type. When the phase failed on one object's docs page, index row or export entry, the message names that object as `while rendering <uuid>`. With `--json`, a failed phase prints this one document instead of a traceback:
+A phase fails the run when it raises, and also when it logs an error and carries on, for example after skipping an object file it could not parse. The run stops at that phase and exits `1`. The result names the phase in `phase` and at the start of `message`. The message says what was wrong, such as ``missing key `version` `` or a reference to an object that does not exist. When the phase failed on one object's docs page, index row or export entry, the message names that object as `while rendering <uuid>`. With `--json`, a failed phase prints this one document instead of a traceback:
 
 ```bash
 opentide --json generate docs
@@ -61,9 +63,11 @@ opentide --json generate docs
   "phase": "docs",
   "ok": false,
   "status": "failed",
-  "message": "docs: Exception: detection_model 00000000-0000-4000-8002-DEADBEEF0000 does not exist in the catalogue while rendering 00000000-0000-4000-8003-000000000001"
+  "message": "docs: detection_model 00000000-0000-4000-8002-DEADBEEF0000 does not exist in the catalogue while rendering 00000000-0000-4000-8003-000000000001"
 }
 ```
+
+A failed phase writes nothing: each phase stages its files and moves them into place only when it succeeds, so the files of the previous run stay as they were, and the exports, pages or bundle of a run that failed are never half-written. The files go into a hidden staging folder beside the output folder, then each replaces its predecessor with a rename. A run cut off while it moves them can leave some files of the new run beside the rest of the old one, but never a half-written file. Files the generator keeps, such as hand-written pages in the output folder, stay where they are.
 
 A phase that logged errors reports the first one, as `docs: logged an error: malformed_object_yaml (path=…, error=…)` or `logged 3 errors, first: …`. The same error logged twice counts once. A phase that logged an error and then raised reports both, the logged error after a `;`, because the skipped object is often what broke the later one. Every error is on stderr. Run [`opentide validate`](./validate.md) to list every broken object at once.
 
@@ -73,22 +77,22 @@ Every phase that loads the registry parses every object file, and the `schemas` 
 
 ## generate templates
 
-`opentide generate templates` walks Pydantic `model_fields` (not JSON Schema `$defs`). Output is line-oriented YAML:
+`opentide generate templates` walks the Tide models' fields (not JSON Schema `$defs`). Output is line-oriented YAML:
 
-- Uncommented keys are required `FieldInfo` on that model (aliases honoured: `att&ck`, `schema`).
+- Uncommented keys are the model's required fields (aliases honoured: `att&ck`, `schema`).
 - Optional `metadata` keys that [`opentide lint`](./lint.md#configuration) requires are uncommented too: `author` and `organisation` by default, or the `[metadata].required` list in `lint.toml`.
 - Optional fields are the same YAML with `#` hugging each key (`#references:` / `  #public:`). Nested optionals inside that block are not commented again. Spacer blank lines stay blank (they are not turned into a lone `#`). Uncomment a block and it is valid YAML.
 - Placeholders are typed: empty strings, `YYYY-MM-DD`, multiline `|` + `...`, `https://`, `3`, `false`. There are no YAML `null` tokens.
 - Vocabulary fields are empty scalars (no enum dump).
-- `DetectionRule.file` and other `Path` / hidden fields are omitted.
+- A rule's `file` and other path or hidden fields are omitted.
 - Rule `configurations` is a live key whose platform slots (`#sentinel:`, `#splunk:`, …) are commented stubs including nested `query: |`. It is never `configurations: {}`.
 - Each enabled platform's block is written to `.opentide/templates/platforms/<platform>.template.yaml` (`sentinel.template.yaml`), named by the platform file, never by its display `name`. `generate snippets` reads it there. Nothing is written into the installed package.
 
 JSON Schema generation (`generate schemas`) stays a separate pipeline. It writes one schema per registered revision (`rule.1.0.schema.json`, `rule.1.1.schema.json`, …) and the router `opentide.schema.json`, which applies the revision named in each object's `metadata.schema`. Map the router in your editor; see [Schema revision](../usage/concepts/schema-revision.md). VS Code snippets copy the YAML templates and add tabstops; they do not re-walk models.
 
-The `schemas` phase also writes the language server's catalogs, `.opentide/lsp/catalogs/generated/fields.json` (every field of every revision of each object family, with its type, whether it is required, enum values and their descriptions, and the objects that take no other key) and `deprecations.json`, from the same models. Editors that run the `opentide-lsp` binary on its own use them instead of the catalog compiled into the engine, so hover, completion and vocabulary checks follow this workspace's configuration. Commit them with the schemas; `opentide doctor` warns when they are missing or stale (`lsp_catalog`).
+The `schemas` phase also writes the language server's catalogs, `.opentide/lsp/catalogs/generated/fields.json` (every field of every revision of each object family, with its type, whether it is required, enum values and their descriptions, and the objects that take no other key) and `deprecations.json`, from the same models. The language server does not read them: it generates the same catalogs from the models and the workspace's configuration itself. Commit them with the schemas if another tool reads them; `opentide doctor` warns when a committed copy does not parse, comes from another opentide version, is missing a file or differs from what the phase writes now (`lsp_catalog`); it likewise warns when a schema differs from what the phase writes now (`schemas_fresh`), as after a change to the objects or the configuration the schemas are built from.
 
-Generated schemas are written for editor hovers and completions. Every field carries a `title` and a `description`, taken from the docstring under the model field; a description that uses Markdown also gets a `markdownDescription`. Vocabulary enums carry one description per value: the full entry in `markdownEnumDescriptions`, and its name and first sentence in `enumDescriptions` (VS Code) and `x-enumDescriptions` (the same list, for other editors). Configuration enums (statuses, log sources, detectors, tenants) carry their whole description as plain text in the same two keys. Each schema's `$comment` names opentide and its tagline. These are annotation keywords: they change what an editor shows, never what validates. Each snippet carries a description naming the object or platform block it inserts.
+Generated schemas are written for editor hovers and completions. Every field carries a `title` and a `description`, taken from the docstring under the model field; a description that uses Markdown also gets a `markdownDescription`. Vocabulary enums carry one description per value: the full entry in `markdownEnumDescriptions`, and its name and first sentence in `enumDescriptions` (VS Code) and `x-enumDescriptions` (the same list, for other editors). An ATT&CK technique, a threat actor or another value a vocabulary keys by id is listed twice: as the value, then as a search hint, the value, ` #` and the entry's name and aliases (`T1548.002 #Abuse Elevation Control Mechanism: Bypass User Account Control`), so an editor that completes from the schema finds it by its name; a hint past 60 characters writes `and`, `with` and `without` as `&`, `w/` and `w/o`. YAML reads what follows ` #` as a comment, so a hint the editor inserts is the value. The language server's catalog (`fields.json`, above) lists each such value once, without its hint, and names the field's vocabulary in `vocab`. Configuration enums (statuses, log sources, detectors, tenants) carry their whole description as plain text in the same two keys. Each schema's `$comment` names opentide and its tagline. These are annotation keywords: they change what an editor shows, never what validates. Each snippet carries a description naming the object or platform block it inserts.
 
 ## generate docs
 
@@ -114,9 +118,15 @@ opentide generate docs index
 
 ### Changed-object baseline
 
-`--changed` and `generate inflight` resolve the same baseline, in order: the current branch's upstream, then `origin/development`, `origin/main`, `origin/master`, then the local `development`, `main`, `master`. The current branch is never its own baseline. A single-branch repository with no upstream falls back to `HEAD`, so uncommitted and untracked object files still count as changed.
+`--changed` and `generate inflight` resolve the same baseline, in order: the current branch's upstream, then `origin/development`, `origin/main`, `origin/master`, then the local `development`, `main`, `master`. The current branch is never its own baseline. A full single-branch clone with no other baseline falls back to `HEAD`, so uncommitted and untracked object files still count as changed.
 
-Without a git worktree or without a first commit, `generate docs --changed` fails with a structured result (`status: failed`, exit `1`) instead of raising a `CalledProcessError`; `generate inflight` logs a warning and writes no shards.
+`generate docs --changed` fails with a structured result (`status: failed`, exit `1`, an `error` that starts `--changed could not read the git baseline:`) rather than guess which files changed when:
+
+- there is no git worktree, or no first commit;
+- the clone is shallow and does not hold the merge base with the baseline, or holds no ref it can tell is the default branch (`origin/HEAD`, `development`, `main` or `master`, or the branch's upstream when it tracks another branch; `actions/checkout` fetches one commit of one ref by default). The message says to check out the full history: `fetch-depth: 0` on GitHub Actions, `GIT_DEPTH: "0"` on GitLab, `fetchDepth: 0` on Azure Pipelines;
+- git cannot read a baseline commit, tree or file, or an object folder or file in the work tree cannot be read.
+
+`generate inflight` logs a warning and writes no shards instead.
 
 Subcommands `rules`, `objectives`, `threats`, and `index` accept the same `--output` and `--flavor` flags.
 
@@ -162,7 +172,7 @@ Each platform block is documented in full, walked from its model: every value it
 
 Internal wiki links are relative to the current folder (`../objectives/…`, `./slug.md` on indexes).
 
-A page is named after its object's slugified name. When two objects in one folder slugify alike, the one with the lowest UUID keeps the plain name and the others get a `-<uuid[:8]>` suffix, so existing page names change only on a collision.
+A page is named after its object's slugified name, with a `_` before a name Windows reserves for a device (`CON` is `_con.md`). A page never takes the folder index's name: an object named `README` gets `readme-<uuid[:8]>.md`, since `readme.md` and `README.md` are one file on Windows and macOS. When two objects in one folder slugify alike, the one with the lowest UUID keeps the plain name and the others get a `-<uuid[:8]>` suffix, so existing page names change only on a collision.
 
 Every run (full, scoped and `--changed`) removes generated pages that no object writes any more, such as the old page of a renamed object, and lists them under `removed` in the result. Only files directly inside an object folder that carry the generator's metadata table are removed; `README.md` and hand-written pages are never touched.
 
@@ -211,7 +221,7 @@ relation_counts = true
 icons = false
 ```
 
-- `folder_index_pages`: write `README.md` index pages for `rules`/`objectives`/`threats` and root. Empty sections are still written, so the root index does not link to a missing file. Folder indexes show a rule's severity, platforms with their status and techniques; an objective's priority, signal and threat counts; a threat's criticality, kill chain and techniques. The rules index opens with rules per platform and status; the threat vectors index groups its threats by kill-chain phase, in kill-chain order. The root index (`Detection catalogue`) adds the threat landscape diagram, a pie chart of platform blocks by status, each slice coloured by its strategy (grey `INERT`, amber `PREVIEW`, blue `UNIVERSAL`, green `RELEASE`, red `DISABLEMENT` and `DELETION`), the same counts per platform, coverage (threat vectors addressed by an objective, objectives and signals implemented by a rule, ATT&CK techniques detected by rules) coverage per kill-chain phase (with its stage), and ATT&CK coverage per tactic: the techniques threat vectors use, how many a rule detects, and those none does. The threat vectors index is grouped by kill-chain stage, then phase.
+- `folder_index_pages`: write `README.md` index pages for `rules`/`objectives`/`threats` and root. Empty sections are still written, so the root index does not link to a missing file. Folder indexes show a rule's severity, platforms with their status and techniques; an objective's priority, signal and threat counts; a threat's criticality, kill chain and techniques. The rules index opens with rules per platform and status; the threat vectors index groups its threats by kill-chain phase, in kill-chain order. The root index (`Detection catalogue`) adds the threat landscape diagram, a pie chart of platform blocks by status, each slice coloured by its strategy (grey `INERT`, amber `PREVIEW`, blue `UNIVERSAL`, green `RELEASE`, red `DISABLEMENT` and `DELETION`), the same counts per platform, coverage (threat vectors addressed by an objective, objectives and signals implemented by a rule, ATT&CK techniques detected by rules, counting each rule's own `techniques` and those it inherits through its `detection_model`; the same techniques the Navigator layer and `info coverage` count) coverage per kill-chain phase (with its stage), and ATT&CK coverage per tactic: the techniques threat vectors use, how many a rule detects, and those none does. A rule's page, its overview and the rules index show the techniques it inherits after its own, marked `(inherited)`. The threat vectors index is grouped by kill-chain stage, then phase.
 - `index.relation_counts`: include relation counts (or object counts on root index table).
 - `index.icons`: prefix section/object labels with emoji shortcodes. Off by default; pages carry no emoji otherwise.
 
@@ -247,9 +257,11 @@ opentide generate exports objects
 opentide generate exports revisions
 ```
 
-`generate exports navigator` writes `.opentide/exports/attack-navigator.json`. Techniques are sorted by ID, and each comment lists threats, then rules, by name. The file changes only when coverage or object names change, not when object files are renamed or moved.
+`generate exports navigator` writes `.opentide/exports/attack-navigator.json`. Techniques are sorted by ID, and each comment lists threats, then rules, by name. A rule covers the techniques it lists in its own `techniques` and those it inherits through its `detection_model` (an objective's, or the objective that owns the signal it names; an objective that lists no `mitre_attack` gives the techniques of the threats it covers): the count `info coverage` and the generated docs use. A technique only a rule covers, which no threat lists, is a "Rule Only" entry in the layer. A platform block's `alert.techniques` is not counted. The file changes only when coverage or object names change, not when object files are renamed or moved.
 
 `generate exports objects` writes `.opentide/exports/objects.export.json`. Threat `actors` are objects whose `name` is a scoped vocabulary ID (`att&ck::G0006`); the export enriches those names to display names.
+
+Every nested value is written as text in a string field: `chaining` is JSON text (`{"leads_to":["t9"]}`, an empty string when the threat has none), where opentide 0.x wrote Python's `str()` of the dictionary, so a script parses it as JSON; `actors`, `attack`, `childs` and `parents` are comma-separated strings.
 
 `generate exports revisions` writes `.opentide/exports/revisions.export.json`: for each object UUID, its `name`, its kind (`object`, the display name of its family), its `description`, and `versions`, keyed by `metadata.version`, each with that version's `schema`, `created`, `modified` and `author`. It snapshots the versions in the working tree; git keeps their history. An object without `metadata.version` is left out. Keys are sorted, so the file changes only when a version or its metadata does.
 
@@ -295,7 +307,7 @@ The file holds the log sources `.opentide/configurations/visibility.toml` declar
 
 The datasets a query reads come from the analysis engine, which reads the table, sourcetype or index pattern as the query checks do; a declared pattern (`logs-*`) covers the datasets it matches.
 
-The explorer previews open pull requests: the bundle is built with the [inflight](#generate-inflight) shards on `.opentide/inflight/` applied over the object files, as `generate docs` is. Every other command reads the object files alone. `generate explorer` is not a phase of the default run. The pipelines `opentide setup ci github --explorer-pages` writes run `opentide --json generate explorer` and publish the site to GitHub Pages ([setup](./setup.md)).
+The explorer previews open pull requests: the bundle is built with the [inflight](#generate-inflight) shards on `.opentide/inflight/` applied over the object files, as `generate docs` is, and leaves out the same invalid previews. Every other command reads the object files alone. `generate explorer` is not a phase of the default run. The pipelines `opentide setup ci github --explorer-pages` writes run `opentide --json generate explorer` and publish the site to GitHub Pages ([setup](./setup.md)).
 
 ## generate inflight
 
@@ -307,6 +319,18 @@ opentide generate inflight prune
 ```
 
 The pipelines from `opentide setup ci` run this on every pull request and commit only `.opentide/inflight/` to the default branch, from a worktree of that branch, never the pull request itself.
+
+Outside CI, the changed objects are those of the work tree against the [baseline](#changed-object-baseline) `generate docs --changed` reads, untracked files included, read without the `git` program. Where `generate docs --changed` fails for want of a baseline, `generate inflight` writes no shard and logs `inflight_no_git_baseline` with the reason.
+
+`generate inflight` checks each changed object as `generate docs` reads it. An object that fails its model check (a typo'd date such as `created: 20256-11-06`) fails the run with exit `1`, naming the file, the object's UUID and the first error, and no shard is written. In the pipelines this is the pull or merge request's own `inflight_shards` job, so the invalid object stays out of the default branch's previews.
+
+`generate docs` and `generate explorer` also check every shard they read. A preview is left out when its object fails its model check, when a reference it makes (a rule's `detection_model`, an objective's `threats`) does not resolve once the previews are laid over the object files, or when it drops a signal a committed rule uses. A preview that only resolved through one left out is left out too. Each is reported as a warning (with `--json`, in `warnings`) naming the shard file, the object's UUID and name, its pull or merge request, and the first error:
+
+```text
+inflight preview .opentide/inflight/<uuid>.json skipped: <uuid> "Typo Rule" from PR #12: … ; the committed object is shown instead
+```
+
+The committed object's page is written as without the preview, and a new object's page is not written. A preview never fails the run.
 
 ## generate extract
 
@@ -322,8 +346,9 @@ opentide generate extract elastic --space staging --include-prebuilt
 Configure tenant credentials under `.opentide/configurations/platforms/` before running.
 
 - Sentinel and Defender imports never overwrite one another: when two rules share a display name, the second file name gets the first eight characters of its UUID.
-- A Defender detection found in several tenants (one `detectorId`) is imported once, with every one of those tenants under `tenants`; each tenant's Graph id is recorded as deployment state. When the tenants' copies differ, the first tenant's is imported and `defender_import_tenants_differ` names the others.
+- A Defender custom detection is imported as a `microsoft_defender` block ([`platform::microsoft_defender::1.0`](/docs/specifications/specs/platforms/microsoft-defender-1.0/)) from the Graph beta API. A rule id deploy gave, `opentide-<uuid>`, becomes the rule's `metadata.uuid` (the part after `opentide-`), so deploying the file addresses the same rule; no deployment state is written. A rule found in several tenants (one rule id) is imported once, with every one of those tenants under `tenants`. When the tenants' copies differ, the first tenant's is imported and `defender_import_tenants_differ` names the others. Any other rule id is reported with `defender_import_new_uuid`, because deploying the file creates a new rule, `opentide-<uuid>`: a bare UUID (a rule opentide 1.0.0 deployed) is kept as the file's `metadata.uuid`, and an id that is not a UUID gets a new one. Before that deploy, delete the original in the portal, or rename both its name and its alert title: Graph refuses the create while another rule holds either, even a disabled one (`microsoft_defender_rule_conflict`). One file is written per uuid: when a bare-uuid rule and its `opentide-<uuid>` copy are both listed (a 1.0.0 rule renamed rather than deleted), the `opentide-` one is imported and the other is skipped with `defender_import_rule_skipped`.
 - Every Sentinel file is parsed before it is written; one that would not parse is skipped with `sentinel_import_rule_skipped`.
+- A Sentinel or Defender rule that lacks a field the import needs, or holds it as another type, is skipped with `sentinel_import_rule_skipped` or `defender_import_rule_skipped` and listed under `skipped` in the JSON result, with the reason (`rule <id>: field `query_period` is not a string`); the other rules are imported.
 - The Defender listing follows `@odata.nextLink`, times out after 60 s per page and reports an HTTP error with the tenant and status.
 
 ### generate extract elastic
@@ -344,15 +369,13 @@ Exports the detection rules of one Kibana space and writes each one to `Imported
 - A look-back window that RFC 0007 cannot express is logged as `elastic_import_window_widened` or `elastic_import_schedule_defaulted`.
 - No deployment state is written: Elastic addresses rules by `metadata.uuid`.
 
+`generate extract defender` and `generate extract elastic` run through the command line's connectors ([the implementation](./json-output.md#the-implementation)): the same requests, deployment state, warnings and result, and the same files: Defender's byte for byte, Elastic's with the same data, written by the serde-saphyr YAML emitter (a string that must be quoted is double-quoted, non-ASCII text is written as UTF-8, and a long line is not folded, where the Python releases' PyYAML single-quoted, escaped and folded them). `generate extract sentinel` runs through the Sentinel connector (the Entra ID sign-in, then every page of the workspace's analytics rules) and writes each rule file, named after the rule (`Imported/<rule name> - <tenant>.yaml`), from the same template as the Python importer's, the one-line values written by serde-saphyr (a value that must be quoted is double-quoted where the Python releases single-quoted it; the file loads to the same data). At a terminal the `import from …` row is printed when the import is done, and a log line is one unstyled line. Unlike the Python releases, `generate extract sentinel` writes no `output-<tenant>.json` listing dump to the working directory and no space at either end of a file name (a rule with a blank display name is named after its id). Both `generate extract elastic` and `generate extract sentinel` extract a value the platform gives as one string where a list is expected (an Elastic rule's `index: "logs-*"`, a Sentinel rule's `tactics`) as a list of that one string, not of its characters.
+
 ## When to run
 
 - After upgrading the `opentide` package version.
 - When `.opentide/schemas/` is missing or stale.
 - After vocabulary or model changes in the package (client repos inherit on upgrade).
-
-## Side effects
-
-Schema and template phases reload `IndexManager` and `Opentide` registry caches.
 
 ## Deprecated shims
 
@@ -366,4 +389,4 @@ The top-level commands of earlier releases are hidden: each prints a `DEPRECATED
 
 ## Source
 
-`src/opentide/cli/commands/generate.py`, `src/opentide/cli/commands/legacy.py`, `src/opentide/cli/services/generation.py`, `src/opentide/generation/errors.py`, `src/opentide/export/` (`explorer_export.py`, `revisions_export.py`)
+`crates/opentide-cli/src/commands/generate.rs`, `crates/opentide-cli/src/commands/extract/`, `crates/opentide-compile/src/generate/`, `crates/opentide-schema/src/generate/`

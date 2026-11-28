@@ -1,0 +1,66 @@
+# verdict	query (JSON string)	source (src/plugins/data/common/opensearch_query/kuery/...)
+accept	"  "	ast/ast.test.ts:54 fromKueryExpression
+accept	"foo"	ast/ast.test.ts:60 fromKueryExpression
+accept	"  foo "	ast/ast.test.ts:66 fromKueryExpression
+accept	"foo bar"	ast/ast.test.ts:72 fromKueryExpression
+accept	"foo and bar"	ast/ast.test.ts:81 fromKueryExpression
+accept	"foo or bar"	ast/ast.test.ts:90 fromKueryExpression
+accept	"not (foo or bar)"	ast/ast.test.ts:102 fromKueryExpression
+accept	"foo or bar and baz or qux"	ast/ast.test.ts:117 fromKueryExpression
+accept	"(foo or bar) and baz"	ast/ast.test.ts:129 fromKueryExpression
+accept	"foo:bar"	ast/ast.test.ts:135 fromKueryExpression
+accept	"foo:bar baz"	ast/ast.test.ts:141 fromKueryExpression
+accept	"foo:\"bar baz\""	ast/ast.test.ts:147 fromKueryExpression
+accept	"foo:(bar or baz)"	ast/ast.test.ts:156 fromKueryExpression
+accept	"foo:((bar or baz) and not qux)"	ast/ast.test.ts:168 fromKueryExpression
+accept	"bytes > 1000 and bytes < 8000"	ast/ast.test.ts:181 fromKueryExpression
+accept	"bytes >= 1000 and bytes <= 8000"	ast/ast.test.ts:209 fromKueryExpression
+accept	"machine*:osx"	ast/ast.test.ts:215 fromKueryExpression
+accept	"foo:ba*"	ast/ast.test.ts:221 fromKueryExpression
+accept	"foo:*"	ast/ast.test.ts:227 fromKueryExpression
+accept	"nestedField:{ childOfNested: foo }"	ast/ast.test.ts:237 fromKueryExpression
+accept	"response:200 and nestedField:{ childOfNested:foo or childOfNested:bar }"	ast/ast.test.ts:253 fromKueryExpression
+accept	"response:200 and ( nestedField:{ childOfNested:foo } or nestedField:{ childOfNested:bar } )"	ast/ast.test.ts:275 fromKueryExpression
+accept	"nestedField:{ nestedChild:{ doublyNestedChild:foo } }"	ast/ast.test.ts:291 fromKueryExpression
+accept	"true"	ast/ast.test.ts:305 fromLiteralExpression
+accept	"false"	ast/ast.test.ts:306 fromLiteralExpression
+accept	"42"	ast/ast.test.ts:307 fromLiteralExpression
+accept	".3"	ast/ast.test.ts:309 fromLiteralExpression
+accept	".36"	ast/ast.test.ts:310 fromLiteralExpression
+accept	".00001"	ast/ast.test.ts:311 fromLiteralExpression
+accept	"3"	ast/ast.test.ts:312 fromLiteralExpression
+accept	"-4"	ast/ast.test.ts:313 fromLiteralExpression
+accept	"0"	ast/ast.test.ts:314 fromLiteralExpression
+accept	"0.0"	ast/ast.test.ts:315 fromLiteralExpression
+accept	"2.0"	ast/ast.test.ts:316 fromLiteralExpression
+accept	"0.8"	ast/ast.test.ts:317 fromLiteralExpression
+accept	"790.9"	ast/ast.test.ts:318 fromLiteralExpression
+accept	"0.0001"	ast/ast.test.ts:319 fromLiteralExpression
+accept	"96565646732345"	ast/ast.test.ts:320 fromLiteralExpression
+accept	"..4"	ast/ast.test.ts:323 fromLiteralExpression
+accept	".3text"	ast/ast.test.ts:324 fromLiteralExpression
+accept	"text"	ast/ast.test.ts:325 fromLiteralExpression
+accept	"."	ast/ast.test.ts:326 fromLiteralExpression
+accept	"-"	ast/ast.test.ts:327 fromLiteralExpression
+accept	"001"	ast/ast.test.ts:328 fromLiteralExpression
+accept	"00.2"	ast/ast.test.ts:329 fromLiteralExpression
+accept	"0.0.1"	ast/ast.test.ts:330 fromLiteralExpression
+accept	"3."	ast/ast.test.ts:331 fromLiteralExpression
+accept	"--4"	ast/ast.test.ts:332 fromLiteralExpression
+accept	"-.4"	ast/ast.test.ts:333 fromLiteralExpression
+accept	"-0"	ast/ast.test.ts:334 fromLiteralExpression
+accept	"00949"	ast/ast.test.ts:335 fromLiteralExpression
+accept	"\\\\\\(\\)\\:\\<\\>\\\"\\*"	ast/ast.test.ts:342 fromLiteralExpression
+accept	"\"\\():<>\\\"*\""	ast/ast.test.ts:348 fromLiteralExpression
+accept	"\"\\\\\""	ast/ast.test.ts:354 fromLiteralExpression
+accept	"foo*bar"	ast/ast.test.ts:360 fromLiteralExpression
+reject	"response:"	kuery_syntax_error.test.ts:36 fromKueryExpression
+reject	"response:200 or "	kuery_syntax_error.test.ts:46 fromKueryExpression
+reject	"response:(200 or )"	kuery_syntax_error.test.ts:56 fromKueryExpression
+reject	"response:200 and not "	kuery_syntax_error.test.ts:64 fromKueryExpression
+reject	"response:(200 and not )"	kuery_syntax_error.test.ts:74 fromKueryExpression
+reject	"foo:\"ba "	kuery_syntax_error.test.ts:84 fromKueryExpression
+reject	"foo:\"ba \"r\""	kuery_syntax_error.test.ts:90 fromKueryExpression
+reject	"foo:ba:r"	kuery_syntax_error.test.ts:98 fromKueryExpression
+reject	"foo > "	kuery_syntax_error.test.ts:106 fromKueryExpression
+reject	"< 1000"	kuery_syntax_error.test.ts:112 fromKueryExpression

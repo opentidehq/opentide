@@ -16,7 +16,7 @@ Want to author objects from scratch and understand each step? Do the [Tutorial](
 ### Install and point at your repo
 
 ```bash
-pip install 'opentide==0.28.0'
+pip install 'opentide==1.1.0'
 export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 ```
 
@@ -26,7 +26,7 @@ export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 
 ### Generate framework artifacts
 
-Schemas, templates, and indexes must exist before validation:
+Write the editor's schemas and templates, the docs and the exports:
 
 ```bash
 opentide generate
@@ -46,7 +46,7 @@ This runs the full pipeline: docs → exports → vocabs → templates → schem
 
 Each finished phase prints one line on stderr (files written, time, destination); the outcome line is the only line on stdout. This is the output with `--no-color`, in a pipe or in CI; at a terminal the phases draw as a live checklist.
 
-Generation runs first because validation checks objects against these generated schemas — no schemas, nothing to validate against.
+Validation does not need these files: `opentide validate` checks objects against the models compiled into opentide. The editor reads them for its schemas and snippets, and the docs are built from them; `opentide new` generates what it needs on first use.
 
 </Step>
 
@@ -56,15 +56,16 @@ Generation runs first because validation checks objects against these generated 
 
 ```bash
 opentide validate
-opentide validate --strict   # warnings also fail (exit 1), except platform_not_enabled — use in CI
+opentide validate --strict   # warnings also fail (exit 1), except platform_not_enabled and the Defender advisories waiting on a tenant check — use in CI
 ```
 
 On success the process exits `0`. For structured detail add `--json`, which writes one result document to stdout (see [Exit codes](../cli/exit-codes.md)). If validation fails, see [Troubleshooting](./troubleshooting.md).
 
-Check a platform's catalogue queries against the tenant. This needs tenant credentials; the vendor SDKs ship with the package. Without `--live` the command exits `2` and names the flag:
+Check a platform's catalogue queries. Without `--live` the engine compiled into opentide checks them offline, with no tenant; `--live` checks them on the tenant, which needs its credentials (the connectors are compiled in too: there is nothing more to install). SentinelOne has no offline engine: without `--live`, `validate query --platform sentinel_one` exits `2` and names the flag.
 
 ```bash
-opentide validate query --platform sentinel --live
+opentide validate query --platform sentinel          # offline
+opentide validate query --platform sentinel --live   # on the tenant
 ```
 
 </Step>

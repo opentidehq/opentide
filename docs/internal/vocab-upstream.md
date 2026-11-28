@@ -35,8 +35,8 @@ Local equivalent:
 
 ```bash
 export OPENTIDE_SPECIFICATIONS_ROOT=/path/to/specifications
-uv run python scripts/vocabulary/sync_upstream.py --check
-uv run python scripts/vocabulary/sync_upstream.py --apply
+cargo xtask vocab ingest --check
+cargo xtask vocab ingest --apply
 ```
 
 Details and bump rules: [`scripts/vocabulary/README.md`](../../scripts/vocabulary/README.md).
@@ -60,7 +60,7 @@ RFC 0003 pins map **schema fields** to vocab contracts (`field::M.m`). They do n
 | `att&ck.groups` | none | MITRE catalog only |
 | `mitigations` | none | MITRE catalog only (name-keyed; duplicate MITRE ids) |
 
-ATT&CK groups **are** version-gated on threat objects through `threat.actors.name` → `actors::*`. `generate_actors` merges STIX intrusion-sets (G-ids) into `actors`. The separate `att&ck.groups` file is a MITRE-only catalog; `ThreatBody` has no `groups` field, so a pin such as `"threat.groups" = "att&ck.groups::1.0"` would be unused.
+ATT&CK groups **are** version-gated on threat objects through `threat.actors.name` → `actors::*`. The ingest merges STIX intrusion-sets (G-ids) into `actors`. The separate `att&ck.groups` file is a MITRE-only catalog; `ThreatBody` has no `groups` field, so a pin such as `"threat.groups" = "att&ck.groups::1.0"` would be unused.
 
 `response.responders` on rules is deliberately not pinned. The team that handles a rule's alerts is per-organisation configuration, not a canonical vocabulary: the shipped `responders` vocabulary was empty, so every authored value failed validation and no instance could fix it ([#507](https://github.com/opentidehq/opentide/issues/507)). An instance declares its teams in `[[responders]]` in `deployment.toml`, and `[deployment] default_responders` fills the field for a rule that names none.
 
@@ -91,7 +91,7 @@ includes every `actors::1.2` key).
 The bundled pins must match `specifications/schemas/pins/` table by table,
 including revisions opentide does not ship yet (`objective::1.1`). Such a table
 is unused until opentide registers that schema. When an opentide PR changes
-bundled vocabularies, pins, the lockfile or the sync script, CI compares them
+bundled vocabularies, pins, the lockfile or the sync (`xtask/src/vocab/sync.rs`), CI compares them
 with specifications `main` and fails on drift. A pin change made only in
 specifications arrives through the next ingest's opentide PR. See
 [`scripts/build/README.md`](../../scripts/build/README.md).

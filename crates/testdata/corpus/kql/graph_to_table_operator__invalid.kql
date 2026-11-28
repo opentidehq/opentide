@@ -1,0 +1,2 @@
+// prod:graph_to_table_operator invalid
+DeviceNetworkEvents | make-graph DeviceName --> RemoteIP | graph-to-table

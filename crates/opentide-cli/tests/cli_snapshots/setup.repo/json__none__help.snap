@@ -1,0 +1,45 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: setup.repo/json/none/help
+---
+args: opentide --json setup repo --help
+exit: 0
+
+━━━ stdout
+Scaffold a detection repository.
+
+Usage: opentide setup repo [OPTIONS]
+
+Options:
+  -C, --path <PATH_FLAG>
+          Repository path
+          
+          [default: .]
+
+      --name <NAME>
+          Repository name, used in the README
+
+      --org <ORG>
+          Organisation or team, used in the README
+
+      --description <DESCRIPTION>
+          One-line description, used in the README
+
+      --platform <PLATFORM>
+          Enable a detection platform (repeatable): sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops, datadog
+          
+          [possible values: sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops, datadog]
+
+      --plan
+          List the files each step would write, and write nothing
+
+  -y, --yes
+          Write without asking for confirmation
+
+      --help
+          Print help
+
+Examples:
+  $ opentide setup repo --yes --name "Detections" --platform sentinel
+
+━━━ stderr · empty

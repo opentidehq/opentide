@@ -1,0 +1,75 @@
+# Crates and dependencies
+
+## Workspace members
+
+`Cargo.toml` members, in dependency order of the product (not the member list):
+
+The layers and tiers are [`xtask/layers.toml`](../../../../xtask/layers.toml), the one copy of the
+table, which `cargo xtask check-layers` enforces; `crates/AGENTS.md` "Crates and layers" lists
+them. In short: `opentide-core`, then `opentide-parse` and `opentide-highlight`, then the language
+crates (foundation tiers 2 to 4: Lucene above kuery, ES|QL and EQL above Lucene), then
+`opentide-schema`, then `opentide-tide`, `opentide-analysis`,
+the hosts and the facade.
+
+A language crate never depends on `opentide-tide` or `opentide-analysis`: Tide injects into it,
+and analysis depends on every engine. A cycle means the layer is wrong.
+
+Shared package metadata (`version`, `edition`, `rust-version`, `license`, `repository`) is `[workspace.package]`. New crates set `version.workspace = true` and the other `*.workspace = true` keys. License is EUPL-1.2.
+
+## Adding a dependency
+
+1. Put `name = { version = "...", features = [...] }` in `[workspace.dependencies]`.
+2. Depend with `name.workspace = true` in the member.
+3. Use the crate from the member that needs it, not from every crate.
+4. Run the compile you need and commit the lock it writes: the new `[[package]]` blocks and the member's `dependencies` update. `cargo tree` before and after shows that no other crate moved; CI builds with `--locked`, so the committed lock must be exactly what Cargo resolves.
+
+No engine crate builds C: `cc` is in the lock only as `ring`'s build dependency (through `opentide-connectors`' TLS and JWT, and `opentide-cassette`'s certificates). `yara-x-parser` and `yara-x-fmt` are dependencies of `opentide-yara` only. `wasm-bindgen` and `js-sys` are dependencies of `opentide-wasm` only. `clap` and `anyhow` are dependencies of `opentide-lsp` only.
+
+## serde
+
+- Engine structs that cross the CLI JSON boundary derive `Serialize` / `Deserialize`.
+- `#[serde(rename_all = "kebab-case")]` on `LanguageId`, with explicit `rename` / `alias` where the wire string is not the kebab of the variant (`TideYaml` → `opentide-yaml`).
+- Optional fields that must disappear from JSON use `#[serde(default, skip_serializing_if = "Option::is_none")]`.
+- Catalog TOML uses `#[serde(default)]` on vectors and flags so a missing key is empty, not a parse failure.
+- Catalogs compiled in with `include_str!` are read item by item through `opentide_core::catalog` (ADR 0013), never `toml::from_str` on a whole file, and never `std::fs::read_to_string` from an engine.
+- `serde_json::json!` is the LSP wire format in `opentide-lsp`. See `.agents/skills/lsp-host/SKILL.md`.
+- YAML has one reader: `opentide_core::node` (saphyr, YAML 1.2), which `validate`, the model and `opentide-tide` all use (#850). Do not add `serde_yaml`, `serde_yml` or another YAML parser.
+
+## thiserror 2 and anyhow
+
+`thiserror` 2 uses the same `#[derive(Error)]` / `#[error("...")]` / `#[from]` shape as 1.x. Prefer an enum variant over `Box<dyn Error>` in the engine.
+
+`anyhow::Context` (`context("...")`) is for host I/O: reading a CLI path, binding a socket, parsing a content-length. `bail!` for a CLI usage error (`cannot detect language`).
+
+## clap 4
+
+```rust
+#[derive(Parser, Debug)]
+#[command(name = "opentide-lsp", version, about = "opentide language server")]
+struct Cli {
+    #[arg(long)]
+    stdio: bool,
+    #[arg(long)]
+    listen: Option<String>,
+    #[command(subcommand)]
+    command: Option<Command>,
+}
+```
+
+`main` checks `stdio`, then `listen`, then `command`. Keep that order. `--help` text is the about string; do not build a second argument parser.
+
+## uuid
+
+Feature `v4` is enabled at the workspace. Object ids go through `Uuid::parse_str` and `get_version_num() == 4`. `Uuid::new_v4()` is not used to invent ids inside the language server; documents bring their own ids. Generating an id belongs to content tooling, not this engine.
+
+## regex
+
+The `regex` crate is Unicode-aware by default. Patterns that should be ASCII-only say so (`(?-u:...)` or an explicit ASCII class). Prefer the existing helpers over a new pattern. A pattern that runs on every document is a `OnceLock`.
+
+## Snapshot and diff crates
+
+`insta` snapshots what a contract fixes (a diagnostic's code, range and message, rendered as text), never a whole struct: `crates/AGENTS.md` "Tests". Assert codes, field paths and severities directly where a snapshot would only restate them.
+
+## Profile
+
+Release profile is already set: `lto = true`, `codegen-units = 1`, `strip = "symbols"`. Do not weaken it to make a local build faster.

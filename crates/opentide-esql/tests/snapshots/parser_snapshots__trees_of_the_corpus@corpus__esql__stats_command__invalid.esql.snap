@@ -1,0 +1,40 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/stats_command__invalid.esql
+---
+SOURCE_FILE@0..64
+  COMMENT@0..29 "// prod:stats_command invalid"
+  WHITESPACE@29..30 "\n"
+  QUERY@30..64
+    FROM_COMMAND@30..41
+      FROM_KW@30..34 "FROM"
+      WHITESPACE@34..35 " "
+      INDEX_PATTERN@35..41
+        INDEX_NAME@35..41
+          SOURCE_TEXT@35..41 "logs-*"
+    WHITESPACE@41..42 "\n"
+    PIPE@42..43 "|"
+    WHITESPACE@43..44 " "
+    STATS_COMMAND@44..64
+      STATS_KW@44..49 "STATS"
+      WHITESPACE@49..50 " "
+      AGGREGATE_FIELD@50..62
+        QUALIFIED_NAME@50..51
+          IDENTIFIER@50..51
+            IDENT@50..51 "c"
+        WHITESPACE@51..52 " "
+        EQ@52..53 "="
+        WHITESPACE@53..54 " "
+        FUNCTION_CALL@54..62
+          IDENTIFIER@54..59
+            IDENT@54..59 "COUNT"
+          L_PAREN@59..60 "("
+          STAR@60..61
+            STAR_TOKEN@60..61 "*"
+          R_PAREN@61..62 ")"
+      COMMA@62..63 ","
+      WHITESPACE@63..64 "\n"
+      AGGREGATE_FIELD@64..64
+--- errors
+63..64: expected an expression (expected NOT_KW, PLUS, MINUS)

@@ -1,0 +1,2 @@
+// prod:string invalid
+process where file.path == 'C:\Windows'

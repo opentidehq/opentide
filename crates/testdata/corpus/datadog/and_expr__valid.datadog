@@ -1,0 +1,2 @@
+# prod:and_expr valid
+source:okta AND @evt.outcome:FAILURE

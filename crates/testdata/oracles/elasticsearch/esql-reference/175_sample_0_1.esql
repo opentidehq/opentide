@@ -1,0 +1,1 @@
+FROM logs | SAMPLE 0.1

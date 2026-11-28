@@ -1,0 +1,211 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: deploy/json/deploy-tenants/unreachable-microsoft-defender
+---
+args: opentide --json deploy --platform microsoft_defender --strategy PREVIEW --strategy RELEASE --all --keep-deprecated
+exit: 1
+
+━━━ stdout · json, 1 lines
+{
+  "changes": [
+    {
+      "action": "upsert",
+      "name": "Defender create rule",
+      "platform": "microsoft_defender",
+      "status": "STAGING",
+      "tenant": "lab",
+      "uuid": "00000000-0000-4000-8047-0000000000d1"
+    },
+    {
+      "action": "upsert",
+      "name": "Defender update rule",
+      "platform": "microsoft_defender",
+      "status": "STAGING",
+      "tenant": "lab",
+      "uuid": "00000000-0000-4000-8047-0000000000d2"
+    },
+    {
+      "action": "upsert",
+      "name": "Defender concurrent create rule",
+      "platform": "microsoft_defender",
+      "status": "STAGING",
+      "tenant": "lab",
+      "uuid": "00000000-0000-4000-8047-0000000000d3"
+    },
+    {
+      "action": "disable",
+      "name": "Defender disable absent rule",
+      "platform": "microsoft_defender",
+      "status": "DISABLED",
+      "tenant": "lab",
+      "uuid": "00000000-0000-4000-8047-0000000000d4"
+    },
+    {
+      "action": "delete",
+      "name": "Defender delete absent rule",
+      "platform": "microsoft_defender",
+      "status": "REMOVED",
+      "tenant": "lab",
+      "uuid": "00000000-0000-4000-8047-0000000000d5"
+    },
+    {
+      "action": "upsert",
+      "name": "Defender refused rule",
+      "platform": "microsoft_defender",
+      "status": "STAGING",
+      "tenant": "lab",
+      "uuid": "00000000-0000-4000-8047-0000000000d6"
+    },
+    {
+      "action": "upsert",
+      "name": "Defender name held rule",
+      "platform": "microsoft_defender",
+      "status": "STAGING",
+      "tenant": "lab",
+      "uuid": "00000000-0000-4000-8047-0000000000d7"
+    }
+  ],
+  "command": "deploy",
+  "deployed": [],
+  "dry_run": false,
+  "duration_ms": 0,
+  "error": "Deployment to microsoft_defender failed on tenant lab: Cannot reach microsoft_defender tenant 'lab' at https://login.microsoftonline.com: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
+  "exit_code": 1,
+  "failure": {
+    "argument": null,
+    "code": "command_failed",
+    "crash_log": null,
+    "message": "Deployment to microsoft_defender failed on tenant lab: Cannot reach microsoft_defender tenant 'lab' at https://login.microsoftonline.com: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
+    "suggestion": null
+  },
+  "failures": [
+    {
+      "error": "Cannot reach microsoft_defender tenant 'lab' at https://login.microsoftonline.com: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
+      "platform": "microsoft_defender",
+      "tenant": "lab"
+    }
+  ],
+  "message": "Deployment to microsoft_defender failed on tenant lab: Cannot reach microsoft_defender tenant 'lab' at https://login.microsoftonline.com: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
+  "next_actions": [],
+  "ok": false,
+  "plan": {
+    "microsoft_defender": [
+      "00000000-0000-4000-8047-0000000000d1",
+      "00000000-0000-4000-8047-0000000000d2",
+      "00000000-0000-4000-8047-0000000000d3",
+      "00000000-0000-4000-8047-0000000000d4",
+      "00000000-0000-4000-8047-0000000000d5",
+      "00000000-0000-4000-8047-0000000000d6",
+      "00000000-0000-4000-8047-0000000000d7"
+    ]
+  },
+  "results": [
+    {
+      "action": "upsert",
+      "error": null,
+      "id": "00000000-0000-4000-8047-0000000000d1",
+      "name": "Defender create rule",
+      "platform": "microsoft_defender",
+      "reason": "not attempted: tenant lab failed",
+      "seconds": 0.0,
+      "status": "not_attempted",
+      "tenant": "lab"
+    },
+    {
+      "action": "upsert",
+      "error": null,
+      "id": "00000000-0000-4000-8047-0000000000d2",
+      "name": "Defender update rule",
+      "platform": "microsoft_defender",
+      "reason": "not attempted: tenant lab failed",
+      "seconds": 0.0,
+      "status": "not_attempted",
+      "tenant": "lab"
+    },
+    {
+      "action": "upsert",
+      "error": null,
+      "id": "00000000-0000-4000-8047-0000000000d3",
+      "name": "Defender concurrent create rule",
+      "platform": "microsoft_defender",
+      "reason": "not attempted: tenant lab failed",
+      "seconds": 0.0,
+      "status": "not_attempted",
+      "tenant": "lab"
+    },
+    {
+      "action": "disable",
+      "error": null,
+      "id": "00000000-0000-4000-8047-0000000000d4",
+      "name": "Defender disable absent rule",
+      "platform": "microsoft_defender",
+      "reason": "not attempted: tenant lab failed",
+      "seconds": 0.0,
+      "status": "not_attempted",
+      "tenant": "lab"
+    },
+    {
+      "action": "delete",
+      "error": null,
+      "id": "00000000-0000-4000-8047-0000000000d5",
+      "name": "Defender delete absent rule",
+      "platform": "microsoft_defender",
+      "reason": "not attempted: tenant lab failed",
+      "seconds": 0.0,
+      "status": "not_attempted",
+      "tenant": "lab"
+    },
+    {
+      "action": "upsert",
+      "error": null,
+      "id": "00000000-0000-4000-8047-0000000000d6",
+      "name": "Defender refused rule",
+      "platform": "microsoft_defender",
+      "reason": "not attempted: tenant lab failed",
+      "seconds": 0.0,
+      "status": "not_attempted",
+      "tenant": "lab"
+    },
+    {
+      "action": "upsert",
+      "error": null,
+      "id": "00000000-0000-4000-8047-0000000000d7",
+      "name": "Defender name held rule",
+      "platform": "microsoft_defender",
+      "reason": "not attempted: tenant lab failed",
+      "seconds": 0.0,
+      "status": "not_attempted",
+      "tenant": "lab"
+    }
+  ],
+  "schema_version": 1,
+  "status": "failed",
+  "strategies": [
+    "PREVIEW",
+    "RELEASE"
+  ],
+  "summary": {
+    "create": 0,
+    "delete": 0,
+    "disable": 0,
+    "failed": 0,
+    "not_attempted": 7,
+    "platforms": 1,
+    "seconds": 0.0,
+    "skipped": 0,
+    "tenants": 1,
+    "unchanged": 0,
+    "update": 0,
+    "upsert": 0
+  }
+}
+
+━━━ stderr · json, 1 lines
+{
+  "error": "Cannot reach microsoft_defender tenant '***' at https://login.microsoftonline.com: error sending request: client error (Connect): tunnel error: failed to create underlying connection: tcp connect error: Connection refused (os error <ECONNREFUSED>)",
+  "event": "tenant_deployment_failed",
+  "level": "critical",
+  "platform": "microsoft_defender",
+  "tenant": "***",
+  "timestamp": "0000-00-00 00:00:00"
+}

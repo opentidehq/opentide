@@ -1,0 +1,26 @@
+name: Objective
+metadata:
+  uuid: 00000000-0000-4000-8000-000000000003
+  schema: objective::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+objective:
+  priority: High
+  type: Threat
+  description: obj
+  composition:
+    strategy: synergetic
+    description: compose
+  signals:
+    - name: Signal
+      uuid: 00000000-0000-4000-8000-000000000099
+      description: sig
+      severity: Medium
+      methodology: analytics
+      entities: [Host::Process]
+      data:
+        availability: Complete
+        requirements: logs
+      effort: '3'

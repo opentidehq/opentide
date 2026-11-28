@@ -1,0 +1,1 @@
+FROM logs | STATS p = PERCENTILE(a, 99), m = MEDIAN(a)

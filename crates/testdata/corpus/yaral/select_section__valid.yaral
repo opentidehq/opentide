@@ -1,0 +1,4 @@
+// prod:select_section valid
+metadata.event_type = "USER_LOGIN"
+select:
+  principal.ip, target.user.userid

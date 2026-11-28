@@ -20,7 +20,7 @@ flowchart TD
 | If you are… | Use | Why |
 |-------------|-----|-----|
 | A person running commands, or a CI pipeline | **[CLI](../cli/index.md)** | Ergonomic, scriptable, sets exit codes for gates |
-| Embedding opentide in a Python app, service, or test | **[SDK](../sdk/index.md)** | Typed objects, direct access to the registry and results |
+| Embedding opentide in a Python app, service, or test | **[SDK](../sdk/index.md)** | A `Workspace` and its documents: validation, lint, the catalogue, the deploy plan |
 | An AI agent in an editor | **[MCP](../mcp/index.md)** | Structured tools/resources with honest capability reporting |
 
 ## Rules of thumb
@@ -46,10 +46,10 @@ opentide validate --uuid 00000000-0000-4000-8003-000000000001 --strict
 <Tab value="SDK">
 
 ```python
-from opentide import Opentide
-Opentide.initialise()
-result = Opentide.Rules["00000000-0000-4000-8003-000000000001"].validate()
-print(result.ok, result.errors)
+from opentide import Workspace
+ws = Workspace.open(".")
+validation = ws.validate(uuids=["00000000-0000-4000-8003-000000000001"], strict=True)
+print(not validation.failed, validation.report["issues"])
 ```
 
 </Tab>

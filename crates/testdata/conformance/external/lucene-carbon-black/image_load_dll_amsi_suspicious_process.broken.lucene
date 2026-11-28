@@ -1,0 +1,1 @@
+(device_os:WINDOWS (modload_name:\\amsi.dll (process_name:\\ExtExport.exe OR process_name:\\odbcconf.exe OR process_name:\\rundll32.exe))

@@ -1,0 +1,64 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: validate.query/json/live-tenants/live-splunk
+---
+args: opentide --json validate query --live --platform splunk
+exit: 1
+
+━━━ stdout · json, 1 lines
+{
+  "command": "validate query",
+  "duration_ms": 0,
+  "error": "Queries rejected on splunk · 3 checked on 1 tenant",
+  "exit_code": 1,
+  "failure": {
+    "argument": null,
+    "code": "query_rejected",
+    "crash_log": null,
+    "message": "Queries rejected on splunk · 3 checked on 1 tenant",
+    "suggestion": null
+  },
+  "message": "Queries rejected on splunk · 3 checked on 1 tenant",
+  "mode": "live",
+  "next_actions": [],
+  "ok": false,
+  "platform": "splunk",
+  "queries_per_tenant": {
+    "lab": 3
+  },
+  "queries_validated": 3,
+  "rejected": [
+    {
+      "errors": [
+        "Splunk refused the query on lab: Unknown search command 'badcommand'."
+      ],
+      "file": "objects/rules/splunk-unknown-command.yaml",
+      "line": 15,
+      "message": "Splunk refused the query on lab: Unknown search command 'badcommand'.",
+      "name": "Splunk unknown command rule",
+      "platform": "splunk",
+      "rule": "00000000-0000-4000-8046-000000000002",
+      "status": "failed",
+      "tenant": "lab",
+      "warnings": []
+    }
+  ],
+  "schema_version": 1,
+  "status": "failed",
+  "strategies": [
+    "PREVIEW",
+    "RELEASE"
+  ],
+  "summary": {
+    "queries": 3,
+    "tenants": 1
+  },
+  "supported": true,
+  "warnings": [
+    "Query validation reported warnings for splunk"
+  ]
+}
+
+━━━ stderr
+{"detail":"Splunk gateway rule (00000000-0000-4000-8046-000000000003) on ***","warning":"Splunk's parser timed out behind a gateway; the query is assumed valid","event":"query_validation_warning","level":"warning","timestamp":"0000-00-00 00:00:00"}
+{"detail":"Splunk unknown command rule (00000000-0000-4000-8046-000000000002) on splunk tenant ***","reason":"Splunk refused the query on ***: Unknown search command 'badcommand'.","event":"query_rejected","level":"critical","timestamp":"0000-00-00 00:00:00"}

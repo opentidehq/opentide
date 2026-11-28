@@ -1,0 +1,54 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/oracles/elasticsearch/esql-reference/058_where_match_message_error_fuzziness_auto_operato.esql
+---
+SOURCE_FILE@0..84
+  QUERY@0..83
+    FROM_COMMAND@0..9
+      FROM_KW@0..4 "FROM"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..9
+        INDEX_NAME@5..9
+          SOURCE_TEXT@5..9 "logs"
+    WHITESPACE@9..10 " "
+    PIPE@10..11 "|"
+    WHITESPACE@11..12 " "
+    WHERE_COMMAND@12..83
+      WHERE_KW@12..17 "WHERE"
+      WHITESPACE@17..18 " "
+      FUNCTION_CALL@18..83
+        IDENTIFIER@18..23
+          IDENT@18..23 "MATCH"
+        L_PAREN@23..24 "("
+        QUALIFIED_NAME@24..31
+          IDENTIFIER@24..31
+            IDENT@24..31 "message"
+        COMMA@31..32 ","
+        WHITESPACE@32..33 " "
+        STRING@33..40
+          STRING_LIT@33..40 "\"error\""
+        COMMA@40..41 ","
+        WHITESPACE@41..42 " "
+        MAP_EXPRESSION@42..82
+          L_BRACE@42..43 "{"
+          MAP_ENTRY@43..62
+            STRING@43..54
+              STRING_LIT@43..54 "\"fuzziness\""
+            COLON@54..55 ":"
+            WHITESPACE@55..56 " "
+            STRING@56..62
+              STRING_LIT@56..62 "\"AUTO\""
+          COMMA@62..63 ","
+          WHITESPACE@63..64 " "
+          MAP_ENTRY@64..81
+            STRING@64..74
+              STRING_LIT@64..74 "\"operator\""
+            COLON@74..75 ":"
+            WHITESPACE@75..76 " "
+            STRING@76..81
+              STRING_LIT@76..81 "\"AND\""
+          R_BRACE@81..82 "}"
+        R_PAREN@82..83 ")"
+  WHITESPACE@83..84 "\n"
+--- errors

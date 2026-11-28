@@ -1,0 +1,36 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: generate/json/none/help
+---
+args: opentide --json generate --help
+exit: 0
+
+━━━ stdout
+Generate schemas, templates, docs and exports
+
+Run with no argument for the full pipeline, or name one or more phases to run only those, in the order given: schemas, templates, vocabs, snippets.
+
+Regenerate editor schemas without paying for documentation: `opentide generate schemas templates vocabs snippets`.
+
+Usage: opentide generate [PHASE]... [COMMAND]
+
+Commands:
+  explorer  Write the explorer bundle and search index
+  docs      Generate markdown documentation for detection objects
+  exports   Export catalogue artefacts
+  extract   Import rules from external platforms
+  inflight  Inflight preview shard generation and prune
+
+Arguments:
+  [PHASE]...
+          Phases to run, in the order given: schemas, templates, vocabs, snippets. None runs the whole pipeline.
+
+Options:
+      --help
+          Print help
+
+Examples:
+  $ opentide generate
+  $ opentide generate schemas templates
+
+━━━ stderr · empty

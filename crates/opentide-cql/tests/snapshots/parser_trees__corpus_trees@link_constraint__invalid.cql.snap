@@ -1,0 +1,53 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(query(&file))
+input_file: crates/testdata/corpus/cql/link_constraint__invalid.cql
+---
+SOURCE_FILE@0..64
+  PIPELINE@0..63
+    FUNCTION_CALL@0..63
+      FUNCTION_NAME@0..9
+        FUNCTION_NAME_TOKEN@0..9 "correlate"
+      L_PAREN@9..10 "("
+      ARGUMENT_LIST@10..62
+        ARGUMENT@10..36
+          NAMED_SUBQUERY@10..36
+            IDENTIFIER@10..15
+              WORD@10..15 "Login"
+            COLON@15..16 ":"
+            WHITESPACE@16..17 " "
+            SUBQUERY@17..36
+              L_BRACE@17..18 "{"
+              WHITESPACE@18..19 " "
+              PIPELINE@19..34
+                FIELD_FILTER@19..34
+                  TAG@19..26
+                    TAG_TOKEN@19..26 "#action"
+                  EQ@26..27 "="
+                  STRING@27..34
+                    STRING_TOKEN@27..34 "\"login\""
+              WHITESPACE@34..35 " "
+              R_BRACE@35..36 "}"
+        COMMA@36..37 ","
+        WHITESPACE@37..38 " "
+        ARGUMENT@38..62
+          NAMED_SUBQUERY@38..62
+            IDENTIFIER@38..46
+              WORD@38..46 "Purchase"
+            COLON@46..47 ":"
+            WHITESPACE@47..48 " "
+            SUBQUERY@48..62
+              L_BRACE@48..49 "{"
+              WHITESPACE@49..50 " "
+              PIPELINE@50..60
+                LINK_CONSTRAINT@50..60
+                  FIELD_NAME@50..56
+                    WORD@50..56 "userId"
+                  WHITESPACE@56..57 " "
+                  LT_EQ_GT@57..60 "<=>"
+              WHITESPACE@60..61 " "
+              R_BRACE@61..62 "}"
+      R_PAREN@62..63 ")"
+  WHITESPACE@63..64 "\n"
+
+60..61: expected a field

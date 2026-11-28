@@ -1,0 +1,4 @@
+// prod:fuse_command valid
+FROM docs METADATA _id, _index, _score
+| FORK (WHERE a == 1) (WHERE b == 2)
+| FUSE linear SCORE BY _score

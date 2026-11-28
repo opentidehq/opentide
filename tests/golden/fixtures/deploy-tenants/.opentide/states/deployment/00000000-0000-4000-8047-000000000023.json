@@ -1,0 +1,9 @@
+{
+  "object_uuid": "00000000-0000-4000-8047-000000000023",
+  "platforms": {
+    "crowdstrike": {
+      "lab": "cs-rule-8"
+    }
+  },
+  "schema": "deployment.state::1.0"
+}

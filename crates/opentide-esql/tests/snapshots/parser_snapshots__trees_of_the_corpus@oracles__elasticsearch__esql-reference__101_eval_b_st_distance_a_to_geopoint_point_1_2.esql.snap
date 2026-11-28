@@ -1,0 +1,45 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/oracles/elasticsearch/esql-reference/101_eval_b_st_distance_a_to_geopoint_point_1_2.esql
+---
+SOURCE_FILE@0..63
+  QUERY@0..62
+    FROM_COMMAND@0..9
+      FROM_KW@0..4 "FROM"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..9
+        INDEX_NAME@5..9
+          SOURCE_TEXT@5..9 "logs"
+    WHITESPACE@9..10 " "
+    PIPE@10..11 "|"
+    WHITESPACE@11..12 " "
+    EVAL_COMMAND@12..62
+      EVAL_KW@12..16 "EVAL"
+      WHITESPACE@16..17 " "
+      FIELD_ASSIGNMENT_OR_EXPRESSION@17..62
+        QUALIFIED_NAME@17..18
+          IDENTIFIER@17..18
+            IDENT@17..18 "b"
+        WHITESPACE@18..19 " "
+        EQ@19..20 "="
+        WHITESPACE@20..21 " "
+        FUNCTION_CALL@21..62
+          IDENTIFIER@21..32
+            IDENT@21..32 "ST_DISTANCE"
+          L_PAREN@32..33 "("
+          QUALIFIED_NAME@33..34
+            IDENTIFIER@33..34
+              IDENT@33..34 "a"
+          COMMA@34..35 ","
+          WHITESPACE@35..36 " "
+          FUNCTION_CALL@36..61
+            IDENTIFIER@36..47
+              IDENT@36..47 "TO_GEOPOINT"
+            L_PAREN@47..48 "("
+            STRING@48..60
+              STRING_LIT@48..60 "\"POINT(1 2)\""
+            R_PAREN@60..61 ")"
+          R_PAREN@61..62 ")"
+  WHITESPACE@62..63 "\n"
+--- errors

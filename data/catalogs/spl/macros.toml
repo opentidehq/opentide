@@ -1,0 +1,109 @@
+# Search macros commonly authored in ES / ESCU detections.
+# The language server never expands macros; names stay in source.
+[[macros]]
+name = "drop_dm_object_name"
+signature = "drop_dm_object_name(object)"
+docs = "Strip Dataset. prefixes after tstats (e.g. Processes.process_name → process_name)."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/Knowledge/Usesearchmacros"
+
+[[macros]]
+name = "security_content_summariesonly"
+signature = "security_content_summariesonly"
+docs = "ESCU helper expanding to tstats summariesonly= (and related flags)."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/Knowledge/Usesearchmacros"
+
+[[macros]]
+name = "security_content_ctime"
+signature = "security_content_ctime(field)"
+docs = "Format a time field for notable display (firstTime / lastTime)."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/Knowledge/Usesearchmacros"
+
+[[macros]]
+name = "cim_Authentication_indexes"
+signature = "cim_Authentication_indexes"
+docs = "Index allow-list macro for the Authentication CIM data model."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/Knowledge/Usesearchmacros"
+
+[[macros]]
+name = "cim_Network_Traffic_indexes"
+signature = "cim_Network_Traffic_indexes"
+docs = "Index allow-list macro for the Network_Traffic CIM data model."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/Knowledge/Usesearchmacros"
+
+[[macros]]
+name = "cim_Endpoint_indexes"
+signature = "cim_Endpoint_indexes"
+docs = "Index allow-list macro for the Endpoint CIM data model."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/Knowledge/Usesearchmacros"
+
+[[macros]]
+name = "cim_Web_indexes"
+signature = "cim_Web_indexes"
+docs = "Index allow-list macro for the Web CIM data model."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/Knowledge/Usesearchmacros"
+
+[[macros]]
+name = "cim_Intrusion_Detection_indexes"
+signature = "cim_Intrusion_Detection_indexes"
+docs = "Index allow-list macro for the Intrusion_Detection CIM data model."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/Knowledge/Usesearchmacros"
+
+[[macros]]
+name = "cim_Malware_indexes"
+signature = "cim_Malware_indexes"
+docs = "Index allow-list macro for the Malware CIM data model."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/Knowledge/Usesearchmacros"
+
+[[macros]]
+name = "cim_Change_indexes"
+signature = "cim_Change_indexes"
+docs = "Index allow-list macro for the Change CIM data model."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/Knowledge/Usesearchmacros"
+
+[[macros]]
+name = "cim_Network_Resolution_indexes"
+signature = "cim_Network_Resolution_indexes"
+docs = "Index allow-list macro for the Network_Resolution CIM data model."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/Knowledge/Usesearchmacros"
+
+[[macros]]
+name = "cim_Email_indexes"
+signature = "cim_Email_indexes"
+docs = "Index allow-list macro for the Email CIM data model."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/Knowledge/Usesearchmacros"
+
+[[macros]]
+name = "cim_Alerts_indexes"
+signature = "cim_Alerts_indexes"
+docs = "Index allow-list macro for the Alerts CIM data model."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/Knowledge/Usesearchmacros"
+
+[[macros]]
+name = "get_asset"
+signature = "get_asset(field)"
+docs = "ES asset enrichment for dest/src/dvc."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/Knowledge/Usesearchmacros"
+
+[[macros]]
+name = "get_identity"
+signature = "get_identity(field)"
+docs = "ES identity enrichment for user/src_user."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/Knowledge/Usesearchmacros"
+
+[[macros]]
+name = "notable"
+signature = "notable"
+docs = "Write an ES notable event (response path; not a generating search)."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/Knowledge/Usesearchmacros"
+
+[[macros]]
+name = "get_risk"
+signature = "get_risk"
+docs = "ES risk plumbing."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/Knowledge/Usesearchmacros"
+
+[[macros]]
+name = "drop_dm_object_name(Processes)"
+signature = "drop_dm_object_name(Processes)"
+docs = "Convenience recognition of the Processes drop macro."
+citation = "https://docs.splunk.com/Documentation/Splunk/latest/Knowledge/Usesearchmacros"

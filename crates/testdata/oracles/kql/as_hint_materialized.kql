@@ -1,0 +1,1 @@
+SigninLogs | where ResultType != "0" | as hint.materialized=true Failures | summarize count() by UserPrincipalName

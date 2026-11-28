@@ -2,7 +2,7 @@
 
 A field the templates ask for is missing; `opentide validate` accepts the object without it.
 
-Severity: note. Reported by `opentide lint` (recommended check). Today it is a rule's `configurations` or `response`. The editor and `opentide tui` report the same finding from the analysis engine; the engine this opentide bundles still shows it as a warning and does not read `[recommended]`.
+Severity: note. Reported by `opentide lint` (recommended check). Today it is a rule's `configurations` or `response`. The editor (`opentide lsp start`) and `opentide tui` report the same finding, at the severity `[recommended]` sets.
 
 ## Example
 

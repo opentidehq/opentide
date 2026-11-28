@@ -1,0 +1,1 @@
+SigninLogs | make-graph UserPrincipalName --> IPAddress with_node_id=id partitioned-by TenantId (graph-match (u)-[s]->(i) project u.id, i.id)

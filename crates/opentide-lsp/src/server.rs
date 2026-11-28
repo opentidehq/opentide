@@ -1,0 +1,515 @@
+//! The server's entry points: one client over stdio, a socket, or the
+//! host's own streams. The protocol loop is `crate::protocol`, the state
+//! `crate::session`, and the methods `crate::handlers`.
+
+use crate::protocol::{self, Direct};
+use crate::session::Session;
+use anyhow::Result;
+use serde_json::{Value, json};
+use std::io::{BufRead, Write};
+use std::path::{Path, PathBuf};
+use std::sync::RwLock;
+use std::sync::atomic::{AtomicBool, Ordering};
+
+/// Serves one client on stdin and stdout until it exits; [`run_stdio_status`]
+/// also says whether it shut the server down first.
+pub fn run_stdio() -> Result<()> {
+    run_stdio_status().map(|_| ())
+}
+
+/// [`run_stdio`], returning whether the client shut the server down before
+/// it exited ([`serve_with_status`]): the process should exit with 0 if so
+/// and 1 if not. Messages are read on a thread of their own, so the ones
+/// that arrive while a request is handled are batched (#185 P1.4); wasip1,
+/// which has no threads, reads them on this one.
+pub fn run_stdio_status() -> Result<bool> {
+    let stdout = std::io::stdout();
+    let mut writer = stdout.lock();
+    let mut session = Session::default();
+    #[cfg(not(target_family = "wasm"))]
+    warm_up();
+    #[cfg(not(target_os = "wasi"))]
+    let mut source = protocol::Threaded::spawn(|| std::io::stdin().lock())?;
+    // wasip1 has no threads: stdin is read on this one, and a probe tells a
+    // workspace pull when the client sent more (`crate::stdin`).
+    #[cfg(target_os = "wasi")]
+    let mut source = {
+        let (stdin, probe) = crate::stdin::ProbedStdin::new();
+        Direct::with_probe(stdin, probe)
+    };
+    protocol::run(&mut source, &mut writer, &mut session)
+}
+
+/// Accepts one client on the TCP address `addr` (`127.0.0.1:2087`) and
+/// serves it until it exits.
+#[cfg(not(target_os = "wasi"))]
+pub fn run_listen(addr: &str) -> Result<()> {
+    let listener = std::net::TcpListener::bind(addr)?;
+    eprintln!("opentide-lsp listening on {addr}");
+    let (stream, _) = listener.accept()?;
+    let reader = stream.try_clone()?;
+    #[cfg(not(target_family = "wasm"))]
+    warm_up();
+    let mut source = protocol::Threaded::spawn(move || std::io::BufReader::new(reader))?;
+    let mut writer = stream;
+    let mut session = Session::default();
+    protocol::run(&mut source, &mut writer, &mut session).map(|_| ())
+}
+
+/// Parses, on a thread of its own, what the first check of a process reads
+/// once and keeps (and generates what the editor reads of the models): the editor's bundled vocabularies (all of them, on the
+/// first Tide document), `validate`'s revision schemas and the bundled
+/// vocabularies a rule's fields name (rules are what an editor opens most),
+/// while the server reads the workspace. (`validate` parses a vocabulary on
+/// first use, only those its objects name: warming all of them costs more
+/// than it saves.) A thread that cannot start leaves them to be parsed on
+/// first use, as before.
+#[cfg(not(target_family = "wasm"))]
+fn warm_up() {
+    let _ = std::thread::Builder::new()
+        .name("opentide-lsp-warm-up".to_owned())
+        .spawn(|| {
+            opentide_tide::bundled_vocabs();
+            opentide_workspace::validate::objects::warm_up("rule::1.1");
+            // What the editor reads of the models until a root's workspace
+            // has loaded, and the configuration files' schemas.
+            crate::models::default_catalog();
+            crate::models::configuration_schemas();
+        });
+    // The KQL catalogs (the Azure Monitor tables, parsed from TOML on first
+    // use: about a quarter of what a first diagnostic costs) on a thread of
+    // their own, alongside the models above. A KQL query is what a rule
+    // opened first most often carries.
+    let _ = std::thread::Builder::new()
+        .name("opentide-lsp-warm-up-kql".to_owned())
+        .spawn(|| {
+            let _ = opentide_analysis::analyze_query(
+                &opentide_analysis::QueryRequest::new(
+                    opentide_core::LanguageId::Kql,
+                    "SecurityEvent | take 1".to_owned(),
+                )
+                .with_platform(Some("sentinel")),
+            );
+        });
+}
+
+/// Fails: `--listen` needs sockets, which wasm32-wasip1 does not have.
+#[cfg(target_os = "wasi")]
+pub fn run_listen(_addr: &str) -> Result<()> {
+    anyhow::bail!("--listen needs sockets, which wasip1 does not have")
+}
+
+/// Serve one client: read LSP frames from `reader` and write the replies to
+/// `writer` until the client sends `exit` or the input ends. [`run_stdio`]
+/// and [`run_listen`] are this on stdio and on a socket; a host with its own
+/// streams calls it directly. [`serve_with_status`] also says whether the
+/// client shut the server down first.
+pub fn serve(reader: impl BufRead, writer: impl Write) -> Result<()> {
+    serve_with_status(reader, writer).map(|_| ())
+}
+
+/// [`serve`], returning whether the session ended cleanly: `exit` (or the
+/// end of input) after `shutdown`. LSP has the process exit with 0 then and
+/// with 1 otherwise; the `opentide-lsp` binary does.
+///
+/// The session follows the LSP lifecycle: before `initialize`, a request is
+/// answered `ServerNotInitialized` (-32002) and a notification is dropped;
+/// after `shutdown`, a request is answered `InvalidRequest` (-32600) and
+/// nothing is published; a second `initialize` is `InvalidRequest`. A frame
+/// whose body is not a message is answered (-32700 or -32600, `id: null`)
+/// and the session goes on, and so does a handler that panics: its request
+/// is answered `InternalError` (-32603). Frames are read on the caller's
+/// thread; those already buffered are handled as one batch.
+pub fn serve_with_status(reader: impl BufRead, mut writer: impl Write) -> Result<bool> {
+    let mut session = Session::default();
+    let mut source = Direct::new(reader);
+    protocol::run(&mut source, &mut writer, &mut session)
+}
+
+/// The language server driven one message at a time, for a host with no
+/// stdio to give it: a browser worker hands [`MessageSession::handle`] each
+/// JSON-RPC message its client posts and posts back what it returns. It is
+/// the loop [`serve`] runs, one message to a batch: the same lifecycle, the
+/// same answers to a body that is not a message, and the same publishes.
+///
+/// Such a host has no filesystem, so it supplies the workspace on
+/// `initialize`, in `initializationOptions.workspace`:
+///
+/// - `documents`: `[{ "uri", "text" }]`, object files indexed as if they were
+///   on disk, each in the root whose folder holds it (references resolve to
+///   them; they are not checked), and a root's `visibility.toml`;
+/// - `objects`: `[{ "uuid", "schema", "name"?, "uri"? }]`, objects the host
+///   knows by their metadata alone, indexed with just those keys, so a
+///   reference to one resolves and hover names it;
+/// - `visibility`: the text of the workspace's `visibility.toml`.
+///
+/// A host with a filesystem may send it too: a root's own files win. When
+/// the files change, the host sends `opentide/didChangeWorkspace` with what
+/// changed (the same keys, plus `removed`: `[uri]`, and `visibility: null`
+/// when the file is gone), and the server re-indexes and re-checks.
+#[derive(Default)]
+pub struct MessageSession {
+    session: Session,
+    driver: protocol::Driver,
+    closed: bool,
+}
+
+impl MessageSession {
+    /// A session before `initialize`, which is the first message it expects.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Handle one JSON-RPC message: its JSON text, without the
+    /// `Content-Length` header. Returns what the server sends back, each
+    /// message as JSON text and in order: the response to a request, the
+    /// notifications it publishes (`textDocument/publishDiagnostics`,
+    /// `window/logMessage`), and the requests it makes of the client
+    /// (`client/registerCapability`, `workspace/diagnostic/refresh`). Text
+    /// that is not a JSON-RPC message is answered with a parse error
+    /// (-32700) or an invalid request (-32600). After `exit` the session is
+    /// closed and handles nothing more.
+    pub fn handle(&mut self, message: &str) -> Vec<String> {
+        if self.closed {
+            return Vec::new();
+        }
+        let mut out = Vec::new();
+        let frame = protocol::frame_of(message);
+        match self.driver.batch(&mut self.session, &mut out, vec![frame]) {
+            Ok(Some(_)) => self.closed = true,
+            Ok(None) => {}
+            // Writing to a `Vec` does not fail.
+            Err(err) => eprintln!("opentide-lsp: {err}"),
+        }
+        protocol::frame_bodies(&out)
+    }
+
+    /// Whether the client has sent `exit`.
+    pub fn is_closed(&self) -> bool {
+        self.closed
+    }
+
+    /// Whether the client shut the server down before it sent `exit`: a
+    /// clean end, as [`serve_with_status`] reports it.
+    pub fn shut_down(&self) -> bool {
+        self.driver.state == protocol::Lifecycle::ShuttingDown
+    }
+}
+
+/// A path as a `file:` URI, typed.
+pub(crate) fn path_to_uri_value(path: &Path) -> Option<lsp_types::Uri> {
+    crate::uri::path_to_uri(&path.display().to_string())
+        .parse()
+        .ok()
+}
+
+/// The workspace root of a file: its nearest ancestor holding `objects/` or
+/// `.opentide/`. `opentide-lsp analyze` and the server, for a document
+/// outside every workspace folder, both use it.
+pub fn workspace_root(file: &Path) -> Option<PathBuf> {
+    file.ancestors()
+        .skip(1)
+        .find(|a| a.join("objects").is_dir() || a.join(".opentide").is_dir())
+        .map(Path::to_path_buf)
+}
+
+// ---------------------------------------------------------------------------
+// Host info (#172).
+
+static HOST: RwLock<Option<(String, String)>> = RwLock::new(None);
+
+/// Name the host that runs the server, process-wide: `opentide lsp start`
+/// sets `("opentide", <its version>)`. Clients read it from
+/// `capabilities.experimental.opentide.host` at `initialize`.
+pub fn set_host_info(name: &str, version: &str) {
+    *HOST.write().unwrap_or_else(|p| p.into_inner()) = Some((name.into(), version.into()));
+}
+
+/// What a client can learn about the server before it uses it, the same at
+/// `initialize` (`capabilities.experimental.opentide`) and from
+/// `opentide-lsp --version --json`. A key is added in a minor release and
+/// never removed (docs/engine/EDITORS.md).
+pub fn host_info() -> Value {
+    let host = HOST.read().unwrap_or_else(|p| p.into_inner()).clone();
+    // The models' catalog, generated in the server for each root (#926),
+    // unless the host supplied its own.
+    let catalog = if host_catalogs() { "host" } else { "models" };
+    json!({
+        "host": host.map(|(name, version)| json!({ "name": name, "version": version })),
+        "engine": crate::VERSION,
+        "catalog": catalog,
+        // Native since UC-2.6 (#821): opentide-schema's checks, in every host.
+        "configurationChecks": true,
+        // opentide-schema's, generated in the server (#926).
+        "configurationSchemas": true,
+        // The supplied workspace follows `opentide/didChangeWorkspace`.
+        "workspaceUpdates": true,
+    })
+}
+
+/// What `opentide validate --file` reports on `file` of the workspace at
+/// `root`, on disk, placed in `text` (the file's text, without a byte-order
+/// mark): the object checks the server reports for an open document. A
+/// configuration that does not resolve stops the checks: none.
+pub fn validate_file(root: &Path, file: &Path, text: &str) -> Vec<opentide_core::Diagnostic> {
+    let mut checks = crate::checks::RootChecks::default();
+    let file = std::path::absolute(file).unwrap_or_else(|_| file.to_path_buf());
+    let found = checks.findings(
+        root,
+        crate::checks::Buffers::default(),
+        vec![file.clone()],
+        0,
+        0,
+    );
+    found
+        .get(&checks.resolve(&file))
+        .map(|findings| {
+            findings
+                .iter()
+                .map(|finding| crate::checks::engine_diagnostic(text, finding))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// What `validate` reports on the Tide object `text` of `file`, a file no
+/// workspace holds (no `objects/` or `.opentide/` above it), placed in
+/// `text`: the object checked in a workspace of its own, as the server
+/// checks a document outside every root, so a reference to an object it
+/// does not hold is `invalid_ref`.
+pub fn validate_standalone(file: &Path, text: &str) -> Vec<opentide_core::Diagnostic> {
+    let mut checks = crate::checks::RootChecks::default();
+    let root = PathBuf::from(crate::session::VIRTUAL_ROOT);
+    let mut buffers = crate::checks::Buffers::default();
+    let Some(placed) = checks.standalone_path(&root, &buffers, &file.display().to_string(), text)
+    else {
+        return Vec::new();
+    };
+    buffers.files.insert(placed.clone(), text.to_string());
+    let found = checks.findings(&root, buffers, vec![placed.clone()], 0, 0);
+    found
+        .get(&checks.resolve(&placed))
+        .map(|findings| {
+            findings
+                .iter()
+                .map(|finding| crate::checks::engine_diagnostic(text, finding))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// What `opentide validate` reports on every object of the workspace at
+/// `root`, on disk, by file: for a host that checks many files of one
+/// workspace (the `opentide` package's `check_file`, `opentide tui`), one
+/// load and one run.
+pub struct ObjectFindings {
+    checks: crate::checks::RootChecks,
+    found: crate::checks::Findings,
+}
+
+impl ObjectFindings {
+    /// Load the workspace at `root` and validate it. A configuration that
+    /// does not resolve gives no finding (`validate` stops there).
+    pub fn validate(root: &Path) -> Self {
+        let mut checks = crate::checks::RootChecks::default();
+        let found = checks.all_findings(root, crate::checks::Buffers::default(), 0, 0);
+        // A host keeps this for as long as it checks files: what the load
+        // read of the disk is not kept with it.
+        checks.disk().forget();
+        Self { checks, found }
+    }
+
+    /// The findings on `file`, placed in `text` (its text, without a
+    /// byte-order mark).
+    pub fn for_file(&self, file: &Path, text: &str) -> Vec<opentide_core::Diagnostic> {
+        let file = std::path::absolute(file).unwrap_or_else(|_| file.to_path_buf());
+        self.found
+            .get(&self.checks.resolve(&file))
+            .map(|findings| {
+                findings
+                    .iter()
+                    .map(|finding| crate::checks::engine_diagnostic(text, finding))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Catalogs.
+
+/// Set by a host that installed the catalogs itself
+/// ([`opentide_analysis::set_default_catalog`]): the server then leaves them
+/// alone instead of installing the ones it generates from the models.
+static HOST_CATALOGS: AtomicBool = AtomicBool::new(false);
+
+/// Keep the catalogs the host installed: the server does not install the
+/// Tide field catalogs it generates from the models for each root (#926).
+/// Process-wide.
+pub fn use_host_catalogs() {
+    HOST_CATALOGS.store(true, Ordering::SeqCst);
+}
+
+/// Whether a host supplied the catalogs ([`use_host_catalogs`]).
+pub(crate) fn host_catalogs() -> bool {
+    HOST_CATALOGS.load(Ordering::SeqCst)
+}
+
+// ---------------------------------------------------------------------------
+// The workspace walk.
+
+/// The workspace's object YAML: the files under `<root>/objects`, read through
+/// `fs` (the root's [`Disk`](crate::checks::Disk), which the workspace then
+/// reads the same listings and files from). A root without `objects/` has
+/// none, and nothing else under it is read (a root of `/tmp` or a home
+/// directory once had every YAML file there indexed).
+pub(crate) fn collect_objects(
+    fs: &dyn opentide_workspace::FileSystem,
+    root: &Path,
+) -> Vec<(String, String)> {
+    yaml_files_in(fs, &root.join("objects"))
+}
+
+/// Every `.yaml` and `.yml` file under `dir`, with its text (byte-order mark
+/// dropped). A symlinked directory is not entered, so a link back up the tree
+/// cannot index a file twice or loop; a symlinked file is read. A file or
+/// directory that cannot be read (not UTF-8, no permission) is left out. The
+/// `opentide-lsp analyze` command and the server share this walk.
+pub fn yaml_files(dir: &Path) -> Vec<(String, String)> {
+    fn rec(dir: &Path, out: &mut Vec<(String, String)>) {
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return;
+        };
+        let mut entries: Vec<_> = entries.flatten().collect();
+        entries.sort_by_key(|entry| entry.file_name());
+        for entry in entries {
+            let Ok(kind) = entry.file_type() else {
+                continue;
+            };
+            let path = entry.path();
+            if kind.is_dir() {
+                rec(&path, out);
+            } else if (kind.is_file() || (kind.is_symlink() && path.is_file()))
+                && matches!(
+                    path.extension().and_then(|s| s.to_str()),
+                    Some("yaml" | "yml")
+                )
+                && let Ok(text) = std::fs::read_to_string(&path)
+            {
+                let text = opentide_core::strip_bom(&text).to_string();
+                out.push((path.display().to_string(), text));
+            }
+        }
+    }
+    let mut out = Vec::new();
+    rec(dir, &mut out);
+    out
+}
+
+/// [`yaml_files`] through `fs`, as the server walks a root (the root's
+/// [`Disk`](crate::checks::Disk)): the same files, but for an entry the
+/// listing cannot read, which leaves out its folder's listing (the
+/// workspace's discovery reads the same one).
+pub(crate) fn yaml_files_in(
+    fs: &dyn opentide_workspace::FileSystem,
+    dir: &Path,
+) -> Vec<(String, String)> {
+    use opentide_workspace::fs::EntryKind;
+    fn rec(fs: &dyn opentide_workspace::FileSystem, dir: &Path, out: &mut Vec<(String, String)>) {
+        let Ok(mut entries) = fs.read_dir(dir) else {
+            return;
+        };
+        entries.sort_by(|a, b| a.file_name.cmp(&b.file_name));
+        for entry in entries {
+            let path = dir.join(&entry.file_name);
+            // An entry's kind is what it leads to: a link to a folder is a
+            // folder, which is not entered; a link to a file is a file.
+            match entry.kind {
+                EntryKind::Dir if !entry.symlink => rec(fs, &path, out),
+                EntryKind::File
+                    if matches!(
+                        path.extension().and_then(|s| s.to_str()),
+                        Some("yaml" | "yml")
+                    ) =>
+                {
+                    if let Ok(bytes) = fs.read(&path)
+                        && let Ok(text) = String::from_utf8(bytes)
+                    {
+                        let text = opentide_core::strip_bom(&text).to_string();
+                        out.push((path.display().to_string(), text));
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    let mut out = Vec::new();
+    rec(fs, dir, &mut out);
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use opentide_core::LanguageId;
+
+    #[test]
+    fn language_for_ignores_unknown_ids_and_sql() {
+        let session = Session::default();
+        let lang = |uri: &str, reported: Option<&str>| session.language_for(uri, reported);
+        assert_eq!(
+            lang("file:///q.sql", Some("sql")),
+            Some(LanguageId::TideYaml)
+        );
+        assert_eq!(
+            lang("file:///q.kql", Some("not-a-language")),
+            Some(LanguageId::Kql)
+        );
+        assert_eq!(lang("file:///q.yaml", Some("kusto")), Some(LanguageId::Kql));
+        assert_eq!(lang("file:///q.spl", Some("SPL")), Some(LanguageId::Spl));
+        assert_eq!(lang("file:///q.txt", None), Some(LanguageId::TideYaml));
+        assert_eq!(lang("file:///q.yar", None), Some(LanguageId::Yara));
+        assert_eq!(lang("file:///q.exabeam", None), Some(LanguageId::Exabeam));
+        assert_eq!(lang("file:///q.datadog", None), Some(LanguageId::Datadog));
+        assert_eq!(
+            lang("file:///q.txt", Some("datadog")),
+            Some(LanguageId::Datadog)
+        );
+        assert_eq!(
+            lang("file:///q.yara", Some("plaintext")),
+            Some(LanguageId::Yara)
+        );
+        assert_eq!(lang("file:///q.yaral", None), Some(LanguageId::Yaral));
+        assert_eq!(
+            lang("file:///q.yl2", Some("plaintext")),
+            Some(LanguageId::Yaral)
+        );
+    }
+
+    #[test]
+    fn configuration_toml_is_opentide_config_and_other_toml_is_not_read() {
+        let session = Session::default();
+        let lang = |uri: &str, reported: Option<&str>| session.language_for(uri, reported);
+        let sharing = "file:///w/.opentide/configurations/sharing.toml";
+        assert_eq!(lang(sharing, Some("toml")), Some(LanguageId::Config));
+        assert_eq!(lang(sharing, Some("kql")), Some(LanguageId::Config));
+        assert_eq!(
+            lang(
+                "file:///w/.opentide/configurations/platforms/sentinel.toml",
+                None
+            ),
+            Some(LanguageId::Config)
+        );
+        assert_eq!(lang("file:///w/Cargo.toml", Some("toml")), None);
+        assert_eq!(lang("file:///w/pyproject.toml", None), None);
+        // The id alone does not make a file a configuration file.
+        assert_eq!(lang("file:///w/Cargo.toml", Some("opentide-config")), None);
+    }
+
+    #[test]
+    fn host_info_names_the_engine_and_no_host_by_default() {
+        let info = host_info();
+        assert_eq!(info["engine"], crate::VERSION);
+        assert_eq!(info["catalog"], "models");
+    }
+}

@@ -1,0 +1,67 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: share.status/json/share-misp/misp-type
+---
+args: opentide --json share status --type rule --target misp-locked
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "command": "share status",
+  "duration_ms": 0,
+  "exit_code": 0,
+  "failure": null,
+  "message": "Status of 5 objects for misp-locked · 3 to create, 2 skipped",
+  "next_actions": [],
+  "ok": true,
+  "records": [
+    {
+      "action": "skipped_status",
+      "integration": "misp",
+      "object_uuid": "00000000-0000-4000-8048-000000000014",
+      "reason": "rule_status",
+      "target": "misp-locked"
+    },
+    {
+      "action": "skipped_tlp",
+      "integration": "misp",
+      "object_uuid": "00000000-0000-4000-8048-000000000015",
+      "reason": "max_tlp",
+      "target": "misp-locked"
+    },
+    {
+      "action": "created",
+      "integration": "misp",
+      "object_uuid": "00000000-0000-4000-8048-000000000011",
+      "target": "misp-locked"
+    },
+    {
+      "action": "created",
+      "integration": "misp",
+      "object_uuid": "00000000-0000-4000-8048-000000000012",
+      "target": "misp-locked"
+    },
+    {
+      "action": "created",
+      "integration": "misp",
+      "object_uuid": "00000000-0000-4000-8048-000000000013",
+      "target": "misp-locked"
+    }
+  ],
+  "schema_version": 1,
+  "status": "completed",
+  "summary": {
+    "failed": 0,
+    "new": 3,
+    "objects": 3,
+    "retracted": 0,
+    "skipped": 2,
+    "unchanged": 0,
+    "updated": 0
+  },
+  "warnings": [
+    "[[misp]] block \"misp-lab\" api_key is a literal. Use ${ENV_VAR}. The value was replaced with [REDACTED]."
+  ]
+}
+
+━━━ stderr · empty

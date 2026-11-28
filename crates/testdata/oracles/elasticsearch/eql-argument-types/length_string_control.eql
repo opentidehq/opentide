@@ -1,0 +1,1 @@
+process where length(process.name) > 0

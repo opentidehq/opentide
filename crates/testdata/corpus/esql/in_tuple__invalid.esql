@@ -1,0 +1,3 @@
+// prod:in_tuple invalid (a tuple element is missing)
+FROM logs-* METADATA _id
+| WHERE (host.name, ) IN (FROM admins | KEEP host.name)

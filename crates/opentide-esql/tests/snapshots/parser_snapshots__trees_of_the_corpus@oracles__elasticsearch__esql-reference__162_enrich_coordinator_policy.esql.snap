@@ -1,0 +1,27 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/oracles/elasticsearch/esql-reference/162_enrich_coordinator_policy.esql
+---
+SOURCE_FILE@0..39
+  QUERY@0..38
+    FROM_COMMAND@0..9
+      FROM_KW@0..4 "FROM"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..9
+        INDEX_NAME@5..9
+          SOURCE_TEXT@5..9 "logs"
+    WHITESPACE@9..10 " "
+    PIPE@10..11 "|"
+    WHITESPACE@11..12 " "
+    ENRICH_COMMAND@12..38
+      ENRICH_KW@12..18 "ENRICH"
+      WHITESPACE@18..19 " "
+      ENRICH_POLICY@19..38
+        ENRICH_MODE@19..31
+          POLICY_PART@19..31 "_coordinator"
+        COLON@31..32 ":"
+        POLICY_NAME@32..38
+          POLICY_PART@32..38 "policy"
+  WHITESPACE@38..39 "\n"
+--- errors

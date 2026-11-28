@@ -1,0 +1,22 @@
+---
+source: crates/opentide-kql/src/parser/tests.rs
+expression: "show(\"T | take 5 )\")"
+---
+SOURCE_FILE@0..12
+  QUERY@0..10
+    TABULAR_EXPRESSION@0..10
+      TABULAR_SOURCE@0..1
+        TABLE_REF@0..1
+          IDENT@0..1 "T"
+      WHITESPACE@1..2 " "
+      PIPE@2..3 "|"
+      WHITESPACE@3..4 " "
+      TAKE_OPERATOR@4..10
+        TAKE_KW@4..8 "take"
+        WHITESPACE@8..9 " "
+        NUMBER@9..10 "5"
+  WHITESPACE@10..11 " "
+  ERROR@11..12
+    R_PAREN@11..12 ")"
+errors:
+10..11: unexpected input after the query (expected `|`)

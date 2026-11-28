@@ -1,0 +1,282 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "CveSettings": {
+      "additionalProperties": false,
+      "description": "`[cve]`: the Vulnerability-Lookup instance CVE references resolve against.",
+      "properties": {
+        "base_url": {
+          "default": "https://vulnerability.circl.lu",
+          "description": "Base URL of the Vulnerability-Lookup API.",
+          "title": "Base Url",
+          "type": "string"
+        },
+        "default_db_link": {
+          "default": "",
+          "description": "Prefix of the page a CVE reference links to.",
+          "title": "Default Db Link",
+          "type": "string"
+        },
+        "retrieve_details": {
+          "default": true,
+          "description": "Fetch CVE details while generating documentation.",
+          "title": "Retrieve Details",
+          "type": "boolean"
+        },
+        "timeout": {
+          "default": 15.0,
+          "description": "Lookup timeout in seconds.",
+          "exclusiveMinimum": 0,
+          "title": "Timeout",
+          "type": "number"
+        }
+      },
+      "title": "CveSettings",
+      "type": "object"
+    },
+    "DiagramSettings": {
+      "additionalProperties": false,
+      "description": "`[diagrams]`: relation diagrams drawn on object pages.",
+      "properties": {
+        "relations_direction": {
+          "default": "both",
+          "description": "Which relations an object page diagram draws.",
+          "enum": [
+            "upstream",
+            "downstream",
+            "both"
+          ],
+          "title": "Relations Direction",
+          "type": "string"
+        }
+      },
+      "title": "DiagramSettings",
+      "type": "object"
+    },
+    "FlavorSettings": {
+      "additionalProperties": false,
+      "description": "`[flavor]`: which markdown dialect the documentation is written for.",
+      "properties": {
+        "default": {
+          "type": "string",
+          "anyOf": [
+            {
+              "enum": [
+                "github",
+                "gitlab",
+                "azure_devops",
+                "generic"
+              ]
+            },
+            {
+              "const": "azure-devops"
+            }
+          ],
+          "description": "Markdown flavor used when opentide generate docs gets no --flavor.",
+          "default": "generic"
+        }
+      },
+      "title": "FlavorSettings",
+      "type": "object"
+    },
+    "GitlabSettings": {
+      "additionalProperties": false,
+      "description": "`[gitlab]`: settings that apply to the gitlab flavor only.",
+      "properties": {
+        "uuid_permalinks": {
+          "default": false,
+          "description": "Link object pages by UUID instead of by name (gitlab only).",
+          "title": "Uuid Permalinks",
+          "type": "boolean"
+        }
+      },
+      "title": "GitlabSettings",
+      "type": "object"
+    },
+    "IndexSettings": {
+      "additionalProperties": false,
+      "description": "`[index]`: the generated index pages.",
+      "properties": {
+        "relation_counts": {
+          "default": true,
+          "description": "Show how many objects each object relates to.",
+          "title": "Relation Counts",
+          "type": "boolean"
+        },
+        "icons": {
+          "default": false,
+          "description": "Prefix index entries with the family icon.",
+          "title": "Icons",
+          "type": "boolean"
+        }
+      },
+      "title": "IndexSettings",
+      "type": "object"
+    },
+    "ObjectNames": {
+      "additionalProperties": false,
+      "description": "`[object_names]`: display names of each object family.",
+      "properties": {
+        "threat": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Display name of threat vectors.",
+          "title": "Threat"
+        },
+        "objective": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Display name of detection objectives.",
+          "title": "Objective"
+        },
+        "signal": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Display name of detection objective signals.",
+          "title": "Signal"
+        },
+        "rule": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Display name of detection rules.",
+          "title": "Rule"
+        }
+      },
+      "title": "ObjectNames",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Merged `documentation.toml`: what `opentide generate docs` writes and how.",
+  "properties": {
+    "scope": {
+      "default": [
+        "threat",
+        "objective",
+        "rule"
+      ],
+      "description": "Object families that get documentation pages.",
+      "items": {
+        "enum": [
+          "threat",
+          "objective",
+          "rule"
+        ],
+        "type": "string"
+      },
+      "title": "Scope",
+      "type": "array"
+    },
+    "skip_model_keys": {
+      "description": "Object keys left out of the rendered pages.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Skip Model Keys",
+      "type": "array"
+    },
+    "folder_index_pages": {
+      "default": true,
+      "description": "Write an index page in every documentation folder.",
+      "title": "Folder Index Pages",
+      "type": "boolean"
+    },
+    "output": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Output folder, relative to the repository. Defaults to the docs path.",
+      "title": "Output"
+    },
+    "flavor": {
+      "anyOf": [
+        {
+          "anyOf": [
+            {
+              "enum": [
+                "github",
+                "gitlab",
+                "azure_devops",
+                "generic"
+              ]
+            },
+            {
+              "const": "azure-devops"
+            }
+          ],
+          "description": "Markdown flavor: github, gitlab, azure_devops or generic.",
+          "type": "string"
+        },
+        {
+          "$ref": "#/$defs/FlavorSettings"
+        }
+      ],
+      "description": "Markdown flavor: a [flavor] table, or the flavor name itself.",
+      "title": "Flavor"
+    },
+    "gitlab": {
+      "$ref": "#/$defs/GitlabSettings",
+      "description": "Settings for the gitlab flavor."
+    },
+    "diagrams": {
+      "$ref": "#/$defs/DiagramSettings",
+      "description": "Relation diagrams."
+    },
+    "index": {
+      "$ref": "#/$defs/IndexSettings",
+      "description": "Index pages."
+    },
+    "cve": {
+      "$ref": "#/$defs/CveSettings",
+      "description": "CVE lookups."
+    },
+    "object_names": {
+      "$ref": "#/$defs/ObjectNames",
+      "description": "Display names of each object family."
+    },
+    "icons": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Icon shown for each object family, keyed by family.",
+      "title": "Icons",
+      "type": "object"
+    }
+  },
+  "title": "documentation.toml",
+  "type": "object"
+}

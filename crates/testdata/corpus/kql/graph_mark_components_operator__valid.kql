@@ -1,0 +1,2 @@
+// prod:graph_mark_components_operator valid
+DeviceNetworkEvents | make-graph DeviceName --> RemoteIP | graph-mark-components kind=weak with_component_id=cid

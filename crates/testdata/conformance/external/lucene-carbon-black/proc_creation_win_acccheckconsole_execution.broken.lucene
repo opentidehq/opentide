@@ -1,0 +1,1 @@
+(device_os:WINDOWS ((process_name:\\AccCheckConsole.exe OR process_original_filename:AccCheckConsole.exe) (process_cmdline:\ \-hwnd* OR process_cmdline:\ \-process\ * OR process_cmdline:\ \-window\ *))

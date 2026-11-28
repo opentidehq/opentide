@@ -1,0 +1,2 @@
+// prod:binary_expression invalid
+$e.network.sent_bytes + > 1

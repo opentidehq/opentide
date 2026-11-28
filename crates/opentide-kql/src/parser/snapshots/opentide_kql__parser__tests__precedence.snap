@@ -1,0 +1,67 @@
+---
+source: crates/opentide-kql/src/parser/tests.rs
+expression: "show(\"T | where a or b and not c has \\\"x\\\" or d == 1 + 2 * 3 - 4\")"
+---
+SOURCE_FILE@0..56
+  QUERY@0..56
+    TABULAR_EXPRESSION@0..56
+      TABULAR_SOURCE@0..1
+        TABLE_REF@0..1
+          IDENT@0..1 "T"
+      WHITESPACE@1..2 " "
+      PIPE@2..3 "|"
+      WHITESPACE@3..4 " "
+      WHERE_OPERATOR@4..56
+        WHERE_KW@4..9 "where"
+        WHITESPACE@9..10 " "
+        OR_EXPR@10..56
+          NAME_REF@10..11
+            IDENT@10..11 "a"
+          WHITESPACE@11..12 " "
+          OR_KW@12..14 "or"
+          WHITESPACE@14..15 " "
+          AND_EXPR@15..34
+            NAME_REF@15..16
+              IDENT@15..16 "b"
+            WHITESPACE@16..17 " "
+            AND_KW@17..20 "and"
+            WHITESPACE@20..21 " "
+            NOT_EXPR@21..34
+              NOT_KW@21..24 "not"
+              WHITESPACE@24..25 " "
+              COMPARISON_EXPR@25..34
+                NAME_REF@25..26
+                  IDENT@25..26 "c"
+                WHITESPACE@26..27 " "
+                CMP_OP@27..30 "has"
+                WHITESPACE@30..31 " "
+                LITERAL@31..34
+                  STRING@31..34 "\"x\""
+          WHITESPACE@34..35 " "
+          OR_KW@35..37 "or"
+          WHITESPACE@37..38 " "
+          COMPARISON_EXPR@38..56
+            NAME_REF@38..39
+              IDENT@38..39 "d"
+            WHITESPACE@39..40 " "
+            CMP_OP@40..42 "=="
+            WHITESPACE@42..43 " "
+            ADDITIVE_EXPR@43..56
+              LITERAL@43..44
+                NUMBER@43..44 "1"
+              WHITESPACE@44..45 " "
+              PLUS@45..46 "+"
+              WHITESPACE@46..47 " "
+              MULTIPLICATIVE_EXPR@47..52
+                LITERAL@47..48
+                  NUMBER@47..48 "2"
+                WHITESPACE@48..49 " "
+                STAR@49..50 "*"
+                WHITESPACE@50..51 " "
+                LITERAL@51..52
+                  NUMBER@51..52 "3"
+              WHITESPACE@52..53 " "
+              MINUS@53..54 "-"
+              WHITESPACE@54..55 " "
+              LITERAL@55..56
+                NUMBER@55..56 "4"

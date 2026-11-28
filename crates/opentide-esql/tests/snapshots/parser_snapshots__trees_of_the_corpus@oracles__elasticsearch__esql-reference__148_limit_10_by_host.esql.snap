@@ -1,0 +1,29 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/oracles/elasticsearch/esql-reference/148_limit_10_by_host.esql
+---
+SOURCE_FILE@0..29
+  QUERY@0..28
+    FROM_COMMAND@0..9
+      FROM_KW@0..4 "FROM"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..9
+        INDEX_NAME@5..9
+          SOURCE_TEXT@5..9 "logs"
+    WHITESPACE@9..10 " "
+    PIPE@10..11 "|"
+    WHITESPACE@11..12 " "
+    LIMIT_COMMAND@12..28
+      LIMIT_KW@12..17 "LIMIT"
+      WHITESPACE@17..18 " "
+      NUMBER@18..20
+        NUMBER_LIT@18..20 "10"
+      WHITESPACE@20..21 " "
+      BY_KW@21..23 "BY"
+      WHITESPACE@23..24 " "
+      QUALIFIED_NAME@24..28
+        IDENTIFIER@24..28
+          IDENT@24..28 "host"
+  WHITESPACE@28..29 "\n"
+--- errors

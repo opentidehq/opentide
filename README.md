@@ -1,21 +1,23 @@
 # opentide
 
 [![PyPI](https://img.shields.io/pypi/v/opentide.svg)](https://pypi.org/project/opentide/)
-[![Coverage](https://raw.githubusercontent.com/opentidehq/opentide/python-coverage-comment-action-data/badge.svg)](https://github.com/opentidehq/opentide/actions/workflows/ci.yml)
+[![CI](https://github.com/opentidehq/opentide/actions/workflows/ci.yml/badge.svg?branch=development)](https://github.com/opentidehq/opentide/actions/workflows/ci.yml)
 
 **opentide** — spec-driven development for agentic detection engineering.
 
-opentide gives every detection an ontology and a taxonomy, so it stays threat-aligned, maintainable and fast to ship, with or without agents. It validates objects, generates schemas, deploys rules, and documents content across thirteen security platforms.
+opentide gives every detection an ontology and a taxonomy, so it stays threat-aligned, maintainable and fast to ship, with or without agents. It validates objects, generates schemas, deploys rules, and documents content across fourteen security platforms: Microsoft Sentinel, Microsoft Defender, Splunk Enterprise Security, SentinelOne, CrowdStrike Falcon, HarfangLab, Carbon Black Cloud, Elastic Security, Sysdig Secure, Bitdefender GravityZone, Graylog, Exabeam New-Scale SIEM, Google Security Operations and Datadog Cloud SIEM.
 
 ## Install
 
 ```bash
-pip install opentide==0.28.0
+pip install opentide==1.1.0
 export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 opentide validate
 ```
 
-Release notes: [CHANGELOG.md](CHANGELOG.md) · [Usage → Releases](https://opentide.org/docs/usage/releases/)
+opentide 1.1.0 runs on one Rust core. The same release is on [crates.io](https://crates.io/crates/opentide) (`cargo install opentide --features cli`) and [npm](https://www.npmjs.com/package/@opentide/opentide) (`npm install @opentide/opentide`).
+
+Release notes: [CHANGELOG.md](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md) · [Usage → Releases](https://opentide.org/docs/usage/releases/)
 
 ## Documentation
 
@@ -28,9 +30,9 @@ Published docs: [opentide.org/docs/usage/](https://opentide.org/docs/usage/).
 | [MCP](https://opentide.org/docs/mcp/) | Agent server |
 | [SDK](https://opentide.org/docs/sdk/) | Python API |
 
-Source for those pages lives in [`docs/`](docs/) (Fumadocs). This repo validates content only: `scripts/validate-docs.sh`. The site is [opentidehq/website](https://github.com/opentidehq/website).
+Source for those pages lives in [`docs/`](https://github.com/opentidehq/opentide/tree/development/docs) (Fumadocs). This repo validates content only: `scripts/validate-docs.sh`. The site is [opentidehq/website](https://github.com/opentidehq/website).
 
-Contributors: see [`AGENTS.md`](AGENTS.md) and [`.agents/skills/docs-maintenance/SKILL.md`](.agents/skills/docs-maintenance/SKILL.md).
+Contributors: see [`AGENTS.md`](https://github.com/opentidehq/opentide/blob/development/AGENTS.md) and [`.agents/skills/docs-maintenance/SKILL.md`](https://github.com/opentidehq/opentide/blob/development/.agents/skills/docs-maintenance/SKILL.md).
 
 ## Repository
 

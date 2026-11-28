@@ -1,0 +1,2 @@
+# prod:not_query invalid
+not(user.name:SYSTEM)

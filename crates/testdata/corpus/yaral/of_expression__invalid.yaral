@@ -1,0 +1,5 @@
+// prod:of_expression invalid
+rule r {
+  condition:
+    any of [$a,
+}

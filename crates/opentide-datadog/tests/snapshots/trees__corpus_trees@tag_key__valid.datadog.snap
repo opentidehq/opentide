@@ -1,0 +1,12 @@
+---
+source: crates/opentide-datadog/tests/trees.rs
+expression: "debug_tree(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/datadog/tag_key__valid.datadog
+---
+QUERY@0..15
+  FIELD_CLAUSE@0..15
+    TAG_KEY@0..7
+      WORD@0..7 "service"
+    COLON@7..8 ":"
+    TERM@8..15
+      WORD@8..15 "web-api"

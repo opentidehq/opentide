@@ -1,0 +1,29 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: setup.skills/json/none/no-target
+---
+args: opentide --json setup skills --yes
+exit: 2
+
+━━━ stdout · json, 1 lines
+{
+  "command": "setup skills",
+  "duration_ms": 0,
+  "error": "Choose at least one skills target (--cursor, --claude-code, --generic, --github-copilot, --plugin)",
+  "exit_code": 2,
+  "failure": {
+    "argument": null,
+    "code": "usage_missing_option",
+    "crash_log": null,
+    "message": "Choose at least one skills target (--cursor, --claude-code, --generic, --github-copilot, --plugin)",
+    "suggestion": null
+  },
+  "message": "Choose at least one skills target (--cursor, --claude-code, --generic, --github-copilot, --plugin)",
+  "next_actions": [],
+  "ok": false,
+  "schema_version": 1,
+  "status": "failed",
+  "summary": {}
+}
+
+━━━ stderr · empty

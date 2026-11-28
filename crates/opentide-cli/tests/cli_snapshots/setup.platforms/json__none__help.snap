@@ -1,0 +1,73 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: setup.platforms/json/none/help
+---
+args: opentide --json setup platforms --help
+exit: 0
+
+━━━ stdout
+Create and enable platform configuration files in `.opentide/configurations/platforms/`.
+
+Usage: opentide setup platforms [OPTIONS]
+
+Options:
+  -C, --path <PATH_FLAG>
+          Repository path
+          
+          [default: .]
+
+      --sentinel
+          Enable Microsoft Sentinel
+
+      --microsoft-defender
+          Enable Microsoft Defender
+
+      --splunk
+          Enable Splunk Enterprise Security
+
+      --sentinel-one
+          Enable SentinelOne
+
+      --crowdstrike
+          Enable CrowdStrike Falcon
+
+      --harfanglab
+          Enable HarfangLab
+
+      --carbon-black-cloud
+          Enable Carbon Black Cloud
+
+      --elastic
+          Enable Elastic Security
+
+      --sysdig
+          Enable Sysdig Secure (Falco)
+
+      --bitdefender
+          Enable Bitdefender GravityZone
+
+      --graylog
+          Enable Graylog
+
+      --exabeam
+          Enable Exabeam New-Scale SIEM
+
+      --google-secops
+          Enable Google Security Operations (YARA-L)
+
+      --datadog
+          Enable Datadog Cloud SIEM
+
+      --plan
+          List the files each step would write, and write nothing
+
+  -y, --yes
+          Write without asking for confirmation
+
+      --help
+          Print help
+
+Examples:
+  $ opentide setup platforms --sentinel --splunk --yes
+
+━━━ stderr · empty

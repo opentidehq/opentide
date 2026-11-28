@@ -1,0 +1,39 @@
+---
+source: crates/opentide-kql/src/parser/tests.rs
+expression: "show(\"find in (T1) where x == 1 project-smart | take 1\")"
+---
+SOURCE_FILE@0..48
+  QUERY@0..48
+    TABULAR_EXPRESSION@0..48
+      TABULAR_SOURCE@0..39
+        SEARCH_SOURCE@0..39
+          FIND_KW@0..4 "find"
+          WHITESPACE@4..5 " "
+          IN_KW@5..7 "in"
+          WHITESPACE@7..8 " "
+          L_PAREN@8..9 "("
+          IDENT@9..11 "T1"
+          R_PAREN@11..12 ")"
+          WHITESPACE@12..13 " "
+          WHERE_KW@13..18 "where"
+          WHITESPACE@18..19 " "
+          COMPARISON_EXPR@19..25
+            NAME_REF@19..20
+              IDENT@19..20 "x"
+            WHITESPACE@20..21 " "
+            CMP_OP@21..23 "=="
+            WHITESPACE@23..24 " "
+            LITERAL@24..25
+              NUMBER@24..25 "1"
+          WHITESPACE@25..26 " "
+          FIND_PROJECT@26..39
+            PROJECT_KW@26..33 "project"
+            MINUS@33..34 "-"
+            IDENT@34..39 "smart"
+      WHITESPACE@39..40 " "
+      PIPE@40..41 "|"
+      WHITESPACE@41..42 " "
+      TAKE_OPERATOR@42..48
+        TAKE_KW@42..46 "take"
+        WHITESPACE@46..47 " "
+        NUMBER@47..48 "1"

@@ -1,0 +1,17 @@
+text: hello
+number: 7
+ratio: 1.5
+flag: false
+items: [a, b]
+inners:
+  - label: x
+    count: 1
+  - label: y
+inner: {label: z}
+mapping: {a: 1, b: 2}
+choice: two
+kind: beta
+either: 3
+some: [p, q]
+schema: s
+vocab: [v]

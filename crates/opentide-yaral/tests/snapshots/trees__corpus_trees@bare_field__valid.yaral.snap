@@ -1,0 +1,58 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/bare_field__valid.yaral
+---
+SOURCE_FILE@0..121
+  COMMENT@0..24 "// prod:bare_field valid"
+  WHITESPACE@24..25 "\n"
+  SEARCH_QUERY@25..120
+    SEARCH_EVENTS@25..120
+      COMPARISON@25..53
+        BARE_FIELD@25..43
+          IDENT@25..34 "principal"
+          MEMBER@34..43
+            ACCESS_DOT@34..35 "."
+            FIELD_NAME@35..43 "hostname"
+        WHITESPACE@43..44 " "
+        EQ@44..45 "="
+        WHITESPACE@45..46 " "
+        LITERAL@46..53
+          STRING@46..53 "\"web01\""
+      WHITESPACE@53..54 "\n"
+      COMPARISON@54..76
+        BARE_FIELD@54..67
+          IDENT@54..60 "labels"
+          INDEX@60..67
+            INDEX_L_BRACK@60..61 "["
+            STRING@61..66 "\"env\""
+            R_BRACK@66..67 "]"
+        WHITESPACE@67..68 " "
+        EQ@68..69 "="
+        WHITESPACE@69..70 " "
+        LITERAL@70..76
+          STRING@70..76 "\"prod\""
+      WHITESPACE@76..77 "\n"
+      AND_EXPR@77..120
+        COMPARISON@77..92
+          NAME_REF@77..79
+            IDENT@77..79 "ip"
+          WHITESPACE@79..80 " "
+          EQ@80..81 "="
+          WHITESPACE@81..82 " "
+          LITERAL@82..92
+            STRING@82..92 "\"10.0.0.1\""
+        WHITESPACE@92..93 " "
+        AND_KW@93..96 "AND"
+        WHITESPACE@96..97 " "
+        COMPARISON@97..120
+          NAME_REF@97..100
+            IDENT@97..100 "raw"
+          WHITESPACE@100..101 " "
+          EQ@101..102 "="
+          WHITESPACE@102..103 " "
+          LITERAL@103..113
+            REGEX_LIT@103..113 "/mimikatz/"
+          WHITESPACE@113..114 " "
+          NOCASE_KW@114..120 "nocase"
+  WHITESPACE@120..121 "\n"

@@ -1,0 +1,30 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: generate.docs.objectives/json/vscode/default
+---
+args: opentide --json generate docs objectives
+exit: 1
+
+━━━ stdout · json, 1 lines
+{
+  "command": "generate docs objectives",
+  "duration_ms": 0,
+  "error": "docs: \"Suspicious LSASS Access\" does not validate: metadata.version: field required (and 6 more); opentide validate shows each finding",
+  "exit_code": 1,
+  "failure": {
+    "argument": null,
+    "code": "command_failed",
+    "crash_log": null,
+    "message": "docs: \"Suspicious LSASS Access\" does not validate: metadata.version: field required (and 6 more); opentide validate shows each finding",
+    "suggestion": null
+  },
+  "message": "docs: \"Suspicious LSASS Access\" does not validate: metadata.version: field required (and 6 more); opentide validate shows each finding",
+  "next_actions": [],
+  "ok": false,
+  "phase": "docs",
+  "schema_version": 1,
+  "status": "failed",
+  "summary": {}
+}
+
+━━━ stderr · empty

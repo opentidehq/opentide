@@ -1,0 +1,21 @@
+name: Schedule days
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000120
+  schema: rule::1.0
+  version: 1
+  created: "2026-01-01"
+  modified: "2026-01-02"
+  tlp: clear
+  author: Detection Engineering
+description: |
+  Block case schedule-days.
+configurations:
+  exabeam:
+    enabled: true
+    schema: platform::exabeam::1.0
+    status: STAGING
+    schedule:
+      - {every: days, from: '08:00Z', to: '18:00Z', first: monday}
+      - {every: day, from: '08:00Z', to: '18:00Z', days: [monday]}
+    sequences:
+      - query: 'activity_type:"app-login" AND outcome:"fail"'

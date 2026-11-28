@@ -1,0 +1,31 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(query(&file))
+input_file: crates/testdata/corpus/cql/match_statement__invalid.cql
+---
+SOURCE_FILE@0..49
+  PIPELINE@0..48
+    MATCH_STATEMENT@0..13
+      FIELD_NAME@0..7
+        WORD@0..7 "logtype"
+      WHITESPACE@7..8 " "
+      MATCH_KW@8..13 "match"
+    WHITESPACE@13..14 " "
+    FREE_TEXT@14..25
+      STRING@14..25
+        STRING_TOKEN@14..25 "\"accesslog\""
+    WHITESPACE@25..26 " "
+    ERROR@26..28
+      FAT_ARROW@26..28 "=>"
+    WHITESPACE@28..29 " "
+    ASSIGNMENT@29..48
+      FIELD_NAME@29..33
+        WORD@29..33 "time"
+      COLON_EQ@33..35 ":="
+      FIELD_NAME@35..48
+        WORD@35..48 "response_time"
+  WHITESPACE@48..49 "\n"
+
+13..14: expected `{` after `match` (expected L_BRACE)
+13..14: missing `}` (expected L_BRACE, R_BRACE)
+25..26: unexpected

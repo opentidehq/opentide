@@ -1,0 +1,36 @@
+---
+source: crates/opentide-kql/src/parser/tests.rs
+expression: "show(\"search kind = case_sensitive \\\"x\\\" | search \\\"y\\\" | take 1\")"
+---
+SOURCE_FILE@0..54
+  QUERY@0..54
+    TABULAR_EXPRESSION@0..54
+      TABULAR_SOURCE@0..32
+        SEARCH_SOURCE@0..32
+          SEARCH_KW@0..6 "search"
+          WHITESPACE@6..7 " "
+          OPERATOR_OPTION@7..28
+            IDENT@7..11 "kind"
+            WHITESPACE@11..12 " "
+            EQ@12..13 "="
+            WHITESPACE@13..14 " "
+            OPTION_VALUE@14..28
+              IDENT@14..28 "case_sensitive"
+          WHITESPACE@28..29 " "
+          LITERAL@29..32
+            STRING@29..32 "\"x\""
+      WHITESPACE@32..33 " "
+      PIPE@33..34 "|"
+      WHITESPACE@34..35 " "
+      SEARCH_OPERATOR@35..45
+        SEARCH_KW@35..41 "search"
+        WHITESPACE@41..42 " "
+        LITERAL@42..45
+          STRING@42..45 "\"y\""
+      WHITESPACE@45..46 " "
+      PIPE@46..47 "|"
+      WHITESPACE@47..48 " "
+      TAKE_OPERATOR@48..54
+        TAKE_KW@48..52 "take"
+        WHITESPACE@52..53 " "
+        NUMBER@53..54 "1"

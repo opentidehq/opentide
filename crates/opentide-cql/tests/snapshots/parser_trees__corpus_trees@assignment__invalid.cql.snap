@@ -1,0 +1,34 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(query(&file))
+input_file: crates/testdata/corpus/cql/assignment__invalid.cql
+---
+SOURCE_FILE@0..13
+  PIPELINE@0..12
+    ASSIGNMENT@0..4
+      FIELD_NAME@0..1
+        WORD@0..1 "a"
+      WHITESPACE@1..2 " "
+      COLON_EQ@2..4 ":="
+    WHITESPACE@4..5 " "
+    AND_FILTER@5..12
+      FREE_TEXT@5..6
+        REGEX@5..6
+          SLASH@5..6 "/"
+      FREE_TEXT@6..10
+        UNQUOTED_PATTERN@6..10
+          WORD@6..10 "fisk"
+      FREE_TEXT@10..11
+        REGEX@10..11
+          SLASH@10..11 "/"
+      FREE_TEXT@11..12
+        UNQUOTED_PATTERN@11..12
+          WORD@11..12 "i"
+  WHITESPACE@12..13 "\n"
+
+4..5: expected an expression
+4..5: a filter cannot follow an assignment without a pipe
+6..6: expected a regular expression (expected REGEX_PATTERN_TOKEN)
+6..6: the regular expression is never closed (expected REGEX_PATTERN_TOKEN, SLASH)
+11..11: expected a regular expression (expected REGEX_PATTERN_TOKEN)
+11..11: the regular expression is never closed (expected REGEX_PATTERN_TOKEN, SLASH)

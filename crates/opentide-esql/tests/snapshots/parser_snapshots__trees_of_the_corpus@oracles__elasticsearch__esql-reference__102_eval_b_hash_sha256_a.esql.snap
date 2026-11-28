@@ -1,0 +1,40 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/oracles/elasticsearch/esql-reference/102_eval_b_hash_sha256_a.esql
+---
+SOURCE_FILE@0..39
+  QUERY@0..38
+    FROM_COMMAND@0..9
+      FROM_KW@0..4 "FROM"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..9
+        INDEX_NAME@5..9
+          SOURCE_TEXT@5..9 "logs"
+    WHITESPACE@9..10 " "
+    PIPE@10..11 "|"
+    WHITESPACE@11..12 " "
+    EVAL_COMMAND@12..38
+      EVAL_KW@12..16 "EVAL"
+      WHITESPACE@16..17 " "
+      FIELD_ASSIGNMENT_OR_EXPRESSION@17..38
+        QUALIFIED_NAME@17..18
+          IDENTIFIER@17..18
+            IDENT@17..18 "b"
+        WHITESPACE@18..19 " "
+        EQ@19..20 "="
+        WHITESPACE@20..21 " "
+        FUNCTION_CALL@21..38
+          IDENTIFIER@21..25
+            IDENT@21..25 "HASH"
+          L_PAREN@25..26 "("
+          STRING@26..34
+            STRING_LIT@26..34 "\"sha256\""
+          COMMA@34..35 ","
+          WHITESPACE@35..36 " "
+          QUALIFIED_NAME@36..37
+            IDENTIFIER@36..37
+              IDENT@36..37 "a"
+          R_PAREN@37..38 ")"
+  WHITESPACE@38..39 "\n"
+--- errors

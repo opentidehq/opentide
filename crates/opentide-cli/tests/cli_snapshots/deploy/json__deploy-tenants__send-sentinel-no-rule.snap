@@ -1,0 +1,39 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: deploy/json/deploy-tenants/send-sentinel-no-rule
+---
+args: opentide --json deploy --platform sentinel --strategy PREVIEW --uuid 00000000-0000-4000-8047-000000000072
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "advice": "set a platform block's status to DEVELOPMENT, IMPROVING, STAGING or ACCEPTANCE for PREVIEW to deploy it",
+  "command": "deploy",
+  "deployed": [],
+  "dry_run": false,
+  "duration_ms": 0,
+  "exit_code": 0,
+  "failure": null,
+  "message": "No rules to deploy for this platform",
+  "next_actions": [],
+  "ok": true,
+  "plan": {},
+  "platform": "sentinel",
+  "schema_version": 1,
+  "scope": "selected",
+  "skipped": [
+    {
+      "platform": "sentinel",
+      "rule": "Sentinel retire rule",
+      "status": "REMOVED",
+      "strategy": "DELETION",
+      "uuid": "00000000-0000-4000-8047-000000000072"
+    }
+  ],
+  "status": "skipped",
+  "summary": {
+    "skipped": 1
+  }
+}
+
+━━━ stderr · empty

@@ -1,0 +1,154 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: share.push/json/share-misp-first-commit/changed-first-push
+---
+args: opentide --json share push --changed --dry-run
+exit: 3
+
+━━━ stdout · json, 1 lines
+{
+  "command": "share push",
+  "duration_ms": 0,
+  "error": "Would share 4 objects to misp-locked, misp-prod · 3 new, 1 updated, 1 unchanged, 6 skipped, 3 failed",
+  "exit_code": 3,
+  "failure": {
+    "argument": null,
+    "code": "share_partial",
+    "crash_log": null,
+    "message": "Would share 4 objects to misp-locked, misp-prod · 3 new, 1 updated, 1 unchanged, 6 skipped, 3 failed",
+    "suggestion": null
+  },
+  "message": "Would share 4 objects to misp-locked, misp-prod · 3 new, 1 updated, 1 unchanged, 6 skipped, 3 failed",
+  "next_actions": [],
+  "ok": false,
+  "records": [
+    {
+      "action": "skipped_status",
+      "integration": "misp",
+      "object_uuid": "00000000-0000-4000-8048-000000000014",
+      "reason": "rule_status",
+      "target": "misp-prod"
+    },
+    {
+      "action": "skipped_tlp",
+      "integration": "misp",
+      "object_uuid": "00000000-0000-4000-8048-000000000015",
+      "reason": "max_tlp",
+      "target": "misp-prod"
+    },
+    {
+      "action": "created",
+      "integration": "misp",
+      "notes": [
+        "organisation_unverified",
+        "cluster_not_resolved"
+      ],
+      "object_uuid": "00000000-0000-4000-8048-000000000001",
+      "target": "misp-prod"
+    },
+    {
+      "action": "created",
+      "integration": "misp",
+      "notes": [
+        "organisation_unverified"
+      ],
+      "object_uuid": "00000000-0000-4000-8048-000000000002",
+      "target": "misp-prod"
+    },
+    {
+      "action": "created",
+      "integration": "misp",
+      "notes": [
+        "organisation_unverified",
+        "cluster_not_resolved"
+      ],
+      "object_uuid": "00000000-0000-4000-8048-000000000011",
+      "target": "misp-prod"
+    },
+    {
+      "action": "updated",
+      "integration": "misp",
+      "notes": [
+        "organisation_unverified",
+        "cluster_not_resolved"
+      ],
+      "object_uuid": "00000000-0000-4000-8048-000000000012",
+      "target": "misp-prod"
+    },
+    {
+      "action": "unchanged",
+      "integration": "misp",
+      "notes": [
+        "organisation_unverified",
+        "cluster_not_resolved"
+      ],
+      "object_uuid": "00000000-0000-4000-8048-000000000013",
+      "target": "misp-prod"
+    },
+    {
+      "action": "skipped_type",
+      "integration": "misp",
+      "object_uuid": "00000000-0000-4000-8048-000000000001",
+      "reason": "object_type",
+      "target": "misp-locked"
+    },
+    {
+      "action": "skipped_type",
+      "integration": "misp",
+      "object_uuid": "00000000-0000-4000-8048-000000000002",
+      "reason": "object_type",
+      "target": "misp-locked"
+    },
+    {
+      "action": "skipped_status",
+      "integration": "misp",
+      "object_uuid": "00000000-0000-4000-8048-000000000014",
+      "reason": "rule_status",
+      "target": "misp-locked"
+    },
+    {
+      "action": "skipped_tlp",
+      "integration": "misp",
+      "object_uuid": "00000000-0000-4000-8048-000000000015",
+      "reason": "max_tlp",
+      "target": "misp-locked"
+    },
+    {
+      "action": "failed",
+      "integration": "misp",
+      "object_uuid": "00000000-0000-4000-8048-000000000011",
+      "reason": "organisation_uuid_missing",
+      "target": "misp-locked"
+    },
+    {
+      "action": "failed",
+      "integration": "misp",
+      "object_uuid": "00000000-0000-4000-8048-000000000012",
+      "reason": "organisation_uuid_missing",
+      "target": "misp-locked"
+    },
+    {
+      "action": "failed",
+      "integration": "misp",
+      "object_uuid": "00000000-0000-4000-8048-000000000013",
+      "reason": "organisation_uuid_missing",
+      "target": "misp-locked"
+    }
+  ],
+  "schema_version": 1,
+  "status": "failed",
+  "summary": {
+    "failed": 3,
+    "new": 3,
+    "objects": 4,
+    "retracted": 0,
+    "skipped": 6,
+    "unchanged": 1,
+    "updated": 1
+  },
+  "warnings": [
+    "[[misp]] block \"misp-lab\" api_key is a literal. Use ${ENV_VAR}. The value was replaced with [REDACTED]."
+  ]
+}
+
+━━━ stderr · empty

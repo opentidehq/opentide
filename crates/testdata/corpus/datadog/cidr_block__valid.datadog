@@ -1,0 +1,2 @@
+# prod:cidr_block valid
+CIDR(@network.client.ip, fc00::/7)

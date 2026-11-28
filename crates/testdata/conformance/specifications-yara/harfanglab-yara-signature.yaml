@@ -1,0 +1,40 @@
+name: HarfangLab YARA signature block
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000040
+  schema: rule::1.0
+  version: 1
+  created: "2026-01-01"
+  modified: "2026-01-02"
+  tlp: clear
+description: |
+  HarfangLab YARA scan rule written as a whole YARA signature, with a private
+  helper rule and a pe import.
+status: STAGING
+severity: High
+response:
+  alert_severity: High
+configurations:
+  harfanglab:
+    enabled: true
+    schema: platform::harfanglab::1.0
+    status: STAGING
+    action: "Alert & Block"
+    yara:
+      signature: |
+        import "pe"
+
+        private rule MZ_Header {
+          condition:
+            uint16(0) == 0x5A4D
+        }
+
+        rule Loader_Stage1 : loader {
+          meta:
+            description = "Stage-1 loader with an encrypted config blob"
+            context = "file,memory"
+          strings:
+            $cfg = { 43 46 47 21 [4-16] 00 01 }
+            $mutex = "Global\\qx-7731" ascii wide
+          condition:
+            MZ_Header and pe.number_of_sections > 3 and all of them
+        }

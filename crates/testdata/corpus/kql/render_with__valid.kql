@@ -1,0 +1,2 @@
+// prod:render_with valid
+SecurityEvent | summarize count() by bin(TimeGenerated, 1h) | render timechart with (title="Events", ycolumns=count_, ymin=0)

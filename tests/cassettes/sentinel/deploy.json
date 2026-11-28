@@ -1,0 +1,292 @@
+{
+  "format": 1,
+  "scenario": "sentinel/deploy",
+  "recorded_from": [
+    "{python}",
+    "tests/cassettes/sentinel/client.py",
+    "deploy"
+  ],
+  "digest": "sha256:324a4ed1965a5fdaf5b54bfc8211b6a9cb1765b3eb160d1eb6b1807c5ffd27b0",
+  "interactions": [
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://login.microsoftonline.com/contoso-tenant-id/v2.0/.well-known/openid-configuration",
+        "headers": [
+          [
+            "x-ms-client-request-id",
+            "00000000-0000-4000-8000-000000000001"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "sentinel-tenant"
+          ],
+          [
+            "content-type",
+            "application/json; charset=utf-8"
+          ]
+        ],
+        "body": "{\"token_endpoint\": \"REDACTED\", \"token_endpoint_auth_methods_supported\": [\"REDACTED\", \"REDACTED\", \"REDACTED\"], \"jwks_uri\": \"https://login.microsoftonline.com/contoso-tenant-id/discovery/v2.0/keys\", \"response_modes_supported\": [\"query\", \"fragment\", \"form_post\"], \"subject_types_supported\": [\"pairwise\"], \"id_token_signing_alg_values_supported\": [\"REDACTED\"], \"response_types_supported\": [\"code\", \"id_token\", \"code id_token\", \"id_token token\"], \"scopes_supported\": [\"openid\", \"profile\", \"email\", \"offline_access\"], \"issuer\": \"https://login.microsoftonline.com/contoso-tenant-id/v2.0\", \"request_uri_parameter_supported\": false, \"userinfo_endpoint\": \"https://graph.microsoft.com/oidc/userinfo\", \"authorization_endpoint\": \"https://login.microsoftonline.com/contoso-tenant-id/oauth2/v2.0/authorize\", \"device_authorization_endpoint\": \"https://login.microsoftonline.com/contoso-tenant-id/oauth2/v2.0/devicecode\", \"http_logout_supported\": true, \"frontchannel_logout_supported\": true, \"end_session_endpoint\": \"REDACTED\", \"claims_supported\": [\"sub\", \"iss\", \"aud\", \"exp\", \"iat\"], \"kerberos_endpoint\": \"https://login.microsoftonline.com/contoso-tenant-id/kerberos\", \"tenant_region_scope\": \"EU\", \"cloud_instance_name\": \"microsoftonline.com\", \"cloud_graph_host_name\": \"graph.windows.net\", \"msgraph_host\": \"graph.microsoft.com\", \"rbac_url\": \"https://pas.windows.net\"}"
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://login.microsoftonline.com/contoso-tenant-id/oauth2/v2.0/token",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "client-request-id",
+            "00000000-0000-4000-8000-000000000003"
+          ],
+          [
+            "content-type",
+            "application/x-www-form-urlencoded"
+          ],
+          [
+            "x-client-current-telemetry",
+            "4|730,2|"
+          ],
+          [
+            "x-client-last-telemetry",
+            "4|0|||"
+          ],
+          [
+            "x-client-os",
+            "linux"
+          ],
+          [
+            "x-client-sku",
+            "MSAL.Python"
+          ],
+          [
+            "x-client-ver",
+            "1.39.0"
+          ],
+          [
+            "x-ms-client-request-id",
+            "00000000-0000-4000-8000-000000000004"
+          ],
+          [
+            "x-ms-lib-capability",
+            "retry-after, h429"
+          ]
+        ],
+        "body": "client_id=opentide-app-id&grant_type=client_credentials&client_info=1&client_secret=REDACTED&scope=https%3A%2F%2Fmanagement.azure.com%2F.default"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "sentinel-tenant"
+          ],
+          [
+            "content-type",
+            "application/json; charset=utf-8"
+          ]
+        ],
+        "body": "{\"token_type\": \"REDACTED\", \"expires_in\": 3599, \"ext_expires_in\": 3599, \"access_token\": \"REDACTED\"}"
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://management.azure.com/subscriptions/sub-0001/resourceGroups/soc-rg/providers/Microsoft.OperationalInsights/workspaces/soc%20workspace/providers/Microsoft.SecurityInsights/alertRules/00000000-0000-4000-8003-000000000001?api-version=2025-10-01-preview",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"kind\": \"Scheduled\", \"properties\": {\"displayName\": \"Encoded PowerShell \\u2014 \\u00dcn\\u00efcode\", \"description\": \"A process ran PowerShell with an encoded command.\", \"severity\": \"High\", \"enabled\": true, \"query\": \"SecurityEvent\\n| where CommandLine has \\\"-enc\\\"\", \"queryFrequency\": \"PT1H\", \"queryPeriod\": \"PT1H\", \"triggerOperator\": \"GreaterThan\", \"triggerThreshold\": 0, \"suppressionDuration\": \"PT5H\", \"suppressionEnabled\": false, \"tactics\": [\"Execution\"], \"techniques\": [\"T1059\"], \"subTechniques\": [\"T1059.001\"]}}"
+      },
+      "response": {
+        "status": 201,
+        "headers": [
+          [
+            "server",
+            "sentinel-tenant"
+          ],
+          [
+            "content-type",
+            "application/json; charset=utf-8"
+          ]
+        ],
+        "body": "{\"kind\": \"Scheduled\", \"properties\": {\"displayName\": \"Encoded PowerShell \\u2014 \\u00dcn\\u00efcode\", \"description\": \"A process ran PowerShell with an encoded command.\", \"severity\": \"High\", \"enabled\": true, \"query\": \"SecurityEvent\\n| where CommandLine has \\\"-enc\\\"\", \"queryFrequency\": \"PT1H\", \"queryPeriod\": \"PT1H\", \"triggerOperator\": \"GreaterThan\", \"triggerThreshold\": 0, \"suppressionDuration\": \"PT5H\", \"suppressionEnabled\": false, \"tactics\": [\"Execution\"], \"techniques\": [\"T1059\"], \"subTechniques\": [\"T1059.001\"]}, \"name\": \"00000000-0000-4000-8003-000000000001\", \"etag\": \"\\\"0300bf09-0000-0000-0000-5c37296e0000\\\"\"}"
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "url": "https://management.azure.com/subscriptions/sub-0001/resourceGroups/soc-rg/providers/Microsoft.OperationalInsights/workspaces/soc%20workspace/providers/Microsoft.SecurityInsights/alertRules/00000000-0000-4000-8003-000000000001?api-version=2025-10-01-preview",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"kind\": \"Scheduled\", \"properties\": {\"displayName\": \"Encoded PowerShell \\u2014 \\u00dcn\\u00efcode\", \"description\": \"A process ran PowerShell with an encoded command.\", \"severity\": \"High\", \"enabled\": true, \"query\": \"SecurityEvent\\n| where CommandLine has \\\"-enc\\\"\", \"queryFrequency\": \"PT1H\", \"queryPeriod\": \"PT1H\", \"triggerOperator\": \"GreaterThan\", \"triggerThreshold\": 0, \"suppressionDuration\": \"PT5H\", \"suppressionEnabled\": false, \"tactics\": [\"Execution\"], \"techniques\": [\"T1059\"], \"subTechniques\": [\"T1059.001\"]}}"
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "sentinel-tenant"
+          ],
+          [
+            "content-type",
+            "application/json; charset=utf-8"
+          ]
+        ],
+        "body": "{\"kind\": \"Scheduled\", \"properties\": {\"displayName\": \"Encoded PowerShell \\u2014 \\u00dcn\\u00efcode\", \"description\": \"A process ran PowerShell with an encoded command.\", \"severity\": \"High\", \"enabled\": true, \"query\": \"SecurityEvent\\n| where CommandLine has \\\"-enc\\\"\", \"queryFrequency\": \"PT1H\", \"queryPeriod\": \"PT1H\", \"triggerOperator\": \"GreaterThan\", \"triggerThreshold\": 0, \"suppressionDuration\": \"PT5H\", \"suppressionEnabled\": false, \"tactics\": [\"Execution\"], \"techniques\": [\"T1059\"], \"subTechniques\": [\"T1059.001\"]}, \"name\": \"00000000-0000-4000-8003-000000000001\", \"etag\": \"\\\"0300bf09-0000-0000-0000-5c37296e0000\\\"\"}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://management.azure.com/subscriptions/sub-0001/resourceGroups/soc-rg/providers/Microsoft.OperationalInsights/workspaces/soc%20workspace/providers/Microsoft.SecurityInsights/alertRules?api-version=2025-10-01-preview",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "sentinel-tenant"
+          ],
+          [
+            "content-type",
+            "application/json; charset=utf-8"
+          ]
+        ],
+        "body": "{\"value\": [{\"kind\": \"Scheduled\", \"properties\": {\"displayName\": \"Encoded PowerShell \\u2014 \\u00dcn\\u00efcode\", \"description\": \"A process ran PowerShell with an encoded command.\", \"severity\": \"High\", \"enabled\": true, \"query\": \"SecurityEvent\\n| where CommandLine has \\\"-enc\\\"\", \"queryFrequency\": \"PT1H\", \"queryPeriod\": \"PT1H\", \"triggerOperator\": \"GreaterThan\", \"triggerThreshold\": 0, \"suppressionDuration\": \"PT5H\", \"suppressionEnabled\": false, \"tactics\": [\"Execution\"], \"techniques\": [\"T1059\"], \"subTechniques\": [\"T1059.001\"]}, \"name\": \"00000000-0000-4000-8003-000000000001\", \"etag\": \"\\\"0300bf09-0000-0000-0000-5c37296e0000\\\"\", \"id\": \"/subscriptions/sub-0001/resourceGroups/soc-rg/providers/Microsoft.OperationalInsights/workspaces/soc%20workspace/providers/Microsoft.SecurityInsights/alertRules/00000000-0000-4000-8003-000000000001\"}], \"nextLink\": \"https://management.azure.com/subscriptions/sub-0001/resourceGroups/soc-rg/providers/Microsoft.OperationalInsights/workspaces/soc%20workspace/providers/Microsoft.SecurityInsights/alertRules?api-version=2025-10-01-preview&$skipToken=page2\"}"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://management.azure.com/subscriptions/sub-0001/resourceGroups/soc-rg/providers/Microsoft.OperationalInsights/workspaces/soc%20workspace/providers/Microsoft.SecurityInsights/alertRules?api-version=2025-10-01-preview&$skipToken=REDACTED",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "sentinel-tenant"
+          ],
+          [
+            "content-type",
+            "application/json; charset=utf-8"
+          ]
+        ],
+        "body": "{\"value\": []}"
+      }
+    },
+    {
+      "request": {
+        "method": "DELETE",
+        "url": "https://management.azure.com/subscriptions/sub-0001/resourceGroups/soc-rg/providers/Microsoft.OperationalInsights/workspaces/soc%20workspace/providers/Microsoft.SecurityInsights/alertRules/00000000-0000-4000-8003-000000000001?api-version=2025-10-01-preview",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": [
+          [
+            "server",
+            "sentinel-tenant"
+          ]
+        ],
+        "body": ""
+      }
+    },
+    {
+      "request": {
+        "method": "DELETE",
+        "url": "https://management.azure.com/subscriptions/sub-0001/resourceGroups/soc-rg/providers/Microsoft.OperationalInsights/workspaces/soc%20workspace/providers/Microsoft.SecurityInsights/alertRules/00000000-0000-4000-8003-000000000001?api-version=2025-10-01-preview",
+        "headers": [
+          [
+            "accept",
+            "application/json"
+          ],
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ]
+        ],
+        "body": ""
+      },
+      "response": {
+        "status": 404,
+        "headers": [
+          [
+            "server",
+            "sentinel-tenant"
+          ],
+          [
+            "content-type",
+            "application/json; charset=utf-8"
+          ]
+        ],
+        "body": "{\"error\": {\"code\": \"REDACTED\", \"message\": \"Alert rule with id '00000000-0000-4000-8003-000000000001' was not found.\"}}"
+      }
+    }
+  ]
+}

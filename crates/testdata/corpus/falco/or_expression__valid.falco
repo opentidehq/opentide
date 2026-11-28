@@ -1,0 +1,2 @@
+# prod:or_expression valid
+proc.name = bash or proc.name = sh

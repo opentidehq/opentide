@@ -1,0 +1,2 @@
+``` prod:dedup_command valid
+index=main | dedup host

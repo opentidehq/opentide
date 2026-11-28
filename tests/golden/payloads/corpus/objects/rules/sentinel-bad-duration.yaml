@@ -1,0 +1,33 @@
+name: Sentinel Bad Duration
+
+metadata:
+  uuid: 00000000-0000-4000-8005-000000000008
+  schema: rule::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+  author: Detection Team
+  contributors:
+    - Analyst One
+    - Detection Team
+
+description: |
+  Sentinel Bad Duration for the compile corpus.
+  Second line.
+
+response:
+  alert_severity: Low
+
+configurations:
+  sentinel:
+    status: STAGING
+    query: SigninLogs
+    scheduling:
+      frequency: soon
+      lookback: 1h
+    alert: {}
+    grouping:
+      event: SingleAlert
+      alert:
+        enabled: false

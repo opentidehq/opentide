@@ -1,0 +1,17 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: deploy/json/deploy-push-no-target/promote-fails
+---
+args: opentide --json deploy --platform splunk --strategy RELEASE
+exit: 1
+
+━━━ stdout · empty
+
+━━━ stderr · json, 1 lines
+{
+  "detail": "Valid statuses: DESIGN, DEVELOPMENT, IMPROVING, STAGING, ACCEPTANCE, PRODUCTION, DISABLED, REMOVED",
+  "event": "invalid_promotion_target",
+  "level": "error",
+  "target": 1,
+  "timestamp": "0000-00-00 00:00:00"
+}

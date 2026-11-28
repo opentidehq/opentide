@@ -1,0 +1,25 @@
+name: Defender create rule
+metadata:
+  uuid: 00000000-0000-4000-8047-0000000000d1
+  schema: rule::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: |
+  A rule the Microsoft Defender stand-in tenant receives in a deploy that sends; the tenant does not hold it yet: PATCH answers 404, then POST creates it with its uuid as id.
+response:
+  alert_severity: High
+configurations:
+  microsoft_defender:
+    status: STAGING
+    query: |
+      DeviceProcessEvents
+      | take 1
+    schedule:
+      frequency: 1H
+    alert:
+      title: Defender create rule
+    entities:
+      hosts:
+        - device_id: DeviceId

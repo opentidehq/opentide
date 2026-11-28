@@ -1,0 +1,17 @@
+# The tenant the fixtures/datadog rules deploy to (RFC §7.2: the soc alias is
+# @slack-soc-alerts), and whose request bodies are the *.api.json files
+# beside this one.
+[platform]
+enabled = true
+name = "Datadog Cloud SIEM"
+description = "Datadog Cloud SIEM detection rules."
+
+[[tenants]]
+name = "datadog-eu"
+strategies = ["RELEASE", "PREVIEW"]
+[tenants.setup]
+site = "datadoghq.eu"
+api_key = "$DD_API_KEY"
+app_key = "$DD_APP_KEY"
+[tenants.setup.notifications]
+soc = "@slack-soc-alerts"

@@ -1,0 +1,38 @@
+---
+source: crates/opentide-kql/src/parser/tests.rs
+expression: "show(\"T | graph-to-table nodes as N with_node_id=id, edges with_source_id=s\")"
+---
+SOURCE_FILE@0..69
+  QUERY@0..69
+    TABULAR_EXPRESSION@0..69
+      TABULAR_SOURCE@0..1
+        TABLE_REF@0..1
+          IDENT@0..1 "T"
+      WHITESPACE@1..2 " "
+      PIPE@2..3 "|"
+      WHITESPACE@3..4 " "
+      GRAPH_TO_TABLE_OPERATOR@4..69
+        GRAPH_TO_TABLE_KW@4..18 "graph-to-table"
+        WHITESPACE@18..19 " "
+        GRAPH_TO_TABLE_ITEM@19..45
+          IDENT@19..24 "nodes"
+          WHITESPACE@24..25 " "
+          AS_KW@25..27 "as"
+          WHITESPACE@27..28 " "
+          IDENT@28..29 "N"
+          WHITESPACE@29..30 " "
+          OPERATOR_OPTION@30..45
+            IDENT@30..42 "with_node_id"
+            EQ@42..43 "="
+            OPTION_VALUE@43..45
+              IDENT@43..45 "id"
+        COMMA@45..46 ","
+        WHITESPACE@46..47 " "
+        GRAPH_TO_TABLE_ITEM@47..69
+          IDENT@47..52 "edges"
+          WHITESPACE@52..53 " "
+          OPERATOR_OPTION@53..69
+            IDENT@53..67 "with_source_id"
+            EQ@67..68 "="
+            OPTION_VALUE@68..69
+              IDENT@68..69 "s"

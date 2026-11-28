@@ -1,0 +1,2 @@
+// prod:graph_to_table_operator prod:graph_to_table_item valid
+DeviceNetworkEvents | make-graph DeviceName --> RemoteIP | graph-to-table nodes as N with_node_id=id, edges as E with_source_id=s with_target_id=t

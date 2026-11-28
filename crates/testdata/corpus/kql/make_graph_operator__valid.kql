@@ -1,0 +1,2 @@
+// prod:make_graph_operator prod:make_graph_arrow prod:make_graph_nodes prod:make_graph_node_table prod:make_graph_partition valid
+DeviceNetworkEvents | make-graph DeviceName --> RemoteIP with Hosts on DeviceName, (Ips | where Risk > 1) on RemoteIP partitioned-by TenantId (graph-match (a)-[e]->(b) project a.DeviceName, b.RemoteIP)

@@ -1,18 +1,22 @@
 {
   "root": true,
   "title": "SDK",
-  "description": "Python package API for embedding opentide",
+  "description": "Python, Rust and TypeScript APIs for embedding opentide",
   "icon": "Code",
   "pages": [
     "index",
     "installation",
-    "---Core---",
-    "registry",
+    "---Python---",
+    "workspace",
+    "migration",
     "validation",
-    "documentation",
     "---Models---",
     "models",
     "platforms",
-    "configuration"
+    "configuration",
+    "---Rust---",
+    "rust",
+    "---TypeScript---",
+    "typescript"
   ]
 }

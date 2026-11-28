@@ -1,0 +1,19 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(source)
+---
+SOURCE_FILE@0..8
+  PIPELINE@0..8
+    ASSIGNMENT@0..8
+      FIELD_NAME@0..1
+        WORD@0..1 "x"
+      WHITESPACE@1..2 " "
+      COLON_EQ@2..4 ":="
+      WHITESPACE@4..5 " "
+      UNARY_EXPRESSION@5..8
+        BANG@5..6 "!"
+        BANG@6..7 "!"
+        FIELD_NAME@7..8
+          WORD@7..8 "a"
+
+6..6: expected an expression

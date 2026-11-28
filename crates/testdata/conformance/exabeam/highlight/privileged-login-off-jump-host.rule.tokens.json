@@ -1,0 +1,146 @@
+[
+  {
+    "text": "activity_type",
+    "range": [
+      0,
+      13
+    ],
+    "capture": "property"
+  },
+  {
+    "text": ":",
+    "range": [
+      13,
+      14
+    ],
+    "capture": "operator"
+  },
+  {
+    "text": "\"app-login\"",
+    "range": [
+      14,
+      25
+    ],
+    "capture": "string"
+  },
+  {
+    "text": "AND",
+    "range": [
+      26,
+      29
+    ],
+    "capture": "keyword"
+  },
+  {
+    "text": "outcome",
+    "range": [
+      30,
+      37
+    ],
+    "capture": "property"
+  },
+  {
+    "text": ":",
+    "range": [
+      37,
+      38
+    ],
+    "capture": "operator"
+  },
+  {
+    "text": "\"success\"",
+    "range": [
+      38,
+      47
+    ],
+    "capture": "string"
+  },
+  {
+    "text": "AND",
+    "range": [
+      48,
+      51
+    ],
+    "capture": "keyword"
+  },
+  {
+    "text": "user",
+    "range": [
+      52,
+      56
+    ],
+    "capture": "property"
+  },
+  {
+    "text": "IN",
+    "range": [
+      57,
+      59
+    ],
+    "capture": "keyword"
+  },
+  {
+    "text": "\"Privileged Accounts\"",
+    "range": [
+      60,
+      81
+    ],
+    "capture": "type"
+  },
+  {
+    "text": "AND",
+    "range": [
+      82,
+      85
+    ],
+    "capture": "keyword"
+  },
+  {
+    "text": "NOT",
+    "range": [
+      86,
+      89
+    ],
+    "capture": "keyword"
+  },
+  {
+    "text": "src_host",
+    "range": [
+      90,
+      98
+    ],
+    "capture": "property"
+  },
+  {
+    "text": "IN",
+    "range": [
+      99,
+      101
+    ],
+    "capture": "keyword"
+  },
+  {
+    "text": "\"Jump Hosts\"",
+    "range": [
+      102,
+      114
+    ],
+    "capture": "type"
+  },
+  {
+    "text": ".",
+    "range": [
+      114,
+      115
+    ],
+    "capture": "punctuation.delimiter"
+  },
+  {
+    "text": "\"Hostname\"",
+    "range": [
+      115,
+      125
+    ],
+    "capture": "type"
+  }
+]

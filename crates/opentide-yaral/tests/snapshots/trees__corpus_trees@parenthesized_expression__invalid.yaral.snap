@@ -1,0 +1,34 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/parenthesized_expression__invalid.yaral
+---
+SOURCE_FILE@0..65
+  COMMENT@0..40 "// prod:parenthesized_expression invalid"
+  WHITESPACE@40..41 "\n"
+  SEARCH_QUERY@41..64
+    SEARCH_EVENTS@41..64
+      PAREN_EXPR@41..64
+        L_PAREN@41..42 "("
+        OR_EXPR@42..64
+          COMPARISON@42..61
+            UDM_FIELD@42..56
+              VARIABLE@42..44
+                VAR_TOKEN@42..44 "$e"
+              MEMBER@44..51
+                ACCESS_DOT@44..45 "."
+                FIELD_NAME@45..51 "target"
+              MEMBER@51..56
+                ACCESS_DOT@51..52 "."
+                FIELD_NAME@52..56 "port"
+            WHITESPACE@56..57 " "
+            EQ@57..58 "="
+            WHITESPACE@58..59 " "
+            LITERAL@59..61
+              INTEGER@59..61 "22"
+          WHITESPACE@61..62 " "
+          OR_KW@62..64 "or"
+  WHITESPACE@64..65 "\n"
+errors:
+64..65: expected an expression
+64..65: expected `)` (expected `)`)

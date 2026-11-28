@@ -1,0 +1,25 @@
+# The queries of published.jsonl that the engine refuses with an error, each with its reason
+# (docs/internal/rfc-datadog-cloud-siem.md, §11.2: "the five queries the prototype rejects";
+# the fifth, `models.litellm[.]cloud`, is a Security Labs query, measured but not vendored).
+# crates/opentide-datadog/tests/published.rs fails on an error not listed here, and on an entry
+# whose query no longer gets its code.
+
+[[rejected]]
+query = "rule:[A-Invalid"
+code = "datadog_range"
+reason = "A deliberately invalid query from Datadog's API client examples (the invalid-rule validation example): the range is never closed."
+
+[[rejected]]
+query = "message:*!*"
+code = "datadog_unescaped_special"
+reason = "Observability Pipelines only: its search syntax allows an unescaped `!` in a value, log search does not."
+
+[[rejected]]
+query = "tags:*\\:!*."
+code = "datadog_unescaped_special"
+reason = "Observability Pipelines only, as `message:*!*`."
+
+[[rejected]]
+query = "@session.view.count :> 3 OR @session.time_spent :> 15000000000"
+code = "datadog_parse_error"
+reason = "A RUM retention-filter docs example written `field :> n`: a space before the colon makes the field a free-text term, and `:` cannot start a clause. Log search reads `@session.view.count:>3`."

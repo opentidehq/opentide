@@ -1,0 +1,1 @@
+(device_os:WINDOWS ((process_file_description:7\-Zip* OR (process_name:\\7z.exe OR process_name:\\7zr.exe OR process_name:\\7za.exe) OR (process_original_filename:7z.exe OR process_original_filename:7za.exe OR process_original_filename:7zr.exe)) (process_cmdline:.dmp* OR process_cmdline:.dump* OR process_cmdline:.hdmp*))

@@ -1,0 +1,1478 @@
+//! The YAML node tree: the one YAML reader of the workspace. opentide-schema
+//! converts a model from it (UC-1.2, #808, re-exported as
+//! `opentide_schema::node`), and opentide-tide reads Tide objects with it
+//! (#850). It lives here, at the bottom layer, so that every engine crate,
+//! published or not, reads YAML the same way.
+//!
+//! The text is read as **YAML 1.2** with the core schema, by the saphyr
+//! project's crates: [`saphyr_parser`] turns the text into events, each with
+//! its span, and [`saphyr::Scalar`] resolves each plain scalar (`true`, `null`,
+//! `0x1f`, `.inf`, `1.5`; everything else is a string). This module only
+//! assembles the events into a tree that keeps every node's position, and
+//! refuses what an object file must not hold:
+//!
+//! - a key written twice in one mapping (the YAML specification requires
+//!   unique keys; equal means the same resolved scalar, so `true` and `True`
+//!   collide and `1` and `"1"` do not);
+//! - a key that is not a scalar (`? [a, b] : c`);
+//! - a tag other than the core schema's (`!!str`, `!!int`, `!!float`,
+//!   `!!bool`, `!!null`, `!!seq`, `!!map`) or the non-specific `!`, and a
+//!   scalar its core tag does not fit (`!!int abc`);
+//! - an alias to its own, unfinished, anchor (a recursive alias);
+//! - more than one document;
+//! - nesting deeper than [`MAX_DEPTH`];
+//! - aliases that expand past [`MAX_EXPANDED_NODES`] (a "billion laughs").
+//!
+//! An alias shares its anchor's node ([`Arc`]), so a tree of aliases costs one
+//! node per anchor however many times it is used. A reader that copies the
+//! tree out (JSON, a model, a Python value) copies every alias in full, so
+//! the loader bounds that copy (#1927).
+//!
+//! What this reads differently from PyYAML's YAML 1.1 loader (the one
+//! opentide 0.23.0 read rules with) is the table in `crates/opentide-schema/YAML.md`, generated and
+//! checked by opentide-schema's `tests/yaml_table.rs` from its
+//! `tests/oracle/yaml_cases.toml`.
+//!
+//! Positions are the CLI's: lines and columns from 1, columns in Unicode code
+//! points. [`Document::span`] and [`Document::yaml_line`] place a field path.
+
+mod locate;
+
+use std::borrow::Cow;
+use std::collections::HashMap;
+use std::fmt;
+use std::sync::{Arc, OnceLock};
+
+use saphyr::{Scalar, ScalarStyle, Tag};
+use saphyr_parser::{Event, Parser, ScanError};
+
+/// The string a [`Value::Str`] and a [`Value::Datetime`] hold: a `String`
+/// that keeps up to 24 bytes inline ([`compact_str`]).
+pub use compact_str::CompactString;
+pub use locate::{Locator, Span};
+
+/// How deeply collections may nest. A Tide object nests a dozen levels; the
+/// bound keeps every walk over a tree (comparison, cloning, writing) far from
+/// the stack's limit.
+pub const MAX_DEPTH: usize = 512;
+
+/// How many nodes a document may hold once every alias is expanded, unless
+/// [`EXPANSION_FACTOR`] times the nodes written is more. A Tide object holds
+/// a few hundred; nested aliases that repeat each other ten times reach this
+/// at five levels, where copying the tree out takes about half a second
+/// and each further level ten times longer (#1927).
+pub const MAX_EXPANDED_NODES: u64 = 100_000;
+
+/// How many times its written size a document past [`MAX_EXPANDED_NODES`]
+/// may expand to, so a large file without nested aliases still loads.
+pub const EXPANSION_FACTOR: u64 = 10;
+
+pub use mark::Mark;
+
+/// [`Mark`], in a module of its own: its fields are private to the rest of
+/// `node` too.
+mod mark {
+    /// A position in the document: lines and columns from 1, columns in Unicode
+    /// code points, as the CLI prints them.
+    ///
+    /// Kept as three `u32`s, 12 bytes where `usize`s took 24: every node holds
+    /// two, and a workspace holds a hundred thousand nodes (#1071). A document
+    /// past 4 Gi code points or lines is far beyond what opentide reads; its
+    /// positions there would read as the last one.
+    #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+    pub struct Mark {
+        index: u32,
+        line: u32,
+        column: u32,
+    }
+
+    impl Mark {
+        /// The position at `index` (in code points), on `line` (from 1), in
+        /// `column` (from 1, in code points).
+        pub fn new(index: usize, line: usize, column: usize) -> Self {
+            let small = |n: usize| u32::try_from(n).unwrap_or(u32::MAX);
+            Self {
+                index: small(index),
+                line: small(line),
+                column: small(column),
+            }
+        }
+
+        /// Offset in the text, in code points.
+        pub fn index(self) -> usize {
+            self.index as usize
+        }
+
+        /// Line, from 1.
+        pub fn line(self) -> usize {
+            self.line as usize
+        }
+
+        /// Column, from 1, in code points.
+        pub fn column(self) -> usize {
+            self.column as usize
+        }
+
+        pub(super) fn from_saphyr(marker: saphyr::Marker) -> Self {
+            Self::new(marker.index(), marker.line(), marker.col() + 1)
+        }
+    }
+}
+
+// A node's size is what a workspace's trees cost per node (#1071): a field
+// added to `Node` or a larger `Value` variant shows here first.
+#[cfg(target_pointer_width = "64")]
+const _: () = assert!(std::mem::size_of::<Node>() == 72);
+
+/// One node of the tree, where it starts and ends.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Node {
+    /// The value.
+    pub value: Value,
+    /// Where the node starts (its anchor or tag, when it has one).
+    pub start: Mark,
+    /// Where it ends: just after a scalar; at the token after a block
+    /// collection.
+    pub end: Mark,
+    /// A plain scalar that YAML resolves to null, a boolean or a number, as
+    /// written (`1.50`, `True`, `~`, `0x1f`): what a consumer that reads
+    /// scalars as text, such as Falco, receives. `None` for a string, a
+    /// collection, and a node no YAML text wrote.
+    pub text: Option<Arc<str>>,
+}
+
+/// A key and its value in a mapping.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Entry {
+    /// The key node, a scalar.
+    pub key: Arc<Node>,
+    /// The value node.
+    pub value: Arc<Node>,
+}
+
+/// A value of the YAML 1.2 core schema.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Value {
+    /// `null`, `~` or nothing.
+    Null,
+    /// `true` or `false`.
+    Bool(bool),
+    /// An integer that fits in 64 bits.
+    Int(i64),
+    /// A floating-point number, `.inf` and `.nan` included.
+    Float(f64),
+    /// A string: quoted, or plain text no other type takes (dates included).
+    /// Kept inline up to 24 bytes, where most of a document's strings fit:
+    /// one allocation fewer per scalar, of a workspace's hundred thousand
+    /// (#1071).
+    Str(CompactString),
+    /// A TOML offset date-time, local date-time, local date or local time, as
+    /// written (`1979-05-27T07:32:00Z`). YAML 1.2's core schema has no such
+    /// type, so only a configuration file (opentide-schema's `configuration`) holds
+    /// one; a field that takes a string does not take it.
+    Datetime(CompactString),
+    /// A sequence.
+    Seq(Vec<Arc<Node>>),
+    /// A mapping, in the document's order, keys unique.
+    Map(Vec<Entry>),
+}
+
+impl Value {
+    /// The type's name in messages: `null`, `boolean`, `integer`, `float`,
+    /// `string`, `datetime`, `sequence`, `mapping`.
+    pub fn type_name(&self) -> &'static str {
+        match self {
+            Self::Null => "null",
+            Self::Bool(_) => "boolean",
+            Self::Int(_) => "integer",
+            Self::Float(_) => "float",
+            Self::Str(_) => "string",
+            Self::Datetime(_) => "datetime",
+            Self::Seq(_) => "sequence",
+            Self::Map(_) => "mapping",
+        }
+    }
+
+    /// The text, for a string.
+    pub fn as_str(&self) -> Option<&str> {
+        match self {
+            Self::Str(text) => Some(text),
+            _ => None,
+        }
+    }
+}
+
+/// A scalar as YAML 1.2 writes it (`null`, `true`, `12`, `1.5`, `.inf`, the
+/// text); a collection as `[...]` or `{...}`. A field path holds a key that
+/// is not a string this way.
+impl fmt::Display for Value {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Null => f.write_str("null"),
+            Self::Bool(flag) => write!(f, "{flag}"),
+            Self::Int(integer) => write!(f, "{integer}"),
+            Self::Float(float) if float.is_nan() => f.write_str(".nan"),
+            Self::Float(float) if float.is_infinite() => {
+                f.write_str(if *float > 0.0 { ".inf" } else { "-.inf" })
+            }
+            Self::Float(float) => write!(f, "{float:?}"),
+            Self::Str(text) | Self::Datetime(text) => f.write_str(text),
+            Self::Seq(_) => f.write_str("[...]"),
+            Self::Map(_) => f.write_str("{...}"),
+        }
+    }
+}
+
+impl Node {
+    /// The value of `key` in this mapping (a string key equal to `key`).
+    pub fn get(&self, key: &str) -> Option<&Arc<Node>> {
+        self.entry(key).map(|entry| &entry.value)
+    }
+
+    /// The entry of `key` in this mapping (a string key equal to `key`).
+    pub fn entry(&self, key: &str) -> Option<&Entry> {
+        match &self.value {
+            Value::Map(entries) => entries
+                .iter()
+                .find(|entry| entry.key.value.as_str() == Some(key)),
+            _ => None,
+        }
+    }
+
+    /// A `null` node at `mark`, for a document with no node.
+    pub fn null_at(mark: Mark) -> Self {
+        Self {
+            value: Value::Null,
+            start: mark,
+            end: mark,
+            text: None,
+        }
+    }
+}
+
+// Children are moved out and dropped one by one, so dropping never recurses.
+impl Drop for Node {
+    fn drop(&mut self) {
+        let mut stack: Vec<Arc<Node>> = Vec::new();
+        take_children(&mut self.value, &mut stack);
+        while let Some(child) = stack.pop() {
+            if let Some(mut node) = Arc::into_inner(child) {
+                take_children(&mut node.value, &mut stack);
+            }
+        }
+    }
+}
+
+fn take_children(value: &mut Value, stack: &mut Vec<Arc<Node>>) {
+    match value {
+        Value::Seq(items) => stack.append(items),
+        Value::Map(entries) => {
+            for entry in entries.drain(..) {
+                stack.push(entry.key);
+                stack.push(entry.value);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Why a document could not be read.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum LoadErrorKind {
+    /// The bytes are not UTF-8.
+    NotUtf8,
+    /// The text is not YAML (the parser's error).
+    Syntax,
+    /// A mapping repeats a key.
+    DuplicateKey,
+    /// A mapping key is a sequence or a mapping.
+    ComplexKey,
+    /// A tag outside the core schema, or a scalar its core tag does not fit.
+    Tag,
+    /// An alias inside the node its anchor names.
+    RecursiveAlias,
+    /// A second document in the stream.
+    MultipleDocuments,
+    /// Collections nested deeper than [`MAX_DEPTH`].
+    TooDeep,
+    /// Aliases that expand past [`MAX_EXPANDED_NODES`] nodes.
+    AliasExpansion,
+    /// An integer that does not fit in 64 bits.
+    OutOfRange,
+}
+
+/// A document that could not be read, and where.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("{problem}")]
+pub struct LoadError {
+    /// What kind of failure.
+    pub kind: LoadErrorKind,
+    /// The problem, in words.
+    pub problem: String,
+    /// Where the problem is, when the text has a place for it.
+    pub mark: Option<Mark>,
+    /// What the parser was reading when it gave up, when that helps more
+    /// than the place it stopped: the `[` or `{` that is never closed.
+    pub note: Option<String>,
+}
+
+impl LoadError {
+    fn new(kind: LoadErrorKind, problem: impl Into<String>, mark: Option<Mark>) -> Self {
+        Self {
+            kind,
+            problem: problem.into(),
+            mark,
+            note: None,
+        }
+    }
+
+    fn at(kind: LoadErrorKind, problem: impl Into<String>, mark: Mark) -> Self {
+        Self::new(kind, problem, Some(mark))
+    }
+
+    fn from_scan(error: &ScanError) -> Self {
+        Self::at(
+            LoadErrorKind::Syntax,
+            error.info(),
+            Mark::from_saphyr(*error.marker()),
+        )
+    }
+}
+
+/// A document read from text: the text, for positions, and its root node
+/// (`None` for a stream with no document: empty, or only comments).
+#[derive(Debug, Clone)]
+pub struct Document {
+    source: String,
+    /// Byte ranges of the lines, computed once: every error's span reads one.
+    lines: Vec<(usize, usize)>,
+    /// Each line as characters, made the first time a span reads it, so many
+    /// errors on one long line (a flow mapping) read it once.
+    line_chars: Vec<OnceLock<Box<[char]>>>,
+    root: Option<Arc<Node>>,
+}
+
+impl Document {
+    /// A document whose `root` another reader built from `text` (TOML's,
+    /// with the positions [`Node`] holds), so spans and lines work the same
+    /// as for YAML.
+    pub fn with_root(text: &str, root: Node) -> Self {
+        let source = text.strip_prefix('\u{feff}').unwrap_or(text).to_owned();
+        let lines = locate::split_lines(&source);
+        let line_chars = std::iter::repeat_with(OnceLock::new)
+            .take(lines.len())
+            .collect();
+        Self {
+            source,
+            lines,
+            line_chars,
+            root: Some(Arc::new(root)),
+        }
+    }
+
+    /// The root node.
+    pub fn root(&self) -> Option<&Arc<Node>> {
+        self.root.as_ref()
+    }
+
+    /// The text the document was read from, without its BOM.
+    pub fn source(&self) -> &str {
+        &self.source
+    }
+}
+
+/// The end, in bytes, of the scalar written at `start..end` in `source`
+/// (`end` the parser's end mark): for a quoted scalar, just after its
+/// closing quote. The parser's end mark for a quoted scalar runs on over the
+/// blanks and a comment after it on the line, so a span taken from it would
+/// rewrite the comment too. `start` may sit on the scalar's tag or anchor
+/// (`!!str 'x'`, `&a "x"`), which are skipped. A plain or block scalar keeps
+/// `end`.
+#[must_use]
+pub fn scalar_end(source: &str, start: usize, end: usize) -> usize {
+    let mut at = start;
+    // The node's properties (a tag, an anchor, either order), each followed
+    // by blanks.
+    loop {
+        let rest = source.get(at..).unwrap_or_default();
+        if !rest.starts_with(['!', '&']) {
+            break;
+        }
+        let after_token = rest.trim_start_matches(|c: char| !matches!(c, ' ' | '\t' | '\r' | '\n'));
+        let after_blanks = after_token.trim_start_matches([' ', '\t']);
+        at += rest.len() - after_blanks.len();
+    }
+    let rest = source.get(at..).unwrap_or_default();
+    let mut chars = rest.char_indices().peekable();
+    match chars.next() {
+        Some((_, '"')) => {
+            while let Some((index, ch)) = chars.next() {
+                match ch {
+                    '\\' => {
+                        chars.next();
+                    }
+                    '"' => return at + index + 1,
+                    _ => {}
+                }
+            }
+            end
+        }
+        Some((_, '\'')) => {
+            while let Some((index, ch)) = chars.next() {
+                if ch == '\'' {
+                    if chars.peek().is_some_and(|(_, next)| *next == '\'') {
+                        chars.next();
+                    } else {
+                        return at + index + 1;
+                    }
+                }
+            }
+            end
+        }
+        _ => end,
+    }
+}
+
+/// Reads `bytes`: UTF-8, then [`load`].
+pub fn load_bytes(bytes: &[u8]) -> Result<Document, LoadError> {
+    let text = utf8(bytes)?;
+    load(text)
+}
+
+/// Reads `text` as one YAML 1.2 document. One leading byte order mark is
+/// dropped first, so positions count from the first character after it.
+pub fn load(text: &str) -> Result<Document, LoadError> {
+    build(text, Builder::default())
+}
+
+/// Reads `bytes` as [`load_bytes`] does, except that a mapping that repeats a
+/// key keeps every entry, in the order written, where [`load`] refuses it.
+///
+/// For a tool that edits values over their spans and must see each one as
+/// written (`migrate vocab-scope`). [`Node::get`] finds the first entry; a
+/// reader of values takes the last, as `merge::to_json` does.
+pub fn load_bytes_keeping_repeated_keys(bytes: &[u8]) -> Result<Document, LoadError> {
+    let text = utf8(bytes)?;
+    load_keeping_repeated_keys(text)
+}
+
+/// Reads `text` as [`load`] does, keeping a repeated key's every entry
+/// ([`load_bytes_keeping_repeated_keys`]).
+pub fn load_keeping_repeated_keys(text: &str) -> Result<Document, LoadError> {
+    build(
+        text,
+        Builder {
+            keep_repeated_keys: true,
+            ..Builder::default()
+        },
+    )
+}
+
+fn utf8(bytes: &[u8]) -> Result<&str, LoadError> {
+    std::str::from_utf8(bytes).map_err(|error| {
+        LoadError::new(
+            LoadErrorKind::NotUtf8,
+            format!("not UTF-8 at byte offset {}", error.valid_up_to()),
+            None,
+        )
+    })
+}
+
+fn build(text: &str, builder: Builder) -> Result<Document, LoadError> {
+    let source = text.strip_prefix('\u{feff}').unwrap_or(text).to_owned();
+    let root = builder.run(&source)?;
+    let lines = locate::split_lines(&source);
+    let line_chars = std::iter::repeat_with(OnceLock::new)
+        .take(lines.len())
+        .collect();
+    Ok(Document {
+        source,
+        lines,
+        line_chars,
+        root,
+    })
+}
+
+/// A collection being built.
+#[derive(Debug)]
+enum Frame {
+    Seq {
+        anchor: usize,
+        start: Mark,
+        items: Vec<Arc<Node>>,
+    },
+    Map {
+        anchor: usize,
+        start: Mark,
+        entries: Vec<Entry>,
+        key: Option<Arc<Node>>,
+        /// The keys so far, each with the line it is first written on, so a
+        /// repeated key is found in constant time.
+        seen: HashMap<KeyId, usize>,
+    },
+}
+
+/// A mapping key's identity: two keys are the same key when they are the
+/// same type and value, as the YAML specification defines node equality
+/// (floats by their bits, so `.nan` equals itself).
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+enum KeyId {
+    Null,
+    Bool(bool),
+    Int(i64),
+    Float(u64),
+    /// Kept inline as the key's own text is: no allocation for a short key.
+    Str(CompactString),
+}
+
+impl KeyId {
+    /// The key's identity; `None` for a collection, which is never a key.
+    fn of(value: &Value) -> Option<Self> {
+        Some(match value {
+            Value::Null => Self::Null,
+            Value::Bool(flag) => Self::Bool(*flag),
+            Value::Int(integer) => Self::Int(*integer),
+            Value::Float(float) => Self::Float(float.to_bits()),
+            Value::Str(text) => Self::Str(text.clone()),
+            Value::Seq(_) | Value::Map(_) | Value::Datetime(_) => return None,
+        })
+    }
+}
+
+/// Assembles saphyr-parser's events into nodes, in one iterative pass.
+#[derive(Debug, Default)]
+struct Builder {
+    frames: Vec<Frame>,
+    /// Finished anchored nodes, by the parser's anchor id.
+    anchors: HashMap<usize, Arc<Node>>,
+    documents: usize,
+    root: Option<Arc<Node>>,
+    /// The expanded size (nodes, every alias counted in full) of each open
+    /// frame's children so far, one per frame.
+    sizes: Vec<u64>,
+    /// The expanded size of each finished anchored node.
+    anchor_sizes: HashMap<usize, u64>,
+    /// The expanded size of the root.
+    root_size: u64,
+    /// The nodes the text writes, an alias counted once.
+    written: u64,
+    /// The alias that expands to the most nodes, and where it is.
+    heaviest_alias: Option<(u64, Mark)>,
+    /// Keep every entry of a mapping that repeats a key, instead of failing
+    /// with [`LoadErrorKind::DuplicateKey`].
+    keep_repeated_keys: bool,
+}
+
+/// The core-schema type a tag names (`!!int`, or verbatim
+/// `!<tag:yaml.org,2002:int>`), if it is one.
+fn core_suffix(tag: &Tag) -> Option<&str> {
+    if tag.is_yaml_core_schema() {
+        return Some(&tag.suffix);
+    }
+    if tag.handle.is_empty() {
+        return tag.suffix.strip_prefix("tag:yaml.org,2002:");
+    }
+    None
+}
+
+/// The non-specific tag `!`, which makes a scalar a string.
+fn is_non_specific(tag: &Tag) -> bool {
+    tag.handle.is_empty() && tag.suffix == "!"
+}
+
+/// A tag as it is written: `!!int`, `!local`, `!<uri>`.
+fn tag_text(tag: &Tag) -> String {
+    if let Some(suffix) = core_suffix(tag) {
+        format!("!!{suffix}")
+    } else if tag.handle.is_empty() {
+        format!("!<{}>", tag.suffix)
+    } else if tag.handle == "!" {
+        format!("!{}", tag.suffix)
+    } else {
+        format!("{}{}", tag.handle, tag.suffix)
+    }
+}
+
+/// Whether a collection may carry `tag`: none, `!`, or its own core tag.
+fn collection_tag_fits(tag: Option<&Cow<'_, Tag>>, suffix: &str) -> Result<(), String> {
+    match tag.map(Cow::as_ref) {
+        None => Ok(()),
+        Some(tag) if is_non_specific(tag) || core_suffix(tag) == Some(suffix) => Ok(()),
+        Some(tag) => Err(format!(
+            "the tag {} cannot be used on a {}",
+            tag_text(tag),
+            if suffix == "seq" {
+                "sequence"
+            } else {
+                "mapping"
+            }
+        )),
+    }
+}
+
+/// A scalar's value under the core schema, or why its tag refuses it.
+///
+/// Untagged, saphyr's [`Scalar`] resolves it (a quoted scalar is a string).
+/// With a core tag, the text is resolved as a plain scalar would be and must
+/// give the tag's type (`!!int "42"` is 42, `!!int abc` is refused); an
+/// integer is a valid `!!float`.
+fn scalar_value(
+    text: Cow<'_, str>,
+    style: ScalarStyle,
+    tag: Option<&Tag>,
+) -> Result<Value, String> {
+    let Some(tag) = tag else {
+        if style != ScalarStyle::Plain {
+            return Ok(
+                match Scalar::parse_from_cow_and_metadata(text, style, None) {
+                    Some(scalar) => from_scalar(scalar),
+                    None => Value::Null,
+                },
+            );
+        }
+        let plain_integer = is_core_integer(&text);
+        let value = resolve_plain(text);
+        if plain_integer && !matches!(value, Value::Int(_)) {
+            return Err(OUT_OF_RANGE.to_owned());
+        }
+        return Ok(value);
+    };
+    if is_non_specific(tag) {
+        return Ok(Value::Str(text.into()));
+    }
+    let Some(suffix) = core_suffix(tag) else {
+        return Err(format!("the tag {} is not supported", tag_text(tag)));
+    };
+    if suffix == "str" {
+        return Ok(Value::Str(text.into()));
+    }
+    let shown = text.clone().into_owned();
+    let resolved = resolve_plain(text);
+    match (suffix, resolved) {
+        ("int", value @ Value::Int(_))
+        | ("float", value @ Value::Float(_))
+        | ("bool", value @ Value::Bool(_))
+        | ("null", value @ Value::Null) => Ok(value),
+        #[expect(
+            clippy::cast_precision_loss,
+            reason = "`!!float 1` is the float nearest the integer"
+        )]
+        ("float", Value::Int(integer)) => Ok(Value::Float(integer as f64)),
+        ("int" | "float" | "bool" | "null", _) => Err(format!(
+            "'{shown}' is not a valid value for the tag {}",
+            tag_text(tag)
+        )),
+        _ => Err(format!("the tag {} is not supported", tag_text(tag))),
+    }
+}
+
+/// A plain scalar's value under the core schema: saphyr's resolution, except
+/// that an integer must be written as the core schema writes one. saphyr
+/// parses `0x`/`0o` digits with Rust's `from_str_radix`, which takes a sign
+/// after the prefix (`0x-A`, `0o+7`); the core schema does not, so that text
+/// is a string. An empty scalar is `null`.
+fn resolve_plain(text: Cow<'_, str>) -> Value {
+    if text.is_empty() {
+        return Value::Null;
+    }
+    if is_core_integer(&text) {
+        return from_scalar(Scalar::parse_from_cow(text));
+    }
+    match from_scalar(Scalar::parse_from_cow(Cow::Borrowed(text.as_ref()))) {
+        Value::Int(_) => Value::Str(text.into()),
+        value => value,
+    }
+}
+
+const OUT_OF_RANGE: &str = "the integer does not fit in 64 bits";
+
+/// Whether `text` is an integer of the core schema (`[-+]?[0-9]+`,
+/// `0o[0-7]+`, `0x[0-9a-fA-F]+`). saphyr reads one beyond 64 bits as an
+/// approximate float, or as a string; the loader refuses it instead.
+fn is_core_integer(text: &str) -> bool {
+    let all = |digits: &str, valid: fn(&u8) -> bool| {
+        !digits.is_empty() && digits.bytes().all(|b| valid(&b))
+    };
+    if let Some(digits) = text.strip_prefix("0o") {
+        return all(digits, u8::is_ascii_digit) && !digits.contains(['8', '9']);
+    }
+    if let Some(digits) = text.strip_prefix("0x") {
+        return all(digits, u8::is_ascii_hexdigit);
+    }
+    let digits = text.strip_prefix(['-', '+']).unwrap_or(text);
+    all(digits, u8::is_ascii_digit)
+}
+
+fn from_scalar(scalar: Scalar<'_>) -> Value {
+    match scalar {
+        Scalar::Null => Value::Null,
+        Scalar::Boolean(flag) => Value::Bool(flag),
+        Scalar::Integer(integer) => Value::Int(integer),
+        Scalar::FloatingPoint(float) => Value::Float(float.into_inner()),
+        Scalar::String(text) => Value::Str(text.into()),
+    }
+}
+
+/// Whether the `[` or `{` at character `at` of `source` is never closed:
+/// its brackets counted to the end of the text, those in a quoted scalar
+/// or a comment left out. An error inside a collection that closes later
+/// names no bracket (B9). A quote opens a scalar only where a flow item
+/// starts (after `[`, `{`, `,` or `:`), so an apostrophe in a plain
+/// scalar (`[don't, x]`) is text; `''` in a single-quoted scalar is one
+/// quote.
+fn never_closes(source: &str, at: usize) -> bool {
+    let mut depth = 0usize;
+    let mut quote: Option<char> = None;
+    let mut comment = false;
+    let mut previous = ' ';
+    // The last character outside blanks, a quoted scalar and a comment.
+    let mut significant = ' ';
+    let mut characters = source.chars().skip(at).peekable();
+    while let Some(character) = characters.next() {
+        if comment {
+            comment = character != '\n' && character != '\r';
+        } else if let Some(open) = quote {
+            if character == open {
+                if open == '\'' && characters.peek() == Some(&'\'') {
+                    characters.next();
+                } else {
+                    quote = None;
+                    significant = character;
+                }
+            } else if open == '"' && character == '\\' {
+                characters.next();
+            }
+        } else {
+            match character {
+                '[' | '{' => depth += 1,
+                ']' | '}' => {
+                    depth = depth.saturating_sub(1);
+                    if depth == 0 {
+                        return false;
+                    }
+                }
+                '\'' | '"' if matches!(significant, '[' | '{' | ',' | ':') => {
+                    quote = Some(character);
+                }
+                '#' if previous.is_whitespace() => comment = true,
+                _ => {}
+            }
+            if !character.is_whitespace() && !comment && quote.is_none() {
+                significant = character;
+            }
+        }
+        previous = character;
+    }
+    true
+}
+
+/// The tab the scanner means when it reports one at `from`: the first tab
+/// at or after `from` with only blanks before it on its line, within the
+/// next lines. The scanner reports a tab used for indentation where it was
+/// reading on the line before (B9: `4:14` for a tab at `5:1`).
+fn tab_after(source: &str, from: Mark) -> Option<Mark> {
+    let mut line = from.line();
+    let mut column = from.column();
+    let mut previous = '\0';
+    let mut indent = false;
+    let mut breaks = 0;
+    for (offset, character) in source.chars().skip(from.index()).enumerate() {
+        match character {
+            '\t' if indent || offset == 0 => {
+                return Some(Mark::new(from.index() + offset, line, column));
+            }
+            // The `\n` of a CRLF: the line was counted at its `\r`.
+            '\n' if previous == '\r' => {
+                previous = character;
+                continue;
+            }
+            '\n' | '\r' => {
+                breaks += 1;
+                if breaks > 2 {
+                    return None;
+                }
+                line += 1;
+                column = 1;
+                indent = true;
+                previous = character;
+                continue;
+            }
+            ' ' | '\t' => {}
+            _ => indent = false,
+        }
+        column += 1;
+        previous = character;
+    }
+    None
+}
+
+/// The first character YAML 1.2 does not allow in a stream (§5.1: C0
+/// controls other than tab and line breaks, DEL, C1 controls other than NEL,
+/// U+FFFE and U+FFFF), with its position. saphyr reads them as text.
+fn non_printable(source: &str) -> Option<(char, Mark)> {
+    let mut line = 1;
+    let mut column = 1;
+    let mut previous = '\0';
+    for (index, character) in source.chars().enumerate() {
+        let printable = matches!(character, '\t' | '\n' | '\r' | '\u{85}')
+            || ('\u{20}'..='\u{7e}').contains(&character)
+            || ('\u{a0}'..='\u{d7ff}').contains(&character)
+            || ('\u{e000}'..='\u{fffd}').contains(&character)
+            || character >= '\u{10000}';
+        if !printable {
+            return Some((character, Mark::new(index, line, column)));
+        }
+        match character {
+            // The `\n` of a `\r\n`: the `\r` broke the line already.
+            '\n' if previous == '\r' => {}
+            '\n' | '\r' => {
+                line += 1;
+                column = 1;
+            }
+            _ => column += 1,
+        }
+        previous = character;
+    }
+    None
+}
+
+impl Builder {
+    /// The parser's `error`, placed where a person looks, with what it was
+    /// reading (B9): a tab the scanner reports at the end of the line before
+    /// it moves onto the tab, and a `[` or `{` still open is named.
+    fn scan_error(&self, error: &ScanError, source: &str) -> LoadError {
+        let mut found = LoadError::from_scan(error);
+        if error.info().contains("tab")
+            && let Some(mark) = found.mark
+            && let Some(tab) = tab_after(source, mark)
+        {
+            found.mark = Some(tab);
+        }
+        let open = self.frames.iter().rev().find_map(|frame| {
+            let start = match frame {
+                Frame::Seq { start, .. } | Frame::Map { start, .. } => *start,
+            };
+            let opener = source.chars().nth(start.index())?;
+            (matches!(opener, '[' | '{') && never_closes(source, start.index()))
+                .then_some((opener, start))
+        });
+        if let Some((opener, start)) = open {
+            found.note = Some(format!(
+                "the `{opener}` opened at line {}, column {} is not closed",
+                start.line(),
+                start.column()
+            ));
+        }
+        found
+    }
+
+    #[expect(
+        clippy::too_many_lines,
+        reason = "the node builder's single pass over the parsed document, kept whole; split when next touched"
+    )]
+    fn run(mut self, source: &str) -> Result<Option<Arc<Node>>, LoadError> {
+        if let Some((character, mark)) = non_printable(source) {
+            return Err(LoadError::at(
+                LoadErrorKind::Syntax,
+                format!(
+                    "the character U+{:04X} is not allowed in YAML",
+                    u32::from(character)
+                ),
+                mark,
+            ));
+        }
+        // A block scalar that ends the file without a line break: saphyr
+        // adds one, which the YAML specification's chomping (§8.1.1.2: the
+        // end of the file instead of a final line break) does not.
+        // Only when the scalar's last content line is that unterminated last
+        // line: after a final line break, or a last line of blanks only (the
+        // scalar's trailing indentation), saphyr's line break is the
+        // scalar's own.
+        let length = source.chars().count();
+        let last_line = source.rsplit(['\n', '\r']).next().unwrap_or_default();
+        let unterminated_content = !last_line.trim_matches([' ', '\t']).is_empty();
+        for event in Parser::new_from_str(source) {
+            let (event, span) = event.map_err(|error| self.scan_error(&error, source))?;
+            let start = Mark::from_saphyr(span.start);
+            let end = Mark::from_saphyr(span.end);
+            match event {
+                Event::Nothing | Event::StreamStart | Event::StreamEnd | Event::DocumentEnd => {}
+                Event::DocumentStart(_) => {
+                    self.documents += 1;
+                    if self.documents > 1 {
+                        return Err(LoadError::at(
+                            LoadErrorKind::MultipleDocuments,
+                            "a file holds one YAML document; a second one starts here",
+                            start,
+                        ));
+                    }
+                }
+                Event::Scalar(text, style, anchor, tag) => {
+                    let written: Arc<str> = Arc::from(text.as_ref());
+                    let mut value =
+                        scalar_value(text, style, tag.as_deref()).map_err(|problem| {
+                            let kind = if problem == OUT_OF_RANGE {
+                                LoadErrorKind::OutOfRange
+                            } else {
+                                LoadErrorKind::Tag
+                            };
+                            LoadError::at(kind, problem, start)
+                        })?;
+                    if matches!(style, ScalarStyle::Literal | ScalarStyle::Folded)
+                        && unterminated_content
+                        && end.index() == length
+                        && let Value::Str(text) = &mut value
+                        && text.ends_with('\n')
+                    {
+                        text.pop();
+                    }
+                    let text = (style == ScalarStyle::Plain
+                        && matches!(
+                            value,
+                            Value::Null | Value::Bool(_) | Value::Int(_) | Value::Float(_)
+                        ))
+                    .then_some(written);
+                    self.finish(
+                        Node {
+                            value,
+                            start,
+                            end,
+                            text,
+                        },
+                        anchor,
+                        1,
+                    )?;
+                }
+                Event::Alias(id) => {
+                    let Some(node) = self.anchors.get(&id).cloned() else {
+                        return Err(LoadError::at(
+                            LoadErrorKind::RecursiveAlias,
+                            "an alias cannot refer to the node that contains it",
+                            start,
+                        ));
+                    };
+                    let size = self.anchor_sizes.get(&id).copied().unwrap_or(1);
+                    if self
+                        .heaviest_alias
+                        .is_none_or(|(heaviest, _)| size > heaviest)
+                    {
+                        self.heaviest_alias = Some((size, start));
+                    }
+                    self.written += 1;
+                    self.attach(node, start, size)?;
+                }
+                Event::SequenceStart(anchor, tag) => {
+                    collection_tag_fits(tag.as_ref(), "seq")
+                        .map_err(|problem| LoadError::at(LoadErrorKind::Tag, problem, start))?;
+                    self.open(
+                        Frame::Seq {
+                            anchor,
+                            start,
+                            items: Vec::new(),
+                        },
+                        start,
+                    )?;
+                }
+                Event::MappingStart(anchor, tag) => {
+                    collection_tag_fits(tag.as_ref(), "map")
+                        .map_err(|problem| LoadError::at(LoadErrorKind::Tag, problem, start))?;
+                    self.open(
+                        Frame::Map {
+                            anchor,
+                            start,
+                            entries: Vec::new(),
+                            key: None,
+                            seen: HashMap::new(),
+                        },
+                        start,
+                    )?;
+                }
+                Event::SequenceEnd | Event::MappingEnd => {
+                    let (node, anchor) = match self.frames.pop() {
+                        Some(Frame::Seq {
+                            anchor,
+                            start,
+                            items,
+                        }) => (
+                            Node {
+                                value: Value::Seq(items),
+                                start,
+                                end,
+                                text: None,
+                            },
+                            anchor,
+                        ),
+                        Some(Frame::Map {
+                            anchor,
+                            start,
+                            entries,
+                            ..
+                        }) => (
+                            Node {
+                                value: Value::Map(entries),
+                                start,
+                                end,
+                                text: None,
+                            },
+                            anchor,
+                        ),
+                        // The parser pairs every end with its start.
+                        None => continue,
+                    };
+                    let children = self.sizes.pop().unwrap_or_default();
+                    self.finish(node, anchor, children.saturating_add(1))?;
+                }
+            }
+        }
+        let limit = MAX_EXPANDED_NODES.max(self.written.saturating_mul(EXPANSION_FACTOR));
+        if self.root_size > limit {
+            return Err(LoadError::new(
+                LoadErrorKind::AliasExpansion,
+                format!(
+                    "the aliases expand to more than {limit} nodes; write the repeated \
+                     content once, or nest fewer aliases"
+                ),
+                self.heaviest_alias.map(|(_, mark)| mark),
+            ));
+        }
+        Ok(self.root)
+    }
+
+    fn open(&mut self, frame: Frame, start: Mark) -> Result<(), LoadError> {
+        if self.frames.len() >= MAX_DEPTH {
+            return Err(LoadError::at(
+                LoadErrorKind::TooDeep,
+                format!("collections nest deeper than {MAX_DEPTH} levels"),
+                start,
+            ));
+        }
+        self.frames.push(frame);
+        self.sizes.push(0);
+        Ok(())
+    }
+
+    /// Finishes `node`, whose expanded size is `size` (itself and its
+    /// children, every alias in full).
+    fn finish(&mut self, node: Node, anchor: usize, size: u64) -> Result<(), LoadError> {
+        let start = node.start;
+        let node = Arc::new(node);
+        self.written += 1;
+        // Anchor ids start at 1; 0 is no anchor. A later anchor of the same
+        // name gets a new id from the parser.
+        if anchor > 0 {
+            self.anchors.insert(anchor, Arc::clone(&node));
+            self.anchor_sizes.insert(anchor, size);
+        }
+        self.attach(node, start, size)
+    }
+
+    fn attach(&mut self, node: Arc<Node>, start: Mark, size: u64) -> Result<(), LoadError> {
+        match self.sizes.last_mut() {
+            Some(total) => *total = total.saturating_add(size),
+            None => self.root_size = size,
+        }
+        match self.frames.last_mut() {
+            None => self.root = Some(node),
+            Some(Frame::Seq { items, .. }) => items.push(node),
+            Some(Frame::Map {
+                entries, key, seen, ..
+            }) => match key.take() {
+                None if self.keep_repeated_keys => {
+                    if KeyId::of(&node.value).is_none() {
+                        return Err(LoadError::at(
+                            LoadErrorKind::ComplexKey,
+                            "a mapping key must be a scalar, not a sequence or a mapping",
+                            start,
+                        ));
+                    }
+                    *key = Some(node);
+                }
+                None => {
+                    let Some(id) = KeyId::of(&node.value) else {
+                        return Err(LoadError::at(
+                            LoadErrorKind::ComplexKey,
+                            "a mapping key must be a scalar, not a sequence or a mapping",
+                            start,
+                        ));
+                    };
+                    match seen.entry(id) {
+                        std::collections::hash_map::Entry::Occupied(first) => {
+                            return Err(LoadError::at(
+                                LoadErrorKind::DuplicateKey,
+                                format!(
+                                    "the key '{}' is repeated (first written on line {})",
+                                    node.value,
+                                    first.get()
+                                ),
+                                start,
+                            ));
+                        }
+                        std::collections::hash_map::Entry::Vacant(slot) => {
+                            slot.insert(node.start.line());
+                        }
+                    }
+                    *key = Some(node);
+                }
+                Some(key_node) => entries.push(Entry {
+                    key: key_node,
+                    value: node,
+                }),
+            },
+        }
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    #[test]
+    fn a_quoted_scalar_ends_at_its_closing_quote() {
+        let cases = [
+            ("'a'  # c", "'a'"),
+            ("\"a\" # c", "\"a\""),
+            ("'it''s' # c", "'it''s'"),
+            ("\"a \\\" b\" # c", "\"a \\\" b\""),
+            ("!!str 'a' # c", "!!str 'a'"),
+            ("&x \"a\" # c", "&x \"a\""),
+            ("&x !!str 'a' # c", "&x !!str 'a'"),
+            ("'a\n  b'  # c", "'a\n  b'"),
+        ];
+        for (text, scalar) in cases {
+            assert_eq!(
+                text.get(..scalar_end(text, 0, text.len())).unwrap(),
+                scalar,
+                "{text:?}"
+            );
+        }
+        // A plain scalar, or a quote that never closes, keeps the end given.
+        assert_eq!(scalar_end("plain # c", 0, 5), 5);
+        assert_eq!(scalar_end("'open", 0, 5), 5);
+        // Byte offsets: `é` and `ü` are two bytes each.
+        let text = "é: 'ü' # c";
+        assert_eq!(text.get(4..scalar_end(text, 4, text.len())).unwrap(), "'ü'");
+        // Properties with multi-byte text, followed by blanks or not.
+        for (text, scalar) in [
+            ("!é \t'😀' # c", "!é \t'😀'"),
+            ("&😀 !é \"é\" # c", "&😀 !é \"é\""),
+            ("!é😀", "!é😀"),
+        ] {
+            assert_eq!(
+                text.get(..scalar_end(text, 0, text.len())).unwrap(),
+                scalar,
+                "{text:?}"
+            );
+        }
+    }
+
+    use super::*;
+
+    /// A position past what three `u32`s hold reads as the last one; any
+    /// other reads back as made.
+    #[test]
+    fn a_mark_keeps_its_position_and_saturates_past_u32() {
+        let mark = Mark::new(16, 3, 5);
+        assert_eq!((mark.index(), mark.line(), mark.column()), (16, 3, 5));
+        let last = u32::MAX as usize;
+        let far = Mark::new(usize::MAX, last + 1, 1);
+        assert_eq!((far.index(), far.line(), far.column()), (last, last, 1));
+    }
+
+    #[test]
+    fn deep_nesting_is_refused_without_recursion() {
+        // saphyr-parser stops flow collections at 256 levels itself.
+        let flow = format!("{}{}", "[".repeat(20_000), "]".repeat(20_000));
+        assert_eq!(load(&flow).unwrap_err().kind, LoadErrorKind::Syntax);
+        // Block sequences, `- - - x`, are bounded here.
+        let block = format!("{}x\n", "- ".repeat(MAX_DEPTH + 1));
+        assert_eq!(load(&block).unwrap_err().kind, LoadErrorKind::TooDeep);
+        let ok = format!("{}x\n", "- ".repeat(MAX_DEPTH));
+        drop(load(&ok).unwrap());
+    }
+
+    #[test]
+    fn aliases_share_one_node() {
+        let document = load("a: &x [1, 2]\nb: *x\n").unwrap();
+        let root = document.root().unwrap();
+        assert!(Arc::ptr_eq(root.get("a").unwrap(), root.get("b").unwrap()));
+    }
+
+    /// Nested aliases, each level repeating the one before ten times.
+    fn laughs(levels: usize) -> String {
+        let mut text = "l0: &l0 [a, a, a, a, a, a, a, a, a, a]\n".to_owned();
+        for level in 1..=levels {
+            let previous = format!("*l{}", level - 1);
+            let items = [previous.as_str(); 10].join(", ");
+            text.push_str(&format!("l{level}: &l{level} [{items}]\n"));
+        }
+        text
+    }
+
+    #[test]
+    fn aliases_that_expand_past_the_budget_are_refused() {
+        // #1927: nine levels would copy out a billion nodes.
+        let text = laughs(9);
+        // Never `unwrap_err`: on a regression its panic would `Debug` the
+        // billion-node tree instead of failing.
+        let Err(error) = load(&text) else {
+            panic!("nine levels of nested aliases loaded");
+        };
+        assert_eq!(error.kind, LoadErrorKind::AliasExpansion);
+        let mark = error.mark.unwrap();
+        // The heaviest alias: the first one of the last line.
+        assert_eq!((mark.line(), mark.column()), (10, 10));
+        assert!(error.problem.contains("100000"), "{}", error.problem);
+        // Three levels (about 1,500 nodes) stay well within it.
+        drop(load(&laughs(3)).unwrap());
+    }
+
+    #[test]
+    fn a_large_document_without_nested_aliases_loads() {
+        // Past `MAX_EXPANDED_NODES` written nodes, with one alias used once
+        // each: the budget grows with the text.
+        let mut text = String::from("base: &base {k: v}\nitems:\n");
+        for item in 0..20_000 {
+            text.push_str(&format!("  - {{n: {item}, b: *base}}\n"));
+        }
+        drop(load(&text).unwrap());
+    }
+
+    #[test]
+    fn a_recursive_alias_is_refused() {
+        let error = load("a: &x [*x]\n").unwrap_err();
+        assert_eq!(error.kind, LoadErrorKind::RecursiveAlias);
+    }
+
+    #[test]
+    fn keys_are_equal_by_type_and_value() {
+        let same_key = |a: &Value, b: &Value| KeyId::of(a).is_some_and(|a| Some(a) == KeyId::of(b));
+        assert!(same_key(&Value::Bool(true), &Value::Bool(true)));
+        assert!(!same_key(&Value::Bool(true), &Value::Int(1)));
+        assert!(!same_key(&Value::Float(1.0), &Value::Int(1)));
+        assert!(same_key(&Value::Float(f64::NAN), &Value::Float(f64::NAN)));
+        assert!(!same_key(&Value::Float(0.0), &Value::Float(-0.0)));
+        assert!(!same_key(&Value::Str("1".into()), &Value::Int(1)));
+        assert!(!same_key(&Value::Seq(Vec::new()), &Value::Seq(Vec::new())));
+        let error = load("true: 1\nTrue: 2\n").unwrap_err();
+        assert_eq!(error.kind, LoadErrorKind::DuplicateKey);
+        assert_eq!(error.mark.map(|m| (m.line(), m.column())), Some((2, 1)));
+        assert!(error.problem.contains("first written on line 1"), "{error}");
+    }
+
+    #[test]
+    fn a_syntax_error_is_placed_where_a_person_looks_and_names_what_is_open() {
+        // B9 (smoke test): a tab indenting line 5 was reported at the end
+        // of line 4; an unclosed `[` had no note; the repeated key read as
+        // one run-on sentence once a place was added.
+        let tab =
+            load("name: X\nconfigurations:\n  splunk:\n    enabled: true\n\tstatus: STAGING\n")
+                .unwrap_err();
+        assert!(tab.problem.contains("tab"), "{tab}");
+        assert_eq!(tab.mark.map(|m| (m.line(), m.column())), Some((5, 1)));
+        // The same with CRLF line endings, as an editor on Windows writes it.
+        let crlf = load(
+            "name: X\r\nconfigurations:\r\n  splunk:\r\n    enabled: true\r\n\tstatus: STAGING\r\n",
+        )
+        .unwrap_err();
+        assert!(crlf.problem.contains("tab"), "{crlf}");
+        assert_eq!(crlf.mark.map(|m| (m.line(), m.column())), Some((5, 1)));
+        let unclosed = load(
+            "name: X\nmetadata:\n  uuid: u\n  tags: [a, b\nresponse:\n  alert_severity: High\n",
+        )
+        .unwrap_err();
+        assert_eq!(
+            unclosed.note.as_deref(),
+            Some("the `[` opened at line 4, column 9 is not closed")
+        );
+        let mapping = load("a: {x: 1\nb: 2\n").unwrap_err();
+        assert_eq!(
+            mapping.note.as_deref(),
+            Some("the `{` opened at line 1, column 4 is not closed")
+        );
+        // A block that fails names no bracket, nor does a collection that
+        // closes after the error.
+        assert_eq!(load("a: 'x\n").unwrap_err().note, None);
+        let closed = load("a: [x: y: z]\n").unwrap_err();
+        assert_eq!(closed.note, None, "{closed}");
+        // An apostrophe in a plain scalar opens no quote: the `]` after it
+        // still closes the `[`; a quoted `]` does not.
+        let apostrophe = load("a: [don't, x: y: z]\n").unwrap_err();
+        assert_eq!(apostrophe.note, None, "{apostrophe}");
+        let quoted = load("a: ['it''s ]', \"\\\" ]\", x: y: z]\n").unwrap_err();
+        assert_eq!(quoted.note, None, "{quoted}");
+        let open = load("a: [don't, b\nc: 1\n").unwrap_err();
+        assert_eq!(
+            open.note.as_deref(),
+            Some("the `[` opened at line 1, column 4 is not closed")
+        );
+        let repeated = load("a: 1\nb: 2\na: 3\n").unwrap_err();
+        assert_eq!(
+            repeated.problem,
+            "the key 'a' is repeated (first written on line 1)"
+        );
+    }
+
+    #[test]
+    fn keeping_repeated_keys_keeps_every_entry_in_order() {
+        let text = "a: 1\nb: 2\na: 3\n";
+        assert_eq!(load(text).unwrap_err().kind, LoadErrorKind::DuplicateKey);
+        let document = load_bytes_keeping_repeated_keys(text.as_bytes()).unwrap();
+        let root = document.root().unwrap();
+        let Value::Map(entries) = &root.value else {
+            panic!("a mapping")
+        };
+        let written: Vec<(String, String)> = entries
+            .iter()
+            .map(|entry| (entry.key.value.to_string(), entry.value.value.to_string()))
+            .collect();
+        assert_eq!(
+            written,
+            [("a", "1"), ("b", "2"), ("a", "3")].map(|(k, v)| (k.to_owned(), v.to_owned()))
+        );
+        assert_eq!(root.get("a").unwrap().value, Value::Int(1));
+        // A collection is still never a key, and other faults still fail.
+        assert_eq!(
+            load_keeping_repeated_keys("? [x]\n: 1\n").unwrap_err().kind,
+            LoadErrorKind::ComplexKey
+        );
+        assert_eq!(
+            load_bytes_keeping_repeated_keys(b"a: \xff\n")
+                .unwrap_err()
+                .kind,
+            LoadErrorKind::NotUtf8
+        );
+    }
+
+    #[test]
+    fn a_large_mapping_loads_in_linear_time() {
+        // A linear scan per key took 22 s for 40 000 keys in a debug build;
+        // with a hash set this takes well under a second.
+        let mut text = String::new();
+        for key in 0..200_000 {
+            text.push_str(&format!("k{key}: {key}\n"));
+        }
+        let started = std::time::Instant::now();
+        let document = load(&text).unwrap();
+        let elapsed = started.elapsed();
+        let Value::Map(entries) = &document.root().unwrap().value else {
+            panic!()
+        };
+        assert_eq!(entries.len(), 200_000);
+        assert!(elapsed.as_secs() < 30, "{elapsed:?}");
+        text.push_str("k123456: again\n");
+        let error = load(&text).unwrap_err();
+        assert_eq!(error.kind, LoadErrorKind::DuplicateKey);
+        assert!(
+            error.problem.contains("first written on line 123457"),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn positions_are_one_based_code_points() {
+        let document = load("é: 1\nb: [x, 'y']\n").unwrap();
+        let root = document.root().unwrap();
+        let b = root.get("b").unwrap();
+        let Value::Seq(items) = &b.value else {
+            panic!("{b:?}")
+        };
+        assert_eq!((items[1].start.line(), items[1].start.column()), (2, 8));
+        assert_eq!((items[1].end.line(), items[1].end.column()), (2, 11));
+        let one = root.get("é").unwrap();
+        assert_eq!((one.start.line(), one.start.column()), (1, 4));
+    }
+
+    fn value_of(text: &str) -> Value {
+        load(text)
+            .unwrap()
+            .root()
+            .unwrap()
+            .get("a")
+            .unwrap()
+            .value
+            .clone()
+    }
+
+    #[test]
+    fn a_sign_after_the_base_prefix_is_a_string() {
+        for text in [
+            "0x-A",
+            "0x+A",
+            "0o-7",
+            "0o+7",
+            "0x-8000000000000000",
+            "-0x1",
+        ] {
+            assert_eq!(
+                value_of(&format!("a: {text}\n")),
+                Value::Str(text.into()),
+                "{text}"
+            );
+        }
+        assert_eq!(value_of("a: 0x1F\n"), Value::Int(31));
+        assert_eq!(value_of("a: 0o17\n"), Value::Int(15));
+        assert_eq!(value_of("a: +12\n"), Value::Int(12));
+        for text in ["a: !!int 0x-A\n", "a: !!int 0o+7\n", "a: !!float 0x-A\n"] {
+            let error = load(text).unwrap_err();
+            assert_eq!(error.kind, LoadErrorKind::Tag, "{text}");
+        }
+        assert_eq!(value_of("a: !!int 0x10\n"), Value::Int(16));
+    }
+
+    #[test]
+    fn an_integer_beyond_64_bits_is_out_of_range() {
+        for text in [
+            "a: 12345678901234567890\n",
+            "a: -9223372036854775809\n",
+            "a: 0xFFFFFFFFFFFFFFFFFFFF\n",
+        ] {
+            let error = load(text).unwrap_err();
+            assert_eq!(error.kind, LoadErrorKind::OutOfRange, "{text}");
+            assert_eq!(error.problem, OUT_OF_RANGE);
+            assert_eq!(error.mark.map(|m| (m.line(), m.column())), Some((1, 4)));
+        }
+    }
+
+    #[test]
+    fn a_forbidden_character_is_placed_by_line_and_column() {
+        let error = load("a: 1\r\nb: 2\r\nc: x\u{1}\r\n").unwrap_err();
+        assert_eq!(error.kind, LoadErrorKind::Syntax);
+        let mark = error.mark.unwrap();
+        assert_eq!((mark.line(), mark.column(), mark.index()), (3, 5, 16));
+        let error = load("a: 1\rb: \u{7f}\n").unwrap_err();
+        let mark = error.mark.unwrap();
+        assert_eq!((mark.line(), mark.column()), (2, 4));
+    }
+
+    #[test]
+    fn a_block_scalar_keeps_its_line_break_before_a_last_blank_line() {
+        for (text, expected) in [
+            ("a: |\n  x\n ", "x\n"),
+            ("a: >\n  x\n ", "x\n"),
+            ("a: |\n  x\n  y\n ", "x\ny\n"),
+            ("a: |\n  x\r\n ", "x\n"),
+            ("a: |\n  x\n\t", "x\n"),
+            ("a: |\n  x\nb: 1", "x\n"),
+            ("a: |\n  x\n# c", "x\n"),
+            ("a: |\n  x", "x"),
+            ("a: |\n  x\n  y", "x\ny"),
+            ("a: >\n  x\n  y", "x y"),
+        ] {
+            assert_eq!(value_of(text), Value::Str(expected.into()), "{text:?}");
+        }
+        let document = load("- |\n  x\n ").unwrap();
+        let Value::Seq(items) = &document.root().unwrap().value else {
+            panic!()
+        };
+        assert_eq!(items[0].value, Value::Str("x\n".into()));
+    }
+
+    #[test]
+    fn display_writes_yaml_scalars() {
+        assert_eq!(Value::Null.to_string(), "null");
+        assert_eq!(Value::Bool(true).to_string(), "true");
+        assert_eq!(Value::Float(1.0).to_string(), "1.0");
+        assert_eq!(Value::Float(f64::NEG_INFINITY).to_string(), "-.inf");
+        assert_eq!(Value::Float(f64::NAN).to_string(), ".nan");
+    }
+}

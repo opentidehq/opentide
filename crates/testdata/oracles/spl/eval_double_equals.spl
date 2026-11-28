@@ -1,0 +1,1 @@
+index=main | eval ok=if(status==200, 1, 0)

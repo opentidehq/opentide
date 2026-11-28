@@ -1,0 +1,4 @@
+SecurityEvent
+| where EventID == 4688 and TimeGenerated > ago(1d)
+| project Computer, EventID, TimeGenerated
+| summarize count() by Computer

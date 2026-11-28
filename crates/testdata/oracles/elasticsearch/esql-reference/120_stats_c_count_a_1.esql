@@ -1,0 +1,1 @@
+FROM logs | STATS c = COUNT(a) + 1

@@ -1,0 +1,1 @@
+process_cmdline:"-nop -w hidden" modload_name:amsi.dll

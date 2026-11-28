@@ -1,4 +1,10 @@
-"""Pytest configuration and shared fixtures."""
+"""Pytest configuration and shared fixtures.
+
+The suite tests what the Python package still holds (UC-6.2, #841): the
+console script, the SDK, the Tide models, the plugin API and the analysis
+door, plus the docs' snippets and CI's contracts. The command line itself is
+the Rust core's, tested by the goldens and the crates' own tests.
+"""
 
 from __future__ import annotations
 
@@ -8,7 +14,6 @@ from collections.abc import Iterator
 from functools import partial
 from pathlib import Path
 from typing import Any
-from unittest.mock import patch
 
 import pytest
 
@@ -20,42 +25,7 @@ for path in (SRC, ROOT):
 
 os.environ.setdefault("TERM_PROGRAM", "vscode")
 
-pytest_plugins = ["tests.corpus_support", "tests.result_models_support"]
-
-_repo_patcher: patch | None = None
-_original_find_workspace_root = None
-
-
-def _test_find_workspace_root(start: Path | None = None) -> Path:
-    """Pin default repo root for imports; honour env override and explicit *start*.
-
-    In-process tests therefore never discover a root from the cwd; cover
-    discovery with an explicit *start* or through a console-script subprocess.
-    """
-    if start is not None:
-        assert _original_find_workspace_root is not None
-        return _original_find_workspace_root(start)
-    override = os.environ.get("OPENTIDE_REPO_ROOT")
-    if override:
-        return Path(override)
-    return ROOT
-
-
-def pytest_configure(config: object) -> None:
-    """Pin repo root before Engines modules resolve paths at import time."""
-    global _repo_patcher, _original_find_workspace_root
-    import opentide.core.root as root_mod
-
-    _original_find_workspace_root = root_mod.find_workspace_root
-    _repo_patcher = patch.object(root_mod, "find_workspace_root", _test_find_workspace_root)
-    _repo_patcher.start()
-
-
-def pytest_unconfigure(config: object) -> None:
-    global _repo_patcher
-    if _repo_patcher is not None:
-        _repo_patcher.stop()
-        _repo_patcher = None
+pytest_plugins = ["tests.corpus_support"]
 
 
 # `git` resolves these BEFORE the `cwd` a caller passes, so a test that shells
@@ -126,42 +96,32 @@ def _isolate_ci_sinks(monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv(name, raising=False)
 
 
-#: Variables that pick the CLI output mode. A developer running the suite from a
-#: coding agent (``CLAUDECODE``, ``AI_AGENT``, ...) would otherwise get agent
-#: mode in every CLI test, and ``OPENTIDE_DEBUG`` would turn on debug logging.
-_OUTPUT_MODE_ENV = ("OPENTIDE_OUTPUT", "OPENTIDE_DEBUG")
+#: Variables that pick the CLI output mode: a developer running the suite from
+#: a coding agent would otherwise get agent mode in every command a test runs,
+#: and ``OPENTIDE_DEBUG`` would turn on debug logging.
+_OUTPUT_MODE_ENV = (
+    "OPENTIDE_OUTPUT",
+    "OPENTIDE_DEBUG",
+    # The command line's AGENT_VARIABLES (crates/opentide-cli/src/mode.rs).
+    "AI_AGENT",
+    "CLAUDECODE",
+    "CURSOR_AGENT",
+    "GEMINI_CLI",
+    "CODEX_CI",
+    "COPILOT_AGENT",
+    "COPILOT_CLI",
+    "OPENCODE",
+    "AMP_CURRENT_THREAD_ID",
+    "AUGMENT_AGENT",
+    "CLINE_ACTIVE",
+)
 
 
 @pytest.fixture(autouse=True)
-def _isolate_output_mode(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
-    """Start every test outside an agent, with no output mode chosen yet.
-
-    ``CliRunner`` runs the root callback in the test's own context, so the
-    ``CliContext`` it activates (``--debug`` included) would otherwise outlive
-    the test and reach code that reads it, such as the crash handler.
-    """
-    from opentide.cli.context import _cli_context
-    from opentide.cli.ui.mode import AGENT_VARIABLES, reset_mode
-
-    for name in (*AGENT_VARIABLES, *_OUTPUT_MODE_ENV):
+def _isolate_output_mode(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Start every test outside an agent, with no output mode chosen."""
+    for name in _OUTPUT_MODE_ENV:
         monkeypatch.delenv(name, raising=False)
-    reset_mode()
-    token = _cli_context.set(None)
-    yield
-    _cli_context.reset(token)
-    reset_mode()
-
-
-@pytest.fixture(scope="session")
-def _catalog_cache(tmp_path_factory: pytest.TempPathFactory) -> Path:
-    return tmp_path_factory.mktemp("opentide-cache")
-
-
-@pytest.fixture(autouse=True)
-def _isolate_catalog_cache(monkeypatch: pytest.MonkeyPatch, _catalog_cache: Path) -> None:
-    """The language-server catalogs opentide generates are cached for the
-    session, never in the user's cache directory."""
-    monkeypatch.setenv("OPENTIDE_CACHE_DIR", str(_catalog_cache))
 
 
 @pytest.fixture(autouse=True)
@@ -171,31 +131,6 @@ def _no_terminal_progress(monkeypatch: pytest.MonkeyPatch) -> None:
     Tests of the sequence itself pass their own environment.
     """
     monkeypatch.setenv("OPENTIDE_PROGRESS", "0")
-
-
-@pytest.fixture
-def metadata() -> dict[str, Any]:
-    return {
-        "uuid": "00000000-0000-4000-8000-000000000001",
-        "schema": "rule::1.0",
-        "version": 1,
-        "created": "2026-01-01",
-        "modified": "2026-01-02",
-        "tlp": "clear",
-    }
-
-
-@pytest.fixture
-def rule_payload(metadata: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "name": "Test rule",
-        "metadata": metadata,
-        "description": "desc",
-        "status": "STAGING",
-        "severity": "High",
-        "techniques": ["T1059"],
-        "platforms": {},
-    }
 
 
 def _restore_environment(saved: dict[str, str]) -> None:
@@ -209,12 +144,7 @@ def pytest_fixture_setup(fixturedef: Any, request: pytest.FixtureRequest) -> Ite
     """Give every module-, class-, package- or session-scoped fixture its own environment.
 
     Such a fixture runs before any test's ``_restore_process_environment``
-    snapshot, so what it leaves in ``os.environ`` would outlive its scope: an
-    in-process CLI call exports ``OPENTIDE_REPO_ROOT``, ``OPENTIDE_DATA_ROOT``
-    and ``OPENTIDE_TIDE_WORKSPACE``, which ``CliRunner(env=...)`` does not
-    take back, and tests in other modules then depend on the order they run in
-    (#642 and #647 each fixed one). The environment is restored when the
-    fixture is torn down, after its own teardown, so it holds for its scope.
+    snapshot, so what it leaves in ``os.environ`` would outlive its scope.
     """
     if fixturedef.scope != "function":
         fixturedef.addfinalizer(partial(_restore_environment, dict(os.environ)))
@@ -223,86 +153,7 @@ def pytest_fixture_setup(fixturedef: Any, request: pytest.FixtureRequest) -> Ite
 
 @pytest.fixture(autouse=True)
 def _restore_process_environment() -> Iterator[None]:
-    """Undo ``os.environ`` writes a test makes outside ``monkeypatch``.
-
-    In-process CLI calls push ``--repo`` / ``--no-color`` into the
-    environment for engine modules and never take them back; without this every
-    later test in the worker inherits them and output checks depend on order.
-    """
+    """Undo ``os.environ`` writes a test makes outside ``monkeypatch``."""
     saved = dict(os.environ)
     yield
     _restore_environment(saved)
-
-
-@pytest.fixture(autouse=True)
-def _restore_typer_rendering() -> Iterator[None]:
-    """``--no-color`` switches Typer's module-level styling off for the process."""
-    from typer import rich_utils
-
-    saved = (rich_utils.COLOR_SYSTEM, rich_utils.FORCE_TERMINAL)
-    yield
-    rich_utils.COLOR_SYSTEM, rich_utils.FORCE_TERMINAL = saved
-
-
-@pytest.fixture(autouse=True)
-def _restore_logging() -> Iterator[None]:
-    """In-process CLI calls re-initialise logging for the whole process.
-
-    After a ``--json`` invocation every later test saw ``is_json_output()`` true,
-    so human-output assertions passed or failed by test order, and root handlers
-    kept writing to the finished ``CliRunner`` stream. pytest's own capture
-    handlers are swapped per phase and left alone.
-    """
-    import logging
-
-    from opentide.core.logging import config
-
-    def installed(root: logging.Logger) -> list[logging.Handler]:
-        return [h for h in root.handlers if type(h).__module__ != "_pytest.logging"]
-
-    root = logging.getLogger()
-    saved_state = (config._config, config._console, config._stdout_console)
-    saved_handlers, saved_level = installed(root), root.level
-    yield
-    config._config, config._console, config._stdout_console = saved_state
-    for handler in installed(root):
-        if handler not in saved_handlers:
-            root.removeHandler(handler)
-    for handler in saved_handlers:
-        if handler not in root.handlers:
-            root.addHandler(handler)
-    root.setLevel(saved_level)
-
-
-@pytest.fixture(autouse=True)
-def _reset_opentide_registry() -> None:
-    """Prevent tests from polluting singleton state."""
-    yield
-    from tests.registry_support import reset_opentide_singletons
-
-    reset_opentide_singletons()
-
-
-@pytest.fixture
-def tide_workspace(monkeypatch: pytest.MonkeyPatch) -> Path:
-    """Redirect tide instance outputs into a repo-local workspace for portable CI."""
-    from opentide.generation.artifact_gate import TIDE_WORKSPACE_DIR
-    from opentide.registry.discovery import OPENTIDE_DIR
-
-    workspace = ROOT / TIDE_WORKSPACE_DIR
-    workspace.mkdir(parents=True, exist_ok=True)
-    for rel in (
-        f"{OPENTIDE_DIR}/schemas",
-        f"{OPENTIDE_DIR}/templates",
-        f"{OPENTIDE_DIR}/exports",
-        f"{OPENTIDE_DIR}/inflight",
-        f"{OPENTIDE_DIR}/configurations",
-        "objects/threats",
-        "objects/objectives",
-        "objects/rules",
-        ".vscode",
-    ):
-        (workspace / rel).mkdir(parents=True, exist_ok=True)
-
-    monkeypatch.setenv("OPENTIDE_TIDE_WORKSPACE", str(workspace.resolve()))
-    return workspace

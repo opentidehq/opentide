@@ -8,14 +8,17 @@ from __future__ import annotations
 
 import os
 import shutil
-from collections.abc import Iterable, Iterator
+import sys
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-from opentide.core.io import load_toml
-from opentide.models.deployment_enums import StatusStrategy
+if sys.version_info >= (3, 11):
+    import tomllib
+else:  # pragma: no cover - Python 3.10
+    import tomli as tomllib
 
 ROOT = Path(__file__).resolve().parents[1]
 TIDE_CORPUS_ROOT = ROOT / "tests/fixtures/tide_corpus/current"
@@ -23,7 +26,7 @@ TIDE_CORPUS_MANIFEST = ROOT / "tests/fixtures/tide_corpus/manifest.toml"
 
 CORPUS_RULE_UUIDS = {
     "sentinel": "00000000-0000-4000-8003-000000000001",
-    "defender_for_endpoint": "00000000-0000-4000-8003-000000000002",
+    "microsoft_defender": "00000000-0000-4000-8003-000000000002",
     "splunk": "00000000-0000-4000-8003-000000000003",
     "sentinel_one": "00000000-0000-4000-8003-000000000004",
     "carbon_black_cloud": "00000000-0000-4000-8003-000000000005",
@@ -31,10 +34,6 @@ CORPUS_RULE_UUIDS = {
     "harfanglab": "00000000-0000-4000-8003-000000000007",
     "elastic": "00000000-0000-4000-8003-000000000009",
     "sysdig": "00000000-0000-4000-8003-0000005d1a90",
-    "bitdefender": "00000000-0000-4000-8003-0000b1d0f001",
-    "graylog": "00000000-0000-4000-8003-00000091a7e0",
-    "exabeam": "00000000-0000-4000-8003-0000e8ab0001",
-    "google_secops": "00000000-0000-4000-8003-00000000ec01",
 }
 #: Rules deploy skips because they sit in subfolders (#312). One shares a
 #: top-level file name, which a lookup by file name would resolve wrongly.
@@ -84,26 +83,6 @@ def migrate_tide_corpus_layout(dest: Path) -> None:
     opentide.joinpath("templates").mkdir(exist_ok=True)
     opentide.joinpath("exports").mkdir(exist_ok=True)
     opentide.joinpath("inflight").mkdir(exist_ok=True)
-
-
-def clear_runtime_caches() -> None:
-    from opentide.core.index_manager import IndexManager
-    from opentide.core.registry import Opentide
-    from opentide.core.root import get_data_root, get_repo_root
-    from opentide.generation import schema_pipeline
-
-    # The schema pipeline caches registry-backed globals; a stale binding points
-    # generation at the previous test's repo root.
-    schema_pipeline._runtime_ready = False
-    get_repo_root.cache_clear()
-    get_data_root.cache_clear()
-    IndexManager._cache = None
-    Opentide._initialised = False
-    Opentide._objects_loaded = False
-    Opentide._index = None
-    Opentide._rules = {}
-    Opentide._threats = {}
-    Opentide._objectives = {}
 
 
 def materialise_corpus(dest: Path) -> Path:
@@ -165,55 +144,6 @@ def add_unplanned_rules(rules: Path) -> None:
     write_rule_variant(rules, "rule-0103-design.yaml", INERT_RULE_UUID, status="DESIGN")
 
 
-def classify_deploy_scope(
-    repo: Path,
-    indexed: Iterable[str],
-    plan: dict[str, list[str]],
-    warnings: Iterable[str],
-    *,
-    excluded: frozenset[StatusStrategy],
-) -> dict[str, set[str]]:
-    """Sort indexed rule UUIDs by why a plan has or lacks them (#312 guard).
-
-    ``silent`` holds rules that are not planned, not excluded by a status
-    strategy in *excluded*, and whose file no warning names.
-    """
-    from opentide.core.io import load_yaml
-    from opentide.core.object_refs import object_uuid
-    from opentide.deployment.utils import check_status
-
-    planned = {uuid for uuids in plan.values() for uuid in uuids}
-    named = {
-        name
-        for message in warnings
-        if "): " in message
-        for name in message.split("): ", 1)[1].split(", ")
-    }
-    root = repo.resolve()
-    files: dict[str, tuple[str, dict[str, Any]]] = {}
-    for path in (repo / "objects" / "rules").rglob("*.yaml"):
-        data = load_yaml(path)
-        files[object_uuid(data)] = (path.resolve().relative_to(root).as_posix(), data)
-    scope: dict[str, set[str]] = {
-        "planned": set(),
-        "status": set(),
-        "warned": set(),
-        "silent": set(),
-    }
-    for uuid in indexed:
-        file, data = files[uuid]
-        strategies = {check_status(conf["status"]) for conf in data["configurations"].values()}
-        if uuid in planned:
-            scope["planned"].add(uuid)
-        elif strategies <= excluded:
-            scope["status"].add(uuid)
-        elif file in named:
-            scope["warned"].add(uuid)
-        else:
-            scope["silent"].add(uuid)
-    return scope
-
-
 def corpus_env(repo: Path) -> dict[str, str]:
     """Environment overrides that point opentide at a materialised corpus."""
     return {
@@ -237,9 +167,7 @@ def tide_corpus_repo(
     monkeypatch.setenv("OPENTIDE_TIDE_WORKSPACE", str(dest))
     monkeypatch.delenv("DEPLOYMENT_PLAN", raising=False)
     monkeypatch.setenv("CI", "true")
-    clear_runtime_caches()
     yield dest
-    clear_runtime_caches()
 
 
 @pytest.fixture
@@ -248,7 +176,7 @@ def corpus_rule_uuids() -> dict[str, str]:
 
 
 def load_corpus_manifest() -> dict[str, Any]:
-    return load_toml(TIDE_CORPUS_MANIFEST)
+    return tomllib.loads(TIDE_CORPUS_MANIFEST.read_text(encoding="utf-8"))
 
 
 def manifest_slices(*, status: str | None = None) -> list[dict[str, Any]]:

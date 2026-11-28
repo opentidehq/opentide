@@ -1,0 +1,1 @@
+SecurityEvent | join kind=inner (SigninLogs) on $left.Account == $right.UserPrincipalNam

@@ -1,0 +1,1 @@
+index=a | streamstats | stats count by host

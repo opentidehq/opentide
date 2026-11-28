@@ -1,0 +1,31 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(query(&file))
+input_file: crates/testdata/corpus/cql/or_filter__invalid.cql
+---
+SOURCE_FILE@0..29
+  PIPELINE@0..28
+    OR_FILTER@0..13
+      FIELD_FILTER@0..10
+        FIELD_NAME@0..6
+          WORD@0..6 "method"
+        EQ@6..7 "="
+        UNQUOTED_PATTERN@7..10
+          WORD@7..10 "GET"
+      WHITESPACE@10..11 " "
+      OR@11..13
+        OR_KW@11..13 "or"
+    WHITESPACE@13..14 " "
+    ERROR@14..16
+      WORD@14..16 "or"
+    WHITESPACE@16..17 " "
+    FIELD_FILTER@17..28
+      FIELD_NAME@17..23
+        WORD@17..23 "method"
+      EQ@23..24 "="
+      UNQUOTED_PATTERN@24..28
+        WORD@24..28 "POST"
+  WHITESPACE@28..29 "\n"
+
+13..14: expected a filter
+13..14: unexpected

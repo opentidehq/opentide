@@ -1,0 +1,33 @@
+# A HarfangLab yara object that sets the signature and the decomposed keys.
+# Expected constraint code: harfanglab_yara_form.
+name: HarfangLab YARA in two forms
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000042
+  schema: rule::1.0
+  version: 1
+  created: "2026-01-01"
+  modified: "2026-01-02"
+  tlp: clear
+description: |
+  A signature and decomposed strings and condition in one yara object.
+status: STAGING
+severity: Medium
+configurations:
+  harfanglab:
+    enabled: true
+    schema: platform::harfanglab::1.0
+    status: STAGING
+    yara:
+      signature: |
+        rule Cmd_String {
+          meta:
+            context = "file"
+          strings:
+            $a = "cmd.exe" ascii
+          condition:
+            $a
+        }
+      strings: |
+        $a = "cmd.exe" ascii
+      condition: |
+        $a

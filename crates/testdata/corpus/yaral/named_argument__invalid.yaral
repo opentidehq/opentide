@@ -1,0 +1,5 @@
+// prod:named_argument invalid
+rule r {
+  export:
+    %seen.write_row(user: : $user)
+}

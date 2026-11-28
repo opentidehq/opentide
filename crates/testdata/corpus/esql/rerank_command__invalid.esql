@@ -1,0 +1,3 @@
+// prod:rerank_command invalid
+FROM docs
+| RERANK ON title

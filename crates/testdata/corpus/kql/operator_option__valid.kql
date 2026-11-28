@@ -1,0 +1,2 @@
+// prod:operator_option valid
+union isfuzzy=true withsource=SourceTable SigninLogs, AADNonInteractiveUserSignInLogs

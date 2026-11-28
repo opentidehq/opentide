@@ -1,0 +1,2 @@
+``` prod:join_command invalid
+index=main | join

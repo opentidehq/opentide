@@ -1,0 +1,76 @@
+# The language server's cold start (#1754): spawn to the first diagnostics of a rule it was
+# asked to open (`start_to_first_diag_ms` of scripts/perf/lsp-bench.mjs), native and WASI (under
+# wasmtime), on the small workspace (the Tide corpus) and the large one (1,000 object files,
+# scripts/perf/make_workspace.py). Measured by scripts/perf/cold-start.sh in the nightly's
+# `Benchmarks (language server cold start)` job (bench.yml) and held by
+# scripts/perf/check_cold_start.py with the rules of tests/bench/budgets.toml, whose [policy] it
+# reads (regression 10%, noise floor 20 ms, cross_cpu_regression 20%):
+#
+#   target_ms       an absolute budget: more than policy.regression above it fails (when the
+#                   difference is also above the noise floor). The p50s #1746 measured after
+#                   its fix, on one 4-vCPU Xeon @ 2.10 GHz (docs/internal/datasets.md,
+#                   "Language server")
+#   target_waiver   a target the runner class misses, waived until the issue it names meets it
+#                   ("#123, why"); the scenario is then held to its CPU baselines alone
+#   [[cpu_baseline]] the p50 of each scenario on a CPU model of CI's runner class
+#                   (ubuntu-24.04, 4 vCPU): a report is held to its own CPU's p50 +
+#                   policy.regression, or on a CPU recorded nowhere to the slowest recorded +
+#                   policy.cross_cpu_regression
+#
+# Re-record only from a CI run of the job, in a change of its own that says why. Add a
+# [[cpu_baseline]] when a run's summary names an unrecorded CPU, copying that run's p50s.
+
+schema_version = 1
+
+# Runs per scenario, each a fresh server: a report of another count fails.
+runs = 10
+
+[[scenario]]
+id = "native_small"
+label = "native, small workspace"
+target_ms = 62
+
+[[scenario]]
+id = "native_large"
+label = "native, large workspace"
+target_ms = 127
+
+[[scenario]]
+id = "wasi_small"
+label = "WASI, small workspace"
+target_ms = 192
+
+[[scenario]]
+id = "wasi_large"
+label = "WASI, large workspace"
+target_ms = 350
+
+[[cpu_baseline]]
+cpu_model = "AMD EPYC 9V74 80-Core Processor"
+source = "https://github.com/opentidehq/opentide/actions/runs/44995501466/attempts/1"
+
+[cpu_baseline.p50_ms]
+native_small = 42.5
+native_large = 66.5
+wasi_small = 192.6
+wasi_large = 419.4
+
+[[cpu_baseline]]
+cpu_model = "AMD EPYC 7763 64-Core Processor"
+source = "https://github.com/opentidehq/opentide/actions/runs/45016268023"
+
+[cpu_baseline.p50_ms]
+native_small = 40.2
+native_large = 79.9
+wasi_small = 177.4
+wasi_large = 492.9
+
+[[cpu_baseline]]
+cpu_model = "AMD EPYC 9V45 96-Core Processor"
+source = "https://github.com/opentidehq/opentide/actions/runs/45016264888"
+
+[cpu_baseline.p50_ms]
+native_small = 26.2
+native_large = 46.2
+wasi_small = 113.2
+wasi_large = 330.2

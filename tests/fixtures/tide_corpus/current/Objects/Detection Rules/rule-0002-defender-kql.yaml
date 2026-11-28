@@ -20,17 +20,18 @@ response:
   alert_severity: High
 
 configurations:
-  defender_for_endpoint:
+  microsoft_defender:
     enabled: true
     name: Defender KQL Rule
     status: STAGING
     query: |
       DeviceProcessEvents
       | take 1
-    scheduling: 1H
+      | project Timestamp, DeviceId, ReportId
+    schedule:
+      frequency: 1H
     alert:
-      category: Execution
-    impacted_entities:
-      device: device_id
-    scope:
-      selection: All
+      title: Defender KQL Rule
+    entities:
+      hosts:
+        - device_id: DeviceId

@@ -1,0 +1,61 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: query/json/tenants/unset-crowdstrike
+---
+args: opentide --json query --platform crowdstrike --from 2099-01-01T00:00:00Z --to 2099-01-01T01:00:00Z '#event_simpleName=ProcessRollup2'
+exit: 1
+
+━━━ stdout · json, 1 lines
+{
+  "command": "query",
+  "duration_ms": 0,
+  "error": "1 of 1 queries failed on 1 crowdstrike tenant: lab: CrowdStrike credentials are unset ($CROWDSTRIKE_CLIENT_SECRET). Set those environment variables, then run the command again.",
+  "exit_code": 1,
+  "failure": {
+    "argument": null,
+    "code": "command_failed",
+    "crash_log": null,
+    "message": "1 of 1 queries failed on 1 crowdstrike tenant: lab: CrowdStrike credentials are unset ($CROWDSTRIKE_CLIENT_SECRET). Set those environment variables, then run the command again.",
+    "suggestion": null
+  },
+  "limit": 100,
+  "message": "1 of 1 queries failed on 1 crowdstrike tenant: lab: CrowdStrike credentials are unset ($CROWDSTRIKE_CLIENT_SECRET). Set those environment variables, then run the command again.",
+  "next_actions": [],
+  "ok": false,
+  "platform": "crowdstrike",
+  "query": "#event_simpleName=ProcessRollup2",
+  "results": [
+    {
+      "elapsed_ms": 0,
+      "error": "CrowdStrike credentials are unset ($CROWDSTRIKE_CLIENT_SECRET). Set those environment variables, then run the command again.",
+      "status": "failed",
+      "tenant": "lab",
+      "warnings": []
+    }
+  ],
+  "row_count": 0,
+  "schema_version": 1,
+  "source": "query",
+  "status": "failed",
+  "summary": {
+    "failed": 1,
+    "rows": 0,
+    "tenants": 1
+  },
+  "tenants": [
+    "lab"
+  ],
+  "window": {
+    "from": "2099-01-01T00:00:00.000Z",
+    "to": "2099-01-01T01:00:00.000Z"
+  }
+}
+
+━━━ stderr · json, 1 lines
+{
+  "advice": "Set those environment variables before a query.",
+  "detail": "Unset configuration variables: $CROWDSTRIKE_CLIENT_SECRET",
+  "event": "environment_variable_missing",
+  "level": "critical",
+  "timestamp": "0000-00-00 00:00:00"
+}

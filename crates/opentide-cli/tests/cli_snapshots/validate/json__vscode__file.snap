@@ -1,0 +1,109 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: validate/json/vscode/file
+---
+args: opentide --json validate --file objects/rules/suspicious-lsass-access.yaml
+exit: 1
+
+━━━ stdout · json, 1 lines
+{
+  "checks": {
+    "configuration": {
+      "check": "configuration",
+      "status": "passed"
+    },
+    "id-uniqueness": {
+      "check": "id-uniqueness",
+      "status": "passed"
+    },
+    "queries": {
+      "check": "queries",
+      "status": "failed"
+    },
+    "schema": {
+      "check": "schema",
+      "status": "failed"
+    },
+    "uuid-format": {
+      "check": "uuid-format",
+      "status": "failed"
+    }
+  },
+  "command": "validate",
+  "duration_ms": 0,
+  "error": "Validation failed",
+  "exit_code": 1,
+  "failure": {
+    "argument": null,
+    "code": "issues_found",
+    "crash_log": null,
+    "message": "Validation failed",
+    "suggestion": null
+  },
+  "message": "Validation failed",
+  "next_actions": [
+    {
+      "command": "opentide --json explain scope_no_match",
+      "reason": "how to fix it"
+    },
+    {
+      "command": "opentide --json validate --file objects/rules/suspicious-lsass-access.yaml",
+      "reason": "check again"
+    }
+  ],
+  "ok": false,
+  "report": {
+    "issues": [
+      {
+        "code": "scope_no_match",
+        "column": null,
+        "context": {
+          "object_types": [],
+          "targets": [
+            "objects/rules/suspicious-lsass-access.yaml"
+          ]
+        },
+        "end_column": null,
+        "end_line": null,
+        "explain": "opentide explain scope_no_match",
+        "field_path": [],
+        "file_path": null,
+        "fix": null,
+        "help": null,
+        "line": null,
+        "message": "No objects matched the validation scope (check --file, --uuid, --type)",
+        "object_type": "",
+        "object_uuid": "",
+        "path": null,
+        "severity": "error",
+        "suggestion": null,
+        "yaml_line": null
+      }
+    ],
+    "ok": false,
+    "stats": {
+      "id_workers": "<CORES>",
+      "object_workers": "<CORES>",
+      "objects_checked": 0,
+      "parallel": "<CORES>",
+      "queries_checked": 0,
+      "wall_ms": 0.0,
+      "workers": "<CORES>"
+    },
+    "warnings": []
+  },
+  "schema_version": 1,
+  "status": "failed",
+  "summary": {
+    "errors": 1,
+    "files": 0,
+    "fixable": 0,
+    "objects": 0,
+    "queries": 0,
+    "warning_files": 0,
+    "warnings": 0
+  },
+  "workspace": "<WS>"
+}
+
+━━━ stderr · empty

@@ -1,0 +1,45 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: setup.mcp/json/tide-corpus/example
+---
+args: opentide --json setup mcp --vscode --yes
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "command": "setup mcp",
+  "duration_ms": 0,
+  "exit_code": 0,
+  "failure": null,
+  "files": [
+    ".vscode/mcp.json"
+  ],
+  "mcp_available": true,
+  "message": "Wrote .vscode/mcp.json",
+  "next_actions": [],
+  "ok": true,
+  "path": "<WS>",
+  "schema_version": 1,
+  "status": "completed",
+  "summary": {}
+}
+
+━━━ stderr · empty
+
+━━━ ws/.vscode/ · created 0755
+
+━━━ ws/.vscode/mcp.json · created 0644
+{
+  "servers": {
+    "opentide": {
+      "command": "opentide",
+      "args": [
+        "mcp",
+        "start"
+      ],
+      "env": {
+        "OPENTIDE_REPO_ROOT": "${workspaceFolder}"
+      }
+    }
+  }
+}

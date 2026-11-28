@@ -16,6 +16,12 @@ With `style = "name"` the stem is the name, less the characters a file name cann
 objects/threats/actor.yaml   # name: Simulated Actor → Simulated Actor.yaml
 ```
 
+A stem Windows reserves for a device (`CON`, `PRN`, `AUX`, `NUL`, `CONIN$`, `CONOUT$`, `COM0`-`COM9`, `LPT0`-`LPT9`, in any case and with any extension) gets a `_` before it under either style:
+
+```text
+objects/rules/con.yaml   # name: CON → _con.yaml
+```
+
 ## How to fix
 
 Run `opentide lint --fix`, which renames the file. When another file already has the expected name (compared without regard to case), the object gets the first eight characters of its UUID as a suffix.

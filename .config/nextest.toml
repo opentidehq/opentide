@@ -1,0 +1,67 @@
+# cargo-nextest (https://nexte.st) for the Cargo workspace.
+#
+#   cargo nextest run --profile fast   the agent loop: unit tests and the fast
+#                                      integration tests (under 60 s warm)
+#   cargo nextest run --profile ci     everything, as CI runs it, with JUnit
+#   cargo nextest run                  everything (the default profile)
+#
+# `cargo test --workspace` stays the plain check and needs no install. nextest
+# does not run doctests: `cargo test --workspace --doc` runs them, as CI does
+# (ci.yml, job `engine-test`: `cargo test --workspace --locked --doc`).
+
+[profile.default]
+# A test past 60s is reported as slow. The LSP stdio tests drive a child server,
+# and one that hangs would otherwise hold the run until the job times out.
+slow-timeout = { period = "60s", terminate-after = 5 }
+
+# The cases on the generated workspaces (`fault` has 800 objects) run every
+# lint and validate check in a debug build: minutes of CPU, a few cores wide.
+[[profile.default.overrides]]
+filter = 'binary_id(opentide-cli::cli_snapshots) and test(/^generated_/)'
+slow-timeout = { period = "120s", terminate-after = 5 }
+
+# The parsers' long-run inputs (tests/long_runs.rs): each test is one thread of
+# CPU for up to two minutes in a debug build. CI runs eight tests at a time on
+# four cores (NEXTEST_TEST_THREADS, for the tests that wait on processes), so
+# when several met at the end of the run each had about half a core and one
+# passed the five-minute kill (run 43819465494). Two slots each: the CPU-bound
+# tests running together never outnumber the cores. Their modules' unit tests
+# (`lexer::tests::…`) are short and keep one slot.
+[[profile.default.overrides]]
+filter = 'binary_id(/::long_runs$/) and not test(/::/)'
+threads-required = 2
+
+[profile.fast]
+# Leaves out what spawns a server, runs Python or walks a long corpus: the
+# language server over stdio, the comparisons with outside tools (`external_*`;
+# `external_difflib` runs CPython), the deep-nesting stack test, the public
+# detection corpora and the binary's E2E tests on scratch git repositories
+# (`opentide-cli::workspace_e2e`). `-p <crate>` narrows it further;
+# `--ignore-default-filter` runs everything.
+default-filter = """
+not (
+    binary_id(opentide-lsp::catalog)
+    | binary_id(opentide-lsp::e2e_stdio)
+    | binary_id(opentide-lsp::protocol)
+    | binary_id(opentide-analysis::tide_corpus)
+    | binary_id(opentide-analysis::deep_queries)
+    | binary_id(opentide-yaral::long_runs)
+    | binary_id(/::external_/)
+    | binary_id(opentide-analysis::live_elasticsearch_probes)
+    | binary_id(opentide-analysis::elastic_detection_rules)
+    | binary_id(opentide-lucene::sigma_sweep)
+    | binary_id(opentide-cli::workspace_e2e)
+)
+"""
+
+[profile.ci]
+# Report every failing test, not just the first binary's.
+fail-fast = false
+# No retries: a flaky test is a bug to fix, not to hide.
+retries = 0
+failure-output = "immediate-final"
+
+[profile.ci.junit]
+# target/nextest/ci/junit.xml, under the workspace root (nextest's store
+# directory does not follow CARGO_TARGET_DIR).
+path = "junit.xml"

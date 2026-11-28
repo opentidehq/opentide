@@ -1,0 +1,46 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: validate.query/json/live-tenants/live-no-tenant-reached
+---
+args: opentide --json validate query --live --platform sentinel
+exit: 2
+
+━━━ stdout · json, 1 lines
+{
+  "advice": "a tenant takes a rule only when its 'strategies' accept the run strategy that deploys the rule's status; a 'manual' tenant only when the rule lists it under tenants; and a rule's tenants list must name a tenant configured for this platform",
+  "command": "validate query",
+  "duration_ms": 0,
+  "error": "No query was sent: none of the 1 sentinel rule(s) goes to a tenant in .opentide/configurations/platforms/sentinel.toml",
+  "exit_code": 2,
+  "failure": {
+    "argument": null,
+    "code": "no_tenant_reached",
+    "crash_log": null,
+    "message": "No query was sent: none of the 1 sentinel rule(s) goes to a tenant in .opentide/configurations/platforms/sentinel.toml",
+    "suggestion": null
+  },
+  "message": "No query was sent: none of the 1 sentinel rule(s) goes to a tenant in .opentide/configurations/platforms/sentinel.toml",
+  "mode": "live",
+  "next_actions": [],
+  "ok": true,
+  "platform": "sentinel",
+  "queries_per_tenant": {},
+  "queries_validated": 0,
+  "schema_version": 1,
+  "status": "skipped",
+  "strategies": [
+    "PREVIEW",
+    "RELEASE"
+  ],
+  "summary": {},
+  "supported": true
+}
+
+━━━ stderr · json, 1 lines
+{
+  "advice": "Set those environment variables before a live check.",
+  "detail": "Unset configuration variables: $AZURE_CLIENT_SECRET",
+  "event": "environment_variable_missing",
+  "level": "critical",
+  "timestamp": "0000-00-00 00:00:00"
+}

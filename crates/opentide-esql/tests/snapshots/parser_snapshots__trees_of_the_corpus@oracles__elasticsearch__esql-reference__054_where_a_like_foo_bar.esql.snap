@@ -1,0 +1,36 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/oracles/elasticsearch/esql-reference/054_where_a_like_foo_bar.esql
+---
+SOURCE_FILE@0..42
+  QUERY@0..41
+    FROM_COMMAND@0..9
+      FROM_KW@0..4 "FROM"
+      WHITESPACE@4..5 " "
+      INDEX_PATTERN@5..9
+        INDEX_NAME@5..9
+          SOURCE_TEXT@5..9 "logs"
+    WHITESPACE@9..10 " "
+    PIPE@10..11 "|"
+    WHITESPACE@11..12 " "
+    WHERE_COMMAND@12..41
+      WHERE_KW@12..17 "WHERE"
+      WHITESPACE@17..18 " "
+      LIKE_EXPRESSION@18..41
+        QUALIFIED_NAME@18..19
+          IDENTIFIER@18..19
+            IDENT@18..19 "a"
+        WHITESPACE@19..20 " "
+        LIKE_KW@20..24 "LIKE"
+        WHITESPACE@24..25 " "
+        L_PAREN@25..26 "("
+        STRING@26..32
+          STRING_LIT@26..32 "\"foo*\""
+        COMMA@32..33 ","
+        WHITESPACE@33..34 " "
+        STRING@34..40
+          STRING_LIT@34..40 "\"bar*\""
+        R_PAREN@40..41 ")"
+  WHITESPACE@41..42 "\n"
+--- errors

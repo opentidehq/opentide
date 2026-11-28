@@ -1,0 +1,2 @@
+search in (Sec*, SigninLogs) "mimikatz"
+| take 10

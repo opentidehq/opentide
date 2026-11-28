@@ -7,7 +7,7 @@ Reported by `opentide doctor`. Fails when it does not (3-second timeout); skippe
 ## Example
 
 ```text
-✗ Cannot connect to proxy http://proxy.example:3128 (ConnectionRefusedError) · proxy
+✗ Cannot connect to proxy http://proxy.example:3128 (Connection refused (os error 111)) · proxy
   → check --proxy, OPENTIDE_PROXY or HTTPS_PROXY, and that the proxy is up
 ```
 

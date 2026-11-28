@@ -13,6 +13,8 @@ import os
 import shutil
 import subprocess
 import sys
+import threading
+import time
 import zipfile
 from pathlib import Path
 
@@ -45,7 +47,7 @@ def _run(cmd: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
 
 
 def test_pip_installed_wheel_validate_generate_and_skills(
-    tmp_path: Path, tide_corpus_repo: Path
+    tmp_path: Path, tide_corpus_repo: Path, wheel_cache: Path
 ) -> None:
     uv = shutil.which("uv")
     if uv is None:
@@ -56,12 +58,12 @@ def test_pip_installed_wheel_validate_generate_and_skills(
     skills_dest = tmp_path / "skills-repo"
     skills_dest.mkdir()
 
-    wheel = _build_wheel(uv, dist)
+    wheel = _build_wheel(uv, dist, wheel_cache)
 
     with zipfile.ZipFile(wheel) as archive:
         names = archive.namelist()
-    assert any(name.endswith("data/configurations/__init__.py") for name in names)
-    assert any(name.endswith("data/configurations/platforms/__init__.py") for name in names)
+    # The binary compiles the data and the schemas in: the wheel carries no copy.
+    assert not any(name.startswith(("opentide/data/", "opentide/schemas/")) for name in names)
     assert not any(
         "/data/skills/" in name or name.endswith("data/skills/manifest.json") for name in names
     )
@@ -74,24 +76,6 @@ def test_pip_installed_wheel_validate_generate_and_skills(
         timeout=180,
     )
     assert install.returncode == 0, install.stdout + install.stderr
-
-    probe = _run(
-        [
-            str(python),
-            "-c",
-            (
-                "import compileall, pathlib, opentide; "
-                "root = pathlib.Path(opentide.__file__).resolve().parent "
-                "/ 'data' / 'configurations'; "
-                "compileall.compile_dir(str(root), quiet=1, force=True); "
-                "print(root)"
-            ),
-        ],
-        timeout=60,
-    )
-    assert probe.returncode == 0, probe.stdout + probe.stderr
-    config_dir = Path(probe.stdout.strip())
-    assert any(config_dir.rglob("*.pyc")), f"no bytecode under {config_dir}"
 
     opentide = _venv_bin(env_dir, "opentide")
     assert opentide.is_file(), f"missing console script {opentide}"
@@ -203,24 +187,50 @@ def test_pip_installed_wheel_validate_generate_and_skills(
     assert "KeyError" not in dry_run.stdout + dry_run.stderr
 
 
-def _build_wheel(uv: str, dist: Path) -> Path:
-    """opentide's wheel, with the engine compiled in (hatch_build.py).
+def _build_wheel(uv: str, dist: Path, shared: Path) -> Path:
+    """opentide's wheel, with the engine compiled in (maturin), copied into *dist*.
 
-    The engine builds with the ``develop`` profile, which ``uv sync`` already
-    compiled, so cargo reuses that build instead of a release one.
+    ``OPENTIDE_TEST_WHEELHOUSE`` names a folder holding one opentide wheel
+    already built (CI's build job builds it once for every Python job): that
+    wheel is used, and nothing is compiled. Otherwise ``uv build`` builds it,
+    with the ``develop`` profile (pyproject.toml's ``[tool.uv]``), which ``uv
+    sync`` already compiled, so cargo reuses that build instead of a release one.
+
+    One test run builds the wheel once, in *shared* (``wheel_cache``), under a
+    lock its xdist workers share, rather than once per worker.
     """
-    import os
-
-    build = _run(
-        [uv, "build", "--wheel", "--out-dir", str(dist)],
-        cwd=str(ROOT),
-        env={**os.environ, "OPENTIDE_ENGINE_PROFILE": "develop"},
-        timeout=900,
-    )
-    assert build.returncode == 0, build.stdout + build.stderr
-    wheels = list(dist.glob("opentide-*.whl"))
-    assert len(wheels) == 1, f"expected one wheel in {dist}: {wheels}"
-    return wheels[0]
+    wheelhouse = os.environ.get("OPENTIDE_TEST_WHEELHOUSE")
+    if wheelhouse:
+        built = sorted(Path(wheelhouse).glob("opentide-*.whl"))
+        assert len(built) == 1, f"expected one opentide wheel in {wheelhouse}: {built}"
+        dist.mkdir(parents=True, exist_ok=True)
+        return Path(shutil.copy2(built[0], dist))
+    shared.mkdir(exist_ok=True)
+    lock = shared / ".lock"
+    deadline = time.monotonic() + 1200
+    while True:
+        try:
+            lock.mkdir()
+            break
+        except FileExistsError:
+            if time.monotonic() > deadline:
+                pytest.fail(f"another worker held {lock} for 20 minutes")
+            time.sleep(1)
+    try:
+        wheels = list(shared.glob("opentide-*.whl"))
+        if not wheels:
+            build = _run(
+                [uv, "build", "--wheel", "--out-dir", str(shared)],
+                cwd=str(ROOT),
+                timeout=900,
+            )
+            assert build.returncode == 0, build.stdout + build.stderr
+            wheels = list(shared.glob("opentide-*.whl"))
+    finally:
+        lock.rmdir()
+    assert len(wheels) == 1, f"expected one wheel in {shared}: {wheels}"
+    dist.mkdir(parents=True, exist_ok=True)
+    return Path(shutil.copy2(wheels[0], dist))
 
 
 def _install(uv: str, env_dir: Path, spec: str) -> Path:
@@ -258,7 +268,7 @@ def _initialize_response(result: subprocess.CompletedProcess[str]) -> dict[str, 
 
 
 def test_bare_wheel_mcp_start_answers_a_stdio_initialize(
-    tmp_path: Path, tide_corpus_repo: Path
+    tmp_path: Path, tide_corpus_repo: Path, wheel_cache: Path
 ) -> None:
     """Issue #526: a BARE install must start the server, with no extra.
 
@@ -266,27 +276,20 @@ def test_bare_wheel_mcp_start_answers_a_stdio_initialize(
     that died with `ModuleNotFoundError: mcp` could ship. Issue #460: that path
     is `opentide mcp start`, and the wheel does not install `opentide-mcp`.
 
-    This replaces an assertion that a bare install *reports a missing extra*.
-    `mcp` became a base dependency in 0.14.0, so that test could only ever skip,
-    and the stronger claim -- a bare install actually serves -- went unguarded.
+    The server is the Rust one compiled into ``opentide._native`` (UC-6.0c,
+    UC-6.2): the wheel no longer depends on the Python ``mcp`` package, and a
+    bare install still serves.
     """
     uv = shutil.which("uv")
     if uv is None:
         pytest.skip("uv is required to build and install the wheel")
 
-    wheel = _build_wheel(uv, tmp_path / "dist")
+    wheel = _build_wheel(uv, tmp_path / "dist", wheel_cache)
     env_dir = tmp_path / "bare-venv"
-    python = _install(uv, env_dir, str(wheel))
+    _install(uv, env_dir, str(wheel))
 
     removed = _venv_bin(env_dir, "opentide-mcp")
     assert not removed.exists(), "the wheel must not install an opentide-mcp alias"
-
-    imported = _run([str(python), "-c", "import mcp.server.mcpserver"], timeout=60)
-    assert imported.returncode == 0, (
-        "a bare wheel install must ship mcp as a base dependency:\n"
-        + imported.stdout
-        + imported.stderr
-    )
 
     opentide = _venv_bin(env_dir, "opentide")
     result = _run(
@@ -313,7 +316,7 @@ def test_bare_wheel_mcp_start_answers_a_stdio_initialize(
 
 
 def test_wheel_installed_with_a_retired_extra_still_answers_a_stdio_initialize(
-    tmp_path: Path, tide_corpus_repo: Path
+    tmp_path: Path, tide_corpus_repo: Path, wheel_cache: Path
 ) -> None:
     """An install command written for an older release still installs a working server.
 
@@ -327,7 +330,7 @@ def test_wheel_installed_with_a_retired_extra_still_answers_a_stdio_initialize(
     if uv is None:
         pytest.skip("uv is required to build and install the wheel")
 
-    wheel = _build_wheel(uv, tmp_path / "dist")
+    wheel = _build_wheel(uv, tmp_path / "dist", wheel_cache)
     env_dir = tmp_path / "mcp-venv"
     _install(uv, env_dir, f"{wheel}[mcp]")
 
@@ -353,14 +356,23 @@ def test_wheel_installed_with_a_retired_extra_still_answers_a_stdio_initialize(
     assert response["result"]["serverInfo"]["name"] == "opentide"
 
 
-#: Every vendor SDK a platform imports. A bare ``pip install opentide`` must
-#: carry all of them: there are no extras, and a generated CI pipeline installs
-#: exactly ``opentide==<version>`` (the 0.14.2 Sentinel live-validation failure).
-_PLATFORM_SDK_IMPORTS = (
-    "azure.identity",
-    "azure.monitor.query",
-    "splunklib.client",
-    "cbc_sdk.rest_api",
+#: The vendor SDKs and Python packages the Python implementation imported. The
+#: Rust core talks to every platform and serves MCP itself (UC-6.2), so a bare
+#: ``pip install opentide`` brings none of them.
+_REMOVED_DEPENDENCIES = (
+    "azure-identity",
+    "azure-monitor-query",
+    "splunk-sdk",
+    "carbon-black-cloud-sdk",
+    "mcp",
+    "pymisp",
+    "typer",
+    "rich",
+    "textual",
+    "questionary",
+    "ruamel.yaml",
+    "dulwich",
+    "structlog",
 )
 
 
@@ -368,53 +380,45 @@ _PLATFORM_SDK_IMPORTS = (
 _NOT_INSTALLED = ("pandas", "numpy", "openpyxl")
 
 
-def test_bare_wheel_imports_every_platform_sdk(tmp_path: Path) -> None:
-    """A bare install, resolved with uv's default pre-release policy, has every SDK.
+def test_bare_wheel_has_only_the_plugins_extra_and_no_vendor_sdks(
+    tmp_path: Path, wheel_cache: Path
+) -> None:
+    """A bare install, resolved with uv's default pre-release policy, is the slim package.
 
-    uv refuses a transitive pre-release, so a pre-release-only dependency (as
-    ``azure-mgmt-securityinsight`` is) would fail this install outright.
+    uv refuses a transitive pre-release, so a pre-release-only dependency would
+    fail this install outright. The wheel declares one extra, `plugins` (pydantic,
+    for the plugin API), and none of the Python implementation's dependencies,
+    pydantic included, are installed (UC-6.2, #1180).
     """
     uv = shutil.which("uv")
     if uv is None:
         pytest.skip("uv is required to build and install the wheel")
 
-    wheel = _build_wheel(uv, tmp_path / "dist")
+    wheel = _build_wheel(uv, tmp_path / "dist", wheel_cache)
     python = _install(uv, tmp_path / "sdk-venv", str(wheel))
 
-    import_every_sdk = "\n".join(
-        [
-            "import importlib, sys",
-            "for name in sys.argv[1:]:",
-            "    importlib.import_module(name)",
-            "import opentide.platforms.sentinel.client as client",
-            "assert client.ALERT_RULES_API_VERSION",
-        ]
-    )
-    probe = _run([str(python), "-c", import_every_sdk, *_PLATFORM_SDK_IMPORTS], timeout=120)
-    assert probe.returncode == 0, probe.stdout + probe.stderr
     print_extras = (
         "from importlib.metadata import metadata; "
         "print(metadata('opentide').get_all('Provides-Extra') or [])"
     )
     metadata = _run([str(python), "-c", print_extras], timeout=60)
-    assert metadata.stdout.strip() == "[]", metadata.stdout + metadata.stderr
-    # No command needs them since #747: they were 100 MB of the VS Code bundle.
+    assert metadata.stdout.strip() == "['plugins']", metadata.stdout + metadata.stderr
     print_installed = (
         "import importlib.metadata as m; "
         "print(sorted(d.metadata['Name'].lower() for d in m.distributions()))"
     )
     installed = _run([str(python), "-c", print_installed], timeout=60)
-    for heavy in _NOT_INSTALLED:
-        assert f"'{heavy}'" not in installed.stdout, installed.stdout + installed.stderr
+    for gone in (*_REMOVED_DEPENDENCIES, *_NOT_INSTALLED, "pydantic"):
+        assert f"'{gone}'" not in installed.stdout, installed.stdout + installed.stderr
 
 
-def test_bare_wheel_installs_the_engine_with_no_extra(tmp_path: Path) -> None:
+def test_bare_wheel_installs_the_engine_with_no_extra(tmp_path: Path, wheel_cache: Path) -> None:
     """``pip install opentide`` brings the analysis engine: offline queries and the LSP (#332)."""
     uv = shutil.which("uv")
     if uv is None:
         pytest.skip("uv is required to build and install the wheel")
 
-    wheel = _build_wheel(uv, tmp_path / "dist")
+    wheel = _build_wheel(uv, tmp_path / "dist", wheel_cache)
     # One wheel carries the engine, for every CPython from 3.10 on.
     assert "-cp310-abi3-" in wheel.name, wheel.name
     python = _install(uv, tmp_path / "engine-venv", str(wheel))
@@ -456,3 +460,54 @@ def _assert_json_ok(result: subprocess.CompletedProcess[str]) -> None:
     assert result.returncode == 0, combined
     payload = json.loads(result.stdout)
     assert payload.get("ok") is True
+
+
+def test_concurrent_wheel_builds_share_one_build(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Workers that need the wheel at once build it once, so no two builds race on the checkout."""
+    builds: list[list[str]] = []
+
+    def fake_run(cmd: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+        builds.append(cmd)
+        time.sleep(0.2)
+        out = Path(cmd[cmd.index("--out-dir") + 1])
+        (out / "opentide-0.0.0-py3-none-any.whl").write_bytes(b"wheel")
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(sys.modules[__name__], "_run", fake_run)
+    monkeypatch.delenv("OPENTIDE_TEST_WHEELHOUSE", raising=False)
+    shared = tmp_path / "shared"
+    found: list[Path] = []
+    threads = [
+        threading.Thread(
+            target=lambda n=n: found.append(_build_wheel("uv", tmp_path / f"d{n}", shared))
+        )
+        for n in range(4)
+    ]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert len(builds) == 1
+    assert sorted(p.parent.name for p in found) == ["d0", "d1", "d2", "d3"]
+    assert all(p.read_bytes() == b"wheel" for p in found)
+
+
+def test_a_wheelhouse_wheel_is_used_without_building(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CI builds opentide's wheel once (the gate's `build` job): the tests install that one."""
+
+    def no_build(cmd: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+        raise AssertionError(f"built a wheel: {cmd}")
+
+    monkeypatch.setattr(sys.modules[__name__], "_run", no_build)
+    wheelhouse = tmp_path / "wheelhouse"
+    wheelhouse.mkdir()
+    (wheelhouse / "opentide-1.0.0-cp310-abi3-linux_x86_64.whl").write_bytes(b"wheel")
+    monkeypatch.setenv("OPENTIDE_TEST_WHEELHOUSE", str(wheelhouse))
+    wheel = _build_wheel("uv", tmp_path / "dist", tmp_path / "shared")
+    assert wheel == tmp_path / "dist" / "opentide-1.0.0-cp310-abi3-linux_x86_64.whl"
+    assert wheel.read_bytes() == b"wheel"

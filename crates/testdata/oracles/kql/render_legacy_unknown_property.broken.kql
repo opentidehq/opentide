@@ -1,0 +1,1 @@
+SigninLogs | summarize count() by AppDisplayName | render barchart ytitle="Sign-ins"

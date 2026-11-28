@@ -1,0 +1,23 @@
+[platform]
+enabled = true
+
+[[tenants]]
+name = "indexed"
+description = "Sets index and tags"
+[tenants.setup]
+ssl = true
+url = "https://kibana.example.org"
+elasticsearch_url = "https://es.example.org"
+api_key = "$ELASTIC_API_KEY"
+index = ["tenant-*"]
+tags = ["Tenant", "OpenTide"]
+
+[[tenants]]
+name = "unsuppressed"
+description = "Sends no alert suppression"
+[tenants.setup]
+ssl = true
+url = "https://kibana2.example.org"
+elasticsearch_url = "https://es2.example.org"
+api_key = "$ELASTIC_API_KEY"
+suppression = false

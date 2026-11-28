@@ -1,0 +1,25 @@
+---
+source: crates/opentide-exabeam/tests/trees.rs
+expression: "debug_parse(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/exabeam/statement__valid.exabeam
+---
+source_file@0..44
+  statement@0..44
+    filter@0..44
+      and_expression@0..44
+        field_term@0..25
+          field_name@0..13
+            identifier@0..13
+              letters@0..13 "activity_type"
+          :@13..14 ":"
+          string@14..25 "\"app-login\""
+        whitespace@25..26 " "
+        keyword@26..29
+          letters@26..29 "AND"
+        whitespace@29..30 " "
+        field_term@30..44
+          field_name@30..37
+            identifier@30..37
+              letters@30..37 "outcome"
+          :@37..38 ":"
+          string@38..44 "\"fail\""

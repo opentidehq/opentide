@@ -1,0 +1,1 @@
+is_compute_service and proc.name in (oops and (gcp.methodName contains "compute.securityPolicies.delete"  or gcp.methodName contains "compute.securityPolicies.insert"  or gcp.methodName contains "compute.securityPolicies.patch")

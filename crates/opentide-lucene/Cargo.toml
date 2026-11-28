@@ -1,0 +1,33 @@
+[package]
+name = "opentide-lucene"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+description = "opentide engine component: I/O-free Lucene query syntax engine. Internal: depend on the opentide crate."
+readme = "../COMPONENT.md"
+
+[lints]
+workspace = true
+
+[dependencies]
+opentide-dataset.workspace = true
+opentide-core.workspace = true
+strsim.workspace = true
+opentide-ecs.workspace = true
+opentide-kuery.workspace = true
+opentide-highlight.workspace = true
+opentide-parse.workspace = true
+rowan.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+toml.workspace = true
+insta.workspace = true
+regex.workspace = true
+
+[build-dependencies]
+opentide-dataset = { workspace = true, features = ["encode"] }

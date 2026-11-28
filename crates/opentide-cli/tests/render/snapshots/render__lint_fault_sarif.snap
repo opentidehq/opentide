@@ -1,0 +1,2704 @@
+---
+source: crates/opentide-cli/tests/render.rs
+---
+{
+  "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+  "runs": [
+    {
+      "automationDetails": {
+        "id": "opentide/lint/"
+      },
+      "columnKind": "unicodeCodePoints",
+      "results": [
+        {
+          "level": "note",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "521fa289-2377-43e7-88a8-19171859bfd8"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/objectives/hidden-spray-objective-0004.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 9,
+                  "startColumn": 1,
+                  "startLine": 3
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "Recommended metadata missing: organisation\nhelp: add the missing keys under metadata"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "76656f3b4c6abdaacdbc1b26c1c8bc2351c1724707deb2e9c0198595fcd4f210"
+          },
+          "ruleId": "metadata_recommended"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "07b2b264-ef95-453e-bd77-c6522fc20511"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/silent-beacon-rule-0031.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 9,
+                  "startColumn": 1,
+                  "startLine": 3
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "Recommended metadata missing: author\nhelp: add the missing keys under metadata"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "173348852a927e06f3f4a97ad419bc9b8fb67376606ac554220f7706685c9542"
+          },
+          "ruleId": "metadata_recommended"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "cbda99c5-165c-4880-a5da-d8f9ce868d28"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/remote-pivot-rule-0033.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 27,
+                  "startColumn": 11,
+                  "startLine": 10
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "author holds a placeholder value written by opentide new\nhelp: replace the value, then delete the '# opentide:placeholder' comment"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "de7ca2bc9b0188eb252afe66172414cb436aa8828c8f6d939f6d0a9513c8048b"
+          },
+          "ruleId": "placeholder"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "3619eda3-a6ca-43c3-b079-972f387190c8"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/covert-beacon-rule-0185.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 31,
+                  "startColumn": 28,
+                  "startLine": 62
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`and` is a search term in Lucene, not an operator; operators are upper case (`AND`)\nhelp: try: AND"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "7bf2391ed8483505ed98f487db4ae9e1963a45d60ba336924b73eae2efdac0ca"
+          },
+          "ruleId": "lucene_lowercase_operator"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "4c9f8716-eccc-4887-9748-90e28779cff4"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/covert-downgrade-rule-0128.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 17,
+                  "startColumn": 7,
+                  "startLine": 60
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`powershell` has no field, so Kibana searches it in every field (`index.query.default_field`); name the field (`field:powershell`)\nhelp: the Kibana KQL reference: https://www.elastic.co/docs/reference/query-languages/kql"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "8d975416eed55c8ebcff3689b98a02e6160ab1252963d7ee131996f83306e8a8"
+          },
+          "ruleId": "kuery_free_text"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "120b27f2-09fe-4291-a7a4-700ee55a8f60"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/covert-injection-rule-0073.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 82,
+                  "startColumn": 9,
+                  "startLine": 42
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`join` runs before `project` narrows columns; project the needed columns first (https://learn.microsoft.com/en-us/kusto/query/best-practices)\nhelp: the KQL reference: https://learn.microsoft.com/kusto/query/"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "3cafd065c7c0e2e9130a4491722d166c681e28de2814b2ac47c0950c5ab83e90"
+          },
+          "ruleId": "kql_join_summarize_before_project"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "30753f8c-e9ee-4af4-b53e-5b734824d7af"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/covert-injection-rule-0287.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 31,
+                  "startColumn": 29,
+                  "startLine": 61
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "EQL maxspan exceeds scheduling.lookback (1m); a sequence that straddles two runs is missed\nhelp: the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "8db3f0d3fc3f71624bf5944a6acc78d9e6a3d963e5b118cc88429eb7bf9b82c7"
+          },
+          "ruleId": "eql_maxspan_lookback"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "eb5f85df-0602-4803-ab51-4d9a7bd6e74e"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/covert-loader-rule-0261.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 19,
+                  "startColumn": 5,
+                  "startLine": 46
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`No such rule` is not a rule of the Falco default rules: Falco refuses to append to it, and on Sysdig it must be a rule the tenant has\nhelp: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "fc7d9b13a7ae63e871a67b81d2310fe37e1cbcb84301ffe1e978adae649099b0"
+          },
+          "ruleId": "falco_unknown_rule"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "6ec70920-6e90-4165-88f9-661497f6c06b"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/covert-pivot-rule-0044.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 11,
+                  "startColumn": 1,
+                  "startLine": 19
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "T1626 (Mobile : Abuse Elevation Control Mechanism) is not Enterprise ATT&CK; Elastic deploy skips it from the rule's threat mapping\nhelp: opentide explain technique_not_enterprise describes it"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "a264bb6c1c445f85c3f594f2261c9d6297c3cda5bd4a436740b403b214f7101d"
+          },
+          "ruleId": "technique_not_enterprise"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "b01c7d9b-3f22-40a5-9c0e-9219acab2d4b"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/covert-pivot-rule-0233.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 25,
+                  "startColumn": 7,
+                  "startLine": 49
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "ECS v9.5.0 maps `process.name` as `keyword`: a range compares it as text, so \"10\" sorts before \"9\"\nhelp: the Kibana KQL reference: https://www.elastic.co/docs/reference/query-languages/kql"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "90965fcd8afa7081a6eb5b46922626bc206004ccf3c1a86c06521b59be3749b7"
+          },
+          "ruleId": "kuery_range_type"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "6bde153b-3275-4213-b4b0-27e916b44edf"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/covert-spray-rule-0242.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 272,
+                  "startColumn": 271,
+                  "startLine": 45
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "expression nesting exceeds 250 levels (parentheses plus chained `not`/`-`/`+`): Elasticsearch 8.19.17+, 9.3.5+, 9.4.3+, and 9.5 reject this query; earlier patches and 9.0 to 9.2 accept it\nhelp: the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "27192ac6778d7c24968094aee7b6413577a071abfd951fe39934925494938852"
+          },
+          "ruleId": "eql_expression_depth"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "42bb52d0-8cca-4e6f-b580-b73aed787af5"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/covert-tunnel-rule-0088.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 14,
+                  "startColumn": 13,
+                  "startLine": 62
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "unscoped `union` uses wildcard table `*` and reads every table; name the tables instead (https://learn.microsoft.com/en-us/kusto/query/best-practices)\nhelp: the KQL reference: https://learn.microsoft.com/kusto/query/"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "ab6ee78f6319b472081e03ec001b92cbd315a87ba92417c374bc7094e2e4b95e"
+          },
+          "ruleId": "kql_unscoped_union"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "132fb138-c0c8-43ea-8e8a-53952395c86b"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/elevated-beacon-rule-0200.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 355,
+                  "startColumn": 349,
+                  "startLine": 71
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "expressions nest 310 deep; Elasticsearch 8.19.17+, 9.3.5+, 9.4.3+, and 9.5 reject more than 300 (earlier releases allow 400)\nhelp: the ES|QL reference: https://www.elastic.co/docs/reference/query-languages/esql"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "f27b095f6511e959e4f20896909a7f627ff146acde8f72b552f8362ea66fab9c"
+          },
+          "ruleId": "esql_expression_depth"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "47894819-0f61-4a8b-a957-0d77b661fac6"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/elevated-downgrade-rule-0251.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 22,
+                  "startColumn": 17,
+                  "startLine": 59
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`/var/` is read as a regular expression because `/` is unescaped, so the value splits into separate clauses; escape the slashes (`\\/`) or quote the value\nhelp: the Lucene query string reference: https://www.elastic.co/docs/reference/query-languages/query-dsl/query-dsl-query-string-query"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "584bbb31dc37eb438346b953975312acf3c7864424686a12d669aa29f10b710a"
+          },
+          "ruleId": "lucene_unescaped_slash"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "99702dad-1bb5-49d3-8146-9d0531ec3061"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/elevated-downgrade-rule-0317.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 15,
+                  "startColumn": 7,
+                  "startLine": 77
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "sequence has no `with maxspan=`: its events can be any distance apart within the search window. A maxspan bounds matches and the partial sequences Elasticsearch keeps\nhelp: the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "5662caecf9e14181a8978020d9e51909c35b130e6b18e3eaf25bdb2306be34c9"
+          },
+          "ruleId": "eql_maxspan_missing"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "972aa027-6e12-4ff5-a707-22d32eef716a"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/elevated-harvest-rule-0362.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 58,
+                  "startColumn": 21,
+                  "startLine": 63
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "Elasticsearch nests block comments, so this comment runs past its first `*/`; other EQL tools end it there. Avoid `/*` inside a comment\nhelp: the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "8dc55977c3577c37ca11027bec4a30b7ef9ef1c0f685db7a421ff5d54c939da3"
+          },
+          "ruleId": "eql_nested_comment"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "1d53c98c-22d7-4f3f-94fd-6f1a7657ec64"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/elevated-implant-rule-0332.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 31,
+                  "startColumn": 29,
+                  "startLine": 40
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "EQL maxspan exceeds the rule window, interval + lookback (5m + 1m); the sequence cannot fit one run\nhelp: the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "47d754af65919e9a7be7963e6a7fa972c064c89685c5b0997328b22cafc8e939"
+          },
+          "ruleId": "eql_maxspan_window"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "451e51e5-5d3a-4318-b8a2-476c73d3934c"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/elevated-loader-rule-0079.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 21,
+                  "startColumn": 9,
+                  "startLine": 66
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`render` is not valid in detection queries\nhelp: the KQL reference: https://learn.microsoft.com/kusto/query/"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "df2edc24b5c41f7203391c6b69c2ba1100dafb17d5be846acad51a3fb96235c7"
+          },
+          "ruleId": "kql_render_not_valid"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "9381818d-bce3-4c9e-9f93-cf5453b9d413"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/encoded-downgrade-rule-0263.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 19,
+                  "startColumn": 7,
+                  "startLine": 65
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`process.nmae` is not an ECS v9.5.0 field; did you mean `process.name`? (ECS allows custom fields, so this is a warning)\nhelp: try: process.name"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "8eccdb8acf4f2030955d4c00f11847be86e17e2afc8779269dfdfc95cecb7f89"
+          },
+          "ruleId": "ecs_unknown_field"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "921756bf-079f-4b90-b996-0f947831a285"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/encoded-dropper-rule-0161.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 31,
+                  "startColumn": 28,
+                  "startLine": 55
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`and` is a search term in Lucene, not an operator; operators are upper case (`AND`)\nhelp: try: AND"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "b612b3f92a9718d45caed6eb25bd6254cb96028d64057a25a8a88e1d23831dd3"
+          },
+          "ruleId": "lucene_lowercase_operator"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "921756bf-079f-4b90-b996-0f947831a285"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/encoded-dropper-rule-0161.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 45,
+                  "startColumn": 43,
+                  "startLine": 55
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`event.code >=` is KQL; Lucene searches `>=` as a term. Write `event.code:>=value`\nhelp: the Lucene query string reference: https://www.elastic.co/docs/reference/query-languages/query-dsl/query-dsl-query-string-query"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "8c9f271488383d80a69c86adac195d6cc642a16ac85494122ac25155f3183f13"
+          },
+          "ruleId": "lucene_kuery_syntax"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "921756bf-079f-4b90-b996-0f947831a285"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/encoded-dropper-rule-0161.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 50,
+                  "startColumn": 7,
+                  "startLine": 55
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "this query reads like Kibana KQL (lower-case `and`/`or`/`not` operators, `field >= value` ranges); if it is an Elastic rule, set `language: kuery`\nhelp: the Lucene query string reference: https://www.elastic.co/docs/reference/query-languages/query-dsl/query-dsl-query-string-query"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "33ec5598e31ccc266db2a0c1729cc56f61ccd57990df559b6a6d23fbb0462298"
+          },
+          "ruleId": "lucene_looks_like_kuery"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "ee2bd735-8431-4a73-9d20-5856a5ac0d76"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/encoded-harvest-rule-0236.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 23,
+                  "startColumn": 21,
+                  "startLine": 64
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "Lucene regular expressions have no `(?…)` groups or flags: `(?:` matches the text `?:` and `(?i)` the text `?i`; drop the `?…` part\nhelp: the Lucene query string reference: https://www.elastic.co/docs/reference/query-languages/query-dsl/query-dsl-query-string-query"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "d5b2b82a0ba191749fe85804bdfbf222a14b2897428f9bf9c594ea53dbf7415c"
+          },
+          "ruleId": "lucene_regexp"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "8618807f-cbd5-4ea8-94cf-ec750dfc7d98"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/encoded-injection-rule-0102.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 24,
+                  "startColumn": 20,
+                  "startLine": 60
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`join` silently truncates at 50,000 events or 60 seconds without an error (https://docs.splunk.com/Documentation/Splunk/latest/Search/Aboutsubsearches)\nhelp: the SPL reference: https://docs.splunk.com/Documentation/Splunk/latest/SearchReference"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "32c413d899a83e7be757f98112db467b43008a7f95acc7f984d350cece7cc604"
+          },
+          "ruleId": "spl_subsearch_truncation"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "da18458f-404f-4038-976e-93fa66bffec8"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/encoded-injection-rule-0206.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 22,
+                  "startColumn": 20,
+                  "startLine": 50
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`10` has no field, so Elasticsearch searches it in every field; to search `event.code` for both, write `event.code:(> 10)`\nhelp: the Lucene query string reference: https://www.elastic.co/docs/reference/query-languages/query-dsl/query-dsl-query-string-query"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "91d9904689a0ed55c90f474cbf923fa883dfc71aa655786a1aa4eba7f7a1bdc2"
+          },
+          "ruleId": "lucene_bare_term"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "da18458f-404f-4038-976e-93fa66bffec8"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/encoded-injection-rule-0206.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 22,
+                  "startColumn": 18,
+                  "startLine": 50
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`event.code:>` needs its value without a space (`event.code:>10`); as written, Elasticsearch searches `event.code` for the text `>` and the next word in every field\nhelp: try: >10"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "d4fa4414b5e9472711e1b095a38cf1145f4d694d38257ecbefc58a7701ab10c7"
+          },
+          "ruleId": "lucene_range_operator"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "48c00730-c5b5-48e7-b061-053f51bdce39"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/hidden-downgrade-rule-0234.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 49,
+                  "startColumn": 40,
+                  "startLine": 45
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`nope_list` is not a list of this block or of the Falco default rules: it is compared as the single value 'nope_list'\nhelp: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "446b0fb82c9b47de889f60f6517d26866477060ae21d81a790b7ade8f92bc049"
+          },
+          "ruleId": "falco_unknown_list"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "b46ee599-20c8-475b-a911-df85187ea6dc"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/hidden-dropper-rule-0120.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 12,
+                  "startColumn": 7,
+                  "startLine": 49
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "leading wildcard `*fail` cannot use the term index; a trailing `fail*` is fine (https://docs.splunk.com/Documentation/Splunk/latest/SearchReference/Search)\nhelp: the SPL reference: https://docs.splunk.com/Documentation/Splunk/latest/SearchReference"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "2868bb8d5b925755fa0643104647264f0f41498608ff5b480d62d32ad847fce9"
+          },
+          "ruleId": "spl_wildcard"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "ccd721f9-1c88-4cb6-8015-28decbb25223"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/hidden-injection-rule-0027.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 11,
+                  "startColumn": 5,
+                  "startLine": 51
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`not a source!` is not an event source the engine knows (`syscall`, `k8s_audit`, `aws_cloudtrail`, `okta`, `github`, `gcp_auditlog`); its fields are not checked\nhelp: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "dcecac302e7ce8b88943e80e78525c7e9c68e5f5b4df7fbcdf1fd689b3d6c405"
+          },
+          "ruleId": "falco_unknown_source"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "ccd721f9-1c88-4cb6-8015-28decbb25223"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/hidden-injection-rule-0027.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 64,
+                  "startColumn": 53,
+                  "startLine": 46
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "unknown filter: `%proc.name)` is not a field or a transformer (libsinsp)\nhelp: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "ae61fff69a150bb0d098db72bed071bc8eaf7bdd223f9fa913ce5be1627f97f2"
+          },
+          "ruleId": "falco_output_syntax"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "e2c16231-e2dd-49dc-837e-8267fd065588"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/hidden-relay-rule-0070.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 34,
+                  "startColumn": 24,
+                  "startLine": 73
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "'containscs' is a legacy spelling; use contains_cs\nhelp: try: contains_cs"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "b5befa341a01cb0cdc31b1ca1bb7d1e166ceac03030ba46f9b0c865a14d3b151"
+          },
+          "ruleId": "kql_deprecated_operator"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "ef06cdd0-4ac7-40c1-9ba1-6a729f0ac00b"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/hidden-tunnel-rule-0270.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 11,
+                  "startColumn": 5,
+                  "startLine": 76
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`my_plugin` is not an event source the engine knows (`syscall`, `k8s_audit`, `aws_cloudtrail`, `okta`, `github`, `gcp_auditlog`); its fields are not checked\nhelp: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "bb4f8a92d06ce645b7a12a58ba379e52ca308440195ef8a8072a360f7503fdf4"
+          },
+          "ruleId": "falco_unknown_source"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "58a93113-983e-4052-8c5c-f313f48dd88c"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/hidden-tunnel-rule-0272.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 44,
+                  "startColumn": 37,
+                  "startLine": 54
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`==` matches `*` literally; use `like` for a wildcard\nhelp: try: like"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "ce3b85618bf6dad5a2dc0747cde3b0a4c52bd3e82ddf1ad96c0a500ee10ce4d4"
+          },
+          "ruleId": "eql_literal_wildcard"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "fb010d50-308e-483c-865c-0621ca7a1286"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/lateral-implant-rule-0146.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 21,
+                  "startColumn": 19,
+                  "startLine": 78
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`process.pid >=` is KQL; Lucene searches `>=` as a term. Write `process.pid:>=value`\nhelp: the Lucene query string reference: https://www.elastic.co/docs/reference/query-languages/query-dsl/query-dsl-query-string-query"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "40947c04866ec7b5bf8f774553248cbf3e38bdf377d983b965aa84a721f44cbd"
+          },
+          "ruleId": "lucene_kuery_syntax"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "6a68a62a-ca94-4549-8d59-41ca48407a6c"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/persistent-implant-rule-0252.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 13,
+                  "startColumn": 9,
+                  "startLine": 65
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "Multiple definitions of exception 'e' in the same rule\nhelp: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "990b349320004e40e0370a48ff8da9b7f5d4c521fbb24a9244c7dd9660db3e57"
+          },
+          "ruleId": "falco_exception"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "46804e8e-5af8-41f2-a055-184e65ecd60e"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/persistent-injection-rule-0227.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 14,
+                  "startColumn": 7,
+                  "startLine": 70
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "event category `PROCESS` is compared case-sensitively; ECS categories are lower case\nhelp: try: process"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "31722e123cdb5b7a4579abe1a1a414f7f67c409e09f5addf7ca0841316986046"
+          },
+          "ruleId": "eql_case_sensitive"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "c78ae0fb-0bc1-4447-b77c-c92bc6e71e24"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/persistent-pivot-rule-0082.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 13,
+                  "startColumn": 7,
+                  "startLine": 57
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "unscoped `search` reads every table; scope it with `in (Table, ...)` or start from a table (https://learn.microsoft.com/en-us/kusto/query/best-practices)\nhelp: the KQL reference: https://learn.microsoft.com/kusto/query/"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "bd3bdb7a3419fdd4f5b440248b3877651917450baee0099c8dd50c1d5c974153"
+          },
+          "ruleId": "kql_unscoped_search"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "d640c54a-d3fa-4ed7-bda3-987bedfc943e"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/persistent-relay-rule-0091.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 30,
+                  "startColumn": 9,
+                  "startLine": 52
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`where` is not the first operator after the table reference; filter before later operators (https://learn.microsoft.com/en-us/kusto/query/best-practices)\nhelp: the KQL reference: https://learn.microsoft.com/kusto/query/"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "59fccb8961220557f153d38189696899a931c9dda169b93c5ea5c02e68359f6e"
+          },
+          "ruleId": "kql_where_not_first"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "5399063b-7627-4464-8232-871393b0aee2"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/rapid-dropper-rule-0180.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 34,
+                  "startColumn": 27,
+                  "startLine": 58
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`evt.dir` is deprecated: due to the drop of enter events, 'evt.dir = <' always evaluates to true, and 'evt.dir = >' always evaluates to false. The rule expression can be simplified by removing the condition on 'evt.dir'\nhelp: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "6e19f8fba8643cf1045d7a991aaefb043780ceea4123fafcea878fdb4bf18024"
+          },
+          "ruleId": "falco_deprecated_field"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "050de452-00b5-4fa5-b745-1eebaecf9289"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/rapid-dropper-rule-0215.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 15,
+                  "startColumn": 7,
+                  "startLine": 49
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "suppression.group_by `user.name` is not an output column of the ES|QL query (c, host.name); deploy rejects it\nhelp: the ES|QL reference: https://www.elastic.co/docs/reference/query-languages/esql"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "450ebcdf73f694f6c5632effd9bb415920493e91adea2d0621c21d850a1454cd"
+          },
+          "ruleId": "esql_group_by_column"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "57c7b809-2212-426b-bbde-7ba94b7096b8"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/rapid-dropper-rule-0216.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 47,
+                  "startColumn": 43,
+                  "startLine": 49
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "regex check with 'bash' may be optimized with simpler operators such as '=', 'contains', 'startswith', 'endswith'\nhelp: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "7fe3f14ced658975d3dfea307a693ae717b6f34b15414181d2821d1b6d6dfc11"
+          },
+          "ruleId": "falco_regex_simple"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "2576591d-4b47-48de-8573-47e3568bdcb8"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/rapid-implant-rule-0279.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 26,
+                  "startColumn": 22,
+                  "startLine": 50
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "comparing a `ka.` or `jevt.` field with `<NA>`: such a field may hold the string `<NA>`, so the check does not tell a missing value apart\nhelp: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "1acba58353776e907cdf0e54259132b78eeba80373cd33d612d1cfc6a4f96590"
+          },
+          "ruleId": "falco_unsafe_na_check"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "78986732-a4e8-4b6f-971b-1a5933088565"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/rapid-injection-rule-0097.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 34,
+                  "startColumn": 33,
+                  "startLine": 75
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "wildcard table `*` scans every table; name the table instead (https://learn.microsoft.com/en-us/kusto/query/best-practices)\nhelp: the KQL reference: https://learn.microsoft.com/kusto/query/"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "50f80ec95c8d1af9ff9b7239b99443fb2bab4e3564e6ae65eff4f42df01a6767"
+          },
+          "ruleId": "kql_wildcard_table"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "486dd087-c6c0-4cf5-a9a3-47b20b34fbc7"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/rapid-injection-rule-0191.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 24,
+                  "startColumn": 22,
+                  "startLine": 74
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "Lucene has no AND/OR precedence (`a OR b AND c` means `a +b +c`); add parentheses\nhelp: the Lucene query string reference: https://www.elastic.co/docs/reference/query-languages/query-dsl/query-dsl-query-string-query"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "ff0afe925d2271421efc4a0f513e97cde265ed10f349bced9d227290197b02a1"
+          },
+          "ruleId": "lucene_mixed_operators"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "11bf3b6f-bdd3-4436-a945-6c411a05239e"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/rapid-loader-rule-0245.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 11,
+                  "startColumn": 7,
+                  "startLine": 56
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "non-aggregating ES|QL query lacks `METADATA _id`; before 9.4 Elastic Security cannot de-duplicate its alerts (9.4 and later add it)\nhelp: try: METADATA _id, _version, _index"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "5dce177cf0f95fa9138a51acfd265e32fe705d96885b7e3aa3f122c99ad5de17"
+          },
+          "ruleId": "esql_metadata_id"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "08636a3a-0ef0-4ddf-a7a8-4f2fb2c1859f"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/rapid-spray-rule-0403.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 66,
+                  "startColumn": 53,
+                  "startLine": 91
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "Elasticsearch ignores a decimal `runs` value: [2.5] runs the query once; use an integer from 1 to 100\nhelp: the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "b8a5072d65f7bc9491f5c53bc2936c045b3664051ab6a1b4cef24757316b5797"
+          },
+          "ruleId": "eql_runs_ignored"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "0d73eb2f-c9d2-4356-a4ea-e16c4f963ce7"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/rapid-tunnel-rule-0143.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 15,
+                  "startColumn": 7,
+                  "startLine": 48
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`_exists_:field` is Lucene; in KQL write `field:*`\nhelp: the Kibana KQL reference: https://www.elastic.co/docs/reference/query-languages/kql"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "9c46059557c5a521b8b3722f1ff88cec1270b1b6e2e4dc64e601c07aed7f7f74"
+          },
+          "ruleId": "kuery_lucene_syntax"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "0d73eb2f-c9d2-4356-a4ea-e16c4f963ce7"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/rapid-tunnel-rule-0143.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 48,
+                  "startColumn": 36,
+                  "startLine": 48
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`[a TO b]` is a Lucene range; KQL searches it as text. Use `field >= a and field <= b`\nhelp: the Kibana KQL reference: https://www.elastic.co/docs/reference/query-languages/kql"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "972980e4bc499d8f507e4faf1a4a692fb694b130b5d0fd2db8e6e4a07362af9f"
+          },
+          "ruleId": "kuery_lucene_syntax"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "0d73eb2f-c9d2-4356-a4ea-e16c4f963ce7"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/rapid-tunnel-rule-0143.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 48,
+                  "startColumn": 7,
+                  "startLine": 48
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "this query reads like Lucene (`_exists_`, ranges); if it is an Elastic rule, set `language: lucene`\nhelp: the Kibana KQL reference: https://www.elastic.co/docs/reference/query-languages/kql"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "2943e358212a4f54096af7aae13d96eef6837227285c1e636d380fec8501a8f1"
+          },
+          "ruleId": "kuery_looks_like_lucene"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "352078c5-ce80-484b-a0a9-19e8d4e03c60"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/remote-downgrade-rule-0288.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 14,
+                  "startColumn": 9,
+                  "startLine": 39
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "list `corpus_shells_369` names itself: Falco keeps `corpus_shells_369` as a literal item, which on Sysdig resolves against a tenant list of that name, not this one\nhelp: opentide explain sysdig_list_self_reference describes it"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "a635393cb7799750536e549258e49a0ffc3ee25eb811f26a823020d17fc5ee51"
+          },
+          "ruleId": "sysdig_list_self_reference"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "e6227b90-5543-4f1d-b8c6-5bb585808c7e"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/remote-harvest-rule-0323.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 9,
+                  "startColumn": 5,
+                  "startLine": 65
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "risk score 90 is outside Kibana's high band (48–73) for alert severity High\nhelp: opentide explain risk_band describes it"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "0d2746e9954b78f4af20a2113b5960c000ec8a58e2c89423d6475793daf981ef"
+          },
+          "ruleId": "risk_band"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "c7cf3ba7-b974-401f-99c8-5447eba444fe"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/remote-loader-rule-0100.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 16,
+                  "startColumn": 7,
+                  "startLine": 52
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "'AuditLogs' is not a table the workspace declares for sentinel in visibility.toml\nhelp: opentide explain kql_table_not_declared describes it"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "8f8cf5ce66fc138fb40dd34b8b35ee35614ab19e732342c6343c71a547f08a29"
+          },
+          "ruleId": "kql_table_not_declared"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "768c5d65-1cec-483b-bbae-ad184a13c099"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/remote-loader-rule-0101.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 26,
+                  "startColumn": 23,
+                  "startLine": 72
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`bob` has no field, so Elasticsearch searches it in every field; to search `user.name` for both, write `user.name:(alice bob)`\nhelp: the Lucene query string reference: https://www.elastic.co/docs/reference/query-languages/query-dsl/query-dsl-query-string-query"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "71fc758abbefb26febdf238d7ea640d0ca337b38bc9d47aa2b960692c22b4030"
+          },
+          "ruleId": "lucene_bare_term"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "555d9b62-a0e7-4acd-b89c-137a7e2ea879"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/remote-relay-rule-0260.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 46,
+                  "startColumn": 34,
+                  "startLine": 56
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "command `INLINE STATS`: needs Elasticsearch 9.2 or later; 8.19, 9.0 and 9.1 reject it; technical preview from 9.2, GA from 9.3\nhelp: the ES|QL reference: https://www.elastic.co/docs/reference/query-languages/esql"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "ea8afca9bede3ebf9f657af8cae51b118ceee56c2ebdaaa975c28d46335a5690"
+          },
+          "ruleId": "esql_unavailable"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "03ef08b2-b94f-4eb5-9c46-d6a630ee5b24"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/remote-tunnel-rule-0243.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 43,
+                  "startColumn": 27,
+                  "startLine": 59
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`my_private_macro` is not a macro of this block or of the Falco default rules; the tenant must define it\nhelp: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "e19d627e64294a964938bfd716834abf3658045ffaa3d2d58a5cf427c53808b1"
+          },
+          "ruleId": "falco_unknown_macro"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "9c4c4795-3c6b-4ed2-ac9e-32a88af069c8"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/rogue-beacon-rule-0129.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 30,
+                  "startColumn": 18,
+                  "startLine": 45
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "sourcetype `linux_secure` is not declared: no Splunk log source in visibility.toml names it\nhelp: opentide explain spl_dataset_not_declared describes it"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "8ebae3e6533d90346b3b1bf51ed87c07c5dc804135134f76c8a4d706b0f1ebee"
+          },
+          "ruleId": "spl_dataset_not_declared"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "5120f979-686c-43fb-af3d-890906d04c41"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/rogue-injection-rule-0084.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 28,
+                  "startColumn": 27,
+                  "startLine": 57
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "empty pipeline stage: Splunk ignores a trailing `|`; remove it or add the command\nhelp: the SPL reference: https://docs.splunk.com/Documentation/Splunk/latest/SearchReference"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "b3b2547d0f562289d611c137f5a2024d561ece8d58fe5bceb04d8dcb8e0796e3"
+          },
+          "ruleId": "spl_empty_stage"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "6f5ee21f-3e45-45a7-b4e0-98cc1462f7d6"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/rogue-injection-rule-0308.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 15,
+                  "startColumn": 7,
+                  "startLine": 72
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "scheduling.lookback is zero: the next run starts as this window ends, so late events are missed; Elastic recommends at least 1m\nhelp: opentide explain lookback_zero describes it"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "e5929bb41479b3df13e0c9f8dfd8e1b8b2b29e276d9971bb3059a69cf54490e1"
+          },
+          "ruleId": "lookback_zero"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "678d19fe-3788-4841-a672-7785a36142c8"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/rogue-tunnel-rule-0278.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 15,
+                  "startColumn": 7,
+                  "startLine": 52
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "scheduling.lookback exceeds 1h: in Elastic it is overlap added to interval, not the whole query window as in Sentinel\nhelp: opentide explain lookback_long describes it"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "fc833645889da7b4b6f9a132b32c0ad100aa3f8a4c835144165d66d87364cd2c"
+          },
+          "ruleId": "lookback_long"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "0cb05cd2-220c-48ae-a092-e73f289fb5f1"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/rogue-tunnel-rule-0377.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 49,
+                  "startColumn": 40,
+                  "startLine": 58
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "EQL regex (Lucene syntax) has no inline flags or `(?...)` groups: `(?i)` matches the text `?i`. Use `regex~` for a case-insensitive match\nhelp: the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "ac608ec54aa7cba27b15f319b727a7efbc281ce378d1a6ddd436bdd7e538d1a5"
+          },
+          "ruleId": "eql_regex"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "3faa2bf9-7715-4e45-8e02-d46806d3dfef"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/scheduled-downgrade-rule-0041.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 15,
+                  "startColumn": 7,
+                  "startLine": 55
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`_exists_:field` is Elasticsearch syntax; Carbon Black searches a field named `_exists_`. Use `field:*`\nhelp: the Lucene query string reference: https://www.elastic.co/docs/reference/query-languages/query-dsl/query-dsl-query-string-query"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "c5b0add5a567e4e45f8ee7d07d33e771c35576b06da3b5d47460a9ad4d1814cc"
+          },
+          "ruleId": "lucene_elasticsearch_only"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "b71a49a0-bdf1-46b7-b2ea-79121d1715f6"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/scheduled-harvest-rule-0064.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 22,
+                  "startColumn": 19,
+                  "startLine": 56
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "'any' is deprecated; use take_any()\nhelp: did you mean 'take_any'?"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "8df30b2d0ccdd92d4a8b88742eb75d05049b314a2876fdaa6d13d8c926c27979"
+          },
+          "ruleId": "kql_deprecated_function"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "36bae939-c024-46b6-9323-7a724fb72741"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/scheduled-injection-rule-0098.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 33,
+                  "startColumn": 31,
+                  "startLine": 38
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "Kibana turns `\\t` inside quotes into a control character; write `\\\\t` for a backslash\nhelp: try: \\\\t"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "f3397c2c966a3f90f91a28e35eddc99b01ef0747cabe1a06440fffe900ba45f4"
+          },
+          "ruleId": "kuery_escape"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "a56f963a-25df-4e72-9811-c509821b6624"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/scheduled-loader-rule-0111.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 30,
+                  "startColumn": 20,
+                  "startLine": 58
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "'frobnicate' is not a command opentide knows; an app on the search head may provide it (opentide cannot declare app commands yet)\nhelp: the SPL reference: https://docs.splunk.com/Documentation/Splunk/latest/SearchReference"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "fb9f47b028d01c5e97dee79a3fe11b5350042edf8127b481caae8927b3cbea17"
+          },
+          "ruleId": "spl_unknown_command"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "c8158e69-1167-4b76-a84e-9ed5efa56b16"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/scheduled-relay-rule-0173.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 25,
+                  "startColumn": 13,
+                  "startLine": 54
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`[a TO b]` is a Lucene range; KQL searches it as text. Use `field >= a and field <= b`\nhelp: the Kibana KQL reference: https://www.elastic.co/docs/reference/query-languages/kql"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "9c815a15badb1d10d54960b0e781a037c5e6586e5ab87836984c7a606c87ebf0"
+          },
+          "ruleId": "kuery_lucene_syntax"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "658c8e86-15ab-437d-a62d-21f81ffddcb1"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/scheduled-spray-rule-0074.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 15,
+                  "startColumn": 7,
+                  "startLine": 83
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "threshold rule's lookback exceeds its interval (5m): threshold counts are not de-duplicated across overlapping runs\nhelp: opentide explain threshold_lookback describes it"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "63f5ed7491cd4ffed020d372b0028c5a6b33c365a2509d728c9c5bad36328993"
+          },
+          "ruleId": "threshold_lookback"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "fb46a28e-b210-4374-9483-d1a3998166eb"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/silent-beacon-rule-0207.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 23,
+                  "startColumn": 7,
+                  "startLine": 54
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "the rule matches 454 event types: narrow it with `evt.type` (a macro such as `spawned_process` or `open_write`). Falco and Sysdig warn: this has a significant performance penalty\nhelp: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "882b1f4b92560109de8a3e0b7ac9afb08b98af2979543cf60b90a4584ca578e7"
+          },
+          "ruleId": "falco_no_evttype"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "c98bc4e5-c90b-4c74-9c96-846e6d6b8641"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/silent-exfiltration-rule-0353.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 21,
+                  "startColumn": 9,
+                  "startLine": 76
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "index pattern `winlogbeat-*` is not declared: no elastic log source in visibility.toml names it or a pattern that covers it\nhelp: opentide explain elastic_dataset_not_declared describes it"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "3323995d7dd5251d7966ce381dfb05a9c23a7941760f717ee4af1b47af30afc7"
+          },
+          "ruleId": "elastic_dataset_not_declared"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "60971380-c16c-4575-8afe-35d537ca9ccc"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/silent-exfiltration-rule-0407.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 79,
+                  "startColumn": 77,
+                  "startLine": 73
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "a missing event (`![`) as the `until` term parses, but Elasticsearch documents no behaviour for it; use `[`\nhelp: the EQL reference: https://www.elastic.co/docs/reference/query-languages/eql"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "aafab20977d734c54922cfa1c79d573637b0cadbdc66debc8a83d8306a505cf7"
+          },
+          "ruleId": "eql_until_term"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "9c6447cd-b23f-4ea1-bfe9-4fc0255cef9a"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/silent-injection-rule-0198.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 44,
+                  "startColumn": 37,
+                  "startLine": 44
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "the `anyof` operator modifier needs libsinsp 0.25.0 or later: an older Falco or Sysdig agent refuses the rule\nhelp: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "ffda52d6b72fcbc475c2c6a727b7d398fd8cd02a8c053a150de4427069053e61"
+          },
+          "ruleId": "falco_newer_syntax"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "4da61ddb-6d55-4ed0-80b5-cc11bee444b7"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/silent-injection-rule-0218.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 26,
+                  "startColumn": 20,
+                  "startLine": 75
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`*` inside quotes is a literal asterisk in KQL, not a wildcard; drop the quotes and escape spaces to match a pattern\nhelp: the Kibana KQL reference: https://www.elastic.co/docs/reference/query-languages/kql"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "10e8d56c3a7514d1c9e5e25ac663ba02d4f6d99d659c8794da68442923f654a5"
+          },
+          "ruleId": "kuery_quoted_wildcard"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "ee9bb617-8658-4cda-a53a-911efb0b4d92"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/silent-relay-rule-0189.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 49,
+                  "startColumn": 39,
+                  "startLine": 57
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "'proc.pname' may be a valid field misused as a const string value: compare with val(proc.pname)\nhelp: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "c4dde8ca04d7a3aa920fb86ea8536d06557d56c7529b5a7a71742f24a99384df"
+          },
+          "ruleId": "falco_field_as_value"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "965f255f-a0d5-412d-96a7-c90fb126c470"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/silent-tunnel-rule-0093.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 10,
+                  "startColumn": 7,
+                  "startLine": 44
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "leading `NOT` used as the search filter scans events before excluding them (https://docs.splunk.com/Documentation/Splunk/latest/Search/Booleanexpressions)\nhelp: the SPL reference: https://docs.splunk.com/Documentation/Splunk/latest/SearchReference"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "e17653e1228cab099d68e53ef98c36246428e95cc509d07bccb69f00b8f8e8d6"
+          },
+          "ruleId": "spl_leading_not"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "b19d3571-8990-4663-af0e-374f288b0300"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/staged-beacon-rule-0188.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 20,
+                  "startColumn": 19,
+                  "startLine": 64
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`?` is a literal character in KQL, not a single-character wildcard; use `*` to match any characters\nhelp: the Kibana KQL reference: https://www.elastic.co/docs/reference/query-languages/kql"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "3b97161657f081712a13747728517917776e7a0e2e5a20e4b04dfcde1849378e"
+          },
+          "ruleId": "kuery_question_mark"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "d3f34507-e6be-4c31-bbd5-2904239530d8"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/staged-injection-rule-0106.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 14,
+                  "startColumn": 13,
+                  "startLine": 58
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "unscoped `union` uses wildcard table `*` and reads every table; name the tables instead (https://learn.microsoft.com/en-us/kusto/query/best-practices)\nhelp: the KQL reference: https://learn.microsoft.com/kusto/query/"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "4da6db280e685e5ffa7f90221ce833a65abb1903b839a5be5b50705b80cf1563"
+          },
+          "ruleId": "kql_unscoped_union"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "4bc8fa1c-33f5-4fba-a957-1d6b7e99e899"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/staged-spray-rule-0116.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 33,
+                  "startColumn": 31,
+                  "startLine": 45
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "Lucene drops a single backslash: `\\W` searches `W`. Write `\\\\` for a literal backslash\nhelp: try: \\\\W"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "666fccba42013e341fbebe5feca3323a4ad02bf1603059eb61f3e5a56ca20f19"
+          },
+          "ruleId": "lucene_escape"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "bc11e3bc-602a-4042-8808-7f1116d23ca1"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/staged-spray-rule-0225.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 51,
+                  "startColumn": 39,
+                  "startLine": 61
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "'tolower(x)' may be a valid field transformer misused as a const string value\nhelp: the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "000633d1d5e712690a352410e16e4502410ad504a137c8989ae3eeb62122f874"
+          },
+          "ruleId": "falco_transformer_as_value"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/threats/encoded-exfiltration-threat-0030.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "Could not parse object YAML: expected a mapping at the top of the file, found an empty file"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "cdef39e30945b36b8f63aa0d0002fde952f335a548878b1b9392a913579dc3b6"
+          },
+          "ruleId": "yaml_parse"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "c1546754-19cf-46f5-96f7-66c13823145a"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/threats/hidden-downgrade-threat-0005-v2.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "Filename 'hidden-downgrade-threat-0005-v2.yaml' does not match slugify(name)='hidden-downgrade-threat-0005'\nhelp: rename it to objects/threats/hidden-downgrade-threat-0005.yaml"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "86d8df3bb37dde6fb8595d2587f6ff245344ac1d0df4ba9f76758c5a28e4943c"
+          },
+          "ruleId": "filename_mismatch"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "6f83b9ba-c935-4169-859d-8c868908468c"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/encoded-harvest-rule-0032.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "Object has no name; cannot check filename slug\nhelp: add a name: the file name is derived from it"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "4b54d36c0d8440755f096a9e43d5b9712d62b4fd4ac24da691c0475cf45d6002"
+          },
+          "ruleId": "name_missing"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/encoded-relay-rule-0014.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 23,
+                  "startColumn": 13,
+                  "startLine": 9
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "Could not parse object YAML: '2026-02-30' is not a valid date (day is out of range for month)"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "b8ea5b47fcb18a6f1eedf456ed42facefff6f0035a0e5cea3a92d1e1d3d2659a"
+          },
+          "ruleId": "yaml_parse"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/encoded-spray-rule-0023.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 2,
+                  "startColumn": 1,
+                  "startLine": 53
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "Could not parse object YAML: did not find expected ',' or ']'"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "82367a03a4370a08b7de1c35afac4cb53218221a9418c1a0b9426f8fa2365580"
+          },
+          "ruleId": "yaml_parse"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/lateral-injection-rule-0024.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 2,
+                  "startColumn": 1,
+                  "startLine": 68
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "Could not parse object YAML: found character that cannot start any token"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "4842c63d7232883cca3fce9a2e972db170d7f72852c3e9b8ac5d29a73ff83a49"
+          },
+          "ruleId": "yaml_parse"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "logicalLocations": [
+                {
+                  "kind": "object",
+                  "name": "e0f31b35-71b0-42e3-905b-c79c642f12ec"
+                }
+              ],
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/renamed-1.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "Filename 'renamed-1.yaml' does not match slugify(name)='scheduled-injection-rule-0029'\nhelp: rename it to objects/rules/scheduled-injection-rule-0029.yaml"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "cffc1a719f317c71f9223911bb7eb3cc26f7cfa4f9b05d2a822fa689884fc2e7"
+          },
+          "ruleId": "filename_mismatch"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/rogue-relay-rule-0035.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "endColumn": 2,
+                  "startColumn": 1,
+                  "startLine": 59
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "Could not parse object YAML: did not find expected ',' or ']'"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "3ffdeef200f6619426fdce614392bf2b7a1650aa760057c1832c3faaa70e243e"
+          },
+          "ruleId": "yaml_parse"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "objects/rules/nested/hidden-harvest-rule-0020.yaml",
+                  "uriBaseId": "%SRCROOT%"
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "objects/rules/nested/hidden-harvest-rule-0020.yaml is in a subfolder of objects/rules and is not an object instance: it is not indexed, validated, shared, documented or deployed (opentide reads only files directly in objects/rules; see https://github.com/opentidehq/opentide/issues/584)"
+          },
+          "partialFingerprints": {
+            "opentide/v1": "e774cf1903a1b00ca0797e6b3675826700fd3075846ab02af4da2a4374010ae5"
+          },
+          "ruleId": "nested_object_file"
+        }
+      ],
+      "tool": {
+        "driver": {
+          "informationUri": "https://opentide.org/docs/cli/diagnostics",
+          "name": "opentide",
+          "rules": [
+            "ecs_unknown_field | - | EcsUnknownField | https://opentide.org/docs/cli/diagnostics#ecs_unknown_field",
+            "elastic_dataset_not_declared | warning | ElasticDatasetNotDeclared | https://opentide.org/docs/cli/diagnostics#elastic_dataset_not_declared",
+            "eql_case_sensitive | - | EqlCaseSensitive | https://opentide.org/docs/cli/diagnostics#eql_case_sensitive",
+            "eql_expression_depth | - | EqlExpressionDepth | https://opentide.org/docs/cli/diagnostics#eql_expression_depth",
+            "eql_literal_wildcard | - | EqlLiteralWildcard | https://opentide.org/docs/cli/diagnostics#eql_literal_wildcard",
+            "eql_maxspan_lookback | - | EqlMaxspanLookback | https://opentide.org/docs/cli/diagnostics#eql_maxspan_lookback",
+            "eql_maxspan_missing | - | EqlMaxspanMissing | https://opentide.org/docs/cli/diagnostics#eql_maxspan_missing",
+            "eql_maxspan_window | - | EqlMaxspanWindow | https://opentide.org/docs/cli/diagnostics#eql_maxspan_window",
+            "eql_nested_comment | - | EqlNestedComment | https://opentide.org/docs/cli/diagnostics#eql_nested_comment",
+            "eql_regex | - | EqlRegex | https://opentide.org/docs/cli/diagnostics#eql_regex",
+            "eql_runs_ignored | - | EqlRunsIgnored | https://opentide.org/docs/cli/diagnostics#eql_runs_ignored",
+            "eql_until_term | - | EqlUntilTerm | https://opentide.org/docs/cli/diagnostics#eql_until_term",
+            "esql_expression_depth | - | EsqlExpressionDepth | https://opentide.org/docs/cli/diagnostics#esql_expression_depth",
+            "esql_group_by_column | - | EsqlGroupByColumn | https://opentide.org/docs/cli/diagnostics#esql_group_by_column",
+            "esql_metadata_id | - | EsqlMetadataId | https://opentide.org/docs/cli/diagnostics#esql_metadata_id",
+            "esql_unavailable | - | EsqlUnavailable | https://opentide.org/docs/cli/diagnostics#esql_unavailable",
+            "falco_deprecated_field | - | FalcoDeprecatedField | https://opentide.org/docs/cli/diagnostics#falco_deprecated_field",
+            "falco_exception | - | FalcoException | https://opentide.org/docs/cli/diagnostics#falco_exception",
+            "falco_field_as_value | - | FalcoFieldAsValue | https://opentide.org/docs/cli/diagnostics#falco_field_as_value",
+            "falco_newer_syntax | - | FalcoNewerSyntax | https://opentide.org/docs/cli/diagnostics#falco_newer_syntax",
+            "falco_no_evttype | - | FalcoNoEvttype | https://opentide.org/docs/cli/diagnostics#falco_no_evttype",
+            "falco_output_syntax | - | FalcoOutputSyntax | https://opentide.org/docs/cli/diagnostics#falco_output_syntax",
+            "falco_regex_simple | - | FalcoRegexSimple | https://opentide.org/docs/cli/diagnostics#falco_regex_simple",
+            "falco_transformer_as_value | - | FalcoTransformerAsValue | https://opentide.org/docs/cli/diagnostics#falco_transformer_as_value",
+            "falco_unknown_list | - | FalcoUnknownList | https://opentide.org/docs/cli/diagnostics#falco_unknown_list",
+            "falco_unknown_macro | - | FalcoUnknownMacro | https://opentide.org/docs/cli/diagnostics#falco_unknown_macro",
+            "falco_unknown_rule | - | FalcoUnknownRule | https://opentide.org/docs/cli/diagnostics#falco_unknown_rule",
+            "falco_unknown_source | - | FalcoUnknownSource | https://opentide.org/docs/cli/diagnostics#falco_unknown_source",
+            "falco_unsafe_na_check | - | FalcoUnsafeNaCheck | https://opentide.org/docs/cli/diagnostics#falco_unsafe_na_check",
+            "filename_mismatch | warning | FilenameMismatch | https://opentide.org/docs/cli/diagnostics#filename_mismatch",
+            "kql_deprecated_function | - | KqlDeprecatedFunction | https://opentide.org/docs/cli/diagnostics#kql_deprecated_function",
+            "kql_deprecated_operator | - | KqlDeprecatedOperator | https://opentide.org/docs/cli/diagnostics#kql_deprecated_operator",
+            "kql_join_summarize_before_project | - | KqlJoinSummarizeBeforeProject | https://opentide.org/docs/cli/diagnostics#kql_join_summarize_before_project",
+            "kql_render_not_valid | - | KqlRenderNotValid | https://opentide.org/docs/cli/diagnostics#kql_render_not_valid",
+            "kql_table_not_declared | warning | KqlTableNotDeclared | https://opentide.org/docs/cli/diagnostics#kql_table_not_declared",
+            "kql_unscoped_search | - | KqlUnscopedSearch | https://opentide.org/docs/cli/diagnostics#kql_unscoped_search",
+            "kql_unscoped_union | - | KqlUnscopedUnion | https://opentide.org/docs/cli/diagnostics#kql_unscoped_union",
+            "kql_where_not_first | - | KqlWhereNotFirst | https://opentide.org/docs/cli/diagnostics#kql_where_not_first",
+            "kql_wildcard_table | - | KqlWildcardTable | https://opentide.org/docs/cli/diagnostics#kql_wildcard_table",
+            "kuery_escape | - | KueryEscape | https://opentide.org/docs/cli/diagnostics#kuery_escape",
+            "kuery_free_text | - | KueryFreeText | https://opentide.org/docs/cli/diagnostics#kuery_free_text",
+            "kuery_looks_like_lucene | - | KueryLooksLikeLucene | https://opentide.org/docs/cli/diagnostics#kuery_looks_like_lucene",
+            "kuery_lucene_syntax | - | KueryLuceneSyntax | https://opentide.org/docs/cli/diagnostics#kuery_lucene_syntax",
+            "kuery_question_mark | - | KueryQuestionMark | https://opentide.org/docs/cli/diagnostics#kuery_question_mark",
+            "kuery_quoted_wildcard | - | KueryQuotedWildcard | https://opentide.org/docs/cli/diagnostics#kuery_quoted_wildcard",
+            "kuery_range_type | - | KueryRangeType | https://opentide.org/docs/cli/diagnostics#kuery_range_type",
+            "lookback_long | - | LookbackLong | https://opentide.org/docs/cli/diagnostics#lookback_long",
+            "lookback_zero | - | LookbackZero | https://opentide.org/docs/cli/diagnostics#lookback_zero",
+            "lucene_bare_term | - | LuceneBareTerm | https://opentide.org/docs/cli/diagnostics#lucene_bare_term",
+            "lucene_elasticsearch_only | - | LuceneElasticsearchOnly | https://opentide.org/docs/cli/diagnostics#lucene_elasticsearch_only",
+            "lucene_escape | - | LuceneEscape | https://opentide.org/docs/cli/diagnostics#lucene_escape",
+            "lucene_kuery_syntax | - | LuceneKuerySyntax | https://opentide.org/docs/cli/diagnostics#lucene_kuery_syntax",
+            "lucene_looks_like_kuery | - | LuceneLooksLikeKuery | https://opentide.org/docs/cli/diagnostics#lucene_looks_like_kuery",
+            "lucene_lowercase_operator | - | LuceneLowercaseOperator | https://opentide.org/docs/cli/diagnostics#lucene_lowercase_operator",
+            "lucene_mixed_operators | - | LuceneMixedOperators | https://opentide.org/docs/cli/diagnostics#lucene_mixed_operators",
+            "lucene_range_operator | - | LuceneRangeOperator | https://opentide.org/docs/cli/diagnostics#lucene_range_operator",
+            "lucene_regexp | - | LuceneRegexp | https://opentide.org/docs/cli/diagnostics#lucene_regexp",
+            "lucene_unescaped_slash | - | LuceneUnescapedSlash | https://opentide.org/docs/cli/diagnostics#lucene_unescaped_slash",
+            "metadata_recommended | note | MetadataRecommended | https://opentide.org/docs/cli/diagnostics#metadata_recommended",
+            "name_missing | error | NameMissing | https://opentide.org/docs/cli/diagnostics#name_missing",
+            "nested_object_file | warning | NestedObjectFile | https://opentide.org/docs/cli/diagnostics#nested_object_file",
+            "placeholder | warning | Placeholder | https://opentide.org/docs/cli/diagnostics#placeholder",
+            "risk_band | - | RiskBand | https://opentide.org/docs/cli/diagnostics#risk_band",
+            "spl_dataset_not_declared | warning | SplDatasetNotDeclared | https://opentide.org/docs/cli/diagnostics#spl_dataset_not_declared",
+            "spl_empty_stage | - | SplEmptyStage | https://opentide.org/docs/cli/diagnostics#spl_empty_stage",
+            "spl_leading_not | - | SplLeadingNot | https://opentide.org/docs/cli/diagnostics#spl_leading_not",
+            "spl_subsearch_truncation | - | SplSubsearchTruncation | https://opentide.org/docs/cli/diagnostics#spl_subsearch_truncation",
+            "spl_unknown_command | - | SplUnknownCommand | https://opentide.org/docs/cli/diagnostics#spl_unknown_command",
+            "spl_wildcard | - | SplWildcard | https://opentide.org/docs/cli/diagnostics#spl_wildcard",
+            "sysdig_list_self_reference | warning | SysdigListSelfReference | https://opentide.org/docs/cli/diagnostics#sysdig_list_self_reference",
+            "technique_not_enterprise | - | TechniqueNotEnterprise | https://opentide.org/docs/cli/diagnostics#technique_not_enterprise",
+            "threshold_lookback | - | ThresholdLookback | https://opentide.org/docs/cli/diagnostics#threshold_lookback",
+            "yaml_parse | error | YamlParse | https://opentide.org/docs/cli/diagnostics#yaml_parse"
+          ],
+          "version": "0.28.1"
+        }
+      }
+    }
+  ],
+  "version": "2.1.0"
+}

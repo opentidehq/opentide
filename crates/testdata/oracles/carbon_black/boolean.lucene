@@ -1,0 +1,1 @@
+device_os:WINDOWS AND (process_name:wscript.exe OR process_name:cscript.exe) AND NOT process_username:SYSTEM

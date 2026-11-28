@@ -7,7 +7,7 @@ Severity: error. Reported by `opentide deploy` on an `exabeam` block (exabeam-1.
 ## Example
 
 ```text
-exabeam_tenant_deployment_failed: code=exabeam_tenant_unreachable tenant=exabeam-eu error=HTTPSConnectionPool(host='api.eu.exabeam.cloud', port=443): Read timed out
+exabeam_tenant_deployment_failed: code=exabeam_tenant_unreachable tenant=exabeam-eu error=exabeam tenant 'exabeam-eu' at https://api.eu.exabeam.cloud sent no complete answer within 30s
 ```
 
 ## How to fix

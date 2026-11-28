@@ -1,0 +1,25 @@
+---
+source: crates/opentide-yaral/tests/trees.rs
+expression: debug_parse(&source)
+input_file: crates/testdata/corpus/yaral/comparison__invalid.yaral
+---
+SOURCE_FILE@0..45
+  COMMENT@0..26 "// prod:comparison invalid"
+  WHITESPACE@26..27 "\n"
+  SEARCH_QUERY@27..44
+    SEARCH_EVENTS@27..44
+      COMPARISON@27..44
+        UDM_FIELD@27..41
+          VARIABLE@27..29
+            VAR_TOKEN@27..29 "$e"
+          MEMBER@29..36
+            ACCESS_DOT@29..30 "."
+            FIELD_NAME@30..36 "target"
+          MEMBER@36..41
+            ACCESS_DOT@36..37 "."
+            FIELD_NAME@37..41 "port"
+        WHITESPACE@41..42 " "
+        GT_EQ@42..44 ">="
+  WHITESPACE@44..45 "\n"
+errors:
+44..45: expected an expression

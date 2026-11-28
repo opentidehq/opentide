@@ -1,0 +1,1 @@
+index=a | fields | stats count by host

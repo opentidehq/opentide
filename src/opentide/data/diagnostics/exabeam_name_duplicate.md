@@ -2,7 +2,7 @@
 
 Two enabled Exabeam blocks resolve to the same Exabeam rule name.
 
-Severity: error. Reported by `opentide validate` on an `exabeam` block (exabeam-1.0). The Exabeam rule name is the block's `name`, else the rule's `name`, compared case-insensitively. Exabeam's import refuses a rule whose name exists and Search links rules by name, so the second deploy would fail with `exabeam_name_conflict`.
+Severity: error. Reported by `opentide validate` on an `exabeam` block (exabeam-1.0). The Exabeam rule name is the block's `name`, else the rule's `name`, compared under full Unicode case folding, as deploy compares them (`ﬁle Access` and `file access`, `Straße` and `STRASSE`, are one name). Exabeam's import refuses a rule whose name exists and Search links rules by name, so the second deploy would fail with `exabeam_name_conflict`.
 
 ## Example
 

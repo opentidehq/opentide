@@ -1,0 +1,1 @@
+SecurityEvent | extend Process = split(NewProcessName, "\\")[-1]

@@ -1,0 +1,1 @@
+ct.name="DeactivateMFADevice" and proc.name in (oops and not ct.error exists and ct.user.identitytype="Root" and ct.request.username="AWS ROOT USER"

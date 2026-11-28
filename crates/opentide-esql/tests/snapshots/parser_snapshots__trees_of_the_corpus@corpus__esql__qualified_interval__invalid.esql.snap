@@ -1,0 +1,51 @@
+---
+source: crates/opentide-esql/tests/parser_snapshots.rs
+expression: "format!(\"{tree}--- errors\\n{errors}\")"
+input_file: crates/testdata/corpus/esql/qualified_interval__invalid.esql
+---
+SOURCE_FILE@0..97
+  COMMENT@0..34 "// prod:qualified_interval invalid"
+  WHITESPACE@34..35 "\n"
+  QUERY@35..96
+    FROM_COMMAND@35..59
+      FROM_KW@35..39 "FROM"
+      WHITESPACE@39..40 " "
+      INDEX_PATTERN@40..46
+        INDEX_NAME@40..46
+          SOURCE_TEXT@40..46 "logs-*"
+      WHITESPACE@46..47 " "
+      METADATA@47..59
+        METADATA_KW@47..55 "METADATA"
+        WHITESPACE@55..56 " "
+        METADATA_FIELD@56..59
+          SOURCE_TEXT@56..59 "_id"
+    WHITESPACE@59..60 "\n"
+    PIPE@60..61 "|"
+    WHITESPACE@61..62 " "
+    WHERE_COMMAND@62..96
+      WHERE_KW@62..67 "WHERE"
+      WHITESPACE@67..68 " "
+      COMPARISON@68..96
+        QUALIFIED_NAME@68..78
+          IDENTIFIER@68..78
+            IDENT@68..78 "@timestamp"
+        WHITESPACE@78..79 " "
+        GT@79..80 ">"
+        WHITESPACE@80..81 " "
+        BINARY_EXPRESSION@81..96
+          FUNCTION_CALL@81..86
+            IDENTIFIER@81..84
+              IDENT@81..84 "NOW"
+            L_PAREN@84..85 "("
+            R_PAREN@85..86 ")"
+          WHITESPACE@86..87 " "
+          MINUS@87..88 "-"
+          WHITESPACE@88..89 " "
+          QUALIFIED_INTERVAL@89..96
+            NUMBER@89..92
+              NUMBER_LIT@89..92 "1.5"
+            WHITESPACE@92..93 " "
+            TIME_UNIT@93..96
+              IDENT@93..96 "day"
+  WHITESPACE@96..97 "\n"
+--- errors

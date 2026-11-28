@@ -1,0 +1,25 @@
+---
+source: crates/opentide-kql/src/parser/tests.rs
+expression: "show(\"T | fork (take 1\")"
+---
+SOURCE_FILE@0..16
+  QUERY@0..16
+    TABULAR_EXPRESSION@0..16
+      TABULAR_SOURCE@0..1
+        TABLE_REF@0..1
+          IDENT@0..1 "T"
+      WHITESPACE@1..2 " "
+      PIPE@2..3 "|"
+      WHITESPACE@3..4 " "
+      FORK_OPERATOR@4..16
+        FORK_KW@4..8 "fork"
+        WHITESPACE@8..9 " "
+        FORK_BRANCH@9..16
+          L_PAREN@9..10 "("
+          SUBQUERY@10..16
+            TAKE_OPERATOR@10..16
+              TAKE_KW@10..14 "take"
+              WHITESPACE@14..15 " "
+              NUMBER@15..16 "1"
+errors:
+16..16: expected `)` (expected `|`, `)`)

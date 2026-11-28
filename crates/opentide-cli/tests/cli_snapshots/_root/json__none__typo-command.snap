@@ -1,0 +1,29 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: _root/json/none/typo-command
+---
+args: opentide --json valdiate
+exit: 2
+
+━━━ stdout · json, 1 lines
+{
+  "command": "",
+  "duration_ms": 0,
+  "error": "unrecognized subcommand 'valdiate'",
+  "exit_code": 2,
+  "failure": {
+    "argument": "valdiate",
+    "code": "usage_unknown_command",
+    "crash_log": null,
+    "message": "unrecognized subcommand 'valdiate'",
+    "suggestion": "validate"
+  },
+  "message": "unrecognized subcommand 'valdiate'",
+  "next_actions": [],
+  "ok": false,
+  "schema_version": 1,
+  "status": "failed",
+  "summary": {}
+}
+
+━━━ stderr · empty

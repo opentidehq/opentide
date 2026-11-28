@@ -1,0 +1,1 @@
+process where add("a", 1) == 1

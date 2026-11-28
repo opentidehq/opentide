@@ -1,0 +1,19 @@
+---
+source: crates/opentide-exabeam/tests/trees.rs
+expression: "debug_parse(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/exabeam/statement__invalid.exabeam
+---
+source_file@0..27
+  statement@0..25
+    filter@0..25
+      field_term@0..25
+        field_name@0..13
+          identifier@0..13
+            letters@0..13 "activity_type"
+        :@13..14 ":"
+        string@14..25 "\"app-login\""
+  whitespace@25..26 " "
+  ERROR@26..27
+    )@26..27 ")"
+errors:
+25..26: unexpected

@@ -1,0 +1,28 @@
+# Reserves the name `opentide` on crates.io for the opentide Rust SDK, the
+# facade crate of the Unified Core plan (decision D-5; the crate itself is
+# UC-5.1). Version 0.0.0 has no API. docs/internal/publishing.md has the steps
+# that publish it and the dry run that checks it:
+#
+#   cargo publish --dry-run --locked --manifest-path publishing/placeholders/crates/opentide/Cargo.toml
+[package]
+name = "opentide"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.85"
+license = "EUPL-1.2"
+description = "Reserved for the opentide Rust SDK. This version has no API; opentide ships today as the Python package `opentide` on PyPI."
+homepage = "https://opentide.org"
+repository = "https://github.com/opentidehq/opentide"
+readme = "README.md"
+keywords = ["opentide", "detection-as-code", "security"]
+# The EUPL asks for a copy of the licence with every copy of the work.
+include = ["/src/**", "/README.md", "/LICENSE"]
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "deny"
+
+# Its own workspace, so it builds, packages and publishes alone whatever Cargo
+# workspace the repository root holds (UC-0.2 adds one with an explicit member
+# list).
+[workspace]

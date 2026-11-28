@@ -1,0 +1,150 @@
+name: Fuzz template
+metadata:
+  uuid: 8d50f9cf-e13f-4365-93d7-069988cfdd2e
+  schema: rule::1.1
+  version: 1
+  created: 2026-11-27
+  modified: 2026-11-27
+  tlp: amber
+  author: opentide
+description: |
+  A rule with a block for every built-in platform.
+response:
+  alert_severity: Informational
+configurations:
+  sentinel:
+    enabled: true
+    status: STAGING
+    query: |
+      SecurityEvent | where EventID == 4688
+    scheduling:
+      frequency: 1h
+      lookback: 1h
+    alert:
+      suppression: false
+      create_incident: true
+    grouping:
+      event: SingleAlert
+      alert:
+        enabled: false
+  microsoft_defender:
+    enabled: true
+    status: STAGING
+    query: |
+      DeviceProcessEvents | where FileName == "cmd.exe"
+    schedule:
+      frequency: 1H
+    scope:
+      device_groups:
+        - Servers
+  splunk:
+    enabled: true
+    status: STAGING
+    query: |
+      index=main sourcetype=WinEventLog EventCode=4688
+    scheduling:
+      timerange:
+        lookback: 1d
+  sentinel_one:
+    enabled: true
+    status: STAGING
+    condition:
+      type: "Single Event"
+      single_event:
+        query: |
+          EventType = "Process Creation"
+  crowdstrike:
+    enabled: true
+    status: STAGING
+    details:
+      trigger: verbose
+      outcome: detection
+    schedule:
+      frequency: 1h
+      lookback: 1h
+    query: |
+      #event_simpleName=ProcessRollup2
+  harfanglab:
+    enabled: true
+    status: STAGING
+    sigma:
+      logsource:
+        category: process_creation
+        product: windows
+      selections:
+        - name: selection
+          field: Image
+          value: cmd.exe
+      condition: selection
+  carbon_black_cloud:
+    enabled: true
+    status: STAGING
+    query: |
+      process_name:cmd.exe
+  elastic:
+    enabled: true
+    status: STAGING
+    type: query
+    query: |
+      process.name: "cmd.exe"
+  sysdig:
+    enabled: true
+    status: STAGING
+    condition: |
+      spawned_process and proc.name = "sh"
+  bitdefender:
+    enabled: true
+    status: STAGING
+    severity: Low
+    detection:
+      target: process
+      criteria:
+        - field: Process.Name
+          is: cmd.exe
+  graylog:
+    enabled: true
+    status: STAGING
+    query: |
+      process_name:cmd.exe
+  exabeam:
+    enabled: true
+    status: STAGING
+    sequences:
+      - query: |
+          activity_type:"process-create"
+  google_secops:
+    enabled: true
+    status: STAGING
+    events: |
+      $e.metadata.event_type = "PROCESS_LAUNCH"
+    outcome: |
+      $risk_score = 40
+    condition: |
+      $e
+  datadog:
+    enabled: true
+    status: STAGING
+    queries:
+      - name: failed
+        query: |
+          source:cloudtrail @evt.outcome:Failure
+        group_by:
+          - "@usr.id"
+    detection:
+      method: threshold
+      window: 5m
+    cases:
+      - name: many
+        condition: failed > 10
+        severity: high
+    signal:
+      group_by:
+        - "@usr.id"
+      keep_alive: 1h
+      max_duration: 1d
+    tags:
+      - team:soc
+x0: &a0 [lol, lol, lol, lol, lol, lol, lol, lol, lol, lol]
+x1: &a1 [*a0, *a0, *a0, *a0, *a0, *a0, *a0, *a0, *a0, *a0]
+x2: &a2 [*a1, *a1, *a1, *a1, *a1, *a1, *a1, *a1, *a1, *a1]
+x3: &a3 [*a2, *a2, *a2, *a2, *a2, *a2, *a2, *a2, *a2, *a2]

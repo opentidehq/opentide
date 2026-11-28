@@ -1,0 +1,2 @@
+union withsource=SourceTable isfuzzy=true Security*, *Logs, SigninLogs
+| take 10

@@ -1,0 +1,2 @@
+# prod:wildcard_term valid
+process.name:cmd* AND file.name:a?c

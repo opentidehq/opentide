@@ -1,0 +1,14 @@
+name: [n]
+schema_id: 1
+description: ~
+severity:
+effort: lots
+enabled: perhaps
+examples:
+  - description: e
+  - link: 3
+    language: rust
+    extra: 1
+  - not an example
+tags: a
+unknown: 1

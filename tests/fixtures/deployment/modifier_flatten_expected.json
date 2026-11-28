@@ -436,7 +436,7 @@
    ]
   },
   {
-   "id": "corpus-defender_for_endpoint",
+   "id": "corpus-microsoft_defender",
    "input": {
     "enabled": true,
     "name": "Defender KQL Rule",
@@ -1729,9 +1729,9 @@
    }
   },
   {
-   "id": "defender_for_endpoint-applies",
+   "id": "microsoft_defender-applies",
    "file": "rule-0002-defender-kql.yaml",
-   "platform": "defender_for_endpoint",
+   "platform": "microsoft_defender",
    "tenants": [
     "Lab"
    ],
@@ -1804,9 +1804,9 @@
    }
   },
   {
-   "id": "defender_for_endpoint-other-tenant",
+   "id": "microsoft_defender-other-tenant",
    "file": "rule-0002-defender-kql.yaml",
-   "platform": "defender_for_endpoint",
+   "platform": "microsoft_defender",
    "tenants": [
     "Prod"
    ],

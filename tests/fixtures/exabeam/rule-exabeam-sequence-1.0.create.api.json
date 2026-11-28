@@ -22,7 +22,7 @@
         },
         {
           "name": "PowerShell connects out",
-          "query": "activity_type:\"network-connection\" AND process_name:(\"powershell.exe\", \"pwsh.exe\")\nAND NOT dest_ip:[10.0.0.0/8] AND NOT dest_ip:[172.16.0.0/12] AND NOT dest_ip:[192.168.0.0/16]",
+          "query": "activity_type:\"network-session\" AND process_name:(\"powershell.exe\", \"pwsh.exe\")\nAND NOT dest_ip:[10.0.0.0/8] AND NOT dest_ip:[172.16.0.0/12] AND NOT dest_ip:[192.168.0.0/16]",
           "condition": {
             "triggerOnAnyMatch": false,
             "groupByOption": true,

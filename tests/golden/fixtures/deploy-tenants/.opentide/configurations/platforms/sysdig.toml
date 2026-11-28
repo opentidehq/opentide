@@ -1,0 +1,12 @@
+[platform]
+enabled = true
+name = "Sysdig Secure"
+
+[[tenants]]
+name = "lab"
+strategies = ["PREVIEW", "RELEASE"]
+[tenants.setup]
+ssl = true
+url = "https://sysdig-tenant.invalid"
+api_token = "$SYSDIG_SECURE_API_TOKEN"
+policies = ["opentide managed detections"]

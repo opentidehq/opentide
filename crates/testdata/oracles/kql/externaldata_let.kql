@@ -1,0 +1,2 @@
+let a = externaldata(c:string, v:dynamic) ["https://example.com/x.json"] with(format="multijson");
+a

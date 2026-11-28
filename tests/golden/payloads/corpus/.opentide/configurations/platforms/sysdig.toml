@@ -1,0 +1,20 @@
+[platform]
+enabled = true
+
+[[tenants]]
+name = "tagged"
+description = "Adds tenant tags, one of them a block tag already"
+[tenants.setup]
+ssl = true
+url = "https://secure.sysdig.example.org"
+api_token = "$SYSDIG_SECURE_API_TOKEN"
+policies = ["opentide managed detections"]
+tags = ["tenant_tag", "container"]
+
+[[tenants]]
+name = "plain"
+description = "Adds nothing"
+[tenants.setup]
+ssl = true
+url = "https://secure2.sysdig.example.org"
+api_token = "$SYSDIG_SECURE_API_TOKEN"

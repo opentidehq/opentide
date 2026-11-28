@@ -1,0 +1,14 @@
+{
+  "about": "Differences between the SDKs' documents that no binding can remove, each one value at one pointer of one runner's document, with its reason and issue. `cargo xtask conformance` accepts a document only when every difference in its data is listed here with both values, and fails on an entry no run needed (stale). Key order and layout are never listed. tests/conformance/README.md, Known differences.",
+  "differences": [
+    {
+      "document": "tide_corpus/run_json-commands.json",
+      "runner": "node",
+      "pointer": "/commands/2/options/11/default",
+      "reference": "120.0",
+      "candidate": "120",
+      "reason": "`opentide query --timeout` defaults to 120.0 (a float) in the command tree, as the PyPI CLI writes it. JavaScript has one number type: JSON.parse reads 120.0 as 120, so `runJson(['commands'])` hands back the same number and JSON.stringify writes it as 120. The value is equal; only its notation differs, and no Node binding can keep the `.0`.",
+      "issue": "https://github.com/opentidehq/opentide/issues/839"
+    }
+  ]
+}

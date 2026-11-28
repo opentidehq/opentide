@@ -1,0 +1,30 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: query/json/live-tenants/rule-no-block
+---
+args: opentide --json query --platform crowdstrike --rule 00000000-0000-4000-8046-000000000001
+exit: 2
+
+━━━ stdout · json, 1 lines
+{
+  "command": "query",
+  "duration_ms": 0,
+  "error": "rule \"Splunk parsed rule\" has no crowdstrike configuration",
+  "exit_code": 2,
+  "failure": {
+    "argument": "--rule",
+    "code": "usage_invalid_value",
+    "crash_log": null,
+    "message": "rule \"Splunk parsed rule\" has no crowdstrike configuration",
+    "suggestion": null
+  },
+  "message": "rule \"Splunk parsed rule\" has no crowdstrike configuration",
+  "next_actions": [],
+  "ok": false,
+  "platform": "crowdstrike",
+  "schema_version": 1,
+  "status": "failed",
+  "summary": {}
+}
+
+━━━ stderr · empty

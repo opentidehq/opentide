@@ -1,0 +1,2 @@
+// prod:parenthesized_expression valid
+$e.metadata.event_type = "A" and ($e.target.port = 22 or $e.target.port = 3389)

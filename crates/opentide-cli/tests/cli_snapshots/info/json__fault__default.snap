@@ -1,0 +1,29 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: info/json/fault/default
+---
+args: opentide --json info
+exit: 0
+view: diagnostics (code, severity, file, line, column and counts; a warning's text; log events by name; no other message text)
+
+━━━ stdout · json
+findings: 0
+counts.objectives: 60
+counts.rules: 693
+counts.threats: 119
+exit_code: 0
+parse_error_count: 7
+schema_version: 1
+summary.load_errors: 7
+summary.objectives: 60
+summary.rules: 693
+summary.threats: 119
+next_actions[]: 1 items
+platforms[]: 14 items
+platforms[].tenants[]: 8 items
+platforms[].tenants[].strategies[]: 12 items
+platforms[].tenants[].variables[]: 19 items
+ok: true x1
+status: issues x1
+
+━━━ stderr · empty

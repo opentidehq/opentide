@@ -1,0 +1,19 @@
+---
+source: crates/opentide-falco/tests/trees.rs
+expression: "debug_parse(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/falco/field_transformer__invalid.falco
+---
+source_file@0..24
+  comparison@0..24
+    field_transformer@0..17
+      transformer_name@0..8 "tolower("
+      field@8..17
+        field_name@8..17 "proc.name"
+    whitespace@17..18 " "
+    comparison_operator@18..19
+      =@18..19 "="
+    whitespace@19..20 " "
+    bare_string@20..24
+      identifier@20..24 "bash"
+errors:
+17..18: missing `)` (expected ), ,)

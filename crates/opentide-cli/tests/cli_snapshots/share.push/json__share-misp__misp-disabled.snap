@@ -1,0 +1,34 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: share.push/json/share-misp/misp-disabled
+---
+args: opentide --json share push --target misp-lab
+exit: 1
+
+━━━ stdout · json, 1 lines
+{
+  "command": "share push",
+  "duration_ms": 0,
+  "error": "No sharing target matched the request",
+  "exit_code": 1,
+  "failure": {
+    "argument": null,
+    "code": "scope_no_match",
+    "crash_log": null,
+    "message": "No sharing target matched the request",
+    "suggestion": null
+  },
+  "message": "No sharing target matched the request",
+  "next_actions": [],
+  "ok": false,
+  "preflight": "scope_no_match",
+  "records": [],
+  "schema_version": 1,
+  "status": "failed",
+  "summary": {},
+  "warnings": [
+    "[[misp]] block \"misp-lab\" api_key is a literal. Use ${ENV_VAR}. The value was replaced with [REDACTED]."
+  ]
+}
+
+━━━ stderr · empty

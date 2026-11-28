@@ -1,0 +1,3 @@
+// prod:toscalar_expression valid
+let Threshold = toscalar(SecurityEvent | summarize count());
+SecurityEvent | where EventID > Threshold

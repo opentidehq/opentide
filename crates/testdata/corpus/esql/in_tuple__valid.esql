@@ -1,0 +1,3 @@
+// prod:in_tuple valid
+FROM logs-* METADATA _id
+| WHERE (host.name, user.name) IN (FROM admins | KEEP host.name, user.name)

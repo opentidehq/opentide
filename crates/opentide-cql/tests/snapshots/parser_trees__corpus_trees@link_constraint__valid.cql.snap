@@ -1,0 +1,79 @@
+---
+source: crates/opentide-cql/tests/parser_trees.rs
+expression: debug_parse(query(&file))
+input_file: crates/testdata/corpus/cql/link_constraint__valid.cql
+---
+SOURCE_FILE@0..125
+  PIPELINE@0..124
+    FUNCTION_CALL@0..124
+      FUNCTION_NAME@0..9
+        FUNCTION_NAME_TOKEN@0..9 "correlate"
+      L_PAREN@9..10 "("
+      ARGUMENT_LIST@10..123
+        ARGUMENT@10..36
+          NAMED_SUBQUERY@10..36
+            IDENTIFIER@10..15
+              WORD@10..15 "Login"
+            COLON@15..16 ":"
+            WHITESPACE@16..17 " "
+            SUBQUERY@17..36
+              L_BRACE@17..18 "{"
+              WHITESPACE@18..19 " "
+              PIPELINE@19..34
+                FIELD_FILTER@19..34
+                  TAG@19..26
+                    TAG_TOKEN@19..26 "#action"
+                  EQ@26..27 "="
+                  STRING@27..34
+                    STRING_TOKEN@27..34 "\"login\""
+              WHITESPACE@34..35 " "
+              R_BRACE@35..36 "}"
+        COMMA@36..37 ","
+        WHITESPACE@37..38 " "
+        ARGUMENT@38..96
+          NAMED_SUBQUERY@38..96
+            IDENTIFIER@38..46
+              WORD@38..46 "Purchase"
+            COLON@46..47 ":"
+            WHITESPACE@47..48 " "
+            SUBQUERY@48..96
+              L_BRACE@48..49 "{"
+              WHITESPACE@49..50 " "
+              PIPELINE@50..94
+                FIELD_FILTER@50..68
+                  TAG@50..57
+                    TAG_TOKEN@50..57 "#action"
+                  EQ@57..58 "="
+                  STRING@58..68
+                    STRING_TOKEN@58..68 "\"purchase\""
+                WHITESPACE@68..69 " "
+                PIPE@69..70 "|"
+                WHITESPACE@70..71 " "
+                LINK_CONSTRAINT@71..94
+                  FIELD_NAME@71..77
+                    WORD@71..77 "userId"
+                  WHITESPACE@77..78 " "
+                  LT_EQ_GT@78..81 "<=>"
+                  WHITESPACE@81..82 " "
+                  FIELD_NAME@82..94
+                    WORD@82..94 "Login.userId"
+              WHITESPACE@94..95 " "
+              R_BRACE@95..96 "}"
+        COMMA@96..97 ","
+        WHITESPACE@97..98 " "
+        NAMED_ARGUMENT@98..111
+          ARGUMENT_NAME@98..106
+            WORD@98..106 "sequence"
+          EQ@106..107 "="
+          BOOLEAN@107..111
+            TRUE_KW@107..111 "true"
+        COMMA@111..112 ","
+        WHITESPACE@112..113 " "
+        NAMED_ARGUMENT@113..123
+          ARGUMENT_NAME@113..119
+            WORD@113..119 "within"
+          EQ@119..120 "="
+          FIELD_NAME@120..123
+            WORD@120..123 "15m"
+      R_PAREN@123..124 ")"
+  WHITESPACE@124..125 "\n"

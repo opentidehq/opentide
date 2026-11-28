@@ -1,0 +1,39 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: deploy/json/vscode/uuid
+---
+args: opentide --json deploy --dry-run --strategy PREVIEW --uuid ff8bf67e-64dc-460d-b5df-48db643f3560
+exit: 1
+
+━━━ stdout · json, 1 lines
+{
+  "command": "deploy",
+  "duration_ms": 0,
+  "error": "\"Suspicious LSASS Access\" (ff8bf67e-64dc-460d-b5df-48db643f3560): configurations.sentinel.status is required for deployment",
+  "exit_code": 1,
+  "failure": {
+    "argument": null,
+    "code": "command_failed",
+    "crash_log": null,
+    "message": "\"Suspicious LSASS Access\" (ff8bf67e-64dc-460d-b5df-48db643f3560): configurations.sentinel.status is required for deployment",
+    "suggestion": null
+  },
+  "message": "\"Suspicious LSASS Access\" (ff8bf67e-64dc-460d-b5df-48db643f3560): configurations.sentinel.status is required for deployment",
+  "next_actions": [],
+  "ok": false,
+  "schema_version": 1,
+  "scope": "selected",
+  "status": "failed",
+  "summary": {}
+}
+
+━━━ stderr · json, 1 lines
+{
+  "detail": "Rule \"Suspicious LSASS Access\" (ff8bf67e-64dc-460d-b5df-48db643f3560) has no 'status' in its sentinel configuration block. Add a status, e.g. 'status: STAGING', then re-run 'opentide validate'.",
+  "event": "platform_status_missing",
+  "level": "error",
+  "rule": "Suspicious LSASS Access",
+  "system": "sentinel",
+  "timestamp": "0000-00-00 00:00:00",
+  "uuid": "ff8bf67e-64dc-460d-b5df-48db643f3560"
+}

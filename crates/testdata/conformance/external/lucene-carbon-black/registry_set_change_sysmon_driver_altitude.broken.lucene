@@ -1,0 +1,1 @@
+(device_os:WINDOWS (regmod_name:\\Services\\* regmod_name:\\Instances\\Sysmon\ Instance\\Altitude)

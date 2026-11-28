@@ -1,0 +1,1 @@
+FROM logs-* | LOOKUP JOIN lookup_idx ON host.name == name

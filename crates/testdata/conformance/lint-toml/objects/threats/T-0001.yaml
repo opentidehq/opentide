@@ -1,0 +1,25 @@
+name: Example threat
+
+metadata:
+  uuid: 00000000-0000-4000-8001-000000000214
+  schema: threat::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+  author: Example Author
+
+criticality: Medium
+threat:
+  description: A synthetic threat for the lint.toml conformance case.
+  severity: Medium
+  impact:
+    - Credential Theft
+  leverage:
+    - Credential Harvesting
+  viability: Environmental
+  terrain: Any
+  surface:
+    - Endpoint
+  mitre_attack:
+    - T1059

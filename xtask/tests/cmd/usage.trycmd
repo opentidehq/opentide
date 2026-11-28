@@ -1,0 +1,45 @@
+Help, and the commands whose work item has not landed yet: they fail, so that
+no script can take one for a check that passed.
+
+```console
+$ xtask help
+The repository's Rust tooling.
+
+Exit status: 0 passed, 1 a check failed or the command is not implemented yet, 2 a usage error or the check could not run.
+
+Usage: cargo xtask <COMMAND>
+
+Commands:
+  check-layers  Check that every dependency between workspace crates points down the layer table (xtask/layers.toml, plan section 4)
+  coverage      Check each workspace crate's line coverage against its gate (xtask/coverage.toml, plan section 5.4)
+  conformance   Run every operation of tests/conformance/manifest.json on every corpus through the Rust, Python and Node SDKs and require byte-identical documents (UC-5.4, #839)
+  corpus        Generate the heavy workspace, run the fault catalogue against the oracle, report coverage (UC-0.6, #804); `corpus help` lists its commands
+  lsp           For each fault kind `opentide validate` reports, the language server's published diagnostics against validate's findings (UC-2.6, #821)
+  codegen       Write the artifacts generated from the Rust model (the platform templates); `--check` compares them (UC-1.8, #814)
+  cassettes     The recorded-HTTP cassettes of tests/cassettes (UC-4.1, #831)
+  bench         Run the benchmarks against their budgets (UC-0.8, #806)
+  throughput    Count each language's parse and analysis in instructions (callgrind) and hold them to tests/bench/instructions.toml (#1571, ADR 0014)
+  vocab         The vocabularies: sync, generate and ingest (UC-1.6, #812); `vocab --help` lists the commands
+  spec-fields   Check every model field's description against its row in the field tables of the specifications checkout
+  stubs         Generate src/opentide/_native/models.pyi and sdk.pyi from the extension's introspection data (UC-1.9, #815; UC-5.2b, #837)
+  help          Print this message or the help of the given subcommand(s)
+
+Options:
+  -h, --help
+          Print help (see a summary with '-h')
+
+$ xtask codegen --frobnicate
+? 2
+error: unexpected argument '--frobnicate' found
+
+Usage: cargo xtask codegen [OPTIONS]
+...
+
+$ xtask frobnicate
+? 2
+error: unrecognized subcommand 'frobnicate'
+
+Usage: cargo xtask <COMMAND>
+...
+
+```

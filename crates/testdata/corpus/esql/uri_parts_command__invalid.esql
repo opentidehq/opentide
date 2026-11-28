@@ -1,0 +1,3 @@
+// prod:uri_parts_command invalid
+FROM logs-* METADATA _id
+| URI_PARTS u =

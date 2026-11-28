@@ -1,0 +1,15 @@
+---
+source: crates/opentide-yaral/src/parser/tests.rs
+expression: "show(\"$a = \")"
+---
+SOURCE_FILE@0..5
+  SEARCH_QUERY@0..4
+    SEARCH_EVENTS@0..4
+      COMPARISON@0..4
+        VARIABLE@0..2
+          VAR_TOKEN@0..2 "$a"
+        WHITESPACE@2..3 " "
+        EQ@3..4 "="
+  WHITESPACE@4..5 " "
+errors:
+4..5: expected an expression

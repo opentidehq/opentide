@@ -1,0 +1,48 @@
+---
+source: crates/opentide-kql/src/parser/tests.rs
+expression: "show(\"T | render timechart with (title=\\\"x\\\", ycolumns=a, b, ymin=-1)\")"
+---
+SOURCE_FILE@0..61
+  QUERY@0..61
+    TABULAR_EXPRESSION@0..61
+      TABULAR_SOURCE@0..1
+        TABLE_REF@0..1
+          IDENT@0..1 "T"
+      WHITESPACE@1..2 " "
+      PIPE@2..3 "|"
+      WHITESPACE@3..4 " "
+      RENDER_OPERATOR@4..61
+        RENDER_KW@4..10 "render"
+        WHITESPACE@10..11 " "
+        IDENT@11..20 "timechart"
+        WHITESPACE@20..21 " "
+        RENDER_WITH@21..61
+          WITH_KW@21..25 "with"
+          WHITESPACE@25..26 " "
+          L_PAREN@26..27 "("
+          NAMED_ARGUMENT@27..36
+            IDENT@27..32 "title"
+            EQ@32..33 "="
+            LITERAL@33..36
+              STRING@33..36 "\"x\""
+          COMMA@36..37 ","
+          WHITESPACE@37..38 " "
+          NAMED_ARGUMENT@38..48
+            IDENT@38..46 "ycolumns"
+            EQ@46..47 "="
+            NAME_REF@47..48
+              IDENT@47..48 "a"
+          COMMA@48..49 ","
+          WHITESPACE@49..50 " "
+          NAME_REF@50..51
+            IDENT@50..51 "b"
+          COMMA@51..52 ","
+          WHITESPACE@52..53 " "
+          NAMED_ARGUMENT@53..60
+            IDENT@53..57 "ymin"
+            EQ@57..58 "="
+            UNARY_EXPR@58..60
+              MINUS@58..59 "-"
+              LITERAL@59..60
+                NUMBER@59..60 "1"
+          R_PAREN@60..61 ")"

@@ -1,0 +1,1 @@
+find in (SigninLogs, AuditLogs) where TimeGenerated > ago(1h) project-smart | take 10

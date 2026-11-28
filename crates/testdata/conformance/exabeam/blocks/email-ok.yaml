@@ -1,0 +1,20 @@
+name: Email
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000111
+  schema: rule::1.0
+  version: 1
+  created: "2026-01-01"
+  modified: "2026-01-02"
+  tlp: clear
+  author: Detection Engineering
+description: |
+  Block case email-ok.
+configurations:
+  exabeam:
+    enabled: true
+    schema: platform::exabeam::1.0
+    status: STAGING
+    email: {recipients: [soc@example.com], subject: Alert, attach_csv: false}
+    outcome: none
+    sequences:
+      - query: 'activity_type:"app-login" AND outcome:"fail"'

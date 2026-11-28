@@ -1,0 +1,2 @@
+// prod:sort_operator valid
+SecurityEvent | sort by TimeGenerated desc

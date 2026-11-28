@@ -1,0 +1,1099 @@
+//! The language server's Tide field catalog: what
+//! `opentide generate schemas` writes to `.opentide/lsp/catalogs/generated/`
+//! and what the engine compiles in (`data/catalogs/tide/generated/`).
+//!
+//! - `fields.json`: every field of every registered object revision
+//!   (`rule::1.0` and `rule::1.1` each have their own rows), with its title,
+//!   description, type, whether validation requires it (`required`, from the
+//!   model) or only the templates ask for it (`recommended`), its enum values
+//!   and their short docs, whether an object forbids keys it does not define
+//!   (`closed`), its string default and its minimum item count.
+//! - `deprecations.json`: the root and platform fields marked deprecated
+//!   (`tide.meta.deprecation`).
+//!
+//! Each row is read from the revision's editor schema with its hover
+//! annotations, `configurations` left as the model declares it
+//! ([`super::schema::unrecomposed_revision_schema`]: the rows do not depend on
+//! which platforms a workspace enables), and from the revision's model schema,
+//! which keeps the `tide.*` keywords and says which fields validation
+//! requires. The shapes are
+//! the engine's (`opentide_tide::intel`); the module is I/O-free and serves
+//! both the CLI and the language server (#926).
+
+use serde::Serialize;
+use serde_json::{Map, Value};
+
+use super::json::{Json, Object};
+use super::schema::{Sources, revision_model_schema, unrecomposed_revision_schema};
+use super::workspace::{CORE_OBJECT_TYPES, identifiers_for_families};
+use crate::keys;
+use crate::objects::platform::schema::all_root_extras;
+
+/// Where the catalogs go, relative to the workspace root.
+pub const CATALOG_DIR: &str = ".opentide/lsp/catalogs/generated";
+/// The field catalog's file name.
+pub const FIELDS_FILE: &str = "fields.json";
+/// The deprecation catalog's file name.
+pub const DEPRECATIONS_FILE: &str = "deprecations.json";
+/// The `generator` label of both documents: the shapes' name, which the
+/// engine and `opentide doctor` know them by.
+pub const GENERATOR: &str = "opentide.generation.lsp_catalog";
+/// Keys that say where a catalog came from rather than what it holds.
+pub const LABEL_KEYS: [&str; 2] = ["opentide", "generator"];
+
+/// Vocabulary essays dominate the catalog and are not needed at hover time:
+/// every enum value is kept, short docs only for enums this small.
+const ENUM_DOC_MAX: usize = 40;
+/// The longest enum doc, in characters, the ellipsis included.
+const DOC_CAP: usize = 160;
+
+/// A reference field's name and the family whose objects it names
+/// (`_REF_LEAF_TO_TYPE`).
+pub const REF_LEAVES: [(&str, &str); 3] = [
+    ("threats", "threat"),
+    ("detection_model", "objective"),
+    ("vector", "threat"),
+];
+
+/// Both catalogs as written, by file name: `fields.json`, then
+/// `deprecations.json`. `version` is the `opentide` label.
+pub fn catalog_texts(version: &str, sources: &Sources) -> Vec<(&'static str, String)> {
+    vec![
+        (FIELDS_FILE, dump(&fields_catalog(version, sources))),
+        (DEPRECATIONS_FILE, dump(&deprecations_catalog(version))),
+    ]
+}
+
+/// A catalog as the files hold it: two-space indentation, `": "` between a
+/// key and its value, UTF-8 unescaped, a final newline.
+pub fn dump(document: &Json) -> String {
+    let mut out = Vec::new();
+    let formatter = serde_json::ser::PrettyFormatter::with_indent(b"  ");
+    let mut serializer = serde_json::Serializer::with_formatter(&mut out, formatter);
+    if document.serialize(&mut serializer).is_err() {
+        return String::new();
+    }
+    out.push(b'\n');
+    String::from_utf8(out).unwrap_or_default()
+}
+
+/// The `deprecations.json` document: the platform block fields whose root
+/// extras carry `tide.meta.deprecation`, sorted by schema and path. The core
+/// families' root extras deprecate no field.
+pub fn deprecations_catalog(version: &str) -> Json {
+    Json::Object(Object::from([
+        ("opentide".to_owned(), Json::from(version)),
+        ("generator".to_owned(), Json::from(GENERATOR)),
+        (
+            "fields".to_owned(),
+            Json::Array(deprecation_rows(all_root_extras())),
+        ),
+    ]))
+}
+
+/// The `fields` of `deprecations.json` from each platform's root extras: a
+/// `rule` row at `configurations.{platform}.{name}` for every property extra
+/// whose `tide.meta.deprecation` is a message (a non-empty string), with
+/// that message, sorted by
+/// schema, path and message.
+fn deprecation_rows(extras: impl IntoIterator<Item = (&'static str, Value)>) -> Vec<Json> {
+    let mut rows: Vec<(String, String, String)> = Vec::new();
+    for (platform, extras) in extras {
+        let Some(Value::Object(properties)) = extras.get("property_extras") else {
+            continue;
+        };
+        for (name, spec) in properties {
+            if let Some(message) = spec
+                .get(keys::META_DEPRECATION)
+                .and_then(Value::as_str)
+                .filter(|message| !message.is_empty())
+            {
+                rows.push((
+                    "rule".to_owned(),
+                    format!("configurations.{platform}.{name}"),
+                    message.to_owned(),
+                ));
+            }
+        }
+    }
+    rows.sort();
+    rows.into_iter()
+        .map(|(schema, path, message)| {
+            Json::Object(Object::from([
+                ("schema".to_owned(), Json::from(schema)),
+                ("path".to_owned(), Json::from(path)),
+                ("message".to_owned(), Json::from(message)),
+            ]))
+        })
+        .collect()
+}
+
+/// The `fields.json` document for every registered object revision, from
+/// the workspace's `sources`.
+pub fn fields_catalog(version: &str, sources: &Sources) -> Json {
+    let ids = identifiers_for_families(&CORE_OBJECT_TYPES);
+    let mut rows: Vec<Row> = Vec::new();
+    let mut roots: Vec<(String, Json)> = Vec::new();
+    for id in &ids {
+        let identifier = id.to_string();
+        let (Some(model), Some(editor)) = (
+            revision_model_schema(&identifier),
+            unrecomposed_revision_schema(&identifier, sources),
+        ) else {
+            continue;
+        };
+        let editor = annotated(editor.as_value());
+        let facts = Facts::of(model.as_value());
+        let family = id.family().to_owned();
+        rows.extend(flatten(&editor, &identifier, &facts));
+        roots.push((
+            identifier,
+            Json::Object(Object::from([
+                ("family".to_owned(), Json::from(family)),
+                ("closed".to_owned(), Json::Bool(closed(&editor))),
+            ])),
+        ));
+    }
+    // `metadata.schema` offers every revision of the family: changing it is
+    // how an object moves to another revision.
+    for row in &mut rows {
+        if row.path == "metadata.schema" {
+            let family = row.schema.split("::").next().unwrap_or_default();
+            let mut revisions: Vec<&crate::revisions::SchemaId> =
+                ids.iter().filter(|id| id.family() == family).collect();
+            revisions.sort_by_key(|id| revision_key(&id.to_string()));
+            let names: Vec<String> = revisions.iter().map(ToString::to_string).collect();
+            row.set("enum", strings(&names));
+            row.set("enum_docs", Json::Array(Vec::new()));
+            let constant = match names.as_slice() {
+                [one] => Json::from(one.clone()),
+                _ => Json::Null,
+            };
+            row.set("const", constant);
+        }
+    }
+    rows.sort_by(|a, b| (schema_key(&a.schema), &a.path).cmp(&(schema_key(&b.schema), &b.path)));
+    roots.sort_by_key(|(identifier, _)| schema_key(identifier));
+    let ref_leaves = REF_LEAVES
+        .iter()
+        .map(|(leaf, family)| ((*leaf).to_owned(), Json::from(*family)))
+        .collect::<Object>();
+    Json::Object(Object::from([
+        ("opentide".to_owned(), Json::from(version)),
+        ("generator".to_owned(), Json::from(GENERATOR)),
+        ("ref_leaves".to_owned(), Json::Object(ref_leaves)),
+        (
+            "schemas".to_owned(),
+            Json::Object(roots.into_iter().collect()),
+        ),
+        (
+            "fields".to_owned(),
+            Json::Array(rows.into_iter().map(|row| Json::Object(row.node)).collect()),
+        ),
+    ]))
+}
+
+/// The dotted paths of the fields of the revision `identifier` that the
+/// catalog marks `recommended`: the templates ask for them and validation
+/// does not require them (a rule's `configurations` and `response`). What
+/// `opentide lint`'s `recommended` check reports, so lint and the editor
+/// name the same fields (`lsp_catalog.recommended_fields`). Sorted; empty for
+/// an identifier that names no revision.
+///
+/// The fields are read from the model schema with the family's root keys
+/// added (`RootExtras`), which is where the editor schema's `required`
+/// differs from the model's; the vocabularies play no part.
+pub fn recommended_fields(identifier: &str) -> Vec<String> {
+    // A pure function of a revision's model, and an editor asks for it on
+    // every keystroke: made once for each identifier.
+    static KNOWN: std::sync::OnceLock<
+        std::sync::Mutex<std::collections::HashMap<String, Vec<String>>>,
+    > = std::sync::OnceLock::new();
+    let known = KNOWN.get_or_init(Default::default);
+    if let Ok(known) = known.lock()
+        && let Some(found) = known.get(identifier)
+    {
+        return found.clone();
+    }
+    let found = recommended_fields_of(identifier);
+    if let Ok(mut known) = known.lock() {
+        known.insert(identifier.to_owned(), found.clone());
+    }
+    found
+}
+
+fn recommended_fields_of(identifier: &str) -> Vec<String> {
+    use schemars::transform::Transform as _;
+    let Some(mut schema) = revision_model_schema(identifier) else {
+        return Vec::new();
+    };
+    let facts = Facts::of(schema.as_value());
+    let family = identifier.split("::").next().unwrap_or_default();
+    super::schema::RootExtras { family }.transform(&mut schema);
+    let mut found: Vec<String> = flatten(schema.as_value(), identifier, &facts)
+        .into_iter()
+        .filter(|row| matches!(row.node.get("recommended"), Some(Json::Bool(true))))
+        .map(|row| row.path)
+        .collect();
+    found.sort();
+    found
+}
+
+/// The editor schema as `generate schemas` writes it, hover texts included.
+fn annotated(schema: &Value) -> Value {
+    let mut json = Json::from(schema);
+    super::annotate::annotate_editor_schema(&mut json);
+    serde_json::to_value(&json).unwrap_or(Value::Null)
+}
+
+/// `family::1.0` sorts by family, then by its revision's numbers.
+fn schema_key(identifier: &str) -> (String, Vec<u64>) {
+    let (family, revision) = identifier.split_once("::").unwrap_or((identifier, ""));
+    (family.to_owned(), revision_key(revision))
+}
+
+fn revision_key(revision: &str) -> Vec<u64> {
+    let revision = revision.rsplit("::").next().unwrap_or(revision);
+    revision
+        .split('.')
+        .filter_map(|part| part.parse::<u64>().ok())
+        .collect()
+}
+
+fn strings(values: &[String]) -> Json {
+    Json::Array(values.iter().cloned().map(Json::from).collect())
+}
+
+/// Whether a schema object forbids keys it does not list.
+fn closed(node: &Value) -> bool {
+    node.get("additionalProperties") == Some(&Value::Bool(false))
+}
+
+/// Whether a schema flag (`tide.template.hide`, ...) is `true`.
+fn flag(value: &Value) -> bool {
+    value.as_bool() == Some(true)
+}
+
+// --- what the model says ------------------------------------------------------------------
+
+/// What the model schema says that the editor schema does not, by dotted
+/// path: whether validation requires a field, its `tide.template.*` flags
+/// and its string default.
+#[derive(Debug, Default)]
+struct Facts {
+    required: std::collections::HashMap<String, bool>,
+    multiline: std::collections::HashSet<String>,
+    hidden: std::collections::HashSet<String>,
+    defaults: std::collections::HashMap<String, String>,
+}
+
+impl Facts {
+    fn of(model: &Value) -> Self {
+        let mut facts = Self::default();
+        let mut seen = Vec::new();
+        facts.walk(model, model, "", &mut seen);
+        facts
+    }
+
+    fn walk(&mut self, root: &Value, node: &Value, path: &str, seen: &mut Vec<String>) {
+        let Some(object) = object_of(root, node) else {
+            return;
+        };
+        let Some(Value::Object(properties)) = object.get("properties") else {
+            return;
+        };
+        let required: Vec<&str> = object
+            .get("required")
+            .and_then(Value::as_array)
+            .map(|keys| keys.iter().filter_map(Value::as_str).collect())
+            .unwrap_or_default();
+        for (key, spec) in properties {
+            let child = join(path, key);
+            self.required
+                .insert(child.clone(), required.contains(&key.as_str()));
+            let merged = Spec::of(root, spec);
+            if merged.get(keys::TEMPLATE_MULTILINE).is_some_and(flag) {
+                self.multiline.insert(child.clone());
+            }
+            if merged.get(keys::TEMPLATE_HIDE).is_some_and(flag) {
+                self.hidden.insert(child.clone());
+            }
+            if let Some(Value::String(default)) = merged.get("default")
+                && !default.is_empty()
+            {
+                self.defaults.insert(child.clone(), default.clone());
+            }
+            // A recursive model is walked once along a path.
+            let target = definition_name(root, spec);
+            if let Some(name) = &target {
+                if seen.contains(name) {
+                    continue;
+                }
+                seen.push(name.clone());
+            }
+            // Only a field that holds one model, or a list of one model, is
+            // walked: a union's models (`int | ElasticRisk`) are not.
+            if let Some(model) = single_model(root, spec) {
+                self.walk(root, model, &child, seen);
+            } else if let Some(items) = array_items(root, spec)
+                && let Some(model) = single_model(root, items)
+            {
+                self.walk(root, model, &child, seen);
+            }
+            if target.is_some() {
+                seen.pop();
+            }
+        }
+    }
+}
+
+/// The one model a field holds, `null` aside: a `$ref`, or a union of one
+/// `$ref` and `null`, to a definition with properties.
+fn single_model<'s>(root: &'s Value, node: &'s Value) -> Option<&'s Value> {
+    let target = if node.get("$ref").is_some() {
+        deref(root, node)
+    } else if let Some(Value::Array(branches)) = node.get("anyOf") {
+        let mut models = branches
+            .iter()
+            .filter(|branch| branch.get("type").and_then(Value::as_str) != Some("null"));
+        let only = models.next()?;
+        if models.next().is_some() || only.get("$ref").is_none() {
+            return None;
+        }
+        deref(root, only)
+    } else {
+        node
+    };
+    has_properties(Some(target)).then_some(target)
+}
+
+fn join(path: &str, key: &str) -> String {
+    if path.is_empty() {
+        key.to_owned()
+    } else {
+        format!("{path}.{key}")
+    }
+}
+
+// --- the schema walk ----------------------------------------------------------------------
+
+/// A row of `fields.json`, keyed as the engine reads it.
+struct Row {
+    schema: String,
+    path: String,
+    node: Object,
+}
+
+impl Row {
+    fn set(&mut self, key: &str, value: Json) {
+        self.node.insert(key.to_owned(), value);
+    }
+}
+
+/// The definition a `$ref` names (`#/$defs/<name>`), followed through
+/// definitions that only refer to another.
+fn deref<'s>(root: &'s Value, node: &'s Value) -> &'s Value {
+    let mut current = node;
+    for _ in 0..16 {
+        let Some(reference) = current.get("$ref").and_then(Value::as_str) else {
+            return current;
+        };
+        match reference
+            .strip_prefix("#/$defs/")
+            .and_then(|name| root.get("$defs").and_then(|defs| defs.get(name)))
+        {
+            Some(target) => current = target,
+            None => return current,
+        }
+    }
+    current
+}
+
+fn definition_name(root: &Value, node: &Value) -> Option<String> {
+    let reference = node.get("$ref").and_then(Value::as_str).or_else(|| {
+        node.get("anyOf")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .find_map(|alt| alt.get("$ref").and_then(Value::as_str))
+    })?;
+    let _ = root;
+    reference.strip_prefix("#/$defs/").map(str::to_owned)
+}
+
+/// What reads a schema node's keywords: a node, or a node seen with its
+/// definition's ([`Spec`]).
+trait Keywords {
+    fn get(&self, key: &str) -> Option<&Value>;
+
+    fn contains_key(&self, key: &str) -> bool {
+        self.get(key).is_some()
+    }
+}
+
+impl Keywords for Map<String, Value> {
+    fn get(&self, key: &str) -> Option<&Value> {
+        Map::get(self, key)
+    }
+}
+
+/// `node` with the keywords of the definition it refers to: the node's own
+/// keywords win (a property's `description` beside its `$ref`), and the
+/// `$ref` itself is not one of them. A view of the two, read in place: a
+/// field's keywords are read many times (its enum, its type, its branches),
+/// and copying them each time, with the enum values and docs of a vocabulary
+/// field, was most of the catalog's build.
+#[derive(Clone, Copy, Default)]
+struct Spec<'a> {
+    own: Option<&'a Map<String, Value>>,
+    /// The definition `own` refers to, when it refers to one.
+    target: Option<&'a Map<String, Value>>,
+    /// Whether `own` holds a `$ref`, which neither side then shows.
+    refers: bool,
+}
+
+impl<'a> Spec<'a> {
+    fn of(root: &'a Value, node: &'a Value) -> Self {
+        let own = node.as_object();
+        let refers = own.is_some_and(|own| own.contains_key("$ref"));
+        let target = if refers {
+            deref(root, node).as_object()
+        } else {
+            None
+        };
+        Self {
+            own,
+            target,
+            refers,
+        }
+    }
+
+    fn get(&self, key: &str) -> Option<&'a Value> {
+        if self.refers && key == "$ref" {
+            return None;
+        }
+        self.own
+            .and_then(|own| own.get(key))
+            .or_else(|| self.target.and_then(|target| target.get(key)))
+    }
+}
+
+impl Keywords for Spec<'_> {
+    fn get(&self, key: &str) -> Option<&Value> {
+        Spec::get(self, key)
+    }
+}
+
+/// The object schema a field holds, through `$ref` and `anyOf` branches
+/// (unions of unions included); `None` for a field that holds no object with
+/// properties.
+fn object_of<'s>(root: &'s Value, node: &'s Value) -> Option<&'s Value> {
+    object_in(root, node, 0)
+}
+
+fn object_in<'s>(root: &'s Value, node: &'s Value, depth: usize) -> Option<&'s Value> {
+    if !node.is_object() || depth > 8 {
+        return None;
+    }
+    let target = if node.get("$ref").is_some() {
+        deref(root, node)
+    } else {
+        node
+    };
+    if has_properties(Some(target)) {
+        return Some(target);
+    }
+    target
+        .get("anyOf")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .find_map(|alt| object_in(root, alt, depth + 1))
+}
+
+/// Whether `spec` holds an object with properties: what [`object_of`] finds
+/// of the node `spec` reads, its `$ref` already followed.
+fn holds_object<'a>(root: &'a Value, spec: &Spec<'a>) -> bool {
+    has_properties_in(spec.get("properties"))
+        || spec
+            .get("anyOf")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .any(|alt| object_in(root, alt, 1).is_some())
+}
+
+fn has_properties_in(properties: Option<&Value>) -> bool {
+    properties
+        .and_then(Value::as_object)
+        .is_some_and(|map| !map.is_empty())
+}
+
+fn has_properties(node: Option<&Value>) -> bool {
+    node.and_then(|node| node.get("properties"))
+        .and_then(Value::as_object)
+        .is_some_and(|map| !map.is_empty())
+}
+
+/// The JSON Schema types a node names: `"string"`, or `["string", "null"]`.
+fn types(node: &impl Keywords) -> Vec<&str> {
+    match node.get("type") {
+        Some(Value::String(kind)) => vec![kind.as_str()],
+        Some(Value::Array(kinds)) => kinds.iter().filter_map(Value::as_str).collect(),
+        _ => Vec::new(),
+    }
+}
+
+fn is_type(node: &impl Keywords, kind: &str) -> bool {
+    types(node).contains(&kind)
+}
+
+/// The non-null alternatives of a node: its `anyOf` branches, each with the
+/// keywords of the definition it refers to, and a branch that is itself a
+/// union (`RiskChoice`, `int | ElasticRisk`) as its own branches.
+fn alternatives<'a>(root: &'a Value, node: &Spec<'a>) -> Vec<Spec<'a>> {
+    let mut found = Vec::new();
+    collect_alternatives(root, node, &mut found, 0);
+    found
+}
+
+fn collect_alternatives<'a>(
+    root: &'a Value,
+    node: &Spec<'a>,
+    found: &mut Vec<Spec<'a>>,
+    depth: usize,
+) {
+    for alt in node
+        .get("anyOf")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+    {
+        let alt = Spec::of(root, alt);
+        if types(&alt) == ["null"] {
+            continue;
+        }
+        if depth < 8 && is_union(&alt) {
+            collect_alternatives(root, &alt, found, depth + 1);
+        } else {
+            found.push(alt);
+        }
+    }
+}
+
+/// A schema that is only a union of others: `anyOf`, no type, no properties.
+fn is_union(node: &Spec<'_>) -> bool {
+    node.contains_key("anyOf") && !node.contains_key("type") && !node.contains_key("properties")
+}
+
+/// An array field's `items`, through the definition it refers to and its
+/// `anyOf` branches.
+fn array_items<'s>(root: &'s Value, node: &'s Value) -> Option<&'s Value> {
+    let node = if node.get("$ref").is_some() {
+        deref(root, node)
+    } else {
+        node
+    };
+    let map = node.as_object()?;
+    if is_type(map, "array") {
+        return map.get("items").filter(|items| items.is_object());
+    }
+    for alt in node
+        .get("anyOf")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+    {
+        let alt = deref(root, alt);
+        if alt.as_object().is_some_and(|map| is_type(map, "array")) {
+            return alt.get("items").filter(|items| items.is_object());
+        }
+    }
+    None
+}
+
+fn flatten(schema: &Value, identifier: &str, facts: &Facts) -> Vec<Row> {
+    let mut rows = Vec::new();
+    let mut seen = Vec::new();
+    walk(schema, schema, "", identifier, facts, &mut rows, &mut seen);
+    rows
+}
+
+fn walk(
+    root: &Value,
+    node: &Value,
+    path: &str,
+    identifier: &str,
+    facts: &Facts,
+    rows: &mut Vec<Row>,
+    seen: &mut Vec<String>,
+) {
+    let object = if path.is_empty() {
+        Some(node)
+    } else {
+        object_of(root, node)
+    };
+    let Some(object) = object else {
+        return;
+    };
+    let Some(Value::Object(properties)) = object.get("properties") else {
+        return;
+    };
+    let required: Vec<&str> = object
+        .get("required")
+        .and_then(Value::as_array)
+        .map(|keys| keys.iter().filter_map(Value::as_str).collect())
+        .unwrap_or_default();
+    for (key, spec) in properties {
+        if !spec.is_object() {
+            continue;
+        }
+        let child = join(path, key);
+        let listed = required.contains(&key.as_str());
+        let is_required = facts.required.get(&child).copied().unwrap_or(listed);
+        let mut row = field_row(root, identifier, &child, key, spec, is_required, facts);
+        if listed && !is_required {
+            // Templates ask for it, validation does not require it.
+            row.set("recommended", Json::Bool(true));
+        }
+        let index = rows.len();
+        rows.push(row);
+        let target = definition_name(root, spec);
+        if let Some(name) = &target {
+            if seen.contains(name) {
+                continue;
+            }
+            seen.push(name.clone());
+        }
+        let nested = object_of(root, spec);
+        if has_properties(nested) {
+            if nested.is_some_and(closed) {
+                rows[index].set("closed", Json::Bool(true));
+            }
+            walk(root, spec, &child, identifier, facts, rows, seen);
+        }
+        if let Some(items) = array_items(root, spec) {
+            let nested = object_of(root, items);
+            if has_properties(nested) {
+                if nested.is_some_and(closed) {
+                    rows[index].set("closed", Json::Bool(true));
+                }
+                walk(root, items, &child, identifier, facts, rows, seen);
+            }
+        }
+        if target.is_some() {
+            seen.pop();
+        }
+    }
+}
+
+fn field_row(
+    root: &Value,
+    identifier: &str,
+    path: &str,
+    name: &str,
+    raw: &Value,
+    required: bool,
+    facts: &Facts,
+) -> Row {
+    let spec = Spec::of(root, raw);
+    // `clean_enum` drops an empty value, so an enum of `""` alone is empty.
+    let (mut values, mut docs, is_array) = enum_of(root, &spec);
+    let vocab = vocab_of(&spec, name);
+    if !vocab.is_empty() {
+        drop_search_hints(&mut values, &mut docs);
+    }
+    let mut docs: Vec<String> = if values.len() > ENUM_DOC_MAX {
+        Vec::new()
+    } else {
+        docs.iter().map(|doc| cap_doc(doc)).collect()
+    };
+    let kind = type_name(root, &spec, is_array);
+    let constant = const_of(root, &spec);
+    let reference = if kind == "string" || kind == "array" {
+        REF_LEAVES
+            .iter()
+            .find(|(leaf, _)| *leaf == name)
+            .map(|(_, family)| *family)
+    } else {
+        None
+    };
+    if reference.is_some() {
+        // A reference is checked, and completed, against the live index of
+        // the workspace's objects, never against a snapshot of their UUIDs.
+        values.clear();
+        docs.clear();
+    }
+    // An empty constant offers no value.
+    if let Some(constant) = &constant
+        && !constant.is_empty()
+        && values.is_empty()
+    {
+        values = vec![constant.clone()];
+        docs = vec![String::new()];
+    }
+    let mut default = facts.defaults.get(path).cloned();
+    if default
+        .as_ref()
+        .is_some_and(|default| !values.is_empty() && !values.contains(default))
+    {
+        // A model default can sit outside the schema enum.
+        default = None;
+    }
+    let title = raw
+        .get("title")
+        .and_then(Value::as_str)
+        .filter(|title| !title.is_empty())
+        .map_or_else(|| default_title(name), str::to_owned);
+    let description = raw
+        .get("description")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_owned();
+    docs.truncate(values.len());
+    docs.resize(values.len(), String::new());
+    let mut node = Object::new();
+    node.insert("schema".into(), Json::from(identifier));
+    node.insert("path".into(), Json::from(path));
+    node.insert("name".into(), Json::from(name));
+    node.insert("title".into(), Json::from(title));
+    node.insert("description".into(), Json::from(description));
+    node.insert("type".into(), Json::from(kind.clone()));
+    node.insert("required".into(), Json::Bool(required));
+    node.insert(
+        "markdown".into(),
+        Json::Bool(facts.multiline.contains(path)),
+    );
+    node.insert("hidden".into(), Json::Bool(facts.hidden.contains(path)));
+    // Every key takes one capture, so nesting never recolours a key.
+    node.insert("capture".into(), Json::from("tide.property"));
+    node.insert("enum".into(), strings(&values));
+    let docs = if docs.iter().any(|doc| !doc.is_empty()) {
+        docs
+    } else {
+        Vec::new()
+    };
+    node.insert("enum_docs".into(), strings(&docs));
+    if !vocab.is_empty() && !values.is_empty() {
+        node.insert("vocab".into(), strings(&vocab.references));
+        node.insert("vocab_scoped".into(), Json::Bool(vocab.scoped));
+    }
+    node.insert("ref".into(), reference.map_or(Json::Null, Json::from));
+    node.insert("const".into(), constant.map_or(Json::Null, Json::from));
+    node.insert("array".into(), Json::Bool(is_array || kind == "array"));
+    if let Some(default) = default {
+        node.insert("default".into(), Json::from(default));
+    }
+    if let Some(min_items) = min_items(root, &spec) {
+        node.insert("min_items".into(), Json::from(min_items));
+    }
+    Row {
+        schema: identifier.to_owned(),
+        path: path.to_owned(),
+        node,
+    }
+}
+
+/// A field's title where its schema gives none: its name, words split at
+/// `_`, each capitalised (`mitre_attack` is `Mitre Attack`), as the models'
+/// titles have always been written.
+fn default_title(name: &str) -> String {
+    name.split('_')
+        .map(|word| {
+            let mut chars = word.chars();
+            chars.next().map_or_else(String::new, |first| {
+                first
+                    .to_uppercase()
+                    .chain(chars.flat_map(char::to_lowercase))
+                    .collect()
+            })
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn min_items<'a>(root: &'a Value, spec: &Spec<'a>) -> Option<u64> {
+    if let Some(count) = spec.get("minItems").and_then(Value::as_u64) {
+        return Some(count);
+    }
+    alternatives(root, spec)
+        .iter()
+        .find_map(|alt| alt.get("minItems").and_then(Value::as_u64))
+}
+
+/// The vocabularies a field's values come from: the references it names
+/// (`tide.vocab`: `true` for the vocabulary named after the field, a
+/// reference, or a list of them), and whether its values carry their stage.
+#[derive(Debug, Default)]
+struct VocabOf {
+    references: Vec<String>,
+    scoped: bool,
+}
+
+impl VocabOf {
+    fn is_empty(&self) -> bool {
+        self.references.is_empty()
+    }
+}
+
+fn vocab_of(spec: &impl Keywords, name: &str) -> VocabOf {
+    let references = match spec.get(keys::VOCAB) {
+        Some(Value::Bool(true)) => vec![name.to_owned()],
+        Some(Value::String(reference)) => vec![reference.clone()],
+        Some(Value::Array(references)) => references
+            .iter()
+            .filter_map(Value::as_str)
+            .map(str::to_owned)
+            .collect(),
+        _ => Vec::new(),
+    };
+    let scoped = spec.get(keys::VOCAB_SCOPED).and_then(Value::as_bool) == Some(true);
+    VocabOf { references, scoped }
+}
+
+/// `values` without the search hints a model vocabulary adds for editors
+/// that know only the schema (`T1548 #Abuse Elevation Control Mechanism`,
+/// after `T1548`), and `docs` without theirs: the catalog's reader offers
+/// each value once and finds it by its name from the vocabulary.
+fn drop_search_hints(values: &mut Vec<String>, docs: &mut Vec<String>) {
+    // Borrowed, not copied: a vocabulary field's values are the vocabulary's.
+    let keep: Vec<bool> = {
+        let plain: std::collections::HashSet<&str> = values
+            .iter()
+            .map(String::as_str)
+            .filter(|value| !value.contains(" #"))
+            .collect();
+        values
+            .iter()
+            .map(|value| {
+                !value
+                    .split_once(" #")
+                    .is_some_and(|(value, _)| plain.contains(value))
+            })
+            .collect()
+    };
+    if keep.iter().all(|kept| *kept) {
+        return;
+    }
+    let mut at = 0;
+    values.retain(|_| {
+        at += 1;
+        keep[at - 1]
+    });
+    if docs.len() == keep.len() {
+        let mut at = 0;
+        docs.retain(|_| {
+            at += 1;
+            keep[at - 1]
+        });
+    } else {
+        // Docs that do not pair with the values cannot be kept beside them.
+        docs.clear();
+    }
+}
+
+/// A field's enum values and their docs, and whether it is an array.
+fn enum_of<'a>(root: &'a Value, spec: &Spec<'a>) -> (Vec<String>, Vec<String>, bool) {
+    if is_type(spec, "array") {
+        return array_enum(root, spec);
+    }
+    // An enum beside `anyOf` applies only when the value can be one of
+    // those strings.
+    if let Some(Value::Array(values)) = spec.get("enum")
+        && scalar_enum_applies(root, spec)
+    {
+        let (values, docs) = clean_enum(values, enum_docs(spec));
+        return (values, docs, false);
+    }
+    for alt in alternatives(root, spec) {
+        if is_type(&alt, "array") {
+            return array_enum(root, &alt);
+        }
+        if let Some(Value::Array(values)) = alt.get("enum") {
+            let (values, docs) = clean_enum(values, enum_docs(&alt));
+            return (values, docs, false);
+        }
+    }
+    (Vec::new(), Vec::new(), is_type(spec, "array"))
+}
+
+fn enum_docs<'a>(spec: &Spec<'a>) -> &'a [Value] {
+    spec.get("markdownEnumDescriptions")
+        .and_then(Value::as_array)
+        .map_or(&[], Vec::as_slice)
+}
+
+fn items_of<'a>(root: &'a Value, spec: &Spec<'a>) -> Spec<'a> {
+    spec.get("items")
+        .filter(|items| items.is_object())
+        .map(|items| Spec::of(root, items))
+        .unwrap_or_default()
+}
+
+fn array_enum<'a>(root: &'a Value, spec: &Spec<'a>) -> (Vec<String>, Vec<String>, bool) {
+    let items = items_of(root, spec);
+    if let Some(Value::Array(values)) = items.get("enum") {
+        let (values, docs) = clean_enum(values, enum_docs(&items));
+        return (values, docs, true);
+    }
+    (Vec::new(), Vec::new(), true)
+}
+
+fn scalar_enum_applies<'a>(root: &'a Value, spec: &Spec<'a>) -> bool {
+    let kinds: Vec<&str> = types(spec)
+        .into_iter()
+        .filter(|kind| *kind != "null")
+        .collect();
+    if kinds
+        .iter()
+        .any(|kind| matches!(*kind, "array" | "object" | "integer" | "number" | "boolean"))
+    {
+        return false;
+    }
+    let alternatives = alternatives(root, spec);
+    if alternatives.is_empty() {
+        return kinds.is_empty() || kinds == ["string"];
+    }
+    if alternatives.iter().any(|alt| is_object_array(root, alt)) {
+        return false;
+    }
+    alternatives.iter().any(|alt| holds_string(root, alt))
+}
+
+fn is_object_array<'a>(root: &'a Value, alt: &Spec<'a>) -> bool {
+    if !is_type(alt, "array") {
+        return false;
+    }
+    let items = items_of(root, alt);
+    is_type(&items, "object")
+        || items.contains_key("properties")
+        || items.contains_key("additionalProperties")
+}
+
+fn holds_string<'a>(root: &'a Value, alt: &Spec<'a>) -> bool {
+    if is_type(alt, "string") {
+        return true;
+    }
+    if !is_type(alt, "array") {
+        return false;
+    }
+    let items = items_of(root, alt);
+    (types(&items).is_empty() || is_type(&items, "string")) && !items.contains_key("properties")
+}
+
+/// An enum value as YAML writes it; `None` for an empty or null value.
+fn yaml_scalar(value: &Value) -> Option<String> {
+    match value {
+        Value::Bool(true) => Some("true".into()),
+        Value::Bool(false) => Some("false".into()),
+        Value::Null => None,
+        Value::String(text) if text.is_empty() => None,
+        Value::String(text) => Some(text.clone()),
+        other => Some(other.to_string()),
+    }
+}
+
+fn clean_enum(values: &[Value], docs: &[Value]) -> (Vec<String>, Vec<String>) {
+    // A nullable field's enum ends in `null`, which has no doc of its own.
+    let non_null = values.iter().filter(|value| !value.is_null()).count();
+    let every_value = docs.len() == values.len();
+    let paired = every_value || docs.len() == non_null;
+    let mut docs = docs.iter();
+    let mut cleaned = Vec::new();
+    let mut paired_docs: Vec<Option<&str>> = Vec::new();
+    for value in values {
+        let doc = if paired && (every_value || !value.is_null()) {
+            docs.next()
+        } else {
+            None
+        };
+        let Some(rendered) = yaml_scalar(value) else {
+            continue;
+        };
+        cleaned.push(rendered);
+        paired_docs.push(doc.and_then(Value::as_str));
+    }
+    // A field with more values than that keeps none of their docs
+    // ([`field_row`]): each is a vocabulary entry's whole description, and
+    // shortening the hundreds of an ATT&CK field's for every field and
+    // revision that offers them was a quarter of the catalog's build.
+    if cleaned.len() > ENUM_DOC_MAX {
+        return (cleaned, Vec::new());
+    }
+    let short = paired_docs
+        .into_iter()
+        .map(|doc| doc.map(short_doc).unwrap_or_default())
+        .collect();
+    (cleaned, short)
+}
+
+/// The part of a dropdown's Markdown after its last `---`, on one line,
+/// capped ([`cap_doc`]). Only the words the cap keeps are joined: the part
+/// is a vocabulary entry's whole description, often thousands of characters,
+/// and the catalog offers each one in many fields (#806).
+fn short_doc(markdown: &str) -> String {
+    let text = markdown.trim();
+    let text = text.rsplit("---").next().unwrap_or(text).trim();
+    let mut line = String::new();
+    let mut chars = 0;
+    for word in text.split_whitespace() {
+        if !line.is_empty() {
+            line.push(' ');
+            chars += 1;
+        }
+        line.push_str(word);
+        chars += word.chars().count();
+        // Past the cap, the first DOC_CAP - 1 characters are all cap_doc keeps.
+        if chars > DOC_CAP {
+            break;
+        }
+    }
+    cap_doc(&line)
+}
+
+fn cap_doc(text: &str) -> String {
+    if text.chars().count() <= DOC_CAP {
+        return text.to_owned();
+    }
+    let kept: String = text.chars().take(DOC_CAP - 1).collect();
+    format!("{}…", kept.trim_end())
+}
+
+fn const_of<'a>(root: &'a Value, spec: &Spec<'a>) -> Option<String> {
+    if let Some(Value::String(constant)) = spec.get("const") {
+        return Some(constant.clone());
+    }
+    alternatives(root, spec)
+        .iter()
+        .find_map(|alt| alt.get("const").and_then(Value::as_str).map(str::to_owned))
+}
+
+fn type_name<'a>(root: &'a Value, spec: &Spec<'a>, is_array: bool) -> String {
+    let alternatives = alternatives(root, spec);
+    if is_array || is_type(spec, "array") || alternatives.iter().any(|alt| is_type(alt, "array")) {
+        return "array".into();
+    }
+    if holds_object(root, spec)
+        || alternatives
+            .iter()
+            .any(|alt| alt.contains_key("properties"))
+    {
+        return "object".into();
+    }
+    if let Some(kind) = types(spec).into_iter().find(|kind| *kind != "null") {
+        return kind.to_owned();
+    }
+    for alt in &alternatives {
+        if let Some(kind) = types(alt).into_iter().find(|kind| *kind != "null") {
+            return kind.to_owned();
+        }
+    }
+    if spec.get("format").and_then(Value::as_str) == Some("date") {
+        "string".into()
+    } else {
+        "any".into()
+    }
+}
+
+#[cfg(test)]
+mod tests;

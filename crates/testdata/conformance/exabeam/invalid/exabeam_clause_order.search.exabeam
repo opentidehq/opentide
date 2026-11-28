@@ -1,0 +1,1 @@
+SELECT user GROUP-BY user WHERE activity_type:"app-login"

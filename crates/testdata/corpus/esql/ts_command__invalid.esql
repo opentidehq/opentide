@@ -1,0 +1,3 @@
+// prod:ts_command invalid
+TS
+| LIMIT 1

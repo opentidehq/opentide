@@ -1,0 +1,2 @@
+# Seeds are bytes: CRLF, a BOM and invalid UTF-8 cases stay as they are.
+* -text

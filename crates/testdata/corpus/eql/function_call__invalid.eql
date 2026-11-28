@@ -1,0 +1,2 @@
+// prod:function_call invalid
+process where add~(1, 2) == 3

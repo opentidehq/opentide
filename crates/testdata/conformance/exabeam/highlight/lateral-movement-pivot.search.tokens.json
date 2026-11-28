@@ -1,0 +1,306 @@
+[
+  {
+    "text": "activity_type",
+    "range": [
+      0,
+      13
+    ],
+    "capture": "property"
+  },
+  {
+    "text": ":",
+    "range": [
+      13,
+      14
+    ],
+    "capture": "operator"
+  },
+  {
+    "text": "\"app-login\"",
+    "range": [
+      14,
+      25
+    ],
+    "capture": "string"
+  },
+  {
+    "text": "AND",
+    "range": [
+      26,
+      29
+    ],
+    "capture": "keyword"
+  },
+  {
+    "text": "outcome",
+    "range": [
+      30,
+      37
+    ],
+    "capture": "property"
+  },
+  {
+    "text": ":",
+    "range": [
+      37,
+      38
+    ],
+    "capture": "operator"
+  },
+  {
+    "text": "\"success\"",
+    "range": [
+      38,
+      47
+    ],
+    "capture": "string"
+  },
+  {
+    "text": "AND",
+    "range": [
+      48,
+      51
+    ],
+    "capture": "keyword"
+  },
+  {
+    "text": "user",
+    "range": [
+      52,
+      56
+    ],
+    "capture": "property"
+  },
+  {
+    "text": "IN",
+    "range": [
+      57,
+      59
+    ],
+    "capture": "keyword"
+  },
+  {
+    "text": "\"Privileged Accounts\"",
+    "range": [
+      60,
+      81
+    ],
+    "capture": "type"
+  },
+  {
+    "text": "|",
+    "range": [
+      82,
+      83
+    ],
+    "capture": "operator.pipe"
+  },
+  {
+    "text": "FOREACH",
+    "range": [
+      84,
+      91
+    ],
+    "capture": "keyword"
+  },
+  {
+    "text": "dest_host",
+    "range": [
+      92,
+      101
+    ],
+    "capture": "property"
+  },
+  {
+    "text": "[",
+    "range": [
+      102,
+      103
+    ],
+    "capture": "punctuation.bracket"
+  },
+  {
+    "text": "SELECT",
+    "range": [
+      104,
+      110
+    ],
+    "capture": "keyword"
+  },
+  {
+    "text": "src_host",
+    "range": [
+      111,
+      119
+    ],
+    "capture": "property"
+  },
+  {
+    "text": "WHERE",
+    "range": [
+      120,
+      125
+    ],
+    "capture": "keyword"
+  },
+  {
+    "text": "src_host",
+    "range": [
+      126,
+      134
+    ],
+    "capture": "property"
+  },
+  {
+    "text": ":",
+    "range": [
+      134,
+      135
+    ],
+    "capture": "operator"
+  },
+  {
+    "text": "@dest_host",
+    "range": [
+      136,
+      146
+    ],
+    "capture": "variable"
+  },
+  {
+    "text": "AND",
+    "range": [
+      147,
+      150
+    ],
+    "capture": "keyword"
+  },
+  {
+    "text": "activity_type",
+    "range": [
+      151,
+      164
+    ],
+    "capture": "property"
+  },
+  {
+    "text": ":",
+    "range": [
+      164,
+      165
+    ],
+    "capture": "operator"
+  },
+  {
+    "text": "\"network-session\"",
+    "range": [
+      165,
+      182
+    ],
+    "capture": "string"
+  },
+  {
+    "text": "]",
+    "range": [
+      183,
+      184
+    ],
+    "capture": "punctuation.bracket"
+  },
+  {
+    "text": "|",
+    "range": [
+      185,
+      186
+    ],
+    "capture": "operator.pipe"
+  },
+  {
+    "text": "SELECT",
+    "range": [
+      187,
+      193
+    ],
+    "capture": "keyword"
+  },
+  {
+    "text": "src_host",
+    "range": [
+      194,
+      202
+    ],
+    "capture": "property"
+  },
+  {
+    "text": ",",
+    "range": [
+      202,
+      203
+    ],
+    "capture": "punctuation.delimiter"
+  },
+  {
+    "text": "COUNT",
+    "range": [
+      204,
+      209
+    ],
+    "capture": "function.builtin"
+  },
+  {
+    "text": "(",
+    "range": [
+      209,
+      210
+    ],
+    "capture": "punctuation.bracket"
+  },
+  {
+    "text": "src_host",
+    "range": [
+      210,
+      218
+    ],
+    "capture": "property"
+  },
+  {
+    "text": ")",
+    "range": [
+      218,
+      219
+    ],
+    "capture": "punctuation.bracket"
+  },
+  {
+    "text": "AS",
+    "range": [
+      220,
+      222
+    ],
+    "capture": "keyword"
+  },
+  {
+    "text": "connections",
+    "range": [
+      223,
+      234
+    ],
+    "capture": "variable"
+  },
+  {
+    "text": "GROUP-BY",
+    "range": [
+      235,
+      243
+    ],
+    "capture": "keyword"
+  },
+  {
+    "text": "src_host",
+    "range": [
+      244,
+      252
+    ],
+    "capture": "property"
+  }
+]

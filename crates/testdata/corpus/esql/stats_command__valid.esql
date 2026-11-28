@@ -1,0 +1,3 @@
+// prod:stats_command valid
+FROM logs-*
+| STATS c = COUNT(*), u = COUNT_DISTINCT(user.name) WHERE event.outcome == "failure" BY host.name, b = BUCKET(@timestamp, 1 hour)

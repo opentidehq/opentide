@@ -1,0 +1,12 @@
+// prod:stage valid
+stage daily {
+  metadata.event_type = "NETWORK_CONNECTION"
+  $host = principal.hostname
+  match:
+    $host by day
+  outcome:
+    $bytes = sum(network.sent_bytes)
+}
+$host = $daily.host
+match:
+  $host

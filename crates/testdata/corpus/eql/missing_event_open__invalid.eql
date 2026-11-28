@@ -1,0 +1,2 @@
+// prod:missing_event_open invalid
+process where true and ![file where true]

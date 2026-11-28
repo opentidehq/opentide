@@ -1,0 +1,1 @@
+any where outcome.reason:"FastPass declined phishing attempt" and outcome.result:"FAILURE" and eventType:"user.authentication.auth_via_mfa"

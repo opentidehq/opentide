@@ -1,0 +1,69 @@
+---
+source: crates/opentide-cli/tests/common/snapshot.rs
+description: validate.query/json/vscode/default
+---
+args: opentide --json validate query
+exit: 0
+
+━━━ stdout · json, 1 lines
+{
+  "command": "validate query",
+  "diagnostics": [],
+  "duration_ms": 0,
+  "engine": {
+    "engine": "1.1.0"
+  },
+  "exit_code": 0,
+  "failure": null,
+  "message": "2 queries valid",
+  "mode": "offline",
+  "next_actions": [],
+  "ok": true,
+  "platform": null,
+  "platforms": [
+    "sentinel"
+  ],
+  "queries": [
+    {
+      "column": 7,
+      "errors": 0,
+      "field_path": [
+        "configurations",
+        "sentinel",
+        "query"
+      ],
+      "language": "kql",
+      "line": 10,
+      "path": "detections/rules/custom-folder-rule.yaml",
+      "platform": "sentinel"
+    },
+    {
+      "column": 7,
+      "errors": 0,
+      "field_path": [
+        "configurations",
+        "sentinel",
+        "query"
+      ],
+      "language": "kql",
+      "line": 10,
+      "path": "detections/rules/misspelled-tlp.yaml",
+      "platform": "sentinel"
+    }
+  ],
+  "queries_validated": 2,
+  "schema_version": 1,
+  "status": "passed",
+  "summary": {
+    "error_files": 0,
+    "errors": 0,
+    "files": 2,
+    "notes": 0,
+    "queries": 2,
+    "warning_files": 0,
+    "warnings": 0
+  },
+  "supported": true
+}
+
+━━━ stderr · empty

@@ -1,0 +1,13 @@
+[platform]
+enabled = true
+name = "Crowdstrike Falcon Correlation Rules"
+
+[[tenants]]
+name = "lab"
+strategies = ["PREVIEW", "RELEASE"]
+[tenants.setup]
+ssl = true
+api = "EU-1"
+customer_id = "00000000000000000000000000000c1d"
+client_id = "golden-client-id"
+client_secret = "$CROWDSTRIKE_CLIENT_SECRET"

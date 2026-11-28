@@ -1,0 +1,3 @@
+// prod:join_command invalid
+FROM logs-* METADATA _id
+| LOOKUP JOIN ON source.ip
