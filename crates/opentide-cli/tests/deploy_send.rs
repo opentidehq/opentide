@@ -2851,8 +2851,9 @@ fn dry_run_requests(ws: &Path, platform: &str) -> Vec<(String, Option<String>)> 
 /// tenants, not a placeholder): the exclusions that apply everywhere, the one
 /// scoped to that tenant, their `let` statements, the non-ASCII text of the
 /// query, and an exclusion scoped to a tenant the run does not reach, left
-/// out of both. The dry run shows the first tenant's body and names it, so
-/// each tenant of the run is put first in turn.
+/// out of both; and the `[[modifiers]]` scoped to that tenant, which the dry
+/// run ignored before. The dry run shows the first tenant's body and
+/// names it, so each tenant of the run is put first in turn.
 #[test]
 fn a_sentinel_deploy_sends_the_body_its_dry_run_shows() {
     let block = format!(
@@ -2884,9 +2885,13 @@ fn a_sentinel_deploy_sends_the_body_its_dry_run_shows() {
             .path()
             .join(".opentide/configurations/platforms/sentinel.toml");
         let mut toml = std::fs::read_to_string(&config).unwrap();
+        // A modifier scoped to `soc` alone: in `soc`'s body, not `lab`'s.
         toml.push_str(&format!(
             "\n[[tenants]]\nname = \"{second}\"\nstrategies = [\"PREVIEW\", \
-             \"RELEASE\"]\n[tenants.setup]\n{SENTINEL_SETUP}"
+             \"RELEASE\"]\n[tenants.setup]\n{SENTINEL_SETUP}\n[[modifiers]]\nname = \"soc \
+             every two hours\"\n[modifiers.conditions]\ntenants = [\"soc\"]\n\
+             [modifiers.modifications]\n\"scheduling.frequency\" = \"PT2H\"\n\
+             \"scheduling.lookback\" = \"PT2H\"\n"
         ));
         std::fs::write(&config, toml).unwrap();
         let shown = dry_run_requests(ws.path(), "sentinel");
@@ -2920,6 +2925,11 @@ fn a_sentinel_deploy_sends_the_body_its_dry_run_shows() {
             "{body}"
         );
         assert!(other.contains(foreign) && !other.contains(own), "{other}");
+        let soc = if first == "soc" { &body } else { &other };
+        let lab = if first == "soc" { &other } else { &body };
+        let every_two_hours = "\"queryFrequency\":\"PT02H00M00S\"";
+        assert!(soc.contains(every_two_hours), "{soc}");
+        assert!(!lab.contains(every_two_hours), "{lab}");
         assert_eq!(shown, vec![(body, Some(first.to_owned()))]);
     }
 }
