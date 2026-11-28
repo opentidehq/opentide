@@ -203,17 +203,25 @@ impl Sender<'_, '_> {
         rule: &opentide_compile::Rule,
         deletion: bool,
     ) -> Result<DeployRequest, Raised> {
+        use opentide_compile::compiler::{Compiler, Splunk, SplunkTarget};
         let compile_error = |error: opentide_compile::rule::CompileError| {
             Raised::new(format!("Rule {} ({}): {error}", rule.uuid, rule.name))
         };
-        let splunk_cx = self.compile;
         // A schedule drawn at random takes its minute and hour from the
         // rule's UUID: the same on every deploy, so a rule redeployed as it
         // is stays unchanged on the tenant (#1711), and rules still spread
         // over the day.
         let clock = opentide_compile::splunk::Clock::for_rule(&rule.uuid, self.cx.now);
-        let writes = opentide_compile::splunk::compile(splunk_cx, rule, &batch.table, Some(clock))
-            .map_err(compile_error)?;
+        // The writes the dry run shows; the settings sent are their updates.
+        let compiled = Splunk::compile(
+            self.compile,
+            rule,
+            SplunkTarget {
+                tenant: &batch.table,
+                clock: Some(clock),
+            },
+        )
+        .map_err(compile_error)?;
         let mut name = rule.name.trim().to_owned();
         let correlation = match rule
             .block(platform)
@@ -225,14 +233,6 @@ impl Sender<'_, '_> {
         };
         if correlation {
             name.push_str(" - Rule");
-        }
-        let mut settings = opentide_compile::json::Object::new();
-        for write in writes.iter().skip(1) {
-            if let CJson::Object(members) = &write.body {
-                for (key, value) in members {
-                    settings.insert(key.clone(), value.clone());
-                }
-            }
         }
         Ok(DeployRequest::new(
             name,
@@ -251,7 +251,7 @@ impl Sender<'_, '_> {
                 );
                 CJson::Object(named).to_compact().into_bytes()
             } else {
-                CJson::Object(settings).to_compact().into_bytes()
+                Splunk::body(&compiled).to_compact().into_bytes()
             },
         ))
     }
