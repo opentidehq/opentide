@@ -1721,6 +1721,33 @@ impl Doctor<'_> {
                 .is_some_and(|items| items.iter().any(|item| item == EXTENSION_ID))
     }
 
+    /// The server of Claude Desktop's configuration that runs `opentide mcp
+    /// start` for this workspace (its `env.OPENTIDE_REPO_ROOT`). The file is
+    /// the user's, not the repository's: a server for another workspace is
+    /// none of this one's.
+    fn claude_desktop_server(&self) -> Option<serde_json::Map<String, JsonValue>> {
+        use crate::commands::setup::desktop::{Os, config_path, home};
+        let os = Os::current();
+        let path = config_path(os, self.cx.env, home(os, self.cx.env).as_deref())?;
+        let data = read_jsonc(&path)?;
+        let here = crate::commands::setup::real(&self.cwd.join(&self.workspace));
+        let JsonValue::Object(servers) = data.get("mcpServers")? else {
+            return None;
+        };
+        servers.values().find_map(|server| {
+            let JsonValue::Object(server) = server else {
+                return None;
+            };
+            let root = server
+                .get("env")
+                .and_then(|env| env.get("OPENTIDE_REPO_ROOT"))
+                .and_then(JsonValue::as_str)
+                .filter(|root| Path::new(root).is_absolute())?;
+            (runs_mcp_start(server) && crate::commands::setup::real(Path::new(root)) == here)
+                .then(|| server.clone())
+        })
+    }
+
     fn mcp(&self) -> Check {
         let mut hosts: Vec<&str> = Vec::new();
         let mut without: Vec<&str> = Vec::new();
@@ -1744,7 +1771,18 @@ impl Doctor<'_> {
                 commands.push(command);
             }
         }
-        let setup = "opentide setup mcp --vscode (or --cursor, --claude-code, --generic)";
+        if let Some(server) = self.claude_desktop_server() {
+            hosts.push(crate::commands::setup::desktop::LABEL);
+            let command = match server.get("command") {
+                Some(JsonValue::String(text)) => text.clone(),
+                _ => String::new(),
+            };
+            if !commands.contains(&command) {
+                commands.push(command);
+            }
+        }
+        let setup =
+            "opentide setup mcp --vscode (or --cursor, --claude-code, --claude-desktop, --generic)";
         let extension = self.recommends_extension();
         if hosts.is_empty() && extension {
             return Check::new(
@@ -1894,16 +1932,22 @@ fn opentide_server(data: &JsonValue) -> Option<serde_json::Map<String, JsonValue
             let JsonValue::Object(server) = server else {
                 continue;
             };
-            if let Some(JsonValue::Array(args)) = server.get("args")
-                && args.len() >= 2
-                && args[args.len() - 2] == "mcp"
-                && args[args.len() - 1] == "start"
-            {
+            if runs_mcp_start(server) {
                 return Some(server.clone());
             }
         }
     }
     None
+}
+
+/// Whether an MCP server entry's `args` end in `mcp start`.
+fn runs_mcp_start(server: &serde_json::Map<String, JsonValue>) -> bool {
+    matches!(
+        server.get("args"),
+        Some(JsonValue::Array(args)) if args.len() >= 2
+            && args[args.len() - 2] == "mcp"
+            && args[args.len() - 1] == "start"
+    )
 }
 
 /// One recursive glob over the object folders' common parent, or one per
@@ -2727,6 +2771,45 @@ mod tests {
         assert!(mcp.2.contains("no-such-opentide is not on PATH"), "{mcp:?}");
         let git = found.iter().find(|(c, ..)| c == "git").unwrap();
         assert_eq!(git.1, "warn");
+    }
+
+    #[test]
+    fn claude_desktop_counts_only_for_this_workspace() {
+        use crate::commands::setup::desktop::{Os, config_path};
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().canonicalize().unwrap();
+        let workspace = root.join("é😀 ws");
+        std::fs::create_dir_all(workspace.join(".opentide")).unwrap();
+        let home = root.join("home");
+        let home_text = home.to_string_lossy().into_owned();
+        let env = Env::from_pairs([
+            ("HOME", home_text.clone()),
+            ("USERPROFILE", home_text.clone()),
+            ("APPDATA", format!("{home_text}/AppData/Roaming")),
+            ("XDG_CONFIG_HOME", format!("{home_text}/.config")),
+            ("PATH", "/nonexistent".to_owned()),
+        ]);
+        let config = config_path(Os::current(), &env, Some(&home)).unwrap();
+        std::fs::create_dir_all(config.parent().unwrap()).unwrap();
+        let mcp = |for_root: &Path| {
+            let entry = serde_json::json!({"mcpServers": {"opentide": {
+                "command": "/bin/sh",
+                "args": ["mcp", "start"],
+                "env": {"OPENTIDE_REPO_ROOT": for_root},
+            }}});
+            std::fs::write(&config, entry.to_string()).unwrap();
+            let found = checks(&run(DoctorMode::Offline, &context(&env, &workspace)));
+            found.into_iter().find(|(c, ..)| c == "mcp_config").unwrap()
+        };
+        let here = mcp(&workspace);
+        assert_eq!(here.1, "pass", "{here:?}");
+        assert!(
+            here.2.contains("MCP configured for Claude Desktop"),
+            "{here:?}"
+        );
+        let elsewhere = mcp(&root.join("another"));
+        assert_eq!(elsewhere.1, "skip", "{elsewhere:?}");
+        assert!(!elsewhere.2.contains("Claude Desktop"), "{elsewhere:?}");
     }
 
     #[test]

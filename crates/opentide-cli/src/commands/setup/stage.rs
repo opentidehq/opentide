@@ -48,6 +48,11 @@ pub struct Stage {
     links: Vec<PathBuf>,
     /// Folders to remove once the files are written, when empty then.
     rmdirs: BTreeSet<PathBuf>,
+    /// Files of the user's outside the repository ([`Stage::write_outside`]).
+    outside: BTreeSet<PathBuf>,
+    /// The files of [`Stage::outside`] the last commit could not write, each
+    /// with its error ([`Stage::unwritten`]).
+    unwritten: Vec<(PathBuf, String)>,
 }
 
 impl Stage {
@@ -175,6 +180,32 @@ impl Stage {
         );
     }
 
+    /// Writes `bytes` to `path`, a file of the user's outside the repository
+    /// (Claude Desktop's configuration): one the commit fails to write is no
+    /// error of the run's, but listed by [`Stage::unwritten`] for a warning,
+    /// and the rest is written.
+    pub fn write_outside(&mut self, path: &Path, bytes: impl Into<Vec<u8>>) {
+        self.mark_outside(path);
+        self.write(path, bytes);
+    }
+
+    /// Takes `path` for a file of the user's outside the repository, which a
+    /// plan lists by its absolute path, written or not.
+    pub fn mark_outside(&mut self, path: &Path) {
+        self.outside.insert(path.to_path_buf());
+    }
+
+    /// Whether `path` is a file of the user's outside the repository.
+    pub fn is_outside(&self, path: &Path) -> bool {
+        self.outside.contains(path)
+    }
+
+    /// The files of [`Stage::write_outside`] the last commits could not
+    /// write, with the error; emptied.
+    pub fn unwritten(&mut self) -> Vec<(PathBuf, String)> {
+        std::mem::take(&mut self.unwritten)
+    }
+
     /// Makes the file at `path` executable.
     ///
     /// # Errors
@@ -270,12 +301,18 @@ impl Stage {
                     if unchanged(&path, &bytes, executable) {
                         continue;
                     }
-                    if let Some(parent) = path.parent() {
-                        std::fs::create_dir_all(parent)
-                            .map_err(|error| format!("{}: {error}", parent.display()))?;
+                    let written = path
+                        .parent()
+                        .map_or(Ok(()), std::fs::create_dir_all)
+                        .and_then(|()| opentide_workspace::fs::write_atomically(&path, &bytes));
+                    match written {
+                        Ok(()) => {}
+                        Err(error) if self.outside.contains(&path) => {
+                            self.unwritten.push((path, error.to_string()));
+                            continue;
+                        }
+                        Err(error) => return Err(format!("{}: {error}", path.display())),
                     }
-                    opentide_workspace::fs::write_atomically(&path, &bytes)
-                        .map_err(|error| format!("{}: {error}", path.display()))?;
                     if executable {
                         set_executable(&path)
                             .map_err(|error| format!("{}: {error}", path.display()))?;
@@ -396,6 +433,29 @@ mod tests {
             std::fs::read_to_string(root.join("a/new.txt")).unwrap(),
             "again\n"
         );
+    }
+
+    #[test]
+    fn a_file_outside_the_repository_that_cannot_be_written_is_listed_not_an_error() {
+        let dir = tempfile::tempdir().unwrap();
+        let blocked = dir.path().join("é😀");
+        std::fs::write(&blocked, "").unwrap();
+        let outside = blocked.join("config.json");
+        let inside = dir.path().join("ws").join("a.json");
+        let mut stage = Stage::new();
+        stage.write_outside(&outside, "{}");
+        stage.write(&inside, "{}");
+        assert!(stage.is_outside(&outside) && !stage.is_outside(&inside));
+        stage.commit().unwrap();
+        let unwritten = stage.unwritten();
+        assert_eq!(unwritten.len(), 1);
+        assert_eq!(unwritten[0].0, outside);
+        assert!(inside.is_file());
+        assert!(stage.unwritten().is_empty());
+        // A file of the repository's is the run's error, as before.
+        let mut stage = Stage::new();
+        stage.write(&outside, "{}");
+        assert!(stage.commit().is_err());
     }
 
     #[test]

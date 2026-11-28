@@ -1580,3 +1580,306 @@ fn a_dry_run_of_an_inert_status_has_an_empty_plan() {
     assert_eq!(preview["plan"], json!({}), "{preview}");
     assert_eq!(preview["payloads"], json!({}), "{preview}");
 }
+
+// Objects the `graph` tests add to the corpus: a chain, and one gap of each kind.
+const LATER_THREAT: &str = "00000000-0000-4000-8001-0000000000a2";
+const ORPHAN_THREAT: &str = "00000000-0000-4000-8001-0000000000a3";
+const IDLE_OBJECTIVE: &str = "00000000-0000-4000-8002-0000000000a2";
+const SIGNAL_RULE: &str = "00000000-0000-4000-8003-0000000000a2";
+
+fn meta(uuid: &str, schema: &str) -> String {
+    format!(
+        "metadata:\n  uuid: {uuid}\n  schema: {schema}\n  version: 1\n  created: 2026-01-01\n  \
+         modified: 2026-01-02\n  tlp: clear\n"
+    )
+}
+
+fn graph_threat(uuid: &str, name: &str) -> String {
+    format!(
+        "name: {name}\ncriticality: High\n\n{}\nthreat:\n  description: Graph test threat.\n  \
+         severity: Substantial incident\n  viability: Likely\n  mitre_attack:\n    - T1003\n",
+        meta(uuid, "threat::1.0")
+    )
+}
+
+/// The corpus, its threat now preceding `LATER_THREAT`, which only
+/// `IDLE_OBJECTIVE` covers; `ORPHAN_THREAT`, which no objective covers; and
+/// `SIGNAL_RULE`, the only rule in production, whose `detection_model` is
+/// the corpus objective's signal.
+fn graph_corpus(root: &Path) -> PathBuf {
+    let ws = corpus(root);
+    let objects = ws.join("objects");
+    let threat = objects.join("threats/threat-0001-simulated-actor.yaml");
+    let mut text = std::fs::read_to_string(&threat).unwrap();
+    text.push_str(&format!(
+        "  chaining:\n    - vector: {LATER_THREAT}\n      relation: sequence::preceeds\n"
+    ));
+    std::fs::write(&threat, text).unwrap();
+    std::fs::write(
+        objects.join("threats/threat-a2.yaml"),
+        graph_threat(LATER_THREAT, "Credential dumping after the intrusion"),
+    )
+    .unwrap();
+    std::fs::write(
+        objects.join("threats/threat-a3.yaml"),
+        graph_threat(ORPHAN_THREAT, "Threat no objective covers"),
+    )
+    .unwrap();
+    std::fs::write(
+        objects.join("objectives/objective-a2.yaml"),
+        format!(
+            "name: Objective without rules\n\n{}\nobjective:\n  priority: High\n  type: Threat\n  \
+             description: Idle.\n  threats:\n    - {LATER_THREAT}\n",
+            meta(IDLE_OBJECTIVE, "objective::1.0")
+        ),
+    )
+    .unwrap();
+    std::fs::write(
+        objects.join("rules/rule-a2.yaml"),
+        format!(
+            "name: Rule on a signal\n\n{}\ndescription: Signal rule.\nseverity: High\n\
+             detection_model: {SIGNAL}\nconfigurations:\n  splunk:\n    enabled: true\n    \
+             name: Rule on a signal\n    status: PRODUCTION\n",
+            meta(SIGNAL_RULE, "rule::1.0")
+        ),
+    )
+    .unwrap();
+    ws
+}
+
+fn gap_uuids(summary: &Value, key: &str) -> Vec<String> {
+    summary[key]["items"]
+        .as_array()
+        .unwrap_or_else(|| panic!("{key}: {summary}"))
+        .iter()
+        .map(|item| item["uuid"].as_str().unwrap().to_owned())
+        .collect()
+}
+
+/// `graph` counts the catalogue and names each kind of gap; a rule on a
+/// signal counts for the signal's objective.
+#[test]
+fn graph_names_every_kind_of_gap() {
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = graph_corpus(scratch.path());
+    let server = server(&ws);
+    let summary = call(&server, "graph", json!({}));
+    assert_eq!(
+        call(&server, "graph", json!({"detail": "summary"})),
+        summary
+    );
+    assert_eq!(summary["counts"]["threats"], 3, "{summary}");
+    assert_eq!(summary["counts"]["objectives"], 2, "{summary}");
+    assert_eq!(summary["counts"]["rules"], 11, "{summary}");
+    assert_eq!(summary["counts"]["chained_threats"], 2, "{summary}");
+    assert_eq!(summary["counts"]["actors"], 1, "{summary}");
+    // No deployment.toml: the bundled lifecycle releases PRODUCTION.
+    assert_eq!(summary["release_statuses"], json!(["PRODUCTION"]));
+    assert_eq!(
+        gap_uuids(&summary, "threats_without_objectives"),
+        [ORPHAN_THREAT]
+    );
+    assert_eq!(gap_uuids(&summary, "threats_without_rules"), [LATER_THREAT]);
+    assert_eq!(
+        gap_uuids(&summary, "objectives_without_rules"),
+        [IDLE_OBJECTIVE]
+    );
+    // Every corpus rule is STAGING: only the signal's rule puts the corpus
+    // threat in production, through the signal's objective.
+    assert!(
+        gap_uuids(&summary, "threats_without_production_rules").is_empty(),
+        "{summary}"
+    );
+    assert_eq!(
+        summary["rule_blocks_by_platform"]["splunk"]["PRODUCTION"],
+        1
+    );
+    assert_eq!(summary["rule_blocks_by_status"]["PRODUCTION"], 1);
+    let orphan = &summary["threats_without_objectives"]["items"][0];
+    assert_eq!(orphan["title"], "Threat no objective covers", "{orphan}");
+    assert_eq!(orphan["type"], "threat", "{orphan}");
+}
+
+/// A `deployment.toml` of the given `(name, strategy)` statuses, in order,
+/// each with the description the model requires.
+fn deployment(statuses: &[(&str, &str)]) -> String {
+    use std::fmt::Write as _;
+    let mut text = String::new();
+    for (name, strategy) in statuses {
+        let _ = write!(
+            text,
+            "[[statuses]]\nname = \"{name}\"\ndescription = \"{name} é😀\"\n\
+             strategy = \"{strategy}\"\n\n"
+        );
+    }
+    text
+}
+
+/// In production means a status `deployment.toml` maps to `RELEASE`, not
+/// the name `PRODUCTION`.
+#[test]
+fn graph_reads_production_from_the_release_statuses() {
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = graph_corpus(scratch.path());
+    std::fs::write(
+        ws.join(".opentide/configurations/deployment.toml"),
+        deployment(&[
+            ("STAGING", "PREVIEW"),
+            ("PRODUCTION", "PREVIEW"),
+            ("LIVE", "RELEASE"),
+            ("GONE", "DELETION"),
+        ]),
+    )
+    .unwrap();
+    let summary = call(&server(&ws), "graph", json!({}));
+    assert_eq!(summary["release_statuses"], json!(["LIVE"]), "{summary}");
+    assert_eq!(
+        gap_uuids(&summary, "threats_without_production_rules"),
+        [THREAT]
+    );
+}
+
+/// A status mapped to `UNIVERSAL` is in production too: a release run
+/// deploys it.
+#[test]
+fn graph_counts_a_universal_status_as_production() {
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = graph_corpus(scratch.path());
+    std::fs::write(
+        ws.join(".opentide/configurations/deployment.toml"),
+        deployment(&[
+            ("STAGING", "PREVIEW"),
+            ("LIVE", "RELEASE"),
+            ("ALWAYS", "UNIVERSAL"),
+        ]),
+    )
+    .unwrap();
+    let rule = ws.join("objects/rules/rule-a2.yaml");
+    let text = std::fs::read_to_string(&rule).unwrap();
+    std::fs::write(&rule, text.replace("status: PRODUCTION", "status: ALWAYS")).unwrap();
+    let summary = call(&server(&ws), "graph", json!({}));
+    assert_eq!(
+        summary["release_statuses"],
+        json!(["LIVE", "ALWAYS"]),
+        "{summary}"
+    );
+    assert!(
+        gap_uuids(&summary, "threats_without_production_rules").is_empty(),
+        "{summary}"
+    );
+}
+
+/// A `deployment.toml` that does not match its model fails the call, as
+/// data, with why, as `deploy_rule` does: nothing deploys under it, so
+/// nothing is counted as in production.
+#[test]
+fn graph_fails_on_an_invalid_deployment_configuration() {
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = graph_corpus(scratch.path());
+    std::fs::write(
+        ws.join(".opentide/configurations/deployment.toml"),
+        format!(
+            "unknown_key = 1\n\n{}",
+            deployment(&[("STAGING", "PREVIEW"), ("PRODUCTION", "RELEASE")])
+        ),
+    )
+    .unwrap();
+    let server = server(&ws);
+    let Answer::Result(result) = server.call("graph", &arguments(json!({}))) else {
+        panic!("not a result");
+    };
+    assert_eq!(result["isError"], true, "{result}");
+    let text = result["content"][0]["text"].as_str().unwrap();
+    assert!(
+        text.starts_with("Error executing tool graph: deployment.toml is invalid: "),
+        "{text}"
+    );
+    assert!(text.contains("unknown_key"), "{text}");
+    // deploy_rule refuses the same workspace with the same reason.
+    let Answer::Result(deploy) = server.call(
+        "deploy_rule",
+        &arguments(json!({"uuid": SIGNAL_RULE, "platform": "splunk", "dry_run": true})),
+    ) else {
+        panic!("not a result");
+    };
+    assert_eq!(deploy["isError"], true, "{deploy}");
+    let reason = text.trim_start_matches("Error executing tool graph: ");
+    assert!(
+        deploy["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .ends_with(reason),
+        "{deploy}"
+    );
+}
+
+/// `chained_threats` counts only threats of the catalogue: a vector naming
+/// a missing object, or an object of another kind, adds nothing.
+#[test]
+fn graph_counts_only_known_threats_as_chained() {
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = graph_corpus(scratch.path());
+    let orphan = ws.join("objects/threats/threat-a3.yaml");
+    let mut text = std::fs::read_to_string(&orphan).unwrap();
+    text.push_str(&format!(
+        "  chaining:\n    - vector: 00000000-0000-4000-8001-0000000000ff\n      \
+         relation: sequence::preceeds\n    - vector: {IDLE_OBJECTIVE}\n      \
+         relation: sequence::preceeds\n"
+    ));
+    std::fs::write(&orphan, text).unwrap();
+    let summary = call(&server(&ws), "graph", json!({}));
+    assert_eq!(summary["counts"]["chained_threats"], 2, "{summary}");
+}
+
+/// Each gap lists at most 25 objects and counts them all.
+#[test]
+fn graph_caps_each_gap_and_counts_it_whole() {
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = graph_corpus(scratch.path());
+    for n in 0..30 {
+        let uuid = format!("00000000-0000-4000-8001-0000000001{n:02}");
+        std::fs::write(
+            ws.join(format!("objects/threats/orphan-{n:02}.yaml")),
+            graph_threat(&uuid, &format!("Orphan {n} é😀")),
+        )
+        .unwrap();
+    }
+    let summary = call(&server(&ws), "graph", json!({}));
+    let gap = &summary["threats_without_objectives"];
+    assert_eq!(gap["count"], 31, "{gap}");
+    assert_eq!(gap["items"].as_array().unwrap().len(), 25, "{gap}");
+    // In file path order: orphan-00.yaml comes before threat-a3.yaml.
+    assert_eq!(
+        gap["items"][0]["uuid"], "00000000-0000-4000-8001-000000000100",
+        "{gap}"
+    );
+    assert_eq!(
+        gap["items"][24]["uuid"], "00000000-0000-4000-8001-000000000124",
+        "{gap}"
+    );
+}
+
+/// A `detail` the tool does not offer is a failed call, as data.
+#[test]
+fn graph_refuses_an_unknown_detail() {
+    let scratch = tempfile::tempdir().unwrap();
+    let ws = corpus(scratch.path());
+    let server = server(&ws);
+    for (bad, reason) in [
+        (
+            json!("full"),
+            "argument detail must be one of summary, not \"full\"",
+        ),
+        (json!(3), "argument detail must be a string, not a number"),
+    ] {
+        let Answer::Result(result) = server.call("graph", &arguments(json!({"detail": bad})))
+        else {
+            panic!("not a result");
+        };
+        assert_eq!(result["isError"], true, "{bad}: {result}");
+        assert_eq!(
+            result["content"][0]["text"],
+            format!("Error executing tool graph: {reason}")
+        );
+    }
+}

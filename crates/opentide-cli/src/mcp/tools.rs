@@ -8,7 +8,7 @@ use std::path::Path;
 use serde_json::{Map, Value, json};
 
 use super::args::Args;
-use super::{catalog, deploy, queries};
+use super::{catalog, deploy, graph, queries};
 use crate::env::Env;
 use crate::json::{Json, Object, document_text};
 
@@ -106,6 +106,7 @@ fn answer(name: &str, arguments: &Map<String, Value>, context: &Context<'_>) -> 
                 &tactic,
             )))
         })(),
+        "graph" => graph::tool(&args, context).map(Payload::One),
         "validate_rule" => (|| {
             let uuid = args.required("uuid")?;
             catalog::validate_rule(context, &uuid).map(Payload::One)

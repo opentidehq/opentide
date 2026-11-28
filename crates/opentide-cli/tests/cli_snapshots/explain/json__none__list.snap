@@ -1478,7 +1478,7 @@ exit: 0
     },
     {
       "code": "mcp_config",
-      "meaning": "An MCP configuration from `opentide setup mcp` runs `opentide mcp start`."
+      "meaning": "An MCP configuration from `opentide setup mcp` runs `opentide mcp start`. Claude Desktop's configuration counts when its server's `OPENTIDE_REPO_ROOT` is this workspace."
     },
     {
       "code": "metadata_recommended",

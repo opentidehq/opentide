@@ -131,6 +131,7 @@ impl SetupMcpArgs {
             ("vscode", self.vscode),
             ("cursor", self.cursor),
             ("claude-code", self.claude_code),
+            ("claude-desktop", self.claude_desktop),
             ("generic", self.generic),
         ]
         .into_iter()

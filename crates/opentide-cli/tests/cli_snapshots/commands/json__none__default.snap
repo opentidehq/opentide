@@ -13847,6 +13847,7 @@ exit: 0
             "vscode",
             "cursor",
             "claude-code",
+            "claude-desktop",
             "generic"
           ],
           "default": [],
@@ -13854,7 +13855,7 @@ exit: 0
           "flags": [
             "--mcp"
           ],
-          "help": "Write MCP configuration for vscode, cursor, claude-code or generic (repeatable)",
+          "help": "Write MCP configuration for vscode, cursor, claude-code, claude-desktop or generic (repeatable)",
           "is_flag": false,
           "multiple": true,
           "name": "mcp",
@@ -14931,6 +14932,21 @@ exit: 0
           "is_flag": true,
           "multiple": false,
           "name": "claude_code",
+          "required": false,
+          "secondary_flags": [],
+          "type": "boolean"
+        },
+        {
+          "choices": null,
+          "default": false,
+          "envvars": [],
+          "flags": [
+            "--claude-desktop"
+          ],
+          "help": "Configure Claude Desktop (its claude_desktop_config.json, outside the repository)",
+          "is_flag": true,
+          "multiple": false,
+          "name": "claude_desktop",
           "required": false,
           "secondary_flags": [],
           "type": "boolean"

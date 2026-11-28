@@ -220,10 +220,7 @@ impl Compiler for Sysdig {
         rule: &Rule,
         tenant: Option<&Json>,
     ) -> Result<sysdig::SysdigRule, CompileError> {
-        Ok(sysdig::SysdigRule {
-            body: sysdig::compile_body(cx, rule, tenant)?,
-            policies: sysdig::block_policies(rule),
-        })
+        sysdig::compile_deployment(cx, rule, tenant)
     }
 
     fn body(compiled: &sysdig::SysdigRule) -> Json {

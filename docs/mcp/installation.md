@@ -43,6 +43,7 @@ Logging on `opentide mcp start` goes to stderr. stdout is JSON-RPC only.
 ```bash
 opentide setup mcp --cursor --yes
 opentide setup mcp --vscode --claude-code --generic --yes
+opentide setup mcp --claude-desktop --yes   # Claude Desktop's own config, outside the repository
 ```
 
 See [Configuration](./configuration.md).

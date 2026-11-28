@@ -5,6 +5,7 @@
 
 use std::path::{Path, PathBuf};
 
+use super::desktop;
 use super::jsonc;
 use super::stage::Stage;
 use crate::env::Env;
@@ -932,6 +933,8 @@ pub struct McpServer {
     pub hint: String,
     /// `opentide`, the command every configuration runs, is not on `PATH`.
     pub not_on_path: bool,
+    /// What `--claude-desktop` needs of this machine.
+    pub desktop: super::desktop::Desktop,
 }
 
 impl McpServer {
@@ -944,6 +947,7 @@ impl McpServer {
     pub fn probe(env: &Env, cwd: &Path) -> McpServer {
         McpServer {
             not_on_path: command_not_on_path(env, cwd),
+            desktop: super::desktop::Desktop::probe(env, cwd),
             ..McpServer::default()
         }
     }
@@ -972,7 +976,21 @@ pub fn mcp(
     server: Option<&McpServer>,
 ) -> StepResult {
     let (mut written, mut skipped, mut warnings) = (Vec::new(), Vec::new(), Vec::new());
+    let mut desktop_config = None;
     for host in hosts {
+        if host == desktop::HOST {
+            match claude_desktop(stage, target, server) {
+                Ok(config) => {
+                    written.push(shown(&config));
+                    desktop_config = Some(config);
+                }
+                Err((shown_as, warning)) => {
+                    skipped.push(shown_as);
+                    warnings.push(warning);
+                }
+            }
+            continue;
+        }
         match write_mcp_config(stage, target, host) {
             Ok((relative, kept)) => {
                 written.push(relative);
@@ -1000,11 +1018,16 @@ pub fn mcp(
         result.set("extension_mcp", Json::Bool(true));
         result.set("detail", Json::str(EXTENSION_MCP_NOTE));
     }
+    let mut advice = Vec::new();
     if hosts.iter().any(|host| host == "generic") {
-        result.set(
-            "advice",
-            Json::str("Copy opentide.mcp.json into your editor MCP settings or run opentide setup mcp with a specific host flag."),
-        );
+        advice.push("Copy opentide.mcp.json into your editor MCP settings or run opentide setup mcp with a specific host flag.");
+    }
+    if let Some(config) = &desktop_config {
+        result.set("claude_desktop_config", Json::str(shown(config)));
+        advice.push(desktop::ADVICE);
+    }
+    if !advice.is_empty() {
+        result.set("advice", Json::str(advice.join(" ")));
     }
     // Every configuration runs `opentide mcp start`. Say so now rather than
     // leaving the user to debug a server their editor silently fails to start.
@@ -1017,18 +1040,70 @@ pub fn mcp(
             server.hint
         ));
     }
-    if server.is_some_and(|server| server.not_on_path) {
+    // The other hosts run a bare `opentide`, which needs `PATH`; Claude
+    // Desktop's entry names the absolute command, unless none was found.
+    let bare = hosts.iter().any(|host| host != desktop::HOST);
+    if bare && server.is_some_and(|server| server.not_on_path) {
         available = false;
         warnings.push(
             "These configs launch opentide mcp start, but opentide is not on PATH, so the editor cannot start the server. Put opentide on PATH (pipx install opentide, or activate its virtual environment before starting the editor), or set the full path as the server command."
                 .to_owned(),
         );
     }
+    if let Some(config) = &desktop_config
+        && server.is_none_or(|server| server.desktop.launch.is_none())
+    {
+        available = false;
+        warnings.push(format!(
+            "No opentide program was found to start from Claude Desktop, which does not read your shell's PATH, so {} runs a bare opentide. Set the full path of opentide as the server command there.",
+            shown(config)
+        ));
+    }
     result.set("mcp_available", Json::Bool(available));
     if !warnings.is_empty() {
         result.set("warnings", strings(&warnings));
     }
     result
+}
+
+/// `setup mcp --claude-desktop`: the opentide server merged into Claude
+/// Desktop's configuration, outside `target`; the file's absolute path. A
+/// commit that cannot write it warns ([`Stage::write_outside`]).
+///
+/// # Errors
+///
+/// The file cannot be found or merged: how the result shows it, for
+/// `skipped`, and the warning. The file is left as it is.
+fn claude_desktop(
+    stage: &mut Stage,
+    target: &Path,
+    server: Option<&McpServer>,
+) -> Result<PathBuf, (String, String)> {
+    let found = server.map(|server| &server.desktop);
+    let Some(config) = found.and_then(|found| found.config.clone()) else {
+        return Err((
+            desktop::CONFIG_FILE.to_owned(),
+            format!(
+                "Could not find Claude Desktop's configuration: {} is not set; left unchanged. Add the opentide server to {} by hand.",
+                if desktop::Os::current() == desktop::Os::Windows {
+                    "APPDATA"
+                } else {
+                    "HOME"
+                },
+                desktop::CONFIG_FILE
+            ),
+        ));
+    };
+    // As `doctor` compares it: absolute, `..` and links resolved.
+    let root = super::real(&std::path::absolute(target).unwrap_or_else(|_| target.to_path_buf()));
+    let template = desktop::template(found.and_then(|found| found.launch.as_ref()), &root);
+    match desktop::write(stage, &config, &template) {
+        Ok(()) => Ok(config),
+        Err(problem) => Err((
+            shown(&config),
+            mcp_config_warning(&shown(&config), &problem),
+        )),
+    }
 }
 
 /// `path` relative to `base` when it is below it.
@@ -1482,6 +1557,90 @@ mod tests {
     }
 
     #[test]
+    fn claude_desktop_is_written_outside_the_repository_by_its_absolute_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("ws");
+        let config = dir
+            .path()
+            .join("home")
+            .join("Claude")
+            .join(desktop::CONFIG_FILE);
+        let server = McpServer {
+            desktop: desktop::Desktop {
+                config: Some(config.clone()),
+                launch: None,
+            },
+            ..McpServer::default()
+        };
+        let mut stage = Stage::new();
+        let hosts = ["claude-desktop".to_owned(), "cursor".to_owned()];
+        let result = mcp(&mut stage, &root, &hosts, Some(&server));
+        assert_eq!(
+            result.strings("files"),
+            [shown(&config), ".cursor/mcp.json".to_owned()]
+        );
+        assert_eq!(
+            result.text("claude_desktop_config"),
+            Some(shown(&config).as_str())
+        );
+        assert_eq!(result.text("advice"), Some(desktop::ADVICE));
+        // No command was found (`launch: None`): the entry runs a bare
+        // `opentide`, which Claude Desktop cannot find without PATH.
+        assert_eq!(result.get("mcp_available"), Some(&Json::Bool(false)));
+        assert!(
+            result
+                .strings("warnings")
+                .iter()
+                .any(|warning| warning.contains("runs a bare opentide")),
+            "{:?}",
+            result.strings("warnings")
+        );
+        // With one, nothing warns, though opentide is not on PATH: the
+        // entry names it by its path.
+        let found = McpServer {
+            not_on_path: true,
+            desktop: desktop::Desktop {
+                config: Some(config.clone()),
+                launch: Some(desktop::Launch {
+                    command: dir.path().join("venv").join("opentide"),
+                    args: vec!["mcp".into(), "start".into()],
+                }),
+            },
+            ..McpServer::default()
+        };
+        let alone = mcp(&mut Stage::new(), &root, &hosts[..1], Some(&found));
+        assert_eq!(alone.get("mcp_available"), Some(&Json::Bool(true)));
+        assert_eq!(alone.get("warnings"), None);
+        // The workspace as `doctor` compares it: `..` resolved.
+        let mut climbed = Stage::new();
+        let roundabout = dir.path().join("é😀").join("..").join("ws");
+        mcp(&mut climbed, &roundabout, &hosts[..1], Some(&found));
+        let text = String::from_utf8(climbed.read(&config).unwrap().unwrap()).unwrap();
+        let value: serde_json::Value = serde_json::from_str(&text).unwrap();
+        assert_eq!(
+            value["mcpServers"]["opentide"]["env"]["OPENTIDE_REPO_ROOT"],
+            super::super::real(&root).to_string_lossy().as_ref()
+        );
+        assert!(stage.is_outside(&config));
+        assert!(!stage.is_outside(&root.join(".cursor/mcp.json")));
+        // Without a home folder there is nowhere to write it: a warning.
+        let result = mcp(
+            &mut Stage::new(),
+            &root,
+            &hosts[..1],
+            Some(&McpServer::default()),
+        );
+        assert!(result.strings("files").is_empty());
+        assert_eq!(result.strings("skipped"), [desktop::CONFIG_FILE]);
+        assert!(
+            result.strings("warnings")[0]
+                .starts_with("Could not find Claude Desktop's configuration"),
+            "{:?}",
+            result.strings("warnings")
+        );
+    }
+
+    #[test]
     fn a_server_that_cannot_start_is_reported_unavailable_with_its_repair() {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path();
@@ -1489,6 +1648,7 @@ mod tests {
             missing: vec!["mcp.server.mcpserver".into()],
             hint: "pip install 'mcp>=2.3,<3'".into(),
             not_on_path: false,
+            ..McpServer::default()
         };
         let result = mcp(&mut Stage::new(), root, &["cursor".into()], Some(&broken));
         assert_eq!(result.get("mcp_available"), Some(&Json::Bool(false)));
@@ -1519,7 +1679,11 @@ mod tests {
             std::fs::set_permissions(&found, std::fs::Permissions::from_mode(0o755)).unwrap();
         }
         let on_path = Env::from_pairs([("PATH".to_owned(), dir.path().display().to_string())]);
-        assert_eq!(McpServer::probe(&on_path, dir.path()), McpServer::default());
+        let probed = McpServer::probe(&on_path, dir.path());
+        assert!(
+            probed.missing.is_empty() && !probed.not_on_path,
+            "{probed:?}"
+        );
     }
 
     /// Every configuration runs a bare `opentide`: without one on `PATH`

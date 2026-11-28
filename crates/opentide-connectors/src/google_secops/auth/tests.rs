@@ -516,6 +516,7 @@ async fn refused_or_unanswered_credentials_stop_the_tenant() {
         "google_secops_tenant_unauthorized: tenant secops-eu: Google refused the credentials \
          (invalid_grant: Bad Request)"
     );
+    assert_eq!(error.code, Some(super::TENANT_UNAUTHORIZED));
     let error = Authorizer::new(user("/empty"), fixed(NOW))
         .token(cx)
         .await
@@ -524,6 +525,7 @@ async fn refused_or_unanswered_credentials_stop_the_tenant() {
         error.to_string(),
         "google_secops_tenant_unauthorized: tenant secops-eu: the credentials gave no access token"
     );
+    assert_eq!(error.code, Some(super::TENANT_UNAUTHORIZED));
     let unreachable = Credentials::AuthorizedUser {
         client_id: "cid".to_owned(),
         client_secret: Secret::new("cs"),
@@ -592,6 +594,7 @@ async fn the_metadata_server_supplies_default_credentials() {
         .token(cx)
         .await
         .unwrap_err();
+    assert_eq!(error.code, Some(super::CREDENTIALS_MISSING));
     assert!(
         error.to_string().starts_with(
             "google_secops_credentials_missing: no credentials: the tenant names none"
@@ -632,6 +635,7 @@ async fn an_answer_without_the_metadata_flavor_is_no_metadata_server() {
     .token(cx)
     .await
     .unwrap_err();
+    assert_eq!(error.code, Some(super::CREDENTIALS_MISSING));
     let shown = error.to_string();
     assert!(
         shown.starts_with(

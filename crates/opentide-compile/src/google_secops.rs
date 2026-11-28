@@ -8,16 +8,19 @@
 //! `rules.create` body (`{"text": ...}`), which the dry run shows.
 
 use opentide_schema::node::{Entry, Mark, Node, Value};
+use opentide_schema::objects::platform::GoogleSecopsConfig;
 use opentide_schema::objects::platform::google_secops::assemble::{
     self as assembly, AssembledRule, RuleFacts,
 };
-use opentide_schema::objects::platform::google_secops::duration_seconds;
+use opentide_schema::objects::platform::google_secops::{
+    GoogleSecopsSchedule, RunFrequency, duration_seconds,
+};
 
 use crate::deploy::{self, Write};
 use crate::json::{Json, Object};
 use crate::rule::{CompileError, Rule};
 use crate::strategy::StatusStrategy;
-use crate::{Context, elastic};
+use crate::{Context, elastic, typed};
 
 /// The platform's key under `configurations`.
 pub const PLATFORM: &str = "google_secops";
@@ -93,9 +96,9 @@ pub fn facts(cx: &Context<'_>, rule: &Rule) -> RuleFacts {
     }
 }
 
-/// The rule's block as a node, or the failure of a rule without one.
-pub fn block_node(rule: &Rule) -> Result<Node, CompileError> {
-    rule.block(PLATFORM).map(node_of).ok_or_else(|| {
+/// The rule's block, or the failure of a rule without one.
+fn block_of(rule: &Rule) -> Result<&Json, CompileError> {
+    rule.block(PLATFORM).ok_or_else(|| {
         CompileError::failed(
             DISPLAY,
             &format!(
@@ -104,6 +107,18 @@ pub fn block_node(rule: &Rule) -> Result<Node, CompileError> {
             ),
         )
     })
+}
+
+/// The rule's block as a node, or the failure of a rule without one.
+pub fn block_node(rule: &Rule) -> Result<Node, CompileError> {
+    block_of(rule).map(node_of)
+}
+
+/// `block`, the rule's Google SecOps block, read by the model `validate`
+/// checks it with (`GoogleSecopsConfig`, #1951; [`typed::read_block`]), or
+/// the error naming the fields whose shape the model refuses.
+fn config_of(block: &Json) -> Result<GoogleSecopsConfig, CompileError> {
+    typed::read_block(block, PLATFORM, DISPLAY)
 }
 
 /// The YARA-L rule `rule` deploys (`assemble`).
@@ -130,13 +145,12 @@ pub fn compile_offline(cx: &Context<'_>, rule: &Rule) -> Result<Json, CompileErr
 /// `run_frequency` when it names one.
 pub fn compile_deployment(cx: &Context<'_>, rule: &Rule) -> Result<Json, CompileError> {
     let assembled = assemble(cx, rule)?;
-    let block = rule.block(PLATFORM).cloned().unwrap_or(Json::Null);
-    let status = block.get("status").map(Json::to_text).unwrap_or_default();
+    let config = config_of(block_of(rule)?)?;
     let strategy = cx
         .statuses
-        .strategy(&status)
+        .strategy(&config.status)
         .map_err(|error| CompileError::failed(DISPLAY, &error.to_string()))?;
-    let state = run_state(&block, strategy);
+    let state = run_state(&RunSettings::from(&config), strategy);
     let mut body = Object::new();
     body.insert("text".into(), Json::Str(assembled.text));
     body.insert("name".into(), Json::Str(assembled.name));
@@ -157,24 +171,46 @@ pub fn compile_deployment(cx: &Context<'_>, rule: &Rule) -> Result<Json, Compile
     run.insert("mask".into(), Json::Str(state.mask));
     run.insert("body".into(), Json::Object(state.body));
     body.insert("run_state".into(), Json::Object(run));
-    if let Some(frequency) = block.get("run_frequency").and_then(Json::as_str) {
-        body.insert("run_frequency".into(), Json::Str(frequency.to_owned()));
+    if let Some(frequency) = config.run_frequency {
+        body.insert("run_frequency".into(), frequency.as_str().into());
     }
     Ok(Json::Object(body))
 }
 
 // --- run state -------------------------------------------------------------
 
-/// `scheduleCustomizations` for the block's `schedule`, or `None`.
-pub fn schedule_customizations(block: &Json) -> Option<Json> {
-    let schedule = block.get("schedule").filter(|value| !value.is_null())?;
+/// What of a block the run state reads ([`run_state`]): `alerting`,
+/// `run_frequency` and `schedule`. The default is a block that names none of
+/// them.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct RunSettings {
+    /// The block's `alerting`; unset, alerting follows the strategy.
+    pub alerting: Option<bool>,
+    /// The block's `run_frequency`; unset, none is sent.
+    pub run_frequency: Option<RunFrequency>,
+    /// The block's `schedule`, sent with the run frequency.
+    pub schedule: Option<GoogleSecopsSchedule>,
+}
+
+impl From<&GoogleSecopsConfig> for RunSettings {
+    fn from(config: &GoogleSecopsConfig) -> Self {
+        Self {
+            alerting: config.alerting,
+            run_frequency: config.run_frequency,
+            schedule: config.schedule.clone(),
+        }
+    }
+}
+
+/// `scheduleCustomizations` for a block's `schedule`.
+pub fn schedule_customizations(schedule: &GoogleSecopsSchedule) -> Json {
     let mut custom = Object::new();
-    if let Some(Json::Bool(flag)) = schedule.get("ensure_enrichment_completeness") {
-        custom.insert("ensureEnrichmentCompleteness".into(), Json::Bool(*flag));
+    if let Some(flag) = schedule.ensure_enrichment_completeness {
+        custom.insert("ensureEnrichmentCompleteness".into(), Json::Bool(flag));
     }
     if let Some(seconds) = schedule
-        .get("late_arriving_data_adjustment")
-        .and_then(Json::as_str)
+        .late_arriving_data_adjustment
+        .as_deref()
         .and_then(duration_seconds)
     {
         custom.insert(
@@ -182,7 +218,7 @@ pub fn schedule_customizations(block: &Json) -> Option<Json> {
             Json::Str(format!("{seconds}s")),
         );
     }
-    Some(Json::Object(custom))
+    Json::Object(custom)
 }
 
 /// A protobuf `Duration` in JSON (`"1800s"`, `"1800.000s"`) in seconds, or
@@ -294,29 +330,31 @@ impl RunState {
 /// `runFrequency` is sent only when the block names one: without it Google
 /// keeps the rule's frequency, or gives a new rule its default, and never
 /// moves a legacy schedule, which Google cannot move back.
-pub fn run_state(block: &Json, strategy: StatusStrategy) -> RunState {
+pub fn run_state(block: &RunSettings, strategy: StatusStrategy) -> RunState {
     if matches!(
         strategy,
         StatusStrategy::Disablement | StatusStrategy::Deletion
     ) {
         return RunState::disabled();
     }
-    let alerting = match block.get("alerting") {
-        Some(Json::Bool(flag)) => *flag,
-        _ => strategy != StatusStrategy::Preview,
-    };
+    let alerting = block
+        .alerting
+        .unwrap_or(strategy != StatusStrategy::Preview);
     let mut body = Object::new();
     body.insert("enabled".into(), Json::Bool(true));
     body.insert("alerting".into(), Json::Bool(alerting));
-    let Some(frequency) = block.get("run_frequency").filter(|value| !value.is_null()) else {
+    let Some(frequency) = block.run_frequency else {
         return RunState {
             mask: "enabled,alerting".to_owned(),
             body,
         };
     };
-    body.insert("runFrequency".into(), frequency.clone());
-    if let Some(custom) = schedule_customizations(block) {
-        body.insert("scheduleCustomizations".into(), custom);
+    body.insert("runFrequency".into(), frequency.as_str().into());
+    if let Some(schedule) = &block.schedule {
+        body.insert(
+            "scheduleCustomizations".into(),
+            schedule_customizations(schedule),
+        );
     }
     RunState {
         mask: "enabled,alerting,runFrequency".to_owned(),
@@ -575,10 +613,8 @@ pub fn compile(
     let Some(block) = rule.block(PLATFORM).filter(|block| block.is_filled()) else {
         return Ok(Vec::new());
     };
-    let status = block
-        .get("status")
-        .and_then(Json::as_str)
-        .unwrap_or_default();
+    let config = config_of(block)?;
+    let status = config.status.as_str();
     let strategy = deploy::strategy(cx, DISPLAY, status)?;
     let instance = tenant_instance(tenant);
     let base = endpoint(tenant);
@@ -597,7 +633,7 @@ pub fn compile(
         }
         Some(action) => {
             let assembled = assemble(cx, rule)?;
-            let state = run_state(block, strategy);
+            let state = run_state(&RunSettings::from(&config), strategy);
             if matches!(action, deploy::Action::Create) {
                 let scope = scope_resource(
                     &instance,
@@ -633,6 +669,24 @@ mod tests {
         serde_json::from_str(text).unwrap_or_else(|error| panic!("{error}"))
     }
 
+    /// The run settings of a block's `alerting`, `run_frequency` and
+    /// `schedule`, written as JSON.
+    fn settings(text: &str) -> RunSettings {
+        #[derive(serde::Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct Written {
+            alerting: Option<bool>,
+            run_frequency: Option<RunFrequency>,
+            schedule: Option<GoogleSecopsSchedule>,
+        }
+        let written: Written = serde_json::from_str(text).unwrap_or_else(|error| panic!("{error}"));
+        RunSettings {
+            alerting: written.alerting,
+            run_frequency: written.run_frequency,
+            schedule: written.schedule,
+        }
+    }
+
     #[test]
     fn an_integer_beyond_i64_is_the_nearest_float_in_a_node() {
         // The node has no integer beyond i64: u64::MAX is 2^64 as the nearest float.
@@ -648,14 +702,14 @@ mod tests {
 
     #[test]
     fn run_state_by_strategy() {
-        let block = json(r#"{"run_frequency": "LIVE"}"#);
+        let block = settings(r#"{"run_frequency": "LIVE"}"#);
         let preview = run_state(&block, StatusStrategy::Preview);
         assert_eq!(preview.mask, "enabled,alerting,runFrequency");
         assert_eq!(
             Json::Object(preview.body).to_compact(),
             r#"{"enabled":true,"alerting":false,"runFrequency":"LIVE"}"#
         );
-        let release = run_state(&json(r#"{"alerting": false}"#), StatusStrategy::Release);
+        let release = run_state(&settings(r#"{"alerting": false}"#), StatusStrategy::Release);
         assert_eq!(release.mask, "enabled,alerting");
         assert_eq!(release.body.get("alerting"), Some(&Json::Bool(false)));
         assert_eq!(
@@ -666,7 +720,7 @@ mod tests {
 
     #[test]
     fn changes_compare_as_google_stores_them() {
-        let block = json(
+        let block = settings(
             r#"{"run_frequency": "LIVE_CUSTOMIZABLE", "schedule": {"late_arriving_data_adjustment": "30m"}}"#,
         );
         let state = run_state(&block, StatusStrategy::Release);
@@ -688,7 +742,7 @@ mod tests {
         assert!(change.body.contains_key("scheduleCustomizations"));
         // A block without a schedule clears one left on the remote rule.
         let plain = run_state(
-            &json(r#"{"run_frequency": "LIVE"}"#),
+            &settings(r#"{"run_frequency": "LIVE"}"#),
             StatusStrategy::Release,
         );
         let custom = json(

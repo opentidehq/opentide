@@ -9,6 +9,7 @@
 //! terminal) is refused with `usage_needs_input`.
 
 pub mod args;
+pub mod desktop;
 pub mod files;
 pub mod hooks;
 pub mod jsonc;
