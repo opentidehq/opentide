@@ -95,12 +95,11 @@ impl opentide_highlight::QueryEngine for Engine {
         }
     }
 
-    #[expect(
-        clippy::expect_used,
-        reason = "loads the HighlightSpec compiled in (highlights/spec.toml): a bad spec fails the tests, never a user's document"
-    )]
     fn highlight(&self, source: &str) -> Vec<HighlightToken> {
-        highlight(HighlightSpec::shared().expect("highlight spec"), source)
+        let Ok(spec) = HighlightSpec::shared() else {
+            return Vec::new();
+        };
+        highlight(spec, source)
     }
 
     fn hover(

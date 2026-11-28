@@ -455,11 +455,21 @@ mod tests {
                             e.signature_help(source, offset, &setting),
                         )
                     });
-                    let direct = (
-                        opentide_lucene::hover_dialect(source, offset, dialect),
-                        opentide_lucene::completions_dialect(source, offset, dialect),
-                        None,
-                    );
+                    // What the removed arms called: `hover` and
+                    // `completions` in the Elastic dialect.
+                    let direct = if dialect == opentide_lucene::Dialect::Elastic {
+                        (
+                            opentide_lucene::hover(source, offset),
+                            opentide_lucene::completions(source, offset),
+                            None,
+                        )
+                    } else {
+                        (
+                            opentide_lucene::hover_dialect(source, offset, dialect),
+                            opentide_lucene::completions_dialect(source, offset, dialect),
+                            None,
+                        )
+                    };
                     assert_eq!(e, Some(direct), "lucene {platform}: {source:?} at {offset}");
                 }
             }
