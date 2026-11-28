@@ -12,7 +12,7 @@ use serde::de::DeserializeOwned;
 
 use crate::compiler::{
     Bitdefender, Compiler, Datadog, Elastic, Exabeam, GoogleSecops, Graylog, GraylogTarget,
-    Sentinel, Sysdig,
+    Sentinel, Splunk, SplunkTarget, Sysdig,
 };
 use crate::json::{Json, Object};
 use crate::rule::{CompileError, Rule};
@@ -212,7 +212,14 @@ fn tenant_writes(
         PlatformId::SentinelOne => sentinel_one::compile(cx, rule, config, id),
         PlatformId::Crowdstrike => crowdstrike::compile(cx, rule, config, id),
         PlatformId::Harfanglab => harfanglab::compile(cx, rule, config),
-        PlatformId::Splunk => splunk::compile(cx, rule, config, inputs.clock),
+        PlatformId::Splunk => Splunk::compile(
+            cx,
+            rule,
+            SplunkTarget {
+                tenant: config,
+                clock: inputs.clock,
+            },
+        ),
         PlatformId::CarbonBlackCloud => carbon_black::compile(cx, rule, config, inputs.timestamp),
         // Not a deployer: a request, never writes (callers never send one).
         PlatformId::Sentinel
