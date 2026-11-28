@@ -19,6 +19,7 @@ use std::sync::{Arc, Mutex};
 
 use opentide_cassette::{Cassette, Mode, Proxy, Redaction};
 use opentide_cli::commands::deploy_send::{Args, Context, Lines, Sent, run};
+use opentide_cli::commands::result::{ExitCode, Status};
 use opentide_cli::env::Env;
 use opentide_cli::json::Json;
 use opentide_cli::render::outcome::Console;
@@ -194,14 +195,20 @@ fn replay_with(
     (proxy, env, ca)
 }
 
-/// The result's value at `key`.
+/// The value of the result's own key `key`.
 fn value<'a>(sent: &'a Sent, key: &str) -> &'a Json {
-    &sent
-        .result
+    sent.result
+        .get(key)
+        .unwrap_or_else(|| panic!("no {key} in {:?}", sent.result))
+}
+
+/// The value of the result's summary at `key`.
+fn summary<'a>(sent: &'a Sent, key: &str) -> Option<&'a Json> {
+    sent.result
+        .summary
         .iter()
         .find(|(name, _)| name == key)
-        .unwrap_or_else(|| panic!("no {key} in {:?}", sent.result))
-        .1
+        .map(|(_, value)| value)
 }
 
 /// Each result row's `status` and `error`.
@@ -258,8 +265,8 @@ fn sentinel_retires_a_rule_as_the_python_deployer_did() {
     let (sent, stderr) = deploy(ws.path(), "sentinel", &env, &sentinel_registry(), 0);
     assert_eq!(proxy.verify(), Vec::new());
     assert_eq!(rows(&sent), [("deployed".to_owned(), None)]);
-    assert_eq!(value(&sent, "status"), &Json::str("completed"));
-    assert_eq!(value(&sent, "_exit_code"), &Json::Int(0));
+    assert_eq!(sent.result.status, Status::Completed);
+    assert_eq!(sent.result.exit, ExitCode::Success);
     assert!(
         stderr.contains(
             "Deploying to sentinel / soc · 1 rule\n  [1/1] ✓ deleted   Encoded PowerShell"
@@ -299,15 +306,15 @@ fn sentinel_stops_the_run_on_a_refusal_with_the_platforms_words() {
         error.starts_with("DELETE https://management.azure.com/"),
         "{error}"
     );
-    assert_eq!(value(&sent, "_exit_code"), &Json::Int(1));
-    assert_eq!(value(&sent, "_failure_code"), &Json::str("issues_found"));
+    assert_eq!(sent.result.exit, ExitCode::Failure);
+    assert_eq!(sent.result.failure.code.as_deref(), Some("issues_found"));
     assert_eq!(
         value(&sent, "error"),
         &Json::str(format!(
             "Deployment to sentinel failed on Encoded PowerShell: {error}"
         ))
     );
-    let Json::Str(message) = value(&sent, "message") else {
+    let Some(message) = &sent.result.message else {
         panic!("a message")
     };
     assert!(
@@ -373,7 +380,7 @@ fn carbon_black_updates_the_report_as_the_python_deployer_did() {
     );
     assert_eq!(proxy.verify(), Vec::new());
     assert_eq!(rows(&sent), [("deployed".to_owned(), None)]);
-    assert_eq!(value(&sent, "status"), &Json::str("completed"));
+    assert_eq!(sent.result.status, Status::Completed);
 }
 
 #[test]
@@ -404,7 +411,7 @@ fn harfanglab_deletes_a_yara_file_as_the_python_client_did() {
     );
     assert_eq!(proxy.verify(), Vec::new());
     assert_eq!(rows(&sent), [("deployed".to_owned(), None)]);
-    assert_eq!(value(&sent, "_exit_code"), &Json::Int(0));
+    assert_eq!(sent.result.exit, ExitCode::Success);
 }
 
 /// A HarfangLab tenant that still sets the removed `type` fails before
@@ -442,7 +449,7 @@ fn harfanglab_refuses_a_tenant_that_still_sets_type() {
             &opentide_connectors::builtin(),
             0,
         );
-        assert_eq!(value(&sent, "status"), &Json::str("failed"), "{kind}");
+        assert_eq!(sent.result.status, Status::Failed, "{kind}");
         assert_eq!(rows(&sent), [("not_attempted".to_owned(), None)], "{kind}");
         let Json::Array(failures) = value(&sent, "failures") else {
             panic!("no failures")
@@ -526,7 +533,7 @@ fn harfanglab_deploys_sigma_and_yara_to_one_tenant() {
     );
     rt.block_on(server.verify());
     assert_eq!(rows(&sent), vec![("deployed".to_owned(), None); 4]);
-    assert_eq!(value(&sent, "status"), &Json::str("completed"));
+    assert_eq!(sent.result.status, Status::Completed);
 }
 
 /// A registered platform that forwards to a [`Scripted`] the test keeps.
@@ -697,8 +704,8 @@ fn a_sentinel_technique_warning_reaches_the_run_once_per_rule() {
         "one request each tenant"
     );
     assert_eq!(
-        value(&sent, "warnings"),
-        &Json::Array(vec![Json::str("Some rules reported deployment warnings")])
+        sent.result.warnings,
+        ["Some rules reported deployment warnings"]
     );
     let log = String::from_utf8(captured.0.lock().unwrap().clone()).unwrap();
     assert_eq!(
@@ -747,8 +754,8 @@ fn a_refused_rule_fails_alone_and_the_rules_after_it_are_deployed() {
             )),
             "{stderr}"
         );
-        assert_eq!(value(&sent, "_exit_code"), &Json::Int(1), "{platform}");
-        assert_eq!(value(&sent, "status"), &Json::str("failed"), "{platform}");
+        assert_eq!(sent.result.exit, ExitCode::Failure, "{platform}");
+        assert_eq!(sent.result.status, Status::Failed, "{platform}");
         assert_eq!(
             value(&sent, "error"),
             &Json::str(
@@ -866,11 +873,7 @@ fn a_tenant_refusing_the_credentials_stops_only_its_own_rules() {
         )
     );
     // No rule failed: the run's code is not `issues_found`.
-    assert!(
-        !sent.result.iter().any(|(key, _)| key == "_failure_code"),
-        "{:?}",
-        sent.result
-    );
+    assert!(sent.result.failure.code.is_none(), "{:?}", sent.result);
     assert_eq!(
         value(&sent, "deployed"),
         &Json::Array(vec![Json::str("sentinel")])
@@ -888,7 +891,7 @@ fn a_rule_refused_before_planning_is_listed_with_the_failures() {
     let env = Env::from_pairs([("AZURE_CLIENT_SECRET", SECRET)]);
     let (sent, _) = deploy(ws.path(), "sentinel", &env, &registry, 0);
     assert_eq!(deployer.seen.lock().unwrap().len(), 2);
-    assert_eq!(value(&sent, "_exit_code"), &Json::Int(1));
+    assert_eq!(sent.result.exit, ExitCode::Failure);
     let Json::Array(failures) = value(&sent, "failures") else {
         panic!("no failures")
     };
@@ -926,7 +929,7 @@ fn an_interrupt_stops_the_run_and_keeps_the_failures_before_it() {
     let statuses: Vec<String> = rows(&sent).into_iter().map(|(status, _)| status).collect();
     assert_eq!(statuses, ["failed", "failed", "not_attempted"]);
     assert_eq!(deployer.seen.lock().unwrap().len(), 2);
-    assert_eq!(value(&sent, "_exit_code"), &Json::Int(1));
+    assert_eq!(sent.result.exit, ExitCode::Failure);
     assert_eq!(
         value(&sent, "error"),
         &Json::str("Deployment to sentinel failed on Second: interrupted")
@@ -1015,7 +1018,7 @@ fn a_refused_rule_on_one_platform_leaves_the_next_platform_to_deploy() {
             .map(|(platform, status)| (platform.to_owned(), status.to_owned()))
     );
     assert_eq!(splunk.seen.lock().unwrap().len(), 1);
-    assert_eq!(value(&sent, "_exit_code"), &Json::Int(1));
+    assert_eq!(sent.result.exit, ExitCode::Failure);
     // Both platforms' sends ran on the process's one runtime (#1558).
     assert_eq!(opentide_connectors::runtime::started(), 1);
 }
@@ -1045,15 +1048,15 @@ fn a_platform_without_tenants_is_refused_before_anything_is_sent() {
     let env = Env::from_pairs(Vec::<(String, String)>::new());
     let (sent, stderr) = deploy(dir.path(), "sentinel", &env, &Registry::new(), 0);
     assert_eq!(stderr, "");
-    assert_eq!(value(&sent, "status"), &Json::str("failed"));
+    assert_eq!(sent.result.status, Status::Failed);
     assert_eq!(
-        value(&sent, "message"),
-        &Json::str(
+        sent.result.message.as_deref(),
+        Some(
             "Cannot deploy: sentinel has no tenants configured in \
              .opentide/configurations/platforms/sentinel.toml"
         )
     );
-    assert_eq!(value(&sent, "_exit_code"), &Json::Int(1));
+    assert_eq!(sent.result.exit, ExitCode::Failure);
     let report = sent.report();
     assert_eq!(report.outcome.exit_code, 1);
     assert_eq!(
@@ -1081,10 +1084,10 @@ fn a_platform_with_no_rule_to_deploy_is_skipped_and_counts_the_blocks_left_out()
     let env = Env::from_pairs([("GITHUB_ACTIONS", "true")]);
     let (sent, stderr) = deploy(ws.path(), "sentinel", &env, &Registry::new(), 0);
     assert_eq!(stderr, "");
-    assert_eq!(value(&sent, "status"), &Json::str("skipped"));
+    assert_eq!(sent.result.status, Status::Skipped);
     assert_eq!(
-        value(&sent, "message"),
-        &Json::str("No rules to deploy for this platform")
+        sent.result.message.as_deref(),
+        Some("No rules to deploy for this platform")
     );
     let report = sent.report();
     assert_eq!(report.outcome.exit_code, 0);
@@ -1162,7 +1165,7 @@ fn deployment_state_refuses_or_skips_rules_before_any_request() {
             .contains("records object_uuid \"x\""),
         "{rows:?}"
     );
-    assert_eq!(value(&sent, "_exit_code"), &Json::Int(1));
+    assert_eq!(sent.result.exit, ExitCode::Failure);
     assert!(stderr.contains("[2/3] · skipped "), "{stderr}");
     // `--persist-state-externally` lifts the CI refusal: the create would be sent.
     let persist = Args {
@@ -1207,8 +1210,8 @@ fn usage_errors_and_selections_that_match_nothing_are_refused_before_planning() 
     };
     let (sent, _) = deploy_with(ws.path(), &base, &none, &Registry::new(), 0);
     assert_eq!(
-        value(&sent, "_failure_code"),
-        &Json::str("usage_missing_option")
+        sent.result.failure.code.as_deref(),
+        Some("usage_missing_option")
     );
     let typo = Args {
         strategies: vec!["PREVEW".into()],
@@ -1216,10 +1219,10 @@ fn usage_errors_and_selections_that_match_nothing_are_refused_before_planning() 
     };
     let (sent, _) = deploy_with(ws.path(), &typo, &none, &Registry::new(), 0);
     assert_eq!(
-        value(&sent, "_failure_code"),
-        &Json::str("usage_invalid_choice")
+        sent.result.failure.code.as_deref(),
+        Some("usage_invalid_choice")
     );
-    assert_eq!(value(&sent, "_failure_suggestion"), &Json::str("PREVIEW"));
+    assert_eq!(sent.result.failure.suggestion.as_deref(), Some("PREVIEW"));
     let plan = Env::from_pairs([("DEPLOYMENT_PLAN", "STAGING")]);
     let preview = Args {
         strategies: vec!["PREVIEW".into()],
@@ -1227,8 +1230,8 @@ fn usage_errors_and_selections_that_match_nothing_are_refused_before_planning() 
     };
     let (sent, _) = deploy_with(ws.path(), &preview, &plan, &Registry::new(), 0);
     assert_eq!(
-        value(&sent, "_failure_code"),
-        &Json::str("usage_invalid_value")
+        sent.result.failure.code.as_deref(),
+        Some("usage_invalid_value")
     );
     let unmatched = Args {
         all: false,
@@ -1237,14 +1240,14 @@ fn usage_errors_and_selections_that_match_nothing_are_refused_before_planning() 
     };
     let (sent, _) = deploy_with(ws.path(), &unmatched, &none, &Registry::new(), 0);
     assert_eq!(value(&sent, "scope"), &Json::str("selected"));
-    assert_eq!(value(&sent, "_exit_code"), &Json::Int(1));
+    assert_eq!(sent.result.exit, ExitCode::Failure);
     // No git checkout: the changed rules cannot be read.
     let changed = Args {
         all: false,
         ..preview.clone()
     };
     let (sent, _) = deploy_with(ws.path(), &changed, &none, &Registry::new(), 0);
-    let Json::Str(message) = value(&sent, "message") else {
+    let Some(message) = &sent.result.message else {
         panic!("a message")
     };
     assert!(message.contains("needs a git checkout"), "{message}");
@@ -1254,7 +1257,7 @@ fn usage_errors_and_selections_that_match_nothing_are_refused_before_planning() 
         ..preview.clone()
     };
     let (sent, _) = deploy_with(ws.path(), &other, &none, &Registry::new(), 0);
-    assert_eq!(value(&sent, "status"), &Json::str("skipped"));
+    assert_eq!(sent.result.status, Status::Skipped);
     assert_eq!(value(&sent, "platform"), &Json::str("crowdstrike"));
 }
 
@@ -1289,10 +1292,8 @@ fn every_platform_without_tenants_can_be_skipped_with_skip_unconfigured() {
     };
     let env = Env::from_pairs(Vec::<(String, String)>::new());
     let (sent, _) = deploy_with(dir.path(), &args, &env, &Registry::new(), 0);
-    assert_eq!(value(&sent, "status"), &Json::str("skipped"));
-    assert!(
-        matches!(value(&sent, "message"), Json::Str(text) if text.starts_with("Skipped deploy: "))
-    );
+    assert_eq!(sent.result.status, Status::Skipped);
+    assert!(matches!(&sent.result.message, Some(text) if text.starts_with("Skipped deploy: ")));
     assert_eq!(sent.report().outcome.exit_code, 0);
 }
 
@@ -1407,10 +1408,10 @@ fn sysdig_forgets_a_rule_to_disable_the_tenant_lost_and_stops_on_a_refused_read(
             .join(format!(".opentide/states/deployment/{denied}.json"))
             .is_file()
     );
-    assert_eq!(value(&sent, "status"), &Json::str("failed"));
+    assert_eq!(sent.result.status, Status::Failed);
     assert_eq!(
-        value(&sent, "warnings"),
-        &Json::Array(vec![Json::str("Some rules reported deployment warnings")])
+        sent.result.warnings,
+        ["Some rules reported deployment warnings"]
     );
 }
 
@@ -1855,8 +1856,8 @@ fn bitdefender_records_created_rules_and_fails_one_whose_name_is_taken() {
     assert!(!recorded.contains("cccccccccccccccccccccccc"), "{recorded}");
     // The lost rule's `bitdefender_rule_recreated` warning.
     assert_eq!(
-        value(&sent, "warnings"),
-        &Json::Array(vec![Json::str("Some rules reported deployment warnings")])
+        sent.result.warnings,
+        ["Some rules reported deployment warnings"]
     );
 }
 
@@ -1902,8 +1903,8 @@ fn bitdefender_forgets_a_lost_rule_to_disable_and_stops_a_tenant_refusing_the_ke
             .exists()
     );
     assert_eq!(
-        value(&sent, "warnings"),
-        &Json::Array(vec![Json::str("Some rules reported deployment warnings")])
+        sent.result.warnings,
+        ["Some rules reported deployment warnings"]
     );
 
     let refusing = rt.block_on(wiremock::MockServer::start());
@@ -1996,8 +1997,8 @@ fn assert_failed_before_any_rule(sent: &Sent, platform: &str, tenant: &str, erro
     assert_eq!(theirs[0].get("id"), None, "{failures:?}");
     let text = theirs[0].get("error").and_then(Json::as_str).unwrap();
     assert!(text.starts_with(error), "{text}");
-    assert_eq!(value(sent, "_exit_code"), &Json::Int(1));
-    assert_eq!(value(sent, "status"), &Json::str("failed"));
+    assert_eq!(sent.result.exit, ExitCode::Failure);
+    assert_eq!(sent.result.status, Status::Failed);
 }
 
 /// The run of a platform whose only tenant, `tenant`, failed on a rule: the
@@ -3934,7 +3935,7 @@ fn a_platform_whose_every_tenant_failed_on_a_rule_is_not_deployed() {
     );
     rt.block_on(server.verify());
     assert_eq!(value(&sent, "deployed"), &Json::Array(Vec::new()));
-    assert_eq!(value(&sent, "status"), &Json::str("failed"));
+    assert_eq!(sent.result.status, Status::Failed);
     let rows = rows(&sent);
     let statuses: Vec<&str> = rows.iter().map(|(status, _)| status.as_str()).collect();
     assert_eq!(
@@ -4451,13 +4452,6 @@ fn sent_and_unsent() -> tempfile::TempDir {
     ws
 }
 
-fn text_of(json: &Json) -> String {
-    match json {
-        Json::Str(text) => text.clone(),
-        other => format!("{other:?}"),
-    }
-}
-
 /// A promoted file the run cannot put back fails the run (exit 1), naming
 /// the file: its commit would carry a status no tenant received (#1653).
 /// The rules folder is made read-only while the rule is sent; a privileged
@@ -4484,9 +4478,9 @@ fn a_promotion_the_run_cannot_undo_fails_the_run() {
         Vec::new(),
     );
     mode(0o755).unwrap();
-    assert_eq!(value(&sent, "_exit_code"), &Json::Int(1), "{text}");
-    assert_eq!(value(&sent, "status"), &Json::str("failed"), "{text}");
-    let message = text_of(value(&sent, "message"));
+    assert_eq!(sent.result.exit, ExitCode::Failure, "{text}");
+    assert_eq!(sent.result.status, Status::Failed, "{text}");
+    let message = sent.result.message.clone().unwrap_or_default();
     assert!(
         message.contains("Could not undo the status promotion of") && message.contains("b.yaml"),
         "{message}"
@@ -4533,21 +4527,18 @@ fn a_promoted_file_changed_during_the_run_is_left_as_it_is() {
             Vec::new(),
         );
         if deleted {
-            assert_eq!(value(&sent, "_exit_code"), &Json::Int(0), "{text}");
-            let Json::Array(warnings) = value(&sent, "warnings") else {
-                panic!("{:?}", sent.result)
-            };
+            assert_eq!(sent.result.exit, ExitCode::Success, "{text}");
+            let warnings = &sent.result.warnings;
             assert!(
                 warnings.iter().any(|warning| {
-                    let warning = text_of(warning);
                     warning.contains("was deleted during the deploy") && warning.contains("b.yaml")
                 }),
                 "{warnings:?}"
             );
             assert!(!unsent.exists(), "the deleted file was made again");
         } else {
-            assert_eq!(value(&sent, "_exit_code"), &Json::Int(1), "{text}");
-            let message = text_of(value(&sent, "message"));
+            assert_eq!(sent.result.exit, ExitCode::Failure, "{text}");
+            let message = sent.result.message.clone().unwrap_or_default();
             assert!(
                 message.contains("b.yaml") && message.contains("changed during the deploy"),
                 "{message}"
@@ -4600,7 +4591,7 @@ fn a_promoted_rule_that_reached_one_tenant_of_two_stays_promoted() {
             )),
         ],
     );
-    assert_eq!(value(&sent, "_exit_code"), &Json::Int(1), "{text}");
+    assert_eq!(sent.result.exit, ExitCode::Failure, "{text}");
     let mut statuses: Vec<String> = rows(&sent).into_iter().map(|(status, _)| status).collect();
     statuses.sort();
     assert_eq!(statuses, ["deployed", "failed"], "{text}");
@@ -4659,7 +4650,7 @@ fn a_platform_run_with_nothing_to_deploy_names_its_strategies() {
         &Registry::new(),
         0,
     );
-    assert_eq!(value(&sent, "status"), &Json::str("skipped"));
+    assert_eq!(sent.result.status, Status::Skipped);
     let Json::Str(advice) = value(&sent, "advice") else {
         panic!("advice")
     };
@@ -4669,8 +4660,8 @@ fn a_platform_run_with_nothing_to_deploy_names_its_strategies() {
         "{advice}"
     );
     assert_eq!(
-        value(&sent, "_outcome"),
-        &Json::str("No rule has a status PREVIEW deploys · 1 rule in PRODUCTION")
+        sent.result.outcome_line.as_deref(),
+        Some("No rule has a status PREVIEW deploys · 1 rule in PRODUCTION")
     );
     let Json::Array(skipped) = value(&sent, "skipped") else {
         panic!("skipped")
@@ -5292,7 +5283,7 @@ fn a_tenant_failing_the_unchanged_lookup_follows_the_failure_before_any_rule() {
     );
     let statuses: Vec<String> = rows(&sent).into_iter().map(|(status, _)| status).collect();
     assert_eq!(statuses, ["deployed", "failed", "not_attempted"], "{text}");
-    assert_eq!(value(&sent, "_exit_code"), &Json::Int(1));
+    assert_eq!(sent.result.exit, ExitCode::Failure);
     assert_eq!(kibana.writes.lock().unwrap().len(), writes, "{text}");
 }
 
@@ -6289,7 +6280,7 @@ fn the_summary_counts_skipped_rows_and_rules_left_out() {
     );
     assert_eq!(rows(&sent), [("skipped".to_owned(), None)], "{text}");
     assert_eq!(
-        value(&sent, "_summary").get("skipped"),
+        summary(&sent, "skipped"),
         Some(&Json::Int(2)),
         "{:?}",
         sent.result
@@ -6405,7 +6396,7 @@ fn a_tenant_that_signs_in_then_refuses_the_first_rule_fails_before_any_rule() {
         let checked = std::panic::catch_unwind(|| {
             let statuses: Vec<String> = rows(&sent).into_iter().map(|(status, _)| status).collect();
             assert_eq!(statuses, ["not_attempted"], "{platform}: {text}");
-            assert_eq!(value(&sent, "_exit_code"), &Json::Int(1), "{platform}");
+            assert_eq!(sent.result.exit, ExitCode::Failure, "{platform}");
         });
         if checked.is_err() {
             failed.push(platform);
@@ -6721,7 +6712,7 @@ fn the_summary_counts_a_skipped_rule_once() {
     };
     assert_eq!(left.len(), 1, "the Sentinel block is left out: {left:?}");
     assert_eq!(
-        value(&sent, "_summary").get("skipped"),
+        summary(&sent, "skipped"),
         Some(&Json::Int(1)),
         "{text}\n{:?}",
         sent.result
@@ -6998,8 +6989,9 @@ fn sentinel_reports_what_arm_did_for_a_rule_it_read_first() {
     assert_eq!(proxy.verify(), Vec::new(), "{:?}", sent.result);
     assert_eq!(only_action(&sent), "unchanged");
     assert!(
-        value(&sent, "message")
-            .as_str()
+        sent.result
+            .message
+            .as_deref()
             .is_some_and(|message| message.contains("1 deleted, 1 unchanged")),
         "{:?}",
         sent.result
@@ -7693,8 +7685,8 @@ fn a_panic_on_a_tenant_deploying_at_once_starts_no_other_tenant() {
     let env = Env::from_pairs([("AZURE_CLIENT_SECRET", SECRET)]);
     let (sent, stderr) = deploy(ws.path(), "sentinel", &env, &registry, 0);
     assert_eq!(
-        value(&sent, "message"),
-        &Json::str("the deploy stopped unexpectedly"),
+        sent.result.message.as_deref(),
+        Some("the deploy stopped unexpectedly"),
         "{stderr}"
     );
     let mut opened = panicking.opened.lock().unwrap().clone();

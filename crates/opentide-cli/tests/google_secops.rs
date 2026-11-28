@@ -15,7 +15,7 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use opentide_cli::commands::deploy_send::{self, Lines, Sent};
-use opentide_cli::commands::result::Status;
+use opentide_cli::commands::result::{ExitCode, Status};
 use opentide_cli::commands::validate_live::{self, Live};
 use opentide_cli::commands::validate_query::Args as QueryArgs;
 use opentide_cli::env::Env;
@@ -197,7 +197,7 @@ fn value<'a>(result: &'a [(String, Json)], key: &str) -> &'a Json {
 
 /// Each result row's `status` and `error`.
 fn rows(sent: &Sent) -> Vec<(String, Option<String>)> {
-    let Json::Array(results) = value(&sent.result, "results") else {
+    let Json::Array(results) = value(&sent.result.data, "results") else {
         panic!("no results")
     };
     results
@@ -241,7 +241,7 @@ fn a_created_rule_records_its_id_in_deployment_state() {
     let (ws, env) = workspace(&server.uri(), "STAGING");
     let (sent, stderr) = deploy(ws.path(), &env);
     assert_eq!(rows(&sent), [("deployed".to_owned(), None)], "{stderr}");
-    assert_eq!(value(&sent.result, "status"), &Json::str("completed"));
+    assert_eq!(sent.result.status, Status::Completed);
     let shard = std::fs::read_to_string(
         opentide_cli::commands::deploy_state::state_dir(ws.path()).join(format!("{UUID}.json")),
     )
@@ -427,12 +427,8 @@ fn unreadable_credentials_fail_the_tenant() {
         ws.path().join("missing.json").to_str().unwrap().to_owned(),
     )]);
     let (sent, stderr) = deploy(ws.path(), &env);
-    assert_eq!(
-        value(&sent.result, "status"),
-        &Json::str("failed"),
-        "{stderr}"
-    );
-    assert_ne!(value(&sent.result, "_exit_code"), &Json::Int(0));
+    assert_eq!(sent.result.status, Status::Failed, "{stderr}");
+    assert_ne!(sent.result.exit, ExitCode::Success);
 }
 
 #[test]
@@ -527,13 +523,13 @@ fn a_tenant_refusing_the_token_on_a_rule_stops_and_is_not_deployed() {
     let (sent, stderr) = deploy(ws.path(), &env);
     runtime.block_on(server.verify());
     assert_eq!(
-        value(&sent.result, "deployed"),
+        value(&sent.result.data, "deployed"),
         &Json::Array(Vec::new()),
         "{stderr}"
     );
     let statuses: Vec<String> = rows(&sent).into_iter().map(|(status, _)| status).collect();
     assert_eq!(statuses, ["not_attempted", "not_attempted"], "{stderr}");
-    let Json::Array(results) = value(&sent.result, "results") else {
+    let Json::Array(results) = value(&sent.result.data, "results") else {
         panic!("no results")
     };
     assert_eq!(
