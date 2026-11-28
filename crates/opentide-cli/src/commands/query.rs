@@ -19,7 +19,7 @@ use std::time::{Duration, Instant};
 
 use super::interrupt::watched;
 use opentide_connectors::connector::{QueryOutcome, QueryRequest, TenantContext, TimeWindow};
-use opentide_connectors::credentials::Mode as Resolve;
+use opentide_connectors::credentials::{self, Mode as Resolve};
 use opentide_connectors::{ConnectorError, Environment, HttpClient, HttpSettings, Tenant};
 use opentide_schema::platforms::PlatformKey;
 use tokio_util::sync::CancellationToken;
@@ -65,47 +65,6 @@ pub const CELL_WIDTH: usize = 60;
 /// (`PLATFORM_LANGUAGES`).
 pub fn languages(platform: &str) -> &'static [&'static str] {
     opentide_schema::platforms::get(platform).map_or(&[], |platform| platform.runner_languages)
-}
-
-/// The client a platform's runner names when its credentials are unset, and
-/// the setup keys it checks, in order (`reject_unsubstituted_placeholders`).
-pub(crate) fn credential_keys(platform: &str) -> (&'static str, &'static [&'static str]) {
-    match platform {
-        "microsoft_defender" => (
-            "Microsoft Graph",
-            &["tenant_id", "client_id", "client_secret"],
-        ),
-        "crowdstrike" => ("CrowdStrike", &["client_id", "client_secret"]),
-        "sentinel_one" => ("SentinelOne", &["url", "api_token"]),
-        "elastic" => ("Elastic", &["api_key"]),
-        "harfanglab" => ("HarfangLab", &["url", "api_token"]),
-        "splunk" => ("Splunk", &["url", "port", "token", "app", "ssl"]),
-        "carbon_black_cloud" => ("CBC", &["url", "org_key", "token"]),
-        "sentinel" => (
-            "Azure",
-            &["azure_tenant_id", "azure_client_id", "azure_client_secret"],
-        ),
-        "graylog" => ("Graylog", &["url", "token"]),
-        _ => ("", &[]),
-    }
-}
-
-/// Microsoft Graph, which Microsoft Defender's tenants are reached through.
-const GRAPH_HOST: &str = "https://graph.microsoft.com";
-/// CrowdStrike's API in its default cloud (US-1).
-const CROWDSTRIKE_HOST: &str = "https://api.crowdstrike.com";
-/// The Log Analytics API, which Microsoft Sentinel's queries run on.
-const LOG_ANALYTICS_HOST: &str = "https://api.loganalytics.io";
-
-/// The address a transport failure is reported at, for a tenant configured
-/// without a URL (`_DEFAULT_HOSTS`).
-pub(crate) fn default_host(platform: &str) -> &'static str {
-    match platform {
-        "microsoft_defender" => GRAPH_HOST,
-        "crowdstrike" => CROWDSTRIKE_HOST,
-        "sentinel" => LOG_ANALYTICS_HOST,
-        _ => "",
-    }
 }
 
 /// How rows are written when `--json` is off: `--format`, as clap parses it.
@@ -622,9 +581,13 @@ pub(crate) fn log_unset(tenants: &[Configured], env: &Env, before: &str) {
 }
 
 /// The runner's refusal of credentials still `$NAME` placeholders
-/// (`reject_unsubstituted_placeholders`), or `None`.
+/// (`reject_unsubstituted_placeholders`), or `None`: a plugin platform's are
+/// its plugin's to check.
 pub(crate) fn unset_credentials(platform: &str, tenant: &Configured, env: &Env) -> Option<String> {
-    let (client, keys) = credential_keys(platform);
+    let PlatformKey::BuiltIn(platform) = PlatformKey::new(platform) else {
+        return None;
+    };
+    let credentials::Keys { client, keys } = credentials::keys(platform)?;
     let missing: Vec<String> = keys
         .iter()
         .filter_map(|key| tenant.setup.get(*key))
@@ -2154,24 +2117,6 @@ mod tests {
         assert_eq!(languages("splunk"), ["spl"]);
         assert_eq!(languages("carbon_black_cloud"), ["lucene"]);
         assert!(languages("sysdig").is_empty());
-        assert_eq!(
-            credential_keys("harfanglab"),
-            ("HarfangLab", &["url", "api_token"][..])
-        );
-        assert_eq!(credential_keys("elastic").1, ["api_key"]);
-        assert_eq!(credential_keys("crowdstrike").0, "CrowdStrike");
-        assert_eq!(credential_keys("microsoft_defender").1.len(), 3);
-        assert_eq!(
-            credential_keys("splunk"),
-            ("Splunk", &["url", "port", "token", "app", "ssl"][..])
-        );
-        assert_eq!(credential_keys("carbon_black_cloud").0, "CBC");
-        assert_eq!(credential_keys("sentinel").1.len(), 3);
-        assert_eq!(credential_keys("sysdig"), ("", &[][..]));
-        assert_eq!(
-            credential_keys("graylog"),
-            ("Graylog", &["url", "token"][..])
-        );
         for platform in platforms() {
             let settings = http_settings(platform, Duration::from_secs(30));
             assert!(settings.timeout > Duration::ZERO, "{platform}");
