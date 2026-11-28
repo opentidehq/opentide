@@ -2119,6 +2119,7 @@ async fn google_secops(
             connector
                 .authorizer(&conn.tenant)
                 .map(|authorizer| (instance, authorizer))
+                .map_err(ConnectorError::from)
         });
         let (instance, authorizer) = match ready {
             Ok(ready) => ready,
