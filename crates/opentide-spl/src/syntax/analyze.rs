@@ -555,7 +555,13 @@ fn command_without_pipe(
     if first.kind() != K::IDENTIFIER || word.as_ref().map(SyntaxToken::kind) != Some(K::IDENT) {
         return;
     }
-    let name = &source[span(first.text_range()).start..span(first.text_range()).end];
+    let range = span(first.text_range());
+    // A node's range is on the char boundaries of the text it was parsed from.
+    let name = source.get(range.start..range.end);
+    debug_assert!(name.is_some(), "{range:?}");
+    let Some(name) = name else {
+        return;
+    };
     if name.eq_ignore_ascii_case("search") || catalog.command(name).is_none() {
         return;
     }
@@ -882,7 +888,10 @@ mod walk_tests {
         let mut out: Vec<String> = SAMPLES.iter().map(|s| (*s).to_owned()).collect();
         let cut: Vec<String> = SAMPLES
             .iter()
-            .flat_map(|t| t.char_indices().map(|(i, _)| t[..i].to_owned()))
+            .flat_map(|t| {
+                t.char_indices()
+                    .map(|(i, _)| t.get(..i).unwrap().to_owned())
+            })
             .collect();
         out.extend(cut);
         out

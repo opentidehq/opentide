@@ -55,7 +55,19 @@ pub(crate) fn command_word(
     while i < end && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_') {
         i += 1;
     }
-    (source[word_start..i].to_string(), Some((word_start, i)))
+    (
+        cut(source, word_start, i).to_string(),
+        Some((word_start, i)),
+    )
+}
+
+/// `source[start..end]`, a span the byte scanners of this crate cut: they
+/// stop at ASCII bytes or at the end, so its ends are char boundaries. A span
+/// that is not fails a debug assertion and reads as empty.
+pub(crate) fn cut(source: &str, start: usize, end: usize) -> &str {
+    let text = source.get(start..end);
+    debug_assert!(text.is_some(), "{start}..{end} in {} bytes", source.len());
+    text.unwrap_or_default()
 }
 
 pub(crate) fn skip_hidden(source: &str, i: usize, end: usize) -> Option<usize> {
@@ -738,7 +750,11 @@ mod plan_tests {
         let mut out: Vec<String> = SAMPLES.iter().map(|s| (*s).to_owned()).collect();
         let cut: Vec<String> = SAMPLES
             .iter()
-            .flat_map(|t| t.char_indices().step_by(2).map(|(i, _)| t[..i].to_owned()))
+            .flat_map(|t| {
+                t.char_indices()
+                    .step_by(2)
+                    .map(|(i, _)| t.get(..i).unwrap().to_owned())
+            })
             .collect();
         out.extend(cut);
         let depth = MAX_SUBSEARCH_DEPTH + 3;

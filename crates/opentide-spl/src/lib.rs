@@ -11,6 +11,11 @@
     clippy::too_many_lines,
     reason = "engine dispatchers match every node kind in one function"
 )]
+// Slicing a `str` by byte index panics off a char boundary, and this crate
+// reads user queries: every slice is checked or says why it is safe (#1946;
+// the lint moves to `[workspace.lints]` once every crate is clean).
+#![warn(clippy::string_slice)]
+
 use opentide_core::{
     CompletionItem, Diagnostic, ParameterInformation, Range, SignatureHelp, SignatureInformation,
     codes, suggest,
@@ -477,11 +482,7 @@ fn option_fragment(opt: &CommandOption) -> String {
 }
 
 fn assigned_option<'a>(before: &str, catalog: &'a Catalog, cmd: &str) -> Option<&'a CommandOption> {
-    let trimmed = before.trim_end();
-    if !trimmed.ends_with('=') {
-        return None;
-    }
-    let left = trimmed[..trimmed.len() - 1].trim_end();
+    let left = before.trim_end().strip_suffix('=')?.trim_end();
     let name = left
         .rsplit(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
         .next()
@@ -700,7 +701,12 @@ fn spl_word_at(source: &str, offset: usize) -> Option<String> {
     if i >= j {
         None
     } else {
-        Some(source[i..j].to_string())
+        #[expect(
+            clippy::string_slice,
+            reason = "with `i < j`, `i..j` is a run of ASCII name bytes: char boundaries"
+        )]
+        let word = &source[i..j];
+        Some(word.to_string())
     }
 }
 
@@ -709,9 +715,7 @@ fn spl_word_at(source: &str, offset: usize) -> Option<String> {
 pub fn hover(source: &str, offset: usize) -> Option<String> {
     let offset = offset.min(source.len());
     // An offset inside a character (a decoded escape) has nothing to show.
-    if !source.is_char_boundary(offset) {
-        return None;
-    }
+    let before = source.get(..offset)?;
     let catalog = Catalog::cached();
     let word = spl_word_at(source, offset)?;
     let macro_name = word.trim_matches('`');
@@ -726,7 +730,7 @@ pub fn hover(source: &str, offset: usize) -> Option<String> {
         }
         return Some(md);
     }
-    if let Some(cmd) = last_command(&source[..offset])
+    if let Some(cmd) = last_command(before)
         && let Some(opt) = catalog
             .options_for(argument_command(&cmd))
             .into_iter()
@@ -751,7 +755,7 @@ pub fn hover(source: &str, offset: usize) -> Option<String> {
             c.docs.clone().unwrap_or_default()
         ));
     }
-    let aggregate = last_command(&source[..offset]).is_some_and(|cmd| aggregate_command(&cmd));
+    let aggregate = last_command(before).is_some_and(|cmd| aggregate_command(&cmd));
     if let Some(f) = catalog.function_in_context(&word, aggregate) {
         return Some(function_markdown(f));
     }
@@ -995,11 +999,15 @@ fn innermost_call(before: &str) -> Option<(String, u32)> {
             break;
         }
     }
-    let name = before[i..open].trim_matches('`').to_string();
+    #[expect(
+        clippy::string_slice,
+        reason = "`i` and `open` index ASCII bytes (name bytes or the `(`): char boundaries"
+    )]
+    let (name, inside) = (&before[i..open], &before[open + 1..]);
+    let name = name.trim_matches('`').to_string();
     if name.is_empty() {
         return None;
     }
-    let inside = &before[open + 1..];
     let mut commas = 0u32;
     let mut nested = 0i32;
     for b in inside.bytes() {
@@ -1014,18 +1022,22 @@ fn innermost_call(before: &str) -> Option<(String, u32)> {
 }
 
 fn parameters_from_signature(sig: &str) -> Vec<ParameterInformation> {
-    let Some(open) = sig.find('(') else {
+    let Some((head, rest)) = sig.split_once('(') else {
         return Vec::new();
     };
-    let start = open + 1;
-    let end = sig.rfind(')').unwrap_or(sig.len());
-    if start >= end {
+    // Up to the last `)`, which must come after the `(`.
+    let inner = match rest.rsplit_once(')') {
+        Some((inner, _)) => inner,
+        None if head.contains(')') => return Vec::new(),
+        None => rest,
+    };
+    if inner.is_empty() {
         return Vec::new();
     }
     let mut params = Vec::new();
     let mut depth = 0i32;
     let mut cur = String::new();
-    for ch in sig[start..end].chars() {
+    for ch in inner.chars() {
         match ch {
             '(' => {
                 depth += 1;
@@ -1373,7 +1385,7 @@ mod tests {
         let r = analyze("index=main | head 1");
         assert!(r.tokens.iter().any(|t| t.capture == "property"));
         assert!(!r.tokens.iter().any(|t| t.capture == "keyword" && {
-            let s = &"index=main | head 1"[t.span.start..t.span.end];
+            let s = "index=main | head 1".get(t.span.start..t.span.end).unwrap();
             s == "search"
         }));
     }
@@ -1440,8 +1452,9 @@ mod tests {
     fn highlight_scm_query_emits_spl_keywords() {
         let src = "index=main | stats count by host | head 1";
         let r = analyze(src);
-        let slice =
-            |t: &opentide_highlight::HighlightToken| src[t.span.start..t.span.end].to_string();
+        let slice = |t: &opentide_highlight::HighlightToken| {
+            src.get(t.span.start..t.span.end).unwrap().to_string()
+        };
         assert!(
             r.tokens
                 .iter()
@@ -1477,7 +1490,12 @@ mod tests {
         let pairs: Vec<(&str, &str)> = r
             .tokens
             .iter()
-            .map(|t| (t.capture.as_str(), &src[t.span.start..t.span.end]))
+            .map(|t| {
+                (
+                    t.capture.as_str(),
+                    src.get(t.span.start..t.span.end).unwrap(),
+                )
+            })
             .collect();
         assert!(
             pairs.iter().any(|(c, t)| *c == "keyword" && *t == "as"),
@@ -1506,7 +1524,12 @@ mod tests {
         let pairs: Vec<(&str, &str)> = r
             .tokens
             .iter()
-            .map(|t| (t.capture.as_str(), &src[t.span.start..t.span.end]))
+            .map(|t| {
+                (
+                    t.capture.as_str(),
+                    src.get(t.span.start..t.span.end).unwrap(),
+                )
+            })
             .collect();
         assert!(
             pairs
@@ -1804,5 +1827,68 @@ mod tests {
         assert!(completions(src, inside).is_empty());
         assert_eq!(hover(src, inside), None);
         assert!(signature_help(src, inside).is_none());
+    }
+
+    /// Queries with multi-byte text in every place the scanners cut: the
+    /// data model checks, declared sourcetypes, the performance and search
+    /// operator checks, parentheses, directives and signs. The spans they
+    /// cut are checked in debug builds (`scan::cut`).
+    const MULTI_BYTE: &[&str] = &[
+        "index=é sourcetype=\"😀\" | tstats count from datamodel=Endpoint.Processes where Processes.é😀=* by Processes.user | rename Processes.* as é",
+        "| datamodel Endpoint Processes search | search Processes.process_name=é*😀 Processes.usér=x",
+        "search é*😀 \"é😀\" TERM(é😀) CASE(é) PREFIX(😀) | eval x=é😀(1) | fields + é😀+x - y | sort -é",
+        "index=x é😀==200 ``` é😀 ``` | where é😀=\"x\" | stats count(é😀) as n by é😀",
+        "index=x (é😀 | eval a=\"(é\" | stats count",
+        "`é😀(1)` | inputlookup é😀 where é=1 | tstats count where index=é by dst=é",
+        "index=x sourcetype=é😀 sourcetype IN (é, \"😀\") | search NOT é😀=*x* | rename é😀 as 'é'x",
+        "index=x a=\"é\"😀\\é b='😀'é | `drop_dm_object_name(é😀)` | eval y=coalesce(é, \"😀\", ",
+    ];
+
+    #[test]
+    fn multi_byte_text_is_read_whole_everywhere() {
+        for query in MULTI_BYTE {
+            let result = analyze(query);
+            for token in &result.tokens {
+                assert!(
+                    query.get(token.span.start..token.span.end).is_some(),
+                    "{query}"
+                );
+            }
+            for (offset, _) in query.char_indices().chain([(query.len(), ' ')]) {
+                let _ = hover(query, offset);
+                let _ = completions(query, offset);
+                let _ = signature_help(query, offset);
+            }
+        }
+    }
+
+    #[test]
+    fn helpers_read_multi_byte_text() {
+        let source = "é😀 abc.d é";
+        let at = source.find('b').unwrap();
+        assert_eq!(spl_word_at(source, at).as_deref(), Some("abc.d"));
+        assert_eq!(spl_word_at(source, 0), None);
+        assert_eq!(spl_word_at(source, source.len()), None);
+        assert_eq!(spl_word_at("aé", 1), None);
+        assert_eq!(
+            innermost_call("eval x=coalesce(é, \"😀\", "),
+            Some(("coalesce".to_owned(), 2))
+        );
+        assert_eq!(innermost_call("é😀(é"), None);
+        let labels = |sig: &str| -> Vec<String> {
+            parameters_from_signature(sig)
+                .into_iter()
+                .map(|p| format!("{:?}", p.label))
+                .collect()
+        };
+        assert_eq!(labels("f(é, 😀)").len(), 2);
+        assert_eq!(labels("f(é").len(), 1);
+        assert!(labels(")é(x").is_empty());
+        assert!(labels("é()").is_empty());
+        assert!(labels("é").is_empty());
+        assert_eq!(
+            hover("index=x | eval y=é😀", "index=x | eval y=é".len()),
+            None
+        );
     }
 }

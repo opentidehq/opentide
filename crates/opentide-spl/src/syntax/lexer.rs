@@ -62,7 +62,7 @@ fn scan_tick(s: &str) -> Option<(Tick, usize)> {
     match bytes.get(after) {
         Some(b'`') => Some((Tick::Macro, after + 1)),
         Some(b'(') => {
-            let close = s[after..].find('`')? + after;
+            let close = bytes[after..].iter().position(|b| *b == b'`')? + after;
             (close > after + 1 && bytes[close - 1] == b')').then_some((Tick::Macro, close + 1))
         }
         _ => None,
@@ -145,11 +145,9 @@ fn string_len(s: &str, in_search: bool, dead: &mut [bool; 2]) -> Option<usize> {
 
 /// The length of a call word (`now()`) at the start of `s`.
 fn callword_len(s: &str) -> Option<usize> {
-    let name = s
-        .bytes()
-        .take_while(|b| b.is_ascii_alphabetic() || *b == b'_')
-        .count();
-    (name > 0 && s[name..].starts_with("()")).then_some(name + 2)
+    let rest = s.trim_start_matches(|c: char| c.is_ascii_alphabetic() || c == '_');
+    let name = s.len() - rest.len();
+    (name > 0 && rest.starts_with("()")).then_some(name + 2)
 }
 
 /// The length of the identifier at the start of `s`: a name, then dotted
@@ -399,11 +397,16 @@ fn term_text_len(s: &str) -> usize {
                 i = j + 1;
             }
             _ => {
-                let c = s[i..].chars().next().map_or(1, char::len_utf8);
-                if s[i..].chars().next().is_some_and(char::is_whitespace) {
-                    break;
+                #[expect(
+                    clippy::string_slice,
+                    reason = "`i` moves past whole characters, or to just after an ASCII \
+                              quote: a char boundary"
+                )]
+                let rest = &s[i..];
+                match rest.chars().next() {
+                    Some(c) if !c.is_whitespace() => i += c.len_utf8(),
+                    _ => break,
                 }
-                i += c;
             }
         }
     }
@@ -424,6 +427,12 @@ fn compound_len(s: &str) -> (Option<usize>, usize, bool) {
     let bytes = s.as_bytes();
     let (mut i, mut previous_quoted, mut found, mut quoted_any) = (0, false, false, false);
     while i < bytes.len() {
+        #[expect(
+            clippy::string_slice,
+            reason = "`i` moves past whole characters, escapes of one, or quoted runs that \
+                      end at an ASCII quote: a char boundary"
+        )]
+        let rest = &s[i..];
         let (len, quoted) = match bytes[i] {
             b'"' => {
                 let mut j = i + 1;
@@ -441,12 +450,12 @@ fn compound_len(s: &str) -> (Option<usize>, usize, bool) {
                 }
                 (j + 1 - i, true)
             }
-            b'\\' => match s[i + 1..].chars().next() {
+            b'\\' => match rest.chars().nth(1) {
                 Some(c) if c != '\n' => (1 + c.len_utf8(), true),
                 _ => break,
             },
             b'|' | b'[' | b']' | b'`' => break,
-            _ => match s[i..].chars().next() {
+            _ => match rest.chars().next() {
                 Some(c) if !c.is_whitespace() => (c.len_utf8(), false),
                 _ => break,
             },
@@ -696,6 +705,10 @@ impl Driver<'_> {
 
     /// The next token at `pos`: its kind and length.
     fn next(&mut self, pos: usize) -> (K, usize) {
+        #[expect(
+            clippy::string_slice,
+            reason = "`pos` is the end of the tokens before it, each a whole number of characters"
+        )]
         let rest = &self.source[pos..];
         let first_char = rest.chars().next().map_or(1, char::len_utf8);
         // A comment, or a macro no longer than the text, takes the place of
@@ -804,19 +817,28 @@ impl Driver<'_> {
                                     && slice.contains('\'')
                                     && !slice.contains('*') =>
                             {
-                                let cut = slice.find('\'').unwrap_or(slice.len()).max(1);
-                                (classify(&slice[..cut]), cut)
+                                // At the `'`, or past it when it comes first.
+                                let (head, _) = slice.split_once('\'').unwrap_or((slice, ""));
+                                let head = if head.is_empty() { "'" } else { head };
+                                (classify(head), head.len())
                             }
                             Search::Word
                                 if spelling.signs
                                     && !starts_with_sign(slice)
-                                    && slice[first_len(slice)..].contains('+') =>
+                                    && after_first(slice).contains('+') =>
                             {
                                 // After the first character, which can be any
                                 // character: `slice[1..]` cut inside `\u{70f}`.
-                                let first = first_len(slice);
-                                let cut = first + slice[first..].find('+').unwrap_or(0);
-                                (classify(&slice[..cut]), cut)
+                                let tail = after_first(slice);
+                                let plus = tail.find('+').unwrap_or(0);
+                                let cut = slice.len() - tail.len() + plus;
+                                #[expect(
+                                    clippy::string_slice,
+                                    reason = "`cut` is the end of the first character plus the \
+                                              offset of a `+` after it: a char boundary"
+                                )]
+                                let head = &slice[..cut];
+                                (classify(head), cut)
                             }
                             Search::Word
                                 if spelling.signs && slice.len() > 1 && starts_with_sign(slice) =>
@@ -844,8 +866,11 @@ impl Driver<'_> {
 
     /// Updates the stage tracker after a significant token.
     fn observe(&mut self, kind: K, start: usize, end: usize) {
-        let text = &self.source[start..end];
-        let rest = &self.source[end..];
+        #[expect(
+            clippy::string_slice,
+            reason = "`start..end` is a token's span, which `next` cuts at char boundaries"
+        )]
+        let (text, rest) = (&self.source[start..end], &self.source[end..]);
         self.raw = false;
         let mut raw = false;
         let f = self.frame();
@@ -1002,8 +1027,11 @@ impl Driver<'_> {
 }
 
 /// The length in bytes of `word`'s first character (0 for an empty word).
-fn first_len(word: &str) -> usize {
-    word.chars().next().map_or(0, char::len_utf8)
+/// `word` after its first character.
+fn after_first(word: &str) -> &str {
+    let mut chars = word.chars();
+    chars.next();
+    chars.as_str()
 }
 
 fn starts_with_sign(word: &str) -> bool {
@@ -1110,7 +1138,10 @@ mod tests {
             .filter(|l| l.kind != K::WHITESPACE.raw())
             .map(|l| {
                 let kind = <crate::syntax::kind::Lang as rowan::Language>::kind_from_raw(l.kind);
-                (kind, &source[std::ops::Range::<usize>::from(l.range)])
+                (
+                    kind,
+                    source.get(std::ops::Range::<usize>::from(l.range)).unwrap(),
+                )
             })
             .collect()
     }
@@ -1248,5 +1279,25 @@ mod tests {
             }
             assert_eq!(end, source.len(), "{source:?}");
         }
+    }
+
+    #[test]
+    fn scans_read_multi_byte_text() {
+        assert_eq!(callword_len("now()😀"), Some(5));
+        assert_eq!(callword_len("é()"), None);
+        assert_eq!(term_text_len("é😀 x"), "é😀".len());
+        assert_eq!(term_text_len("é\"😀 )\"😀) x"), "é\"😀 )\"😀".len());
+        assert_eq!(term_text_len("😀|x"), "😀".len());
+        assert_eq!(
+            compound_len("a=\"é\"😀\\é x"),
+            (Some("a=\"é\"😀\\é".len()), "a=\"é\"😀\\é".len(), true)
+        );
+        assert_eq!(compound_len("é😀 x"), (None, "é😀".len(), false));
+        assert_eq!(after_first("😀é"), "é");
+        assert_eq!(after_first(""), "");
+        // A word cut at its quote, and at a `+` after its first character.
+        let source = "| rename é😀'x' as y | fields + \u{70f}+é";
+        let text: String = kinds(source).iter().map(|(_, text)| *text).collect();
+        assert_eq!(text, source.replace(' ', ""));
     }
 }
