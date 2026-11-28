@@ -11,9 +11,9 @@ use opentide_workspace::{OsFs, Workspace, root};
 
 use super::super::placement;
 use super::super::result::{CommandResult, ExitCode, Status};
-use super::{Args, COMMAND, Context, RuleResult, deploy, refusal, set};
+use super::{Args, COMMAND, Context, RuleResult, deploy, refusal};
 use crate::envelope::NextAction;
-use crate::json::Json;
+use crate::json::{Json, Object};
 use crate::render::glyphs;
 
 /// The run: the plan and the sends, then the warnings and the blocks
@@ -44,10 +44,10 @@ pub(super) fn run_deploy(args: &Args, cx: &Context<'_>) -> CommandResult {
     promoted.finish().apply(&mut result, &mut warnings);
     // What `--prune` would retire, sent nowhere (#1713).
     if let Some(retirable) = retirable {
-        result.data.push(("retirable".into(), retirable));
+        result.data.insert("retirable".into(), retirable);
     }
     if (!args.uuids.is_empty() || !args.files.is_empty()) && result.get("scope").is_none() {
-        result.data.push(("scope".into(), Json::str("selected")));
+        result.data.insert("scope".into(), Json::str("selected"));
     }
     let unread = opentide_compile::dry_run::unread_files(&workspace, cx.cwd);
     if !unread.is_empty() {
@@ -112,9 +112,9 @@ fn left_out(skipped: &[plan::Skipped]) -> (usize, String) {
 }
 
 /// The run's strategies, as the result's `strategies` names them.
-fn run_strategies(result: &[(String, Json)]) -> Vec<StatusStrategy> {
-    match result.iter().find(|(key, _)| key == "strategies") {
-        Some((_, Json::Array(items))) => items
+fn run_strategies(result: &Object) -> Vec<StatusStrategy> {
+    match result.get("strategies") {
+        Some(Json::Array(items)) => items
             .iter()
             .filter_map(Json::as_str)
             .filter_map(|name| {
@@ -156,15 +156,15 @@ fn report_skipped(
             .collect::<Vec<_>>()
             .join(" or ")
     };
-    result.data.push((
+    result.data.insert(
         "skipped".into(),
         Json::Array(skipped.iter().map(|entry| entry.to_json()).collect()),
-    ));
+    );
     // The rows the run skipped (a rule no tenant takes, an `INERT` block),
     // and the rules a status left out that have no such row: a rule is
     // never counted twice.
-    let rows = match result.summary.iter().find(|(key, _)| key == "skipped") {
-        Some((_, Json::Int(rows))) => usize::try_from(*rows).unwrap_or(0),
+    let rows = match result.summary.get("skipped") {
+        Some(Json::Int(rows)) => usize::try_from(*rows).unwrap_or(0),
         _ => 0,
     };
     let skipped_rows: std::collections::HashSet<String> = match result.get("results") {
@@ -183,11 +183,9 @@ fn report_skipped(
         .collect();
     left.sort_unstable();
     left.dedup();
-    set(
-        &mut result.summary,
-        "skipped",
-        Json::from(rows + left.len()),
-    );
+    result
+        .summary
+        .insert("skipped".to_owned(), Json::from(rows + left.len()));
     let deployable = if runs.is_empty() {
         Vec::new()
     } else {
@@ -213,13 +211,13 @@ fn report_skipped(
             glyphs::SEPARATOR
         ));
         if result.get("advice").is_none() {
-            result.data.push(("advice".into(), Json::str(advice)));
+            result.data.insert("advice".into(), Json::str(advice));
         }
     } else if result.get("detail").is_none() {
-        result.data.push((
+        result.data.insert(
             "detail".into(),
             Json::str(format!("not in the plan: {in_status}; {advice}")),
-        ));
+        );
     }
 }
 

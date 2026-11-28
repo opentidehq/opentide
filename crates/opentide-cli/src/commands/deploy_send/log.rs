@@ -12,7 +12,7 @@ use super::{
     DONE, Lines, MAX_ERROR_LENGTH, MAX_ERROR_LINES, MIN_ERROR_WIDTH, NAME_WIDTH, NOT_ATTEMPTED,
     VERBS, reached,
 };
-use crate::json::Json;
+use crate::json::{Json, Object};
 use crate::render::glyphs;
 use crate::render::progress::{plural, seconds_text};
 use crate::render::text::Text;
@@ -163,18 +163,18 @@ pub(super) fn run_summary(
     platforms: usize,
     tenants: usize,
     seconds: f64,
-) -> Vec<(String, Json)> {
+) -> Object {
     let counts = run_counts(results);
-    let mut members: Vec<(String, Json)> = counts
+    let mut members: Object = counts
         .iter()
         .map(|(key, count)| ((*key).to_owned(), Json::from(*count)))
         .collect();
-    members.push((
+    members.insert(
         "seconds".into(),
         Json::Float((seconds * 1000.0).round() / 1000.0),
-    ));
-    members.push(("platforms".into(), Json::from(platforms)));
-    members.push(("tenants".into(), Json::from(tenants)));
+    );
+    members.insert("platforms".into(), Json::from(platforms));
+    members.insert("tenants".into(), Json::from(tenants));
     members
 }
 

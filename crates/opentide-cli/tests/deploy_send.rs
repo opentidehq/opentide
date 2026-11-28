@@ -208,11 +208,7 @@ fn value<'a>(sent: &'a Sent, key: &str) -> &'a Json {
 
 /// The value of the result's summary at `key`.
 fn summary<'a>(sent: &'a Sent, key: &str) -> Option<&'a Json> {
-    sent.result
-        .summary
-        .iter()
-        .find(|(name, _)| name == key)
-        .map(|(_, value)| value)
+    sent.result.summary.get(key)
 }
 
 /// Each result row's `status` and `error`.

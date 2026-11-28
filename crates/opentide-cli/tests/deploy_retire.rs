@@ -352,10 +352,7 @@ fn a_deleted_sentinel_rule_is_retired_by_its_uuid_with_prune() {
     assert_eq!(sent.result.status, Status::Completed);
     assert_eq!(sent.result.exit, ExitCode::Success);
     let summary = &sent.result.summary;
-    assert!(
-        summary.contains(&("delete".to_owned(), Json::Int(1))),
-        "{summary:?}"
-    );
+    assert!(summary.get("delete") == Some(&Json::Int(1)), "{summary:?}");
     let Json::Array(changes) = value(&sent, "changes") else {
         panic!("changes")
     };
