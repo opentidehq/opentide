@@ -388,8 +388,8 @@ fn criteria_fields(source: &str) -> Vec<String> {
                 && key.path[5] == "field"
         })
         .filter_map(|key| {
-            let line = &source[key.key_start..];
-            let line = &line[..line.find('\n').unwrap_or(line.len())];
+            let rest = key.tail(source);
+            let line = rest.split_once('\n').map_or(rest, |(line, _)| line);
             key_value(line, "field").map(str::to_owned)
         })
         .collect()
@@ -695,17 +695,16 @@ fn word_at(source: &str, offset: usize) -> Option<String> {
     let ok = |c: char| c.is_ascii_alphanumeric() || matches!(c, '_' | '/');
     // A host converts positions to char boundaries; stay safe if one did not.
     let offset = source.floor_char_boundary(offset);
-    let start = source[..offset]
-        .char_indices()
-        .rev()
-        .take_while(|(_, c)| ok(*c))
-        .last()
-        .map_or(offset, |(i, _)| i);
-    let end = source[offset..]
-        .char_indices()
-        .find(|(_, c)| !ok(*c))
-        .map_or(source.len(), |(i, _)| offset + i);
-    (end > start).then(|| source[start..end].to_owned())
+    #[expect(
+        clippy::string_slice,
+        reason = "`floor_char_boundary` returns a char boundary of `source`"
+    )]
+    let (before, after) = (&source[..offset], &source[offset..]);
+    // `rsplit` and `split` yield at least one piece: the run at the cursor.
+    let head = before.rsplit(|c| !ok(c)).next().unwrap_or_default();
+    let tail = after.split(|c| !ok(c)).next().unwrap_or_default();
+    let word = format!("{head}{tail}");
+    (!word.is_empty()).then_some(word)
 }
 
 #[cfg(test)]
@@ -890,5 +889,23 @@ mod tests {
         let cursor = crate::yaml_path::yaml_cursor(source, offset);
         assert!(hover(source, offset, &cursor).is_none());
         assert!(completions(source, offset, &cursor).is_none());
+    }
+
+    /// #1946: the word under the cursor and the criteria fields among
+    /// multi-byte text.
+    #[test]
+    fn words_and_fields_among_multi_byte_text() {
+        let source = "é😀 a_b/c😀 é";
+        let at = source.find("b/").unwrap();
+        assert_eq!(word_at(source, at).as_deref(), Some("a_b/c"));
+        assert_eq!(
+            word_at(source, source.find('c').unwrap() + 1).as_deref(),
+            Some("a_b/c")
+        );
+        assert_eq!(word_at(source, 1), None);
+        assert_eq!(word_at(source, source.len()), None);
+        // Not loadable YAML: the fields come from the written keys.
+        let source = "configurations:\n  bitdefender:\n    detection:\n      criteria:\n        - field: é😀\n          is: [é\n";
+        assert_eq!(criteria_fields(source), ["é😀"]);
     }
 }

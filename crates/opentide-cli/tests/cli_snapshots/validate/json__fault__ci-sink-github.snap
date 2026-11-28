@@ -7,7 +7,7 @@ exit: 1
 view: diagnostics (code, severity, file, line, column and counts; a warning's text; log events by name; no other message text)
 
 ━━━ stdout · json
-findings: 106
+findings: 109
   issues_found | - | - | - | -
   unknown_key | error | <WS>/.opentide/configurations/deployment.toml | 1 | 1
   unknown_key | error | <WS>/.opentide/configurations/deployment.toml | 2 | 1
@@ -17,98 +17,101 @@ findings: 106
   missing_field | error | <WS>/.opentide/configurations/platforms/microsoft_defender.toml | 6 | 1
   unknown_key | error | <WS>/.opentide/configurations/platforms/sentinel.toml | 2 | 1
   schema_validation | error | <WS>/.opentide/configurations/platforms/splunk.toml | 4 | 8
-  deployment_state_shape | error | <WS>/.opentide/states/deployment/e2cb0ccd-ebb4-4031-996c-2055d3d4de9e.json | - | -
-  deployment_state_platform | error | <WS>/.opentide/states/deployment/f9b687ac-3536-4bb1-a283-2b278f3f0780.json | - | -
-  deployment_state_uuid_mismatch | error | <WS>/.opentide/states/deployment/ffa05d91-6966-4583-ac48-7f849cd08261.json | - | -
+  deployment_state_uuid_mismatch | error | <WS>/.opentide/states/deployment/a82203e7-7105-4c10-9fc0-323ed6aaa69e.json | - | -
+  deployment_state_shape | error | <WS>/.opentide/states/deployment/b47c0ec3-8988-40a2-b6c7-2f76b2476121.json | - | -
+  deployment_state_platform | error | <WS>/.opentide/states/deployment/b84b7ffe-3d7e-4d91-9413-9d13fcac8dee.json | - | -
   invalid_ref | error | <WS>/objects/objectives/elevated-exfiltration-objective-0002.yaml | 54 | 7
   vocab_unknown | error | <WS>/objects/objectives/lateral-beacon-objective-0001.yaml | 34 | 11
   invalid_ref | error | <WS>/objects/objectives/rapid-tunnel-objective-0003.yaml | 77 | 7
-  invalid_ref | error | <WS>/objects/rules/covert-beacon-rule-0015.yaml | 29 | 18
-  schema_validation | error | <WS>/objects/rules/covert-dropper-rule-0064.yaml | 41 | 3
-  falco_output_syntax | error | <WS>/objects/rules/covert-implant-rule-0165.yaml | 43 | 30
-  schema_validation | error | <WS>/objects/rules/covert-injection-rule-0032.yaml | 1 | 1
-  eql_unknown_function | error | <WS>/objects/rules/covert-injection-rule-0262.yaml | 80 | 21
-  kuery_parse_error | error | <WS>/objects/rules/covert-pivot-rule-0073.yaml | 48 | 19
-  spl_search_operator | error | <WS>/objects/rules/elevated-dropper-rule-0068.yaml | 59 | 22
-  schema_validation | error | <WS>/objects/rules/elevated-exfiltration-rule-0014.yaml | 9 | 13
-  spl_command_without_pipe | error | <WS>/objects/rules/elevated-exfiltration-rule-0043.yaml | 65 | 7
-  falco_unknown_field | error | <WS>/objects/rules/elevated-harvest-rule-0259.yaml | 90 | 54
-  spl_unknown_datamodel | error | <WS>/objects/rules/elevated-loader-rule-0081.yaml | 56 | 37
-  config_enum_unknown | error | <WS>/objects/rules/elevated-pivot-rule-0018.yaml | 29 | 15
-  yaml_parse | error | <WS>/objects/rules/encoded-beacon-rule-0034.yaml | 83 | 1
+  falco_misplaced_list | error | <WS>/objects/rules/covert-downgrade-rule-0429.yaml | 47 | 16
+  yaml_parse | error | <WS>/objects/rules/covert-implant-rule-0021.yaml | 58 | 1
+  eql_unsupported | error | <WS>/objects/rules/covert-pivot-rule-0289.yaml | 62 | 28
+  schema_validation | error | <WS>/objects/rules/covert-spray-rule-0009.yaml | 16 | 3
+  yaml_parse | error | <WS>/objects/rules/covert-tunnel-rule-0022.yaml | 73 | 1
+  schema_validation | error | <WS>/objects/rules/elevated-exfiltration-rule-0135.yaml | 52 | 3
+  schema_validation | error | <WS>/objects/rules/elevated-exfiltration-rule-0555.yaml | 44 | 3
+  config_enum_unknown | error | <WS>/objects/rules/elevated-injection-rule-0029.yaml | 48 | 13
+  vocab_unknown | error | <WS>/objects/rules/elevated-spray-rule-0011.yaml | 9 | 8
+  vocab_unknown | error | <WS>/objects/rules/elevated-spray-rule-0039.yaml | 9 | 8
+  config_enum_unknown | error | <WS>/objects/rules/elevated-spray-rule-0039.yaml | 57 | 13
+  ecs_type_mismatch | error | <WS>/objects/rules/encoded-downgrade-rule-0078.yaml | 60 | 20
+  schema_validation | error | <WS>/objects/rules/encoded-dropper-rule-0107.yaml | 50 | 3
   invalid_uuid | error | <WS>/objects/rules/encoded-exfiltration-rule-0005.yaml | 4 | 9
-  vocab_unknown | error | <WS>/objects/rules/encoded-implant-rule-0042.yaml | 9 | 8
-  config_enum_unknown | error | <WS>/objects/rules/encoded-implant-rule-0042.yaml | 43 | 13
-  eql_parse_error | error | <WS>/objects/rules/encoded-implant-rule-0216.yaml | 46 | 37
-  schema_validation | error | <WS>/objects/rules/encoded-loader-rule-0035.yaml | 42 | 3
-  vocab_unknown | error | <WS>/objects/rules/encoded-tunnel-rule-0049.yaml | 9 | 8
-  kql_parse_error | error | <WS>/objects/rules/encoded-tunnel-rule-0049.yaml | 51 | 29
-  falco_append_condition | error | <WS>/objects/rules/encoded-tunnel-rule-0077.yaml | 65 | 7
-  lucene_fuzzy | error | <WS>/objects/rules/encoded-tunnel-rule-0080.yaml | 54 | 23
-  kql_control_command_unsupported | error | <WS>/objects/rules/hidden-beacon-rule-0062.yaml | 63 | 7
-  spl_empty_command | error | <WS>/objects/rules/hidden-dropper-rule-0055.yaml | 37 | 17
-  eql_argument_type | error | <WS>/objects/rules/hidden-dropper-rule-0067.yaml | 65 | 28
-  eql_maxspan_unit | error | <WS>/objects/rules/hidden-dropper-rule-0194.yaml | 100 | 29
-  missing_uuid | error | <WS>/objects/rules/hidden-implant-rule-0006.yaml | - | -
-  schema_validation | error | <WS>/objects/rules/hidden-loader-rule-0008.yaml | 1 | 1
-  yaml_parse | error | <WS>/objects/rules/hidden-loader-rule-0024.yaml | 45 | 1
-  kql_unknown_table | error | <WS>/objects/rules/hidden-pivot-rule-0041.yaml | 41 | 7
-  falco_unknown_event | error | <WS>/objects/rules/lateral-downgrade-rule-0139.yaml | 58 | 18
-  schema_validation | error | <WS>/objects/rules/lateral-dropper-rule-0026.yaml | 1 | 1
-  invalid_uuid | error | <WS>/objects/rules/lateral-dropper-rule-0026.yaml | 4 | 9
-  esql_parse_error | error | <WS>/objects/rules/lateral-pivot-rule-0104.yaml | 76 | 41
+  yaml_parse | error | <WS>/objects/rules/encoded-tunnel-rule-0030.yaml | 70 | 1
+  schema_validation | error | <WS>/objects/rules/hidden-beacon-rule-0121.yaml | 49 | 3
+  falco_field_argument | error | <WS>/objects/rules/hidden-exfiltration-rule-0191.yaml | 45 | 27
+  falco_output_syntax | error | <WS>/objects/rules/hidden-exfiltration-rule-0433.yaml | 84 | 30
+  lucene_fuzzy | error | <WS>/objects/rules/hidden-harvest-rule-0086.yaml | 68 | 23
+  esql_unknown_function | error | <WS>/objects/rules/hidden-spray-rule-0170.yaml | 77 | 43
+  kql_rule_union_star | error | <WS>/objects/rules/hidden-spray-rule-0267.yaml | 42 | 13
+  kql_control_command_unsupported | error | <WS>/objects/rules/hidden-tunnel-rule-0099.yaml | 53 | 7
+  eql_function_arity | error | <WS>/objects/rules/lateral-downgrade-rule-0142.yaml | 78 | 21
+  schema_validation | error | <WS>/objects/rules/lateral-dropper-rule-0065.yaml | 42 | 3
+  schema_validation | error | <WS>/objects/rules/lateral-implant-rule-0008.yaml | 1 | 1
+  spl_search_operator | error | <WS>/objects/rules/lateral-implant-rule-0087.yaml | 36 | 22
+  spl_unknown_datamodel_field | error | <WS>/objects/rules/lateral-implant-rule-0115.yaml | 42 | 59
+  falco_rhs_field | error | <WS>/objects/rules/lateral-loader-rule-0331.yaml | 32 | 39
+  falco_append_condition | error | <WS>/objects/rules/lateral-pivot-rule-0177.yaml | 52 | 7
   duplicate_id | error | <WS>/objects/rules/persistent-beacon-rule-0004.yaml | 4 | 9
   invalid_uuid | error | <WS>/objects/rules/persistent-beacon-rule-0004.yaml | 4 | 9
-  falco_field_argument | error | <WS>/objects/rules/persistent-beacon-rule-0087.yaml | 46 | 27
-  kql_unknown_function | error | <WS>/objects/rules/persistent-beacon-rule-0088.yaml | 73 | 20
-  falco_transformer | error | <WS>/objects/rules/persistent-downgrade-rule-0126.yaml | 35 | 27
-  falco_value_type | error | <WS>/objects/rules/persistent-harvest-rule-0152.yaml | 52 | 38
-  schema_validation | error | <WS>/objects/rules/persistent-loader-rule-0010.yaml | 9 | 13
-  falco_operator_type | error | <WS>/objects/rules/rapid-dropper-rule-0103.yaml | 61 | 36
+  invalid_ref | error | <WS>/objects/rules/persistent-downgrade-rule-0013.yaml | 29 | 18
+  kql_unknown_function | error | <WS>/objects/rules/persistent-dropper-rule-0127.yaml | 46 | 20
+  schema_validation | error | <WS>/objects/rules/persistent-harvest-rule-0024.yaml | 1 | 1
+  invalid_uuid | error | <WS>/objects/rules/persistent-harvest-rule-0024.yaml | 4 | 9
+  falco_unknown_field | error | <WS>/objects/rules/persistent-injection-rule-0583.yaml | 62 | 54
+  falco_unknown_field | error | <WS>/objects/rules/persistent-injection-rule-0583.yaml | 70 | 11
+  kql_rule_union_star | error | <WS>/objects/rules/persistent-loader-rule-0211.yaml | 60 | 13
+  falco_unknown_field | error | <WS>/objects/rules/persistent-spray-rule-0400.yaml | 100 | 27
+  eql_unknown_function | error | <WS>/objects/rules/persistent-tunnel-rule-0232.yaml | 42 | 21
+  schema_missing | error | <WS>/objects/rules/rapid-downgrade-rule-0007.yaml | 3 | 1
   invalid_uuid | error | <WS>/objects/rules/rapid-exfiltration-rule-0001.yaml | 4 | 9
-  spl_unknown_datamodel_field | error | <WS>/objects/rules/rapid-implant-rule-0082.yaml | 59 | 59
-  invalid_ref | error | <WS>/objects/rules/rapid-injection-rule-0013.yaml | 23 | 18
-  config_enum_unknown | error | <WS>/objects/rules/rapid-injection-rule-0023.yaml | 62 | 13
-  esql_unknown_type | error | <WS>/objects/rules/rapid-pivot-rule-0223.yaml | 76 | 56
-  schema_missing | error | <WS>/objects/rules/rapid-relay-rule-0007.yaml | 3 | 1
-  schema_validation | error | <WS>/objects/rules/remote-beacon-rule-0061.yaml | 46 | 3
-  schema_validation | error | <WS>/objects/rules/remote-dropper-rule-0048.yaml | 36 | 3
-  schema_validation | error | <WS>/objects/rules/remote-dropper-rule-0074.yaml | 48 | 3
-  eql_not_boolean | error | <WS>/objects/rules/remote-dropper-rule-0197.yaml | 58 | 21
-  ecs_type_mismatch | error | <WS>/objects/rules/remote-spray-rule-0119.yaml | 68 | 20
-  kql_unknown_operator | error | <WS>/objects/rules/rogue-exfiltration-rule-0092.yaml | 65 | 9
+  schema_validation | error | <WS>/objects/rules/rapid-exfiltration-rule-0051.yaml | 51 | 3
+  schema_validation | error | <WS>/objects/rules/rapid-injection-rule-0037.yaml | 43 | 3
+  schema_validation | error | <WS>/objects/rules/rapid-injection-rule-0079.yaml | 36 | 3
+  spl_command_without_pipe | error | <WS>/objects/rules/rapid-loader-rule-0045.yaml | 34 | 7
+  schema_validation | error | <WS>/objects/rules/rapid-loader-rule-0093.yaml | 53 | 3
+  falco_unknown_event | error | <WS>/objects/rules/rapid-pivot-rule-0387.yaml | 37 | 18
+  spl_empty_command | error | <WS>/objects/rules/rapid-tunnel-rule-0059.yaml | 58 | 17
+  esql_pattern | error | <WS>/objects/rules/remote-beacon-rule-0100.yaml | 70 | 58
+  eql_parse_error | error | <WS>/objects/rules/remote-exfiltration-rule-0212.yaml | 71 | 37
+  kql_parse_error | error | <WS>/objects/rules/remote-harvest-rule-0085.yaml | 48 | 15
+  falco_parse_error | error | <WS>/objects/rules/remote-pivot-rule-0303.yaml | 57 | 37
+  external_id_in_rule | error | <WS>/objects/rules/remote-relay-rule-0057.yaml | 67 | 14
+  schema_validation | error | <WS>/objects/rules/rogue-downgrade-rule-0023.yaml | 31 | 3
+  falco_invalid_regex | error | <WS>/objects/rules/rogue-exfiltration-rule-0219.yaml | 49 | 43
   duplicate_id | error | <WS>/objects/rules/rogue-harvest-rule-0003.yaml | 4 | 9
-  external_id_in_rule | error | <WS>/objects/rules/rogue-harvest-rule-0027.yaml | 55 | 14
-  spl_parse_error | error | <WS>/objects/rules/rogue-harvest-rule-0056.yaml | 70 | 27
-  kql_type_mismatch | error | <WS>/objects/rules/rogue-harvest-rule-0066.yaml | 61 | 26
-  vocab_unknown | error | <WS>/objects/rules/rogue-relay-rule-0011.yaml | 9 | 8
-  falco_parse_error | error | <WS>/objects/rules/rogue-spray-rule-0113.yaml | 46 | 37
-  falco_rhs_field | error | <WS>/objects/rules/scheduled-beacon-rule-0116.yaml | 67 | 39
-  schema_validation | error | <WS>/objects/rules/scheduled-exfiltration-rule-0038.yaml | 61 | 3
-  lucene_parse_error | error | <WS>/objects/rules/scheduled-harvest-rule-0099.yaml | 59 | 19
-  schema_validation | error | <WS>/objects/rules/scheduled-loader-rule-0030.yaml | 65 | 3
-  eql_function_arity | error | <WS>/objects/rules/scheduled-relay-rule-0151.yaml | 57 | 21
-  schema_validation | error | <WS>/objects/rules/scheduled-relay-rule-0243.yaml | 38 | 3
-  kql_unknown_column | error | <WS>/objects/rules/silent-beacon-rule-0079.yaml | 43 | 15
-  esql_unknown_command | error | <WS>/objects/rules/silent-beacon-rule-0158.yaml | 72 | 34
-  esql_unknown_function | error | <WS>/objects/rules/silent-dropper-rule-0177.yaml | 56 | 43
-  falco_unknown_field | error | <WS>/objects/rules/silent-implant-rule-0142.yaml | 53 | 27
-  schema_validation | error | <WS>/objects/rules/silent-injection-rule-0022.yaml | 51 | 3
-  schema_validation | error | <WS>/objects/rules/silent-pivot-rule-0025.yaml | 68 | 3
-  eql_field_comparison | error | <WS>/objects/rules/silent-pivot-rule-0086.yaml | 50 | 21
-  kql_parse_error | error | <WS>/objects/rules/staged-beacon-rule-0053.yaml | 62 | 15
-  falco_invalid_regex | error | <WS>/objects/rules/staged-beacon-rule-0100.yaml | 51 | 43
-  esql_pattern | error | <WS>/objects/rules/staged-dropper-rule-0112.yaml | 59 | 58
-  yaml_parse | error | <WS>/objects/rules/staged-exfiltration-rule-0021.yaml | 72 | 1
-  falco_misplaced_list | error | <WS>/objects/rules/staged-harvest-rule-0155.yaml | 63 | 16
-  eql_unsupported | error | <WS>/objects/rules/staged-injection-rule-0281.yaml | 55 | 28
-  schema_validation | error | <WS>/objects/rules/staged-pivot-rule-0009.yaml | 14 | 3
+  eql_argument_type | error | <WS>/objects/rules/rogue-harvest-rule-0067.yaml | 82 | 28
+  invalid_ref | error | <WS>/objects/rules/rogue-implant-rule-0015.yaml | 22 | 18
+  spl_parse_error | error | <WS>/objects/rules/rogue-pivot-rule-0073.yaml | 42 | 27
+  eql_field_comparison | error | <WS>/objects/rules/rogue-tunnel-rule-0092.yaml | 45 | 21
+  lucene_parse_error | error | <WS>/objects/rules/scheduled-downgrade-rule-0106.yaml | 56 | 19
+  kql_unknown_operator | error | <WS>/objects/rules/scheduled-dropper-rule-0141.yaml | 54 | 9
+  falco_operator_type | error | <WS>/objects/rules/scheduled-dropper-rule-0261.yaml | 34 | 36
+  schema_validation | error | <WS>/objects/rules/scheduled-exfiltration-rule-0027.yaml | 1 | 1
+  falco_value_type | error | <WS>/objects/rules/scheduled-exfiltration-rule-0401.yaml | 53 | 38
+  esql_parse_error | error | <WS>/objects/rules/scheduled-harvest-rule-0050.yaml | 56 | 41
+  eql_maxspan_unit | error | <WS>/objects/rules/scheduled-pivot-rule-0149.yaml | 81 | 29
+  vocab_unknown | error | <WS>/objects/rules/scheduled-relay-rule-0071.yaml | 9 | 8
+  kql_parse_error | error | <WS>/objects/rules/scheduled-relay-rule-0071.yaml | 43 | 29
+  spl_unknown_datamodel | error | <WS>/objects/rules/scheduled-relay-rule-0101.yaml | 55 | 37
+  kql_type_mismatch | error | <WS>/objects/rules/scheduled-tunnel-rule-0113.yaml | 52 | 26
+  eql_not_boolean | error | <WS>/objects/rules/silent-beacon-rule-0162.yaml | 43 | 21
+  kql_unknown_column | error | <WS>/objects/rules/silent-loader-rule-0125.yaml | 86 | 15
+  schema_validation | error | <WS>/objects/rules/silent-spray-rule-0014.yaml | 9 | 13
+  config_enum_unknown | error | <WS>/objects/rules/silent-spray-rule-0017.yaml | 37 | 15
+  kuery_parse_error | error | <WS>/objects/rules/silent-spray-rule-0058.yaml | 77 | 19
+  esql_unknown_command | error | <WS>/objects/rules/staged-exfiltration-rule-0120.yaml | 40 | 34
+  schema_validation | error | <WS>/objects/rules/staged-harvest-rule-0010.yaml | 9 | 13
+  missing_uuid | error | <WS>/objects/rules/staged-implant-rule-0006.yaml | - | -
+  falco_transformer | error | <WS>/objects/rules/staged-loader-rule-0345.yaml | 39 | 27
+  esql_unknown_type | error | <WS>/objects/rules/staged-relay-rule-0190.yaml | 58 | 56
+  kql_unknown_table | error | <WS>/objects/rules/staged-spray-rule-0032.yaml | 58 | 7
   chaining_relation_unknown | error | <WS>/objects/threats/elevated-tunnel-threat-0003.yaml | 44 | 17
   yaml_parse | error | <WS>/objects/threats/encoded-exfiltration-threat-0030.yaml | - | -
   schema_validation | error | <WS>/objects/threats/remote-dropper-threat-0001.yaml | 21 | 11
   vocab_unknown | error | <WS>/objects/threats/rogue-downgrade-threat-0002.yaml | 22 | 13
   invalid_uuid | error | <WS>/objects/threats/scheduled-loader-threat-0010.yaml | 5 | 10
-  nested_object_file | warning | <WS>/objects/rules/nested/encoded-spray-rule-0017.yaml | - | -
+  nested_object_file | warning | <WS>/objects/rules/nested/rapid-tunnel-rule-0018.yaml | - | -
   asset_unknown | warning | <WS>/.opentide/configurations/visibility.toml | 48 | 12
   asset_unknown | warning | <WS>/.opentide/configurations/visibility.toml | 54 | 12
   asset_unknown | warning | <WS>/.opentide/configurations/visibility.toml | 60 | 12
@@ -116,17 +119,17 @@ findings: 106
   asset_unknown | warning | <WS>/.opentide/configurations/visibility.toml | 72 | 12
 exit_code: 1
 report.stats.objects_checked: 872
-report.stats.queries_checked: 2025
+report.stats.queries_checked: 1905
 schema_version: 1
-summary.errors: 99
-summary.files: 91
+summary.errors: 102
+summary.files: 93
 summary.fixable: 0
 summary.objects: 872
-summary.queries: 2025
+summary.queries: 1905
 summary.warning_files: 2
 summary.warnings: 6
 next_actions[]: 2 items
-report.issues[]: 99 items
+report.issues[]: 102 items
 report.warnings[]: 6 items
 warnings[]: 1 items
 warnings[]: Validation reported warnings

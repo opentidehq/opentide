@@ -1,6 +1,6 @@
-//! Microsoft Sentinel (UC-4.3, #833): the ARM `alertRules` calls of
-//! `platforms/sentinel/client.py`, and its runner's Log Analytics queries,
-//! one REST call each.
+//! Microsoft Sentinel (UC-4.3, #833): the ARM `alertRules` calls a deploy
+//! makes, and the Log Analytics queries `opentide query` and `validate query
+//! --live` run, one REST call each.
 //!
 //! Both sign in to Entra ID with the tenant's app registration
 //! ([`crate::entra`]: `azure_tenant_id`, `azure_client_id`,
@@ -24,7 +24,6 @@ use crate::connector::{
 use crate::entra::CredentialNames;
 use crate::error::ConnectorError;
 use crate::retry::RetryPolicy;
-use crate::text::json_text;
 use crate::token::TokenCache;
 use crate::{HttpSettings, Secret};
 
@@ -50,6 +49,11 @@ pub const LOGS_SCOPE: &str = "https://api.loganalytics.io/.default";
 pub const ALERT_RULES_API_VERSION: &str = "2025-10-01-preview";
 /// The longest a Log Analytics query may run on the server (`server_timeout`).
 pub const MAX_SERVER_TIMEOUT: Duration = Duration::from_secs(600);
+/// The shortest read timeout of a query: azure-core reads for 300 s, and
+/// the server holds a query up to its own timeout (`Prefer: wait`).
+pub const MIN_QUERY_TIMEOUT: Duration = Duration::from_secs(300);
+/// The read timeout of a deploy's ARM session (it sends no query).
+pub const DEPLOY_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// The HTTP settings of a Sentinel tenant: *timeout* on each request, and
 /// the connectors' retries.
@@ -592,7 +596,7 @@ fn partial_message(answer: &Answer, body: &Json) -> String {
         .and_then(|error| error.get("message"))
         .map_or_else(
             || "null".to_owned(),
-            |message| json_text(&answer.quoted(message)),
+            |message| Json::to_text(&answer.quoted(message)),
         )
 }
 
@@ -605,12 +609,12 @@ fn arm_error(answer: &Answer) -> (String, String) {
             let code = error
                 .and_then(|error| error.get("code"))
                 .filter(|code| code.is_filled())
-                .map(json_text)
+                .map(Json::to_text)
                 .unwrap_or_default();
             let message = error
                 .and_then(|error| error.get("message"))
                 .filter(|message| message.is_filled())
-                .map_or_else(head, json_text);
+                .map_or_else(head, Json::to_text);
             (code, message)
         }
         None => (String::new(), head()),
@@ -634,10 +638,10 @@ fn inner_message(answer: &Answer) -> String {
             .and_then(|nested| nested.get("message"))
             .filter(|message| message.is_filled())
         {
-            return json_text(message);
+            return Json::to_text(message);
         }
         if let Some(message) = inner.get("message").filter(|message| message.is_filled()) {
-            return json_text(message);
+            return Json::to_text(message);
         }
     }
     match error {
@@ -646,7 +650,7 @@ fn inner_message(answer: &Answer) -> String {
                 error
                     .get(name)
                     .filter(|value| !value.is_null())
-                    .map(json_text)
+                    .map(Json::to_text)
                     .filter(|text| !text.is_empty())
             };
             let mut text = match (field("code"), field("message")) {
@@ -679,8 +683,8 @@ fn table(table: &Json) -> (Vec<QueryColumn>, Vec<Row>) {
             .iter()
             .map(|column| {
                 (
-                    column.get("name").map(json_text).unwrap_or_default(),
-                    column.get("type").map(json_text),
+                    column.get("name").map(Json::to_text).unwrap_or_default(),
+                    column.get("type").map(Json::to_text),
                 )
             })
             .collect(),
@@ -717,7 +721,7 @@ fn native(kind: Option<&str>, value: &Json) -> Json {
             datetime(text).map_or_else(|| value.clone(), Json::Str)
         }
         (Some("timespan" | "guid"), other) if !matches!(other, Json::Str(_)) => {
-            Json::Str(json_text(other))
+            Json::Str(Json::to_text(other))
         }
         _ => value.clone(),
     }

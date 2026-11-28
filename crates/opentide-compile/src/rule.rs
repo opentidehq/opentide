@@ -1,6 +1,6 @@
 //! A rule as the compilers read it: its document as ordered JSON, with the
 //! few fields every compiler needs, and the error a compiler gives for a rule
-//! it cannot compile (`deployment/preview.py` `compile_diagnostic`).
+//! it cannot compile.
 
 use std::fmt;
 
@@ -14,9 +14,9 @@ pub struct Rule {
     /// The document as read, for a compiler that needs a scalar as written
     /// (Falco reads list items and exception values as text).
     pub node: std::sync::Arc<opentide_schema::node::Node>,
-    /// `metadata.uuid`, written as the oracle's `UUID` writes it.
+    /// `metadata.uuid`, in its canonical form ([`canonical_uuid`]).
     pub uuid: String,
-    /// `name`.
+    /// `name`; empty when it is unset or not a string.
     pub name: String,
     /// The file it was read from, when it was read from one.
     pub file: Option<String>,
@@ -71,7 +71,7 @@ impl Rule {
             .unwrap_or(opentide_schema::objects::response::DEFAULT_ALERT_SEVERITY)
     }
 
-    /// `description`.
+    /// `description`; empty when it is unset or not a string.
     pub fn description(&self) -> &str {
         self.data
             .get("description")
@@ -80,29 +80,11 @@ impl Rule {
     }
 }
 
-/// A UUID in its canonical form: lowercase, hyphenated (surrounding blanks,
-/// braces and a `urn:uuid:` prefix dropped). Text that is not a UUID stays as
-/// written.
+/// A UUID in its canonical form: lowercase, hyphenated, read as
+/// [`opentide_core::ids::canonical`] reads it. Text that is not a UUID stays
+/// as written.
 pub fn canonical_uuid(text: &str) -> String {
-    let trimmed = text.trim();
-    let bare = trimmed
-        .strip_prefix("urn:uuid:")
-        .unwrap_or(trimmed)
-        .trim_start_matches('{')
-        .trim_end_matches('}');
-    let hex: String = bare.chars().filter(|c| *c != '-').collect();
-    if hex.len() != 32 || !hex.chars().all(|c| c.is_ascii_hexdigit()) {
-        return text.to_owned();
-    }
-    let hex = hex.to_ascii_lowercase();
-    format!(
-        "{}-{}-{}-{}-{}",
-        &hex[0..8],
-        &hex[8..12],
-        &hex[12..16],
-        &hex[16..20],
-        &hex[20..32]
-    )
+    opentide_core::ids::canonical(text).unwrap_or_else(|| text.to_owned())
 }
 
 /// The codes a compile failure carries, each with its `opentide explain` page
@@ -191,7 +173,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn uuids_are_written_as_python_writes_them() {
+    fn uuids_are_written_in_canonical_form() {
         assert_eq!(
             canonical_uuid("0000000A-0000-4000-8003-00000000000B"),
             "0000000a-0000-4000-8003-00000000000b"

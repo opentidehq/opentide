@@ -20,7 +20,7 @@
 //! `|`, not from grammar rule names.
 
 use super::Catalog;
-use super::scan::{Order, closing_bracket, count_nested_scan, walk_pipelines};
+use super::scan::{Order, closing_bracket, count_nested_scan, cut, walk_pipelines};
 use opentide_core::{ByteSpan, Diagnostic, LineIndex, codes};
 
 /// Where a search clause sits, which decides what Splunk does with the
@@ -104,7 +104,7 @@ fn clause_of(
     catalog: &Catalog,
 ) -> Option<(Clause, usize, usize)> {
     if let Some((word_start, word_end)) = command_word(source, start, end) {
-        let word = &source[word_start..word_end];
+        let word = cut(source, word_start, word_end);
         if !is_field(source, word_end, end) {
             if word.eq_ignore_ascii_case("search") {
                 return Some((Clause::Search, word_end, end));
@@ -136,12 +136,14 @@ fn where_clause(
     let mut words = top_level_words(source, start, end).into_iter();
     let from = words
         .by_ref()
-        .find(|&(s, e)| source[s..e].eq_ignore_ascii_case("where") && !is_field(source, e, end))
+        .find(|&(s, e)| {
+            cut(source, s, e).eq_ignore_ascii_case("where") && !is_field(source, e, end)
+        })
         .map(|(_, e)| e)?;
     let to = if stop_at_by {
         words
             .find(|&(s, e)| {
-                let w = &source[s..e];
+                let w = cut(source, s, e);
                 (w.eq_ignore_ascii_case("by") || w.eq_ignore_ascii_case("groupby"))
                     && !is_field(source, e, end)
             })
@@ -297,14 +299,14 @@ fn check_term(
 ) -> bool {
     let bytes = source.as_bytes();
     let Some(op_start) = (start..end).find(|&j| is_op_byte(bytes[j])) else {
-        let term = &source[start..end];
+        let term = cut(source, start, end);
         return is_field_name(term) && !matches!(term, "AND" | "OR" | "NOT" | "IN" | "XOR");
     };
     let mut op_end = op_start;
     while op_end < end && (is_op_byte(bytes[op_end]) || bytes[op_end] == b'~') {
         op_end += 1;
     }
-    let op = &source[op_start..op_end];
+    let op = cut(source, op_start, op_end);
     if !OPERATORS.contains(&op) {
         return false;
     }
@@ -317,7 +319,7 @@ fn check_term(
         // comparison.
         let has_value =
             op_end < end || (op_end < clause_end && matches!(bytes[op_end], b'"' | b'\'' | b'`'));
-        is_field_name(&source[start..op_start]) && has_value
+        is_field_name(cut(source, start, op_start)) && has_value
     };
     if reported {
         push(out, lines, op, clause, op_start, op_end);
@@ -421,8 +423,9 @@ pub(crate) fn skip_hidden_own(source: &str, i: usize, end: usize) -> Option<usiz
         return None;
     }
     if bytes[i..end].starts_with(b"```") {
-        let close = source[i + 3..end]
-            .find("```")
+        let close = bytes[i + 3..end]
+            .windows(3)
+            .position(|run| run == b"```")
             .map_or(end, |at| i + 3 + at + 3);
         return Some(close);
     }
@@ -443,8 +446,9 @@ pub(crate) fn skip_hidden_own(source: &str, i: usize, end: usize) -> Option<usiz
             Some(end)
         }
         b'`' => Some(
-            source[i + 1..end]
-                .find('`')
+            bytes[i + 1..end]
+                .iter()
+                .position(|b| *b == b'`')
                 .map_or(end, |at| i + 1 + at + 1),
         ),
         _ => None,
@@ -493,8 +497,11 @@ mod tests {
                 })
                 .expect("range inside the source")
         };
-        &src[at(d.range.start.line, d.range.start.character)
-            ..at(d.range.end.line, d.range.end.character)]
+        src.get(
+            at(d.range.start.line, d.range.start.character)
+                ..at(d.range.end.line, d.range.end.character),
+        )
+        .unwrap()
     }
 
     /// The one diagnostic on `src`, which must cover `op`.
@@ -512,7 +519,11 @@ mod tests {
         let fix = d.suggestion.as_deref().expect("a fix");
         let op = covered(src, d);
         let start = src.find(op).expect("operator in source");
-        format!("{}{fix}{}", &src[..start], &src[start + op.len()..])
+        format!(
+            "{}{fix}{}",
+            src.get(..start).unwrap(),
+            src.get(start + op.len()..).unwrap()
+        )
     }
 
     const BASE: &str = "| makeresults count=4 | eval status=200 | ";

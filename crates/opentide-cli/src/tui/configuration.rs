@@ -1,5 +1,5 @@
-//! The Configuration tab's content (`cli/services/configuration_view.py`,
-//! #776; UC-6.0d, #841): the workspace's configuration read, not as TOML.
+//! The Configuration tab's content (#776; UC-6.0d, #841): the workspace's
+//! configuration read, not as TOML.
 //!
 //! Each file (`deployment.toml`, `lint.toml`, `documentation.toml`,
 //! `sharing.toml` and each `platforms/*.toml`) is shown by section, each
@@ -20,6 +20,7 @@
 //! whose redaction cannot be proven, has no raw view.
 
 use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
@@ -73,7 +74,7 @@ pub struct Setting {
 /// A finding of `validate --check configuration` on one file.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConfigFinding {
-    /// The code.
+    /// The diagnostic code (`config_parse`).
     pub code: String,
     /// `error` or `warning`.
     pub severity: String,
@@ -106,7 +107,7 @@ pub struct ConfigFile {
 /// One `setup` key of a tenant: never its value.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Credential {
-    /// The key.
+    /// The setup key (`api_token`).
     pub key: String,
     /// The variable it names, when it is a reference.
     pub variable: Option<String>,
@@ -131,7 +132,8 @@ pub struct TenantCard {
     pub rules: Vec<String>,
 }
 
-/// A platform's card.
+/// A platform on the Configuration tab: whether it is enabled, its tenants
+/// and its rules.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlatformCard {
     /// The platform's key.
@@ -230,7 +232,7 @@ fn scalar_text(value: &Value) -> String {
     }
 }
 
-/// A value as the tab shows it (`_format`).
+/// A value as the tab shows it.
 fn format_value(value: &Node) -> String {
     match &value.value {
         Value::Bool(flag) => if *flag { "true" } else { "false" }.to_owned(),
@@ -254,8 +256,7 @@ fn format_value(value: &Node) -> String {
     }
 }
 
-/// Each value that is no table, and no array of scalars, with its key path
-/// (`_leaves`).
+/// Each value that is no table, and no array of scalars, with its key path.
 fn leaves(value: &Node, parts: &mut Vec<String>, out: &mut Vec<(Vec<String>, Node)>) {
     match &value.value {
         Value::Map(entries) => {
@@ -280,7 +281,7 @@ fn leaves(value: &Node, parts: &mut Vec<String>, out: &mut Vec<(Vec<String>, Nod
     }
 }
 
-/// Every scalar, with its key path, array items by index (`_scalars`).
+/// Every scalar, with its key path, array items by index.
 fn scalars(value: &Node, parts: &mut Vec<String>, out: &mut Vec<(Vec<String>, Node)>) {
     match &value.value {
         Value::Map(entries) => {
@@ -301,7 +302,7 @@ fn scalars(value: &Node, parts: &mut Vec<String>, out: &mut Vec<(Vec<String>, No
     }
 }
 
-/// The node at `parts`, if any (`_at`).
+/// The node at `parts`, if any.
 fn at<'a, S: AsRef<str>>(document: &'a Node, parts: &[S]) -> Option<&'a Node> {
     let mut node = document;
     for part in parts {
@@ -315,7 +316,7 @@ fn at<'a, S: AsRef<str>>(document: &'a Node, parts: &[S]) -> Option<&'a Node> {
     Some(node)
 }
 
-/// A setting at `parts` (`_shown`): a secret is its reference, or hidden.
+/// A setting at `parts`: a secret is its reference, or hidden.
 fn shown(value: &Node, parts: &[String], env: &Env) -> Setting {
     let path = parts.join(".");
     let key = parts.last().cloned().unwrap_or_default();
@@ -347,8 +348,7 @@ fn shown(value: &Node, parts: &[String], env: &Env) -> Setting {
     setting
 }
 
-/// `dotted path → description` from the file's JSON Schema, list items as `*`
-/// (`_schema_descriptions`).
+/// `dotted path → description` from the file's JSON Schema, list items as `*`.
 fn schema_descriptions(file_key: &str) -> BTreeMap<String, String> {
     let mut found = BTreeMap::new();
     let Some(schema) = opentide_schema::generate::configuration::configuration_schema(file_key)
@@ -498,7 +498,7 @@ fn comment_descriptions(text: Option<&str>) -> BTreeMap<String, String> {
     found
 }
 
-/// The description of the setting at `parts` (`_description`).
+/// The description of the setting at `parts`.
 fn description(descriptions: &BTreeMap<String, String>, parts: &[String]) -> String {
     let starred: Vec<&str> = parts
         .iter()
@@ -531,27 +531,9 @@ fn bundled_text(file_key: &str) -> Option<&'static str> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UnsafeRawView(pub String);
 
-/// The redactor met text it does not read: the raw view is withheld.
+/// A value the raw view cannot place (no byte span): the raw view is withheld.
 #[derive(Debug)]
 struct ScanError;
-
-const BARE_KEY: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-";
-
-/// The value a TOML value `token` (a string, number, date...) reads as.
-fn decode(token: &str) -> Result<Node, ScanError> {
-    let document = config_toml::parse(&format!("v = {token}")).map_err(|_| ScanError)?;
-    document
-        .get("v")
-        .map(|value| (**value).clone())
-        .ok_or(ScanError)
-}
-
-fn decode_str(token: &str) -> Result<String, ScanError> {
-    match &decode(token)?.value {
-        Value::Str(text) => Ok(text.to_string()),
-        _ => Err(ScanError),
-    }
-}
 
 /// `value` as a TOML basic string.
 fn basic_string(value: &str) -> String {
@@ -575,348 +557,200 @@ fn basic_string(value: &str) -> String {
     out
 }
 
-/// The document as code points, read as `_Redactor` reads it.
-struct Scan {
-    text: Vec<char>,
-}
-
-impl Scan {
-    fn at(&self, index: usize) -> Result<char, ScanError> {
-        self.text.get(index).copied().ok_or(ScanError)
-    }
-
-    fn starts_with(&self, index: usize, token: &str) -> bool {
-        (index..)
-            .zip(token.chars())
-            .all(|(at, c)| self.text.get(at) == Some(&c))
-    }
-
-    fn slice(&self, start: usize, end: usize) -> String {
-        self.text
-            .get(start..end.min(self.text.len()))
-            .map(|chars| chars.iter().collect())
-            .unwrap_or_default()
-    }
-
-    /// The end of the TOML string that starts at `pos`, any of its four forms.
-    fn string_end(&self, pos: usize) -> Result<usize, ScanError> {
-        let quote = self.at(pos)?;
-        if self.starts_with(pos, &quote.to_string().repeat(3)) {
-            let mut i = pos + 3;
-            loop {
-                let c = self.at(i)?;
-                if quote == '"' && c == '\\' {
-                    i += 2;
-                } else if c == quote {
-                    let mut run = 1;
-                    while self.text.get(i + run) == Some(&quote) {
-                        run += 1;
-                    }
-                    if run >= 3 {
-                        // Up to two quotes may end the content, right before the closing three.
-                        return Ok(i + run.min(5));
-                    }
-                    i += run;
-                } else {
-                    i += 1;
-                }
-            }
-        }
-        let mut i = pos + 1;
-        loop {
-            let c = self.at(i)?;
-            if c == quote {
-                return Ok(i + 1);
-            }
-            if c == '\n' {
-                return Err(ScanError);
-            }
-            i += if quote == '"' && c == '\\' { 2 } else { 1 };
-        }
-    }
-
-    /// The end of the (dotted) key at `pos` and its parts, quotes decoded.
-    fn key(&self, pos: usize) -> Result<(usize, Vec<String>), ScanError> {
-        let mut parts = Vec::new();
-        let mut i = pos;
-        loop {
-            let c = self.at(i)?;
-            let end = if c == '"' || c == '\'' {
-                let end = self.string_end(i)?;
-                parts.push(decode_str(&self.slice(i, end))?);
-                end
-            } else {
-                let mut end = i;
-                while self.text.get(end).is_some_and(|c| BARE_KEY.contains(*c)) {
-                    end += 1;
-                }
-                if end == i {
-                    return Err(ScanError);
-                }
-                parts.push(self.slice(i, end));
-                end
-            };
-            i = end;
-            let dot = self.blank(i);
-            if self.text.get(dot) == Some(&'.') {
-                i = self.blank(dot + 1);
-                continue;
-            }
-            return Ok((end, parts));
-        }
-    }
-
-    fn blank(&self, mut pos: usize) -> usize {
-        while self.text.get(pos).is_some_and(|c| *c == ' ' || *c == '\t') {
-            pos += 1;
-        }
-        pos
-    }
-
-    /// Past blanks, newlines and comments, as arrays (and TOML 1.1 inline
-    /// tables) allow.
-    fn trivia(&self, mut pos: usize) -> usize {
-        while let Some(c) = self.text.get(pos) {
-            match c {
-                ' ' | '\t' | '\r' | '\n' => pos += 1,
-                '#' => {
-                    pos = self.text[pos..]
-                        .iter()
-                        .position(|c| *c == '\n')
-                        .map_or(self.text.len(), |at| pos + at);
-                }
-                _ => break,
-            }
-        }
-        pos
-    }
-
-    /// The end of the TOML value that starts at `pos`.
-    fn value_end(&self, pos: usize) -> Result<usize, ScanError> {
-        let c = self.at(pos)?;
-        if c == '"' || c == '\'' {
-            return self.string_end(pos);
-        }
-        if c == '[' {
-            let mut i = self.trivia(pos + 1);
-            while self.at(i)? != ']' {
-                i = self.trivia(self.value_end(i)?);
-                if self.at(i)? == ',' {
-                    i = self.trivia(i + 1);
-                }
-            }
-            return Ok(i + 1);
-        }
-        if c == '{' {
-            let mut i = self.trivia(pos + 1);
-            while self.at(i)? != '}' {
-                i = self.trivia(self.key(i)?.0);
-                if self.at(i)? != '=' {
-                    return Err(ScanError);
-                }
-                i = self.trivia(self.value_end(self.trivia(i + 1))?);
-                if self.at(i)? == ',' {
-                    i = self.trivia(i + 1);
-                }
-            }
-            return Ok(i + 1);
-        }
-        // A number, boolean or date: up to what may follow a value (a date
-        // may hold a space).
-        let mut end = pos;
-        while self.text.get(end).is_some_and(|c| !",]}#\n".contains(*c)) {
-            end += 1;
-        }
-        while end > pos && self.text.get(end - 1).is_some_and(|c| " \t\r".contains(*c)) {
-            end -= 1;
-        }
-        if end == pos {
-            return Err(ScanError);
-        }
-        Ok(end)
-    }
-}
-
-/// Copies a TOML document, each secret value replaced and each URL's user
-/// hidden (`_Redactor`). It reads the document as TOML does, value by value
-/// (strings of every form, arrays and inline tables over any number of
-/// lines), so a value never leaks for being written one way rather than
-/// another. It assumes the document parses; [`redact_toml`] checks that
-/// first and the result after.
+/// What the raw view changes in a document, found on `toml_edit`'s tree of
+/// it (`_Redactor`), which keeps each value's bytes: a secret value is
+/// replaced, and a string whose URL names a user is written again with the
+/// user hidden. Inline tables are read key by key and arrays item by item, so
+/// a value is found however it is written; an array whose path is a secret is
+/// replaced whole.
 struct Redactor<'a> {
-    scan: Scan,
     env: &'a Env,
-    pos: usize,
-    out: String,
+    /// The bytes of each value the view shows as something else, and what.
+    replaced: Vec<(Range<usize>, String)>,
+    /// The bytes of every value, replaced or not: no comment is read in them.
+    values: Vec<Range<usize>>,
 }
 
 impl Redactor<'_> {
-    /// Copies up to `end`, a comment's URL user hidden.
-    fn copy_to(&mut self, end: usize) {
-        let chunk = self.scan.slice(self.pos, end);
-        if chunk.contains('#') {
-            let lines: Vec<String> = chunk.split('\n').map(hide_userinfo).collect();
-            self.out.push_str(&lines.join("\n"));
-        } else {
-            self.out.push_str(&chunk);
+    /// The values of `table` at `path` (a table header's keys, an array of
+    /// tables' without an index), each statement's value at the top.
+    fn table(&mut self, table: &toml_edit::Table, path: &mut Vec<String>) -> Result<(), ScanError> {
+        for (key, item) in table {
+            path.push(key.to_owned());
+            match item {
+                toml_edit::Item::None => {}
+                toml_edit::Item::Value(value) => self.value(value, path, true)?,
+                toml_edit::Item::Table(table) => self.table(table, path)?,
+                toml_edit::Item::ArrayOfTables(tables) => {
+                    for table in tables {
+                        self.table(table, path)?;
+                    }
+                }
+            }
+            path.pop();
         }
-        self.pos = end.max(self.pos);
-    }
-
-    fn expect(&mut self, token: &str) -> Result<(), ScanError> {
-        if !self.scan.starts_with(self.pos, token) {
-            return Err(ScanError);
-        }
-        self.copy_to(self.pos + token.chars().count());
         Ok(())
     }
 
-    fn run(mut self) -> Result<String, ScanError> {
-        let mut table: Vec<String> = Vec::new();
-        loop {
-            self.copy_to(self.scan.trivia(self.pos));
-            if self.pos >= self.scan.text.len() {
-                return Ok(self.out);
-            }
-            if self.scan.at(self.pos)? == '[' {
-                let closing = if self.scan.starts_with(self.pos, "[[") {
-                    "]]"
-                } else {
-                    "]"
-                };
-                self.copy_to(self.scan.blank(self.pos + closing.len()));
-                let (end, parts) = self.scan.key(self.pos)?;
-                table = parts;
-                self.copy_to(self.scan.blank(end));
-                self.expect(closing)?;
-            } else {
-                self.key_value(&table, true)?;
-            }
-            // A statement ends with blanks, a comment, and a newline (or the end).
-            self.copy_to(self.scan.blank(self.pos));
-            if self.scan.text.get(self.pos) == Some(&'#') {
-                let end = self.scan.text[self.pos..]
-                    .iter()
-                    .position(|c| *c == '\n')
-                    .map_or(self.scan.text.len(), |at| self.pos + at);
-                self.copy_to(end);
-            }
-            if self
-                .scan
-                .text
-                .get(self.pos)
-                .is_some_and(|c| *c != '\r' && *c != '\n')
-            {
-                return Err(ScanError);
-            }
-        }
-    }
-
-    fn key_value(&mut self, table: &[String], top: bool) -> Result<(), ScanError> {
-        let (end, parts) = self.scan.key(self.pos)?;
-        let next = if top {
-            self.scan.blank(end)
-        } else {
-            self.scan.trivia(end)
-        };
-        self.copy_to(next);
-        self.expect("=")?;
-        self.copy_to(self.scan.blank(self.pos));
-        let mut path = table.to_vec();
-        path.extend(parts);
-        self.value(&path, top)
-    }
-
-    fn value(&mut self, path: &[String], top: bool) -> Result<(), ScanError> {
-        let start = self.pos;
-        let c = self.scan.at(start)?;
-        if c == '{' {
+    /// `value` at `path`; `top` when it is a statement's value, not an
+    /// array's item or an inline table's.
+    fn value(
+        &mut self,
+        value: &toml_edit::Value,
+        path: &mut Vec<String>,
+        top: bool,
+    ) -> Result<(), ScanError> {
+        if let toml_edit::Value::InlineTable(table) = value {
             // Its keys are no secret: each value is redacted at its own path.
-            self.expect("{")?;
-            loop {
-                self.copy_to(self.scan.trivia(self.pos));
-                if self.scan.at(self.pos)? == '}' {
-                    return self.expect("}");
-                }
-                self.key_value(path, false)?;
-                self.copy_to(self.scan.trivia(self.pos));
-                if self.scan.at(self.pos)? == ',' {
-                    self.expect(",")?;
-                }
+            for (key, value) in table {
+                path.push(key.to_owned());
+                self.value(value, path, false)?;
+                path.pop();
             }
-        }
-        let end = self.scan.value_end(start)?;
-        let token = self.scan.slice(start, end);
-        if is_secret(path) && token != "true" && token != "false" {
-            let hidden = self.hidden(&token, top)?;
-            self.out.push_str(&hidden);
-            self.pos = end;
             return Ok(());
         }
-        if c == '[' {
-            self.expect("[")?;
-            let mut index = 0_usize;
-            loop {
-                self.copy_to(self.scan.trivia(self.pos));
-                if self.scan.at(self.pos)? == ']' {
-                    return self.expect("]");
-                }
-                let mut item = path.to_vec();
-                item.push(index.to_string());
-                self.value(&item, false)?;
-                index += 1;
-                self.copy_to(self.scan.trivia(self.pos));
-                if self.scan.at(self.pos)? == ',' {
-                    self.expect(",")?;
+        let span = value.span().ok_or(ScanError)?;
+        if is_secret(path) && !value.is_bool() {
+            let hidden = self.hidden(value.as_str(), top);
+            self.replace(span, hidden);
+            return Ok(());
+        }
+        match value {
+            toml_edit::Value::Array(items) => {
+                for (index, item) in items.iter().enumerate() {
+                    path.push(index.to_string());
+                    self.value(item, path, false)?;
+                    path.pop();
                 }
             }
-        }
-        if c == '"' || c == '\'' {
-            let decoded = decode_str(&token)?;
-            let shown = hide_userinfo(&decoded);
-            if shown == decoded {
-                self.out.push_str(&token);
-            } else {
-                self.out.push_str(&basic_string(&shown));
+            toml_edit::Value::String(text) => {
+                let shown = hide_userinfo(text.value());
+                if shown == *text.value() {
+                    self.values.push(span);
+                } else {
+                    self.replace(span, basic_string(&shown));
+                }
             }
-        } else {
-            self.out.push_str(&token);
+            _ => self.values.push(span),
         }
-        self.pos = end;
         Ok(())
     }
 
-    /// What a secret value reads as: its variable and whether it is set, or
-    /// [`HIDDEN`].
-    fn hidden(&self, token: &str, top: bool) -> Result<String, ScanError> {
-        let referenced = if token.starts_with(['"', '\'']) {
-            let decoded = decode_str(token)?;
-            opentide_workspace::info::env_reference(&decoded).map(str::to_owned)
-        } else {
-            None
-        };
-        let Some(variable) = referenced else {
-            return Ok(basic_string(HIDDEN));
+    fn replace(&mut self, span: Range<usize>, text: String) {
+        self.values.push(span.clone());
+        self.replaced.push((span, text));
+    }
+
+    /// What a secret value reads as: the variable a string names and whether
+    /// it is set (on a statement's value), or [`HIDDEN`].
+    fn hidden(&self, text: Option<&str>, top: bool) -> String {
+        let Some(variable) = text.and_then(opentide_workspace::info::env_reference) else {
+            return basic_string(HIDDEN);
         };
         let quoted = basic_string(&format!("${{{variable}}}"));
         if !top {
-            return Ok(quoted);
+            return quoted;
         }
         let state = if self
             .env
-            .get(&variable)
+            .get(variable)
             .is_some_and(|value| !value.is_empty())
         {
             "set"
         } else {
             "unset"
         };
-        Ok(format!("{quoted}  # {state}"))
+        format!("{quoted}  # {state}")
+    }
+
+    /// `text` with the values replaced and, between the values, each
+    /// comment's URL user hidden (and a quoted key's that holds a `#`).
+    fn write(mut self, text: &str) -> Result<String, ScanError> {
+        self.values.sort_by_key(|span| span.start);
+        self.replaced.sort_by_key(|(span, _)| span.start);
+        let mut replaced = self.replaced.into_iter().peekable();
+        let mut out = String::with_capacity(text.len());
+        let mut pos = 0;
+        for span in self.values {
+            let gap = text.get(pos..span.start).ok_or(ScanError)?;
+            out.push_str(&between_values(gap)?);
+            match replaced.next_if(|(at, _)| at.start == span.start) {
+                Some((_, shown)) => out.push_str(&shown),
+                None => out.push_str(text.get(span.clone()).ok_or(ScanError)?),
+            }
+            pos = span.end;
+        }
+        out.push_str(&between_values(text.get(pos..).ok_or(ScanError)?)?);
+        Ok(out)
     }
 }
 
+/// Text between two values (keys, table headers, punctuation, blanks and
+/// comments) as the raw view shows it: each comment's URL user hidden, and a
+/// quoted key's when it holds a `#`. A [`ScanError`] if a cut fell off a
+/// char boundary, which no cut does: each is where `find` found a character,
+/// or the end of a quoted key.
+fn between_values(gap: &str) -> Result<String, ScanError> {
+    let mut out = String::with_capacity(gap.len());
+    let mut rest = gap;
+    while let Some(at) = rest.find(['#', '"', '\'']) {
+        debug_assert!(rest.is_char_boundary(at), "{rest:?} cut at {at}");
+        let (plain, from) = rest.split_at_checked(at).ok_or(ScanError)?;
+        out.push_str(plain);
+        rest = from;
+        let end = if rest.starts_with('#') {
+            rest.find('\n').unwrap_or(rest.len())
+        } else {
+            quoted_key_end(rest)
+        };
+        debug_assert!(rest.is_char_boundary(end), "{rest:?} cut at {end}");
+        let (token, after) = rest.split_at_checked(end).ok_or(ScanError)?;
+        if token.contains('#') {
+            out.push_str(&hide_userinfo(token));
+        } else {
+            out.push_str(token);
+        }
+        rest = after;
+    }
+    out.push_str(rest);
+    Ok(out)
+}
+
+/// The length of the quoted key `text` starts with: up to its closing quote
+/// (a basic one's escapes skipped), or the line's end.
+fn quoted_key_end(text: &str) -> usize {
+    let mut chars = text.char_indices();
+    let Some((_, quote)) = chars.next() else {
+        return 0;
+    };
+    while let Some((at, c)) = chars.next() {
+        match c {
+            '\\' if quote == '"' => {
+                chars.next();
+            }
+            '\n' => return at,
+            c if c == quote => return at + c.len_utf8(),
+            _ => {}
+        }
+    }
+    text.len()
+}
+
+/// `text` read by `toml_edit`, with every secret value replaced and every
+/// URL user hidden (`_Redactor`).
+fn redacted_text(text: &str, env: &Env) -> Result<String, ScanError> {
+    let parsed = toml_edit::ImDocument::parse(text).map_err(|_| ScanError)?;
+    let mut redactor = Redactor {
+        env,
+        replaced: Vec::new(),
+        values: Vec::new(),
+    };
+    redactor.table(parsed.as_table(), &mut Vec::new())?;
+    redactor.write(text)
+}
+
 /// Every text a secret of `document` could show as: never to appear in a
-/// raw view (`_secrets`).
+/// raw view.
 fn secrets(document: &Node) -> HashSet<String> {
     let mut found = HashSet::new();
     let mut all = Vec::new();
@@ -951,7 +785,7 @@ fn secrets(document: &Node) -> HashSet<String> {
 }
 
 /// Whether `redacted` holds no secret of `document`, read back as TOML and
-/// as text (`_proven`).
+/// as text.
 fn proven(document: &Node, redacted: &str) -> bool {
     let Ok(shown) = config_toml::parse(redacted) else {
         return false;
@@ -998,17 +832,8 @@ fn proven(document: &Node, redacted: &str) -> bool {
 pub fn redact_toml(text: &str, env: &Env) -> Result<String, UnsafeRawView> {
     let document = config_toml::parse(text)
         .map_err(|error| UnsafeRawView(format!("not valid TOML: {}", toml_position(&error))))?;
-    let redactor = Redactor {
-        scan: Scan {
-            text: text.chars().collect(),
-        },
-        env,
-        pos: 0,
-        out: String::with_capacity(text.len()),
-    };
-    let redacted = redactor
-        .run()
-        .map_err(|ScanError| UnsafeRawView(UNSAFE_RAW.to_owned()))?;
+    let redacted =
+        redacted_text(text, env).map_err(|ScanError| UnsafeRawView(UNSAFE_RAW.to_owned()))?;
     if !proven(&document, &redacted) {
         return Err(UnsafeRawView(UNSAFE_RAW.to_owned()));
     }
@@ -1017,12 +842,12 @@ pub fn redact_toml(text: &str, env: &Env) -> Result<String, UnsafeRawView> {
 
 // -- the view ------------------------------------------------------------------
 
-/// Whether `document` has a value at `parts` (`_has`).
+/// Whether `document` has a value at `parts`.
 fn has(document: &Node, parts: &[String]) -> bool {
     at(document, parts).is_some()
 }
 
-/// One configuration file (`_file`).
+/// One configuration file.
 fn file(
     file_key: &str,
     merged: Option<&Node>,
@@ -1127,8 +952,7 @@ fn file(
     }
 }
 
-/// `validate --check configuration`'s findings, by the file they name
-/// (`_findings`).
+/// `validate --check configuration`'s findings, by the file they name.
 fn findings(resolved: &Node) -> BTreeMap<String, Vec<ConfigFinding>> {
     let mut found: BTreeMap<String, Vec<ConfigFinding>> = BTreeMap::new();
     let checked = std::panic::catch_unwind(|| {
@@ -1202,8 +1026,7 @@ fn sharing_findings(folders: &[PathBuf], resolved: &Node) -> Vec<ConfigFinding> 
         .collect()
 }
 
-/// Status name to strategy, from `deployment.toml` as written
-/// (`_status_strategies`).
+/// Status name to strategy, from `deployment.toml` as written.
 fn status_strategies(
     deployment: Option<&Node>,
 ) -> BTreeMap<String, opentide_compile::strategy::StatusStrategy> {
@@ -1228,7 +1051,7 @@ fn status_strategies(
     found
 }
 
-/// A card per platform file (`_platform_cards`): `rules` are the rule
+/// A card per platform file: `rules` are the rule
 /// bodies by UUID, in the catalogue's order.
 #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn platform_cards(resolved: &Node, rules: &[(String, &Node)], env: &Env) -> Vec<PlatformCard> {
@@ -1238,7 +1061,6 @@ fn platform_cards(resolved: &Node, rules: &[(String, &Node)], env: &Env) -> Vec<
     };
     let mut sorted: Vec<&opentide_schema::node::Entry> = platforms.iter().collect();
     sorted.sort_by_key(|entry| scalar_text(&entry.key.value));
-    let config = opentide_compile::json::Json::from_node(resolved);
     let mut cards = Vec::new();
     for entry in sorted {
         let platform = scalar_text(&entry.key.value);
@@ -1249,7 +1071,10 @@ fn platform_cards(resolved: &Node, rules: &[(String, &Node)], env: &Env) -> Vec<
         // On exactly when `deploy` deploys it: `[platform] enabled` is the
         // boolean `true`; the string "false", or an `enabled` outside the
         // `[platform]` table, is not on.
-        let enabled = opentide_compile::plan::platform_enabled(&config, &platform);
+        let enabled = opentide_schema::configuration::resolve::platform_enabled(
+            resolved.get("platforms").map(AsRef::as_ref),
+            &platform,
+        );
         let with_block: Vec<(&str, &Node)> = rules
             .iter()
             .filter_map(|(uuid, rule)| {

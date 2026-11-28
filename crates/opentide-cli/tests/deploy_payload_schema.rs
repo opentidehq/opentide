@@ -6,7 +6,7 @@
 //! The documents are the dry runs of the `tide-corpus` fixture, the one the
 //! snapshot cases `deploy dry-run` and `deploy platform` run, one run per
 //! platform of the registry. The fixture has rules for nine platforms; the
-//! other four (Bitdefender, Graylog, Exabeam, Google SecOps) get a rule from
+//! other five (Bitdefender, Graylog, Exabeam, Google SecOps, Datadog) get a rule from
 //! `opentide new rule` in the test's copy, so every platform's `payloads` hold
 //! a rule.
 
@@ -37,7 +37,13 @@ const LISTS: [&str; 6] = [
 
 /// The platforms the fixture has no rule for: `new rule` writes one, and its
 /// status is moved to `STAGING`, a `PREVIEW` status.
-const SCAFFOLDED: [&str; 4] = ["bitdefender", "graylog", "exabeam", "google_secops"];
+const SCAFFOLDED: [&str; 5] = [
+    "bitdefender",
+    "graylog",
+    "exabeam",
+    "google_secops",
+    "datadog",
+];
 
 /// `opentide --json <args>` in `cwd`, its document, whatever the exit code.
 fn document(cwd: &Path, args: &[&str]) -> Value {

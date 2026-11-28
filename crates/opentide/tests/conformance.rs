@@ -14,7 +14,7 @@
 //! and `OPENTIDE_CONFORMANCE_OUT` the folder to write;
 //! `OPENTIDE_CONFORMANCE_DIVERGE` (test-only) makes this runner diverge on
 //! purpose. Without them it starts the stand-ins itself
-//! (`tests/cassettes/<name>/tenant.py`, with `$PYTHON`, else `python3`) and
+//! (each platform's `tenant.py` under `tests/cassettes/`, with `$PYTHON`, else `python3`) and
 //! runs every operation on the tide corpus under a temporary folder.
 
 #![cfg(all(feature = "cli", feature = "connectors"))]
@@ -471,7 +471,7 @@ impl Drop for StandIn {
     }
 }
 
-/// Starts each stand-in of `plan` (`tests/cassettes/<name>/tenant.py`) on
+/// Starts each stand-in of `plan` (each platform's `tenant.py` under `tests/cassettes/`) on
 /// loopback, for a run of this runner alone, its URL in `plan["urls"]`.
 fn start_stand_ins(plan: &mut Value) -> Vec<StandIn> {
     let python = std::env::var_os("PYTHON")

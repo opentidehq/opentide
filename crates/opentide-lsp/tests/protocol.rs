@@ -4,6 +4,10 @@
 //! features built on the Tide index.
 
 #![expect(
+    clippy::string_slice,
+    reason = "a test: a slice off a char boundary panics, and a panic is a failed test"
+)]
+#![expect(
     clippy::expect_used,
     clippy::unwrap_used,
     reason = "test helpers outside #[test] functions: a panic fails the test"
@@ -76,11 +80,12 @@ fn send(lsp: &mut Lsp, id: i64, method: &str, params: Value) {
     lsp.write(&json!({ "jsonrpc": "2.0", "id": id, "method": method, "params": params }));
 }
 
-/// Have the server sleep, and wait until it does: what is sent next queues
-/// up as one batch.
-fn hold(lsp: &mut Lsp, id: i64) {
-    send(lsp, id, "opentide/__sleep", json!({ "ms": 700 }));
-    std::thread::sleep(std::time::Duration::from_millis(150));
+/// Queue a batch: the batch that takes this request ends exactly `frames`
+/// frames after it (`opentide/__hold`, debug builds). The server waits for
+/// them however long the test takes to write them, and leaves what comes
+/// after them to the next batch, so no timing window holds it (#2010).
+fn hold(lsp: &mut Lsp, id: i64, frames: u64) {
+    send(lsp, id, "opentide/__hold", json!({ "frames": frames }));
 }
 
 fn watch() -> Value {
@@ -186,7 +191,7 @@ fn queued_edits_are_analysed_and_published_once() {
     open(&mut lsp, uri, "kql", "SecurityEvent | take 1");
     published_for(&mut lsp, uri);
     let before = stats(&mut lsp);
-    hold(&mut lsp, 900);
+    hold(&mut lsp, 900, 21);
     for n in 0..20 {
         lsp.notify(
             "textDocument/didChange",
@@ -214,7 +219,7 @@ fn cancelled_and_outdated_requests_are_answered_so() {
     let uri = "file:///tmp/cancel.kql";
     open(&mut lsp, uri, "kql", "SecurityEvent | take 1");
     published_for(&mut lsp, uri);
-    hold(&mut lsp, 800);
+    hold(&mut lsp, 800, 5);
     send(
         &mut lsp,
         801,
@@ -528,6 +533,55 @@ fn an_elastic_rule_publishes_no_advisory_of_its_own() {
     assert_eq!(editor_indexed(&mut lsp), 0);
 }
 
+/// #1982: the editor publishes `validate`'s schema finding on an Elastic
+/// lookback too long to deploy, placed at the value; the largest one the
+/// bound allows is not flagged.
+#[test]
+fn an_elastic_lookback_past_the_deployable_bound_is_flagged_in_the_editor() {
+    let scratch = workspace("elastic-duration-bound", false);
+    let root = &scratch.0;
+    let rule_uri = file_uri(&root.join("objects/rules/rule-1.0.yaml"));
+    let (mut lsp, _) = start(json!({ "capabilities": watch(), "rootUri": file_uri(root) }));
+    let register = lsp.read();
+    lsp.write(&json!({ "jsonrpc": "2.0", "id": register["id"], "result": null }));
+    let rule = |lookback: &str| {
+        format!(
+            "{}  elastic:\n    status: STAGING\n    type: query\n    query: 'process.name: \"é\"'\n    \
+             scheduling:\n      interval: 5m\n      lookback: {lookback}\n",
+            fixture(RULE)
+        )
+    };
+    let bounded = |diagnostics: &[Value]| {
+        diagnostics
+            .iter()
+            .filter(|d| {
+                d["message"]
+                    .as_str()
+                    .is_some_and(|m| m.contains("longer than a rule can be deployed"))
+            })
+            .count()
+    };
+    let huge = "9".repeat(40) + "s";
+    open(&mut lsp, &rule_uri, "opentide-yaml", &rule(&huge));
+    let diagnostics = published_for(&mut lsp, &rule_uri);
+    assert_eq!(bounded(&diagnostics), 1, "{diagnostics:#?}");
+
+    let scratch = workspace("elastic-duration-at-bound", false);
+    let root = &scratch.0;
+    let rule_uri = file_uri(&root.join("objects/rules/rule-1.0.yaml"));
+    let (mut lsp, _) = start(json!({ "capabilities": watch(), "rootUri": file_uri(root) }));
+    let register = lsp.read();
+    lsp.write(&json!({ "jsonrpc": "2.0", "id": register["id"], "result": null }));
+    open(
+        &mut lsp,
+        &rule_uri,
+        "opentide-yaml",
+        &rule("9223372036854775807s"),
+    );
+    let diagnostics = published_for(&mut lsp, &rule_uri);
+    assert_eq!(bounded(&diagnostics), 0, "{diagnostics:#?}");
+}
+
 /// #821 (UC-2.6): no object of the root is indexed by the editor for an
 /// Elastic rule's first diagnostics, now that the platform-block advisories
 /// that looked up the objects it inherits from are `lint`'s alone. The index
@@ -729,6 +783,121 @@ fn code_actions_follow_the_context() {
 
     let found = actions(&mut lsp, json!({ "diagnostics": [], "only": ["quickfix"] }));
     assert!(found.iter().all(|a| a["kind"] == "quickfix"), "{found:#?}");
+}
+
+/// A Microsoft Defender rule whose block names a column its query does not
+/// return, and whose query ends without a `project` (#1885).
+const DEFENDER_RULE: &str = "name: Defender rule
+configurations:
+  microsoft_defender:
+    query: |
+      DeviceProcessEvents
+      | where FileName =~ 'powershell.exe' // encoded
+    entities:
+      hosts:
+        - device_id: DevicId
+      accounts:
+        - upn: AccountUpn
+";
+
+/// #1885: the Defender block's columns against its query's output, with a
+/// quick fix for each: the column it most likely means, and the `| project`
+/// appended after the query's last operator, on its line.
+#[test]
+fn defender_output_findings_have_quick_fixes() {
+    let scratch = workspace("defender_output", false);
+    let uri = file_uri(&scratch.0.join("objects/rules/defender.yaml"));
+    let (mut lsp, _) = start(json!({ "capabilities": {}, "rootUri": file_uri(&scratch.0) }));
+    open(&mut lsp, &uri, "opentide-yaml", DEFENDER_RULE);
+    let diagnostics = published_for(&mut lsp, &uri);
+    let find = |code: &str| {
+        diagnostics
+            .iter()
+            .find(|d| d["code"] == code)
+            .unwrap_or_else(|| panic!("{code}: {diagnostics:#?}"))
+            .clone()
+    };
+    let column = find("microsoft_defender_column_not_in_output");
+    assert_eq!(column["severity"], 1, "{column}");
+    assert_eq!(
+        column["range"]["start"],
+        json!({ "line": 8, "character": 21 })
+    );
+    assert_eq!(
+        column["range"]["end"],
+        json!({ "line": 8, "character": 28 })
+    );
+    let unprojected = find("microsoft_defender_unprojected_output");
+    // A note: it never fails `lint --strict`.
+    assert_eq!(unprojected["severity"], 3, "{unprojected}");
+    assert_eq!(
+        unprojected["range"]["start"],
+        json!({ "line": 5, "character": 8 })
+    );
+    assert_eq!(
+        unprojected["range"]["end"],
+        json!({ "line": 5, "character": 42 })
+    );
+
+    let actions = |lsp: &mut Lsp, diagnostic: &Value| {
+        lsp.request(
+            "textDocument/codeAction",
+            json!({
+                "textDocument": { "uri": uri },
+                "range": diagnostic["range"],
+                "context": { "diagnostics": [diagnostic] }
+            }),
+        )["result"]
+            .as_array()
+            .unwrap()
+            .clone()
+    };
+    let found = actions(&mut lsp, &column);
+    assert_eq!(found.len(), 1, "{found:#?}");
+    assert_eq!(found[0]["title"], "Apply suggestion: DeviceId");
+    let edit = &found[0]["edit"]["changes"][&uri][0];
+    assert_eq!(edit["range"], column["range"]);
+    assert_eq!(edit["newText"], "DeviceId");
+
+    let found = actions(&mut lsp, &unprojected);
+    assert_eq!(found.len(), 1, "{found:#?}");
+    let project = "| project Timestamp, DeviceId, ReportId, AccountUpn";
+    assert_eq!(found[0]["title"], format!("Append {project}"));
+    let edit = &found[0]["edit"]["changes"][&uri][0];
+    // An insertion after the operator, before the line's comment.
+    assert_eq!(edit["range"]["start"], unprojected["range"]["end"]);
+    assert_eq!(edit["range"]["end"], unprojected["range"]["end"]);
+    assert_eq!(edit["newText"], format!(" {project}"));
+
+    // fixAll applies the column's suggestion, never the project.
+    let all = lsp.request(
+        "textDocument/codeAction",
+        json!({
+            "textDocument": { "uri": uri },
+            "range": { "start": { "line": 0, "character": 0 }, "end": { "line": 12, "character": 0 } },
+            "context": { "diagnostics": [], "only": ["source.fixAll.opentide"] }
+        }),
+    )["result"]
+        .as_array()
+        .unwrap()
+        .clone();
+    let edits = all
+        .iter()
+        .flat_map(|a| {
+            a["edit"]["changes"][&uri]
+                .as_array()
+                .cloned()
+                .unwrap_or_default()
+        })
+        .collect::<Vec<_>>();
+    assert!(
+        edits.iter().all(|e| !e["newText"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("project")),
+        "{all:#?}"
+    );
+    assert!(edits.iter().any(|e| e["newText"] == "DeviceId"), "{all:#?}");
 }
 
 /// #887: an unknown SPL command's fix replaces the command, not its stage.
@@ -3093,7 +3262,7 @@ fn a_diagnostics_request_before_shutdown_in_one_batch_is_answered() {
     }));
     let uri = file_uri(&scratch.0.join("objects/rules/rule-1.0.yaml"));
     open(&mut lsp, &uri, "opentide-yaml", &fixture(RULE));
-    hold(&mut lsp, 900);
+    hold(&mut lsp, 900, 3);
     send(
         &mut lsp,
         901,
@@ -3131,7 +3300,7 @@ fn a_deferred_diagnostics_request_for_a_document_closed_later_in_the_batch_is_ou
     }));
     let uri = file_uri(&scratch.0.join("objects/rules/rule-1.0.yaml"));
     open(&mut lsp, &uri, "opentide-yaml", &fixture(RULE));
-    hold(&mut lsp, 900);
+    hold(&mut lsp, 900, 3);
     send(
         &mut lsp,
         901,
@@ -3171,7 +3340,7 @@ fn a_batch_answers_diagnostics_after_hovers_and_completions() {
     let uri = file_uri(&scratch.0.join("objects/rules/rule-1.0.yaml"));
     let text = fixture(RULE);
     open(&mut lsp, &uri, "opentide-yaml", &text);
-    hold(&mut lsp, 900);
+    hold(&mut lsp, 900, 4);
     let at = json!({ "textDocument": { "uri": uri }, "position": { "line": 0, "character": 2 } });
     send(
         &mut lsp,
@@ -3693,6 +3862,33 @@ fn pulling_and_watching() -> Value {
     } }))
 }
 
+/// Queue the document's diagnostics (`1`) and the workspace's (`2`) as one
+/// batch that pauses before them (`opentide/__sleep`, debug builds) until
+/// the file `release` exists. The pulls are answered last in their batch,
+/// so what the test sends before it writes `release` is input the
+/// workspace pull finds waiting from its start, whatever the timing (#2041).
+fn pulls_paused_until(lsp: &mut Lsp, uri: &str, release: &std::path::Path) {
+    hold(lsp, 900, 3);
+    send(
+        lsp,
+        1,
+        "textDocument/diagnostic",
+        json!({ "textDocument": { "uri": uri } }),
+    );
+    send(
+        lsp,
+        2,
+        "workspace/diagnostic",
+        json!({ "previousResultIds": [] }),
+    );
+    send(
+        lsp,
+        901,
+        "opentide/__sleep",
+        json!({ "ms": 60_000, "until": release }),
+    );
+}
+
 /// A workspace pull the client cancels while it yields to the messages
 /// behind it is answered `RequestCanceled`, after them.
 #[test]
@@ -3705,19 +3901,8 @@ fn a_workspace_pull_cancelled_while_it_yields_is_answered_cancelled() {
     lsp.write(&json!({ "jsonrpc": "2.0", "id": register["id"], "result": null }));
     let uri = file_uri(&root.join("objects/rules/rule-1.0.yaml"));
     open(&mut lsp, &uri, "opentide-yaml", &fixture(RULE));
-    send(
-        &mut lsp,
-        1,
-        "textDocument/diagnostic",
-        json!({ "textDocument": { "uri": uri } }),
-    );
-    send(
-        &mut lsp,
-        2,
-        "workspace/diagnostic",
-        json!({ "previousResultIds": [] }),
-    );
-    until_response(&mut lsp, 1);
+    let release = root.join("released");
+    pulls_paused_until(&mut lsp, &uri, &release);
     send(
         &mut lsp,
         3,
@@ -3725,23 +3910,24 @@ fn a_workspace_pull_cancelled_while_it_yields_is_answered_cancelled() {
         json!({ "textDocument": { "uri": uri } }),
     );
     lsp.notify("$/cancelRequest", json!({ "id": 2 }));
+    std::fs::write(&release, "").unwrap();
     let seen = until_response(&mut lsp, 2);
     let answered: Vec<i64> = seen
         .iter()
         .filter(|message| message.get("method").is_none())
         .filter_map(|message| message["id"].as_i64())
         .collect();
-    assert_eq!(answered, [3, 2], "{seen:#?}");
+    assert_eq!(answered, [900, 901, 1, 3, 2], "{seen:#?}");
     assert_eq!(seen.last().unwrap()["error"]["code"], -32800, "{seen:#?}");
 }
 
 /// #1767: what VS Code sends after it opens a rule (QA's trace): the
 /// document's diagnostics, the workspace's, then `documentSymbol`,
 /// `codeAction`, `documentLink`, `inlayHint`, `foldingRange` and
-/// `semanticTokens/full`. The four after the workspace pull arrive while the
-/// server makes it, on a workspace of 1,000 rules; each is answered before
-/// the workspace pull, which yields to them and is answered after, with every
-/// rule's report.
+/// `semanticTokens/full`. The six after the workspace pull are waiting
+/// when the server starts it, on a workspace of 1,000 rules; each is
+/// answered before the workspace pull, which yields to them and is answered
+/// after, with every rule's report.
 #[test]
 fn document_requests_sent_during_a_workspace_pull_are_answered_first() {
     let scratch = rules_workspace("pull-yields", 1000);
@@ -3756,16 +3942,10 @@ fn document_requests_sent_during_a_workspace_pull_are_answered_first() {
     let document = json!({ "textDocument": { "uri": uri } });
     let range =
         json!({ "start": { "line": 0, "character": 0 }, "end": { "line": 5, "character": 0 } });
-    send(&mut lsp, 1, "textDocument/diagnostic", document.clone());
-    send(
-        &mut lsp,
-        2,
-        "workspace/diagnostic",
-        json!({ "previousResultIds": [] }),
-    );
-    // The document's diagnostics are answered first (the batch's rule); the
-    // workspace pull starts after them, and the rest arrive while it runs.
-    let mut seen = until_response(&mut lsp, 1);
+    // The pulls wait in their batch until the rest are sent: the workspace
+    // pull then finds them waiting, and yields to them.
+    let release = root.join("released");
+    pulls_paused_until(&mut lsp, &uri, &release);
     let requests = [
         (3, "textDocument/documentSymbol", document.clone()),
         (
@@ -3785,7 +3965,8 @@ fn document_requests_sent_during_a_workspace_pull_are_answered_first() {
     for (id, method, params) in requests {
         send(&mut lsp, id, method, params);
     }
-    seen.extend(until_response(&mut lsp, 2));
+    std::fs::write(&release, "").unwrap();
+    let seen = until_response(&mut lsp, 2);
     let answered: Vec<i64> = seen
         .iter()
         .filter(|message| message.get("method").is_none())
@@ -3809,7 +3990,7 @@ fn document_requests_sent_during_a_workspace_pull_are_answered_first() {
     let yields = lsp.request("opentide/__stats", Value::Null)["result"]["pullYields"]
         .as_u64()
         .unwrap();
-    assert!(yields >= 1, "{yields}");
+    assert_eq!(yields, 1);
     // The first validation of every object ran once, to its end. Whether it
     // also stopped for these messages depends on timing (a many-core host can
     // finish its first batch before they wait), so that is not asserted here:
@@ -3838,10 +4019,18 @@ fn a_file_changed_on_disk_within_a_batch_is_read_again_for_its_event() {
     let rule = root.join("objects/rules/rule-1.0.yaml");
     // One batch: a request that reads every object file (the editor's index,
     // from the workspace it loads), a pause in which the rule changes on
-    // disk, the watcher's event for it, and the workspace's diagnostics.
-    hold(&mut lsp, 1);
+    // disk (until the test, once the index is answered, writes it and then
+    // the release file), the watcher's event for it, and the workspace's
+    // diagnostics.
+    let release = root.join("released");
+    hold(&mut lsp, 1, 4);
     send(&mut lsp, 2, "workspace/symbol", json!({ "query": "" }));
-    send(&mut lsp, 3, "opentide/__sleep", json!({ "ms": 400 }));
+    send(
+        &mut lsp,
+        3,
+        "opentide/__sleep",
+        json!({ "ms": 60_000, "until": release }),
+    );
     lsp.notify(
         "workspace/didChangeWatchedFiles",
         json!({ "changes": [{ "uri": file_uri(&rule), "type": 2 }] }),
@@ -3857,6 +4046,7 @@ fn a_file_changed_on_disk_within_a_batch_is_read_again_for_its_event() {
     let changed = text.replacen("tlp: clear", "tlp: clearr", 1);
     assert_ne!(changed, text);
     std::fs::write(&rule, changed).unwrap();
+    std::fs::write(&release, "").unwrap();
     let report = until_response(&mut lsp, 4).pop().unwrap();
     let items = report["result"]["items"]
         .as_array()
@@ -4142,13 +4332,15 @@ fn a_workspace_pull_without_a_file_watcher_never_yields() {
     let (mut lsp, _) = start(json!({ "capabilities": caps, "rootUri": file_uri(root) }));
     let uri = file_uri(&root.join("objects/rules/rule-1.0.yaml"));
     open(&mut lsp, &uri, "opentide-yaml", &fixture(RULE));
+    // The pull is its batch's last frame: the request behind it waits in
+    // the next batch, whatever the timing.
+    hold(&mut lsp, 900, 1);
     send(
         &mut lsp,
         2,
         "workspace/diagnostic",
         json!({ "previousResultIds": [] }),
     );
-    std::thread::sleep(std::time::Duration::from_millis(50));
     send(
         &mut lsp,
         3,
@@ -4243,4 +4435,414 @@ fn a_workspace_pull_is_answered_while_the_client_keeps_editing() {
         editor.join().unwrap()
     });
     assert!(in_time, "the pull was not answered within 60 s of edits");
+}
+
+/// #1944: the workspace's symbols are placed from the index, and a code lens
+/// reads each referencing file where it is kept: neither copies a file per
+/// result. An open document is found by its path without comparing the
+/// path of every open document on each lookup.
+#[test]
+fn symbols_and_lenses_copy_no_file_and_find_open_documents_by_path() {
+    const RULES: usize = 10;
+    let scratch = workspace("symbols-shared-text", true);
+    let rules = scratch.0.join("objects/rules");
+    let objective = file_uri(&scratch.0.join("objects/objectives/objective-1.0.yaml"));
+    let rule_uris: Vec<(String, String)> = (0..RULES)
+        .map(|n| {
+            let path = rules.join(format!("rule-{n}.yaml"));
+            let text = fixture(RULE)
+                .replace("8003-000000000001", &format!("8003-0000000001{n:02}"))
+                .replace("name: Sentinel KQL Rule", &format!("name: Rule é😀 {n}"));
+            std::fs::write(&path, &text).unwrap();
+            (file_uri(&path), text)
+        })
+        .collect();
+    let (mut lsp, _) = start(json!({ "capabilities": watch(), "rootUri": file_uri(&scratch.0) }));
+    open(&mut lsp, &objective, "opentide-yaml", &fixture(OBJECTIVE));
+    for (uri, text) in &rule_uris {
+        open(&mut lsp, uri, "opentide-yaml", text);
+    }
+    let counters = |lsp: &mut Lsp| {
+        let stats = lsp.request("opentide/__stats", Value::Null);
+        (
+            stats["result"]["textCopies"].as_u64().unwrap(),
+            stats["result"]["docPathKeys"].as_u64().unwrap(),
+        )
+    };
+
+    let (copies, keys) = counters(&mut lsp);
+    let symbols = lsp.request("workspace/symbol", json!({ "query": "" }));
+    let symbols = symbols["result"].as_array().unwrap();
+    // The rule fixture on disk, its ten copies and the objective.
+    assert_eq!(symbols.len(), RULES + 2, "{symbols:?}");
+    let rule = symbols
+        .iter()
+        .find(|s| s["name"] == "Rule é😀 3")
+        .unwrap_or_else(|| panic!("{symbols:?}"));
+    // `name: Rule é😀 3`: the value from column 6, `😀` two UTF-16 units.
+    assert_eq!(
+        rule["location"]["range"],
+        json!({ "start": { "line": 0, "character": 6 }, "end": { "line": 0, "character": 16 } })
+    );
+
+    let lens = lsp.request(
+        "textDocument/codeLens",
+        json!({ "textDocument": { "uri": objective } }),
+    );
+    let locations = lens["result"][0]["command"]["arguments"][2]
+        .as_array()
+        .unwrap_or_else(|| panic!("{lens}"));
+    assert_eq!(locations.len(), RULES + 1, "{lens}");
+    assert!(
+        locations
+            .iter()
+            .all(|l| l["range"]["start"] == json!({ "line": 16, "character": 17 })),
+        "each at the rule's `detection_model`: {lens}"
+    );
+    let (copies_after, keys_after) = counters(&mut lsp);
+    assert_eq!(copies_after, copies, "a symbol or a lens copied a file");
+    assert!(
+        keys_after - keys <= RULES as u64 + 1,
+        "each lookup of an open document compared every open document's path: {} keys",
+        keys_after - keys
+    );
+}
+
+/// #1943: a keystroke in one open object runs the engine on that object
+/// alone. The analysis of every open object is made again (what `validate`
+/// says of one may change with another), but the engine's analysis of an
+/// object reads no other object, and is kept per text. What each document
+/// is told is what a server that opens the same texts tells it.
+#[test]
+fn a_keystroke_runs_the_engine_on_the_object_it_changed_alone() {
+    const OPEN: usize = 10;
+    let scratch = workspace("engine-analysis-per-text", true);
+    let rules = scratch.0.join("objects/rules");
+    let mut texts: Vec<(String, String)> = (0..OPEN)
+        .map(|n| {
+            let path = rules.join(format!("rule-{n}.yaml"));
+            let text = fixture(RULE)
+                .replace("8003-000000000001", &format!("8003-0000000001{n:02}"))
+                .replace("name: Sentinel KQL Rule", &format!("name: Rule é😀 {n}"));
+            std::fs::write(&path, &text).unwrap();
+            (file_uri(&path), text)
+        })
+        .collect();
+    let session = |texts: &[(String, String)]| {
+        let (mut lsp, _) = start(json!({
+            "capabilities": watching_relative(),
+            "rootUri": file_uri(&scratch.0)
+        }));
+        // The bundled configuration's catalogs come from the warm-up
+        // thread; installed after the first pulls, they are a new
+        // environment, and the keystroke would run the engine on every
+        // object again (#2164). The counts start with them in place.
+        lsp.request("opentide/__catalogs", Value::Null);
+        for (uri, text) in texts {
+            open(&mut lsp, uri, "opentide-yaml", text);
+        }
+        lsp
+    };
+    let pull_all = |lsp: &mut Lsp, texts: &[(String, String)]| -> Vec<Value> {
+        texts
+            .iter()
+            .map(|(uri, _)| {
+                let report = lsp.request(
+                    "textDocument/diagnostic",
+                    json!({ "textDocument": { "uri": uri } }),
+                );
+                report["result"]["items"].clone()
+            })
+            .collect()
+    };
+    let engine = |lsp: &mut Lsp| {
+        lsp.request("opentide/__stats", Value::Null)["result"]["engineAnalyses"]
+            .as_u64()
+            .unwrap()
+    };
+
+    let mut lsp = session(&texts);
+    pull_all(&mut lsp, &texts);
+    assert_eq!(engine(&mut lsp), OPEN as u64, "each object once");
+    let analyses = stats(&mut lsp);
+
+    let typed = format!("{}\n# typé 😀\n", texts[0].1);
+    lsp.notify(
+        "textDocument/didChange",
+        json!({ "textDocument": { "uri": texts[0].0, "version": 2 },
+                "contentChanges": [{ "text": typed }] }),
+    );
+    texts[0].1 = typed;
+    let after = pull_all(&mut lsp, &texts);
+    assert_eq!(
+        engine(&mut lsp),
+        OPEN as u64 + 1,
+        "a keystroke ran the engine on every open object again"
+    );
+    assert_eq!(
+        stats(&mut lsp),
+        analyses + OPEN as u64,
+        "the findings across objects are made again for each"
+    );
+
+    let mut fresh = session(&texts);
+    assert_eq!(after, pull_all(&mut fresh, &texts));
+    assert!(
+        after
+            .iter()
+            .any(|items| !items.as_array().unwrap().is_empty()),
+        "the comparison compares diagnostics: {after:?}"
+    );
+}
+
+/// #2169: the field catalogs arrive after the first pulls of `OPEN` open
+/// rules of `scratch` (the server generates no catalog before a path the
+/// test creates exists, `OPENTIDE_LSP_HOLD_CATALOGS`), once `generated`
+/// catalogs are ready; a pull installs them (pulled until one does), then a keystroke in one
+/// rule is pulled. How many engine analyses ran after the first pulls: once
+/// the catalogs were installed, and after the keystroke.
+fn engine_analyses_across_late_catalogs(
+    scratch: &Scratch,
+    open_rules: usize,
+    generated: u64,
+) -> (u64, u64) {
+    let hold = scratch.0.with_extension("hold");
+    let _ = std::fs::remove_file(&hold);
+    let rules = scratch.0.join("objects/rules");
+    let mut texts: Vec<(String, String)> = (0..open_rules)
+        .map(|n| {
+            let path = rules.join(format!("rule-{n}.yaml"));
+            let text = fixture(RULE)
+                .replace("8003-000000000001", &format!("8003-0000000001{n:02}"))
+                .replace("name: Sentinel KQL Rule", &format!("name: Rule é😀 {n}"));
+            std::fs::write(&path, &text).unwrap();
+            (file_uri(&path), text)
+        })
+        .collect();
+    let mut lsp = Lsp::spawn_with_env(&[("OPENTIDE_LSP_HOLD_CATALOGS", hold.as_os_str())]);
+    lsp.request(
+        "initialize",
+        json!({ "capabilities": watching_relative(), "rootUri": file_uri(&scratch.0) }),
+    );
+    lsp.notify("initialized", json!({}));
+    for (uri, text) in &texts {
+        open(&mut lsp, uri, "opentide-yaml", text);
+    }
+    let pull_all = |lsp: &mut Lsp, texts: &[(String, String)]| {
+        for (uri, _) in texts {
+            let report = lsp.request(
+                "textDocument/diagnostic",
+                json!({ "textDocument": { "uri": uri } }),
+            );
+            assert!(report["result"]["items"].is_array(), "{report}");
+        }
+    };
+    let stats = |lsp: &mut Lsp| lsp.request("opentide/__stats", Value::Null)["result"].clone();
+    let engine = |lsp: &mut Lsp| stats(lsp)["engineAnalyses"].as_u64().unwrap();
+
+    pull_all(&mut lsp, &texts);
+    let before = stats(&mut lsp);
+    assert_eq!(before["catalogsBuilt"], 0, "{before}");
+    assert_eq!(before["catalogInstalled"], false, "{before}");
+    let first = engine(&mut lsp);
+    assert_eq!(first, open_rules as u64, "each rule once");
+
+    std::fs::write(&hold, "").unwrap();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(120);
+    while stats(&mut lsp)["catalogsBuilt"].as_u64().unwrap() < generated {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the catalogs were not generated"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    // `catalogsBuilt` counts a catalog before the server can hand it out
+    // (the warm-up thread's `OnceLock` is set after the count, a root's own
+    // thread is joined once finished), so a pull right after the count can
+    // still find none to install: pull until one did.
+    let arrived = loop {
+        pull_all(&mut lsp, &texts);
+        let arrived = stats(&mut lsp);
+        if arrived["catalogInstalled"] == true {
+            break arrived;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the catalogs were generated but never installed: {arrived}"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    };
+    assert_eq!(arrived["catalogInstalled"], true, "{arrived}");
+    let installed = engine(&mut lsp) - first;
+
+    let typed = format!("{}\n# typé 😀\n", texts[0].1);
+    lsp.notify(
+        "textDocument/didChange",
+        json!({ "textDocument": { "uri": texts[0].0, "version": 2 },
+                "contentChanges": [{ "text": typed }] }),
+    );
+    texts[0].1 = typed;
+    pull_all(&mut lsp, &texts);
+    let typed = engine(&mut lsp) - first;
+    let _ = std::fs::remove_file(&hold);
+    (installed, typed)
+}
+
+/// #2169: the bundled configuration's catalogs, which the warm-up thread
+/// generates, are the ones compiled into the engine but for their version
+/// label. Arriving after the first pulls, they run the engine on no open
+/// object again: a keystroke then runs it on the rule it changed alone.
+#[test]
+fn the_bundled_catalogs_arriving_late_run_the_engine_on_nothing_again() {
+    const OPEN: usize = 4;
+    let scratch = workspace("late-bundled-catalogs", true);
+    assert_eq!(
+        engine_analyses_across_late_catalogs(&scratch, OPEN, 1),
+        (0, 1),
+        "the bundled catalogs arriving ran the engine again"
+    );
+}
+
+/// #2169: a root's own catalogs (its teams, from `deployment.toml`) hold
+/// something else than the engine's: arriving late, they are what every
+/// open object of the root is analysed with from then on, so the engine
+/// runs on each again.
+#[test]
+fn a_roots_own_catalogs_arriving_late_run_the_engine_again() {
+    const OPEN: usize = 4;
+    let scratch = workspace("late-own-catalogs", true);
+    let configurations = scratch.0.join(".opentide/configurations");
+    std::fs::create_dir_all(&configurations).unwrap();
+    std::fs::write(
+        configurations.join("deployment.toml"),
+        "[[responders]]\nname = \"Équipe 😀\"\ndescription = \"Our own\"\n",
+    )
+    .unwrap();
+    // The bundled configuration's catalogs and the root's.
+    let (_, typed) = engine_analyses_across_late_catalogs(&scratch, OPEN, 2);
+    assert_eq!(
+        typed, OPEN as u64,
+        "the root's own catalogs did not reach every open rule"
+    );
+}
+
+/// The `esql_unavailable` diagnostics of the document, pulled now: severity
+/// and message.
+fn esql_unavailable(lsp: &mut Lsp, uri: &str) -> Vec<(u64, String)> {
+    let reply = lsp.request(
+        "textDocument/diagnostic",
+        json!({ "textDocument": { "uri": uri } }),
+    );
+    reply["result"]["items"]
+        .as_array()
+        .unwrap_or_else(|| panic!("{reply}"))
+        .iter()
+        .filter(|d| d["code"] == "esql_unavailable")
+        .map(|d| {
+            (
+                d["severity"].as_u64().unwrap(),
+                d["message"].as_str().unwrap().to_string(),
+            )
+        })
+        .collect()
+}
+
+/// #1943: the engine's analysis is kept per text, so a change to the Elastic
+/// tenants (`elastic.toml`, which the engine reads) must reach an open
+/// Elastic rule whose text did not change: on disk with a watcher, as an
+/// open buffer, when that buffer closes, and when the file is deleted. A
+/// keystroke in another object does not take the finding away.
+#[test]
+fn elastic_tenants_changes_reach_an_open_elastic_rule_under_the_engine_cache() {
+    let tenants = |version: &str| {
+        format!("[[tenants]]\nname = \"é😀\"\n[tenants.setup]\nversion = \"{version}\"\n")
+    };
+    let scratch = workspace("engine-cache-elastic-tenants", true);
+    let root = &scratch.0;
+    let platforms = root.join(".opentide/configurations/platforms");
+    std::fs::create_dir_all(&platforms).unwrap();
+    let elastic = platforms.join("elastic.toml");
+    std::fs::write(&elastic, tenants("9.5")).unwrap();
+    let elastic_uri = file_uri(&elastic);
+
+    let rule_path = root.join("objects/rules/elastic-rule.yaml");
+    let rule = format!(
+        "{}  elastic:\n    type: esql\n    query: 'FROM logs-* | STATS a = ABSENT(host.name)'\n",
+        fixture(RULE)
+            .replace("8003-000000000001", "8003-000000000201")
+            .replace("name: Sentinel KQL Rule", "name: Elastic rule é😀")
+    );
+    std::fs::write(&rule_path, &rule).unwrap();
+    let rule_uri = file_uri(&rule_path);
+    let other = fixture(RULE);
+    let other_uri = file_uri(&root.join("objects/rules/rule-1.0.yaml"));
+
+    let (mut lsp, _) = start(json!({
+        "capabilities": watching_relative(),
+        "rootUri": file_uri(root)
+    }));
+    workspace_pull_codes(&mut lsp);
+    open(&mut lsp, &rule_uri, "opentide-yaml", &rule);
+    open(&mut lsp, &other_uri, "opentide-yaml", &other);
+    assert!(
+        esql_unavailable(&mut lsp, &rule_uri).is_empty(),
+        "9.5 has ABSENT"
+    );
+
+    // (A) On disk, 9.5 to 8.19, with the watcher's event.
+    std::fs::write(&elastic, tenants("8.19")).unwrap();
+    lsp.notify(
+        "workspace/didChangeWatchedFiles",
+        json!({ "changes": [{ "uri": elastic_uri, "type": 2 }] }),
+    );
+    let on_8_19 = esql_unavailable(&mut lsp, &rule_uri);
+    assert_eq!(on_8_19.len(), 1, "{on_8_19:?}");
+    assert_eq!(on_8_19[0].0, 2, "a warning: {on_8_19:?}");
+    assert!(
+        on_8_19[0].1.contains("Elasticsearch 8.19 rejects it"),
+        "{on_8_19:?}"
+    );
+
+    // A keystroke in another open object keeps it.
+    lsp.notify(
+        "textDocument/didChange",
+        json!({ "textDocument": { "uri": other_uri, "version": 2 },
+                "contentChanges": [{ "text": format!("{other}\n# typé 😀\n") }] }),
+    );
+    assert_eq!(esql_unavailable(&mut lsp, &rule_uri), on_8_19);
+
+    // (B) The open buffer wins over the disk: edited to 9.5, the finding goes.
+    open(&mut lsp, &elastic_uri, "toml", &tenants("8.19"));
+    assert_eq!(esql_unavailable(&mut lsp, &rule_uri), on_8_19);
+    lsp.notify(
+        "textDocument/didChange",
+        json!({ "textDocument": { "uri": elastic_uri, "version": 2 },
+                "contentChanges": [{ "text": tenants("9.5") }] }),
+    );
+    assert!(
+        esql_unavailable(&mut lsp, &rule_uri).is_empty(),
+        "the buffer's 9.5 did not reach the rule"
+    );
+
+    // (C) Closed: the disk's 8.19 again.
+    lsp.notify(
+        "textDocument/didClose",
+        json!({ "textDocument": { "uri": elastic_uri } }),
+    );
+    assert_eq!(esql_unavailable(&mut lsp, &rule_uri), on_8_19);
+
+    // (D) Deleted: no declared stack, so every supported line is checked and
+    // the finding names none.
+    std::fs::remove_file(&elastic).unwrap();
+    lsp.notify(
+        "workspace/didChangeWatchedFiles",
+        json!({ "changes": [{ "uri": elastic_uri, "type": 3 }] }),
+    );
+    let undeclared = esql_unavailable(&mut lsp, &rule_uri);
+    assert_eq!(undeclared.len(), 1, "{undeclared:?}");
+    assert_eq!(undeclared[0].0, 3, "information: {undeclared:?}");
+    assert!(
+        !undeclared[0].1.contains("Elasticsearch 8.19 rejects it"),
+        "{undeclared:?}"
+    );
 }

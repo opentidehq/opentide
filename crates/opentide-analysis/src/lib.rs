@@ -12,6 +12,7 @@
     missing_docs,
     reason = "imported from language-server with public items undocumented: crates/AGENTS.md, Lints"
 )]
+
 pub use opentide_core::datasets::{
     DatasetKind, Declaration, DeclaredColumn, DeclaredDatasets, DeclaredSource,
 };
@@ -34,10 +35,9 @@ pub use opentide_core::{
     CompletionItem, Diagnostic, LanguageId, Position, Range, Severity, SignatureHelp, codes,
 };
 pub use opentide_highlight::{HighlightResult, HighlightToken, SemanticTokens};
-pub use opentide_tide::{DocumentSymbol, ElasticTenant, IndexedObject};
+pub use opentide_tide::{DocumentSymbol, ElasticTenant, IndexEntry, IndexedObject};
 
 use opentide_highlight::{HighlightSpec, encode_lsp_semantic_tokens};
-use opentide_kql::Profile;
 use opentide_tide::TideAnalyzeResult;
 
 // The README's example runs as a doctest, so the crates.io page cannot drift.
@@ -46,6 +46,9 @@ use opentide_tide::TideAnalyzeResult;
 pub struct ReadmeDoctests;
 
 mod ecs;
+
+#[cfg(test)]
+mod dispatch_tests;
 
 /// This engine's version: the one every `opentide-*` build reports
 /// ([`opentide_core::VERSION`]): the crate version, or the release
@@ -66,9 +69,32 @@ pub trait WorkspaceHost {
     fn indexed_objects(&self) -> Option<std::sync::Arc<[IndexedObject]>> {
         None
     }
+
+    /// The text of the Elastic platform configuration
+    /// ([`ELASTIC_CONFIGURATION`]) that [`elastic_tenants`] reads: by
+    /// default the first of [`documents`](Self::documents) at that path. A
+    /// host that holds many documents answers without copying them all.
+    fn elastic_configuration(&self) -> Option<String> {
+        self.documents()
+            .into_iter()
+            .find(|(path, _)| is_elastic_configuration(path))
+            .map(|(_, text)| text)
+    }
+}
+
+/// Whether `path` is the Elastic platform configuration
+/// ([`ELASTIC_CONFIGURATION`]) of a workspace.
+pub fn is_elastic_configuration(path: &str) -> bool {
+    path.replace('\\', "/").ends_with(ELASTIC_CONFIGURATION)
 }
 
 pub use opentide_tide::index_object;
+
+/// The query-engine registry (#1953): one
+/// [`QueryEngine`](opentide_highlight::QueryEngine) per query language. Crates
+/// above this one read it here, not from opentide-tide, which ADR 0016 folds
+/// into this crate.
+pub use opentide_tide::engines;
 
 #[derive(Debug, Clone, Default)]
 pub struct MemoryWorkspace {
@@ -127,10 +153,8 @@ pub const ELASTIC_CONFIGURATION: &str = ".opentide/configurations/platforms/elas
 /// Elastic tenants declared in the workspace, if the host supplies the
 /// configuration file.
 pub fn elastic_tenants(host: &dyn WorkspaceHost) -> Vec<ElasticTenant> {
-    host.documents()
-        .iter()
-        .find(|(path, _)| path.replace('\\', "/").ends_with(ELASTIC_CONFIGURATION))
-        .map(|(_, text)| opentide_tide::elastic_tenants(text))
+    host.elastic_configuration()
+        .map(|text| opentide_tide::elastic_tenants(&text))
         .unwrap_or_default()
 }
 
@@ -139,60 +163,8 @@ pub fn elastic_tenants(host: &dyn WorkspaceHost) -> Vec<ElasticTenant> {
 /// workspace, so a host checking many files of one workspace calls it file
 /// by file: the object's own checks are `validate`'s (UC-2.6, #821) and its
 /// platform blocks' are [`analyze_blocks`], which `lint` reads.
-#[expect(
-    clippy::too_many_lines,
-    reason = "one arm per language: kept whole; split when next touched"
-)]
 pub fn analyze(host: &dyn WorkspaceHost, request: AnalyzeRequest) -> AnalyzeResponse {
     match request.language {
-        LanguageId::Kql => {
-            let r = opentide_kql::analyze(&request.text, Profile::Sentinel);
-            AnalyzeResponse {
-                diagnostics: r.diagnostics,
-                tokens: r.tokens,
-                symbols: Vec::new(),
-            }
-        }
-        LanguageId::Spl => {
-            let r = opentide_spl::analyze(&request.text);
-            AnalyzeResponse {
-                diagnostics: r.diagnostics,
-                tokens: r.tokens,
-                symbols: Vec::new(),
-            }
-        }
-        LanguageId::Esql => {
-            let r = opentide_esql::analyze(&request.text);
-            AnalyzeResponse {
-                diagnostics: r.diagnostics,
-                tokens: r.tokens,
-                symbols: Vec::new(),
-            }
-        }
-        LanguageId::Eql => {
-            let r = opentide_eql::analyze(&request.text);
-            AnalyzeResponse {
-                diagnostics: r.diagnostics,
-                tokens: r.tokens,
-                symbols: Vec::new(),
-            }
-        }
-        LanguageId::Kuery => {
-            let r = opentide_kuery::analyze(&request.text, opentide_lucene::parses);
-            AnalyzeResponse {
-                diagnostics: r.diagnostics,
-                tokens: r.tokens,
-                symbols: Vec::new(),
-            }
-        }
-        LanguageId::Lucene => {
-            let r = opentide_lucene::analyze(&request.text);
-            AnalyzeResponse {
-                diagnostics: r.diagnostics,
-                tokens: r.tokens,
-                symbols: Vec::new(),
-            }
-        }
         // A configuration file's findings are the host's: it checks the
         // buffer with opentide-schema's models and places them
         // ([`place_configuration_issues`]).
@@ -201,22 +173,6 @@ pub fn analyze(host: &dyn WorkspaceHost, request: AnalyzeRequest) -> AnalyzeResp
             tokens: Vec::new(),
             symbols: Vec::new(),
         },
-        LanguageId::Falco => {
-            let r = opentide_falco::analyze(&request.text);
-            AnalyzeResponse {
-                diagnostics: r.diagnostics,
-                tokens: r.tokens,
-                symbols: Vec::new(),
-            }
-        }
-        LanguageId::Cql => {
-            let r = opentide_cql::analyze(&request.text);
-            AnalyzeResponse {
-                diagnostics: r.diagnostics,
-                tokens: r.tokens,
-                symbols: Vec::new(),
-            }
-        }
         LanguageId::Yara => {
             // One parse for the diagnostics and the outline (ADR 0014).
             let (r, symbols) = opentide_yara::analyze_document(&request.text);
@@ -224,23 +180,6 @@ pub fn analyze(host: &dyn WorkspaceHost, request: AnalyzeRequest) -> AnalyzeResp
                 diagnostics: r.diagnostics,
                 tokens: r.tokens,
                 symbols: yara::outline(&request.text, symbols),
-            }
-        }
-        // A `.exabeam` file is a search (exabeam-1.0, "Defaults").
-        LanguageId::Exabeam => {
-            let r = opentide_exabeam::analyze(&request.text);
-            AnalyzeResponse {
-                diagnostics: r.diagnostics,
-                tokens: r.tokens,
-                symbols: Vec::new(),
-            }
-        }
-        LanguageId::Yaral => {
-            let r = opentide_yaral::analyze(&request.text);
-            AnalyzeResponse {
-                diagnostics: r.diagnostics,
-                tokens: r.tokens,
-                symbols: Vec::new(),
             }
         }
         LanguageId::TideYaml => {
@@ -253,6 +192,27 @@ pub fn analyze(host: &dyn WorkspaceHost, request: AnalyzeRequest) -> AnalyzeResp
                 diagnostics: r.diagnostics,
                 tokens: r.tokens,
                 symbols: r.symbols,
+            }
+        }
+        // A query language's file is one query, read with its default
+        // profile (a `.kql` file is Sentinel's, an `.exabeam` or a
+        // `.datadog` file a search). `LanguageId` is non-exhaustive: a
+        // language that is not a query language has no findings, tokens or
+        // symbols. Every query language has an engine (the registry's test
+        // and `every_query_language_is_analysed` hold it).
+        language => {
+            let engine = engines::engine(language);
+            debug_assert!(
+                engine.is_some() || !LanguageId::QUERY_LANGUAGES.contains(&language),
+                "{language} is a query language with no engine in `engines::ENGINES`"
+            );
+            let r = engine
+                .map(|engine| engine.analyze(&request.text))
+                .unwrap_or_default();
+            AnalyzeResponse {
+                diagnostics: r.diagnostics,
+                tokens: r.tokens,
+                symbols: Vec::new(),
             }
         }
     }
@@ -356,15 +316,74 @@ pub fn analyze_tide_parsed(
     }
 }
 
+/// Where a query on its own will sit: the profile [`analyze_query_at`]
+/// checks it under (ADR 0015 §4: a profile is chosen by where the text sits;
+/// a caller that names the position says where it will sit).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum QueryPosition {
+    /// A search: a query file, a hunt, `opentide query`. The default.
+    #[default]
+    Search,
+    /// A rule block's query on the request's platform: checked as that
+    /// block checks its query's text. It needs a platform
+    /// ([`validate_position`]). Exabeam's `rule` profile, CQL's
+    /// Next-Gen SIEM correlation rule, Datadog's `rule` profile, a Sentinel
+    /// scheduled rule's KQL limits and YARA-L's assembled rule (the rule
+    /// profile, its `meta` deploy's) differ from a search; every other language checks a rule's query as a search. The
+    /// checks that read the rest of a block (Elastic's tenants and schedule,
+    /// Sysdig's macros, Defender's alert mapping) need the object: see
+    /// `Workspace::validate`. The platform is not checked to have a block in
+    /// the query's language: the command line and MCP refuse that first.
+    Rule,
+}
+
+impl QueryPosition {
+    /// The position's name: `search` or `rule`.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            QueryPosition::Search => "search",
+            QueryPosition::Rule => "rule",
+        }
+    }
+
+    /// The position named `name`: `search` or `rule`, as the command line
+    /// and MCP spell them.
+    #[must_use]
+    pub fn parse(name: &str) -> Option<Self> {
+        match name {
+            "search" => Some(QueryPosition::Search),
+            "rule" => Some(QueryPosition::Rule),
+            _ => None,
+        }
+    }
+}
+
+/// Why a [`QueryRequest`] cannot be checked at a position
+/// ([`validate_position`]).
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[non_exhaustive]
+pub enum QueryRequestError {
+    /// [`QueryPosition::Rule`] without a platform: a rule block is a
+    /// platform's, so there is no rule to check the query as.
+    #[error(
+        "position `rule` needs a platform: name the platform whose rule block the query is for"
+    )]
+    RuleWithoutPlatform,
+}
+
 /// A query on its own, outside an object file.
 #[derive(Debug, Clone)]
 pub struct QueryRequest {
     pub language: LanguageId,
-    /// The detection platform the query is for, as a `configurations` key
-    /// (`microsoft_defender` picks the Defender KQL schema,
+    /// The detection platform the query is for, as a `configurations` key.
+    /// It names the language's dialect, the product's catalogs and checks
+    /// (ADR 0015 §3): `microsoft_defender` picks the Defender KQL schema,
     /// `carbon_black_cloud` the Carbon Black Lucene dialect, `graylog` the
-    /// Graylog one, and `exabeam` the Exabeam `rule` profile of a
-    /// correlation-rule sequence). `None` for the language's default.
+    /// Graylog one, and `harfanglab` or `bitdefender` that product's YARA
+    /// checks. `None` for the language's default. It never picks the
+    /// profile: the position does ([`analyze_query_at`]).
     pub platform: Option<String>,
     /// Elastic stack the query must run on (`"9.5"`, `"serverless"`), for
     /// ES|QL. `None`, or a value that does not parse, checks every supported
@@ -373,59 +392,106 @@ pub struct QueryRequest {
     pub text: String,
 }
 
-/// Diagnostics for one query, in the query's own coordinates.
-pub fn analyze_query(request: &QueryRequest) -> Vec<Diagnostic> {
-    let platform = request.platform.as_deref().unwrap_or("");
-    match request.language {
-        LanguageId::Kql => opentide_kql::analyze(&request.text, kql_profile(platform)).diagnostics,
-        // `platform: crowdstrike` is the query of a CrowdStrike rule block,
-        // which deploys as a Next-Gen SIEM correlation rule. A hunt search is
-        // not one: [`analyze_queries`] checks it without the correlation rules.
-        LanguageId::Cql if platform == "crowdstrike" => {
-            opentide_cql::analyze_with(&request.text, &opentide_cql::Context::CORRELATION_RULE)
-                .diagnostics
-        }
-        // `platform: exabeam` is a correlation-rule sequence query (the
-        // `rule` profile); without it, a search.
-        LanguageId::Exabeam => {
-            let ctx = if platform == "exabeam" {
-                opentide_exabeam::Context::RULE
-            } else {
-                opentide_exabeam::Context::SEARCH
-            };
-            opentide_exabeam::analyze_with(&request.text, &ctx).diagnostics
-        }
-        LanguageId::Lucene => {
-            let dialect = opentide_lucene::Dialect::for_platform(platform);
-            opentide_lucene::analyze_dialect(&request.text, dialect).diagnostics
-        }
-        // `platform: harfanglab` or `bitdefender`: the platform's YARA profile.
-        LanguageId::Yara => {
-            let ctx = opentide_yara::Profile::for_platform(platform)
-                .map(opentide_yara::Context::for_profile)
-                .unwrap_or_default();
-            opentide_yara::analyze_with(&request.text, &ctx).diagnostics
-        }
-        LanguageId::Esql => {
-            let target = request
-                .stack
-                .as_deref()
-                .and_then(opentide_esql::StackTarget::parse);
-            opentide_esql::analyze_for(&request.text, target).diagnostics
-        }
-        language => {
-            let host = MemoryWorkspace::default();
-            analyze(
-                &host,
-                AnalyzeRequest {
-                    uri: "query".into(),
-                    language,
-                    text: request.text.clone(),
-                },
-            )
-            .diagnostics
+impl QueryRequest {
+    /// A request to check `text` as `language`: no platform, every stack.
+    #[must_use]
+    pub fn new(language: LanguageId, text: impl Into<String>) -> Self {
+        QueryRequest {
+            language,
+            platform: None,
+            stack: None,
+            text: text.into(),
         }
     }
+
+    /// The request for `platform` (a `configurations` key), or for none.
+    #[must_use]
+    pub fn with_platform(mut self, platform: Option<&str>) -> Self {
+        self.platform = platform.map(str::to_owned);
+        self
+    }
+
+    /// The request for an Elastic `stack` (ES|QL), or for every one.
+    #[must_use]
+    pub fn with_stack(mut self, stack: Option<&str>) -> Self {
+        self.stack = stack.map(str::to_owned);
+        self
+    }
+}
+
+/// Whether `request` can be checked at `position`: a [`QueryPosition::Rule`]
+/// needs a platform. Hosts that refuse a usage error up front (the command
+/// line, MCP) call it before [`analyze_query_at`], which answers a request
+/// that fails it with one `query_position_needs_platform` error and nothing
+/// else.
+///
+/// # Errors
+///
+/// [`QueryRequestError::RuleWithoutPlatform`] for a rule with no platform
+/// (or an empty one).
+pub fn validate_position(
+    request: &QueryRequest,
+    position: QueryPosition,
+) -> Result<(), QueryRequestError> {
+    let has_platform = request.platform.as_deref().is_some_and(|p| !p.is_empty());
+    if position == QueryPosition::Rule && !has_platform {
+        return Err(QueryRequestError::RuleWithoutPlatform);
+    }
+    Ok(())
+}
+
+/// Diagnostics for one query, in the query's own coordinates, under its
+/// platform's dialect, at [`QueryPosition::Search`]: as a file of its
+/// language is checked.
+pub fn analyze_query(request: &QueryRequest) -> Vec<Diagnostic> {
+    analyze_query_at(request, QueryPosition::Search)
+}
+
+/// [`analyze_query`] at `position`: the platform picks the dialect, the
+/// position the profile (ADR 0015 §4). A request [`validate_position`]
+/// refuses (a rule with no platform) gets one error,
+/// `query_position_needs_platform`, on the query's start, and is not
+/// checked: there is no rule block to check it as, and a search would be a
+/// silent fallback.
+pub fn analyze_query_at(request: &QueryRequest, position: QueryPosition) -> Vec<Diagnostic> {
+    if let Err(error) = validate_position(request, position) {
+        return vec![Diagnostic::error(
+            codes::QUERY_POSITION_NEEDS_PLATFORM,
+            error.to_string(),
+            Range::point(0, 0),
+        )];
+    }
+    // The platform names the dialect, and the stack ES|QL's target. The
+    // profile comes from the position, never from the platform (ADR 0015
+    // §4). A search is checked as a file of its language is: a `.cql` file
+    // is plain LogScale, without the correlation rule's restrictions; a
+    // `.exabeam` or `.datadog` file is the `search` profile; a `.yaral` file
+    // is a rule or a search by its text; KQL's search profile adds nothing.
+    // A rule is checked as the platform's block checks its query (Tide's
+    // field paths): Sentinel's scheduled rule limits, CQL's correlation
+    // rule, Exabeam's and Datadog's `rule` profile, YARA-L's assembled rule.
+    let profile = match position {
+        QueryPosition::Search => opentide_highlight::Profile::File,
+        QueryPosition::Rule => opentide_highlight::Profile::Rule,
+    };
+    let setting = opentide_highlight::Setting {
+        platform: request.platform.as_deref().unwrap_or(""),
+        profile,
+        stack: request.stack.as_deref(),
+    };
+    if let Some(engine) = engines::engine(request.language) {
+        return engine.analyze_for(&request.text, &setting).diagnostics;
+    }
+    let host = MemoryWorkspace::default();
+    analyze(
+        &host,
+        AnalyzeRequest {
+            uri: "query".into(),
+            language: request.language,
+            text: request.text.clone(),
+        },
+    )
+    .diagnostics
 }
 
 /// Workspace catalogs that replace the bundled ones, as `opentide generate
@@ -729,16 +795,6 @@ pub fn semantic_tokens(language: LanguageId, text: &str) -> SemanticTokens {
     }
 }
 
-/// The KQL profile of a platform: Defender's schema for
-/// `microsoft_defender`, else Sentinel's.
-fn kql_profile(platform: &str) -> Profile {
-    if platform == "microsoft_defender" {
-        Profile::Defender
-    } else {
-        Profile::Sentinel
-    }
-}
-
 /// Hover at byte `offset` of `text`. A host converts the editor's UTF-16
 /// position once (`opentide_core::position_to_offset`); a byte-order mark at
 /// the start counts as bytes, as in [`completions`].
@@ -765,37 +821,36 @@ pub fn hover(
     }
 }
 
-/// Hover inside one query language. `platform` selects the KQL profile.
+/// Hover inside one query language: its engine's, then, for the Elastic
+/// languages, the ECS field under the cursor. `platform` selects the KQL and
+/// Lucene dialects.
 fn query_hover(language: LanguageId, text: &str, offset: usize, platform: &str) -> Option<String> {
+    // Configuration hover needs the file's path (configuration_hover), and
+    // Tide YAML is not a query language: neither has an engine.
+    let engine = engines::engine(language)?;
+    engine
+        .hover(text, offset, &editor_setting(platform))
+        .or_else(|| ecs_applies(language, platform).then(|| ecs::hover(text, offset))?)
+}
+
+/// What the editor hooks read: the platform, which picks the dialect.
+fn editor_setting(platform: &str) -> opentide_highlight::Setting<'_> {
+    opentide_highlight::Setting {
+        platform,
+        ..opentide_highlight::Setting::default()
+    }
+}
+
+/// Whether a query in `language` on `platform` reads ECS fields: ES|QL, EQL,
+/// Kibana KQL, and Lucene in its Elastic dialect. Carbon Black has its own
+/// fields (#162), and Graylog its message fields.
+fn ecs_applies(language: LanguageId, platform: &str) -> bool {
     match language {
-        LanguageId::Kql => opentide_kql::hover(text, offset, kql_profile(platform)),
-        LanguageId::Spl => opentide_spl::hover(text, offset),
-        LanguageId::Esql => opentide_esql::hover(text, offset).or_else(|| ecs::hover(text, offset)),
-        LanguageId::Eql => opentide_eql::hover(text, offset).or_else(|| ecs::hover(text, offset)),
-        LanguageId::Kuery => {
-            opentide_kuery::hover(text, offset).or_else(|| ecs::hover(text, offset))
-        }
-        // Carbon Black has its own fields (#162), and Graylog its message
-        // fields: no ECS.
-        LanguageId::Lucene if matches!(platform, "carbon_black_cloud" | "graylog") => {
-            opentide_lucene::hover_dialect(
-                text,
-                offset,
-                opentide_lucene::Dialect::for_platform(platform),
-            )
-        }
+        LanguageId::Esql | LanguageId::Eql | LanguageId::Kuery => true,
         LanguageId::Lucene => {
-            opentide_lucene::hover(text, offset).or_else(|| ecs::hover(text, offset))
+            opentide_lucene::Dialect::for_platform(platform) == opentide_lucene::Dialect::Elastic
         }
-        LanguageId::Falco => {
-            opentide_falco::hover(text, offset, &opentide_falco::Context::default())
-        }
-        LanguageId::Cql => opentide_cql::hover(text, offset),
-        LanguageId::Yara => opentide_yara::editor::hover(text, offset),
-        LanguageId::Exabeam => opentide_exabeam::hover(text, offset),
-        LanguageId::Yaral => opentide_yaral::editor::hover(text, offset),
-        // Configuration hover needs the file's path: configuration_hover.
-        LanguageId::TideYaml | LanguageId::Config => None,
+        _ => false,
     }
 }
 
@@ -851,36 +906,16 @@ fn query_completions(
     offset: usize,
     platform: &str,
 ) -> Vec<CompletionItem> {
-    match language {
-        LanguageId::Kql => opentide_kql::completions(text, offset, kql_profile(platform)),
-        LanguageId::Spl => opentide_spl::completions(text, offset),
-        LanguageId::Lucene if matches!(platform, "carbon_black_cloud" | "graylog") => {
-            opentide_lucene::completions_dialect(
-                text,
-                offset,
-                opentide_lucene::Dialect::for_platform(platform),
-            )
-        }
-        LanguageId::Esql | LanguageId::Eql | LanguageId::Kuery | LanguageId::Lucene => {
-            let mut items = match language {
-                LanguageId::Esql => opentide_esql::completions(text, offset),
-                LanguageId::Eql => opentide_eql::completions(text, offset),
-                LanguageId::Kuery => opentide_kuery::completions(text, offset),
-                _ => opentide_lucene::completions(text, offset),
-            };
-            ecs::complete(language, text, offset, &mut items);
-            items
-        }
-        LanguageId::Falco => {
-            opentide_falco::completions(text, offset, &opentide_falco::Context::default())
-        }
-        LanguageId::Cql => opentide_cql::completions(text, offset),
-        LanguageId::Yara => opentide_yara::editor::completions(text, offset),
-        LanguageId::Exabeam => opentide_exabeam::completions(text, offset),
-        LanguageId::Yaral => opentide_yaral::editor::completions(text, offset),
-        // Configuration completion needs the file's path: configuration_completions.
-        LanguageId::TideYaml | LanguageId::Config => Vec::new(),
+    // Configuration completion needs the file's path
+    // (configuration_completions): no engine, as for Tide YAML.
+    let Some(engine) = engines::engine(language) else {
+        return Vec::new();
+    };
+    let mut items = engine.completions(text, offset, &editor_setting(platform));
+    if ecs_applies(language, platform) {
+        ecs::complete(language, text, offset, &mut items);
     }
+    items
 }
 
 pub use yara::{definition, folding, format, references, rename};
@@ -923,26 +958,126 @@ fn query_signature_help(
     offset: usize,
     platform: &str,
 ) -> Option<SignatureHelp> {
-    match language {
-        LanguageId::Kql => opentide_kql::signature_help(text, offset, kql_profile(platform)),
-        LanguageId::Spl => opentide_spl::signature_help(text, offset),
-        LanguageId::Esql => opentide_esql::signature_help(text, offset),
-        LanguageId::Eql => opentide_eql::signature_help(text, offset),
-        LanguageId::Cql => opentide_cql::signature_help(text, offset),
-        LanguageId::Yara => opentide_yara::editor::signature_help(text, offset),
-        LanguageId::Yaral => opentide_yaral::editor::signature_help(text, offset),
-        LanguageId::Kuery
-        | LanguageId::Lucene
-        | LanguageId::Falco
-        | LanguageId::Exabeam
-        | LanguageId::TideYaml
-        | LanguageId::Config => None,
-    }
+    engines::engine(language)?.signature_help(text, offset, &editor_setting(platform))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A query in `language` that parses, and one that does not.
+    /// `LanguageId` is non-exhaustive, so this `match` and the ones in this
+    /// crate have a wildcard arm: a language added to `QUERY_LANGUAGES`
+    /// panics here until it has samples, and then fails
+    /// [`every_query_language_is_analysed`] until its arms are written.
+    fn samples(language: LanguageId) -> (&'static str, &'static str) {
+        match language {
+            LanguageId::Kql => (
+                "SecurityEvent | where EventID == 4688 | take 1",
+                "SecurityEvent | where (",
+            ),
+            LanguageId::Spl => (
+                "index=main | stats count by host",
+                "index=main | stats count by (",
+            ),
+            LanguageId::Esql => ("FROM logs-* | WHERE x == 1", "FROM logs-* | WHERE ("),
+            LanguageId::Eql => (
+                "process where process.name : \"cmd.exe\"",
+                "process where (",
+            ),
+            LanguageId::Kuery => (
+                "event.category:process and not user.name:SYSTEM",
+                "event.category:(process",
+            ),
+            LanguageId::Lucene => (
+                "event.category:process AND process.name:cmd",
+                "event.category:(process",
+            ),
+            LanguageId::Falco => (
+                "spawned_process and proc.name = bash",
+                "spawned_process and (",
+            ),
+            LanguageId::Cql => (
+                "#event_simpleName=ProcessRollup2 | count()",
+                "#event_simpleName=ProcessRollup2 | count(",
+            ),
+            LanguageId::Exabeam => (
+                "activity_type:\"process-create\"",
+                "activity_type:(\"process-create\"",
+            ),
+            LanguageId::Yara => (
+                "rule demo { strings: $a = \"cmd.exe\" condition: $a }",
+                "rule demo { condition: ( }",
+            ),
+            LanguageId::Yaral => (
+                "rule demo { meta: author = \"a\" events: $e.metadata.event_type = \"PROCESS_LAUNCH\" condition: $e }",
+                "rule demo { events: ( }",
+            ),
+            LanguageId::Datadog => ("source:okta @evt.outcome:FAILURE", "source:(okta"),
+            other => panic!("give {other} samples in samples()"),
+        }
+    }
+
+    /// Every query language reaches its engine through each `match` on
+    /// `LanguageId` here: a missing arm falls into a wildcard that reports
+    /// nothing, highlights nothing and completes nothing.
+    #[test]
+    fn every_query_language_is_analysed() {
+        let host = MemoryWorkspace { files: Vec::new() };
+        for &language in LanguageId::QUERY_LANGUAGES {
+            let (valid, broken) = samples(language);
+            assert!(
+                !highlight(language, valid).tokens.is_empty(),
+                "{language}: no tokens"
+            );
+            let response = analyze(
+                &host,
+                AnalyzeRequest {
+                    uri: "memory".into(),
+                    language,
+                    text: broken.to_string(),
+                },
+            );
+            assert!(
+                !response.diagnostics.is_empty(),
+                "{language}: {broken:?} reports nothing"
+            );
+            assert!(
+                !completions(&host, language, valid, valid.len()).is_empty()
+                    || !completions(&host, language, "", 0).is_empty(),
+                "{language}: no completion"
+            );
+        }
+    }
+
+    /// `analyze` of a query file is its engine's analysis: YARA's own arm
+    /// (`analyze_document`, for the outline) included.
+    #[test]
+    fn analyze_agrees_with_each_engine() {
+        let host = MemoryWorkspace { files: Vec::new() };
+        for &language in LanguageId::QUERY_LANGUAGES {
+            let Some(engine) = engines::engine(language) else {
+                panic!("{language}: no engine");
+            };
+            let (valid, broken) = samples(language);
+            for text in [valid, broken, "é 😀"] {
+                let response = analyze(
+                    &host,
+                    AnalyzeRequest {
+                        uri: "memory".into(),
+                        language,
+                        text: text.to_string(),
+                    },
+                );
+                let direct = engine.analyze(text);
+                assert_eq!(
+                    (response.diagnostics, response.tokens),
+                    (direct.diagnostics, direct.tokens),
+                    "{language}: {text:?}"
+                );
+            }
+        }
+    }
 
     #[test]
     fn memory_workspace_indexes_objects() {
@@ -1034,8 +1169,15 @@ configurations:
             files: vec![("objects/rules/rule.yaml".into(), src.to_string())],
         };
         let where_off = src.find("where").expect("where");
-        let line = src[..where_off].bytes().filter(|b| *b == b'\n').count() as u32;
-        let col = src[..where_off]
+        let line = src
+            .get(..where_off)
+            .unwrap()
+            .bytes()
+            .filter(|b| *b == b'\n')
+            .count() as u32;
+        let col = src
+            .get(..where_off)
+            .unwrap()
             .rsplit_once('\n')
             .map(|(_, rest)| rest.len())
             .unwrap_or(where_off) as u32;
@@ -1083,7 +1225,12 @@ detection_model: 00000000-0000-4000-8002-000000000001
             ],
         };
         let desc = src.find("description:").unwrap();
-        let line = src[..desc].bytes().filter(|b| *b == b'\n').count() as u32;
+        let line = src
+            .get(..desc)
+            .unwrap()
+            .bytes()
+            .filter(|b| *b == b'\n')
+            .count() as u32;
         let h = hover(
             &host,
             LanguageId::TideYaml,
@@ -1095,8 +1242,15 @@ detection_model: 00000000-0000-4000-8002-000000000001
             "key hover, got {h:?}"
         );
         let tlp_val = src.find("clear").unwrap();
-        let tlp_line = src[..tlp_val].bytes().filter(|b| *b == b'\n').count() as u32;
-        let col = src[..tlp_val]
+        let tlp_line = src
+            .get(..tlp_val)
+            .unwrap()
+            .bytes()
+            .filter(|b| *b == b'\n')
+            .count() as u32;
+        let col = src
+            .get(..tlp_val)
+            .unwrap()
             .rsplit_once('\n')
             .map(|(_, rest)| rest.len())
             .unwrap_or(tlp_val) as u32;

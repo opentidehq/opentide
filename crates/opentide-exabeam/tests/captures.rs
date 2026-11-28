@@ -1,6 +1,11 @@
 //! What the parser's tree highlights: the rules of the tree-sitter
 //! `highlights.scm` it replaces, a few cases each.
 
+#![expect(
+    clippy::string_slice,
+    reason = "a test: a slice off a char boundary panics, and a panic is a failed test"
+)]
+
 use opentide_exabeam::highlight_captures;
 
 /// `text=capture` of every span.

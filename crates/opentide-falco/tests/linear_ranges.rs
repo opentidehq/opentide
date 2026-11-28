@@ -3,6 +3,11 @@
 //! a scan of the text from its start per finding, which made one with
 //! thousands of findings take seconds. The guard counts the scans, not time.
 
+#![expect(
+    clippy::string_slice,
+    reason = "a test: a slice off a char boundary panics, and a panic is a failed test"
+)]
+
 use opentide_core::scans_from_the_start;
 
 fn findings_without_a_scan(source: &str) -> usize {

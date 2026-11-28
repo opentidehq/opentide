@@ -11,9 +11,8 @@
 //! `exabeam_context_table_trigger`, a rule about the condition a
 //! context-table lookup may take ([`uses_context_table`]).
 //!
-//! A port of 0.28.0's `platforms/exabeam/constraints.py`; the language
-//! server's `opentide-tide` checks the block through this module, never a
-//! second copy.
+//! The language server's `opentide-tide` checks the block through this
+//! module, never a second copy.
 
 use std::collections::BTreeSet;
 use std::sync::OnceLock;
@@ -631,7 +630,7 @@ fn non_blank(node: Option<&Node>) -> bool {
     text(node).is_some_and(|text| !text.trim().is_empty())
 }
 
-/// `_number`: an integer or a float, not a boolean.
+/// An integer or a float, not a boolean.
 fn number(node: &Node) -> bool {
     matches!(node.value, Value::Int(_) | Value::Float(_))
 }
@@ -739,7 +738,7 @@ pub fn uses_context_table(query: &str) -> bool {
     false
 }
 
-/// `_group_by_ok`: a list of up to three distinct non-blank strings, empty
+/// A list of up to three distinct non-blank strings, empty
 /// only when `allow_empty`.
 fn group_by_ok(node: &Node, allow_empty: bool) -> bool {
     let Value::Seq(items) = &node.value else {
@@ -958,7 +957,9 @@ fn correlation_findings(correlation: Option<&Node>, count: usize) -> Vec<Finding
     findings
 }
 
-/// `_email_ok`.
+/// Whether `email` is a mapping with a non-empty list of distinct valid
+/// addresses in `recipients`, a non-blank `subject` when set, and a boolean
+/// `attach_csv` when set.
 fn email_ok(email: &Node) -> bool {
     if !matches!(email.value, Value::Map(_)) {
         return false;
@@ -1025,7 +1026,7 @@ fn distinct(items: &[std::sync::Arc<Node>]) -> bool {
         .all(|(index, item)| items[..index].iter().all(|seen| seen.value != item.value))
 }
 
-/// Why `recurrence` is not a valid `schedule[]` entry (`_recurrence_problem`).
+/// Why `recurrence` is not a valid `schedule[]` entry.
 fn recurrence_problem(recurrence: &Node) -> Option<String> {
     let every = if matches!(recurrence.value, Value::Map(_)) {
         text(field(recurrence, "every"))
@@ -1229,7 +1230,7 @@ pub fn block_codes(block: &Node) -> BTreeSet<&'static str> {
 }
 
 // ---------------------------------------------------------------------------
-// Across the workspace: rule names (`validation/exabeam_names.py`).
+// Across the workspace: rule names.
 // ---------------------------------------------------------------------------
 
 /// The workspace check's code.
@@ -1243,7 +1244,7 @@ fn rule_block(rule: &Node) -> Option<&Node> {
 
 /// The Exabeam rule name a rule resolves to: the block's `name`, else the
 /// rule's; `None` without a block, or, when `enabled_only`, for a block
-/// that is not `enabled: true` (`_exabeam_name`).
+/// that is not `enabled: true`.
 pub fn rule_exabeam_name(rule: &Node, enabled_only: bool) -> Option<String> {
     let block = rule_block(rule)?;
     if enabled_only
@@ -1277,24 +1278,49 @@ pub struct NameFinding {
     pub value: Option<String>,
 }
 
+thread_local! {
+    /// [`name_steps`].
+    static NAME_STEPS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// How many rules [`name_findings`] has looked at on this thread, each rule
+/// indexed and each UUID looked up counting one: for the test that holds it
+/// to linear (a work count, not a wall clock).
+#[cfg(test)]
+fn name_steps() -> usize {
+    NAME_STEPS.get()
+}
+
 /// `exabeam_name_duplicate` and `exabeam_name_length` for each rule of
 /// `in_scope`, among `rules` (UUID and document): two enabled blocks that
-/// resolve to one name, compared case-insensitively; a block with no `name`
-/// whose rule name is longer than 128 characters (`exabeam_name_issues`).
+/// resolve to one name, compared under full Unicode case folding as the
+/// connector matches names on deploy (`ﬁle` and `FILE`, `ß` and `ss`, are one
+/// name); a block with no `name` whose rule name is longer than 128 characters
+/// (`exabeam_name_issues`).
 pub fn name_findings<'r>(
     rules: &[(&'r str, &'r Node)],
     in_scope: impl IntoIterator<Item = &'r str>,
 ) -> Vec<NameFinding> {
     let mut by_name: std::collections::BTreeMap<String, Vec<&str>> =
         std::collections::BTreeMap::new();
+    // Each in-scope rule found by its UUID, not by a scan of `rules` (#1945):
+    // the first rule of a UUID, as the scan found it.
+    let mut by_uuid: std::collections::HashMap<&str, &Node> =
+        std::collections::HashMap::with_capacity(rules.len());
+    NAME_STEPS.set(NAME_STEPS.get() + rules.len());
     for (uuid, rule) in rules {
+        by_uuid.entry(*uuid).or_insert(*rule);
         if let Some(name) = rule_exabeam_name(rule, true) {
-            by_name.entry(name.to_lowercase()).or_default().push(uuid);
+            by_name
+                .entry(caseless::default_case_fold_str(&name))
+                .or_default()
+                .push(uuid);
         }
     }
     let mut findings = Vec::new();
     for uuid in in_scope {
-        let Some((_, rule)) = rules.iter().find(|(known, _)| *known == uuid) else {
+        NAME_STEPS.set(NAME_STEPS.get() + 1);
+        let Some(rule) = by_uuid.get(uuid).copied() else {
             continue;
         };
         if let Some(block) = rule_block(rule)
@@ -1317,7 +1343,7 @@ pub fn name_findings<'r>(
             continue;
         };
         let mut others: Vec<&str> = by_name
-            .get(&name.to_lowercase())
+            .get(&caseless::default_case_fold_str(&name))
             .map(|uuids| {
                 uuids
                     .iter()
@@ -1347,8 +1373,7 @@ pub fn name_findings<'r>(
 }
 
 // ---------------------------------------------------------------------------
-// Advisories (`platforms/exabeam/advisories.py`): warnings that never
-// reject a rule.
+// Advisories: warnings that never reject a rule.
 // ---------------------------------------------------------------------------
 
 /// `outcome: none` and no email.

@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 use super::tools::{Context, next_action, quote};
 use crate::commands::validate_query::{live_query_platforms, offline_languages};
-use crate::json::Json;
+use crate::json::{Json, Object};
 use crate::queries::Profiles;
 
 /// `run_query`'s default row limit (`MAX_QUERY_ROWS`).
@@ -26,6 +26,7 @@ fn default_language(platform: &str) -> &'static str {
         "sysdig" => "falco",
         "crowdstrike" => "cql",
         "exabeam" => "exabeam",
+        "datadog" => "datadog",
         // A whole YARA-L rule (a `.yaral` file's text), checked as a rule.
         "google_secops" => "yaral",
         // A whole YARA text, under the platform's profile (harfanglab-1.0 1.2,
@@ -60,6 +61,8 @@ pub struct QueryCheck {
     pub language: String,
     /// `stack`.
     pub stack: String,
+    /// `position`: `search` (the default) or `rule`.
+    pub position: String,
 }
 
 /// `run_query`'s arguments.
@@ -177,6 +180,33 @@ fn known_stack(stack: &str) -> bool {
 /// catalogue's rules for `platform` on its tenants.
 pub fn validate_query(check: &QueryCheck, context: &Context<'_>) -> Result<Json, String> {
     let platform = check.platform.as_str();
+    // The position is read before either check, so a value the tool does not
+    // know is refused live too, and a rule's position is not dropped by one.
+    let position = match check.position.trim() {
+        "" => Some(opentide_analysis::QueryPosition::Search),
+        named => opentide_analysis::QueryPosition::parse(named),
+    };
+    let refusal = match position {
+        None => Some(format!(
+            "position is search (a query file or a hunt) or rule (the query of the platform's \
+             rule block), not {:?}",
+            check.position
+        )),
+        Some(opentide_analysis::QueryPosition::Rule) if check.live => Some(
+            "position rule applies to the offline check of query; live: true checks the \
+             catalogue's rules, which are checked as rules"
+                .to_owned(),
+        ),
+        Some(_) => None,
+    };
+    if let Some(message) = refusal {
+        return Ok(Json::object([
+            ("valid", Json::Null),
+            ("status", Json::str("failed")),
+            ("platform", Json::str(platform)),
+            ("message", Json::Str(message)),
+        ]));
+    }
     let live_platform = live_query_platforms().contains(&platform);
     if !live_platform && (check.live || offline_languages(platform).is_none()) {
         return Ok(Json::object([
@@ -247,6 +277,7 @@ fn offline(check: &QueryCheck, context: &Context<'_>) -> Json {
         platform,
         language,
         stack,
+        position,
         ..
     } = check;
     let live_step = next_action(
@@ -262,15 +293,15 @@ fn offline(check: &QueryCheck, context: &Context<'_>) -> Json {
              the configured credentials, so ask a person first"
         ),
     );
-    let mut payload = vec![
+    let mut payload = Object::from([
         ("supported".to_owned(), Json::Bool(true)),
         ("mode".to_owned(), Json::str("offline")),
         ("platform".to_owned(), Json::str(platform)),
-    ];
-    let failed = |mut payload: Vec<(String, Json)>, message: String| {
-        payload.push(("valid".to_owned(), Json::Null));
-        payload.push(("status".to_owned(), Json::str("failed")));
-        payload.push(("message".to_owned(), Json::Str(message)));
+    ]);
+    let failed = |mut payload: Object, message: String| {
+        payload.insert("valid".to_owned(), Json::Null);
+        payload.insert("status".to_owned(), Json::str("failed"));
+        payload.insert("message".to_owned(), Json::Str(message));
         payload
     };
     let Some(languages) = offline_languages(platform) else {
@@ -281,18 +312,20 @@ fn offline(check: &QueryCheck, context: &Context<'_>) -> Json {
                  them. Pass live: true."
             ),
         );
-        payload.push(("query_preview".to_owned(), Json::Str(preview(query))));
-        payload.push(("next_actions".to_owned(), Json::Array(vec![live_step])));
-        return Json::object(payload);
+        payload.insert("query_preview".to_owned(), Json::Str(preview(query)));
+        payload.insert("next_actions".to_owned(), Json::Array(vec![live_step]));
+        return Json::Object(payload);
     };
     if query.trim().is_empty() {
-        return Json::object(failed(
+        return Json::Object(failed(
             payload,
             "query is empty: pass the query text to check".to_owned(),
         ));
     }
+    // validate_query refused any other value before calling this.
+    let position = opentide_analysis::QueryPosition::parse(position.trim()).unwrap_or_default();
     if !stack.trim().is_empty() && !known_stack(stack) {
-        return Json::object(failed(
+        return Json::Object(failed(
             payload,
             format!(
                 "stack is an Elastic stack version, MAJOR.MINOR (such as 8.19 or 9.5), or \
@@ -309,7 +342,7 @@ fn offline(check: &QueryCheck, context: &Context<'_>) -> Json {
         .then(|| opentide_analysis::LanguageId::from_extension(&chosen))
         .flatten()
     else {
-        return Json::object(failed(
+        return Json::Object(failed(
             payload,
             format!(
                 "{platform} queries are in {}, not {chosen:?}; pass one of those as language",
@@ -322,12 +355,12 @@ fn offline(check: &QueryCheck, context: &Context<'_>) -> Json {
     // A configuration file that does not parse is `config_parse`, its place
     // in the message, not a workspace read as if it declared nothing (#1659).
     let root = if context.workspace_problem.is_none() {
-        match super::catalog::workspace(context) {
+        match super::catalog::open(context) {
             Ok(workspace) => Some(workspace.root().to_path_buf()),
-            Err(message) if message.starts_with("config_parse") => {
-                return Json::object(failed(payload, message));
+            Err(error @ super::catalog::OpenError::ConfigParse(_)) => {
+                return Json::Object(failed(payload, error.to_string()));
             }
-            Err(_) => None,
+            Err(super::catalog::OpenError::Other { .. }) => None,
         }
     } else {
         None
@@ -337,6 +370,7 @@ fn offline(check: &QueryCheck, context: &Context<'_>) -> Json {
         language_id,
         Some(platform),
         (!stack.is_empty()).then_some(stack.as_str()),
+        position,
     );
     let diagnostics: Vec<Json> = findings
         .iter()
@@ -407,6 +441,7 @@ fn offline(check: &QueryCheck, context: &Context<'_>) -> Json {
     }
     payload.extend([
         ("language".to_owned(), Json::str(&chosen)),
+        ("position".to_owned(), Json::str(position.as_str())),
         ("valid".to_owned(), Json::Bool(errors.is_empty())),
         (
             "status".to_owned(),
@@ -427,7 +462,7 @@ fn offline(check: &QueryCheck, context: &Context<'_>) -> Json {
         ("query_preview".to_owned(), Json::Str(preview(query))),
         ("next_actions".to_owned(), Json::Array(actions)),
     ]);
-    Json::object(payload)
+    Json::Object(payload)
 }
 
 /// `run_query`: refused without `live`, with the call that runs it; with
@@ -458,43 +493,43 @@ pub fn run_query(run: &QueryRun, context: &Context<'_>) -> Result<Json, String> 
         ]));
     }
     let mut command: Vec<String> = vec!["query".into(), "--platform".into(), platform.into()];
-    let mut arguments = vec![
+    let mut arguments = Object::from([
         ("query".to_owned(), Json::str(&run.query)),
         ("platform".to_owned(), Json::str(platform)),
         ("live".to_owned(), Json::Bool(true)),
-    ];
+    ]);
     if !run.tenant.is_empty() {
-        arguments.push(("tenant".to_owned(), Json::str(&run.tenant)));
+        arguments.insert("tenant".to_owned(), Json::str(&run.tenant));
         for name in &tenants {
             command.extend(["--tenant".to_owned(), name.clone()]);
         }
     }
     if !run.rule.is_empty() {
-        arguments.push(("rule".to_owned(), Json::str(&run.rule)));
+        arguments.insert("rule".to_owned(), Json::str(&run.rule));
         command.extend(["--rule".to_owned(), run.rule.clone()]);
     }
     // The live call keeps every choice the agent made, so it runs what was
     // asked; a live run passes the limit, and the window when it has one.
     let since_named = !run.since.is_empty() && run.since != "24h";
     if since_named {
-        arguments.push(("since".to_owned(), Json::str(&run.since)));
+        arguments.insert("since".to_owned(), Json::str(&run.since));
     }
     if since_named || (run.live && !run.since.is_empty()) {
         command.extend(["--since".to_owned(), run.since.clone()]);
     }
     let limit_named = run.limit != MAX_QUERY_ROWS;
     if limit_named {
-        arguments.push(("limit".to_owned(), Json::Int(run.limit)));
+        arguments.insert("limit".to_owned(), Json::Int(run.limit));
     }
     if limit_named || run.live {
         command.extend(["--limit".to_owned(), run.limit.to_string()]);
     }
     if !run.language.is_empty() {
-        arguments.push(("language".to_owned(), Json::str(&run.language)));
+        arguments.insert("language".to_owned(), Json::str(&run.language));
         command.extend(["--language".to_owned(), run.language.clone()]);
     }
     if !run.index.is_empty() {
-        arguments.push(("index".to_owned(), Json::str(&run.index)));
+        arguments.insert("index".to_owned(), Json::str(&run.index));
         for name in &indices {
             command.extend(["--index".to_owned(), name.clone()]);
         }
@@ -529,7 +564,7 @@ pub fn run_query(run: &QueryRun, context: &Context<'_>) -> Result<Json, String> 
             "next_actions",
             Json::Array(vec![next_action(
                 "run_query",
-                Json::object(arguments),
+                Json::Object(arguments),
                 &shown,
                 &format!(
                     "run it on {platform}: this contacts the tenant with the configured \
@@ -641,6 +676,7 @@ mod tests {
                     live: false,
                     language: language.into(),
                     stack: String::new(),
+                    position: String::new(),
                 },
                 &context(&env),
             )
@@ -675,6 +711,81 @@ mod tests {
                 .iter()
                 .all(|action| action.get("tool") != Some(&Json::str("validate_query"))),
             "sysdig has no live check"
+        );
+    }
+
+    /// #1950: the offline check stops on a configuration that does not parse
+    /// by matching `OpenError::ConfigParse`, not the message's first word;
+    /// any other refusal (no workspace) checks the query with no declared
+    /// datasets.
+    #[test]
+    fn a_configuration_that_does_not_parse_stops_the_offline_check() {
+        let env = Env::default();
+        let check = |cwd: &Path| {
+            let context = Context {
+                cwd: Some(cwd),
+                ..context(&env)
+            };
+            let opened = super::super::catalog::open(&context).err();
+            let checked = validate_query(
+                &QueryCheck {
+                    query: "SecurityEvent | where Account == 'é😀'".into(),
+                    platform: "sentinel".into(),
+                    live: false,
+                    language: String::new(),
+                    stack: String::new(),
+                    position: String::new(),
+                },
+                &context,
+            )
+            .unwrap();
+            (opened, checked)
+        };
+        let broken = tempfile::tempdir().unwrap();
+        let platforms = broken.path().join(".opentide/configurations/platforms");
+        std::fs::create_dir_all(&platforms).unwrap();
+        std::fs::write(
+            platforms.join("sentinel.toml"),
+            "enabled = true\n[platform\n",
+        )
+        .unwrap();
+        let (opened, checked) = check(broken.path());
+        let Some(error @ super::super::catalog::OpenError::ConfigParse(_)) = opened else {
+            panic!("not config_parse: {opened:?}");
+        };
+        assert!(
+            error
+                .to_string()
+                .starts_with("config_parse: .opentide/configurations/platforms/sentinel.toml:2:"),
+            "{error}"
+        );
+        assert_eq!(checked.get("status"), Some(&Json::str("failed")));
+        assert_eq!(checked.get("message"), Some(&Json::Str(error.to_string())));
+
+        // A folder with no configuration opens: the query is checked.
+        let empty = tempfile::tempdir().unwrap();
+        let (opened, checked) = check(empty.path());
+        assert_eq!(opened, None);
+        assert_eq!(checked.get("language"), Some(&Json::str("kql")));
+        assert_ne!(checked.get("status"), Some(&Json::str("failed")));
+    }
+
+    /// An `OpenError` reads `code: message`, as the string it replaced did;
+    /// the variant, not the text, says whether it is `config_parse`.
+    #[test]
+    fn an_open_error_reads_code_then_message() {
+        use super::super::catalog::OpenError;
+        assert_eq!(
+            OpenError::ConfigParse("a.toml:2:1: é😀".into()).to_string(),
+            "config_parse: a.toml:2:1: é😀"
+        );
+        let other = OpenError::Other {
+            code: "command_failed".into(),
+            message: "config_parse in the text is not the code".into(),
+        };
+        assert_eq!(
+            other.to_string(),
+            "command_failed: config_parse in the text is not the code"
         );
     }
 

@@ -1,4 +1,4 @@
-//! `opentide lint` (`cli/commands/lint.py`): `opentide-workspace`'s lint,
+//! `opentide lint`: `opentide-workspace`'s lint,
 //! its queries check on the query engines
 //! ([`crate::queries::EngineLintQueries`]), `--changed` from the git diff
 //! `deploy` reads (`opentide_compile::git`), `--format`/`--output` reports
@@ -6,14 +6,15 @@
 
 use std::path::{Path, PathBuf};
 
-use opentide_workspace::lint::{Changed, LintCheck, LintOptions, LintStatus, NO_COMMITS_ADVICE};
+use opentide_workspace::lint::{Changed, LintCheck, LintOptions, NO_COMMITS_ADVICE};
 use opentide_workspace::{FileSystem as _, OsFs};
 
 use super::findings::{self, diagnostic};
+use super::result::{ExitCode, Status};
 use super::{Block, Report, Terminal, placement};
 use crate::env::Env;
-use crate::envelope::{Failure, NextAction, USAGE_EXIT_CODE};
-use crate::json::Json;
+use crate::envelope::{Failure, NextAction};
+use crate::json::{Json, Object};
 use crate::queries::EngineLintQueries;
 use crate::render::diagnostic::{Diagnostic, SourceFiles};
 use crate::render::outcome::OutcomeKind;
@@ -125,7 +126,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
         args.output.is_some(),
         terminal.mode == crate::mode::Mode::Json,
     ) {
-        return Report::failed(COMMAND, USAGE_EXIT_CODE, failure);
+        return Report::failed(COMMAND, ExitCode::Usage, failure);
     }
     let (_, root_options) = placement(cx.repo, cx.env, cx.cwd);
     let ws = match super::open_for(COMMAND, root_options) {
@@ -138,7 +139,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
                 failure.code == super::CONFIG_PARSE
                     && failure.message.contains("configurations/lint.toml")
             }) {
-                report.outcome.exit_code = USAGE_EXIT_CODE;
+                report.outcome.exit_code = ExitCode::Usage;
             }
             return *report;
         }
@@ -178,7 +179,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
         ws.lint(Some(&OsFs), &options)
     };
     // `payload()`'s order, with each finding's keys in its own order.
-    let data: Vec<(String, Json)> = lint
+    let data: Object = lint
         .payload()
         .into_iter()
         .map(|(key, value)| {
@@ -191,14 +192,9 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
         })
         .collect();
     let mut report = Report::completed(COMMAND, data);
-    report.outcome.status = match lint.status {
-        LintStatus::Completed => "completed",
-        LintStatus::Issues => "issues",
-        LintStatus::Failed => "failed",
-    }
-    .into();
+    report.outcome.status = Status::from_text(lint.status.as_str());
     report.outcome.message.clone_from(&lint.message);
-    report.outcome.exit_code = lint.exit_code;
+    report.outcome.exit_code = ExitCode::of_service(lint.exit_code);
     if lint.exit_code != 0 {
         report.outcome.failure = Some(Failure::new(
             lint.failure_code.unwrap_or(super::COMMAND_FAILED),
@@ -208,7 +204,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     if let Some(summary) = &lint.summary {
         report.outcome.summary = match super::json(summary) {
             Json::Object(members) => members.into_iter().collect(),
-            _ => Vec::new(),
+            _ => Object::new(),
         };
     }
     report.outcome.next_actions = lint
@@ -260,7 +256,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
         &diagnostics,
         COMMAND,
         &outcome,
-        findings::kind_name(&report.outcome.status, lint.exit_code == 0),
+        findings::kind_name(report.outcome.status.as_str(), lint.exit_code == 0),
         terminal.mode,
         cx.env,
         cx.cwd,

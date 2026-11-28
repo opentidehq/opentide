@@ -277,7 +277,7 @@ impl Transport for FakeSplunk {
 }
 
 impl TransportFactory for FakeSplunk {
-    fn make(&self, _spec: &TransportSpec<'_>) -> Result<Arc<dyn Transport>, String> {
+    fn make(&self, _spec: &TransportSpec<'_>) -> Result<Arc<dyn Transport>, transport::SetupError> {
         Ok(Arc::new(self.clone()))
     }
 }
@@ -373,7 +373,7 @@ fn send_outcomes_on(
         .iter()
         .map(|name| {
             let env = Environment::from_pairs([("SPLUNK_TOKEN", format!("t-{name}"))]);
-            let setup: toml::Table = toml::from_str(
+            let setup: opentide_core::json::Object = toml::from_str(
                 "url = \"splunk.invalid\"\napp = \"search\"\ntoken = \"$SPLUNK_TOKEN\"\n",
             )
             .unwrap();

@@ -18,7 +18,7 @@ use tokio_util::sync::CancellationToken;
 use crate::commands::{Block, Report};
 use crate::env::Env;
 use crate::envelope::NextAction;
-use crate::json::Json;
+use crate::json::{Json, Object};
 use crate::render::text::Text;
 use anstyle::{AnsiColor, Style};
 
@@ -164,7 +164,7 @@ fn written(value: Option<&serde_json::Value>) -> bool {
         .is_some_and(|text| !text.is_empty())
 }
 
-/// The catalogue a manifest document describes (`_parse_manifest`), the
+/// The catalogue a manifest document describes, the
 /// bundled skills it does not list added.
 pub fn parse_manifest(
     data: &serde_json::Map<String, serde_json::Value>,
@@ -256,7 +256,7 @@ pub const API_HOST: &str = "api.github.com";
 
 /// `path` when it is a plain relative path in the repository: no leading
 /// `/`, no backslash, no `?`, `#` or line break, no empty, `.` or `..`
-/// segment (`_repo_file_path`).
+/// segment.
 pub fn repo_file_path(path: &str) -> Option<&str> {
     if path.is_empty()
         || path.starts_with('/')
@@ -327,7 +327,7 @@ pub fn fetch_file(path: &str, git_ref: &str, network: Network<'_>) -> Option<Vec
 }
 
 /// Every blob path of the skills repository at `git_ref`, from one call of
-/// GitHub's trees API (`_fetch_github_blobs`); `None` when it cannot be
+/// GitHub's trees API; `None` when it cannot be
 /// read, or GitHub cut it short (`truncated`): a skill is never installed
 /// with files missing.
 pub fn fetch_tree(git_ref: &str, network: Network<'_>) -> Option<Vec<String>> {
@@ -412,7 +412,7 @@ fn source_of(manifest: &Manifest) -> String {
     format!("{}@{}", manifest.source, manifest.git_ref)
 }
 
-/// *text* cut at the last word that fits in *width*, then the ellipsis (`_shorten`).
+/// *text* cut at the last word that fits in *width*, then the ellipsis.
 pub fn shorten(text: &str, width: usize, ellipsis: &str) -> String {
     let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
     let chars: Vec<char> = text.chars().collect();
@@ -421,8 +421,8 @@ pub fn shorten(text: &str, width: usize, ellipsis: &str) -> String {
     }
     let take = (width + 1).saturating_sub(ellipsis.chars().count());
     let cut: String = chars[..take.min(chars.len())].iter().collect();
-    let kept = match cut.rfind(' ') {
-        Some(at) if at > 0 => cut[..at].to_owned(),
+    let kept = match cut.rsplit_once(' ') {
+        Some((head, _)) if !head.is_empty() => head.to_owned(),
         _ => {
             let mut all: Vec<char> = cut.chars().collect();
             all.pop();
@@ -480,10 +480,10 @@ pub fn discover(args: &DiscoverArgs, network: Network<'_>, width: usize) -> Repo
             ("count".into(), count(kept.len())),
         ],
     );
-    report.outcome.summary = vec![
+    report.outcome.summary = Object::from([
         ("skills".into(), count(kept.len())),
         ("installed".into(), count(installed_count)),
-    ];
+    ]);
     let noun = if kept.len() == 1 { "skill" } else { "skills" };
     let counted = match args.query.as_deref() {
         Some(query) if !query.is_empty() => format!("{} {noun} match '{query}'", kept.len()),
@@ -549,12 +549,12 @@ pub fn show(name: &str, repo: &Path, refresh: bool, network: Network<'_>, json: 
         let mut report = Report::error(command, message.clone());
         if json {
             // The document carries the catalogue's keys after the error.
-            report.outcome.data = vec![
+            report.outcome.data = Object::from([
                 ("error".into(), Json::str(&message)),
                 ("source".into(), Json::str(&source)),
                 ("manifest_source".into(), Json::str("remote")),
                 ("manifest_refreshed".into(), Json::Bool(manifest.refreshed)),
-            ];
+            ]);
         }
         return report;
     };
@@ -611,6 +611,7 @@ pub fn show(name: &str, repo: &Path, refresh: bool, network: Network<'_>, json: 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::commands::result::ExitCode;
 
     fn parsed(json: &str) -> Manifest {
         let value: serde_json::Value = serde_json::from_str(json).unwrap();
@@ -686,6 +687,9 @@ mod tests {
         );
         assert_eq!(shorten("Abcdefghijklmnopqrstuvwxyz", 10, "…"), "Abcdefghi…");
         assert_eq!(shorten("one two, three", 9, "…"), "one two…");
+        // #1946: cut at a word among multi-byte text.
+        assert_eq!(shorten("é😀 détection 😀é", 8, "…"), "é😀…");
+        assert_eq!(shorten("😀😀😀😀😀😀", 4, "…"), "😀😀😀…");
     }
 
     #[test]
@@ -782,13 +786,11 @@ mod tests {
     }
 
     fn data<'a>(report: &'a Report, key: &str) -> &'a Json {
-        &report
+        report
             .outcome
             .data
-            .iter()
-            .find(|(name, _)| name == key)
+            .get(key)
             .unwrap_or_else(|| panic!("no {key} in {:?}", report.outcome.data))
-            .1
     }
 
     #[test]
@@ -814,7 +816,7 @@ mod tests {
                 network(&failing.env),
                 80,
             );
-            assert_eq!(report.outcome.exit_code, 1);
+            assert_eq!(report.outcome.exit_code, ExitCode::Failure);
             let failure = report.outcome.failure.as_ref().unwrap();
             assert_eq!(failure.code, "command_failed");
             assert!(
@@ -853,7 +855,7 @@ mod tests {
             network(&served.env),
             80,
         );
-        assert_eq!(report.outcome.exit_code, 0);
+        assert_eq!(report.outcome.exit_code, ExitCode::Success);
         let Json::Array(listed) = data(&report, "skills") else {
             panic!("skills is not a list")
         };
@@ -875,10 +877,10 @@ mod tests {
         );
         assert_eq!(
             report.outcome.summary,
-            vec![
+            Object::from([
                 ("skills".to_owned(), Json::Int(2)),
                 ("installed".to_owned(), Json::Int(2))
-            ]
+            ])
         );
 
         // `show` of an installed skill says so and offers no install.
@@ -919,7 +921,7 @@ mod tests {
         let repo = tempfile::tempdir().unwrap();
         for name in ["Fancy Name", " fancy name ", "FANCY-SKILL"] {
             let report = show(name, repo.path(), false, network(&served.env), true);
-            assert_eq!(report.outcome.exit_code, 0, "{name}");
+            assert_eq!(report.outcome.exit_code, ExitCode::Success, "{name}");
             assert_eq!(
                 data(&report, "skill").get("slug"),
                 Some(&Json::str("fancy-skill")),
@@ -927,6 +929,6 @@ mod tests {
             );
         }
         let report = show("Fancy", repo.path(), false, network(&served.env), true);
-        assert_eq!(report.outcome.exit_code, 1);
+        assert_eq!(report.outcome.exit_code, ExitCode::Failure);
     }
 }

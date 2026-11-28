@@ -1,6 +1,11 @@
 //! The parser over every `.kql` of `crates/testdata`: lossless on every file
 //! and prefix, and every valid tree conforms to `kql.ungram`.
 
+#![expect(
+    clippy::string_slice,
+    reason = "a test: a slice off a char boundary panics, and a panic is a failed test"
+)]
+
 mod common;
 use common::corpus;
 use opentide_kql::inspect::{conformance, lex_spans, parse_error_count, parse_is_lossless};

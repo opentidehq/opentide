@@ -7,6 +7,11 @@
 //! produce one. Each accepted query with a `:` outside quotes also gets a
 //! fault twin, its first such `:` turned into `:)`, which must error.
 
+#![expect(
+    clippy::string_slice,
+    reason = "a test: a slice off a char boundary panics, and a panic is a failed test"
+)]
+
 use opentide_core::Severity;
 use std::path::PathBuf;
 

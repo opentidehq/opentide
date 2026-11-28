@@ -45,7 +45,7 @@ impl Stand {
         proxy: Option<&str>,
         settings: &HttpSettings,
     ) -> Self {
-        let setup: toml::Table = toml::from_str(
+        let setup: opentide_core::json::Object = toml::from_str(
             "azure_tenant_id = \"$TENANT_ID\"\nazure_client_id = \"app-id\"\n\
              azure_client_secret = \"$SECRET\"\n",
         )

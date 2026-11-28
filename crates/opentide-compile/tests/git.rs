@@ -1,6 +1,10 @@
 //! The git baseline on repositories the `git` program builds: each CI diff
 //! source, and the failures a run reports.
 #![expect(
+    clippy::string_slice,
+    reason = "a test: a slice off a char boundary panics, and a panic is a failed test"
+)]
+#![expect(
     clippy::unwrap_used,
     clippy::expect_used,
     reason = "test helpers: git builds every repository here"
@@ -703,7 +707,7 @@ fn changed_names(root: &Path, folder: &str) -> Vec<String> {
 }
 
 /// What git itself reports for `folder` against `base`: `git diff
-/// --name-only` and `git ls-files --others --exclude-standard`, the oracle's
+/// --name-only` and `git ls-files --others --exclude-standard`, opentide 0.23.0's
 /// two commands.
 fn git_reports(root: &Path, base: &str, folder: &str) -> Vec<String> {
     let mut names: Vec<String> = git_cmd(
@@ -1049,11 +1053,11 @@ fn a_push_without_its_trigger_or_with_an_unknown_one_fails() {
     );
 }
 
-/// `--since` names a commit as the oracle read it: a full id, a branch,
+/// `--since` names a commit as opentide 0.23.0 read it: a full id, a branch,
 /// `origin/<branch>`, `refs/...` (an annotated tag peeled); never a short id
 /// or a revision expression.
 #[test]
-fn since_names_a_commit_as_the_oracle_read_it() {
+fn since_names_a_commit_as_dulwich_read_it() {
     let h = history();
     let local = |since: &str| through_head(&h.root, &[], Some(since));
     assert_eq!(local(&h.b).unwrap(), ["objects/rules/r2.yaml"]);
@@ -1633,4 +1637,652 @@ fn a_shallow_clone_cannot_list_what_it_deleted() {
         deleted(&shallow, &[]).unwrap_err(),
         GitError::Failed(message) if message.contains("the checkout is shallow")
     ));
+}
+
+/// The loose object file of `id`, made unreadable by git: its bytes no
+/// longer inflate.
+fn corrupt_object(root: &Path, id: &str) {
+    let path = root.join(".git/objects").join(&id[..2]).join(&id[2..]);
+    let mut permissions = std::fs::metadata(&path).unwrap().permissions();
+    #[expect(
+        clippy::permissions_set_readonly_false,
+        reason = "git writes loose objects read-only; the test overwrites one"
+    )]
+    permissions.set_readonly(false);
+    std::fs::set_permissions(&path, permissions).unwrap();
+    std::fs::write(&path, b"not a zlib stream").unwrap();
+}
+
+/// A baseline object that cannot be read is the run's failure, never an
+/// empty folder or a file without its committed text (#1931): the baseline
+/// decides which rules a run reads and retires.
+#[test]
+fn docs_changes_fail_on_a_baseline_object_that_cannot_be_read() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dunce::canonicalize(dir.path()).unwrap();
+    git_cmd(&root, &["init", "-q", "-b", "main"]);
+    write(&root, "rules/kept é.yaml", "name: kept 😀\n");
+    write(&root, "rules/edited.yaml", "name: edited\n");
+    commit(&root, "base");
+    write(
+        &root,
+        "rules/edited.yaml",
+        "name: edited in the work tree\n",
+    );
+    let keep = |_: &str| true;
+    // The edited file's committed text cannot be read: not an added file.
+    let blob = git_cmd(&root, &["rev-parse", "HEAD:rules/edited.yaml"]);
+    corrupt_object(&root, &blob);
+    let error = git::changed_in_folders(&root, &[root.join("rules")], &keep).unwrap_err();
+    assert!(
+        matches!(&error, GitError::Failed(message) if message.starts_with(&format!("Could not find git object {blob}"))),
+        "{error:?}"
+    );
+    // The folder's tree cannot be read: not an empty folder whose files are all new.
+    let tree = git_cmd(&root, &["rev-parse", "HEAD:rules"]);
+    corrupt_object(&root, &tree);
+    let error = git::changed_in_folders(&root, &[root.join("rules")], &keep).unwrap_err();
+    assert!(
+        matches!(&error, GitError::Failed(message) if message.starts_with(&format!("Could not find git object {tree}"))),
+        "{error:?}"
+    );
+}
+
+/// A shallow clone that does not hold the merge base with the default
+/// branch says to fetch more history, not compare with HEAD or an empty
+/// tree (#1931).
+#[test]
+fn docs_changes_in_a_shallow_clone_without_the_merge_base_say_to_fetch_history() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dunce::canonicalize(dir.path()).unwrap();
+    let origin = root.join("origin");
+    std::fs::create_dir_all(&origin).unwrap();
+    git_cmd(&origin, &["init", "-q", "-b", "main"]);
+    write(&origin, "rules/a.yaml", "a: 1\n");
+    commit(&origin, "a");
+    git_cmd(&origin, &["checkout", "-q", "-b", "feature"]);
+    write(&origin, "rules/b.yaml", "b: 1\n");
+    commit(&origin, "on the branch");
+    git_cmd(&origin, &["checkout", "-q", "main"]);
+    write(&origin, "rules/a.yaml", "a: 2\n");
+    commit(&origin, "main moves on");
+    let path = origin.to_string_lossy().replace('\\', "/");
+    let url = format!("file:///{}", path.trim_start_matches('/'));
+    let shallow = root.join("shallow");
+    git_cmd(
+        &root,
+        &[
+            "clone",
+            "-q",
+            "--depth",
+            "1",
+            "--no-single-branch",
+            "--branch",
+            "feature",
+            &url,
+            &shallow.to_string_lossy(),
+        ],
+    );
+    let keep = |_: &str| true;
+    let error = git::changed_in_folders(&shallow, &[shallow.join("rules")], &keep).unwrap_err();
+    assert!(
+        matches!(&error, GitError::Failed(message) if message.contains("the checkout is shallow") && message.contains("fetch-depth: 0")),
+        "{error:?}"
+    );
+}
+
+/// A shallow single-branch clone (`actions/checkout`'s default: depth 1, one
+/// ref) holds no default-branch ref, and its branch's own upstream is HEAD:
+/// it says to fetch more history, not compare with HEAD (#1931).
+#[test]
+fn docs_changes_in_a_shallow_single_branch_clone_say_to_fetch_history() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dunce::canonicalize(dir.path()).unwrap();
+    let origin = root.join("origin");
+    std::fs::create_dir_all(&origin).unwrap();
+    git_cmd(&origin, &["init", "-q", "-b", "main"]);
+    write(&origin, "rules/a.yaml", "a: 1\n");
+    commit(&origin, "a");
+    git_cmd(&origin, &["checkout", "-q", "-b", "feature"]);
+    write(&origin, "rules/bé.yaml", "b: 1\n");
+    commit(&origin, "on the branch");
+    git_cmd(&origin, &["checkout", "-q", "main"]);
+    let path = origin.to_string_lossy().replace('\\', "/");
+    let url = format!("file:///{}", path.trim_start_matches('/'));
+    let shallow = root.join("shallow");
+    git_cmd(
+        &root,
+        &[
+            "clone",
+            "-q",
+            "--depth",
+            "1",
+            "--single-branch",
+            "--branch",
+            "feature",
+            &url,
+            &shallow.to_string_lossy(),
+        ],
+    );
+    let keep = |_: &str| true;
+    let error = git::changed_in_folders(&shallow, &[shallow.join("rules")], &keep).unwrap_err();
+    assert!(
+        matches!(&error, GitError::Failed(message) if message.contains("the checkout is shallow") && message.contains("fetch-depth: 0")),
+        "{error:?}"
+    );
+}
+
+/// `commit_changes` lists what `git diff --no-renames <rev>^ <rev> --
+/// <folder>` lists, with both sides' content: a modification, a deletion and
+/// an addition under the folder, not the file beside it; the folder is read
+/// from where the run starts, the paths from the top level (#1955).
+#[test]
+fn a_commits_changes_under_a_folder_carry_both_sides() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().canonicalize().unwrap();
+    git_cmd(&root, &["init", "-q"]);
+    write(&root, "w/états/kept.json", "1");
+    write(&root, "w/états/gone.json", "2");
+    write(&root, "w/other.json", "3");
+    commit(&root, "base");
+    write(&root, "w/états/kept.json", "1é");
+    std::fs::remove_file(root.join("w/états/gone.json")).unwrap();
+    write(&root, "w/états/sub/new 😀.json", "4");
+    write(&root, "w/other.json", "5");
+    commit(&root, "ours");
+    let changes = git::commit_changes(&root.join("w"), &no_env, "HEAD", "états").unwrap();
+    let seen: Vec<_> = changes
+        .iter()
+        .map(|change| {
+            (
+                change.path.as_str(),
+                change.before.as_deref(),
+                change.after.as_deref(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        seen,
+        [
+            ("w/états/gone.json", Some(&b"2"[..]), None),
+            ("w/états/kept.json", Some(&b"1"[..]), Some("1é".as_bytes())),
+            ("w/états/sub/new 😀.json", None, Some(&b"4"[..])),
+        ]
+    );
+    // A parent step names the commit too; the first commit has no parent.
+    let first = git::commit_changes(&root, &no_env, "HEAD~1", "w").unwrap_err();
+    assert!(
+        matches!(&first, GitError::Failed(message) if message.contains("no parent")),
+        "{first:?}"
+    );
+    let missing = git::commit_changes(&root, &no_env, "no-such-commit", "w").unwrap_err();
+    assert!(
+        matches!(&missing, GitError::Failed(message) if message.contains("no-such-commit")),
+        "{missing:?}"
+    );
+}
+
+/// `config_value` reads what `git config --get` prints: the global file the
+/// environment names (and its includes), the repository's file over it, the
+/// last value of a key winning, and `GIT_CONFIG_COUNT` over every file.
+/// `local_branches` lists packed and loose branches (#1955).
+#[test]
+fn configuration_and_branches_are_read_as_git_reads_them() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().canonicalize().unwrap();
+    let included = root.join("inclus é.gitconfig");
+    std::fs::write(&included, "[init]\n\tdefaultBranch = included\n").unwrap();
+    let global = root.join("global.gitconfig");
+    std::fs::write(
+        &global,
+        format!(
+            "[init]\n\tdefaultBranch = first\n[include]\n\tpath = {}\n",
+            included.display()
+        ),
+    )
+    .unwrap();
+    let global_text = global.to_str().unwrap().to_owned();
+    let env = move |name: &str| match name {
+        "GIT_CONFIG_GLOBAL" => Some(global_text.clone()),
+        "GIT_CONFIG_NOSYSTEM" => Some("1".to_owned()),
+        _ => None,
+    };
+    let outside = root.join("outside");
+    std::fs::create_dir_all(&outside).unwrap();
+    assert_eq!(
+        git::config_value(&outside, "init.defaultBranch", &env).as_deref(),
+        Some("included")
+    );
+    assert!(!git::in_repository(&outside));
+    assert!(git::local_branches(&outside).is_empty());
+    let repo = root.join("repo");
+    std::fs::create_dir_all(&repo).unwrap();
+    git_cmd(&repo, &["init", "-q", "-b", "main"]);
+    git_cmd(&repo, &["config", "init.defaultBranch", "local"]);
+    assert!(git::in_repository(&repo));
+    assert_eq!(
+        git::config_value(&repo, "init.defaultBranch", &env).as_deref(),
+        Some("local")
+    );
+    let overridden = |name: &str| match name {
+        "GIT_CONFIG_COUNT" => Some("2".to_owned()),
+        "GIT_CONFIG_KEY_0" => Some("init.defaultbranch".to_owned()),
+        "GIT_CONFIG_VALUE_0" => Some("zero".to_owned()),
+        "GIT_CONFIG_KEY_1" => Some("other.key".to_owned()),
+        "GIT_CONFIG_VALUE_1" => Some("one".to_owned()),
+        other => env(other),
+    };
+    assert_eq!(
+        git::config_value(&repo, "init.defaultBranch", &overridden).as_deref(),
+        Some("zero")
+    );
+    write(&repo, "a.txt", "a");
+    commit(&repo, "first");
+    git_cmd(&repo, &["branch", "feature/x"]);
+    git_cmd(&repo, &["pack-refs", "--all"]);
+    git_cmd(&repo, &["branch", "loose"]);
+    assert_eq!(git::local_branches(&repo), ["feature/x", "loose", "main"]);
+}
+
+/// What `git rev-parse --show-toplevel --git-path hooks --git-common-dir`
+/// prints from `dir`, each path resolved.
+fn rev_parse_layout(dir: &Path) -> [PathBuf; 3] {
+    let printed = git_cmd(
+        dir,
+        &[
+            "rev-parse",
+            "--show-toplevel",
+            "--git-path",
+            "hooks",
+            "--git-common-dir",
+        ],
+    );
+    let lines: Vec<PathBuf> = printed
+        .lines()
+        .map(|line| dunce::canonicalize(dir.join(line)).unwrap())
+        .collect();
+    [lines[0].clone(), lines[1].clone(), lines[2].clone()]
+}
+
+/// `hooks_layout` from `dir`, `home` the home folder, each path resolved.
+fn read_layout(dir: &Path, home: &Path) -> [PathBuf; 3] {
+    let home = home.display().to_string();
+    let lookup = |name: &str| match name {
+        "HOME" => Some(home.clone()),
+        "GIT_CONFIG_NOSYSTEM" => Some("1".to_owned()),
+        _ => None,
+    };
+    let layout = git::hooks_layout(dir, &lookup).unwrap();
+    [layout.top, layout.hooks_dir, layout.common_dir].map(|path| dunce::canonicalize(path).unwrap())
+}
+
+/// The hooks layout is what `git rev-parse` prints (#1955): from a
+/// subfolder, with `core.hooksPath` unset, relative, under `~/` and
+/// absolute, and from a linked worktree, whose hooks are the main
+/// repository's. Outside a checkout there is none.
+#[test]
+fn the_hooks_layout_is_read_as_git_rev_parse_prints_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dunce::canonicalize(dir.path()).unwrap();
+    let repo = root.join("dépôt");
+    let deep = repo.join("sous/😀");
+    std::fs::create_dir_all(&deep).unwrap();
+    git_cmd(&repo, &["init", "-q", "-b", "main"]);
+    write(&repo, "a.txt", "a\n");
+    commit(&repo, "a");
+    for folder in [".git/hooks", "mes-hooks", "h", "../absolus"] {
+        std::fs::create_dir_all(repo.join(folder)).unwrap();
+    }
+    assert_eq!(read_layout(&deep, &repo), rev_parse_layout(&deep));
+    let absolute = root.join("absolus").display().to_string();
+    // git_cmd's HOME is the folder it runs in: git runs at the top level,
+    // so `~/h` is the same folder for both.
+    for configured in ["mes-hooks", "~/h", absolute.as_str()] {
+        git_cmd(&repo, &["config", "core.hooksPath", configured]);
+        let expected = rev_parse_layout(&repo);
+        assert_eq!(read_layout(&repo, &repo), expected, "{configured}");
+        assert_eq!(read_layout(&deep, &repo)[1], expected[1], "{configured}");
+    }
+    git_cmd(&repo, &["config", "--unset", "core.hooksPath"]);
+    let linked = root.join("lié");
+    git_cmd(
+        &repo,
+        &["worktree", "add", "-q", "-b", "w", linked.to_str().unwrap()],
+    );
+    let layout = read_layout(&linked, &repo);
+    assert_eq!(layout, rev_parse_layout(&linked));
+    assert_eq!(layout[1], repo.join(".git/hooks"));
+    let outside = root.join("ailleurs");
+    std::fs::create_dir_all(&outside).unwrap();
+    assert_eq!(git::hooks_layout(&outside, &|_: &str| None), None);
+}
+
+/// `hooks_layout` and `config_value` find the checkout through the run's
+/// environment, as `git rev-parse` and `git config` did (#1955): `GIT_DIR`
+/// and `GIT_WORK_TREE` from outside the checkout, and a
+/// `GIT_CEILING_DIRECTORIES` that hides it.
+#[test]
+fn the_hooks_layout_and_configuration_follow_the_runs_git_variables() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dunce::canonicalize(dir.path()).unwrap();
+    let repo = root.join("dépôt");
+    let deep = repo.join("sous/😀");
+    std::fs::create_dir_all(&deep).unwrap();
+    git_cmd(&repo, &["init", "-q", "-b", "main"]);
+    git_cmd(&repo, &["config", "core.hooksPath", "mes-hooks"]);
+    git_cmd(&repo, &["config", "user.name", "Zoë 😀"]);
+    std::fs::create_dir_all(repo.join("mes-hooks")).unwrap();
+    let outside = root.join("ailleurs");
+    std::fs::create_dir_all(&outside).unwrap();
+    let git_dir = repo.join(".git").display().to_string();
+    let work_tree = repo.display().to_string();
+    let named = |name: &str| match name {
+        "GIT_DIR" => Some(git_dir.clone()),
+        "GIT_WORK_TREE" => Some(work_tree.clone()),
+        "GIT_CONFIG_NOSYSTEM" => Some("1".to_owned()),
+        _ => None,
+    };
+    let layout = git::hooks_layout(&outside, &named).unwrap();
+    let printed = Command::new("git")
+        .args(["rev-parse", "--show-toplevel"])
+        .current_dir(&outside)
+        .env("GIT_DIR", &git_dir)
+        .env("GIT_WORK_TREE", &work_tree)
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .output()
+        .unwrap();
+    assert!(printed.status.success());
+    let printed = String::from_utf8(printed.stdout).unwrap();
+    assert_eq!(
+        dunce::canonicalize(&layout.top).unwrap(),
+        dunce::canonicalize(printed.trim_end()).unwrap()
+    );
+    // A relative `core.hooksPath` is taken from the top level, where git
+    // runs its hooks.
+    assert_eq!(layout.hooks_dir, repo.join("mes-hooks"));
+    assert_eq!(layout.common_dir, repo.join(".git"));
+    assert_eq!(
+        git::config_value(&outside, "user.name", &named).as_deref(),
+        Some("Zoë 😀")
+    );
+    let bare = |name: &str| match name {
+        "GIT_CONFIG_NOSYSTEM" => Some("1".to_owned()),
+        _ => None,
+    };
+    assert_eq!(git::hooks_layout(&outside, &bare), None);
+    assert_eq!(git::config_value(&outside, "user.name", &bare), None);
+    // A ceiling at the top level hides the checkout from a subfolder.
+    let ceiling = |name: &str| match name {
+        "GIT_CEILING_DIRECTORIES" => Some(work_tree.clone()),
+        "GIT_CONFIG_NOSYSTEM" => Some("1".to_owned()),
+        _ => None,
+    };
+    assert_eq!(git::hooks_layout(&deep, &ceiling), None);
+    assert_eq!(git::config_value(&deep, "user.name", &ceiling), None);
+    assert!(git::hooks_layout(&deep, &bare).is_some());
+}
+
+/// With `extensions.worktreeConfig` on, a linked worktree's
+/// `git config --worktree core.hooksPath` is where git runs its hooks, and
+/// `hooks_layout` reads it there; the main worktree keeps its own hooks
+/// (#1955).
+#[test]
+fn a_worktree_hooks_path_is_read_with_the_worktree_config_extension() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dunce::canonicalize(dir.path()).unwrap();
+    let repo = root.join("dépôt");
+    std::fs::create_dir_all(&repo).unwrap();
+    git_cmd(&repo, &["init", "-q", "-b", "main"]);
+    write(&repo, "a.txt", "a\n");
+    commit(&repo, "a");
+    let linked = root.join("lié");
+    git_cmd(
+        &repo,
+        &["worktree", "add", "-q", "-b", "w", linked.to_str().unwrap()],
+    );
+    git_cmd(&repo, &["config", "extensions.worktreeConfig", "true"]);
+    let only = root.join("seulement 😀");
+    std::fs::create_dir_all(&only).unwrap();
+    std::fs::create_dir_all(repo.join(".git/hooks")).unwrap();
+    git_cmd(
+        &linked,
+        &[
+            "config",
+            "--worktree",
+            "core.hooksPath",
+            only.to_str().unwrap(),
+        ],
+    );
+    let layout = read_layout(&linked, &repo);
+    assert_eq!(layout, rev_parse_layout(&linked));
+    assert_eq!(layout[1], only);
+    assert_eq!(read_layout(&repo, &repo), rev_parse_layout(&repo));
+    assert_eq!(read_layout(&repo, &repo)[1], repo.join(".git/hooks"));
+}
+
+/// Where git finds no work tree, `hooks_layout` finds no layout rather than
+/// the checkout around it (#1955): inside the git directory, and inside a
+/// bare repository nested in the work tree.
+#[test]
+fn no_hooks_layout_inside_the_git_directory_or_a_nested_bare_repository() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dunce::canonicalize(dir.path()).unwrap();
+    let repo = root.join("dépôt");
+    std::fs::create_dir_all(&repo).unwrap();
+    git_cmd(&repo, &["init", "-q", "-b", "main"]);
+    git_cmd(&repo, &["init", "-q", "--bare", "imbriqué 😀.git"]);
+    let nested = repo.join("imbriqué 😀.git");
+    let hooks = repo.join(".git/hooks");
+    std::fs::create_dir_all(&hooks).unwrap();
+    let lookup = |name: &str| match name {
+        "GIT_CONFIG_NOSYSTEM" => Some("1".to_owned()),
+        _ => None,
+    };
+    for probe in [
+        hooks.as_path(),
+        repo.join(".git").as_path(),
+        nested.as_path(),
+        nested.join("refs").as_path(),
+    ] {
+        let status = Command::new("git")
+            .args(["rev-parse", "--show-toplevel"])
+            .current_dir(probe)
+            .env_remove("GIT_DIR")
+            .env_remove("GIT_WORK_TREE")
+            .output()
+            .unwrap()
+            .status;
+        assert!(!status.success(), "{}", probe.display());
+        assert_eq!(
+            git::hooks_layout(probe, &lookup),
+            None,
+            "{}",
+            probe.display()
+        );
+    }
+    assert!(git::hooks_layout(&repo, &lookup).is_some());
+}
+
+/// Discovery without the process's git variables (a hook running the tests
+/// exports `GIT_DIR`).
+fn no_env(_: &str) -> Option<std::ffi::OsString> {
+    None
+}
+
+/// What `commit_changes` reads `a.json` as at `rev`: its content before and
+/// after that commit.
+fn sides(root: &Path, rev: &str) -> Result<(String, String), GitError> {
+    let changes = git::commit_changes(root, &no_env, rev, "w")?;
+    let [change] = changes.as_slice() else {
+        panic!("{rev}: {changes:?}");
+    };
+    let text = |side: &Option<Vec<u8>>| String::from_utf8(side.clone().unwrap()).unwrap();
+    Ok((text(&change.before), text(&change.after)))
+}
+
+/// Three commits on `main` edit `w/a.json` (0, 1, 2); the second's message
+/// is `première étape 😀`.
+fn three_steps() -> (tempfile::TempDir, PathBuf) {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().canonicalize().unwrap();
+    git_cmd(&root, &["init", "-q", "-b", "main"]);
+    for (text, message) in [("0", "base"), ("1", "première étape 😀"), ("2", "seconde")] {
+        write(&root, "w/a.json", text);
+        commit(&root, message);
+    }
+    (dir, root)
+}
+
+/// A reflog entry names the commit a reference held: `HEAD@{1}` and
+/// `main@{1}` are the commit before the last, `main@{2}` the one before
+/// it; one past the reflog is refused with its length (#1955).
+#[test]
+fn a_reflog_entry_names_a_commit() {
+    let (_dir, root) = three_steps();
+    let second = ("0".to_owned(), "1".to_owned());
+    assert_eq!(sides(&root, "HEAD@{1}").unwrap(), second);
+    assert_eq!(sides(&root, "main@{1}").unwrap(), second);
+    assert_eq!(sides(&root, "@{1}").unwrap(), second);
+    assert_eq!(
+        sides(&root, "HEAD@{0}").unwrap(),
+        ("1".to_owned(), "2".to_owned())
+    );
+    // A date after every entry is the newest one.
+    assert_eq!(
+        sides(&root, "main@{2999-01-01}").unwrap(),
+        ("1".to_owned(), "2".to_owned())
+    );
+    let error = sides(&root, "HEAD@{9}").unwrap_err();
+    assert!(
+        matches!(&error, GitError::Failed(message) if message.contains("has only 3 entries")),
+        "{error:?}"
+    );
+}
+
+/// A reflog line longer than any read window (a 5,000-character, non-ASCII
+/// commit subject) still reads: `HEAD@{n}` and `@{-1}` resolve (#1955).
+#[test]
+fn a_long_reflog_line_is_read() {
+    let (_dir, root) = three_steps();
+    git_cmd(&root, &["checkout", "-q", "-b", "longue-é"]);
+    write(&root, "w/a.json", "3");
+    commit(&root, &"é😀".repeat(2_500));
+    git_cmd(&root, &["checkout", "-q", "main"]);
+    let last = ("2".to_owned(), "3".to_owned());
+    assert_eq!(sides(&root, "@{-1}").unwrap(), last);
+    assert_eq!(sides(&root, "HEAD@{1}").unwrap(), last);
+    assert_eq!(sides(&root, "longue-é@{0}").unwrap(), last);
+    assert_eq!(
+        sides(&root, "HEAD@{3}").unwrap(),
+        ("1".to_owned(), "2".to_owned())
+    );
+}
+
+/// `:/text` is the newest commit whose message matches, from every
+/// reference; `<rev>^{/text}` searches from `<rev>` (#1955).
+#[test]
+fn a_message_search_names_the_newest_match() {
+    let (_dir, root) = three_steps();
+    let second = ("0".to_owned(), "1".to_owned());
+    assert_eq!(sides(&root, ":/première").unwrap(), second);
+    assert_eq!(sides(&root, ":/étape 😀").unwrap(), second);
+    assert_eq!(sides(&root, "HEAD^{/^premi}").unwrap(), second);
+    assert_eq!(
+        sides(&root, ":/!-première").unwrap(),
+        ("1".to_owned(), "2".to_owned())
+    );
+    let error = sides(&root, ":/introuvable").unwrap_err();
+    assert!(
+        matches!(&error, GitError::Failed(message) if message.contains("no commit's message matches introuvable")),
+        "{error:?}"
+    );
+}
+
+/// `@{-1}` is the branch checked out before; `@{u}` a branch's upstream
+/// (#1955).
+#[test]
+fn the_previous_branch_and_the_upstream_name_commits() {
+    let (_dir, root) = three_steps();
+    let second = ("0".to_owned(), "1".to_owned());
+    git_cmd(&root, &["branch", "ancien-é", "HEAD~1"]);
+    git_cmd(&root, &["checkout", "-q", "ancien-é"]);
+    git_cmd(&root, &["checkout", "-q", "main"]);
+    assert_eq!(sides(&root, "@{-1}").unwrap(), second);
+    // `@{-1}~1` is the first commit, which has no parent to compare with.
+    let error = sides(&root, "@{-1}~1").unwrap_err();
+    assert!(error.message().contains("no parent"), "{error:?}");
+    let error = sides(&root, "@{-5}").unwrap_err();
+    assert!(error.message().contains("fewer than 5"), "{error:?}");
+    // No upstream yet.
+    let error = sides(&root, "@{u}").unwrap_err();
+    assert!(
+        error.message().contains("branch main has no upstream"),
+        "{error:?}"
+    );
+    git_cmd(&root, &["config", "branch.main.remote", "."]);
+    git_cmd(
+        &root,
+        &["config", "branch.main.merge", "refs/heads/ancien-é"],
+    );
+    assert_eq!(sides(&root, "@{u}").unwrap(), second);
+    assert_eq!(sides(&root, "main@{upstream}").unwrap(), second);
+    assert_eq!(sides(&root, "HEAD@{u}").unwrap(), second);
+    // A remote's branch is its remote-tracking reference.
+    git_cmd(&root, &["update-ref", "refs/remotes/origin/main", "HEAD~1"]);
+    git_cmd(&root, &["config", "branch.main.remote", "origin"]);
+    git_cmd(&root, &["config", "branch.main.merge", "refs/heads/main"]);
+    git_cmd(
+        &root,
+        &[
+            "config",
+            "remote.origin.fetch",
+            "+refs/heads/*:refs/remotes/origin/*",
+        ],
+    );
+    assert_eq!(sides(&root, "@{u}").unwrap(), second);
+    // The remote's fetch refspec maps the branch, as git maps it; a local
+    // branch named `origin/main` is not the upstream.
+    git_cmd(&root, &["update-ref", "-d", "refs/remotes/origin/main"]);
+    git_cmd(&root, &["update-ref", "refs/heads/origin/main", "HEAD~1"]);
+    let error = sides(&root, "@{u}").unwrap_err();
+    assert!(
+        error.message().contains("is not in the checkout"),
+        "{error:?}"
+    );
+    git_cmd(
+        &root,
+        &[
+            "config",
+            "remote.origin.fetch",
+            "+refs/heads/*:refs/miroir/é/*",
+        ],
+    );
+    git_cmd(&root, &["update-ref", "refs/miroir/é/main", "HEAD~1"]);
+    assert_eq!(sides(&root, "@{u}").unwrap(), second);
+    git_cmd(
+        &root,
+        &["config", "remote.origin.fetch", "+refs/tags/*:refs/tags/*"],
+    );
+    let error = sides(&root, "@{u}").unwrap_err();
+    assert!(
+        error.message().contains("none of its remote's refspecs"),
+        "{error:?}"
+    );
+}
+
+/// What names no single commit is refused, saying why (#1955).
+#[test]
+fn a_revision_that_names_no_commit_is_refused_with_the_reason() {
+    let (_dir, root) = three_steps();
+    for (rev, reason) in [
+        ("HEAD~1..HEAD", "a range"),
+        ("HEAD~1...HEAD", "a range"),
+        ("HEAD:w/a.json", "a file in a commit"),
+        (":w/a.json", "a file in the index"),
+        ("HEAD^{tree}", "is not a commit"),
+        ("@{push}", "@{push} is not supported"),
+    ] {
+        let error = sides(&root, rev).unwrap_err();
+        assert!(error.message().contains(reason), "{rev}: {error:?}");
+    }
 }

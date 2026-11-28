@@ -7,9 +7,11 @@
 //! the Python and npm launchers and the tests all run the same code.
 
 use crate::catalog;
+use crate::commands::result::{ExitCode, Status};
 use crate::crash::{self, Facts, Internal};
 use crate::env::Env;
 use crate::envelope::{Failure, INTERRUPTED_EXIT_CODE, NextAction, Outcome, USAGE_EXIT_CODE, code};
+use crate::json::Object;
 use crate::json::document_text;
 use crate::logging::{self, LogLayer, Sink};
 use crate::mode::{self, Inputs, Mode};
@@ -201,6 +203,10 @@ struct Run<'a> {
     indent: bool,
     env: &'a Env,
     host: &'a Host,
+    /// The working directory the commands read: [`Host::cwd`], or an empty
+    /// path, which the commands take as the process's own, when the host
+    /// gave none. Resolved once here so no command repeats it.
+    cwd: PathBuf,
     started: Instant,
 }
 
@@ -232,7 +238,7 @@ impl Run<'_> {
                 let text = document_text(&outcome.document(self.duration_ms()), self.indent);
                 out.write_all(text.as_bytes())?;
             }
-            _ if outcome.failure.is_some() && outcome.exit_code != 0 => {
+            _ if outcome.failure.is_some() && outcome.exit_code != ExitCode::Success => {
                 let message = outcome
                     .failure
                     .as_ref()
@@ -260,7 +266,7 @@ impl Run<'_> {
         }
         out.flush()?;
         err.flush()?;
-        Ok(outcome.exit_code)
+        Ok(outcome.exit_code.code())
     }
 
     /// A usage error a command found itself once the line parsed: exit 2,
@@ -297,7 +303,7 @@ impl Run<'_> {
         err: &mut dyn Write,
     ) -> std::io::Result<i32> {
         if self.mode == Mode::Json {
-            let outcome = Outcome::failed(&problem.command, USAGE_EXIT_CODE, problem.failure);
+            let outcome = Outcome::failed(&problem.command, ExitCode::Usage, problem.failure);
             return self.emit(&outcome, &[], out, err);
         }
         let console = self.console(self.host.stderr_tty);
@@ -374,11 +380,7 @@ impl Run<'_> {
             .get(if cfg!(windows) { "USERPROFILE" } else { "HOME" })
             .filter(|home| !home.is_empty())
             .map(PathBuf::from);
-        let facts = crate::commands::home::gather(
-            &self.host.version,
-            &cwd,
-            self.env.get("OPENTIDE_REPO_ROOT"),
-        );
+        let facts = crate::commands::home::gather(&self.host.version, &cwd, self.env);
         let console = self.console(self.host.stdout_tty);
         Some(crate::commands::home::render(
             &facts,
@@ -458,8 +460,7 @@ impl Run<'_> {
         );
         let outcome = match installed {
             Ok(installed) => {
-                let cwd = self.host.cwd.clone().unwrap_or_default();
-                let shown = completion::person_path(&installed.path, &cwd, home.as_deref());
+                let shown = completion::person_path(&installed.path, &self.cwd, home.as_deref());
                 let next = if installed.reload.is_empty() {
                     NextAction::new(installed.reason, "")
                 } else {
@@ -467,24 +468,24 @@ impl Run<'_> {
                 };
                 Outcome {
                     command: String::new(),
-                    status: "completed".into(),
+                    status: Status::Completed,
                     message: format!("Installed {shell} completion in {shown}"),
-                    data: vec![
+                    data: Object::from([
                         ("shell".into(), crate::json::Json::Str(shell.to_owned())),
                         (
                             "path".into(),
                             crate::json::Json::Str(installed.path.to_string_lossy().into_owned()),
                         ),
-                    ],
-                    exit_code: 0,
-                    summary: Vec::new(),
+                    ]),
+                    exit_code: ExitCode::Success,
+                    summary: Object::new(),
                     next_actions: vec![next],
                     failure: None,
                 }
             }
             Err(error) => Outcome::failed(
                 "",
-                1,
+                ExitCode::Failure,
                 Failure::new(
                     "io_error",
                     format!("Could not install {shell} completion: {error}"),
@@ -583,7 +584,7 @@ impl Run<'_> {
             };
             let mut failure = Failure::new(code::USAGE_INVALID_VALUE, message);
             failure.argument = Some(named.into());
-            let mut outcome = Outcome::failed("", USAGE_EXIT_CODE, failure);
+            let mut outcome = Outcome::failed("", ExitCode::Usage, failure);
             let reason = match named {
                 "--repo" => "--repo takes the folder with .opentide/ in it",
                 "OPENTIDE_REPO_ROOT" => {
@@ -600,7 +601,7 @@ impl Run<'_> {
                 "--quiet and --verbose cannot be used together",
             );
             failure.argument = Some("--verbose".into());
-            let outcome = Outcome::failed("", USAGE_EXIT_CODE, failure);
+            let outcome = Outcome::failed("", ExitCode::Usage, failure);
             return self.emit(&outcome, &[], out, err);
         }
         // The commands dispatched by their clap derive structs (`tree.rs`).
@@ -638,11 +639,11 @@ impl Run<'_> {
                 let count = catalog::entries(&self.root).len();
                 let outcome = Outcome {
                     command: "commands".into(),
-                    status: "completed".into(),
+                    status: Status::Completed,
                     message: format!("{count} commands"),
-                    data,
-                    exit_code: 0,
-                    summary,
+                    data: Object::from_iter(data),
+                    exit_code: ExitCode::Success,
+                    summary: Object::from_iter(summary),
                     next_actions: Vec::new(),
                     failure: None,
                 };
@@ -669,12 +670,11 @@ impl Run<'_> {
             Some(RootCommand::Migrate(crate::tree::MigrateArgs {
                 command: Some(crate::tree::MigrateCommand::VocabScope(args)),
             })) => {
-                let cwd = self.host.cwd.clone().unwrap_or_default();
                 let report = crate::commands::migrate::run(
                     &crate::commands::migrate::Args::from(args),
                     self.globals.repo.as_deref(),
                     self.env,
-                    &cwd,
+                    &self.cwd,
                 );
                 return self.emit_report(&report, out, err);
             }
@@ -736,16 +736,14 @@ impl Run<'_> {
                 };
             }
             Some(RootCommand::Doctor(args)) => {
-                let cwd = self.host.cwd.clone().unwrap_or_default();
                 let interrupt = self.host.interrupt.clone();
                 let interrupted = || interrupt.requested();
                 let report = crate::commands::doctor::run(
-                    args.offline,
-                    args.live,
+                    args.into(),
                     &crate::commands::doctor::Context {
                         repo: self.globals.repo.as_deref(),
                         env: self.env,
-                        cwd: &cwd,
+                        cwd: &self.cwd,
                         version: &self.host.version,
                         text: self.mode != Mode::Json && !self.globals.quiet,
                         proxy: self.globals.proxy.as_deref(),
@@ -757,12 +755,11 @@ impl Run<'_> {
             Some(RootCommand::Rules(crate::tree::RulesArgs {
                 command: Some(crate::tree::RulesCommand::Unreviewed(args)),
             })) => {
-                let cwd = self.host.cwd.clone().unwrap_or_default();
                 let report = crate::commands::rules::run(
                     &args.older_than,
                     self.globals.repo.as_deref(),
                     self.env,
-                    &cwd,
+                    &self.cwd,
                     jiff::Timestamp::now(),
                     self.mode != Mode::Json,
                 );
@@ -809,7 +806,7 @@ impl Run<'_> {
             let launch = crate::tui::Launch {
                 repo: self.globals.repo.clone(),
                 env: self.env.clone(),
-                cwd: self.host.cwd.clone().unwrap_or_default(),
+                cwd: self.cwd.clone(),
                 version: self.host.version.clone(),
             };
             // A configuration file that does not parse is refused as every
@@ -844,18 +841,17 @@ impl Run<'_> {
             GenerateCommand as Command, GenerateExtractCommand as Extract,
             GenerateInflightCommand as Inflight,
         };
-        let cwd = self.host.cwd.clone().unwrap_or_default();
         let cx = generate::Context {
             repo: self.globals.repo.as_deref(),
             env: self.env,
-            cwd: &cwd,
+            cwd: &self.cwd,
             proxy: self.globals.proxy.as_deref(),
             version: &self.host.version,
         };
         let extract_cx = extract::Context {
             repo: self.globals.repo.as_deref(),
             env: self.env,
-            cwd: &cwd,
+            cwd: &self.cwd,
             proxy: self.globals.proxy.as_deref(),
         };
         if !args.phases.is_empty() && args.command.is_some() {
@@ -879,15 +875,17 @@ impl Run<'_> {
             }
             Some(Command::Docs(docs)) => generate::docs(&docs.into(), &cx),
             Some(Command::Extract(extraction)) => match &extraction.command {
-                Some(Extract::Elastic(elastic)) => {
-                    extract::elastic(&extract_cx, &elastic.space, elastic.include_prebuilt)
-                }
+                Some(Extract::Elastic(elastic)) => extract::elastic(
+                    &extract_cx,
+                    &elastic.space,
+                    elastic.include_prebuilt.or(false),
+                ),
                 Some(Extract::Sentinel(_)) => extract::sentinel(&extract_cx),
                 Some(Extract::Defender(_)) => extract::defender(&extract_cx),
                 // `generate extract` needs a subcommand: clap refused it.
                 None => crate::commands::Report::failed(
                     "generate extract",
-                    1,
+                    ExitCode::Failure,
                     Failure::new(
                         code::INTERNAL,
                         "opentide generate extract has no implementation: this is a bug in opentide",
@@ -912,7 +910,6 @@ impl Run<'_> {
         if let Some(report) = report {
             return self.emit_report(&report, out, err);
         }
-        let cwd = self.host.cwd.clone().unwrap_or_default();
         let terminal = self.terminal();
         let interrupt = self.host.interrupt.clone();
         let code = crate::commands::watch::run(
@@ -920,7 +917,7 @@ impl Run<'_> {
             &crate::commands::validate::Context {
                 repo: self.globals.repo.as_deref(),
                 env: self.env,
-                cwd: &cwd,
+                cwd: &self.cwd,
                 version: &self.host.version,
                 terminal: &terminal,
                 proxy: self.globals.proxy.as_deref(),
@@ -938,7 +935,6 @@ impl Run<'_> {
     fn new_object(&self, command: &crate::tree::NewCommand) -> crate::commands::Report {
         use crate::commands::new::{Context, NewArgs, run, stdin_is_terminal};
         let parsed = NewArgs::from(command);
-        let cwd = self.host.cwd.clone().unwrap_or_default();
         let can_prompt = self.mode == Mode::Human && stdin_is_terminal();
         // The questions are the setup wizards': drawn on stderr.
         let prompter = std::cell::RefCell::new(crate::commands::setup::wizard::Inquire::new(
@@ -949,7 +945,7 @@ impl Run<'_> {
             &Context {
                 repo: self.globals.repo.as_deref(),
                 env: self.env,
-                cwd: &cwd,
+                cwd: &self.cwd,
                 version: &self.host.version,
                 can_prompt,
                 prompter: Some(&prompter),
@@ -967,11 +963,10 @@ impl Run<'_> {
         let Some(group) = matches.subcommand_matches("setup") else {
             return crate::commands::Report::error("setup", "no setup command");
         };
-        let cwd = self.host.cwd.clone().unwrap_or_default();
         match &args.command {
             None => crate::commands::setup::run::group(
                 &crate::commands::setup::run::GroupArgs::from(args),
-                &self.setup_context(&cwd),
+                &self.setup_context(),
             ),
             Some(Command::Ci(ci)) => self.setup_ci(args, ci, group),
             Some(Command::Env(env)) => {
@@ -979,7 +974,7 @@ impl Run<'_> {
             }
             Some(Command::Hooks(hooks)) => {
                 let step = Step::Hooks {
-                    install: !hooks.no_install,
+                    install: hooks.install.or(true),
                 };
                 self.setup_step(args, group, step, &hooks.target, &hooks.confirm)
             }
@@ -1039,25 +1034,24 @@ impl Run<'_> {
                 .is_some_and(|own| given(own, "path"))
                 .then(|| ci.path.clone()),
             group_path: given(group, "path").then(|| args.path.clone()),
-            staging: !pipeline.no_staging,
-            inflight: !pipeline.no_inflight,
-            sharing: pipeline.sharing,
-            lint_changed: pipeline.lint_changed,
-            promotion: pipeline.promotion_choice(),
+            staging: pipeline.staging.or(true),
+            inflight: pipeline.inflight.or(true),
+            sharing: pipeline.sharing.or(false),
+            lint_changed: pipeline.lint_changed.or(false),
+            promotion: pipeline.promotion.get(),
             promotion_target: pipeline.promotion_target.clone(),
             python_version: pipeline.python_version.clone(),
-            explorer_pages: pipeline.explorer_pages,
+            explorer_pages: pipeline.explorer_pages.or(false),
             variable_group: pipeline.variable_group.clone(),
-            app_token: pipeline.app_token_choice(),
-            prune: pipeline.prune_choice(),
+            app_token: pipeline.app_token.get(),
+            prune: pipeline.prune.get(),
             stdout: ci.stdout,
             default_branch: pipeline.default_branch.clone(),
             plan: ci.confirm.plan || args.plan,
             yes: ci.confirm.yes || args.yes,
             group_only: self.setup_group_only(group),
         };
-        let cwd = self.host.cwd.clone().unwrap_or_default();
-        run(&parsed, &self.setup_context(&cwd))
+        run(&parsed, &self.setup_context())
     }
 
     /// The `setup` group's own options given on the command line before a
@@ -1101,14 +1095,11 @@ impl Run<'_> {
     }
 
     /// The setup commands' context.
-    fn setup_context<'a>(
-        &'a self,
-        cwd: &'a std::path::Path,
-    ) -> crate::commands::setup::Context<'a> {
+    fn setup_context(&self) -> crate::commands::setup::Context<'_> {
         crate::commands::setup::Context {
             repo: self.globals.repo.as_deref(),
             env: self.env,
-            cwd,
+            cwd: &self.cwd,
             mode: self.mode,
             version: &self.host.version,
             quiet: self.globals.quiet,
@@ -1145,13 +1136,12 @@ impl Run<'_> {
             both: flag_given && positional_given,
             group_only: self.setup_group_only(group),
         };
-        let cwd = self.host.cwd.clone().unwrap_or_default();
         subcommand(
             &step,
             &paths,
             confirm.yes || args.yes,
             confirm.plan || args.plan,
-            &self.setup_context(&cwd),
+            &self.setup_context(),
         )
     }
 
@@ -1177,20 +1167,18 @@ impl Run<'_> {
             yes: skills.yes || args.yes,
             plan: skills.plan || args.plan,
         };
-        let cwd = self.host.cwd.clone().unwrap_or_default();
-        install(&parsed, &paths, &self.setup_context(&cwd))
+        install(&parsed, &paths, &self.setup_context())
     }
 
     /// `opentide info`, from its parsed arguments.
     fn info(&self, args: &crate::tree::InfoArgs) -> crate::commands::Report {
-        let cwd = self.host.cwd.clone().unwrap_or_default();
         let parsed = crate::commands::info::Args::from(args);
         crate::commands::info::run(
             &parsed,
             &crate::commands::info::Context {
                 repo: self.globals.repo.as_deref(),
                 env: self.env,
-                cwd: &cwd,
+                cwd: &self.cwd,
                 version: &self.host.version,
                 text: self.mode != Mode::Json,
             },
@@ -1211,14 +1199,13 @@ impl Run<'_> {
         if parsed.watch && crate::commands::validate::refuse(&parsed, self.mode).is_none() {
             return (parsed, None);
         }
-        let cwd = self.host.cwd.clone().unwrap_or_default();
         let terminal = self.terminal();
         let report = run(
             &parsed,
             &Context {
                 repo: self.globals.repo.as_deref(),
                 env: self.env,
-                cwd: &cwd,
+                cwd: &self.cwd,
                 version: &self.host.version,
                 terminal: &terminal,
                 proxy: self.globals.proxy.as_deref(),
@@ -1238,16 +1225,15 @@ impl Run<'_> {
         use crate::commands::validate_query::{Args, COMMAND, Context, plugin_live, refusal, run};
         if let Some(problem) = refusal(validate, query) {
             let failure = Failure::new(code::USAGE_INVALID_VALUE, problem);
-            return crate::commands::Report::failed(COMMAND, USAGE_EXIT_CODE, failure);
+            return crate::commands::Report::failed(COMMAND, ExitCode::Usage, failure);
         }
         let parsed = Args::from_cli(validate, query);
-        let cwd = self.host.cwd.clone().unwrap_or_default();
         let plugin = parsed
             .platform
             .clone()
             .filter(|platform| crate::plugins::is_plugin(platform));
         if parsed.live && plugin.is_none() {
-            return self.validate_query_live(&parsed, &cwd);
+            return self.validate_query_live(&parsed);
         }
         let terminal = self.terminal();
         let interrupt = &self.host.interrupt;
@@ -1255,7 +1241,7 @@ impl Run<'_> {
         let cx = Context {
             repo: self.globals.repo.as_deref(),
             env: self.env,
-            cwd: &cwd,
+            cwd: &self.cwd,
             terminal: &terminal,
             proxy: self.globals.proxy.as_deref(),
             interrupted: &interrupted,
@@ -1274,7 +1260,6 @@ impl Run<'_> {
     fn validate_query_live(
         &self,
         parsed: &crate::commands::validate_query::Args,
-        cwd: &std::path::Path,
     ) -> crate::commands::Report {
         use crate::commands::{validate_live, validate_query};
         use crate::render::summary;
@@ -1289,10 +1274,7 @@ impl Run<'_> {
         if parsed.platform.is_none() {
             // A live check reads one platform's tenants: refused, as the
             // oracle refuses it (a usage failure writes no CI job summary).
-            return validate_live::report_of(
-                validate_query::COMMAND,
-                &validate_query::live_without_platform(),
-            );
+            return validate_query::live_without_platform().report(validate_query::COMMAND);
         }
         let interrupt = &self.host.interrupt;
         let interrupted = || interrupt.requested();
@@ -1302,7 +1284,7 @@ impl Run<'_> {
             &validate_live::Context {
                 repo: self.globals.repo.as_deref(),
                 env: self.env,
-                cwd,
+                cwd: &self.cwd,
                 proxy: self.globals.proxy.as_deref(),
                 interrupted: &interrupted,
                 now: jiff::Timestamp::now(),
@@ -1332,14 +1314,13 @@ impl Run<'_> {
     /// `opentide lint`, from its parsed arguments.
     fn lint(&self, args: &crate::tree::LintArgs) -> crate::commands::Report {
         let parsed = crate::commands::lint::Args::from(args);
-        let cwd = self.host.cwd.clone().unwrap_or_default();
         let terminal = self.terminal();
         crate::commands::lint::run(
             &parsed,
             &crate::commands::lint::Context {
                 repo: self.globals.repo.as_deref(),
                 env: self.env,
-                cwd: &cwd,
+                cwd: &self.cwd,
                 version: &self.host.version,
                 terminal: &terminal,
             },
@@ -1364,21 +1345,22 @@ impl Run<'_> {
     fn query(&self, args: &crate::tree::QueryArgs) -> crate::commands::Report {
         use crate::commands::query::{Args, Context, run};
         let parsed = Args::from(args);
-        let cwd = self.host.cwd.clone().unwrap_or_default();
         let terminal = self.terminal();
         let interrupt = &self.host.interrupt;
         let interrupted = || interrupt.requested();
+        // Read as `--query-file` is: bytes, decoded leniently; only a failed
+        // read is an error (#1936).
         let stdin = || {
-            let mut text = String::new();
-            let _ = std::io::Read::read_to_string(&mut std::io::stdin(), &mut text);
-            text
+            let mut bytes = Vec::new();
+            std::io::Read::read_to_end(&mut std::io::stdin(), &mut bytes)?;
+            Ok(String::from_utf8_lossy(&bytes).into_owned())
         };
         run(
             &parsed,
             &Context {
                 repo: self.globals.repo.as_deref(),
                 env: self.env,
-                cwd: &cwd,
+                cwd: &self.cwd,
                 proxy: self.globals.proxy.as_deref(),
                 terminal: &terminal,
                 interrupted: &interrupted,
@@ -1392,13 +1374,12 @@ impl Run<'_> {
     /// `opentide deploy --dry-run`, from its parsed arguments.
     fn deploy(&self, args: &crate::tree::DeployArgs) -> crate::commands::deploy::DryRun {
         let parsed = crate::commands::deploy::Args::from(args);
-        let cwd = self.host.cwd.clone().unwrap_or_default();
         crate::commands::deploy::run(
             &parsed,
             &crate::commands::deploy::Context {
                 repo: self.globals.repo.as_deref(),
                 env: self.env,
-                cwd: &cwd,
+                cwd: &self.cwd,
                 debug: self.globals.debug || self.env.opentide_debug(),
             },
         )
@@ -1426,7 +1407,6 @@ impl Run<'_> {
             persist_state_externally: args.persist_state_externally,
             prune: parsed.prune,
         };
-        let cwd = self.host.cwd.clone().unwrap_or_default();
         let interrupt = &self.host.interrupt;
         let interrupted = || interrupt.requested();
         // The built-in platforms, then the platform plugins (UC-4.5b).
@@ -1448,7 +1428,7 @@ impl Run<'_> {
             &Context {
                 repo: self.globals.repo.as_deref(),
                 env: self.env,
-                cwd: &cwd,
+                cwd: &self.cwd,
                 proxy: self.globals.proxy.as_deref(),
                 interrupted: &interrupted,
                 now: jiff::Timestamp::now(),
@@ -1509,14 +1489,16 @@ impl Run<'_> {
         err: &mut dyn Write,
     ) -> std::io::Result<i32> {
         use crate::tree::DeployCommand as Command;
-        let cwd = self.host.cwd.clone().unwrap_or_default();
         match &deploy.command {
             Some(Command::ReplayState(replay)) => {
                 if self.interrupted() {
                     return Ok(INTERRUPTED_EXIT_CODE);
                 }
-                let report =
-                    crate::commands::deploy_replay::report(&cwd, self.env, &replay.state_commit);
+                let report = crate::commands::deploy_replay::report(
+                    &self.cwd,
+                    self.env,
+                    &replay.state_commit,
+                );
                 self.emit_report(&report, out, err)
             }
             Some(Command::Metadata(metadata)) => {
@@ -1528,7 +1510,7 @@ impl Run<'_> {
                     format!("Metadata deployment is not implemented for {platform}"),
                 );
                 self.emit(
-                    &Outcome::failed("deploy metadata", USAGE_EXIT_CODE, failure),
+                    &Outcome::failed("deploy metadata", ExitCode::Usage, failure),
                     &[],
                     out,
                     err,
@@ -1538,7 +1520,7 @@ impl Run<'_> {
                 let report = crate::commands::migrate_state::run(
                     self.globals.repo.as_deref(),
                     self.env,
-                    &cwd,
+                    &self.cwd,
                 );
                 self.emit_report(&report, out, err)
             }
@@ -1568,7 +1550,7 @@ impl Run<'_> {
         }
     }
 
-    /// Prints a dry run in this run's mode, in the oracle's order: the
+    /// Prints a dry run in this run's mode, in this order: the
     /// progress events, then the plan (stdout), the rules that would fail
     /// (stderr), the CI job summary, the result, and the closing note.
     fn emit_deploy(
@@ -1595,7 +1577,7 @@ impl Run<'_> {
             let document = run.document(self.duration_ms());
             out.write_all(document_text(&document, self.indent).as_bytes())?;
             out.flush()?;
-            return Ok(outcome.exit_code);
+            return Ok(outcome.exit_code.code());
         }
         let stdout = self.console(self.host.stdout_tty);
         let stderr = self.console(self.host.stderr_tty);
@@ -1617,7 +1599,7 @@ impl Run<'_> {
                 links: self.mode == Mode::Human && self.host.stderr_tty,
                 columns: stderr.width,
                 highlight: self.mode == Mode::Human,
-                cwd: self.host.cwd.clone().unwrap_or_default(),
+                cwd: self.cwd.clone(),
                 env: self.env.clone(),
             };
             let mut sources = crate::render::diagnostic::SourceFiles::default();
@@ -1628,13 +1610,12 @@ impl Run<'_> {
             )?;
             err.flush()?;
         }
-        if !run.refused && outcome.exit_code != USAGE_EXIT_CODE {
+        if !run.refused && outcome.exit_code != ExitCode::Usage {
             let markdown = summary::fit(
                 &summary::deploy_summary(&run.result, None, Some(true)),
                 summary::MAX_SUMMARY_BYTES,
             );
-            let cwd = self.host.cwd.clone().unwrap_or_default();
-            let written = ci::append_summary(&markdown, "deploy", self.mode, self.env, &cwd);
+            let written = ci::append_summary(&markdown, "deploy", self.mode, self.env, &self.cwd);
             for line in &written.stdout {
                 out.write_all(format!("{line}\n").as_bytes())?;
             }
@@ -1645,7 +1626,7 @@ impl Run<'_> {
         let view = ResultView {
             message: outcome.message.clone(),
             outcome: run.outcome_line.clone(),
-            status: outcome.status.clone(),
+            status: outcome.status.as_str().to_owned(),
             ok: outcome.ok(),
             outcome_kind: run.plan_kind.then_some(OutcomeKind::Plan),
             failure: outcome
@@ -1673,7 +1654,7 @@ impl Run<'_> {
         }
         out.flush()?;
         err.flush()?;
-        Ok(outcome.exit_code)
+        Ok(outcome.exit_code.code())
     }
 
     /// The width a table or a long line is laid out at on stdout: `COLUMNS`,
@@ -1715,7 +1696,7 @@ impl Run<'_> {
         if report.bare_exit {
             out.flush()?;
             err.flush()?;
-            return Ok(outcome.exit_code);
+            return Ok(outcome.exit_code.code());
         }
         if report.usage_notes
             && let Some(failure) = &outcome.failure
@@ -1765,14 +1746,14 @@ impl Run<'_> {
             }
             out.write_all(document_text(&document, self.indent).as_bytes())?;
             out.flush()?;
-            return Ok(outcome.exit_code);
+            return Ok(outcome.exit_code.code());
         }
         let mut logged = false;
         if !report.steps.is_empty() && self.mode != Mode::Mcp && !self.globals.quiet {
             let console = self.console(self.host.stderr_tty);
             if self.mode == Mode::Human && self.host.stderr_tty {
-                // The oracle's live display keeps its rows below the lines
-                // logged while it runs: they end up above the checklist.
+                // The lines logged while the steps ran are written first, so
+                // they end up above the checklist rather than inside it.
                 for line in &report.after_steps {
                     line.log();
                 }
@@ -1806,13 +1787,12 @@ impl Run<'_> {
             }
         }
         if let Some(markdown) = &report.ci_summary
-            && outcome.exit_code != USAGE_EXIT_CODE
+            && outcome.exit_code != ExitCode::Usage
         {
             use crate::render::{ci, summary};
             let markdown = summary::fit(markdown, summary::MAX_SUMMARY_BYTES);
-            let cwd = self.host.cwd.clone().unwrap_or_default();
             let written =
-                ci::append_summary(&markdown, &outcome.command, self.mode, self.env, &cwd);
+                ci::append_summary(&markdown, &outcome.command, self.mode, self.env, &self.cwd);
             for line in &written.stdout {
                 out.write_all(format!("{line}\n").as_bytes())?;
             }
@@ -1831,7 +1811,7 @@ impl Run<'_> {
                 out.write_all(whole.as_bytes())?;
             }
             out.flush()?;
-            return Ok(outcome.exit_code);
+            return Ok(outcome.exit_code.code());
         }
         if self.mode != Mode::Mcp {
             for block in &report.body {
@@ -1862,15 +1842,15 @@ impl Run<'_> {
                 }
             }
         }
-        if report.body_only && outcome.exit_code == 0 {
+        if report.body_only && outcome.exit_code == ExitCode::Success {
             out.flush()?;
             err.flush()?;
-            return Ok(outcome.exit_code);
+            return Ok(outcome.exit_code.code());
         }
         let view = ResultView {
             message: outcome.message.clone(),
             outcome: report.outcome_line.clone(),
-            status: outcome.status.clone(),
+            status: outcome.status.as_str().to_owned(),
             ok: outcome.ok(),
             outcome_kind: report.outcome_kind,
             failure: outcome
@@ -1898,7 +1878,7 @@ impl Run<'_> {
         err.write_all(text_err.as_bytes())?;
         out.flush()?;
         err.flush()?;
-        Ok(outcome.exit_code)
+        Ok(outcome.exit_code.code())
     }
 
     fn resolve(&self, path: &str) -> PathBuf {
@@ -2014,14 +1994,13 @@ impl Run<'_> {
             }
         }
         let parsed = Args::from_cli(share, |id| typed(group, id));
-        let cwd = self.host.cwd.clone().unwrap_or_default();
         Ok(run(
             &parsed,
             &Context {
                 command: path,
                 repo: self.globals.repo.as_deref(),
                 env: self.env,
-                cwd: &cwd,
+                cwd: &self.cwd,
                 proxy: self.globals.proxy.as_deref(),
                 version: &self.host.version,
             },
@@ -2038,7 +2017,6 @@ impl Run<'_> {
         skills_command: SkillsCommand<'_>,
     ) -> crate::commands::Report {
         use crate::commands::skills;
-        let cwd = self.host.cwd.clone().unwrap_or_default();
         let path = match skills_command {
             SkillsCommand::Discover(_) => "setup skills discover",
             SkillsCommand::Show(_) => "setup skills show",
@@ -2105,7 +2083,7 @@ impl Run<'_> {
         let usage = |message: String| {
             let mut failure = crate::envelope::Failure::new(code::USAGE_INVALID_VALUE, message);
             failure.argument = None;
-            crate::commands::Report::failed(path, USAGE_EXIT_CODE, failure)
+            crate::commands::Report::failed(path, ExitCode::Usage, failure)
         };
         if let Some(refusal) = refusal {
             return usage(refusal);
@@ -2149,18 +2127,20 @@ impl Run<'_> {
             match self.globals.repo.as_deref() {
                 Some(repo)
                     if candidate == std::path::Path::new(".")
-                        && crate::commands::setup::resolved(&cwd, std::path::Path::new(repo))
-                            != crate::commands::setup::resolved(&cwd, &cwd) =>
+                        && crate::commands::setup::resolved(
+                            &self.cwd,
+                            std::path::Path::new(repo),
+                        ) != crate::commands::setup::resolved(&self.cwd, &self.cwd) =>
                 {
-                    cwd.join(repo)
+                    self.cwd.join(repo)
                 }
-                _ => cwd.join(candidate),
+                _ => self.cwd.join(candidate),
             }
         };
         let named: Vec<String> = group_paths.into_iter().chain(own).collect();
         let mut targets: Vec<std::path::PathBuf> = named
             .iter()
-            .map(|given| crate::commands::setup::resolved(&cwd, &setup_path(given)))
+            .map(|given| crate::commands::setup::resolved(&self.cwd, &setup_path(given)))
             .collect();
         targets.dedup();
         if targets.len() > 1 {
@@ -2224,13 +2204,11 @@ struct ServerPlaces {
 
 /// The subcommand path `matches` ran.
 /// The string a result holds at `key`, if any.
-fn data_text(data: &[(String, crate::json::Json)], key: &str) -> Option<String> {
-    data.iter()
-        .find(|(name, _)| name == key)
-        .and_then(|(_, value)| match value {
-            crate::json::Json::Str(text) => Some(text.clone()),
-            _ => None,
-        })
+fn data_text(data: &crate::json::Object, key: &str) -> Option<String> {
+    data.get(key).and_then(|value| match value {
+        crate::json::Json::Str(text) => Some(text.clone()),
+        _ => None,
+    })
 }
 
 fn command_path(matches: &clap::ArgMatches) -> Vec<String> {
@@ -2244,34 +2222,113 @@ fn command_path(matches: &clap::ArgMatches) -> Vec<String> {
 }
 
 thread_local! {
-    static LAST_PANIC: RefCell<Option<Internal>> = const { RefCell::new(None) };
+    static LAST_PANIC: RefCell<Option<Recorded>> = const { RefCell::new(None) };
+}
+
+/// What the panic hook keeps of a panic: its message, its location and the
+/// backtrace, captured but not resolved. Resolving the symbols can take
+/// hundreds of milliseconds on a large binary, so the hook leaves it to the
+/// report ([`Recorded::into_internal`]): the hook stays cheap, a panic that
+/// is caught and swallowed never pays for it, and a worker's panic reaches
+/// [`catch_panic`], which stops the other workers, sooner.
+struct Recorded {
+    message: String,
+    location: String,
+    backtrace: std::backtrace::Backtrace,
+}
+
+impl Recorded {
+    /// The crash report's record, with the backtrace resolved.
+    fn into_internal(self) -> Internal {
+        Internal {
+            kind: "panic".into(),
+            message: self.message,
+            trace: format!("{}{}", self.location, self.backtrace),
+        }
+    }
 }
 
 /// Records each panic's message, location and backtrace for the crash report,
 /// instead of printing them: [`run`] reports the panic itself.
 pub fn install_panic_hook() {
-    std::panic::set_hook(Box::new(|info| {
-        let message = crash::panic_message(info.payload());
-        let location = info
-            .location()
-            .map(|location| {
-                format!(
-                    "at {}:{}:{}\n",
-                    location.file(),
-                    location.line(),
-                    location.column()
-                )
-            })
-            .unwrap_or_default();
-        let backtrace = std::backtrace::Backtrace::force_capture();
-        LAST_PANIC.with(|last| {
-            *last.borrow_mut() = Some(Internal {
-                kind: "panic".into(),
-                message,
-                trace: format!("{location}{backtrace}"),
-            });
+    std::panic::set_hook(Box::new(record_panic));
+}
+
+/// The panic hook's work: the panic's message, location and backtrace, kept
+/// for this thread's crash report.
+fn record_panic(info: &std::panic::PanicHookInfo<'_>) {
+    let message = crash::panic_message(info.payload());
+    let location = info
+        .location()
+        .map(|location| {
+            format!(
+                "at {}:{}:{}\n",
+                location.file(),
+                location.line(),
+                location.column()
+            )
+        })
+        .unwrap_or_default();
+    let backtrace = std::backtrace::Backtrace::force_capture();
+    LAST_PANIC.with(|last| {
+        *last.borrow_mut() = Some(Recorded {
+            message,
+            location,
+            backtrace,
         });
-    }));
+    });
+}
+
+/// A panic caught on a worker thread, with the message, location and
+/// backtrace the panic hook recorded there: [`resume`](Self::resume) raises
+/// it again on the thread that joins the worker, whose crash report then
+/// shows where the worker panicked. The hook's record is the panicking
+/// thread's own and `resume_unwind` does not run the hook again, so a
+/// worker's panic re-raised without it would lose its trace.
+pub struct CaughtPanic {
+    payload: Box<dyn std::any::Any + Send>,
+    recorded: Option<Recorded>,
+}
+
+impl std::fmt::Debug for CaughtPanic {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CaughtPanic")
+            .field("message", &crash::panic_message(self.payload.as_ref()))
+            .finish_non_exhaustive()
+    }
+}
+
+impl CaughtPanic {
+    /// A panic `join` returned, with what the hook recorded on this thread
+    /// (none when the panic was another thread's).
+    #[must_use]
+    pub fn from_payload(payload: Box<dyn std::any::Any + Send>) -> Self {
+        Self {
+            payload,
+            recorded: None,
+        }
+    }
+
+    /// Raises the panic again on this thread, with the record of the thread
+    /// it was caught on. Without one, this thread's record is cleared, so a
+    /// stale record of an earlier panic never stands in for this one.
+    pub fn resume(self) -> ! {
+        LAST_PANIC.with(|last| *last.borrow_mut() = self.recorded);
+        std::panic::resume_unwind(self.payload)
+    }
+}
+
+/// Runs `work`, catching its panic with what the panic hook recorded on
+/// this thread, for a worker thread to hand back ([`CaughtPanic`]).
+///
+/// # Errors
+///
+/// The panic of `work`.
+pub fn catch_panic<T>(work: impl FnOnce() -> T) -> Result<T, CaughtPanic> {
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(work)).map_err(|payload| CaughtPanic {
+        payload,
+        recorded: LAST_PANIC.with(|last| last.borrow_mut().take()),
+    })
 }
 
 /// The UTC time now: `2026-11-09T10:11:12Z`, the crash log's stamp
@@ -2383,6 +2440,7 @@ fn run_with(
         globals,
         mode,
         env,
+        cwd: host.cwd.clone().unwrap_or_default(),
         host,
         started,
     };
@@ -2420,11 +2478,14 @@ fn run_with(
         Err(payload) => {
             let internal = LAST_PANIC
                 .with(|last| last.borrow_mut().take())
-                .unwrap_or_else(|| Internal {
-                    kind: "panic".into(),
-                    message: crash::panic_message(payload.as_ref()),
-                    trace: String::new(),
-                });
+                .map_or_else(
+                    || Internal {
+                        kind: "panic".into(),
+                        message: crash::panic_message(payload.as_ref()),
+                        trace: String::new(),
+                    },
+                    Recorded::into_internal,
+                );
             report_internal(&run, &internal, &redactor, debug, out, err)
         }
     }
@@ -2668,7 +2729,11 @@ fn version_only(argv: &[String], version: &str) -> Option<String> {
 /// (`internal`, exit 1). Every path the tree has is answered.
 fn unhandled(path: &str) -> Outcome {
     let message = format!("opentide {path} has no implementation: this is a bug in opentide");
-    Outcome::failed(path, 1, Failure::new(code::INTERNAL, message))
+    Outcome::failed(
+        path,
+        ExitCode::Failure,
+        Failure::new(code::INTERNAL, message),
+    )
 }
 
 /// The phase words followed by the subcommand names clap took after them
@@ -2689,14 +2754,14 @@ mod tests {
     use super::*;
     #[test]
     fn a_reports_detail_and_advice_are_its_note_and_help() {
-        let mut outcome = Outcome::failed("tui", 2, Failure::new("x", "m"));
+        let mut outcome = Outcome::failed("tui", ExitCode::Usage, Failure::new("x", "m"));
         assert_eq!(data_text(&outcome.data, "advice"), None);
         outcome
             .data
-            .push(("advice".into(), crate::json::Json::str("do this")));
+            .insert("advice".into(), crate::json::Json::str("do this"));
         outcome
             .data
-            .push(("detail".into(), crate::json::Json::Int(1)));
+            .insert("detail".into(), crate::json::Json::Int(1));
         assert_eq!(
             data_text(&outcome.data, "advice").as_deref(),
             Some("do this")
@@ -2820,7 +2885,7 @@ mod tests {
         ];
         for ((iso, stamp, clock), want_iso, want_stamp) in table {
             assert_eq!((iso.as_str(), stamp.as_str()), (want_iso, want_stamp));
-            assert_eq!(clock, &want_iso[11..19]);
+            assert_eq!(Some(clock.as_str()), want_iso.get(11..19));
         }
     }
 
@@ -3039,7 +3104,8 @@ mod tests {
                     Ok(0)
                 });
                 assert_eq!(result.stdout, "", "{line}");
-                // `--json` writes its log lines as JSON, as the oracle does.
+                // `--json` writes its log lines as JSON objects, on stderr:
+                // stdout stays empty.
                 let (warned, loaded) = if line.contains("--json") {
                     (
                         "\"event\":\"tenant_targets_failed\",\"level\":\"warning\"",
@@ -3073,6 +3139,67 @@ mod tests {
             });
             assert_eq!(result.stderr.contains("debug: Seen"), shown, "{pairs:?}");
         }
+    }
+
+    /// A panic on a worker thread, handed back with [`catch_panic`] and
+    /// raised again on the command's thread, keeps the worker's location and
+    /// backtrace in the crash report (#1998): the hook's record is the
+    /// worker's own, which `resume_unwind` alone would lose.
+    #[test]
+    fn a_worker_threads_panic_keeps_its_trace_in_the_crash_report() {
+        // The hook records as the binary's does, after printing as the test
+        // harness's does (the other tests' failures stay visible).
+        static HOOKED: std::sync::Once = std::sync::Once::new();
+        HOOKED.call_once(|| {
+            let previous = std::panic::take_hook();
+            std::panic::set_hook(Box::new(move |info| {
+                record_panic(info);
+                previous(info);
+            }));
+        });
+        let crashed = ran(
+            "--debug validate",
+            &[("XDG_STATE_HOME", "relative")],
+            false,
+            |_, _, _| {
+                let caught = std::thread::scope(|scope| {
+                    scope
+                        .spawn(|| catch_panic(|| -> i32 { panic!("worker boom") }))
+                        .join()
+                        .unwrap()
+                });
+                match caught {
+                    Ok(code) => Ok(code),
+                    Err(caught) => caught.resume(),
+                }
+            },
+        );
+        assert_eq!(crashed.code, 1);
+        assert!(
+            crashed.stderr.starts_with("panic: worker boom\n"),
+            "{}",
+            crashed.stderr
+        );
+        assert!(crashed.stderr.contains("src/app.rs:"), "{}", crashed.stderr);
+    }
+
+    /// A panic raised again without a record of its own clears this
+    /// thread's record (#1998): a stale record of an earlier, swallowed
+    /// panic never stands in for it in the crash report.
+    #[test]
+    fn a_panic_resumed_without_a_record_clears_the_stale_one() {
+        LAST_PANIC.with(|last| {
+            *last.borrow_mut() = Some(Recorded {
+                message: "an earlier panic".into(),
+                location: String::new(),
+                backtrace: std::backtrace::Backtrace::disabled(),
+            });
+        });
+        let resumed = std::panic::catch_unwind(|| {
+            CaughtPanic::from_payload(Box::new("another thread's panic")).resume()
+        });
+        assert!(resumed.is_err());
+        assert!(LAST_PANIC.with(|last| last.borrow().is_none()));
     }
 
     #[test]
@@ -3863,11 +3990,11 @@ mod tests {
         let success = ran("mcp start", &[], false, |run, out, err| {
             let outcome = Outcome {
                 command: "mcp start".into(),
-                status: "completed".into(),
+                status: Status::Completed,
                 message: "done".into(),
-                data: Vec::new(),
-                exit_code: 0,
-                summary: Vec::new(),
+                data: Object::new(),
+                exit_code: ExitCode::Success,
+                summary: Object::new(),
                 next_actions: Vec::new(),
                 failure: None,
             };

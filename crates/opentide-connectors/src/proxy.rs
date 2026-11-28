@@ -109,11 +109,13 @@ impl ProxySettings {
     /// unless [`bypassed`](Self::bypassed) sends it direct, so the transport
     /// and `doctor` read `no_proxy` the same way.
     #[cfg(not(target_os = "wasi"))]
-    pub fn proxies(&self) -> Result<Vec<reqwest::Proxy>, String> {
+    pub fn proxies(&self) -> Result<Vec<reqwest::Proxy>, crate::transport::SetupError> {
         let mut parsed = [None, None];
         for (slot, url) in parsed.iter_mut().zip([&self.https, &self.http]) {
             if let Some(url) = url {
-                *slot = Some(parse(url).map_err(|_| invalid(url))?);
+                *slot = Some(
+                    parse(url).map_err(|reason| crate::transport::SetupError::Proxy { reason })?,
+                );
             }
         }
         if parsed.iter().all(Option::is_none) {
@@ -172,15 +174,6 @@ fn split_port(entry: &str) -> Option<(&str, u16)> {
     (!host.is_empty() && !host.contains([':', '/'])).then_some((host, port))
 }
 
-#[cfg(not(target_os = "wasi"))]
-/// The message for a proxy URL that is not one, without its credentials.
-fn invalid(url: &str) -> String {
-    match parse(url) {
-        Ok(parsed) => format!("{} is not a proxy URL", crate::error::origin(&parsed)),
-        Err(reason) => format!("the proxy is not a proxy URL: {reason}"),
-    }
-}
-
 /// A proxy URL as the transport reads it: one written without a scheme
 /// (`proxy.internal:8080`) is an HTTP proxy.
 ///
@@ -201,8 +194,10 @@ pub fn parse(proxy: &str) -> Result<url::Url, String> {
     let (scheme, rest) = proxy.split_once("://").unwrap_or(("http", proxy));
     // The URL standard ends the authority at the first of these; any `@`
     // after it is a user or password that was not percent-encoded.
-    let end = rest.find(['/', '?', '#', '\\']).unwrap_or(rest.len());
-    if rest[end..].contains('@') {
+    if rest
+        .split_once(['/', '?', '#', '\\'])
+        .is_some_and(|(_, after)| after.contains('@'))
+    {
         return Err(
             "an `@` follows a `/`, `?`, `#` or `\\`: if it ends a user or password, \
              percent-encode those characters in it (`%2F`, `%3F`, `%23`, `%5C`, and \
@@ -302,9 +297,18 @@ mod tests {
             #[cfg(not(target_os = "wasi"))]
             {
                 let refused = proxies.proxies().unwrap_err();
+                let text = refused.to_string();
                 assert!(
-                    refused.starts_with("the proxy is not a proxy URL: an `@` follows"),
-                    "{refused}"
+                    matches!(
+                        &refused,
+                        crate::transport::SetupError::Proxy { reason }
+                            if reason.starts_with("an `@` follows")
+                    ),
+                    "{refused:?}"
+                );
+                assert!(
+                    text.starts_with("the proxy is not a proxy URL: an `@` follows"),
+                    "{text}"
                 );
             }
         }
@@ -382,5 +386,12 @@ mod tests {
         assert!(!direct("https://splunk.example.com/x"));
         let handed = url::Url::parse("https://10.1.2.3/x").map(|url| proxies.proxy_for(&url));
         assert_eq!(handed, Ok(None));
+    }
+
+    #[test]
+    fn an_at_after_the_authority_is_refused_in_multi_byte_text() {
+        assert!(parse("http://é😀/a@b").is_err());
+        assert!(parse("é😀?@").is_err());
+        assert!(parse("http://user@proxy.example:8080/é😀").is_ok());
     }
 }

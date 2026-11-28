@@ -181,6 +181,59 @@ fn the_catalog_holds_a_dangling_ref_with_its_range_and_follows_the_edit_that_fix
     assert_eq!(other["result"], json!({ "roots": [] }));
 }
 
+/// #2002: a keystroke in an open object digests that object alone to decide
+/// whether `opentide/catalogChanged` goes out, not every object on disk; a
+/// file on disk is digested once.
+#[test]
+fn a_keystroke_digests_the_object_it_changed_alone() {
+    const RULES: usize = 30;
+    let scratch = workspace("catalog-digest");
+    let root = &scratch.0;
+    for n in 0..RULES {
+        let text = rule(DANGLING)
+            .replace(
+                "00000000-0000-4000-8003-000000000001",
+                &format!("00000000-0000-4000-8003-0000000001{n:02}"),
+            )
+            .replace("name: Sentinel KQL Rule", &format!("name: Rule é😀 {n}"));
+        std::fs::write(root.join(format!("objects/rules/rule-{n}.yaml")), text).unwrap();
+    }
+    let rule_uri = file_uri(&root.join("objects/rules/rule-1.0.yaml"));
+    let mut lsp = start(json!({ "capabilities": {}, "rootUri": file_uri(root) }));
+    let digested = |lsp: &mut Lsp| {
+        lsp.request("opentide/__stats", Value::Null)["result"]["digestedObjects"]
+            .as_u64()
+            .unwrap()
+    };
+    let catalog = lsp.request("opentide/catalog", json!({}))["result"].clone();
+    let objects = catalog["roots"][0]["objects"].as_array().unwrap().len();
+    assert_eq!(objects, RULES + 2, "{catalog}");
+    // Every object, once.
+    assert_eq!(digested(&mut lsp), (RULES + 2) as u64);
+    lsp.notify(
+        "textDocument/didOpen",
+        json!({ "textDocument": { "uri": rule_uri, "languageId": "opentide-yaml", "version": 1, "text": rule(DANGLING) } }),
+    );
+    settle(&mut lsp);
+    let before = digested(&mut lsp);
+    // The open rule is digested from its text; no file on disk again.
+    assert_eq!(before, (RULES + 3) as u64);
+
+    // A keystroke that changes nothing the catalog says, then one that does.
+    did_change(
+        &mut lsp,
+        &rule_uri,
+        &rule(DANGLING).replace("Minimal valid", "A minimal é😀"),
+    );
+    let seen = settle(&mut lsp);
+    assert!(catalog_changes(&seen).is_empty(), "{seen:?}");
+    assert_eq!(digested(&mut lsp), before + 1);
+    did_change(&mut lsp, &rule_uri, &rule(MODEL));
+    let seen = settle(&mut lsp);
+    assert_eq!(catalog_changes(&seen).len(), 1, "{seen:?}");
+    assert_eq!(digested(&mut lsp), before + 2);
+}
+
 #[test]
 fn a_file_deleted_on_disk_is_announced_to_a_client_that_asked_for_the_catalog() {
     let scratch = workspace("catalog-watch");
@@ -516,4 +569,161 @@ fn a_catalog_request_without_params_or_with_null_asks_for_every_root() {
     let changes = catalog_changes(&seen);
     assert_eq!(changes.len(), 1, "{seen:?}");
     assert_eq!(changes[0]["params"]["root"], file_uri(root).as_str());
+}
+
+/// #2002: a keystroke in an open object leaves the part of the index the
+/// files on disk make as it was: no entry of a file on disk is gathered
+/// again, until the open documents or the disk change.
+#[test]
+fn a_keystroke_gathers_no_disk_entry_again() {
+    const RULES: usize = 30;
+    let scratch = workspace("catalog-base");
+    let root = &scratch.0;
+    for n in 0..RULES {
+        let text = rule(DANGLING)
+            .replace(
+                "00000000-0000-4000-8003-000000000001",
+                &format!("00000000-0000-4000-8003-0000000001{n:02}"),
+            )
+            .replace("name: Sentinel KQL Rule", &format!("name: Rule é😀 {n}"));
+        std::fs::write(root.join(format!("objects/rules/rule-{n}.yaml")), text).unwrap();
+    }
+    let rule_uri = file_uri(&root.join("objects/rules/rule-1.0.yaml"));
+    let mut lsp = start(json!({ "capabilities": {}, "rootUri": file_uri(root) }));
+    let gathered = |lsp: &mut Lsp| {
+        lsp.request("opentide/__stats", Value::Null)["result"]["baseObjects"]
+            .as_u64()
+            .unwrap()
+    };
+    let objects = |lsp: &mut Lsp| {
+        lsp.request("opentide/catalog", json!({}))["result"]["roots"][0]["objects"]
+            .as_array()
+            .unwrap()
+            .len()
+    };
+    assert_eq!(objects(&mut lsp), RULES + 2);
+    assert_eq!(gathered(&mut lsp), (RULES + 2) as u64);
+    lsp.notify(
+        "textDocument/didOpen",
+        json!({ "textDocument": { "uri": rule_uri, "languageId": "opentide-yaml", "version": 1, "text": rule(DANGLING) } }),
+    );
+    settle(&mut lsp);
+    // Opening a file on disk leaves it out of the disk's part, gathered
+    // again once.
+    assert_eq!(objects(&mut lsp), RULES + 2);
+    let before = gathered(&mut lsp);
+    assert_eq!(before, (2 * RULES + 3) as u64);
+    for text in [
+        rule(DANGLING).replace("Minimal valid", "A minimal é😀"),
+        rule(MODEL),
+    ] {
+        did_change(&mut lsp, &rule_uri, &text);
+        settle(&mut lsp);
+        assert_eq!(objects(&mut lsp), RULES + 2);
+    }
+    assert_eq!(gathered(&mut lsp), before);
+}
+
+/// The bytes of the server's reply to `opentide/catalog` for every root,
+/// asked with request id `id`: two servers asked with the same id answer
+/// the same frame for the same index.
+fn catalog_frame(lsp: &mut Lsp, id: i64) -> Vec<u8> {
+    use std::io::{BufRead, Read};
+    lsp.write(&json!({ "jsonrpc": "2.0", "id": id, "method": "opentide/catalog", "params": {} }));
+    loop {
+        let mut length = None;
+        loop {
+            let mut header = String::new();
+            lsp.reader.read_line(&mut header).unwrap();
+            let header = header.trim_end();
+            if header.is_empty() {
+                break;
+            }
+            if let Some(value) = header.strip_prefix("Content-Length:") {
+                length = Some(value.trim().parse::<usize>().unwrap());
+            }
+        }
+        let mut frame = vec![0u8; length.expect("Content-Length")];
+        lsp.reader.read_exact(&mut frame).unwrap();
+        let message: Value = serde_json::from_slice(&frame).unwrap();
+        if message["id"] == id && message.get("method").is_none() {
+            return frame;
+        }
+    }
+}
+
+/// The index a server keeps across keystrokes (its disk entries shared, the
+/// open document's entry and digest made again, #2002) answers
+/// `opentide/catalog` byte for byte as a server that indexes the same
+/// workspace from scratch: one with the edited text open, and one with it
+/// on disk and nothing open.
+#[test]
+fn an_index_kept_across_keystrokes_answers_the_catalog_a_fresh_index_does() {
+    const RULES: usize = 4;
+    let scratch = workspace("catalog-differential");
+    let root = &scratch.0;
+    for n in 0..RULES {
+        let text = rule(DANGLING)
+            .replace(
+                "00000000-0000-4000-8003-000000000001",
+                &format!("00000000-0000-4000-8003-0000000002{n:02}"),
+            )
+            .replace("name: Sentinel KQL Rule", &format!("name: Rule é😀 {n}"));
+        std::fs::write(root.join(format!("objects/rules/rule-{n}.yaml")), text).unwrap();
+    }
+    let path = root.join("objects/rules/rule-1.0.yaml");
+    let rule_uri = file_uri(&path);
+    // With a file watcher, the index is kept across batches.
+    let params = json!({
+        "capabilities": { "workspace": { "didChangeWatchedFiles": { "dynamicRegistration": true } } },
+        "rootUri": file_uri(root),
+    });
+    let open = |lsp: &mut Lsp, text: &str| {
+        lsp.notify(
+            "textDocument/didOpen",
+            json!({ "textDocument": { "uri": rule_uri, "languageId": "opentide-yaml", "version": 1, "text": text } }),
+        );
+    };
+    let mut kept = start(params.clone());
+    // The index is built once, before the document opens.
+    catalog_frame(&mut kept, 9000);
+    open(&mut kept, &rule(DANGLING));
+    let steps = [
+        rule(DANGLING).replace("Minimal valid", "A minimal é😀"),
+        // The ref resolves, then the name changes, then the object goes.
+        rule(MODEL),
+        rule(MODEL).replace("name: Sentinel KQL Rule", "name: Renamed 😀"),
+        String::new(),
+        "name: [".to_string(),
+        rule(DANGLING),
+    ];
+    for (step, text) in steps.iter().enumerate() {
+        did_change(&mut kept, &rule_uri, text);
+        settle(&mut kept);
+        let id = 9001 + i64::try_from(step).unwrap();
+        let incremental = catalog_frame(&mut kept, id);
+
+        let mut fresh = start(params.clone());
+        open(&mut fresh, text);
+        let opened = catalog_frame(&mut fresh, id);
+        assert_eq!(
+            String::from_utf8_lossy(&incremental),
+            String::from_utf8_lossy(&opened),
+            "step {step}: the kept index and a fresh one with the document open"
+        );
+        drop(fresh);
+    }
+    // Closed, the document is its file on disk again.
+    kept.notify(
+        "textDocument/didClose",
+        json!({ "textDocument": { "uri": rule_uri } }),
+    );
+    settle(&mut kept);
+    let closed = catalog_frame(&mut kept, 9100);
+    let mut fresh = start(params);
+    assert_eq!(
+        String::from_utf8_lossy(&closed),
+        String::from_utf8_lossy(&catalog_frame(&mut fresh, 9100)),
+        "the kept index after didClose and a fresh one"
+    );
 }

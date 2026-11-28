@@ -1,7 +1,6 @@
-//! The MISP Event of one Tide object (`sharing/payload.py`) and the galaxy
-//! cluster tags it carries (`sharing/galaxy.py`).
+//! The MISP Event of one Tide object and the galaxy cluster tags it carries.
 //!
-//! The event is plain JSON built key by key in the oracle's order. Galaxy
+//! The event is plain JSON built key by key, in a fixed order. Galaxy
 //! tags come from a read-only lookup of the instance's clusters; a preview
 //! passes none.
 
@@ -13,7 +12,6 @@ use opentide_connectors::misp::{
     GALAXY_ACTOR, GALAXY_ATTACK, GalaxyCluster, Kind, Misp, MispCallError, OPENTIDE_TEMPLATE_UUID,
 };
 use opentide_schema::node::Value;
-use regex::Regex;
 
 use super::document::TideDocument;
 
@@ -33,20 +31,15 @@ pub const REQUIRED_RELATIONS: [&str; 6] = [
 /// The longest `info` MISP takes.
 const INFO_LIMIT: usize = 255;
 
-/// A canonical UUID (`CANONICAL_UUID_PATTERN`).
-#[expect(
-    clippy::expect_used,
-    reason = "a literal pattern, compiled once; it cannot fail"
-)]
-pub fn uuid_pattern() -> &'static Regex {
-    static PATTERN: OnceLock<Regex> = OnceLock::new();
-    PATTERN.get_or_init(|| {
-        Regex::new(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
-            .expect("a valid pattern")
-    })
+/// Whether `text` is a UUID in its canonical form, lower case
+/// (`CANONICAL_UUID_PATTERN`, [`opentide_core::ids::is_canonical`]): what an
+/// event carries as it is written, so an upper-case relation is refused
+/// rather than sent.
+pub fn is_canonical_uuid(text: &str) -> bool {
+    opentide_core::ids::is_canonical(text)
 }
 
-/// A vocabulary's `misp` tags by name (`_vocab_misp`).
+/// A vocabulary's `misp` tags by name.
 fn vocab_misp(field: &str) -> &'static BTreeMap<String, String> {
     static TLP: OnceLock<BTreeMap<String, String>> = OnceLock::new();
     static PAP: OnceLock<BTreeMap<String, String>> = OnceLock::new();
@@ -223,7 +216,7 @@ pub fn build(document: &TideDocument, cluster_tags: &[String]) -> Built {
     }
 }
 
-/// `metadata.created` as `YYYY-MM-DD` (`_created`).
+/// `metadata.created` as `YYYY-MM-DD`.
 fn created(value: Option<&Json>) -> Option<String> {
     let text = value?.as_str()?.trim();
     let head = text.get(..10)?;
@@ -233,7 +226,7 @@ fn created(value: Option<&Json>) -> Option<String> {
     (bytes.get(4) == Some(&b'-') && bytes.get(7) == Some(&b'-')).then(|| date.to_string())
 }
 
-/// `metadata.version` as text (`_version`).
+/// `metadata.version` as text.
 fn version(value: Option<&Json>) -> Option<String> {
     match value? {
         Json::Int(number) if *number >= 0 => Some(number.to_string()),
@@ -245,15 +238,14 @@ fn version(value: Option<&Json>) -> Option<String> {
     }
 }
 
-/// The objects `document` relates to (`_relations`).
+/// The objects `document` relates to.
 fn relations(document: &TideDocument, family: &str) -> Result<Vec<String>, &'static str> {
-    let pattern = uuid_pattern();
     match family {
         "threat" => Ok(Vec::new()),
         "rule" => match document.body.get("detection_model") {
             None | Some(Json::Null) => Ok(Vec::new()),
             Some(Json::Str(text)) if text.is_empty() => Ok(Vec::new()),
-            Some(Json::Str(text)) if pattern.is_match(text) => Ok(vec![text.clone()]),
+            Some(Json::Str(text)) if is_canonical_uuid(text) => Ok(vec![text.clone()]),
             Some(_) => Err("relation_uuid"),
         },
         _ => {
@@ -273,7 +265,7 @@ fn relations(document: &TideDocument, family: &str) -> Result<Vec<String>, &'sta
                 match item {
                     Json::Null => {}
                     Json::Str(text) if text.is_empty() => {}
-                    Json::Str(text) if pattern.is_match(text) => {
+                    Json::Str(text) if is_canonical_uuid(text) => {
                         if !found.contains(text) {
                             found.push(text.clone());
                         }
@@ -316,7 +308,7 @@ fn techniques(document: &TideDocument, family: &str) -> Vec<String> {
     found
 }
 
-/// The identifiers that need a galaxy lookup (`_cluster_sources`).
+/// The identifiers that need a galaxy lookup.
 fn cluster_sources(document: &TideDocument, family: &str) -> Vec<String> {
     let mut sources: Vec<String> = techniques(document, family)
         .into_iter()
@@ -340,7 +332,7 @@ fn cluster_sources(document: &TideDocument, family: &str) -> Vec<String> {
     sources
 }
 
-/// MISP's threat level of an object (`_threat_level`).
+/// MISP's threat level of an object.
 fn threat_level(family: &str, document: &TideDocument) -> i64 {
     const CRITICALITY: [(&str, i64); 7] = [
         ("Emergency", 1),
@@ -452,7 +444,7 @@ pub fn resolve_clusters(
     })
 }
 
-/// `_same`: equal once stripped and case-folded.
+/// Equal once stripped and case-folded.
 fn same(left: &str, right: &str) -> bool {
     left.trim().to_lowercase() == right.trim().to_lowercase()
 }
@@ -528,7 +520,7 @@ pub fn other(reason: &str) -> MispCallError {
     MispCallError::new(Kind::Other, reason, None)
 }
 
-/// An event's `Object`s merged for `events/edit` (`_edit_body`): the
+/// An event's `Object`s merged for `events/edit`: the
 /// instance's own objects kept, this object's replaced.
 pub fn is_ours(object: &Object, tide_uuid: &str) -> bool {
     let name = object.get("name").and_then(Json::as_str);

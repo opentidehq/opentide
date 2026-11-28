@@ -195,11 +195,13 @@ fn open_call(before: &str) -> Option<(String, &str)> {
         }
     }
     let open = *stack.last()?;
-    let name_start = opentide_core::word_start(&before[..open], |c| {
-        c.is_ascii_alphanumeric() || c == '_' || c == ':'
-    });
-    let name = &before[name_start..open];
-    (!name.is_empty()).then(|| (name.to_string(), &before[open + 1..]))
+    // `open` is a `(` (from `char_indices`), and the word before it starts on
+    // a char.
+    let head = crate::cut(before, 0, open);
+    let name_start =
+        opentide_core::word_start(head, |c| c.is_ascii_alphanumeric() || c == '_' || c == ':');
+    let name = crate::cut(head, name_start, head.len());
+    (!name.is_empty()).then(|| (name.to_string(), crate::cut(before, open + 1, before.len())))
 }
 
 /// The characters of `text` outside strings and comments, with their byte
@@ -286,8 +288,9 @@ fn top_level_arguments(args: &str) -> Vec<String> {
 fn argument_name(arg: &str) -> Option<&str> {
     let arg = arg.trim_start();
     let end = arg.find(|c: char| !(c.is_alphanumeric() || c == '_'))?;
-    let rest = arg[end..].trim_start();
-    (end > 0 && rest.starts_with('=') && !rest.starts_with("==")).then(|| &arg[..end])
+    let (name, rest) = arg.split_at_checked(end)?;
+    let rest = rest.trim_start();
+    (!name.is_empty() && rest.starts_with('=') && !rest.starts_with("==")).then_some(name)
 }
 
 /// Signature help at byte `offset` of `source`.
@@ -373,6 +376,14 @@ fn event_items(catalog: &Catalog) -> Vec<CompletionItem> {
         .collect()
 }
 
+/// The name before an `=` or `!=` (`lhs` ends before it), unquoted.
+fn name_before(lhs: &str) -> &str {
+    let lhs = lhs.trim_end();
+    // `word_start` starts on a char.
+    let start = opentide_core::word_start(lhs, |c| word_char(c) || c == '"');
+    unquote(crate::cut(lhs, start, lhs.len()))
+}
+
 /// Completion at byte `offset` of `source`.
 pub fn completions(source: &str, offset: usize) -> Vec<CompletionItem> {
     let Some(before) = source.get(..offset.min(source.len())) else {
@@ -380,12 +391,11 @@ pub fn completions(source: &str, offset: usize) -> Vec<CompletionItem> {
     };
     let catalog = Catalog::cached();
     let word_start = opentide_core::word_start(before, word_char);
-    let head = before[..word_start].trim_end();
+    let head = crate::cut(before, 0, word_start).trim_end();
 
     // `#event_simpleName!=`: events, as after `=`.
     if let Some(lhs) = head.strip_suffix("!=") {
-        let lhs = lhs.trim_end();
-        let name = unquote(&lhs[opentide_core::word_start(lhs, |c| word_char(c) || c == '"')..]);
+        let name = name_before(lhs);
         if name == "#event_simpleName" || name == "event_simpleName" {
             return event_items(catalog);
         }
@@ -395,9 +405,7 @@ pub fn completions(source: &str, offset: usize) -> Vec<CompletionItem> {
         .strip_suffix('=')
         .filter(|h| !h.ends_with(['!', '<', '>', '=', ':']))
     {
-        let lhs = lhs.trim_end();
-        let name = &lhs[opentide_core::word_start(lhs, |c| word_char(c) || c == '"')..];
-        let name = unquote(name);
+        let name = name_before(lhs);
         if name == "#event_simpleName" || name == "event_simpleName" {
             return event_items(catalog);
         }

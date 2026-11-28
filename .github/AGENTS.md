@@ -71,7 +71,7 @@ closed). Then:
   `packages/` or `crates/opentide-wasm/` changes, `ts_packages`), `textmate` (`highlights/`,
   `editors/`),
   `gitlab-ci-lint` (opentide-cli's CI renderer and `setup` commands, the linters' installer, its
-  test), `facade` (`crates/opentide/`: the public API), `deny` (`Cargo.lock`, `deny.toml`, a
+  test), `facade` (`crates/opentide/` and the sources, `Cargo.toml` and `build.rs` of the crates it re-exports from: the public API), `deny` (`Cargo.lock`, `deny.toml`, a
   manifest, `vendor/`, `fuzz/`, `publishing/`), `docs` (`docs/`, the root guides), `website` (`docs/`),
   `throughput` (any crate opentide-analysis is built from, the throughput bench,
   `tests/bench/instructions.toml`, `xtask throughput`);
@@ -96,7 +96,7 @@ checked before the next pull request builds on it.
 | `gitlab-ci-lint` | The pipeline `opentide setup ci gitlab` renders, linted (glint, gitlab-ci-verify) |
 | `docs` | `scripts/validate-docs.sh` (the site builds in opentidehq/website) and the docs tests that need no wheel (`tests/test_docs` but `test_docs_commands_golden.py` and `test_sdk_snippets.py`, the Python job's) |
 | `website` | **The website sync guard**: opentidehq/website's `main` with this run's own `docs/` at `vendor/opentide` (a sparse git checkout, whose `HEAD` the site stamps; this tree, not the branch the website's `.gitmodules` names, so the check holds on `integration/unified-core` too) and opentidehq/specifications' `main` at `vendor/specifications`; then the site's `pnpm install --frozen-lockfile` (pnpm by `pnpm/action-setup` from the website's `packageManager`, its store cached by `setup-node` on the website's lockfile) and **`pnpm check:upstream`**, the one command the site's hourly "Sync docs and deploy" uses to decide whether it takes a tree. The checks it runs are listed in the website's `AGENTS.md` ("Upstream checks") and nowhere here: the job follows when the website changes them, and `tests/test_ci` holds that it lists none. A tree the site would hold back fails the pull request instead of stopping the site's sync. When `docs/` changes (`website` in `changes.py`'s `CHECKS`) and on every push and nightly. Run it locally: check out the website, put this checkout's `docs/` (a git checkout) at `vendor/opentide` and the specifications at `vendor/specifications`, then `pnpm install` and `pnpm check:upstream` (`--report <file.json>` names the check that failed). opentidehq/specifications has the same guard (`website-sync.yml`) |
-| `facade` | The `opentide` facade with every feature: tests and doctests, rustdoc as docs.rs builds it, `cargo semver-checks` (0.51.0) against the first parent |
+| `facade-docs`, `facade-features`, `facade-tests`, `facade-semver`, `facade-reexports` | The `opentide` facade when its public API changes (`facade`), as five parallel jobs on the `full-set-Linux` compiler cache (one job ran them back to back for 20+ minutes): `cargo doc` with every feature as docs.rs builds it; the `cli` and `queries` features on their own; the default features' doctests and the build without the query engines; `cargo semver-checks` (0.51.0) on the facade against the first parent; and, through `scripts/ci/facade_semver.py`, on what it re-exports from the crates that define it (#1911), and on an item that moved between them at its facade path (#1985). The two semver jobs build the base and the change at once, each rustdoc JSON once, and keep the baseline's rustdoc JSON in `actions/cache` (`facade-semver-rustdoc-…` and `facade-reexports-rustdoc-…`, keyed on the toolchain and the base commit): a push to a base branch saves its own commit's, a pull request restores its base's and builds only on a miss (cargo-semver-checks runs on the two documents, built with its own flags). The gate needs each of the five |
 | `node` | `@opentide/opentide` (`bindings/node`): the napi-rs addon for linux-x64-gnu, the generated `index.js` and `index.d.ts` against the committed ones, and `npm test`; it compiles its own addon, so it starts beside `build`. Node's parity with the Python and Rust SDKs, byte for byte, is the conformance suite's (nightly and release pull requests) |
 | `wasm` | Every WebAssembly artifact, one compiler cache (`wasm`): `build-wasm.sh browser wasi cli` (the browser module and the WASI language server, pure Rust, smoke-tested; wasi-sdk only for the command line's C, `ring`; the WASI command line the VS Code extension runs, its size held to the .vsix's 15 MiB), tenant commands through `@opentide/wasi-host` in the WASI module, the npm packs; when `packages/` changes (`ts_packages`) and on every push and nightly also the native language server and command line and the TypeScript client against the native, worker and WASI servers. The WebAssembly targets' clippy is `engine-lint-variants`'s |
 | `throughput` | `cargo xtask throughput --check`: each language's parse and full analysis, counted with callgrind (valgrind from apt) on the bench profile in the bench binary's own instructions (within 3%) and its allocator calls (within 2), held to `tests/bench/instructions.toml` (#1571, ADR 0014, `docs/engine/THROUGHPUT.md`). When a crate the analysis is built from is affected, or the bench, the budgets or the command change; every push. Uploads the callgrind profiles when it fails. Sccache family `throughput`. Counts the bench binary's own code (glibc and the loader left out). Pinned to `ubuntu-24.04`, the image its budgets are recorded on |
@@ -199,8 +199,8 @@ restore. The families: `build` (the tests' build), `native` (the extension), `st
 from a push to each base branch and from Run workflow (a pull request reads its base branch's
 caches and `development`'s), and from a pull request only when it restored no copy of the family
 at all (`cache-matched-key` empty: its base has none yet, after a new family or a toolchain bump),
-so its next push is warm; `wasm` (the `wasm` job's wasm32 compiles) under the same rule; `full-set-Linux` (`conformance` saves it, by the nightly; `node`,
-`facade` and the nightly's Linux Rust jobs restore it). The release pipeline restores none: it
+so its next push is warm; `wasm` (the `wasm` job's wasm32 compiles) under the same rule; `facade-semver-Linux` and `facade-reexports-Linux` (the two jobs that build rustdoc JSON: `cargo rustdoc --all-features` builds each package's dependencies as metadata, 5 of the 9-11 minutes, and the jobs print the statistics so that a miss shows; `SCCACHE_BASEDIRS` names the change's and the baseline's directories); `full-set-Linux` (`conformance` saves it, by the nightly; `node`,
+the other `facade-*` jobs and the nightly's Linux Rust jobs restore it). The release pipeline restores none: it
 builds as a release does, and its critical path is macOS and Windows anyway. **Linux only**: macOS and Windows build cold (their
 caches crowded the Linux families out of the 10 GB GitHub keeps). **A pull request saves no
 cache** but that bootstrap copy. The one rust-cache left: `fuzz` (engine-fuzz.yml, saved by one cell of the scheduled run), plus coverage.yml's and
@@ -279,7 +279,8 @@ merging** → add `PR gate`, remove the others → **Save changes**.
   Its issue job is the only job in any workflow with `issues: write`, and it never runs on a pull
   request (`tests/test_ci/test_workflows.py`).
 - [`oracle.yml`](workflows/oracle.yml) checks the query parsers against Kusto.Language, Splunk,
-  Elasticsearch, Lucene, Kibana and Falco (`OPENTIDE_ORACLE_REQUIRED`), the vendors' own parsers
+  Elasticsearch, Lucene, Kibana, Falco, YARA-X and VRL's Datadog search grammar
+  (`OPENTIDE_ORACLE_REQUIRED`), the vendors' own parsers
   (not the Python oracle), in the nightly (nightly.yml calls it, with the Carbon Black Cloud tenant)
   and on demand: every reference on each run. Its network-heavy references keep it out of ci.yml. The pinned Elastic
   references (Lucene's jars from Maven Central, the EQL and kuery grammars) are cached under
@@ -302,7 +303,8 @@ Where each of language-server's workflow jobs went (or why it was dropped):
 
 - [`coverage.yml`](workflows/coverage.yml), in the nightly (nightly.yml calls it) and on demand: job **Rust coverage gates**. One cargo-llvm-cov build measured by the workspace's Rust tests and by the whole Python
   suite, which drives `opentide._native`; `cargo xtask coverage gate` checks each crate against
-  `xtask/coverage.toml`. Read-only.
+  `xtask/coverage.toml`. Read-only. Its first step frees the runner's disk (the image's .NET, Android,
+  GHC and CodeQL toolchains): the instrumented target holds three dependency trees (#1896).
 - The parity dashboard (`parity.yml`) was retired with the Python implementation (UC-6.2, #841): every command runs on Rust.
 
 ## Releases

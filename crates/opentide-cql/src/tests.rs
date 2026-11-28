@@ -12,7 +12,7 @@ fn codes_of(source: &str) -> Vec<String> {
 }
 
 fn codes_in_rule(source: &str) -> Vec<String> {
-    analyze_with(source, &Context::CORRELATION_RULE)
+    analyze_with(source, &Profile::CORRELATION_RULE)
         .diagnostics
         .into_iter()
         .map(|d| d.code)
@@ -302,7 +302,7 @@ fn deep_nesting_stays_fast_in_every_check() {
         " c=1)".repeat(990)
     );
     for q in [&aggregates, &cases, &linked] {
-        for ctx in [Context::default(), Context::CORRELATION_RULE] {
+        for ctx in [Profile::default(), Profile::CORRELATION_RULE] {
             let t = std::time::Instant::now();
             let r = analyze_with(q, &ctx);
             assert!(r.diagnostics.is_empty(), "{:?}", r.diagnostics);
@@ -310,7 +310,7 @@ fn deep_nesting_stays_fast_in_every_check() {
                 t.elapsed() < std::time::Duration::from_secs(1),
                 "{:?} for {}",
                 t.elapsed(),
-                &q[..40]
+                q.get(..40).unwrap()
             );
         }
     }
@@ -549,7 +549,7 @@ fn a_subquery_missing_its_brace_says_so() {
     assert_eq!(d[0].code, codes::CQL_PARSE_ERROR, "{d:#?}");
     assert!(d[0].message.contains("missing `}`"), "{d:#?}");
     let q = "correlate(A: { a=1 | x <=> B.x , B: { b=1 | y <=> A.y }, within=5m)";
-    let d = analyze_with(q, &Context::CORRELATION_RULE).diagnostics;
+    let d = analyze_with(q, &Profile::CORRELATION_RULE).diagnostics;
     assert!(d[0].message.contains("missing `}`"), "{d:#?}");
     assert!(
         d.iter()
@@ -601,4 +601,52 @@ fn parse_errors_name_the_fault() {
         let d = analyze(q).diagnostics;
         assert_eq!(d[0].message, message, "{q}: {d:#?}");
     }
+}
+
+/// Queries with multi-byte text in every place the crate cuts: calls and
+/// their named arguments, `=`/`!=` values, numbers and durations, a parse
+/// error after U+00A0. The ranges are checked in debug builds (`cut`).
+const MULTI_BYTE: &[&str] = &[
+    "#event_simpleName=é😀 | é😀 != \"😀\" | groupBy([é😀], function=count(é, as=😀)) | 😀é=5é😀 | x > 1.5é",
+    "\"é😀\"!=😀 | head(é😀=1, limit=😀 | case { é😀=1 | x := \"😀\"; * } | é\u{a0}😀 | regex(\"(?<é😀>.*)\", field=é",
+    "// é😀\nFileName = /é😀/i | test(é😀 > 3😀) | $é😀(arg=é) | match(file=\"é😀.csv\", field=😀) | é😀(",
+];
+
+#[test]
+fn multi_byte_text_is_read_whole_everywhere() {
+    for query in MULTI_BYTE {
+        for profile in [Profile::default(), Profile::CORRELATION_RULE] {
+            let result = analyze_with(query, &profile);
+            for token in &result.tokens {
+                assert!(
+                    query.get(token.span.start..token.span.end).is_some(),
+                    "{query}"
+                );
+            }
+        }
+        for (offset, _) in query.char_indices().chain([(query.len(), ' ')]) {
+            let _ = hover(query, offset);
+            let _ = completions(query, offset);
+            let _ = signature_help(query, offset);
+            let _ = analyze(query.get(..offset).unwrap());
+        }
+    }
+}
+
+#[test]
+fn helpers_read_multi_byte_text() {
+    assert_eq!(cut("é😀x", 0, 2), "é");
+    assert_eq!(cut("é😀x", 2, 7), "😀x");
+    let call = "groupBy([é😀], function=count(é😀, as=😀";
+    let help = signature_help(call, call.len());
+    assert!(help.is_some());
+    let messages: Vec<String> = analyze("x = é\u{a0}😀")
+        .diagnostics
+        .into_iter()
+        .map(|d| d.message)
+        .collect();
+    assert!(
+        messages.iter().any(|m| m.contains("U+00A0")),
+        "{messages:?}"
+    );
 }

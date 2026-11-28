@@ -118,9 +118,15 @@ opentide generate docs index
 
 ### Changed-object baseline
 
-`--changed` and `generate inflight` resolve the same baseline, in order: the current branch's upstream, then `origin/development`, `origin/main`, `origin/master`, then the local `development`, `main`, `master`. The current branch is never its own baseline. A single-branch repository with no upstream falls back to `HEAD`, so uncommitted and untracked object files still count as changed.
+`--changed` and `generate inflight` resolve the same baseline, in order: the current branch's upstream, then `origin/development`, `origin/main`, `origin/master`, then the local `development`, `main`, `master`. The current branch is never its own baseline. A full single-branch clone with no other baseline falls back to `HEAD`, so uncommitted and untracked object files still count as changed.
 
-Without a git worktree or without a first commit, `generate docs --changed` fails with a structured result (`status: failed`, exit `1`) instead of raising a `CalledProcessError`; `generate inflight` logs a warning and writes no shards.
+`generate docs --changed` fails with a structured result (`status: failed`, exit `1`, an `error` that starts `--changed could not read the git baseline:`) rather than guess which files changed when:
+
+- there is no git worktree, or no first commit;
+- the clone is shallow and does not hold the merge base with the baseline, or holds no ref it can tell is the default branch (`origin/HEAD`, `development`, `main` or `master`, or the branch's upstream when it tracks another branch; `actions/checkout` fetches one commit of one ref by default). The message says to check out the full history: `fetch-depth: 0` on GitHub Actions, `GIT_DEPTH: "0"` on GitLab, `fetchDepth: 0` on Azure Pipelines;
+- git cannot read a baseline commit, tree or file, or an object folder or file in the work tree cannot be read.
+
+`generate inflight` logs a warning and writes no shards instead.
 
 Subcommands `rules`, `objectives`, `threats`, and `index` accept the same `--output` and `--flavor` flags.
 
@@ -314,6 +320,8 @@ opentide generate inflight prune
 
 The pipelines from `opentide setup ci` run this on every pull request and commit only `.opentide/inflight/` to the default branch, from a worktree of that branch, never the pull request itself.
 
+Outside CI, the changed objects are those of the work tree against the [baseline](#changed-object-baseline) `generate docs --changed` reads, untracked files included, read without the `git` program. Where `generate docs --changed` fails for want of a baseline, `generate inflight` writes no shard and logs `inflight_no_git_baseline` with the reason.
+
 `generate inflight` checks each changed object as `generate docs` reads it. An object that fails its model check (a typo'd date such as `created: 20256-11-06`) fails the run with exit `1`, naming the file, the object's UUID and the first error, and no shard is written. In the pipelines this is the pull or merge request's own `inflight_shards` job, so the invalid object stays out of the default branch's previews.
 
 `generate docs` and `generate explorer` also check every shard they read. A preview is left out when its object fails its model check, when a reference it makes (a rule's `detection_model`, an objective's `threats`) does not resolve once the previews are laid over the object files, or when it drops a signal a committed rule uses. A preview that only resolved through one left out is left out too. Each is reported as a warning (with `--json`, in `warnings`) naming the shard file, the object's UUID and name, its pull or merge request, and the first error:
@@ -338,7 +346,7 @@ opentide generate extract elastic --space staging --include-prebuilt
 Configure tenant credentials under `.opentide/configurations/platforms/` before running.
 
 - Sentinel and Defender imports never overwrite one another: when two rules share a display name, the second file name gets the first eight characters of its UUID.
-- A Defender custom detection is imported as a `microsoft_defender` block ([`platform::microsoft_defender::1.0`](/docs/specifications/specs/platforms/microsoft-defender-1.0/)) from the Graph beta API, and its rule id becomes the rule's `metadata.uuid`, which deploy addresses; no deployment state is written. A rule found in several tenants (one rule id) is imported once, with every one of those tenants under `tenants`. When the tenants' copies differ, the first tenant's is imported and `defender_import_tenants_differ` names the others. A rule id that is not a UUID gets a new one with `defender_import_new_uuid`: deploying that file creates a new rule, so disable or delete the original in the portal.
+- A Defender custom detection is imported as a `microsoft_defender` block ([`platform::microsoft_defender::1.0`](/docs/specifications/specs/platforms/microsoft-defender-1.0/)) from the Graph beta API. A rule id deploy gave, `opentide-<uuid>`, becomes the rule's `metadata.uuid` (the part after `opentide-`), so deploying the file addresses the same rule; no deployment state is written. A rule found in several tenants (one rule id) is imported once, with every one of those tenants under `tenants`. When the tenants' copies differ, the first tenant's is imported and `defender_import_tenants_differ` names the others. Any other rule id is reported with `defender_import_new_uuid`, because deploying the file creates a new rule, `opentide-<uuid>`: a bare UUID (a rule opentide 1.0.0 deployed) is kept as the file's `metadata.uuid`, and an id that is not a UUID gets a new one. Before that deploy, delete the original in the portal, or rename both its name and its alert title: Graph refuses the create while another rule holds either, even a disabled one (`microsoft_defender_rule_conflict`). One file is written per uuid: when a bare-uuid rule and its `opentide-<uuid>` copy are both listed (a 1.0.0 rule renamed rather than deleted), the `opentide-` one is imported and the other is skipped with `defender_import_rule_skipped`.
 - Every Sentinel file is parsed before it is written; one that would not parse is skipped with `sentinel_import_rule_skipped`.
 - A Sentinel or Defender rule that lacks a field the import needs, or holds it as another type, is skipped with `sentinel_import_rule_skipped` or `defender_import_rule_skipped` and listed under `skipped` in the JSON result, with the reason (`rule <id>: field `query_period` is not a string`); the other rules are imported.
 - The Defender listing follows `@odata.nextLink`, times out after 60 s per page and reports an HTTP error with the tenant and status.

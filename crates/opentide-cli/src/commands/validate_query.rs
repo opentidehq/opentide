@@ -1,7 +1,5 @@
-//! `opentide validate query` offline (`cli/commands/validate.py`
-//! `validate_query_cmd`, `cli/services/validation.py`
-//! `validate_query_offline`): every query of the rule files directly in the
-//! rules folder (or those `--changed`, `--file` and `--uuid` select), and
+//! `opentide validate query` offline: every query of the rule files directly
+//! in the rules folder (or those `--changed`, `--file` and `--uuid` select), and
 //! the query files `--file` names, checked by the query engines
 //! ([`crate::queries`]). The engine's errors are the run's, as `validate`'s
 //! queries check reports them; its warnings and notes are `lint`'s.
@@ -15,16 +13,17 @@
 
 use std::path::{Path, PathBuf};
 
-use opentide_analysis::{LanguageId, Severity as EngineSeverity};
+use opentide_analysis::{LanguageId, QueryPosition, Severity as EngineSeverity};
 use opentide_compile::plan::Scope;
 use opentide_workspace::validate::QueriesMode;
 use opentide_workspace::{FileSystem as _, OsFs, Workspace};
 
 use super::findings;
+use super::result::{CommandResult, ExitCode, FailureDetail, Status};
 use super::{Block, ISSUES_FOUND, Report, Terminal, placement};
 use crate::env::Env;
-use crate::envelope::{Failure, NextAction, USAGE_EXIT_CODE, code};
-use crate::json::Json;
+use crate::envelope::{Failure, NextAction, code};
+use crate::json::{Json, Object};
 use crate::queries::{CheckedQuery, Finding, Profiles, REPORTED_AS_WARNING_NOTE};
 use crate::render::diagnostic::{Diagnostic, Severity, SourceFiles, relative_path};
 use crate::render::outcome::OutcomeKind;
@@ -85,6 +84,8 @@ pub struct Args {
     pub queries: Option<QueriesMode>,
     /// `--check-timeout`.
     pub check_timeout: Option<String>,
+    /// `--position`, when given: where a `--file` query will sit.
+    pub position: Option<QueryPosition>,
 }
 
 /// Why `validate <options> query` is refused, if it is: an option of
@@ -212,6 +213,10 @@ impl Args {
                 .or(strictness.queries)
                 .map(QueriesMode::from),
             check_timeout: query.check_timeout.clone(),
+            position: query.position.map(|position| match position {
+                crate::tree::Position::Rule => QueryPosition::Rule,
+                crate::tree::Position::Search => QueryPosition::Search,
+            }),
         }
     }
 }
@@ -299,24 +304,29 @@ pub fn query_file_language(target: &str) -> Option<LanguageId> {
 
 /// A failed result with the keys every refusal carries: `platform`, `mode`,
 /// `supported`. Exit 2 is a usage error (`failure_code`).
-fn refused(platform: Option<&str>, message: &str, exit_code: i32, failure_code: &str) -> Report {
+fn refused(
+    platform: Option<&str>,
+    message: &str,
+    exit_code: ExitCode,
+    failure_code: &str,
+) -> Report {
     let failure = Failure::new(failure_code, message);
     let mut report = Report::failed(COMMAND, exit_code, failure);
-    report.outcome.data = vec![
+    report.outcome.data = Object::from([
         (
             "platform".into(),
             Json::opt_str(platform.map(str::to_owned)),
         ),
         ("mode".into(), Json::str("offline")),
         ("supported".into(), Json::Bool(true)),
-    ];
+    ]);
     report
 }
 
-/// A scope refusal (`_query_scope_refused`): exit 2 a usage error, exit 1
+/// A scope refusal: exit 2 a usage error, exit 1
 /// a run that could not read its scope.
-fn scope_refused(platform: Option<&str>, message: &str, exit_code: i32) -> Report {
-    let failure_code = if exit_code == USAGE_EXIT_CODE {
+fn scope_refused(platform: Option<&str>, message: &str, exit_code: ExitCode) -> Report {
+    let failure_code = if exit_code == ExitCode::Usage {
         code::USAGE_ERROR
     } else {
         super::COMMAND_FAILED
@@ -328,7 +338,7 @@ fn scope_refused(platform: Option<&str>, message: &str, exit_code: i32) -> Repor
 fn usage(message: impl Into<String>, argument: &str, failure_code: &str) -> Report {
     let mut failure = Failure::new(failure_code, message);
     failure.argument = Some(argument.to_owned());
-    Report::failed(COMMAND, USAGE_EXIT_CODE, failure)
+    Report::failed(COMMAND, ExitCode::Usage, failure)
 }
 
 /// The usage errors the options make offline, before anything runs.
@@ -390,11 +400,11 @@ pub fn unsupported(args: &Args) -> Option<Report> {
     let message = format!("query validation not supported for {platform}");
     let mut report = Report::error(COMMAND, message);
     // The envelope writes `error` after the message.
-    report.outcome.data = vec![
+    report.outcome.data = Object::from([
         ("platform".to_owned(), Json::str(platform)),
         ("valid".to_owned(), Json::Null),
         ("supported".to_owned(), Json::Bool(false)),
-    ];
+    ]);
     Some(report)
 }
 
@@ -436,6 +446,7 @@ pub fn live_usage(args: &Args, env: &Env) -> Option<Report> {
     for (flag, used) in [
         ("--strict", args.strict),
         ("--queries", args.queries.is_some()),
+        ("--position", args.position.is_some()),
     ] {
         if used {
             return Some(usage(
@@ -461,28 +472,24 @@ pub const CHECK_TIMEOUT_ENV: &str = "OPENTIDE_QUERY_CHECK_TIMEOUT";
 
 /// What a `--live` run that names no `--platform` answers: a live check
 /// reads one platform's tenants, so the run is refused (exit 2,
-/// `usage_missing_option`), as `_validate_query_platform` refuses it. The
-/// result, keys in the oracle's order, `_`-keys included.
-pub fn live_without_platform() -> Vec<(String, Json)> {
-    vec![
+/// `usage_missing_option`). The result's own keys are the live check's, in
+/// the same order.
+pub fn live_without_platform() -> CommandResult {
+    let mut result = CommandResult::failed(
+        "--live checks one platform's tenants: pass --platform",
+        ExitCode::Usage,
+    );
+    result.failure = FailureDetail {
+        code: Some(code::USAGE_MISSING_OPTION.to_owned()),
+        argument: Some("--platform".to_owned()),
+        suggestion: None,
+    };
+    result.data = Object::from([
         ("platform".to_owned(), Json::Null),
         ("mode".to_owned(), Json::str("live")),
-        ("status".to_owned(), Json::str("failed")),
         ("supported".to_owned(), Json::Bool(true)),
-        (
-            "message".to_owned(),
-            Json::str("--live checks one platform's tenants: pass --platform"),
-        ),
-        (
-            "_exit_code".to_owned(),
-            Json::Int(i64::from(USAGE_EXIT_CODE)),
-        ),
-        (
-            "_failure_code".to_owned(),
-            Json::str(code::USAGE_MISSING_OPTION),
-        ),
-        ("_failure_argument".to_owned(), Json::str("--platform")),
-    ]
+    ]);
+    result
 }
 
 /// One checked query: the rule or query file it is in, as shown and on disk.
@@ -494,10 +501,10 @@ struct Check {
     query: CheckedQuery,
 }
 
-/// Logs the object files the workspace's index could not load, as the
-/// oracle's registry did when the rules folder was first read
+/// Logs the object files the workspace's index could not load
 /// (`malformed_object_yaml`, `unreadable_object_file`,
-/// `missing_identifier_from_model`).
+/// `missing_identifier_from_model`), when a run reads the rules folder and
+/// before it selects its rules.
 fn log_load_errors(ws: &Workspace, cwd: &Path) {
     let cwd = OsFs.resolve(cwd);
     for error in &ws.index().load_errors {
@@ -569,7 +576,7 @@ fn changed_scope(
 }
 
 /// Why a rule file has no query the engine could read: not readable, not
-/// UTF-8 or not YAML (`_unreadable`); `None` when it is YAML.
+/// UTF-8 or not YAML; `None` when it is YAML.
 fn unreadable_rule(
     bytes: Result<Vec<u8>, String>,
 ) -> Option<(String, Option<usize>, Option<usize>)> {
@@ -602,8 +609,8 @@ fn unreadable_rule(
 /// `(os error N)`.
 fn os_problem(error: &std::io::Error) -> String {
     let text = error.to_string();
-    match text.rfind(" (os error ") {
-        Some(at) if text.ends_with(')') => text[..at].to_owned(),
+    match text.rsplit_once(" (os error ") {
+        Some((head, _)) if text.ends_with(')') => head.to_owned(),
         _ => text,
     }
 }
@@ -635,7 +642,6 @@ fn engine_diagnostic(
     diagnostic.field_path.clone_from(&finding.field_path);
     diagnostic.help = Some(crate::queries::engine_help(
         &finding.code,
-        &finding.message,
         finding.suggestion.as_deref(),
     ));
     if warn {
@@ -733,7 +739,7 @@ fn findings_outcome(
 /// a platform plugin).
 #[expect(
     clippy::too_many_lines,
-    reason = "the oracle's steps in order (validate_query_offline), read top to bottom"
+    reason = "the command's steps in order, read top to bottom"
 )]
 pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     if let Some(report) = refuse(args) {
@@ -741,23 +747,38 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     }
     let platform = args.platform.as_deref();
     let queries = args.queries.unwrap_or_default();
+    // A rule block is a platform's: there is no rule to check a query file
+    // as without one (#1993), and no silent fallback to a search.
+    if args.position == Some(QueryPosition::Rule) && platform.is_none() {
+        let mut report = refused(
+            platform,
+            "--position rule checks a query as a platform's rule block checks its own: pass \
+             --platform",
+            ExitCode::Usage,
+            code::USAGE_MISSING_OPTION,
+        );
+        if let Some(failure) = &mut report.outcome.failure {
+            failure.argument = Some("--platform".into());
+        }
+        return report;
+    }
     if let Some(name) = platform
         && offline_languages(name).is_none()
     {
         if !live_query_platforms().contains(&name) {
             let mut report = Report::failed(
                 COMMAND,
-                1,
+                ExitCode::Failure,
                 Failure::new(
                     super::COMMAND_FAILED,
                     format!("query validation not supported for {name}"),
                 ),
             );
-            report.outcome.data = vec![
+            report.outcome.data = Object::from([
                 ("platform".into(), Json::str(name)),
                 ("valid".into(), Json::Null),
                 ("supported".into(), Json::Bool(false)),
-            ];
+            ]);
             return report;
         }
         let mut report = refused(
@@ -766,7 +787,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
                 "{name} queries are checked on the tenant only; the offline engine does not \
                  parse them. Re-run with --live."
             ),
-            USAGE_EXIT_CODE,
+            ExitCode::Usage,
             code::USAGE_MISSING_OPTION,
         );
         if let Some(failure) = &mut report.outcome.failure {
@@ -779,6 +800,21 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
         .iter()
         .filter(|target| is_query_file(target))
         .collect();
+    // A rule block's query is checked as a rule by where it sits: the
+    // position says where a query file's will.
+    if args.position.is_some() && query_files.is_empty() {
+        let mut report = refused(
+            platform,
+            "--position says where a --file query will sit; a rule's own queries are checked as \
+             its blocks check them",
+            ExitCode::Usage,
+            code::USAGE_ERROR,
+        );
+        if let Some(failure) = &mut report.outcome.failure {
+            failure.argument = Some("--position".into());
+        }
+        return report;
+    }
     let rule_targets: Vec<String> = args
         .files
         .iter()
@@ -789,7 +825,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
         return scope_refused(
             platform,
             "--changed cannot be combined with --file or --uuid",
-            USAGE_EXIT_CODE,
+            ExitCode::Usage,
         );
     }
     let on_disk = |target: &str| cx.cwd.join(target);
@@ -802,12 +838,12 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
         let mut report = scope_refused(
             platform,
             &format!("No such query file: {}", missing.join(", ")),
-            USAGE_EXIT_CODE,
+            ExitCode::Usage,
         );
-        report.outcome.data.push((
-            "unmatched".into(),
+        report.outcome.data.insert(
+            "unmatched".to_owned(),
             Json::Array(missing.iter().map(Json::str).collect()),
-        ));
+        );
         return report;
     }
     if let Some(name) = platform {
@@ -827,7 +863,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
                     languages.join(", "),
                     other.join(", ")
                 ),
-                USAGE_EXIT_CODE,
+                ExitCode::Usage,
             );
             if let Some(failure) = &mut report.outcome.failure {
                 failure.argument = Some("--file".into());
@@ -861,7 +897,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
             return scope_refused(
                 platform,
                 "--changed cannot be combined with --file or --uuid",
-                USAGE_EXIT_CODE,
+                ExitCode::Usage,
             );
         }
         log_load_errors(&ws, cx.cwd);
@@ -875,7 +911,11 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
                     warnings.extend(warning);
                 }
                 Err(error) => {
-                    return scope_refused(platform, &error.message, error.exit_code);
+                    return scope_refused(
+                        platform,
+                        &error.message,
+                        ExitCode::of_service(error.exit_code),
+                    );
                 }
             }
         } else if !rule_targets.is_empty() || !args.uuids.is_empty() {
@@ -894,12 +934,12 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
                         "No rule file directly in {folder} matched: {}",
                         unmatched.join(", ")
                     ),
-                    1,
+                    ExitCode::Failure,
                 );
-                report.outcome.data.push((
-                    "unmatched".into(),
+                report.outcome.data.insert(
+                    "unmatched".to_owned(),
                     Json::Array(unmatched.iter().map(Json::str).collect()),
-                ));
+                );
                 return report;
             }
             rule_files = scope.files;
@@ -990,7 +1030,13 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
                         offline_languages(name)
                             .is_some_and(|languages| languages.contains(&language.as_str()))
                     });
-                    let findings = profiles.check_query(&text, language, platform, None);
+                    let findings = profiles.check_query(
+                        &text,
+                        language,
+                        platform,
+                        None,
+                        args.position.unwrap_or_default(),
+                    );
                     checks.push(Check {
                         file_path: file_path.clone(),
                         path: shown.clone(),
@@ -1012,15 +1058,15 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
             cannot_read.push(format!("{target}: {problem}"));
         }
     }
-    let base = || -> Vec<(String, Json)> {
-        vec![
+    let base = || -> Object {
+        Object::from([
             (
                 "platform".into(),
                 Json::opt_str(platform.map(str::to_owned)),
             ),
             ("mode".into(), Json::str("offline")),
             ("supported".into(), Json::Bool(true)),
-        ]
+        ])
     };
     if !cannot_read.is_empty() {
         let message = format!("Cannot check {}", cannot_read.join("; "));
@@ -1038,9 +1084,9 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     } else {
         String::new()
     };
-    let scoped = |data: &mut Vec<(String, Json)>| {
+    let scoped = |data: &mut Object| {
         if let Some(label) = scope_label {
-            data.push(("scope".into(), Json::str(label)));
+            data.insert("scope".into(), Json::str(label));
         }
     };
     if checks.is_empty() && unreadable.is_empty() {
@@ -1052,15 +1098,15 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
         };
         let message = format!("No {place}rule has a {target}query the engine checks");
         let mut data = base();
-        data.push(("queries_validated".into(), Json::from(0usize)));
+        data.insert("queries_validated".into(), Json::from(0usize));
         scoped(&mut data);
         let mut report = Report::completed(COMMAND, data);
-        report.outcome.status = "skipped".into();
+        report.outcome.status = Status::Skipped;
         report.outcome.message = message;
-        report.outcome.summary = vec![
+        report.outcome.summary = Object::from([
             ("queries".into(), Json::from(0usize)),
             ("files".into(), Json::from(0usize)),
-        ];
+        ]);
         report.warnings = warnings;
         report.stderr_first = stderr_first;
         return report;
@@ -1103,7 +1149,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
         .iter()
         .map(|check| check.file_path.as_path())
         .collect();
-    let summary = vec![
+    let summary = Object::from([
         ("queries".into(), Json::from(checks.len())),
         ("files".into(), Json::from(files.len())),
         ("errors".into(), Json::from(errors)),
@@ -1111,7 +1157,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
         ("notes".into(), Json::from(notes)),
         ("error_files".into(), Json::from(error_files)),
         ("warning_files".into(), Json::from(warning_files)),
-    ];
+    ]);
     let failed = errors > 0 || (args.strict && warning_count > 0);
     let count = checks.len();
     let checked = format!("{count} {}", if count == 1 { "query" } else { "queries" });
@@ -1131,12 +1177,12 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     platforms.sort_unstable();
     platforms.dedup();
     let mut data = base();
-    data.push((
+    data.insert(
         "platforms".into(),
         Json::Array(platforms.iter().map(|name| Json::str(*name)).collect()),
-    ));
-    data.push(("queries_validated".into(), Json::from(count)));
-    data.push((
+    );
+    data.insert("queries_validated".into(), Json::from(count));
+    data.insert(
         "queries".into(),
         Json::Array(
             checks
@@ -1162,18 +1208,22 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
                 })
                 .collect(),
         ),
-    ));
-    data.push((
+    );
+    data.insert(
         "diagnostics".into(),
         Json::Array(diagnostics.iter().map(diagnostic_json).collect()),
-    ));
-    data.push((
+    );
+    data.insert(
         "engine".into(),
         Json::object([("engine", Json::str(opentide_analysis::VERSION))]),
-    ));
+    );
     scoped(&mut data);
     let mut report = Report::completed(COMMAND, data);
-    report.outcome.status = if failed { "failed" } else { "passed" }.into();
+    report.outcome.status = if failed {
+        Status::Failed
+    } else {
+        Status::Passed
+    };
     report.outcome.message = if failed {
         "Queries rejected offline".to_owned()
     } else {
@@ -1181,7 +1231,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     };
     report.outcome.summary = summary;
     if failed {
-        report.outcome.exit_code = 1;
+        report.outcome.exit_code = ExitCode::Failure;
         report.outcome.failure = Some(Failure::new(ISSUES_FOUND, report.outcome.message.clone()));
         let mut next = Vec::new();
         let first = diagnostics
@@ -1212,7 +1262,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     let mut body = vec![Block::Raw(text)];
     let kind = match outcome_kind {
         Some(OutcomeKind::Warning) => "warning",
-        _ => findings::kind_name(&report.outcome.status, !failed),
+        _ => findings::kind_name(report.outcome.status.as_str(), !failed),
     };
     let published = findings::publish(
         &diagnostics,
@@ -1256,7 +1306,7 @@ fn rerun(args: &Args, queries: QueriesMode) -> String {
     if args.strict {
         words.push("--strict".into());
     }
-    shlex::try_join(words.iter().map(String::as_str)).unwrap_or_else(|_| words.join(" "))
+    opentide_core::text::shell_line(words.iter().map(String::as_str))
 }
 
 #[cfg(test)]
@@ -1277,7 +1327,7 @@ mod tests {
     fn offline_options_that_choose_tenants_are_refused() {
         let failure = |args: &Args| {
             let report = refuse(args).unwrap();
-            assert_eq!(report.outcome.exit_code, 2);
+            assert_eq!(report.outcome.exit_code, ExitCode::Usage);
             report.outcome.failure.unwrap()
         };
         let strategy = Args {
@@ -1331,10 +1381,10 @@ mod tests {
                 interrupted: &|| false,
             },
         );
+        assert_eq!(report.outcome.exit_code, ExitCode::Usage);
         let failure = report.outcome.failure.unwrap();
         assert_eq!(failure.code, code::USAGE_ERROR);
         assert_eq!(failure.argument.as_deref(), Some("--strict"));
-        assert_eq!(report.outcome.exit_code, 2);
     }
 
     #[test]
@@ -1403,6 +1453,15 @@ mod tests {
         assert!(!problem.is_empty());
         assert_eq!(format!("{problem} (os error {code})"), error.to_string());
         assert_eq!(os_problem(&std::io::Error::other("gone")), "gone");
+        // #1946: words in any script before the suffix.
+        assert_eq!(
+            os_problem(&std::io::Error::other("fichier é😀 absent (os error 2)")),
+            "fichier é😀 absent"
+        );
+        assert_eq!(
+            os_problem(&std::io::Error::other("é (os error 2) 😀")),
+            "é (os error 2) 😀"
+        );
     }
 
     #[test]

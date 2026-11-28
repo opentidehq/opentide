@@ -4,6 +4,10 @@
 //! warnings, the closing note, the JSON document's keys and their order,
 //! the progress events, the CI summary, and the refusals.
 #![expect(
+    clippy::string_slice,
+    reason = "a test: a slice off a char boundary panics, and a panic is a failed test"
+)]
+#![expect(
     clippy::unwrap_used,
     reason = "test helpers: every workspace here is written to a fresh folder"
 )]
@@ -181,7 +185,7 @@ fn quiet_keeps_the_frames_and_the_tally_and_drops_the_plan_and_the_note() {
 }
 
 #[test]
-fn the_json_document_keeps_the_oracles_keys_and_order() {
+fn the_json_document_keeps_the_recorded_keys_and_order() {
     let ws = workspace();
     let ran = deploy(
         &ws,
@@ -579,7 +583,7 @@ fn a_deploy_without_a_platform_that_matches_no_rule_warns_the_ci_run() {
 }
 
 #[test]
-fn a_rule_without_a_status_logs_the_oracles_event_as_json_under_json() {
+fn a_rule_without_a_status_logs_the_recorded_event_as_json_under_json() {
     let ws = workspace();
     std::fs::write(
         ws.join("objects/rules/good.yaml"),

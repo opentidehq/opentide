@@ -19,7 +19,7 @@ pub enum VocabError {
     MissingKey {
         /// The file.
         file: String,
-        /// The key.
+        /// The top-level key that is missing.
         key: String,
     },
     /// A top-level key has the wrong type or value.
@@ -27,7 +27,7 @@ pub enum VocabError {
     InvalidKey {
         /// The file.
         file: String,
-        /// The key.
+        /// The top-level key whose value is wrong.
         key: String,
         /// What is wrong with it.
         why: String,
@@ -47,7 +47,7 @@ pub enum VocabError {
     DuplicateKey {
         /// The file.
         file: String,
-        /// The key.
+        /// The entry key both entries use.
         key: String,
         /// The second entry's index.
         index: usize,

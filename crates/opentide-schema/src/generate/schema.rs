@@ -30,11 +30,8 @@
 //!
 //! then [`super::annotate::annotate_editor_schema`] adds the hover texts.
 //!
-//! The comparison with the oracle was by verdict, not by text (`cargo xtask
-//! codegen --check --oracle`, retired in #1142): every corpus object and
-//! fault got the same verdict from both documents. The text (titles,
-//! descriptions, key order, `type` arrays where Pydantic writes `anyOf` with
-//! `null`) is schemars'.
+//! The text (titles, descriptions, key order, `type` arrays where Pydantic
+//! writes `anyOf` with `null`) is schemars'.
 
 use std::sync::Arc;
 
@@ -303,7 +300,7 @@ impl Transform for RootExtras<'_> {
 
 /// The keyword that names the configuration table whose enabled platforms
 /// become an object's properties (`recomposition`). It stays in the written
-/// schema, as the oracle leaves it.
+/// schema.
 pub const RECOMPOSITION: &str = "recomposition";
 
 /// Sets each contract a revision pins (`metadata.tlp` = `tlp::1.0`) as the
@@ -761,7 +758,7 @@ fn items_are_objects(array: &Map<String, Value>) -> bool {
         || items.contains_key("$ref")
 }
 
-/// Attaches an enum to a field (`_apply_vocab_enum`): each string branch of a
+/// Attaches an enum to a field: each string branch of a
 /// union takes it, and each array branch as its `items`; a plain string
 /// field takes it (with `null` when the field is nullable, so an optional
 /// field stays optional), a plain array field as its `items`. A list of

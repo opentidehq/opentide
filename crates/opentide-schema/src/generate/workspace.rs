@@ -1,16 +1,15 @@
 //! What `opentide generate` writes into a workspace from its resolved
-//! configuration: the object and platform templates
-//! (`template_renderer.py`), the VS Code snippets (`vscode_snippets.py`) and
-//! the router schema (`router_schema.py`). Paths are relative to the
+//! configuration: the object and platform templates, the VS Code snippets
+//! and the router schema. Paths are relative to the
 //! workspace, `/`-separated; the host writes the files.
 
 use crate::configuration::lint::parse_lint_config;
 use crate::node::{Node, Value};
 use crate::objects::objective::ObjectiveV1_0;
 use crate::objects::platform::{
-    BitdefenderConfig, CarbonBlackConfig, CrowdstrikeConfig, ElasticConfig, ExabeamConfig,
-    GoogleSecopsConfig, GraylogConfig, HarfangLabConfig, PLATFORM_CONFIG_MODELS, SentinelConfig,
-    SentinelOneConfig, SplunkConfig, SysdigConfig,
+    BitdefenderConfig, CarbonBlackConfig, CrowdstrikeConfig, DatadogConfig, ElasticConfig,
+    ExabeamConfig, GoogleSecopsConfig, GraylogConfig, HarfangLabConfig, PLATFORM_CONFIG_MODELS,
+    SentinelConfig, SentinelOneConfig, SplunkConfig, SysdigConfig,
 };
 use crate::objects::rule::{RuleV1_0, RuleV1_1};
 use crate::objects::threat::ThreatVectorV1_0;
@@ -83,6 +82,7 @@ pub fn platform_template(platform: &str) -> Result<Option<String>, TemplateError
         "exabeam" => render::<ExabeamConfig>(&options)?,
         "google_secops" => render::<GoogleSecopsConfig>(&options)?,
         "graylog" => render::<GraylogConfig>(&options)?,
+        "datadog" => render::<DatadogConfig>(&options)?,
         _ => return Ok(None),
     }))
 }
@@ -216,11 +216,12 @@ pub fn join_path(dir: &str, name: &str) -> String {
 }
 
 /// Platforms with a rule block whose merged `[platform] enabled` is `true`,
-/// in the configuration's order, each with its display name
-/// (`enabled_platforms`, `_entry_name`).
+/// in the configuration's order, each with its display name.
 pub fn enabled_platforms(config: &Node) -> Vec<(String, String)> {
-    let Some(Value::Map(platforms)) = table(Some(config), "platforms").map(|node| &node.value)
-    else {
+    let Some(config_platforms) = table(Some(config), "platforms") else {
+        return Vec::new();
+    };
+    let Value::Map(platforms) = &config_platforms.value else {
         return Vec::new();
     };
     let mut enabled = Vec::new();
@@ -235,10 +236,7 @@ pub fn enabled_platforms(config: &Node) -> Vec<(String, String)> {
             continue;
         }
         let section = table(Some(&entry.value), "platform");
-        if matches!(
-            table(section, "enabled").map(|node| &node.value),
-            Some(Value::Bool(true))
-        ) {
+        if crate::configuration::resolve::platform_enabled(Some(config_platforms), identifier) {
             let name = string(section, "name")
                 .filter(|name| !name.is_empty())
                 .unwrap_or(identifier);
@@ -313,8 +311,7 @@ fn push(artifacts: &mut Vec<Artifact>, path: String, text: String) {
     artifacts.push(Artifact { path, text });
 }
 
-/// `rule.1.0.template.yaml` as `rule::1.0`; `None` for another name
-/// (`_schema_id_from_template_filename`).
+/// `rule.1.0.template.yaml` as `rule::1.0`; `None` for another name.
 pub fn schema_id_from_template_filename(filename: &str) -> Option<String> {
     let stem = filename.strip_suffix(".template.yaml")?;
     let parts: Vec<&str> = stem.split('.').collect();

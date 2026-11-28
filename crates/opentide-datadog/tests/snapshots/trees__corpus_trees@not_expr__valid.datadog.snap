@@ -1,0 +1,28 @@
+---
+source: crates/opentide-datadog/tests/trees.rs
+expression: "debug_tree(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/datadog/not_expr__valid.datadog
+---
+QUERY@0..32
+  AND_EXPR@0..32
+    NOT_EXPR@0..13
+      MINUS@0..1 "-"
+      FIELD_CLAUSE@1..13
+        ATTRIBUTE@1..7
+          WORD@1..7 "@level"
+        COLON@7..8 ":"
+        TERM@8..13
+          WORD@8..13 "Error"
+    WHITESPACE@13..14 " "
+    NOT_EXPR@14..32
+      NOT_KW@14..17 "NOT"
+      WHITESPACE@17..18 " "
+      GROUP@18..32
+        L_PAREN@18..19 "("
+        FIELD_CLAUSE@19..31
+          TAG_KEY@19..25
+            WORD@19..25 "status"
+          COLON@25..26 ":"
+          TERM@26..31
+            WORD@26..31 "debug"
+        R_PAREN@31..32 ")"

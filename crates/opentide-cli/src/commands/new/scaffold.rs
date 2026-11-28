@@ -1,4 +1,4 @@
-//! The text of a new object (`cli/services/new.py`): the generated template,
+//! The text of a new object: the generated template,
 //! line by line. Required keys are uncommented and filled in place, every
 //! other line is kept as the template writes it, so the comments that list
 //! the optional keys stay in the new file. YAML is never parsed and written
@@ -207,7 +207,7 @@ impl<'s> Model<'s> {
             .is_some_and(|map| !map.is_empty())
     }
 
-    /// What a field holds (`_shape`): `Option` unwrapped; a union of several
+    /// What a field holds: `Option` unwrapped; a union of several
     /// types is a plain value.
     pub fn shape(&self, spec: &'s Value) -> Shape {
         let mut node = spec;
@@ -422,6 +422,17 @@ fn block_text(entries: &[Line], at: usize) -> Vec<(usize, usize)> {
         .collect()
 }
 
+/// `raw` cut at `at`, a [`Line`]'s `indent` or `column` (or the `#` after
+/// its indent): those count the spaces, `#` and `- ` that [`line_pattern`]
+/// matched at the line's start, all ASCII.
+fn cut_at(raw: &str, at: usize) -> (&str, &str) {
+    #[expect(
+        clippy::string_slice,
+        reason = "`at` is within the ASCII prefix `line_pattern` matched: a char boundary"
+    )]
+    (&raw[..at], &raw[at..])
+}
+
 /// Each non-blank line of `lines` with its YAML path (`index_template`).
 /// Template comments hug the key (`  #author:`), so a commented line has the
 /// indentation it would have uncommented.
@@ -531,11 +542,11 @@ fn json_matches(value: &Value, scalar: &Scalar) -> bool {
 }
 
 /// Uncomments the keys in `fill.fields`, fills their values, keeps every
-/// other line (`fill_template`). A required field with no answer gets a
+/// other line. A required field with no answer gets a
 /// placeholder; every placeholder line ends in [`PLACEHOLDER_MARKER`].
 #[expect(
     clippy::too_many_lines,
-    reason = "one pass over the template, as the oracle's, kept in one place"
+    reason = "one pass over the template, kept in one place"
 )]
 pub fn fill_template(template: &str, fill: &Fill<'_>) -> Scaffold {
     let mut lines: Vec<String> = template.lines().map(str::to_owned).collect();
@@ -560,7 +571,9 @@ pub fn fill_template(template: &str, fill: &Fill<'_>) -> Scaffold {
     let uncomment = |lines: &mut Vec<String>, entry: &mut Line| {
         if entry.commented {
             let raw = &lines[entry.index];
-            let text = format!("{}{}", &raw[..entry.indent], &raw[entry.indent + 1..]);
+            // Without the `#` after the indent.
+            let ((head, _), (_, tail)) = (cut_at(raw, entry.indent), cut_at(raw, entry.indent + 1));
+            let text = format!("{head}{tail}");
             lines[entry.index] = text;
             entry.commented = false;
             entry.column -= 1;
@@ -612,8 +625,8 @@ pub fn fill_template(template: &str, fill: &Fill<'_>) -> Scaffold {
         for position in block {
             let other = &mut entries[position];
             if !other.commented {
-                let raw = &lines[other.index];
-                lines[other.index] = format!("{}#{}", &raw[..other.indent], &raw[other.indent..]);
+                let (head, tail) = cut_at(&lines[other.index], other.indent);
+                lines[other.index] = format!("{head}#{tail}");
                 other.commented = true;
                 other.column += 1;
             }
@@ -660,7 +673,7 @@ pub fn fill_template(template: &str, fill: &Fill<'_>) -> Scaffold {
                      at: usize,
                      value: &Scalar| {
         let entry = &entries[at];
-        let head = &lines[entry.index][..entry.column];
+        let (head, _) = cut_at(&lines[entry.index], entry.column);
         if entry.role == Role::Key {
             let leaf = entry.path.last().map_or("", String::as_str);
             replacements.insert(entry.index, format!("{head}{leaf}: {}", scalar_text(value)));
@@ -837,11 +850,11 @@ pub fn fill_template(template: &str, fill: &Fill<'_>) -> Scaffold {
                 && let Scalar::Text(body) = given
             {
                 // A block scalar keeps its `|`: the text replaces its lines,
-                // one block line per line of the text (`_fill_template`).
+                // one block line per line of the text.
                 let text = block_text(&entries, at);
                 let head = text.first().map_or_else(
                     || " ".repeat(entries[at].column + 2),
-                    |(index, column)| lines[*index][..*column].to_owned(),
+                    |(index, column)| cut_at(&lines[*index], *column).0.to_owned(),
                 );
                 let rendered = body
                     .lines()

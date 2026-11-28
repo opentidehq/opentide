@@ -1,5 +1,4 @@
-//! `validate` (UC-2.2, #817; `validation/session.py` and
-//! `cli/services/validation.py`): every check over a loaded [`Workspace`],
+//! `validate` (UC-2.2, #817): every check over a loaded [`Workspace`],
 //! reported as [`Diagnostic`]s, the one finding type the CLI, the SDK, MCP
 //! and the language server share.
 //!
@@ -7,7 +6,7 @@
 //! | --- | --- |
 //! | `id-uniqueness` | `duplicate_id` |
 //! | `uuid-format` | `invalid_uuid` |
-//! | `schema` | `schema_validation`, `schema_missing`, `yaml_parse`, `missing_uuid`, `invalid_ref`, `vocab_unknown`, `config_enum_unknown`, `chaining_relation_unknown`, `external_id_in_rule`, `deployment_state_*`; warnings `deprecated_field`, `platform_not_enabled` |
+//! | `schema` | `schema_validation`, `schema_missing`, `yaml_parse`, `missing_uuid`, `invalid_ref`, `vocab_unknown`, `config_enum_unknown`, `chaining_relation_unknown`, `external_id_in_rule`, `exabeam_name_duplicate`, `google_secops_name_duplicate`, `deployment_state_*`, and every platform model's constraint code (`opentide_schema::objects::platform::constraint_codes`); warnings `deprecated_field`, `platform_not_enabled` |
 //! | `configuration` | `missing_field`, `unknown_key`, `schema_validation`, `promotion_target_unknown`; warnings `asset_unknown` |
 //! | `sharing-config` | `sharing.toml`'s codes |
 //! | `queries` | the query engines' codes, from the host's [`QueryCheck`] (UC-2.5, #820) |
@@ -47,6 +46,7 @@ pub use scope::{Scope, Selection};
 
 /// One check `validate` can run (`ValidateCheck`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
 pub enum Check {
     /// `id-uniqueness`.
     IdUniqueness,
@@ -119,6 +119,7 @@ impl Check {
                 "chaining_relation_unknown",
                 "external_id_in_rule",
                 "external_id_shape",
+                "exabeam_name_duplicate",
                 "google_secops_name_duplicate",
                 "deployment_state_uuid_mismatch",
                 "deployment_state_platform",
@@ -158,8 +159,9 @@ impl Check {
 }
 
 /// Every code a `validate` finding can carry (`VALIDATION_CODES`): each
-/// check's issue and warning codes, `scope_no_match`, `file_not_found` and
-/// `nested_object_file`, sorted. The engine's own query codes are not here.
+/// check's issue and warning codes, `scope_no_match`, `file_not_found`,
+/// `nested_object_file` and the [`STRICT_EXEMPT_WARNINGS`], sorted. The
+/// engine's own query codes are not here.
 pub const VALIDATION_CODES: &[&str] = &[
     "api_key_literal",
     "asset_unknown",
@@ -174,6 +176,7 @@ pub const VALIDATION_CODES: &[&str] = &[
     "duplicate_id",
     "duplicate_name",
     "engine_unavailable",
+    "exabeam_name_duplicate",
     "external_id_in_rule",
     "external_id_shape",
     "file_not_found",
@@ -183,6 +186,9 @@ pub const VALIDATION_CODES: &[&str] = &[
     "invalid_uuid",
     "invalid_value",
     "max_tlp_unknown",
+    "microsoft_defender_custom_details_limit",
+    "microsoft_defender_impacted_asset_identifier",
+    "microsoft_defender_placeholder_limit",
     "missing_field",
     "missing_uuid",
     "name_invalid",
@@ -207,6 +213,7 @@ pub const VALIDATION_CODES: &[&str] = &[
 
 /// `--queries`: how the queries check reports a query the engine rejects.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub enum QueriesMode {
     /// As an error (the default).
     #[default]
@@ -215,6 +222,17 @@ pub enum QueriesMode {
     Warn,
     /// Not checked.
     Off,
+}
+
+impl QueriesMode {
+    /// The mode as `--queries` takes it: `error`, `warn` or `off`.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Error => "error",
+            Self::Warn => "warn",
+            Self::Off => "off",
+        }
+    }
 }
 
 /// An object whose queries the queries check reads.
@@ -324,6 +342,7 @@ pub trait CompileCheck: Sync {
 /// One finding of a plugin platform's own check of a rule's block
 /// ([`PlatformConfigurations`]).
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct PlatformFinding {
     /// Where, inside the block: keys and list indexes as strings.
     pub field_path: Vec<String>,
@@ -331,6 +350,18 @@ pub struct PlatformFinding {
     pub message: String,
     /// A warning rather than an error.
     pub warning: bool,
+}
+
+impl PlatformFinding {
+    /// A finding at `field_path` inside the block: an error, or a warning
+    /// when `warning` is set.
+    pub fn new(field_path: Vec<String>, message: impl Into<String>, warning: bool) -> Self {
+        Self {
+            field_path,
+            message: message.into(),
+            warning,
+        }
+    }
 }
 
 /// The configuration blocks of platform plugins (UC-4.5, #835), which the
@@ -387,8 +418,14 @@ pub struct Options<'a> {
 /// workspace as it was: drop it when anything the checks read changed.
 #[derive(Debug, Default)]
 pub struct ObjectMemo {
-    found: std::sync::Mutex<HashMap<(PathBuf, String), objects::Found>>,
+    /// By file, then UUID: a lookup borrows the subject's path and UUID
+    /// instead of allocating a key, and a hit clones an `Arc` under the lock,
+    /// not the findings (#1945).
+    found: std::sync::Mutex<MemoMap>,
 }
+
+/// [`ObjectMemo`]'s findings, by file and UUID.
+type MemoMap = HashMap<PathBuf, HashMap<String, std::sync::Arc<objects::Found>>>;
 
 impl ObjectMemo {
     /// How many objects it holds.
@@ -397,7 +434,9 @@ impl ObjectMemo {
         self.found
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .len()
+            .values()
+            .map(HashMap::len)
+            .sum()
     }
 
     /// Whether it holds none.
@@ -429,6 +468,7 @@ impl std::fmt::Debug for Options<'_> {
 
 /// The report's `stats`.
 #[derive(Debug, Clone, PartialEq, Serialize)]
+#[non_exhaustive]
 pub struct Stats {
     /// Objects the object checks read.
     pub objects_checked: usize,
@@ -449,6 +489,7 @@ pub struct Stats {
 
 /// The report: `validate --json`'s `report`.
 #[derive(Debug, Clone, PartialEq, Serialize)]
+#[non_exhaustive]
 pub struct Report {
     /// No error.
     pub ok: bool,
@@ -461,7 +502,8 @@ pub struct Report {
 }
 
 /// The counts behind the outcome line (`summary`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+#[non_exhaustive]
 pub struct Summary {
     /// Objects checked.
     pub objects: usize,
@@ -480,8 +522,22 @@ pub struct Summary {
     pub fixable: usize,
 }
 
-/// Warning codes `--strict` reports without failing.
-pub const STRICT_EXEMPT_WARNINGS: [&str; 1] = ["platform_not_enabled"];
+/// Warning codes `--strict` reports without failing:
+/// `platform_not_enabled`, and Microsoft Defender's advisories that wait on
+/// a tenant probe (`docs/internal/microsoft-defender-tenant-test.md`):
+/// `microsoft_defender_impacted_asset_identifier`, whose rule is Microsoft's
+/// advice rather than something Graph is known to refuse (check 11), and
+/// `microsoft_defender_custom_details_limit` and
+/// `microsoft_defender_placeholder_limit`, limits Microsoft documents without
+/// saying what Graph does past them (check 9, #1890).
+///
+/// A slice, not an array, so a code made exempt does not change its type.
+pub const STRICT_EXEMPT_WARNINGS: &[&str] = &[
+    "platform_not_enabled",
+    opentide_core::codes::MICROSOFT_DEFENDER_IMPACTED_ASSET_IDENTIFIER,
+    opentide_core::codes::MICROSOFT_DEFENDER_CUSTOM_DETAILS_LIMIT,
+    opentide_core::codes::MICROSOFT_DEFENDER_PLACEHOLDER_LIMIT,
+];
 
 /// The object families `validate --type` takes.
 pub const OBJECT_TYPES: [&str; 3] = ["rule", "threat", "objective"];
@@ -490,6 +546,7 @@ pub const OBJECT_TYPES: [&str; 3] = ["rule", "threat", "objective"];
 /// it: the usage failure's code, the option, the first value refused, and
 /// the message.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct Refusal {
     /// The usage failure's code (`usage_invalid_choice`).
     pub code: &'static str,
@@ -531,7 +588,8 @@ pub struct Validation {
     /// Each check run, with `passed` or `failed`, in the order `checks`
     /// lists them.
     pub checks: Vec<(Check, &'static str)>,
-    /// The report.
+    /// The errors and warnings found, and what the run did:
+    /// `validate --json`'s `report`.
     pub report: Report,
     /// The counts.
     pub summary: Summary,
@@ -691,9 +749,12 @@ fn file_name(path: &Path) -> String {
 /// `graylog_title_duplicate`: each rule in scope whose enabled Graylog block
 /// resolves to the event definition title of another rule's
 /// (`graylog_title_issues`): Graylog's alert list cannot tell them apart.
+///
+/// The titles are grouped once (`graylog::Titles`) and each rule found by its
+/// UUID: a scan of every rule per rule was quadratic (#1945).
 fn title_duplicates(index: &Index, work: &[Subject<'_>]) -> Vec<Diagnostic> {
     use opentide_schema::objects::platform::graylog::{
-        definition_title, title_duplicate_message, title_duplicates,
+        Titles, definition_title, title_duplicate_message,
     };
     let Some(rules) = index.objects.get("rule") else {
         return Vec::new();
@@ -702,12 +763,15 @@ fn title_duplicates(index: &Index, work: &[Subject<'_>]) -> Vec<Diagnostic> {
         .iter()
         .filter_map(|(uuid, object)| Some((uuid.as_str(), object.root()?)))
         .collect();
+    cross_rule_steps(all.len());
+    let titles = Titles::new(&all);
     work.iter()
         .filter(|subject| subject.family == "rule")
         .filter_map(|subject| {
-            let (_, root) = all.iter().find(|(uuid, _)| *uuid == subject.uuid)?;
+            cross_rule_steps(1);
+            let root = rules.get(subject.uuid)?.root()?;
             let title = definition_title(root)?;
-            let others = title_duplicates(subject.uuid, title, &all);
+            let others = titles.duplicates(subject.uuid, title);
             if others.is_empty() {
                 return None;
             }
@@ -724,10 +788,23 @@ fn title_duplicates(index: &Index, work: &[Subject<'_>]) -> Vec<Diagnostic> {
         .collect()
 }
 
+thread_local! {
+    /// [`cross_rule_steps`].
+    static CROSS_RULE_STEPS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Counts `n` rules the cross-rule checks (`graylog_title_duplicate`,
+/// `exabeam_name_duplicate`, `google_secops_name_duplicate`) looked at on this thread, each rule indexed and
+/// each UUID looked up counting one: for the test that holds them to linear
+/// (a work count, not a wall clock).
+fn cross_rule_steps(n: usize) {
+    CROSS_RULE_STEPS.set(CROSS_RULE_STEPS.get() + n);
+}
+
 /// `exabeam_name_duplicate` and `exabeam_name_length`: the cross-rule check of
 /// Exabeam rule names (`exabeam::name_findings`), over every rule in the
 /// workspace, reported on the rules this run validates (`work`). Two enabled Exabeam blocks that
-/// resolve to one name (case-insensitively) are a duplicate; a block with no
+/// resolve to one name (under full case folding) are a duplicate; a block with no
 /// `name` whose rule name is over the limit is too long.
 fn exabeam_names(index: &Index, work: &[Subject<'_>]) -> Vec<Diagnostic> {
     use opentide_schema::objects::platform::exabeam;
@@ -759,14 +836,22 @@ fn exabeam_names(index: &Index, work: &[Subject<'_>]) -> Vec<Diagnostic> {
         .filter(|subject| subject.family == "rule")
         .map(|subject| subject.uuid)
         .collect();
+    // Each finding's file by its rule's UUID, the first source of the UUID
+    // as a scan finds it, not a scan per finding (#1945).
+    let mut paths: HashMap<&str, &Path> = HashMap::with_capacity(rules.len());
+    cross_rule_steps(rules.len());
+    for (uuid, _, path) in &rules {
+        paths.entry(uuid.as_str()).or_insert(*path);
+    }
     let mut out = Vec::new();
     for finding in exabeam::name_findings(&pairs, in_scope.iter().copied()) {
-        let Some((_, _, path)) = rules.iter().find(|(uuid, _, _)| *uuid == finding.uuid) else {
+        cross_rule_steps(1);
+        let Some(path) = paths.get(finding.uuid.as_str()).copied() else {
             continue;
         };
         let mut diagnostic = Diagnostic::error(finding.code, finding.message)
             .object(finding.uuid.clone(), "rule")
-            .file(*path)
+            .file(path)
             .at([
                 "configurations".to_owned(),
                 "exabeam".to_owned(),
@@ -795,6 +880,13 @@ fn name_duplicates(index: &Index, work: &[Subject<'_>]) -> Vec<Diagnostic> {
         .iter()
         .filter_map(|(uuid, object)| Some((uuid.as_str(), object.root()?)))
         .collect();
+    // The first rule in `work` with each UUID, as a scan of `work` per
+    // finding would find it, looked up once per finding (#1945).
+    let mut subjects: HashMap<&str, &Subject<'_>> = HashMap::new();
+    for subject in work.iter().filter(|subject| subject.family == "rule") {
+        cross_rule_steps(1);
+        subjects.entry(subject.uuid).or_insert(subject);
+    }
     let in_scope = work
         .iter()
         .filter(|subject| subject.family == "rule")
@@ -802,9 +894,8 @@ fn name_duplicates(index: &Index, work: &[Subject<'_>]) -> Vec<Diagnostic> {
     name_duplicates(all, in_scope)
         .into_iter()
         .map(|duplicate| {
-            let subject = work
-                .iter()
-                .find(|subject| subject.family == "rule" && subject.uuid == duplicate.uuid);
+            cross_rule_steps(1);
+            let subject = subjects.get(duplicate.uuid.as_str());
             let mut diagnostic = Diagnostic::error(NAME_DUPLICATE, duplicate.message())
                 .object(duplicate.uuid.as_str(), "rule")
                 .at(NameDuplicate::field_path())
@@ -913,10 +1004,7 @@ fn enabled_platforms(
         else {
             continue;
         };
-        if matches!(
-            block.get("enabled").map(|e| &e.value),
-            Some(Value::Bool(true))
-        ) {
+        if opentide_schema::configuration::resolve::platform_enabled(platforms, platform) {
             enabled.insert(platform.to_owned());
         }
         if let Value::Map(entries) = &block.value {
@@ -1237,7 +1325,7 @@ pub fn validate(ws: &Workspace, options: &Options<'_>) -> Validation {
 /// uninterrupted run makes otherwise.
 #[expect(
     clippy::too_many_lines,
-    reason = "the run's phases in the oracle's order (session.py run_validation), read top to bottom"
+    reason = "the run's phases in the order they run, read top to bottom"
 )]
 pub fn validate_resumable(ws: &Workspace, options: &Options<'_>) -> Option<Validation> {
     if let Some(refusal) = options
@@ -1663,7 +1751,6 @@ fn check_in_batches(
     // host with one thread; more on a host with many, so that its threads
     // are not joined every few objects.
     let batch_len = 32.max(4 * rayon::current_num_threads());
-    let key = |subject: &Subject<'_>| (subject.path.to_path_buf(), subject.uuid.to_string());
     let lock = || {
         memo.found
             .lock()
@@ -1674,11 +1761,15 @@ fn check_in_batches(
     // interrupting still goes on, a batch at a time.
     let mut checked = false;
     for batch in work.chunks(batch_len) {
-        let kept: Vec<Option<objects::Found>> = {
+        let kept: Vec<Option<std::sync::Arc<objects::Found>>> = {
             let held = lock();
             batch
                 .iter()
-                .map(|subject| held.get(&key(subject)).cloned())
+                .map(|subject| {
+                    held.get(subject.path)
+                        .and_then(|by_uuid| by_uuid.get(subject.uuid))
+                        .cloned()
+                })
                 .collect()
         };
         let fresh_work = kept.iter().any(Option::is_none);
@@ -1686,18 +1777,35 @@ fn check_in_batches(
             return None;
         }
         checked |= fresh_work;
-        let fresh: Vec<Option<objects::Found>> = batch
+        // Each object's findings, and those to keep when it was checked now;
+        // the findings a run reports are its own, cloned here, on the
+        // batch's threads and outside the lock.
+        let fresh: Vec<(objects::Found, Option<std::sync::Arc<objects::Found>>)> = batch
             .par_iter()
             .zip(kept)
             .map(|(subject, kept)| match kept {
-                Some(found) => Some(found),
-                None => Some(objects::check_object(subject, graph, checks, fs, root)),
+                Some(found) => ((*found).clone(), None),
+                None => {
+                    let found = objects::check_object(subject, graph, checks, fs, root);
+                    let keep = std::sync::Arc::new(found.clone());
+                    (found, Some(keep))
+                }
             })
             .collect();
         let mut held = lock();
-        for (subject, found) in batch.iter().zip(fresh) {
-            let Some(found) = found else { continue };
-            held.entry(key(subject)).or_insert_with(|| found.clone());
+        for (subject, (found, keep)) in batch.iter().zip(fresh) {
+            if let Some(keep) = keep {
+                // A key is allocated only for what is kept, and the first
+                // object checked under a file and UUID stays.
+                if !held.contains_key(subject.path) {
+                    held.insert(subject.path.to_path_buf(), HashMap::new());
+                }
+                if let Some(by_uuid) = held.get_mut(subject.path)
+                    && !by_uuid.contains_key(subject.uuid)
+                {
+                    by_uuid.insert(subject.uuid.to_owned(), keep);
+                }
+            }
             all.push(found);
         }
     }
@@ -1714,6 +1822,10 @@ struct ListedPaths<'a> {
     fs: &'a dyn FileSystem,
     links: &'a HashMap<PathBuf, PathBuf>,
     folders: RefCell<HashMap<PathBuf, PathBuf>>,
+    /// The last folder resolved, and what it resolves to: a family's files
+    /// are listed one folder after another, and comparing a folder with the
+    /// last one is cheaper than hashing it for each object (#2122).
+    last: RefCell<Option<(PathBuf, PathBuf)>>,
 }
 
 impl<'a> ListedPaths<'a> {
@@ -1722,6 +1834,7 @@ impl<'a> ListedPaths<'a> {
             fs,
             links,
             folders: RefCell::default(),
+            last: RefCell::default(),
         }
     }
 
@@ -1736,11 +1849,20 @@ impl<'a> ListedPaths<'a> {
         if folder.as_os_str().is_empty() {
             return self.fs.resolve(path);
         }
-        self.folders
+        if let Some((last, resolved)) = self.last.borrow().as_ref()
+            && last == folder
+        {
+            return resolved.join(name);
+        }
+        let resolved = self
+            .folders
             .borrow_mut()
             .entry(folder.to_path_buf())
             .or_insert_with(|| self.fs.resolve(folder))
-            .join(name)
+            .clone();
+        let path = resolved.join(name);
+        *self.last.borrow_mut() = Some((folder.to_path_buf(), resolved));
+        path
     }
 }
 
@@ -1903,12 +2025,25 @@ fn status(report: &Report, check: Check) -> &'static str {
             let codes = check.issue_codes();
             report.issues.iter().any(|issue| {
                 (codes.contains(&issue.code.as_str()) && issue.object_type != "configuration")
+                    || (check == Check::Schema && is_model_constraint(issue))
                     || (matches!(check, Check::UuidFormat | Check::Schema)
                         && matches!(issue.code.as_str(), "scope_no_match" | "file_not_found"))
             })
         }
     };
     if failed { "failed" } else { "passed" }
+}
+
+/// Whether `issue` is a platform block's model finding under its own
+/// constraint code (`microsoft_defender_severity`, `graylog_schedule`, ...):
+/// the `schema` check runs the models, so it fails on one. The codes are the
+/// models' own ([`opentide_schema::objects::platform::constraint_codes`]),
+/// and a finding of the query engine (`source: engine`) under the same code
+/// stays the `queries` check's.
+fn is_model_constraint(issue: &Diagnostic) -> bool {
+    issue.object_type != "configuration"
+        && issue.context.get("source").and_then(ContextValue::as_str) != Some("engine")
+        && opentide_schema::objects::platform::constraint_codes().any(|code| code == issue.code)
 }
 
 /// The `deployment_state_*` findings on the shards under
@@ -1998,6 +2133,169 @@ impl Workspace {
 mod tests {
     use super::*;
 
+    /// #1945: `graylog_title_duplicate`, `exabeam_name_duplicate` and
+    /// `google_secops_name_duplicate` index the rules once and find each by its UUID, so their work grows with the
+    /// rules, not with their square (a scan of every rule per rule).
+    #[test]
+    fn cross_rule_checks_look_at_each_rule_a_bounded_number_of_times() {
+        use std::sync::Arc;
+
+        use crate::fs::{FileSystem, MemoryFs};
+        use crate::root::RootOptions;
+        use crate::workspace::{Options as WorkspaceOptions, Workspace};
+
+        let steps = |n: usize| {
+            let fs = Arc::new(MemoryFs::new());
+            fs.create_dir("/ws/.opentide/configurations");
+            fs.create_dir("/ws/objects/rules");
+            for i in 0..n {
+                // Every tenth rule shares its titles with the one before it.
+                let name = format!("Rule é {}", i - usize::from(i % 10 == 9));
+                fs.write(
+                    format!("/ws/objects/rules/r{i}.yaml"),
+                    format!(
+                        "name: {name}\nmetadata:\n  uuid: 00000000-0000-4000-8000-{i:012}\n  \
+                         schema: rule::1.1\nconfigurations:\n  graylog:\n    enabled: true\n  \
+                         exabeam:\n    enabled: true\n  google_secops:\n    enabled: true\n"
+                    ),
+                );
+            }
+            let ws = Workspace::open(
+                Arc::clone(&fs) as Arc<dyn FileSystem>,
+                WorkspaceOptions {
+                    roots: RootOptions {
+                        repo: Some(PathBuf::from("/ws")),
+                        cwd: PathBuf::from("/ws"),
+                        ..RootOptions::default()
+                    },
+                },
+            )
+            .unwrap();
+            let before = CROSS_RULE_STEPS.get();
+            let validation = validate(&ws, &Options::default());
+            let found = |code: &str| {
+                validation
+                    .report
+                    .issues
+                    .iter()
+                    .chain(&validation.report.warnings)
+                    .filter(|d| d.code == code)
+                    .count()
+            };
+            assert_eq!(found("graylog_title_duplicate"), n / 10 * 2);
+            assert_eq!(found("exabeam_name_duplicate"), n / 10 * 2);
+            assert_eq!(found("google_secops_name_duplicate"), n / 10 * 2);
+            CROSS_RULE_STEPS.get() - before
+        };
+        let (small, large) = (steps(100), steps(400));
+        assert!(
+            large < small * 8,
+            "{small} steps for 100 rules, {large} for 400"
+        );
+    }
+
+    /// #2122: a run places its findings from the index's documents, looked
+    /// up one by one for the first files and from a table of every file
+    /// after (`annotate::Sources`). A run over every object (findings in
+    /// more files than are looked up one by one, a UUID written twice) and
+    /// runs narrowed to each file place each finding at the same line and
+    /// column, the displaced duplicate's from its own text.
+    #[test]
+    fn findings_are_placed_alike_in_a_full_run_and_in_one_narrowed_to_a_file() {
+        use std::sync::Arc;
+
+        use crate::fs::{FileSystem, MemoryFs};
+        use crate::root::RootOptions;
+        use crate::workspace::{Options as WorkspaceOptions, Workspace};
+
+        const RULES: usize = 12;
+        let fs = Arc::new(MemoryFs::new());
+        fs.create_dir("/ws/.opentide/configurations");
+        fs.create_dir("/ws/objects/rules");
+        for i in 0..RULES {
+            // The last two rules share a UUID that is not one, so that the
+            // displaced file has a finding of its own; each rule's padding
+            // moves its fields to lines of its own.
+            let uuid = if i < RULES - 2 {
+                format!("00000000-0000-4000-8000-{i:012}")
+            } else {
+                "pas-un-uuid-é".to_owned()
+            };
+            let padding = "# é😀\n".repeat(i);
+            fs.write(
+                format!("/ws/objects/rules/r{i}.yaml"),
+                format!(
+                    "{padding}name: Règle é😀 {i}\nmetadata:\n  uuid: {uuid}\n  \
+                     schema: rule::1.1\nstatus: NOPE\nconfigurations:\n  sentinel:\n    \
+                     enabled: 3\n"
+                ),
+            );
+        }
+        let ws = Workspace::open(
+            Arc::clone(&fs) as Arc<dyn FileSystem>,
+            WorkspaceOptions {
+                roots: RootOptions {
+                    repo: Some(PathBuf::from("/ws")),
+                    cwd: PathBuf::from("/ws"),
+                    ..RootOptions::default()
+                },
+            },
+        )
+        .unwrap();
+        type Placed = (
+            Option<PathBuf>,
+            String,
+            Vec<String>,
+            Option<usize>,
+            Option<usize>,
+        );
+        let placed = |validation: Validation| -> BTreeSet<Placed> {
+            validation
+                .report
+                .issues
+                .into_iter()
+                .chain(validation.report.warnings)
+                .map(|d| (d.file_path, d.code, d.field_path, d.line, d.column))
+                .collect()
+        };
+        let full = placed(validate(&ws, &Options::default()));
+        let files: BTreeSet<&PathBuf> = full.iter().filter_map(|p| p.0.as_ref()).collect();
+        assert_eq!(files.len(), RULES, "{full:#?}");
+        assert!(
+            full.iter()
+                .all(|(file, _, _, line, _)| file.is_none() || line.is_some()),
+            "{full:#?}"
+        );
+        assert!(
+            full.iter().any(|(_, code, _, _, _)| code == "duplicate_id"),
+            "{full:#?}"
+        );
+        for file in files {
+            let selection = Selection {
+                files: vec![file.display().to_string()],
+                ..Selection::default()
+            };
+            let narrowed = placed(validate(
+                &ws,
+                &Options {
+                    selection: Some(&selection),
+                    ..Options::default()
+                },
+            ));
+            // What has no file (`scope_no_match` for the displaced file,
+            // which holds no object) is placed nowhere.
+            let narrowed: Vec<&Placed> = narrowed.iter().filter(|p| p.0.is_some()).collect();
+            assert!(!narrowed.is_empty(), "{}", file.display());
+            for finding in narrowed {
+                assert!(
+                    full.contains(finding),
+                    "{finding:?}, placed in a run narrowed to {}, is not in the full run's",
+                    file.display()
+                );
+            }
+        }
+    }
+
     #[test]
     fn workers_follow_the_cores_and_never_outnumber_the_items() {
         let cores = std::thread::available_parallelism().map_or(1, std::num::NonZero::get);
@@ -2009,6 +2307,170 @@ mod tests {
         }
     }
 
+    /// The platform codes no `schema` finding carries under its own name,
+    /// each with where it comes from ([`every_platform_code_is_placed`]).
+    const ELSEWHERE: &[(&str, &str)] = &[
+        // The query engines' codes: the `queries` check's (`source: engine`).
+        ("elastic_dataset_not_declared", "engine"),
+        // A Defender block against its query's output (#1885): the KQL
+        // engine's errors and lint's advisories.
+        ("microsoft_defender_column_not_in_output", "engine"),
+        ("microsoft_defender_required_columns", "engine"),
+        ("microsoft_defender_column_type", "engine"),
+        ("microsoft_defender_unprojected_output", "engine"),
+        // Microsoft's documented NRT restrictions (#1890): lint's advisory.
+        ("microsoft_defender_nrt_query", "engine"),
+        ("graylog_leading_wildcard", "engine"),
+        ("graylog_regex_unsupported", "engine"),
+        ("graylog_regex_operator", "engine"),
+        ("graylog_regex_quote", "engine"),
+        ("graylog_open_range", "engine"),
+        ("graylog_double_backslash", "engine"),
+        ("graylog_analyzed_field", "engine"),
+        ("bitdefender_yara_ascii", "engine"),
+        ("bitdefender_yara_size", "engine"),
+        ("exabeam_parse_error", "engine"),
+        ("exabeam_implicit_operator", "engine"),
+        ("exabeam_not_equal", "engine"),
+        ("exabeam_bare_wildcard", "engine"),
+        ("exabeam_leading_slash", "engine"),
+        ("exabeam_free_text_special", "engine"),
+        ("exabeam_unknown_function", "engine"),
+        ("exabeam_function_arity", "engine"),
+        ("exabeam_regex", "engine"),
+        ("exabeam_range", "engine"),
+        ("exabeam_ipv6_range", "engine"),
+        ("exabeam_time_exact", "engine"),
+        ("exabeam_context_table_or", "engine"),
+        ("exabeam_context_table_limit", "engine"),
+        ("exabeam_advanced_in_rule", "engine"),
+        ("exabeam_keyword_case", "engine"),
+        ("exabeam_clause_order", "engine"),
+        ("exabeam_pipe_limit", "engine"),
+        ("exabeam_rgx_extract_limit", "engine"),
+        ("exabeam_reserved_alias", "engine"),
+        ("exabeam_group_by_select_star", "engine"),
+        ("exabeam_group_by_column", "engine"),
+        ("exabeam_foreach_clause", "engine"),
+        ("exabeam_foreach_reference", "engine"),
+        ("exabeam_foreach_position", "engine"),
+        ("exabeam_mixed_boolean", "engine"),
+        ("exabeam_implicit_and", "engine"),
+        ("exabeam_single_group", "engine"),
+        ("exabeam_pipe_misuse", "engine"),
+        ("exabeam_wildcard_in_phrase", "engine"),
+        ("exabeam_unquoted_value", "engine"),
+        ("exabeam_legacy_regex", "engine"),
+        ("exabeam_unknown_field", "engine"),
+        ("exabeam_string_field_number", "engine"),
+        ("exabeam_unknown_value", "engine"),
+        ("datadog_parse_error", "engine"),
+        ("datadog_unescaped_special", "engine"),
+        ("datadog_regex", "engine"),
+        ("datadog_cidr", "engine"),
+        ("datadog_range", "engine"),
+        ("datadog_mixed_boolean", "engine"),
+        ("datadog_lowercase_operator", "engine"),
+        ("datadog_curly_quote", "engine"),
+        ("datadog_wildcard_in_phrase", "engine"),
+        ("datadog_unescaped_colon", "engine"),
+        ("datadog_symbol_operator", "engine"),
+        ("datadog_detached_operator", "engine"),
+        ("datadog_full_text_in_rule", "engine"),
+        ("datadog_calculated_field_in_rule", "engine"),
+        ("datadog_pipelines_only", "engine"),
+        ("datadog_unknown_attribute", "engine"),
+        // Named checks that report their codes inside one
+        // `schema_validation` finding (`<Model> validation failed with
+        // code(s): ...`), which the `schema` check fails on.
+        ("sysdig_rule_shape", "schema_validation"),
+        ("sysdig_tuning_keys", "schema_validation"),
+        ("sysdig_priority", "schema_validation"),
+        ("sysdig_source", "schema_validation"),
+        ("sysdig_exception_shape", "schema_validation"),
+        ("sysdig_definition_name", "schema_validation"),
+        ("sysdig_definition_duplicate", "schema_validation"),
+        ("sysdig_definition_order", "schema_validation"),
+        ("sysdig_list_in_value", "schema_validation"),
+        ("sysdig_list_self_reference", "schema_validation"),
+        ("harfanglab_rule_kind", "schema_validation"),
+        ("harfanglab_yara_form", "schema_validation"),
+        ("harfanglab_yara_section_header", "schema_validation"),
+        ("harfanglab_yara_import", "schema_validation"),
+        ("harfanglab_yara_rule_name", "schema_validation"),
+    ];
+
+    /// Every platform's code in `opentide_core::codes::ALL` (named
+    /// `<platform>_...` after a platform of the registry) has its place: a
+    /// finding the `schema` check fails on (a model's constraint code, or
+    /// one of its own codes), a block advisory (a warning), or a code no
+    /// `schema` finding carries, named below with where it comes from. A new
+    /// platform code fails here until it is placed, so the `schema` check's
+    /// status cannot miss it (#1893).
+    #[test]
+    fn every_platform_code_is_placed() {
+        use opentide_schema::objects::platform as models;
+        let prefixes: Vec<String> = opentide_schema::platforms::PLATFORMS
+            .iter()
+            .map(|platform| format!("{}_", platform.id))
+            .collect();
+        let schema: BTreeSet<&str> = models::constraint_codes()
+            .chain(Check::Schema.issue_codes().iter().copied())
+            .collect();
+        let advisories: BTreeSet<&str> = models::bitdefender::advisories::ADVISORY_CODES
+            .into_iter()
+            .chain(models::graylog::ADVISORY_CODES)
+            .chain(models::exabeam::ADVISORY_CODES)
+            .chain(models::microsoft_defender::ADVISORY_CODES)
+            .chain(models::google_secops::advisories::ADVISORY_CODES)
+            .chain(models::datadog::ADVISORY_CODES)
+            .chain(models::harfanglab::yara::ADVISORY_CODES)
+            .collect();
+        let elsewhere: BTreeSet<&str> = ELSEWHERE.iter().map(|(code, _)| *code).collect();
+        let mut unplaced = Vec::new();
+        for code in opentide_core::codes::ALL {
+            if !prefixes
+                .iter()
+                .any(|prefix| code.starts_with(prefix.as_str()))
+            {
+                continue;
+            }
+            // A code may be both (Bitdefender's `bitdefender_criterion_field`
+            // is an error on an EDR target and a warning on another), but a
+            // code named below is neither.
+            let checked = schema.contains(code) || advisories.contains(code);
+            if elsewhere.contains(code) {
+                assert!(!checked, "{code} is named below and placed too");
+            } else if !checked {
+                unplaced.push(*code);
+            }
+        }
+        assert_eq!(unplaced, Vec::<&str>::new(), "platform codes with no place");
+        // No stale entry: each named code still exists.
+        for (code, _) in ELSEWHERE {
+            assert!(opentide_core::codes::ALL.contains(code), "{code}");
+        }
+    }
+
+    /// A constraint code fails the `schema` check on an object's model
+    /// finding only: the query engine's finding under the same code stays
+    /// the `queries` check's, and a configuration file's the
+    /// `configuration` check's.
+    #[test]
+    fn a_constraint_code_is_the_schema_checks_on_a_model_finding_only() {
+        let model = Diagnostic::error("microsoft_defender_severity", "m").object("u", "rule");
+        assert!(is_model_constraint(&model));
+        let engine = model.clone().with("source", "engine");
+        assert!(!is_model_constraint(&engine));
+        let configuration =
+            Diagnostic::error("microsoft_defender_severity", "m").object("", "configuration");
+        assert!(!is_model_constraint(&configuration));
+        assert!(!is_model_constraint(&Diagnostic::error(
+            "kql_parse_error",
+            "m"
+        )));
+    }
+
     #[test]
     fn validation_codes_hold_every_checks_codes_sorted() {
         for check in Check::ALL {
@@ -2017,7 +2479,7 @@ mod tests {
             }
         }
         for code in STRICT_EXEMPT_WARNINGS {
-            assert!(VALIDATION_CODES.contains(&code), "{code}");
+            assert!(VALIDATION_CODES.contains(code), "{code}");
         }
         assert!(VALIDATION_CODES.windows(2).all(|pair| pair[0] < pair[1]));
     }

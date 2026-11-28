@@ -1,6 +1,6 @@
 ---
 title: opentide
-description: Spec-driven development for agentic detection engineering — validate, generate, deploy, and document detection rules across thirteen security platforms.
+description: Spec-driven development for agentic detection engineering — validate, generate, deploy, and document detection rules across fourteen security platforms.
 ---
 
 # opentide
@@ -18,10 +18,10 @@ description: Spec-driven development for agentic detection engineering — valid
 
 ## Quick start
 
-The latest release is **[1.0.0](./usage/releases.md)** (25 November 2026). The first public release was **0.1.0**.
+The latest release is **[1.1.0](./usage/releases.md)** (26 November 2026). The first public release was **0.1.0**.
 
 ```bash
-pip install 'opentide==1.0.0'
+pip install 'opentide==1.1.0'
 export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 
 opentide setup --yes --platform sentinel --ci github
@@ -32,7 +32,7 @@ opentide deploy --platform sentinel --dry-run --strategy PREVIEW --all
 
 ## Platform coverage
 
-opentide deploys to **thirteen platforms**, checks queries on the tenant on **nine** of them and offline, with no tenant, on **twelve**. CrowdStrike, HarfangLab, Sysdig and Bitdefender deploy but have no live query check — opentide never fakes validation for those platforms; the offline engine checks their queries (CQL, YARA and Falco conditions) without a tenant. SentinelOne's queries are checked on the tenant only.
+opentide deploys to **fourteen platforms**, checks queries on the tenant on **ten** of them and offline, with no tenant, on **thirteen**. CrowdStrike, HarfangLab, Sysdig and Bitdefender deploy but have no live query check — opentide never fakes validation for those platforms; the offline engine checks their queries (CQL, YARA and Falco conditions) without a tenant. SentinelOne's queries are checked on the tenant only.
 
 See [Platforms](./usage/concepts/platforms.md) for the capability matrix.
 

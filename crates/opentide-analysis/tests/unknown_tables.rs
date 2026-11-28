@@ -3,6 +3,10 @@
 //! Defender XDR tables are known (#113).
 
 #![expect(
+    clippy::string_slice,
+    reason = "a test: a slice off a char boundary panics, and a panic is a failed test"
+)]
+#![expect(
     clippy::unwrap_used,
     reason = "test helpers outside #[test] functions: a panic fails the test"
 )]

@@ -1,0 +1,57 @@
+---
+source: crates/opentide-datadog/tests/trees.rs
+expression: "debug_tree(r#\"@evt.outcome:FAILURE source:okta #d:>1 *:hi *:* \"q.f\":x @u.first\\ name:al*\"#)"
+---
+QUERY@0..74
+  AND_EXPR@0..74
+    FIELD_CLAUSE@0..20
+      ATTRIBUTE@0..12
+        WORD@0..12 "@evt.outcome"
+      COLON@12..13 ":"
+      TERM@13..20
+        WORD@13..20 "FAILURE"
+    WHITESPACE@20..21 " "
+    FIELD_CLAUSE@21..32
+      TAG_KEY@21..27
+        WORD@21..27 "source"
+      COLON@27..28 ":"
+      TERM@28..32
+        WORD@28..32 "okta"
+    WHITESPACE@32..33 " "
+    FIELD_CLAUSE@33..38
+      CALCULATED_FIELD@33..35
+        WORD@33..35 "#d"
+      COLON@35..36 ":"
+      COMPARISON@36..38
+        GT@36..37 ">"
+        TERM@37..38
+          NUMBER@37..38 "1"
+    WHITESPACE@38..39 " "
+    FIELD_CLAUSE@39..43
+      ALL_ATTRIBUTES@39..40
+        STAR@39..40 "*"
+      COLON@40..41 ":"
+      TERM@41..43
+        WORD@41..43 "hi"
+    WHITESPACE@43..44 " "
+    MATCH_ALL@44..47
+      STAR@44..45 "*"
+      COLON@45..46 ":"
+      STAR@46..47 "*"
+    WHITESPACE@47..48 " "
+    FIELD_CLAUSE@48..55
+      QUOTED_FIELD@48..53
+        PHRASE_TOKEN@48..53 "\"q.f\""
+      COLON@53..54 ":"
+      TERM@54..55
+        WORD@54..55 "x"
+    WHITESPACE@55..56 " "
+    FIELD_CLAUSE@56..74
+      ATTRIBUTE@56..70
+        WORD@56..64 "@u.first"
+        ESCAPE@64..66 "\\ "
+        WORD@66..70 "name"
+      COLON@70..71 ":"
+      TERM@71..74
+        WORD@71..73 "al"
+        STAR@73..74 "*"

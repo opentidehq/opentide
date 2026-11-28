@@ -5,7 +5,7 @@
 //! The descriptions are the hovers editors show (the language server's
 //! catalog and the generated schemas read them from the models), so they are
 //! held to the specification's text. The Python check
-//! (`tests/test_models/test_spec_field_descriptions.py`) read the Pydantic
+//! (0.28.0's spec-field test) read the Pydantic
 //! docstrings; this one reads the Rust models' JSON Schemas
 //! (`opentide_schema::generate::schema::revision_model_schema`): each
 //! object revision's root and every model under `$defs` it reaches (the
@@ -126,7 +126,10 @@ fn last_cell(line: &str) -> &str {
             start = index + 1;
         }
     }
-    &inner[start..]
+    // Past an ASCII `|`.
+    inner
+        .split_at_checked(start)
+        .map_or(inner, |(_, cell)| cell)
 }
 
 /// The rows of one spec page that describe a model.
@@ -603,5 +606,12 @@ mod tests {
             "{:?}",
             platform_blocks(&models)
         );
+    }
+
+    #[test]
+    fn the_last_cell_reads_multi_byte_text() {
+        assert_eq!(last_cell("| é | 😀 \\| é |"), " 😀 \\| é ");
+        assert_eq!(last_cell("é😀"), "é😀");
+        assert_eq!(last_cell("|é|😀|"), "😀");
     }
 }

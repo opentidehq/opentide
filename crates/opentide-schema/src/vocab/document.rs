@@ -201,7 +201,7 @@ pub struct Entry {
     pub description: Description,
     /// The icon.
     pub icon: String,
-    /// The link.
+    /// The entry's reference URL (`link`: ATT&CK's page for an ATT&CK entry).
     pub link: String,
     /// The stages it belongs to (`tide.vocab.stages`), in order.
     pub stages: Vec<String>,
@@ -220,7 +220,7 @@ impl Entry {
 /// A loaded vocabulary.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Vocabulary {
-    /// The metadata.
+    /// Everything in the document but its entries.
     pub metadata: Metadata,
     /// The entries by key, in the document's order.
     pub entries: IndexMap<String, Entry>,

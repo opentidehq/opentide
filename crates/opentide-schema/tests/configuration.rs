@@ -1,4 +1,4 @@
-//! The configuration checks against the oracle (UC-1.5, #811): every case of
+//! The configuration checks against the Pydantic models (UC-1.5, #811): every case of
 //! `tests/oracle/config_cases.toml` run through `opentide_schema::configuration`
 //! and compared with `tests/oracle/config_table.json`, what opentide 0.23.0
 //! reports for it (`config_table.py`): each finding's code, severity, field
@@ -9,7 +9,7 @@
 //! A case whose result differs names the `[[difference]]` that explains it.
 //! A difference lists the `fields` it may change (`message`, `resolved`, ...):
 //! every other field of such a case (code, severity, field path, file, line,
-//! column, context) is still compared with the oracle's. A case that names a
+//! column, context) is still compared with the Pydantic models'. A case that names a
 //! difference and does not differ fails, as does a difference no case names.
 
 #![expect(
@@ -117,7 +117,7 @@ fn workspace_case(case: &toml::Value) -> Json {
     match resolve(&Instance {
         workspace: Some(&workspace),
         parent: parent.as_ref(),
-        // The oracle runs without OPENTIDE_TIDE_WORKSPACE.
+        // The Pydantic models runs without OPENTIDE_TIDE_WORKSPACE.
         skip_parent: false,
     }) {
         Ok(resolved) => json!({
@@ -186,7 +186,7 @@ fn sharing_case(case: &toml::Value) -> Json {
     let resolved = resolve(&Instance {
         workspace: Some(&workspace),
         parent: parent.as_ref(),
-        // The oracle runs without OPENTIDE_TIDE_WORKSPACE.
+        // The Pydantic models runs without OPENTIDE_TIDE_WORKSPACE.
         skip_parent: false,
     })
     .unwrap();
@@ -277,7 +277,7 @@ fn differences_outside(
     }
 }
 
-/// Checks one case against the oracle; a failure's description, if any.
+/// Checks one case against the Pydantic models; a failure's description, if any.
 fn compare(
     id: &str,
     oracle: &Json,
@@ -295,7 +295,9 @@ fn compare(
         return (rust != oracle).then(|| format!("{id}:{}", shown()));
     };
     if rust == oracle {
-        return Some(format!("{id}: names `{name}` but matches the oracle"));
+        return Some(format!(
+            "{id}: names `{name}` but matches the Pydantic models"
+        ));
     }
     let mut outside = Vec::new();
     differences_outside(oracle, rust, allowed, "", &mut outside);
@@ -309,7 +311,7 @@ fn compare(
 }
 
 #[test]
-fn configuration_cases_match_the_oracle_or_name_their_difference() {
+fn configuration_cases_match_the_models_or_name_their_difference() {
     let table: Json = serde_json::from_str(TABLE).unwrap();
     let cases: toml::Value = toml::from_str(CASES).unwrap();
     // Each difference: the finding members it may change, and the field
@@ -361,7 +363,7 @@ fn configuration_cases_match_the_oracle_or_name_their_difference() {
             used.insert((*name).to_owned());
         }
         // The snapshot records every finding Rust reports, the added ones
-        // included; only the comparison with the oracle sets them aside.
+        // included; only the comparison with the Pydantic models sets them aside.
         results.insert(id.to_owned(), rust.clone());
         let mut rust = rust;
         for path in &added {
@@ -384,7 +386,7 @@ fn configuration_cases_match_the_oracle_or_name_their_difference() {
             failures.push(format!("difference `{name}` is named by no case"));
         }
     }
-    // The Python oracle's verdicts are no longer asserted (they had drifted by
+    // The Python models' verdicts are no longer asserted (they had drifted by
     // design, #1139): the reviewed snapshot below is the contract.
     drop(failures);
     insta::assert_snapshot!(
@@ -418,7 +420,7 @@ fn a_difference_still_compares_the_fields_it_does_not_name() {
 }
 
 #[test]
-fn configuration_bundled_files_are_the_folder_and_the_oracles() {
+fn configuration_bundled_files_are_the_folder_and_the_models() {
     let table: Json = serde_json::from_str(TABLE).unwrap();
     let every: Vec<&str> = bundled::FILES.iter().map(|(path, _)| *path).collect();
     let oracle: Vec<&str> = table["bundled"]
@@ -582,7 +584,7 @@ fn configuration_buffer_takes_its_parent_layer_and_open_deployment() {
 }
 
 #[test]
-fn configuration_file_keys_route_as_the_oracle_routes_them() {
+fn configuration_file_keys_route_as_the_models_routes_them() {
     for (path, key) in [
         ("deployment.toml", Some("deployment.toml")),
         (
@@ -597,6 +599,28 @@ fn configuration_file_keys_route_as_the_oracle_routes_them() {
     ] {
         assert_eq!(checks::file_key(path).as_deref(), key, "{path}");
     }
+}
+
+#[test]
+fn configuration_paths_with_multi_byte_names() {
+    // #1946: the file key and the configurations folder never slice inside
+    // a character.
+    assert_eq!(
+        checks::file_key("/é/.opentide/configurations/platforms/😀.toml").as_deref(),
+        Some("platforms/*.toml")
+    );
+    assert_eq!(checks::file_key("/é/.opentide/configurations/é.😀"), None);
+    assert_eq!(
+        checks::configurations_directory("/é/.opentide/configurations/😀é.toml"),
+        Some((
+            "/é/.opentide/configurations".to_owned(),
+            "😀é.toml".to_owned()
+        ))
+    );
+    assert_eq!(
+        checks::configurations_directory("/é/.opentide/configurations/"),
+        None
+    );
 }
 
 mod configuration_never_panics {
@@ -858,4 +882,73 @@ fn the_dataset_list_refusal_covers_sourcetypes_and_a_missing_system() {
         message.contains("name = \"T\"\ndescription = \"<description>\"\nsystem = \"<system>\""),
         "{message}"
     );
+}
+
+/// `T` read from a TOML table, and its `Debug` output.
+fn debug_of<T: opentide_schema::FromNode + std::fmt::Debug>(text: &str) -> String {
+    let node = config_toml::parse(text).unwrap();
+    let mut cx = opentide_schema::from_node::Context::new();
+    let value = T::from_node(&node, &mut cx);
+    assert_eq!(cx.into_errors(), [], "{text}");
+    format!("{:?}", value.unwrap())
+}
+
+#[test]
+fn credentials_never_print_in_a_debug_output() {
+    // #1933: the secrets are skipped when serialised, but `{:?}` printed them.
+    use opentide_schema::configuration::models::{
+        CarbonBlackCloudSetup, CrowdstrikeSetup, HarfangLabSetup, MicrosoftDefenderSetup,
+        MispIntegration, SentinelOneSetup, SentinelSetup, SplunkSetup,
+    };
+    use opentide_schema::configuration::sharing::MispBlock;
+    const SECRET: &str = "s3cr3t-é😀";
+    let shown = [
+        debug_of::<SentinelSetup>(&format!(
+            "resource_group = \"g\"\nworkspace_name = \"w\"\nworkspace_id = \"i\"\n\
+             azure_tenant_id = \"t\"\nazure_subscription_id = \"s\"\nazure_client_id = \"c\"\n\
+             azure_client_secret = \"{SECRET}\"\n"
+        )),
+        debug_of::<SplunkSetup>(&format!(
+            "url = \"u\"\nport = 8089\napp = \"search\"\ntoken = \"{SECRET}\"\n"
+        )),
+        debug_of::<CarbonBlackCloudSetup>(&format!(
+            "url = \"u\"\norg_key = \"o\"\ntoken = \"{SECRET}\"\n"
+        )),
+        debug_of::<SentinelOneSetup>(&format!(
+            "url = \"u\"\naccount_id = 1\napi_token = \"{SECRET}\"\n"
+        )),
+        debug_of::<MicrosoftDefenderSetup>(&format!(
+            "tenant_id = \"t\"\nclient_id = \"c\"\nclient_secret = \"{SECRET}\"\n"
+        )),
+        debug_of::<CrowdstrikeSetup>(&format!(
+            "api = \"a\"\nclient_id = \"c\"\nclient_secret = \"{SECRET}\"\ncustomer_id = \"x\"\n"
+        )),
+        debug_of::<HarfangLabSetup>(&format!(
+            "url = \"u\"\napi_token = \"{SECRET}\"\nsource_id = \"s\"\n"
+        )),
+        debug_of::<MispIntegration>(&format!(
+            "name = \"a\"\nurl = \"https://a\"\napi_key = \"{SECRET}\"\nmax_tlp = \"red\"\n"
+        )),
+        format!(
+            "{:?}",
+            MispBlock {
+                name: "a".to_owned(),
+                url: "https://a".to_owned(),
+                max_tlp: "red".to_owned(),
+                api_key: Some(SECRET.to_owned()),
+                enabled: true,
+                object_types: Vec::new(),
+                rule_statuses: Vec::new(),
+                organisation_uuid: None,
+                publish: false,
+                verify_ssl: true,
+            }
+        ),
+    ];
+    for shown in shown {
+        assert!(!shown.contains(SECRET), "{shown}");
+        assert!(shown.contains("[REDACTED]"), "{shown}");
+        // The other fields are still shown.
+        assert!(shown.contains("ssl") || shown.contains("name"), "{shown}");
+    }
 }

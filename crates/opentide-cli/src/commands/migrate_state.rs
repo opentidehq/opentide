@@ -1,4 +1,4 @@
-//! `deploy migrate-state` (UC-4.4, #834; `cli/services/migrate_state.py`):
+//! `deploy migrate-state` (UC-4.4, #834):
 //! move vendor rule ids off rules into deployment state (RFC 0010 §3).
 //!
 //! SentinelOne and CrowdStrike ids found on a rule are
@@ -28,10 +28,11 @@ use opentide_schema::node::{self, Node, Value};
 use opentide_workspace::{OsFs, root};
 
 use super::deploy_state::{self, ExternalId, Shard, StateError};
+use super::result::{ExitCode, Status};
 use super::{Report, counted, placement};
 use crate::env::Env;
 use crate::envelope::Failure;
-use crate::json::Json;
+use crate::json::{Json, Object};
 
 /// The command's path.
 pub const COMMAND: &str = "deploy migrate-state";
@@ -139,7 +140,7 @@ impl Source {
         }
     }
 
-    /// The zero-based last line `node` occupies (`_last_line`).
+    /// The zero-based last line `node` occupies.
     fn last_line(&self, node: &Node) -> usize {
         let (start, end) = (
             node.start.line().saturating_sub(1),
@@ -197,7 +198,7 @@ fn rule_files(rules_dir: &Path) -> Vec<PathBuf> {
     found
 }
 
-/// Binds one tenant's id (`_bind`).
+/// Binds one tenant's id.
 fn bind(
     rule: &mut RuleIds,
     platform: &str,
@@ -250,7 +251,7 @@ fn bind(
     });
 }
 
-/// Every legacy key under `configurations` (`_collect`).
+/// Every legacy key under `configurations`.
 fn collect(rule: &mut RuleIds, source: &Source, root: &Node) {
     let Some(configurations) = root.get("configurations") else {
         return;
@@ -306,7 +307,16 @@ fn collect(rule: &mut RuleIds, source: &Source, root: &Node) {
                     );
                     continue;
                 }
-                let tenant = &key[LEGACY_TENANT_PREFIX.len()..];
+                // `is_legacy_key` lets through the map keys, handled above,
+                // and `rule_id::<tenant>`.
+                debug_assert!(key.starts_with(LEGACY_TENANT_PREFIX), "{key:?}");
+                let Some(tenant) = key.strip_prefix(LEGACY_TENANT_PREFIX) else {
+                    rule.fail(
+                        "external_id_shape",
+                        format!("configurations.{platform}.{key} is not an id key"),
+                    );
+                    continue;
+                };
                 bind(
                     rule,
                     &platform,
@@ -321,7 +331,7 @@ fn collect(rule: &mut RuleIds, source: &Source, root: &Node) {
 }
 
 /// `text` without the lines of `spans`; lines split after each LF, so a
-/// CRLF line keeps its CR (`_strip_lines`).
+/// CRLF line keeps its CR.
 fn strip_lines(text: &str, spans: &[(usize, usize)]) -> String {
     text.split_inclusive('\n')
         .enumerate()
@@ -335,7 +345,7 @@ fn strip_lines(text: &str, spans: &[(usize, usize)]) -> String {
 }
 
 /// The document as plain values, with every legacy key removed from the
-/// platform blocks when `strip` (`_expected_document`).
+/// platform blocks when `strip`.
 fn plain(document: &node::Document, strip: bool) -> serde_json::Value {
     let Some(root) = document.root() else {
         return serde_json::Value::Null;
@@ -364,7 +374,7 @@ fn unsupported_breaks(text: &str) -> bool {
     false
 }
 
-/// Finds the ids in one file and computes its edited text (`_plan_rule`).
+/// Finds the ids in one file and computes its edited text.
 #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
 fn plan_rule(path: &Path) -> (RuleIds, Option<String>) {
     let mut rule = RuleIds::default();
@@ -470,7 +480,7 @@ fn plan_rule(path: &Path) -> (RuleIds, Option<String>) {
     (rule, Some(edited))
 }
 
-/// Loads the shard and refuses ids that disagree with it (`_check_shard`).
+/// Loads the shard and refuses ids that disagree with it.
 fn check_shard(rule: &mut RuleIds, workspace: &Path) -> Option<Shard> {
     let uuid = rule.object_uuid.clone()?;
     rule.shard_bindings().next()?;
@@ -502,7 +512,7 @@ fn check_shard(rule: &mut RuleIds, workspace: &Path) -> Option<Shard> {
     Some(shard)
 }
 
-/// `path` relative to `workspace`, with `/` (`_display`).
+/// `path` relative to `workspace`, with `/`.
 fn display(path: &Path, workspace: &Path) -> String {
     let resolved = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
     let base = std::fs::canonicalize(workspace).unwrap_or_else(|_| workspace.to_path_buf());
@@ -592,15 +602,15 @@ pub fn migrate(workspace: &Path, rules_dir: &Path) -> Report {
                 file = relative.as_str(),
                 "external_id_unused"
             );
-            let mut members = vec![
+            let mut members = Object::from([
                 ("file".to_owned(), Json::str(&relative)),
                 ("uuid".to_owned(), optional(rule.object_uuid.as_ref())),
-            ];
+            ]);
             if let Json::Object(binding) = binding.json() {
                 members.extend(binding);
             }
             unused.push((
-                Json::object(members),
+                Json::Object(members),
                 format!(
                     "external_id_unused: {} tenant {} id {} removed from {relative} (never read \
                      by its deployer; not stored)",
@@ -724,32 +734,32 @@ fn outcome(
             ])
         })
         .collect();
-    let mut data = vec![
+    let mut data = Object::from([
         ("migrated".to_owned(), Json::Array(migrated)),
         ("unused".to_owned(), Json::Array(unused)),
         ("errors".to_owned(), Json::Array(error_items)),
         ("shards_written".to_owned(), int(shards_written)),
         ("rules_edited".to_owned(), int(rules)),
-    ];
-    let mut report = Report::completed(COMMAND, Vec::new());
-    report.outcome.summary = vec![
+    ]);
+    let mut report = Report::completed(COMMAND, Object::new());
+    report.outcome.summary = Object::from([
         ("ids".to_owned(), int(ids)),
         ("rules".to_owned(), int(rules)),
         ("shards".to_owned(), int(shards_written)),
-    ];
+    ]);
     if !errors.is_empty() {
         let detail: Vec<String> = errors
             .iter()
             .map(|(code, file, _, message)| format!("{code}: {file}: {message}"))
             .collect();
-        data.push(("detail".to_owned(), Json::str(detail.join("; "))));
+        data.insert("detail".to_owned(), Json::str(detail.join("; ")));
         let message = format!(
             "{} rule file(s) could not be migrated; {rules} migrated. Fix them and re-run",
             errors.len()
         );
-        failed(&mut report, message, 1);
+        failed(&mut report, message, ExitCode::Failure);
     } else if rules > 0 {
-        data.push(("advice".to_owned(), Json::str(COMMIT_ADVICE)));
+        data.insert("advice".to_owned(), Json::str(COMMIT_ADVICE));
         report.outcome.message = format!(
             "Moved {} to .opentide/states/deployment/ · {} edited, {} written",
             counted(ids, "vendor id"),
@@ -759,16 +769,16 @@ fn outcome(
     } else {
         "No vendor rule ids left on rules".clone_into(&mut report.outcome.message);
     }
-    report.outcome.data = data;
+    report.outcome.data = Object::from_iter(data);
     report.warnings = warnings;
     report
 }
 
 /// Marks `report` failed with `message`, `command_failed`.
-fn failed(report: &mut Report, message: String, exit_code: i32) {
-    "failed".clone_into(&mut report.outcome.status);
+fn failed(report: &mut Report, message: String, exit: ExitCode) {
+    report.outcome.status = Status::Failed;
     report.outcome.message.clone_from(&message);
-    report.outcome.exit_code = exit_code;
+    report.outcome.exit_code = exit;
     report.outcome.failure = Some(Failure::new(super::COMMAND_FAILED, message));
 }
 
@@ -778,8 +788,8 @@ fn refused(rule: &deploy_state::IgnoreRule) -> Report {
         "deployment_state_ignored: {}",
         deploy_state::ignored_message(rule)
     );
-    let mut report = Report::completed(COMMAND, Vec::new());
-    report.outcome.data = vec![
+    let mut report = Report::completed(COMMAND, Object::new());
+    report.outcome.data = Object::from([
         ("code".to_owned(), Json::str("deployment_state_ignored")),
         (
             "ignore".to_owned(),
@@ -803,8 +813,8 @@ fn refused(rule: &deploy_state::IgnoreRule) -> Report {
         ("migrated".to_owned(), Json::Array(Vec::new())),
         ("unused".to_owned(), Json::Array(Vec::new())),
         ("errors".to_owned(), Json::Array(Vec::new())),
-    ];
-    failed(&mut report, message, 1);
+    ]);
+    failed(&mut report, message, ExitCode::Failure);
     report
 }
 
@@ -830,13 +840,11 @@ mod tests {
     }
 
     fn data<'r>(report: &'r Report, key: &str) -> &'r Json {
-        &report
+        report
             .outcome
             .data
-            .iter()
-            .find(|(name, _)| name == key)
+            .get(key)
             .unwrap_or_else(|| panic!("no {key}"))
-            .1
     }
 
     fn rule(configurations: &str) -> String {
@@ -852,7 +860,7 @@ mod tests {
         );
         let dir = workspace(&[("objects/rules/r.yaml", &text)]);
         let report = migrate(dir.path(), &rules(&dir));
-        assert_eq!(report.outcome.exit_code, 0, "{report:?}");
+        assert_eq!(report.outcome.exit_code, ExitCode::Success, "{report:?}");
         assert_eq!(
             report.outcome.message,
             "Moved 2 vendor ids to .opentide/states/deployment/ · 1 rule edited, 1 shard written"
@@ -876,7 +884,20 @@ mod tests {
         // A second run finds nothing left.
         let again = migrate(dir.path(), &rules(&dir));
         assert_eq!(again.outcome.message, "No vendor rule ids left on rules");
-        assert_eq!(again.outcome.exit_code, 0);
+        assert_eq!(again.outcome.exit_code, ExitCode::Success);
+    }
+
+    #[test]
+    fn a_tenant_named_in_any_script_keeps_its_name() {
+        // #1946: the tenant is what follows `rule_id::`, multi-byte or not.
+        let text = rule("  sentinel_one:\n    rule_id::prodé😀: 12345\n    query: é😀\n");
+        let dir = workspace(&[("objects/rules/é😀.yaml", &text)]);
+        let report = migrate(dir.path(), &rules(&dir));
+        assert_eq!(report.outcome.exit_code, ExitCode::Success, "{report:?}");
+        let shard = Shard::load(dir.path(), UUID).unwrap();
+        assert_eq!(shard.get("sentinel_one", "prodé😀"), Some("12345"));
+        let edited = std::fs::read_to_string(rules(&dir).join("é😀.yaml")).unwrap();
+        assert_eq!(edited, rule("  sentinel_one:\n    query: é😀\n"));
     }
 
     #[test]
@@ -887,7 +908,7 @@ mod tests {
         );
         let dir = workspace(&[("objects/rules/r.yml", &text)]);
         let report = migrate(dir.path(), &rules(&dir));
-        assert_eq!(report.outcome.exit_code, 0, "{report:?}");
+        assert_eq!(report.outcome.exit_code, ExitCode::Success, "{report:?}");
         let edited = std::fs::read_to_string(dir.path().join("objects/rules/r.yml")).unwrap();
         assert_eq!(
             edited,
@@ -903,8 +924,8 @@ mod tests {
         let text = rule("  sentinel_one:\n    rule_id::lab: \"007\"\n    query: q\n");
         let dir = workspace(&[("objects/rules/r.yaml", &text)]);
         let report = migrate(dir.path(), &rules(&dir));
-        assert_eq!(report.outcome.exit_code, 1);
-        assert_eq!(report.outcome.status, "failed");
+        assert_eq!(report.outcome.exit_code, ExitCode::Failure);
+        assert_eq!(report.outcome.status, Status::Failed);
         assert_eq!(
             report.outcome.message,
             "1 rule file(s) could not be migrated; 0 migrated. Fix them and re-run"
@@ -970,7 +991,11 @@ mod tests {
         for (configurations, code, message) in cases {
             let dir = workspace(&[("objects/rules/r.yaml", &rule(configurations))]);
             let report = migrate(dir.path(), &rules(&dir));
-            assert_eq!(report.outcome.exit_code, 1, "{configurations}");
+            assert_eq!(
+                report.outcome.exit_code,
+                ExitCode::Failure,
+                "{configurations}"
+            );
             let Json::Array(errors) = data(&report, "errors") else {
                 panic!("errors")
             };
@@ -1010,7 +1035,7 @@ mod tests {
         let text = "name: R\nmetadata:\n  uuid: 7\nconfigurations:\n  splunk:\n    rule_id::us: a\n    query: q\n";
         let dir = workspace(&[("objects/rules/r.yaml", text)]);
         let report = migrate(dir.path(), &rules(&dir));
-        assert_eq!(report.outcome.exit_code, 0);
+        assert_eq!(report.outcome.exit_code, ExitCode::Success);
         let Json::Array(unused) = data(&report, "unused") else {
             panic!("unused")
         };
@@ -1034,7 +1059,7 @@ mod tests {
             (&format!(".opentide/states/deployment/{UUID}.json"), &shard),
         ]);
         let report = migrate(dir.path(), &rules(&dir));
-        assert_eq!(report.outcome.exit_code, 1);
+        assert_eq!(report.outcome.exit_code, ExitCode::Failure);
         let Json::Str(detail) = data(&report, "detail") else {
             panic!("detail")
         };
@@ -1054,7 +1079,7 @@ mod tests {
             (&format!(".opentide/states/deployment/{UUID}.json"), &shard),
         ]);
         let report = migrate(dir.path(), &rules(&dir));
-        assert_eq!(report.outcome.exit_code, 0, "{report:?}");
+        assert_eq!(report.outcome.exit_code, ExitCode::Success, "{report:?}");
         assert_eq!(data(&report, "shards_written"), &Json::Int(0));
     }
 
@@ -1071,7 +1096,7 @@ mod tests {
             panic!("errors")
         };
         assert_eq!(errors.len(), 2);
-        assert_eq!(report.outcome.exit_code, 1);
+        assert_eq!(report.outcome.exit_code, ExitCode::Failure);
     }
 
     #[test]
@@ -1080,7 +1105,7 @@ mod tests {
             .replace("# keep me\n", "# keep\rme\n");
         let dir = workspace(&[("objects/rules/r.yaml", &text)]);
         let report = migrate(dir.path(), &rules(&dir));
-        assert_eq!(report.outcome.exit_code, 1);
+        assert_eq!(report.outcome.exit_code, ExitCode::Failure);
         assert!(unsupported_breaks("a\u{2028}b"));
         assert!(!unsupported_breaks("a\r\nb\n"));
     }
@@ -1090,7 +1115,7 @@ mod tests {
         let dir = workspace(&[]);
         let report = migrate(dir.path(), &rules(&dir));
         assert_eq!(report.outcome.message, "No vendor rule ids left on rules");
-        assert_eq!(report.outcome.exit_code, 0);
+        assert_eq!(report.outcome.exit_code, ExitCode::Success);
     }
 
     #[test]
@@ -1110,7 +1135,7 @@ mod tests {
             return;
         }
         let report = migrate(dir.path(), &rules(&dir));
-        assert_eq!(report.outcome.exit_code, 1);
+        assert_eq!(report.outcome.exit_code, ExitCode::Failure);
         assert_eq!(
             data(&report, "code"),
             &Json::str("deployment_state_ignored")

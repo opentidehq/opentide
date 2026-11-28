@@ -8,6 +8,7 @@ names the few the toolkit needs in a `Grammar`. I/O-free, no `unsafe`, no worksp
 |--------|------|
 | `token_set.rs` | `TokenSet`: a 512-kind bitset (expected sets, recovery sets); a kind past `CAPACITY` panics, never vanishes |
 | `input.rs` | `Grammar`, `Lexeme`, `lex` (a logos token source that resumes one character after an error), `Input` (trivia kept, skipped for lookahead) |
+| `memo.rs` | `LastParse`: the last parse of a text, which a language keeps in a `thread_local!` of its own so the highlighting, fields and diagnostics of one text share one parse (`parse_memo` in Falco, Exabeam and Kibana KQL); a text past `MEMO_MAX` (64 KiB) is not kept |
 | `parser.rs` | `Parser` (`nth`/`at`/`eat`/`expect`/`bump_as`/`err_*`/`enter`/`exit`), `Marker`/`CompletedMarker::precede`, `Event`, `ErrorKind` |
 | `tree.rs` | `build`: events to a lossless rowan `GreenNode` and `SyntaxError`s, iteratively, no deeper than `MAX_TREE_DEPTH` |
 | `green.rs` | The green tree builder `build` uses in place of rowan's `GreenNodeBuilder` (#1616): token and node caches hashed with foldhash's per-map seed and capped at 4,096 entries each (a full one is no longer consulted), so names crafted to collide under rowan's Fx hash cannot make a parse quadratic. Trees are built through `build`; rowan's builder appears only in tests |

@@ -1,4 +1,4 @@
-//! `validate`'s compile check (#660; UC-2.2, #817; `validation/compile_check.py`):
+//! `validate`'s compile check (#660; UC-2.2, #817):
 //! what a deploy would compile must compile.
 //!
 //! A platform's compiler has requirements its schema does not state (Sentinel
@@ -12,6 +12,7 @@
 
 use std::collections::BTreeSet;
 
+use opentide_schema::platforms::PlatformId;
 use opentide_schema::vocab::Vocabularies;
 use opentide_workspace::Workspace;
 use opentide_workspace::validate::{CompileCheck, CompileFailure, CompileRule};
@@ -58,19 +59,20 @@ pub fn failures(
     enabled: &BTreeSet<String>,
 ) -> Vec<CompileFailure> {
     let compiled = Rule::new(rule.root, Some(rule.path.to_string_lossy().into_owned()));
-    let mut platforms: Vec<&str> = preview::offline()
+    let mut platforms: Vec<PlatformId> = preview::offline()
         .into_iter()
-        .filter(|platform| enabled.contains(*platform))
+        .filter(|platform| enabled.contains(platform.as_str()))
         .collect();
-    platforms.sort_unstable();
+    // By identifier, as the findings are reported.
+    platforms.sort_unstable_by_key(|platform| platform.as_str());
     let mut found = Vec::new();
     for platform in platforms {
-        if !deploys(cx, compiled.block(platform)) {
+        if !deploys(cx, compiled.block(platform.as_str())) {
             continue;
         }
         if let Some(Err(error)) = preview::compile_offline(cx, platform, &compiled) {
             found.push(CompileFailure {
-                platform: platform.to_owned(),
+                platform: platform.as_str().to_owned(),
                 code: error.code.to_owned(),
                 message: error.reason,
                 hint: error.hint,
@@ -81,7 +83,7 @@ pub fn failures(
     found
 }
 
-/// Whether a deploy compiles `block` (`_deploys`): a mapping whose status
+/// Whether a deploy compiles `block`: a mapping whose status
 /// maps to a compiled strategy. An unknown status is the schema's finding.
 fn deploys(cx: &Context<'_>, block: Option<&Json>) -> bool {
     let Some(Json::Object(block)) = block else {

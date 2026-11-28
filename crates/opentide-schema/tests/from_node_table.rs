@@ -1,11 +1,11 @@
-//! The structural conversion against the oracle (UC-1.2, #808): every case of
+//! The structural conversion against the Pydantic models (UC-1.2, #808): every case of
 //! `tests/oracle/from_node_cases.toml` converted with the models below, which
 //! mirror the Pydantic models of `tests/oracle/from_node_table.py` field for
-//! field. `tests/oracle/from_node_table.json` is what the oracle reports: each
+//! field. `tests/oracle/from_node_table.json` is what the Pydantic models reports: each
 //! error's type, path, message, input and context, the span the CLI prints
 //! and the `yaml_line` it attaches, or the validated value.
 //!
-//! A case whose result differs from the oracle's names one of the file's
+//! A case whose result differs from the Pydantic models' names one of the file's
 //! `[[difference]]` entries (its reason and the bold lead of its CHANGELOG.md
 //! entry); a case that names one and does not differ fails, as does an entry
 //! no case uses. Every Rust result, the same or not, is the reviewed snapshot
@@ -219,7 +219,7 @@ struct Cases {
 }
 
 #[test]
-fn every_case_is_compared_with_the_oracle_and_every_difference_is_explained() {
+fn every_case_is_compared_with_the_models_and_every_difference_is_explained() {
     let table: Json = serde_json::from_str(TABLE).unwrap();
     assert_eq!(table["oracle"], "0.28.1");
     let notes: Cases = toml::from_str(include_str!("oracle/from_node_cases.toml")).unwrap();
@@ -270,10 +270,10 @@ fn every_case_is_compared_with_the_oracle_and_every_difference_is_explained() {
         let listed = named.get(id).copied().unwrap_or_default();
         match (listed.is_empty(), actual == expected) {
             (true, false) => failures.push(format!(
-                "{id}: differs from the oracle without a difference entry\n  oracle: {expected}\n  rust:   {actual}"
+                "{id}: differs from the Pydantic models without a difference entry\n  oracle: {expected}\n  rust:   {actual}"
             )),
             (false, true) => failures.push(format!(
-                "{id}: names {listed:?} but converts as the oracle does"
+                "{id}: names {listed:?} but converts as the Pydantic models does"
             )),
             _ => {}
         }
@@ -290,7 +290,7 @@ fn every_case_is_compared_with_the_oracle_and_every_difference_is_explained() {
             failures.push(format!("difference {id}: no case names it"));
         }
     }
-    // The Python oracle's verdicts are no longer asserted (they had drifted by
+    // The Python models' verdicts are no longer asserted (they had drifted by
     // design, #1139): the reviewed snapshot below is the contract.
     drop(failures);
     insta::assert_snapshot!(

@@ -1,9 +1,7 @@
-//! The platform blocks' tests, ported from the oracle's
-//! `tests/test_platforms/test_elastic_model.py`,
-//! `tests/test_platforms/test_sysdig_model.py`,
-//! `tests/test_models/test_platform*.py` and
-//! `tests/test_models/test_sentinel_attack.py`: each block is a JSON value,
-//! read as the node the YAML would give.
+//! The platform blocks' tests: the shared fields, Elastic's and Sysdig's
+//! named checks, Sentinel's techniques and durations, and Splunk's
+//! `advanced` table. Each block is a JSON value, read as the node the YAML
+//! would give.
 
 use garde::Validate;
 use serde_json::{Value as Json, json};
@@ -259,7 +257,7 @@ fn named_checks_are_registered_by_name() {
 }
 
 // ---------------------------------------------------------------------------
-// elastic_rule_shape (`test_elastic_model.py`).
+// elastic_rule_shape.
 // ---------------------------------------------------------------------------
 
 const ELASTIC: &str = "configurations.elastic";
@@ -651,6 +649,42 @@ fn elastic_bad_duration_names_its_field_value_and_form() {
 }
 
 #[test]
+fn elastic_durations_past_the_deployable_bound_report_duration() {
+    // #1982: the seconds of a 40-digit lookback saturate at `u128::MAX`, and
+    // deploy wrote `now-340282366920938463463374607431768211455s`.
+    let huge = "9".repeat(40) + "s";
+    let block = merged(&elastic_base(), &json!({"scheduling": {"lookback": huge}}));
+    assert_eq!(
+        errors("elastic", &block),
+        format!(
+            "scheduling.lookback: ElasticConfig validation failed with code(s): duration \
+             (\"{huge}\" is longer than a rule can be deployed with: at most \
+             9223372036854775807 seconds)"
+        )
+    );
+    // The bound itself is a duration; a second more is not, in every field.
+    let max = "9223372036854775807s";
+    let over = "9223372036854775808s";
+    for (field, overrides) in [
+        ("lookback", json!({"scheduling": {"lookback": max}})),
+        ("interval", json!({"scheduling": {"interval": max}})),
+    ] {
+        let block = merged(&elastic_base(), &overrides);
+        assert!(!errors("elastic", &block).contains("duration"), "{field}");
+    }
+    for overrides in [
+        json!({"scheduling": {"lookback": over}}),
+        json!({"scheduling": {"interval": over}}),
+        json!({"scheduling": {"interval": "106751991167301d"}}),
+        json!({"suppression": {"group_by": ["host.name"], "duration": over}}),
+        json!({"type": "new_terms", "new_terms": {"fields": ["user.name"], "history_window_start": over}}),
+    ] {
+        let block = merged(&elastic_base(), &overrides);
+        assert!(errors("elastic", &block).contains("duration"), "{block}");
+    }
+}
+
+#[test]
 fn elastic_non_object_scheduling_is_a_shape_error() {
     for scheduling in [json!("5m"), json!(["5m"]), json!(5)] {
         let found = errors(
@@ -694,7 +728,7 @@ fn elastic_round_trips_through_its_serialised_form() {
 }
 
 // ---------------------------------------------------------------------------
-// sysdig_rule_shape (`test_sysdig_model.py`).
+// sysdig_rule_shape.
 // ---------------------------------------------------------------------------
 
 fn rule() -> Json {
@@ -1082,7 +1116,7 @@ fn garde_runs_the_named_checks_and_the_field_checks() {
 }
 
 // ---------------------------------------------------------------------------
-// Sentinel (`test_sentinel_attack.py`, the known gap on durations).
+// Sentinel: techniques, and the durations deploy converts.
 // ---------------------------------------------------------------------------
 
 fn sentinel_with(alert: &Json, scheduling: &Json) -> Json {
@@ -1121,7 +1155,9 @@ fn sentinel_frequency_must_be_a_duration_deploy_converts() {
             "sentinel",
             &sentinel_with(
                 &json!({}),
-                &json!({"frequency": frequency, "lookback": "PT2H"}),
+                // At least every frequency: a shorter lookback is
+                // `sentinel_lookback` (#1916).
+                &json!({"frequency": frequency, "lookback": "P2D"}),
             ),
         );
     }
@@ -1175,15 +1211,15 @@ fn lists_that_double_at_each_step_stay_bounded() {
 
 #[test]
 fn a_block_larger_than_the_budget_is_left_to_the_conversion() {
-    let document = crate::node::load(
-        "a: &a [x, x, x, x, x, x, x, x, x, x]\n\
-         b: &b [*a, *a, *a, *a, *a, *a, *a, *a, *a, *a]\n\
-         c: &c [*b, *b, *b, *b, *b, *b, *b, *b, *b, *b]\n\
-         d: &d [*c, *c, *c, *c, *c, *c, *c, *c, *c, *c]\n\
-         e: &e [*d, *d, *d, *d, *d, *d, *d, *d, *d, *d]\n\
-         block:\n  status: S\n  priority: LOUD\n  tags: *e\n",
-    )
-    .unwrap();
+    // Past the conversion's budget, yet within the loader's alias budget
+    // (#1927): 21,000 written items, then five aliases of them (about
+    // 126,000 nodes expanded, under ten times what is written).
+    let items = vec!["x"; 21_000].join(", ");
+    let text = format!(
+        "a: &a [{items}]\n\
+         block:\n  status: S\n  priority: LOUD\n  tags: [*a, *a, *a, *a, *a]\n"
+    );
+    let document = crate::node::load(&text).unwrap();
     let block = document.root().unwrap().get("block").unwrap();
     assert!(!within_budget(block));
     assert!(sysdig::block_codes(block).is_empty());
@@ -1195,8 +1231,7 @@ fn a_block_larger_than_the_budget_is_left_to_the_conversion() {
 }
 
 /// An optional `Literal` is Pydantic's `anyOf [literal, null]`: its `enum`
-/// holds the literal's values only, never a `null` (as the retired schema
-/// diff against the oracle held it).
+/// holds the literal's values only, never a `null`.
 #[test]
 fn an_optional_literal_keeps_null_out_of_its_enum() {
     let schema = serde_json::to_value(schemars::schema_for!(ElasticConfig)).unwrap();
@@ -1259,7 +1294,7 @@ fn sysdig_a_null_exception_value_is_refused() {
 }
 
 // ---------------------------------------------------------------------------
-// Splunk's `advanced` table (0.24.0's `test_platform_query_contract.py`).
+// Splunk's `advanced` table.
 // ---------------------------------------------------------------------------
 
 fn splunk_block() -> Json {

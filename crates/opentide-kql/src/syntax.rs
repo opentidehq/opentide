@@ -757,11 +757,12 @@ mod tests {
         let text = ungram();
         let mut tokens = BTreeSet::new();
         let mut rest = text.as_str();
-        while let Some(open) = rest.find('\'') {
-            let after = &rest[open + 1..];
-            let Some(close) = after.find('\'') else { break };
-            tokens.insert(after[..close].to_owned());
-            rest = &after[close + 1..];
+        while let Some((_, after)) = rest.split_once('\'') {
+            let Some((token, next)) = after.split_once('\'') else {
+                break;
+            };
+            tokens.insert(token.to_owned());
+            rest = next;
         }
         let macro_source = include_str!("syntax.rs");
         for token in &tokens {

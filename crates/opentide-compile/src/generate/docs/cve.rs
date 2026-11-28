@@ -1,5 +1,5 @@
-//! CVE references as links to a Vulnerability-Lookup instance
-//! (`vulnerability_lookup.py`: identifiers, `page_url_for`, `[cve]`).
+//! CVE references as links to a Vulnerability-Lookup instance, as `[cve]`
+//! in the configuration sets it.
 //!
 //! With `[cve] retrieve_details` off, a page lists each identifier as a link
 //! to its record page. With it on (its default) a page is a table of each
@@ -219,7 +219,7 @@ pub enum EpssDetail {
     /// No score: the record has no CVE identifier, or the instance has none.
     #[default]
     None,
-    /// Its score.
+    /// The instance's EPSS score for the record's CVE.
     Score(Epss),
     /// The instance could not be asked.
     Unavailable,
@@ -231,23 +231,27 @@ pub enum EpssDetail {
 pub struct CveRecord {
     /// Its canonical identifier.
     pub identifier: String,
-    /// Its title.
+    /// The CNA's title, an OSV record's `summary`, or another record's
+    /// `title` or `summary`.
     pub title: Option<String>,
-    /// Its description.
+    /// The description, whitespace collapsed: the CNA's English one when it
+    /// gives one, else its first; an OSV record's `details`; another
+    /// record's `description` or `details`.
     pub description: Option<String>,
     /// Its publication date.
     pub published: Option<String>,
     /// The CVE record's state.
     pub state: Option<String>,
-    /// Its severity.
+    /// `HIGH (8.1)`, a score, or another severity.
     pub severity: Option<String>,
-    /// Its aliases.
+    /// A CVE record's aliases from its linked GitHub advisories; an OSV
+    /// record's own `aliases`.
     pub aliases: Vec<String>,
-    /// Its page.
+    /// Its page on the vulnerability-lookup instance.
     pub page_url: String,
     /// Its newest CVSS score.
     pub cvss: Option<Cvss>,
-    /// Its weaknesses.
+    /// The CWEs of the CNA's and the ADPs' problem types, each once.
     pub weaknesses: Vec<Weakness>,
     /// The products it affects (`vendor product`), each once.
     pub affected: Vec<String>,
@@ -457,8 +461,8 @@ impl CveFindings {
     }
 }
 
-/// A probability as a percentage that never rounds to a certainty
-/// (`_share`): `>99.9%`, `<0.1%`.
+/// A probability as a percentage that never rounds to a certainty: `>99.9%`,
+/// `<0.1%`.
 pub fn share(value: f64) -> String {
     let percent = value * 100.0;
     if percent >= 99.95 {
@@ -470,7 +474,7 @@ pub fn share(value: f64) -> String {
     }
 }
 
-/// The Exploitation cell of a record (`_exploitation`).
+/// The Exploitation cell of a record.
 pub fn exploitation(record: &CveRecord) -> String {
     if let Some(added) = &record.kev_added {
         return format!("**Known exploited**<br>CISA KEV, {added}");
@@ -493,8 +497,7 @@ pub fn exploitation(record: &CveRecord) -> String {
 /// Affected products listed under a CVE; the rest are counted.
 pub const AFFECTED_SHOWN: usize = 4;
 
-/// One line per CVE: what it is, what it affects, how it scores
-/// (`_cve_detail`).
+/// One line per CVE: what it is, what it affects, how it scores.
 pub fn detail_line(record: &CveRecord) -> String {
     let source = record
         .title

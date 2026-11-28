@@ -123,7 +123,7 @@ impl Transport for Wire {
 }
 
 impl TransportFactory for Wire {
-    fn make(&self, _spec: &TransportSpec<'_>) -> Result<Arc<dyn Transport>, String> {
+    fn make(&self, _spec: &TransportSpec<'_>) -> Result<Arc<dyn Transport>, transport::SetupError> {
         Ok(Arc::new(self.clone()))
     }
 }
@@ -158,7 +158,7 @@ fn probe(
         Some(secret) => Environment::default().with("SECRET", secret),
         None => Environment::default(),
     };
-    let setup: toml::Table = toml::from_str(setup).unwrap();
+    let setup: opentide_core::json::Object = toml::from_str(setup).unwrap();
     // As deploy mounts it: an unset variable is the connector's to report.
     let tenant = Tenant::from_setup(
         platform.id(),

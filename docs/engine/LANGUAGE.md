@@ -413,6 +413,35 @@ Language id `exabeam` (`.exabeam`). The Exabeam Query Language of Exabeam's New-
 | exabeam.range | `range` | `range__valid`, `range__invalid` | `keyword` (`TO`), `number`, `constant` |
 | exabeam.pipe | `"\|"` | `foreach_statement__valid` | `operator.pipe` |
 
+## Datadog
+
+Language id `datadog` (`.datadog`). The Datadog log search syntax of Datadog Cloud SIEM detection rules ([rfc-datadog-cloud-siem](../internal/rfc-datadog-cloud-siem.md), §6; [DATADOG.md](DATADOG.md)): `.datadog` files (profile `search`); a detection rule's `queries[].query` (profile `rule`) once the platform lands. A modifier binds tightest, then AND (written or implied), then OR. The language has no comment syntax: each fixture's tag is on a `#` first line the gate drops.
+
+| id | grammar rule | fixture ids | capture |
+| --- | --- | --- | --- |
+| datadog.or | `or_expr` | `or_expr__valid`, `or_expr__invalid` | keyword (`OR`, `\|\|`) |
+| datadog.and | `and_expr` | `and_expr__valid`, `and_expr__invalid` | keyword (`AND`, `&&`) |
+| datadog.not | `not_expr` | `not_expr__valid`, `not_expr__invalid` | keyword (`NOT`), operator (`-`, `+`) |
+| datadog.group | `group` | `group__valid`, `group__invalid` | punctuation.bracket |
+| datadog.match-all | `match_all` | `match_all__valid`, `match_all__invalid` | operator |
+| datadog.cidr | `cidr_call` | `cidr_call__valid`, `cidr_call__invalid` | function.builtin, punctuation |
+| datadog.cidr-block | `cidr_block` | `cidr_block__valid`, `cidr_block__invalid` | constant |
+| datadog.field | `field_clause` | `field_clause__valid`, `field_clause__invalid` | operator (`:`) |
+| datadog.attribute | `attribute` | `attribute__valid`, `attribute__invalid` | property |
+| datadog.calculated | `calculated_field` | `calculated_field__valid`, `calculated_field__invalid` | variable |
+| datadog.tag | `tag_key` | `tag_key__valid`, `tag_key__invalid` | property |
+| datadog.all-attributes | `all_attributes` | `all_attributes__valid`, `all_attributes__invalid` | operator |
+| datadog.quoted-field | `quoted_field` | `quoted_field__valid`, `quoted_field__invalid` | property |
+| datadog.value-group | `value_group` | `value_group__valid`, `value_group__invalid` | punctuation.bracket |
+| datadog.value-or | `value_or_expr` | `value_or_expr__valid`, `value_or_expr__invalid` | keyword |
+| datadog.value-and | `value_and_expr` | `value_and_expr__valid`, `value_and_expr__invalid` | keyword |
+| datadog.value-not | `value_not_expr` | `value_not_expr__valid`, `value_not_expr__invalid` | keyword, operator |
+| datadog.term | `term` | `term__valid`, `term__invalid` | string; operator (wildcards); constant (escapes); number |
+| datadog.phrase | `phrase` | `phrase__valid`, `phrase__invalid` | string |
+| datadog.comparison | `comparison` | `comparison__valid`, `comparison__invalid` | operator, number |
+| datadog.range | `range` | `range__valid`, `range__invalid` | punctuation.bracket, keyword (`TO`) |
+| datadog.range-bound | `range_bound` | `range_bound__valid`, `range_bound__invalid` | number, string |
+
 ## YARA
 
 Language id `yara` (`.yar`, `.yara`). YARA signatures as YARA-X 1.x compiles them ([yara-1.0](https://github.com/opentidehq/specifications/blob/main/specs/languages/yara-1.0.md), its YARA-X revision language-yara 1.6 in [opentidehq/specifications#94](https://github.com/opentidehq/specifications/pull/94); #1225): HarfangLab and Bitdefender `yara` blocks, whose profiles refuse YARA-X-only syntax (the setting `yara_x_syntax`, the error `yara_x_only_syntax`). `docs/engine/YARA.md` has the codes.

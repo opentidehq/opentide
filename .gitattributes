@@ -14,12 +14,17 @@ tests/fixtures/google_secops/** -text
 # the rule fixtures by search and replace on `\n`: the bytes as committed, LF,
 # on a Windows checkout too.
 tests/fixtures/graylog/** -text
+# Microsoft Defender: the compiler's tests (crates/opentide-compile/tests/microsoft_defender.rs)
+# compare the requests with the `.api.json` goldens byte for byte and edit the
+# rule fixtures by search and replace on `\n`: the bytes as committed, LF, on a
+# Windows checkout too.
+tests/fixtures/microsoft_defender/** -text
 # The minijinja templates compiled in with include_str! (setup ci's pipelines,
-# generate docs' pages) and setup ci's oracle pipelines: files a user commits,
+# generate docs' pages) and setup ci's recorded pipelines: files a user commits,
 # compared byte for byte, so a Windows checkout holds the LF bytes too.
 crates/opentide-compile/src/**/templates/*.j2 -text
 crates/opentide-compile/tests/ci/** -text
-# The renderers' oracle files (crates/opentide-cli/AGENTS.md): compared byte for byte too.
+# The renderers' recorded files (crates/opentide-cli/AGENTS.md): compared byte for byte too.
 crates/opentide-cli/tests/render/** -text linguist-generated
 
 # Digested and compiled in byte for byte (data/specifications.lock.json through
@@ -48,7 +53,7 @@ crates/testdata/objects/** -text
 src/opentide/data/diagnostics/*.md -text
 
 # The language server field catalog opentide-schema generates and compares byte for
-# byte with the oracle's (crates/opentide-schema/tests/catalog.rs): the bytes as
+# byte with the recorded one (crates/opentide-schema/tests/catalog.rs): the bytes as
 # committed, LF, on a Windows checkout too.
 data/catalogs/tide/generated/*.json -text
 # The agent skills and entrypoint templates `setup skills` writes (compiled into

@@ -243,7 +243,7 @@ impl Workspace {
             lint_records: Arc::default(),
             index: Arc::new(Index::default()),
         };
-        workspace.refresh(&HashSet::new(), true);
+        workspace.refresh(&HashSet::new());
         Ok(workspace)
     }
 
@@ -261,47 +261,115 @@ impl Workspace {
         Ok(Self::open(Arc::new(crate::fs::OsFs), Options { roots })?)
     }
 
-    /// Lists the object folders (unless `rescan` is false: the listing
-    /// is the last one), parses what the cache does not hold (and what
-    /// `stale` names), drops what is no longer listed, and assembles the
+    /// Lists the object folders, parses what the cache does not hold (and
+    /// what `stale` names), drops what is no longer listed, and assembles the
     /// index.
-    fn refresh(&mut self, stale: &HashSet<PathBuf>, rescan: bool) -> Vec<PathBuf> {
-        if rescan {
-            self.scans = Arc::new(scan_all(self.fs.as_ref(), &self.config));
-            self.lint_records.forget_listing();
-        }
+    fn refresh(&mut self, stale: &HashSet<PathBuf>) -> Vec<PathBuf> {
+        self.scans = Arc::new(scan_all(self.fs.as_ref(), &self.config));
+        self.lint_records.forget_listing();
         let scans = Arc::clone(&self.scans);
-        let files = listed(&scans);
-        let keep: HashSet<&PathBuf> = files.iter().collect();
-        self.parsed
-            .retain(|path, _| keep.contains(path) && !stale.contains(path));
-        let missing: Vec<PathBuf> = files
-            .iter()
-            .filter(|path| !self.parsed.contains_key(*path))
-            .cloned()
-            .collect();
+        let missing: Vec<PathBuf> = {
+            let files = listed(&scans);
+            let keep: HashSet<&PathBuf> = files.iter().collect();
+            self.parsed
+                .retain(|path, _| keep.contains(path) && !stale.contains(path));
+            files
+                .iter()
+                .filter(|path| !self.parsed.contains_key(*path))
+                .cloned()
+                .collect()
+        };
         let fresh = read_and_parse(self.fs.as_ref(), &missing);
         self.stats.file_reads += fresh.len();
         self.stats.parses += fresh.len();
         self.parsed.extend(fresh);
-        if rescan {
-            self.links = scans
-                .iter()
-                .filter_map(|scan| scan.scan.as_ref().ok())
-                .flat_map(|scan| scan.links.iter())
-                .map(|link| (link.clone(), self.fs.resolve(link)))
-                .collect();
-        }
+        self.links = scans
+            .iter()
+            .filter_map(|scan| scan.scan.as_ref().ok())
+            .flat_map(|scan| scan.links.iter())
+            .map(|link| (link.clone(), self.fs.resolve(link)))
+            .collect();
+        self.assemble_index();
+        missing
+    }
+
+    /// Assembles the index from the last listing and the parses.
+    fn assemble_index(&mut self) {
         // Messages show paths from the working directory, both resolved, as
         // `_shown_path` compares them (links, `\\?\` on Windows, `/private`).
         let display_base = self.fs.resolve(&self.options.roots.cwd);
         self.index = Arc::new(index::assemble(
             &self.config.families,
-            &scans,
+            &self.scans,
             &self.parsed,
             &display_base,
         ));
-        missing
+    }
+
+    /// Reads again the files `stale` names, on an edit of their content
+    /// alone: the listing is the last one, and `parsed` holds each file it
+    /// lists and nothing else (each refresh reads every listed file it does
+    /// not hold, a file it cannot read included), so nothing else is read or
+    /// dropped. Listing and hashing every file again made a third of an
+    /// edit's cost at 5,000 objects (#2122).
+    ///
+    /// When each file stays the object it was ([`Index::replacements`]) and
+    /// nothing else holds the index, the new documents are put in place in
+    /// it, and the invalidation is returned: assembling the index again from
+    /// every parse, and dropping the old one, made most of what remained of
+    /// an edit's bookkeeping (#2122). Otherwise the new parses are in the
+    /// cache, the index is still the one before the edit, and the files read
+    /// are returned for the caller to assemble it again.
+    fn reread_in_place(&mut self, stale: &HashSet<PathBuf>) -> Result<Invalidation, Vec<PathBuf>> {
+        let paths: Vec<PathBuf> = stale
+            .iter()
+            .filter(|path| self.parsed.contains_key(*path))
+            .cloned()
+            .collect();
+        let fresh = read_and_parse(self.fs.as_ref(), &paths);
+        self.stats.file_reads += fresh.len();
+        self.stats.parses += fresh.len();
+        let replacements = fresh
+            .iter()
+            .map(|(path, after)| {
+                let before = self.parsed.get(path)?;
+                Some((path.as_path(), before.as_ref(), after.as_ref()))
+            })
+            .collect::<Option<Vec<_>>>()
+            .and_then(|edits| self.index.replacements(&edits));
+        let Some(replacements) = replacements.filter(|_| Arc::get_mut(&mut self.index).is_some())
+        else {
+            self.parsed.extend(fresh);
+            return Err(paths);
+        };
+        // What the other objects' checks read of these files, before.
+        let identity = identity_facts(&self.index, stale);
+        let blocks = block_facts(&self.index, stale);
+        let replaced = Arc::get_mut(&mut self.index)
+            .map(|index| index.replace(replacements))
+            .unwrap_or_default();
+        self.parsed.extend(fresh);
+        // Each file is the object it was, in an index with no UUID used
+        // twice: what `needs_every_check` asks is false.
+        let identity_changed = identity != identity_facts(&self.index, stale);
+        if identity_changed {
+            self.lint_records.forget_stems();
+        }
+        // The objects and signals are the ones before, and so are the
+        // references but for the ones the replaced documents wrote.
+        let mut affected = affected(&self.index, &self.index, stale);
+        affected.extend(replaced.into_iter().map(|reference| reference.target));
+        let mut changed = paths;
+        changed.sort();
+        Ok(Invalidation {
+            full: false,
+            configuration: false,
+            reparsed: changed.clone(),
+            affected,
+            changed,
+            identity_changed,
+            cross_changed: blocks != block_facts(&self.index, stale),
+        })
     }
 
     /// The options it was opened with.
@@ -314,7 +382,7 @@ impl Workspace {
         &self.options.roots.cwd
     }
 
-    /// The roots.
+    /// Where the repository root and the detection workspace are.
     pub fn roots(&self) -> &Roots {
         &self.roots
     }
@@ -329,7 +397,8 @@ impl Workspace {
         &self.config
     }
 
-    /// The index.
+    /// The objects loaded from the object folders, and the files that did
+    /// not load.
     pub fn index(&self) -> &Arc<Index> {
         &self.index
     }
@@ -411,8 +480,8 @@ impl Workspace {
         // A root marker (`.opentide/`, `objects/`) created or deleted moves the
         // workspace: everything is loaded again from the new one.
         let full = outside || root::resolve(self.fs.as_ref(), &self.options.roots) != self.roots;
-        let before = Arc::clone(&self.index);
         if full {
+            let before = Arc::clone(&self.index);
             // Never through a session: this is how a kept one is refreshed.
             let fresh = Self::open_observed(Arc::clone(&self.fs), self.options.clone(), |_, _| {})?;
             let stats = Stats {
@@ -474,7 +543,18 @@ impl Workspace {
                     .iter()
                     .any(|path| self.parsed.contains_key(path) && self.fs.is_file(path))
             });
-        let mut reparsed = self.refresh(&stale, !content_only);
+        let (before, mut reparsed) = if content_only {
+            match self.reread_in_place(&stale) {
+                Ok(invalidation) => return Ok(invalidation),
+                Err(reread) => {
+                    let before = Arc::clone(&self.index);
+                    self.assemble_index();
+                    (before, reread)
+                }
+            }
+        } else {
+            (Arc::clone(&self.index), self.refresh(&stale))
+        };
         reparsed.sort();
         let paths: HashSet<PathBuf> = stale.into_iter().chain(reparsed.iter().cloned()).collect();
         let mut reread: Vec<PathBuf> = paths.iter().cloned().collect();
@@ -561,73 +641,100 @@ fn needs_every_check(before: &Index, after: &Index, paths: &HashSet<PathBuf>) ->
     })
 }
 
+/// The files an invalidation read again, asked about once for each object of
+/// the index. An edit reads one file again: comparing it with each object's
+/// path is cheaper than hashing that path, every component of it, which made
+/// these walks a third of an edit's bookkeeping at 5,000 objects (#2122). A
+/// set of many files is hashed as before; the answer is the set's either way.
+struct Reread<'a>(&'a HashSet<PathBuf>);
+
+impl Reread<'_> {
+    /// How many files are compared one by one before the set is hashed.
+    const COMPARED: usize = 16;
+
+    fn contains(&self, path: &Path) -> bool {
+        if self.0.len() <= Self::COMPARED {
+            self.0.iter().any(|reread| reread == path)
+        } else {
+            self.0.contains(path)
+        }
+    }
+}
+
 /// What the other objects' checks read of the objects in `paths`, in each
 /// index: whether it is the same before and after, then what the cross-rule
 /// checks read of their platform blocks.
 fn what_others_read(before: &Index, after: &Index, paths: &HashSet<PathBuf>) -> (bool, bool) {
-    // `(kind, family, uuid, name)`: an object, a file's displaced duplicate,
-    // a signal of such an object.
-    type Facts = BTreeSet<(u8, String, String, String)>;
-    fn identity(index: &Index, paths: &HashSet<PathBuf>) -> Facts {
-        let mut facts = Facts::new();
-        let mut owners: HashSet<&str> = HashSet::new();
-        for (family, objects) in &index.objects {
-            for object in objects.values().filter(|o| paths.contains(&o.path)) {
-                let name = object
-                    .root()
-                    .and_then(|root| root.get("name"))
-                    .map_or_else(|| object.uuid.clone(), |name| name.value.to_string());
-                owners.insert(object.uuid.as_str());
-                facts.insert((0, family.clone(), object.uuid.clone(), name));
-            }
-        }
-        for duplicate in index.duplicates.iter().filter(|d| paths.contains(&d.path)) {
-            facts.insert((
-                1,
-                duplicate.family.clone(),
-                duplicate.uuid.clone(),
-                String::new(),
-            ));
-        }
-        for signal in index.signals.values() {
-            if owners.contains(signal.owner.as_str()) {
-                let name = signal
-                    .node
-                    .get("name")
-                    .map_or_else(|| signal.uuid.clone(), |name| name.value.to_string());
-                facts.insert((2, signal.owner.clone(), signal.uuid.clone(), name));
-            }
-        }
-        facts
-    }
-    /// The platform blocks the cross-rule checks compare, by rule.
-    fn blocks(index: &Index, paths: &HashSet<PathBuf>) -> Facts {
-        let mut facts = Facts::new();
-        for object in index
-            .objects
-            .get("rule")
-            .into_iter()
-            .flat_map(|rules| rules.values())
-            .filter(|rule| paths.contains(&rule.path))
-        {
-            let Some(configurations) = object.root().and_then(|root| root.get("configurations"))
-            else {
-                continue;
-            };
-            for platform in ["graylog", "exabeam", "google_secops"] {
-                if let Some(block) = configurations.get(platform) {
-                    let mut text = String::new();
-                    dump(block, &mut text);
-                    facts.insert((3, platform.to_owned(), object.uuid.clone(), text));
-                }
-            }
-        }
-        facts
-    }
     (
-        identity(before, paths) != identity(after, paths),
-        blocks(before, paths) != blocks(after, paths),
+        identity_facts(before, paths) != identity_facts(after, paths),
+        block_facts(before, paths) != block_facts(after, paths),
     )
+}
+
+/// What [`what_others_read`] compares: `(kind, family, uuid, name)`, an
+/// object, a file's displaced duplicate, a signal of such an object, or a
+/// platform block a cross-rule check compares.
+type Facts = BTreeSet<(u8, String, String, String)>;
+
+/// What the other objects' checks read of the objects in `paths`.
+fn identity_facts(index: &Index, paths: &HashSet<PathBuf>) -> Facts {
+    let paths = Reread(paths);
+    let mut facts = Facts::new();
+    let mut owners: HashSet<&str> = HashSet::new();
+    for (family, objects) in &index.objects {
+        for object in objects.values().filter(|o| paths.contains(&o.path)) {
+            let name = object
+                .root()
+                .and_then(|root| root.get("name"))
+                .map_or_else(|| object.uuid.clone(), |name| name.value.to_string());
+            owners.insert(object.uuid.as_str());
+            facts.insert((0, family.clone(), object.uuid.clone(), name));
+        }
+    }
+    for duplicate in index.duplicates.iter().filter(|d| paths.contains(&d.path)) {
+        facts.insert((
+            1,
+            duplicate.family.clone(),
+            duplicate.uuid.clone(),
+            String::new(),
+        ));
+    }
+    for signal in index.signals.values() {
+        if owners.contains(signal.owner.as_str()) {
+            let name = signal
+                .node
+                .get("name")
+                .map_or_else(|| signal.uuid.clone(), |name| name.value.to_string());
+            facts.insert((2, signal.owner.clone(), signal.uuid.clone(), name));
+        }
+    }
+    facts
+}
+
+/// The platform blocks the cross-rule checks compare, of the rules in
+/// `paths`.
+fn block_facts(index: &Index, paths: &HashSet<PathBuf>) -> Facts {
+    let paths = Reread(paths);
+    let mut facts = Facts::new();
+    for object in index
+        .objects
+        .get("rule")
+        .into_iter()
+        .flat_map(|rules| rules.values())
+        .filter(|rule| paths.contains(&rule.path))
+    {
+        let Some(configurations) = object.root().and_then(|root| root.get("configurations")) else {
+            continue;
+        };
+        for platform in ["graylog", "exabeam", "google_secops"] {
+            if let Some(block) = configurations.get(platform) {
+                let mut text = String::new();
+                dump(block, &mut text);
+                facts.insert((3, platform.to_owned(), object.uuid.clone(), text));
+            }
+        }
+    }
+    facts
 }
 
 /// The UUIDs whose object, signal, references or duplicate findings may differ
@@ -635,6 +742,7 @@ fn what_others_read(before: &Index, after: &Index, paths: &HashSet<PathBuf>) -> 
 /// that were read again: the objects in them (in either index), the objects
 /// that reference or are referenced by those, and the signals they own.
 fn affected(before: &Index, after: &Index, paths: &HashSet<PathBuf>) -> BTreeSet<String> {
+    let paths = Reread(paths);
     let mut out: BTreeSet<String> = BTreeSet::new();
     for index in [before, after] {
         for objects in index.objects.values() {

@@ -1,7 +1,11 @@
 //! The repository `docs/usage/tutorial.md` builds (one threat, objective
 //! and rule), made by the Rust `opentide setup` and the tutorial's own YAML:
-//! what `tests/test_cli/test_tui.py` drives the Python UI against.
+//! what the Python UI's tests drove it against.
 #![allow(dead_code, reason = "each test file uses part of the helpers")]
+#![expect(
+    clippy::string_slice,
+    reason = "a test: a slice off a char boundary panics, and a panic is a failed test"
+)]
 
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};

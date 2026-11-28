@@ -21,6 +21,7 @@ pub const PLATFORMS: &[&str] = &[
     "graylog",
     "exabeam",
     "google_secops",
+    "datadog",
 ];
 
 /// `tlp::1.0`.

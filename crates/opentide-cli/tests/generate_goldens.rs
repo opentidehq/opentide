@@ -6,6 +6,10 @@
 
 #![cfg(unix)]
 #![expect(
+    clippy::string_slice,
+    reason = "a test: a slice off a char boundary panics, and a panic is a failed test"
+)]
+#![expect(
     clippy::unwrap_used,
     reason = "a test helper: a broken recording is a failure"
 )]
@@ -23,7 +27,7 @@ use replay::{Buffer, fixture};
 
 /// A phase that fails writes nothing: a threat without `metadata.version`
 /// fails the objects table after the Navigator layer rendered, and neither
-/// export is written (the oracle wrote them one after another, leaving the
+/// export is written (opentide 0.23.0 wrote them one after another, leaving the
 /// layer of a run that failed for CI to publish).
 #[test]
 fn exports_are_not_written_when_one_fails() {
@@ -275,6 +279,16 @@ fn an_invalid_inflight_preview_is_left_out_with_a_warning() {
     assert_eq!(bundle()["models"], models_before);
 }
 
+/// A case root for the `tide-corpus-folders` fixture, which holds
+/// `Objects/` and `objects/` side by side: on a case-sensitive volume
+/// (`OPENTIDE_CASE_ROOT` on macOS, whose default volume folds case and makes
+/// them one folder, as the snapshot cases need too).
+fn folders_root() -> tempfile::TempDir {
+    let root = replay::case_root();
+    replay::assert_case_sensitive(root.path());
+    root
+}
+
 /// `generate inflight` refuses an object that fails its model check: the run,
 /// its own pull request's, exits 1 naming the file and the error, and writes
 /// no shard for the default branch's docs to trip on.
@@ -283,7 +297,7 @@ fn inflight_shards_refuse_an_invalid_object() {
     if !has_git() {
         return;
     }
-    let scratch = tempfile::tempdir().unwrap();
+    let scratch = folders_root();
     let ws = std::fs::canonicalize(scratch.path()).unwrap().join("ws");
     fixture("tide-corpus-folders", &ws);
     git(&ws, &["init", "-q", "-b", "main"]);
@@ -397,7 +411,7 @@ fn inflight_shards_follow_the_branch() {
     {
         return;
     }
-    let scratch = tempfile::tempdir().unwrap();
+    let scratch = folders_root();
     let ws = std::fs::canonicalize(scratch.path()).unwrap().join("ws");
     fixture("tide-corpus-folders", &ws);
     git(&ws, &["init", "-q", "-b", "main"]);
@@ -546,7 +560,7 @@ fn setup_ci_refuses_then_writes() {
 }
 
 /// `--promotion-target` reads the statuses from the merged configuration,
-/// unchecked, as the oracle does: a `paths.toml` its model refuses (a legacy
+/// unchecked, as opentide 0.23.0 does: a `paths.toml` its model refuses (a legacy
 /// `[paths.core]` table) does not stop it (#957).
 #[test]
 fn setup_ci_reads_the_statuses_of_a_refused_paths_toml() {
@@ -710,7 +724,7 @@ fn the_explorer_reports_declared_visibility() {
     assert_eq!(code, 0, "{stdout}");
     let report: serde_json::Value =
         serde_json::from_slice(&std::fs::read(&visibility).unwrap()).unwrap();
-    // As the oracle's report: nothing could be read, so nothing is present.
+    // As opentide 0.23.0's report: nothing could be read, so nothing is present.
     assert_eq!(report["present"], false);
     assert_eq!(report["logsources"], serde_json::json!([]));
     let problem = report["problem"].as_str().unwrap();
@@ -774,7 +788,7 @@ fn inflight_skips_deleted_object_files() {
     if !has_git() {
         return;
     }
-    let scratch = tempfile::tempdir().unwrap();
+    let scratch = folders_root();
     let ws = std::fs::canonicalize(scratch.path()).unwrap().join("ws");
     let rules = feature_branch(&ws);
     std::fs::remove_file(ws.join("objects/objectives/objective-0001-credential-access.yaml"))
@@ -860,6 +874,211 @@ fn setup_ci_detects_the_default_branch() {
             // The first run wrote it for "trunk" (#1656).
             ".github/workflows/opentide.yml differs from what this run generates; it is replaced, and any hand edits in it are replaced too (`git diff -- .github/workflows/opentide.yml` shows them after the write)."
         ])
+    );
+}
+
+/// The default branch is read without the `git` program (#1955): `PATH`
+/// names an empty folder. Outside a repository it is `init.defaultBranch`
+/// from the global file the run's environment names, a `GIT_CONFIG_COUNT`
+/// override winning over it, else `main` with the not-a-repository warning;
+/// in one whose branches are packed, the checked-out branch with the
+/// warning that others exist.
+#[test]
+fn setup_ci_reads_the_default_branch_without_git() {
+    let scratch = tempfile::tempdir().unwrap();
+    let root = std::fs::canonicalize(scratch.path()).unwrap();
+    let ws = root.join("ws");
+    fixture("tide-corpus", &ws);
+    let no_git = root.join("empty-path");
+    std::fs::create_dir_all(&no_git).unwrap();
+    let path = no_git.to_str().unwrap();
+    let global = root.join("global.gitconfig");
+    std::fs::write(&global, "[init]\n\tdefaultBranch = trunk\n").unwrap();
+    let global = global.to_str().unwrap();
+    let branch = |extra: &[(&str, &str)]| {
+        let extra: Vec<(&str, &str)> = [("PATH", path)]
+            .into_iter()
+            .chain(extra.iter().copied())
+            .collect();
+        let (code, stdout) = run_json_with(&ws, &["setup", "ci", "github", "--yes"], &extra);
+        assert_eq!(code, 0, "{stdout}");
+        let written = document(&stdout);
+        (
+            written["default_branch"].as_str().unwrap().to_owned(),
+            written["warnings"].clone(),
+        )
+    };
+    let (found, _) = branch(&[("GIT_CONFIG_GLOBAL", global)]);
+    assert_eq!(found, "trunk");
+    let overridden = [
+        ("GIT_CONFIG_GLOBAL", global),
+        ("GIT_CONFIG_COUNT", "1"),
+        ("GIT_CONFIG_KEY_0", "Init.DefaultBranch"),
+        ("GIT_CONFIG_VALUE_0", "release"),
+    ];
+    assert_eq!(branch(&overridden).0, "release");
+    let (found, warnings) = branch(&[]);
+    assert_eq!(found, "main");
+    assert!(
+        warnings[0]
+            .as_str()
+            .unwrap()
+            .starts_with("This folder is not a git repository yet"),
+        "{warnings}"
+    );
+    if !has_git() {
+        return;
+    }
+    git(&ws, &["init", "-q", "-b", "main"]);
+    git(&ws, &["add", "-A"]);
+    git(&ws, &["commit", "-q", "-m", "catalogue"]);
+    git(&ws, &["checkout", "-q", "-b", "feature/x"]);
+    git(&ws, &["pack-refs", "--all"]);
+    let (found, warnings) = branch(&[]);
+    assert_eq!(found, "feature/x");
+    assert!(
+        warnings[0]
+            .as_str()
+            .unwrap()
+            .starts_with("origin/HEAD is not set, so the pipeline targets the checked-out branch"),
+        "{warnings}"
+    );
+}
+
+/// The first value named `key` anywhere in `value`.
+fn find_key<'a>(value: &'a serde_json::Value, key: &str) -> Option<&'a serde_json::Value> {
+    match value {
+        serde_json::Value::Object(map) => map
+            .get(key)
+            .or_else(|| map.values().find_map(|inner| find_key(inner, key))),
+        serde_json::Value::Array(items) => items.iter().find_map(|inner| find_key(inner, key)),
+        _ => None,
+    }
+}
+
+/// `new` reads its author's `user.name` without the `git` program (#1955):
+/// `PATH` names an empty folder, and the name comes from the global file the
+/// run's environment names, a `GIT_CONFIG_COUNT` override winning over it.
+#[test]
+fn new_reads_the_author_without_git() {
+    let scratch = tempfile::tempdir().unwrap();
+    let root = std::fs::canonicalize(scratch.path()).unwrap();
+    let ws = root.join("ws");
+    fixture("tide-corpus", &ws);
+    let no_git = root.join("empty-path");
+    std::fs::create_dir_all(&no_git).unwrap();
+    let path = no_git.to_str().unwrap();
+    let global = root.join("global.gitconfig");
+    std::fs::write(&global, "[user]\n\tname = Zoë 😀\n").unwrap();
+    let global = global.to_str().unwrap();
+    let author = |name: &str, extra: &[(&str, &str)]| {
+        let extra: Vec<(&str, &str)> = [("PATH", path)]
+            .into_iter()
+            .chain(extra.iter().copied())
+            .collect();
+        let (code, stdout) = run_json_with(&ws, &["new", "threat", "--name", name], &extra);
+        assert_eq!(code, 0, "{stdout}");
+        find_key(&document(&stdout), "author")
+            .cloned()
+            .unwrap_or_else(|| panic!("{stdout}"))
+    };
+    assert_eq!(author("First", &[("GIT_CONFIG_GLOBAL", global)]), "Zoë 😀");
+    let overridden = [
+        ("GIT_CONFIG_GLOBAL", global),
+        ("GIT_CONFIG_COUNT", "1"),
+        ("GIT_CONFIG_KEY_0", "User.Name"),
+        ("GIT_CONFIG_VALUE_0", "Émile"),
+    ];
+    assert_eq!(author("Second", &overridden), "Émile");
+    assert_eq!(author("Third", &[]), serde_json::Value::Null);
+}
+
+/// `setup hooks` finds the repository's layout without the `git` program
+/// (#1955): from a nested workspace, a relative `core.hooksPath` is taken
+/// from the top level, and one outside the repository is shared, so it is
+/// left alone with a warning.
+#[test]
+fn setup_hooks_reads_the_layout_without_git() {
+    if !has_git() {
+        return;
+    }
+    let scratch = tempfile::tempdir().unwrap();
+    let root = std::fs::canonicalize(scratch.path()).unwrap();
+    let repo = root.join("repo");
+    let ws = repo.join("détection");
+    fixture("tide-corpus", &ws);
+    git(&repo, &["init", "-q", "-b", "main"]);
+    git(&repo, &["config", "core.hooksPath", ".githooks"]);
+    let no_git = root.join("empty-path");
+    std::fs::create_dir_all(&no_git).unwrap();
+    let path = no_git.to_str().unwrap();
+    let (code, stdout) = run_json_with(&ws, &["setup", "hooks", "--yes"], &[("PATH", path)]);
+    assert_eq!(code, 0, "{stdout}");
+    let hook = std::fs::read_to_string(repo.join(".githooks/pre-commit")).unwrap();
+    assert!(
+        hook.contains("# opentide-workspace: \"détection\""),
+        "{hook}"
+    );
+    assert!(!repo.join(".git/hooks/pre-commit").exists());
+    let shared = root.join("partagés");
+    let shared = shared.to_str().unwrap();
+    let overridden = [
+        ("PATH", path),
+        ("GIT_CONFIG_COUNT", "1"),
+        ("GIT_CONFIG_KEY_0", "core.hooksPath"),
+        ("GIT_CONFIG_VALUE_0", shared),
+    ];
+    let (code, stdout) = run_json_with(&ws, &["setup", "hooks", "--yes"], &overridden);
+    assert_eq!(code, 0, "{stdout}");
+    assert!(
+        stdout.contains("core.hooksPath points outside this repository"),
+        "{stdout}"
+    );
+    assert!(stdout.contains(shared), "{stdout}");
+    assert!(!root.join("partagés/pre-commit").exists());
+}
+
+/// `setup hooks` finds the repository through the run's `GIT_DIR` and
+/// `GIT_WORK_TREE`, as `git rev-parse` did (#1955): the work tree has no
+/// `.git`, so without them there is no repository to install into.
+#[test]
+fn setup_hooks_follows_the_runs_git_dir() {
+    if !has_git() {
+        return;
+    }
+    let scratch = tempfile::tempdir().unwrap();
+    let root = std::fs::canonicalize(scratch.path()).unwrap();
+    let repo = root.join("repo");
+    let ws = repo.join("détection");
+    fixture("tide-corpus", &ws);
+    let store = root.join("dépôt 😀.git");
+    git(
+        &root,
+        &[
+            "init",
+            "-q",
+            "-b",
+            "main",
+            "--separate-git-dir",
+            store.to_str().unwrap(),
+            repo.to_str().unwrap(),
+        ],
+    );
+    std::fs::remove_file(repo.join(".git")).unwrap();
+    std::fs::create_dir_all(store.join("hooks")).unwrap();
+    let (code, stdout) = run_json_with(&ws, &["setup", "hooks", "--yes"], &[]);
+    assert_eq!(code, 0, "{stdout}");
+    assert!(!store.join("hooks/pre-commit").exists(), "{stdout}");
+    let named = [
+        ("GIT_DIR", store.to_str().unwrap()),
+        ("GIT_WORK_TREE", repo.to_str().unwrap()),
+    ];
+    let (code, stdout) = run_json_with(&ws, &["setup", "hooks", "--yes"], &named);
+    assert_eq!(code, 0, "{stdout}");
+    let hook = std::fs::read_to_string(store.join("hooks/pre-commit")).unwrap();
+    assert!(
+        hook.contains("# opentide-workspace: \"détection\""),
+        "{hook}"
     );
 }
 
@@ -1498,11 +1717,11 @@ fn docs_with_cve_details_fetch_each_record() {
 }
 
 /// `[paths.core] docs_folder` (CoreTIDE's docs folder) is not a key of
-/// paths.toml: the oracle's `load_settings` falls back to it, but its paths
+/// paths.toml: opentide 0.23.0's `load_settings` falls back to it, but its paths
 /// model refuses the table first, so the docs step fails and writes nothing,
 /// neither under that folder nor under `docs/` (#936). Pinned here so a
-/// later fallback cannot start writing pages the oracle never wrote, and the
-/// failure stays the docs step's (`phase`), as the oracle reports it.
+/// later fallback cannot start writing pages opentide 0.23.0 never wrote, and the
+/// failure stays the docs step's (`phase`), as opentide 0.23.0 reports it.
 #[test]
 fn docs_refuse_the_legacy_core_docs_folder() {
     let scratch = tempfile::tempdir().unwrap();
@@ -1523,7 +1742,7 @@ fn docs_refuse_the_legacy_core_docs_folder() {
 }
 
 /// A configuration that does not load fails the step of every `generate`
-/// command, as the oracle reports it: the oracle reads the configuration
+/// command, as opentide 0.23.0 reports it: opentide 0.23.0 reads the configuration
 /// inside the phase, so the envelope leads with `phase`, the message with
 /// the phase's name, and plain mode prints the failed checklist row before
 /// the error. Opened before the step, the workspace's error was a bare
@@ -1615,7 +1834,7 @@ fn run_plain(ws: &Path, words: &[&str]) -> (i32, String) {
 }
 
 /// The full pipeline (UC-6.0, #841) names the object files in subfolders it
-/// skipped once, after the phases, in the oracle's `nested_object_file`
+/// skipped once, after the phases, in opentide 0.23.0's `nested_object_file`
 /// warning (`report_nested_object_files`), its list as Python prints one;
 /// with `OPENTIDE_PROGRESS=json`, each phase's event comes before its row.
 #[test]

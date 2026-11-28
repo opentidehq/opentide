@@ -2,15 +2,15 @@
 //! (`/api/secure/rules`) and the runtime policies that name them
 //! (`/api/v2/policies`), the endpoints Sysdig's own Terraform provider uses.
 //!
-//! A port of `platforms/sysdig/client.py` (`SysdigClient`: a bearer token,
-//! 30 s, the connectors' retries; a 401 or 403 refuses the whole tenant) and of
-//! `deployer.py`'s `deploy_api`, rule by rule and request for request:
-//! create a rule and add it to the policies the block or the tenant names;
-//! update it with the version the tenant holds, renaming it in those
-//! policies; disable it (out of the policies) or delete it; create again a
-//! recorded rule the tenant lost, or forget one that was to be disabled. The
-//! rule id Sysdig gives is what deployment state records ([`StateChange`]).
-//! Sysdig has no live validation and no query runner (`supported: False`).
+//! Every request carries a bearer token and has 30 s, with the connectors'
+//! retries ([`http_defaults`]); a 401 or 403 refuses the whole tenant. A
+//! deploy works rule by rule: it creates a rule and adds it to the policies
+//! the block or the tenant names; updates it with the version the tenant
+//! holds, renaming it in those policies; disables it (out of the policies)
+//! or deletes it; creates again a recorded rule the tenant lost, or forgets
+//! one that was to be disabled. The rule id Sysdig gives is what deployment
+//! state records ([`StateChange`]). Sysdig has no live validation and no
+//! query runner (`supported: false`).
 //!
 //! The body is `opentide-compile`'s (`sysdig::compile_body`): the Falco rule
 //! with its block's macros and lists expanded into the condition, as Falco's
@@ -36,6 +36,10 @@ const RULES: &str = "/api/secure/rules";
 /// Runtime policies.
 const POLICIES: &str = "/api/v2/policies";
 
+/// The connect timeout and the read timeout of each request to the tenant;
+/// with retries, a whole request can take longer.
+pub const REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
 /// How a Sysdig tenant is reached: 30 s, and the connectors' retries. Only
 /// a read or a delete is sent again after a transient answer: a rule create
 /// is a `POST`, and every update is a `PUT` that is never retried once
@@ -43,7 +47,7 @@ const POLICIES: &str = "/api/v2/policies";
 /// held, and a policy is sent back as the tenant listed it.
 pub fn http_defaults() -> HttpSettings {
     HttpSettings {
-        timeout: std::time::Duration::from_secs(30),
+        timeout: REQUEST_TIMEOUT,
         retry: RetryPolicy::standard(),
         ..HttpSettings::default()
     }
@@ -310,15 +314,9 @@ impl<'a> Client<'a> {
         &self,
         policy: &Object,
     ) -> Result<Result<Json, ApiError>, ConnectorError> {
-        let name = policy
-            .get("name")
-            .map(opentide_compile::deploy::text)
-            .unwrap_or_default();
+        let name = policy.get("name").map(Json::to_text).unwrap_or_default();
         let action = format!("update policy '{name}'");
-        let id = policy
-            .get("id")
-            .map(opentide_compile::deploy::text)
-            .unwrap_or_default();
+        let id = policy.get("id").map(Json::to_text).unwrap_or_default();
         let bytes = self.serialise(&Json::Object(policy.clone()))?;
         let answer = self
             .send(
@@ -492,7 +490,7 @@ async fn create(
             message: "create rule: the response carries no rule id".to_owned(),
         }));
     };
-    outcome.state = StateChange::Record(opentide_compile::deploy::text(id));
+    outcome.state = StateChange::Record(Json::to_text(id));
     join_policies(client, &rule.name, policies(rule)).await
 }
 
@@ -529,13 +527,10 @@ async fn recreate(
 async fn named(client: &Client<'_>, names: &[String]) -> Result<Vec<Object>, Failure> {
     let listed = client.list_policies().await??;
     let by_name = |name: &str| {
-        listed.iter().rev().find(|policy| {
-            policy
-                .get("name")
-                .map(opentide_compile::deploy::text)
-                .as_deref()
-                == Some(name)
-        })
+        listed
+            .iter()
+            .rev()
+            .find(|policy| policy.get("name").map(Json::to_text).as_deref() == Some(name))
     };
     let missing: Vec<String> = names
         .iter()

@@ -145,11 +145,12 @@ fn minimal(model: &str, alert: &str) -> String {
 
 #[test]
 fn unset_keys_are_left_out_and_defaults_apply() {
-    // Written upper case, the id is the lowercase canonical uuid.
+    // Written upper case, the id is `opentide-` and the lowercase canonical
+    // uuid (#1886).
     let upper = minimal("", "").replace("0000000000e9\n  schema", "0000000000E9\n  schema");
     let (body, warnings, id) = compiled(&upper, &[], "contoso");
     assert!(warnings.is_empty(), "{warnings:?}");
-    assert_eq!(id, "00000000-0000-4000-8003-0000000000e9");
+    assert_eq!(id, "opentide-00000000-0000-4000-8003-0000000000e9");
     assert_eq!(
         body.to_compact(),
         r#"{"displayName":"Minimal","description":"A rule.","status":"enabled","queryCondition":{"queryText":"DeviceProcessEvents | take 1"},"schedule":{"frequency":"PT0S"},"detectionAction":{"alertTemplate":{"title":"Minimal","description":"A rule.","severity":"medium"}}}"#
@@ -274,7 +275,19 @@ fn a_dry_run_shows_the_first_call() {
         let writes = microsoft_defender::compile(&cx, &rule, "contoso").unwrap();
         assert_eq!(writes.first().map(|write| write.method), method, "{status}");
         if let Some(write) = writes.first() {
-            assert_eq!(write.url, rule_url("00000000-0000-4000-8003-0000000000e9"));
+            // #1886: the uuid begins with a digit, which Graph refuses as an
+            // id; the request names `opentide-<uuid>`.
+            assert_eq!(
+                write.url,
+                rule_url("opentide-00000000-0000-4000-8003-0000000000e9")
+            );
+            assert!(
+                write
+                    .url
+                    .ends_with("/detectionRules/opentide-00000000-0000-4000-8003-0000000000e9"),
+                "{}",
+                write.url
+            );
         }
     }
 }

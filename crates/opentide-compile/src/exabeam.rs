@@ -1,6 +1,5 @@
 //! Exabeam New-Scale SIEM (exabeam-1.0): an opentide rule's `exabeam` block
-//! as a correlation rule body, a port of 0.28.0's
-//! `platforms/exabeam/compile.py`.
+//! as a correlation rule body.
 //!
 //! The author writes the sequences and the response settings; the rest is
 //! derived from the rule: the Exabeam rule name, the description (with the
@@ -11,13 +10,17 @@
 //! the specification's Compiled body table; `tests/fixtures/exabeam/` holds
 //! the bodies.
 
-use opentide_schema::objects::platform::exabeam::{delay_minutes, duration, unit_name};
+use opentide_schema::objects::platform::ExabeamConfig;
+use opentide_schema::objects::platform::exabeam::{
+    ExabeamDays, ExabeamEvery, ExabeamOutcome, ExabeamRecurrence, ExabeamSequence, ExabeamValue,
+    ExabeamValueItem, delay_minutes, duration, unit_name,
+};
 
-use crate::Context;
 use crate::elastic::rule_techniques;
 use crate::json::{Json, Object};
 use crate::rule::{CompileError, Rule};
 use crate::strategy::StatusStrategy;
+use crate::{Context, typed};
 
 /// The platform's identifier.
 pub const PLATFORM: &str = "exabeam";
@@ -73,33 +76,9 @@ impl ExabeamRule {
     }
 }
 
-/// A key of a block table, a null read as the key left out.
-fn field<'j>(table: &'j Json, key: &str) -> Option<&'j Json> {
-    table.get(key).filter(|value| !value.is_null())
-}
-
-/// A string field that is set and not empty.
-fn text<'j>(table: &'j Json, key: &str) -> Option<&'j str> {
-    field(table, key)
-        .and_then(Json::as_str)
-        .filter(|value| !value.is_empty())
-}
-
-/// A list field's items, or none.
-fn items<'j>(table: &'j Json, key: &str) -> &'j [Json] {
-    match field(table, key) {
-        Some(Json::Array(items)) => items,
-        _ => &[],
-    }
-}
-
-/// A value as text: a string as itself, any other value in its JSON form
-/// (`null`, `true`, `false`, `42`), as the Rust messages write it (#1068).
-fn scalar_text(value: &Json) -> String {
-    match value {
-        Json::Str(text) => text.clone(),
-        other => other.to_compact(),
-    }
+/// A text the block sets, unless empty.
+fn filled(text: Option<&str>) -> Option<&str> {
+    text.filter(|text| !text.is_empty())
 }
 
 /// The rule's Exabeam block, or the error naming the rule (`block_of`).
@@ -112,14 +91,26 @@ fn block_of(rule: &Rule) -> Result<&Json, CompileError> {
     })
 }
 
-/// The strategy the block's status maps to (`_strategy`).
-pub fn strategy(cx: &Context<'_>, rule: &Rule) -> Result<StatusStrategy, CompileError> {
-    let status = block_of(rule)?
-        .get("status")
-        .map_or_else(|| "null".to_owned(), scalar_text);
+/// The rule's Exabeam block read by the model `validate` checks it with
+/// (`ExabeamConfig`, #1951; [`typed::read_block`]), or the error naming the
+/// rule or the fields whose shape the model refuses.
+fn config_of(rule: &Rule) -> Result<ExabeamConfig, CompileError> {
+    typed::read_block(block_of(rule)?, PLATFORM, DISPLAY)
+}
+
+/// The strategy `block`'s status maps to.
+fn status_strategy(
+    cx: &Context<'_>,
+    block: &ExabeamConfig,
+) -> Result<StatusStrategy, CompileError> {
     cx.statuses
-        .strategy(&status)
+        .strategy(&block.status)
         .map_err(|error| CompileError::failed(DISPLAY, &error.to_string()))
+}
+
+/// The strategy the block's status maps to.
+pub fn strategy(cx: &Context<'_>, rule: &Rule) -> Result<StatusStrategy, CompileError> {
+    status_strategy(cx, &config_of(rule)?)
 }
 
 /// The shared `name`, else the opentide rule `name` (`exabeam_name`).
@@ -148,9 +139,9 @@ pub fn derive_description(cx: &Context<'_>, rule: &Rule) -> String {
 
 /// The block `severity`, else `response.alert_severity`'s, else `medium`
 /// (`derive_severity`).
-pub fn derive_severity(rule: &Rule, block: &Json) -> String {
-    if let Some(severity) = text(block, "severity") {
-        return severity.to_owned();
+pub fn derive_severity(rule: &Rule, block: &ExabeamConfig) -> String {
+    if let Some(severity) = block.severity {
+        return severity.as_str().to_owned();
     }
     let Some(severity) = rule
         .response()
@@ -158,7 +149,7 @@ pub fn derive_severity(rule: &Rule, block: &Json) -> String {
     else {
         return DEFAULT_SEVERITY.to_owned();
     };
-    alert_severity(&scalar_text(severity).trim().to_lowercase())
+    alert_severity(&Json::to_text(severity).trim().to_lowercase())
         .unwrap_or(DEFAULT_SEVERITY)
         .to_owned()
 }
@@ -179,6 +170,11 @@ pub fn time_unit(value: &Json, units: &str) -> Result<(Json, &'static str), Comp
     }
 }
 
+/// [`time_unit`] of a duration the block writes.
+fn window(text: &str, units: &str) -> Result<(Json, &'static str), CompileError> {
+    time_unit(&Json::Str(text.to_owned()), units)
+}
+
 /// `value` as the API takes it: a number in its shortest form, a list joined
 /// by `,` (`threshold_value`).
 pub fn threshold_value(value: Option<&Json>) -> String {
@@ -187,7 +183,7 @@ pub fn threshold_value(value: Option<&Json>) -> String {
             Json::Float(float) if float.fract() == 0.0 && float.is_finite() => {
                 format!("{float:.0}")
             }
-            other => scalar_text(other),
+            other => Json::to_text(other),
         }
     }
     match value {
@@ -197,30 +193,52 @@ pub fn threshold_value(value: Option<&Json>) -> String {
     }
 }
 
-fn strings(values: &[Json]) -> Json {
+/// A threshold's `value` as the block writes it.
+fn value_json(value: &ExabeamValue) -> Json {
+    match value {
+        ExabeamValue::Int(integer) => Json::Int(*integer),
+        ExabeamValue::Float(float) => Json::Float(*float),
+        ExabeamValue::List(items) => Json::Array(
+            items
+                .iter()
+                .map(|item| match item {
+                    ExabeamValueItem::Text(text) => Json::Str(text.clone()),
+                    ExabeamValueItem::Int(integer) => Json::Int(*integer),
+                    ExabeamValueItem::Float(float) => Json::Float(*float),
+                })
+                .collect(),
+        ),
+    }
+}
+
+fn strings(values: Option<&Vec<String>>) -> Json {
     Json::Array(
         values
+            .map(Vec::as_slice)
+            .unwrap_or_default()
             .iter()
-            .map(|value| scalar_text(value).into())
+            .map(|value| value.as_str().into())
             .collect(),
     )
 }
 
-fn condition(sequence: &Json) -> Result<Object, CompileError> {
-    let group_by = items(sequence, "group_by");
-    let threshold = field(sequence, "threshold");
+/// Whether a list the block may set has items.
+fn has_items(values: Option<&Vec<String>>) -> bool {
+    values.is_some_and(|values| !values.is_empty())
+}
+
+fn condition(sequence: &ExabeamSequence) -> Result<Object, CompileError> {
+    let group_by = sequence.group_by.as_ref();
+    let threshold = sequence.threshold.as_ref();
     let mut condition = Object::new();
     condition.insert("triggerOnAnyMatch".into(), Json::Bool(threshold.is_none()));
-    condition.insert("groupByOption".into(), Json::Bool(!group_by.is_empty()));
+    condition.insert("groupByOption".into(), Json::Bool(has_items(group_by)));
     condition.insert("groupBy".into(), strings(group_by));
     let Some(threshold) = threshold else {
         return Ok(condition);
     };
-    let function = field(threshold, "function")
-        .map(scalar_text)
-        .unwrap_or_default();
-    condition.insert("functionType".into(), function.into());
-    let column = text(threshold, "field");
+    condition.insert("functionType".into(), threshold.function.as_str().into());
+    let column = filled(threshold.field.as_deref());
     condition.insert(
         "subject".into(),
         if column.is_some() { "field" } else { "event" }.into(),
@@ -228,36 +246,28 @@ fn condition(sequence: &Json) -> Result<Object, CompileError> {
     if let Some(column) = column {
         condition.insert("field".into(), column.into());
     }
-    let operator = field(threshold, "operator")
-        .map(scalar_text)
-        .unwrap_or_default();
-    condition.insert("operator".into(), operator.into());
-    condition.insert(
-        "value".into(),
-        threshold_value(field(threshold, "value")).into(),
-    );
-    let (time, unit) = time_unit(threshold.get("within").unwrap_or(&Json::Null), "mhd")?;
+    condition.insert("operator".into(), threshold.operator.as_str().into());
+    let value = threshold.value.as_ref().map(value_json);
+    condition.insert("value".into(), threshold_value(value.as_ref()).into());
+    let (time, unit) = window(&threshold.within, "mhd")?;
     condition.insert("time".into(), time);
     condition.insert("unit".into(), unit.into());
     Ok(condition)
 }
 
-fn sequence(sequence: &Json) -> Result<Json, CompileError> {
+fn sequence(sequence: &ExabeamSequence) -> Result<Json, CompileError> {
     let mut entry = Object::new();
-    if let Some(name) = text(sequence, "name") {
+    if let Some(name) = filled(sequence.name.as_deref()) {
         entry.insert("name".into(), name.into());
     }
-    let query = field(sequence, "query")
-        .map(scalar_text)
-        .unwrap_or_default();
-    entry.insert("query".into(), query.trim().into());
+    entry.insert("query".into(), sequence.query.trim().into());
     entry.insert("condition".into(), Json::Object(condition(sequence)?));
     Ok(Json::Object(entry))
 }
 
-fn outcomes(block: &Json, name: &str) -> Json {
-    let outcome = text(block, "outcome").unwrap_or("alert");
-    let email = field(block, "email");
+fn outcomes(block: &ExabeamConfig, name: &str) -> Json {
+    let outcome = block.outcome.map_or("alert", ExabeamOutcome::as_str);
+    let email = block.email.as_ref();
     let mut outcomes = Object::new();
     outcomes.insert("sendAlertTriage".into(), Json::Bool(outcome == "alert"));
     outcomes.insert("createCase".into(), Json::Bool(outcome == "case"));
@@ -274,79 +284,61 @@ fn outcomes(block: &Json, name: &str) -> Json {
     }
     if let Some(email) = email {
         let mut out = Object::new();
-        out.insert("recipients".into(), strings(items(email, "recipients")));
+        out.insert("recipients".into(), strings(Some(&email.recipients)));
         out.insert(
             "subject".into(),
-            text(email, "subject").unwrap_or(name).into(),
+            filled(email.subject.as_deref()).unwrap_or(name).into(),
         );
         out.insert(
             "attachCsv".into(),
-            Json::Bool(field(email, "attach_csv").is_some_and(Json::is_true)),
+            Json::Bool(email.attach_csv == Some(true)),
         );
         outcomes.insert("email".into(), Json::Object(out));
     }
     Json::Object(outcomes)
 }
 
-fn recurrence(recurrence: &Json) -> Result<Json, CompileError> {
-    let every = text(recurrence, "every").unwrap_or_default();
-    let Some(kind) = recurrence_type(every) else {
-        return Err(CompileError::failed(
-            DISPLAY,
-            &format!("'{every}' is not a recurrence"),
-        ));
-    };
+fn recurrence(recurrence: &ExabeamRecurrence) -> Json {
+    let every = recurrence.every.as_str();
     let mut out = Object::new();
-    out.insert("recurrenceType".into(), kind.into());
     out.insert(
-        "startTime".into(),
-        field(recurrence, "from")
-            .map(scalar_text)
-            .unwrap_or_default()
-            .into(),
+        "recurrenceType".into(),
+        recurrence_type(every).unwrap_or_default().into(),
     );
-    out.insert(
-        "endTime".into(),
-        field(recurrence, "to")
-            .map(scalar_text)
-            .unwrap_or_default()
-            .into(),
-    );
-    let upper = |key: &str| {
-        field(recurrence, key)
-            .map(scalar_text)
-            .unwrap_or_else(|| "null".to_owned())
-            .to_uppercase()
+    out.insert("startTime".into(), recurrence.from_.as_str().into());
+    out.insert("endTime".into(), recurrence.to.as_str().into());
+    let upper = |day: Option<&String>| day.map_or("null", String::as_str).to_uppercase();
+    // The days as the block writes them: weekday names, or day numbers.
+    let days: Vec<Json> = match &recurrence.days {
+        None => Vec::new(),
+        Some(ExabeamDays::Names(names)) => names.iter().map(|name| name.as_str().into()).collect(),
+        Some(ExabeamDays::Numbers(numbers)) => numbers.iter().copied().map(Json::Int).collect(),
     };
-    match every {
-        "week" => {
+    match recurrence.every {
+        ExabeamEvery::Week => {
             out.insert(
                 "daysOfWeek".into(),
                 Json::Array(
-                    items(recurrence, "days")
-                        .iter()
-                        .map(|day| scalar_text(day).to_uppercase().into())
+                    days.iter()
+                        .map(|day| Json::to_text(day).to_uppercase().into())
                         .collect(),
                 ),
             );
         }
-        "month" => {
-            out.insert(
-                "daysInMonth".into(),
-                Json::Array(items(recurrence, "days").to_vec()),
-            );
+        ExabeamEvery::Month => {
+            out.insert("daysInMonth".into(), Json::Array(days));
             out.insert(
                 "lastDayOfMonth".into(),
-                Json::Bool(field(recurrence, "last_day").is_some_and(Json::is_true)),
+                Json::Bool(recurrence.last_day == Some(true)),
             );
         }
-        "days" => {
-            out.insert("dayFrom".into(), upper("first").into());
-            out.insert("dayTo".into(), upper("last").into());
+        ExabeamEvery::Days => {
+            out.insert("dayFrom".into(), upper(recurrence.first.as_ref()).into());
+            out.insert("dayTo".into(), upper(recurrence.last.as_ref()).into());
         }
-        _ => {}
+        ExabeamEvery::Day => {}
     }
-    Ok(Json::Object(out))
+    Json::Object(out)
 }
 
 /// The create and update body of `rule` under `strategy` (`compile_body`,
@@ -358,9 +350,20 @@ pub fn compile_body(
     strategy: StatusStrategy,
     tenant_test_mode: bool,
 ) -> Result<Json, CompileError> {
-    let block = block_of(rule)?;
-    let name = exabeam_name(&rule.name, text(block, "name")).to_owned();
-    let sequences = items(block, "sequences")
+    body(cx, rule, &config_of(rule)?, strategy, tenant_test_mode)
+}
+
+/// [`compile_body`] of the rule's block, read.
+fn body(
+    cx: &Context<'_>,
+    rule: &Rule,
+    block: &ExabeamConfig,
+    strategy: StatusStrategy,
+    tenant_test_mode: bool,
+) -> Result<Json, CompileError> {
+    let name = exabeam_name(&rule.name, Some(&block.name)).to_owned();
+    let sequences = block
+        .sequences
         .iter()
         .map(sequence)
         .collect::<Result<Vec<_>, _>>()?;
@@ -368,24 +371,21 @@ pub fn compile_body(
     let mut sequences_config = Object::new();
     sequences_config.insert("sequences".into(), Json::Array(sequences));
     if count >= 2 {
-        let Some(correlation) = field(block, "correlation") else {
+        let Some(correlation) = &block.correlation else {
             return Err(CompileError::failed(
                 DISPLAY,
                 &format!("Rule {}: two or more sequences need correlation", rule.uuid),
             ));
         };
-        let (time, unit) = time_unit(correlation.get("within").unwrap_or(&Json::Null), "mhd")?;
+        let (time, unit) = window(&correlation.within, "mhd")?;
         let mut common = Object::new();
-        common.insert("groupBy".into(), strings(items(correlation, "group_by")));
+        common.insert("groupBy".into(), strings(correlation.group_by.as_ref()));
         common.insert("time".into(), time);
         common.insert("unit".into(), unit.into());
         sequences_config.insert("commonProperties".into(), Json::Object(common));
     }
     sequences_config.insert("outcomes".into(), outcomes(block, &name));
-    let test_mode = match field(block, "test_mode") {
-        Some(flag) => flag.is_true(),
-        None => tenant_test_mode,
-    };
+    let test_mode = block.test_mode.unwrap_or(tenant_test_mode);
     let mut body = Object::new();
     body.insert("name".into(), name.clone().into());
     body.insert("description".into(), derive_description(cx, rule).into());
@@ -397,14 +397,14 @@ pub fn compile_body(
     body.insert("testMode".into(), Json::Bool(test_mode));
     body.insert("sequencesConfig".into(), Json::Object(sequences_config));
     let mut suppress = Object::new();
-    match field(block, "suppression") {
+    match &block.suppression {
         Some(suppression) => {
-            let (time, unit) = time_unit(suppression.get("for").unwrap_or(&Json::Null), "mhdw")?;
+            let (time, unit) = window(&suppression.for_, "mhdw")?;
             suppress.insert("suppressOption".into(), Json::Bool(true));
             suppress.insert("suppressTime".into(), time);
             suppress.insert("suppressUnit".into(), unit.into());
-            let group_by = items(suppression, "group_by");
-            if !group_by.is_empty() {
+            let group_by = suppression.group_by.as_ref();
+            if has_items(group_by) {
                 suppress.insert("granularSuppressOption".into(), Json::Bool(true));
                 suppress.insert("suppressGroupFields".into(), strings(group_by));
             }
@@ -414,7 +414,7 @@ pub fn compile_body(
         }
     }
     body.insert("suppressConfig".into(), Json::Object(suppress));
-    let minutes = text(block, "delay")
+    let minutes = filled(block.delay.as_deref())
         .and_then(delay_minutes)
         .filter(|m| *m > 0);
     let mut delay = Object::new();
@@ -431,17 +431,12 @@ pub fn compile_body(
         }
     }
     body.insert("delayConfig".into(), Json::Object(delay));
-    let schedule = items(block, "schedule");
+    let schedule = block.schedule.as_deref().unwrap_or_default();
     if !schedule.is_empty() {
         let mut config = Object::new();
         config.insert(
             "recurrences".into(),
-            Json::Array(
-                schedule
-                    .iter()
-                    .map(recurrence)
-                    .collect::<Result<Vec<_>, _>>()?,
-            ),
+            Json::Array(schedule.iter().map(recurrence).collect()),
         );
         body.insert("scheduleConfig".into(), Json::Object(config));
     }
@@ -465,7 +460,18 @@ pub fn compile_rule(
     strategy: StatusStrategy,
     tenant: Option<&Json>,
 ) -> Result<ExabeamRule, CompileError> {
-    let body = compile_body(cx, rule, strategy, tenant_test_mode(tenant))?;
+    exabeam_rule(cx, rule, &config_of(rule)?, strategy, tenant)
+}
+
+/// [`compile_rule`] of the rule's block, read.
+fn exabeam_rule(
+    cx: &Context<'_>,
+    rule: &Rule,
+    block: &ExabeamConfig,
+    strategy: StatusStrategy,
+    tenant: Option<&Json>,
+) -> Result<ExabeamRule, CompileError> {
+    let body = body(cx, rule, block, strategy, tenant_test_mode(tenant))?;
     let name = body
         .get("name")
         .and_then(Json::as_str)
@@ -485,8 +491,9 @@ pub fn compile_deployment(
     rule: &Rule,
     tenant: Option<&Json>,
 ) -> Result<ExabeamRule, CompileError> {
-    let strategy = strategy(cx, rule)?;
-    compile_rule(cx, rule, strategy, tenant)
+    let block = config_of(rule)?;
+    let strategy = status_strategy(cx, &block)?;
+    exabeam_rule(cx, rule, &block, strategy, tenant)
 }
 
 fn request(method: &str, path: String, body: Json) -> Json {
@@ -511,7 +518,7 @@ pub fn update_request(compiled: &ExabeamRule, rule_id: &str) -> Json {
     )
 }
 
-/// `at` as `YYYY-MM-DDThh:mm:ssZ`, in UTC (`_utc`).
+/// `at` as `YYYY-MM-DDThh:mm:ssZ`, in UTC.
 pub fn utc(at: jiff::Timestamp) -> String {
     at.strftime("%Y-%m-%dT%H:%M:%SZ").to_string()
 }

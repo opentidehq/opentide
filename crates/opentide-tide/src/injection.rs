@@ -15,11 +15,12 @@
 //! | `configurations.{harfanglab,bitdefender}.yara.signature` | YARA, under the platform's profile | the block's key |
 //! | `configurations.harfanglab.yara.{strings,condition,imports}` | YARA: the one rule deploy assembles ([`crate::yara`]) | `harfanglab` |
 //! | `configurations.exabeam.sequences.<n>.query` | the Exabeam Query Language, profile `rule` | `exabeam` |
+//! | `configurations.datadog.queries.<n>.query` | the Datadog search syntax, profile `rule` | `datadog` |
 //!
 //! A hunt's `system` is free text in opentide. It names a language only when
 //! it is a platform identifier, spelled as a `configurations` key
 //! (`sentinel`, `microsoft_defender`, `splunk`, `carbon_black_cloud`,
-//! `graylog`, `crowdstrike`, `google_secops`, `exabeam`, or
+//! `graylog`, `crowdstrike`, `google_secops`, `exabeam`, `datadog`, or
 //! `elastic` with the entry's `language`). Any other `system` (`Sentinel`,
 //! `Splunk ES`, `MDE`) is not analysed: the language is never guessed
 //! (specifications#58).
@@ -67,6 +68,9 @@ pub fn hunt_query_language(system: &str, language: Option<&str>) -> Option<Langu
         // Exabeam searches are the Exabeam Query Language, profile `search`
         // (a block's queries are its sequences' filters).
         PlatformId::Exabeam => Some(LanguageId::Exabeam),
+        // Datadog searches are the Datadog search syntax, profile `search`
+        // (a block's queries are `queries[].query`).
+        PlatformId::Datadog => Some(LanguageId::Datadog),
         platform => platform_field_language(platform, &["query"]),
     }
 }
@@ -103,7 +107,8 @@ fn query_language(source: &str, keys: &[YamlKey], key: &YamlKey) -> Option<(Lang
         }
         // Every other block field the platform table names
         // (`platform_field_language`): a `query`, Splunk's `search`, a YARA
-        // `signature`, a Google SecOps section, an Exabeam sequence's `query`.
+        // `signature`, a Google SecOps section, an Exabeam sequence's `query`, a Datadog
+        // query's `query`.
         ["configurations", platform, ..] => {
             language_for_field_path(&path).map(|l| (l, (*platform).to_string()))
         }
@@ -136,7 +141,10 @@ fn injected(
     if lead + trail >= text.len() || text.trim().is_empty() {
         return None;
     }
-    let inner = text[lead..text.len() - trail].to_string();
+    let inner = text
+        .trim_start_matches(['\n', '\r'])
+        .trim_end_matches(['\n', '\r'])
+        .to_string();
     let host_map = scalar.map[lead..scalar.map.len() - trail].to_vec();
     let start = *host_map.first()?;
     let end = scalar.end.max(host_map.last()? + 1);
@@ -194,7 +202,7 @@ mod tests {
         let mut units = 0;
         for (i, c) in line.char_indices() {
             if units >= d.range.start.character as usize {
-                return &line[i..];
+                return line.get(i..).unwrap();
             }
             units += c.len_utf16();
         }

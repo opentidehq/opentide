@@ -39,6 +39,7 @@ fn render(source: &str, diagnostics: &[Diagnostic], codes: &[&str]) -> String {
         if d.suggestion.is_none() && !codes.contains(&d.code.as_str()) {
             continue;
         }
+        help_is_kept(d);
         let _ = writeln!(
             out,
             "  {} {} `{}` => {}",
@@ -51,16 +52,72 @@ fn render(source: &str, diagnostics: &[Diagnostic], codes: &[&str]) -> String {
     out
 }
 
+/// The help a finding with a suggestion gets: the one the message's words
+/// chose before each code declared its kind (#1950), except where that was
+/// wrong, and its code declares a kind. Every case of this file passes
+/// through here. The help is the `queries` feature's (`engine_help`); the
+/// workspace's run turns it on.
+#[cfg(feature = "queries")]
+fn help_is_kept(d: &Diagnostic) {
+    let Some(suggestion) = d.suggestion.as_deref().filter(|s| !s.is_empty()) else {
+        return;
+    };
+    let replacement = format!(
+        "did you mean {}?",
+        opentide_schema::vocab::quote(suggestion)
+    );
+    let step = format!("try: {suggestion}");
+    let lower = d.message.to_lowercase();
+    let words = ["unknown", "deprecated", "not a command"];
+    let expected = if NOW_REPLACEMENTS.contains(&d.code.as_str()) {
+        replacement
+    } else if NOW_STEPS.contains(&d.code.as_str()) {
+        step
+    } else if words.iter().any(|word| lower.contains(word)) {
+        replacement
+    } else {
+        step
+    };
+    let help = opentide_analysis::queries::engine_help(&d.code, Some(suggestion));
+    assert_eq!(help, expected, "{} {}", d.code, d.message);
+    assert!(
+        opentide_core::codes::suggestion_kind(&d.code).is_some(),
+        "{} suggests but declares no kind (`suggests` in opentide-core's codes!)",
+        d.code
+    );
+}
+
+/// Near misses of a known name whose messages named none of the words, so
+/// that they printed `try: …` (#1950): a near miss is a replacement.
+#[cfg(feature = "queries")]
+const NOW_REPLACEMENTS: [&str; 12] = [
+    "kql_table_misspelt",
+    "kql_unknown_column",
+    "spl_unknown_datamodel",
+    "spl_unknown_datamodel_field",
+    "ecs_unknown_field",
+    "esql_unknown_type",
+    "cbc_unknown_field",
+    "falco_unknown_field",
+    "falco_unknown_macro",
+    "falco_unknown_rule",
+    "cql_unknown_event",
+    "cql_unknown_parameter",
+];
+
+/// Fixes whose messages explain an "unknown command" in places, so that they
+/// printed `did you mean …?` there (#1950).
+#[cfg(feature = "queries")]
+const NOW_STEPS: [&str; 2] = ["esql_parse_error", "esql_unavailable"];
+
+#[cfg(not(feature = "queries"))]
+fn help_is_kept(_: &Diagnostic) {}
+
 /// Each query of `cases`, analysed on its own, and what it suggests.
 fn queries(language: LanguageId, platform: Option<&str>, codes: &[&str], cases: &[&str]) -> String {
     let mut out = String::new();
     for text in cases {
-        let found = analyze_query(&QueryRequest {
-            language,
-            platform: platform.map(str::to_string),
-            stack: None,
-            text: (*text).to_string(),
-        });
+        let found = analyze_query(&QueryRequest::new(language, *text).with_platform(platform));
         let _ = writeln!(out, "{text}");
         out.push_str(&render(text, &found, codes));
     }
@@ -286,4 +343,74 @@ fn sysdig_append_to_rule() {
         "  sysdig:\n    append_to_rule: Terminal shell in containr\n    condition: proc.name = bash\n",
         &["falco_unknown_rule"],
     ));
+}
+
+/// ES|QL's spacing fixes explain an "unknown command" and suggest the text to
+/// write, so their help is `try: …`, not `did you mean …?` (#1950): the
+/// message's words chose the replacement before each code declared its kind.
+#[cfg(feature = "queries")]
+#[test]
+fn an_esql_spacing_fix_is_a_step() {
+    for (text, code, help) in [
+        ("FROM(logs-*)", "esql_unavailable", "try: FROM ("),
+        (
+            "FROM logs-* | WHERE\"é😀\" == b",
+            "esql_parse_error",
+            "try: WHERE \"",
+        ),
+    ] {
+        let found = analyze_query(&QueryRequest {
+            language: LanguageId::Esql,
+            platform: None,
+            stack: None,
+            text: text.to_string(),
+        });
+        let d = found
+            .iter()
+            .find(|d| d.code == code && d.message.contains("unknown command"))
+            .unwrap_or_else(|| panic!("{text}: no {code} on an unknown command: {found:?}"));
+        assert_eq!(
+            opentide_analysis::queries::engine_help(&d.code, d.suggestion.as_deref()),
+            help,
+            "{text}"
+        );
+    }
+}
+
+/// Every query of the parser corpora (`crates/testdata/corpus/`), under each
+/// of its language's dialects, keeps its help (#1950).
+#[cfg(feature = "queries")]
+#[test]
+fn every_corpus_query_keeps_its_help() {
+    let corpus = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../testdata/corpus");
+    let mut checked = 0;
+    for &language in LanguageId::QUERY_LANGUAGES {
+        let platforms: &[Option<&str>] = match language {
+            LanguageId::Kql => &[None, Some("microsoft_defender")],
+            LanguageId::Lucene => &[None, Some("carbon_black_cloud"), Some("graylog")],
+            LanguageId::Yara => &[None, Some("harfanglab"), Some("bitdefender")],
+            _ => &[None],
+        };
+        let Ok(entries) = std::fs::read_dir(corpus.join(language.as_str())) else {
+            continue;
+        };
+        for entry in entries {
+            let path = entry.expect("a corpus entry").path();
+            let Ok(text) = std::fs::read_to_string(&path) else {
+                continue;
+            };
+            for platform in platforms {
+                for d in analyze_query(&QueryRequest {
+                    language,
+                    platform: platform.map(str::to_string),
+                    stack: None,
+                    text: text.clone(),
+                }) {
+                    help_is_kept(&d);
+                    checked += usize::from(d.suggestion.is_some());
+                }
+            }
+        }
+    }
+    assert!(checked > 0, "no corpus finding carried a suggestion");
 }

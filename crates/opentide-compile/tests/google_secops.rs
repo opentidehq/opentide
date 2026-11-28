@@ -14,7 +14,9 @@ use opentide_compile::google_secops::{
     self, RunState, archived_request, create_request, deployment_request, run_state,
     tenant_instance, verify_request,
 };
-use opentide_compile::{Json, Owned, Rule};
+use opentide_compile::{Json, Owned, Rule, preview};
+use opentide_schema::objects::platform::GoogleSecopsConfig;
+use opentide_schema::platforms::PlatformKey;
 use opentide_schema::vocab::Vocabularies;
 use opentide_workspace::{FileSystem, MemoryFs, Options, RootOptions, Workspace};
 
@@ -27,10 +29,22 @@ fn read_json(path: &Path) -> Json {
 }
 
 fn workspace(rule: &str) -> Workspace {
+    workspace_with(rule, None)
+}
+
+/// A workspace holding `rule`, and `platform` as its Google SecOps
+/// configuration when given.
+fn workspace_with(rule: &str, platform: Option<&str>) -> Workspace {
     let fs = Arc::new(MemoryFs::new());
     fs.create_dir("/ws/.opentide/configurations/platforms");
     fs.create_dir("/ws/objects/rules");
     fs.write("/ws/objects/rules/r.yaml", rule.to_owned());
+    if let Some(platform) = platform {
+        fs.write(
+            "/ws/.opentide/configurations/platforms/google_secops.toml",
+            platform.to_owned(),
+        );
+    }
     Workspace::open(
         fs as Arc<dyn FileSystem>,
         Options {
@@ -114,6 +128,12 @@ fn compile_text(text: &str) -> Compiled {
     }
 }
 
+/// The run settings of a block, read by its model.
+fn settings(block: &Json) -> google_secops::RunSettings {
+    let config: GoogleSecopsConfig = serde_json::from_str(&block.to_compact()).unwrap();
+    google_secops::RunSettings::from(&config)
+}
+
 fn strategy(status: &str) -> opentide_compile::strategy::StatusStrategy {
     use opentide_compile::strategy::StatusStrategy;
     match status {
@@ -131,7 +151,8 @@ fn the_deployment_payload_carries_the_run_state_of_the_blocks_status() {
         let compiled = compile(stem);
         let payload = &compiled.deployment;
         assert_eq!(payload.get("text"), compiled.offline.get("text"));
-        let state = google_secops::run_state(&compiled.block, strategy(&compiled.status));
+        let state =
+            google_secops::run_state(&settings(&compiled.block), strategy(&compiled.status));
         let run = payload.get("run_state").unwrap();
         assert_eq!(
             run.get("mask").and_then(Json::as_str),
@@ -161,6 +182,74 @@ fn the_deployment_payload_carries_the_run_state_of_the_blocks_status() {
         .get("body")
         .unwrap();
     assert_eq!(body.get("alerting"), Some(&Json::Bool(false)));
+}
+
+/// The block is read by the model `opentide validate` checks it with
+/// (`GoogleSecopsConfig`, #1951): a block whose shape the model refuses fails
+/// the deploy's compile and the dry run's writes with `compile_failed` at the
+/// field, in the model's words, with a hint to run `validate`.
+#[test]
+fn a_block_the_model_refuses_fails_at_its_field() {
+    let fixture =
+        std::fs::read_to_string(fixtures().join("rule-google-secops-process-1.0.yaml")).unwrap();
+    for (written, field, reason) in [
+        (
+            "    run_frequency: LIVE\n    alerting: 'yes'\n",
+            "alerting",
+            "Input should be a valid boolean",
+        ),
+        (
+            "    run_frequency: HOURLY\n",
+            "run_frequency",
+            "Input should be",
+        ),
+        (
+            "    run_frequency: LIVE\n    schedule:\n      ensure_enrichment_completeness: é\n",
+            "schedule.ensure_enrichment_completeness",
+            "Input should be a valid boolean",
+        ),
+        (
+            "    run_frequency: LIVE\n    surprisé: 😀\n",
+            "surprisé",
+            "Extra inputs are not permitted",
+        ),
+    ] {
+        let text = fixture.replace("    run_frequency: LIVE\n", written);
+        let uuid = "00000000-0000-4000-8003-000000000061";
+        let workspace = workspace(&text);
+        let owned = Owned::new(
+            &Vocabularies::bundled(),
+            &workspace.configuration().resolved,
+        );
+        let index = workspace.index().clone();
+        let cx = owned.context(&index);
+        let object = index.get("rule", uuid).unwrap();
+        let rule = Rule::new(object.root().unwrap(), None);
+        let at: Vec<&str> = ["configurations", "google_secops"]
+            .into_iter()
+            .chain(field.split('.'))
+            .collect();
+        for error in [
+            google_secops::compile_deployment(&cx, &rule).unwrap_err(),
+            google_secops::compile(&cx, &rule, &tenant(), None).unwrap_err(),
+        ] {
+            assert_eq!(error.code, "compile_failed", "{field}: {error}");
+            assert_eq!(error.field, at, "{field}: {error}");
+            assert!(
+                error
+                    .reason
+                    .contains(&format!("configurations.google_secops.{field}: {reason}")),
+                "{field}: {error}"
+            );
+            assert!(
+                error
+                    .hint
+                    .as_deref()
+                    .is_some_and(|hint| hint.contains("opentide validate")),
+                "{field}: {error}"
+            );
+        }
+    }
 }
 
 /// A rule without `metadata.version` deploys without `opentide_version` in
@@ -214,7 +303,7 @@ fn every_request_equals_its_fixture() {
             compiled.offline,
             fixture("create").get("body").unwrap().clone()
         );
-        let state = run_state(&compiled.block, strategy(&compiled.status));
+        let state = run_state(&settings(&compiled.block), strategy(&compiled.status));
         assert_eq!(
             deployment_request(&instance, RULE_ID, &state).to_json(),
             fixture("deployment"),
@@ -252,4 +341,66 @@ fn every_request_equals_its_fixture() {
             fixture("deployment").get("body")
         );
     }
+}
+
+/// Three tenants: `eu`, whose modifier runs its rules daily; `lab`, with
+/// none; and `é😀`, whose modifier blanks the rule's `condition`.
+const MODIFIED_TENANTS: &str = "[platform]\nenabled = true\n\n[[tenants]]\nname = \"eu\"\n\
+     strategies = [\"PREVIEW\"]\n[tenants.setup]\nproject = \"p\"\nlocation = \"eu\"\ninstance \
+     = \"i\"\n\n[[tenants]]\nname = \"lab\"\nstrategies = [\"PREVIEW\"]\n[tenants.setup]\nproject \
+     = \"p\"\nlocation = \"us\"\ninstance = \"i\"\n\n[[tenants]]\nname = \"é😀\"\nstrategies = \
+     [\"PREVIEW\"]\n[tenants.setup]\nproject = \"p\"\nlocation = \"us\"\ninstance = \"i\"\n\n\
+     [[modifiers]]\nname = \"eu daily\"\n[modifiers.conditions]\ntenants = [\"eu\"]\n\
+     [modifiers.modifications]\nrun_frequency = \"DAILY\"\n\n[[modifiers]]\nname = \"no \
+     condition\"\n[modifiers.conditions]\ntenants = [\"é😀\"]\n[modifiers.modifications]\n\
+     condition = \" \"\n";
+
+/// #1952: the dry run compiles the rule for each tenant the run reaches,
+/// with that tenant's `[[modifiers]]`, as the deploy does: the body shown
+/// is the first tenant's, the entry names it, and a later tenant whose
+/// modifiers break the rule fails the dry run, naming that tenant.
+#[test]
+fn the_dry_run_compiles_for_each_tenant_with_its_modifiers() {
+    let text =
+        std::fs::read_to_string(fixtures().join("rule-google-secops-process-1.0.yaml")).unwrap();
+    let ws = workspace_with(&text, Some(MODIFIED_TENANTS));
+    let owned = Owned::new(&Vocabularies::bundled(), &ws.configuration().resolved);
+    let index = ws.index().clone();
+    let cx = owned.context(&index);
+    let object = index
+        .get("rule", "00000000-0000-4000-8003-000000000061")
+        .unwrap();
+    let rule = Rule::new(object.root().unwrap(), None);
+    let platform = PlatformKey::new("google_secops");
+    let dry_run = |tenants: &[&str]| {
+        let tenants: Vec<String> = tenants.iter().map(|&name| name.to_owned()).collect();
+        preview::preview_on(&cx, &platform, &rule, &tenants)
+    };
+    let frequency = |entry: &Json| {
+        entry
+            .get("api_request")
+            .and_then(|request| request.get("run_frequency"))
+            .and_then(Json::as_str)
+            .map(str::to_owned)
+    };
+    // `eu` first: its modifier is in the body shown.
+    let entry = dry_run(&["eu", "lab"]);
+    assert_eq!(entry.get("tenant").and_then(Json::as_str), Some("eu"));
+    assert_eq!(frequency(&entry).as_deref(), Some("DAILY"), "{entry:?}");
+    // `lab` first: `eu`'s modifier does not leak into it.
+    let entry = dry_run(&["lab", "eu"]);
+    assert_eq!(entry.get("tenant").and_then(Json::as_str), Some("lab"));
+    assert_eq!(frequency(&entry).as_deref(), Some("LIVE"), "{entry:?}");
+    // A later tenant whose modifier blanks `condition` fails the dry run,
+    // and the error names that tenant.
+    let entry = dry_run(&["eu", "é😀"]);
+    assert_eq!(
+        entry.get("status").and_then(Json::as_str),
+        Some("failed"),
+        "{entry:?}"
+    );
+    let error = entry.get("error").and_then(Json::as_str).unwrap();
+    assert!(error.contains("condition"), "{error}");
+    assert!(error.ends_with("(tenant 'é😀')"), "{error}");
+    assert_eq!(entry.get("api_request"), Some(&Json::Null));
 }

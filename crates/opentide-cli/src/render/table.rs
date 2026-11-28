@@ -28,7 +28,7 @@ pub enum Justify {
 /// One column.
 #[derive(Clone, Debug)]
 pub struct Column {
-    /// The header.
+    /// The column's text in the header row.
     pub header: String,
     /// The alignment.
     pub justify: Justify,
@@ -68,14 +68,15 @@ impl Column {
     }
 }
 
-/// A table.
+/// A table: an optional title above, columns with their headers, rows, and an
+/// optional caption below.
 #[derive(Clone, Debug, Default)]
 pub struct Table {
     /// The title, above.
     pub title: Option<String>,
     /// The caption, below.
     pub caption: Option<String>,
-    /// The columns.
+    /// The columns, left to right.
     pub columns: Vec<Column>,
     /// The rows, one string per column.
     pub rows: Vec<Vec<String>>,

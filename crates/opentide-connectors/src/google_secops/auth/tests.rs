@@ -51,7 +51,7 @@ fn tenant() -> (Tenant, HttpClient) {
     let tenant = Tenant::from_setup(
         PLATFORM,
         "secops-eu",
-        &toml::Table::new(),
+        &opentide_core::json::Object::new(),
         &Environment::default(),
         Mode::Required,
         &settings,
@@ -273,6 +273,88 @@ fn the_assertion_is_google_auths_and_deterministic_under_a_fixed_clock() {
     );
 }
 
+#[derive(serde::Serialize)]
+struct SomeClaims {
+    iss: &'static str,
+    sub: &'static str,
+    note: &'static str,
+}
+
+const SOME_CLAIMS: SomeClaims = SomeClaims {
+    iss: "déploy@acme.iam.gserviceaccount.com",
+    sub: "😀",
+    note: "a \"quoted\" / slashed value",
+};
+
+/// The token jsonwebtoken signs for the same key, header and claims.
+fn jsonwebtoken_token(pem: &str, kid: Option<&str>) -> String {
+    let key = jsonwebtoken::EncodingKey::from_rsa_pem(pem.as_bytes()).unwrap();
+    let mut header = jsonwebtoken::Header::new(jsonwebtoken::Algorithm::RS256);
+    header.kid = kid.map(str::to_owned);
+    jsonwebtoken::encode(&header, &SOME_CLAIMS, &key).unwrap()
+}
+
+#[test]
+fn the_rs256_signer_writes_jsonwebtokens_token_byte_for_byte() {
+    let pem = test_key();
+    let key = rs256::SigningKey::from_pem(&pem).unwrap();
+    for kid in [Some("kid-1"), None] {
+        let ours = rs256::encode(&key, kid, &SOME_CLAIMS).unwrap();
+        assert_eq!(ours, jsonwebtoken_token(&pem, kid), "kid {kid:?}");
+    }
+}
+
+/// The test key as PKCS#1 (`BEGIN RSA PRIVATE KEY`): the `RSAPrivateKey`
+/// the PKCS#8 wrapper holds in its trailing OCTET STRING.
+fn test_key_pkcs1() -> String {
+    use base64::Engine as _;
+    let pkcs8 = base64_decode(include_str!("../test_key.b64"));
+    // The algorithm's NULL parameters, then `04 82 <len> <len>`.
+    let at = pkcs8
+        .windows(4)
+        .position(|window| window == [0x05, 0x00, 0x04, 0x82])
+        .unwrap();
+    let pkcs1 = &pkcs8[at + 6..];
+    assert_eq!(pkcs1[0], 0x30, "an RSAPrivateKey SEQUENCE");
+    let body = base64::engine::general_purpose::STANDARD.encode(pkcs1);
+    let lines: Vec<&str> = body
+        .as_bytes()
+        .chunks(64)
+        .map(|chunk| std::str::from_utf8(chunk).unwrap())
+        .collect();
+    let label = ["RSA", "PRIVATE", "KEY"].join(" ");
+    format!(
+        "-----BEGIN {label}-----\r\n{}\r\n-----END {label}-----\r\n",
+        lines.join("\r\n")
+    )
+}
+
+#[test]
+fn a_pkcs1_key_with_crlf_lines_signs_as_its_pkcs8_form_does() {
+    let pkcs1 = test_key_pkcs1();
+    let from_pkcs1 = rs256::SigningKey::from_pem(&pkcs1).unwrap();
+    let from_pkcs8 = rs256::SigningKey::from_pem(&test_key()).unwrap();
+    let ours = rs256::encode(&from_pkcs1, Some("kid-1"), &SOME_CLAIMS).unwrap();
+    assert_eq!(
+        ours,
+        rs256::encode(&from_pkcs8, Some("kid-1"), &SOME_CLAIMS).unwrap()
+    );
+    assert_eq!(ours, jsonwebtoken_token(&pkcs1, Some("kid-1")));
+}
+
+#[test]
+fn a_text_that_is_no_rsa_private_key_is_refused() {
+    for text in [
+        "",
+        "x",
+        "-----BEGIN PRIVATE KEY-----\nAAAA\n-----END PRIVATE KEY-----\n",
+        // A certificate, not a key.
+        "-----BEGIN CERTIFICATE-----\nAAAA\n-----END CERTIFICATE-----\n",
+    ] {
+        assert!(rs256::SigningKey::from_pem(text).is_err(), "{text:?}");
+    }
+}
+
 /// Standard base64, as the PEM body holds it.
 fn base64_decode(text: &str) -> Vec<u8> {
     const ALPHABET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -434,6 +516,7 @@ async fn refused_or_unanswered_credentials_stop_the_tenant() {
         "google_secops_tenant_unauthorized: tenant secops-eu: Google refused the credentials \
          (invalid_grant: Bad Request)"
     );
+    assert_eq!(error.code, Some(super::TENANT_UNAUTHORIZED));
     let error = Authorizer::new(user("/empty"), fixed(NOW))
         .token(cx)
         .await
@@ -442,6 +525,7 @@ async fn refused_or_unanswered_credentials_stop_the_tenant() {
         error.to_string(),
         "google_secops_tenant_unauthorized: tenant secops-eu: the credentials gave no access token"
     );
+    assert_eq!(error.code, Some(super::TENANT_UNAUTHORIZED));
     let unreachable = Credentials::AuthorizedUser {
         client_id: "cid".to_owned(),
         client_secret: Secret::new("cs"),
@@ -510,6 +594,7 @@ async fn the_metadata_server_supplies_default_credentials() {
         .token(cx)
         .await
         .unwrap_err();
+    assert_eq!(error.code, Some(super::CREDENTIALS_MISSING));
     assert!(
         error.to_string().starts_with(
             "google_secops_credentials_missing: no credentials: the tenant names none"
@@ -550,6 +635,7 @@ async fn an_answer_without_the_metadata_flavor_is_no_metadata_server() {
     .token(cx)
     .await
     .unwrap_err();
+    assert_eq!(error.code, Some(super::CREDENTIALS_MISSING));
     let shown = error.to_string();
     assert!(
         shown.starts_with(

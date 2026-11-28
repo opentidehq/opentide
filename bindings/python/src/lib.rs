@@ -8,7 +8,7 @@
 //! The engine reports LSP positions (0-based, UTF-16 code units); every
 //! position is converted here, against the text it points into.
 
-use opentide::analysis::{self, LanguageId, LineStarts, QueryRequest, codes};
+use opentide::analysis::{self, LanguageId, LineStarts, QueryPosition, QueryRequest, codes};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
@@ -66,14 +66,17 @@ impl Diagnostic {
 /// Diagnostics for one query on its own. *platform* is a `configurations` key
 /// (`microsoft_defender` selects the Defender schema, `carbon_black_cloud`
 /// the Carbon Black dialect); *stack* is an Elastic stack (`"9.5"`) for ES|QL.
+/// *position* is `"search"` (a query file, a hunt) or `"rule"` (the query of
+/// *platform*'s rule block, which needs a platform).
 #[pyfunction]
-#[pyo3(signature = (text, language, platform=None, stack=None))]
+#[pyo3(signature = (text, language, platform=None, stack=None, position="search"))]
 fn analyze_query(
     py: Python<'_>,
     text: String,
     language: &str,
     platform: Option<String>,
     stack: Option<String>,
+    position: &str,
 ) -> PyResult<Vec<Diagnostic>> {
     let language = parse_language(language)?;
     if language == LanguageId::TideYaml {
@@ -81,15 +84,20 @@ fn analyze_query(
             "opentide-yaml is an object file, not a query; use opentide.Workspace.validate",
         ));
     }
-    Ok(py.detach(|| {
-        let request = QueryRequest {
-            language,
-            platform,
-            stack,
-            text: text.clone(),
-        };
-        convert_all(&text, analysis::analyze_query(&request))
-    }))
+    let position = QueryPosition::parse(position).ok_or_else(|| {
+        PyValueError::new_err(format!(
+            "unknown position {position:?}: pass \"search\" or \"rule\""
+        ))
+    })?;
+    let request = QueryRequest::new(language, text.clone())
+        .with_platform(platform.as_deref())
+        .with_stack(stack.as_deref());
+    // A usage error, refused before the check as the command line and MCP
+    // refuse it.
+    analysis::validate_position(&request, position)
+        .map_err(|error| PyValueError::new_err(error.to_string()))?;
+    let diagnostics = py.detach(|| analysis::analyze_query_at(&request, position));
+    Ok(convert_all(&text, diagnostics))
 }
 
 /// Runs the command line with *argv* (without the program name) in this

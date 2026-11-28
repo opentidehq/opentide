@@ -20,15 +20,16 @@
 
 use std::collections::BTreeSet;
 use std::path::Path;
-use std::process::{Command, Stdio};
 
 use indexmap::IndexMap;
+use opentide_compile::git::GitError;
 
 use super::deploy_state::{Shard, StateError};
+use super::result::{ExitCode, Status};
 use super::{Report, counted};
 use crate::env::Env;
 use crate::envelope::Failure;
-use crate::json::Json;
+use crate::json::{Json, Object};
 
 /// The deployment-state folder, relative to the repository root.
 pub const DEPLOYMENT_STATES: &str = ".opentide/states/deployment";
@@ -65,47 +66,22 @@ impl std::fmt::Display for ReplayError {
     }
 }
 
-fn git(root: &Path, env: &Env, args: &[&str]) -> Result<Vec<u8>, ReplayError> {
-    let output = Command::new("git")
-        .args(args)
-        .current_dir(root)
-        .env_clear()
-        .envs(env.iter())
-        .stdin(Stdio::null())
-        .output()
-        .map_err(|error| ReplayError::Git(format!("git {}: {error}", args.join(" "))))?;
-    if !output.status.success() {
-        return Err(ReplayError::Git(format!(
-            "git {} failed: {}",
-            args.join(" "),
-            String::from_utf8_lossy(&output.stderr).trim()
-        )));
-    }
-    Ok(output.stdout)
-}
-
-/// The shard *path* holds at *revision*, written into *scratch* to be read
-/// with the shard's own checks; an empty state where it has none.
-fn state_at(
-    root: &Path,
-    env: &Env,
-    revision: &str,
-    path: &str,
-    scratch: &Path,
-) -> Result<Shard, ReplayError> {
+/// A shard as one side of the commit held it, written into *scratch* to be
+/// read with the shard's own checks; an empty state where it held nothing.
+fn state_at(bytes: Option<&[u8]>, path: &str, scratch: &Path) -> Result<Shard, ReplayError> {
     let name = Path::new(path)
         .file_name()
         .map(|name| name.to_string_lossy().into_owned())
         .unwrap_or_default();
     let stem = name.strip_suffix(".json").unwrap_or(&name).to_owned();
     let target = scratch.join(&name);
-    match git(root, env, &["show", &format!("{revision}:{path}")]) {
-        Ok(bytes) => {
+    match bytes {
+        Some(bytes) => {
             std::fs::create_dir_all(scratch).map_err(ReplayError::Io)?;
             std::fs::write(&target, bytes).map_err(ReplayError::Io)?;
             Shard::from_file(&target, None).map_err(ReplayError::State)
         }
-        Err(_) => Ok(empty(target, stem)),
+        None => Ok(empty(target, stem)),
     }
 }
 
@@ -170,32 +146,33 @@ impl Drop for Scratch {
     reason = "a shard is named <uuid>.json in lower case; git lists the paths as committed"
 )]
 pub fn replay(root: &Path, env: &Env, state_commit: &str) -> Result<Replayed, ReplayError> {
-    let parent = format!("{state_commit}^");
-    let changed = git(
-        root,
-        env,
-        &[
-            "diff",
-            "--name-only",
-            "--no-renames",
-            &parent,
-            state_commit,
-            "--",
-            DEPLOYMENT_STATES,
-        ],
-    )?;
-    let changed = String::from_utf8_lossy(&changed).into_owned();
+    // The checkout is the one git would find with the run's environment
+    // (`GIT_DIR`, `GIT_WORK_TREE`, `GIT_CEILING_DIRECTORIES`).
+    let lookup = |name: &str| env.get(name).map(std::ffi::OsString::from);
+    let changes =
+        opentide_compile::git::commit_changes(root, &lookup, state_commit, DEPLOYMENT_STATES)
+            .map_err(|error| {
+                ReplayError::Git(match error {
+                    GitError::MissingCheckout(searched) => format!(
+                        "no git checkout was found from {}",
+                        dunce::simplified(&searched).display()
+                    ),
+                    other => other.message(),
+                })
+            })?;
     let scratch = Scratch::new().map_err(ReplayError::Io)?;
     let mut result = Replayed::default();
-    for path in changed.lines().filter(|line| line.ends_with(".json")) {
+    for change in changes
+        .iter()
+        .filter(|change| change.path.ends_with(".json"))
+    {
+        let path = change.path.as_str();
         let base = bindings(&state_at(
-            root,
-            env,
-            &parent,
+            change.before.as_deref(),
             path,
             &scratch.path().join("base"),
         )?);
-        let ours_state = state_at(root, env, state_commit, path, &scratch.path().join("ours"))?;
+        let ours_state = state_at(change.after.as_deref(), path, &scratch.path().join("ours"))?;
         let ours = bindings(&ours_state);
         let tip_path = root.join(path);
         let stem = Path::new(path)
@@ -274,11 +251,11 @@ pub fn report(cwd: &Path, env: &Env, state_commit: &str) -> Report {
                 ],
             );
             let count = |count: usize| Json::Int(i64::try_from(count).unwrap_or(i64::MAX));
-            report.outcome.summary = vec![
+            report.outcome.summary = Object::from([
                 ("written".to_owned(), count(result.written.len())),
                 ("removed".to_owned(), count(result.removed.len())),
                 ("conflicts".to_owned(), count(result.conflicts.len())),
-            ];
+            ]);
             report.outcome.message = format!(
                 "Replayed deployment state · {} written, {} removed, {} conflicting",
                 counted(result.written.len(), "shard"),
@@ -294,9 +271,9 @@ pub fn report(cwd: &Path, env: &Env, state_commit: &str) -> Report {
                 COMMAND,
                 [("state_commit".to_owned(), Json::str(state_commit))],
             );
-            "failed".clone_into(&mut report.outcome.status);
+            report.outcome.status = Status::Failed;
             report.outcome.message.clone_from(&message);
-            report.outcome.exit_code = 1;
+            report.outcome.exit_code = ExitCode::Failure;
             report.outcome.failure = Some(Failure::new(super::COMMAND_FAILED, message));
             report
         }
@@ -305,6 +282,8 @@ pub fn report(cwd: &Path, env: &Env, state_commit: &str) -> Report {
 
 #[cfg(test)]
 mod tests {
+    use std::process::Command;
+
     use super::*;
 
     const UUID: &str = "00000000-0000-4000-8003-000000000001";
@@ -316,9 +295,44 @@ mod tests {
             .current_dir(dir)
             .env("GIT_CONFIG_GLOBAL", "/dev/null")
             .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env_remove("GIT_DIR")
+            .env_remove("GIT_WORK_TREE")
+            .env_remove("GIT_INDEX_FILE")
             .status()
             .unwrap();
         assert!(status.success(), "git {args:?}");
+    }
+
+    /// A run's environment without git's variables (a hook running the
+    /// tests exports `GIT_DIR`).
+    fn no_env() -> Env {
+        Env::from_pairs(Vec::<(String, String)>::new())
+    }
+
+    /// The run's `GIT_DIR` and `GIT_WORK_TREE` name the checkout, as they
+    /// did for the `git` program: a run from outside it replays its commit.
+    #[test]
+    fn the_runs_git_dir_names_the_checkout() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("dépôt");
+        let elsewhere = dir.path().join("ailleurs");
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::create_dir_all(&elsewhere).unwrap();
+        git_in(&root, &["init", "-q"]);
+        write(&root, &shard("{\"crowdstrike\": {\"lab\": \"1\"}}"));
+        git_in(&root, &["add", "-A"]);
+        git_in(&root, &["commit", "-qm", "base"]);
+        write(&root, &shard("{\"crowdstrike\": {\"lab\": \"2\"}}"));
+        git_in(&root, &["commit", "-qam", "ours"]);
+        let env = Env::from_pairs([
+            ("GIT_DIR", root.join(".git").to_string_lossy().into_owned()),
+            ("GIT_WORK_TREE", root.to_string_lossy().into_owned()),
+        ]);
+        let result = replay(&elsewhere, &env, "HEAD").unwrap();
+        assert_eq!(result.written.len(), 1, "{result:?}");
+        // Without them, the folder is no checkout.
+        let error = replay(&elsewhere, &no_env(), "HEAD").unwrap_err();
+        assert!(error.to_string().contains("no git checkout"), "{error}");
     }
 
     fn shard(platforms: &str) -> String {
@@ -331,17 +345,6 @@ mod tests {
         let path = dir.join(DEPLOYMENT_STATES).join(format!("{UUID}.json"));
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(path, text).unwrap();
-    }
-
-    fn env() -> Env {
-        Env::from_pairs(
-            std::env::vars()
-                .chain([
-                    ("GIT_CONFIG_GLOBAL".to_owned(), "/dev/null".to_owned()),
-                    ("GIT_CONFIG_NOSYSTEM".to_owned(), "1".to_owned()),
-                ])
-                .collect::<Vec<_>>(),
-        )
     }
 
     /// This run added `soc` and changed nothing else; a concurrent run had
@@ -361,7 +364,7 @@ mod tests {
         git_in(root, &["commit", "-qam", "ours"]);
         // The tip, as a concurrent merge left it.
         write(root, &shard("{\"crowdstrike\": {\"lab\": \"9\"}}"));
-        let result = replay(root, &env(), "HEAD").unwrap();
+        let result = replay(root, &no_env(), "HEAD").unwrap();
         assert_eq!(result.written.len(), 1);
         assert!(result.conflicts.is_empty(), "{:?}", result.conflicts);
         let text =
@@ -384,7 +387,7 @@ mod tests {
         write(root, &shard("{\"crowdstrike\": {\"lab\": \"2\"}}"));
         git_in(root, &["commit", "-qam", "ours"]);
         write(root, &shard("{\"crowdstrike\": {\"lab\": \"3\"}}"));
-        let result = replay(root, &env(), "HEAD").unwrap();
+        let result = replay(root, &no_env(), "HEAD").unwrap();
         assert_eq!(
             result.conflicts,
             [format!(
@@ -398,11 +401,11 @@ mod tests {
         std::fs::remove_file(&path).unwrap();
         git_in(root, &["commit", "-qam", "removed"]);
         write(root, &shard("{\"crowdstrike\": {\"lab\": \"2\"}}"));
-        let result = replay(root, &env(), "HEAD").unwrap();
+        let result = replay(root, &no_env(), "HEAD").unwrap();
         assert_eq!(result.removed.len(), 1);
         assert!(!path.exists());
-        let report = report(root, &env(), "HEAD~1");
-        assert_eq!(report.outcome.exit_code, 0);
+        let report = report(root, &no_env(), "HEAD~1");
+        assert_eq!(report.outcome.exit_code, ExitCode::Success);
         assert!(
             report
                 .outcome
@@ -411,8 +414,8 @@ mod tests {
             "{}",
             report.outcome.message
         );
-        let failed = super::report(root, &env(), "no-such-commit");
-        assert_eq!(failed.outcome.exit_code, 1);
-        assert_eq!(failed.outcome.status, "failed");
+        let failed = super::report(root, &no_env(), "no-such-commit");
+        assert_eq!(failed.outcome.exit_code, ExitCode::Failure);
+        assert_eq!(failed.outcome.status, Status::Failed);
     }
 }

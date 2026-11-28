@@ -21,6 +21,10 @@
 //! severity, file, line, column), counts and exit code, never message text.
 
 #![allow(dead_code, reason = "each test binary uses part of the helpers")]
+#![expect(
+    clippy::string_slice,
+    reason = "a test: a slice off a char boundary panics, and a panic is a failed test"
+)]
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
@@ -293,7 +297,7 @@ const REFUSING_PROXY: &str = "http://127.0.0.1:9";
 const CASE_PATH: &str = "/usr/local/bin:/usr/bin:/bin";
 
 /// The environment every case starts from (nothing inherited): the goldens'
-/// (the retired `xtask/src/golden/case.rs` `base_env`), less the Python oracle's own.
+/// (the retired `xtask/src/golden/case.rs` `base_env`), less the Python CLI's own.
 fn base_env(mode: &str) -> BTreeMap<String, String> {
     let mut env: BTreeMap<String, String> = [
         ("PATH", CASE_PATH),
@@ -399,23 +403,6 @@ fn change<'a>(
     })
 }
 
-/// Stops a run whose case root folds case (macOS's default volume): the
-/// `tide-corpus` fixtures hold `Objects/` and `objects/` side by side, which
-/// would be one folder there, so a snapshot recorded on it is not Linux's.
-fn assert_case_sensitive(root: &Path) {
-    let probe = root.join("Case-Probe");
-    std::fs::write(&probe, "").unwrap();
-    let folds = root.join("case-probe").exists();
-    std::fs::remove_file(&probe).unwrap();
-    assert!(
-        !folds,
-        "{} is on a case-insensitive volume, where `Objects/` and `objects/` are one folder: \
-         set OPENTIDE_CASE_ROOT to a folder on a case-sensitive volume \
-         (tests/golden/README.md, \"Snapshots\")",
-        root.display()
-    );
-}
-
 /// An executable `name` in `folder` that exits 0.
 fn stub_program(folder: &Path, name: &str) {
     use std::os::unix::fs::PermissionsExt as _;
@@ -440,7 +427,7 @@ pub fn run_case(case: &Case) -> String {
     // for it); `<TMP>/empty`, a PATH that has no program.
     stub_program(&root.join("bin"), "opentide");
     if case.fixture.starts_with("tide-corpus") {
-        assert_case_sensitive(&root);
+        replay::assert_case_sensitive(&root);
     }
     replay::fixture(&case.fixture, &ws);
     replay::fix_modes(&ws);
@@ -1173,16 +1160,9 @@ fn shrink(value: &mut serde_json::Value, limit: usize) {
     }
 }
 
-/// `(N bytes, sha256 HEX)`.
+/// `(N bytes, sha256 <64 lowercase hex digits>)`.
 fn digest_line(bytes: &[u8]) -> String {
-    use sha2::Digest as _;
-    let hex =
-        sha2::Sha256::digest(bytes)
-            .iter()
-            .fold(String::with_capacity(64), |mut hex, byte| {
-                let _ = write!(hex, "{byte:02x}");
-                hex
-            });
+    let hex = opentide_core::text::sha256_hex(bytes);
     format!("({} bytes, sha256 {hex})\n", bytes.len())
 }
 

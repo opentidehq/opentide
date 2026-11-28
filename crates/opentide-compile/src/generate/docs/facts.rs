@@ -1,4 +1,4 @@
-//! Where a rule deploys (`documentation/facts/deployment.py`): per platform
+//! Where a rule deploys: per platform
 //! block, its status, the runs that act on it, and the tenants they reach.
 //!
 //! A page shows what `opentide deploy` would do with the rule, not what its
@@ -223,7 +223,7 @@ pub enum TenantScope {
 pub struct TenantTarget {
     /// The tenant.
     pub name: String,
-    /// Its description.
+    /// The tenant's `description`, as [`TenantInfo`] holds it.
     pub description: String,
     /// The runs that deploy the block there.
     pub runs: Vec<StatusStrategy>,
@@ -238,7 +238,7 @@ pub struct TenantTarget {
 pub struct PlatformDeployment {
     /// The platform's key.
     pub platform: String,
-    /// Its label.
+    /// The platform's display name ([`platform_label`]).
     pub label: String,
     /// The block's `enabled`.
     pub enabled: bool,
@@ -309,13 +309,7 @@ pub fn rule_deployments(
                 _ => Vec::new(),
             };
             let listed: Vec<String> = match block.json.get("tenants") {
-                Some(Json::Array(items)) => items
-                    .iter()
-                    .map(|item| match item {
-                        Json::Str(text) => text.clone(),
-                        other => other.to_compact(),
-                    })
-                    .collect(),
+                Some(Json::Array(items)) => items.iter().map(Json::to_text).collect(),
                 _ => Vec::new(),
             };
             let deployment = PlatformDeployment {

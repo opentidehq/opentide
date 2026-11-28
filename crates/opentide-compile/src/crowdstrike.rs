@@ -1,7 +1,5 @@
-//! CrowdStrike Falcon: the correlation rule a deploy sends to one tenant
-//! (`platforms/crowdstrike/deployer.py` `compile_deployment`, the client's
-//! `create_detection_rule`, `update_detection_rule` and
-//! `delete_detection_rule`): the body with its `null` values left out.
+//! CrowdStrike Falcon: the correlation rule a deploy sends to one tenant to
+//! create, update or delete it: the body with its `null` values left out.
 
 use crate::Context;
 use crate::deploy::{self, Action, Write};
@@ -16,7 +14,7 @@ pub const PLATFORM: &str = "crowdstrike";
 /// The platform's display name, in messages.
 pub const DISPLAY: &str = "CrowdStrike";
 
-/// The API of a tenant's `api` cloud (`_get_base_api`).
+/// The API of a tenant's `api` cloud.
 pub fn base_api(domain: &str) -> Result<&'static str, CompileError> {
     Ok(match domain {
         "US-1" => "https://api.crowdstrike.com",
@@ -111,7 +109,7 @@ pub fn body(cx: &Context<'_>, rule: &Rule, tenant: &Json) -> Result<Json, Compil
     if !matches!(outcome.as_str(), "detection" | "incident")
         || !matches!(trigger_mode.as_str(), "verbose" | "summary")
     {
-        // The oracle says `outcome` for a bad trigger too.
+        // One message for both: a bad trigger is reported as an outcome too.
         return Err(CompileError::failed(
             DISPLAY,
             "Invalid Crowdstrike outcome value",
@@ -129,7 +127,7 @@ pub fn body(cx: &Context<'_>, rule: &Rule, tenant: &Json) -> Result<Json, Compil
             "@every {}",
             schedule
                 .and_then(|schedule| schedule.get("frequency"))
-                .map(deploy::text)
+                .map(Json::to_text)
                 .unwrap_or_default()
         )
         .into(),
@@ -140,7 +138,7 @@ pub fn body(cx: &Context<'_>, rule: &Rule, tenant: &Json) -> Result<Json, Compil
         operation.insert(
             to.into(),
             filled(schedule, from).map_or(Json::Null, |value| {
-                fix_datetime(&deploy::text(value)).into()
+                fix_datetime(&Json::to_text(value)).into()
             }),
         );
     }
@@ -148,7 +146,7 @@ pub fn body(cx: &Context<'_>, rule: &Rule, tenant: &Json) -> Result<Json, Compil
         Some(Json::Array(items)) => items
             .iter()
             .filter(|item| item.is_filled())
-            .map(deploy::text)
+            .map(Json::to_text)
             .collect(),
         _ => deploy::rule_text(rule, &["metadata", "author"])
             .map(str::to_owned)
@@ -179,13 +177,15 @@ pub fn body(cx: &Context<'_>, rule: &Rule, tenant: &Json) -> Result<Json, Compil
 /// The writes a deploy sends for `rule` to `tenant`, whose recorded id is
 /// `known`: a create (`POST`), an update (`PATCH` of a one-rule list with
 /// the id) or a delete (`DELETE ?ids=`), or none for a rule to retire that
-/// the tenant never received.
+/// the tenant never received. The body is the one the deploy sends
+/// ([`crate::compiler::Crowdstrike`]).
 pub fn compile(
     cx: &Context<'_>,
     rule: &Rule,
     tenant: &Json,
     known: Option<&str>,
 ) -> Result<Vec<Write>, CompileError> {
+    use crate::compiler::{Compiler, Crowdstrike};
     let status = rule
         .block(PLATFORM)
         .and_then(|block| block.get("status"))
@@ -203,7 +203,7 @@ pub fn compile(
         base_api(&api)?
     };
     let endpoint = format!("{base}/correlation-rules/entities/rules/v1");
-    let body = body(cx, rule, tenant)?;
+    let body = Crowdstrike::body(&Crowdstrike::compile(cx, rule, tenant)?);
     Ok(vec![match action {
         Action::Create => Write::new("POST", endpoint, body),
         Action::Update(id) => {

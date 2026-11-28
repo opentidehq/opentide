@@ -28,7 +28,8 @@ struct Stand {
 impl Stand {
     async fn start(name: &str, secret: &str) -> Self {
         let server = MockServer::start().await;
-        let setup: toml::Table = toml::from_str("client_secret = \"$SECRET\"\n").unwrap();
+        let setup: opentide_core::json::Object =
+            toml::from_str("client_secret = \"$SECRET\"\n").unwrap();
         let env = Environment::default().with("SECRET", secret);
         let tenant = Tenant::from_setup(
             "stand",

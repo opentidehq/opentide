@@ -1,6 +1,11 @@
 //! What the parser's tree highlights, and the fields it finds: the rules of
 //! the tree-sitter `highlights.scm` it replaces, one case each.
 
+#![expect(
+    clippy::string_slice,
+    reason = "a test: a slice off a char boundary panics, and a panic is a failed test"
+)]
+
 use opentide_falco::{highlight_captures, tree_fields};
 
 /// `text=capture` of every span.

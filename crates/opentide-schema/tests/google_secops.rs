@@ -256,7 +256,7 @@ fn a_block_without_condition_is_not_assembled() {
     );
 }
 
-/// 0.28.0's `validation/errors.py` reports a google-secops-1.0 constraint by
+/// 0.28.0 reports a google-secops-1.0 constraint by
 /// its own code (`google_secops.checks.CONSTRAINT_CODES`), not
 /// `schema_validation`; the stray `query` key is not one of them.
 #[test]

@@ -1,0 +1,10 @@
+---
+source: crates/opentide-datadog/tests/trees.rs
+expression: "debug_tree(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/datadog/term__invalid.datadog
+---
+QUERY@0..7
+  TERM@0..7
+    WORD@0..3 "foo"
+    BANG@3..4 "!"
+    WORD@4..7 "bar"

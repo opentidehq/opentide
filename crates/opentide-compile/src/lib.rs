@@ -3,16 +3,20 @@
 //!
 //! - [`strategy`]: status strategies, `--strategy`, the configured statuses.
 //! - [`sentinel`], [`elastic`], [`sysdig`]: the request bodies of the platforms whose body
-//!   is built from the rule alone (`compile_offline`), byte for byte the
-//!   oracle's ([`json::Json`] keeps the order keys are built in).
+//!   is built from the rule alone (`compile_offline`), with their keys in the
+//!   order they are built in ([`json::Json`] keeps it), so a rule compiles to
+//!   the same bytes on every run.
 //! - [`microsoft_defender`], [`splunk`], [`sentinel_one`], [`crowdstrike`],
 //!   [`harfanglab`], [`carbon_black`]: the writes a deployer sends for a rule
 //!   to one tenant, built from the tenant and the deployment state
 //!   ([`deploy`]: create, update or delete).
+//! - [`compiler`]: the one compile entry point per platform the dry run and
+//!   the deploy share (`Compiler`).
 //! - [`promotion`]: the status promotion of a RELEASE deploy on a push.
-//! - [`preview`]: a dry run's payload entries; for a platform the oracle
-//!   shows as the block's model dump, the block serialised from
-//!   opentide-schema's model.
+//! - [`preview`]: a dry run's payload entries; where the dry run builds no
+//!   body, the block serialised from opentide-schema's model.
+//! - [`rule_query`]: the queries a rule sends to a platform, which a search
+//!   runs and a tenant checks.
 //! - [`duration`], [`kql`], [`attack`]: what the compilers share.
 //!
 //! The crate does no I/O: the workspace (`opentide-workspace`) is loaded by
@@ -25,7 +29,9 @@ pub mod attack;
 pub mod bitdefender;
 pub mod carbon_black;
 pub mod ci;
+pub mod compiler;
 pub mod crowdstrike;
+pub mod datadog;
 pub mod deploy;
 pub mod dry_run;
 pub mod duration;
@@ -44,11 +50,13 @@ pub mod plan;
 pub mod preview;
 pub mod promotion;
 pub mod rule;
+pub mod rule_query;
 pub mod sentinel;
 pub mod sentinel_one;
 pub mod splunk;
 pub mod strategy;
 pub mod sysdig;
+mod typed;
 pub mod validate;
 
 pub use json::Json;

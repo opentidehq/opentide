@@ -1,4 +1,4 @@
-//! Page layout (`documentation/markdown/page.py`): one title, a lead, a
+//! Page layout: one title, a lead, a
 //! contents line, ordered sections.
 //!
 //! Every page is assembled here, so the three families and the folder
@@ -20,7 +20,7 @@
 use std::collections::HashMap;
 
 use super::flavor::Flavor;
-use super::text::{escape_pipes, join, markdown_text, table_cell};
+use super::text::{escape_pipes, join, markdown_lines, markdown_text, table_cell};
 
 /// A page with fewer listed sections than this gets no contents line.
 pub const CONTENTS_THRESHOLD: usize = 4;
@@ -314,10 +314,10 @@ pub fn table_of_contents(flavor: Flavor) -> &'static str {
     }
 }
 
-/// One table cell as a table writes it: a line break would end the row and
-/// a bare `|` the cell.
+/// One table cell as a table writes it: a line break (a lone `\r` too,
+/// [`markdown_lines`]) would end the row and a bare `|` the cell.
 pub fn cell(text: &str) -> String {
-    let lines: Vec<&str> = text.lines().collect();
+    let lines: Vec<&str> = markdown_lines(text).collect();
     escape_pipes(&lines.join(" "))
 }
 
@@ -528,5 +528,16 @@ mod tests {
         );
         assert_eq!(blockquote(""), ">\n\n");
         assert_eq!(code_block("kql", "x"), "```kql\nx\n```\n\n");
+    }
+
+    /// Markdown ends a line at a lone `\r` too: in a cell it would end the
+    /// row (#1957).
+    #[test]
+    fn a_cell_is_one_line_whatever_ends_its_lines() {
+        assert_eq!(cell("é\r😀|\r\nb\nc"), "é 😀\\| b c");
+        assert_eq!(
+            table(&["é\rA"], &[["😀\rB"]]),
+            "| é A |\n| --- |\n| 😀 B |\n"
+        );
     }
 }

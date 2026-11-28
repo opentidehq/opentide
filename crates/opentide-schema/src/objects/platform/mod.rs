@@ -1,34 +1,33 @@
 //! The rule platform blocks (UC-1.4, #810): `configurations.<platform>`,
-//! schemas `platform::<platform>::1.0`, ported from `models/platform.py`,
-//! `models/platform_configs.py` and `models/platform_schema.py`.
+//! schemas `platform::<platform>::1.0`.
 //!
-//! Each block is one struct, its fields the oracle's in the oracle's order: the
-//! shared ones of `PlatformConfigBase` first (`platform_block!`), then the
-//! block's own. A field's doc comment is its schema description, held to the
-//! oracle's text (by `cargo xtask schema diff` until #1142).
+//! Each block is one struct: the fields every block shares first
+//! (`platform_block!`), then the block's own. A field's doc comment is its
+//! schema description.
 //!
-//! | Oracle | Here |
-//! |--------|------|
-//! | `PlatformConfigBase._registered_platform_schema` (after) | [`check_platform_schema`] |
-//! | `QueryText` (`_query_not_blank`, after) | [`check_query_text`], [`query_text`] |
-//! | `ElasticConfig._validate_raw_elastic_block` (before) | [`elastic::block_codes`], the named check `elastic_rule_shape` |
-//! | `SysdigConfig._validate_raw_sysdig_block` (before) | [`sysdig::block_codes`], the named check `sysdig_rule_shape` |
-//! | `HarfangLabConfig._validate_raw_harfanglab_block` (before) | [`harfanglab::yara::block_codes`], the named check `harfanglab_rule_shape` |
-//! | `GraylogConfig._validate_raw_graylog_block` (before) | [`graylog::findings`], the named check `graylog_constraints`: one [`ErrorKind::Constraint`](crate::error::ErrorKind::Constraint) per finding |
-//! | `SentinelTechnique` (`check_sentinel_technique`, after) | [`sentinel::check_technique`], [`sentinel::check_duration`] |
-//! | `minimum_engine_version` (`ge=0`, strict) | [`sysdig::minimum_engine_version`] |
-//! | `__legacy_keys__` | [`LEGACY_KEYS`] (none in the oracle: Elastic's and Sysdig's are declared empty) |
-//! | `PLATFORM_CONFIG_MODELS` | [`PLATFORM_CONFIG_MODELS`], closed |
-//! | `platform_schema.py` | [`schema`] |
+//! | Check | Here |
+//! |-------|------|
+//! | `schema` is the block's registered identifier (after the fields) | [`check_platform_schema`] |
+//! | a query is not blank (after) | [`check_query_text`], [`query_text`] |
+//! | Elastic's block shape (before the fields) | [`elastic::block_codes`], the named check `elastic_rule_shape` |
+//! | Sysdig's block shape (before) | [`sysdig::block_codes`], the named check `sysdig_rule_shape` |
+//! | HarfangLab's block shape (before) | [`harfanglab::yara::block_codes`], the named check `harfanglab_rule_shape` |
+//! | Graylog's constraints (before) | [`graylog::findings`], the named check `graylog_constraints`: one [`ErrorKind::Constraint`](crate::error::ErrorKind::Constraint) per finding |
+//! | a Sentinel technique and duration (after) | [`sentinel::check_technique`], [`sentinel::check_duration`] |
+//! | Sysdig's `minimum_engine_version` (at least 0, an integer) | [`sysdig::minimum_engine_version`] |
+//! | keys a block accepts outside its schema | [`LEGACY_KEYS`] (none: every list is empty) |
+//! | the block models, by platform | [`PLATFORM_CONFIG_MODELS`], closed |
+//! | the keys and shared properties editor schemas add | [`schema`] |
 //! | `tide.meta.deprecation` (`deprecated_field`) | [`deprecation`] |
 //!
 //! The named checks are Rust functions registered by name ([`NAMED_CHECKS`]);
-//! each one's message is the oracle's (`ElasticConfig validation failed with
-//! code(s): …`), the codes sorted and joined with `, `.
+//! each one's message is `<Model> validation failed with code(s): …`
+//! ([`codes_message`]), the codes sorted and joined with `, `.
 
 pub mod bitdefender;
 pub mod carbon_black;
 pub mod crowdstrike;
+pub mod datadog;
 pub mod deprecation;
 pub mod microsoft_defender;
 /// Elastic Security durations: `opentide_core::duration`, the grammar the
@@ -62,6 +61,7 @@ use crate::objects::checks::Violation;
 pub use bitdefender::BitdefenderConfig;
 pub use carbon_black::CarbonBlackConfig;
 pub use crowdstrike::CrowdstrikeConfig;
+pub use datadog::DatadogConfig;
 pub use elastic::ElasticConfig;
 pub use exabeam::ExabeamConfig;
 pub use google_secops::GoogleSecopsConfig;
@@ -235,7 +235,7 @@ pub trait PlatformBlock {
     fn tenants(&self) -> Option<&[String]>;
 
     /// The platform's key in `configurations` (`sentinel`): the identifier's
-    /// middle part, as `platform_schema.py` takes it.
+    /// middle part.
     fn platform() -> &'static str {
         Self::SCHEMA_IDENTIFIER
             .split("::")
@@ -273,6 +273,7 @@ pub const PLATFORM_CONFIG_MODELS: [Registered; crate::platforms::COUNT] = [
     registered::<GraylogConfig>("graylog", "GraylogConfig"),
     registered::<ExabeamConfig>("exabeam", "ExabeamConfig"),
     registered::<GoogleSecopsConfig>("google_secops", "GoogleSecopsConfig"),
+    registered::<DatadogConfig>("datadog", "DatadogConfig"),
 ];
 
 const fn registered<T: PlatformBlock>(key: &'static str, model: &'static str) -> Registered {
@@ -295,10 +296,9 @@ pub type LegacyKeys = &'static [(&'static str, Option<&'static str>)];
 /// The keys a model's before-validator accepts although its schema does not
 /// list them (`__legacy_keys__`), by model name: each a legacy spelling,
 /// relative to the model, and the field it fills, or `None` when the key is
-/// dropped. The language server's catalog reads them. In the oracle (0.23.0)
-/// only `ElasticConfig` and `SysdigConfig` declare the mapping, and both
-/// declare it empty: their before-validators report constraint codes and
-/// accept no extra key. So no block tolerates a key, and the pre-pass
+/// dropped. The language server's catalog reads them. Every list here is
+/// empty: the before-validators report constraint codes and accept no extra
+/// key. So no block tolerates a key, and the pre-pass
 /// ([`fill_legacy_keys`]) has nothing to move.
 pub const LEGACY_KEYS: &[(&str, LegacyKeys)] = &[
     ("ElasticConfig", &[]),
@@ -306,6 +306,7 @@ pub const LEGACY_KEYS: &[(&str, LegacyKeys)] = &[
     ("BitdefenderConfig", &[]),
     ("ExabeamConfig", &[]),
     ("GoogleSecopsConfig", &[]),
+    ("DatadogConfig", &[]),
 ];
 
 /// The legacy keys of `model` ([`LEGACY_KEYS`]); a model that declares none
@@ -393,7 +394,7 @@ pub struct Finding {
 }
 
 /// A named check: a Rust function registered by name, run on a block's raw
-/// node before its fields, giving the oracle's constraint codes.
+/// node before its fields, giving the block's constraint codes.
 #[derive(Debug, Clone, Copy)]
 pub struct NamedCheck {
     /// The check's name (`elastic_rule_shape`).
@@ -452,13 +453,43 @@ pub const NAMED_CHECKS: [NamedCheck; 5] = [
     },
 ];
 
+/// Every code a platform block's model reports as an error typed by its own
+/// code ([`ErrorKind::Constraint`](crate::error::ErrorKind::Constraint)),
+/// read from each platform's own list: Bitdefender's
+/// ([`bitdefender::checks::CODE_MESSAGES`]), Graylog's
+/// ([`graylog::constraint_codes`]), Exabeam's ([`exabeam::constraint_codes`]),
+/// Microsoft Defender's ([`microsoft_defender::CONSTRAINT_CODES`]), Microsoft
+/// Sentinel's ([`sentinel::CONSTRAINT_CODES`]) and Google
+/// SecOps' ([`google_secops::CONSTRAINT_CODES`], but `extra_forbidden`, which
+/// its model reports as an unknown key), then Datadog's
+/// ([`datadog::constraint_codes`]). `validate` attributes a finding
+/// under one of them to its `schema` check, which runs the models. The other
+/// platforms' named checks report their codes in one `schema_validation`
+/// finding ([`codes_message`]).
+pub fn constraint_codes() -> impl Iterator<Item = &'static str> {
+    bitdefender::checks::CODE_MESSAGES
+        .iter()
+        .map(|(code, _)| *code)
+        .chain(graylog::constraint_codes())
+        .chain(exabeam::constraint_codes())
+        .chain(datadog::constraint_codes())
+        .chain(microsoft_defender::CONSTRAINT_CODES)
+        .chain(sentinel::CONSTRAINT_CODES)
+        .chain(
+            google_secops::CONSTRAINT_CODES
+                .into_iter()
+                .filter(|code| *code != "extra_forbidden"),
+        )
+}
+
 /// Every block advisory a rule earns, each platform's in the platform
 /// table's order: a warning that never rejects the rule, which `validate`
 /// and `lint`'s `queries` check report at its field path. Bitdefender's
 /// ([`bitdefender::advisories::advisories`]), Graylog's
 /// ([`graylog::advisories`], which read the workspace's Graylog tenants:
 /// `graylog_tenants`), Exabeam's ([`exabeam::advisories`]), then Google
-/// SecOps' ([`google_secops::advisories::advisories`]), as lint orders them.
+/// SecOps' ([`google_secops::advisories::advisories`]), then Datadog's
+/// ([`datadog::advisories`]), as lint orders them.
 pub fn block_advisories(rule: &Node, graylog_tenants: &[graylog::TenantView<'_>]) -> Vec<Advisory> {
     let convert = |code, field_path, message| Advisory {
         code,
@@ -477,12 +508,13 @@ pub fn block_advisories(rule: &Node, graylog_tenants: &[graylog::TenantView<'_>]
     found.extend(exabeam::advisories(rule));
     found.extend(microsoft_defender::advisories(rule));
     found.extend(google_secops::advisories::advisories(rule));
+    found.extend(datadog::advisories(rule));
     found
 }
 
 /// The node a platform block's `yara.signature` names when it is written as
-/// a YAML alias (`yara_signature_alias`): its anchor's, which starts where
-/// the oracle places the finding. HarfangLab's own check
+/// a YAML alias (`yara_signature_alias`): its anchor's, where the finding is
+/// placed. HarfangLab's own check
 /// ([`harfanglab::yara::aliased_signature`]), or the yara-1.0 one every other
 /// platform with a `YaraSignature` takes ([`bitdefender::checks::signature_aliases`]).
 #[must_use]
@@ -501,8 +533,8 @@ pub fn named_check(name: &str) -> Option<&'static NamedCheck> {
     NAMED_CHECKS.iter().find(|check| check.name == name)
 }
 
-/// The oracle's message for a before-validator's codes: `<Model> validation
-/// failed with code(s): a, b`.
+/// The message for a before-validator's codes: `<Model> validation failed
+/// with code(s): a, b`.
 pub fn codes_message(model: &str, codes: &BTreeSet<&str>) -> String {
     let joined: Vec<&str> = codes.iter().copied().collect();
     format!(
@@ -575,7 +607,7 @@ fn report_at(keys: &[&str], violation: &Violation, node: &Node, cx: &mut Context
 }
 
 /// One finding as an error typed by its code, at its path under the block.
-/// Its input is the block, as the oracle's `InitErrorDetails` gives it.
+/// Its node (its input and span) is the block, wherever the path points.
 fn report_finding(finding: &Finding, block: &Node, cx: &mut Context) {
     fn at(path: &[String], finding: &Finding, block: &Node, cx: &mut Context) {
         match path.split_first() {
@@ -830,6 +862,8 @@ pub enum PlatformConfig {
     GoogleSecops(GoogleSecopsConfig),
     /// `graylog`.
     Graylog(GraylogConfig),
+    /// `datadog`.
+    Datadog(DatadogConfig),
 }
 
 /// Why [`parse_platform_config`] refused a block.
@@ -870,6 +904,7 @@ pub fn parse_platform_config(platform: &str, node: &Node) -> Result<PlatformConf
         "exabeam" => read(node, PlatformConfig::Exabeam),
         "google_secops" => read(node, PlatformConfig::GoogleSecops),
         "graylog" => read(node, PlatformConfig::Graylog),
+        "datadog" => read(node, PlatformConfig::Datadog),
         other => Err(ParseError::UnknownPlatform(format!(
             "Unknown platform {}",
             repr::quote(other)

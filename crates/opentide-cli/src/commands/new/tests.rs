@@ -1,4 +1,5 @@
 use super::*;
+use crate::commands::result::ExitCode;
 
 #[test]
 fn a_uuid_is_the_canonical_hex_form() {
@@ -307,8 +308,9 @@ fn a_workspace_root_has_its_folder_or_a_catalogue() {
     assert!(!is_workspace_root(dir.path()));
     std::fs::create_dir(dir.path().join("objects")).unwrap();
     assert!(is_workspace_root(dir.path()));
-    // Only opentide's markers count: an `__init__.py` changes nothing.
-    std::fs::write(dir.path().join("objects/__init__.py"), "").unwrap();
+    // Only opentide's markers count: a source file in `objects/` changes
+    // nothing.
+    std::fs::write(dir.path().join("objects/mod.rs"), "").unwrap();
     assert!(is_workspace_root(dir.path()));
     std::fs::create_dir(dir.path().join(".opentide")).unwrap();
     assert!(is_workspace_root(dir.path()));
@@ -378,7 +380,7 @@ fn written(report: &Report, dir: &Path) -> String {
     std::fs::read_to_string(dir.join(path)).unwrap()
 }
 
-/// At a terminal a missing name is asked for, as `_ask_name` asks.
+/// At a terminal a missing name is asked for.
 #[test]
 fn a_missing_name_is_asked_for_at_a_terminal() {
     let dir = prompted_workspace();
@@ -390,7 +392,12 @@ fn a_missing_name_is_asked_for_at_a_terminal() {
         true,
     );
     assert_eq!(asked, ["text Threat name [] Some(\"a name\")"]);
-    assert_eq!(report.outcome.exit_code, 0, "{:?}", report.outcome);
+    assert_eq!(
+        report.outcome.exit_code,
+        ExitCode::Success,
+        "{:?}",
+        report.outcome
+    );
     assert!(written(&report, dir.path()).contains("name: Served Threat"));
 }
 
@@ -411,7 +418,12 @@ fn a_rule_asks_for_its_platform_blocks() {
         asked[1],
         "checkbox Platform blocks [\"Microsoft Sentinel\", \"Splunk Enterprise Security\"] [] required=false"
     );
-    assert_eq!(report.outcome.exit_code, 0, "{:?}", report.outcome);
+    assert_eq!(
+        report.outcome.exit_code,
+        ExitCode::Success,
+        "{:?}",
+        report.outcome
+    );
     let text = written(&report, dir.path());
     assert!(text.contains("  splunk:"), "{text}");
     assert!(!text.contains("  sentinel:"), "{text}");
@@ -444,7 +456,7 @@ fn an_unanswered_question_stops_the_run() {
     assert_eq!(failure.message, "The name cannot be empty");
     assert_eq!(failure.argument.as_deref(), Some("--name"));
     let (report, _) = prompted(dir.path(), "threat", &[], vec![Reply::CtrlC], true);
-    assert_eq!(report.outcome.exit_code, 130);
+    assert_eq!(report.outcome.exit_code, ExitCode::Interrupted);
     let (report, _) = prompted(
         dir.path(),
         "rule",
@@ -452,7 +464,7 @@ fn an_unanswered_question_stops_the_run() {
         vec![Reply::Text(Some("Watch")), Reply::CtrlC],
         true,
     );
-    assert_eq!(report.outcome.exit_code, 130);
+    assert_eq!(report.outcome.exit_code, ExitCode::Interrupted);
     assert!(
         !dir.path().join("objects/rules").exists()
             || std::fs::read_dir(dir.path().join("objects/rules"))
@@ -482,7 +494,12 @@ fn a_rule_with_every_platform_block_is_valid() {
         vec![Reply::Text(Some("Every Platform"))],
         true,
     );
-    assert_eq!(report.outcome.exit_code, 0, "{:?}", report.outcome);
+    assert_eq!(
+        report.outcome.exit_code,
+        ExitCode::Success,
+        "{:?}",
+        report.outcome
+    );
     let text = written(&report, dir.path());
     for platform in &every {
         assert!(

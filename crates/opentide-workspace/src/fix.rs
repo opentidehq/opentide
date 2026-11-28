@@ -1,5 +1,5 @@
 //! `validate --fix`: the safe edits of the findings, applied as text splices
-//! (`cli/ui/fixes.py`, UC-2.3 #818).
+//! (UC-2.3, #818).
 //!
 //! An edit replaces the text from (`line`, `column`) up to (`end_line`,
 //! `end_column`) and keeps every other byte of the file: comments, quoting,
@@ -180,12 +180,13 @@ pub fn split_keeping_breaks(text: &str) -> Vec<&str> {
                 continue;
             }
         };
-        lines.push(&text[start..end]);
+        // Each line ends after an ASCII line break.
+        lines.push(crate::cut(text, start, end));
         start = end;
         index = end;
     }
     if start < text.len() {
-        lines.push(&text[start..]);
+        lines.push(crate::cut(text, start, text.len()));
     }
     lines
 }
@@ -210,7 +211,8 @@ fn line_spans(text: &str) -> Vec<(usize, usize)> {
 /// column may be one past the line's last character.
 fn offset(text: &str, spans: &[(usize, usize)], line: usize, column: usize) -> Option<usize> {
     let (start, end) = *spans.get(line.checked_sub(1)?)?;
-    let content = &text[start..end];
+    // A line's span ends before its ASCII line break.
+    let content = crate::cut(text, start, end);
     let column = column.checked_sub(1)?;
     if column == content.chars().count() {
         return Some(end);
@@ -231,11 +233,14 @@ pub fn apply(text: &str, edit: &TextEdit) -> Option<(String, String)> {
     if end <= start {
         return None;
     }
+    // `offset` reads both from `char_indices` or a line's end.
+    let (before, rest) = text.split_at_checked(start)?;
+    let (replaced, after) = rest.split_at_checked(end - start)?;
     let mut updated = String::with_capacity(text.len() + edit.replacement.len());
-    updated.push_str(&text[..start]);
+    updated.push_str(before);
     updated.push_str(&edit.replacement);
-    updated.push_str(&text[end..]);
-    Some((updated, text[start..end].to_owned()))
+    updated.push_str(after);
+    Some((updated, replaced.to_owned()))
 }
 
 /// The edits `--fix` may apply for `diagnostic`: none unless its fix is safe
@@ -532,7 +537,7 @@ pub fn validate_command(
             words.extend([flag, value.as_str()]);
         }
     }
-    shlex::try_join(words).unwrap_or_default()
+    opentide_core::text::shell_line(words)
 }
 
 /// `apply 1 safe fix`, `apply 3 safe fixes`.
@@ -545,8 +550,7 @@ pub fn apply_reason(count: usize) -> String {
 }
 
 /// `Fixed 3 values in 2 files`, `Would fix 1 value in 1 file`, `No safe fix
-/// to apply`; `unwritten` counts the fixes whose file could not be written
-/// (`validation.py` `fix_phrase`).
+/// to apply`; `unwritten` counts the fixes whose file could not be written.
 pub fn fix_phrase(count: usize, files: usize, dry_run: bool, unwritten: usize) -> String {
     let failed = if unwritten == 1 {
         format!("could not write {unwritten} fix")
@@ -862,6 +866,16 @@ mod tests {
             fix_command(None, None, &crate::validate::Selection::default()),
             "opentide validate --fix"
         );
+        // A value no shell can carry (a NUL, from an MCP call) is shown, not
+        // dropped with the rest of the command (#1957).
+        let selection = crate::validate::Selection {
+            files: vec!["é 😀.yaml".to_owned(), "a\0b.yaml".to_owned()],
+            ..crate::validate::Selection::default()
+        };
+        assert_eq!(
+            fix_command(None, None, &selection),
+            "opentide validate --fix --file 'é 😀.yaml' --file \"a\\0b.yaml\""
+        );
         assert_eq!(apply_reason(1), "apply 1 safe fix");
         assert_eq!(apply_reason(2), "apply 2 safe fixes");
     }
@@ -872,5 +886,26 @@ mod tests {
         assert_eq!(fix_phrase(0, 0, false, 2), "Could not write 2 fixes");
         assert_eq!(fix_phrase(3, 2, false, 0), "Fixed 3 values in 2 files");
         assert_eq!(fix_phrase(1, 1, true, 0), "Would fix 1 value in 1 file");
+    }
+
+    #[test]
+    fn an_edit_on_multi_byte_text_replaces_whole_characters() {
+        let text = "é😀x\r\n😀é\n";
+        assert_eq!(
+            apply(text, &edit(1, 2, 3, "ab")),
+            Some(("éabx\r\n😀é\n".to_owned(), "😀".to_owned()))
+        );
+        assert_eq!(
+            apply(text, &edit(2, 2, 3, "")),
+            Some(("é😀x\r\n😀\n".to_owned(), "é".to_owned()))
+        );
+        assert_eq!(apply(text, &edit(1, 3, 2, "")), None);
+        assert_eq!(apply(text, &edit(1, 1, 9, "")), None);
+        for column in 1..=4 {
+            for end in column..=5 {
+                let _ = apply(text, &edit(1, column, end, "é"));
+                let _ = apply(text, &edit(2, column, end, "😀"));
+            }
+        }
     }
 }

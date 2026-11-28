@@ -1,11 +1,11 @@
 ---
 title: Deployment state
-description: Where opentide keeps the vendor rule ids that Microsoft Defender, SentinelOne, CrowdStrike, Sysdig, Bitdefender, Graylog, Exabeam and Google SecOps, and platform plugins, assign, and why the files must be committed.
+description: Where opentide keeps the vendor rule ids that SentinelOne, CrowdStrike, Sysdig, Bitdefender, Graylog, Exabeam, Google SecOps and Datadog, and platform plugins, assign, and why the files must be committed.
 ---
 
 # Deployment state
 
-Microsoft Defender, SentinelOne, CrowdStrike, Sysdig, Bitdefender, Graylog, Exabeam and Google SecOps give every rule
+SentinelOne, CrowdStrike, Sysdig, Bitdefender, Graylog, Exabeam, Google SecOps and Datadog give every rule
 opentide creates an id of their own, and so do platform plugins. The next deploy has to update or delete the
 remote rule by that id. opentide keeps it in a per-rule JSON file under
 `.opentide/states/`, not in the rule YAML.
@@ -29,9 +29,10 @@ directory: change that line before you deploy (see [0.15.0](../releases.md#0150-
 
 `<uuid>` is the rule's `metadata.uuid` in lowercase canonical form, and the
 file's `object_uuid` is exactly that string. A rule that has never been
-deployed to one of the seven platforms that keep ids (SentinelOne, CrowdStrike, Sysdig, Bitdefender, Graylog, Exabeam and Google SecOps), or to a [platform plugin](../../sdk/platforms.md#platform-plugins)'s
+deployed to one of the eight platforms that keep ids (SentinelOne, CrowdStrike, Sysdig, Bitdefender, Graylog, Exabeam, Google SecOps and Datadog), or to a [platform plugin](../../sdk/platforms.md#platform-plugins)'s
 platform, has no file. Sentinel, Splunk, HarfangLab, Carbon Black Cloud and
-Elastic address rules by `metadata.uuid` or by title and never get one. Splunk
+Elastic address rules by `metadata.uuid` or by title and never get one, and
+Microsoft Defender by `opentide-<uuid>`, an id derived from it. Splunk
 names a saved search after the rule's `name` and keeps no state for it: the
 last line of the saved search's description, `opentide rule <uuid>`, names the
 rule. After writing or retiring a rule, a deploy deletes the other saved
@@ -59,7 +60,7 @@ deployed again: delete it in Splunk if the rule was renamed before then.
 - Tenant keys are the tenant `name` from `.opentide/configurations/platforms/<platform>.toml`, with surrounding spaces removed. A stored key that itself has surrounding spaces (`" contoso "`) is invalid. Renaming a tenant orphans its entry, and the next deploy creates a new remote rule.
 - Only the canonical spelling is read. An uppercase, unhyphenated or `.JSON` file name, or a second file for the same rule, is `deployment_state_uuid_mismatch` and the rule is refused: a case-sensitive checkout would not find such a file, and deploy would create a second remote rule.
 - An empty `platforms` map, or an empty map for one platform, reads as no binding. Writers never leave one behind.
-- Ids are JSON strings. SentinelOne ids are canonical decimal integers (`12345`, no sign or leading zero). Exabeam ids are a lower-case canonical UUID (`016dbc1d-a727-43df-a143-9546dcc81a5a`): deploy lower-cases the id Exabeam returns, and a shard that holds another spelling is `deployment_state_shape`. CrowdStrike ids, and the ids a platform plugin returns, are stored exactly as the platform returned them.
+- Ids are JSON strings. SentinelOne ids are canonical decimal integers (`12345`, no sign or leading zero). Exabeam ids are a lower-case canonical UUID (`016dbc1d-a727-43df-a143-9546dcc81a5a`): deploy lower-cases the id Exabeam returns, and a shard that holds another spelling is `deployment_state_shape`. CrowdStrike and Datadog ids, and the ids a platform plugin returns, are stored exactly as the platform returned them: no source documents the format of a Datadog rule id, so none is enforced.
 - A platform plugin's ids sit under its identifier (`platforms.acme`). Any platform identifier that is not a built-in platform's is accepted, whether or not the plugin is installed where the shard is read.
 - Keys are sorted, the indent is two spaces, and the file ends with one newline, so a deploy that touches one tenant changes one line in review.
 
@@ -134,7 +135,7 @@ the pull-request staging job (`opentide deploy --strategy PREVIEW`), would
 leave the id of a rule it creates on a runner that is thrown away, and the
 next run would create the rule again. In CI, a run other than
 `--strategy RELEASE` on a push therefore refuses to create a rule that has
-no shard entry on any of the seven platforms above, with
+no shard entry on any of the eight platforms above, with
 `deployment_state_unpersisted` and before any vendor call. The run exits `1`.
 
 - Updates, disablements and deletions of a rule that already has a shard

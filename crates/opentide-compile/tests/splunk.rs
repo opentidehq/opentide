@@ -1,8 +1,8 @@
 //! A Splunk block's `advanced` table (0.24.0, #878): the `savedsearches.conf`
-//! keys a deploy sends as written. The oracle (0.23.0) refuses the table, so
-//! the compile corpus cannot hold such a rule (`tests/oracle.rs` compares
-//! every rule of it with the oracle); these are the cases of 0.24.0's
-//! `tests/test_platforms/test_splunk_deployer.py`.
+//! keys a deploy sends as written. Opentide 0.23.0 refuses the table, so
+//! the compile corpus cannot hold such a rule (`tests/payload_corpus.rs` compares
+//! every rule of it with opentide 0.23.0); these are the cases of 0.24.0's
+//! Splunk deployer tests.
 #![expect(
     clippy::unwrap_used,
     reason = "test helpers: every workspace here opens"
@@ -11,8 +11,10 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use opentide_compile::compiler::{Compiler, Splunk, SplunkTarget};
 use opentide_compile::json::Object;
 use opentide_compile::{Json, Owned, Rule, deploy, splunk};
+use opentide_schema::platforms::PlatformKey;
 use opentide_schema::vocab::Vocabularies;
 use opentide_workspace::{FileSystem, MemoryFs, Options, RootOptions, Workspace};
 
@@ -114,26 +116,56 @@ fn settings_at(block: &str, clock: Option<splunk::Clock>) -> Object {
     let cx = owned.context(&index);
     let object = index.get("rule", UUID).unwrap();
     let rule = Rule::new(object.root().unwrap(), None);
-    let tenant = deploy::tenants(&cx, splunk::PLATFORM)[0];
-    let writes = splunk::compile(&cx, &rule, tenant, clock).unwrap();
+    let tenant = deploy::tenants(&cx, &PlatformKey::new(splunk::PLATFORM))[0];
+    let writes = Splunk::compile(&cx, &rule, SplunkTarget { tenant, clock }).unwrap();
     assert_eq!(writes.len(), 3, "create, settings, then the late settings");
-    let Json::Object(body) = writes[1].body.clone() else {
-        panic!("a settings update is an object")
+    let Json::Object(body) = Splunk::body(&writes) else {
+        panic!("the settings a deploy sends are an object")
     };
-    let mut body = body;
-    if let Json::Object(late) = &writes[2].body {
-        for (key, value) in late {
-            body.insert(key.clone(), value.clone());
-        }
-    }
     body
 }
 
+/// The settings a deploy sends are the dry run's updates (every write after
+/// the create), merged in order: the `search` first, the late settings last.
+#[test]
+fn the_settings_sent_are_the_updates_the_dry_run_shows() {
+    let workspace = workspace(ADVANCED);
+    let owned = Owned::new(
+        &Vocabularies::bundled(),
+        &workspace.configuration().resolved,
+    );
+    let index = workspace.index().clone();
+    let cx = owned.context(&index);
+    let object = index.get("rule", UUID).unwrap();
+    let rule = Rule::new(object.root().unwrap(), None);
+    let tenant = deploy::tenants(&cx, &PlatformKey::new(splunk::PLATFORM))[0];
+    let writes = Splunk::compile(
+        &cx,
+        &rule,
+        SplunkTarget {
+            tenant,
+            clock: None,
+        },
+    )
+    .unwrap();
+    let mut merged = Object::new();
+    for write in &writes[1..] {
+        let Json::Object(update) = &write.body else {
+            panic!("a settings update is an object")
+        };
+        merged.extend(update.clone());
+    }
+    let Json::Object(sent) = Splunk::body(&writes) else {
+        panic!("the settings a deploy sends are an object")
+    };
+    assert_eq!(sent, merged);
+    assert_eq!(sent.keys().next().map(String::as_str), Some("search"));
+    assert_eq!(sent.keys().last().map(String::as_str), Some("actions"));
+    assert_eq!(Splunk::body(&Vec::new()), Json::Object(Object::new()));
+}
+
 fn text(body: &Object, key: &str) -> Option<String> {
-    body.get(key).map(|value| match value {
-        Json::Str(text) => text.clone(),
-        other => other.to_compact(),
-    })
+    body.get(key).map(Json::to_text)
 }
 
 #[test]

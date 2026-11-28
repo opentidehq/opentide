@@ -3,14 +3,14 @@
 //!
 //! tree-sitter lexed what the parser could accept next (`valid_symbols`): the same bytes are a
 //! pattern in a filter, a field reference in an expression and a division where an operator is
-//! due. A pre-lexed token stream has no parser to ask, so [`Driver`] follows the grammar at the
-//! level of tokens: a [`Mode`] says what is valid next and a stack of [`Frame`]s says where the
+//! due. A pre-lexed token stream has no parser to ask, so `Driver` follows the grammar at the
+//! level of tokens: a `Mode` says what is valid next and a stack of `Frame`s says where the
 //! brackets return to. Only what changes a token's extent or kind is tracked; everything else is
 //! the parser's business. Words are not keywords here: `and`, `or`, `not`, `case`, `match`,
 //! `like`, `true` and `false` are [`K::WORD`] and the parser re-kinds them.
 //!
-//! The scanner (`scanner.c`) is [`scan`]: function names, unquoted patterns, and the field of an
-//! assignment, ported rule for rule. The slash that closes a regex is part of [`Driver::regex`].
+//! The scanner (`scanner.c`) is `scan`: function names, unquoted patterns, and the field of an
+//! assignment, ported rule for rule. The slash that closes a regex is part of `Driver::regex`.
 //! The lexer tiles the source, whitespace and comments included, and never skips.
 
 use crate::syntax::SyntaxKind as K;
@@ -564,7 +564,7 @@ fn scan(s: &str, start: usize, flags: Flags) -> Option<(K, usize)> {
 // ---- The driver ----------------------------------------------------------------------------
 
 /// Lexes `source`: every byte is in exactly one lexeme.
-pub(crate) fn lex(source: &str) -> Vec<Lexeme> {
+pub fn lex(source: &str) -> Vec<Lexeme> {
     let mut driver = Driver {
         src: source,
         pos: 0,
@@ -1092,7 +1092,7 @@ mod tests {
             .iter()
             .map(|l| {
                 let r = std::ops::Range::<usize>::from(l.range);
-                (K::from_raw(l.kind), &source[r])
+                (K::from_raw(l.kind), source.get(r).unwrap())
             })
             .filter(|(k, _)| *k != K::WHITESPACE)
             .collect()

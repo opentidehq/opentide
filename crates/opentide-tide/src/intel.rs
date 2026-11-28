@@ -284,7 +284,12 @@ fn word_match(lowered: &str, text: &str) -> bool {
     }
     let text = text.to_lowercase();
     text.match_indices(lowered).any(|(at, _)| {
-        text[..at]
+        #[expect(
+            clippy::string_slice,
+            reason = "a match from `match_indices` starts on a char boundary"
+        )]
+        let before = &text[..at];
+        before
             .chars()
             .next_back()
             .is_none_or(|before| !before.is_alphanumeric())
@@ -435,8 +440,8 @@ fn resolve_field_by_name(label: &str) -> Option<&'static TideField> {
 }
 
 fn document_uuid(source: &str) -> Option<String> {
-    let idx = source.find("uuid:")?;
-    let rest = source[idx + 5..].trim_start();
+    let (_, rest) = source.split_once("uuid:")?;
+    let rest = rest.trim_start();
     let token = rest
         .split(|c: char| !(c.is_ascii_hexdigit() || c == '-'))
         .next()
@@ -448,18 +453,10 @@ pub fn inlay_hints(source: &str, workspace: &[IndexedObject]) -> Vec<TideInlay> 
     opentide_core::with_line_index(source, || inlay_hints_lines(source, workspace))
 }
 
-#[expect(
-    clippy::expect_used,
-    reason = "a regex literal: an invalid pattern fails every test that reaches it"
-)]
 fn inlay_hints_lines(source: &str, workspace: &[IndexedObject]) -> Vec<TideInlay> {
     let self_uuid = document_uuid(source);
-    let re = regex::Regex::new(
-        r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
-    )
-    .expect("uuid");
     let mut out = Vec::new();
-    for m in re.find_iter(source) {
+    for m in opentide_core::ids::finder().find_iter(source) {
         if self_uuid.as_deref() == Some(m.as_str()) {
             continue;
         }
@@ -476,11 +473,9 @@ fn inlay_hints_lines(source: &str, workspace: &[IndexedObject]) -> Vec<TideInlay
 }
 
 pub fn extract_uuid(text: &str) -> Option<String> {
-    let re = regex::Regex::new(
-        r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
-    )
-    .ok()?;
-    re.find(text).map(|m| m.as_str().to_string())
+    opentide_core::ids::finder()
+        .find(text)
+        .map(|m| m.as_str().to_string())
 }
 
 #[cfg(test)]
@@ -675,5 +670,18 @@ detection_model: 00000000-0000-4000-8002-000000000001
         assert!(labels.contains(&"rule::1.0"), "{labels:?}");
         assert!(!labels.contains(&"threat::1.0"), "{labels:?}");
         assert!(!labels.contains(&"objective::1.0"), "{labels:?}");
+    }
+
+    /// #1946: word starts and the document's UUID among multi-byte text.
+    #[test]
+    fn words_and_uuids_among_multi_byte_text() {
+        assert!(word_match("bypass", "Évasion: Bypass 😀"));
+        assert!(word_match("évasion", "😀 Évasion"));
+        assert!(!word_match("vasion", "Évasion"));
+        assert_eq!(
+            document_uuid("name: é😀\nuuid: 00000000-0000-4000-8003-000000000001 # é\n").as_deref(),
+            Some("00000000-0000-4000-8003-000000000001")
+        );
+        assert_eq!(document_uuid("uuid: é😀"), None);
     }
 }

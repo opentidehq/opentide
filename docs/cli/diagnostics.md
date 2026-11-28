@@ -84,6 +84,45 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`credentials`](#credentials) | Per configured tenant, whether every `$VARIABLE` its setup names is set. |
 | [`crowdstrike_unsupported`](#crowdstrike_unsupported) | Retired in engine 0.12.0; CrowdStrike queries are now checked as CQL: see the `cql_*` codes. |
 | [`cve_lookup_unavailable`](#cve_lookup_unavailable) | A threat lists CVE identifiers, but Vulnerability-Lookup could not be reached to check them. |
+| [`datadog_calculated_field_in_rule`](#datadog_calculated_field_in_rule) | A detection rule's query names a calculated field (`#name`): real-time detection rules have none. |
+| [`datadog_cidr`](#datadog_cidr) | A Datadog `CIDR()` call does not name an `@attribute` first, has no block, or has an argument that is not an IPv4 or IPv6 CIDR block. |
+| [`datadog_concurrent_modification`](#datadog_concurrent_modification) | The Datadog rule changed between deploy's read and its update. |
+| [`datadog_condition`](#datadog_condition) | A case's condition does not parse, names an unknown query, or does not suit the method. |
+| [`datadog_condition_mixed`](#datadog_condition_mixed) | A condition mixes `&&` and `||`, whose precedence Datadog does not document. |
+| [`datadog_create_unconfirmed`](#datadog_create_unconfirmed) | A Datadog create got no answer, or a server error, so it may or may not have happened. |
+| [`datadog_curly_quote`](#datadog_curly_quote) | A Datadog search holds a curly quote, which is not a quote: the words around it are searched as separate terms. |
+| [`datadog_detached_operator`](#datadog_detached_operator) | A Datadog exclusion `-` is followed by a space. |
+| [`datadog_detection_option`](#datadog_detection_option) | A `detection` key the method does not take, or `new_value` without `forget_after`. |
+| [`datadog_duration`](#datadog_duration) | A duration is not one of the values its key accepts. |
+| [`datadog_full_text_in_rule`](#datadog_full_text_in_rule) | A detection rule's query searches every attribute with `*:term`, which Datadog documents for monitors, dashboards and notebooks, not for detection rules. |
+| [`datadog_lowercase_operator`](#datadog_lowercase_operator) | A lower-case `and`, `or` or `not` stands between field clauses or in a value group, where Datadog reads it as a search term, not an operator. |
+| [`datadog_measure`](#datadog_measure) | A query sets more than one measure, or `new_value` does not match the method. |
+| [`datadog_method_unsupported`](#datadog_method_unsupported) | `detection.method` is not a detection method of `platform::datadog::1.0`. |
+| [`datadog_mixed_boolean`](#datadog_mixed_boolean) | A Datadog search puts OR beside an AND, written or implied, without parentheses: AND binds tighter, as VRL reads it (unverified on Cloud SIEM). |
+| [`datadog_notification_alias`](#datadog_notification_alias) | A case's `notify` names an alias the tenant does not define. |
+| [`datadog_parse_error`](#datadog_parse_error) | The Datadog search does not parse: an unbalanced bracket, a dangling operator, an empty group, a field with no value, two modifiers in a row, or an unclosed phrase. |
+| [`datadog_pipelines_only`](#datadog_pipelines_only) | A Datadog search uses Observability Pipelines syntax (`_exists_:`, `_missing_:`, a quoted field name), which log search does not read the same way. |
+| [`datadog_query_name`](#datadog_query_name) | A query name is not `[a-z][a-z0-9_]*`, is a duplicate, or is set on a `new_value` query. |
+| [`datadog_range`](#datadog_range) | A Datadog range is malformed (a missing bound, a lower-case `to`), or mixes an inclusive and an exclusive bound. |
+| [`datadog_rate_limited`](#datadog_rate_limited) | Datadog's rate limit held after the waits a deploy allows. |
+| [`datadog_regex`](#datadog_regex) | A Datadog search term holds `~` or `^`: the search syntax has no regular expression, fuzzy or boost operator. |
+| [`datadog_request_failed`](#datadog_request_failed) | Datadog answered a rule's request with an error other than a refusal of the rule. |
+| [`datadog_rule_default`](#datadog_rule_default) | The id a deployment state names is a Datadog default rule, which opentide never changes. |
+| [`datadog_rule_invalid`](#datadog_rule_invalid) | Datadog refused the rule: its validation, or a write, answered `400`. |
+| [`datadog_rule_missing`](#datadog_rule_missing) | The rule a deployment state names no longer exists on the Datadog tenant. |
+| [`datadog_rule_recreated`](#datadog_rule_recreated) | The rule a deployment state names was gone, and deploy created it again. |
+| [`datadog_severity`](#datadog_severity) | A case severity is not one of Datadog's five statuses. |
+| [`datadog_signal_group_by`](#datadog_signal_group_by) | A `signal.group_by` field is in no query's `group_by`. |
+| [`datadog_site`](#datadog_site) | A tenant's `site` is not a Datadog site, and no `api_url` is set. |
+| [`datadog_symbol_operator`](#datadog_symbol_operator) | `&&` or `||` stands between Datadog search clauses: Datadog's docs list them as characters to escape; write AND or OR. |
+| [`datadog_tag`](#datadog_tag) | A tag Datadog would refuse or rewrite. |
+| [`datadog_tenant_unauthorized`](#datadog_tenant_unauthorized) | Datadog refused the tenant's API or application key. |
+| [`datadog_tenant_unreachable`](#datadog_tenant_unreachable) | The Datadog tenant did not answer. |
+| [`datadog_unescaped_colon`](#datadog_unescaped_colon) | A Datadog search value holds an unescaped `:`, which Datadog's docs say to escape. |
+| [`datadog_unescaped_special`](#datadog_unescaped_special) | A Datadog search term holds an unescaped `!`, `<` or `>`, or a value starts with an unescaped `-`, which Datadog reads as an exclusion: escape it with `\`. |
+| [`datadog_unknown_attribute`](#datadog_unknown_attribute) | A Datadog search field is a dotted bare key, searched as a tag, where an `@attribute` was probably meant. |
+| [`datadog_wildcard_in_phrase`](#datadog_wildcard_in_phrase) | A `*` or `?` touches a word inside a quoted phrase, where it is punctuation, not a wildcard. |
+| [`datadog_window_order`](#datadog_window_order) | `detection.window` is longer than `signal.keep_alive` or `signal.max_duration`. |
 | [`defender_output_columns`](#defender_output_columns) | A Defender custom detection must return the columns Defender requires. |
 | [`deployment_state_platform`](#deployment_state_platform) | A deployment state shard names a platform that stores no external ids. |
 | [`deployment_state_shape`](#deployment_state_shape) | A deployment state shard is not the JSON shape opentide writes. |
@@ -298,9 +337,13 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`kql_control_command_unsupported`](#kql_control_command_unsupported) | A KQL control command (.show, .create, ...) is not a detection query; rules cannot run it. |
 | [`kql_deprecated_function`](#kql_deprecated_function) | The KQL function is a deprecated alias; Microsoft Learn names its replacement. |
 | [`kql_deprecated_operator`](#kql_deprecated_operator) | The KQL scalar operator is a legacy spelling (containscs); use the current name (contains_cs). |
+| [`kql_function_unavailable`](#kql_function_unavailable) | A KQL query calls a function that exists in another product's dialect, not in this one: a Microsoft Defender advanced hunting function in a Microsoft Sentinel query. |
 | [`kql_join_summarize_before_project`](#kql_join_summarize_before_project) | A `join` runs while the pipeline it sits in still carries every column, and a later `project` would have narrowed it. |
 | [`kql_parse_error`](#kql_parse_error) | The KQL query does not parse. |
 | [`kql_render_not_valid`](#kql_render_not_valid) | render draws a chart; it has no effect in a detection rule. |
+| [`kql_rule_search_star`](#kql_rule_search_star) | A Microsoft Sentinel analytics rule's query contains `search *`, which Microsoft does not allow in a scheduled rule. |
+| [`kql_rule_too_long`](#kql_rule_too_long) | A Microsoft Sentinel analytics rule's query is longer than the 10,000 characters Microsoft allows. |
+| [`kql_rule_union_star`](#kql_rule_union_star) | A Microsoft Sentinel analytics rule's query contains `union *`, which Microsoft does not allow in a scheduled rule. |
 | [`kql_table_misspelt`](#kql_table_misspelt) | A KQL table is not one the engine knows or the workspace declares, but is a near miss of one that is (one edit for a name of up to seven characters, two for a longer one, and not a custom `_CL` table): most likely a typo. |
 | [`kql_table_not_declared`](#kql_table_not_declared) | The table is one the engine knows for the platform, but no log source of the workspace declares it in visibility.toml. |
 | [`kql_type_mismatch`](#kql_type_mismatch) | The operator cannot apply to the column's documented or declared type. |
@@ -336,24 +379,34 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`lucene_regexp`](#lucene_regexp) | The /regexp/ body is rejected by, or too costly for, Lucene's RegExp. |
 | [`lucene_unescaped_slash`](#lucene_unescaped_slash) | An unescaped / starts a regular expression. |
 | [`max_tlp_unknown`](#max_tlp_unknown) | A `sharing.toml` block's `max_tlp` is not a TLP value. |
-| [`mcp_config`](#mcp_config) | An MCP configuration from `opentide setup mcp` runs `opentide mcp start`. |
+| [`mcp_config`](#mcp_config) | An MCP configuration from `opentide setup mcp` runs `opentide mcp start`. Claude Desktop's configuration counts when its server's `OPENTIDE_REPO_ROOT` is this workspace. |
 | [`metadata_recommended`](#metadata_recommended) | An object has no `metadata.author` or `metadata.organisation`. |
 | [`microsoft_defender_action_kind`](#microsoft_defender_action_kind) | A key of a Microsoft Defender block's `actions` is not an automated action. |
 | [`microsoft_defender_action_target`](#microsoft_defender_action_target) | A Microsoft Defender automated action has no target, or a target is empty or names a field its action does not take. |
 | [`microsoft_defender_column`](#microsoft_defender_column) | A Microsoft Defender column name is blank or not a string. |
+| [`microsoft_defender_column_not_in_output`](#microsoft_defender_column_not_in_output) | A column a Microsoft Defender block names is not a column of its query's output. |
+| [`microsoft_defender_column_type`](#microsoft_defender_column_type) | A Microsoft Defender entity or action is mapped from a column that holds no identifier, name or address. |
 | [`microsoft_defender_custom_details`](#microsoft_defender_custom_details) | A Microsoft Defender block's `alert.custom_details` is not a mapping of non-blank names to result columns. |
+| [`microsoft_defender_custom_details_limit`](#microsoft_defender_custom_details_limit) | A Microsoft Defender block's `alert.custom_details` is past the limits Microsoft documents. |
+| [`microsoft_defender_entity_identifier`](#microsoft_defender_entity_identifier) | A Microsoft Defender entity mapping lacks an identifier Graph requires of its kind. |
 | [`microsoft_defender_entity_kind`](#microsoft_defender_entity_kind) | A key of a Microsoft Defender block's `entities` is not an entity kind. |
 | [`microsoft_defender_entity_mapping`](#microsoft_defender_entity_mapping) | A Microsoft Defender entity mapping is empty, is not a mapping, or names a field its kind does not have. |
 | [`microsoft_defender_frequency`](#microsoft_defender_frequency) | A Microsoft Defender block's `schedule.frequency` is not `NRT`, `<n>H` or `<n>D`. |
 | [`microsoft_defender_grouping`](#microsoft_defender_grouping) | A Microsoft Defender block's `alert.grouping` is not `alert_per_event` or `single_alert`. |
+| [`microsoft_defender_impacted_asset_identifier`](#microsoft_defender_impacted_asset_identifier) | A Microsoft Defender device or user mapping sets no strong identifier of its impacted asset. |
 | [`microsoft_defender_incident`](#microsoft_defender_incident) | A Microsoft Defender block's `incident` is not a mapping whose `exclude_from_correlation` is `true` or `false`. |
 | [`microsoft_defender_isolation_type`](#microsoft_defender_isolation_type) | A Microsoft Defender `isolate_devices` target's `isolation_type` is not `full` or `selective`. |
 | [`microsoft_defender_lookback`](#microsoft_defender_lookback) | A Microsoft Defender block's `schedule.lookback` is not a duration, is set on a near-real-time rule, or is shorter than its frequency. |
 | [`microsoft_defender_no_entities`](#microsoft_defender_no_entities) | A Microsoft Defender block maps no entity. |
+| [`microsoft_defender_nrt_query`](#microsoft_defender_nrt_query) | A Microsoft Defender rule runs continuously (`frequency: NRT`), and its query is one Microsoft documents NRT cannot run. |
+| [`microsoft_defender_placeholder_limit`](#microsoft_defender_placeholder_limit) | A Microsoft Defender alert title or description references more than three columns. |
+| [`microsoft_defender_required_columns`](#microsoft_defender_required_columns) | A Microsoft Defender query's output lacks a column a custom detection needs. |
 | [`microsoft_defender_rule_absent`](#microsoft_defender_rule_absent) | A Microsoft Defender rule to disable is not on the tenant, so nothing was disabled or created. |
+| [`microsoft_defender_rule_conflict`](#microsoft_defender_rule_conflict) | Graph refused to create a Microsoft Defender rule because another rule most likely holds its display name or alert title. |
 | [`microsoft_defender_schema`](#microsoft_defender_schema) | A Microsoft Defender block's `schema` names another schema. |
 | [`microsoft_defender_scope`](#microsoft_defender_scope) | A Microsoft Defender block's `scope` is not a non-empty list of device group names. |
 | [`microsoft_defender_severity`](#microsoft_defender_severity) | A Microsoft Defender block's `alert.severity` is not one of opentide's five severities. |
+| [`microsoft_defender_unprojected_output`](#microsoft_defender_unprojected_output) | A Microsoft Defender query returns columns nothing in its block uses. |
 | [`missing_author`](#missing_author) | Retired in opentide 0.24.0; `opentide lint` reports a missing recommended metadata field as `metadata_recommended`. |
 | [`missing_field`](#missing_field) | A configuration file is missing a required key, once it is merged with the bundled file and the parent instance. |
 | [`missing_organisation`](#missing_organisation) | Retired in opentide 0.24.0; `opentide lint` reports a missing recommended metadata field as `metadata_recommended`. |
@@ -382,6 +435,7 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`python_version`](#python_version) | The Python interpreter running opentide. |
 | [`query_check_timeout`](#query_check_timeout) | `validate query --live` failed because a tenant did not answer a query's check within the check timeout. |
 | [`query_folded_comment`](#query_folded_comment) | A `//` comment in a query that YAML folds into one line comments out the lines after it. |
+| [`query_position_needs_platform`](#query_position_needs_platform) | A query on its own is to be checked as a rule's query, but no platform says whose rule block it is. |
 | [`query_rejected`](#query_rejected) | `validate query --live` failed because a tenant refused a rule's query as invalid. |
 | [`recommended_field_missing`](#recommended_field_missing) | A field the templates ask for is missing; `opentide validate` accepts the object without it. |
 | [`reference_not_found`](#reference_not_found) | `--objective` or `--threat` names a UUID that no object in the catalogue carries. |
@@ -394,6 +448,8 @@ Every finding `opentide validate` and `opentide lint` report carries a stable `c
 | [`schema_validation`](#schema_validation) | An object does not match the schema its `metadata.schema` names. |
 | [`schemas_fresh`](#schemas_fresh) | Every JSON schema this opentide version generates exists and matches what `opentide generate schemas` writes now. |
 | [`scope_no_match`](#scope_no_match) | A `--file`, `--uuid` or `--type` selection matched no object, so nothing was validated. |
+| [`sentinel_frequency`](#sentinel_frequency) | A Microsoft Sentinel block's `scheduling.frequency` is shorter than 5 minutes or longer than 14 days. |
+| [`sentinel_lookback`](#sentinel_lookback) | A Microsoft Sentinel block's `scheduling.lookback` is shorter than 5 minutes, longer than 14 days, or shorter than its frequency. |
 | [`share_failed`](#share_failed) | `share` reached the destination, and every object failed. |
 | [`share_partial`](#share_partial) | `share` shared some objects, and others failed. |
 | [`share_unreachable`](#share_unreachable) | `share` could not authenticate to, or reach, any destination. |
@@ -1096,7 +1152,7 @@ Severity: error. Reported by `opentide deploy` on a `bitdefender` tenant (bitdef
 ### Example
 
 ```text illustrative
-bitdefender_tenant_unreachable: bitdefender tenant 'gz' at https://cloudgz.gravityzone.bitdefender.com sent no answer within 30s
+bitdefender_tenant_unreachable: bitdefender tenant 'gz' at https://cloudgz.gravityzone.bitdefender.com sent no complete answer within 30s
 ```
 
 ### How to fix
@@ -1793,6 +1849,716 @@ threat:
 ### How to fix
 
 Check network access to https://vulnerability.circl.lu (or the configured lookup URL and any proxy), then run `opentide validate --check cve` again. The identifiers themselves were not judged: the check failed open.
+
+## datadog_calculated_field_in_rule
+
+A detection rule's query names a calculated field (`#name`): real-time detection rules have none.
+
+Severity: warning. Reported by the analysis engine on a Datadog log search: in an editor on a `.datadog` file (`opentide lsp start`, profile `search`), and, once the `datadog` platform lands, on a detection rule's queries (profile `rule`).
+
+Calculated fields are defined in a Log Explorer view; a real-time detection rule evaluates incoming logs, which carry none. In a `.datadog` file (profile `search`) `#name` is allowed.
+
+### Example
+
+```text illustrative
+#duration_ms:>500
+```
+
+### How to fix
+
+Use the attribute the calculated field is computed from: `@duration:>500ms`.
+
+## datadog_cidr
+
+A Datadog `CIDR()` call does not name an `@attribute` first, has no block, or has an argument that is not an IPv4 or IPv6 CIDR block.
+
+Severity: error. Reported by the analysis engine on a Datadog log search: in an editor on a `.datadog` file (`opentide lsp start`, profile `search`), and, once the `datadog` platform lands, on a detection rule's queries (profile `rule`).
+
+`CIDR(@attribute, block, …)` matches an IP attribute inside any of the blocks. The first argument is an attribute (with `@`); each block is an IPv4 or IPv6 address with an optional prefix length (`10.0.0.0/8`, `fc00::/7`), within 32 or 128.
+
+### Example
+
+```text illustrative
+CIDR(network.client.ip, 10.0.0.0/8)
+CIDR(@network.client.ip, 10.0.0.300)
+```
+
+### How to fix
+
+Name the attribute with `@` and write each block as an address and prefix: `CIDR(@network.client.ip, 10.0.0.0/8)`.
+
+## datadog_concurrent_modification
+
+The Datadog rule changed between deploy's read and its update.
+
+Severity: error. Reported by `opentide deploy` on a `datadog` block (`platform::datadog::1.0`). An update sends the `version` the `GET` returned; Datadog answers a stale version with `401`, which opentide reports as this code rather than as a refused key. Someone or something changed the rule meanwhile.
+
+### Example
+
+```text illustrative
+datadog_concurrent_modification: Datadog rule abc-def-ghi changed after deploy read it (HTTP 401 on the update, which carries the version read)
+```
+
+### How to fix
+
+Deploy again. If the rule keeps changing, find what else edits it (the UI, Terraform) and stop it.
+
+## datadog_condition
+
+A case's condition does not parse, names an unknown query, or does not suit the method.
+
+Severity: error. Reported by `opentide validate` on a `datadog` block (`platform::datadog::1.0`). A condition compares query names with numbers, joined by `&&` or `||`: `failed > 10 && success > 0`. The query name comes first (Datadog allows `a > 3`, not `3 < a`). `threshold` and `anomaly` cases need a condition. Under `anomaly` the number is a percentile between 0 and 1 (`a > 0.995`), and `<` and `<=` are documented for threshold rules only. Parentheses and `==` are not documented.
+
+### Example
+
+```yaml
+configurations:
+  datadog:
+    queries:
+      - name: failed
+        query: source:okta @evt.outcome:FAILURE
+    cases:
+      - condition: 3 < failed
+```
+
+### How to fix
+
+Put the query name first (`failed > 3`), name a query the block has, and under `anomaly` compare with a fraction.
+
+## datadog_condition_mixed
+
+A condition mixes `&&` and `||`, whose precedence Datadog does not document.
+
+Severity: warning. Reported by `opentide validate` and `opentide lint` (its `queries` check) on a `datadog` block (`platform::datadog::1.0`). Datadog documents both operators but not which binds tighter, so `a > 1 || b > 1 && c > 1` may not mean what it reads as. It is an advisory: the rule validates and deploys.
+
+### Example
+
+```yaml
+configurations:
+  datadog:
+    cases:
+      - condition: a > 1 || b > 1 && c > 1
+```
+
+### How to fix
+
+Split the condition into two cases, which Datadog tests in order, or keep to one operator.
+
+## datadog_create_unconfirmed
+
+A Datadog create got no answer, or a server error, so it may or may not have happened.
+
+Severity: error. Reported by `opentide deploy` on a `datadog` block (`platform::datadog::1.0`). The create timed out, the connection was reset, or Datadog answered `5xx`. Datadog may have created the rule, but its id never reached opentide. Deploy never sends a create again.
+
+### Example
+
+```text illustrative
+datadog_create_unconfirmed: the create of 'Okta brute force followed by a successful login' got HTTP 503, so Datadog may have created it with an id opentide does not know
+```
+
+### How to fix
+
+Look for the rule by its name, or by the tag `opentide_uuid:<uuid>`, in Datadog. Delete it and deploy again, or record its id under `platforms.datadog.<tenant>` in `.opentide/states/deployment/<uuid>.json` and commit it. If there is none, deploy again.
+
+## datadog_curly_quote
+
+A Datadog search holds a curly quote, which is not a quote: the words around it are searched as separate terms.
+
+Severity: warning. Reported by the analysis engine on a Datadog log search: in an editor on a `.datadog` file (`opentide lsp start`, profile `search`), and, once the `datadog` platform lands, on a detection rule's queries (profile `rule`).
+
+Only the straight double quote `"` delimits a phrase. Text pasted from a document often carries `“` and `”`, which Datadog searches as part of the words.
+
+### Example
+
+```text illustrative
+@evt.name:“Console Login”
+```
+
+### How to fix
+
+Use straight double quotes: `@evt.name:"Console Login"`.
+
+## datadog_detached_operator
+
+A Datadog exclusion `-` is followed by a space.
+
+Severity: warning. Reported by the analysis engine on a Datadog log search: in an editor on a `.datadog` file (`opentide lsp start`, profile `search`), and, once the `datadog` platform lands, on a detection rule's queries (profile `rule`).
+
+The exclusion is written against what it excludes. With a space after it, a reader cannot tell what is excluded, and the docs never write it so.
+
+### Example
+
+```text illustrative
+- @login_type:k
+```
+
+### How to fix
+
+Remove the space: `-@login_type:k`.
+
+## datadog_detection_option
+
+A `detection` key the method does not take, or `new_value` without `forget_after`.
+
+Severity: error. Reported by `opentide validate` on a `datadog` block (`platform::datadog::1.0`). `learning` goes with `new_value`, `anomaly` and `impossible_travel`; `forget_after` with `new_value`, where it is required; `bucket` and `tolerance` (a whole number, 1 to 5) with `anomaly`; `detect_ip_transitions` with `impossible_travel`. `threshold` takes only `method` and `window`.
+
+### Example
+
+```yaml
+configurations:
+  datadog:
+    detection:
+      method: threshold
+      bucket: 5m
+```
+
+### How to fix
+
+Remove the key, or use the method it belongs to. A `new_value` rule needs `forget_after`.
+
+## datadog_duration
+
+A duration is not one of the values its key accepts.
+
+Severity: error. Reported by `opentide validate` on a `datadog` block (`platform::datadog::1.0`). `detection.window`, `signal.keep_alive` and `signal.max_duration` take `0`, `1m`, `5m`, `10m`, `15m`, `30m`, `1h`, `2h`, `3h`, `6h`, `12h` or `1d`. `detection.bucket` takes `5m`, `10m`, `15m`, `30m`, `1h` or `3h`. `detection.learning` takes `0d` to `30d` under `new_value`, `1h`, `6h`, `12h`, `1d`, `2d`, `7d` or `14d` under `anomaly`, and `1d` to `30d` under `impossible_travel`. `detection.forget_after` takes `1d` to `30d`. Datadog's API takes only these values.
+
+### Example
+
+```yaml
+configurations:
+  datadog:
+    detection:
+      window: 7m
+```
+
+### How to fix
+
+Pick the nearest value the key takes: `5m` or `10m` here.
+
+## datadog_full_text_in_rule
+
+A detection rule's query searches every attribute with `*:term`, which Datadog documents for monitors, dashboards and notebooks, not for detection rules.
+
+Severity: warning. Reported by the analysis engine on a Datadog log search: in an editor on a `.datadog` file (`opentide lsp start`, profile `search`), and, once the `datadog` platform lands, on a detection rule's queries (profile `rule`).
+
+Datadog's search syntax page documents `*:term` for Log Management's monitor, dashboard and notebook queries; detection rules are not on that list. `*:*` (every event) is not reported. In a `.datadog` file (profile `search`) `*:term` is allowed.
+
+### Example
+
+```text illustrative
+*:mimikatz
+```
+
+### How to fix
+
+Name the attribute the term is in: `@process.command_line:*mimikatz*`.
+
+## datadog_lowercase_operator
+
+A lower-case `and`, `or` or `not` stands between field clauses or in a value group, where Datadog reads it as a search term, not an operator.
+
+Severity: warning. Reported by the analysis engine on a Datadog log search: in an editor on a `.datadog` file (`opentide lsp start`, profile `search`), and, once the `datadog` platform lands, on a detection rule's queries (profile `rule`).
+
+Operators are upper case only. A lower-case `or` between two field clauses is a free-text term joined to both by AND; in a value group it is a value. Between free-text words it is just a word, and is not reported (`not enough attributes`).
+
+### Example
+
+```text illustrative
+@login_type:(k OR n or E)
+```
+
+### How to fix
+
+Write the operator in upper case: `@login_type:(k OR n OR E)`.
+
+## datadog_measure
+
+A query sets more than one measure, or `new_value` does not match the method.
+
+Severity: error. Reported by `opentide validate` on a `datadog` block (`platform::datadog::1.0`). A query sets at most one of `count_distinct`, `sum`, `max` and `new_value`; with none it counts events. `new_value` lists one to five fields and goes with `method: new_value`, and every query of a `new_value` rule sets it. An `impossible_travel` query takes no measure: it measures the distance between logins itself.
+
+### Example
+
+```yaml
+configurations:
+  datadog:
+    queries:
+      - query: source:okta
+        count_distinct: "@usr.email"
+        sum: "@bytes"
+```
+
+### How to fix
+
+Keep one measure per query, and set `new_value` only under `method: new_value`.
+
+## datadog_method_unsupported
+
+`detection.method` is not a detection method of `platform::datadog::1.0`.
+
+Severity: error. Reported by `opentide validate` on a `datadog` block (`platform::datadog::1.0`). 1.0 takes `threshold`, `new_value`, `anomaly` and `impossible_travel`, written in lower case. Datadog no longer accepts new `signal_correlation` rules, and sequence rules, which correlate other rules' signals, wait for 1.x.
+
+### Example
+
+```yaml
+configurations:
+  datadog:
+    detection:
+      method: sequence
+```
+
+### How to fix
+
+Use one of the four methods. To count another rule's signals, write a query `from: signals`.
+
+## datadog_mixed_boolean
+
+A Datadog search puts OR beside an AND, written or implied, without parentheses: AND binds tighter, as VRL reads it (unverified on Cloud SIEM).
+
+Severity: warning. Reported by the analysis engine on a Datadog log search: in an editor on a `.datadog` file (`opentide lsp start`, profile `search`), and, once the `datadog` platform lands, on a detection rule's queries (profile `rule`).
+
+In Datadog's search syntax, a space between two clauses is AND, and AND binds tighter than OR, so `service:x status:error OR warning` reads as `(service:x status:error) OR warning`: any log containing the word `warning` matches. The precedence is VRL's (the library behind Datadog's Observability Pipelines) and is not yet verified on Cloud SIEM, so this is a warning. The same holds inside a value group: `@SourceFileName:(*.exe OR *.rar *.7z)` asks for a name ending in both `.rar` and `.7z`.
+
+### Example
+
+```text illustrative
+service:azure-service-bus status:error OR warning
+```
+
+### How to fix
+
+Add parentheses to say which you mean: `service:azure-service-bus status:(error OR warning)`.
+
+## datadog_notification_alias
+
+A case's `notify` names an alias the tenant does not define.
+
+Severity: error. Reported by `opentide deploy` on a `datadog` block (`platform::datadog::1.0`). Also reported by `opentide deploy --dry-run` and `validate query --live` for a tenant the run reaches. An entry that starts with `@` is a Datadog handle and is sent as written; any other entry is an alias, which `[tenants.setup.notifications]` in `platforms/datadog.toml` maps to a handle. A dry run with no tenant shows an alias as `<tenant:notifications.ALIAS>`.
+
+### Example
+
+```toml
+# platforms/datadog.toml: no secops alias for notify: [secops]
+[tenants.setup.notifications]
+soc = "@slack-soc-alerts"
+```
+
+### How to fix
+
+Add the alias to the tenant's `notifications`, or write the `@handle` itself.
+
+## datadog_parse_error
+
+The Datadog search does not parse: an unbalanced bracket, a dangling operator, an empty group, a field with no value, two modifiers in a row, or an unclosed phrase.
+
+Severity: error. Reported by the analysis engine on a Datadog log search: in an editor on a `.datadog` file (`opentide lsp start`, profile `search`), and, once the `datadog` platform lands, on a detection rule's queries (profile `rule`).
+
+Datadog refuses the query. The engine reports the first fault only: what follows it is not checked. Modifiers do not stack (`--a`, `NOT NOT a`, `-NOT a`), a field needs a value after its colon, and a space between a field and its colon makes the field free text, so the colon starts nothing. Nesting deeper than 1,000 groups is the same error.
+
+### Example
+
+```text illustrative
+service:(web OR api
+@usr.email:
+@session.view.count :> 3
+```
+
+### How to fix
+
+Close the bracket, give the field a value, write one modifier, and put the colon right after the field: `service:(web OR api)`, `@session.view.count:>3`.
+
+## datadog_pipelines_only
+
+A Datadog search uses Observability Pipelines syntax (`_exists_:`, `_missing_:`, a quoted field name), which log search does not read the same way.
+
+Severity: warning. Reported by the analysis engine on a Datadog log search: in an editor on a `.datadog` file (`opentide lsp start`, profile `search`), and, once the `datadog` platform lands, on a detection rule's queries (profile `rule`).
+
+Observability Pipelines (VRL) has its own search dialect. In log search, existence is `@attribute:*`, absence `-@attribute:*`, and a field name is written bare, with what needs it escaped.
+
+### Example
+
+```text illustrative
+_exists_:service
+"service.status":disabled
+```
+
+### How to fix
+
+Write the log search form: `service:*`, `service.status:disabled` (as a tag) or `@service.status:disabled` (as an attribute).
+
+## datadog_query_name
+
+A query name is not `[a-z][a-z0-9_]*`, is a duplicate, or is set on a `new_value` query.
+
+Severity: error. Reported by `opentide validate` on a `datadog` block (`platform::datadog::1.0`). Conditions call queries by name. An unnamed query is called `a`, `b`, … by its position, so a query named `a` after an unnamed first query clashes with it. A `new_value` query takes no name: Datadog's own provider calls the two not compatible.
+
+### Example
+
+```yaml
+configurations:
+  datadog:
+    queries:
+      - name: Failed-Logins
+        query: source:okta @evt.outcome:FAILURE
+```
+
+### How to fix
+
+Use lower-case letters, digits and underscores, starting with a letter (`failed_logins`), and give each query its own name.
+
+## datadog_range
+
+A Datadog range is malformed (a missing bound, a lower-case `to`), or mixes an inclusive and an exclusive bound.
+
+Severity: error (a malformed range); warning (mixed bounds). Reported by the analysis engine on a Datadog log search: in an editor on a `.datadog` file (`opentide lsp start`, profile `search`), and, once the `datadog` platform lands, on a detection rule's queries (profile `rule`).
+
+A range is `[low TO high]` (inclusive) or `{low TO high}` (exclusive), with `TO` in upper case and `*` for an open end. A range that is never closed, or has no `TO`, is an error. `[1 TO 5}`, which mixes the two, is a warning: Datadog does not document it.
+
+### Example
+
+```text illustrative
+@http.status_code:[400 to 499]
+@http.status_code:[400 TO 499}
+```
+
+### How to fix
+
+Write `TO` in upper case and the same bracket on both ends: `@http.status_code:[400 TO 499]`.
+
+## datadog_rate_limited
+
+Datadog's rate limit held after the waits a deploy allows.
+
+Severity: error. Reported by `opentide deploy` on a `datadog` block (`platform::datadog::1.0`). A `429` is waited out for the seconds its `X-RateLimit-Reset` gives and sent again, at most three times. A reset more than 120 seconds away is not waited for. The rule fails; the next rule is tried.
+
+### Example
+
+```text illustrative
+datadog_rate_limited: POST /api/v2/security_monitoring/rules: Datadog's rate limit resets in 600s, more than the 120s a deploy waits
+```
+
+### How to fix
+
+Deploy again later, or deploy fewer rules in one run.
+
+## datadog_regex
+
+A Datadog search term holds `~` or `^`: the search syntax has no regular expression, fuzzy or boost operator.
+
+Severity: error. Reported by the analysis engine on a Datadog log search: in an editor on a `.datadog` file (`opentide lsp start`, profile `search`), and, once the `datadog` platform lands, on a detection rule's queries (profile `rule`).
+
+Lucene's `foo~2` (fuzzy) and `foo^2` (boost) are not Datadog syntax, and `/…/` is not a regular expression: `/` is an ordinary character.
+
+### Example
+
+```text illustrative
+@msg:foo~2
+```
+
+### How to fix
+
+Use wildcards (`@msg:foo*`), or escape the character to search for it (`@msg:foo\~2`).
+
+## datadog_request_failed
+
+Datadog answered a rule's request with an error other than a refusal of the rule.
+
+Severity: error. Reported by `opentide deploy` on a `datadog` block (`platform::datadog::1.0`). Any answer that is not `400` (`datadog_rule_invalid`), a refused key, a stale version or a rate limit: a `404` on a path, a `5xx` on an update or a read after its retries. The rule fails; the next rule is tried.
+
+### Example
+
+```text illustrative
+datadog_request_failed: PUT /api/v2/security_monitoring/rules/abc-def-ghi: HTTP 500: Internal Server Error
+```
+
+### How to fix
+
+Deploy again; if it persists, check Datadog's status page.
+
+## datadog_rule_default
+
+The id a deployment state names is a Datadog default rule, which opentide never changes.
+
+Severity: error. Reported by `opentide deploy` on a `datadog` block (`platform::datadog::1.0`). Datadog ships and maintains default rules (`isDefault: true`); they can be enabled and tuned, but not rewritten or deleted through opentide. Deploy checks before any write and refuses.
+
+### Example
+
+```text illustrative
+datadog_rule_default: Datadog rule def-000-u7q is a default rule, which opentide never changes or deletes
+```
+
+### How to fix
+
+Remove the id from `.opentide/states/deployment/<uuid>.json`: the next deploy creates a rule of its own.
+
+## datadog_rule_invalid
+
+Datadog refused the rule: its validation, or a write, answered `400`.
+
+Severity: error. Reported by `opentide deploy` on a `datadog` block (`platform::datadog::1.0`). Also reported by `validate query --live` on a block. Every create and update is first sent to `POST /security_monitoring/rules/validation`, so an invalid rule is reported before anything changes. The finding lists Datadog's `errors[]`.
+
+### Example
+
+```text illustrative
+datadog_rule_invalid: POST /api/v2/security_monitoring/rules/validation: HTTP 400: Invalid query: unbalanced parenthesis
+```
+
+### How to fix
+
+Fix what Datadog names, then run `opentide validate query --live --platform datadog` before deploying.
+
+## datadog_rule_missing
+
+The rule a deployment state names no longer exists on the Datadog tenant.
+
+Severity: warning. Reported by `opentide deploy` on a `datadog` block (`platform::datadog::1.0`). Under a DELETION or a DISABLEMENT status, the stored id answered `404`, or `isDeleted: true`. There is nothing to delete or disable, so the id is removed from the deployment state.
+
+### Example
+
+```text illustrative
+datadog_rule_missing: Datadog rule abc-def-ghi no longer exists on the tenant; its id is removed
+```
+
+### How to fix
+
+Nothing to do; commit the updated `.opentide/states/deployment/` shard.
+
+## datadog_rule_recreated
+
+The rule a deployment state names was gone, and deploy created it again.
+
+Severity: warning. Reported by `opentide deploy` on a `datadog` block (`platform::datadog::1.0`). The stored id answered `404`, or `isDeleted: true`, so deploy created the rule anew and recorded its new id. A CI run that cannot persist deployment state does not create it (`deployment_state_unpersisted`).
+
+### Example
+
+```text illustrative
+datadog_rule_recreated: Datadog rule abc-def-ghi no longer exists on the tenant; creating it again
+```
+
+### How to fix
+
+Commit the updated `.opentide/states/deployment/` shard. If the rule was deleted on purpose, set the block's status to a DELETION status instead.
+
+## datadog_severity
+
+A case severity is not one of Datadog's five statuses.
+
+Severity: error. Reported by `opentide validate` on a `datadog` block (`platform::datadog::1.0`). A case's `severity` is `info`, `low`, `medium`, `high` or `critical`, in lower case. Left out, it comes from `response.alert_severity`, else `info`.
+
+### Example
+
+```yaml
+configurations:
+  datadog:
+    cases:
+      - condition: a > 5
+        severity: urgent
+```
+
+### How to fix
+
+Use one of the five values, or leave `severity` out.
+
+## datadog_signal_group_by
+
+A `signal.group_by` field is in no query's `group_by`.
+
+Severity: error. Reported by `opentide validate` on a `datadog` block (`platform::datadog::1.0`). Signals can only be grouped by a field the queries group their matches by. Which subset Datadog requires exactly is not documented; opentide asks that each field be in some query's `group_by`.
+
+### Example
+
+```yaml
+configurations:
+  datadog:
+    queries:
+      - query: source:okta
+        group_by: ["@usr.email"]
+    signal:
+      group_by: ["@usr.id"]
+```
+
+### How to fix
+
+Group the signals by a field the queries group by, or add the field to a query's `group_by`.
+
+## datadog_site
+
+A tenant's `site` is not a Datadog site, and no `api_url` is set.
+
+Severity: error. Reported by `opentide deploy` on a `datadog` block (`platform::datadog::1.0`). The sites are `datadoghq.com`, `us3.datadoghq.com`, `us5.datadoghq.com`, `datadoghq.eu`, `ap1.datadoghq.com`, `ap2.datadoghq.com`, `uk1.datadoghq.com`, `ddog-gov.com` and `us2.ddog-gov.com`; calls go to `https://api.<site>`.
+
+### Example
+
+```toml
+[tenants.setup]
+site = "app.datadoghq.eu"
+```
+
+### How to fix
+
+Write the site, not the web address (`datadoghq.eu`), or set `api_url` for a new site or a proxy.
+
+## datadog_symbol_operator
+
+`&&` or `||` stands between Datadog search clauses: Datadog's docs list them as characters to escape; write AND or OR.
+
+Severity: warning. Reported by the analysis engine on a Datadog log search: in an editor on a `.datadog` file (`opentide lsp start`, profile `search`), and, once the `datadog` platform lands, on a detection rule's queries (profile `rule`).
+
+VRL (Observability Pipelines) reads `&&` and `||` as AND and OR, and so does the engine, but Datadog's log search documents them as characters to escape, not as operators.
+
+### Example
+
+```text illustrative
+source:okta && @evt.outcome:FAILURE
+```
+
+### How to fix
+
+Write the operator: `source:okta AND @evt.outcome:FAILURE`.
+
+## datadog_tag
+
+A tag Datadog would refuse or rewrite.
+
+Severity: error. Reported by `opentide validate` on a `datadog` block (`platform::datadog::1.0`). Also reported by `opentide deploy` for a tenant's `tags`. A tag starts with a lower-case letter, holds only `a-z`, `0-9`, `_`, `-`, `:`, `.` and `/`, and is at most 200 characters. Datadog lowers upper case and replaces other characters, so the rule it holds would differ from the one opentide compiled.
+
+### Example
+
+```yaml
+configurations:
+  datadog:
+    tags: ["Team:Identity"]
+```
+
+### How to fix
+
+Write the tag in lower case with the allowed characters: `team:identity`.
+
+## datadog_tenant_unauthorized
+
+Datadog refused the tenant's API or application key.
+
+Severity: error. Reported by `opentide deploy` on a `datadog` block (`platform::datadog::1.0`). Also reported by `validate query --live` and `opentide query`. Datadog answered `403`, or `401` on a request that is not an update. The application key needs `security_monitoring_rules_read` and `security_monitoring_rules_write` (validation needs write), and `logs_read_data` for queries. The tenant's other rules are not attempted.
+
+### Example
+
+```text illustrative
+datadog_tenant_unauthorized: tenant datadog-eu refused GET /api/v2/security_monitoring/rules/abc-def-ghi: HTTP 403 (Forbidden)
+```
+
+### How to fix
+
+Check `$DD_API_KEY` and `$DD_APP_KEY`, the scopes of the application key, and that the tenant's `site` is the organisation's.
+
+## datadog_tenant_unreachable
+
+The Datadog tenant did not answer.
+
+Severity: error. Reported by `opentide deploy` on a `datadog` block (`platform::datadog::1.0`). DNS, TLS or a timeout stopped the request. The tenant's other rules are not attempted.
+
+### Example
+
+```text illustrative
+datadog_tenant_unreachable: Cannot reach datadog tenant 'datadog-eu' at https://api.datadoghq.eu: dns error
+```
+
+### How to fix
+
+Check the tenant's `site` or `api_url`, the network and the proxy, then deploy again.
+
+## datadog_unescaped_colon
+
+A Datadog search value holds an unescaped `:`, which Datadog's docs say to escape.
+
+Severity: warning. Reported by the analysis engine on a Datadog log search: in an editor on a `.datadog` file (`opentide lsp start`, profile `search`), and, once the `datadog` platform lands, on a detection rule's queries (profile `rule`).
+
+A field is everything before the first unescaped colon, so a colon in the value is ambiguous; Datadog's docs list `:` among the characters to escape, though its own content does not always. A value of `tags` is no exception: the log docs write `tags:(env\:prod OR env\:test)`.
+
+### Example
+
+```text illustrative
+@usr.id:system:serviceaccount:x
+```
+
+### How to fix
+
+Escape the colons: `@usr.id:system\:serviceaccount\:x`, or quote the value.
+
+## datadog_unescaped_special
+
+A Datadog search term holds an unescaped `!`, `<` or `>`, or a value starts with an unescaped `-`, which Datadog reads as an exclusion: escape it with `\`.
+
+Severity: error. Reported by the analysis engine on a Datadog log search: in an editor on a `.datadog` file (`opentide lsp start`, profile `search`), and, once the `datadog` platform lands, on a detection rule's queries (profile `rule`).
+
+Datadog's search syntax reserves `!`, `<` and `>` (comparisons go right after a field's colon: `@x:>=5`), and a `-` before a value excludes it. A negative number in a comparison is fine (`@x:>-1`).
+
+### Example
+
+```text illustrative
+foo!bar
+@x:-1
+```
+
+### How to fix
+
+Escape the character (`foo\!bar`, `@x:\-1`) or quote the value (`@x:"-1"`). To exclude, put `-` before the field: `-@x:1`.
+
+## datadog_unknown_attribute
+
+A Datadog search field is a dotted bare key, searched as a tag, where an `@attribute` was probably meant.
+
+Severity: hint. Reported by the analysis engine on a Datadog log search: in an editor on a `.datadog` file (`opentide lsp start`, profile `search`), and, once the `datadog` platform lands, on a detection rule's queries (profile `rule`).
+
+A bare key (`host`, `service`, `env:prod`) searches a reserved attribute or a tag; an attribute of the log is written with `@`. A dotted bare key such as `evt.name` searches a tag named `evt.name`, which is rarely what was meant.
+
+### Example
+
+```text illustrative
+evt.name:ConsoleLogin
+```
+
+### How to fix
+
+Add `@` to search the attribute: `@evt.name:ConsoleLogin`. If the tag is meant, escape the dot (`evt\.name:ConsoleLogin`) to say so.
+
+## datadog_wildcard_in_phrase
+
+A `*` or `?` touches a word inside a quoted phrase, where it is punctuation, not a wildcard.
+
+Severity: warning. Reported by the analysis engine on a Datadog log search: in an editor on a `.datadog` file (`opentide lsp start`, profile `search`), and, once the `datadog` platform lands, on a detection rule's queries (profile `rule`).
+
+Wildcards work in terms only. Inside quotes, `"*mimikatz*"` searches for the word `mimikatz`, with the asterisks as punctuation.
+
+### Example
+
+```text illustrative
+"*mimikatz*"
+```
+
+### How to fix
+
+Take the wildcard out of the quotes, escaping any space: `*mimikatz*`, `*my\ test*`.
+
+## datadog_window_order
+
+`detection.window` is longer than `signal.keep_alive` or `signal.max_duration`.
+
+Severity: error. Reported by `opentide validate` on a `datadog` block (`platform::datadog::1.0`). A signal would close before the window its cases are tested over ends. `keep_alive` defaults to `1h` and `max_duration` to `1d`, so a window of `2h` or more needs a longer `keep_alive`.
+
+### Example
+
+```yaml
+configurations:
+  datadog:
+    detection:
+      window: 1h
+    signal:
+      keep_alive: 30m
+```
+
+### How to fix
+
+Make `signal.keep_alive` and `signal.max_duration` at least as long as `detection.window`, or shorten the window.
 
 ## defender_output_columns
 
@@ -2933,7 +3699,7 @@ Rename the block (`configurations.exabeam.name`), or delete the old rule in the 
 
 Two enabled Exabeam blocks resolve to the same Exabeam rule name.
 
-Severity: error. Reported by `opentide validate` on an `exabeam` block (exabeam-1.0). The Exabeam rule name is the block's `name`, else the rule's `name`, compared case-insensitively. Exabeam's import refuses a rule whose name exists and Search links rules by name, so the second deploy would fail with `exabeam_name_conflict`.
+Severity: error. Reported by `opentide validate` on an `exabeam` block (exabeam-1.0). The Exabeam rule name is the block's `name`, else the rule's `name`, compared under full Unicode case folding, as deploy compares them (`ﬁle Access` and `file access`, `Straße` and `STRASSE`, are one name). Exabeam's import refuses a rule whose name exists and Search links rules by name, so the second deploy would fail with `exabeam_name_conflict`.
 
 ### Example
 
@@ -3343,7 +4109,7 @@ Severity: error. Reported by `opentide deploy` on an `exabeam` block (exabeam-1.
 ### Example
 
 ```text illustrative
-exabeam_tenant_deployment_failed: code=exabeam_tenant_unreachable tenant=exabeam-eu error=exabeam tenant 'exabeam-eu' at https://api.eu.exabeam.cloud sent no answer within 30s
+exabeam_tenant_deployment_failed: code=exabeam_tenant_unreachable tenant=exabeam-eu error=exabeam tenant 'exabeam-eu' at https://api.eu.exabeam.cloud sent no complete answer within 30s
 ```
 
 ### How to fix
@@ -4472,7 +5238,7 @@ Severity: error. Reported by `opentide deploy` on a `google_secops` tenant (goog
 ### Example
 
 ```text illustrative
-google_secops_tenant_unreachable: google_secops tenant 'eu' at https://eu-chronicle.googleapis.com sent no answer within 30s
+google_secops_tenant_unreachable: google_secops tenant 'eu' at https://eu-chronicle.googleapis.com sent no complete answer within 30s
 ```
 
 ### How to fix
@@ -5429,6 +6195,25 @@ opentide validate query
 
 Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [KQL reference](https://learn.microsoft.com/kusto/query/) describes the syntax and the commands the engine checks against.
 
+## kql_function_unavailable
+
+A KQL query calls a function that exists in another product's dialect, not in this one: a Microsoft Defender advanced hunting function in a Microsoft Sentinel query.
+
+Severity: warning. Reported by the analysis engine in a KQL query under the Sentinel dialect (a `sentinel` block, or a Sentinel hunt), at the function's name: `opentide lint` (its `queries` check) and an editor running `opentide lsp start` show it; `opentide validate` does not fail on it. `lint --strict` fails on it, as on every warning; `kql_function_unavailable = "info"` under `[queries.codes]` in `lint.toml` keeps it reported without failing. The functions are advanced hunting's own, which Microsoft documents for advanced hunting in the Microsoft Defender portal: [`FileProfile()`](https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-fileprofile-function), [`DeviceFromIP()`](https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-devicefromip-function) and [`SeenBy()`](https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-seenby-function), each called with `invoke`, and [`AssignedIPAddresses()`](https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-assignedipaddresses-function). A Log Analytics workspace, where Sentinel's analytics rules run, does not have them, so a rule that calls one fails to run. It is a warning, not an error, because a workspace can save a function of its own under the same name: declare it as a log source in `visibility.toml` under its exact name, as any workspace function is declared, and the call is not reported (a pattern such as `Device*` declares tables, not the function). Declaring a first `sentinel` log source turns on the log-source check for that platform: every other table the queries read must be declared too, or it is `kql_table_not_declared`. A function the query defines with `let` is not reported either.
+
+### Example
+
+```kql
+DeviceFileEvents
+| where Timestamp > ago(1d)
+| project SHA1
+| invoke FileProfile()
+```
+
+### How to fix
+
+Run the query in Microsoft Defender: move it to a `microsoft_defender` block. In Sentinel, read the same data from the workspace's own tables instead, or save a workspace function under that name and declare it as a log source in `visibility.toml` with the tables the queries read.
+
 ## kql_join_summarize_before_project
 
 A `join` runs while the pipeline it sits in still carries every column, and a later `project` would have narrowed it.
@@ -5497,6 +6282,58 @@ opentide validate query
 ### How to fix
 
 Change the query where the frame points, then run `opentide validate query` (`--file` for one rule or query file) or `opentide lint --check queries` again. The [KQL reference](https://learn.microsoft.com/kusto/query/) describes the syntax and the commands the engine checks against.
+
+## kql_rule_search_star
+
+A Microsoft Sentinel analytics rule's query contains `search *`, which Microsoft does not allow in a scheduled rule.
+
+Severity: error. Reported by the analysis engine on the query of a `sentinel` block (the KQL rule profile), at the `search` keyword: `opentide validate` (its `queries` check) and an editor running `opentide lsp start` show it. Microsoft's [scheduled analytics rules docs](https://learn.microsoft.com/en-us/azure/sentinel/scheduled-rules-overview) (read 2026-11-27) say: "The query length should be between 1 and 10,000 characters and can't contain "`search *`" or "`union *`"." It is `search` with no `in (...)` list and a bare `*`. A hunt's search (`response.procedure.searches`) may use it: there, an unscoped `search` is the performance warning `kql_unscoped_search`, which this error replaces in a rule. A Microsoft Defender block is not checked: Defender's custom detection docs set no such limit.
+
+### Example
+
+```yaml
+configurations:
+  sentinel:
+    query: |
+      search * | where Account == "admin"
+```
+
+### How to fix
+
+Start from the tables the rule needs (`SecurityEvent | where Account == "admin"`), or scope the search: `search in (SecurityEvent, SigninLogs) "admin"`.
+
+## kql_rule_too_long
+
+A Microsoft Sentinel analytics rule's query is longer than the 10,000 characters Microsoft allows.
+
+Severity: error. Reported by the analysis engine on the query of a `sentinel` block (the KQL rule profile), on its first line: `opentide validate` (its `queries` check) and an editor running `opentide lsp start` show it. Microsoft's [scheduled analytics rules docs](https://learn.microsoft.com/en-us/azure/sentinel/scheduled-rules-overview) (read 2026-11-27) say: "The query length should be between 1 and 10,000 characters", and suggest user-defined functions to stay under it. The query is counted in characters, not bytes, without the blank lines and spaces around it. The `exclusions` deploy appends for a tenant are not counted, so a query just under the limit passes this check and can still be refused once deploy adds them. A hunt's search is not checked, nor a Microsoft Defender block: Defender's custom detection docs set no such limit.
+
+### Example
+
+A `sentinel` block whose `query` holds 10,001 characters or more.
+
+### How to fix
+
+Move parts of the query into a saved workspace function and call it from the rule ("a single function can replace dozens of lines of code"), or split the rule in two.
+
+## kql_rule_union_star
+
+A Microsoft Sentinel analytics rule's query contains `union *`, which Microsoft does not allow in a scheduled rule.
+
+Severity: error. Reported by the analysis engine on the query of a `sentinel` block (the KQL rule profile), at the `*`: `opentide validate` (its `queries` check) and an editor running `opentide lsp start` show it. Microsoft's [scheduled analytics rules docs](https://learn.microsoft.com/en-us/azure/sentinel/scheduled-rules-overview) (read 2026-11-27) say: "The query length should be between 1 and 10,000 characters and can't contain "`search *`" or "`union *`"." It is a bare `*` among a `union`'s tables; a pattern such as `Sec*` names only the tables it matches and is not reported. A hunt's search (`response.procedure.searches`) may use it: there it is the performance warning `kql_unscoped_union`, which this error replaces in a rule. A Microsoft Defender block is not checked: Defender's custom detection docs set no such limit.
+
+### Example
+
+```yaml
+configurations:
+  sentinel:
+    query: |
+      union * | where EventID == 4625
+```
+
+### How to fix
+
+Name the tables the rule reads: `union SecurityEvent, WindowsEvent | where EventID == 4625`.
 
 ## kql_table_misspelt
 
@@ -6088,7 +6925,7 @@ Use a value of the TLP vocabulary: `clear`, `green`, `amber`, `amber+strict` or 
 
 ## mcp_config
 
-An MCP configuration from `opentide setup mcp` runs `opentide mcp start`.
+An MCP configuration from `opentide setup mcp` runs `opentide mcp start`. Claude Desktop's configuration counts when its server's `OPENTIDE_REPO_ROOT` is this workspace.
 
 Reported by `opentide doctor`. Warns when no configuration has such a server, or its command is not on `PATH`; skipped when there is no configuration. Passes without one when `.vscode/extensions.json` recommends the opentide VS Code extension (`opentidehq.opentide`), which provides the opentide MCP server to VS Code; with both, the message says so, since `.vscode/mcp.json` then serves teammates without the extension.
 
@@ -6096,12 +6933,12 @@ Reported by `opentide doctor`. Warns when no configuration has such a server, or
 
 ```text illustrative
 ○ No MCP configuration: agents in editors cannot call opentide tools · mcp_config
-  → opentide setup mcp --vscode (or --cursor, --claude-code, --generic)
+  → opentide setup mcp --vscode (or --cursor, --claude-code, --claude-desktop, --generic)
 ```
 
 ### How to fix
 
-Run `opentide setup mcp` with your editor's flag.
+Run `opentide setup mcp` with your editor's flag (`--claude-desktop` for Claude Desktop).
 
 ## metadata_recommended
 
@@ -6166,7 +7003,7 @@ Keep only the action's fields: `block_files` takes `sha1`, `sha256` and `device_
 
 A Microsoft Defender column name is blank or not a string.
 
-Severity: error. Reported by `opentide validate` (its `schema` check) on a `microsoft_defender` block (microsoft-defender-1.0). Entity fields, action columns and custom detail values name a column of the query's output, sent verbatim (`DeviceId`). Whether the column exists is Defender's to check at deploy. The finding is on the field.
+Severity: error. Reported by `opentide validate` (its `schema` check) on a `microsoft_defender` block (microsoft-defender-1.0). Entity fields, action columns and custom detail values name a column of the query's output, sent verbatim (`DeviceId`). Whether the query returns the column is `microsoft_defender_column_not_in_output`, which the analysis engine checks offline against the query's inferred output. The finding is on the field.
 
 ### Example
 
@@ -6181,6 +7018,58 @@ configurations:
 ### How to fix
 
 Name the result column (`device_id: DeviceId`), or remove the field.
+
+## microsoft_defender_column_not_in_output
+
+A column a Microsoft Defender block names is not a column of its query's output.
+
+Severity: error. Reported by the analysis engine on a `microsoft_defender` block (microsoft-defender-1.0), with its query's findings: `opentide validate` and `opentide lint` (their `queries` check) and an editor running `opentide lsp start` show it, without a tenant. Every column the block names is a column of what the query returns: an `entities` field, an action's column (not `isolation_type` or `device_groups`), an `alert.custom_details` value, and a `{{Column}}` placeholder in `alert.title` or `alert.description`. A column the query does not return cannot be filled from its results: Defender refuses the rule at deploy, or maps nothing. Column names compare as KQL's do: case-sensitively, so `deviceid` is not `DeviceId`. The finding is on the field (on the placeholder, in a title or description), with the output column it most likely means; an editor offers to replace it.
+
+The engine infers the output offline: the columns after the query's last operator. A query names its columns once a `project`, a `project-keep` without a pattern, a `summarize` (one without `arg_max(..., *)` or `arg_min(..., *)`, which copies a table's columns), `distinct` or `count` sets them and nothing after it adds a column the engine cannot name; any other name is then reported. Otherwise the query returns every column of its tables, and a table can have columns its reference does not list yet: only a near miss of a documented column is reported then (`DevicId`). When the engine cannot infer the output (a table or function it does not know, an `evaluate` plugin, `bag_unpack`, an expression whose column name it does not model, a `union` with such a leg, several tabular statements), nothing is reported. `opentide validate query --live` checks what the tenant returns.
+
+### Example
+
+```yaml
+configurations:
+  microsoft_defender:
+    query: |
+      DeviceProcessEvents
+      | where FileName =~ "powershell.exe"
+      | project Timestamp, ReportId, DeviceId, AccountUpn
+    alert:
+      title: Encoded PowerShell on {{DeviceName}}   # not projected
+    entities:
+      hosts:
+        - device_id: DevicId                         # did you mean DeviceId?
+```
+
+### How to fix
+
+Name a column the query returns, spelled as it is (`device_id: DeviceId`), or add the column to the query's final `project`.
+
+## microsoft_defender_column_type
+
+A Microsoft Defender entity or action is mapped from a column that holds no identifier, name or address.
+
+Severity: warning. Reported by the analysis engine on a `microsoft_defender` block (microsoft-defender-1.0), with its query's findings: `opentide lint` (its `queries` check) and an editor running `opentide lsp start` show it; `opentide validate` does not fail on it. An entity field (`hosts.device_id`, `ips.address`, `files.sha256`, ...) or an action's column holds an identifier, a name or an address, which Defender reads as text. The engine reports a mapping from an output column whose type it knows is `dynamic`, `datetime`, `bool` or `timespan`, none of which holds an identifier, a name or an address; a number may (`cloud_applications.app_id` from `ApplicationId`), and is not reported. Custom details and alert placeholders show any type and are not checked. When the engine does not know the column's type, or cannot infer the query's output, nothing is reported. The finding is on the field.
+
+### Example
+
+```yaml
+configurations:
+  microsoft_defender:
+    query: |
+      DeviceNetworkEvents
+      | extend Remote = parse_json(AdditionalFields)
+      | project Timestamp, ReportId, DeviceId, Remote
+    entities:
+      ips:
+        - address: Remote   # a dynamic column
+```
+
+### How to fix
+
+Map the column that holds the identifier, or extract it as text in the query: `| extend RemoteAddress = tostring(Remote.ip)`, then `address: RemoteAddress`.
 
 ## microsoft_defender_custom_details
 
@@ -6200,6 +7089,56 @@ configurations:
 ### How to fix
 
 Write a mapping: `custom_details: {CommandLine: ProcessCommandLine}`.
+
+## microsoft_defender_custom_details_limit
+
+A Microsoft Defender block's `alert.custom_details` is past the limits Microsoft documents.
+
+Severity: warning. Reported by `opentide validate` (its `schema` check) and `opentide lint` (its `queries` check) on a `microsoft_defender` block (microsoft-defender-1.0), at `alert.custom_details`, when it has more than 20 details, or when the details' names alone take more than 4 KB (4096 bytes). Microsoft's [custom detection docs](https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules) (read 2026-11-26) say: "Each rule is limited to up to 20 key-value pairs of custom details. The combined size limit for all custom details and their values in a single alert is 4 KB. If the custom details array exceeds this limit, the whole custom details array is dropped from the alert." The values are the query's results, known only when the rule runs, so opentide reports the size only when the names fill the limit on their own. Graph's answer to a 21st detail is not documented, so this is an advisory: the rule validates and deploys, and `validate --strict` reports it without failing until a tenant check settles it. `lint --strict` fails on it, as on every warning; `microsoft_defender_custom_details_limit = "info"` under `[queries.codes]` in `lint.toml` keeps it reported without failing.
+
+### Example
+
+```yaml
+configurations:
+  microsoft_defender:
+    alert:
+      custom_details:
+        Detail1: Column1
+        # Detail2 to Detail20
+        Detail21: Column21
+```
+
+### How to fix
+
+Keep the details an analyst needs first, at most 20, and keep their values short: a long command line or a JSON column can push one alert past 4 KB, and then the alert shows no custom detail at all.
+
+## microsoft_defender_entity_identifier
+
+A Microsoft Defender entity mapping lacks an identifier Graph requires of its kind.
+
+Severity: error. Reported by `opentide validate` (its `schema` check) and by an editor running `opentide lsp start`, on a `microsoft_defender` block (microsoft-defender-1.0). Graph checks a rule's mappings when it creates the rule and each time it enables it, but not on an update to a disabled rule (#1884); whether it checks a rule created disabled is not confirmed. So a disabled rule with a bad mapping can sit in the tenant and fail on the deploy that enables it. The finding is on `entities.<kind>.<N>`, and its message names the missing field, Graph's identifier for it and the property it is sent as.
+
+One rule is enforced: a `registry_values` mapping sets `key` (identifier `RegKey`, sent as `keyColumn`). Without it Graph answers:
+
+```text illustrative
+HTTP 400 · Entity mapping for type 'RegistryValue' does not include a required identifier. Supported identifiers: RegKey | Name
+```
+
+The other kinds need any one of their fields (`microsoft_defender_entity_mapping`): Microsoft documents no further requirement for them, and none has been observed.
+
+### Example
+
+```yaml
+configurations:
+  microsoft_defender:
+    entities:
+      registry_values:
+        - value_name: RegistryValueName
+```
+
+### How to fix
+
+Map the missing field to the result column that holds it, and have the query return that column: `registry_values: [{key: RegistryKey, value_name: RegistryValueName}]`.
 
 ## microsoft_defender_entity_kind
 
@@ -6279,6 +7218,26 @@ configurations:
 ### How to fix
 
 Write `single_alert` or `alert_per_event`, or remove the key: Defender then creates one alert per event.
+
+## microsoft_defender_impacted_asset_identifier
+
+A Microsoft Defender device or user mapping sets no strong identifier of its impacted asset.
+
+Severity: warning, which `opentide validate --strict` reports without failing. Reported by `opentide validate`, `opentide lint` (its `queries` check) and an editor running `opentide lsp start`, on a `microsoft_defender` block (microsoft-defender-1.0). `hosts` and `accounts` map the alert's impacted devices and users. Microsoft's custom detection page lists the result columns its rule wizard maps to an impacted asset by itself, each a strong identifier: for a device `DeviceId` (`device_id`) or `DeviceName`, `RemoteDeviceName` (`name`); for a user `AccountObjectId` (`aad_user_id`), `AccountSid`, `InitiatingProcessAccountSid` (`sid`) or `AccountUpn`, `InitiatingProcessAccountUpn` (`upn`). Microsoft Sentinel's entity reference adds the strong combinations: a user's `name` with `nt_domain`, `dns_domain` or `upn_suffix`, and a device's `netbios_name` with `nt_domain` or `dns_domain`. A mapping with none of these (an account's `name` alone, a device's `dns_domain` alone) may not tell Defender which device or user the alert is about. Neither page says Graph refuses such a mapping, so the rule validates and deploys. The finding is on `entities.<kind>.<N>`.
+
+### Example
+
+```yaml
+configurations:
+  microsoft_defender:
+    entities:
+      accounts:
+        - name: AccountName
+```
+
+### How to fix
+
+Add an identifier to the mapping, and have the query return its column: `accounts: [{upn: AccountUpn}]`, or `accounts: [{name: AccountName, nt_domain: AccountDomain}]`.
 
 ## microsoft_defender_incident
 
@@ -6360,21 +7319,105 @@ configurations:
 
 Map the columns the query returns: `entities: {hosts: [{device_id: DeviceId}]}`.
 
-## microsoft_defender_rule_absent
+## microsoft_defender_nrt_query
 
-A Microsoft Defender rule to disable is not on the tenant, so nothing was disabled or created.
+A Microsoft Defender rule runs continuously (`frequency: NRT`), and its query is one Microsoft documents NRT cannot run.
 
-Severity: warning. Reported by `opentide deploy` on a `microsoft_defender` tenant (microsoft-defender-1.0). A `DISABLEMENT` status sends `PATCH {base}/{uuid}` with `status: disabled`; Graph answered `404`, so the tenant has no rule with the rule's `metadata.uuid`. Deploy does not create a rule only to disable it. The rule is reported as skipped.
+Severity: warning. Reported by the analysis engine on the KQL query of a `microsoft_defender` block whose `schedule.frequency` is `NRT`: `opentide lint` (its `queries` check) and an editor running `opentide lsp start` show it; `opentide validate` does not report it. `lint --strict` fails on it, as on every warning; `microsoft_defender_nrt_query = "info"` under `[queries.codes]` in `lint.toml` keeps it reported without failing. Microsoft's [custom detection docs](https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules) (read 2026-11-26) say "You can run a query continuously as long as: The query references one table only. [...] The query doesn't use joins, unions, or the externaldata operator. The query doesn't include any comments line or information.", list the tables near real-time detections support, and leave out `EmailEvents`' `LatestDeliveryLocation` and `LatestDeliveryAction` columns. Each finding is where the query breaks one of these: a second table, a table off the list, each `join`, `union` and `externaldata`, the first comment (the message counts them), or an excluded `EmailEvents` column.
+
+The check is conservative. A query with a syntax error, a table read through a function or another database's table, and the docs' list of supported KQL operators are not judged. A `let` or a parameter name is not a table, and a column the query defines (`extend LatestDeliveryAction = ...`, a `project-rename`'s new name) is not `EmailEvents`' own. What Graph does with such a rule is not documented.
+
+The tables: `AlertEvidence`, `CloudAppEvents`, `DeviceEvents`, `DeviceFileCertificateInfo`, `DeviceFileEvents`, `DeviceImageLoadEvents`, `DeviceLogonEvents`, `DeviceNetworkEvents`, `DeviceNetworkInfo`, `DeviceInfo`, `DeviceProcessEvents`, `DeviceRegistryEvents`, `EmailAttachmentInfo`, `EmailEvents`, `EmailPostDeliveryEvents`, `EmailUrlInfo`, `IdentityDirectoryEvents`, `IdentityLogonEvents`, `IdentityQueryEvents` and `UrlClickEvents` from Defender XDR; `ABAPAuditLog_C`, `ABAPChangeDocsLog_CL`, `AuditLogs`, `AWSCloudTrail`, `AWSGuardDuty`, `AzureActivity`, `CommonSecurityLog`, `GCPAuditLogs`, `MicrosoftGraphActivityLogs`, `OfficeActivity`, `Okta_CL`, `OktaV2_CL`, `ProofpointPOD`, `ProofPointTAPClicksPermitted_CL`, `ProofPointTAPMessagesDelivered_CL`, `SecurityAlert`, `SecurityEvent` and `SigninLogs` from Microsoft Sentinel.
 
 ### Example
 
-```text illustrative
-microsoft_defender_rule_absent: rule 00000000-0000-4000-8003-0000000000d0 is not on tenant 'contoso': nothing to disable
+```yaml
+configurations:
+  microsoft_defender:
+    schedule:
+      frequency: NRT
+    query: |
+      // PowerShell on servers
+      DeviceProcessEvents
+      | where FileName =~ "powershell.exe"
+      | join (DeviceInfo | where DeviceType == "Server") on DeviceId
 ```
 
 ### How to fix
 
-Nothing to do if the rule was never deployed to that tenant. If it was, it was deleted in the portal or deployed under another uuid: check the rule's `metadata.uuid`.
+Move comments to the rule's description, and filter one table from the list without a join, a union or `externaldata`. A detection that needs more than that runs on a schedule: `frequency: 1H`, `3H`, `12H` or `24H`.
+
+## microsoft_defender_placeholder_limit
+
+A Microsoft Defender alert title or description references more than three columns.
+
+Severity: warning. Reported by `opentide validate` (its `schema` check) and `opentide lint` (its `queries` check) on a `microsoft_defender` block (microsoft-defender-1.0), at `alert.title` or `alert.description`, when the field references more than three distinct columns as `{{Column}}`. Only an identifier between the braces, with no space, counts (`{{AccountName}}`, the form the docs show): JSON or prose in braces, and `{{ AccountName }}`, whose substitution is not documented, do not. Microsoft's [custom detection docs](https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules) (read 2026-11-26) say of a dynamic alert title and description: "You can reference up to three columns in each field." A column referenced twice counts once. What Defender does with a fourth is not documented, so this is an advisory: the rule validates and deploys, and `validate --strict` reports it without failing until a tenant check settles it. `lint --strict` fails on it, as on every warning; `microsoft_defender_placeholder_limit = "info"` under `[queries.codes]` in `lint.toml` keeps it reported without failing.
+
+### Example
+
+```yaml
+configurations:
+  microsoft_defender:
+    alert:
+      title: "{{AccountName}} ran {{FileName}} on {{DeviceName}} from {{FolderPath}}"
+```
+
+### How to fix
+
+Keep three columns in the field, and show the others as custom details (`alert.custom_details`), which the alert side panel lists.
+
+## microsoft_defender_required_columns
+
+A Microsoft Defender query's output lacks a column a custom detection needs.
+
+Severity: error. Reported by the analysis engine on a `microsoft_defender` block's `query` (microsoft-defender-1.0), at its last operator: `opentide validate` and `opentide lint` (their `queries` check) and an editor running `opentide lsp start` show it, without a tenant. A custom detection's results need `Timestamp`; `DeviceId` and `ReportId` when the query reads a device table (`DeviceProcessEvents`, `DeviceEvents`, ...); `ObservationId` for an observation table; `ReportId` for the other Defender XDR tables, with a column that identifies the impacted asset (`AccountUpn`, `RecipientEmailAddress`, `DeviceName`, ...); and `Timestamp` or `TimeGenerated`, `ReportId` and an asset column when the query reads none of them. It is the offline twin of the check `opentide validate query --live` makes on the columns the tenant returns, from the same table. The engine reports it only when the query names its output columns (a query names its columns once a `project`, a `project-keep` without a pattern, a `summarize` (one without `arg_max(..., *)` or `arg_min(..., *)`, which copies a table's columns), `distinct` or `count` sets them and nothing after it adds a column the engine cannot name): otherwise the query returns every column of its tables. Offline, the table family is read from the Defender XDR tables the query names anywhere, a `join`, a `union` or a `let` included, as the live check reads it; a query that names none of them (only a custom table, a function, `datatable`) gets nothing offline, and its columns are checked by `opentide validate query --live`. A table named only in a `let` the query does not use still counts. When the engine cannot infer the output, nothing is reported.
+
+### Example
+
+```yaml
+configurations:
+  microsoft_defender:
+    query: |
+      DeviceProcessEvents
+      | where FileName =~ "powershell.exe"
+      | project Timestamp, AccountUpn   # lacks DeviceId and ReportId
+```
+
+### How to fix
+
+Keep the columns the message names in the query's output: `| project Timestamp, ReportId, DeviceId, AccountUpn`.
+
+## microsoft_defender_rule_absent
+
+A Microsoft Defender rule to disable is not on the tenant, so nothing was disabled or created.
+
+Severity: warning. Reported by `opentide deploy` on a `microsoft_defender` tenant (microsoft-defender-1.0). A `DISABLEMENT` status sends `PATCH {base}/opentide-<uuid>` with `status: disabled`; Graph answered `404`, so the tenant has no rule with the id deploy gives the rule, `opentide-` and its `metadata.uuid`. Deploy does not create a rule only to disable it. The rule is reported as skipped.
+
+### Example
+
+```text illustrative
+microsoft_defender_rule_absent: rule opentide-00000000-0000-4000-8003-0000000000d0 is not on tenant 'contoso': nothing to disable
+```
+
+### How to fix
+
+Nothing to do if the rule was never deployed to that tenant. If it was, it was deleted in the portal, deployed under another uuid (check the rule's `metadata.uuid`), or deployed by an earlier opentide release: 1.0.0 deployed under the bare uuid, without the `opentide-` prefix, and this deploy does not touch that rule. Delete it in the portal, or rename it: Graph keeps a disabled rule's name reserved, so a later create of the rule fails with `microsoft_defender_rule_conflict` while it is there.
+
+## microsoft_defender_rule_conflict
+
+Graph refused to create a Microsoft Defender rule because another rule most likely holds its display name or alert title.
+
+Severity: error. Reported by `opentide deploy` on a `microsoft_defender` tenant (microsoft-defender-1.0). Deploy addresses each rule as `opentide-<uuid>`: its `PATCH` found no rule with that id, so it sent a `POST` to create one, and Graph answered `409` (`A detection rule with this name, title, or rule ID already exists.`). The `PATCH` deploy sends after a `409` found no rule with the id either, so the conflict is another rule with the same display name or alert title. Most often it is one an earlier opentide release created: 1.0.0 deployed under the bare uuid, without the `opentide-` prefix, and 0.x under ids of its own. It can also be a rule created by hand in the portal. Graph keeps the name and alert title of a disabled rule reserved, so disabling that rule is not enough, and the alert title defaults to the rule's name, so renaming the rule alone may not be either. The rule fails, with the code before its message in the row's `error`; the others are deployed.
+
+### Example
+
+```text illustrative
+microsoft_defender_rule_conflict: Graph refused to create detection rule opentide-8f3c4a7e-1b2d-4c3e-9f0a-1234567890ab on tenant contoso: HTTP 409 (A detection rule with this name, title, or rule ID already exists.). No rule has this id, so another rule most likely holds its display name or alert title: one an earlier opentide release created (under the bare uuid in 1.0.0, or in 0.x), or one created by hand. Graph keeps them reserved for a disabled rule too: delete that rule in the Defender portal (or rename both its name and its alert title), then deploy again
+```
+
+### How to fix
+
+In the Defender portal (Investigation & response > Hunting > Custom detection rules), find the rule with the same name or alert title: delete it (the simplest fix), or rename both its name and its alert title, then deploy again. A rule that an earlier opentide release created is replaced by the one this deploy creates. To keep the other rule, give the opentide rule another display name (`configurations.microsoft_defender.name`, else the rule's `name`) and alert title (`alert.title`).
 
 ## microsoft_defender_schema
 
@@ -6431,6 +7474,29 @@ configurations:
 ### How to fix
 
 Write the severity with its capital (`High`), or remove it: deploy then uses `response.alert_severity`, else `Medium`.
+
+## microsoft_defender_unprojected_output
+
+A Microsoft Defender query returns columns nothing in its block uses.
+
+Severity: note. Reported by the analysis engine on a `microsoft_defender` block's `query` (microsoft-defender-1.0), at its last operator: `opentide lint` (its `queries` check) shows it with `--verbose` and counts it otherwise, and an editor running `opentide lsp start` shows it; a note never fails `validate` or `lint --strict`. It applies when the query's output has a column that no entity, action, custom detail or alert `{{placeholder}}` names and a custom detection does not require, typically because the query ends without a `project` and returns every column of its table. Defender derives entity mappings of its own from a rule's result columns (IP addresses, files, processes, URLs, registry values), beyond the ones the block declares. They are stored on the rule, opentide never sees them, and Graph can later refuse them when the rule is enabled: a rule could be disabled and then not enabled again until its `entityMappings` were rewritten by hand. Projecting only the columns the rule uses prevents it. When the engine cannot infer the output, nothing is reported.
+
+### Example
+
+```yaml
+configurations:
+  microsoft_defender:
+    query: |
+      DeviceProcessEvents
+      | where FileName =~ "powershell.exe"
+    entities:
+      accounts:
+        - upn: AccountUpn
+```
+
+### How to fix
+
+End the query with a `project` of the columns a custom detection needs and the ones the block names. The finding suggests it, and an editor offers to append it after the query's last operator: `| project Timestamp, DeviceId, ReportId, AccountUpn` (not after a final `render`, nor in a single-quoted YAML query where a bracketed column name would need escaping). Applying every suggestion of a file at once leaves it out: it changes what the rule returns.
 
 ## missing_author
 
@@ -6927,6 +7993,27 @@ Write the query as a literal block (`|` or `|-`), which keeps each line a line, 
 
 Or remove the comment.
 
+## query_position_needs_platform
+
+A query on its own is to be checked as a rule's query, but no platform says whose rule block it is.
+
+Severity: error. Reported by the analysis engine on a query checked on its own at position `rule` with no platform: the Rust SDK's `opentide::analysis::analyze_query_at` answers this one error and checks nothing else. The command line and MCP refuse the same request before any check: `opentide validate query --position rule` without `--platform` exits `2` with `usage_missing_option` (`failure.argument` `--platform`), and MCP `validate_query` requires `platform`. Python's `opentide.analysis.check_query(..., position="rule")` without a `platform` raises `ValueError`.
+
+A rule block is a platform's: Exabeam's sequence filter refuses Search's operators, and CrowdStrike's query is a Next-Gen SIEM correlation rule. Without the platform there is no block to check the query as, and checking it as a search instead would pass a query the rule would refuse ([#1993](https://github.com/opentidehq/opentide/issues/1993), ADR 0015 §4).
+
+### Example
+
+```rust
+use opentide::analysis::{LanguageId, QueryPosition, QueryRequest, analyze_query_at};
+
+let request = QueryRequest::new(LanguageId::Exabeam, r#"SELECT user WHERE vendor:"x""#);
+let diagnostics = analyze_query_at(&request, QueryPosition::Rule); // [query_position_needs_platform]
+```
+
+### How to fix
+
+Name the platform whose rule block the query is for (`.with_platform(Some("exabeam"))`, `--platform exabeam`), or check it as a search: `analyze_query`, or position `search`.
+
 ## query_rejected
 
 `validate query --live` failed because a tenant refused a rule's query as invalid.
@@ -7145,6 +8232,46 @@ opentide validate --file objects/rules/sentinel-kql-rul.yaml
 ### How to fix
 
 Fix the path, file name or UUID. A `--file` path that does not exist on disk is reported as `file_not_found` instead. A path matches only that file; a bare file name matches every object file with that name. Every `--file` target must match. For `share`, name a target `opentide share targets` lists, and enable it in `sharing.toml`.
+
+## sentinel_frequency
+
+A Microsoft Sentinel block's `scheduling.frequency` is shorter than 5 minutes or longer than 14 days.
+
+Severity: error. Reported by `opentide validate` (its `schema` check) on a `sentinel` block (sentinel-1.0), on `scheduling.frequency`. Microsoft's [scheduled analytics rules docs](https://learn.microsoft.com/en-us/azure/sentinel/scheduled-rules-overview) (read 2026-11-27) say of the query interval and the lookback period: "The allowed range for both of these parameters is from 5 minutes to 14 days." Sentinel refuses a rule outside that range at deploy. A near-real-time rule (`scheduling.nrt: true`) is not checked, because deploy sends no frequency for it. A value that is not a duration is reported by the `schema` check's `value_error` instead.
+
+### Example
+
+```yaml
+configurations:
+  sentinel:
+    scheduling:
+      frequency: 1m
+      lookback: 1h
+```
+
+### How to fix
+
+Run the rule every 5 minutes or more, at most every 14 days (`frequency: 5m`, `PT1H`, `P1D`). For a rule that must fire as events arrive, set `scheduling.nrt: true` instead.
+
+## sentinel_lookback
+
+A Microsoft Sentinel block's `scheduling.lookback` is shorter than 5 minutes, longer than 14 days, or shorter than its frequency.
+
+Severity: error. Reported by `opentide validate` (its `schema` check) on a `sentinel` block (sentinel-1.0), on `scheduling.lookback`. Microsoft's [scheduled analytics rules docs](https://learn.microsoft.com/en-us/azure/sentinel/scheduled-rules-overview) (read 2026-11-27) say: "The allowed range for both of these parameters is from 5 minutes to 14 days", and "The query interval must be shorter than or equal to the lookback period": a lookback shorter than the frequency would leave gaps between runs. Sentinel refuses such a rule at deploy. Durations are compared in seconds (`1h` equals `PT60M`). A near-real-time rule (`scheduling.nrt: true`) is not checked, because deploy sends no lookback for it. A value that is not a duration is reported by the `schema` check's `value_error` instead.
+
+### Example
+
+```yaml
+configurations:
+  sentinel:
+    scheduling:
+      frequency: 1h
+      lookback: 30m
+```
+
+### How to fix
+
+Make the lookback at least the frequency and at most 14 days (`frequency: 1h`, `lookback: 2h`).
 
 ## share_failed
 

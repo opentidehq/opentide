@@ -2,7 +2,7 @@
 
 Internal to opentide, with no stability promise: depend on [`opentide`](https://docs.rs/opentide), the opentide Rust SDK, instead (its `lsp` feature: `opentide::lsp`).
 
-Native language server for **KQL**, **SPL**, **ES|QL**, **EQL**, **Kibana KQL** (`kuery`), **Lucene**, **Falco** rule conditions, the **CrowdStrike Query Language** (CQL), **YARA**, the **Exabeam Query Language** (`exabeam`), **YARA-L 2.0** (Google Security Operations), and **Tide YAML** objects.
+Native language server for **KQL**, **SPL**, **ES|QL**, **EQL**, **Kibana KQL** (`kuery`), **Lucene**, **Falco** rule conditions, the **CrowdStrike Query Language** (CQL), **YARA**, the **Exabeam Query Language** (`exabeam`), **YARA-L 2.0** (Google Security Operations), the **Datadog log search syntax** (`datadog`, Datadog Cloud SIEM: `.datadog` files), and **Tide YAML** objects.
 
 v1 languages: KQL + SPL + Tide YAML. The Elastic languages cover `configurations.elastic` rules, and Falco covers `configurations.sysdig` (Sysdig Secure and Falco), checked as libsinsp and Falco's rule loader check it ([docs/engine/FALCO.md](../../docs/engine/FALCO.md)). CQL covers `configurations.crowdstrike` (Falcon LogScale and Next-Gen SIEM), checked against CrowdStrike's published grammar and function reference ([docs/engine/CQL.md](../../docs/engine/CQL.md)). The Exabeam Query Language covers `configurations.exabeam` (Exabeam New-Scale SIEM correlation rules) and `system: exabeam` hunts, checked as the specification's reference checker checks it, with Exabeam's Common Information Model ([docs/engine/EXABEAM.md](../../docs/engine/EXABEAM.md)). YARA-L covers `configurations.google_secops` and Google SecOps hunts, checked against Google's UDM field list and function reference ([docs/engine/YARAL.md](../../docs/engine/YARAL.md)). SQL is out of scope. Names use `opentide`, never `otide`.
 
@@ -99,6 +99,7 @@ With none of these, it says so on stderr and exits `2`. `opentide lsp start`, in
 | `opentide-cql` | CrowdStrike Query Language (Falcon LogScale, Next-Gen SIEM): function, event and field catalogs, Next-Gen SIEM correlation-rule checks, `cql_*` diagnostics |
 | `opentide-exabeam` | Exabeam Query Language (New-Scale SIEM): a port of the specification's reference checker with the `rule` and `search` profiles, RE2 pattern checks, the Common Information Model catalogue, `exabeam_*` diagnostics |
 | `opentide-yaral` | YARA-L 2.0 (Google Security Operations): rule and search profiles, UDM and function catalogs, `yaral_*` diagnostics |
+| `opentide-datadog` | Datadog log search syntax (Datadog Cloud SIEM): a Pratt grammar in which AND binds tighter than OR, the `rule` and `search` profiles, the reserved and standard attribute catalogue, `datadog_*` diagnostics |
 | `opentide-ecs` | Elastic Common Schema field catalog (completion, hover) and the ECS checks for queries on ECS indices (`ecs_type_mismatch`, near-miss `ecs_unknown_field`; never a closed list) |
 | `opentide-tide` | Schemas, vocabs, UUID graph, YAML injection remap |
 | `opentide-analysis` | `WorkspaceHost` orchestrator |

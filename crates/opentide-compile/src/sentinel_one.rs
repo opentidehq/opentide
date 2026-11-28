@@ -1,7 +1,5 @@
 //! SentinelOne: the STAR custom detection rule a deploy sends to one tenant
-//! (`platforms/sentinel_one/deployer.py` `compile_deployment`, the client's
-//! `create_update_detection_rule` and `delete_detection_rule`): the body with
-//! its `null` values left out.
+//! to create, update or delete it: the body with its `null` values left out.
 
 use crate::Context;
 use crate::deploy::{self, Action, Write};
@@ -15,12 +13,14 @@ pub const PLATFORM: &str = "sentinel_one";
 /// The platform's display name, in messages.
 pub const DISPLAY: &str = "SentinelOne";
 
-/// A failure the oracle raises without a message (`raise Exception`).
+/// A failure with no detail: an empty block, one without its condition, or a condition
+/// type other than `Single Event` and `Correlation`. The message says `no
+/// detail given`.
 fn bare() -> CompileError {
     CompileError::failed(DISPLAY, "")
 }
 
-/// A duration in minutes (`_convert_to_minutes`): `30m`, or `2h`.
+/// A duration in minutes: `30m`, or `2h`.
 pub fn minutes(timespan: &str) -> Result<i64, CompileError> {
     let refused = || {
         CompileError::failed(
@@ -65,7 +65,7 @@ fn text<'j>(value: Option<&'j Json>, key: &str) -> Option<&'j str> {
         .filter(|text| !text.is_empty())
 }
 
-/// `value` without its `null` members and items (`_remove_nulls`).
+/// `value` without its `null` members and items.
 pub fn without_nulls(value: Json) -> Json {
     match value {
         Json::Object(object) => Json::Object(
@@ -230,12 +230,12 @@ pub fn body(cx: &Context<'_>, rule: &Rule, tenant: &Json) -> Result<Json, Compil
         filter.insert("accountIds".into(), Json::Null);
         filter.insert(
             "siteIds".into(),
-            Json::Array(vec![Json::Str(deploy::text(site))]),
+            Json::Array(vec![Json::Str(Json::to_text(site))]),
         );
     } else if let Some(account) = deploy::setup(tenant, "account_id").filter(|id| id.is_filled()) {
         filter.insert(
             "accountIds".into(),
-            Json::Array(vec![Json::Str(deploy::text(account))]),
+            Json::Array(vec![Json::Str(Json::to_text(account))]),
         );
         filter.insert("siteIds".into(), Json::Null);
     } else {
@@ -263,13 +263,15 @@ fn numeric(id: &str) -> Result<i64, CompileError> {
 /// The writes a deploy sends for `rule` to `tenant`, whose recorded id is
 /// `known`: a create (`POST`), an update (`PUT`) or a delete (`DELETE` with
 /// a filter on the id), or none for a rule to retire that the tenant never
-/// received.
+/// received. The body is the one the deploy sends
+/// ([`crate::compiler::SentinelOne`]).
 pub fn compile(
     cx: &Context<'_>,
     rule: &Rule,
     tenant: &Json,
     known: Option<&str>,
 ) -> Result<Vec<Write>, CompileError> {
+    use crate::compiler::{Compiler, SentinelOne};
     let status = rule
         .block(PLATFORM)
         .and_then(|block| block.get("status"))
@@ -278,7 +280,7 @@ pub fn compile(
     let Some(action) = deploy::action(cx, DISPLAY, status, known)? else {
         return Ok(Vec::new());
     };
-    let body = body(cx, rule, tenant)?;
+    let body = SentinelOne::body(&SentinelOne::compile(cx, rule, tenant)?);
     let endpoint = format!(
         "{}/web/api/v2.1/cloud-detection/rules",
         deploy::setup_text(tenant, "url")

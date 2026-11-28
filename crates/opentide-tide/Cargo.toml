@@ -31,14 +31,14 @@ opentide-cql.workspace = true
 opentide-yara.workspace = true
 opentide-yaral.workspace = true
 opentide-exabeam.workspace = true
+opentide-datadog.workspace = true
 opentide-highlight.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-# Floats printed as the oracle's YAML loader printed them (`yaml::number_text`).
+# Floats printed as opentide 0.23.0's YAML loader printed them (`yaml::number_text`).
 ryu.workspace = true
 toml.workspace = true
 regex.workspace = true
-uuid.workspace = true
 
 [dev-dependencies]
 

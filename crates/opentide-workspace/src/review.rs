@@ -1,5 +1,5 @@
 //! `opentide rules unreviewed`: the rules RFC 0008's review predicate
-//! lists (`models/review.py`, `cli/services/rules.py`). Nothing is written.
+//! lists. Nothing is written.
 //!
 //! `rule::1.0` is always unreviewed; `rule::1.1` when `metadata.reviewed`
 //! is absent or strictly earlier than the evaluation instant minus the
@@ -25,7 +25,7 @@ pub const WINDOW_POSITIVE: &str = "window must be a positive duration";
 /// A review window: its length and the text it was written as.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Window {
-    /// The count.
+    /// How many `unit`s long it is.
     pub count: u64,
     /// `d`, `h` or `m`.
     pub unit: char,
@@ -39,8 +39,9 @@ impl Window {
     /// [`WINDOW_SHAPE`] or [`WINDOW_POSITIVE`].
     pub fn parse(text: &str) -> Result<Self, &'static str> {
         let text = text.trim();
-        let (digits, unit) = match text.chars().last() {
-            Some(unit @ ('d' | 'h' | 'm')) => (&text[..text.len() - 1], unit),
+        let mut chars = text.chars();
+        let (digits, unit) = match chars.next_back() {
+            Some(unit @ ('d' | 'h' | 'm')) => (chars.as_str(), unit),
             _ => (text, 'd'),
         };
         if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
@@ -85,8 +86,9 @@ impl Window {
 /// `090 days`.
 pub fn window_text(older_than: &str) -> String {
     let text = older_than.trim();
-    let (number, unit) = match text.chars().last() {
-        Some(unit @ ('d' | 'h' | 'm')) => (&text[..text.len() - 1], unit),
+    let mut chars = text.chars();
+    let (number, unit) = match chars.next_back() {
+        Some(unit @ ('d' | 'h' | 'm')) => (chars.as_str(), unit),
         _ => (text, 'd'),
     };
     let word = match unit {
@@ -129,8 +131,8 @@ pub struct Findings {
 ///
 /// # Errors
 ///
-/// The oracle's message for a value that is neither form, or the date
-/// library's for one that does not exist.
+/// [`REVIEWED_SHAPE`] for a value that is neither form, or the reason
+/// [`check_reviewed`] gives for one that does not exist (jiff's).
 pub fn review_instant(text: &str) -> Result<Timestamp, String> {
     let text = text.trim();
     check_reviewed(text).map_err(|violation| {
@@ -383,5 +385,14 @@ mod tests {
             .unwrap()
             .any_rule_files
         );
+    }
+
+    #[test]
+    fn a_window_with_multi_byte_text_is_refused() {
+        assert!(Window::parse("é").is_err());
+        assert!(Window::parse("9😀").is_err());
+        assert!(Window::parse("😀d").is_err());
+        assert_eq!(window_text("é"), "é days");
+        assert_eq!(window_text("😀h"), "😀 hours");
     }
 }

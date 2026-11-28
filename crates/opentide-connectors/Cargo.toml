@@ -17,7 +17,7 @@ workspace = true
 [dependencies]
 # The log events a client writes as the Python one does (Splunk's urllib handler):
 # the CLI's log layer prints them.
-tracing = "0.1"
+tracing.workspace = true
 # `$NAME` and `${NAME}` placeholders: the one parser the workspace's `info` uses.
 opentide-workspace.workspace = true
 # Elastic's advisory codes (UC-4.2b) and Python's float `repr` in messages.
@@ -35,24 +35,28 @@ serde_json = { workspace = true, features = ["raw_value"] }
 base64.workspace = true
 thiserror.workspace = true
 url.workspace = true
-toml.workspace = true
 # The platforms (UC-4.2): bodies and rows as ordered JSON, a search's window,
 # a gateway page's title, query strings encoded as `requests` encodes them,
 # HarfangLab's telemetry words; Elastic's durations (UC-4.2b).
 opentide-compile.workspace = true
 jiff.workspace = true
 regex.workspace = true
-percent-encoding = "2"
+percent-encoding.workspace = true
 # Splunk's XML: the error body's message and the Atom feed of saved searches.
 roxmltree = { version = "0.21", default-features = false, features = ["std"] }
-shlex = "2.0"
+shlex.workspace = true
+# Exabeam's rule names compare as `str.casefold()` does: full Unicode case
+# folding, the crate opentide-compile sorts exported names with.
+caseless.workspace = true
 # Sentinel (UC-4.3): the request ids MSAL and azure-core stamp their requests with.
 uuid = { workspace = true, features = ["v4"] }
 # Google SecOps: the service-account JWT (RS256) exchanged for an access token
 # on the tenant's own client (google-cloud-auth sends through a client of its
-# own, so it would bypass the tenant's proxy, CA bundles and timeouts). 9.x
-# signs with ring, the provider rustls already uses here.
-jsonwebtoken = { version = "9.3", default-features = false, features = ["use_pem"] }
+# own, so it would bypass the tenant's proxy, CA bundles and timeouts). Signed
+# with ring, the provider rustls already uses here, from the PEM key
+# rustls-pki-types reads (src/google_secops/auth/rs256.rs).
+ring = "0.17"
+rustls-pki-types = { version = "1.9", default-features = false, features = ["alloc"] }
 
 # The native transport (src/transport.rs, `ReqwestTransport`): reqwest on rustls
 # and the system's certificates, on tokio's multi-thread runtime. Not on WASI,
@@ -66,6 +70,9 @@ rustls-native-certs.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread"] }
 
 [dev-dependencies]
+# The tests and examples write a tenant's setup as TOML text; the crate reads a
+# setup as the configuration's JSON object (#1967).
+toml.workspace = true
 # The Sysdig test compiles the tide corpus's rule as deploy does.
 opentide-schema.workspace = true
 # The recorded-HTTP harness: the sample connector's cassette is replayed with
@@ -75,8 +82,9 @@ wiremock.workspace = true
 # Exabeam's pacer is tested on a paused clock (`tokio::time::pause`).
 tokio = { workspace = true, features = ["net", "io-util", "test-util"] }
 tokio-rustls.workspace = true
-tempfile = "3"
+tempfile.workspace = true
 # Entra's sign-in: what it logs is collected, to show the secret is not in it.
-tracing-subscriber = { version = "0.3", default-features = false, features = ["registry", "std"] }
-# Google SecOps: the test key's public half, to verify the assertion's signature.
-ring = "0.17"
+tracing-subscriber.workspace = true
+# Google SecOps: the assertion is cross-checked against jsonwebtoken's, and its
+# signature verified with the test key's public half.
+jsonwebtoken = { version = "9.3", default-features = false, features = ["use_pem"] }

@@ -11,6 +11,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use opentide_compile::{Json, Owned, Rule, preview, sentinel};
+use opentide_schema::platforms::PlatformKey;
 use opentide_schema::vocab::Vocabularies;
 use opentide_workspace::{FileSystem, MemoryFs, Options, RootOptions, Workspace};
 
@@ -39,11 +40,15 @@ fn rule(alert_techniques: &str) -> String {
 }
 
 fn compile(ids: &[&str], alert_techniques: &str) -> (Json, Vec<String>, Json) {
+    compile_text(ids, &rule(alert_techniques))
+}
+
+fn compile_text(ids: &[&str], rule_text: &str) -> (Json, Vec<String>, Json) {
     let fs = Arc::new(MemoryFs::new());
     fs.create_dir("/ws/.opentide/configurations/platforms");
     fs.create_dir("/ws/objects/rules");
     fs.create_dir("/ws/objects/objectives");
-    fs.write("/ws/objects/rules/r.yaml", rule(alert_techniques));
+    fs.write("/ws/objects/rules/r.yaml", rule_text.to_owned());
     fs.write("/ws/objects/objectives/o.yaml", objective(ids));
     let workspace = Workspace::open(
         fs as Arc<dyn FileSystem>,
@@ -65,7 +70,7 @@ fn compile(ids: &[&str], alert_techniques: &str) -> (Json, Vec<String>, Json) {
     let object = index.get("rule", RULE).unwrap();
     let rule = Rule::new(object.root().unwrap(), None);
     let (body, warnings) = sentinel::compile_with_warnings(&cx, &rule, "one").unwrap();
-    let entry = preview::preview(&cx, "sentinel", &rule);
+    let entry = preview::preview(&cx, &PlatformKey::new("sentinel"), &rule);
     (
         body,
         warnings.into_iter().map(|(_, message)| message).collect(),
@@ -77,6 +82,35 @@ fn property(body: &Json, name: &str) -> String {
     body.get("properties")
         .and_then(|properties| properties.get(name))
         .map_or_else(|| "absent".to_owned(), Json::to_compact)
+}
+
+/// A schedule only the model's own bounds refuse (`sentinel_frequency`,
+/// `sentinel_lookback`, #1916) is not a shape fault: the compile sends it as
+/// it did before the typed conversion (#1951), and `validate` reports it.
+#[test]
+fn a_schedule_outside_the_bounds_still_compiles() {
+    let (baseline, _, _) = compile(&["T1562.008"], "");
+    let baseline = baseline.to_compact();
+    let sent = r#""queryFrequency":"PT01H00M00S","queryPeriod":"PT02H00M00S""#;
+    assert!(baseline.contains(sent), "{baseline}");
+    for (frequency, lookback, iso) in [
+        (
+            "1m",
+            "PT2H",
+            r#""queryFrequency":"PT01M00S","queryPeriod":"PT02H00M00S""#,
+        ),
+        (
+            "PT1H",
+            "30m",
+            r#""queryFrequency":"PT01H00M00S","queryPeriod":"PT30M00S""#,
+        ),
+    ] {
+        let text = rule("")
+            .replace("frequency: PT1H", &format!("frequency: {frequency}"))
+            .replace("lookback: PT2H", &format!("lookback: {lookback}"));
+        let (body, _, _) = compile_text(&["T1562.008"], &text);
+        assert_eq!(body.to_compact(), baseline.replace(sent, iso));
+    }
 }
 
 #[test]

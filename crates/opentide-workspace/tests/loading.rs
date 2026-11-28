@@ -384,7 +384,7 @@ mod loading {
             "threats and objectives are missing"
         );
 
-        // An empty folder names none, as the oracle's `if rel:` skips it: the
+        // An empty folder names none, as opentide 0.23.0's `if rel:` skips it: the
         // workspace root is never scanned as the rule folder.
         fs.write("/ws/root-level.yaml", object("root"));
         fs.write(

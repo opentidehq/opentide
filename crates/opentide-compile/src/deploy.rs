@@ -1,7 +1,8 @@
 //! What the deployers whose body is built from a tenant share: the writes a
 //! deploy sends for one rule to one tenant, what the deployment state makes
-//! of it (create, update or delete, `deployment/external_ids.py`
-//! `plan_external_id`) and a tenant's settings.
+//! of it (create, update or delete) and a tenant's settings.
+
+use opentide_schema::platforms::PlatformKey;
 
 use crate::Context;
 use crate::json::{Json, Object};
@@ -32,7 +33,7 @@ pub const PATH_SEGMENT: &percent_encoding::AsciiSet = &percent_encoding::CONTROL
 pub struct Write {
     /// `POST`, `PUT`, `PATCH` or `DELETE`.
     pub method: &'static str,
-    /// The URL.
+    /// The URL, or the REST path for an SDK that builds the URL itself.
     pub url: String,
     /// The JSON body, `null` when the request has none.
     pub body: Json,
@@ -100,8 +101,8 @@ pub enum Action {
     Delete(String),
 }
 
-/// The strategy of `status`, or the error the oracle's `check_status` raises,
-/// in `display`'s words.
+/// The strategy of `status`, or a failure in `display`'s words that says why
+/// the status has none.
 pub fn strategy(
     cx: &Context<'_>,
     display: &str,
@@ -145,7 +146,7 @@ pub fn setup<'t>(tenant: &'t Json, key: &str) -> Option<&'t Json> {
         .filter(|value| !value.is_null())
 }
 
-/// A tenant's `name`.
+/// A tenant's `name`; empty when it is unset or not a string.
 pub fn tenant_name(tenant: &Json) -> &str {
     tenant
         .get("name")
@@ -153,18 +154,9 @@ pub fn tenant_name(tenant: &Json) -> &str {
         .unwrap_or_default()
 }
 
-/// A value as text: a string as it is, anything else as its JSON (`42`,
-/// `1.5`, `true`, `null`).
-pub fn text(value: &Json) -> String {
-    match value {
-        Json::Str(text) => text.clone(),
-        other => other.to_compact(),
-    }
-}
-
 /// A setup string, `""` when unset.
 pub fn setup_text(tenant: &Json, key: &str) -> String {
-    setup(tenant, key).map(text).unwrap_or_default()
+    setup(tenant, key).map(Json::to_text).unwrap_or_default()
 }
 
 /// A tenant's on-or-off setup value at `key`: `default` when it is unset,
@@ -183,7 +175,7 @@ pub fn setup_switch(tenant: &Json, key: &str, default: bool) -> Result<bool, Str
         )),
         Some(other) => Err(format!(
             "{key} must be true or false, got {:?}",
-            text(other)
+            other.to_text()
         )),
     }
 }
@@ -197,12 +189,12 @@ pub fn platform_config<'c>(cx: &'c Context<'_>, platform: &str) -> Option<&'c Js
 }
 
 /// The tenants configured for `platform`, in their order.
-pub fn tenants<'c>(cx: &'c Context<'_>, platform: &str) -> Vec<&'c Json> {
+pub fn tenants<'c>(cx: &'c Context<'_>, platform: &PlatformKey) -> Vec<&'c Json> {
     crate::plan::tenants(cx.config, platform)
 }
 
 /// The tenant of `platform` named `name`.
-pub fn tenant<'c>(cx: &'c Context<'_>, platform: &str, name: &str) -> Option<&'c Json> {
+pub fn tenant<'c>(cx: &'c Context<'_>, platform: &PlatformKey, name: &str) -> Option<&'c Json> {
     tenants(cx, platform)
         .into_iter()
         .find(|tenant| tenant_name(tenant) == name)
@@ -226,8 +218,8 @@ pub fn rule_value<'r>(rule: &'r Rule, path: &[&str]) -> Option<&'r Json> {
     (!value.is_null()).then_some(value)
 }
 
-/// The rule's techniques it inherits through its detection model
-/// (`techniques_resolver`), or the error the oracle's resolver raises.
+/// The rule's techniques it inherits through its detection model, or a
+/// failure in `display`'s words whose message is the missing key, quoted.
 pub fn inherited_techniques(
     cx: &Context<'_>,
     display: &str,
@@ -266,13 +258,7 @@ fn pick_techniques(
     inherited: impl FnOnce() -> Result<Vec<String>, CompileError>,
 ) -> Result<Vec<String>, CompileError> {
     let chosen = if own.is_empty() { inherited()? } else { own };
-    let mut unique: Vec<String> = Vec::with_capacity(chosen.len());
-    for id in chosen {
-        if !unique.contains(&id) {
-            unique.push(id);
-        }
-    }
-    Ok(unique)
+    Ok(opentide_core::text::unique(chosen))
 }
 
 #[cfg(test)]
@@ -308,15 +294,6 @@ mod tests {
         assert_eq!(encoded("logs-*,x_y.z~"), "logs-*,x_y.z~");
         assert_eq!(encoded("a b/c?d#e%"), "a%20b%2Fc%3Fd%23e%25");
         assert_eq!(encoded("é"), "%C3%A9");
-    }
-
-    #[test]
-    fn values_are_written_as_text_and_json() {
-        assert_eq!(text(&Json::Int(42)), "42");
-        assert_eq!(text(&Json::Str("x".into())), "x");
-        assert_eq!(text(&Json::Bool(true)), "true");
-        assert_eq!(text(&Json::Float(1.5)), "1.5");
-        assert_eq!(text(&Json::Null), "null");
     }
 
     #[test]

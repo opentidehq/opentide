@@ -1,5 +1,4 @@
-//! Status strategies (`models/deployment_enums.py`, `deployment/utils.py`):
-//! what a run deploys (`--strategy`), what a status maps to
+//! Status strategies: what a run deploys (`--strategy`), what a status maps to
 //! (`deployment.toml` `[[statuses]]`), and which runs act on which rules.
 
 use opentide_schema::FromNode;
@@ -102,7 +101,8 @@ pub fn deployment_error(deployment: &Node) -> Option<String> {
 impl Statuses {
     /// The statuses of a resolved configuration (`deployment.statuses`). When
     /// `deployment.toml` does not match its model, every lookup fails with
-    /// why, as the oracle's does.
+    /// why (`deployment.toml is invalid: ...`), so no rule is planned under
+    /// a configuration that does not read.
     pub fn from_resolved(resolved: &Resolved) -> Self {
         let mut statuses = Vec::new();
         let Some(deployment) = resolved.get("deployment") else {
@@ -286,7 +286,7 @@ mod tests {
     }
 
     #[test]
-    fn runs_act_on_the_strategies_the_oracle_says() {
+    fn each_run_acts_on_its_strategies() {
         assert!(deploys(Preview, Preview));
         assert!(deploys(Universal, Preview));
         assert!(deploys(Universal, Release));

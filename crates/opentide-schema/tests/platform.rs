@@ -1,6 +1,5 @@
 //! The platform blocks on the repository's fixtures (UC-1.4, #810), as the
-//! oracle's `tests/test_platforms/test_sysdig_model.py`
-//! (`test_fixture_blocks_validate`) and `test_elastic_model.py` read them:
+//! Pydantic models' Sysdig and Elastic tests read them:
 //! every block of `tests/fixtures/sysdig` and `tests/fixtures/elastic`
 //! validates, and the invalid Elastic fixture reports the codes its header
 //! names.

@@ -38,7 +38,7 @@ fn a_workspace_opens_and_counts_its_objects() {
         (1, 1, 10)
     );
     assert_eq!(info.load_errors, 0);
-    assert_eq!(info.platforms.len(), 13);
+    assert_eq!(info.platforms.len(), 14);
     assert!(
         info.platforms
             .iter()
@@ -92,11 +92,11 @@ impl PlatformConfigurations for AcmeBlocks {
         if block["severity"].is_u64() {
             return Vec::new();
         }
-        vec![PlatformFinding {
-            field_path: vec!["severity".to_owned()],
-            message: "Input should be a valid integer".to_owned(),
-            warning: false,
-        }]
+        vec![PlatformFinding::new(
+            vec!["severity".to_owned()],
+            "Input should be a valid integer",
+            false,
+        )]
     }
 }
 

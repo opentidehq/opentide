@@ -10,7 +10,7 @@ build-backend = "maturin"
 [project]
 name = "opentide"
 dynamic = ["version"]
-description = "Spec-driven development for agentic detection engineering: validate, generate, deploy, and document detection-as-code across thirteen security platforms."
+description = "Spec-driven development for agentic detection engineering: validate, generate, deploy, and document detection-as-code across fourteen security platforms."
 readme = "README.md"
 license = "EUPL-1.2"
 # NOTICE covers the third-party data the engine compiles in; the licence and notice
@@ -27,6 +27,8 @@ license-files = [
     "data/catalogs/cql/LICENSE-MIT.txt",
     "data/catalogs/cql/LICENSE-Unlicense.txt",
     "data/catalogs/cql/NOTICE",
+    "data/catalogs/datadog/LICENSE-BSD-3-Clause.txt",
+    "data/catalogs/datadog/NOTICE",
     "data/catalogs/bitdefender/NOTICE",
     "data/catalogs/carbon_black/NOTICE",
     "data/catalogs/exabeam/LICENSE-Apache-2.0.txt",

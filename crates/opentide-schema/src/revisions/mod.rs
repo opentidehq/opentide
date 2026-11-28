@@ -3,10 +3,10 @@
 //! registry does not hold, and the newest revision of each family.
 //!
 //! - [`SchemaId`]: `family::major.minor`, normalised and ordered
-//!   (`models/version.py` `SchemaVersion`).
+//!   by family, then major, then minor.
 //! - [`REVISIONS`]: the Tide objects (`rule::1.0`, `rule::1.1`,
 //!   `objective::1.0`, `threat::1.0`), the visibility file
-//!   (`visibility::1.0`), the nine platform blocks (`platform::<id>::1.0`) and
+//!   (`visibility::1.0`), one block per platform (`platform::<id>::1.0`) and
 //!   the MISP sharing block (`sharing::misp::1.0`); [`lookup`] and [`newest`]
 //!   answer from it, the newest being what `new` and the templates write.
 //! - [`dispatch`]: `metadata.schema` first, then that revision's conversion
@@ -31,7 +31,7 @@ pub enum Kind {
     /// A Tide object file (`objects/**/*.yaml`), selected by its
     /// `metadata.schema`.
     Object,
-    /// A configuration file that the oracle registers with the objects
+    /// A configuration file registered beside the objects
     /// (`visibility.toml`, `visibility::1.0`); its model is
     /// [`crate::configuration`]'s.
     Configuration,
@@ -50,8 +50,8 @@ pub struct Revision {
     pub identifier: &'static str,
     /// What it describes.
     pub kind: Kind,
-    /// The oracle's model class (`DetectionRule_v1_1`), which is also the
-    /// JSON Schema's title.
+    /// The model's class name (`DetectionRule_v1_1`): the JSON Schema's
+    /// title, and the Python class the package exposes.
     pub model: &'static str,
 }
 
@@ -65,9 +65,8 @@ impl Revision {
         SchemaId::parse(self.identifier).expect("a registered identifier parses")
     }
 
-    /// Whether the oracle's object registry holds it
-    /// (`schema_registry.is_registered`): the identifiers `metadata.schema`
-    /// accepts, [`crate::objects::checks::REGISTERED`].
+    /// Whether the object registry holds it: the identifiers
+    /// `metadata.schema` accepts, [`crate::objects::checks::REGISTERED`].
     pub fn in_object_registry(&self) -> bool {
         matches!(self.kind, Kind::Object | Kind::Configuration)
     }
@@ -100,6 +99,7 @@ pub const REVISIONS: &[Revision] = &[
         Kind::Platform,
         "CrowdstrikeConfig",
     ),
+    revision("platform::datadog::1.0", Kind::Platform, "DatadogConfig"),
     revision("platform::elastic::1.0", Kind::Platform, "ElasticConfig"),
     revision("platform::exabeam::1.0", Kind::Platform, "ExabeamConfig"),
     revision(

@@ -1,4 +1,4 @@
-//! YAML object skeletons (`pydantic_skeleton.py`), rendered from a model's
+//! YAML object skeletons, rendered from a model's
 //! JSON Schema (schemars) and its field order ([`super::models`]).
 //!
 //! Required fields are live YAML; an optional field is the same YAML with
@@ -145,8 +145,7 @@ impl<'s> Walker<'s> {
     }
 
     /// Optional and `$ref` seen through; of a union, a list, else a model,
-    /// else the first member that is not `Any` (`_unwrap_annotation`,
-    /// `_pick_union`).
+    /// else the first member that is not `Any`.
     fn core(&self, schema: &'s Value, depth: usize) -> Result<Core<'s>, TemplateError> {
         if depth > 16 {
             return Err(TemplateError("a schema refers to itself".to_owned()));
@@ -517,7 +516,7 @@ fn format_default(default: Option<&Value>) -> Option<String> {
     default.map(format_scalar)
 }
 
-/// `_format_scalar`.
+/// A default value as the template writes it.
 fn format_scalar(value: &Value) -> String {
     match value {
         Value::Bool(true) => "true".to_owned(),
@@ -528,7 +527,7 @@ fn format_scalar(value: &Value) -> String {
     }
 }
 
-/// `_format_string`: bare when YAML reads it back as the same string, else
+/// Bare when YAML reads it back as the same string, else
 /// double-quoted.
 fn format_string(value: &str) -> String {
     if value.is_empty() {
@@ -550,7 +549,7 @@ fn format_string(value: &str) -> String {
     quoted()
 }
 
-/// `_scalar_placeholder`: `extras` is the field's own schema (its `tide.*`
+/// `extras` is the field's own schema (its `tide.*`
 /// keys and `format`), `schema` the type's.
 fn scalar_placeholder(
     name: &str,
@@ -610,7 +609,7 @@ fn scalar_placeholder(
     }
 }
 
-/// `_list_item_lines`: `- ` on the first body line, at the item's indent.
+/// `- ` on the first body line, at the item's indent.
 fn list_item_lines(body: &[String], item_indent: usize) -> Vec<String> {
     let pad = " ".repeat(item_indent);
     let Some((first, rest)) = body.split_first() else {
@@ -621,7 +620,7 @@ fn list_item_lines(body: &[String], item_indent: usize) -> Vec<String> {
     lines
 }
 
-/// `_comment_hug_keys`: `#` before each line's first token; blank lines stay
+/// `#` before each line's first token; blank lines stay
 /// blank and a commented line stays as it is.
 fn hug(lines: Vec<String>) -> Vec<String> {
     lines
@@ -634,8 +633,8 @@ fn hug(lines: Vec<String>) -> Vec<String> {
             if rest.starts_with('#') {
                 return line;
             }
-            let spaces = line.len() - rest.len();
-            format!("{}#{rest}", &line[..spaces])
+            let indent = " ".repeat(line.len() - rest.len());
+            format!("{indent}#{rest}")
         })
         .collect()
 }
@@ -651,11 +650,11 @@ pub fn uncomment_optional_blocks(text: &str) -> String {
             None => (line, ""),
         };
         let rest = body.trim_start_matches(' ');
-        let spaces = body.len() - rest.len();
+        let indent = body.len() - rest.len();
         if !body.trim().is_empty()
             && let Some(uncommented) = rest.strip_prefix('#')
         {
-            out.push_str(&body[..spaces]);
+            out.extend(std::iter::repeat_n(' ', indent));
             out.push_str(uncommented);
         } else {
             out.push_str(body);

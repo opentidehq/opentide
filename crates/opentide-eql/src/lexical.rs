@@ -4,12 +4,12 @@
 use opentide_core::ByteSpan;
 
 /// Depth limit of `EqlParser.MAX_EXPRESSION_DEPTH`.
-pub(crate) const MAX_EXPRESSION_DEPTH: i64 = 250;
+pub const MAX_EXPRESSION_DEPTH: i64 = 250;
 
 /// How Elasticsearch reads one `/* ... */` comment, when that differs from
 /// the grammar's first-`*/` rule.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum CommentFinding {
+pub enum CommentFinding {
     /// Elasticsearch nests this comment; it ends later than the first `*/`.
     Nested(ByteSpan),
     /// Elasticsearch does not read a comment here: `/` and `*` become
@@ -19,17 +19,20 @@ pub(crate) enum CommentFinding {
 
 /// What a scan of the source finds about its block comments (the lexer itself ends a
 /// comment where Elasticsearch's lexer does, nested ones too).
-pub(crate) struct Prepared {
+pub struct Prepared {
     pub comments: Vec<CommentFinding>,
 }
 
-pub(crate) fn prepare(source: &str) -> Prepared {
+pub fn prepare(source: &str) -> Prepared {
+    use crate::cut;
+    // `i` stops on ASCII bytes (quotes, backticks, `/`) or past a run that
+    // ends on one: a char boundary.
     let bytes = source.as_bytes();
     let mut comments = Vec::new();
     let mut i = 0;
     while i < bytes.len() {
         match bytes[i] {
-            b'"' if source[i..].starts_with("\"\"\"") => match raw_string_end(source, i) {
+            b'"' if bytes[i..].starts_with(b"\"\"\"") => match raw_string_end(source, i) {
                 Some(end) => i = end,
                 None => break,
             },
@@ -56,14 +59,20 @@ pub(crate) fn prepare(source: &str) -> Prepared {
                 i = j + 1;
             }
             b'/' if bytes.get(i + 1) == Some(&b'/') => {
-                i = source[i..].find('\n').map_or(bytes.len(), |n| i + n + 1);
+                i = bytes[i..]
+                    .iter()
+                    .position(|&b| b == b'\n')
+                    .map_or(bytes.len(), |n| i + n + 1);
             }
             b'/' if bytes.get(i + 1) == Some(&b'*') => {
                 // The grammar ends a block comment at the first `*/`.
-                let Some(first) = source[i + 2..].find("*/").map(|n| i + 2 + n + 2) else {
+                let Some(first) = cut(source, i + 2, source.len())
+                    .find("*/")
+                    .map(|n| i + 2 + n + 2)
+                else {
                     break;
                 };
-                if !source[i + 2..first - 1].contains("/*") {
+                if !cut(source, i + 2, first - 1).contains("/*") {
                     i = first;
                     continue;
                 }
@@ -88,9 +97,11 @@ pub(crate) fn prepare(source: &str) -> Prepared {
 /// End of a `"""` string: content runs to the first `"""` on the same line,
 /// and up to two more `"` belong to the value.
 fn raw_string_end(source: &str, start: usize) -> Option<usize> {
-    let rest = &source[start + 3..];
-    let close = rest.find("\"\"\"")?;
-    if rest[..close].contains(['\r', '\n']) {
+    // Past the opening `"""`.
+    let rest = crate::cut(source, start + 3, source.len());
+    let (content, _) = rest.split_once("\"\"\"")?;
+    let close = content.len();
+    if content.contains(['\r', '\n']) {
         return None;
     }
     let mut end = start + 3 + close + 3;
@@ -181,7 +192,7 @@ mod tests {
 
     fn end(src: &str) -> Option<&str> {
         let start = src.find("/*")?;
-        es_comment_end(src.as_bytes(), start).map(|e| &src[start..e])
+        es_comment_end(src.as_bytes(), start).map(|e| src.get(start..e).unwrap())
     }
 
     /// Cases checked against the generated `EqlBaseLexer` (ANTLR 4.13).

@@ -1,0 +1,24 @@
+name: Defender columns unprojected
+metadata:
+  uuid: 00000000-0000-4000-8185-000000000002
+  schema: rule::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: A custom detection whose query returns every column of its table.
+response:
+  alert_severity: High
+configurations:
+  microsoft_defender:
+    status: STAGING
+    query: |
+      DeviceEvents
+      | where ActionType == "PowerShellCommand"
+    schedule:
+      frequency: 1H
+    alert:
+      title: Defender columns unprojected
+    entities:
+      accounts:
+        - upn: InitiatingProcessAccountUpn

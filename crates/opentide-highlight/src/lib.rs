@@ -11,6 +11,7 @@
     reason = "imported from language-server with public items undocumented: crates/AGENTS.md, Lints"
 )]
 
+mod engine;
 mod function_names;
 mod keywords;
 mod markdown;
@@ -23,11 +24,22 @@ pub use tide_grammar::{
 mod tm_extras;
 
 use opentide_core::{ByteSpan, LanguageId, LineIndex, Range};
+
+/// `text[start..end]`, a range this crate is given or computes: a token's
+/// bounds, a character's, or an ASCII byte's, so its ends are char
+/// boundaries. A range that is not fails a debug assertion and reads as
+/// empty.
+pub(crate) fn cut(text: &str, start: usize, end: usize) -> &str {
+    let piece = text.get(start..end);
+    debug_assert!(piece.is_some(), "{start}..{end} in {} bytes", text.len());
+    piece.unwrap_or_default()
+}
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex, OnceLock, RwLock};
 use thiserror::Error;
 
+pub use engine::{AnalyzeResult, Profile, QueryEngine, Setting};
 pub use keywords::{Capture, Keywords, keywords};
 pub use markdown::highlight_markdown_line;
 use tide_model::Repr;
@@ -810,14 +822,15 @@ pre{margin:0;white-space:pre-wrap}
         }
         let start = t.span.start.min(source.len());
         let end = t.span.end.min(source.len());
-        html.push_str(&html_escape(&source[last..start]));
+        // The engines' tokens start and end on char boundaries.
+        html.push_str(&html_escape(cut(source, last, start)));
         let class = t.capture.replace('.', "-");
         html.push_str(&format!("<span class=\"{class}\">"));
-        html.push_str(&html_escape(&source[start..end]));
+        html.push_str(&html_escape(cut(source, start, end)));
         html.push_str("</span>");
         last = end;
     }
-    html.push_str(&html_escape(&source[last..]));
+    html.push_str(&html_escape(cut(source, last, source.len())));
     html.push_str("</pre>");
     html
 }
@@ -960,10 +973,17 @@ fn generate_tm_language_from(
         // pattern and `docker/* foo=1` is a value and a pair (the engine's
         // lexer reads `/*` as a comment only when it is terminated).
         LanguageId::Cql => Some(concat!(token_start!(), "(?://.*$|/\\*[\\s\\S]*?\\*/)")),
-        // Kibana KQL, Lucene, Falco conditions and the Exabeam Query
-        // Language have no comment syntax.
-        LanguageId::Kuery | LanguageId::Lucene | LanguageId::Falco | LanguageId::Exabeam => None,
+        // Kibana KQL, Lucene, Falco conditions, the Exabeam Query Language
+        // and the Datadog search syntax have no comment syntax.
+        LanguageId::Kuery
+        | LanguageId::Lucene
+        | LanguageId::Falco
+        | LanguageId::Exabeam
+        | LanguageId::Datadog => None,
         LanguageId::Config => Some("(?m)^\\s*#.*$"),
+        // `LanguageId` is non-exhaustive: a language added later gets no
+        // comment pattern until it is given one here.
+        _ => None,
     };
     if let Some(comment_match) = comment_match {
         patterns.push(serde_json::json!({
@@ -1002,10 +1022,7 @@ fn generate_tm_language_from(
     if language == LanguageId::TideYaml {
         patterns.extend(tide_grammar::structure_rules(spec));
         for (capture, regex) in [
-            (
-                "tide.uuid",
-                "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
-            ),
+            ("tide.uuid", opentide_core::ids::PATTERN),
             ("tide.schema", "\\b[A-Za-z][A-Za-z0-9_]*::[0-9.]+"),
             ("boolean", "(?<![A-Za-z0-9_])(?:true|false)(?![A-Za-z0-9_])"),
         ] {
@@ -1042,9 +1059,15 @@ fn generate_tm_language_from(
             "comment": "capture:number",
         }));
     } else {
+        // Datadog's search syntax quotes with `"` only: `'` is a term's character.
+        let string_match = if language == LanguageId::Datadog {
+            "\"(\\\\.|[^\"\\\\])*\"?"
+        } else {
+            "\"(\\\\.|[^\"\\\\])*\"|'(\\\\.|[^'\\\\])*'"
+        };
         patterns.push(serde_json::json!({
             "name": string_tm,
-            "match": "\"(\\\\.|[^\"\\\\])*\"|'(\\\\.|[^'\\\\])*'",
+            "match": string_match,
             "comment": "capture:string",
         }));
         patterns.push(serde_json::json!({
@@ -1567,6 +1590,29 @@ mod tests {
         assert!(html.contains("#4fc1ff"));
         assert!(html.contains(".markdown-heading"));
         assert!(html.contains(".macro"));
+    }
+
+    #[test]
+    fn html_keeps_multi_byte_text_around_its_tokens() {
+        let spec = HighlightSpec::load().unwrap();
+        let src = "é😀 | é <😀>";
+        let tokens = tokens_from_spans(
+            &spec,
+            src,
+            &[
+                (ByteSpan::new(0, 6), "type"),
+                (ByteSpan::new(7, 8), "operator.pipe"),
+                (ByteSpan::new(9, 11), "keyword"),
+            ],
+        )
+        .unwrap();
+        let html = tokens_to_html(src, &tokens);
+        assert!(html.contains("<span class=\"type\">é😀</span>"), "{html}");
+        assert!(
+            html.contains("<span class=\"keyword\">é</span> &lt;😀&gt;"),
+            "{html}"
+        );
+        assert_eq!(cut("é😀x", 2, 7), "😀x");
     }
 
     #[test]

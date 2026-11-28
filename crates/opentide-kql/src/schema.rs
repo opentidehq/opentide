@@ -22,8 +22,9 @@
 //!
 //! The pass never reports on a query that does not parse.
 
-use crate::{Catalog, Profile, tables};
+use crate::{Catalog, Dialect, tables};
 use foldhash::{HashMap, HashMapExt, HashSet};
+use opentide_core::datasets::glob_matches;
 use opentide_core::{ByteSpan, Diagnostic, codes};
 use std::collections::BTreeSet;
 use std::hash::BuildHasher;
@@ -722,29 +723,6 @@ fn reshaped(input: Known) -> Known {
     }
 }
 
-/// Whether `name` matches a column pattern: `*` stands for any run of
-/// characters, everything else matches itself (case-sensitive, as Kusto
-/// column names are).
-fn glob_matches(pattern: &str, name: &str) -> bool {
-    let mut parts = pattern.split('*');
-    let first = parts.next().unwrap_or("");
-    let Some(mut rest) = name.strip_prefix(first) else {
-        return false;
-    };
-    let parts: Vec<&str> = parts.collect();
-    let Some((last, middle)) = parts.split_last() else {
-        // No `*` at all: the pattern is a plain name.
-        return rest.is_empty();
-    };
-    for part in middle {
-        match rest.find(part) {
-            Some(at) => rest = &rest[at + part.len()..],
-            None => return false,
-        }
-    }
-    rest.len() >= last.len() && rest.ends_with(last)
-}
-
 /// The keyword an operator node is written with.
 fn operator_keyword(kind: &str) -> &'static str {
     match kind {
@@ -878,7 +856,7 @@ fn build_table_schema(catalog: &Catalog, name: &str) -> Option<Schema> {
         ..Schema::open()
     };
     // Every Log Analytics table has the standard columns.
-    if catalog.profile == Profile::Sentinel && table.documented {
+    if catalog.profile == Dialect::Sentinel && table.documented {
         for (column, type_name) in tables::STANDARD_COLUMNS {
             if !schema.has(column) {
                 Arc::make_mut(&mut schema.columns).push(Arc::new(
@@ -1113,7 +1091,7 @@ pub(crate) fn primary_type(primary: &Primary<'_>, input: &Schema) -> Option<Stri
         Primary::Dynamic => Some("dynamic".into()),
         // `datetime(2024-01-01)`, `long(null)`: the literal's type.
         Primary::Typed(text) => {
-            let name = text[..text.find('(')?].trim().to_ascii_lowercase();
+            let name = text.split_once('(')?.0.trim().to_ascii_lowercase();
             Some(match name.as_str() {
                 "date" => "datetime".into(),
                 "time" => "timespan".into(),
@@ -1287,7 +1265,6 @@ pub(crate) fn unknown_column(
 
 #[cfg(test)]
 pub(crate) mod tests {
-    use super::glob_matches;
     use super::{Column, Columns, Schema, Source, merge_union};
     use std::sync::Arc;
 
@@ -1298,7 +1275,7 @@ pub(crate) mod tests {
     /// bundled catalog's), and a copy of it builds its own again.
     #[test]
     fn a_declared_catalog_keeps_its_own_schemas() {
-        use crate::{Catalog, Profile};
+        use crate::{Catalog, Dialect};
         use std::sync::Arc;
         let declared = opentide_core::datasets::DeclaredDatasets::from_visibility(
             "[[logsources]]\nname = \"SecurityEvent\"\ndescription = \"x\"\n\
@@ -1306,7 +1283,7 @@ pub(crate) mod tests {
         )
         .expect("visibility.toml");
         let sources: Vec<_> = declared.sources_with_columns("sentinel").cloned().collect();
-        let bundled = Catalog::cached(Profile::Sentinel);
+        let bundled = Catalog::cached(Dialect::Sentinel);
         let catalog = bundled.with_declared_columns(&sources, &[]);
         let has = |schema: &Schema, name: &str| schema.columns.iter().any(|c| c.name == name);
 
@@ -1406,7 +1383,7 @@ pub(crate) mod tests {
             ("1000 `count()`", items("count()", 1000)),
         ] {
             NAMES_COMPARED.with(|c| c.set(0));
-            let analysis = crate::columns(&q, crate::Profile::Sentinel);
+            let analysis = crate::columns(&q, crate::Dialect::Sentinel);
             let compared = NAMES_COMPARED.with(std::cell::Cell::get);
             let made: usize = analysis
                 .pipelines
@@ -1503,7 +1480,7 @@ pub(crate) mod tests {
             let compared = |n: usize| {
                 let q = query(n);
                 NAMES_COMPARED.with(|c| c.set(0));
-                let _ = crate::columns(&q, crate::Profile::Core);
+                let _ = crate::columns(&q, crate::Dialect::Core);
                 NAMES_COMPARED.with(std::cell::Cell::get)
             };
             let (small, large) = (compared(1_000), compared(2_000));
@@ -1858,21 +1835,5 @@ pub(crate) mod tests {
         /// The pipelines [`super::Analysis::pipeline`] scanned on this thread.
         pub(crate) static PIPELINES_SCANNED: std::cell::Cell<usize> =
             const { std::cell::Cell::new(0) };
-    }
-
-    #[test]
-    fn column_patterns_glob_over_names() {
-        assert!(glob_matches("*", "Anything"));
-        assert!(glob_matches("User*", "UserPrincipalName"));
-        assert!(glob_matches("User*", "User"));
-        assert!(glob_matches("*Id", "TenantId"));
-        assert!(glob_matches("Device*Name", "DeviceName"));
-        assert!(glob_matches("Device*Name", "DeviceHostName"));
-        assert!(glob_matches("a*b*c", "aXbYc"));
-        assert!(!glob_matches("User*", "user"));
-        assert!(!glob_matches("User*", "AppUser"));
-        assert!(!glob_matches("*Id", "Identity"));
-        assert!(!glob_matches("a*a", "a"));
-        assert!(!glob_matches("a*b*c", "acb"));
     }
 }

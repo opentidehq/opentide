@@ -430,7 +430,7 @@ mod tests {
         if !cfg!(windows) {
             assert_eq!(exit_status(&["check"]), 0);
         }
-        // `record` was retired with the oracle (#1142).
+        // `record` was retired with the Python CLI (#1142).
         assert_eq!(exit_status(&["record"]), 2);
     }
 

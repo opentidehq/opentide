@@ -1,9 +1,9 @@
 //! Sysdig against the cassette the Python deployer recorded
 //! (`tests/cassettes/sysdig/deploy.json`): the tide corpus's Falco rule,
-//! compiled here by `opentide-compile` as the oracle compiled it (its macros
+//! compiled here by `opentide-compile` as opentide 0.23.0 compiled it (its macros
 //! and lists expanded into the condition), goes through the same ten steps
 //! as `client.py`, and every request is the Python deployer's, in order
-//! (a JSON body as the same data); each step changes deployment state as the oracle's did
+//! (a JSON body as the same data); each step changes deployment state as opentide 0.23.0's did
 //! (the outcomes `client.py` printed when it recorded).
 
 #![expect(clippy::unwrap_used, reason = "a test: a failed set-up is a failure")]
@@ -470,7 +470,7 @@ fn local_with(
     extra: &str,
 ) -> (opentide_connectors::Tenant, opentide_connectors::HttpClient) {
     let env = opentide_connectors::Environment::from_pairs([(TOKEN.0, TOKEN.1)]);
-    let setup: toml::Table = toml::from_str(&format!(
+    let setup: opentide_core::json::Object = toml::from_str(&format!(
         "url = \"{}\"\napi_token = \"$SYSDIG_SECURE_API_TOKEN\"\n{extra}",
         server.uri()
     ))

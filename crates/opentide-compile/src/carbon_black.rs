@@ -1,6 +1,6 @@
 //! Carbon Black Cloud: the watchlist report a deploy creates on one tenant
-//! for a rule (`platforms/carbon_black/deployer.py` `_deploy_to_org`, through
-//! the Carbon Black SDK's `Report.create(...).build().save_watchlist()`).
+//! for a rule, the body the Carbon Black SDK's
+//! `Report.create(...).build().save_watchlist()` sends.
 //!
 //! What else a deploy does depends on what the org already holds (a report
 //! of the same title is updated in place, its IOCs replaced or removed), so
@@ -37,6 +37,8 @@ fn severity(name: &str) -> Result<i64, CompileError> {
 /// the status deploys or retires it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Report {
+    /// The rule's UUID, its IOC's id.
+    pub uuid: String,
     /// The rule's name, trimmed.
     pub name: String,
     /// The rule's description, trimmed.
@@ -80,11 +82,11 @@ pub fn report(
     let mut tags: Vec<String> = vec![status.to_owned()];
     if let Some(model) = deploy::rule_value(rule, &["detection_model"]).filter(|m| m.is_name()) {
         let techniques = deploy::inherited_techniques(cx, DISPLAY, rule)?;
-        tags.push(deploy::text(model));
+        tags.push(Json::to_text(model));
         tags.extend(techniques);
     }
     if let Some(Json::Array(items)) = block.get("tags") {
-        tags.extend(items.iter().map(deploy::text));
+        tags.extend(items.iter().map(Json::to_text));
     }
     let alert_severity = if rule.response().is_some() {
         rule.alert_severity()
@@ -93,6 +95,7 @@ pub fn report(
     };
     let name = rule.name.trim().to_owned();
     Ok(Some(Report {
+        uuid: rule.uuid.clone(),
         description: rule.description().trim().to_owned(),
         query: query.replace('\n', " "),
         deployment: !matches!(
@@ -106,14 +109,43 @@ pub fn report(
             .filter(|value| value.is_filled())
             .or_else(|| deploy::setup(tenant, "watchlist"))
             .filter(|value| value.is_filled())
-            .map(deploy::text)
+            .map(Json::to_text)
             .unwrap_or_default(),
         report: block
             .get("report")
             .filter(|value| value.is_filled())
-            .map_or_else(|| name.clone(), deploy::text),
+            .map_or_else(|| name.clone(), Json::to_text),
         name,
     }))
+}
+
+/// A rule compiled for one tenant ([`crate::compiler::CarbonBlack`]): the
+/// report a deploy hands the Deployer ([`report`]), or `None` for a block
+/// with no query.
+pub type Compiled = Option<Report>;
+
+/// The body a deploy sends the Deployer for the `compiled` report: its
+/// fields (`uuid`, `name`, `description`, `query`, `tags`, `severity`,
+/// `watchlist`, `report`) in the order serde_json's sorted map writes them,
+/// or `null` for no report. Whether the report is deployed or its IOC
+/// retired is the request's operation, not the body's.
+pub fn deploy_body(compiled: &Compiled) -> Json {
+    let Some(report) = compiled else {
+        return Json::Null;
+    };
+    let mut body = Object::new();
+    body.insert("description".into(), report.description.clone().into());
+    body.insert("name".into(), report.name.clone().into());
+    body.insert("query".into(), report.query.clone().into());
+    body.insert("report".into(), report.report.clone().into());
+    body.insert("severity".into(), Json::Int(report.severity));
+    body.insert(
+        "tags".into(),
+        Json::Array(report.tags.iter().cloned().map(Json::Str).collect()),
+    );
+    body.insert("uuid".into(), report.uuid.clone().into());
+    body.insert("watchlist".into(), report.watchlist.clone().into());
+    Json::Object(body)
 }
 
 /// The writes a deploy sends for `rule` to `tenant` when the org holds no
@@ -123,81 +155,52 @@ pub fn report(
 /// `<tenant-read:watchlist_id>`, `<tenant-read:watchlist>`), or none for a
 /// rule to retire or a block with no query. Without a `timestamp` (a
 /// dry run), the report's is the placeholder `<send-time:timestamp>`: the
-/// deploy stamps it as it sends.
+/// deploy stamps it as it sends. The report is the one the deploy sends
+/// ([`crate::compiler::CarbonBlack`]).
 pub fn compile(
     cx: &Context<'_>,
     rule: &Rule,
     tenant: &Json,
     timestamp: Option<i64>,
 ) -> Result<Vec<Write>, CompileError> {
-    let Some(block) = rule.block(PLATFORM).filter(|block| block.is_filled()) else {
-        return Ok(Vec::new());
-    };
-    let query = block
-        .get("query")
-        .and_then(Json::as_str)
-        .unwrap_or_default();
-    if query.is_empty() {
-        return Ok(Vec::new());
+    use crate::compiler::{CarbonBlack, Compiler};
+    match CarbonBlack::compile(cx, rule, tenant)? {
+        Some(report) => writes(&report, tenant, timestamp),
+        None => Ok(Vec::new()),
     }
-    let name = rule.name.trim();
-    let description = rule.description().trim();
-    let status = block
-        .get("status")
-        .and_then(Json::as_str)
-        .unwrap_or_default();
-    let query = query.replace('\n', " ");
-    let strategy = deploy::strategy(cx, DISPLAY, status)?;
-    let deployment = !matches!(
-        strategy,
-        StatusStrategy::Disablement | StatusStrategy::Deletion
-    );
-    let mut tags: Vec<String> = vec![status.to_owned()];
-    if let Some(model) = deploy::rule_value(rule, &["detection_model"]).filter(|m| m.is_name()) {
-        let techniques = deploy::inherited_techniques(cx, DISPLAY, rule)?;
-        tags.push(deploy::text(model));
-        tags.extend(techniques);
-    }
-    if let Some(Json::Array(items)) = block.get("tags") {
-        tags.extend(items.iter().map(deploy::text));
-    }
-    let alert_severity = if rule.response().is_some() {
-        rule.alert_severity()
-    } else {
-        "Low"
-    };
-    let severity = severity(alert_severity)?;
-    let watchlist = block
-        .get("watchlist")
-        .filter(|value| value.is_filled())
-        .or_else(|| deploy::setup(tenant, "watchlist"))
-        .filter(|value| value.is_filled())
-        .map(deploy::text)
-        .unwrap_or_default();
-    let report = block
-        .get("report")
-        .filter(|value| value.is_filled())
-        .map_or_else(|| name.to_owned(), deploy::text);
-    if watchlist.is_empty() {
+}
+
+/// The writes of [`compile`] for `report`: none when it is retired, and a
+/// failure when no watchlist names where it goes.
+fn writes(
+    report: &Report,
+    tenant: &Json,
+    timestamp: Option<i64>,
+) -> Result<Vec<Write>, CompileError> {
+    if report.watchlist.is_empty() {
         return Err(CompileError::failed(
             DISPLAY,
             &format!(
                 "The CBC Deployer cannot create a detection in a nonexistent Watchlist: \
-                 {watchlist}. Create it on the console before retriggering deployment."
+                 {}. Create it on the console before retriggering deployment.",
+                report.watchlist
             ),
         ));
     }
-    if !deployment {
+    if !report.deployment {
         return Ok(Vec::new());
     }
     let mut ioc = Object::new();
-    ioc.insert("id".into(), rule.uuid.clone().into());
+    ioc.insert("id".into(), report.uuid.clone().into());
     ioc.insert("match_type".into(), "query".into());
-    ioc.insert("values".into(), Json::Array(vec![query.into()]));
+    ioc.insert(
+        "values".into(),
+        Json::Array(vec![report.query.clone().into()]),
+    );
     let mut body = Object::new();
-    body.insert("title".into(), report.into());
-    body.insert("description".into(), description.into());
-    body.insert("severity".into(), Json::Int(severity));
+    body.insert("title".into(), report.report.clone().into());
+    body.insert("description".into(), report.description.clone().into());
+    body.insert("severity".into(), Json::Int(report.severity));
     body.insert(
         "timestamp".into(),
         timestamp.map_or_else(|| deploy::send_time("timestamp").into(), Json::Int),
@@ -205,7 +208,9 @@ pub fn compile(
     body.insert(
         "tags".into(),
         Json::Array(
-            tags.iter()
+            report
+                .tags
+                .iter()
                 .map(|tag| Json::Str(tag.trim().to_owned()))
                 .collect(),
         ),
@@ -240,6 +245,73 @@ mod tests {
         assert_eq!(
             severity("x").unwrap_err().reason,
             "Carbon Black Cloud cannot compile this rule: \"x\""
+        );
+    }
+
+    fn report() -> Report {
+        Report {
+            uuid: "00000000-0000-4000-8000-000000000001".into(),
+            name: "Ré 😀".into(),
+            description: "d\"é".into(),
+            query: "process_name:cmd.exe".into(),
+            deployment: true,
+            tags: vec!["STAGING".into(), " t1059 ".into()],
+            severity: 8,
+            watchlist: "W".into(),
+            report: "Ré 😀".into(),
+        }
+    }
+
+    /// The body the deploy sends is the bytes it wrote with serde_json
+    /// before it was the compiler's (#1952): the report's fields, sorted.
+    #[test]
+    fn the_deploy_body_is_the_reports_fields() {
+        let report = report();
+        let before = serde_json::json!({
+            "uuid": report.uuid,
+            "name": report.name,
+            "description": report.description,
+            "query": report.query,
+            "tags": report.tags,
+            "severity": report.severity,
+            "watchlist": report.watchlist,
+            "report": report.report,
+        });
+        assert_eq!(
+            deploy_body(&Some(report)).to_compact(),
+            serde_json::to_string(&before).unwrap()
+        );
+        assert_eq!(deploy_body(&None), Json::Null);
+    }
+
+    /// The dry run's writes are the deploy's report: its IOC, title and
+    /// tags (trimmed); none when it is retired; a failure with no watchlist.
+    #[test]
+    fn the_writes_are_the_reports() {
+        let tenant = Json::Null;
+        let written = writes(&report(), &tenant, Some(7)).unwrap();
+        assert_eq!(written.len(), 2);
+        let body = &written[0].body;
+        assert_eq!(body.get("title").and_then(Json::as_str), Some("Ré 😀"));
+        assert_eq!(body.get("timestamp"), Some(&Json::Int(7)));
+        assert_eq!(
+            body.get("tags"),
+            Some(&Json::Array(vec!["STAGING".into(), "t1059".into()]))
+        );
+        let retired = Report {
+            deployment: false,
+            ..report()
+        };
+        assert!(writes(&retired, &tenant, None).unwrap().is_empty());
+        let nowhere = Report {
+            watchlist: String::new(),
+            ..retired
+        };
+        assert!(
+            writes(&nowhere, &tenant, None)
+                .unwrap_err()
+                .reason
+                .contains("nonexistent Watchlist")
         );
     }
 }

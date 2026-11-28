@@ -249,29 +249,18 @@ pub trait Sources {
 /// `text` split at the line breaks YAML counts (`\r\n`, `\r`, `\n`), a last empty line dropped.
 pub fn split_yaml_lines(text: &str) -> Vec<&str> {
     let mut lines = Vec::new();
-    let mut start = 0;
-    let bytes = text.as_bytes();
-    let mut index = 0;
-    while index < bytes.len() {
-        match bytes[index] {
-            b'\r' => {
-                lines.push(&text[start..index]);
-                index += if bytes.get(index + 1) == Some(&b'\n') {
-                    2
-                } else {
-                    1
-                };
-                start = index;
-            }
-            b'\n' => {
-                lines.push(&text[start..index]);
-                index += 1;
-                start = index;
-            }
-            _ => index += 1,
-        }
+    let mut rest = text;
+    while let Some((line, after)) = rest.split_once(['\r', '\n']) {
+        lines.push(line);
+        // `\r\n` is one break; the byte after `line` is the one it split at.
+        let carriage_return = rest.as_bytes().get(line.len()) == Some(&b'\r');
+        rest = if carriage_return {
+            after.strip_prefix('\n').unwrap_or(after)
+        } else {
+            after
+        };
     }
-    lines.push(&text[start..]);
+    lines.push(rest);
     if lines.last() == Some(&"") {
         lines.pop();
     }
@@ -322,6 +311,12 @@ mod tests {
     fn yaml_lines_and_spans() {
         assert_eq!(split_yaml_lines("a\r\nb\rc\n"), ["a", "b", "c"]);
         assert_eq!(split_yaml_lines("a\u{2028}b"), ["a\u{2028}b"]);
+        // #1946: the breaks are found between characters, whatever they are.
+        assert_eq!(
+            split_yaml_lines("é😀\r\n\r😀\n\n\ré"),
+            ["é😀", "", "😀", "", "", "é"]
+        );
+        assert_eq!(split_yaml_lines("\r\r\n"), ["", ""]);
         assert_eq!(split_yaml_lines(""), Vec::<&str>::new());
         let mut item = Diagnostic::new("x", Severity::Error, "m");
         item.line = Some(3);

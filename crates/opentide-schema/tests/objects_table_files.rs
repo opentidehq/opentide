@@ -20,7 +20,7 @@ fn repo() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 
-/// The table's `file:` cases: (repository path, text the oracle read).
+/// The table's `file:` cases: (repository path, text the Pydantic models read).
 fn files() -> Vec<(String, String)> {
     let Ok(table) = serde_json::from_str::<Json>(TABLE) else {
         panic!("objects_table.json is not JSON: run objects_table.py");

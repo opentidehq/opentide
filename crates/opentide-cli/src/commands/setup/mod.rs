@@ -1,7 +1,6 @@
-//! `opentide setup ci <provider>` (`cli/setup_app.py`,
-//! `cli/services/setup/ci.py`, `cli/services/setup/promotion.py`): writes
-//! the CI pipeline `opentide-compile`'s `ci` templates render for the
-//! platforms the repository enables, and the `[promotion]` override
+//! `opentide setup ci <provider>`: writes the CI pipeline
+//! `opentide-compile`'s `ci` templates render for the platforms the
+//! repository enables, and the `[promotion]` override
 //! `deploy` reads when `--promotion` or `--promotion-target` asks for one.
 //!
 //! `--plan` lists the files the step would write (`create` or `merge`)
@@ -10,6 +9,7 @@
 //! terminal) is refused with `usage_needs_input`.
 
 pub mod args;
+pub mod desktop;
 pub mod files;
 pub mod hooks;
 pub mod jsonc;
@@ -24,13 +24,15 @@ use std::path::{Path, PathBuf};
 
 use indexmap::IndexMap;
 use opentide_compile::ci::{self, Provider};
+use opentide_core::text::unique;
 use opentide_schema::configuration::resolve::Resolved;
 use opentide_schema::node::Value;
 
 use super::{Block, Report, USAGE_INVALID_VALUE};
+use crate::commands::result::{ExitCode, Status};
 use crate::env::Env;
-use crate::envelope::{Failure, USAGE_EXIT_CODE};
-use crate::json::Json;
+use crate::envelope::Failure;
+use crate::json::{Json, Object};
 use crate::mode::Mode;
 use crate::render::outcome::OutcomeKind;
 use crate::render::table::columns;
@@ -59,7 +61,7 @@ pub const USAGE_NEEDS_INPUT: &str = "usage_needs_input";
     reason = "the command's switches, one field each"
 )]
 pub struct CiArgs {
-    /// The provider.
+    /// The CI provider to write the pipeline for (`setup ci <provider>`).
     pub provider: Provider,
     /// `--path`, when given to the command.
     pub path: Option<String>,
@@ -138,7 +140,7 @@ pub(crate) fn bad_parameter(message: &str, hint: &[&str], argument: Option<&str>
     };
     let mut failure = Failure::new(USAGE_INVALID_VALUE, shown);
     failure.argument = argument.map(str::to_owned);
-    Box::new(Report::failed(COMMAND, USAGE_EXIT_CODE, failure))
+    Box::new(Report::failed(COMMAND, ExitCode::Usage, failure))
 }
 
 /// A prompt nobody can answer: exit 2 naming the flag that answers it.
@@ -146,7 +148,7 @@ pub(crate) fn bad_parameter(message: &str, hint: &[&str], argument: Option<&str>
 pub(crate) fn needs_input_for(command: &str, message: String) -> Box<Report> {
     Box::new(Report::failed(
         command,
-        USAGE_EXIT_CODE,
+        ExitCode::Usage,
         Failure::new(USAGE_NEEDS_INPUT, message),
     ))
 }
@@ -189,7 +191,7 @@ pub(crate) fn real(path: &Path) -> PathBuf {
     soft_canonicalize::soft_canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
 }
 
-/// The repository `setup ci` writes to (`_option_path`): the one path the
+/// The repository `setup ci` writes to: the one path the
 /// command and its group name, `.` by default, which an explicit `--repo`
 /// replaces.
 fn target(args: &CiArgs, cx: &Context<'_>) -> Result<PathBuf, Box<Report>> {
@@ -227,7 +229,7 @@ fn target(args: &CiArgs, cx: &Context<'_>) -> Result<PathBuf, Box<Report>> {
     Ok(setup_path(named.last().copied().unwrap_or(".")))
 }
 
-/// Asks a person to confirm the write, at the terminal (`_confirm_write`).
+/// Asks a person to confirm the write, at the terminal.
 /// `Ok(false)` when they decline.
 fn confirm(shown: &Path, absolute: &Path, cx: &Context<'_>) -> Result<bool, Box<Report>> {
     confirm_write(
@@ -239,8 +241,8 @@ fn confirm(shown: &Path, absolute: &Path, cx: &Context<'_>) -> Result<bool, Box<
     )
 }
 
-/// Asks a person to confirm a write to `absolute` with `question`
-/// (`_confirm_write`); refuses where nobody can answer.
+/// Asks a person to confirm a write to `absolute` with `question`;
+/// refuses where nobody can answer.
 pub(crate) fn confirm_write(
     command: &str,
     shown: &Path,
@@ -491,34 +493,33 @@ fn repository_dir(path: &Path) -> PathBuf {
         .map_or_else(|| path.to_path_buf(), Path::to_path_buf)
 }
 
-/// The branch GitHub and Azure jobs deploy from, and which setting named it
-/// (`_detect_default_branch`): `origin/HEAD`, the checked-out branch, then
-/// `init.defaultBranch`, else `main`.
+/// The branch GitHub and Azure jobs deploy from, and which setting named it:
+/// `origin/HEAD`, the checked-out branch, then
+/// `init.defaultBranch`, else `main`. The repository is read with gix, so
+/// git need not be installed; the configuration files are found through the
+/// run's environment, as git would find them.
 fn detect_default_branch(env: &Env, path: &Path) -> (String, &'static str) {
-    use crate::git_baseline::stdout;
+    use opentide_compile::git;
     let dir = repository_dir(path);
-    let short = |args: &[&str]| stdout(env, &dir, args).unwrap_or_default();
-    let remote_head = short(&[
-        "symbolic-ref",
-        "--quiet",
-        "--short",
-        "refs/remotes/origin/HEAD",
-    ]);
-    let remote = remote_head
-        .strip_prefix("origin/")
-        .unwrap_or_default()
-        .to_owned();
+    let checkout = git::checkout(&dir);
+    let lookup = |name: &str| env.get(name).map(str::to_owned);
     for (source, branch) in [
-        ("origin/HEAD", remote),
+        (
+            "origin/HEAD",
+            checkout
+                .as_ref()
+                .and_then(|checkout| checkout.default_branch.clone()),
+        ),
         (
             "HEAD",
-            short(&["symbolic-ref", "--quiet", "--short", "HEAD"]),
+            checkout.and_then(|checkout| checkout.current_branch),
         ),
         (
             "init.defaultBranch",
-            short(&["config", "--get", "init.defaultBranch"]),
+            git::config_value(&dir, "init.defaultBranch", &lookup),
         ),
     ] {
+        let branch = branch.unwrap_or_default();
         if is_valid_branch_name(&branch) {
             return (branch, source);
         }
@@ -526,26 +527,13 @@ fn detect_default_branch(env: &Env, path: &Path) -> (String, &'static str) {
     (FALLBACK_DEFAULT_BRANCH.to_owned(), "fallback")
 }
 
-/// A detected branch that is likely not the one that deploys
-/// (`_default_branch_warnings`).
-fn default_branch_warnings(env: &Env, path: &Path, branch: &str, source: &str) -> Vec<String> {
-    use crate::git_baseline::stdout;
+/// A detected branch that is likely not the one that deploys.
+fn default_branch_warnings(path: &Path, branch: &str, source: &str) -> Vec<String> {
+    use opentide_compile::git;
     let dir = repository_dir(path);
-    let local: Vec<String> = stdout(
-        env,
-        &dir,
-        &["for-each-ref", "--format=%(refname)", "refs/heads/"],
-    )
-    .unwrap_or_default()
-    .lines()
-    .map(|line| line.strip_prefix("refs/heads/").unwrap_or(line).to_owned())
-    .collect();
+    let local = git::local_branches(&dir);
     let quoted = repr(branch);
-    if source == "fallback"
-        && stdout(env, &dir, &["rev-parse", "--git-dir"])
-            .unwrap_or_default()
-            .is_empty()
-    {
+    if source == "fallback" && !git::in_repository(&dir) {
         return vec![format!(
             "This folder is not a git repository yet, so the pipeline targets {quoted}; create it on that branch with 'git init -b {branch}', or write the pipeline for another one with 'opentide setup ci <provider> --default-branch <branch>'."
         )];
@@ -599,9 +587,8 @@ fn rules_folder(root: &Path, cx: &Context<'_>) -> String {
 }
 
 /// The statuses `deployment.toml` defines in the workspace at `root`, read
-/// from the merged files without checking them, as the oracle's
-/// `resolve_configurations` reads them: a `paths.toml` its model refuses
-/// does not hide them (#957).
+/// from the merged files without checking them against their models: a
+/// `paths.toml` its model refuses does not hide them (#957).
 pub(crate) fn statuses(root: &Path, cx: &Context<'_>) -> Result<Vec<String>, String> {
     let fs = opentide_workspace::OsFs;
     let roots = opentide_workspace::root::resolve(&fs, &root_options(root, cx));
@@ -958,7 +945,7 @@ pub(crate) fn prepare(
         (_, Some(given)) => given.clone(),
         (_, None) => {
             let (branch, source) = detect_default_branch(cx.env, root);
-            warnings.extend(default_branch_warnings(cx.env, root, &branch, source));
+            warnings.extend(default_branch_warnings(root, &branch, source));
             branch
         }
     };
@@ -1144,8 +1131,8 @@ pub fn ci(args: &CiArgs, cx: &Context<'_>) -> Report {
         match confirm(&shown, &root, cx) {
             Ok(true) => {}
             Ok(false) => {
-                let mut report = Report::completed(COMMAND, Vec::new());
-                report.outcome.status = "skipped".into();
+                let mut report = Report::completed(COMMAND, Object::new());
+                report.outcome.status = Status::Skipped;
                 report.outcome.message = "CI/CD setup cancelled".into();
                 return report;
             }
@@ -1199,7 +1186,7 @@ pub fn ci(args: &CiArgs, cx: &Context<'_>) -> Report {
     let mut report = Report::completed(COMMAND, fields);
     report.outcome.message = match files.as_slice() {
         [] => {
-            report.outcome.status = "skipped".into();
+            report.outcome.status = Status::Skipped;
             "Nothing written".to_owned()
         }
         [one] => format!("Wrote {one}"),
@@ -1237,7 +1224,7 @@ fn stdout_report(args: &CiArgs, root: &Path, cx: &Context<'_>) -> Report {
         Ok(run) => run,
         Err(report) => return *report,
     };
-    let mut report = Report::completed(COMMAND, Vec::new());
+    let mut report = Report::completed(COMMAND, Object::new());
     report.outcome.message = format!("Printed the {} pipeline", args.provider.label());
     // `body_only` skips the result's own warnings, so they go to stderr here.
     let warnings = unique(run.warnings);
@@ -1250,16 +1237,6 @@ fn stdout_report(args: &CiArgs, root: &Path, cx: &Context<'_>) -> Report {
     report.body.push(Block::Raw(run.pipeline));
     report.warnings = warnings;
     report
-}
-
-fn unique(items: Vec<String>) -> Vec<String> {
-    let mut out: Vec<String> = Vec::new();
-    for item in items {
-        if !out.contains(&item) {
-            out.push(item);
-        }
-    }
-    out
 }
 
 /// What a written file is for, as the summary lists it.
@@ -1326,13 +1303,13 @@ fn plan(root: &Path, run: &Run) -> Report {
     report.outcome.message = format!(
         "Plan: {writes} {noun} to write ({created} new, {merged} changed) · nothing written"
     );
-    report.outcome.summary = vec![
+    report.outcome.summary = Object::from([
         ("create".into(), Json::Int(created)),
         ("merge".into(), Json::Int(merged)),
         ("skip".into(), Json::Int(skipped)),
         ("delete".into(), Json::Int(0)),
         ("steps".into(), Json::Int(1)),
-    ];
+    ]);
     report.outcome_kind = Some(OutcomeKind::Plan);
     report.warnings = warnings;
     let bold = Style::new().bold();
@@ -1610,7 +1587,7 @@ mod tests {
             unknown.outcome.message,
             "--promotion-target: \"NOPE\" is not a status in this repository's deployment.toml; use one of: STAGING, PRODUCTION"
         );
-        assert_eq!(unknown.outcome.exit_code, 2);
+        assert_eq!(unknown.outcome.exit_code, ExitCode::Usage);
     }
 
     /// A `deployment.toml` that cannot be read is refused and left as it
@@ -1646,7 +1623,7 @@ mod tests {
             group_only: Vec::new(),
         };
         let refused = po(root, &args, || Ok(Vec::new())).unwrap_err();
-        assert_eq!(refused.outcome.exit_code, 2);
+        assert_eq!(refused.outcome.exit_code, ExitCode::Usage);
         assert!(
             refused.outcome.message.starts_with(
                 "--no-promotion: .opentide/configurations/deployment.toml cannot be read ("

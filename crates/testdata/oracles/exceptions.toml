@@ -188,3 +188,70 @@ reason = "YARA-X builds `vt` by default and compiles `import \"vt\"`; opentide r
 paths = [
   "crates/testdata/conformance/yara/cases.json#opentide:modules/vt",
 ]
+
+# ---------------------------------------------------------------------------
+# Datadog search syntax: VRL's grammar (vectordotdev/vrl@1e3e2e8a,
+# src/datadog/search/grammar.pest), the Observability Pipelines dialect.
+# scripts/engine/oracles/datadog/oracle.py compares accept-or-reject verdicts
+# on Datadog's published queries (published.jsonl#<line>) and the corpus.
+# docs/internal/rfc-datadog-cloud-siem.md, section 11.2, expects 14
+# disagreements on the 3,229 queries it measured, each a query Datadog
+# publishes that VRL refuses; 12 of them are in the vendored set (the two
+# blog posts with an unescaped `:` are measured, not vendored).
+# ---------------------------------------------------------------------------
+
+[[datadog]]
+id = "datadog-cidr-ipv6"
+reason = "Datadog pipeline filters with `CIDR(…, fc00::/7)`. VRL has no CIDR(): it reads the call as a free-text term and a group, and refuses these because a term cannot hold `:`. Datadog documents CIDR() with IPv4 and IPv6 blocks (RFC 6.6); the engine parses the call and checks each block."
+paths = [
+  "crates/testdata/conformance/external/datadog/published.jsonl#1917",
+  "crates/testdata/conformance/external/datadog/published.jsonl#1918",
+  "crates/testdata/conformance/external/datadog/published.jsonl#1923",
+  "crates/testdata/corpus/datadog/cidr_block__valid.datadog",
+]
+
+[[datadog]]
+id = "datadog-full-text-search"
+reason = "Datadog's search syntax page documents `*:term`, a search of every attribute; VRL has only `*:*`. The engine accepts it, and warns in a detection rule's query (datadog_full_text_in_rule)."
+paths = [
+  "crates/testdata/conformance/external/datadog/published.jsonl#224",
+  "crates/testdata/conformance/external/datadog/published.jsonl#225",
+  "crates/testdata/conformance/external/datadog/published.jsonl#226",
+  "crates/testdata/conformance/external/datadog/published.jsonl#227",
+  "crates/testdata/corpus/datadog/all_attributes__valid.datadog",
+]
+
+[[datadog]]
+id = "datadog-leading-plus-value"
+reason = "Values starting with `+` (`@process.args:+x`, `@data.message:+*`), which Datadog's docs write. VRL refuses a term starting with `+`; the engine reads `+` there as part of the value."
+paths = [
+  "crates/testdata/conformance/external/datadog/published.jsonl#133",
+  "crates/testdata/conformance/external/datadog/published.jsonl#478",
+]
+
+[[datadog]]
+id = "datadog-unescaped-colon"
+reason = "A RUM docs example with an unescaped `:` in a value (`@http.url:https:\\/\\/*`). VRL refuses a term holding `:`; Datadog's docs say to escape it but its own content does not always, so the engine warns (datadog_unescaped_colon) rather than refuses."
+paths = ["crates/testdata/conformance/external/datadog/published.jsonl#423"]
+
+[[datadog]]
+id = "datadog-pipelines-forms"
+reason = "Observability Pipelines examples VRL's own grammar refuses: a quoted field name (`\"service.status\":disabled`, which the engine warns about as pipelines syntax, datadog_pipelines_only) and a term glued to a phrase (`tags:service\\:\"web-store\"`, which the engine reads as one value without a finding)."
+paths = [
+  "crates/testdata/conformance/external/datadog/published.jsonl#354",
+  "crates/testdata/conformance/external/datadog/published.jsonl#403",
+  "crates/testdata/corpus/datadog/quoted_field__valid.datadog",
+]
+
+[[datadog]]
+id = "datadog-cidr-arguments-checked"
+reason = "VRL reads `CIDR(…)` as text and a group, so it accepts any argument; the engine checks the call: an attribute first (`CIDR(network.client.ip, …)` searches a tag) and IPv4 or IPv6 blocks (`10.0.0.300` is none), datadog_cidr."
+paths = [
+  "crates/testdata/corpus/datadog/cidr_block__invalid.datadog",
+  "crates/testdata/corpus/datadog/tag_key__invalid.datadog",
+]
+
+[[datadog]]
+id = "datadog-stacked-modifiers"
+reason = "VRL accepts `NOT NOT a` (and `-NOT a`); the engine refuses stacked modifiers, as VRL refuses `--a`, and no published query uses them (RFC 6.3)."
+paths = ["crates/testdata/corpus/datadog/not_expr__invalid.datadog"]

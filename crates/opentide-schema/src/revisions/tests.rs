@@ -104,7 +104,7 @@ fn every_registered_identifier_parses_and_prints_back() {
 }
 
 #[test]
-fn the_object_registry_is_the_oracles() {
+fn the_object_registry_is_the_registered_object_revisions() {
     let registered: Vec<&str> = REVISIONS
         .iter()
         .filter(|revision| revision.in_object_registry())
@@ -262,7 +262,7 @@ fn an_unknown_revision_is_checked_against_the_newest_without_the_unknown_key_che
         "unknown schema identifier: \"rule::7.0\"; checked against rule::1.1, the \
          newest rule revision, without the unknown-key check"
     );
-    assert_eq!(errors[0].context["error"], errors[0].message["".len()..]);
+    assert_eq!(errors[0].context["error"], errors[0].message.as_str());
     assert_eq!(errors[0].code(crate::Surface::Object), "schema_validation");
     assert!(errors[0].span.is_some());
 
@@ -335,7 +335,7 @@ fn the_loader_refuses_what_is_not_a_revision_of_the_family() {
         assert_eq!(verdict.unwrap_err().code(), "schema_missing");
     }
     // `identifier-quoting` (tests/oracle/objects_cases.toml): double quotes
-    // whatever the identifier holds, where the oracle used Python's repr.
+    // whatever the identifier holds.
     for (schema, message) in [
         ("true", "unknown schema identifier: \"true\""),
         ("[rule::1.1]", "unknown schema identifier: \"[...]\""),
@@ -387,7 +387,7 @@ fn the_loader_refuses_what_is_not_a_revision_of_the_family() {
 }
 
 /// Every object file of the corpora (`tests/fixtures/tide_corpus` and the VS
-/// Code fixture workspace, carried in the oracle's table) dispatches to the
+/// Code fixture workspace, carried in `tests/oracle/objects_table.json`) dispatches to the
 /// revision its `metadata.schema` names, and together they hold every object
 /// revision. The values and errors themselves are `objects::table`'s.
 #[test]

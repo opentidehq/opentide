@@ -73,7 +73,9 @@ fn warm_up() {
             opentide_workspace::validate::objects::warm_up("rule::1.1");
             // What the editor reads of the models until a root's workspace
             // has loaded, and the configuration files' schemas.
-            crate::models::default_catalog();
+            // Whether they are the engine's own, which the first request
+            // after they arrive asks (#2169).
+            crate::models::is_compiled_in(&crate::models::default_catalog());
             crate::models::configuration_schemas();
         });
     // The KQL catalogs (the Azure Monitor tables, parsed from TOML on first
@@ -83,12 +85,13 @@ fn warm_up() {
     let _ = std::thread::Builder::new()
         .name("opentide-lsp-warm-up-kql".to_owned())
         .spawn(|| {
-            let _ = opentide_analysis::analyze_query(&opentide_analysis::QueryRequest {
-                language: opentide_core::LanguageId::Kql,
-                platform: Some("sentinel".to_owned()),
-                stack: None,
-                text: "SecurityEvent | take 1".to_owned(),
-            });
+            let _ = opentide_analysis::analyze_query(
+                &opentide_analysis::QueryRequest::new(
+                    opentide_core::LanguageId::Kql,
+                    "SecurityEvent | take 1".to_owned(),
+                )
+                .with_platform(Some("sentinel")),
+            );
         });
 }
 
@@ -469,6 +472,11 @@ mod tests {
         assert_eq!(lang("file:///q.txt", None), Some(LanguageId::TideYaml));
         assert_eq!(lang("file:///q.yar", None), Some(LanguageId::Yara));
         assert_eq!(lang("file:///q.exabeam", None), Some(LanguageId::Exabeam));
+        assert_eq!(lang("file:///q.datadog", None), Some(LanguageId::Datadog));
+        assert_eq!(
+            lang("file:///q.txt", Some("datadog")),
+            Some(LanguageId::Datadog)
+        );
         assert_eq!(
             lang("file:///q.yara", Some("plaintext")),
             Some(LanguageId::Yara)

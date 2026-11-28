@@ -12,18 +12,27 @@ exit: 0
   "exit_code": 0,
   "failure": null,
   "import": "defender",
-  "message": "Imported 3 rules from defender",
+  "message": "Imported 3 rules from defender · 1 skipped",
   "next_actions": [],
   "ok": true,
   "schema_version": 1,
+  "skipped": [
+    {
+      "name": "Suspicious PowerShell: \"encoded\" command (1.0.0)",
+      "reason": "rule 8d7c6b5a-0000-4000-8000-000000000201 names the same uuid as rule opentide-8d7c6b5a-0000-4000-8000-000000000201, which the file holds: it is most likely the copy an earlier opentide release left; delete it in the portal, or rename both its name and its alert title"
+    }
+  ],
   "status": "completed",
   "summary": {
     "imported": 3,
-    "skipped": 0
+    "skipped": 1
   }
 }
 
-━━━ stderr · empty
+━━━ stderr
+{"rule":"Suspicious PowerShell: \"encoded\" command (1.0.0)","reason":"rule 8d7c6b5a-0000-4000-8000-000000000201 names the same uuid as rule opentide-8d7c6b5a-0000-4000-8000-000000000201, which the file holds: it is most likely the copy an earlier opentide release left; delete it in the portal, or rename both its name and its alert title","event":"defender_import_rule_skipped","level":"warning","timestamp":"0000-00-00 00:00:00"}
+{"rule":"Office spawns PowerShell","uuid":"8d7c6b5a-0000-4000-8000-000000000202","detail":"the tenant's rule id 8d7c6b5a-0000-4000-8000-000000000202 is not the id deploy addresses a rule by (opentide-<uuid>): deploying the file creates opentide-8d7c6b5a-0000-4000-8000-000000000202; first delete the original in the portal, or rename both its name and its alert title","event":"defender_import_new_uuid","level":"warning","timestamp":"0000-00-00 00:00:00"}
+{"rule":"office spawns powershell","uuid":"8d7c6b5a-0000-4000-8000-000000000203","detail":"the tenant's rule id 8d7c6b5a-0000-4000-8000-000000000203 is not the id deploy addresses a rule by (opentide-<uuid>): deploying the file creates opentide-8d7c6b5a-0000-4000-8000-000000000203; first delete the original in the portal, or rename both its name and its alert title","event":"defender_import_new_uuid","level":"warning","timestamp":"0000-00-00 00:00:00"}
 
 ━━━ ws/Imported/ · created 0755
 

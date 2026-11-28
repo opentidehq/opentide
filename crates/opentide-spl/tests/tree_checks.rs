@@ -3,6 +3,10 @@
 //! Rust tree (`syntax::analyze`): the same tests, unchanged.
 
 #![expect(
+    clippy::string_slice,
+    reason = "a test: a slice off a char boundary panics, and a panic is a failed test"
+)]
+#![expect(
     clippy::unwrap_used,
     clippy::expect_used,
     reason = "test helpers outside #[test] functions: a panic fails the test"

@@ -1,4 +1,4 @@
-//! Graylog event definitions (`platforms/graylog/compile.py`, graylog-1.0):
+//! Graylog event definitions (graylog-1.0):
 //! the definition a rule's Graylog block deploys, and its requests.
 //!
 //! The author writes the query, the aggregation, the schedule, the event
@@ -15,14 +15,18 @@
 
 use std::fmt;
 
+use opentide_schema::objects::platform::GraylogConfig;
 use opentide_schema::objects::platform::durations::duration_seconds;
-use opentide_schema::objects::platform::graylog::PRIORITIES;
 use opentide_schema::objects::platform::graylog::condition::compile_condition;
+use opentide_schema::objects::platform::graylog::{
+    GraylogEventField, GraylogSchedule, MAX_DURATION_SECONDS, PRIORITIES, StringOrList, as_list,
+    too_long_detail,
+};
 
 use crate::elastic::rule_techniques;
 use crate::json::{Json, Object};
 use crate::rule::{CompileError, Rule};
-use crate::{Context, attack};
+use crate::{Context, attack, typed};
 
 /// The platform's identifier.
 pub const PLATFORM: &str = "graylog";
@@ -138,8 +142,11 @@ pub fn parse_version(text: &str) -> Option<Version> {
             }
             return None;
         }
-        *part = rest[..end].parse().ok()?;
-        rest = &rest[end..];
+        // `end` ends a run of ASCII digits, so it is a char boundary.
+        debug_assert!(rest.is_char_boundary(end), "{rest:?} cut at {end}");
+        let (digits, after) = rest.split_at_checked(end)?;
+        *part = digits.parse().ok()?;
+        rest = after;
     }
     Some(Version(parts[0], parts[1], parts[2]))
 }
@@ -194,14 +201,24 @@ impl CompiledDefinition {
     }
 }
 
-/// The rule's Graylog block, or the error naming the rule (`block_of`).
-pub fn block_of(rule: &Rule) -> Result<&Json, CompileError> {
-    rule.block(PLATFORM).ok_or_else(|| {
+/// The rule's Graylog block, read by the model `opentide validate` checks it
+/// with (`GraylogConfig`, #1951; `typed::read_block`), or the error naming
+/// the rule (`block_of`).
+///
+/// A block the model refuses (a missing `query` or `status`, an unknown key,
+/// a value of the wrong type) fails with `compile_failed`, the field path the
+/// rule wrote and the model's reason. A block whose only faults are values
+/// the block's own check refuses (`graylog_constraints`: a duration, a cron
+/// expression, an event limit outside 1-1,000) is compiled as before;
+/// `validate` reports them.
+pub fn block_of(rule: &Rule) -> Result<GraylogConfig, CompileError> {
+    let block = rule.block(PLATFORM).ok_or_else(|| {
         CompileError::failed(
             DISPLAY,
             &format!("Rule {} ({}) has no graylog block", rule.uuid, rule.name),
         )
-    })
+    })?;
+    typed::read_block(block, PLATFORM, DISPLAY)
 }
 
 // --- derived fields -------------------------------------------------------------
@@ -240,34 +257,37 @@ pub fn attack_ids(cx: &Context<'_>, rule: &Rule) -> Vec<String> {
     techniques
 }
 
-fn text<'a>(block: &'a Json, key: &str) -> Option<&'a str> {
-    block.get(key).and_then(Json::as_str)
+/// A string the block sets, not empty: a missing key and `""` are none.
+fn set_text(value: Option<&String>) -> Option<&str> {
+    value.map(String::as_str).filter(|value| !value.is_empty())
 }
 
-/// A non-empty string of the block: a missing key, a non-string and `""`
-/// are none.
-fn set_text<'a>(block: &'a Json, key: &str) -> Option<&'a str> {
-    text(block, key).filter(|value| !value.is_empty())
+/// A string-or-list field of the block as owned strings (`as_list`).
+fn list(value: Option<&StringOrList>) -> Vec<String> {
+    as_list(value).into_iter().map(str::to_owned).collect()
 }
 
-/// A string-or-list value as a list (`as_list`).
-fn as_list(value: Option<&Json>) -> Vec<String> {
+/// Whether a string-or-list field holds something: not absent, `""` or `[]`.
+fn filled(value: Option<&StringOrList>) -> bool {
+    match value {
+        None => false,
+        Some(StringOrList::One(one)) => !one.is_empty(),
+        Some(StringOrList::Many(many)) => !many.is_empty(),
+    }
+}
+
+/// A string-or-list value of the tenant's setup as a list (`as_list`).
+fn setup_list(value: Option<&Json>) -> Vec<String> {
     match value {
         Some(Json::Str(one)) => vec![one.clone()],
-        Some(Json::Array(items)) => items
-            .iter()
-            .map(|item| match item {
-                Json::Str(text) => text.clone(),
-                other => other.to_compact(),
-            })
-            .collect(),
+        Some(Json::Array(items)) => items.iter().map(Json::to_text).collect(),
         _ => Vec::new(),
     }
 }
 
 /// The shared `name`, else the opentide rule `name` (`derive_title`).
-pub fn derive_title(rule: &Rule, block: &Json) -> String {
-    set_text(block, "name").unwrap_or(&rule.name).to_owned()
+pub fn derive_title(rule: &Rule, block: &GraylogConfig) -> String {
+    set_text(Some(&block.name)).unwrap_or(&rule.name).to_owned()
 }
 
 /// The rule description, whitespace collapsed; before 7.2, an `ATT&CK:` line
@@ -287,8 +307,8 @@ pub fn derive_description(rule: &Rule, ids: &[String], version: Version) -> Stri
 
 /// The block `priority`, else `response.alert_severity`, else none
 /// (`priority_label`).
-pub fn priority_label(rule: &Rule, block: &Json) -> Option<String> {
-    if let Some(priority) = set_text(block, "priority") {
+pub fn priority_label(rule: &Rule, block: &GraylogConfig) -> Option<String> {
+    if let Some(priority) = set_text(block.priority.as_ref()) {
         return Some(priority.to_owned());
     }
     let severity = rule.response()?.get("alert_severity")?;
@@ -333,8 +353,8 @@ pub fn normalise_tag(tag: &str) -> String {
 
 /// Block tags, `opentide`, `opentide.<uuid>`, tenant tags; normalised,
 /// unique, at most 64 (`derive_tags`).
-pub fn derive_tags(rule: &Rule, block: &Json, tenant_tags: &[String]) -> Vec<String> {
-    let candidates = as_list(block.get("tags"))
+pub fn derive_tags(rule: &Rule, block: &GraylogConfig, tenant_tags: &[String]) -> Vec<String> {
+    let candidates = list(block.tags.as_ref())
         .into_iter()
         .chain(["opentide".to_owned(), format!("opentide.{}", rule.uuid)])
         .chain(tenant_tags.iter().cloned());
@@ -357,39 +377,30 @@ fn template_provider(template: String) -> Json {
     Json::Object(provider)
 }
 
-/// An event field value's provider (`_provider`): a lookup, a template, or
+/// An event field value's provider: a lookup, a template, or
 /// a bare field name as `${source.<field>}`.
-fn provider(value: &Json) -> Json {
-    if let Some(lookup) = value.get("lookup") {
-        let mut provider = Object::new();
-        provider.insert("type".into(), "lookup-v1".into());
-        provider.insert(
-            "table_name".into(),
-            lookup.get("table").cloned().unwrap_or(Json::Null),
-        );
-        provider.insert(
-            "key_field".into(),
-            lookup.get("key_field").cloned().unwrap_or(Json::Null),
-        );
-        return Json::Object(provider);
-    }
-    if let Some(template) = value.get("template") {
-        return template_provider(template.as_str().unwrap_or_default().to_owned());
-    }
+fn provider(value: &GraylogEventField) -> Json {
     match value {
-        Json::Str(field) if !field.contains("${") => {
+        GraylogEventField::Lookup(lookup) => {
+            let mut provider = Object::new();
+            provider.insert("type".into(), "lookup-v1".into());
+            provider.insert("table_name".into(), lookup.lookup.table.as_str().into());
+            provider.insert("key_field".into(), lookup.lookup.key_field.as_str().into());
+            Json::Object(provider)
+        }
+        GraylogEventField::Template(template) => template_provider(template.template.clone()),
+        GraylogEventField::Text(field) if !field.contains("${") => {
             template_provider(format!("${{source.{field}}}"))
         }
-        Json::Str(template) => template_provider(template.clone()),
-        other => template_provider(other.to_compact()),
+        GraylogEventField::Text(template) => template_provider(template.clone()),
     }
 }
 
 /// `event_fields` by their value forms; before 7.2, plus
 /// `attack_techniques` (`derive_field_spec`).
-pub fn derive_field_spec(block: &Json, ids: &[String], version: Version) -> Object {
+pub fn derive_field_spec(block: &GraylogConfig, ids: &[String], version: Version) -> Object {
     let mut spec = Object::new();
-    if let Some(Json::Object(fields)) = block.get("event_fields") {
+    if let Some(fields) = &block.event_fields {
         for (name, value) in fields {
             let mut field = Object::new();
             field.insert("data_type".into(), "string".into());
@@ -409,38 +420,52 @@ pub fn derive_field_spec(block: &Json, ids: &[String], version: Version) -> Obje
     spec
 }
 
-/// Milliseconds in a duration (`duration_ms`).
-fn duration_ms(value: &str, allow_zero: bool) -> Result<i64, CompileError> {
-    duration_seconds(value, allow_zero)
-        .map(|seconds| i64::try_from(seconds.saturating_mul(1000)).unwrap_or(i64::MAX))
-        .map_err(|_| {
-            CompileError::invalid_rule(format!(
-                "Invalid duration format: {}",
-                opentide_schema::configuration::repr::quote(value)
+/// Milliseconds in a duration (`duration_ms`), `field`'s (its path under
+/// `configurations.graylog`, dotted). A duration longer than
+/// [`MAX_DURATION_SECONDS`], which the model refuses too, refuses the rule
+/// naming the field: its milliseconds do not fit the payload's integer
+/// (#2005).
+fn duration_ms(value: &str, allow_zero: bool, field: &str) -> Result<i64, CompileError> {
+    let seconds = duration_seconds(value, allow_zero).map_err(|_| {
+        CompileError::invalid_rule(format!(
+            "Invalid duration format: {}",
+            opentide_schema::configuration::repr::quote(value)
+        ))
+    })?;
+    seconds
+        .checked_mul(1000)
+        .filter(|_| seconds <= MAX_DURATION_SECONDS)
+        .and_then(|millis| i64::try_from(millis).ok())
+        .ok_or_else(|| {
+            let mut path = vec!["configurations", "graylog"];
+            path.extend(field.split('.'));
+            CompileError::invalid_rule(too_long_detail(
+                &format!("configurations.graylog.{field}"),
+                value,
             ))
+            .at(&path)
         })
-}
-
-fn schedule(block: &Json) -> Option<&Json> {
-    block.get("schedule").filter(|value| !value.is_null())
 }
 
 /// The time range each run searches: `window`, else `every`, else 5 minutes
 /// (`window_ms`).
-pub fn window_ms(block: &Json) -> Result<i64, CompileError> {
-    let value = schedule(block)
-        .and_then(|schedule| set_text(schedule, "window").or_else(|| set_text(schedule, "every")))
-        .unwrap_or(DEFAULT_EVERY);
-    duration_ms(value, false)
+pub fn window_ms(block: &GraylogConfig) -> Result<i64, CompileError> {
+    let window = block.schedule.as_ref().and_then(|schedule| {
+        set_text(schedule.window.as_ref())
+            .map(|value| (value, "schedule.window"))
+            .or_else(|| set_text(schedule.every.as_ref()).map(|value| (value, "schedule.every")))
+    });
+    let (value, field) = window.unwrap_or((DEFAULT_EVERY, "schedule.every"));
+    duration_ms(value, false, field)
 }
 
 /// The block's `streams`, else the tenant's (`stream_aliases`).
-pub fn stream_aliases(block: &Json, setup: Option<&Json>) -> Vec<String> {
-    let own = as_list(block.get("streams"));
+pub fn stream_aliases(block: &GraylogConfig, setup: Option<&Json>) -> Vec<String> {
+    let own = list(block.streams.as_ref());
     if !own.is_empty() {
         return own;
     }
-    as_list(setup.and_then(|setup| setup.get("streams")))
+    setup_list(setup.and_then(|setup| setup.get("streams")))
 }
 
 /// The code of an alias a tenant does not define.
@@ -450,7 +475,7 @@ pub const ALIAS_UNKNOWN: &str = "graylog_alias_unknown";
 pub const ALIAS_HINT: &str = "add the alias to the tenant's stream_ids or notification_ids table, \
                               or change the block's streams or notifications";
 
-/// Each alias's id in the tenant's `table` (`_resolve`), or
+/// Each alias's id in the tenant's `table`, or
 /// `graylog_alias_unknown` naming the aliases it lacks.
 fn resolve(
     aliases: &[String],
@@ -497,7 +522,7 @@ fn strings(values: Vec<String>) -> Json {
 /// The definition's `config`, and the aliases left unresolved without a
 /// tenant (`derive_config`).
 pub fn derive_config(
-    block: &Json,
+    block: &GraylogConfig,
     setup: Option<&Json>,
     tenant: Option<&str>,
 ) -> Result<(Object, Unresolved), CompileError> {
@@ -512,36 +537,33 @@ pub fn derive_config(
         }
         Some(setup) => resolve(&aliases, setup, "stream_ids", "stream", tenant)?,
     };
-    let schedule = schedule(block);
-    let cron = schedule.and_then(|schedule| set_text(schedule, "cron"));
+    let schedule: Option<&GraylogSchedule> = block.schedule.as_ref();
+    let cron = schedule.and_then(|schedule| set_text(schedule.cron.as_ref()));
     let window = window_ms(block)?;
     let every = match cron {
         Some(_) => window,
         None => duration_ms(
             schedule
-                .and_then(|schedule| set_text(schedule, "every"))
+                .and_then(|schedule| set_text(schedule.every.as_ref()))
                 .unwrap_or(DEFAULT_EVERY),
             false,
+            "schedule.every",
         )?,
     };
     let mut config = Object::new();
     config.insert("type".into(), "aggregation-v1".into());
-    config.insert(
-        "query".into(),
-        block.get("query").cloned().unwrap_or(Json::Null),
-    );
+    config.insert("query".into(), block.query.as_str().into());
     config.insert("query_parameters".into(), Json::Array(Vec::new()));
     config.insert("filters".into(), Json::Array(Vec::new()));
     config.insert("streams".into(), strings(streams));
     config.insert(
         "stream_categories".into(),
-        strings(as_list(block.get("stream_categories"))),
+        strings(list(block.stream_categories.as_ref())),
     );
-    let aggregation = block.get("aggregation").filter(|value| !value.is_null());
+    let aggregation = block.aggregation.as_ref();
     match aggregation {
         Some(aggregation) => {
-            let condition = text(aggregation, "condition").unwrap_or_default();
-            let (tree, series) = compile_condition(condition).map_err(|error| {
+            let (tree, series) = compile_condition(&aggregation.condition).map_err(|error| {
                 CompileError::invalid_rule(error.message).at(&[
                     "configurations",
                     PLATFORM,
@@ -551,7 +573,7 @@ pub fn derive_config(
             })?;
             config.insert(
                 "group_by".into(),
-                strings(as_list(aggregation.get("group_by"))),
+                strings(list(aggregation.group_by.as_ref())),
             );
             config.insert("series".into(), json(&series));
             let mut conditions = Object::new();
@@ -573,16 +595,13 @@ pub fn derive_config(
         config.insert("cron_expression".into(), cron.into());
         config.insert(
             "cron_timezone".into(),
-            set_text(schedule, "timezone")
+            set_text(schedule.timezone.as_ref())
                 .unwrap_or(DEFAULT_TIMEZONE)
                 .into(),
         );
     }
     if aggregation.is_none() {
-        let limit = match block.get("event_limit") {
-            Some(Json::Int(limit)) => *limit,
-            _ => DEFAULT_EVENT_LIMIT,
-        };
+        let limit = block.event_limit.unwrap_or(DEFAULT_EVENT_LIMIT);
         config.insert("event_limit".into(), Json::Int(limit));
     }
     Ok((config, unresolved))
@@ -608,7 +627,7 @@ pub fn compile_definition(
     setup: Option<&Json>,
     tenant: Option<&str>,
 ) -> Result<CompiledDefinition, CompileError> {
-    let block = block_of(rule)?;
+    let block = &block_of(rule)?;
     let ids = attack_ids(cx, rule);
     let mut warnings: Vec<(&'static str, String)> = Vec::new();
     let label = priority_label(rule, block);
@@ -632,17 +651,11 @@ pub fn compile_definition(
         derive_description(rule, &ids, version).into(),
     );
     definition.insert("priority".into(), Json::Int(priority));
-    definition.insert(
-        "alert".into(),
-        match block.get("alert") {
-            Some(Json::Bool(alert)) => Json::Bool(*alert),
-            _ => Json::Bool(true),
-        },
-    );
-    if let Some(remediation) = set_text(block, "remediation") {
+    definition.insert("alert".into(), Json::Bool(block.alert));
+    if let Some(remediation) = set_text(block.remediation.as_ref()) {
         definition.insert("remediation_steps".into(), remediation.into());
     }
-    if let Some(summary) = set_text(block, "summary") {
+    if let Some(summary) = set_text(block.summary.as_ref()) {
         if takes(version, "event_summary_template") {
             definition.insert("event_summary_template".into(), summary.into());
         } else {
@@ -656,13 +669,13 @@ pub fn compile_definition(
         }
     }
     if takes(version, "tags") {
-        let tenant_tags = as_list(setup.and_then(|setup| setup.get("tags")));
+        let tenant_tags = setup_list(setup.and_then(|setup| setup.get("tags")));
         definition.insert(
             "tags".into(),
             strings(derive_tags(rule, block, &tenant_tags)),
         );
         definition.insert("tactics_techniques".into(), strings(ids.clone()));
-    } else if block.get("tags").is_some_and(Json::is_filled) {
+    } else if filled(block.tags.as_ref()) {
         warnings.push((
             "graylog_field_unsupported_version",
             format!("tags are left out: Graylog {version} has no definition tags (7.2 and later)"),
@@ -674,20 +687,17 @@ pub fn compile_definition(
         "field_spec".into(),
         Json::Object(derive_field_spec(block, &ids, version)),
     );
-    definition.insert("key_spec".into(), strings(as_list(block.get("event_key"))));
-    let grace_period_ms = match set_text(block, "grace_period") {
-        Some(grace) => duration_ms(grace, true)?,
+    definition.insert("key_spec".into(), strings(list(block.event_key.as_ref())));
+    let grace_period_ms = match set_text(block.grace_period.as_ref()) {
+        Some(grace) => duration_ms(grace, true, "grace_period")?,
         None => 0,
     };
-    let backlog = match block.get("backlog") {
-        Some(Json::Int(backlog)) => *backlog,
-        _ => 0,
-    };
+    let backlog = block.backlog.unwrap_or(0);
     let mut settings = Object::new();
     settings.insert("grace_period_ms".into(), Json::Int(grace_period_ms));
     settings.insert("backlog_size".into(), Json::Int(backlog));
     definition.insert("notification_settings".into(), Json::Object(settings));
-    let notifications = as_list(block.get("notifications"));
+    let notifications = list(block.notifications.as_ref());
     let notification_ids = match setup {
         None => {
             if !notifications.is_empty() {
@@ -799,7 +809,7 @@ pub fn api_request(method: &str, path: &str, body: Option<Json>) -> Json {
     Json::Object(request)
 }
 
-/// The create request (`create_request`).
+/// The `POST` that creates the definition, scheduled (`create_request`).
 pub fn create_request(compiled: &CompiledDefinition) -> Json {
     api_request("POST", &create_path(), Some(create_body(compiled)))
 }
@@ -816,21 +826,6 @@ pub fn update_request(compiled: &CompiledDefinition, definition_id: &str, enable
 /// The setup of a tenant (`tenant.setup`), when it has one.
 pub fn tenant_setup(tenant: &Json) -> Option<&Json> {
     tenant.get("setup").filter(|setup| !setup.is_null())
-}
-
-/// The create body `rule` deploys on `tenant` at [`PREVIEW_VERSION`] (none
-/// for a dry run: aliases are left unresolved), the body a preview shows.
-pub fn compile_body(
-    cx: &Context<'_>,
-    rule: &Rule,
-    tenant: Option<&Json>,
-) -> Result<Json, CompileError> {
-    let setup = tenant.and_then(tenant_setup);
-    let name = tenant
-        .and_then(|tenant| tenant.get("name"))
-        .and_then(Json::as_str);
-    let compiled = compile_definition(cx, rule, PREVIEW_VERSION, setup, name)?;
-    Ok(create_body(&compiled))
 }
 
 #[cfg(test)]
@@ -867,6 +862,12 @@ mod tests {
         assert_eq!(parse_version("7"), None);
         assert_eq!(parse_version("v7.2"), None);
         assert_eq!(parse_version(""), None);
+        // #1946: a multi-byte character ends a part, never splits it.
+        assert_eq!(parse_version("é7.2"), None);
+        assert_eq!(parse_version("7.é"), None);
+        assert_eq!(parse_version("7😀.2"), None);
+        assert_eq!(parse_version("7.2.😀"), Some(Version(7, 2, 0)));
+        assert_eq!(parse_version("7.2.3é"), Some(Version(7, 2, 3)));
         assert_eq!(Version(7, 2, 0).to_string(), "7.2.0");
     }
 

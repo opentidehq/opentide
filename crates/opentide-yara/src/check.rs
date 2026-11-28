@@ -6,7 +6,7 @@
 
 use crate::atoms::{self, MaskedByte};
 use crate::catalog::{Catalog, Kind};
-use crate::{Context, Finding, Profile, regexp};
+use crate::{Context, Dialect, Finding, regexp};
 use opentide_core::{Severity, codes};
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -298,7 +298,7 @@ impl<'a> Checker<'a> {
     /// (`yara_x_syntax`), naming the construct and the profile.
     fn yara_x_only(&mut self, feature: &str, at: (usize, usize)) {
         if self.ctx.yara_x_syntax == crate::YaraXSyntax::Refused {
-            let who = self.ctx.profile.map_or("this context", Profile::display);
+            let who = self.ctx.profile.map_or("this context", Dialect::display);
             self.error(
                 codes::YARA_X_ONLY_SYNTAX,
                 format!("{feature} is YARA-X syntax, and {who} has `yara_x_syntax: refused`: its engine is not known to take it"),
@@ -543,7 +543,7 @@ impl<'a> Checker<'a> {
                 );
             }
         }
-        if profile == Profile::Harfanglab {
+        if profile == Dialect::Harfanglab {
             for meta in metas.iter().filter(|m| m.identifier.name == "context") {
                 let (value, at) = match &meta.value {
                     MetaValue::String((raw, s)) => (raw.trim_matches('"').to_string(), span(s)),
@@ -846,7 +846,7 @@ impl<'a> Checker<'a> {
     /// `$a`, `#a`, `@a`, `!a`: the string they name.
     fn use_pattern(&mut self, ident: &Ident) {
         let at = span(&ident.span());
-        let name = format!("${}", &ident.name[1..]);
+        let name = format!("${}", crate::editor::unsigiled(ident.name));
         if name == "$" {
             if self.in_for_of == 0 {
                 self.error(

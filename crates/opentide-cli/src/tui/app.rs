@@ -1,4 +1,4 @@
-//! The UI's state, its keys and its drawing (`tui_app.py`'s `OpentideTui`).
+//! The UI's state, its keys and its drawing.
 //!
 //! One command runs at a time, on a thread of its own, so the UI stays
 //! responsive; when it finishes, the catalogue is read again. Quitting while
@@ -89,7 +89,7 @@ pub enum Command {
     Run(Action),
     /// Read the catalogue again.
     Reload,
-    /// Quit.
+    /// Leave the terminal UI.
     Quit,
 }
 
@@ -126,7 +126,7 @@ pub fn commands() -> Vec<Command> {
 /// The `opentide tui` application.
 #[expect(
     clippy::struct_excessive_bools,
-    reason = "the UI's switches, one field each, as the Python app has them"
+    reason = "the UI's switches, each an independent toggle with its own field"
 )]
 pub struct App {
     launch: Launch,
@@ -1745,15 +1745,21 @@ fn query_languages(path: Option<&Path>) -> BTreeMap<String, String> {
         .collect()
 }
 
-/// The first line of hover Markdown with its emphasis marks dropped.
+/// The first line of hover Markdown as text (`opentide_core::markdown`):
+/// its marks dropped, a link as its text.
 fn first_line(markdown: &str) -> String {
-    markdown
-        .lines()
-        .find(|line| !line.trim().is_empty())
+    use opentide_core::markdown::{Lines, Links, Options, to_text};
+    let text = to_text(
+        markdown,
+        Options {
+            links: Links::Text,
+            lines: Lines::Keep,
+        },
+    );
+    text.lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty())
         .unwrap_or_default()
-        .replace("**", "")
-        .replace('`', "")
-        .trim()
         .to_owned()
 }
 
@@ -1833,6 +1839,20 @@ mod tests {
         assert_eq!(
             first_line("\n**Tlp** `string` — required\n\nmore"),
             "Tlp string — required"
+        );
+        assert_eq!(
+            first_line("  \n**Évènement** `chaîne` 😀 — requis\nsuite"),
+            "Évènement chaîne 😀 — requis"
+        );
+        assert_eq!(first_line("snake_case_name `é`"), "snake_case_name é");
+        assert_eq!(first_line(""), "");
+        assert_eq!(first_line("\n\n"), "");
+        // What the line-by-line stripper left: a heading's marks, a link's
+        // destination.
+        assert_eq!(first_line("## Champ é\n\ntexte"), "Champ é");
+        assert_eq!(
+            first_line("Voir [la page 😀](https://x.y/é) ici"),
+            "Voir la page 😀 ici"
         );
     }
 

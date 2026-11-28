@@ -388,25 +388,41 @@ fn crowdstrike_stops_the_search_a_cancelled_run_stops_waiting_for() {
         &[],
         DEFAULT_QUERY_TIMEOUT,
     );
-    let trigger = cancel.clone();
-    let outcome = block_on(async {
-        let run = opentide_connectors::connector::QueryRunner::run(&runner, cx, &request);
-        tokio::pin!(run);
-        // Cancel between the first poll and the second (0.5 s apart).
-        tokio::select! {
-            outcome = &mut run => outcome,
-            () = tokio::time::sleep(Duration::from_millis(250)) => {
-                trigger.cancel();
-                run.await
-            }
+    // Cancel between the first poll and the second (0.5 s apart): once the proxy has the first
+    // poll (the third request), not on a timer that could fire before it. A cancel while that
+    // poll is still answered stops the search the same way: the poll was sent. The proxy is read
+    // from a thread of its own (it blocks on a runtime of its own). The watcher stops when the
+    // run ends, even by a panic (`Done` sets the flag on drop, unwinding included), and after
+    // 10 s at most, so a run that never reaches the first poll fails instead of hanging the scope.
+    struct Done<'a>(&'a std::sync::atomic::AtomicBool);
+    impl Drop for Done<'_> {
+        fn drop(&mut self) {
+            self.0.store(true, std::sync::atomic::Ordering::SeqCst);
         }
-    })
-    .unwrap();
+    }
+    let done = std::sync::atomic::AtomicBool::new(false);
+    let outcome = std::thread::scope(|scope| {
+        scope.spawn(|| {
+            let deadline = std::time::Instant::now() + Duration::from_secs(10);
+            while !done.load(std::sync::atomic::Ordering::SeqCst)
+                && replay.proxy.requests().len() < 3
+                && std::time::Instant::now() < deadline
+            {
+                std::thread::sleep(Duration::from_millis(2));
+            }
+            cancel.cancel();
+        });
+        let _done = Done(&done);
+        block_on(opentide_connectors::connector::QueryRunner::run(
+            &runner, cx, &request,
+        ))
+        .unwrap()
+    });
     assert!(
         matches!(outcome, Err(ConnectorError::Cancelled)),
         "{outcome:?}"
     );
-    // The oracle's run polled again; this one stopped instead: the
+    // Opentide 0.23.0's run polled again; this one stopped instead: the
     // DELETE is the fourth request, and nothing after it was sent.
     let mismatches = replay.proxy.verify();
     assert_eq!(mismatches[0].index, 3, "{mismatches:?}");

@@ -7,6 +7,11 @@
 //! `INSTA_UPDATE=always cargo test -p opentide-analysis --test snapshots`)
 //! writes the new one; CI sets `INSTA_UPDATE=no`, so it never writes one.
 
+#![expect(
+    clippy::string_slice,
+    reason = "a test: a slice off a char boundary panics, and a panic is a failed test"
+)]
+
 use opentide_analysis::{QueryRequest, analyze_query, highlight};
 use opentide_core::{Diagnostic, LanguageId};
 use std::fmt::Write as _;
@@ -32,12 +37,9 @@ fn render_diagnostics(diagnostics: &[Diagnostic]) -> String {
 }
 
 fn query(language: LanguageId, platform: Option<&str>, text: &str) -> String {
-    render_diagnostics(&analyze_query(&QueryRequest {
-        language,
-        platform: platform.map(str::to_string),
-        stack: None,
-        text: text.to_string(),
-    }))
+    render_diagnostics(&analyze_query(
+        &QueryRequest::new(language, text).with_platform(platform),
+    ))
 }
 
 #[test]

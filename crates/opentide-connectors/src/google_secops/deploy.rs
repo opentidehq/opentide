@@ -1,5 +1,4 @@
-//! Deploys YARA-L rules to Google Security Operations, ported from 0.28.0's
-//! `platforms/google_secops/deployer.py`, request for request.
+//! Deploys YARA-L rules to Google Security Operations.
 //!
 //! Google assigns every rule an id (`ru_<uuid>`) at create time; deployment
 //! state keeps it, and every create, update, disable, archive and delete is
@@ -17,7 +16,7 @@ use opentide_compile::Json;
 use opentide_compile::google_secops::{RunState, scope_id};
 use opentide_schema::objects::platform::google_secops::assemble::AssembledRule;
 
-use crate::connector::TenantContext;
+use crate::connector::{CodedError, TenantContext};
 use crate::error::ConnectorError;
 
 use super::auth::Authorizer;
@@ -76,7 +75,7 @@ pub enum StateChange {
 /// keeping (`google_secops_compile_warning`).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Warning {
-    /// The code.
+    /// The code (`google_secops_rule_missing`, `google_secops_compile_warning`, …).
     pub code: &'static str,
     /// What happened.
     pub detail: String,
@@ -120,7 +119,10 @@ impl RuleOutcome {
     }
 
     fn request_failed(&mut self, error: &ApiError) {
-        self.fail("google_secops_request_failed", error.short());
+        self.fail(
+            crate::tenant_codes::GOOGLE_SECOPS.request_failed,
+            error.short(),
+        );
     }
 
     fn deployment_failed(&mut self, rule_id: &str, error: &ApiError) {
@@ -170,7 +172,7 @@ fn etag(remote: &Json) -> Option<String> {
     remote
         .get("etag")
         .filter(|value| value.is_filled())
-        .map(opentide_compile::deploy::text)
+        .map(Json::to_text)
 }
 
 /// `RuleDeployment.executionState` values under which Google does not run
@@ -211,14 +213,15 @@ fn health(rule: &Json, deployment: &Json, outcome: &mut RuleOutcome) {
 ///
 /// # Errors
 ///
-/// The tenant's [`ConnectorError`].
+/// The tenant's [`ConnectorError`], under Google SecOps's code when it names
+/// one ([`CodedError`]).
 pub async fn deploy_rule(
     cx: TenantContext<'_>,
     auth: &Authorizer,
     endpoint: &str,
     instance: &str,
     rule: &RuleDeploy,
-) -> Result<RuleOutcome, ConnectorError> {
+) -> Result<RuleOutcome, CodedError> {
     let client = Client::new(cx, auth, endpoint, instance);
     let mut outcome = RuleOutcome {
         state: StateChange::Keep,
@@ -234,7 +237,7 @@ pub async fn deploy_rule(
 }
 
 /// A failure the rule records, or the tenant's error.
-fn api(failure: Failure) -> Result<ApiError, ConnectorError> {
+fn api(failure: Failure) -> Result<ApiError, CodedError> {
     match failure {
         Failure::Api(error) => Ok(error),
         Failure::Tenant(error) => Err(error),
@@ -247,7 +250,7 @@ async fn verify(
     client: &Client<'_>,
     assembled: &AssembledRule,
     outcome: &mut RuleOutcome,
-) -> Result<Option<VerifyOutcome>, ConnectorError> {
+) -> Result<Option<VerifyOutcome>, CodedError> {
     let verified = match client.verify(&assembled.text).await {
         Ok(answer) => read_verify_answer(&answer),
         Err(failure) => {
@@ -321,7 +324,7 @@ async fn create(
     client: &Client<'_>,
     rule: &RuleDeploy,
     outcome: &mut RuleOutcome,
-) -> Result<(), ConnectorError> {
+) -> Result<(), CodedError> {
     let Some(verified) = verify(client, &rule.assembled, outcome).await? else {
         return Ok(());
     };
@@ -335,9 +338,12 @@ async fn create(
     {
         Ok(created) => created,
         // Sent, and no answer: the rule may exist with an id opentide never saw.
-        Err(Failure::Tenant(
-            error @ (ConnectorError::Timeout { .. } | ConnectorError::Answer { .. }),
-        )) => {
+        Err(Failure::Tenant(error))
+            if matches!(
+                *error.error,
+                ConnectorError::Timeout { .. } | ConnectorError::Answer { .. }
+            ) =>
+        {
             outcome.fail(
                 "google_secops_create_unconfirmed",
                 format!("the create of rule {name} got no answer ({error}), {UNCONFIRMED}"),
@@ -391,7 +397,7 @@ async fn update(
     rule: &RuleDeploy,
     rule_id: &str,
     outcome: &mut RuleOutcome,
-) -> Result<(), ConnectorError> {
+) -> Result<(), CodedError> {
     let disabling = rule.disabling;
     let read = async {
         let remote = client.get_rule(rule_id).await?;
@@ -415,7 +421,7 @@ async fn update(
         return Ok(());
     }
     let mut allowed: Vec<String> = match remote.get("allowedRunFrequencies") {
-        Some(Json::Array(items)) => items.iter().map(opentide_compile::deploy::text).collect(),
+        Some(Json::Array(items)) => items.iter().map(Json::to_text).collect(),
         _ => Vec::new(),
     };
     let text = &rule.assembled.text;
@@ -469,7 +475,7 @@ async fn update(
     let current = remote
         .get("scope")
         .filter(|value| value.is_filled())
-        .map(opentide_compile::deploy::text)
+        .map(Json::to_text)
         .unwrap_or_default();
     if scope_id(&current) != scope_id(&wanted)
         && let Err(failure) = client.update_scope(rule_id, &wanted, tag.as_deref()).await
@@ -498,7 +504,7 @@ async fn gone(
     client: &Client<'_>,
     rule: &RuleDeploy,
     outcome: &mut RuleOutcome,
-) -> Result<(), ConnectorError> {
+) -> Result<(), CodedError> {
     if rule.retiring {
         outcome.warn(
             "google_secops_rule_missing",
@@ -524,7 +530,7 @@ async fn retire(
     rule: &RuleDeploy,
     rule_id: &str,
     outcome: &mut RuleOutcome,
-) -> Result<(), ConnectorError> {
+) -> Result<(), CodedError> {
     if !rule.delete {
         return archive(client, rule_id, outcome).await;
     }
@@ -554,7 +560,7 @@ async fn archive(
     client: &Client<'_>,
     rule_id: &str,
     outcome: &mut RuleOutcome,
-) -> Result<(), ConnectorError> {
+) -> Result<(), CodedError> {
     let steps = async {
         let remote = client.get_deployment(rule_id).await?;
         if remote.get("archived").is_some_and(Json::is_true) {

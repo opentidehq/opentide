@@ -117,6 +117,44 @@ fn required_keys_are_filled_and_stand_ins_marked() {
 }
 
 #[test]
+fn multi_byte_text_in_the_template_and_the_answers_is_kept() {
+    // #1946: lines are cut at the columns of their ASCII indent, `#` and
+    // `- `, whatever text follows.
+    let root = model();
+    let model = Model::new(&root);
+    let fields = collect_fields(&model, &root, &[], &[]);
+    let values = HashMap::from([
+        (path(&["name"]), Scalar::Text("Nom é😀".into())),
+        (path(&["metadata", "uuid"]), Scalar::Text("u-1".into())),
+        (
+            path(&["body", "description"]),
+            Scalar::Text("é😀 un\n😀 deux".into()),
+        ),
+    ]);
+    let template = format!(
+        "# é😀\n{}",
+        TEMPLATE
+            .replace("    ...\n", "    é😀…\n")
+            .replace("  #author: \n", "  #author: é😀\n")
+    );
+    let filled = fill_template(
+        &template,
+        &Fill {
+            fields: &fields,
+            values: &values,
+            schema: &json!({}),
+            model: &model,
+            marked: &HashSet::new(),
+            make_uuid: &|| "fresh".to_owned(),
+        },
+    );
+    assert_eq!(
+        filled.text,
+        "# é😀\nname: \"Nom é😀\"\nlevel: low  # opentide:placeholder\n\nmetadata:\n  uuid: u-1\n  tlp: amber\n  #author: é😀\n  #organisation:\n    #uuid: \n    #name: \nbody:\n  description: |\n    é😀 un\n    😀 deux\n  tags:\n    - ...  # opentide:placeholder\n  #extra: \nblock:\n  first: 1  # opentide:placeholder\n  #second: \n"
+    );
+}
+
+#[test]
 fn a_wanted_block_is_answered_and_a_list_answer_replaces_the_items() {
     let root = model();
     let model = Model::new(&root);
@@ -292,7 +330,7 @@ fn with_description(template: &str, value: Scalar) -> String {
 }
 
 /// A value for a key the template writes as a block scalar is the block's
-/// text, one block line per line, as `_fill_template` writes it: `new rule
+/// text, one block line per line: `new rule
 /// --platform google_secops` wrote `outcome: "$risk_score = 40"` over the
 /// template's `...` line, which no YAML reader accepts. The key and its text
 /// are commented in the template, as a platform block's are.

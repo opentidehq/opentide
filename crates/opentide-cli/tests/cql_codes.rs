@@ -260,4 +260,52 @@ fn validate_reports_correlate_with_an_aggregate_in_a_correlation_rule_only() {
         &[],
     );
     assert_eq!(ran.code, 0, "{}{}", ran.stdout, ran.stderr);
+    // `--platform crowdstrike` names the dialect, not the profile: the file
+    // is still plain LogScale (#1912, ADR 0015 §4).
+    let ran = opentide(
+        &ws,
+        &[
+            "--json",
+            "validate",
+            "query",
+            "--platform",
+            "crowdstrike",
+            "--file",
+            "hunt.cql",
+        ],
+        &[],
+    );
+    assert_eq!(ran.code, 0, "{}{}", ran.stdout, ran.stderr);
+    assert_eq!(
+        ran.json()["queries"][0]["platform"],
+        "crowdstrike",
+        "{}",
+        ran.stdout
+    );
+    // `--position rule`: the query of the CrowdStrike block, a correlation
+    // rule, which refuses it (#1993).
+    let ran = opentide(
+        &ws,
+        &[
+            "--json",
+            "validate",
+            "query",
+            "--platform",
+            "crowdstrike",
+            "--position",
+            "rule",
+            "--file",
+            "hunt.cql",
+        ],
+        &[],
+    );
+    assert_eq!(ran.code, 1, "{}{}", ran.stdout, ran.stderr);
+    let document = ran.json();
+    let found: Vec<&str> = document["diagnostics"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|item| item["code"].as_str())
+        .collect();
+    assert_eq!(found, [code], "{}", ran.stdout);
 }

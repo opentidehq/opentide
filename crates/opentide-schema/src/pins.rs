@@ -104,7 +104,7 @@ pub enum PinError {
     /// Not TOML.
     #[error("could not read pins {file}: {message}")]
     Toml {
-        /// The file.
+        /// The pin file's name, as given to [`PinTable::parse`].
         file: String,
         /// The parser's message.
         message: String,
@@ -112,9 +112,9 @@ pub enum PinError {
     /// A value that is not a string, or a string that is not `field::M.m`.
     #[error("{file}: [{revision}] {path}: {error}")]
     Contract {
-        /// The file.
+        /// The pin file's name, as given to [`PinTable::parse`].
         file: String,
-        /// The revision.
+        /// The revision's table (`threat::1.0`).
         revision: String,
         /// The field path.
         path: String,
@@ -124,9 +124,9 @@ pub enum PinError {
     /// Two files pin the same revision.
     #[error("{file}: [{revision}] is pinned by another file too")]
     Duplicate {
-        /// The file.
+        /// The file that pins the revision again, as given to [`PinTable::parse`].
         file: String,
-        /// The revision.
+        /// The revision both files pin (`threat::1.0`).
         revision: String,
     },
 }

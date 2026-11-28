@@ -1,7 +1,7 @@
 //! What a Google SecOps deploy, live check and search do when the instance
 //! refuses, loses or half-answers a request: each failure is the rule's
 //! (with its code and a message that says what was and was not written), or
-//! the tenant's, as `deployer.py` reports it. The Chronicle API and the token
+//! the tenant's, as the 0.28.0 deployer reports it. The Chronicle API and the token
 //! endpoint are a wiremock server; no real credential is used.
 #![expect(clippy::unwrap_used, reason = "a test: a failed set-up is a failure")]
 
@@ -9,8 +9,8 @@ use std::time::Duration;
 
 use opentide_compile::google_secops::RunState;
 use opentide_connectors::connector::{
-    DeployRequest, DeployScope, Deployer, LiveValidator, Operation, QueryRequest, QueryRunner,
-    TenantContext, TimeWindow,
+    CodedError, DeployRequest, DeployScope, Deployer, LiveValidator, Operation, QueryRequest,
+    QueryRunner, TenantContext, TimeWindow,
 };
 use opentide_connectors::credentials::Mode;
 use opentide_connectors::google_secops::deploy::{
@@ -104,7 +104,7 @@ async fn with_tenant<T>(
     let document = json!({"type": "authorized_user", "client_id": "c", "client_secret": CLIENT_SECRET,
         "refresh_token": REFRESH_TOKEN, "token_uri": format!("{}/token", api.uri())});
     std::fs::write(&adc, document.to_string()).unwrap();
-    let setup: toml::Table = toml::from_str(&format!(
+    let setup: opentide_core::json::Object = toml::from_str(&format!(
         "project = \"acme\"\nlocation = \"eu\"\ninstance = \"i-1\"\nendpoint = \"{}\"\n{extra}",
         api.uri()
     ))
@@ -153,7 +153,7 @@ async fn deploy_with(
     api: &MockServer,
     settings: &HttpSettings,
     rule: &RuleDeploy,
-) -> Result<RuleOutcome, ConnectorError> {
+) -> Result<RuleOutcome, CodedError> {
     with_tenant(api, "", settings, async |cx, connector| {
         let authorizer = connector.authorizer(cx.tenant).unwrap();
         deploy_rule(cx, &authorizer, &api.uri(), RESOURCE, rule).await
@@ -351,7 +351,8 @@ fn credentials_the_instance_refuses_stop_the_tenant_without_the_token() {
         let error = deploy_with(&api, &settings, &rule(Action::Create))
             .await
             .unwrap_err();
-        let ConnectorError::Authentication { message, .. } = &error else {
+        assert_eq!(error.code, Some("google_secops_tenant_unauthorized"));
+        let ConnectorError::Authentication { message, .. } = &*error.error else {
             panic!("{error:?}")
         };
         assert!(message.starts_with("google_secops_tenant_unauthorized: tenant secops-eu"));
@@ -885,7 +886,7 @@ fn an_instance_without_an_endpoint_is_reached_at_its_locations_default() {
     let env = Environment::default();
     for extra in ["", "endpoint = \"\""] {
         let setup = format!("project = \"acme\"\nlocation = \"eu\"\ninstance = \"i-1\"\n{extra}");
-        let setup: toml::Table = toml::from_str(&setup).unwrap();
+        let setup: opentide_core::json::Object = toml::from_str(&setup).unwrap();
         let settings = HttpSettings::default();
         let tenant = Tenant::from_setup(
             "google_secops",
@@ -916,7 +917,7 @@ fn a_token_endpoint_that_cannot_be_reached_is_unreachable_not_unauthorized() {
             "client_secret": CLIENT_SECRET, "refresh_token": REFRESH_TOKEN,
             "token_uri": "http://127.0.0.1:1/token"});
         std::fs::write(&adc, document.to_string()).unwrap();
-        let setup: toml::Table = toml::from_str(
+        let setup: opentide_core::json::Object = toml::from_str(
             "project = \"acme\"\nlocation = \"eu\"\ninstance = \"i-1\"\nendpoint = \"http://127.0.0.1:1\"\n",
         )
         .unwrap();
@@ -941,8 +942,9 @@ fn a_token_endpoint_that_cannot_be_reached_is_unreachable_not_unauthorized() {
         };
         let authorizer = GoogleSecops::new(env).authorizer(&tenant).unwrap();
         let error = authorizer.token(cx).await.unwrap_err();
+        assert_eq!(error.code, None);
         assert!(
-            matches!(error, ConnectorError::Unreachable { .. }),
+            matches!(*error.error, ConnectorError::Unreachable { .. }),
             "{error:?}"
         );
         let shown = format!("{error} {error:?}");

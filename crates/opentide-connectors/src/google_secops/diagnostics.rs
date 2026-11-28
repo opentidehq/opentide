@@ -1,5 +1,4 @@
-//! `verifyRuleText` answers, read and put back on the block, ported from
-//! 0.28.0's `platforms/google_secops/diagnostics.py`.
+//! `verifyRuleText` answers, read and put back on the block.
 //!
 //! `verifyRuleText` compiles a rule without creating it. It answers
 //! `success: true` for a rule that compiles; a refused rule answers HTTP 200
@@ -66,7 +65,7 @@ fn diagnostic(raw: &Json) -> Diagnostic {
     let text = |key: &str| {
         raw.get(key)
             .filter(|value| value.is_filled())
-            .map(opentide_compile::deploy::text)
+            .map(Json::to_text)
     };
     Diagnostic {
         message: text("message").unwrap_or_else(|| "no message".to_owned()),

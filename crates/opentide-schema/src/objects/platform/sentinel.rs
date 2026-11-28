@@ -8,6 +8,8 @@ use indexmap::IndexMap;
 use schemars::{JsonSchema, Schema, SchemaGenerator, json_schema};
 use serde::{Deserialize, Serialize};
 
+use opentide_core::duration::{Iso8601Error, SENTINEL, SENTINEL_MAX_DAYS, SENTINEL_MAX_SECONDS};
+
 use crate::FromNode;
 use crate::configuration::repr;
 use crate::from_node::{Context, Shape};
@@ -87,21 +89,22 @@ pub struct SentinelTrigger {
 /// `1h10m`), around blanks; empty is left to deploy, which asks for the
 /// value where it needs one. Validation refuses what deploy cannot convert:
 /// a value of neither shape (`frequency: hourly`), and one longer than
-/// deploy's `timedelta` holds ([`MAX_DURATION_SECONDS`]: `1000000000d`,
-/// `P99999999999D`), both of which the oracle accepted and deploy refused.
+/// deploy converts ([`MAX_DURATION_SECONDS`]: `1000000000d`,
+/// `P99999999999D`).
+/// The grammar is [`SENTINEL`], the one deploy reads too (#1934).
 pub fn check_duration(value: &str) -> Result<(), Violation> {
     let text = value.trim();
     if text.is_empty() {
         return Ok(());
     }
-    match duration_seconds(text) {
-        Length::Seconds(_) => Ok(()),
-        Length::TooLong => Err(Violation::value_error(format!(
+    match SENTINEL.seconds(text) {
+        Ok(_) => Ok(()),
+        Err(Iso8601Error::TooLong) => Err(Violation::value_error(format!(
             "Duration {} is longer than a rule can be deployed with (at most {MAX_DURATION_DAYS} \
              days, 23 hours, 59 minutes and 59 seconds)",
             repr::quote(value)
         ))),
-        Length::NotADuration => Err(Violation::value_error(format!(
+        Err(Iso8601Error::Format) => Err(Violation::value_error(format!(
             "Duration {} is not an ISO 8601 duration (PT1H, PT30M, P1D) or a shorthand duration \
              (30m, 1h, 1d, 1h10m)",
             repr::quote(value)
@@ -110,77 +113,11 @@ pub fn check_duration(value: &str) -> Result<(), Violation> {
 }
 
 /// The most days deploy's duration holds: 999,999,999.
-pub const MAX_DURATION_DAYS: u64 = 999_999_999;
+pub const MAX_DURATION_DAYS: u64 = SENTINEL_MAX_DAYS;
 
 /// The longest duration deploy converts, in seconds: [`MAX_DURATION_DAYS`]
 /// and a day less one second, in whole seconds.
-pub const MAX_DURATION_SECONDS: u64 = MAX_DURATION_DAYS * 86_400 + 86_399;
-
-/// What a Sentinel duration's text spells.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Length {
-    /// Neither shape.
-    NotADuration,
-    /// Longer than [`MAX_DURATION_SECONDS`] (a part too long for a `u64`
-    /// included: the sum is checked, so no digit string can overflow it).
-    TooLong,
-    /// The duration, in seconds.
-    Seconds(u64),
-}
-
-/// The duration `text` (stripped) spells.
-#[expect(
-    clippy::expect_used,
-    reason = "regex literals, tested by `sentinel_durations`"
-)]
-fn duration_seconds(text: &str) -> Length {
-    use std::sync::OnceLock;
-    static PATTERNS: OnceLock<(regex::Regex, regex::Regex)> = OnceLock::new();
-    let (short, iso) = PATTERNS.get_or_init(|| {
-        (
-            regex::Regex::new(r"^(?:([0-9]+)d)?(?:([0-9]+)h)?(?:([0-9]+)m)?(?:([0-9]+)s)?$")
-                .expect("a valid pattern"),
-            regex::Regex::new(
-                r"(?i)^P(?:([0-9]+)W)?(?:([0-9]+)D)?(?:T(?:([0-9]+)H)?(?:([0-9]+)M)?(?:([0-9]+)S)?)?$",
-            )
-            .expect("a valid pattern"),
-        )
-    });
-    // Each group's length in seconds, in the pattern's order.
-    let total = |captures: &regex::Captures<'_>, units: &[u64]| -> Option<Length> {
-        if !captures.iter().skip(1).any(|part| part.is_some()) {
-            return None;
-        }
-        let mut sum: Option<u64> = Some(0);
-        for (part, unit) in captures.iter().skip(1).zip(units) {
-            if let Some(part) = part {
-                let seconds = part
-                    .as_str()
-                    .parse::<u64>()
-                    .ok()
-                    .and_then(|count| count.checked_mul(*unit));
-                sum = sum
-                    .zip(seconds)
-                    .and_then(|(sum, seconds)| sum.checked_add(seconds));
-            }
-        }
-        Some(
-            sum.filter(|seconds| *seconds <= MAX_DURATION_SECONDS)
-                .map_or(Length::TooLong, Length::Seconds),
-        )
-    };
-    if let Some(captures) = short.captures(text)
-        && let Some(length) = total(&captures, &[86_400, 3_600, 60, 1])
-    {
-        return length;
-    }
-    if text.to_uppercase().ends_with('T') {
-        return Length::NotADuration;
-    }
-    iso.captures(text)
-        .and_then(|captures| total(&captures, &[604_800, 86_400, 3_600, 60, 1]))
-        .unwrap_or(Length::NotADuration)
-}
+pub const MAX_DURATION_SECONDS: u64 = SENTINEL_MAX_SECONDS;
 
 /// A duration field in the conversion: `null`, or a string [`check_duration`]
 /// accepts.
@@ -224,13 +161,151 @@ fn garde_suppression(value: &Suppression, _pins: &Pins) -> garde::Result {
     }
 }
 
+/// `scheduling.frequency` is 5 minutes to 14 days.
+pub const FREQUENCY: &str = opentide_core::codes::SENTINEL_FREQUENCY;
+/// `scheduling.lookback` is 5 minutes to 14 days, and at least `frequency`.
+pub const LOOKBACK: &str = opentide_core::codes::SENTINEL_LOOKBACK;
+
+/// Every code [`schedule_findings`] reports.
+pub const CONSTRAINT_CODES: [&str; 2] = [FREQUENCY, LOOKBACK];
+
+/// The shortest frequency and lookback Sentinel takes, in seconds: 5 minutes.
+pub const SCHEDULE_MIN_SECONDS: u64 = 5 * 60;
+
+/// The longest frequency and lookback Sentinel takes, in seconds: 14 days.
+pub const SCHEDULE_MAX_SECONDS: u64 = 14 * 86_400;
+
+/// One broken bound of a scheduled rule: its code, the key under
+/// `scheduling` it is about, and what is wrong.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ScheduleFinding {
+    /// [`FREQUENCY`] or [`LOOKBACK`].
+    pub code: &'static str,
+    /// `frequency` or `lookback`.
+    pub key: &'static str,
+    /// The message.
+    pub message: String,
+}
+
+/// The bounds Microsoft documents for a scheduled rule's "Run query every"
+/// and "Lookup data from the last" (learn.microsoft.com/en-us/azure/sentinel/
+/// scheduled-rules-overview, read 2026-11-27): "The allowed range for both of
+/// these parameters is from 5 minutes to 14 days", and "The query interval
+/// must be shorter than or equal to the lookback period". Sentinel refuses a
+/// rule outside them at deploy.
+///
+/// A near-real-time rule (`nrt: true`) is not judged: deploy sends neither
+/// field. Neither is a value that is empty or not a duration
+/// ([`check_duration`] reports the latter, deploy asks for the former).
+pub fn schedule_findings(
+    nrt: Option<bool>,
+    frequency: Option<&str>,
+    lookback: Option<&str>,
+) -> Vec<ScheduleFinding> {
+    let mut found = Vec::new();
+    if nrt == Some(true) {
+        return found;
+    }
+    let seconds = |value: Option<&str>| match value.map(str::trim) {
+        Some(text) if !text.is_empty() => SENTINEL.seconds(text).ok(),
+        _ => None,
+    };
+    let every = seconds(frequency);
+    let window = seconds(lookback);
+    for (code, key, value, length) in [
+        (FREQUENCY, "frequency", frequency, every),
+        (LOOKBACK, "lookback", lookback, window),
+    ] {
+        let Some(length) = length else {
+            continue;
+        };
+        let bound = if length < SCHEDULE_MIN_SECONDS {
+            "shorter than 5 minutes"
+        } else if length > SCHEDULE_MAX_SECONDS {
+            "longer than 14 days"
+        } else {
+            continue;
+        };
+        found.push(ScheduleFinding {
+            code,
+            key,
+            message: format!(
+                "scheduling.{key} {} is {bound}: Sentinel takes a scheduled rule's {key} from 5 \
+                 minutes to 14 days",
+                repr::quote(value.unwrap_or_default())
+            ),
+        });
+    }
+    if let (Some(every), Some(window)) = (every, window)
+        && window < every
+        && !found.iter().any(|finding| finding.code == LOOKBACK)
+    {
+        found.push(ScheduleFinding {
+            code: LOOKBACK,
+            key: "lookback",
+            message: format!(
+                "scheduling.lookback {} is shorter than frequency {}: Sentinel requires the \
+                 lookback to be at least the frequency, or the rule's runs leave gaps",
+                repr::quote(lookback.unwrap_or_default()),
+                repr::quote(frequency.unwrap_or_default())
+            ),
+        });
+    }
+    found
+}
+
+/// [`schedule_findings`] as a `mode="after"` validator: each finding an error
+/// typed by its code, at its key.
+fn schedule_bounds(value: &SentinelScheduling, node: &Node, cx: &mut Context) -> bool {
+    let found = schedule_findings(
+        value.nrt,
+        value.frequency.as_deref(),
+        value.lookback.as_deref(),
+    );
+    for finding in &found {
+        let input = match &node.value {
+            crate::node::Value::Map(entries) => entries
+                .iter()
+                .find(|entry| entry.key.value.as_str() == Some(finding.key))
+                .map_or(node, |entry| entry.value.as_ref()),
+            _ => node,
+        };
+        cx.at_key(finding.key, |cx| {
+            cx.error(
+                crate::error::ErrorKind::Constraint(finding.code),
+                finding.message.clone(),
+                input,
+            );
+        });
+    }
+    found.is_empty()
+}
+
+/// garde: [`schedule_findings`] on a value built in memory.
+fn garde_schedule(value: &SentinelScheduling, _pins: &Pins) -> garde::Result {
+    match schedule_findings(
+        value.nrt,
+        value.frequency.as_deref(),
+        value.lookback.as_deref(),
+    )
+    .first()
+    {
+        None => Ok(()),
+        Some(first) => Err(garde::Error::new(format!(
+            "{}: {}",
+            first.code, first.message
+        ))),
+    }
+}
+
 /// Run cadence, or NRT (`SentinelScheduling`).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, Validate, FromNode)]
 #[serde(deny_unknown_fields)]
 #[garde(context(Pins))]
 #[garde(allow_unvalidated)]
+#[garde(custom(garde_schedule))]
 #[schemars(rename = "SentinelScheduling", description = "")]
-#[from_node(model = "SentinelScheduling")]
+#[from_node(model = "SentinelScheduling", after = "schedule_bounds")]
 #[cfg_attr(
     feature = "python",
     pyo3::pyclass(
@@ -725,6 +800,86 @@ platform_block! {
 mod tests {
     use super::*;
 
+    /// Microsoft's bounds (#1916): 5 minutes to 14 days each, the lookback
+    /// at least the frequency, compared in seconds whatever the spelling.
+    #[test]
+    fn schedule_bounds() {
+        let codes = |nrt: Option<bool>, frequency: Option<&str>, lookback: Option<&str>| {
+            schedule_findings(nrt, frequency, lookback)
+                .into_iter()
+                .map(|finding| (finding.code, finding.key))
+                .collect::<Vec<_>>()
+        };
+        // Inside the bounds, at both ends and across spellings.
+        assert!(codes(None, Some("5m"), Some("PT5M")).is_empty());
+        assert!(codes(None, Some("PT1H"), Some("60m")).is_empty());
+        assert!(codes(None, Some("14d"), Some("P2W")).is_empty());
+        assert!(codes(Some(false), Some("300s"), Some("1209600s")).is_empty());
+        // Below 5 minutes, above 14 days.
+        assert_eq!(
+            codes(None, Some("4m59s"), Some("1h")),
+            [(FREQUENCY, "frequency")]
+        );
+        assert_eq!(
+            codes(None, Some("1h"), Some("14d1s")),
+            [(LOOKBACK, "lookback")]
+        );
+        assert_eq!(
+            codes(None, Some("P15D"), Some("P15D")),
+            [(FREQUENCY, "frequency"), (LOOKBACK, "lookback")]
+        );
+        assert_eq!(codes(None, Some("0m"), None), [(FREQUENCY, "frequency")]);
+        // The lookback shorter than the frequency, once.
+        assert_eq!(
+            codes(None, Some("2h"), Some("PT1H")),
+            [(LOOKBACK, "lookback")]
+        );
+        assert_eq!(
+            codes(None, Some("1h"), Some("1m")),
+            [(LOOKBACK, "lookback")]
+        );
+        // Not judged: NRT, absent, empty, or not a duration.
+        assert!(codes(Some(true), Some("1m"), Some("30d")).is_empty());
+        assert!(codes(None, None, None).is_empty());
+        assert!(codes(None, Some("  "), Some("hourly")).is_empty());
+        // The message names the value and the bounds.
+        let [finding] = schedule_findings(None, Some("1m"), None)
+            .try_into()
+            .unwrap();
+        assert_eq!(
+            finding.message,
+            "scheduling.frequency \"1m\" is shorter than 5 minutes: Sentinel takes a scheduled \
+             rule's frequency from 5 minutes to 14 days"
+        );
+    }
+
+    /// The conversion reports each finding typed by its code, at its key;
+    /// garde reports the first on a value built in memory.
+    #[test]
+    fn schedule_bounds_in_the_conversion_and_garde() {
+        let document = crate::node::load("frequency: 2h\nlookback: 1m\n").unwrap();
+        let root = document.root().unwrap();
+        let mut cx = Context::new();
+        assert!(SentinelScheduling::from_node(root, &mut cx).is_none());
+        let errors = cx.into_errors();
+        assert_eq!(errors.len(), 1, "{errors:?}");
+        assert_eq!(
+            errors[0].kind,
+            crate::error::ErrorKind::Constraint(LOOKBACK)
+        );
+        assert_eq!(
+            errors[0].path,
+            [crate::error::PathSegment::Key("lookback".into())]
+        );
+        let built = SentinelScheduling {
+            nrt: None,
+            frequency: Some("1m".into()),
+            lookback: Some("1h".into()),
+        };
+        let error = built.validate_with(&Pins::default()).unwrap_err();
+        assert!(error.to_string().contains("sentinel_frequency"), "{error}");
+    }
+
     #[test]
     fn sentinel_durations() {
         for text in [
@@ -746,9 +901,9 @@ mod tests {
         );
     }
 
-    /// What deploy's `timedelta` holds passes; one second more, or a part
-    /// too long for any integer, is refused (the oracle's deploy raised
-    /// `OverflowError` on each, after validation accepted it).
+    /// What deploy converts passes; one second more, or a part too long for
+    /// any integer, is refused, so validation never passes a duration that
+    /// deploy then refuses.
     #[test]
     fn sentinel_durations_are_bounded_by_what_deploy_converts() {
         for text in [

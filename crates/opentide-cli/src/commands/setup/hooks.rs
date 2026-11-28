@@ -1,4 +1,4 @@
-//! `opentide setup hooks` (`services/setup/hooks.py`): a local
+//! `opentide setup hooks`: a local
 //! `opentide-validate` hook in `.pre-commit-config.yaml`, the versioned
 //! `.opentide/hooks/pre-commit` script, and that script installed as Git's
 //! `pre-commit` hook when the workspace is in a Git repository.
@@ -27,7 +27,7 @@ const LEGACY_HOOK_ENTRIES: [&str; 1] = ["opentide validate --strict"];
 
 /// `word` as one shell word.
 fn quote(word: &str) -> String {
-    shlex::try_quote(word).map_or_else(|_| format!("'{word}'"), std::borrow::Cow::into_owned)
+    opentide_core::text::shell_word(word).into_owned()
 }
 
 /// The shell word naming the workspace: the Git root, plus `relative`.
@@ -146,35 +146,24 @@ struct GitLayout {
     hooks_shared: bool,
 }
 
-/// Asks Git where the repository around `target` is (`_git_layout`).
+/// Where the repository around `target` is: its top level, the folder git
+/// runs hooks from (`core.hooksPath`, read through `env`) and its common
+/// directory, read with gix, so git need not be installed.
 fn git_layout(env: &Env, target: &Path) -> Option<GitLayout> {
     let probe = target
         .ancestors()
         .find(|candidate| candidate.is_dir())?
         .to_path_buf();
-    let output = crate::git_baseline::stdout(
-        env,
-        &probe,
-        &[
-            "rev-parse",
-            "--show-toplevel",
-            "--git-path",
-            "hooks",
-            "--git-common-dir",
-        ],
-    )?;
-    let lines: Vec<&str> = output.lines().collect();
-    let [top, hooks, common] = lines.as_slice() else {
-        return None;
-    };
-    let top_level = super::real(Path::new(top));
+    let lookup = |name: &str| env.get(name).map(str::to_owned);
+    let found = opentide_compile::git::hooks_layout(&probe, &lookup)?;
+    let top_level = super::real(&found.top);
     let relative = super::real(target)
         .strip_prefix(&top_level)
         .ok()?
         .to_string_lossy()
         .replace('\\', "/");
-    let hooks_dir = super::real(&probe.join(hooks));
-    let common_dir = super::real(&probe.join(common));
+    let hooks_dir = super::real(&found.hooks_dir);
+    let common_dir = super::real(&found.common_dir);
     Some(GitLayout {
         hooks_shared: !(hooks_dir.starts_with(&top_level) || hooks_dir.starts_with(&common_dir)),
         top_level,
@@ -231,7 +220,7 @@ fn entry_line() -> regex::Regex {
     regex::Regex::new(r"^(?P<lead>\s*(?:-\s+)?entry:[ \t]*)(?P<value>.*?)[ \t]*$").expect("regex")
 }
 
-/// Points stale opentide `entry:` lines at `relative` (`_refresh_hook_entry`);
+/// Points stale opentide `entry:` lines at `relative`;
 /// the new text (`None` when nothing changed) and the other workspaces
 /// entries were left pinned to.
 fn refresh_hook_entry(
@@ -246,6 +235,10 @@ fn refresh_hook_entry(
     let mut kept = Vec::new();
     for line in &mut lines {
         let body = line.trim_end_matches(['\r', '\n']).to_owned();
+        #[expect(
+            clippy::string_slice,
+            reason = "`body` is `line` with whole characters trimmed off its end"
+        )]
         let ending = line[body.len()..].to_owned();
         let Some(found) = pattern.captures(&body) else {
             continue;
@@ -303,19 +296,22 @@ fn same(a: &Node, b: &Node) -> bool {
     }
 }
 
-/// The code-point offset `index` of `text` as a byte offset.
-fn byte_offset(text: &str, index: usize) -> usize {
-    text.char_indices()
-        .nth(index)
-        .map_or(text.len(), |(at, _)| at)
+/// `text` before and from code point `index` (all of `text` before, when it
+/// is shorter).
+fn split_at_char(text: &str, index: usize) -> (&str, &str) {
+    match text.char_indices().nth(index) {
+        Some((at, _)) =>
+        {
+            #[expect(clippy::string_slice, reason = "`char_indices` yields char boundaries")]
+            (&text[..at], &text[at..])
+        }
+        None => (text, ""),
+    }
 }
 
 /// Whether the node at `index` opens a flow collection.
 fn is_flow(text: &str, node: &Node) -> bool {
-    matches!(
-        text[byte_offset(text, node.start.index())..].chars().next(),
-        Some('{' | '[')
-    )
+    matches!(text.chars().nth(node.start.index()), Some('{' | '['))
 }
 
 fn indented_hook(relative: &str, indent: usize) -> String {
@@ -333,8 +329,8 @@ fn blank_or_comment(line: &str) -> bool {
     stripped.is_empty() || stripped.starts_with('#')
 }
 
-/// `text` with the opentide hook as the last `repos` entry
-/// (`_with_local_hook`); `None` when the layout is not one this extends. A
+/// `text` with the opentide hook as the last `repos` entry;
+/// `None` when the layout is not one this extends. A
 /// file whose every line ends in CRLF keeps CRLF, the added lines too.
 fn with_local_hook(text: &str, relative: &str) -> Option<String> {
     // A CRLF cut after its CR: complete it.
@@ -345,6 +341,7 @@ fn with_local_hook(text: &str, relative: &str) -> Option<String> {
     } else {
         text
     };
+    // CRLF only when every line has it: not `opentide_core::text::newline_of` (any CRLF).
     let crlf = text.contains("\r\n") && text.matches('\n').count() == text.matches("\r\n").count();
     if crlf {
         let added = with_local_hook_lf(&text.replace("\r\n", "\n"), relative)?;
@@ -413,15 +410,11 @@ fn with_local_hook_lf(text: &str, relative: &str) -> Option<String> {
     if !empty {
         return None;
     }
-    let start = byte_offset(&text, repos.start.index());
-    let end = byte_offset(&text, repos.end.index());
-    let head = text[..start].trim_end_matches([' ', '\t']);
+    let (head, _) = split_at_char(&text, repos.start.index());
+    let (_, tail) = split_at_char(&text, repos.end.index());
+    let head = head.trim_end_matches([' ', '\t']);
     let block = indented_hook(relative, entry.key.start.column() - 1 + 2);
-    Some(format!(
-        "{head}\n{}{}",
-        block.trim_end_matches('\n'),
-        &text[end..]
-    ))
+    Some(format!("{head}\n{}{tail}", block.trim_end_matches('\n')))
 }
 
 /// `text` as YAML: `Ok(None)` for a document of comments only.
@@ -692,9 +685,7 @@ pub fn executable_bit_warning(paths: &[&str]) -> Option<String> {
     }
     let quoted: Vec<String> = paths
         .iter()
-        .map(|path| {
-            shlex::try_quote(path).map_or_else(|_| (*path).to_owned(), |quoted| quoted.into_owned())
-        })
+        .map(|path| opentide_core::text::shell_word(path).into_owned())
         .collect();
     Some(format!(
         "This build of opentide cannot set file permissions (WASI), so the hook is not executable and git will skip it; make it executable: chmod +x {}",
@@ -884,6 +875,18 @@ mod tests {
         let added = with_local_hook("repos: []\n", "").unwrap();
         assert!(added.starts_with("repos:\n  - repo: local\n"), "{added}");
         assert_eq!(with_local_hook("{repos: []}\n", ""), None);
+        // #1946: the empty sequence is found by code point among
+        // multi-byte text, before and after it.
+        let added = with_local_hook("# é😀\nrepos: []\nci:\n  skip: [é]\n", "").unwrap();
+        assert!(
+            added.starts_with("# é😀\nrepos:\n  - repo: local\n"),
+            "{added}"
+        );
+        assert!(
+            added.ends_with("always_run: true\nci:\n  skip: [é]\n"),
+            "{added}"
+        );
+        assert_eq!(with_local_hook("# é😀\n{repos: []}\n", ""), None);
     }
 
     #[test]
@@ -894,6 +897,14 @@ mod tests {
         assert!(kept.is_empty());
         assert!(
             refreshed.contains(&format!("entry: {}\r\n", hook_entry(""))),
+            "{refreshed}"
+        );
+        // #1946: the line ending is kept after multi-byte text.
+        let text = "# é😀\r\nrepos:\n  - repo: local\n    hooks:\n      - id: opentide-validate # é\n        entry: opentide validate --strict\r\n";
+        let refreshed = refresh_hook_entry(text, "", None).0.unwrap();
+        assert!(
+            refreshed.starts_with("# é😀\r\n")
+                && refreshed.ends_with(&format!("entry: {}\r\n", hook_entry(""))),
             "{refreshed}"
         );
     }

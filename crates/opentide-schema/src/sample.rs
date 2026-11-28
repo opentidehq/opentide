@@ -9,7 +9,7 @@
 //! | Field | Convention |
 //! |-------|------------|
 //! | `name` | required: no serde default, so a missing key is an error |
-//! | `uuid` | an identifier kept as the string the file holds, unchecked here: a workspace check (`invalid_uuid`) owns its format, as at the oracle |
+//! | `uuid` | an identifier kept as the string the file holds, unchecked here: a workspace check (`invalid_uuid`) owns its format |
 //! | `schema_id` | serialised as `schema`, also read as `schema_id` (Pydantic `alias` with `populate_by_name=True`) |
 //! | `description` | `tide.*` keys as `#[schemars(extend(...))]` |
 //! | `severity` | a vocabulary field: `tide.vocab`, and a custom validator that reads the [`Pins`] context |

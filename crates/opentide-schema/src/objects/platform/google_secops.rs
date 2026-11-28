@@ -1,13 +1,13 @@
 //! Google Security Operations YARA-L 2.0 detection rule,
 //! `platform::google_secops::1.0` (`GoogleSecopsConfig` and its nested
-//! models), ported from 0.28.0 (platform-google-secops rev 1.2).
+//! models; platform-google-secops rev 1.2).
 //!
-//! | Oracle (0.28.0) | Here |
-//! |-----------------|------|
-//! | `models/platform.py` `GoogleSecopsConfig`, `platform_configs.py` | [`GoogleSecopsConfig`], [`GoogleSecopsMatch`], [`GoogleSecopsOptions`], [`GoogleSecopsSchedule`] |
-//! | `platforms/google_secops/checks.py` `block_findings` | [`block_findings`], [`block_codes`] (the named check `google_secops_rule_shape`) |
-//! | `platforms/google_secops/yaral.py` | [`yaral`] |
-//! | `platforms/google_secops/compile.py` `assemble`, `AssembledRule`, `SectionPlace`, `Location` | [`assemble`] |
+//! - [`GoogleSecopsConfig`], [`GoogleSecopsMatch`], [`GoogleSecopsOptions`],
+//!   [`GoogleSecopsSchedule`]: the block's models;
+//! - [`block_findings`], [`block_codes`]: the named check
+//!   `google_secops_rule_shape`;
+//! - [`yaral`]: the parts of YARA-L checked without a parser;
+//! - [`assemble`]: the rule deploy sends.
 //!
 //! Unlike the older platforms' before-validators, which report one
 //! `value_error` naming every code, this block's reports one error per
@@ -427,7 +427,7 @@ platform_block! {
 }
 
 // ---------------------------------------------------------------------------
-// The named check `google_secops_rule_shape` (`checks.py` `block_findings`).
+// The named check `google_secops_rule_shape` ([`block_findings`]).
 // ---------------------------------------------------------------------------
 
 /// A positive `<n>s`, `<n>m`, `<n>h` or `<n>d` duration in seconds, or
@@ -441,7 +441,7 @@ pub fn duration_seconds(value: &str) -> Option<u64> {
         'd' => 86_400,
         _ => return None,
     };
-    yaral::positive_number(&value[..value.len() - 1]).map(|count| count.saturating_mul(factor))
+    yaral::positive_number(value.strip_suffix(unit)?).map(|count| count.saturating_mul(factor))
 }
 
 fn schedule_findings(block: &Node) -> Vec<Finding> {
@@ -623,5 +623,16 @@ mod tests {
                 "meta key \"live\" is of type boolean: a meta value is a string (quote it)",
             ]
         );
+    }
+
+    #[test]
+    fn a_duration_with_a_multi_byte_character_is_none() {
+        // #1946: the unit is stripped, never sliced off by byte.
+        for text in ["😀s", "5é", "é", "", "5😀"] {
+            assert_eq!(duration_seconds(text), None, "{text}");
+            assert_eq!(yaral::window_minutes(text), None, "{text}");
+        }
+        assert_eq!(duration_seconds("10m"), Some(600));
+        assert_eq!(yaral::window_minutes("2h"), Some(120));
     }
 }

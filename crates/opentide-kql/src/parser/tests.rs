@@ -436,7 +436,10 @@ fn parse_kv_takes_its_keys_and_options() {
             .expect("a parse-kv operator");
         assert_eq!(
             op.to_string().trim_end(),
-            source[source.find("parse-kv").unwrap_or(0)..].trim_end()
+            source
+                .get(source.find("parse-kv").unwrap_or(0)..)
+                .unwrap()
+                .trim_end()
         );
     }
     assert!(!errors("T | parse-kv Text as (a long)").is_empty());

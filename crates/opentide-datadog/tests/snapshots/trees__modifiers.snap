@@ -1,0 +1,21 @@
+---
+source: crates/opentide-datadog/tests/trees.rs
+expression: "debug_tree(\"--a NOT NOT b\")"
+---
+QUERY@0..13
+  AND_EXPR@0..13
+    NOT_EXPR@0..3
+      MINUS@0..1 "-"
+      MINUS@1..2 "-"
+      TERM@2..3
+        WORD@2..3 "a"
+    WHITESPACE@3..4 " "
+    NOT_EXPR@4..13
+      NOT_KW@4..7 "NOT"
+      WHITESPACE@7..8 " "
+      NOT_KW@8..11 "NOT"
+      WHITESPACE@11..12 " "
+      TERM@12..13
+        WORD@12..13 "b"
+1..1: two modifiers in a row: `-`, `+` and `NOT` do not stack (write one, or group)
+7..8: two modifiers in a row: `-`, `+` and `NOT` do not stack (write one, or group)

@@ -15,7 +15,7 @@ readme = "../COMPONENT.md"
 workspace = true
 
 [dependencies]
-opentide-core.workspace = true
+opentide-core = { workspace = true, features = ["shell"] }
 opentide-schema.workspace = true
 # The revisions' JSON Schemas, whose `tide.vocab` keys the vocabulary check reads.
 schemars.workspace = true
@@ -24,10 +24,8 @@ serde.workspace = true
 toml.workspace = true
 # Canonical paths without Windows' verbatim (`\\?\`) prefix.
 dunce.workspace = true
-# UUID v4 and canonical forms (`uuid-format`, deployment state shards).
-uuid.workspace = true
 # Objects in the order the registry meets them, looked up by UUID.
-indexmap = { version = "2", features = ["serde"] }
+indexmap = { workspace = true, features = ["serde"] }
 # Each object file is read and parsed on its own thread.
 rayon.workspace = true
 serde_json.workspace = true
@@ -35,17 +33,14 @@ serde_json.workspace = true
 # opentide-schema checks `metadata.reviewed` with).
 jiff.workspace = true
 thiserror.workspace = true
-# The catalogue's text fallbacks and `$VAR` references, as the oracle's
+# The catalogue's text fallbacks and `$VAR` references, as opentide 0.23.0's
 # patterns; lint's placeholder markers and top-level keys; watch's UUID scan.
 regex.workspace = true
 # `validate --fix --dry-run`'s unified diff (the user's rule: a crate, never a
-# port of Python's difflib). Version 2, as xtask uses: `similar` 3 would be
-# a second shipped copy, which cargo-deny's bans refuse.
-similar = "2.7"
+# port of Python's difflib). The workspace's version (see the root manifest).
+similar.workspace = true
 # `validate --fix` writes through a temporary file renamed into place.
-tempfile = "3"
-# `lint --fix`'s next step quotes its flags as a shell would read them.
-shlex = "2.0"
+tempfile.workspace = true
 
 # `--watch`'s change detection. The language server and the WebAssembly
 # build have no file watcher of their own to need.
@@ -55,4 +50,4 @@ notify = "8.2"
 [dev-dependencies]
 proptest.workspace = true
 # The process session's test opens a workspace on the disk.
-tempfile = "3"
+tempfile.workspace = true

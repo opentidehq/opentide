@@ -6,7 +6,7 @@
     "-c",
     "cp -R tests/golden/fixtures/deploy-tenants \"$HOME/ws\" && exec {oracle}/opentide --repo \"$HOME/ws\" --json deploy --platform microsoft_defender --strategy PREVIEW --strategy RELEASE --all --keep-deprecated"
   ],
-  "digest": "sha256:2c9828555674e2e0651ea78516298991a0d0ca3638c6d93c0e20f3850c07a189",
+  "digest": "sha256:ef915ccbbcb3f230b5998f65a9383fff0aa3fa495bb72b7f0c72dfc5daa79cdc",
   "interactions": [
     {
       "request": {
@@ -38,7 +38,7 @@
     {
       "request": {
         "method": "PATCH",
-        "url": "https://graph.microsoft.com/beta/security/rules/detectionRules/00000000-0000-4000-8047-0000000000d1",
+        "url": "https://graph.microsoft.com/beta/security/rules/detectionRules/opentide-00000000-0000-4000-8047-0000000000d1",
         "headers": [
           [
             "authorization",
@@ -76,7 +76,7 @@
             "application/json"
           ]
         ],
-        "body": "{\"id\":\"00000000-0000-4000-8047-0000000000d1\",\"displayName\":\"Defender create rule\",\"description\":\"A rule the Microsoft Defender stand-in tenant receives in a deploy that sends; the tenant does not hold it yet: PATCH answers 404, then POST creates it with its uuid as id.\\n\",\"status\":\"enabled\",\"queryCondition\":{\"queryText\":\"DeviceProcessEvents\\n| take 1\\n\"},\"schedule\":{\"frequency\":\"PT1H\"},\"detectionAction\":{\"alertTemplate\":{\"title\":\"Defender create rule\",\"description\":\"A rule the Microsoft Defender stand-in tenant receives in a deploy that sends; the tenant does not hold it yet: PATCH answers 404, then POST creates it with its uuid as id.\\n\",\"severity\":\"high\",\"entityMappings\":{\"hosts\":[{\"deviceIdColumn\":\"DeviceId\"}]}}}}"
+        "body": "{\"id\":\"opentide-00000000-0000-4000-8047-0000000000d1\",\"displayName\":\"Defender create rule\",\"description\":\"A rule the Microsoft Defender stand-in tenant receives in a deploy that sends; the tenant does not hold it yet: PATCH answers 404, then POST creates it with its uuid as id.\\n\",\"status\":\"enabled\",\"queryCondition\":{\"queryText\":\"DeviceProcessEvents\\n| take 1\\n\"},\"schedule\":{\"frequency\":\"PT1H\"},\"detectionAction\":{\"alertTemplate\":{\"title\":\"Defender create rule\",\"description\":\"A rule the Microsoft Defender stand-in tenant receives in a deploy that sends; the tenant does not hold it yet: PATCH answers 404, then POST creates it with its uuid as id.\\n\",\"severity\":\"high\",\"entityMappings\":{\"hosts\":[{\"deviceIdColumn\":\"DeviceId\"}]}}}}"
       },
       "response": {
         "status": 201,
@@ -90,13 +90,13 @@
             "application/json"
           ]
         ],
-        "body": "{\"id\": \"00000000-0000-4000-8047-0000000000d1\", \"displayName\": \"Defender create rule\", \"description\": \"A rule the Microsoft Defender stand-in tenant receives in a deploy that sends; the tenant does not hold it yet: PATCH answers 404, then POST creates it with its uuid as id.\\n\", \"status\": \"enabled\", \"queryCondition\": {\"queryText\": \"DeviceProcessEvents\\n| take 1\\n\"}, \"schedule\": {\"frequency\": \"PT1H\"}, \"detectionAction\": {\"alertTemplate\": {\"title\": \"Defender create rule\", \"description\": \"A rule the Microsoft Defender stand-in tenant receives in a deploy that sends; the tenant does not hold it yet: PATCH answers 404, then POST creates it with its uuid as id.\\n\", \"severity\": \"high\", \"entityMappings\": {\"hosts\": [{\"deviceIdColumn\": \"DeviceId\"}]}}}}"
+        "body": "{\"id\": \"opentide-00000000-0000-4000-8047-0000000000d1\", \"displayName\": \"Defender create rule\", \"description\": \"A rule the Microsoft Defender stand-in tenant receives in a deploy that sends; the tenant does not hold it yet: PATCH answers 404, then POST creates it with its uuid as id.\\n\", \"status\": \"enabled\", \"queryCondition\": {\"queryText\": \"DeviceProcessEvents\\n| take 1\\n\"}, \"schedule\": {\"frequency\": \"PT1H\"}, \"detectionAction\": {\"alertTemplate\": {\"title\": \"Defender create rule\", \"description\": \"A rule the Microsoft Defender stand-in tenant receives in a deploy that sends; the tenant does not hold it yet: PATCH answers 404, then POST creates it with its uuid as id.\\n\", \"severity\": \"high\", \"entityMappings\": {\"hosts\": [{\"deviceIdColumn\": \"DeviceId\"}]}}}}"
       }
     },
     {
       "request": {
         "method": "PATCH",
-        "url": "https://graph.microsoft.com/beta/security/rules/detectionRules/00000000-0000-4000-8047-0000000000d2",
+        "url": "https://graph.microsoft.com/beta/security/rules/detectionRules/opentide-00000000-0000-4000-8047-0000000000d2",
         "headers": [
           [
             "authorization",
@@ -121,13 +121,13 @@
             "application/json"
           ]
         ],
-        "body": "{\"id\": \"00000000-0000-4000-8047-0000000000d2\", \"displayName\": \"Defender update rule\", \"description\": \"A rule the Microsoft Defender stand-in tenant receives in a deploy that sends; the tenant holds it: one PATCH updates it.\\n\", \"status\": \"enabled\", \"queryCondition\": {\"queryText\": \"DeviceProcessEvents\\n| take 1\\n\"}, \"schedule\": {\"frequency\": \"PT1H\"}, \"detectionAction\": {\"alertTemplate\": {\"title\": \"Defender update rule\", \"description\": \"A rule the Microsoft Defender stand-in tenant receives in a deploy that sends; the tenant holds it: one PATCH updates it.\\n\", \"severity\": \"high\", \"entityMappings\": {\"hosts\": [{\"deviceIdColumn\": \"DeviceId\"}]}}}}"
+        "body": "{\"id\": \"opentide-00000000-0000-4000-8047-0000000000d2\", \"displayName\": \"Defender update rule\", \"description\": \"A rule the Microsoft Defender stand-in tenant receives in a deploy that sends; the tenant holds it: one PATCH updates it.\\n\", \"status\": \"enabled\", \"queryCondition\": {\"queryText\": \"DeviceProcessEvents\\n| take 1\\n\"}, \"schedule\": {\"frequency\": \"PT1H\"}, \"detectionAction\": {\"alertTemplate\": {\"title\": \"Defender update rule\", \"description\": \"A rule the Microsoft Defender stand-in tenant receives in a deploy that sends; the tenant holds it: one PATCH updates it.\\n\", \"severity\": \"high\", \"entityMappings\": {\"hosts\": [{\"deviceIdColumn\": \"DeviceId\"}]}}}}"
       }
     },
     {
       "request": {
         "method": "PATCH",
-        "url": "https://graph.microsoft.com/beta/security/rules/detectionRules/00000000-0000-4000-8047-0000000000d3",
+        "url": "https://graph.microsoft.com/beta/security/rules/detectionRules/opentide-00000000-0000-4000-8047-0000000000d3",
         "headers": [
           [
             "authorization",
@@ -165,7 +165,7 @@
             "application/json"
           ]
         ],
-        "body": "{\"id\":\"00000000-0000-4000-8047-0000000000d3\",\"displayName\":\"Defender concurrent create rule\",\"description\":\"A rule the Microsoft Defender stand-in tenant receives in a deploy that sends; another run creates it between this run's PATCH (404) and POST (409): one more PATCH updates it.\\n\",\"status\":\"enabled\",\"queryCondition\":{\"queryText\":\"DeviceProcessEvents\\n| take 1\\n\"},\"schedule\":{\"frequency\":\"PT1H\"},\"detectionAction\":{\"alertTemplate\":{\"title\":\"Defender concurrent create rule\",\"description\":\"A rule the Microsoft Defender stand-in tenant receives in a deploy that sends; another run creates it between this run's PATCH (404) and POST (409): one more PATCH updates it.\\n\",\"severity\":\"high\",\"entityMappings\":{\"hosts\":[{\"deviceIdColumn\":\"DeviceId\"}]}}}}"
+        "body": "{\"id\":\"opentide-00000000-0000-4000-8047-0000000000d3\",\"displayName\":\"Defender concurrent create rule\",\"description\":\"A rule the Microsoft Defender stand-in tenant receives in a deploy that sends; another run creates it between this run's PATCH (404) and POST (409): one more PATCH updates it.\\n\",\"status\":\"enabled\",\"queryCondition\":{\"queryText\":\"DeviceProcessEvents\\n| take 1\\n\"},\"schedule\":{\"frequency\":\"PT1H\"},\"detectionAction\":{\"alertTemplate\":{\"title\":\"Defender concurrent create rule\",\"description\":\"A rule the Microsoft Defender stand-in tenant receives in a deploy that sends; another run creates it between this run's PATCH (404) and POST (409): one more PATCH updates it.\\n\",\"severity\":\"high\",\"entityMappings\":{\"hosts\":[{\"deviceIdColumn\":\"DeviceId\"}]}}}}"
       },
       "response": {
         "status": 409,
@@ -179,13 +179,13 @@
             "application/json"
           ]
         ],
-        "body": "{\"error\": {\"code\": \"REDACTED\", \"message\": \"A rule with id 00000000-0000-4000-8047-0000000000d3 already exists.\"}}"
+        "body": "{\"error\": {\"code\": \"REDACTED\", \"message\": \"A detection rule with this name, title, or rule ID already exists.\"}}"
       }
     },
     {
       "request": {
         "method": "PATCH",
-        "url": "https://graph.microsoft.com/beta/security/rules/detectionRules/00000000-0000-4000-8047-0000000000d3",
+        "url": "https://graph.microsoft.com/beta/security/rules/detectionRules/opentide-00000000-0000-4000-8047-0000000000d3",
         "headers": [
           [
             "authorization",
@@ -210,13 +210,13 @@
             "application/json"
           ]
         ],
-        "body": "{\"id\": \"00000000-0000-4000-8047-0000000000d3\", \"displayName\": \"Defender concurrent create rule\", \"description\": \"A rule the Microsoft Defender stand-in tenant receives in a deploy that sends; another run creates it between this run's PATCH (404) and POST (409): one more PATCH updates it.\\n\", \"status\": \"enabled\", \"queryCondition\": {\"queryText\": \"DeviceProcessEvents\\n| take 1\\n\"}, \"schedule\": {\"frequency\": \"PT1H\"}, \"detectionAction\": {\"alertTemplate\": {\"title\": \"Defender concurrent create rule\", \"description\": \"A rule the Microsoft Defender stand-in tenant receives in a deploy that sends; another run creates it between this run's PATCH (404) and POST (409): one more PATCH updates it.\\n\", \"severity\": \"high\", \"entityMappings\": {\"hosts\": [{\"deviceIdColumn\": \"DeviceId\"}]}}}}"
+        "body": "{\"id\": \"opentide-00000000-0000-4000-8047-0000000000d3\", \"displayName\": \"Defender concurrent create rule\", \"description\": \"A rule the Microsoft Defender stand-in tenant receives in a deploy that sends; another run creates it between this run's PATCH (404) and POST (409): one more PATCH updates it.\\n\", \"status\": \"enabled\", \"queryCondition\": {\"queryText\": \"DeviceProcessEvents\\n| take 1\\n\"}, \"schedule\": {\"frequency\": \"PT1H\"}, \"detectionAction\": {\"alertTemplate\": {\"title\": \"Defender concurrent create rule\", \"description\": \"A rule the Microsoft Defender stand-in tenant receives in a deploy that sends; another run creates it between this run's PATCH (404) and POST (409): one more PATCH updates it.\\n\", \"severity\": \"high\", \"entityMappings\": {\"hosts\": [{\"deviceIdColumn\": \"DeviceId\"}]}}}}"
       }
     },
     {
       "request": {
         "method": "PATCH",
-        "url": "https://graph.microsoft.com/beta/security/rules/detectionRules/00000000-0000-4000-8047-0000000000d4",
+        "url": "https://graph.microsoft.com/beta/security/rules/detectionRules/opentide-00000000-0000-4000-8047-0000000000d4",
         "headers": [
           [
             "authorization",
@@ -243,7 +243,7 @@
     {
       "request": {
         "method": "DELETE",
-        "url": "https://graph.microsoft.com/beta/security/rules/detectionRules/00000000-0000-4000-8047-0000000000d5",
+        "url": "https://graph.microsoft.com/beta/security/rules/detectionRules/opentide-00000000-0000-4000-8047-0000000000d5",
         "headers": [
           [
             "authorization",
@@ -268,13 +268,13 @@
             "application/json"
           ]
         ],
-        "body": "{\"error\": {\"code\": \"REDACTED\", \"message\": \"rule 00000000-0000-4000-8047-0000000000d5 not found\"}}"
+        "body": "{\"error\": {\"code\": \"REDACTED\", \"message\": \"rule opentide-00000000-0000-4000-8047-0000000000d5 not found\"}}"
       }
     },
     {
       "request": {
         "method": "PATCH",
-        "url": "https://graph.microsoft.com/beta/security/rules/detectionRules/00000000-0000-4000-8047-0000000000d6",
+        "url": "https://graph.microsoft.com/beta/security/rules/detectionRules/opentide-00000000-0000-4000-8047-0000000000d6",
         "headers": [
           [
             "authorization",
@@ -300,6 +300,91 @@
           ]
         ],
         "body": "{\"error\": {\"code\": \"REDACTED\", \"message\": \"The query is not valid for a custom detection.\"}}"
+      }
+    },
+    {
+      "request": {
+        "method": "PATCH",
+        "url": "https://graph.microsoft.com/beta/security/rules/detectionRules/opentide-00000000-0000-4000-8047-0000000000d7",
+        "headers": [
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"displayName\":\"Defender name held rule\",\"description\":\"A rule the Microsoft Defender stand-in tenant receives in a deploy that sends; opentide 1.0.0 left it under its bare uuid, renamed since but with its alert title unchanged: PATCH answers 404, POST 409 and PATCH 404 again, so the rule fails with microsoft_defender_rule_conflict and the run goes on.\\n\",\"status\":\"enabled\",\"queryCondition\":{\"queryText\":\"DeviceProcessEvents\\n| take 1\\n\"},\"schedule\":{\"frequency\":\"PT1H\"},\"detectionAction\":{\"alertTemplate\":{\"title\":\"Defender name held rule\",\"description\":\"A rule the Microsoft Defender stand-in tenant receives in a deploy that sends; opentide 1.0.0 left it under its bare uuid, renamed since but with its alert title unchanged: PATCH answers 404, POST 409 and PATCH 404 again, so the rule fails with microsoft_defender_rule_conflict and the run goes on.\\n\",\"severity\":\"high\",\"entityMappings\":{\"hosts\":[{\"deviceIdColumn\":\"DeviceId\"}]}}}}"
+      },
+      "response": {
+        "status": 404,
+        "headers": [
+          [
+            "server",
+            "defender-tenant"
+          ]
+        ],
+        "body": ""
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "url": "https://graph.microsoft.com/beta/security/rules/detectionRules",
+        "headers": [
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"id\":\"opentide-00000000-0000-4000-8047-0000000000d7\",\"displayName\":\"Defender name held rule\",\"description\":\"A rule the Microsoft Defender stand-in tenant receives in a deploy that sends; opentide 1.0.0 left it under its bare uuid, renamed since but with its alert title unchanged: PATCH answers 404, POST 409 and PATCH 404 again, so the rule fails with microsoft_defender_rule_conflict and the run goes on.\\n\",\"status\":\"enabled\",\"queryCondition\":{\"queryText\":\"DeviceProcessEvents\\n| take 1\\n\"},\"schedule\":{\"frequency\":\"PT1H\"},\"detectionAction\":{\"alertTemplate\":{\"title\":\"Defender name held rule\",\"description\":\"A rule the Microsoft Defender stand-in tenant receives in a deploy that sends; opentide 1.0.0 left it under its bare uuid, renamed since but with its alert title unchanged: PATCH answers 404, POST 409 and PATCH 404 again, so the rule fails with microsoft_defender_rule_conflict and the run goes on.\\n\",\"severity\":\"high\",\"entityMappings\":{\"hosts\":[{\"deviceIdColumn\":\"DeviceId\"}]}}}}"
+      },
+      "response": {
+        "status": 409,
+        "headers": [
+          [
+            "server",
+            "defender-tenant"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"error\": {\"code\": \"REDACTED\", \"message\": \"A detection rule with this name, title, or rule ID already exists.\"}}"
+      }
+    },
+    {
+      "request": {
+        "method": "PATCH",
+        "url": "https://graph.microsoft.com/beta/security/rules/detectionRules/opentide-00000000-0000-4000-8047-0000000000d7",
+        "headers": [
+          [
+            "authorization",
+            "Bearer REDACTED"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "body": "{\"displayName\":\"Defender name held rule\",\"description\":\"A rule the Microsoft Defender stand-in tenant receives in a deploy that sends; opentide 1.0.0 left it under its bare uuid, renamed since but with its alert title unchanged: PATCH answers 404, POST 409 and PATCH 404 again, so the rule fails with microsoft_defender_rule_conflict and the run goes on.\\n\",\"status\":\"enabled\",\"queryCondition\":{\"queryText\":\"DeviceProcessEvents\\n| take 1\\n\"},\"schedule\":{\"frequency\":\"PT1H\"},\"detectionAction\":{\"alertTemplate\":{\"title\":\"Defender name held rule\",\"description\":\"A rule the Microsoft Defender stand-in tenant receives in a deploy that sends; opentide 1.0.0 left it under its bare uuid, renamed since but with its alert title unchanged: PATCH answers 404, POST 409 and PATCH 404 again, so the rule fails with microsoft_defender_rule_conflict and the run goes on.\\n\",\"severity\":\"high\",\"entityMappings\":{\"hosts\":[{\"deviceIdColumn\":\"DeviceId\"}]}}}}"
+      },
+      "response": {
+        "status": 404,
+        "headers": [
+          [
+            "server",
+            "defender-tenant"
+          ]
+        ],
+        "body": ""
       }
     }
   ]

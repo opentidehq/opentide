@@ -1,8 +1,7 @@
 //! Bitdefender GravityZone (bitdefender-1.0, Deploy): custom detection rules
 //! through the Incidents API, JSON-RPC 2.0 at `<url>/v1.0/jsonrpc/incidents`.
 //!
-//! A port of 0.28.0's `platforms/bitdefender/client.py` and of `deployer.py`,
-//! rule by rule and request for request:
+//! How the client speaks to GravityZone, rule by rule:
 //!
 //! - Every request is a `POST` with a fresh string `id`. A personal API key
 //!   is HTTP Basic (the key as user name), a service key the `X-API-Key`
@@ -44,7 +43,7 @@ use opentide_compile::bitdefender::{
 use opentide_compile::json::Object;
 
 use crate::connector::{
-    BoxFuture, DeployError, DeployEvent, DeployFailure, DeployOutcome, DeployRequest, DeployScope,
+    BoxFuture, CodedError, DeployError, DeployEvent, DeployFailure, DeployOutcome, DeployRequest,
     DeployWarning, Deployer, Operation, Platform, TenantContext,
 };
 use crate::error::ConnectorError;
@@ -82,13 +81,13 @@ pub const RATE_LIMIT: RetryPolicy =
     RetryPolicy::rate_limited(MAX_RATE_LIMITED, DEFAULT_RETRY_AFTER);
 
 /// `bitdefender_tenant_unauthorized`.
-pub const TENANT_UNAUTHORIZED: &str = "bitdefender_tenant_unauthorized";
+pub const TENANT_UNAUTHORIZED: &str = crate::tenant_codes::BITDEFENDER.unauthorized;
 /// `bitdefender_incidents_api_unavailable`.
 pub const INCIDENTS_API_UNAVAILABLE: &str = "bitdefender_incidents_api_unavailable";
 /// `bitdefender_tenant_unreachable`.
-pub const TENANT_UNREACHABLE: &str = "bitdefender_tenant_unreachable";
+pub const TENANT_UNREACHABLE: &str = crate::tenant_codes::BITDEFENDER.unreachable;
 /// `bitdefender_request_failed`.
-pub const REQUEST_FAILED: &str = "bitdefender_request_failed";
+pub const REQUEST_FAILED: &str = crate::tenant_codes::BITDEFENDER.request_failed;
 /// `bitdefender_name_conflict`.
 pub const NAME_CONFLICT: &str = "bitdefender_name_conflict";
 /// `bitdefender_create_unconfirmed`.
@@ -107,11 +106,15 @@ pub const ACTIONS_UNSUPPORTED: &str = "bitdefender_actions_unsupported";
 /// event, not a warning).
 pub const CREATE_RETRIED: &str = "bitdefender_create_retried";
 
+/// The connect timeout and the read timeout of each request to the tenant;
+/// with retries, a whole request can take longer.
+pub const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
+
 /// How a GravityZone tenant is reached: 30 s, and no transport retry (a
 /// create that got no answer must not be sent again blindly).
 pub fn http_defaults() -> HttpSettings {
     HttpSettings {
-        timeout: Duration::from_secs(30),
+        timeout: REQUEST_TIMEOUT,
         retry: RetryPolicy::none(),
         ..HttpSettings::default()
     }
@@ -120,7 +123,7 @@ pub fn http_defaults() -> HttpSettings {
 /// A JSON-RPC call that failed for this rule only (`BitdefenderApiError`).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ApiError {
-    /// The method.
+    /// The JSON-RPC method that failed (`createCustomRule`).
     pub method: String,
     /// The JSON-RPC error code, when there was one.
     pub code: Option<i64>,
@@ -252,14 +255,16 @@ pub enum CallError {
     /// tenant's certificate was refused. Nothing happened.
     Unsent(ConnectorError),
     /// The tenant refused the key, has no Incidents API, or the run was
-    /// cancelled: no rule on it can deploy.
-    Tenant(ConnectorError),
+    /// cancelled: no rule on it can deploy. The code is Bitdefender's when
+    /// the call names one ([`TENANT_UNAUTHORIZED`],
+    /// [`INCIDENTS_API_UNAVAILABLE`]).
+    Tenant(CodedError),
 }
 
 impl From<ConnectorError> for CallError {
-    /// A wait the run cancelled.
+    /// A wait the run cancelled, or a tenant's setup that cannot be used.
     fn from(error: ConnectorError) -> Self {
-        Self::Tenant(error)
+        Self::Tenant(error.into())
     }
 }
 
@@ -294,12 +299,10 @@ impl<'a> Client<'a> {
         &self.cx.tenant.label.tenant
     }
 
-    fn refused(&self, code: &str, message: String) -> CallError {
-        CallError::Tenant(ConnectorError::refused(
-            PLATFORM,
-            self.tenant(),
-            format!("{code}: {message}"),
-            None,
+    fn refused(&self, code: &'static str, message: String) -> CallError {
+        CallError::Tenant(CodedError::new(
+            code,
+            ConnectorError::refused(PLATFORM, self.tenant(), format!("{code}: {message}"), None),
         ))
     }
 
@@ -307,16 +310,16 @@ impl<'a> Client<'a> {
         let tenant = self.cx.tenant;
         let base = tenant
             .secret("url")
-            .map_err(CallError::Tenant)?
+            .map_err(CallError::from)?
             .expose()
             .trim_end_matches('/')
             .to_owned();
-        let key = tenant.secret("api_key").map_err(CallError::Tenant)?;
+        let key = tenant.secret("api_key").map_err(CallError::from)?;
         let service = tenant
             .secret("key_type")
             .is_ok_and(|kind| kind.expose() == "service");
         let bytes = serde_json::to_vec(body).map_err(|error| {
-            CallError::Tenant(ConnectorError::Setup {
+            CallError::from(ConnectorError::Setup {
                 platform: PLATFORM.to_owned(),
                 tenant: self.tenant().to_owned(),
                 message: error.to_string(),
@@ -335,7 +338,7 @@ impl<'a> Client<'a> {
             builder.basic_auth(key.expose(), Some(""))
         };
         builder.build().map_err(|error| {
-            CallError::Tenant(ConnectorError::Setup {
+            CallError::from(ConnectorError::Setup {
                 platform: PLATFORM.to_owned(),
                 tenant: self.tenant().to_owned(),
                 message: error.describe(),
@@ -352,7 +355,7 @@ impl<'a> Client<'a> {
         let request = self.build(body)?;
         let credentials = crate::answer::Credentials::of(&request);
         let classify = |error: ConnectorError| match error {
-            ConnectorError::Cancelled => CallError::Tenant(error),
+            ConnectorError::Cancelled => CallError::from(error),
             other => CallError::NoAnswer(other),
         };
         let response = self
@@ -398,7 +401,7 @@ impl<'a> Client<'a> {
             self.cx
                 .tenant
                 .secret("api_key")
-                .map_err(CallError::Tenant)?
+                .map_err(CallError::from)?
                 .expose(),
         );
         let answered = RATE_LIMIT
@@ -456,7 +459,7 @@ impl<'a> Client<'a> {
             let message = error
                 .get("message")
                 .filter(|message| message.is_filled())
-                .map(|message| credentials.mask_text(&crate::text::json_text(message)))
+                .map(|message| credentials.mask_text(&Json::to_text(message)))
                 .unwrap_or_default();
             return match code {
                 Some(TOO_MANY_REQUESTS) => Ok(Attempt::RateLimited(retry_after)),
@@ -498,7 +501,7 @@ fn details(data: Option<&Json>) -> Option<String> {
         Json::Object(data) => data
             .get("details")
             .filter(|details| !details.is_null())
-            .map(crate::text::json_text),
+            .map(Json::to_text),
         Json::Str(text) => Some(text.clone()),
         _ => None,
     }
@@ -563,7 +566,7 @@ pub enum Failure {
     /// `_name_conflict`, `_create_unconfirmed`, `_create_no_id`,
     /// `_kind_changed`), the error, and the request's own text.
     Request {
-        /// The code.
+        /// Which of the codes above.
         code: &'static str,
         /// What failed, for the reader.
         error: String,
@@ -604,18 +607,23 @@ impl RuleOutcome {
     }
 }
 
-/// A tenant error from a call: `bitdefender_tenant_unreachable` for a call
-/// that got no answer or was never sent, else the error itself.
-fn tenant_error(error: CallError, tenant: &str) -> ConnectorError {
+/// A tenant error from a call: [`TENANT_UNREACHABLE`] for a call that got
+/// no answer or was never sent, else the error itself.
+fn tenant_error(error: CallError, tenant: &str) -> CodedError {
     match error {
         CallError::Tenant(error) => error,
-        CallError::NoAnswer(error) | CallError::Unsent(error) => ConnectorError::refused(
-            PLATFORM,
-            tenant,
-            format!("{TENANT_UNREACHABLE}: {}", error.text()),
-            None,
+        CallError::NoAnswer(error) | CallError::Unsent(error) => CodedError::new(
+            TENANT_UNREACHABLE,
+            ConnectorError::refused(
+                PLATFORM,
+                tenant,
+                format!("{TENANT_UNREACHABLE}: {}", error.text()),
+                None,
+            ),
         ),
-        CallError::Api(error) => ConnectorError::refused(PLATFORM, tenant, error.text(), None),
+        CallError::Api(error) => {
+            ConnectorError::refused(PLATFORM, tenant, error.text(), None).into()
+        }
     }
 }
 
@@ -626,7 +634,7 @@ fn tenant_error(error: CallError, tenant: &str) -> ConnectorError {
 pub async fn deploy_rule(
     cx: TenantContext<'_>,
     rule: &RuleDeploy,
-) -> Result<RuleOutcome, ConnectorError> {
+) -> Result<RuleOutcome, CodedError> {
     deploy_rule_with(cx, rule, pacer()).await
 }
 
@@ -635,7 +643,7 @@ pub async fn deploy_rule_with(
     cx: TenantContext<'_>,
     rule: &RuleDeploy,
     pacer: &Pacer,
-) -> Result<RuleOutcome, ConnectorError> {
+) -> Result<RuleOutcome, CodedError> {
     let client = Client::new(cx, pacer);
     let mut outcome = RuleOutcome {
         state: StateChange::Keep,
@@ -779,7 +787,7 @@ async fn create(
                     outcome.fail(
                         CREATE_UNCONFIRMED,
                         format!("{unconfirmed}; the retry was refused by the tenant"),
-                        Some(second.text()),
+                        Some(second.error.text()),
                     );
                     return Ok(());
                 }
@@ -989,26 +997,12 @@ pub const RULE_CREATED: &str = "bitdefender_rule_created";
 /// The event a deleted rule is logged with.
 pub const RULE_DELETED: &str = "bitdefender_rule_deleted";
 
-/// A tenant's failure from [`deploy_rule`], with its own code when it has
-/// one ([`TENANT_UNAUTHORIZED`], [`INCIDENTS_API_UNAVAILABLE`],
-/// [`TENANT_UNREACHABLE`]): each of its rules would fail the same way.
-fn tenant_failure(error: ConnectorError) -> DeployError {
-    let own = match &error {
-        ConnectorError::Refused { message, .. } => [
-            TENANT_UNAUTHORIZED,
-            INCIDENTS_API_UNAVAILABLE,
-            TENANT_UNREACHABLE,
-        ]
-        .into_iter()
-        .find(|code| message.starts_with(&format!("{code}: "))),
-        _ => None,
-    };
-    let mut failed = DeployError::from(error);
-    failed.scope = DeployScope::Tenant;
-    if let Some(code) = own {
-        failed.failure.code = code;
-    }
-    failed
+/// A tenant's failure from [`deploy_rule`], with its own code when the call
+/// that raised it names one ([`TENANT_UNAUTHORIZED`],
+/// [`INCIDENTS_API_UNAVAILABLE`], [`TENANT_UNREACHABLE`]): each of its rules
+/// would fail the same way.
+fn tenant_failure(error: CodedError) -> DeployError {
+    error.into_tenant_failure()
 }
 
 /// A compiled rule read back from `createCustomRule` params (a

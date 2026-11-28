@@ -11,27 +11,26 @@ use super::catalog::{known_platform, require};
 use super::tools::Context;
 use crate::json::{Json, Object};
 
-fn error(uuid: &str, status: &str, dry_run: bool, rest: Vec<(&str, Json)>) -> Json {
-    let mut members = vec![
-        ("action", Json::str("error")),
-        ("tenant", Json::Null),
-        ("rule_id", Json::str(uuid)),
-        ("status", Json::str(status)),
-        ("dry_run", Json::Bool(dry_run)),
-    ];
+fn error(uuid: &str, status: &str, dry_run: bool, rest: Object) -> Json {
+    let mut members = Object::from([
+        ("action".to_owned(), Json::str("error")),
+        ("tenant".to_owned(), Json::Null),
+        ("rule_id".to_owned(), Json::str(uuid)),
+        ("status".to_owned(), Json::str(status)),
+        ("dry_run".to_owned(), Json::Bool(dry_run)),
+    ]);
     members.extend(rest);
-    Json::object(members)
+    Json::Object(members)
 }
 
 /// The refusal of a deploy to `platform` when its merged configuration
-/// declares no `[[tenants]]` table (`_missing_tenants`).
+/// declares no `[[tenants]]` table.
 fn missing_tenants(workspace: &Workspace, uuid: &str, platform: &str) -> Option<Json> {
     let tenants = workspace
         .configuration()
         .resolved
-        .tree
-        .get("systems")
-        .and_then(|systems| systems.get(platform))
+        .platforms()
+        .and_then(|platforms| platforms.get(platform))
         .and_then(|system| system.get("tenants"));
     if let Some(Value::Seq(items)) = tenants.map(|node| &node.value)
         && items.iter().any(|item| matches!(item.value, Value::Map(_)))
@@ -43,23 +42,23 @@ fn missing_tenants(workspace: &Workspace, uuid: &str, platform: &str) -> Option<
         uuid,
         "failed",
         false,
-        vec![
-            ("platform", Json::str(platform)),
+        Object::from([
+            ("platform".to_owned(), Json::str(platform)),
             (
-                "message",
+                "message".to_owned(),
                 Json::Str(format!(
                     "Cannot deploy: {platform} has no tenants configured in {path}"
                 )),
             ),
             (
-                "advice",
+                "advice".to_owned(),
                 Json::Str(format!("add (or uncomment) a [[tenants]] entry in {path}")),
             ),
             (
-                "missing_tenants",
+                "missing_tenants".to_owned(),
                 Json::object([(platform, Json::Str(path))]),
             ),
-        ],
+        ]),
     ))
 }
 
@@ -127,13 +126,13 @@ fn only_platform<'a>(
         uuid,
         "error",
         dry_run,
-        vec![
-            ("message", Json::Str(message)),
+        Object::from([
+            ("message".to_owned(), Json::Str(message)),
             (
-                "platforms",
+                "platforms".to_owned(),
                 Json::Array(names.iter().map(|name| Json::str(*name)).collect()),
             ),
-        ],
+        ]),
     ))
 }
 
@@ -151,7 +150,7 @@ fn preview(uuid: &str, status: &str, platform: &str, message: &str, cli: Option<
         _ => false,
     };
     let would_deploy = nonempty(cli.and_then(|document| document.get("plan")));
-    let mut members: Vec<(String, Json)> = vec![
+    let mut members = Object::from([
         ("action".to_owned(), Json::str("dry-run")),
         ("tenant".to_owned(), Json::Null),
         ("rule_id".to_owned(), Json::str(uuid)),
@@ -167,7 +166,7 @@ fn preview(uuid: &str, status: &str, platform: &str, message: &str, cli: Option<
                 message
             }),
         ),
-    ];
+    ]);
     match cli {
         Some(Json::Object(entries)) => {
             for (key, value) in entries {
@@ -176,36 +175,28 @@ fn preview(uuid: &str, status: &str, platform: &str, message: &str, cli: Option<
                 } else {
                     key
                 };
-                if !members.iter().any(|(name, _)| name == key) {
-                    members.push((key.to_owned(), value.clone()));
-                }
+                members
+                    .entry(key.to_owned())
+                    .or_insert_with(|| value.clone());
             }
         }
         // Nothing would run: the command's own skip path has these empty.
         _ => {
-            members.push(("plan".to_owned(), Json::Object(Object::new())));
-            members.push(("changes".to_owned(), Json::Array(Vec::new())));
-            members.push(("payloads".to_owned(), Json::Object(Object::new())));
+            members.insert("plan".to_owned(), Json::Object(Object::new()));
+            members.insert("changes".to_owned(), Json::Array(Vec::new()));
+            members.insert("payloads".to_owned(), Json::Object(Object::new()));
         }
     }
-    Json::Object(members.into_iter().collect())
+    Json::Object(members)
 }
 
 /// Whether the merged configuration enables `platform`
 /// (`platforms.<platform>.platform.enabled` is `true`).
 fn platform_enabled(workspace: &Workspace, platform: &str) -> bool {
-    matches!(
-        workspace
-            .configuration()
-            .resolved
-            .tree
-            .get("platforms")
-            .and_then(|platforms| platforms.get(platform))
-            .and_then(|table| table.get("platform"))
-            .and_then(|block| block.get("enabled"))
-            .map(|node| &node.value),
-        Some(Value::Bool(true))
-    )
+    workspace
+        .configuration()
+        .resolved
+        .platform_enabled(platform)
 }
 
 /// `deploy_rule`.
@@ -223,7 +214,7 @@ pub fn deploy_rule(
         .get("rule")
         .and_then(|bucket| bucket.get(uuid))
     else {
-        return Ok(error(uuid, "not_found", dry_run, Vec::new()));
+        return Ok(error(uuid, "not_found", dry_run, Object::new()));
     };
     let platform = match platform.filter(|name| !name.is_empty()) {
         Some(name) => name,
@@ -237,13 +228,13 @@ pub fn deploy_rule(
             uuid,
             "unknown_platform",
             dry_run,
-            vec![
-                ("platform", Json::str(platform)),
+            Object::from([
+                ("platform".to_owned(), Json::str(platform)),
                 (
-                    "message",
+                    "message".to_owned(),
                     Json::Str(format!("Unknown platform {platform:?}")),
                 ),
-            ],
+            ]),
         ));
     }
     if !dry_run && let Some(missing) = missing_tenants(&workspace, uuid, platform) {
@@ -270,13 +261,13 @@ pub fn deploy_rule(
             uuid,
             "error",
             dry_run,
-            vec![
-                ("platform", Json::str(platform)),
+            Object::from([
+                ("platform".to_owned(), Json::str(platform)),
                 (
-                    "message",
+                    "message".to_owned(),
                     Json::Str(format!("Rule {name:?} has no {platform} status to deploy")),
                 ),
-            ],
+            ]),
         ));
     };
     // The status resolves to its strategy before the dry run returns too: a
@@ -373,27 +364,27 @@ pub fn deploy_rule(
                     uuid,
                     "failed",
                     true,
-                    vec![
-                        ("platform", Json::str(platform)),
+                    Object::from([
+                        ("platform".to_owned(), Json::str(platform)),
                         (
-                            "message",
+                            "message".to_owned(),
                             Json::Str(format!(
                                 "The dry run produced no plan (exit code {})",
                                 run.exit_code
                             )),
                         ),
-                        ("error", Json::str("dry_run_failed")),
-                    ],
+                        ("error".to_owned(), Json::str("dry_run_failed")),
+                    ]),
                 ),
             },
         );
     }
     if run.exit_code != 0 {
         let cause = failure_cause(document.as_ref(), &message);
-        let mut rest = vec![
-            ("platform", Json::str(platform)),
+        let mut rest = Object::from([
+            ("platform".to_owned(), Json::str(platform)),
             (
-                "message",
+                "message".to_owned(),
                 Json::Str(if !cause.is_empty() {
                     cause
                 } else if message.is_empty() {
@@ -404,15 +395,15 @@ pub fn deploy_rule(
                     format!("Deployment failed: {message}")
                 }),
             ),
-            ("error", Json::str("deployment_failed")),
-        ];
+            ("error".to_owned(), Json::str("deployment_failed")),
+        ]);
         if let Some(advice) = document
             .as_ref()
             .and_then(|document| document.get("failure"))
             .and_then(|failure| failure.get("advice"))
             .filter(|advice| !matches!(advice, Json::Null))
         {
-            rest.push(("advice", advice.clone()));
+            rest.insert("advice".to_owned(), advice.clone());
         }
         return Ok(error(uuid, "failed", false, rest));
     }
@@ -462,7 +453,7 @@ mod tests {
 
     #[test]
     fn an_error_names_the_rule_and_its_status() {
-        let json = error("u", "not_found", true, Vec::new());
+        let json = error("u", "not_found", true, Object::new());
         assert_eq!(json.get("action"), Some(&Json::str("error")));
         assert_eq!(json.get("tenant"), Some(&Json::Null));
         assert_eq!(json.get("dry_run"), Some(&Json::Bool(true)));

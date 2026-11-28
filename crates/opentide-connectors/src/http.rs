@@ -110,10 +110,10 @@ impl HttpClient {
             env,
         })
         .map_err(|error| match error {
-            transport::MakeError::Setup(message) => ConnectorError::Setup {
+            transport::MakeError::Setup(error) => ConnectorError::Setup {
                 platform: label.platform.clone(),
                 tenant: label.tenant.clone(),
-                message,
+                message: error.to_string(),
             },
             transport::MakeError::NetworkUnavailable => ConnectorError::NetworkUnavailable {
                 platform: label.platform.clone(),
@@ -188,6 +188,12 @@ impl HttpClient {
                 tenant,
                 address,
                 seconds: self.settings.timeout.as_secs(),
+            },
+            TransportFailure::Deadline { after } => ConnectorError::Timeout {
+                platform,
+                tenant,
+                address,
+                seconds: after.as_secs(),
             },
             TransportFailure::Answer { reason } => ConnectorError::Answer {
                 platform,

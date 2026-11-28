@@ -91,7 +91,7 @@ impl Stand {
              client_secret = \"$EXABEAM_CLIENT_SECRET\"\napi_url = \"{}/\"\n{extra}",
             server.uri()
         );
-        let setup: toml::Table = toml::from_str(&setup).unwrap();
+        let setup: opentide_core::json::Object = toml::from_str(&setup).unwrap();
         let env = Environment::default()
             .with("EXABEAM_CLIENT_ID", "client-id")
             .with("EXABEAM_CLIENT_SECRET", "client-secret");
@@ -530,13 +530,24 @@ async fn a_create_with_no_answer_is_unconfirmed_and_not_sent_again() {
         .await;
     let session = stand.session();
     let deploy = create_rule();
-    // The run is cancelled while the create waits for its answer.
-    let cancel = stand.cancel.clone();
-    tokio::spawn(async move {
-        tokio::time::sleep(Duration::from_millis(500)).await;
-        cancel.cancel();
-    });
-    let outcome = deploy_rule(&session, &deploy).await.unwrap();
+    // The run is cancelled while the create waits for its answer: once the stand holds the
+    // POST, never on a timer that could fire before it was sent. The 10 s only keep a deploy
+    // that never sends it from hanging the test; it then fails on the outcome.
+    let cancelled_once_sent = async {
+        let backstop = tokio::time::Instant::now() + Duration::from_secs(10);
+        while tokio::time::Instant::now() < backstop
+            && !stand
+                .requests()
+                .await
+                .iter()
+                .any(|request| request.method.as_str() == "POST" && request.url.path() == RULES)
+        {
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+        stand.cancel.cancel();
+    };
+    let (outcome, ()) = tokio::join!(deploy_rule(&session, &deploy), cancelled_once_sent);
+    let outcome = outcome.unwrap();
     assert_eq!(failure_code(&outcome), Some("exabeam_create_unconfirmed"));
     let failure = outcome.failure.unwrap();
     assert!(
@@ -784,7 +795,7 @@ async fn an_unreachable_tenant_stops() {
     let closed = tokio::net::TcpSocket::new_v4().unwrap();
     closed.bind("127.0.0.1:0".parse().unwrap()).unwrap();
     let address = closed.local_addr().unwrap();
-    let setup: toml::Table = toml::from_str(&format!(
+    let setup: opentide_core::json::Object = toml::from_str(&format!(
         "region = \"eu\"\nclient_id = \"$A\"\nclient_secret = \"$B\"\napi_url = \"http://{address}\"\n"
     ))
     .unwrap();
@@ -899,7 +910,7 @@ async fn a_long_or_endless_rate_limit_fails_the_rule() {
 #[tokio::test]
 async fn an_unset_credential_fails_before_any_call() {
     let stand = Stand::start().await;
-    let setup: toml::Table = toml::from_str(
+    let setup: opentide_core::json::Object = toml::from_str(
         "region = \"eu\"\nclient_id = \"$UNSET_ID\"\nclient_secret = \"$UNSET_SECRET\"\n",
     )
     .unwrap();
@@ -930,7 +941,7 @@ async fn an_unset_credential_fails_before_any_call() {
 async fn the_region_names_the_api_host() {
     let server = MockServer::start().await;
     let _ = server;
-    let setup: toml::Table =
+    let setup: opentide_core::json::Object =
         toml::from_str("region = \"us-east\"\nclient_id = \"$A\"\nclient_secret = \"$B\"\n")
             .unwrap();
     let env = Environment::default().with("A", "a").with("B", "b");

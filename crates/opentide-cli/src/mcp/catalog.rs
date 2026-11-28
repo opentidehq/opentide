@@ -1,11 +1,9 @@
-//! The catalogue tools (`src/opentide/mcp_server/catalog.py` and the
-//! registry tools of `tools.py`): `search`, `get_chaining`, `coverage`,
+//! The catalogue tools: `search`, `get_chaining`, `coverage`,
 //! `deployment_status` and `validate_rule`, on the workspace as it is on disk
 //! at the call.
 
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use std::sync::LazyLock;
 
 use indexmap::IndexMap;
 use opentide_schema::node::{Node, Value};
@@ -14,14 +12,49 @@ use opentide_workspace::coverage::{match_technique, rule_technique_index, techni
 use opentide_workspace::{Index, Workspace, fields};
 
 use super::tools::{Context, next_action, validation_next_actions};
-use crate::json::Json;
+use crate::json::{Json, Object};
 
 /// The object families the catalogue tools read, in the order they search them.
 pub const FAMILIES: [&str; 3] = ["rule", "threat", "objective"];
 
-/// The workspace `context` places, opened afresh: the tools answer for the
-/// files as they are now.
+/// The workspace `context` places, as its files are now: under a call
+/// ([`super::tools::call`]) the process's warm one, brought up to date with
+/// what changed on disk since the last call.
 pub fn workspace(context: &Context<'_>) -> Result<Workspace, String> {
+    open(context).map_err(|error| error.to_string())
+}
+
+/// Why [`open`] opens no workspace. Its text is `code: message`, what a
+/// tool reports.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum OpenError {
+    /// A configuration file does not parse or cannot be read
+    /// (`config_parse`): the message names its place, `path:line:column`.
+    ConfigParse(String),
+    /// Any other refusal: its failure code and message.
+    Other {
+        /// The failure code (`command_failed`, ...).
+        code: String,
+        /// What went wrong.
+        message: String,
+    },
+}
+
+impl std::fmt::Display for OpenError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::ConfigParse(message) => write!(f, "{}: {message}", crate::commands::CONFIG_PARSE),
+            Self::Other { code, message } => write!(f, "{code}: {message}"),
+        }
+    }
+}
+
+impl std::error::Error for OpenError {}
+
+/// [`workspace`], its refusal typed: a caller that treats a configuration
+/// that does not parse apart matches [`OpenError::ConfigParse`], never the
+/// message's text (#1950).
+pub fn open(context: &Context<'_>) -> Result<Workspace, OpenError> {
     let cwd = context
         .cwd
         .map_or_else(|| PathBuf::from("."), Path::to_path_buf);
@@ -30,7 +63,11 @@ pub fn workspace(context: &Context<'_>) -> Result<Workspace, String> {
     // place, as on the command line (D9, B10).
     crate::commands::open_for("mcp", roots).map_err(|refused| {
         let (code, message, _) = crate::commands::refusal_parts(&refused);
-        format!("{code}: {message}")
+        if code == crate::commands::CONFIG_PARSE {
+            OpenError::ConfigParse(message)
+        } else {
+            OpenError::Other { code, message }
+        }
     })
 }
 
@@ -120,7 +157,8 @@ pub fn block_statuses(body: &Node) -> Vec<String> {
         .collect()
 }
 
-fn summary(uuid: &str, family: &str, body: &Node) -> Json {
+/// One object as `search` lists it: `{uuid, type, title, status}`.
+pub(super) fn summary(uuid: &str, family: &str, body: &Node) -> Json {
     let title = match body.get("name").map(|node| &node.value) {
         None | Some(Value::Null | Value::Bool(false)) => Json::str(uuid),
         Some(Value::Str(text)) if text.is_empty() => Json::str(uuid),
@@ -199,15 +237,11 @@ fn matches_platform(body: &Node, platform: &str) -> bool {
     needle.is_empty() || fields::platforms(body).contains(&needle)
 }
 
-static UUID: LazyLock<regex::Regex> = LazyLock::new(|| {
-    #[expect(clippy::expect_used, reason = "a literal pattern")]
-    regex::Regex::new("(?i)^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")
-        .expect("valid regex")
-});
-
 /// `search`: a summary of each object `query` and the filters match.
 pub fn search(index: &Index, query: &str, filters: &Filters) -> Vec<Json> {
-    if UUID.is_match(query.trim()) {
+    // A Tide object's id is a version 4 UUID (`metadata.uuid`'s rule): a
+    // query written as one looks the object up instead of searching text.
+    if opentide_core::ids::is_v4(query.trim()) {
         let Some(found) = get_object(index, query) else {
             return Vec::new();
         };
@@ -342,7 +376,7 @@ fn lineage_edges(index: &Index) -> Vec<Edge> {
 }
 
 /// The connected sets reached through `objective.threats`,
-/// `detection_model` and `threat.chaining` (`_lineage_by_uuid`): each
+/// `detection_model` and `threat.chaining`: each
 /// member's set, in the order members were first linked.
 fn lineage_by_uuid(index: &Index, edges: &[Edge]) -> IndexMap<String, Lineage> {
     let mut parent: HashMap<String, String> = HashMap::new();
@@ -532,38 +566,38 @@ pub fn get_chaining(index: &Index, uuid: &str, depth: usize) -> Json {
     // Only the chaining relations: an object without one has `lineage` for
     // its graph, and repeating it under every member made the answer grow
     // with the square of the lineage.
-    let chaining_index: Vec<(String, Json)> = index
+    let chaining_index: Object = index
         .chaining
         .iter()
         .filter(|(uuid, relation)| !relation.is_empty() && present.contains(*uuid))
         .map(|(uuid, relation)| (uuid.clone(), narrow_relation(relation)))
         .collect();
-    let mut payload = vec![
+    let mut payload = Object::from([
         ("uuid".to_owned(), Json::str(node.uuid)),
         ("found".to_owned(), Json::Bool(true)),
         ("type".to_owned(), Json::str(node.family)),
         ("graph".to_owned(), graph),
-        ("chaining_index".to_owned(), Json::object(chaining_index)),
-    ];
+        ("chaining_index".to_owned(), Json::Object(chaining_index)),
+    ]);
     if let Some(signal) = resolved_from {
-        payload.push((
+        payload.insert(
             "resolved_from".to_owned(),
             Json::object([("type", Json::str("signal")), ("uuid", Json::str(signal))]),
-        ));
+        );
     }
     if let Some(lineage) = &lineage {
-        payload.push(("lineage".to_owned(), lineage_json(lineage)));
+        payload.insert("lineage".to_owned(), lineage_json(lineage));
     }
     if truncated {
-        payload.push(("truncated".to_owned(), Json::Bool(true)));
-        payload.push((
+        payload.insert("truncated".to_owned(), Json::Bool(true));
+        payload.insert(
             "hint".to_owned(),
             Json::str(format!(
                 "The lineage goes on beyond {depth} hop(s): call get_chaining again with a larger depth to follow it."
             )),
-        ));
+        );
     }
-    Json::object(payload)
+    Json::Object(payload)
 }
 
 fn strings(items: impl IntoIterator<Item = String>) -> Json {
@@ -631,7 +665,7 @@ fn platform_state(
     block: Option<&Node>,
     external_ids: Option<&IndexMap<String, String>>,
 ) -> Json {
-    let ids: Vec<(String, Json)> = external_ids
+    let ids: Object = external_ids
         .map(|ids| {
             ids.iter()
                 .map(|(tenant, id)| (tenant.clone(), Json::str(id)))
@@ -645,34 +679,33 @@ fn platform_state(
         Some(Value::Seq(items)) => items.iter().map(|item| node_json(item)).collect(),
         _ => Vec::new(),
     };
-    let rule_id = if ids.len() == 1 {
-        ids[0].1.clone()
-    } else {
-        Json::Null
+    let rule_id = match ids.values().next() {
+        Some(id) if ids.len() == 1 => id.clone(),
+        _ => Json::Null,
     };
-    let mut state = vec![
+    let mut state = Object::from([
         (
             "deployed".to_owned(),
             Json::Bool(!ids.is_empty() || !tenants.is_empty()),
         ),
         ("rule_id".to_owned(), rule_id),
-        ("external_ids".to_owned(), Json::object(ids)),
+        ("external_ids".to_owned(), Json::Object(ids)),
         ("tenants".to_owned(), Json::Array(tenants)),
-    ];
+    ]);
     // A platform that addresses its rules without a vendor id has no state to
     // read: a deploy leaves no trace here, and `deployed` only says the rule's
     // block names tenants.
     if opentide_schema::platforms::external_id_kind(name)
         == opentide_schema::platforms::ExternalId::None
     {
-        state.push(("note".to_owned(), Json::Str(format!(
+        state.insert("note".to_owned(), Json::Str(format!(
             "opentide records no deployment state for {name}: it addresses its rules without a vendor id, \
              so a deploy leaves nothing here and deployed only says the rule's block names tenants. \
              Ask the tenant: validate_query or run_query with live true; deploy_rule with dry_run true \
              previews what a deploy sends."
-        ))));
+        )));
     }
-    Json::object(state)
+    Json::Object(state)
 }
 
 /// `deployment_status`: where the rule `uuid` is deployed.
@@ -701,7 +734,7 @@ pub fn deployment_status(workspace: &Workspace, uuid: &str) -> Json {
                 ])),
             ),
         };
-    let mut platforms: Vec<(String, Json)> = Vec::new();
+    let mut platforms = Object::new();
     // The platform blocks: `configurations`, else the legacy `platforms`,
     // whichever is a table with a block in it. A value of any other type
     // holds no block, so it does not hide the other key.
@@ -718,26 +751,24 @@ pub fn deployment_status(workspace: &Workspace, uuid: &str) -> Json {
         for entry in blocks {
             let name = entry.key.value.to_string();
             let block = matches!(entry.value.value, Value::Map(_)).then_some(entry.value.as_ref());
-            platforms.push((
-                name.clone(),
-                platform_state(&name, block, recorded.get(&name)),
-            ));
+            let state = platform_state(&name, block, recorded.get(&name));
+            platforms.insert(name, state);
         }
     }
     for (name, ids) in &recorded {
-        if !platforms.iter().any(|(key, _)| key == name) {
-            platforms.push((name.clone(), platform_state(name, None, Some(ids))));
+        if !platforms.contains_key(name) {
+            platforms.insert(name.clone(), platform_state(name, None, Some(ids)));
         }
     }
-    let mut payload = vec![
-        ("platforms".to_owned(), Json::object(platforms)),
+    let mut payload = Object::from([
+        ("platforms".to_owned(), Json::Object(platforms)),
         ("uuid".to_owned(), Json::str(uuid)),
         ("found".to_owned(), Json::Bool(true)),
-    ];
+    ]);
     if let Some(error) = state_error {
-        payload.push(("state_error".to_owned(), error));
+        payload.insert("state_error".to_owned(), error);
     }
-    Json::object(payload)
+    Json::Object(payload)
 }
 
 /// The platforms opentide knows (`Opentide.Platforms`), in the platform table's order.
@@ -753,7 +784,7 @@ pub fn known_platform(platform: &str) -> bool {
 
 /// The `--strategy` values whose run deploys the rule's `platform` block;
 /// none for `INERT`. A status the deployment configuration does not define
-/// runs `PREVIEW` (`_run_strategies`).
+/// runs `PREVIEW`.
 fn run_strategies(workspace: &Workspace, body: &Node, platform: &str) -> Vec<&'static str> {
     use opentide_compile::strategy::{Statuses, deployed_by};
     let block_status = body

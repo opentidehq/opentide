@@ -1,4 +1,4 @@
-//! The opentide marks for the terminal (`brand.py`): pixel grids drawn with
+//! The opentide marks for the terminal: pixel grids drawn with
 //! upper half-blocks, two pixel rows to a line, and the one-line pill.
 //!
 //! Reflex Blue (`#001489`) is a fill, drawn as the terminal's 256-colour

@@ -23,6 +23,7 @@ use std::sync::{Arc, OnceLock};
 
 use clap::Command;
 use clap_complete::engine::{ArgValueCompleter, CompletionCandidate};
+use opentide_schema::platforms::PlatformKey;
 use opentide_workspace::fs::{FileSystem, OsFs};
 use opentide_workspace::root::{self, Roots};
 use opentide_workspace::{Configuration, RootOptions};
@@ -377,8 +378,12 @@ impl Context {
             .config
             .as_ref()
             .map(|config| {
-                let tree = opentide_compile::Json::from_node(&config.resolved.tree);
-                opentide_compile::plan::enabled(&tree)
+                config
+                    .resolved
+                    .enabled_platforms()
+                    .into_iter()
+                    .map(|platform| platform.as_str().to_owned())
+                    .collect()
             })
             .unwrap_or_default()
     }
@@ -403,14 +408,14 @@ impl Context {
         };
         let tree = opentide_compile::Json::from_node(&config.resolved.tree);
         let platforms = if self.platforms.is_empty() {
-            opentide_compile::plan::enabled(&tree)
+            self.enabled_platforms()
         } else {
             self.platforms.clone()
         };
         let mut seen = HashSet::new();
         let mut found = Vec::new();
         for platform in &platforms {
-            for tenant in opentide_compile::plan::tenants(&tree, platform) {
+            for tenant in opentide_compile::plan::tenants(&tree, &PlatformKey::new(platform)) {
                 let name = opentide_compile::deploy::tenant_name(tenant);
                 if name.is_empty() || !name.starts_with(current) || !seen.insert(name) {
                     continue;
@@ -481,23 +486,19 @@ pub fn header(path: &Path) -> (Option<String>, Option<String>) {
         return (None, None);
     };
     let text = String::from_utf8_lossy(&bytes);
-    let end = text
-        .match_indices('\n')
-        .nth(HEADER_LINES - 1)
-        .map_or(text.len(), |(at, _)| at);
-    let mut fields = opentide_workspace::catalogue::text_fields(&text[..end]);
+    let head = text
+        .split('\n')
+        .take(HEADER_LINES)
+        .collect::<Vec<_>>()
+        .join("\n");
+    let mut fields = opentide_workspace::catalogue::text_fields(&head);
     (fields.remove("uuid"), fields.remove("name"))
 }
 
 /// Whether `text` is a UUID, hyphens in place: a hand-mangled header is never
 /// offered.
 fn is_uuid(text: &str) -> bool {
-    let groups: Vec<&str> = text.split('-').collect();
-    groups.len() == 5
-        && groups
-            .iter()
-            .zip([8, 4, 4, 4, 12])
-            .all(|(group, len)| group.len() == len && group.chars().all(|c| c.is_ascii_hexdigit()))
+    opentide_core::ids::is_hyphenated(text)
 }
 
 /// Whether `id` is an ATT&CK technique id: `T1059` or `T1059.001`.
@@ -946,6 +947,24 @@ mod tests {
         let platforms = cx.platforms(&platform_names(), "");
         assert!(helps(&platforms).iter().all(String::is_empty));
         assert_eq!(header(&dir.path().join("missing.yaml")), (None, None));
+        // #1946: the first lines are read whatever their characters.
+        let path = dir.path().join("é😀.yaml");
+        std::fs::write(
+            &path,
+            "# é😀\nname: Règle 😀\nuuid: 00000000-0000-4000-8003-000000000001\n",
+        )
+        .unwrap();
+        assert_eq!(
+            header(&path),
+            (
+                Some("00000000-0000-4000-8003-000000000001".to_owned()),
+                Some("Règle 😀".to_owned())
+            )
+        );
+        let mut late = "é😀\n".repeat(HEADER_LINES - 1);
+        late.push_str("name: dernière\nuuid: 00000000-0000-4000-8003-000000000001\n");
+        std::fs::write(&path, late).unwrap();
+        assert_eq!(header(&path), (None, Some("dernière".to_owned())));
     }
 
     #[test]

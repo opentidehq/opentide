@@ -67,7 +67,7 @@ fn tenant(
     env: &Environment,
     proxy: Option<&str>,
 ) -> (Tenant, HttpClient) {
-    let setup: toml::Table = toml::from_str(setup).unwrap();
+    let setup: opentide_core::json::Object = toml::from_str(setup).unwrap();
     let tenant = Tenant::from_setup(
         platform,
         "lab",
@@ -172,7 +172,8 @@ async fn harfanglab_that_does_not_answer_in_time_is_a_timeout() {
         .mount(&server)
         .await;
     let env = Environment::from_pairs([("HARFANGLAB_API_TOKEN", TOKEN)]);
-    let setup: toml::Table = toml::from_str(&HARFANGLAB.replace("URL", &server.uri())).unwrap();
+    let setup: opentide_core::json::Object =
+        toml::from_str(&HARFANGLAB.replace("URL", &server.uri())).unwrap();
     let settings = HttpSettings {
         timeout: Duration::from_secs(1),
         ..opentide_connectors::http_settings(harfanglab::PLATFORM, Duration::from_secs(1))
@@ -227,7 +228,8 @@ async fn a_tenant_nothing_listens_for_is_unreachable() {
 async fn a_credential_that_is_not_set_is_credential_unset_before_any_request() {
     let server = MockServer::start().await;
     let env = Environment::default();
-    let setup: toml::Table = toml::from_str(&HARFANGLAB.replace("URL", &server.uri())).unwrap();
+    let setup: opentide_core::json::Object =
+        toml::from_str(&HARFANGLAB.replace("URL", &server.uri())).unwrap();
     // `Resolve::Counting` leaves an unset variable for the connector to name.
     let tenant = Tenant::from_setup(
         harfanglab::PLATFORM,

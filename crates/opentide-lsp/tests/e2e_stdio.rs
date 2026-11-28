@@ -1,6 +1,10 @@
 //! Protocol tests over stdio. The CLI never speaks JSON-RPC; `--stdio` does.
 
 #![expect(
+    clippy::string_slice,
+    reason = "a test: a slice off a char boundary panics, and a panic is a failed test"
+)]
+#![expect(
     clippy::expect_used,
     clippy::unwrap_used,
     reason = "test helpers outside #[test] functions: a panic fails the test"
@@ -2440,6 +2444,49 @@ fn exabeam_over_stdio() {
 }
 
 #[test]
+fn datadog_over_stdio() {
+    let mut lsp = Lsp::spawn();
+    lsp.request("initialize", json!({ "capabilities": {} }));
+    lsp.notify("initialized", json!({}));
+    // The `.datadog` suffix selects the engine when the client reports no
+    // known id; a raw file is a search.
+    let broken = "source:okta @evt.name:foo!bar\n";
+    let codes = published_codes(&mut lsp, "file:///tmp/r.datadog", "plaintext", broken);
+    assert_eq!(
+        codes,
+        vec!["datadog_unescaped_special"],
+        "raw .datadog file"
+    );
+    let uri = "file:///tmp/h.datadog";
+    let text = "source:okta @evt.outcome:FAILURE\n-@network.client.ip:10.* CIDR(@network.client.ip, 10.0.0.0/8)\n";
+    let codes = published_codes(&mut lsp, uri, "datadog", text);
+    assert!(codes.is_empty(), "{codes:?}");
+    let at = |line: u32, character: usize| {
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": line, "character": character }
+        })
+    };
+    let hover = lsp.request("textDocument/hover", at(0, 15));
+    let value = hover["result"]["contents"]["value"]
+        .as_str()
+        .unwrap_or_default();
+    assert!(value.contains("@evt.outcome"), "{hover}");
+    let tokens = lsp.request(
+        "textDocument/semanticTokens/full",
+        json!({ "textDocument": { "uri": uri } }),
+    );
+    let data = tokens["result"]["data"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    assert!(
+        data.len() >= 5 * 10,
+        "semantic tokens for .datadog: {tokens}"
+    );
+}
+
+#[test]
 fn yaral_over_stdio() {
     let mut lsp = Lsp::spawn();
     lsp.request("initialize", json!({ "capabilities": {} }));
@@ -2770,4 +2817,50 @@ fn at_uri(uri: &str, line: u32, character: usize) -> Value {
         "textDocument": { "uri": uri },
         "position": { "line": line, "character": character }
     })
+}
+
+/// Completion, rename and folding read the document around every position
+/// of multi-byte text, the middle of a surrogate pair included (#1946): the
+/// server answers each request and stays up.
+#[test]
+fn editor_requests_read_multi_byte_documents_whole() {
+    let mut lsp = Lsp::spawn();
+    lsp.request("initialize", json!({ "capabilities": {} }));
+    lsp.notify("initialized", json!({}));
+    let documents = [
+        (
+            "file:///tmp/multi.yar",
+            "yara",
+            "rule é😀 {\n  strings:\n    $é = \"😀\" /* é😀\n */\n  condition:\n    #é > 1 and $é\n}\n",
+        ),
+        (
+            "file:///tmp/multi.kql",
+            "kql",
+            "Sécurité😀 | whére é😀.process.na == \"😀\" | projéct-awy é",
+        ),
+    ];
+    for (uri, language, text) in documents {
+        published_codes(&mut lsp, uri, language, text);
+        for (line_number, line) in text.split('\n').enumerate() {
+            let units = line.encode_utf16().count();
+            for character in 0..=units + 1 {
+                let position = json!({
+                    "textDocument": { "uri": uri },
+                    "position": { "line": line_number, "character": character }
+                });
+                for method in ["textDocument/completion", "textDocument/prepareRename"] {
+                    let answer = lsp.request(method, position.clone());
+                    assert!(
+                        answer.get("result").is_some() || answer.get("error").is_some(),
+                        "{method} at {line_number}:{character}: {answer}"
+                    );
+                }
+            }
+        }
+        let folding = lsp.request(
+            "textDocument/foldingRange",
+            json!({ "textDocument": { "uri": uri } }),
+        );
+        assert!(folding.get("result").is_some(), "{folding}");
+    }
 }

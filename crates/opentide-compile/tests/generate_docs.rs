@@ -2,7 +2,7 @@
 //! writes for the tide-corpus fixture, in each of the four flavours,
 //! compared byte for byte with the files opentide 0.28.1 writes for it
 //! (`tests/docs_0_28/<flavor>`: pages, folder indexes, GitLab's `.order`
-//! files and the catalogue overview, diagrams included), and the oracle's
+//! files and the catalogue overview, diagrams included), and opentide 0.23.0's
 //! failure on the vscode fixture. The flavour a run picks from its CI and
 //! `origin`, a rule with several platform blocks, a rule's tenants and
 //! remote ids, and a threat's CVEs have no recording: their tests assert
@@ -20,6 +20,10 @@
 //! `tests/docs_0_28/<flavor>`.
 
 #![cfg(unix)]
+#![expect(
+    clippy::string_slice,
+    reason = "a test: a slice off a char boundary panics, and a panic is a failed test"
+)]
 #![expect(clippy::unwrap_used, reason = "a test: a broken fixture is a failure")]
 
 #[path = "common/golden.rs"]

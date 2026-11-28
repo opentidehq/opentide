@@ -4,6 +4,10 @@
 //! Python client's, in order (a JSON body as the same data), the retries of a gateway's
 //! answer included.
 
+#![expect(
+    clippy::string_slice,
+    reason = "a test: a slice off a char boundary panics, and a panic is a failed test"
+)]
 #![expect(clippy::unwrap_used, reason = "a test: a failed set-up is a failure")]
 
 mod support;
@@ -597,7 +601,7 @@ fn stand_tenant_at(
     kibana: &str,
     elasticsearch: &str,
 ) -> (opentide_connectors::Tenant, opentide_connectors::HttpClient) {
-    let setup: toml::Table = toml::from_str(&format!(
+    let setup: opentide_core::json::Object = toml::from_str(&format!(
         "url = \"{kibana}\"\nelasticsearch_url = \"{elasticsearch}\"\nindex = [\"logs-*\"]\n"
     ))
     .unwrap();
@@ -704,6 +708,43 @@ fn mount_kibana(
             .mount(server)
             .await;
     });
+}
+
+/// A 200 from `_field_caps` whose body is not JSON (a proxy's page) fails
+/// the deploy instead of reading as "no fields", and nothing is written to
+/// Kibana (#1936).
+#[test]
+fn a_field_caps_answer_that_is_not_json_is_refused() {
+    use wiremock::matchers::{method, path_regex};
+    let (rule_id, body) = overridden_rule("query");
+    let request = DeployRequest::new(rule_id, Operation::Update, body);
+    let (outcome, asked) = deploy_to_stand(
+        |server, runtime| {
+            runtime.block_on(
+                wiremock::Mock::given(method("GET"))
+                    .and(path_regex("/_field_caps$"))
+                    .respond_with(
+                        wiremock::ResponseTemplate::new(200)
+                            .set_body_string("<html>Sign in — é😀</html>"),
+                    )
+                    .mount(server),
+            );
+        },
+        &request,
+        false,
+    );
+    let error = outcome.unwrap_err();
+    assert!(
+        error
+            .failure
+            .message
+            .contains("Elastic answered _field_caps on lab with a body that is not JSON"),
+        "{error:?}"
+    );
+    assert!(
+        asked.iter().all(|line| line.ends_with("/_field_caps")),
+        "{asked:?}"
+    );
 }
 
 /// A create Kibana refuses fails the rule with its code and status, the

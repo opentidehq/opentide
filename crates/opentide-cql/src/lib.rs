@@ -23,9 +23,21 @@ pub mod catalog;
 mod catalog_model;
 pub mod check;
 mod highlight;
-mod lexer;
-mod parser;
-mod syntax;
+// The parser's pieces and the typed AST of `cql.ungram` (written by `cargo xtask codegen`):
+// public but hidden, as KQL's and SPL's, for the crate's corpus, tree and conformance tests
+// (`tests/`). Not an API.
+#[doc(hidden)]
+#[path = "generated/ast.rs"]
+pub mod ast;
+#[doc(hidden)]
+pub mod lexer;
+#[doc(hidden)]
+pub mod parser;
+#[doc(hidden)]
+pub mod syntax;
+// The typed AST and `T!` name the kinds from the crate root.
+#[doc(hidden)]
+pub use syntax::{Lang, SyntaxKind, SyntaxNode, SyntaxToken};
 
 pub use assist::{completions, hover, signature_help};
 
@@ -33,18 +45,30 @@ use opentide_core::{ByteSpan, Diagnostic, Range, codes, span_to_range};
 use opentide_highlight::{HighlightSpec, HighlightToken};
 use opentide_parse::{ErrorKind, SyntaxError};
 use rowan::TextRange;
-use syntax::{SyntaxKind as K, SyntaxNode};
+use syntax::SyntaxKind as K;
 
-/// Where the query runs.
+/// `text[start..end]`, a range this crate computes: a token's bounds, a
+/// character's, or an ASCII byte's, so its ends are char boundaries. A range
+/// that is not fails a debug assertion and reads as empty.
+pub(crate) fn cut(text: &str, start: usize, end: usize) -> &str {
+    let piece = text.get(start..end);
+    debug_assert!(piece.is_some(), "{start}..{end} in {} bytes", text.len());
+    piece.unwrap_or_default()
+}
+
+/// The use of the query (ADR 0015 §1: a profile, chosen by where the text
+/// sits, never by the platform). The default is a search: a raw `.cql` file
+/// or a hunt.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct Context {
+pub struct Profile {
     /// A Next-Gen SIEM correlation rule (`configurations.crowdstrike.query`),
     /// which adds CrowdStrike's correlation-rule restrictions.
     pub correlation_rule: bool,
 }
 
-impl Context {
-    pub const CORRELATION_RULE: Context = Context {
+impl Profile {
+    /// A CrowdStrike block's `query`.
+    pub const CORRELATION_RULE: Profile = Profile {
         correlation_rule: true,
     };
 }
@@ -111,19 +135,74 @@ pub fn debug_productions() -> Vec<String> {
 
 /// Analyze a CQL query on its own (a raw `.cql` file or a hunt search).
 pub fn analyze(source: &str) -> AnalyzeResult {
-    analyze_with(source, &Context::default())
+    analyze_with(source, &Profile::default())
 }
 
-/// Analyze a CQL query where `ctx` says it runs.
-pub fn analyze_with(source: &str, ctx: &Context) -> AnalyzeResult {
-    opentide_core::with_line_index(source, || analyze_lines(source, *ctx))
+/// The CrowdStrike CQL [`QueryEngine`](opentide_highlight::QueryEngine) (#1953):
+/// [`analyze`] behind the shared interface.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Engine;
+
+impl opentide_highlight::QueryEngine for Engine {
+    fn language(&self) -> opentide_core::LanguageId {
+        opentide_core::LanguageId::Cql
+    }
+
+    fn analyze_for(
+        &self,
+        source: &str,
+        setting: &opentide_highlight::Setting<'_>,
+    ) -> opentide_highlight::AnalyzeResult {
+        let profile = if setting.profile == opentide_highlight::Profile::Rule {
+            Profile::CORRELATION_RULE
+        } else {
+            Profile::default()
+        };
+        let r = analyze_with(source, &profile);
+        opentide_highlight::AnalyzeResult {
+            diagnostics: r.diagnostics,
+            tokens: r.tokens,
+        }
+    }
+
+    fn hover(
+        &self,
+        source: &str,
+        offset: usize,
+        _setting: &opentide_highlight::Setting<'_>,
+    ) -> Option<String> {
+        hover(source, offset)
+    }
+
+    fn completions(
+        &self,
+        source: &str,
+        offset: usize,
+        _setting: &opentide_highlight::Setting<'_>,
+    ) -> Vec<opentide_core::CompletionItem> {
+        completions(source, offset)
+    }
+
+    fn signature_help(
+        &self,
+        source: &str,
+        offset: usize,
+        _setting: &opentide_highlight::Setting<'_>,
+    ) -> Option<opentide_core::SignatureHelp> {
+        signature_help(source, offset)
+    }
+}
+
+/// Analyze a CQL query under `profile`: a correlation rule or a search.
+pub fn analyze_with(source: &str, profile: &Profile) -> AnalyzeResult {
+    opentide_core::with_line_index(source, || analyze_lines(source, *profile))
 }
 
 #[expect(
     clippy::expect_used,
     reason = "loads the HighlightSpec compiled in (highlights/spec.toml): a bad spec fails the tests, never a user's document"
 )]
-fn analyze_lines(source: &str, ctx: Context) -> AnalyzeResult {
+fn analyze_lines(source: &str, ctx: Profile) -> AnalyzeResult {
     let spec = HighlightSpec::shared().expect("highlight spec");
     let (root, parse) = parser::parse(source);
     let mut diagnostics = Vec::new();
@@ -177,7 +256,8 @@ fn parse_error(root: &SyntaxNode, err: &SyntaxError, source: &str) -> (String, B
     });
     // Text pasted from a web page often carries U+00A0, which CQL does not
     // read as a space: blame it when it is where the parser stopped.
-    let before = source[..at].chars().next_back();
+    // The anchor is a gap's bound: a token's.
+    let before = cut(source, 0, at).chars().next_back();
     let here = source.get(span.start..span.end).unwrap_or("");
     if before == Some('\u{a0}') || here.contains('\u{a0}') {
         return (

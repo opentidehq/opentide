@@ -1,4 +1,4 @@
-//! The findings of configuration files (`validation/configuration.py`).
+//! The findings of configuration files.
 //!
 //! Client files are partial overrides, so a file is merged onto the layers
 //! before it (the bundled file by default) and the model's required keys
@@ -12,11 +12,11 @@ use super::errors::{code_of, describe_error, model_errors};
 use super::merge::merge_layers;
 use super::models::{
     BitdefenderConfiguration, CarbonBlackCloudConfiguration, CrowdstrikeConfiguration,
-    DeploymentConfiguration, DocumentationConfiguration, ElasticConfiguration,
-    ExabeamConfiguration, GoogleSecopsConfiguration, GraylogConfiguration, HarfangLabConfiguration,
-    MicrosoftDefenderConfiguration, PLATFORMS, PathsConfiguration, PlatformConfiguration,
-    SentinelConfiguration, SentinelOneConfiguration, SplunkConfiguration, SysdigConfiguration,
-    VisibilityConfig,
+    DatadogConfiguration, DeploymentConfiguration, DocumentationConfiguration,
+    ElasticConfiguration, ExabeamConfiguration, GoogleSecopsConfiguration, GraylogConfiguration,
+    HarfangLabConfiguration, MicrosoftDefenderConfiguration, PLATFORMS, PathsConfiguration,
+    PlatformConfiguration, SentinelConfiguration, SentinelOneConfiguration, SplunkConfiguration,
+    SysdigConfiguration, VisibilityConfig,
 };
 use super::sharing::{SharingIssue, merge_sharing_documents};
 use super::{Finding, Severity, bundled, codes, models::TLP_ORDER, repr, toml};
@@ -57,11 +57,11 @@ const UNMODELLED_FILES: [&str; 3] = ["resources.toml", "lint.toml", "organisatio
 
 const RESPONDERS: &str = "responders";
 
-/// Whether a file name ends in `.toml`, case-sensitively as the oracle
-/// reads it (`Deployment.TOML` is not a configuration file).
+/// Whether a file name ends in `.toml`, case-sensitively
+/// (`Deployment.TOML` is not a configuration file).
 #[expect(
     clippy::case_sensitive_file_extension_comparisons,
-    reason = "the oracle compares the suffix case-sensitively"
+    reason = "a configuration file's suffix is `.toml` exactly, as the resolver reads it"
 )]
 pub(crate) fn is_toml(name: &str) -> bool {
     name.ends_with(".toml")
@@ -84,9 +84,9 @@ fn parts(path: &str) -> Vec<String> {
 }
 
 fn stem(name: &str) -> &str {
-    match name.rfind('.') {
-        Some(0) | None => name,
-        Some(dot) => &name[..dot],
+    match name.rsplit_once('.') {
+        Some(("", _)) | None => name,
+        Some((stem, _)) => stem,
     }
 }
 
@@ -169,7 +169,7 @@ fn finding(
     Finding::new(code, severity, path, message, Some(file))
 }
 
-/// The status names of a `deployment.toml` document (`_status_names`).
+/// The status names of a `deployment.toml` document.
 pub fn status_names(deployment: &Node) -> Vec<String> {
     let Some(Value::Seq(statuses)) = deployment.get("statuses").map(|node| &node.value) else {
         return Vec::new();
@@ -320,6 +320,7 @@ fn validate(key: &str, merged: &Node) -> Vec<Finding> {
         "platforms/exabeam.toml" => (convert::<ExabeamConfiguration>(merged).0, None),
         "platforms/google_secops.toml" => (convert::<GoogleSecopsConfiguration>(merged).0, None),
         "platforms/graylog.toml" => (convert::<GraylogConfiguration>(merged).0, None),
+        "platforms/datadog.toml" => (convert::<DatadogConfiguration>(merged).0, None),
         _ => (convert::<PlatformConfiguration>(merged).0, None),
     };
     let mut issues: Vec<Finding> = errors
@@ -552,13 +553,12 @@ pub fn configurations_directory(path: &str) -> Option<(String, String)> {
         return None;
     }
     let marker = "/.opentide/configurations/";
-    let at = normal.rfind(marker)?;
-    let relative = &normal[at + marker.len()..];
+    let (head, relative) = normal.rsplit_once(marker)?;
     if relative.is_empty() {
         return None;
     }
     Some((
-        normal[..at + marker.len() - 1].to_owned(),
+        format!("{head}{}", marker.trim_end_matches('/')),
         relative.to_owned(),
     ))
 }

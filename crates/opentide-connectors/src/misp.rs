@@ -1,12 +1,11 @@
-//! MISP's REST API, the subset `opentide share` speaks (UC-4.4b, #834;
-//! `sharing/client.py`, which spoke it through PyMISP's `_prepare_request`).
+//! MISP's REST API, the subset `opentide share` speaks (UC-4.4b, #834).
 //!
 //! Every request carries the block's key in `Authorization`, asks for and
 //! sends `application/json`, and has 30 seconds; TLS follows the block's
 //! `verify_ssl`. A body is compact JSON in the order it was built; a request
-//! without data sends no body. Answers are
-//! classified as `_decode` does: never recorded, never echoed, a fixed
-//! reason for every failure ([`MispCallError`]).
+//! without data sends no body. Answers are classified by [`decode`]: never
+//! recorded, never echoed, a fixed reason for every failure
+//! ([`MispCallError`]).
 
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -19,7 +18,8 @@ use crate::{Environment, HttpClient, HttpSettings, TenantLabel};
 
 /// `REQUEST_TIMEOUT_SECONDS`.
 pub const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
-/// `SEARCH_PAGE_SIZE`.
+/// The events one search page asks for (`limit`); a shorter page is the last
+/// (`SEARCH_PAGE_SIZE`).
 pub const SEARCH_PAGE_SIZE: i64 = 100;
 /// The pages a search reads at most (`_PAGE_CAP`).
 const PAGE_CAP: i64 = 1000;
@@ -127,9 +127,9 @@ impl RemoteEvent {
 pub struct TemplateView {
     /// Whether the instance has it.
     pub found: bool,
-    /// Its version.
+    /// The template's `version`.
     pub version: Option<i64>,
-    /// Its relations.
+    /// The `object_relation` of each of its elements, each once, in order.
     pub relations: Vec<String>,
     /// The values `opentide-type` takes, when the template lists them.
     pub type_values: Option<Vec<String>>,

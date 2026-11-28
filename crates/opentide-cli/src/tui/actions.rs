@@ -1,4 +1,4 @@
-//! The commands `opentide tui` runs (`cli/services/tui.py`'s actions): each
+//! The commands `opentide tui` runs: each
 //! is the command line itself, run in this process as a person at a terminal
 //! runs it, so what the Results tab shows is what the command prints. Its
 //! output comes from the CLI's renderers (code frames, a dry run's plan, the
@@ -231,16 +231,13 @@ fn said(output: &str, document: Option<&serde_json::Value>) -> String {
 pub fn clean(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     let mut rest = text;
-    while let Some(start) = rest.find("\x1b]8;") {
-        out.push_str(&rest[..start]);
-        let after = &rest[start..];
+    while let Some((head, after)) = rest.split_once("\x1b]8;") {
+        out.push_str(head);
         // `ESC ] 8 ; params ; uri ST`, ST being `ESC \` or BEL.
-        let end = after
-            .find("\x1b\\")
-            .map(|at| at + 2)
-            .or_else(|| after.find('\x07').map(|at| at + 1))
-            .unwrap_or(after.len());
-        rest = &after[end..];
+        rest = after
+            .split_once("\x1b\\")
+            .or_else(|| after.split_once('\x07'))
+            .map_or("", |(_, tail)| tail);
     }
     out.push_str(rest);
     out.replace("\x1b[?25l", "")
@@ -286,6 +283,11 @@ mod tests {
         let text = "\x1b[?25l\r\x1b[2K\x1b[?25h\
                     \x1b]8;;file:///x.yaml\x1b\\x.yaml\x1b]8;;\x1b\\:8\n";
         assert_eq!(clean(text), "x.yaml:8\n");
+        // #1946: multi-byte text before, in and after a link; a link left
+        // open runs to the end; a BEL ends one too.
+        let text = "é😀\x1b]8;;file:///é😀.yaml\x1b\\é😀.yaml\x1b]8;;\x07:8 😀";
+        assert_eq!(clean(text), "é😀é😀.yaml:8 😀");
+        assert_eq!(clean("é\x1b]8;;file:///😀"), "é");
         assert_eq!(strip_escapes("\x1b[1;31merror\x1b[0m: x"), "error: x");
         assert_eq!(
             strip_escapes("\x1b]8;;http://x\x1b\\link\x1b]8;;\x1b\\ \x1b(Bdone"),

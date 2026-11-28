@@ -62,6 +62,7 @@ Status `STAGING` · deployed by PREVIEW runs · tenants: no tenant configured
 ```kql
 DeviceProcessEvents
 | take 1
+| project Timestamp, DeviceId, ReportId
 ```
 
 | Setting | Value | Description |
@@ -74,7 +75,7 @@ DeviceProcessEvents
 
 | `device_id` |
 | --- |
-| `device_id` |
+| `DeviceId` |
 
 ## Response
 

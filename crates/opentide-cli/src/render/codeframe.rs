@@ -176,9 +176,11 @@ const MAX_SOURCE: usize = 400;
 
 /// `text` cut to `limit` characters, `…` marking the cut.
 pub fn shortened(text: &str, limit: usize) -> std::borrow::Cow<'_, str> {
-    match text.char_indices().nth(limit) {
-        Some((at, _)) => format!("{}…", &text[..at]).into(),
-        None => text.into(),
+    if text.chars().nth(limit).is_some() {
+        let kept: String = text.chars().take(limit).collect();
+        format!("{kept}…").into()
+    } else {
+        text.into()
     }
 }
 
@@ -322,17 +324,6 @@ pub fn shorten_path(location: &str, room: usize) -> String {
     format!("{head_text}…{tail_text}")
 }
 
-/// `(column, end_column, style)` spans of one source line of a file, 1-based code points.
-pub trait LineStyles {
-    /// The spans of line `line` (1-based) of `path`, whose text `sources` holds.
-    fn styles(
-        &mut self,
-        path: &Path,
-        line: usize,
-        sources: &mut dyn Sources,
-    ) -> Vec<(usize, usize, Style)>;
-}
-
 /// HighlightSpec capture → terminal style, for the query lines of a frame.
 /// Captures not listed (variables, properties, punctuation, Tide keys) keep the
 /// terminal's colour.
@@ -371,7 +362,7 @@ impl QueryHighlighter {
             return by_line;
         };
         // As a text file is read: every line break a `\n`.
-        let text = text.replace("\r\n", "\n").replace('\r', "\n");
+        let text = opentide_core::text::universal_newlines(text);
         for token in opentide_analysis::highlight(language, &text).tokens {
             let Some(style) = query_style(&token.capture) else {
                 continue;
@@ -395,10 +386,14 @@ impl QueryHighlighter {
 /// The 1-based line and code-point column of byte `offset` in `text`.
 fn position(text: &str, offset: usize) -> (usize, usize) {
     let offset = text.floor_char_boundary(offset);
+    #[expect(
+        clippy::string_slice,
+        reason = "`floor_char_boundary` returns a char boundary of `text`"
+    )]
     let before = &text[..offset];
     let line = before.matches('\n').count() + 1;
-    let start = before.rfind('\n').map_or(0, |at| at + 1);
-    (line, text[start..offset].chars().count() + 1)
+    let head = before.rsplit_once('\n').map_or(before, |(_, head)| head);
+    (line, head.chars().count() + 1)
 }
 
 /// `opentide-yaml` for an object file, a query language for its extension.
@@ -410,8 +405,10 @@ fn language_of(path: &Path) -> Option<opentide_analysis::LanguageId> {
     opentide_analysis::LanguageId::from_extension(extension)
 }
 
-impl LineStyles for QueryHighlighter {
-    fn styles(
+impl QueryHighlighter {
+    /// The `(column, end_column, style)` spans of line `line` (1-based) of
+    /// `path`, whose text `sources` holds: 1-based code points.
+    pub fn styles(
         &mut self,
         path: &Path,
         line: usize,
@@ -433,7 +430,7 @@ impl Frames {
         &self,
         diagnostic: &Diagnostic,
         sources: &mut dyn Sources,
-        mut styles: Option<&mut dyn LineStyles>,
+        mut styles: Option<&mut QueryHighlighter>,
     ) -> Vec<Text> {
         let style = severity_style(diagnostic.severity);
         let bold = Style::new().bold();
@@ -711,7 +708,7 @@ impl Frames {
         let mut highlighter = QueryHighlighter::default();
         let mut out = String::new();
         for diagnostic in sort_diagnostics(shown) {
-            let styles: Option<&mut dyn LineStyles> = if self.highlight {
+            let styles: Option<&mut QueryHighlighter> = if self.highlight {
                 Some(&mut highlighter)
             } else {
                 None
@@ -1198,6 +1195,21 @@ mod tests {
         }
         assert_eq!(position("é名\nx", "é名".len()), (1, 3));
         assert_eq!(position("é名", 1), (1, 1));
+    }
+
+    #[test]
+    fn multi_byte_text_is_shortened_and_located_by_characters() {
+        // #1946: the cut and the column count characters, never bytes.
+        assert_eq!(shortened("é😀ab", 2), "é😀…");
+        assert_eq!(shortened("é😀", 2), "é😀");
+        assert_eq!(shortened("😀", 0), "…");
+        assert_eq!(shortened("", 0), "");
+        let text = "😀é\né😀x\n";
+        assert_eq!(position(text, text.find('x').unwrap()), (2, 3));
+        // Inside `😀`: its start.
+        assert_eq!(position(text, "😀é\né".len() + 2), (2, 2));
+        assert_eq!(position(text, text.len()), (3, 1));
+        assert_eq!(position(text, text.len() + 5), (3, 1));
     }
 
     #[test]

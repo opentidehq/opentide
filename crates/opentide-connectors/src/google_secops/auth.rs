@@ -1,6 +1,4 @@
-//! OAuth 2.0 access tokens for Google Security Operations, ported from
-//! 0.28.0's `client.py` (`load_credentials`, `_authorise`), which used
-//! google-auth.
+//! OAuth 2.0 access tokens for Google Security Operations.
 //!
 //! A tenant's `credentials` is a service-account key, as a JSON document or
 //! the path to one (`type: service_account` only: another type runs commands
@@ -11,7 +9,7 @@
 //!
 //! Every token request is sent on the tenant's own client, so it takes the
 //! tenant's proxy, CA bundles and timeouts: a service-account key signs a JWT
-//! (RS256, `jsonwebtoken`) and exchanges it at the key's `token_uri`; an
+//! (RS256, signed in the private `rs256` module) and exchanges it at the key's `token_uri`; an
 //! `authorized_user` file (gcloud's `application-default login`) exchanges its
 //! refresh token; the metadata server is asked for the default service
 //! account's token. A token is reused until 3 minutes 45 seconds before it
@@ -35,7 +33,7 @@ use opentide_compile::Json;
 
 use crate::Environment;
 use crate::answer::Answer;
-use crate::connector::TenantContext;
+use crate::connector::{CodedError, TenantContext};
 use crate::credentials::{Credential, Secret};
 use crate::error::ConnectorError;
 
@@ -62,13 +60,13 @@ pub const CREDENTIALS_MISSING: &str = "google_secops_credentials_missing";
 
 /// The code of credentials Google refused, or a token endpoint whose answer
 /// is no token.
-pub const TENANT_UNAUTHORIZED: &str = "google_secops_tenant_unauthorized";
+pub const TENANT_UNAUTHORIZED: &str = crate::tenant_codes::GOOGLE_SECOPS.unauthorized;
 
 /// What time it is, for a token's expiry and an assertion's `iat`: the
 /// system's clock, or a fixed one in a test.
 pub type Clock = Arc<dyn Fn() -> Timestamp + Send + Sync>;
 
-/// The system clock.
+/// A [`Clock`] that reads the system's time.
 pub fn system_clock() -> Clock {
     Arc::new(Timestamp::now)
 }
@@ -84,7 +82,8 @@ pub enum Credentials {
         private_key: Secret,
         /// `private_key_id`, the assertion's `kid`.
         private_key_id: Option<String>,
-        /// `token_uri`.
+        /// `token_uri`, where the token is obtained; Google's default when the JSON
+        /// names none.
         token_uri: String,
         /// `quota_project_id`.
         quota_project: Option<String>,
@@ -98,7 +97,8 @@ pub enum Credentials {
         client_secret: Secret,
         /// `refresh_token`.
         refresh_token: Secret,
-        /// `token_uri`.
+        /// `token_uri`, where the token is obtained; Google's default when the JSON
+        /// names none.
         token_uri: String,
         /// `quota_project_id`.
         quota_project: Option<String>,
@@ -174,7 +174,7 @@ fn from_info(
         let private_key =
             required(&value, "private_key", "service-account key").map_err(invalid)?;
         // A key that does not parse is refused here, as google-auth refuses it.
-        jsonwebtoken::EncodingKey::from_rsa_pem(private_key.as_bytes()).map_err(|error| {
+        rs256::SigningKey::from_pem(&private_key).map_err(|error| {
             LoadError(format!(
                 "cannot load Google credentials: the private key cannot be read ({error})"
             ))
@@ -370,10 +370,8 @@ pub fn assertion(
     token_uri: &str,
     now: Timestamp,
 ) -> Result<String, LoadError> {
-    let key = jsonwebtoken::EncodingKey::from_rsa_pem(private_key.expose().as_bytes())
+    let key = rs256::SigningKey::from_pem(private_key.expose())
         .map_err(|error| LoadError(format!("the private key cannot be read ({error})")))?;
-    let mut header = jsonwebtoken::Header::new(jsonwebtoken::Algorithm::RS256);
-    header.kid = private_key_id.map(str::to_owned);
     let iat = now.as_second();
     let claims = Claims {
         iat,
@@ -382,7 +380,7 @@ pub fn assertion(
         aud: token_uri,
         scope: SCOPE,
     };
-    jsonwebtoken::encode(&header, &claims, &key)
+    rs256::encode(&key, private_key_id, &claims)
         .map_err(|error| LoadError(format!("the private key cannot sign ({error})")))
 }
 
@@ -410,23 +408,30 @@ impl std::fmt::Debug for Authorizer {
     }
 }
 
-fn unauthorized(cx: TenantContext<'_>, message: String) -> ConnectorError {
-    ConnectorError::Authentication {
-        platform: PLATFORM.to_owned(),
-        tenant: cx.tenant.label.tenant.clone(),
-        message: format!("{TENANT_UNAUTHORIZED}: {message}"),
-        detail: None,
-    }
+fn unauthorized(cx: TenantContext<'_>, message: String) -> CodedError {
+    CodedError::new(
+        TENANT_UNAUTHORIZED,
+        ConnectorError::Authentication {
+            platform: PLATFORM.to_owned(),
+            tenant: cx.tenant.label.tenant.clone(),
+            message: format!("{TENANT_UNAUTHORIZED}: {message}"),
+            detail: None,
+        },
+    )
 }
 
-/// The error of credentials that are missing or cannot be read.
-pub fn credentials_missing(tenant: &str, error: &LoadError) -> ConnectorError {
-    ConnectorError::Authentication {
-        platform: PLATFORM.to_owned(),
-        tenant: tenant.to_owned(),
-        message: format!("{CREDENTIALS_MISSING}: {}", error.0),
-        detail: None,
-    }
+/// The error of credentials that are missing or cannot be read
+/// ([`CREDENTIALS_MISSING`]).
+pub fn credentials_missing(tenant: &str, error: &LoadError) -> CodedError {
+    CodedError::new(
+        CREDENTIALS_MISSING,
+        ConnectorError::Authentication {
+            platform: PLATFORM.to_owned(),
+            tenant: tenant.to_owned(),
+            message: format!("{CREDENTIALS_MISSING}: {}", error.0),
+            detail: None,
+        },
+    )
 }
 
 impl Authorizer {
@@ -439,7 +444,7 @@ impl Authorizer {
         }
     }
 
-    /// The credentials.
+    /// The credentials it obtains tokens with.
     pub fn credentials(&self) -> &Credentials {
         &self.credentials
     }
@@ -449,11 +454,12 @@ impl Authorizer {
     ///
     /// # Errors
     ///
-    /// [`ConnectorError::Authentication`] when no token can be obtained.
+    /// [`ConnectorError::Authentication`] when no token can be obtained,
+    /// under [`TENANT_UNAUTHORIZED`] or [`CREDENTIALS_MISSING`].
     pub async fn headers(
         &self,
         cx: TenantContext<'_>,
-    ) -> Result<Vec<(&'static str, String)>, ConnectorError> {
+    ) -> Result<Vec<(&'static str, String)>, CodedError> {
         let token = self.token(cx).await?;
         let mut headers = vec![("Authorization", format!("Bearer {}", token.expose()))];
         if let Some(project) = self.credentials.quota_project() {
@@ -467,8 +473,9 @@ impl Authorizer {
     ///
     /// # Errors
     ///
-    /// [`ConnectorError::Authentication`] when no token can be obtained.
-    pub async fn token(&self, cx: TenantContext<'_>) -> Result<Secret, ConnectorError> {
+    /// [`ConnectorError::Authentication`] when no token can be obtained,
+    /// under [`TENANT_UNAUTHORIZED`] or [`CREDENTIALS_MISSING`].
+    pub async fn token(&self, cx: TenantContext<'_>) -> Result<Secret, CodedError> {
         let now = (self.clock)();
         if let Some(token) = self
             .token
@@ -485,7 +492,7 @@ impl Authorizer {
         Ok(secret)
     }
 
-    async fn fetch(&self, cx: TenantContext<'_>, now: Timestamp) -> Result<Token, ConnectorError> {
+    async fn fetch(&self, cx: TenantContext<'_>, now: Timestamp) -> Result<Token, CodedError> {
         let tenant = cx.tenant.label.tenant.clone();
         let request = match &self.credentials {
             Credentials::ServiceAccount {
@@ -545,11 +552,11 @@ impl Authorizer {
         };
         let answer = match crate::answer::exchange(cx, request).await {
             Ok(answer) => answer,
-            Err(ConnectorError::Cancelled) => return Err(ConnectorError::Cancelled),
+            Err(ConnectorError::Cancelled) => return Err(ConnectorError::Cancelled.into()),
             // The token endpoint could not be reached, or sent no answer in
             // time: the network's failure, not the credentials' (#1658, D5).
             Err(error @ (ConnectorError::Unreachable { .. } | ConnectorError::Timeout { .. })) => {
-                return Err(error);
+                return Err(error.into());
             }
             Err(error) => {
                 return Err(unauthorized(
@@ -572,7 +579,7 @@ impl Authorizer {
         cx: TenantContext<'_>,
         host: &str,
         now: Timestamp,
-    ) -> Result<Token, ConnectorError> {
+    ) -> Result<Token, CodedError> {
         let tenant = cx.tenant.label.tenant.clone();
         let missing = |reason: String| {
             credentials_missing(
@@ -585,7 +592,7 @@ impl Authorizer {
         };
         let answer = match metadata_answer(cx, host).await {
             Ok(answer) => answer,
-            Err(ConnectorError::Cancelled) => return Err(ConnectorError::Cancelled),
+            Err(ConnectorError::Cancelled) => return Err(ConnectorError::Cancelled.into()),
             Err(error) => return Err(missing(error.to_string())),
         };
         Self::token_from(cx, &answer, now)
@@ -597,7 +604,7 @@ impl Authorizer {
         cx: TenantContext<'_>,
         answer: &Answer,
         now: Timestamp,
-    ) -> Result<Token, ConnectorError> {
+    ) -> Result<Token, CodedError> {
         let tenant = cx.tenant.label.tenant.clone();
         let body = answer.json().unwrap_or(Json::Null);
         let token = body
@@ -716,6 +723,8 @@ fn refusal_reason(answer: &Answer) -> String {
             .unwrap_or_else(|| format!("HTTP {}", answer.status)),
     }
 }
+
+mod rs256;
 
 #[cfg(test)]
 mod tests;

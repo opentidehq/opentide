@@ -11,7 +11,7 @@ The opentide MCP server exposes catalogue search, validation, deployment, and re
 ## Quick start
 
 ```bash
-pip install 'opentide==1.0.0'
+pip install 'opentide==1.1.0'
 export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 opentide setup mcp --cursor --yes
 ```
@@ -37,6 +37,7 @@ Transport: **stdio** (standard MCP over stdin/stdout).
 | Search catalogue | `search` |
 | Threat → objective → rule graph | `get_chaining` |
 | ATT&CK coverage gaps | `coverage` |
+| Catalogue gaps: threats and objectives without rules, nothing in production | `graph` |
 | Validate a rule, with positions and fixes | `validate_rule`, `validation_report` |
 | What a diagnostic code means | `explain` |
 | Check queries against the tenant | `validate_query` with `live: true` |
@@ -51,7 +52,7 @@ The server sends `instructions` to MCP hosts with its `initialize` response. The
 
 > opentide: Spec-driven development for agentic detection engineering. opentide gives every detection an ontology and a taxonomy, so it stays threat-aligned, maintainable and fast to ship, with or without agents.
 
-Then they give the agent its workflow: search (`search`, `coverage`, `get_chaining`); draft from `opentide://templates/{object_type}` and write the file itself, since the server writes none; call `validation_report` after every edit, applying each issue's `fix` and reading `explain(code)`, until `ok` is `true`; preview with `deploy_rule` and `dry_run: true`. People review and merge, and run real deployments. They also say that `validate_query` and `run_query` with `live: true` contact the tenant, so the agent asks first, and how to read [`next_actions`](./tools.md#next-actions). The text is the server manifest's `instructions` (`crates/opentide-cli/data/mcp/manifest.json`).
+Then they give the agent its workflow: search (`search`, `coverage`, `get_chaining`, and `graph` for where the catalogue is blind); draft from `opentide://templates/{object_type}` and write the file itself, since the server writes none; call `validation_report` after every edit, applying each issue's `fix` and reading `explain(code)`, until `ok` is `true`; preview with `deploy_rule` and `dry_run: true`. People review and merge, and run real deployments. They also say that `validate_query` and `run_query` with `live: true` contact the tenant, so the agent asks first, and how to read [`next_actions`](./tools.md#next-actions). The text is the server manifest's `instructions` (`crates/opentide-cli/data/mcp/manifest.json`).
 
 <Callout type="warn">
 `validate_query` checks the `query` argument offline, with the engine

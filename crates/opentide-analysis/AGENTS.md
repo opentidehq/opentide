@@ -25,6 +25,16 @@ on; the language server and the browser build leave it off.
   the queries, the highlighting and the symbols, and no other object of the workspace is read
   for it. A platform block's own findings are `analyze_blocks`, which `opentide lint` reads
   (UC-2.6, #821): never fold them back into `analyze`, or the editor shows a fault twice.
+- The query-engine registry is re-exported as `opentide_analysis::engines` (`ENGINES`,
+  `engine`): crates above this one use that path, never `opentide_tide::engines`, so the fold of
+  opentide-tide into this crate (ADR 0016, #1965) changes no caller. A query language with no
+  row in `ENGINES` fails the registry's test and `every_query_language_is_analysed`, and
+  `analyze` `debug_assert!`s it.
+- A query's dialect, profile and stack reach its engine as an `opentide_highlight::Setting`
+  through `QueryEngine::analyze_for`: `analyze_query` passes the request's platform and stack with
+  the `File` profile, Tide's injections the block's or hunt's (ADR 0015 §4). Each engine maps the
+  setting onto its crate's own types; a new language does it in its `Engine`, not in a `match`
+  here.
 - The README's example is a doctest (`ReadmeDoctests`): keep it compiling.
 
 ## Test
@@ -36,8 +46,8 @@ cargo test -p opentide-analysis --doc
 cargo bench -p opentide-analysis --bench analyze         # informational
 ```
 
-`tests/tide_corpus.rs` runs this checkout's Pydantic models through `.venv` (`uv sync --group
-dev`, or `OPENTIDE_PYTHON`). `tests/snapshots.rs` holds insta snapshots (`tests/snapshots/`).
+`tests/tide_corpus.rs` indexes and analyses the tide_corpus objects, their queries injected and
+checked in their languages. `tests/snapshots.rs` holds insta snapshots (`tests/snapshots/`).
 `tests/elastic_detection_rules.rs` is an opt-in sweep (`OPENTIDE_DETECTION_RULES`).
 
 ## Do not

@@ -36,9 +36,9 @@ Options:
           One-line description, used in the README
 
       --platform <PLATFORM>
-          Enable a detection platform (repeatable): sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops
+          Enable a detection platform (repeatable): sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops, datadog
           
-          [possible values: sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops]
+          [possible values: sentinel, microsoft_defender, splunk, sentinel_one, crowdstrike, harfanglab, carbon_black_cloud, elastic, sysdig, bitdefender, graylog, exabeam, google_secops, datadog]
 
       --ci <PROVIDER>
           CI/CD pipeline to write: github, gitlab, azure or none
@@ -97,9 +97,9 @@ Options:
           Run setup vscode: the extension recommendation and snippets (the opentide VS Code extension is the recommended path)
 
       --mcp <HOST>
-          Write MCP configuration for vscode, cursor, claude-code or generic (repeatable)
+          Write MCP configuration for vscode, cursor, claude-code, claude-desktop or generic (repeatable)
           
-          [possible values: vscode, cursor, claude-code, generic]
+          [possible values: vscode, cursor, claude-code, claude-desktop, generic]
 
       --skills <TARGET>
           Install agent skills for claude-code, cursor, github-copilot or generic (repeatable)

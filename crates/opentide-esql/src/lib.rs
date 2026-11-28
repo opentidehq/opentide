@@ -42,9 +42,14 @@ mod catalog_model;
 mod columns;
 mod ecs;
 mod gates;
-mod lexer;
-mod parser;
-mod syntax;
+// The lexer, the parser and the kinds: public but hidden, as the typed AST, for the crate's
+// corpus, tree and conformance tests (`tests/`). Not an API.
+#[doc(hidden)]
+pub mod lexer;
+#[doc(hidden)]
+pub mod parser;
+#[doc(hidden)]
+pub mod syntax;
 mod tree;
 
 // What the generated typed AST names from the crate root (`use crate::{..}`).
@@ -61,6 +66,15 @@ pub use catalog::{Catalog, CommandRow, FunctionRow, Lifecycle, StackVersion, Typ
 pub use columns::output_columns;
 pub use ecs::{ecs_diagnostics, source_indices};
 pub use version::{Availability, RELEASES, StackTarget};
+
+/// `text[start..end]`, a range this crate computes: a token's bounds, a
+/// character's, or an ASCII byte's, so its ends are char boundaries. A range
+/// that is not fails a debug assertion and reads as empty.
+pub(crate) fn cut(text: &str, start: usize, end: usize) -> &str {
+    let piece = text.get(start..end);
+    debug_assert!(piece.is_some(), "{start}..{end} in {} bytes", text.len());
+    piece.unwrap_or_default()
+}
 
 use gates::{
     SyntaxElement, element_span, first_token, is_named, nodes_after, parts, span_of, text_of,
@@ -135,6 +149,59 @@ pub fn syntax_tree(source: &str) -> SyntaxNode {
 /// `analyze_for(source, None)`.
 pub fn analyze(source: &str) -> AnalyzeResult {
     analyze_for(source, None)
+}
+
+/// The ES|QL [`QueryEngine`](opentide_highlight::QueryEngine) (#1953):
+/// [`analyze`] behind the shared interface.
+///
+/// The stack is the setting's ([`StackTarget::parse`]); a query on its own
+/// has no Elastic tenant, so no stack target.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Engine;
+
+impl opentide_highlight::QueryEngine for Engine {
+    fn language(&self) -> opentide_core::LanguageId {
+        opentide_core::LanguageId::Esql
+    }
+
+    fn analyze_for(
+        &self,
+        source: &str,
+        setting: &opentide_highlight::Setting<'_>,
+    ) -> opentide_highlight::AnalyzeResult {
+        let r = analyze_for(source, setting.stack.and_then(StackTarget::parse));
+        opentide_highlight::AnalyzeResult {
+            diagnostics: r.diagnostics,
+            tokens: r.tokens,
+        }
+    }
+
+    fn hover(
+        &self,
+        source: &str,
+        offset: usize,
+        _setting: &opentide_highlight::Setting<'_>,
+    ) -> Option<String> {
+        hover(source, offset)
+    }
+
+    fn completions(
+        &self,
+        source: &str,
+        offset: usize,
+        _setting: &opentide_highlight::Setting<'_>,
+    ) -> Vec<opentide_core::CompletionItem> {
+        completions(source, offset)
+    }
+
+    fn signature_help(
+        &self,
+        source: &str,
+        offset: usize,
+        _setting: &opentide_highlight::Setting<'_>,
+    ) -> Option<opentide_core::SignatureHelp> {
+        signature_help(source, offset)
+    }
 }
 
 /// Analyze for one stack.
@@ -535,13 +602,12 @@ fn parse_problem(tree: &tree::Tree, source: &str) -> Option<Diagnostic> {
     // A bracket, pipe or operator is quoted alone; a word with its dots
     // (`host.name`) up to the next one: a whitespace-delimited chunk ran on
     // over `("a",`, or to the end of a query written without spaces.
-    let chunk_len = rest.find(char::is_whitespace).unwrap_or(rest.len());
+    let chunk = rest.split(char::is_whitespace).next().unwrap_or_default();
     let stop = |c: char| "()[]{},|;=<>!+%".contains(c);
-    let word_len = match rest.chars().next() {
-        Some(c) if stop(c) => c.len_utf8(),
-        _ => rest[..chunk_len].find(stop).unwrap_or(chunk_len),
+    let word = match rest.chars().next() {
+        Some(c) if stop(c) => rest.split_at_checked(c.len_utf8()).map_or(rest, |(c, _)| c),
+        _ => chunk.split(stop).next().unwrap_or_default(),
     };
-    let word = &rest[..word_len];
     let near = if word.is_empty() {
         "ES|QL syntax error at the end of the query".to_string()
     } else {
@@ -551,7 +617,7 @@ fn parse_problem(tree: &tree::Tree, source: &str) -> Option<Diagnostic> {
     Some(Diagnostic::error(
         codes::ESQL_PARSE_ERROR,
         message,
-        range(source, ByteSpan::new(at, at + word_len)),
+        range(source, ByteSpan::new(at, at + word.len())),
     ))
 }
 
@@ -608,7 +674,11 @@ impl Lines {
         let character = if self.ascii.get(line).copied().unwrap_or(false) {
             offset - start
         } else {
-            source[start..offset].chars().map(char::len_utf16).sum()
+            // A line's start follows a `\n`; `offset` is floored to a char.
+            cut(source, start, offset)
+                .chars()
+                .map(char::len_utf16)
+                .sum()
         };
         opentide_core::Position {
             line: u32::try_from(line).unwrap_or(u32::MAX),
@@ -1389,7 +1459,8 @@ pub fn completions(source: &str, offset: usize) -> Vec<CompletionItem> {
     };
     let catalog = Catalog::cached();
     let segment_start = last_pipe(before).map(|i| i + 1);
-    let segment = &before[segment_start.unwrap_or(0)..];
+    // Past a `|` byte.
+    let segment = cut(before, segment_start.unwrap_or(0), before.len());
     let trimmed = segment.trim_start();
     let typing_first_word = !trimmed.contains(char::is_whitespace);
     if typing_first_word {
@@ -1573,9 +1644,10 @@ fn innermost_call(before: &str) -> Option<(String, u32)> {
         i += 1;
     }
     let (open, commas) = *stack.last()?;
-    let name_start =
-        opentide_core::word_start(&before[..open], |c| c.is_ascii_alphanumeric() || c == '_');
-    let name = before[name_start..open].to_string();
+    // `open` is a `(` byte, and the word before it starts on a char.
+    let head = cut(before, 0, open);
+    let name_start = opentide_core::word_start(head, |c| c.is_ascii_alphanumeric() || c == '_');
+    let name = cut(head, name_start, head.len()).to_string();
     (!name.is_empty()).then_some((name, commas))
 }
 
@@ -1859,7 +1931,7 @@ mod tests {
             .flat_map(|t| {
                 let ends: Vec<usize> = t.char_indices().map(|(i, _)| i).step_by(7).collect();
                 ends.into_iter()
-                    .map(|i| t[..i].to_owned())
+                    .map(|i| t.get(..i).unwrap().to_owned())
                     .collect::<Vec<_>>()
             })
             .collect();
@@ -2553,5 +2625,57 @@ mod tests {
             .map(|c| c.label)
             .collect();
         assert_eq!(columns, ["a.b", "x"]);
+    }
+
+    /// Queries with multi-byte text in every place the crate cuts: the
+    /// lexer's modes (commands, sources, policies, names, quoted identifiers),
+    /// parse errors, grok and dissect patterns, pipes and calls. The ranges are
+    /// checked in debug builds (`cut`).
+    const MULTI_BYTE: &[&str] = &[
+        "FROM logs-é😀*, `é😀` | WHERE é😀 == \"😀\" AND `a``é` > 1 | EVAL x = CONCAT(é, \"😀\", ",
+        "FROM é | DISSECT é \"%{+é😀} %{?😀} %{é->} %{&é}\" | GROK é \"%{WORD:é😀} (?<😀>é) (?=é)\" | KEEP é😀*, *😀",
+        "FROM a | ENRICH é😀:policy ON é WITH 😀 = é | LOOKUP JOIN é😀 ON é | é😀 bad | STATS c = COUNT(é) BY 😀",
+        "ROW é = 1 /* é😀 */ // 😀\n | WHERE é IN (FROM é😀 | KEEP é) | RENAME é AS 😀 | é😀(",
+        "TS é😀 | PROMQL é😀{a=\"😀\"} | FORK (WHERE é) (WHERE 😀) | EXPLAIN (ROW 😀",
+        "😀 é | FROM",
+    ];
+
+    #[test]
+    fn multi_byte_text_is_read_whole_everywhere() {
+        for query in MULTI_BYTE {
+            let result = analyze(query);
+            for token in &result.tokens {
+                assert!(
+                    query.get(token.span.start..token.span.end).is_some(),
+                    "{query}"
+                );
+            }
+            let _ = output_columns(query);
+            for (offset, _) in query.char_indices().chain([(query.len(), ' ')]) {
+                let _ = hover(query, offset);
+                let _ = completions(query, offset);
+                let _ = signature_help(query, offset);
+                let prefix = query.get(..offset).unwrap();
+                let _ = analyze(prefix);
+                let _ = output_columns(prefix);
+            }
+        }
+    }
+
+    #[test]
+    fn cut_reads_a_range_on_char_boundaries() {
+        assert_eq!(cut("é😀x", 0, 2), "é");
+        assert_eq!(cut("é😀x", 2, 7), "😀x");
+        assert_eq!(cut("é😀x", 7, 7), "");
+    }
+
+    #[test]
+    fn a_parse_error_on_multi_byte_text_quotes_the_whole_word() {
+        let messages: Vec<String> = analyze("FROM a | WHERE x == é😀,(y")
+            .diagnostics
+            .into_iter()
+            .map(|d| d.message)
+            .collect();
+        assert!(messages.iter().any(|m| m.contains("`é😀`")), "{messages:?}");
     }
 }

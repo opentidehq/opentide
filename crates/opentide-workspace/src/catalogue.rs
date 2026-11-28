@@ -1,7 +1,6 @@
 //! `opentide info catalog`: every object, how they relate, and the ATT&CK
 //! skeleton, in one document for an editor's catalogue, coverage graph,
-//! ATT&CK matrix and search (`cli/services/catalog.py`; vscode-extension
-//! `docs/CONTRACTS.md`).
+//! ATT&CK matrix and search (vscode-extension `docs/CONTRACTS.md`).
 //!
 //! It is built in one pass over the index: each edge comes from the field
 //! that holds the reference, so the cost is linear in the catalogue.
@@ -50,6 +49,7 @@ const STRATEGIES: [&str; 6] = [
 
 /// A rule's platform block, as the catalogue lists it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[non_exhaustive]
 pub struct PlatformBlock {
     /// The platform's key.
     pub id: String,
@@ -63,6 +63,7 @@ pub struct PlatformBlock {
 
 /// An object's techniques, kept apart by where they come from.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Default)]
+#[non_exhaustive]
 pub struct Techniques {
     /// Listed by the object.
     pub own: Vec<String>,
@@ -72,6 +73,7 @@ pub struct Techniques {
 
 /// One object that loaded.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[non_exhaustive]
 pub struct ObjectRow {
     /// Its UUID.
     pub uuid: String,
@@ -114,6 +116,7 @@ pub struct ObjectRow {
 
 /// Why a file did not load.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[non_exhaustive]
 pub struct LoadErrorDetail {
     /// `yaml_parse`, `missing_uuid` or `duplicate_id`.
     pub code: String,
@@ -125,6 +128,7 @@ pub struct LoadErrorDetail {
 
 /// A file the index holds no object for: what can be read of it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[non_exhaustive]
 pub struct LoadErrorRow {
     /// The UUID its text names, except for a duplicate (the kept object's).
     pub uuid: Option<String>,
@@ -195,6 +199,7 @@ impl Row {
 
 /// An edge between two objects, or from an object to a technique or log source.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[non_exhaustive]
 pub struct Edge {
     /// Where it starts.
     pub from: String,
@@ -212,6 +217,7 @@ pub struct Edge {
 
 /// A signal of an objective.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[non_exhaustive]
 pub struct SignalRow {
     /// Its UUID.
     pub uuid: String,
@@ -225,6 +231,7 @@ pub struct SignalRow {
 
 /// The catalogue's counts.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[non_exhaustive]
 pub struct Summary {
     /// Rows of `objects`, load errors included.
     pub objects: usize,
@@ -242,8 +249,10 @@ pub struct Summary {
     pub load_errors: usize,
 }
 
-/// The catalogue.
+/// The workspace's objects and the links between them, as `info catalog`
+/// lists them.
 #[derive(Debug, Clone, PartialEq, Serialize)]
+#[non_exhaustive]
 pub struct Catalogue {
     /// Objects by family (threats, objectives, rules), each by path, then
     /// the files that did not load.
@@ -276,9 +285,9 @@ fn patterns() -> &'static [Regex; 4] {
 
 /// The 1-based line of the root `name:` key, or 1.
 pub fn name_line(text: &str) -> usize {
-    patterns()[0]
-        .find(text)
-        .map_or(1, |found| text[..found.start()].matches('\n').count() + 1)
+    patterns()[0].find(text).map_or(1, |found| {
+        crate::cut(text, 0, found.start()).matches('\n').count() + 1
+    })
 }
 
 /// A plain or quoted YAML scalar written on one line, without its comment.
@@ -320,7 +329,8 @@ fn scalar(raw: Option<&str>) -> Option<String> {
             break;
         }
     }
-    let value = raw[..cut].trim();
+    // `cut` is the length, or the blank before a `#`: an ASCII byte.
+    let value = crate::cut(raw, 0, cut).trim();
     (!value.is_empty()).then(|| value.to_owned())
 }
 
@@ -342,7 +352,10 @@ pub fn text_fields(text: &str) -> HashMap<&'static str, String> {
         let found = key_line.captures(line);
         let indent = match &found {
             Some(found) => found.get(1).map_or("", |m| m.as_str()).to_owned(),
-            None => line[..line.len() - line.trim_start().len()].to_owned(),
+            None => line
+                .strip_suffix(line.trim_start())
+                .unwrap_or_default()
+                .to_owned(),
         };
         let key = found.as_ref().and_then(|f| f.get(2)).map(|m| m.as_str());
         let value = found.as_ref().and_then(|f| f.get(3)).map(|m| m.as_str());
@@ -940,5 +953,19 @@ mod tests {
         let fields = text_fields("name: a\u{2028}b\n");
         assert_eq!(fields["name"], "a\u{2028}b");
         assert!(text_fields("").is_empty());
+    }
+
+    #[test]
+    fn text_fields_and_the_name_line_read_multi_byte_text() {
+        let text = "# é😀\nuuid: é😀 #c\nname: é😀 # 😀\ndescription: é#😀\nmeta:\n  é: 😀\n";
+        assert_eq!(name_line(text), 3);
+        assert_eq!(scalar(Some("é😀 # 😀")).as_deref(), Some("é😀"));
+        assert_eq!(scalar(Some("é#😀")).as_deref(), Some("é#😀"));
+        assert_eq!(scalar(Some("😀\t#")).as_deref(), Some("😀"));
+        let _ = text_fields(text);
+        for (at, _) in text.char_indices() {
+            let _ = text_fields(text.get(..at).unwrap());
+            let _ = name_line(text.get(at..).unwrap());
+        }
     }
 }

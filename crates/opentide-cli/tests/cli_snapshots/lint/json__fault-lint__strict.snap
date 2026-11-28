@@ -7,105 +7,225 @@ exit: 1
 view: diagnostics (code, severity, file, line, column and counts; a warning's text; log events by name; no other message text)
 
 ━━━ stdout · json
-findings: 86
+findings: 206
   issues_found | - | - | - | -
   metadata_recommended | info | objects/objectives/hidden-spray-objective-0004.yaml | 3 | 1
-  metadata_recommended | info | objects/rules/elevated-exfiltration-rule-0031.yaml | 3 | 1
-  placeholder | warning | objects/rules/silent-exfiltration-rule-0033.yaml | 10 | 11
-  falco_exception | warning | objects/rules/covert-downgrade-rule-0237.yaml | 100 | 9
-  kql_wildcard_table | warning | objects/rules/covert-exfiltration-rule-0157.yaml | 45 | 33
-  esql_group_by_column | warning | objects/rules/covert-relay-rule-0307.yaml | 51 | 7
-  kql_unscoped_union | warning | objects/rules/covert-tunnel-rule-0170.yaml | 49 | 13
-  eql_expression_depth | warning | objects/rules/covert-tunnel-rule-0392.yaml | 75 | 271
-  falco_unknown_source | warning | objects/rules/elevated-beacon-rule-0256.yaml | 68 | 5
-  falco_unsafe_na_check | warning | objects/rules/elevated-harvest-rule-0259.yaml | 83 | 22
-  esql_unavailable | info | objects/rules/elevated-harvest-rule-0372.yaml | 39 | 34
-  spl_unknown_command | warning | objects/rules/elevated-relay-rule-0107.yaml | 58 | 20
-  esql_expression_depth | warning | objects/rules/elevated-relay-rule-0242.yaml | 53 | 349
-  kql_deprecated_function | warning | objects/rules/elevated-tunnel-rule-0101.yaml | 53 | 19
-  lucene_bare_term | info | objects/rules/encoded-beacon-rule-0145.yaml | 72 | 23
-  falco_field_as_value | warning | objects/rules/encoded-downgrade-rule-0181.yaml | 83 | 39
-  lucene_lowercase_operator | warning | objects/rules/encoded-dropper-rule-0294.yaml | 44 | 28
-  falco_no_evttype | warning | objects/rules/encoded-injection-rule-0204.yaml | 57 | 7
-  lucene_bare_term | info | objects/rules/encoded-spray-rule-0359.yaml | 53 | 20
-  lucene_range_operator | warning | objects/rules/encoded-spray-rule-0359.yaml | 53 | 18
-  technique_not_enterprise | warning | objects/rules/encoded-tunnel-rule-0047.yaml | 20 | 1
-  lucene_escape | warning | objects/rules/encoded-tunnel-rule-0164.yaml | 42 | 31
-  falco_deprecated_field | warning | objects/rules/encoded-tunnel-rule-0178.yaml | 37 | 27
-  lucene_kuery_syntax | warning | objects/rules/hidden-downgrade-rule-0229.yaml | 55 | 19
-  lucene_unescaped_slash | warning | objects/rules/hidden-exfiltration-rule-0470.yaml | 54 | 17
-  threshold_lookback | warning | objects/rules/hidden-harvest-rule-0060.yaml | 62 | 7
-  falco_regex_simple | warning | objects/rules/hidden-harvest-rule-0217.yaml | 57 | 43
-  kuery_lucene_syntax | warning | objects/rules/hidden-injection-rule-0268.yaml | 57 | 13
-  eql_maxspan_missing | info | objects/rules/hidden-relay-rule-0476.yaml | 60 | 7
-  risk_band | warning | objects/rules/hidden-tunnel-rule-0528.yaml | 67 | 5
-  lucene_mixed_operators | warning | objects/rules/lateral-downgrade-rule-0340.yaml | 78 | 22
-  kql_where_not_first | warning | objects/rules/lateral-dropper-rule-0144.yaml | 52 | 9
-  eql_regex | warning | objects/rules/lateral-exfiltration-rule-0606.yaml | 49 | 40
-  eql_nested_comment | warning | objects/rules/lateral-pivot-rule-0587.yaml | 56 | 21
-  eql_runs_ignored | warning | objects/rules/lateral-spray-rule-0652.yaml | 66 | 53
-  spl_dataset_not_declared | warning | objects/rules/persistent-beacon-rule-0121.yaml | 59 | 18
-  falco_unknown_macro | warning | objects/rules/persistent-beacon-rule-0233.yaml | 87 | 27
-  kuery_range_type | info | objects/rules/persistent-dropper-rule-0379.yaml | 61 | 7
-  falco_newer_syntax | warning | objects/rules/persistent-loader-rule-0191.yaml | 46 | 37
-  lookback_zero | warning | objects/rules/rapid-beacon-rule-0509.yaml | 66 | 7
-  spl_empty_stage | warning | objects/rules/rapid-implant-rule-0083.yaml | 70 | 27
-  kuery_quoted_wildcard | info | objects/rules/rapid-injection-rule-0333.yaml | 49 | 20
-  esql_metadata_id | warning | objects/rules/remote-downgrade-rule-0353.yaml | 74 | 7
-  kql_unscoped_union | warning | objects/rules/remote-dropper-rule-0140.yaml | 75 | 13
-  falco_transformer_as_value | warning | objects/rules/remote-injection-rule-0220.yaml | 51 | 39
-  ecs_unknown_field | warning | objects/rules/remote-loader-rule-0398.yaml | 61 | 7
-  kql_deprecated_operator | warning | objects/rules/remote-pivot-rule-0105.yaml | 44 | 24
-  eql_maxspan_window | warning | objects/rules/remote-tunnel-rule-0541.yaml | 51 | 29
-  falco_unknown_list | warning | objects/rules/rogue-beacon-rule-0230.yaml | 46 | 40
-  elastic_dataset_not_declared | warning | objects/rules/rogue-beacon-rule-0574.yaml | 76 | 9
-  lucene_regexp | warning | objects/rules/rogue-downgrade-rule-0424.yaml | 58 | 21
-  spl_subsearch_truncation | warning | objects/rules/rogue-dropper-rule-0095.yaml | 73 | 20
-  kql_join_summarize_before_project | warning | objects/rules/rogue-dropper-rule-0118.yaml | 45 | 9
-  eql_until_term | warning | objects/rules/rogue-injection-rule-0671.yaml | 60 | 77
-  eql_maxspan_lookback | warning | objects/rules/rogue-pivot-rule-0457.yaml | 67 | 29
-  lookback_long | warning | objects/rules/rogue-pivot-rule-0463.yaml | 60 | 7
-  eql_literal_wildcard | warning | objects/rules/rogue-spray-rule-0411.yaml | 53 | 37
-  spl_wildcard | warning | objects/rules/rogue-tunnel-rule-0120.yaml | 64 | 7
-  kql_table_not_declared | warning | objects/rules/rogue-tunnel-rule-0166.yaml | 61 | 7
-  eql_case_sensitive | warning | objects/rules/rogue-tunnel-rule-0346.yaml | 49 | 7
-  kql_render_not_valid | warning | objects/rules/scheduled-beacon-rule-0127.yaml | 65 | 9
-  kuery_escape | warning | objects/rules/scheduled-dropper-rule-0138.yaml | 56 | 31
-  kuery_lucene_syntax | warning | objects/rules/scheduled-dropper-rule-0203.yaml | 48 | 7
-  kuery_lucene_syntax | warning | objects/rules/scheduled-dropper-rule-0203.yaml | 48 | 36
-  kuery_looks_like_lucene | warning | objects/rules/scheduled-dropper-rule-0203.yaml | 48 | 7
-  kuery_question_mark | info | objects/rules/scheduled-implant-rule-0314.yaml | 76 | 19
-  falco_unknown_rule | warning | objects/rules/scheduled-relay-rule-0243.yaml | 52 | 5
-  lucene_elasticsearch_only | warning | objects/rules/scheduled-spray-rule-0037.yaml | 57 | 7
-  sysdig_list_self_reference | warning | objects/rules/scheduled-tunnel-rule-0269.yaml | 63 | 9
-  falco_unknown_source | warning | objects/rules/silent-pivot-rule-0025.yaml | 88 | 5
-  falco_output_syntax | warning | objects/rules/silent-pivot-rule-0025.yaml | 83 | 53
-  kuery_free_text | info | objects/rules/silent-tunnel-rule-0184.yaml | 64 | 7
-  lucene_lowercase_operator | warning | objects/rules/silent-tunnel-rule-0275.yaml | 58 | 28
-  lucene_kuery_syntax | warning | objects/rules/silent-tunnel-rule-0275.yaml | 58 | 43
-  lucene_looks_like_kuery | warning | objects/rules/silent-tunnel-rule-0275.yaml | 58 | 7
-  spl_leading_not | warning | objects/rules/staged-beacon-rule-0094.yaml | 40 | 7
-  kql_unscoped_search | warning | objects/rules/staged-pivot-rule-0131.yaml | 36 | 7
+  metadata_recommended | info | objects/rules/elevated-relay-rule-0026.yaml | 3 | 1
+  placeholder | warning | objects/rules/rogue-pivot-rule-0028.yaml | 11 | 11
+  microsoft_defender_unprojected_output | info | objects/rules/covert-beacon-rule-0114.yaml | 63 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/covert-beacon-rule-0641.yaml | 47 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/covert-dropper-rule-0382.yaml | 80 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/covert-exfiltration-rule-0175.yaml | 80 | 9
+  lucene_escape | warning | objects/rules/covert-exfiltration-rule-0176.yaml | 52 | 31
+  microsoft_defender_unprojected_output | info | objects/rules/covert-exfiltration-rule-0263.yaml | 57 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/covert-implant-rule-0016.yaml | 36 | 9
+  kql_join_summarize_before_project | warning | objects/rules/covert-implant-rule-0169.yaml | 54 | 9
+  spl_dataset_not_declared | warning | objects/rules/covert-implant-rule-0199.yaml | 40 | 18
+  microsoft_defender_unprojected_output | info | objects/rules/covert-implant-rule-0590.yaml | 57 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/covert-injection-rule-0226.yaml | 51 | 9
+  lucene_kuery_syntax | warning | objects/rules/covert-injection-rule-0226.yaml | 68 | 19
+  microsoft_defender_unprojected_output | info | objects/rules/covert-injection-rule-0632.yaml | 59 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/covert-pivot-rule-0436.yaml | 63 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/covert-relay-rule-0494.yaml | 79 | 9
+  kql_unscoped_search | warning | objects/rules/covert-spray-rule-0197.yaml | 34 | 7
+  eql_regex | warning | objects/rules/covert-spray-rule-0499.yaml | 80 | 40
+  microsoft_defender_unprojected_output | info | objects/rules/covert-tunnel-rule-0151.yaml | 60 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/covert-tunnel-rule-0410.yaml | 60 | 9
+  falco_transformer_as_value | warning | objects/rules/covert-tunnel-rule-0507.yaml | 43 | 39
+  microsoft_defender_unprojected_output | info | objects/rules/covert-tunnel-rule-0550.yaml | 85 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/elevated-downgrade-rule-0340.yaml | 59 | 9
+  kql_where_not_first | warning | objects/rules/elevated-dropper-rule-0225.yaml | 53 | 9
+  falco_deprecated_field | warning | objects/rules/elevated-exfiltration-rule-0434.yaml | 48 | 27
+  falco_unknown_rule | warning | objects/rules/elevated-exfiltration-rule-0555.yaml | 64 | 5
+  microsoft_defender_unprojected_output | info | objects/rules/elevated-harvest-rule-0592.yaml | 70 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/elevated-implant-rule-0088.yaml | 69 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/elevated-implant-rule-0578.yaml | 63 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/elevated-loader-rule-0452.yaml | 54 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/elevated-spray-rule-0011.yaml | 63 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/elevated-tunnel-rule-0361.yaml | 59 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/elevated-tunnel-rule-0445.yaml | 52 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/encoded-beacon-rule-0422.yaml | 40 | 9
+  eql_maxspan_missing | info | objects/rules/encoded-beacon-rule-0422.yaml | 59 | 7
+  falco_unknown_macro | warning | objects/rules/encoded-beacon-rule-0527.yaml | 60 | 27
+  falco_regex_simple | warning | objects/rules/encoded-downgrade-rule-0485.yaml | 38 | 43
+  microsoft_defender_unprojected_output | info | objects/rules/encoded-downgrade-rule-0487.yaml | 55 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/encoded-downgrade-rule-0562.yaml | 46 | 9
+  eql_until_term | warning | objects/rules/encoded-downgrade-rule-0562.yaml | 62 | 77
+  microsoft_defender_unprojected_output | info | objects/rules/encoded-dropper-rule-0347.yaml | 48 | 9
+  falco_unknown_list | warning | objects/rules/encoded-exfiltration-rule-0513.yaml | 44 | 40
+  microsoft_defender_unprojected_output | info | objects/rules/encoded-exfiltration-rule-0683.yaml | 72 | 9
+  lucene_unescaped_slash | warning | objects/rules/encoded-harvest-rule-0386.yaml | 55 | 17
+  microsoft_defender_unprojected_output | info | objects/rules/encoded-injection-rule-0074.yaml | 67 | 9
+  spl_empty_stage | warning | objects/rules/encoded-injection-rule-0129.yaml | 34 | 27
+  kql_table_not_declared | warning | objects/rules/encoded-injection-rule-0253.yaml | 49 | 7
+  microsoft_defender_unprojected_output | info | objects/rules/encoded-relay-rule-0548.yaml | 41 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/encoded-spray-rule-0158.yaml | 60 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/encoded-tunnel-rule-0431.yaml | 56 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/hidden-beacon-rule-0619.yaml | 102 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/hidden-downgrade-rule-0366.yaml | 54 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/hidden-downgrade-rule-0394.yaml | 45 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/hidden-dropper-rule-0172.yaml | 63 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/hidden-exfiltration-rule-0352.yaml | 40 | 9
+  eql_expression_depth | warning | objects/rules/hidden-exfiltration-rule-0352.yaml | 55 | 271
+  microsoft_defender_unprojected_output | info | objects/rules/hidden-exfiltration-rule-0424.yaml | 68 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/hidden-exfiltration-rule-0557.yaml | 54 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/hidden-harvest-rule-0086.yaml | 50 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/hidden-harvest-rule-0277.yaml | 64 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/hidden-injection-rule-0137.yaml | 63 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/hidden-pivot-rule-0389.yaml | 57 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/hidden-relay-rule-0655.yaml | 63 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/hidden-spray-rule-0095.yaml | 74 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/hidden-spray-rule-0170.yaml | 60 | 9
+  lucene_regexp | warning | objects/rules/hidden-spray-rule-0373.yaml | 61 | 21
+  microsoft_defender_unprojected_output | info | objects/rules/hidden-spray-rule-0515.yaml | 55 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/hidden-tunnel-rule-0284.yaml | 76 | 9
+  technique_not_enterprise | warning | objects/rules/lateral-beacon-rule-0036.yaml | 21 | 1
+  microsoft_defender_unprojected_output | info | objects/rules/lateral-beacon-rule-0381.yaml | 75 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/lateral-downgrade-rule-0142.yaml | 61 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/lateral-exfiltration-rule-0256.yaml | 59 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/lateral-implant-rule-0536.yaml | 51 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/lateral-injection-rule-0128.yaml | 49 | 9
+  kuery_escape | warning | objects/rules/lateral-injection-rule-0128.yaml | 64 | 31
+  spl_unknown_command | warning | objects/rules/lateral-injection-rule-0171.yaml | 50 | 20
+  microsoft_defender_unprojected_output | info | objects/rules/lateral-injection-rule-0200.yaml | 60 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/lateral-pivot-rule-0002.yaml | 60 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/lateral-pivot-rule-0688.yaml | 49 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/lateral-relay-rule-0305.yaml | 67 | 9
+  lucene_elasticsearch_only | warning | objects/rules/lateral-spray-rule-0033.yaml | 55 | 7
+  microsoft_defender_unprojected_output | info | objects/rules/lateral-spray-rule-0193.yaml | 57 | 9
+  falco_no_evttype | warning | objects/rules/lateral-spray-rule-0471.yaml | 41 | 7
+  microsoft_defender_unprojected_output | info | objects/rules/lateral-tunnel-rule-0326.yaml | 71 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/persistent-beacon-rule-0004.yaml | 65 | 9
+  esql_expression_depth | warning | objects/rules/persistent-beacon-rule-0247.yaml | 75 | 349
+  microsoft_defender_unprojected_output | info | objects/rules/persistent-beacon-rule-0338.yaml | 41 | 9
+  ecs_unknown_field | warning | objects/rules/persistent-beacon-rule-0338.yaml | 59 | 7
+  spl_wildcard | warning | objects/rules/persistent-downgrade-rule-0185.yaml | 52 | 7
+  esql_unavailable | info | objects/rules/persistent-dropper-rule-0317.yaml | 69 | 34
+  kuery_free_text | info | objects/rules/persistent-harvest-rule-0148.yaml | 64 | 7
+  lucene_lowercase_operator | warning | objects/rules/persistent-harvest-rule-0246.yaml | 41 | 28
+  falco_field_as_value | warning | objects/rules/persistent-implant-rule-0443.yaml | 47 | 39
+  falco_unsafe_na_check | warning | objects/rules/persistent-injection-rule-0583.yaml | 55 | 22
+  kql_deprecated_operator | warning | objects/rules/persistent-loader-rule-0166.yaml | 99 | 24
+  microsoft_defender_unprojected_output | info | objects/rules/persistent-pivot-rule-0613.yaml | 52 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/persistent-relay-rule-0478.yaml | 62 | 9
+  elastic_dataset_not_declared | warning | objects/rules/persistent-relay-rule-0478.yaml | 81 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/persistent-tunnel-rule-0324.yaml | 39 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/persistent-tunnel-rule-0508.yaml | 56 | 9
+  spl_leading_not | warning | objects/rules/rapid-downgrade-rule-0143.yaml | 61 | 7
+  microsoft_defender_unprojected_output | info | objects/rules/rapid-dropper-rule-0179.yaml | 51 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/rapid-exfiltration-rule-0254.yaml | 57 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/rapid-exfiltration-rule-0268.yaml | 53 | 9
+  kuery_question_mark | info | objects/rules/rapid-exfiltration-rule-0268.yaml | 69 | 19
+  microsoft_defender_unprojected_output | info | objects/rules/rapid-exfiltration-rule-0634.yaml | 72 | 9
+  kql_deprecated_function | warning | objects/rules/rapid-implant-rule-0155.yaml | 53 | 19
+  microsoft_defender_unprojected_output | info | objects/rules/rapid-implant-rule-0646.yaml | 56 | 9
+  falco_unknown_source | warning | objects/rules/rapid-injection-rule-0037.yaml | 63 | 5
+  falco_output_syntax | warning | objects/rules/rapid-injection-rule-0037.yaml | 58 | 53
+  microsoft_defender_unprojected_output | info | objects/rules/rapid-injection-rule-0235.yaml | 53 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/rapid-pivot-rule-0506.yaml | 54 | 9
+  kuery_lucene_syntax | warning | objects/rules/rapid-spray-rule-0205.yaml | 81 | 7
+  kuery_lucene_syntax | warning | objects/rules/rapid-spray-rule-0205.yaml | 81 | 36
+  kuery_looks_like_lucene | warning | objects/rules/rapid-spray-rule-0205.yaml | 81 | 7
+  microsoft_defender_unprojected_output | info | objects/rules/rapid-spray-rule-0368.yaml | 60 | 9
+  lookback_zero | warning | objects/rules/rapid-spray-rule-0415.yaml | 64 | 7
+  microsoft_defender_unprojected_output | info | objects/rules/rapid-spray-rule-0489.yaml | 67 | 9
+  eql_runs_ignored | warning | objects/rules/rapid-spray-rule-0512.yaml | 60 | 53
+  microsoft_defender_unprojected_output | info | objects/rules/rapid-tunnel-rule-0310.yaml | 60 | 9
+  esql_metadata_id | warning | objects/rules/rapid-tunnel-rule-0310.yaml | 79 | 7
+  eql_literal_wildcard | warning | objects/rules/rapid-tunnel-rule-0359.yaml | 81 | 37
+  microsoft_defender_unprojected_output | info | objects/rules/rapid-tunnel-rule-0486.yaml | 58 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/rapid-tunnel-rule-0534.yaml | 51 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/remote-beacon-rule-0100.yaml | 53 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/remote-downgrade-rule-0319.yaml | 73 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/remote-dropper-rule-0380.yaml | 48 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/remote-exfiltration-rule-0212.yaml | 56 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/remote-exfiltration-rule-0408.yaml | 62 | 9
+  lookback_long | warning | objects/rules/remote-harvest-rule-0358.yaml | 45 | 7
+  microsoft_defender_unprojected_output | info | objects/rules/remote-harvest-rule-0674.yaml | 54 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/remote-loader-rule-0450.yaml | 61 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/remote-loader-rule-0697.yaml | 49 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/remote-pivot-rule-0046.yaml | 57 | 9
+  eql_nested_comment | warning | objects/rules/remote-spray-rule-0479.yaml | 89 | 21
+  microsoft_defender_unprojected_output | info | objects/rules/remote-tunnel-rule-0072.yaml | 36 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/renamed-1.yaml | 74 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/rogue-exfiltration-rule-0282.yaml | 40 | 9
+  falco_exception | warning | objects/rules/rogue-exfiltration-rule-0541.yaml | 75 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/rogue-harvest-rule-0067.yaml | 65 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/rogue-harvest-rule-0473.yaml | 74 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/rogue-injection-rule-0109.yaml | 66 | 9
+  risk_band | warning | objects/rules/rogue-injection-rule-0428.yaml | 71 | 5
+  microsoft_defender_unprojected_output | info | objects/rules/rogue-injection-rule-0576.yaml | 47 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/rogue-pivot-rule-0116.yaml | 67 | 9
+  lucene_lowercase_operator | warning | objects/rules/rogue-pivot-rule-0233.yaml | 59 | 28
+  lucene_kuery_syntax | warning | objects/rules/rogue-pivot-rule-0233.yaml | 59 | 43
+  lucene_looks_like_kuery | warning | objects/rules/rogue-pivot-rule-0233.yaml | 59 | 7
+  microsoft_defender_unprojected_output | info | objects/rules/rogue-pivot-rule-0296.yaml | 57 | 9
+  lucene_mixed_operators | warning | objects/rules/rogue-pivot-rule-0296.yaml | 76 | 22
+  microsoft_defender_unprojected_output | info | objects/rules/rogue-pivot-rule-0403.yaml | 55 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/rogue-relay-rule-0529.yaml | 66 | 9
+  kql_wildcard_table | warning | objects/rules/rogue-spray-rule-0239.yaml | 51 | 33
+  microsoft_defender_unprojected_output | info | objects/rules/rogue-tunnel-rule-0676.yaml | 51 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/scheduled-beacon-rule-0130.yaml | 69 | 9
+  eql_maxspan_lookback | warning | objects/rules/scheduled-beacon-rule-0372.yaml | 60 | 29
+  microsoft_defender_unprojected_output | info | objects/rules/scheduled-beacon-rule-0691.yaml | 75 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/scheduled-downgrade-rule-0156.yaml | 63 | 9
+  eql_maxspan_window | warning | objects/rules/scheduled-downgrade-rule-0442.yaml | 47 | 29
+  microsoft_defender_unprojected_output | info | objects/rules/scheduled-dropper-rule-0660.yaml | 48 | 9
+  falco_unknown_source | warning | objects/rules/scheduled-harvest-rule-0569.yaml | 53 | 5
+  kql_render_not_valid | warning | objects/rules/scheduled-implant-rule-0183.yaml | 56 | 9
+  falco_newer_syntax | warning | objects/rules/scheduled-implant-rule-0457.yaml | 39 | 37
+  microsoft_defender_unprojected_output | info | objects/rules/scheduled-loader-rule-0520.yaml | 60 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/scheduled-pivot-rule-0599.yaml | 58 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/scheduled-pivot-rule-0618.yaml | 60 | 9
+  kuery_range_type | info | objects/rules/scheduled-relay-rule-0288.yaml | 63 | 7
+  microsoft_defender_unprojected_output | info | objects/rules/scheduled-tunnel-rule-0604.yaml | 52 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/scheduled-tunnel-rule-0662.yaml | 80 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/silent-downgrade-rule-0044.yaml | 60 | 9
+  threshold_lookback | warning | objects/rules/silent-downgrade-rule-0044.yaml | 84 | 7
+  microsoft_defender_unprojected_output | info | objects/rules/silent-dropper-rule-0242.yaml | 69 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/silent-dropper-rule-0298.yaml | 64 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/silent-exfiltration-rule-0053.yaml | 75 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/silent-exfiltration-rule-0571.yaml | 67 | 9
+  kuery_lucene_syntax | warning | objects/rules/silent-implant-rule-0218.yaml | 54 | 13
+  microsoft_defender_unprojected_output | info | objects/rules/silent-implant-rule-0464.yaml | 51 | 9
+  kuery_quoted_wildcard | info | objects/rules/silent-injection-rule-0275.yaml | 62 | 20
+  microsoft_defender_unprojected_output | info | objects/rules/silent-injection-rule-0492.yaml | 56 | 9
+  sysdig_list_self_reference | warning | objects/rules/silent-loader-rule-0597.yaml | 62 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/silent-pivot-rule-0214.yaml | 57 | 9
+  eql_case_sensitive | warning | objects/rules/silent-pivot-rule-0302.yaml | 46 | 7
+  lucene_bare_term | info | objects/rules/silent-pivot-rule-0316.yaml | 39 | 20
+  lucene_range_operator | warning | objects/rules/silent-pivot-rule-0316.yaml | 39 | 18
+  microsoft_defender_unprojected_output | info | objects/rules/silent-relay-rule-0184.yaml | 48 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/silent-spray-rule-0058.yaml | 59 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/silent-tunnel-rule-0198.yaml | 58 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/staged-beacon-rule-0466.yaml | 74 | 9
+  lucene_bare_term | info | objects/rules/staged-dropper-rule-0163.yaml | 62 | 23
+  microsoft_defender_unprojected_output | info | objects/rules/staged-exfiltration-rule-0620.yaml | 66 | 9
+  spl_subsearch_truncation | warning | objects/rules/staged-harvest-rule-0157.yaml | 51 | 20
+  esql_group_by_column | warning | objects/rules/staged-harvest-rule-0260.yaml | 68 | 7
+  microsoft_defender_unprojected_output | info | objects/rules/staged-loader-rule-0240.yaml | 49 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/staged-relay-rule-0132.yaml | 67 | 9
+  microsoft_defender_unprojected_output | info | objects/rules/staged-tunnel-rule-0221.yaml | 67 | 9
   yaml_parse | error | objects/threats/encoded-exfiltration-threat-0030.yaml | - | -
   filename_mismatch | warning | objects/threats/hidden-downgrade-threat-0005-v2.yaml | - | -
-  name_missing | error | objects/rules/covert-injection-rule-0032.yaml | - | -
-  yaml_parse | error | objects/rules/encoded-beacon-rule-0034.yaml | 83 | 1
-  yaml_parse | error | objects/rules/hidden-loader-rule-0024.yaml | 45 | 1
+  yaml_parse | error | objects/rules/covert-implant-rule-0021.yaml | 58 | 1
+  yaml_parse | error | objects/rules/covert-tunnel-rule-0022.yaml | 73 | 1
+  yaml_parse | error | objects/rules/encoded-tunnel-rule-0030.yaml | 70 | 1
   filename_mismatch | warning | objects/rules/renamed-1.yaml | - | -
-  yaml_parse | error | objects/rules/staged-exfiltration-rule-0021.yaml | 72 | 1
-  nested_object_file | warning | objects/rules/nested/encoded-spray-rule-0017.yaml | - | -
-count: 85
+  name_missing | error | objects/rules/scheduled-exfiltration-rule-0027.yaml | - | -
+  nested_object_file | warning | objects/rules/nested/rapid-tunnel-rule-0018.yaml | - | -
+count: 205
 exit_code: 1
 fixed: 0
 schema_version: 1
 summary.errors: 5
 summary.files: 879
-summary.findings: 85
+summary.findings: 205
 summary.fixed: 0
-summary.notes: 10
-summary.warnings: 70
+summary.notes: 132
+summary.warnings: 68
 checks[]: 4 items
-findings[]: 85 items
+findings[]: 205 items
 next_actions[]: 1 items
 ok: false x1
 status: failed x1

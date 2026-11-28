@@ -18,15 +18,14 @@ workspace = true
 
 [build-dependencies]
 opentide-dataset = { workspace = true, features = ["encode"] }
-opentide-core.workspace = true
+opentide-core = { workspace = true, features = ["markdown"] }
 # The offers of the bundled vocabularies are worked out by build.rs from the same modules the crate
 # compiles (`src/vocab/offer.rs` and what it reads: the documents, the Markdown clean-up).
 serde.workspace = true
 thiserror.workspace = true
 toml.workspace = true
-indexmap = { version = "2", features = ["serde"] }
+indexmap = { workspace = true, features = ["serde"] }
 regex.workspace = true
-fancy-regex.workspace = true
 titlecase.workspace = true
 
 # The bundled vocabularies are split and compressed by build.rs (the `text!` literals name only
@@ -44,7 +43,7 @@ stubs = ["python", "pyo3/experimental-inspect"]
 
 [dependencies]
 opentide-dataset.workspace = true
-opentide-core.workspace = true
+opentide-core = { workspace = true, features = ["markdown"] }
 serde.workspace = true
 schemars.workspace = true
 garde.workspace = true
@@ -53,7 +52,7 @@ thiserror.workspace = true
 toml.workspace = true
 serde_json.workspace = true
 # Entries in document order, looked up by key. The version Cargo.lock holds.
-indexmap = { version = "2", features = ["serde"] }
+indexmap = { workspace = true, features = ["serde"] }
 serde-saphyr.workspace = true
 opentide-schema-derive.workspace = true
 # Configuration TOML with every item's span (UC-1.5): the version the
@@ -64,16 +63,20 @@ toml_edit.workspace = true
 regex.workspace = true
 # The lint `pattern` anchored on its parsed form, verbose comments and all.
 regex-syntax.workspace = true
-# The oracle's Markdown patterns of the editor annotations (`generate::annotate`).
-fancy-regex.workspace = true
 # An all-lower-case vocabulary name, title-cased in a dropdown (`generate::schema`).
 titlecase.workspace = true
 pyo3 = { workspace = true, features = ["abi3-py310", "indexmap"], optional = true }
 # `metadata.reviewed` (UC-1.3): whether the date, the time and the offset
 # exist (jiff's civil types; no time zone database).
 jiff = { workspace = true }
+# Exabeam's rule names compare as `str.casefold()` does (`exabeam_name_duplicate`):
+# full Unicode case folding, the crate the Exabeam connector matches names with.
+caseless.workspace = true
 
 [dev-dependencies]
+# The Pydantic models' sentence-end pattern, with its look-ahead: the tests hold
+# `generate::annotate`'s hand-written match to it.
+fancy-regex.workspace = true
 insta.workspace = true
 strsim.workspace = true
 trybuild.workspace = true

@@ -21,8 +21,7 @@ use super::{resources, tools};
 use crate::app::Interrupt;
 use crate::env::Env;
 
-/// What the server says of itself: `data/mcp/manifest.json`, hand-edited (the
-/// Python generator is gone).
+/// What the server says of itself: `data/mcp/manifest.json`, edited by hand.
 const MANIFEST: &str = include_str!("../../data/mcp/manifest.json");
 
 /// The manifest's parts, as rmcp types.
@@ -37,7 +36,7 @@ impl Manifest {
     /// The compiled-in manifest, with the package's `version`.
     #[expect(
         clippy::expect_used,
-        reason = "the manifest is compiled in, and the_manifest_reads_into_every_part (and tests/test_mcp/test_bridge.py) reads every part of it"
+        reason = "the manifest is compiled in, and the_manifest_reads_into_every_part reads every part of it"
     )]
     fn load(version: &str) -> Manifest {
         let manifest: Value = serde_json::from_str(MANIFEST).expect("data/mcp/manifest.json");
@@ -485,7 +484,7 @@ mod tests {
     #[test]
     fn every_tool_has_a_title_and_annotations() {
         let manifest = Manifest::load("1.2.3");
-        assert_eq!(manifest.tools.tools.len(), 10);
+        assert_eq!(manifest.tools.tools.len(), 11);
         for tool in &manifest.tools.tools {
             let name = &tool.name;
             assert!(
@@ -527,6 +526,7 @@ mod tests {
             "search",
             "get_chaining",
             "coverage",
+            "graph",
             "validate_rule",
             "validation_report",
             "explain",
@@ -534,6 +534,7 @@ mod tests {
         ] {
             let hints = hints_of(name);
             assert_eq!(hints.read_only_hint, Some(true), "{name}");
+            assert_eq!(hints.idempotent_hint, Some(true), "{name}");
             assert_eq!(hints.open_world_hint, Some(false), "{name}");
         }
     }

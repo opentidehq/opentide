@@ -10,14 +10,14 @@
 //! run macros of `scripts.sh.j2`; [`render`] fills it from [`Options`]. A
 //! value is `[[ value ]]` in a template, since GitHub Actions writes its own
 //! expressions `${{ }}`. The commands and conditions the jobs share are
-//! built here once, as `ci/stages.py` and `ci/gates.py` build them.
+//! built here once, so every provider runs the same ones.
 
-use std::borrow::Cow;
 use std::sync::LazyLock;
 
 use indexmap::IndexMap;
 use minijinja::syntax::SyntaxConfig;
 use minijinja::{Environment, Value, context};
+use opentide_core::text::shell_word;
 
 /// A CI provider (`setup ci <provider>`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -115,7 +115,7 @@ pub const DEFAULT_RULES_FOLDER: &str = "objects/rules";
     reason = "the switches of `setup ci`, one field each"
 )]
 pub struct Options {
-    /// The provider.
+    /// The provider whose template renders the pipeline.
     pub provider: Provider,
     /// The platforms the repository enables, as `configurations` keys.
     pub platforms: Vec<String>,
@@ -218,6 +218,7 @@ static SOURCES: LazyLock<Vec<(&'static str, String)>> = LazyLock::new(|| lf_sour
 fn lf_sources(templates: &[(&'static str, &str)]) -> Vec<(&'static str, String)> {
     templates
         .iter()
+        // Only CRLF: not `opentide_core::text::universal_newlines` (a lone `\r` is kept).
         .map(|(name, source)| (*name, source.replace("\r\n", "\n")))
         .collect()
 }
@@ -300,11 +301,6 @@ fn scalar(text: String, indent: usize) -> String {
     } else {
         serde_json::to_string(&text).unwrap_or(text)
     }
-}
-
-/// A shell word, quoted as `shlex.quote` quotes it.
-pub fn shell_word(text: &str) -> Cow<'_, str> {
-    shlex::try_quote(text).unwrap_or(Cow::Borrowed(text))
 }
 
 /// `pip install "opentide==$OPENTIDE_VERSION"`: every job installs the
@@ -566,8 +562,8 @@ pub fn env_references(text: &str) -> Vec<String> {
 fn references(text: &str) -> Vec<String> {
     let mut found = Vec::new();
     let mut rest = text;
-    while let Some(at) = rest.find('$') {
-        rest = &rest[at + 1..];
+    while let Some((_, after)) = rest.split_once('$') {
+        rest = after;
         let name: String = rest
             .chars()
             .take_while(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || *c == '_')
@@ -1092,8 +1088,8 @@ mod tests {
             let from = written
                 .find(job)
                 .unwrap_or_else(|| panic!("{job}: {written}"));
-            let rest = &written[from..];
-            rest[..rest.find(end).unwrap_or(rest.len())].to_owned()
+            let rest = written.get(from..).unwrap();
+            rest.split(end).next().unwrap().to_owned()
         };
         let written = render(&options(Provider::GitHub)).unwrap();
         for (job, group) in [
@@ -1308,8 +1304,8 @@ mod tests {
             let from = written
                 .find(start)
                 .unwrap_or_else(|| panic!("{start}: {written}"));
-            let rest = &written[from + start.len()..];
-            rest[..rest.find(end).unwrap_or(rest.len())].to_owned()
+            let rest = written.get(from + start.len()..).unwrap();
+            rest.split(end).next().unwrap().to_owned()
         };
         // Each platform has tenants, so only the names they use are mapped,
         // not the bundled files' (`AZURE_CLIENT_SECRET`, `SPLUNK_TOKEN`).
@@ -1472,7 +1468,7 @@ mod tests {
                 Provider::GitHub => ("\n  share:\n", "MISP_API_KEY: ${{ secrets.MISP_API_KEY }}"),
                 _ => ("- job: share\n", "MISP_API_KEY: $(MISP_API_KEY)"),
             };
-            let share = &written[written.find(job).unwrap()..];
+            let share = written.get(written.find(job).unwrap()..).unwrap();
             assert_eq!(written.matches(mapped).count(), 1, "{written}");
             assert!(share.contains(mapped), "{share}");
         }
@@ -1495,7 +1491,7 @@ mod tests {
         assert!(gitlab.contains("codequality: opentide-reports/codequality.json"));
 
         let github = render(&options(Provider::GitHub)).unwrap();
-        let explorer = &github[github.find("  explorer:").unwrap()..];
+        let explorer = github.get(github.find("  explorer:").unwrap()..).unwrap();
         for gone in [
             "pip install -e",
             "opentidehq/opentide\n",
@@ -1533,5 +1529,11 @@ mod tests {
             assert_eq!(written, render_in(&lf, &options).unwrap());
             assert_eq!(written, render(&options).unwrap());
         }
+    }
+
+    #[test]
+    fn references_around_multi_byte_characters() {
+        // #1946: the scan never slices inside a character.
+        assert_eq!(references("é$AB 😀$C_1$é $😀"), ["AB", "C_1"]);
     }
 }

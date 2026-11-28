@@ -1,5 +1,5 @@
 //! The JSON Schema of each configuration TOML file and the router keyed by
-//! file name (`configuration_schemas.py`; UC-1.8b, #900), from the
+//! file name (UC-1.8b, #900), from the
 //! configuration models' derived [`JsonSchema`] (schemars), never from a
 //! hand-written schema.
 //!
@@ -9,9 +9,8 @@
 //! `.opentide/configurations/` to its schema file, since a TOML file is
 //! routed by its name rather than by a key inside it.
 //!
-//! The documents accept and refuse what the oracle's do (`cargo xtask
-//! codegen --check --oracle` validated every configuration file of the
-//! corpora against both until #1142); their text is schemars'.
+//! The documents accept and refuse what the models' derived schemas do, and
+//! their text is schemars'.
 
 use schemars::generate::SchemaSettings;
 use schemars::transform::Transform;
@@ -21,11 +20,11 @@ use serde_json::{Map, Value, json};
 use crate::configuration::checks::{FILE_MODELS, GENERIC_PLATFORM_FILE};
 use crate::configuration::models::{
     BitdefenderConfiguration, CarbonBlackCloudConfiguration, CrowdstrikeConfiguration,
-    DeploymentConfiguration, DocumentationConfiguration, ElasticConfiguration,
-    ExabeamConfiguration, GoogleSecopsConfiguration, GraylogConfiguration, HarfangLabConfiguration,
-    MicrosoftDefenderConfiguration, PLATFORMS, PathsConfiguration, PlatformConfiguration,
-    SentinelConfiguration, SentinelOneConfiguration, SharingConfiguration, SplunkConfiguration,
-    SysdigConfiguration, VisibilityConfig,
+    DatadogConfiguration, DeploymentConfiguration, DocumentationConfiguration,
+    ElasticConfiguration, ExabeamConfiguration, GoogleSecopsConfiguration, GraylogConfiguration,
+    HarfangLabConfiguration, MicrosoftDefenderConfiguration, PLATFORMS, PathsConfiguration,
+    PlatformConfiguration, SentinelConfiguration, SentinelOneConfiguration, SharingConfiguration,
+    SplunkConfiguration, SysdigConfiguration, VisibilityConfig,
 };
 
 use super::schema::StripFrameworkKeywords;
@@ -36,7 +35,7 @@ pub const JSON_SCHEMA_DIALECT: &str = "https://json-schema.org/draft/2020-12/sch
 /// The router's file name.
 pub const ROUTER_NAME: &str = "configurations.router.json";
 
-/// The router's title.
+/// The configuration router schema's `title`.
 pub const ROUTER_TITLE: &str = "opentide Configuration Router";
 
 /// The schema identifier `visibility.toml` declares (`visibility::1.0`).
@@ -45,9 +44,9 @@ pub const VISIBILITY_SCHEMA_ID: &str = "visibility::1.0";
 /// The MISP connector's schema identifier (`MISP_SCHEMA_ID`).
 pub const MISP_SCHEMA_ID: &str = "sharing::misp::1.0";
 
-/// Every router key with a model, in the oracle's order
-/// (`configuration_files`): the files with a model of their own, each
-/// platform's file, then the generic platform file.
+/// Every router key with a model, in the router's order: the files with a
+/// model of their own, each platform's file, then the generic platform
+/// file.
 pub fn file_keys() -> Vec<String> {
     let mut keys: Vec<String> = FILE_MODELS.iter().map(|&key| key.to_owned()).collect();
     keys.extend(PLATFORMS.iter().map(|id| format!("platforms/{id}.toml")));
@@ -95,6 +94,7 @@ fn raw(file_key: &str) -> Option<Schema> {
         "platforms/exabeam.toml" => model_schema::<ExabeamConfiguration>(),
         "platforms/google_secops.toml" => model_schema::<GoogleSecopsConfiguration>(),
         "platforms/graylog.toml" => model_schema::<GraylogConfiguration>(),
+        "platforms/datadog.toml" => model_schema::<DatadogConfiguration>(),
         GENERIC_PLATFORM_FILE => model_schema::<PlatformConfiguration>(),
         _ => return None,
     })
@@ -155,8 +155,8 @@ pub fn configuration_router() -> Value {
     })
 }
 
-/// Every configuration schema and the router, by output file name, in the
-/// oracle's order (`generate_configuration_schemas`).
+/// Every configuration schema and the router, by output file name: one
+/// schema per file name, in [`file_keys`]'s order, then the router.
 pub fn configuration_schemas() -> Vec<(String, Value)> {
     let mut documents: Vec<(String, Value)> = Vec::new();
     for key in file_keys() {

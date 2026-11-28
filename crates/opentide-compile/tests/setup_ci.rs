@@ -1,14 +1,18 @@
-//! `setup ci`'s pipelines against the oracle's (UC-3.2c, #916): each case of
-//! `tests/ci/` (recorded by `tests/ci/oracle.py` from the Python CLI) is
-//! rendered from its inputs and compared with the oracle's file: first as
+//! `setup ci`'s pipelines against the recorded ones (UC-3.2c, #916): each case of
+//! `tests/ci/` (recorded from opentide 0.23.0 by `tests/ci/record.py`) is
+//! rendered from its inputs and compared with the recorded file: first as
 //! the YAML data it holds (the jobs, steps, commands and triggers), then as
-//! text, line for line. GitLab's oracle wrote its pipeline with PyYAML's
+//! text, line for line. The recorded GitLab pipeline was written with PyYAML's
 //! dumper; the template writes the same layout, quoting a value only where
-//! YAML would read it as something else. The oracle is retired (#1142): a
+//! YAML would read it as something else. The recorder is retired (#1142): a
 //! deliberate change to a pipeline updates its `.yml` here in the same
 //! change (`OPENTIDE_CI_RENDERED=<dir>` writes what the templates render),
 //! as the tenants' own credential variables did (#1655).
 
+#![expect(
+    clippy::string_slice,
+    reason = "a test: a slice off a char boundary panics, and a panic is a failed test"
+)]
 #![expect(
     clippy::unwrap_used,
     reason = "a test helper: a broken case is a failure"
@@ -75,18 +79,18 @@ fn options(inputs: &toml::Table) -> Options {
 }
 
 /// The first line the two texts differ on.
-fn first_difference(oracle: &str, rendered: &str) -> Option<String> {
-    let (a, b): (Vec<&str>, Vec<&str>) = (oracle.lines().collect(), rendered.lines().collect());
+fn first_difference(recorded: &str, rendered: &str) -> Option<String> {
+    let (a, b): (Vec<&str>, Vec<&str>) = (recorded.lines().collect(), rendered.lines().collect());
     for index in 0..a.len().max(b.len()) {
         let (left, right) = (a.get(index), b.get(index));
         if left != right {
             return Some(format!(
-                "line {}:\n  oracle: {left:?}\n  rust:   {right:?}",
+                "line {}:\n  recorded: {left:?}\n  rust:   {right:?}",
                 index + 1
             ));
         }
     }
-    (oracle != rendered).then(|| "line endings differ".to_owned())
+    (recorded != rendered).then(|| "line endings differ".to_owned())
 }
 
 fn data(text: &str) -> Option<Json> {
@@ -95,7 +99,7 @@ fn data(text: &str) -> Option<Json> {
 }
 
 #[test]
-fn pipelines_are_the_oracles() {
+fn pipelines_match_the_recording() {
     let mut problems = Vec::new();
     let found = cases();
     assert!(found.len() >= 12, "only {} cases", found.len());
@@ -104,7 +108,7 @@ fn pipelines_are_the_oracles() {
         let inputs: toml::Table = std::fs::read_to_string(&case).unwrap().parse().unwrap();
         let options = options(&inputs);
         assert_eq!(options.provider.path(), inputs["path"].as_str().unwrap());
-        let oracle = std::fs::read_to_string(case.with_extension("yml")).unwrap();
+        let recorded = std::fs::read_to_string(case.with_extension("yml")).unwrap();
         let rendered = match render(&options) {
             Ok(rendered) => rendered,
             Err(error) => {
@@ -112,14 +116,14 @@ fn pipelines_are_the_oracles() {
                 continue;
             }
         };
-        // A file the user commits: LF on every OS, as the oracle recorded it.
-        if rendered.contains('\r') || oracle.contains('\r') {
+        // A file the user commits: LF on every OS, as it was recorded.
+        if rendered.contains('\r') || recorded.contains('\r') {
             problems.push(format!(
                 "{name}: CR in the {} pipeline",
                 if rendered.contains('\r') {
                     "rendered"
                 } else {
-                    "oracle's"
+                    "recorded"
                 }
             ));
             continue;
@@ -127,13 +131,13 @@ fn pipelines_are_the_oracles() {
         if let Some(dir) = std::env::var_os("OPENTIDE_CI_RENDERED") {
             std::fs::write(Path::new(&dir).join(format!("{name}.yml")), &rendered).unwrap();
         }
-        let same_data = data(&rendered).is_some() && data(&oracle) == data(&rendered);
+        let same_data = data(&rendered).is_some() && data(&recorded) == data(&rendered);
         if !same_data {
             problems.push(format!(
                 "{name}: the pipeline holds other data\n{}",
-                first_difference(&oracle, &rendered).unwrap_or_default()
+                first_difference(&recorded, &rendered).unwrap_or_default()
             ));
-        } else if let Some(difference) = first_difference(&oracle, &rendered) {
+        } else if let Some(difference) = first_difference(&recorded, &rendered) {
             problems.push(format!("{name}: {difference}"));
         }
     }

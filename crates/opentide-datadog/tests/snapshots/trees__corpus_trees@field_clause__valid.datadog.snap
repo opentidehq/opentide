@@ -1,0 +1,12 @@
+---
+source: crates/opentide-datadog/tests/trees.rs
+expression: "debug_tree(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/datadog/field_clause__valid.datadog
+---
+QUERY@0..22
+  FIELD_CLAUSE@0..22
+    ATTRIBUTE@0..9
+      WORD@0..9 "@evt.name"
+    COLON@9..10 ":"
+    TERM@10..22
+      WORD@10..22 "ConsoleLogin"

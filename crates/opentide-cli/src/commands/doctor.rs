@@ -1,5 +1,5 @@
-//! `opentide doctor` (`cli/commands/doctor.py`, `cli/services/doctor.py`;
-//! UC-3.5c, #928; its network checks UC-4.4, #834): one checklist for the
+//! `opentide doctor` (UC-3.5c, #928; its network checks UC-4.4, #834): one
+//! checklist for the
 //! installation, the workspace and its integrations.
 //!
 //! Every check has a stable `code` (`docs/cli/doctor.md`), a status (`pass`,
@@ -35,6 +35,7 @@ use opentide_schema::generate::workspace::{
     CORE_OBJECT_TYPES, identifiers_for_families, object_template,
 };
 use opentide_schema::node::{Node, Value};
+use opentide_schema::platforms::PlatformId;
 use opentide_workspace::info::env_reference;
 use opentide_workspace::root::{self, RootOptions};
 use opentide_workspace::{OsFs, config};
@@ -44,10 +45,11 @@ use tokio_util::sync::CancellationToken;
 use super::doctor_network as network;
 use super::generate::phase_outputs;
 use super::interrupt::watched;
+use super::result::{ExitCode, Status};
 use super::{Block, Report, placement};
 use crate::env::Env;
 use crate::envelope::Failure;
-use crate::json::Json;
+use crate::json::{Json, Object};
 use crate::render::glyphs;
 use crate::render::text::Text;
 use anstyle::{AnsiColor, Style};
@@ -56,9 +58,6 @@ const COMMAND: &str = "doctor";
 
 /// `failure.code` when at least one check failed.
 pub const CHECKS_FAILED: &str = "doctor_checks_failed";
-
-/// The platforms, in the order the checklist names them (`SYSTEM_KEYS`).
-const SYSTEM_KEYS: [&str; opentide_schema::platforms::COUNT] = opentide_schema::platforms::IDS;
 
 /// The files `opentide setup mcp` writes, with the host each is for.
 const MCP_OUTPUT_PATHS: [(&str, &str); 4] = [
@@ -258,8 +257,36 @@ struct PlatformTenants {
     tenants: Vec<TenantEnv>,
 }
 
+/// Which network checks `opentide doctor` makes: `--offline` and `--live`
+/// conflict, so a run is in one of three modes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DoctorMode {
+    /// Neither flag: the PyPI release and the proxy are checked, the tenants
+    /// are not reached.
+    Default,
+    /// `--offline`: no network check.
+    Offline,
+    /// `--live`: each tenant whose credentials are set is reached too.
+    Live,
+}
+
+impl From<&crate::tree::DoctorArgs> for DoctorMode {
+    fn from(args: &crate::tree::DoctorArgs) -> Self {
+        // clap refuses `--offline --live` together.
+        if args.live {
+            Self::Live
+        } else if args.offline {
+            Self::Offline
+        } else {
+            Self::Default
+        }
+    }
+}
+
 /// Runs `opentide doctor`.
-pub fn run(offline: bool, live: bool, cx: &Context<'_>) -> Report {
+pub fn run(mode: DoctorMode, cx: &Context<'_>) -> Report {
+    let offline = mode == DoctorMode::Offline;
+    let live = mode == DoctorMode::Live;
     let (shown, options) = placement(cx.repo, cx.env, cx.cwd);
     let cwd = resolve(cx.cwd);
     let workspace = resolve(&cx.cwd.join(&shown));
@@ -1021,18 +1048,12 @@ impl Doctor<'_> {
         )
     }
 
-    /// The platforms whose merged `[platform] enabled` is `true`.
+    /// The built-in platforms whose merged `[platform] enabled` is `true`
+    /// ([`opentide_schema::configuration::resolve::enabled_platforms`]).
     fn enabled_platforms(&self) -> Vec<&'static str> {
-        SYSTEM_KEYS
-            .iter()
-            .copied()
-            .filter(|system| {
-                matches!(
-                    self.node(&["systems", system, "platform", "enabled"])
-                        .map(|node| &node.value),
-                    Some(Value::Bool(true))
-                )
-            })
+        opentide_schema::configuration::resolve::enabled_platforms(self.node(&["platforms"]))
+            .into_iter()
+            .map(PlatformId::as_str)
             .collect()
     }
 
@@ -1061,7 +1082,7 @@ impl Doctor<'_> {
         let mut found = Vec::new();
         for platform in self.enabled_platforms() {
             let tenants: Vec<&Node> = match self
-                .node(&["systems", platform, "tenants"])
+                .node(&["platforms", platform, "tenants"])
                 .map(|node| &node.value)
             {
                 Some(Value::Seq(items)) => items
@@ -1271,18 +1292,10 @@ impl Doctor<'_> {
         prober: &dyn opentide_connectors::connector::Prober,
         environment: &opentide_connectors::Environment,
     ) -> Result<(), DeployError> {
-        let setup: toml::Table = CJson::from_node(&tenant.node)
+        let setup = CJson::from_node(&tenant.node)
             .get("setup")
             .and_then(CJson::as_object)
-            .map(|setup| {
-                setup
-                    .iter()
-                    .filter_map(|(key, value)| {
-                        opentide_connectors::tenant::toml_value(value)
-                            .map(|value| (key.clone(), value))
-                    })
-                    .collect()
-            })
+            .cloned()
             .unwrap_or_default();
         let settings = opentide_connectors::deploy_http_settings(platform);
         Tenant::from_setup(
@@ -1709,6 +1722,33 @@ impl Doctor<'_> {
                 .is_some_and(|items| items.iter().any(|item| item == EXTENSION_ID))
     }
 
+    /// The server of Claude Desktop's configuration that runs `opentide mcp
+    /// start` for this workspace (its `env.OPENTIDE_REPO_ROOT`). The file is
+    /// the user's, not the repository's: a server for another workspace is
+    /// none of this one's.
+    fn claude_desktop_server(&self) -> Option<serde_json::Map<String, JsonValue>> {
+        use crate::commands::setup::desktop::{Os, config_path, home};
+        let os = Os::current();
+        let path = config_path(os, self.cx.env, home(os, self.cx.env).as_deref())?;
+        let data = read_jsonc(&path)?;
+        let here = crate::commands::setup::real(&self.cwd.join(&self.workspace));
+        let JsonValue::Object(servers) = data.get("mcpServers")? else {
+            return None;
+        };
+        servers.values().find_map(|server| {
+            let JsonValue::Object(server) = server else {
+                return None;
+            };
+            let root = server
+                .get("env")
+                .and_then(|env| env.get("OPENTIDE_REPO_ROOT"))
+                .and_then(JsonValue::as_str)
+                .filter(|root| Path::new(root).is_absolute())?;
+            (runs_mcp_start(server) && crate::commands::setup::real(Path::new(root)) == here)
+                .then(|| server.clone())
+        })
+    }
+
     fn mcp(&self) -> Check {
         let mut hosts: Vec<&str> = Vec::new();
         let mut without: Vec<&str> = Vec::new();
@@ -1732,7 +1772,18 @@ impl Doctor<'_> {
                 commands.push(command);
             }
         }
-        let setup = "opentide setup mcp --vscode (or --cursor, --claude-code, --generic)";
+        if let Some(server) = self.claude_desktop_server() {
+            hosts.push(crate::commands::setup::desktop::LABEL);
+            let command = match server.get("command") {
+                Some(JsonValue::String(text)) => text.clone(),
+                _ => String::new(),
+            };
+            if !commands.contains(&command) {
+                commands.push(command);
+            }
+        }
+        let setup =
+            "opentide setup mcp --vscode (or --cursor, --claude-code, --claude-desktop, --generic)";
         let extension = self.recommends_extension();
         if hosts.is_empty() && extension {
             return Check::new(
@@ -1795,8 +1846,8 @@ impl Doctor<'_> {
 
 /// Every `*.toml` file under `dir`, at any depth, none in a folder whose
 /// name starts with `.` or `__`. A link to a folder is entered, once: a link
-/// that points back up ends. `.toml` is matched case-sensitively, as the
-/// oracle's `rglob("*.toml")` matches it on Linux.
+/// that points back up ends. `.toml` is matched case-sensitively, on every
+/// system: `CONFIG.TOML` is not read.
 fn collect_toml(dir: &Path, out: &mut Vec<PathBuf>) {
     let hidden = |entry: &walkdir::DirEntry| {
         let name = entry.file_name().to_string_lossy();
@@ -1835,7 +1886,15 @@ fn toml_problem(path: &Path) -> Option<(Option<usize>, String)> {
         Err(error) => {
             let line = error
                 .span()
-                .map(|span| text[..span.start.min(text.len())].matches('\n').count() + 1);
+                // Newlines are single bytes: a span starting inside a
+                // character counts the newlines before that character.
+                .map(|span| {
+                    text.bytes()
+                        .take(span.start)
+                        .filter(|byte| *byte == b'\n')
+                        .count()
+                        + 1
+                });
             let reason = error
                 .message()
                 .lines()
@@ -1874,16 +1933,22 @@ fn opentide_server(data: &JsonValue) -> Option<serde_json::Map<String, JsonValue
             let JsonValue::Object(server) = server else {
                 continue;
             };
-            if let Some(JsonValue::Array(args)) = server.get("args")
-                && args.len() >= 2
-                && args[args.len() - 2] == "mcp"
-                && args[args.len() - 1] == "start"
-            {
+            if runs_mcp_start(server) {
                 return Some(server.clone());
             }
         }
     }
     None
+}
+
+/// Whether an MCP server entry's `args` end in `mcp start`.
+fn runs_mcp_start(server: &serde_json::Map<String, JsonValue>) -> bool {
+    matches!(
+        server.get("args"),
+        Some(JsonValue::Array(args)) if args.len() >= 2
+            && args[args.len() - 2] == "mcp"
+            && args[args.len() - 1] == "start"
+    )
 }
 
 /// One recursive glob over the object folders' common parent, or one per
@@ -1929,12 +1994,18 @@ fn report(checks: &[Check], text: bool) -> Report {
         if warned > 0 {
             rest.push(plural(warned, "warning"));
         }
-        (format!("{} failed", plural(failed, "check")), "failed")
+        (
+            format!("{} failed", plural(failed, "check")),
+            Status::Failed,
+        )
     } else if warned > 0 {
-        (plural(warned, "warning"), "issues")
+        (plural(warned, "warning"), Status::Issues)
     } else {
         rest.clear();
-        (format!("{} passed", plural(passed, "check")), "completed")
+        (
+            format!("{} passed", plural(passed, "check")),
+            Status::Completed,
+        )
     };
     if skipped > 0 {
         rest.push(format!("{skipped} skipped"));
@@ -1949,17 +2020,17 @@ fn report(checks: &[Check], text: bool) -> Report {
         Json::Array(checks.iter().map(Check::to_json).collect()),
     )];
     let mut report = Report::completed(COMMAND, data);
-    status.clone_into(&mut report.outcome.status);
+    report.outcome.status = status;
     report.outcome.message.clone_from(&message);
-    report.outcome.summary = vec![
+    report.outcome.summary = Object::from([
         ("checks".to_owned(), int(checks.len())),
         ("passed".to_owned(), int(passed)),
         ("warnings".to_owned(), int(warned)),
         ("failed".to_owned(), int(failed)),
         ("skipped".to_owned(), int(skipped)),
-    ];
+    ]);
     if failed > 0 {
-        report.outcome.exit_code = 1;
+        report.outcome.exit_code = ExitCode::Failure;
         report.outcome.failure = Some(Failure::new(CHECKS_FAILED, message));
     }
     if text {
@@ -2036,6 +2107,21 @@ pub(crate) fn on_path(name: &str, path: &str, cwd: &std::path::Path) -> Option<s
 mod tests {
     use super::*;
 
+    #[test]
+    fn a_toml_problem_after_multi_byte_text_is_on_its_line() {
+        // #1946: the line counts newlines up to the error, wherever the
+        // multi-byte characters before it are.
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("x.toml");
+        std::fs::write(&path, "# é😀\nnom = \"é😀\"\n😀 = 1\n").unwrap();
+        let (line, reason) = toml_problem(&path).expect("invalid TOML");
+        assert_eq!(line, Some(3), "{reason}");
+        std::fs::write(&path, "nom = \"é😀\"\nclé = \"é😀").unwrap();
+        assert_eq!(toml_problem(&path).expect("invalid TOML").0, Some(2));
+        std::fs::write(&path, "nom = \"é😀\"\n").unwrap();
+        assert_eq!(toml_problem(&path), None);
+    }
+
     fn context<'a>(env: &'a Env, cwd: &'a Path) -> Context<'a> {
         Context {
             repo: None,
@@ -2048,10 +2134,56 @@ mod tests {
         }
     }
 
+    /// The checklist reads the platforms every other command reads: the
+    /// resolved `platforms` table, which the 0.x `systems.toml` merges into
+    /// (#1935).
+    #[test]
+    fn enabled_platforms_and_their_tenants_come_from_the_platforms_table() {
+        use opentide_schema::configuration::resolve::{Folder, Instance, resolve};
+        let env = Env::default();
+        let dir = tempfile::tempdir().unwrap();
+        let cx = context(&env, dir.path());
+        for (file, text) in [
+            (
+                "systems.toml",
+                "[splunk.platform]\nenabled = true\n[[splunk.tenants]]\nname = 'é😀'\n",
+            ),
+            (
+                "platforms/splunk.toml",
+                "[platform]\nenabled = true\n[[tenants]]\nname = 'é😀'\n",
+            ),
+        ] {
+            let folder = Folder {
+                path: "/w/.opentide/configurations".to_owned(),
+                files: vec![(file.to_owned(), text.to_owned())],
+                folders: vec!["platforms".to_owned()],
+            };
+            let tree = resolve(&Instance {
+                workspace: Some(&folder),
+                ..Instance::default()
+            })
+            .unwrap()
+            .tree;
+            // `systems` merges into `platforms`, the only table the tree holds.
+            assert!(tree.get("systems").is_none(), "{file}");
+            let doctor = Doctor {
+                cx: &cx,
+                workspace: dir.path().to_path_buf(),
+                explicit: false,
+                cwd: dir.path().to_path_buf(),
+                tide_workspace: None,
+                config: Some(tree),
+                expected: None,
+            };
+            assert_eq!(doctor.enabled_platforms(), ["splunk"], "{file}");
+            let tenants = doctor.tenants();
+            assert_eq!(tenants.len(), 1, "{file}");
+            assert_eq!(tenants[0].tenants.len(), 1, "{file}");
+        }
+    }
+
     fn checks(report: &Report) -> Vec<(String, String, String)> {
-        let Some((_, Json::Array(items))) =
-            report.outcome.data.iter().find(|(key, _)| key == "checks")
-        else {
+        let Some(Json::Array(items)) = report.outcome.data.get("checks") else {
             panic!("no checks");
         };
         items
@@ -2067,6 +2199,14 @@ mod tests {
                 (get("code"), get("status"), get("message"))
             })
             .collect()
+    }
+
+    #[test]
+    fn the_flags_pick_one_mode() {
+        let mode = |offline, live| DoctorMode::from(&crate::tree::DoctorArgs { offline, live });
+        assert_eq!(mode(false, false), DoctorMode::Default);
+        assert_eq!(mode(true, false), DoctorMode::Offline);
+        assert_eq!(mode(false, true), DoctorMode::Live);
     }
 
     #[test]
@@ -2099,7 +2239,7 @@ mod tests {
         drop(listener);
         let env = Env::from_pairs([("HTTPS_PROXY".to_owned(), proxy.clone())]);
         let dir = tempfile::tempdir().unwrap();
-        let report = run(false, false, &context(&env, dir.path()));
+        let report = run(DoctorMode::Default, &context(&env, dir.path()));
         let found = checks(&report);
         let latest = found
             .iter()
@@ -2262,7 +2402,7 @@ mod tests {
     fn an_empty_folder_fails_the_workspace_check() {
         let env = Env::from_pairs(Vec::<(String, String)>::new());
         let dir = tempfile::tempdir().unwrap();
-        let report = run(true, false, &context(&env, dir.path()));
+        let report = run(DoctorMode::Offline, &context(&env, dir.path()));
         let found = checks(&report);
         let workspace = found.iter().find(|(code, ..)| code == "workspace").unwrap();
         assert_eq!(workspace.1, "fail");
@@ -2270,8 +2410,8 @@ mod tests {
             workspace.2.starts_with("No workspace at ./"),
             "{workspace:?}"
         );
-        assert_eq!(report.outcome.exit_code, 1);
-        assert_eq!(report.outcome.status, "failed");
+        assert_eq!(report.outcome.exit_code, ExitCode::Failure);
+        assert_eq!(report.outcome.status, Status::Failed);
         assert_eq!(report.outcome.failure.unwrap().code, CHECKS_FAILED);
         let codes: Vec<&str> = found.iter().map(|(code, ..)| code.as_str()).collect();
         assert_eq!(
@@ -2295,7 +2435,7 @@ mod tests {
         )
         .unwrap();
         let env = Env::from_pairs(Vec::<(String, String)>::new());
-        let report = run(true, false, &context(&env, dir.path()));
+        let report = run(DoctorMode::Offline, &context(&env, dir.path()));
         let found = checks(&report);
         let get = |code: &str| {
             found
@@ -2322,8 +2462,8 @@ mod tests {
                 .starts_with("4 template(s) missing")
         );
         assert_eq!(get("schemas_fresh")[0].0, "warn");
-        assert_eq!(report.outcome.status, "issues");
-        assert_eq!(report.outcome.exit_code, 0);
+        assert_eq!(report.outcome.status, Status::Issues);
+        assert_eq!(report.outcome.exit_code, ExitCode::Success);
     }
 
     #[test]
@@ -2340,7 +2480,7 @@ mod tests {
             std::fs::write(templates.join(template_artifact_name(&id)), text).unwrap();
         }
         let env = Env::from_pairs(Vec::<(String, String)>::new());
-        let found = checks(&run(true, false, &context(&env, dir.path())));
+        let found = checks(&run(DoctorMode::Offline, &context(&env, dir.path())));
         let fresh = found
             .iter()
             .find(|(code, ..)| code == "templates_fresh")
@@ -2352,7 +2492,7 @@ mod tests {
         let mut text = std::fs::read_to_string(&path).unwrap();
         text.push('\n');
         std::fs::write(&path, text).unwrap();
-        let found = checks(&run(true, false, &context(&env, dir.path())));
+        let found = checks(&run(DoctorMode::Offline, &context(&env, dir.path())));
         let stale = found
             .iter()
             .find(|(code, ..)| code == "templates_fresh")
@@ -2389,13 +2529,18 @@ mod tests {
             version: "9.9.9",
         };
         let report = super::super::generate::phases(&["schemas".to_owned()], &cx, "9.9.9");
-        assert_eq!(report.outcome.exit_code, 0, "{}", report.outcome.message);
+        assert_eq!(
+            report.outcome.exit_code,
+            ExitCode::Success,
+            "{}",
+            report.outcome.message
+        );
         dir
     }
 
     fn find_check(dir: &Path, code: &str) -> (String, String, String) {
         let env = Env::from_pairs(Vec::<(String, String)>::new());
-        checks(&run(true, false, &context(&env, dir)))
+        checks(&run(DoctorMode::Offline, &context(&env, dir)))
             .into_iter()
             .find(|(found, ..)| found == code)
             .unwrap()
@@ -2470,7 +2615,7 @@ mod tests {
         std::fs::create_dir_all(&config).unwrap();
         std::fs::write(config.join("lint.toml"), "[metadata]\nrequired = [\n").unwrap();
         let env = Env::from_pairs(Vec::<(String, String)>::new());
-        let found = checks(&run(true, false, &context(&env, dir.path())));
+        let found = checks(&run(DoctorMode::Offline, &context(&env, dir.path())));
         let configuration = found
             .iter()
             .find(|(code, ..)| code == "configuration")
@@ -2627,7 +2772,7 @@ mod tests {
         )
         .unwrap();
         let env = Env::from_pairs([("PATH", "/nonexistent")]);
-        let found = checks(&run(true, false, &context(&env, dir.path())));
+        let found = checks(&run(DoctorMode::Offline, &context(&env, dir.path())));
         let settings = found.iter().find(|(c, ..)| c == "vscode_settings").unwrap();
         assert_eq!(settings.1, "pass");
         let mcp = found.iter().find(|(c, ..)| c == "mcp_config").unwrap();
@@ -2636,6 +2781,45 @@ mod tests {
         assert!(mcp.2.contains("no-such-opentide is not on PATH"), "{mcp:?}");
         let git = found.iter().find(|(c, ..)| c == "git").unwrap();
         assert_eq!(git.1, "warn");
+    }
+
+    #[test]
+    fn claude_desktop_counts_only_for_this_workspace() {
+        use crate::commands::setup::desktop::{Os, config_path};
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().canonicalize().unwrap();
+        let workspace = root.join("é😀 ws");
+        std::fs::create_dir_all(workspace.join(".opentide")).unwrap();
+        let home = root.join("home");
+        let home_text = home.to_string_lossy().into_owned();
+        let env = Env::from_pairs([
+            ("HOME", home_text.clone()),
+            ("USERPROFILE", home_text.clone()),
+            ("APPDATA", format!("{home_text}/AppData/Roaming")),
+            ("XDG_CONFIG_HOME", format!("{home_text}/.config")),
+            ("PATH", "/nonexistent".to_owned()),
+        ]);
+        let config = config_path(Os::current(), &env, Some(&home)).unwrap();
+        std::fs::create_dir_all(config.parent().unwrap()).unwrap();
+        let mcp = |for_root: &Path| {
+            let entry = serde_json::json!({"mcpServers": {"opentide": {
+                "command": "/bin/sh",
+                "args": ["mcp", "start"],
+                "env": {"OPENTIDE_REPO_ROOT": for_root},
+            }}});
+            std::fs::write(&config, entry.to_string()).unwrap();
+            let found = checks(&run(DoctorMode::Offline, &context(&env, &workspace)));
+            found.into_iter().find(|(c, ..)| c == "mcp_config").unwrap()
+        };
+        let here = mcp(&workspace);
+        assert_eq!(here.1, "pass", "{here:?}");
+        assert!(
+            here.2.contains("MCP configured for Claude Desktop"),
+            "{here:?}"
+        );
+        let elsewhere = mcp(&root.join("another"));
+        assert_eq!(elsewhere.1, "skip", "{elsewhere:?}");
+        assert!(!elsewhere.2.contains("Claude Desktop"), "{elsewhere:?}");
     }
 
     #[test]
@@ -2649,7 +2833,7 @@ mod tests {
         )
         .unwrap();
         let env = Env::from_pairs(Vec::<(String, String)>::new());
-        let found = checks(&run(true, false, &context(&env, dir.path())));
+        let found = checks(&run(DoctorMode::Offline, &context(&env, dir.path())));
         let settings = found.iter().find(|(c, ..)| c == "vscode_settings").unwrap();
         assert_eq!(settings.1, "warn");
         assert!(

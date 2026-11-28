@@ -11,6 +11,8 @@ Each tool below lists its parameters, an example call, and an example response s
 
 The server's `instructions`, sent with the `initialize` response, open with the tagline (*Spec-driven development for agentic detection engineering*) and give the agent its workflow: search, draft from a template, call `validation_report` until it is clean, then preview with `deploy_rule` and `dry_run: true`. People review and merge, and run real deployments.
 
+Every tool and resource answers for the files as they are on disk at the call. The server reads the workspace once and keeps it between calls: each call re-reads only the files changed, added or deleted since the last one. A `deploy_rule` that is not a dry run reads the workspace afresh, and the next call reads it again.
+
 ### Next actions
 
 `validate_rule`, `validation_report` and `validate_query` add a `next_actions` list: the calls worth making next.
@@ -35,6 +37,7 @@ The server's `instructions`, sent with the `initialize` response, open with the 
 | `search` | Search the catalogue | true | false | true | false |
 | `get_chaining` | Threat, objective and rule lineage | true | false | true | false |
 | `coverage` | ATT&CK coverage | true | false | true | false |
+| `graph` | Catalogue gaps | true | false | true | false |
 | `validate_rule` | Validate a rule | true | false | true | false |
 | `validation_report` | Validation report | true | false | true | false |
 | `explain` | Explain a diagnostic code | true | false | true | false |
@@ -196,6 +199,58 @@ Without `technique`:
 }
 ```
 
+## graph
+
+Where the catalogue is blind: the threat → objective → rule → production funnel as counts and gap lists. Use it to answer "where are we blind?" or "which threats have nothing in production?". `coverage` answers per ATT&CK technique and `get_chaining` per object; `graph` is the whole catalogue at once, and stays small whatever its size.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `detail` | string | `"summary"` | The level of detail. Only `summary` is offered |
+
+A threat is covered when an objective lists it in `objective.threats`. A rule counts for the objective its `detection_model` names or, when that is a signal (`objective.signals[].uuid`), for the signal's objective, as in `coverage` and `get_chaining`. A rule is *in production* when one of its platform blocks has a status in `release_statuses`: the `[[statuses]]` of `deployment.toml` mapped to `RELEASE`, or to `UNIVERSAL`, which a release run deploys as well (`PRODUCTION` in the default lifecycle). `DISABLEMENT` and `DELETION` statuses are deployed by a release run to take a rule away, so they do not count.
+
+Each threat lands in the first gap that applies: no objective, else no rule, else no rule in production, so `threats_without_rules` leaves out the threats in `threats_without_objectives`. Only threats have a production gap: an objective whose rules are none in production is in no list. Each gap is `{count, items}`: `count` is the full number and `items` lists at most 25 objects in file path order, each shaped like a `search` result. `rule_blocks_by_status` and `rule_blocks_by_platform` count platform blocks, a block without a status as `unset`. `chained_threats` counts the catalogue's threats on either end of a `threat.chaining` entry; a vector that names no threat of the catalogue counts neither end.
+
+A `deployment.toml` that does not match its model fails the call (`isError: true`, `deployment.toml is invalid: ...`), as `deploy_rule` does: nothing deploys under it, so `graph` does not say what is in production.
+
+```json
+// call
+{}
+
+// returns
+{
+  "counts": { "threats": 3, "objectives": 2, "rules": 11, "signals": 1, "chained_threats": 2, "actors": 1 },
+  "release_statuses": ["PRODUCTION"],
+  "rule_blocks_by_status": { "PRODUCTION": 1, "STAGING": 10 },
+  "rule_blocks_by_platform": {
+    "carbon_black_cloud": { "STAGING": 1 },
+    "crowdstrike": { "STAGING": 1 },
+    "elastic": { "STAGING": 1 },
+    "harfanglab": { "STAGING": 1 },
+    "microsoft_defender": { "STAGING": 1 },
+    "sentinel": { "STAGING": 2 },
+    "sentinel_one": { "STAGING": 1 },
+    "splunk": { "PRODUCTION": 1, "STAGING": 1 },
+    "sysdig": { "STAGING": 1 }
+  },
+  "threats_without_objectives": {
+    "count": 1,
+    "items": [{ "uuid": "00000000-0000-4000-8001-0000000000a3", "type": "threat", "title": "Threat no objective covers", "status": null }]
+  },
+  "threats_without_rules": {
+    "count": 1,
+    "items": [{ "uuid": "00000000-0000-4000-8001-0000000000a2", "type": "threat", "title": "Credential dumping after the intrusion", "status": null }]
+  },
+  "threats_without_production_rules": { "count": 0, "items": [] },
+  "objectives_without_rules": {
+    "count": 1,
+    "items": [{ "uuid": "00000000-0000-4000-8002-0000000000a2", "type": "objective", "title": "Objective without rules", "status": null }]
+  }
+}
+```
+
+Follow an item with `get_chaining` for its lineage, or `coverage` for its techniques. Any other `detail` fails the call (`isError: true`, `argument detail must be one of summary, not "full"`).
+
 ## validate_rule
 
 Validate a single rule against its schema and cross-object checks.
@@ -349,9 +404,10 @@ Checks a query offline with the analysis engine, the same engine as `opentide va
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `query` | string | | The query to check offline. The live check reads catalogue rules, not this string |
-| `platform` | string | | Platform key: picks the language and its profile (Defender tables for `microsoft_defender`, the Carbon Black dialect for `carbon_black_cloud`, Graylog's Lucene for `graylog`, CQL with the Next-Gen SIEM correlation-rule checks for `crowdstrike`, Falco for `sysdig`, YARA under the HarfangLab or Bitdefender profile for `harfanglab` and `bitdefender`, the Exabeam Query Language for `exabeam`, a YARA-L rule for `google_secops`) |
+| `platform` | string | | Platform key: picks the language and the product's checks (Defender tables for `microsoft_defender`, the Carbon Black dialect for `carbon_black_cloud`, Graylog's Lucene for `graylog`, CQL for `crowdstrike`, Falco for `sysdig`, YARA under the HarfangLab or Bitdefender profile for `harfanglab` and `bitdefender`, the Exabeam Query Language for `exabeam`, YARA-L for `google_secops`). The query is checked as `position` says it will sit |
 | `live` | boolean | `false` | `true` calls the tenant |
 | `language` | string | `""` | Empty: the platform's language. Elastic, the one platform with several: `esql`, `eql`, `kuery` (the default) or `lucene` |
+| `position` | string | `"search"` | Where the query will sit. `search`: as a query file of its language, so a CrowdStrike query is plain LogScale, an Exabeam query a search, and a YARA-L text a rule when it declares one. `rule`: as the platform's rule block checks its query, so a CrowdStrike query is a Next-Gen SIEM correlation rule (`cql_correlate_aggregate`), an Exabeam query a sequence filter (`exabeam_advanced_in_rule`) and a Datadog query a detection rule's; a YARA-L text the rule a Google SecOps block assembles, a Sentinel KQL query a scheduled analytics rule (`kql_rule_*`); other languages check a rule's query as a search. Pass `rule` while drafting a rule's query. Any other value, and `rule` with `live: true` (which checks the catalogue's rules, as rules), is refused with `status: "failed"` and `valid: null`. The offline result's `position` echoes it |
 | `stack` | string | `""` | Elastic ES\|QL only: the stack the query must run on, `MAJOR.MINOR` such as `9.5`, or `serverless`. Empty: every supported stack. Any other value is refused with `status: "failed"` and `valid: null`, as an unknown `language` is |
 
 Offline, the result has `valid` (`false` when the engine found an error), `status`, `language`, `errors`, `warnings`, every finding under `diagnostics` (`code`, `severity`, `message`, `line`, `column`, `end_line`, `end_column` in the query, 1-based, columns in code points; `suggestion`, the language's `reference` and `explain`), and `engine`, the version of the engine that checked it. Warnings (slow query shapes) leave `valid` true. The offline check knows the tables, indexes and index patterns the workspace's [`visibility.toml`](../usage/configuration.md#the-datasets-a-log-source-fills) declares, read afresh on each call as `opentide validate` and `lint` read it, so a declared table is known and, once a platform declares one, an undeclared one is a warning (`kql_table_not_declared`). A server with no workspace declares nothing. `next_actions` names the first finding's `explain` page, then the live check, for a platform that has one (CrowdStrike's CQL and Sysdig's Falco are checked offline only, so `live: true` returns `supported: false` for them).
@@ -434,7 +490,7 @@ SentinelOne's S1QL has no offline engine: the default refuses and names `live: t
 }
 ```
 
-Supported on the tenant: `carbon_black_cloud`, `microsoft_defender`, `elastic`, `exabeam`, `google_secops`, `graylog`, `sentinel`, `sentinel_one`, `splunk` (the registry's `live_check`; the tool description lists the same set). Offline: every platform but `sentinel_one`, the registry's `offline_languages`. The live next action says that it contacts the tenant with the configured credentials: ask a person before following it.
+Supported on the tenant: `carbon_black_cloud`, `microsoft_defender`, `elastic`, `datadog`, `exabeam`, `google_secops`, `graylog`, `sentinel`, `sentinel_one`, `splunk` (the registry's `live_check`; the tool description lists the same set). Offline: every platform but `sentinel_one`, the registry's `offline_languages`. The live next action says that it contacts the tenant with the configured credentials: ask a person before following it.
 
 ## run_query
 
@@ -556,7 +612,7 @@ Per-platform deployment state for a rule. Vendor rule ids come from the rule's [
 }
 ```
 
-`deployed` is true once a vendor id is recorded or the block names `tenants`. `external_ids` maps tenant name to the stored id (for the platforms that store one, below). `rule_id` is that id when exactly one tenant is bound, otherwise `null`. A shard that cannot be read adds `state_error` with its `deployment_state_*` code. A platform that addresses its rules without a vendor id (Sentinel, Microsoft Defender, Splunk, HarfangLab, Carbon Black Cloud and Elastic; the others store the id their vendor gives: SentinelOne, CrowdStrike, Sysdig, Bitdefender, Graylog, Exabeam and Google SecOps) keeps no deployment state, so a deploy to it leaves nothing for this tool to read: it adds a `note` saying so, and `deployed` is true only when the rule's block names `tenants`, never because a deploy went through. Ask the tenant instead (`validate_query` or `run_query` with `live: true`).
+`deployed` is true once a vendor id is recorded or the block names `tenants`. `external_ids` maps tenant name to the stored id (for the platforms that store one, below). `rule_id` is that id when exactly one tenant is bound, otherwise `null`. A shard that cannot be read adds `state_error` with its `deployment_state_*` code. A platform that addresses its rules without a vendor id (Sentinel, Microsoft Defender, Splunk, HarfangLab, Carbon Black Cloud and Elastic; the others store the id their vendor gives: SentinelOne, CrowdStrike, Sysdig, Bitdefender, Graylog, Exabeam, Google SecOps and Datadog) keeps no deployment state, so a deploy to it leaves nothing for this tool to read: it adds a `note` saying so, and `deployed` is true only when the rule's block names `tenants`, never because a deploy went through. Ask the tenant instead (`validate_query` or `run_query` with `live: true`).
 
 ## Agent workflows
 
@@ -578,6 +634,7 @@ deploy_rule(uuid=<new rule>, platform="sentinel", dry_run=true)   → preview
 ### Audit coverage
 
 ```text
+graph()                                   → threats and objectives without rules, threats with nothing in production
 coverage()                                → technique_count + matrix of technique → rule UUIDs (own and inherited)
 coverage(technique="T1059")               → covered bool + rules list for one technique
 search(technique=<gap>)                   → confirm nothing exists

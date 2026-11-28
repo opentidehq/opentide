@@ -1,37 +1,37 @@
-//! A platform's `[[modifiers]]` applied to a rule for one tenant
-//! (`deployment/planning.py` `TideDeployment.modifiers_resolver`): each
+//! A platform's `[[modifiers]]` applied to a rule for one tenant: each
 //! modifier whose conditions hold rewrites keys of the rule's platform block
 //! before the rule is sent there. `validate query --live` checks the queries
 //! a deploy sends, so it reads the block as modified.
 
 use opentide_schema::from_node::Model;
 use opentide_schema::objects::platform::{
-    BitdefenderConfig, CarbonBlackConfig, CrowdstrikeConfig, ElasticConfig, ExabeamConfig,
-    GoogleSecopsConfig, GraylogConfig, HarfangLabConfig, MicrosoftDefenderConfig, SentinelConfig,
-    SentinelOneConfig, SplunkConfig, SysdigConfig,
+    BitdefenderConfig, CarbonBlackConfig, CrowdstrikeConfig, DatadogConfig, ElasticConfig,
+    ExabeamConfig, GoogleSecopsConfig, GraylogConfig, HarfangLabConfig, MicrosoftDefenderConfig,
+    SentinelConfig, SentinelOneConfig, SplunkConfig, SysdigConfig,
 };
+use opentide_schema::platforms::{PlatformId, PlatformKey};
 
 use crate::json::{Json, Object};
 
 /// The top-level keys of `platform`'s block model, attribute and serialised
-/// names (`_typed_platform_config_roots`); empty for a platform it does not
-/// know.
-pub fn typed_roots(platform: &str) -> Vec<&'static str> {
+/// names. A plugin's platform has no model
+/// here: [`apply`] then skips no root.
+pub fn typed_roots(platform: PlatformId) -> Vec<&'static str> {
     let fields: &[(&str, &str)] = match platform {
-        "sentinel" => SentinelConfig::FIELDS,
-        "microsoft_defender" => MicrosoftDefenderConfig::FIELDS,
-        "splunk" => SplunkConfig::FIELDS,
-        "sentinel_one" => SentinelOneConfig::FIELDS,
-        "crowdstrike" => CrowdstrikeConfig::FIELDS,
-        "harfanglab" => HarfangLabConfig::FIELDS,
-        "carbon_black_cloud" => CarbonBlackConfig::FIELDS,
-        "elastic" => ElasticConfig::FIELDS,
-        "sysdig" => SysdigConfig::FIELDS,
-        "bitdefender" => BitdefenderConfig::FIELDS,
-        "exabeam" => ExabeamConfig::FIELDS,
-        "google_secops" => GoogleSecopsConfig::FIELDS,
-        "graylog" => GraylogConfig::FIELDS,
-        _ => &[],
+        PlatformId::Sentinel => SentinelConfig::FIELDS,
+        PlatformId::MicrosoftDefender => MicrosoftDefenderConfig::FIELDS,
+        PlatformId::Splunk => SplunkConfig::FIELDS,
+        PlatformId::SentinelOne => SentinelOneConfig::FIELDS,
+        PlatformId::Crowdstrike => CrowdstrikeConfig::FIELDS,
+        PlatformId::Harfanglab => HarfangLabConfig::FIELDS,
+        PlatformId::CarbonBlackCloud => CarbonBlackConfig::FIELDS,
+        PlatformId::Elastic => ElasticConfig::FIELDS,
+        PlatformId::Sysdig => SysdigConfig::FIELDS,
+        PlatformId::Bitdefender => BitdefenderConfig::FIELDS,
+        PlatformId::Exabeam => ExabeamConfig::FIELDS,
+        PlatformId::GoogleSecops => GoogleSecopsConfig::FIELDS,
+        PlatformId::Graylog => GraylogConfig::FIELDS,
+        PlatformId::Datadog => DatadogConfig::FIELDS,
     };
     let mut roots = Vec::with_capacity(fields.len() * 2);
     for (attribute, serialised) in fields {
@@ -134,8 +134,7 @@ fn unroll(key: &str, value: Json) -> Object {
     unrolled
 }
 
-/// *base* updated from *update*, mappings merged rather than replaced
-/// (`_deep_update`).
+/// *base* updated from *update*, mappings merged rather than replaced.
 fn deep_update(base: &mut Object, update: &Object) {
     for (key, value) in update {
         if let Json::Object(inner) = value {
@@ -167,7 +166,7 @@ fn flattened<'b>(block: &'b Object, key: &str) -> Option<&'b Json> {
 
 /// The platform block *block* of a rule with the modifiers of `modifiers`
 /// (the platform's `[[modifiers]]`) applied for `tenant` (`modifiers_resolver`).
-pub fn apply(modifiers: &[Json], platform: &str, block: &Json, tenant: &str) -> Json {
+pub fn apply(modifiers: &[Json], platform: &PlatformKey, block: &Json, tenant: &str) -> Json {
     let Json::Object(original) = block else {
         return block.clone();
     };
@@ -177,7 +176,8 @@ pub fn apply(modifiers: &[Json], platform: &str, block: &Json, tenant: &str) -> 
         _ => String::new(),
     };
     let flags = strings(original.get("flags"));
-    let roots = typed_roots(platform);
+    // A plugin's platform (not built in): no model, so no root is skipped.
+    let roots = platform.builtin().map_or_else(Vec::new, typed_roots);
     let mut raw = original.clone();
     for modifier in modifiers {
         if !applies(modifier.get("conditions"), &status, tenant, &flags) {
@@ -228,10 +228,10 @@ pub fn apply(modifiers: &[Json], platform: &str, block: &Json, tenant: &str) -> 
 }
 
 /// The platform's `[[modifiers]]` in the resolved configuration `config`.
-pub fn of_platform(config: &Json, platform: &str) -> Vec<Json> {
+pub fn of_platform(config: &Json, platform: &PlatformKey) -> Vec<Json> {
     match config
         .get("platforms")
-        .and_then(|platforms| platforms.get(platform))
+        .and_then(|platforms| platforms.get(platform.as_str()))
         .and_then(|table| table.get("modifiers"))
     {
         Some(Json::Array(items)) => items.clone(),
@@ -244,17 +244,17 @@ pub fn of_platform(config: &Json, platform: &str) -> Vec<Json> {
 /// deploy's batches and a dry run's tenant-compiled entries both take.
 pub fn rule_for_tenant(
     modifiers: &[Json],
-    platform: &str,
+    platform: &PlatformKey,
     rule: &crate::Rule,
     tenant: &str,
 ) -> crate::Rule {
-    let block = rule.block(platform).cloned().unwrap_or(Json::Null);
+    let block = rule.block(platform.as_str()).cloned().unwrap_or(Json::Null);
     let modified = apply(modifiers, platform, &block, tenant);
     let mut sent = rule.clone();
     if let Json::Object(document) = &mut sent.data
         && let Some(Json::Object(configurations)) = document.get_mut("configurations")
     {
-        configurations.insert(platform.to_owned(), modified);
+        configurations.insert(platform.as_str().to_owned(), modified);
     }
     sent
 }
@@ -300,7 +300,7 @@ mod tests {
         let block = json(
             r#"{"status": "STAGING", "query": "T | take 1", "scheduling": {"lookback": "2h"}}"#,
         );
-        let applied = apply(&modifiers, "sentinel", &block, "lab");
+        let applied = apply(&modifiers, &PlatformId::Sentinel.into(), &block, "lab");
         assert_eq!(
             applied.get("query").and_then(Json::as_str),
             Some("// lab\nT | take 1")
@@ -318,7 +318,15 @@ mod tests {
             applied.get("trigger").and_then(Json::as_str),
             Some(" (lab)")
         );
-        assert_eq!(apply(&modifiers, "sentinel", &block, "prod"), block);
+        assert_eq!(
+            apply(&modifiers, &PlatformId::Sentinel.into(), &block, "prod"),
+            block
+        );
+        // A plugin's platform has no model here, so no root is skipped: the
+        // key the built-in model lacks is set too.
+        let plugin = apply(&modifiers, &PlatformKey::new("acme_siem"), &block, "lab");
+        assert_eq!(plugin.get("severity").and_then(Json::as_str), Some("high"));
+        assert!(plugin.get("dispatch").is_some());
     }
 
     #[test]

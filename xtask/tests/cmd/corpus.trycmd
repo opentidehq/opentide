@@ -2,7 +2,7 @@ The generator's digest for a tiny workspace (xtask/tests/corpus_generate.rs reco
 
 ```
 $ xtask corpus generate --seed 1 --threats 2 --objectives 2 --rules 3 --digest
-e0ccee3db37b12e0
+605e8619eb749556
 
 ```
 
@@ -34,17 +34,17 @@ For more information, try '--help'.
 
 $ xtask corpus faults --check
 ? 2
-xtask corpus: --engine python is required (the oracle the expectations name)
+xtask corpus: --engine is required: python (the oracle the expectations name) or rust
 
 ```
 
-The Rust engine checks the object, platform and configuration kinds against the oracle; any
-other kind is a usage error until its item ports it:
+The Rust engine checks the object, platform, configuration and query kinds against the oracle;
+any other kind is checked against its expectations, with the oracle:
 
 ```
 $ xtask corpus faults --check --engine rust --only uuid-invalid-rule
 ? 2
-xtask corpus: --engine rust checks the object kinds (UC-1.3; --only objects lists them), the platform kinds (UC-1.4; --only platforms) and the configuration kinds (UC-1.5; --only configuration): `uuid-invalid-rule` comes with the Rust engine's validate (UC-2.x)
+xtask corpus: --engine rust checks the object kinds (UC-1.3; --only objects lists them), the platform kinds (UC-1.4; --only platforms) and the configuration kinds (UC-1.5; --only configuration) and the query kinds (UC-2.5; --only queries): `uuid-invalid-rule` is checked with --engine python
 
 $ xtask corpus faults --check --engine rust --only no-such-kind
 ? 2
@@ -52,11 +52,18 @@ xtask corpus: --only: no fault kind `no-such-kind`
 
 ```
 
-`clean` and `codes` have no Rust run yet: they fail, never pass:
+`clean` runs either engine, named; `codes` lists the oracle's codes, and only the oracle's:
 
 ```
-$ xtask corpus clean --engine rust --repo .
-? 1
-xtask corpus: --engine rust is not implemented yet; the Rust engine's validate (UC-2.x, https://github.com/opentidehq/opentide/issues/790) runs it
+$ xtask corpus clean --repo .
+? 2
+xtask corpus: --engine is required: python (the oracle the expectations name) or rust
+
+$ xtask corpus codes --engine rust
+? 2
+error: invalid value 'rust' for '--engine <ENGINE>'
+  [possible values: python]
+
+For more information, try '--help'.
 
 ```

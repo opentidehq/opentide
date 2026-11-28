@@ -33,6 +33,7 @@ pub mod carbon_black;
 pub mod connector;
 pub mod credentials;
 pub mod crowdstrike;
+pub mod datadog;
 pub mod elastic;
 pub mod entra;
 pub mod env;
@@ -56,7 +57,7 @@ pub mod sentinel_one;
 pub mod splunk;
 pub mod sysdig;
 pub mod tenant;
-pub mod text;
+pub mod tenant_codes;
 pub mod tls;
 pub mod token;
 pub mod transport;
@@ -69,6 +70,15 @@ pub use error::ConnectorError;
 pub use http::{HttpClient, HttpSettings};
 pub use plugin::{PluginError, PluginHost};
 pub use tenant::{Tenant, TenantLabel};
+
+/// `text[start..end]`, a range this crate computes: a match's bounds, or an
+/// ASCII byte's, so its ends are char boundaries. A range that is not fails a
+/// debug assertion and reads as empty.
+pub(crate) fn cut(text: &str, start: usize, end: usize) -> &str {
+    let piece = text.get(start..end);
+    debug_assert!(piece.is_some(), "{start}..{end} in {} bytes", text.len());
+    piece.unwrap_or_default()
+}
 
 /// The HTTP settings *platform*'s client mounts: its timeout and retries.
 /// *timeout* is the read timeout of the
@@ -85,14 +95,13 @@ pub fn http_settings(platform: &str, timeout: std::time::Duration) -> HttpSettin
         "sysdig" => sysdig::http_defaults(),
         "bitdefender" => bitdefender::http_defaults(),
         "exabeam" => exabeam::http_defaults(),
+        "datadog" => datadog::http_defaults(),
         "google_secops" => google_secops::http_settings(timeout),
         "graylog" => graylog::http_defaults(),
         "elastic" => elastic::http_settings(timeout),
         "splunk" => splunk::http_settings(timeout),
         "carbon_black_cloud" => carbon_black::http_settings(timeout),
-        // azure-core reads for 300 s; the server holds a query up to its own
-        // timeout (`Prefer: wait`).
-        "sentinel" => sentinel::http_settings(timeout.max(std::time::Duration::from_secs(300))),
+        "sentinel" => sentinel::http_settings(timeout.max(sentinel::MIN_QUERY_TIMEOUT)),
         _ => HttpSettings::default(),
     }
 }
@@ -106,10 +115,9 @@ pub fn http_settings(platform: &str, timeout: std::time::Duration) -> HttpSettin
 /// [`http_settings`]. Only the timeout follows 0.28: the retries are the
 /// connectors' own ([`retry::RetryPolicy`]).
 pub fn deploy_http_settings(platform: &str) -> HttpSettings {
-    use std::time::Duration;
     match platform {
-        "sentinel" => sentinel::http_settings(Duration::from_secs(60)),
-        "elastic" => elastic::http_settings(Duration::from_secs(30)),
+        "sentinel" => sentinel::http_settings(sentinel::DEPLOY_TIMEOUT),
+        "elastic" => elastic::http_settings(elastic::DEPLOY_TIMEOUT),
         "google_secops" => google_secops::http_defaults(),
         _ => http_settings(platform, http::DEFAULT_TIMEOUT),
     }
@@ -120,7 +128,7 @@ pub fn deploy_http_settings(platform: &str) -> HttpSettings {
 /// HarfangLab and Sysdig (UC-4.2a), Microsoft Defender, Elastic and
 /// SentinelOne (UC-4.2b), Sentinel, Splunk and Carbon Black Cloud (UC-4.3),
 /// Bitdefender GravityZone and Graylog (the catch-up to 0.28.0), and Exabeam
-/// New-Scale SIEM (P-EX). Google SecOps reads Application Default
+/// New-Scale SIEM (P-EX), and Datadog Cloud SIEM. Google SecOps reads Application Default
 /// Credentials from the process environment; [`builtin_with`] names another.
 pub fn builtin() -> Registry {
     builtin_with(&Environment::process())
@@ -148,6 +156,7 @@ pub fn builtin_with(environment: &Environment) -> Registry {
         // Application Default Credentials are the environment's ambient
         // credentials (google-auth's `default()`).
         Box::new(google_secops::GoogleSecops::new(environment.clone())),
+        Box::new(datadog::Datadog::new()),
     ];
     // The table's order, wherever a connector is listed above; a connector
     // the table does not name would go last (the tests refuse one).
@@ -212,7 +221,7 @@ mod tests {
         for platform in opentide_schema::platforms::PLATFORMS.iter().map(|p| p.id) {
             let seconds = match platform {
                 "sentinel" | "google_secops" => 60,
-                "elastic" | "exabeam" | "sysdig" | "bitdefender" | "graylog" => 30,
+                "elastic" | "exabeam" | "sysdig" | "bitdefender" | "graylog" | "datadog" => 30,
                 "microsoft_defender" | "splunk" | "sentinel_one" | "carbon_black_cloud"
                 | "crowdstrike" | "harfanglab" => 120,
                 other => panic!("{other}: no deploy timeout pinned"),
@@ -249,28 +258,69 @@ mod tests {
         assert_eq!(names, ["prod", "lab"]);
         let setup = &tenants[0].1;
         assert_eq!(setup["url"].as_str(), Some("$SPLUNK_URL"));
-        assert_eq!(setup["port"].as_integer(), Some(8089));
+        assert_eq!(setup["port"].as_i64(), Some(8089));
         assert_eq!(setup["ssl"].as_bool(), Some(false));
-        assert_eq!(setup["ratio"].as_float(), Some(0.5));
+        assert_eq!(setup["ratio"], opentide_compile::Json::Float(0.5));
         assert_eq!(
             setup["index"],
-            toml::Value::Array(vec![
-                toml::Value::String("main".into()),
-                toml::Value::Integer(3)
-            ])
+            opentide_compile::Json::Array(vec!["main".into(), 3_i64.into()])
         );
         // A table is kept, for the tenant's string tables (Graylog's
-        // `stream_ids`); a null has no TOML form and is left out.
+        // `stream_ids`); a null is kept as written.
         assert_eq!(
             setup["nested"],
-            toml::Value::Table(toml::map::Map::from_iter([(
-                "a".to_owned(),
-                toml::Value::Integer(1)
-            )]))
+            opentide_compile::Json::object([("a", 1_i64.into())])
         );
-        assert!(!setup.contains_key("none"));
+        assert!(setup["none"].is_null());
+        // File order, not name order.
+        let keys: Vec<&str> = setup.keys().map(String::as_str).collect();
+        assert_eq!(
+            keys,
+            ["url", "port", "ssl", "index", "nested", "none", "ratio"]
+        );
         assert!(tenants[1].1.is_empty());
         assert!(super::tenant::configured(&config, "elastic").is_empty());
+    }
+
+    /// #1967: the setup used to reach the tenant through a `toml::Table`,
+    /// which has no null and no integer past `i64`: the null was dropped and
+    /// `u64::MAX` became the float `18446744073709552000.0`.
+    #[test]
+    fn a_setup_keeps_its_nulls_and_its_integers_digit_for_digit() {
+        let config: opentide_compile::Json = serde_json::from_str(
+            r#"{"platforms": {"splunk": {"tenants": [{"name": "prod", "setup": {
+                "url": "https://splunk.example", "token": "$TOKEN", "unset": null,
+                "account": 18446744073709551615, "id": 9007199254740993, "ratio": 2.0,
+                "ssl": null
+            }}]}}}"#,
+        )
+        .expect("JSON");
+        let tenants = super::tenant::configured(&config, "splunk");
+        let (name, setup) = &tenants[0];
+        assert!(setup.contains_key("unset"), "the null is kept: {setup:?}");
+        let env = super::Environment::from_pairs([("TOKEN", "t0ken")]);
+        let tenant = super::Tenant::from_setup(
+            "splunk",
+            name,
+            setup,
+            &env,
+            super::credentials::Mode::Required,
+            &super::HttpSettings::default(),
+        )
+        .expect("the tenant");
+        let secret = |key: &str| {
+            tenant
+                .secret(key)
+                .ok()
+                .map(|secret| secret.expose().to_owned())
+        };
+        assert_eq!(secret("account").as_deref(), Some("18446744073709551615"));
+        assert_eq!(secret("id").as_deref(), Some("9007199254740993"));
+        assert_eq!(secret("ratio").as_deref(), Some("2.0"));
+        assert_eq!(secret("token").as_deref(), Some("t0ken"));
+        // A null is unset: no credential, and a null `ssl` keeps verifying.
+        assert!(secret("unset").is_none());
+        assert!(tenant.http.tls.verify);
     }
 
     #[test]
@@ -292,7 +342,8 @@ mod tests {
                 "bitdefender",
                 "graylog",
                 "exabeam",
-                "google_secops"
+                "google_secops",
+                "datadog"
             ]
         );
         let can = |id: &str| {
@@ -316,6 +367,7 @@ mod tests {
         assert_eq!(can("exabeam"), (true, true, true));
         assert_eq!(can("google_secops"), (true, true, true));
         assert_eq!(can("graylog"), (true, true, true));
+        assert_eq!(can("datadog"), (true, true, true));
         // The platform table says the same of each connector.
         for row in opentide_schema::platforms::PLATFORMS {
             let (_, live, query) = can(row.id);

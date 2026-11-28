@@ -1,5 +1,5 @@
-//! The `opentide://` resources (`src/opentide/mcp_server/resources.py`):
-//! the index, the objects, the generated schemas and templates, the
+//! The `opentide://` resources: the index, the objects, the generated
+//! schemas and templates, the
 //! vocabularies and the platforms, each an indented JSON document
 //! (`application/json`), except an object template (`opentide://templates/{type}`),
 //! which is its YAML as it is (`application/yaml`). `templates/systems` and the
@@ -44,6 +44,8 @@ const TEMPLATES: [(&str, bool, bool); 6] = [
 
 /// `resources/read` of `uri`.
 pub fn read(uri: &str, context: &Context<'_>) -> Answer {
+    // A resource only reads: on the process's warm workspace (#1942).
+    let _warm = opentide_workspace::session::activate();
     let text = if let Some((_, needs)) = FIXED.iter().find(|(fixed, _)| *fixed == uri) {
         fixed(uri, *needs, context)
     } else if let Some((prefix, value, needs)) =
@@ -189,7 +191,7 @@ fn sorted_names<'a>(names: impl IntoIterator<Item = &'a String>) -> Json {
 }
 
 /// `rule::1.0`, `rule.1.0` or `rule` as its family and version, the family's
-/// plural read as the family (`_split_schema_id`).
+/// plural read as the family.
 fn split_schema_id(identifier: &str) -> (String, Option<String>) {
     let text = identifier.trim();
     let (family, version) = text
@@ -219,8 +221,7 @@ fn version_order(version: &str) -> Vec<(u8, u64, String)> {
         .collect()
 }
 
-/// The key of `keys` a family alias names, the highest version first
-/// (`_resolve_family_key`).
+/// The key of `keys` a family alias names, the highest version first.
 fn resolve_family_key<'k>(
     keys: impl IntoIterator<Item = &'k str>,
     requested: &str,
@@ -286,7 +287,7 @@ fn schema_artifact_identifier(name: &str) -> Option<String> {
 }
 
 /// The generated JSON Schemas of the workspace, by identifier, with their
-/// files (`_scan_framework_schemas`).
+/// files.
 fn json_schemas(workspace: &Workspace) -> Vec<(String, PathBuf, Json)> {
     let config = &workspace.configuration().resolved.tree;
     let dir = workspace_dir(
@@ -357,14 +358,14 @@ fn schema(workspace: &Workspace, object_type: &str) -> Json {
 /// The templates (`Templates.Index`): the workspace's generated object
 /// templates by family, and every configured platform's block template
 /// under `systems`.
-fn templates(workspace: &Workspace) -> Vec<(String, Json)> {
+fn templates(workspace: &Workspace) -> Object {
     let config = &workspace.configuration().resolved.tree;
     let dir = workspace_dir(
         workspace,
         &paths_value(config, "opentide", "templates")
             .unwrap_or_else(|| ".opentide/templates/".into()),
     );
-    let mut out: Vec<(String, Json)> = Vec::new();
+    let mut out = Object::new();
     if OsFs.is_dir(&dir) {
         let read = |file: &str| {
             OsFs.read(&dir.join(file))
@@ -379,11 +380,11 @@ fn templates(workspace: &Workspace) -> Vec<(String, Json)> {
                 .last()
                 .and_then(|id| read(&template_artifact_name(id)));
             if let Some(text) = newest.or_else(|| read(&file)) {
-                out.push((family, text));
+                out.insert(family, text);
             }
         }
     }
-    let mut systems = Vec::new();
+    let mut systems = Object::new();
     if let Some(Value::Map(platforms)) = config.get("platforms").map(|node| &node.value) {
         for entry in platforms {
             let name = entry.key.value.to_string();
@@ -394,20 +395,17 @@ fn templates(workspace: &Workspace) -> Vec<(String, Json)> {
                 continue;
             }
             if let Ok(Some(text)) = opentide_schema::generate::workspace::platform_template(&name) {
-                systems.push((name, Json::Str(text)));
+                systems.insert(name, Json::Str(text));
             }
         }
     }
-    match out.iter_mut().find(|(key, _)| key == "systems") {
-        Some((_, existing)) => *existing = Json::object(systems),
-        None => out.push(("systems".to_owned(), Json::object(systems))),
-    }
+    out.insert("systems".to_owned(), Json::Object(systems));
     out
 }
 
 /// The generated template of each object revision in the workspace
 /// (`rule.1.0.template.yaml` as `rule::1.0`).
-fn revision_templates(workspace: &Workspace) -> Vec<(String, Json)> {
+fn revision_templates(workspace: &Workspace) -> Object {
     let config = &workspace.configuration().resolved.tree;
     let dir = workspace_dir(
         workspace,
@@ -442,14 +440,12 @@ fn revision_templates(workspace: &Workspace) -> Vec<(String, Json)> {
 fn template(workspace: &Workspace, object_type: &str) -> Json {
     let mut templates = templates(workspace);
     for (identifier, text) in revision_templates(workspace) {
-        if !templates.iter().any(|(name, _)| *name == identifier) {
-            templates.push((identifier, text));
-        }
+        templates.entry(identifier).or_insert(text);
     }
-    let names: Vec<String> = templates.iter().map(|(name, _)| name.clone()).collect();
+    let names: Vec<String> = templates.keys().cloned().collect();
     let key = resolve_family_key(names.iter().map(String::as_str), object_type);
-    match key.and_then(|key| templates.into_iter().find(|(name, _)| *name == key)) {
-        Some((_, text)) => text,
+    match key.and_then(|key| templates.into_map().shift_remove(&key)) {
+        Some(text) => text,
         None => Json::object([
             (
                 "error",
@@ -486,20 +482,20 @@ fn index_vocabulary(vocabulary: &Vocabulary) -> Json {
         .stages
         .iter()
         .map(|stage| {
-            let mut members = Vec::new();
+            let mut members = Object::new();
             for (key, value) in [
                 ("id", &stage.id),
                 ("name", &stage.name),
                 ("description", &stage.description),
             ] {
                 if let Some(value) = value {
-                    members.push((key.to_owned(), Json::str(value)));
+                    members.insert(key.to_owned(), Json::str(value));
                 }
             }
-            Json::object(members)
+            Json::Object(members)
         })
         .collect();
-    let mut meta = vec![
+    let mut meta = Object::from([
         ("name".to_owned(), Json::str(&metadata.name)),
         ("field".to_owned(), Json::str(&metadata.field)),
         ("description".to_owned(), Json::str(&metadata.description)),
@@ -507,20 +503,20 @@ fn index_vocabulary(vocabulary: &Vocabulary) -> Json {
         ("key".to_owned(), Json::str(if id { "id" } else { "name" })),
         ("model".to_owned(), Json::Bool(id)),
         ("stages".to_owned(), Json::Array(stages)),
-    ];
+    ]);
     for (key, value) in &metadata.extra {
-        meta.push((key.clone(), toml_json(value)));
+        meta.insert(key.clone(), toml_json(value));
     }
     let entries = vocabulary
         .entries
         .iter()
         .map(|(key, entry)| {
-            let mut members = vec![
+            let mut members = Object::from([
                 ("name".to_owned(), Json::str(&entry.name)),
                 ("version".to_owned(), Json::Str(entry.version.to_string())),
-            ];
+            ]);
             if let Some(removed) = entry.removed {
-                members.push(("removed".to_owned(), Json::Str(removed.to_string())));
+                members.insert("removed".to_owned(), Json::Str(removed.to_string()));
             }
             members.extend([
                 (
@@ -535,13 +531,13 @@ fn index_vocabulary(vocabulary: &Vocabulary) -> Json {
                 ),
             ]);
             for (name, value) in &entry.extra {
-                members.push((name.clone(), toml_json(value)));
+                members.insert(name.clone(), toml_json(value));
             }
-            (key.clone(), Json::object(members))
+            (key.clone(), Json::Object(members))
         })
         .collect();
     Json::object([
-        ("metadata", Json::object(meta)),
+        ("metadata", Json::Object(meta)),
         ("entries", Json::Object(entries)),
     ])
 }
@@ -557,7 +553,7 @@ fn text_of(node: Option<&Node>) -> Option<Json> {
 /// The workspace's object vocabularies as the registry's index holds them
 /// (`build_object_vocabularies`), in the families' order.
 #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
-fn object_vocabularies(workspace: &Workspace) -> Vec<(String, Json)> {
+fn object_vocabularies(workspace: &Workspace) -> Object {
     let config = &workspace.configuration().resolved.tree;
     let documentation = config.get("documentation");
     let setting = |table: &str, family: &str| {
@@ -567,7 +563,7 @@ fn object_vocabularies(workspace: &Workspace) -> Vec<(String, Json)> {
             .and_then(|node| node.value.as_str().map(str::to_owned))
     };
     let index = workspace.index();
-    let mut out = Vec::new();
+    let mut out = Object::new();
     for family in OBJECT_TYPES {
         if !workspace
             .configuration()
@@ -588,7 +584,7 @@ fn object_vocabularies(workspace: &Workspace) -> Vec<(String, Json)> {
             ("description", Json::str(&name)),
             ("model", Json::Bool(true)),
         ]);
-        let mut entries: Vec<(String, Json)> = Vec::new();
+        let mut entries = Object::new();
         for (uuid, body) in opentide_workspace::coverage::bucket(index, family) {
             let object_name = body.get("name").map(AsRef::as_ref);
             let named = object_name.is_some_and(opentide_workspace::index::holds_name);
@@ -601,7 +597,7 @@ fn object_vocabularies(workspace: &Workspace) -> Vec<(String, Json)> {
             if !named {
                 continue;
             }
-            let mut entry: Vec<(String, Json)> = vec![
+            let mut entry = Object::from([
                 (
                     "name".to_owned(),
                     text_of(object_name).unwrap_or(Json::Null),
@@ -611,16 +607,16 @@ fn object_vocabularies(workspace: &Workspace) -> Vec<(String, Json)> {
                     "tlp".to_owned(),
                     text_of(meta.get("tlp").map(AsRef::as_ref)).unwrap_or_else(|| Json::str("")),
                 ),
-            ];
+            ]);
             if let Some(criticality) = text_of(body.get("criticality").map(AsRef::as_ref)) {
-                entry.push(("criticality".to_owned(), criticality));
+                entry.insert("criticality".to_owned(), criticality);
             }
             if let Some(aliases) = body
                 .get("actor")
                 .filter(|actor| matches!(actor.value, Value::Map(_)))
                 .and_then(|actor| text_of(actor.get("aliases").map(AsRef::as_ref)))
             {
-                entry.push(("aliases".to_owned(), aliases));
+                entry.insert("aliases".to_owned(), aliases);
             }
             let nested = body
                 .get(family)
@@ -639,12 +635,12 @@ fn object_vocabularies(workspace: &Workspace) -> Vec<(String, Json)> {
                 && let Some(priority) =
                     nested.and_then(|n| text_of(n.get("priority").map(AsRef::as_ref)))
             {
-                entry.push(("priority".to_owned(), priority));
+                entry.insert("priority".to_owned(), priority);
             }
             if description != Json::Null {
-                entry.push(("description".to_owned(), description));
+                entry.insert("description".to_owned(), description);
             }
-            entries.push((uuid.to_owned(), Json::object(entry)));
+            entries.insert(uuid.to_owned(), Json::Object(entry));
             if family != "objective" {
                 continue;
             }
@@ -666,7 +662,7 @@ fn object_vocabularies(workspace: &Workspace) -> Vec<(String, Json)> {
                     Some(value) => value.to_string(),
                     None => String::new(),
                 };
-                let mut entry = vec![
+                let mut entry = Object::from([
                     (
                         "name".to_owned(),
                         Json::Str(format!("{base}::{signal_name}").replace("\n ", " ")),
@@ -681,28 +677,28 @@ fn object_vocabularies(workspace: &Workspace) -> Vec<(String, Json)> {
                         text_of(meta.get("tlp").map(AsRef::as_ref))
                             .unwrap_or_else(|| Json::str("")),
                     ),
-                ];
+                ]);
                 for key in ["severity", "description"] {
                     if let Some(value) = field(key) {
-                        entry.push((key.to_owned(), value));
+                        entry.insert(key.to_owned(), value);
                     }
                 }
-                entries.push((signal_uuid, Json::object(entry)));
+                entries.insert(signal_uuid, Json::Object(entry));
             }
         }
-        out.push((
+        out.insert(
             family.to_owned(),
-            Json::object([("metadata", metadata), ("entries", Json::object(entries))]),
-        ));
+            Json::object([("metadata", metadata), ("entries", Json::Object(entries))]),
+        );
     }
     out
 }
 
 /// Every vocabulary in the index's form: the bundled ones, then the
 /// workspace's object vocabularies.
-fn index_vocabularies(objects: Option<&Workspace>) -> Vec<(String, Json)> {
+fn index_vocabularies(objects: Option<&Workspace>) -> Object {
     let bundled = Vocabularies::bundled();
-    let mut out: Vec<(String, Json)> = bundled
+    let mut out: Object = bundled
         .fields()
         .into_iter()
         .filter_map(|field| {
@@ -713,8 +709,8 @@ fn index_vocabularies(objects: Option<&Workspace>) -> Vec<(String, Json)> {
         .collect();
     if let Some(workspace) = objects {
         for (field, vocabulary) in object_vocabularies(workspace) {
-            out.retain(|(known, _)| *known != field);
-            out.push((field, vocabulary));
+            out.shift_remove(&field);
+            out.insert(field, vocabulary);
         }
     }
     out
@@ -860,39 +856,23 @@ fn vocabularies_listing(objects: Option<&Workspace>) -> Json {
 
 fn vocabulary(objects: Option<&Workspace>, name: &str) -> Json {
     let all = index_vocabularies(objects);
-    match all.iter().find(|(field, _)| field == name) {
-        Some((_, vocabulary)) => definition(vocabulary),
+    match all.get(name) {
+        Some(vocabulary) => definition(vocabulary),
         None => Json::object([
             ("error", Json::Str(format!("Unknown vocabulary {name:?}"))),
-            (
-                "available",
-                sorted_names(all.iter().map(|(field, _)| field)),
-            ),
+            ("available", sorted_names(all.keys())),
         ]),
     }
 }
 
 /// `opentide://platforms`: what each platform can do here.
 fn platforms(workspace: &Workspace) -> Json {
-    let systems = workspace
-        .configuration()
-        .resolved
-        .tree
-        .get("systems")
-        .cloned();
+    let resolved = &workspace.configuration().resolved;
     Json::Array(
         PLATFORMS
             .iter()
             .map(|name| {
-                let enabled = matches!(
-                    systems
-                        .as_ref()
-                        .and_then(|systems| systems.get(name))
-                        .and_then(|system| system.get("platform"))
-                        .and_then(|platform| platform.get("enabled"))
-                        .map(|node| &node.value),
-                    Some(Value::Bool(true))
-                );
+                let enabled = resolved.platform_enabled(name);
                 Json::object([
                     ("name", Json::str(*name)),
                     ("enabled", Json::Bool(enabled)),
@@ -932,10 +912,10 @@ fn index(workspace: &Workspace, context: &Context<'_>) -> Json {
     let objects = |key: &str| {
         paths_value(config, "objects", key).map(|value| OsFs.resolve(&root.join(value)))
     };
-    let mut tide = Vec::new();
+    let mut tide = Object::new();
     for family in OBJECT_TYPES {
         if let Some(path) = objects(family) {
-            tide.push((family.to_owned(), path_json(&path)));
+            tide.insert(family.to_owned(), path_json(&path));
         }
     }
     let opentide = root.join(".opentide");
@@ -974,14 +954,14 @@ fn index(workspace: &Workspace, context: &Context<'_>) -> Json {
         ),
     ]);
     let docs = |key: &str, default: &str| path_json(&relative("docs", key, default));
-    let mut paths: Vec<(String, Json)> = vec![
+    let mut paths = Object::from([
         ("_workspace_root".to_owned(), path_json(&root)),
         ("opentide".to_owned(), path_json(&opentide)),
-    ];
+    ]);
     paths.extend(
         tide.iter()
-            .filter(|(key, _)| key != "custom_configurations")
-            .cloned(),
+            .filter(|(key, _)| key.as_str() != "custom_configurations")
+            .map(|(key, value)| (key.clone(), value.clone())),
     );
     paths.extend([
         ("inflight".to_owned(), path_json(&opentide.join("inflight"))),
@@ -1018,12 +998,12 @@ fn index(workspace: &Workspace, context: &Context<'_>) -> Json {
                     .collect(),
             ),
         ),
-        ("tide".to_owned(), Json::object(tide.clone())),
+        ("tide".to_owned(), Json::Object(tide.clone())),
     ]);
     let _ = context;
     let schemas = json_schemas(workspace);
     let index = workspace.index();
-    let mut families: Vec<(String, Json)> = index
+    let mut families: Object = index
         .objects
         .iter()
         .map(|(family, bucket)| {
@@ -1040,7 +1020,7 @@ fn index(workspace: &Workspace, context: &Context<'_>) -> Json {
             )
         })
         .collect();
-    families.push((
+    families.insert(
         opentide_workspace::index::SIGNAL_FAMILY.to_owned(),
         Json::Object(
             index
@@ -1058,12 +1038,12 @@ fn index(workspace: &Workspace, context: &Context<'_>) -> Json {
                 })
                 .collect(),
         ),
-    ));
+    );
     let object_vocab = object_vocabularies(workspace);
     Json::object([
-        ("paths", Json::object(paths)),
+        ("paths", Json::Object(paths)),
         ("configurations", node_json(config)),
-        ("vocabs", Json::object(index_vocabularies(Some(workspace)))),
+        ("vocabs", Json::Object(index_vocabularies(Some(workspace)))),
         (
             "framework_schemas",
             Json::Object(
@@ -1082,7 +1062,7 @@ fn index(workspace: &Workspace, context: &Context<'_>) -> Json {
                     .collect(),
             ),
         ),
-        ("templates", Json::object(templates(workspace))),
+        ("templates", Json::Object(templates(workspace))),
         (
             "parse_errors",
             Json::Array(
@@ -1133,7 +1113,7 @@ fn index(workspace: &Workspace, context: &Context<'_>) -> Json {
                     .collect(),
             ),
         ),
-        ("objects", Json::object(families)),
+        ("objects", Json::Object(families)),
         (
             "files",
             Json::Object(

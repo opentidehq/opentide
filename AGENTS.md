@@ -1,6 +1,6 @@
 # opentide — Agent Guide
 
-**opentide** (`opentide`) — spec-driven development for agentic detection engineering. A versioned Python package on PyPI for detection-as-code: validate, index, generate schemas, deploy, and document rules across thirteen security platforms, with a Rust engine (query languages, Tide YAML, the language server) compiled in.
+**opentide** (`opentide`) — spec-driven development for agentic detection engineering. A versioned Python package on PyPI for detection-as-code: validate, index, generate schemas, deploy, and document rules across fourteen security platforms, with a Rust engine (query languages, Tide YAML, the language server) compiled in.
 
 **Entry point:** this file is the map; people start at [`CONTRIBUTING.md`](CONTRIBUTING.md). Read the guide of the area you change (below), then the skill that matches the task.
 
@@ -158,7 +158,7 @@ lint, the facade's semver checks, cargo deny, docs) when its paths changed; one 
 package and its install on each OS, and Python 3.10 to 3.13; the nightly (`nightly.yml`) adds the
 workspace's tests on macOS and Windows, coverage, benchmarks, every fuzz target for ten minutes
 (`engine-fuzz.yml`), lsp parity and the vendor-parser oracles, and never gates. Nothing compares
-with the frozen Python oracle: the command line is held by its snapshots (`tests/golden/README.md`).
+with the retired Python CLI: the command line is held by its snapshots (`tests/golden/README.md`).
 The test profiles are in [`.config/nextest.toml`](.config/nextest.toml); CI's jobs are in
 [`.github/AGENTS.md`](.github/AGENTS.md).
 
@@ -186,7 +186,7 @@ Configuration: `pyproject.toml` → `[tool.ruff]`, `[tool.ty]`; `Cargo.toml`, `c
 
 ## Platforms
 
-Thirteen built-in platforms. The one source of truth is the registry,
+Fourteen built-in platforms. The one source of truth is the registry,
 [`crates/opentide-schema/src/platforms.rs`](crates/opentide-schema/src/platforms.rs) (`PLATFORMS`):
 `--platform`'s choices, `setup`, `info`, `doctor`, the connectors and the MCP capabilities read it, and
 `opentide info --json` (`platforms[].can_deploy`, `can_validate`, `can_query`) prints it. Change a
@@ -207,8 +207,9 @@ capability there, not in a list of names.
 | `graylog` | Graylog | ✅ | ✅ | ✅ | Lucene (Graylog dialect) | Lucene |
 | `exabeam` | Exabeam New-Scale SIEM | ✅ | ✅ | ✅ | Exabeam Query Language (`.exabeam`) | Exabeam Query Language |
 | `google_secops` | Google Security Operations | ✅ | ✅ | ✅ | YARA-L 2.0 (`.yaral`, `.yl2`) | YARA-L 2.0 |
+| `datadog` | Datadog Cloud SIEM | ✅ | ✅ | ✅ | Datadog search syntax (`.datadog`) | Datadog search syntax (Logs Search) |
 
-All 13 deploy; 9 have a tenant check, 12 an offline engine, 11 `opentide query`. A check a platform
+All 14 deploy; 10 have a tenant check, 13 an offline engine, 12 `opentide query`. A check a platform
 does not have is `supported: false` (or, offline, a usage error naming `--live`), never a fake pass.
 Every platform's block is also checked by its model (`opentide validate`'s `schema` check) and, in the
 editor, by the language server. A change to this table is a change to the registry, the user docs

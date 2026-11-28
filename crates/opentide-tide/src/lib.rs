@@ -16,13 +16,17 @@
     clippy::too_many_lines,
     reason = "engine dispatchers match every node kind in one function"
 )]
+
 mod bitdefender;
 mod elastic;
+pub mod engines;
 mod falco;
 mod folded;
 mod google_secops;
 mod injection;
 mod intel;
+mod microsoft_defender;
+mod microsoft_defender_nrt;
 mod outline;
 mod placeholder;
 mod refs;
@@ -41,10 +45,9 @@ mod yara;
 use opentide_core::node::{Node, Value};
 use opentide_core::{ByteSpan, Diagnostic, LanguageId, Range, span_to_range};
 use opentide_highlight::{
-    HighlightSpec, HighlightToken, TideField, highlight_markdown_line, tide_field_at,
-    tokens_from_spans,
+    HighlightSpec, HighlightToken, Profile, Setting, TideField, highlight_markdown_line,
+    tide_field_at, tokens_from_spans,
 };
-use opentide_kql::Profile;
 use opentide_schema::platforms::PlatformId;
 use regex::Regex;
 use serde::Deserialize;
@@ -135,6 +138,16 @@ pub fn platform_field_language(platform: PlatformId, field: &[&str]) -> Option<L
             }
             _ => None,
         },
+        // A Datadog Cloud SIEM rule's queries (RFC rfc-datadog-cloud-siem §6.8),
+        // profile `rule`.
+        PlatformId::Datadog => match field {
+            ["queries", item, "query"]
+                if !item.is_empty() && item.bytes().all(|b| b.is_ascii_digit()) =>
+            {
+                Some(LanguageId::Datadog)
+            }
+            _ => None,
+        },
         PlatformId::Elastic | PlatformId::SentinelOne => None,
     }
 }
@@ -146,8 +159,8 @@ pub struct InjectedQuery {
     pub language: LanguageId,
     /// The platform the query runs on, as a `configurations` key
     /// (`sentinel`, `microsoft_defender`, `elastic`): the block's key for a
-    /// rule query, the entry's `system` for a hunt. It picks the KQL profile
-    /// and the Lucene dialect.
+    /// rule query, the entry's `system` for a hunt. It picks the query's KQL,
+    /// Lucene or YARA dialect.
     pub platform: String,
     /// YAML path of the query, list items by index:
     /// `["configurations", "sentinel", "query"]`,
@@ -258,7 +271,14 @@ fn assembled_line_end<'s>(
     offset: usize,
     new_lines: bool,
 ) -> Option<(usize, &'s str)> {
-    let column = |at: usize| at - source[..at].rfind('\n').map_or(0, |i| i + 1);
+    // A line feed is one byte, and no byte of a multi-byte character is one.
+    let column = |at: usize| {
+        at - source
+            .bytes()
+            .take(at)
+            .rposition(|byte| byte == b'\n')
+            .map_or(0, |i| i + 1)
+    };
     let written =
         |p: &&InjectionPart| !p.synthetic && p.end > p.start && typed_as_yara(&p.field_path);
     inj.parts.iter().rev().filter(written).find_map(|p| {
@@ -505,9 +525,37 @@ impl TideObject {
 }
 
 /// One object of the workspace index: what its file says, read once per
-/// text.
+/// text. Its fields are read through [`IndexEntry`], shared: a clone is a
+/// reference count, so an index rebuilt after a keystroke copies none of
+/// the objects it keeps (#2002).
 #[derive(Debug, Clone)]
-pub struct IndexedObject {
+pub struct IndexedObject(Arc<IndexEntry>);
+
+impl IndexedObject {
+    /// The entry, shared from now on.
+    #[must_use]
+    pub fn new(entry: IndexEntry) -> Self {
+        Self(Arc::new(entry))
+    }
+
+    /// Whether `a` and `b` are one entry, not two equal ones.
+    #[must_use]
+    pub fn ptr_eq(a: &Self, b: &Self) -> bool {
+        Arc::ptr_eq(&a.0, &b.0)
+    }
+}
+
+impl std::ops::Deref for IndexedObject {
+    type Target = IndexEntry;
+
+    fn deref(&self) -> &IndexEntry {
+        &self.0
+    }
+}
+
+/// What an [`IndexedObject`] holds.
+#[derive(Debug)]
+pub struct IndexEntry {
     pub path: String,
     /// The schema family (`rule`, `objective`, `threat`).
     pub object_type: String,
@@ -537,7 +585,7 @@ impl IndexedObject {
     ) -> Self {
         let uuid = uuid.into();
         let refs = object_refs("", &body, &uuid);
-        Self {
+        Self::new(IndexEntry {
             path: path.into(),
             object_type: object_type.into(),
             name: name.into(),
@@ -551,7 +599,7 @@ impl IndexedObject {
             body,
             name_range: Range::point(0, 0),
             refs,
-        }
+        })
     }
 
     /// Whether the body names `uuid` (not as the object's own).
@@ -785,9 +833,11 @@ fn analyze_queries_lines(source: &str, elastic_tenants: &[ElasticTenant]) -> Vec
 }
 
 /// The block findings a query carries: the datasets the Elastic block
-/// reads (`index`, `threat.index`, `data_view_id`) are its query's, and the
+/// reads (`index`, `threat.index`, `data_view_id`) are its query's, the
 /// Sysdig block's event source and exceptions its condition's (Falco
-/// appends the exceptions to the condition when it loads the rule). A
+/// appends the exceptions to the condition when it loads the rule), and the
+/// Microsoft Defender block's columns, checked against what its query
+/// returns, its query's ([`microsoft_defender`]). A
 /// placeholder query carries none: `opentide validate` skips it, and
 /// [`block_diagnostics`] reports them on the block instead.
 fn attach_to_queries(source: &str, configurations: Option<&Arc<Node>>, out: &mut [QueryAnalysis]) {
@@ -803,6 +853,14 @@ fn attach_to_queries(source: &str, configurations: Option<&Arc<Node>>, out: &mut
             .diagnostics
             .extend(elastic::dataset_declarations(source, block));
     }
+    // A continuous Defender block's NRT findings are its query's
+    // ([`microsoft_defender_nrt`], #1890).
+    if let Some(block) = configurations.and_then(|c| c.get("microsoft_defender"))
+        && let Some(at) = carrier(out, microsoft_defender_nrt::QUERY)
+    {
+        let found = microsoft_defender_nrt::nrt_findings(source, block, &out[at].query);
+        out[at].diagnostics.extend(found);
+    }
     if let Some(block) = configurations.and_then(|c| c.get("sysdig"))
         && let Some(at) = carrier(out, SYSDIG_CONDITION)
     {
@@ -812,6 +870,13 @@ fn attach_to_queries(source: &str, configurations: Option<&Arc<Node>>, out: &mut
         out[at]
             .diagnostics
             .extend(exceptions_beyond_the_model(source, block));
+    }
+    // The Defender block's columns against what its query returns (#1885).
+    if let Some(configurations) = configurations
+        && let Some(at) = carrier(out, microsoft_defender::QUERY)
+    {
+        let found = microsoft_defender::output_findings(source, configurations, &out[at].query);
+        out[at].diagnostics.extend(found);
     }
 }
 
@@ -885,37 +950,38 @@ fn analyze_injections(
     });
     for inj in injections {
         let mut extra = Vec::new();
+        // A block's query is a rule, a hunt's search is not (ADR 0015 §4);
+        // the platform (the block's key, the hunt's `system`) names the
+        // dialect.
+        let rule = inj.field_path.first().map(String::as_str) == Some("configurations");
+        // Hunts have no tenants; only the rule block's ES|QL is targeted.
+        let stack = (rule && inj.language == LanguageId::Esql)
+            .then(|| {
+                elastic::stack_target(
+                    configurations.and_then(|c| c.get("elastic")),
+                    elastic_tenants,
+                )
+            })
+            .flatten()
+            .map(|target| target.to_string());
+        let setting = Setting {
+            platform: &inj.platform,
+            profile: if rule { Profile::Rule } else { Profile::Search },
+            stack: stack.as_deref(),
+        };
+        // `LanguageId` is non-exhaustive: Tide YAML, a configuration file and
+        // a language this crate does not analyse yet have no engine, and no
+        // findings or tokens.
+        let checked = || {
+            engines::engine(inj.language)
+                .map(|engine| engine.analyze_for(&inj.inner, &setting))
+                .unwrap_or_default()
+        };
         let (found, query_tokens) = match inj.language {
-            LanguageId::Kql => {
-                let profile = if inj.platform == "microsoft_defender" {
-                    Profile::Defender
-                } else {
-                    Profile::Sentinel
-                };
-                let r = opentide_kql::analyze(&inj.inner, profile);
-                (r.diagnostics, r.tokens)
-            }
-            LanguageId::Spl => {
-                let r = opentide_spl::analyze(&inj.inner);
-                (r.diagnostics, r.tokens)
-            }
-            LanguageId::Esql => {
-                // Hunts have no tenants; only the rule block is targeted.
-                let target = (inj.field_path.first().map(String::as_str) == Some("configurations"))
-                    .then(|| {
-                        elastic::stack_target(
-                            configurations.and_then(|c| c.get("elastic")),
-                            elastic_tenants,
-                        )
-                    })
-                    .flatten();
-                let r = opentide_esql::analyze_for(&inj.inner, target);
-                (r.diagnostics, r.tokens)
-            }
             LanguageId::Eql => {
-                let mut r = opentide_eql::analyze(&inj.inner);
+                let mut r = checked();
                 // Hunts have no schedule; only the rule query is compared.
-                if inj.field_path.first().map(String::as_str) == Some("configurations") {
+                if rule {
                     extra = elastic::maxspan_advisories(source, configurations, &inj);
                 }
                 if let Some(indices) = elastic::ecs_indices(configurations, &inj.field_path) {
@@ -927,7 +993,7 @@ fn analyze_injections(
                 (r.diagnostics, r.tokens)
             }
             LanguageId::Kuery => {
-                let mut r = opentide_kuery::analyze(&inj.inner, opentide_lucene::parses);
+                let mut r = checked();
                 if let Some(indices) = elastic::ecs_indices(configurations, &inj.field_path) {
                     let ecs = opentide_ecs::with_declared_fields(&indices, || {
                         opentide_kuery::ecs_diagnostics(&inj.inner)
@@ -938,10 +1004,10 @@ fn analyze_injections(
             }
             LanguageId::Lucene => {
                 // Carbon Black's and Graylog's dialects by their block or
-                // hunt `system`; Elastic's otherwise.
-                let dialect = opentide_lucene::Dialect::for_platform(&inj.platform);
-                let mut r = opentide_lucene::analyze_dialect(&inj.inner, dialect);
-                let indices = (dialect == opentide_lucene::Dialect::Elastic)
+                // hunt `system`; Elastic's otherwise, the one that reads ECS.
+                let mut r = checked();
+                let indices = (opentide_lucene::Dialect::for_platform(&inj.platform)
+                    == opentide_lucene::Dialect::Elastic)
                     .then(|| elastic::ecs_indices(configurations, &inj.field_path))
                     .flatten();
                 if let Some(indices) = indices {
@@ -952,6 +1018,7 @@ fn analyze_injections(
                 }
                 (r.diagnostics, r.tokens)
             }
+            // The block's macros, lists and event source, and its `output`.
             LanguageId::Falco => {
                 let ctx = falco::context_for(
                     configurations
@@ -966,22 +1033,8 @@ fn analyze_injections(
                 };
                 (r.diagnostics, r.tokens)
             }
-            LanguageId::Cql => {
-                // The rule block is a Next-Gen SIEM correlation rule; a hunt
-                // search is not.
-                let ctx = if inj.field_path.first().map(String::as_str) == Some("configurations") {
-                    opentide_cql::Context::CORRELATION_RULE
-                } else {
-                    opentide_cql::Context::default()
-                };
-                let r = opentide_cql::analyze_with(&inj.inner, &ctx);
-                (r.diagnostics, r.tokens)
-            }
             LanguageId::Yara => {
-                let ctx = opentide_yara::Profile::for_platform(&inj.platform)
-                    .map(opentide_yara::Context::for_profile)
-                    .unwrap_or_default();
-                let r = opentide_yara::analyze_with(&inj.inner, &ctx);
+                let r = checked();
                 let inner_lines = opentide_core::LineIndex::new(&inj.inner);
                 let diagnostics = r
                     .diagnostics
@@ -999,24 +1052,16 @@ fn analyze_injections(
                 extra.extend(secops_block.take().unwrap_or_default());
                 (found, opentide_yaral::highlight(&inj.inner))
             }
-            // A hunt with `system: google_secops`: a search.
-            LanguageId::Yaral => {
-                let r = opentide_yaral::analyze_with(&inj.inner, &opentide_yaral::Context::SEARCH);
+            // Each engine maps the setting onto its own profile: KQL's rule
+            // profile (Sentinel's limits), SPL, ES|QL, CQL (a block's query
+            // is a Next-Gen SIEM correlation rule), YARA-L (a hunt with
+            // `system: google_secops`, a search), Exabeam (a block's
+            // sequence filter is the `rule` profile) and Datadog (a block's
+            // query is a detection rule's, RFC rfc-datadog-cloud-siem §6.1).
+            _ => {
+                let r = checked();
                 (r.diagnostics, r.tokens)
             }
-            // A sequence filter of the Exabeam block is a correlation-rule
-            // query (profile `rule`); a hunt with `system: exabeam` is a
-            // search (profile `search`), as a `.exabeam` file is.
-            LanguageId::Exabeam => {
-                let ctx = if inj.field_path.first().map(String::as_str) == Some("configurations") {
-                    opentide_exabeam::Context::RULE
-                } else {
-                    opentide_exabeam::Context::SEARCH
-                };
-                let r = opentide_exabeam::analyze_with(&inj.inner, &ctx);
-                (r.diagnostics, r.tokens)
-            }
-            LanguageId::TideYaml | LanguageId::Config => (Vec::new(), Vec::new()),
         };
         // The stand-in `opentide new` wrote is lint's `placeholders` finding,
         // not a query to check: `opentide validate` skips it too.
@@ -1156,7 +1201,6 @@ fn join_field_path(parent: &str, key: &str) -> String {
 /// it runs on every scalar of every file, and compiling them each time was
 /// most of `opentide lint`'s time (#806).
 struct ScalarPatterns {
-    uuid: Regex,
     schema: Regex,
     technique: Regex,
     number: Regex,
@@ -1169,8 +1213,6 @@ struct ScalarPatterns {
 fn scalar_patterns() -> &'static ScalarPatterns {
     static PATTERNS: std::sync::OnceLock<ScalarPatterns> = std::sync::OnceLock::new();
     PATTERNS.get_or_init(|| ScalarPatterns {
-        uuid: Regex::new(r"(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
-            .unwrap(),
         schema: Regex::new(r"^[A-Za-z][A-Za-z0-9_]*::[0-9.]+$").unwrap(),
         technique: Regex::new(r"^T[0-9]{4}(\.[0-9]{3})?$").unwrap(),
         number: Regex::new(r"^-?[0-9]+(\.[0-9]+)?$").unwrap(),
@@ -1203,7 +1245,7 @@ fn highlight_scalar(
             || field.const_value.as_deref() == Some(value)
     });
     let patterns = scalar_patterns();
-    let capture = if patterns.uuid.is_match(value) {
+    let capture = if opentide_core::ids::is_hyphenated(value) {
         "tide.uuid"
     } else if patterns.schema.is_match(value) {
         "tide.schema"
@@ -1231,12 +1273,11 @@ fn line_key(line: &str) -> Option<(&str, &str, usize, usize)> {
     let body = line.trim_end_matches(['\n', '\r']);
     let indent = body.bytes().take_while(|b| *b == b' ').count();
     let rest = body.get(indent..)?;
-    let colon = rest.find(':')?;
-    let key = &rest[..colon];
+    let (key, value) = rest.split_once(':')?;
     if key.is_empty() || !key.chars().all(is_yaml_key_char) {
         return None;
     }
-    Some((key, &rest[colon + 1..], indent, indent + key.len()))
+    Some((key, value, indent, indent + key.len()))
 }
 
 fn line_list_item(line: &str) -> Option<(&str, usize)> {
@@ -1486,8 +1527,10 @@ fn object_schema_id(object: &TideObject) -> String {
 pub fn same_file(a: &str, b: &str) -> bool {
     fn key(path: &str) -> String {
         let mut key = path.replace('\\', "/");
-        if key.as_bytes().get(1) == Some(&b':') {
-            key[..1].make_ascii_lowercase();
+        if let Some((drive, rest)) = key.split_at_mut_checked(1)
+            && rest.starts_with(':')
+        {
+            drive.make_ascii_lowercase();
         }
         key
     }
@@ -1543,7 +1586,7 @@ pub fn index_value(path: &str, source: &str, value: Arc<Node>) -> Option<Indexed
     let object_type = schema.split("::").next()?.to_string();
     let name = value.get("name")?.as_str().unwrap_or("").to_string();
     let refs = object_refs(source, &value, &uuid);
-    Some(IndexedObject {
+    Some(IndexedObject::new(IndexEntry {
         path: path.to_string(),
         object_type,
         name_range: name_range(source, &name),
@@ -1552,7 +1595,7 @@ pub fn index_value(path: &str, source: &str, value: Arc<Node>) -> Option<Indexed
         body: value,
         schema,
         refs,
-    })
+    }))
 }
 
 /// The `name` value's range on the key's line, else the key's, else the
@@ -1561,11 +1604,14 @@ fn name_range(source: &str, name: &str) -> Range {
     let Some(key) = yaml_path::key_span(source, &["name"]) else {
         return Range::point(0, 0);
     };
-    let line_end = source[key.end..]
-        .find('\n')
-        .map_or(source.len(), |i| key.end + i);
+    // A key's span ends where its text does.
+    debug_assert!(source.is_char_boundary(key.end), "{key:?}");
+    let Some(after) = source.get(key.end..) else {
+        return span_to_range(source, key);
+    };
+    let line = after.split_once('\n').map_or(after, |(line, _)| line);
     let span = (!name.is_empty())
-        .then(|| source[key.end..line_end].find(name))
+        .then(|| line.find(name))
         .flatten()
         .map_or(key, |i| {
             ByteSpan::new(key.end + i, key.end + i + name.len())
@@ -1622,6 +1668,20 @@ mod tests {
     }
     use super::*;
     use opentide_core::codes;
+
+    /// #2002: an index rebuilt from the entries it kept copies none of them;
+    /// each clone is the same entry, with the same fields.
+    #[test]
+    fn a_cloned_index_entry_is_the_same_entry() {
+        let source = "name: Règle 😀\nmetadata:\n  uuid: 00000000-0000-4000-8003-000000000001\n  schema: rule::1.1\ndetection_model: 00000000-0000-4000-8002-000000000001\n";
+        let entry = index_object("objects/rules/r.yaml", source).unwrap();
+        let index: Arc<[IndexedObject]> = vec![entry.clone(), entry.clone()].into();
+        assert!(index.iter().all(|kept| IndexedObject::ptr_eq(kept, &entry)));
+        assert_eq!(index[0].name, "Règle 😀");
+        assert!(index[1].names("00000000-0000-4000-8002-000000000001"));
+        let twin = index_object("objects/rules/r.yaml", source).unwrap();
+        assert!(!IndexedObject::ptr_eq(&twin, &entry));
+    }
 
     /// The object checks are `opentide-workspace`'s `validate` (UC-2.6,
     /// #821): an object with a broken UUID, an unknown TLP, a dangling
@@ -1787,7 +1847,8 @@ configurations:
             };
             assert_eq!(query.host_map.len(), query.inner.len());
             assert_eq!(
-                &src[query.host_span.start..query.host_span.start + 13],
+                src.get(query.host_span.start..query.host_span.start + 13)
+                    .unwrap(),
                 "SecurityEvent"
             );
             let r = analyze(AnalyzeInput {
@@ -1996,6 +2057,7 @@ threat:
             PlatformId::Crowdstrike => Some(LanguageId::Cql),
             PlatformId::GoogleSecops => Some(LanguageId::Yaral),
             PlatformId::Exabeam => Some(LanguageId::Exabeam),
+            PlatformId::Datadog => Some(LanguageId::Datadog),
             PlatformId::Elastic => Some(LanguageId::Esql),
             // Sysdig's query is a block's `condition`, never a hunt's.
             PlatformId::Sysdig
@@ -2138,7 +2200,7 @@ threat:
         tokens
             .iter()
             .filter(|t| t.capture == capture)
-            .map(|t| &source[t.span.start..t.span.end])
+            .map(|t| source.get(t.span.start..t.span.end).unwrap())
             .collect()
     }
 
@@ -2244,23 +2306,23 @@ configurations:
             elastic_tenants: &[],
         });
         assert!(
-            r.tokens
-                .iter()
-                .any(|t| t.capture == "type"
-                    && &src[t.span.start..t.span.end] == "DeviceNetworkEvents"),
+            r.tokens.iter().any(|t| t.capture == "type"
+                && src.get(t.span.start..t.span.end).unwrap() == "DeviceNetworkEvents"),
             "{:?}",
             r.tokens
                 .iter()
-                .map(|t| (t.capture.as_str(), &src[t.span.start..t.span.end]))
+                .map(|t| (
+                    t.capture.as_str(),
+                    src.get(t.span.start..t.span.end).unwrap()
+                ))
                 .collect::<Vec<_>>()
         );
         let purpose_keys = token_text(src, &r.tokens, "tide.property");
         assert!(purpose_keys.contains(&"purpose"), "{purpose_keys:?}");
         // The CrowdStrike block's query is CQL: `index` is a field.
         assert!(
-            r.tokens
-                .iter()
-                .any(|t| t.capture == "property" && &src[t.span.start..t.span.end] == "index"),
+            r.tokens.iter().any(|t| t.capture == "property"
+                && src.get(t.span.start..t.span.end).unwrap() == "index"),
             "{:?}",
             r.tokens
         );
@@ -2310,7 +2372,11 @@ configurations:
         );
         // Placed on the YAML, where `groupBi` is written.
         let start = opentide_core::position_to_offset(&src, d[0].range.start);
-        assert!(src[start..].starts_with("groupBi"), "{:?}", &src[start..]);
+        assert!(
+            src.get(start..).unwrap().starts_with("groupBi"),
+            "{:?}",
+            src.get(start..)
+        );
         // The rule block is a correlation rule: correlate() takes no other aggregate.
         let d = found(&rule(
             "correlate(A: { a=1 }, B: { b=1 | aid <=> A.aid }, within=5m) | count()",
@@ -2356,7 +2422,12 @@ configurations:
         let pairs: Vec<(&str, &str)> = r
             .tokens
             .iter()
-            .map(|t| (t.capture.as_str(), &src[t.span.start..t.span.end]))
+            .map(|t| {
+                (
+                    t.capture.as_str(),
+                    src.get(t.span.start..t.span.end).unwrap(),
+                )
+            })
             .collect();
         assert!(
             pairs
@@ -2499,7 +2570,7 @@ configurations:
         }
         for offset in [escape, escape + 1] {
             let (inj, inner) = injection_at_offset(source, offset).unwrap();
-            assert_eq!(&inj.inner[inner..], "\u{e9}", "{offset}");
+            assert_eq!(inj.inner.get(inner..).unwrap(), "\u{e9}", "{offset}");
         }
     }
 
@@ -2511,12 +2582,24 @@ configurations:
         let source = "name: R\nconfigurations:\n  harfanglab:\n    yara:\n      strings: |\n        $cmd = \"cmd.exe\" ascii\n      condition: |\n        $cmd and #cmd > 1\n";
         let end = source.find("> 1").unwrap() + "> 1".len();
         let (inj, inner) = injection_at_offset(source, end).unwrap();
-        assert!(inj.inner[..inner].ends_with("$cmd and #cmd > 1"), "{inner}");
+        assert!(
+            inj.inner
+                .get(..inner)
+                .unwrap()
+                .ends_with("$cmd and #cmd > 1"),
+            "{inner}"
+        );
         assert!(!inj.is_synthetic(inner.saturating_sub(1)));
         // The end of the strings line, too; not a byte past the newline.
         let strings_end = source.find("ascii").unwrap() + "ascii".len();
         let (inj, inner) = injection_at_offset(source, strings_end).unwrap();
-        assert!(inj.inner[..inner].ends_with("\"cmd.exe\" ascii"), "{inner}");
+        assert!(
+            inj.inner
+                .get(..inner)
+                .unwrap()
+                .ends_with("\"cmd.exe\" ascii"),
+            "{inner}"
+        );
         assert!(injection_at_offset(source, end + 1).is_none());
     }
 
@@ -2532,12 +2615,15 @@ configurations:
         let source = format!("{head}        $cmd \n");
         let at = source.rfind("$cmd ").unwrap() + "$cmd ".len();
         let (inj, inner, typed) = injection_typed_at(&source, at).unwrap();
-        assert!(inj.inner[..inner].ends_with("$cmd"), "{inner}");
+        assert!(inj.inner.get(..inner).unwrap().ends_with("$cmd"), "{inner}");
         assert_eq!(typed, " ");
         // A new line in the block, indented as its lines are.
         let source = format!("{head}        $cmd and\n        ");
         let (inj, inner, typed) = injection_typed_at(&source, source.len()).unwrap();
-        assert!(inj.inner[..inner].ends_with("$cmd and"), "{inner}");
+        assert!(
+            inj.inner.get(..inner).unwrap().ends_with("$cmd and"),
+            "{inner}"
+        );
         assert_eq!(typed, "\n        ");
         // Hover and definition do not take it: nothing is written there.
         assert!(injection_at_offset(&source, source.len()).is_none());
@@ -2548,13 +2634,19 @@ configurations:
         let source = format!("{head}        $cmd and\n        #cmd > 1\n");
         let at = source.find("$cmd and").unwrap() + "$cmd and".len();
         let (inj, inner, typed) = injection_typed_at(&source, at).unwrap();
-        assert!(inj.inner[..inner].ends_with("$cmd and"), "{inner}");
+        assert!(
+            inj.inner.get(..inner).unwrap().ends_with("$cmd and"),
+            "{inner}"
+        );
         assert_eq!(typed, "");
-        assert!(inj.inner[inner..].starts_with('\n'));
+        assert!(inj.inner.get(inner..).unwrap().starts_with('\n'));
         // A line ending in `é`, two bytes.
         let at = source.find("café").unwrap() + "café".len();
         let (inj, inner, typed) = injection_typed_at(&source, at).unwrap();
-        assert!(inj.inner[..inner].ends_with("// café"), "{inner}");
+        assert!(
+            inj.inner.get(..inner).unwrap().ends_with("// café"),
+            "{inner}"
+        );
         assert_eq!(typed, "");
     }
 
@@ -2566,10 +2658,24 @@ configurations:
         let source = "name: R\nconfigurations:\n  sentinel:\n    query: \"T\\Lfoo\"\n";
         let f = source.find("foo").unwrap();
         let (inj, inner) = injection_at_offset(source, f).unwrap();
-        assert_eq!(&inj.inner[inner..], "foo");
+        assert_eq!(inj.inner.get(inner..).unwrap(), "foo");
         for offset in [f - 2, f - 1] {
             let (inj, inner) = injection_at_offset(source, offset).unwrap();
-            assert_eq!(&inj.inner[inner..], "\u{2028}foo", "{offset}");
+            assert_eq!(inj.inner.get(inner..).unwrap(), "\u{2028}foo", "{offset}");
         }
+    }
+
+    /// #1946: keys, drive letters and names among multi-byte text.
+    #[test]
+    fn keys_paths_and_names_with_multi_byte_text() {
+        assert_eq!(super::line_key("  key: é😀\n"), Some(("key", " é😀", 2, 5)));
+        assert_eq!(super::line_key("  clé: 1"), None);
+        assert!(super::same_file("C:\\w\\é😀.yaml", "c:/w/é😀.yaml"));
+        assert!(!super::same_file("É:/w", "é:/w"));
+        assert!(!super::same_file("😀:/w", "😀:/x"));
+        let source = "# é😀\nname: \"Règle 😀\"\n";
+        let range = super::name_range(source, "Règle 😀");
+        assert_eq!((range.start.line, range.start.character), (1, 7));
+        assert_eq!(range.end.character, 7 + 8);
     }
 }

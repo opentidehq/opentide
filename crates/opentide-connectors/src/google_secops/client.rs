@@ -1,5 +1,4 @@
-//! The Chronicle API v1 client of one Google SecOps instance, ported from
-//! 0.28.0's `platforms/google_secops/client.py`.
+//! The Chronicle API v1 client of one Google SecOps instance.
 //!
 //! Every request goes to `<endpoint>/v1/projects/<project>/locations/
 //! <location>/instances/<instance>` with an access token ([`super::auth`]).
@@ -19,7 +18,7 @@ use opentide_compile::Json;
 use opentide_compile::google_secops::{self as compile, Request, RunState};
 
 use crate::answer::Answer;
-use crate::connector::TenantContext;
+use crate::connector::{CodedError, TenantContext};
 use crate::error::ConnectorError;
 use crate::retry::{MAX_BACKOFF, parse_retry_after};
 
@@ -44,7 +43,7 @@ pub const RETRY_INFO: &str = "type.googleapis.com/google.rpc.RetryInfo";
 /// `error.message`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ApiError {
-    /// The method.
+    /// The HTTP method (`GET`).
     pub method: String,
     /// The path relative to the instance (`rules/ru_…`, `:verifyRuleText`).
     pub path: String,
@@ -150,7 +149,7 @@ pub fn error_of(answer: &Answer) -> (String, String) {
 /// A value as text; an empty or `null` one as nothing.
 fn text(value: &Json) -> String {
     if value.is_filled() {
-        opentide_compile::deploy::text(value)
+        Json::to_text(value)
     } else {
         String::new()
     }
@@ -173,14 +172,15 @@ pub struct Reply {
 /// # Errors
 ///
 /// What `send` returns, or [`ConnectorError::Cancelled`].
-pub async fn with_waits<F, Fut>(
+pub async fn with_waits<F, Fut, E>(
     cancel: &tokio_util::sync::CancellationToken,
     resent: &[u16],
     mut send: F,
-) -> Result<Reply, ConnectorError>
+) -> Result<Reply, E>
 where
     F: FnMut() -> Fut,
-    Fut: Future<Output = Result<Reply, ConnectorError>>,
+    Fut: Future<Output = Result<Reply, E>>,
+    E: From<ConnectorError>,
 {
     let mut retries = 0;
     loop {
@@ -197,7 +197,7 @@ where
         )
         .unwrap_or(BACKOFF[retries]);
         tokio::select! {
-            () = cancel.cancelled() => return Err(ConnectorError::Cancelled),
+            () = cancel.cancelled() => return Err(ConnectorError::Cancelled.into()),
             () = tokio::time::sleep(wait) => {}
         }
         retries += 1;
@@ -210,13 +210,20 @@ pub enum Failure {
     /// Google answered with an error.
     Api(ApiError),
     /// The tenant refused the credentials or could not be reached, or the
-    /// run was cancelled.
-    Tenant(ConnectorError),
+    /// run was cancelled: under Google SecOps's code when the failure names
+    /// one ([`TENANT_UNAUTHORIZED`], `google_secops_credentials_missing`).
+    Tenant(CodedError),
+}
+
+impl From<CodedError> for Failure {
+    fn from(error: CodedError) -> Self {
+        Self::Tenant(error)
+    }
 }
 
 impl From<ConnectorError> for Failure {
     fn from(error: ConnectorError) -> Self {
-        Self::Tenant(error)
+        Self::Tenant(error.into())
     }
 }
 
@@ -261,11 +268,7 @@ impl<'a> Client<'a> {
     }
 
     /// Sends one request once, with a fresh token.
-    async fn send_once(
-        &self,
-        request: &Request,
-        body: Option<&[u8]>,
-    ) -> Result<Reply, ConnectorError> {
+    async fn send_once(&self, request: &Request, body: Option<&[u8]>) -> Result<Reply, CodedError> {
         let headers = self.auth.headers(self.cx).await?;
         let mut url = format!("{}{}", self.endpoint.trim_end_matches('/'), request.path);
         if !request.query.is_empty() {
@@ -374,17 +377,20 @@ impl<'a> Client<'a> {
             } else {
                 format!(" {status}")
             };
-            return Err(Failure::Tenant(ConnectorError::Authentication {
-                platform: PLATFORM.to_owned(),
-                tenant: self.tenant().to_owned(),
-                message: format!(
-                    "{TENANT_UNAUTHORIZED}: tenant {} refused the request (HTTP {}{status}): \
-                     {message}",
-                    self.tenant(),
-                    answer.status
-                ),
-                detail: None,
-            }));
+            return Err(Failure::Tenant(CodedError::new(
+                TENANT_UNAUTHORIZED,
+                ConnectorError::Authentication {
+                    platform: PLATFORM.to_owned(),
+                    tenant: self.tenant().to_owned(),
+                    message: format!(
+                        "{TENANT_UNAUTHORIZED}: tenant {} refused the request (HTTP {}{status}): \
+                         {message}",
+                        self.tenant(),
+                        answer.status
+                    ),
+                    detail: None,
+                },
+            )));
         }
         let failed = |status: String, message: String| ApiError {
             method: request.method.to_owned(),

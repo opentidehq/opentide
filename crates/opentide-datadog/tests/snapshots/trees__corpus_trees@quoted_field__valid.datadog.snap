@@ -1,0 +1,12 @@
+---
+source: crates/opentide-datadog/tests/trees.rs
+expression: "debug_tree(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/datadog/quoted_field__valid.datadog
+---
+QUERY@0..25
+  FIELD_CLAUSE@0..25
+    QUOTED_FIELD@0..16
+      PHRASE_TOKEN@0..16 "\"service.status\""
+    COLON@16..17 ":"
+    TERM@17..25
+      WORD@17..25 "disabled"

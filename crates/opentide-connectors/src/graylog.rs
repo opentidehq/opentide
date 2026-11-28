@@ -31,7 +31,7 @@ use regex::Regex;
 
 use crate::answer::Answer;
 use crate::connector::{
-    BoxFuture, DeployError, DeployEvent, DeployFailure, DeployOutcome, DeployRequest, DeployScope,
+    BoxFuture, CodedError, DeployError, DeployEvent, DeployFailure, DeployOutcome, DeployRequest,
     DeployWarning, Deployer, LiveCheck, LiveValidator, Operation, Platform, Prober, QueryColumn,
     QueryOutcome, QueryRequest, QueryRunner, Row, TenantContext,
 };
@@ -49,11 +49,15 @@ pub const MESSAGES_PATH: &str = "/api/search/messages";
 /// The header Graylog requires on every write.
 pub const REQUESTED_BY: &str = "opentide";
 
+/// The connect timeout and the read timeout of each request to the tenant;
+/// with retries, a whole request can take longer.
+pub const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
+
 /// How a Graylog tenant is reached: 30 s, and the connectors' retries (a
 /// create, a `POST`, that got no answer is never sent again).
 pub fn http_defaults() -> HttpSettings {
     HttpSettings {
-        timeout: Duration::from_secs(30),
+        timeout: REQUEST_TIMEOUT,
         retry: RetryPolicy::standard(),
         ..HttpSettings::default()
     }
@@ -159,7 +163,7 @@ impl ApiError {
         } else if self.invalid() {
             "graylog_definition_invalid"
         } else {
-            "graylog_request_failed"
+            REQUEST_FAILED
         }
     }
 
@@ -207,12 +211,18 @@ enum Failure {
     Rule(ApiError),
     /// The tenant refused the token, runs a version opentide cannot deploy
     /// to, or could not be reached.
-    Tenant(ConnectorError),
+    Tenant(CodedError),
+}
+
+impl From<CodedError> for Failure {
+    fn from(error: CodedError) -> Self {
+        Self::Tenant(error)
+    }
 }
 
 impl From<ConnectorError> for Failure {
     fn from(error: ConnectorError) -> Self {
-        Self::Tenant(error)
+        Self::Tenant(error.into())
     }
 }
 
@@ -232,22 +242,14 @@ fn errors_of(body: Option<&Json>) -> Vec<(String, Vec<String>)> {
         .iter()
         .map(|(name, messages)| {
             let messages = match messages {
-                Json::Array(items) => items.iter().map(text_of).collect(),
-                other => vec![text_of(other)],
+                Json::Array(items) => items.iter().map(Json::to_text).collect(),
+                other => vec![Json::to_text(other)],
             };
             (name.clone(), messages)
         })
         .collect();
     found.sort_by(|left, right| left.0.cmp(&right.0));
     found
-}
-
-/// A JSON value as text: a string as itself.
-fn text_of(value: &Json) -> String {
-    match value {
-        Json::Str(text) => text.clone(),
-        other => other.to_compact(),
-    }
 }
 
 /// Graylog's `message` and `errors` of an answer; a body that is not JSON is
@@ -262,7 +264,7 @@ fn message_of(answer: &Answer) -> (String, Vec<(String, Vec<String>)>) {
     let message = body
         .get("message")
         .filter(|message| message.is_filled())
-        .map(text_of)
+        .map(Json::to_text)
         .unwrap_or_default();
     (message, errors_of(Some(&body)))
 }
@@ -283,13 +285,13 @@ pub const QUERY_INVALID: &str = "graylog_query_invalid";
 /// column (`explanation_text`).
 pub fn explanation_text(explanation: &Json) -> String {
     let Json::Object(_) = explanation else {
-        return text_of(explanation);
+        return Json::to_text(explanation);
     };
     let field = |key: &str| {
         explanation
             .get(key)
             .filter(|value| value.is_filled())
-            .map(|value| text_of(value).trim().to_owned())
+            .map(|value| Json::to_text(value).trim().to_owned())
             .filter(|text| !text.is_empty())
     };
     let title = field("error_title").or_else(|| field("error_type"));
@@ -321,7 +323,10 @@ pub fn read_verdict(payload: &Json) -> (Vec<String>, Vec<(&'static str, String)>
     let status = payload
         .get("status")
         .filter(|status| status.is_filled())
-        .map_or_else(|| "OK".to_owned(), |status| text_of(status).to_uppercase());
+        .map_or_else(
+            || "OK".to_owned(),
+            |status| Json::to_text(status).to_uppercase(),
+        );
     let explanations = match payload.get("explanations") {
         Some(Json::Array(items)) => items.as_slice(),
         _ => &[],
@@ -332,7 +337,7 @@ pub fn read_verdict(payload: &Json) -> (Vec<String>, Vec<(&'static str, String)>
         let kind = explanation
             .get("error_type")
             .filter(|kind| kind.is_filled())
-            .map(text_of)
+            .map(Json::to_text)
             .unwrap_or_default();
         let warning = WARNING_TYPES
             .iter()
@@ -393,7 +398,7 @@ impl<'a> Client<'a> {
         path: &str,
         body: Option<&Json>,
         timeout: Option<Duration>,
-    ) -> Result<Result<Answer, ApiError>, ConnectorError> {
+    ) -> Result<Result<Answer, ApiError>, CodedError> {
         let base = self
             .cx
             .tenant
@@ -427,15 +432,18 @@ impl<'a> Client<'a> {
             .map_err(|error| self.setup_error(error.describe()))?;
         let answer = Answer::fetch(self.cx.http, request, self.cx.cancel).await?;
         if answer.status == 401 {
-            return Err(ConnectorError::Authentication {
-                platform: PLATFORM.to_owned(),
-                tenant: self.tenant().to_owned(),
-                message: format!(
-                    "graylog_tenant_unauthorized: tenant {} refused the access token: HTTP 401",
-                    self.tenant()
-                ),
-                detail: None,
-            });
+            return Err(CodedError::new(
+                TENANT_UNAUTHORIZED,
+                ConnectorError::Authentication {
+                    platform: PLATFORM.to_owned(),
+                    tenant: self.tenant().to_owned(),
+                    message: format!(
+                        "{TENANT_UNAUTHORIZED}: tenant {} refused the access token: HTTP 401",
+                        self.tenant()
+                    ),
+                    detail: None,
+                },
+            ));
         }
         if !(200..300).contains(&answer.status) {
             let (message, errors) = message_of(&answer);
@@ -472,7 +480,7 @@ impl<'a> Client<'a> {
     ///
     /// A version below 6.3, or none, refuses the tenant
     /// (`graylog_version_unsupported`).
-    pub async fn version(&self) -> Result<Result<Version, ApiError>, ConnectorError> {
+    pub async fn version(&self) -> Result<Result<Version, ApiError>, CodedError> {
         let method = crate::transport::Method::GET;
         let answer = match self.send(method.clone(), SYSTEM_PATH, None, None).await? {
             Ok(answer) => answer,
@@ -499,16 +507,19 @@ impl<'a> Client<'a> {
                         other => other.to_compact(),
                     },
                 );
-                Err(ConnectorError::Refused {
-                    platform: PLATFORM.to_owned(),
-                    tenant: self.tenant().to_owned(),
-                    message: format!(
-                        "graylog_version_unsupported: tenant {} runs Graylog {shown}; opentide \
-                         deploys to Graylog 6.3 and later",
-                        self.tenant()
-                    ),
-                    detail: None,
-                })
+                Err(CodedError::new(
+                    VERSION_UNSUPPORTED,
+                    ConnectorError::Refused {
+                        platform: PLATFORM.to_owned(),
+                        tenant: self.tenant().to_owned(),
+                        message: format!(
+                            "{VERSION_UNSUPPORTED}: tenant {} runs Graylog {shown}; opentide \
+                             deploys to Graylog 6.3 and later",
+                            self.tenant()
+                        ),
+                        detail: None,
+                    },
+                ))
             }
         }
     }
@@ -519,7 +530,7 @@ impl<'a> Client<'a> {
         &self,
         body: &Json,
         timeout: Option<Duration>,
-    ) -> Result<Result<Json, ApiError>, ConnectorError> {
+    ) -> Result<Result<Json, ApiError>, CodedError> {
         let method = crate::transport::Method::POST;
         let answer = match self
             .send(method.clone(), VALIDATE_PATH, Some(body), timeout)
@@ -547,7 +558,7 @@ impl<'a> Client<'a> {
         &self,
         body: &Json,
         timeout: Option<Duration>,
-    ) -> Result<Result<Json, ApiError>, ConnectorError> {
+    ) -> Result<Result<Json, ApiError>, CodedError> {
         let method = crate::transport::Method::POST;
         let answer = match self
             .send(method.clone(), MESSAGES_PATH, Some(body), timeout)
@@ -566,10 +577,7 @@ impl<'a> Client<'a> {
     /// page): the definition may exist, so the caller reports it
     /// unconfirmed, never as a failed request a later run would create
     /// again.
-    pub async fn create(
-        &self,
-        body: &Json,
-    ) -> Result<Result<Option<Json>, ApiError>, ConnectorError> {
+    pub async fn create(&self, body: &Json) -> Result<Result<Option<Json>, ApiError>, CodedError> {
         let answer = match self
             .send(
                 crate::transport::Method::POST,
@@ -592,7 +600,7 @@ impl<'a> Client<'a> {
         definition_id: &str,
         body: &Json,
         enabled: bool,
-    ) -> Result<Result<(), ApiError>, ConnectorError> {
+    ) -> Result<Result<(), ApiError>, CodedError> {
         let path = update_path(definition_id, enabled);
         Ok(self
             .send(crate::transport::Method::PUT, &path, Some(body), None)
@@ -602,10 +610,7 @@ impl<'a> Client<'a> {
 
     /// `DELETE /api/events/definitions/{id}`: any 2xx, 204 for an id Graylog
     /// does not have (`delete`).
-    pub async fn delete(
-        &self,
-        definition_id: &str,
-    ) -> Result<Result<(), ApiError>, ConnectorError> {
+    pub async fn delete(&self, definition_id: &str) -> Result<Result<(), ApiError>, CodedError> {
         let path = delete_path(definition_id);
         Ok(self
             .send(crate::transport::Method::DELETE, &path, None, None)
@@ -716,7 +721,7 @@ fn failed(error: &ApiError) -> RuleFailure {
 pub async fn deploy_rule(
     cx: TenantContext<'_>,
     rule: &RuleDeploy,
-) -> Result<RuleOutcome, ConnectorError> {
+) -> Result<RuleOutcome, CodedError> {
     let client = Client::new(cx);
     let mut outcome = RuleOutcome::new();
     match run(&client, rule, &mut outcome).await {
@@ -807,11 +812,14 @@ async fn create(
         Ok(Err(error)) => return Err(Failure::Rule(error)),
         // No answer: the create may have happened. Titles are not unique, so
         // a retry could create a second definition; it is never retried.
-        Err(
-            error @ (ConnectorError::Unreachable { .. }
-            | ConnectorError::Timeout { .. }
-            | ConnectorError::Answer { .. }),
-        ) => {
+        Err(error)
+            if matches!(
+                *error.error,
+                ConnectorError::Unreachable { .. }
+                    | ConnectorError::Timeout { .. }
+                    | ConnectorError::Answer { .. }
+            ) =>
+        {
             outcome.failure = Some(create_unconfirmed(compiled, &error.to_string()));
             return Ok(());
         }
@@ -859,7 +867,7 @@ async fn recreate(
     });
     if let Some(refusal) = &rule.recreate_refusal {
         outcome.failure = Some(RuleFailure {
-            code: "graylog_request_failed",
+            code: REQUEST_FAILED,
             reason: refusal.clone(),
             status: None,
             detail: None,
@@ -1008,7 +1016,7 @@ pub fn read_rows(payload: &Json) -> (Vec<QueryColumn>, Vec<Row>) {
                 .get("field")
                 .filter(|name| name.is_filled())
                 .or_else(|| entry.get("name"))
-                .map(text_of)
+                .map(Json::to_text)
                 .unwrap_or_default();
             QueryColumn {
                 name,
@@ -1077,7 +1085,9 @@ pub const VERSION_UNSUPPORTED: &str = "graylog_version_unsupported";
 /// A version that does not revoke access tokens reliably (a warning).
 pub const VERSION_VULNERABLE: &str = "graylog_version_vulnerable";
 /// A token Graylog refuses (a tenant's failure).
-pub const TENANT_UNAUTHORIZED: &str = "graylog_tenant_unauthorized";
+pub const TENANT_UNAUTHORIZED: &str = crate::tenant_codes::GRAYLOG.unauthorized;
+/// A refused request (a tenant's answer no other code covers).
+pub const REQUEST_FAILED: &str = crate::tenant_codes::GRAYLOG.request_failed;
 /// A body that carries fields the tenant's version does not take.
 pub const FIELD_UNSUPPORTED: &str = "graylog_field_unsupported_version";
 
@@ -1228,7 +1238,7 @@ impl Deployer for Graylog {
             let failed = match refusal {
                 // `recreate` refuses with the message alone, and no status.
                 Some(refusal)
-                    if failure.code == "graylog_request_failed"
+                    if failure.code == REQUEST_FAILED
                         && failure.status.is_none()
                         && refusal.message == failure.reason =>
                 {
@@ -1286,8 +1296,7 @@ fn rule_uuid(definition: &opentide_compile::json::Object, rule_id: &str) -> Opti
     let after = tags.iter().position(|tag| *tag == "opentide")? + 1;
     tags.get(after)
         .and_then(|tag| tag.strip_prefix("opentide."))
-        .filter(|rest| uuid::Uuid::parse_str(rest).is_ok())
-        .map(str::to_owned)
+        .and_then(opentide_core::ids::canonical)
 }
 
 /// The tenant's version (`GET /api/system`).
@@ -1301,32 +1310,18 @@ fn failed_with(error: &ApiError) -> DeployFailure {
     let code = if error.forbidden() {
         "graylog_forbidden"
     } else {
-        "graylog_request_failed"
+        REQUEST_FAILED
     };
     DeployFailure::new(code, error.reason())
         .with_status(error.status)
         .with_field("detail", error.detail())
 }
 
-/// A tenant's failure, with its own code when it names one
-/// ([`VERSION_UNSUPPORTED`], [`TENANT_UNAUTHORIZED`]): each of its rules
-/// would fail the same way.
-fn tenant_failure(error: ConnectorError) -> DeployError {
-    let own = match &error {
-        ConnectorError::Refused { message, .. }
-        | ConnectorError::Authentication { message, .. } => {
-            [VERSION_UNSUPPORTED, TENANT_UNAUTHORIZED]
-                .into_iter()
-                .find(|code| message.starts_with(&format!("{code}: ")))
-        }
-        _ => None,
-    };
-    let mut failed = DeployError::from(error);
-    failed.scope = DeployScope::Tenant;
-    if let Some(code) = own {
-        failed.failure.code = code;
-    }
-    failed
+/// A tenant's failure, with its own code when the request that raised it
+/// names one ([`VERSION_UNSUPPORTED`], [`TENANT_UNAUTHORIZED`]): each of its
+/// rules would fail the same way.
+fn tenant_failure(error: CodedError) -> DeployError {
+    error.into_tenant_failure()
 }
 
 /// What a deploy on a tenant running `version` raised: the warning of a
@@ -1634,6 +1629,44 @@ mod tests {
         assert_eq!(rows.len(), 2);
         assert!(!rows[0].contains_key("user"));
         assert_eq!(rows[1]["user"], Json::Str("bob".to_owned()));
+    }
+
+    /// The tag after the bare `opentide` one is read as any UUID spelling
+    /// and returned canonical (lower case, hyphenated), as a rule's UUID is
+    /// recorded; one that is no UUID names nothing.
+    #[test]
+    fn the_rule_uuid_from_a_tag_is_canonical() {
+        let with_tags = |tags: &[&str]| {
+            let mut definition = opentide_compile::json::Object::new();
+            definition.insert(
+                "tags".into(),
+                Json::Array(
+                    tags.iter()
+                        .map(|tag| Json::Str((*tag).to_owned()))
+                        .collect(),
+                ),
+            );
+            definition
+        };
+        let canonical = "0000000a-0000-4000-8003-00000000000b";
+        for written in [
+            canonical,
+            "0000000A-0000-4000-8003-00000000000B",
+            "{0000000a-0000-4000-8003-00000000000b}",
+            " 0000000a-0000-4000-8003-00000000000b",
+            "uuid:0000000a00004000800300000000000b",
+        ] {
+            let tag = format!("opentide.{written}");
+            assert_eq!(
+                rule_uuid(&with_tags(&["opentide", &tag]), "other").as_deref(),
+                Some(canonical),
+                "{tag}"
+            );
+        }
+        assert_eq!(
+            rule_uuid(&with_tags(&["opentide", "opentide.é-not-a-uuid"]), "other"),
+            None
+        );
     }
 
     #[test]

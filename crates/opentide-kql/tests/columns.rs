@@ -2,6 +2,10 @@
 //! sources (#113).
 
 #![expect(
+    clippy::string_slice,
+    reason = "a test: a slice off a char boundary panics, and a panic is a failed test"
+)]
+#![expect(
     clippy::expect_used,
     clippy::unwrap_used,
     reason = "test helpers outside #[test] functions: a panic fails the test"
@@ -9,9 +13,9 @@
 
 use opentide_core::{Position, Severity, codes};
 use opentide_kql::schema::Known;
-use opentide_kql::{Profile, analyze, columns, completions, hover, signature_help};
+use opentide_kql::{Dialect, analyze, columns, completions, hover, signature_help};
 
-fn errors(src: &str, profile: Profile) -> Vec<(String, String, Option<String>)> {
+fn errors(src: &str, profile: Dialect) -> Vec<(String, String, Option<String>)> {
     analyze(src, profile)
         .diagnostics
         .into_iter()
@@ -21,7 +25,7 @@ fn errors(src: &str, profile: Profile) -> Vec<(String, String, Option<String>)> 
 }
 
 fn column_errors(src: &str) -> Vec<(String, Option<String>)> {
-    errors(src, Profile::Sentinel)
+    errors(src, Dialect::Sentinel)
         .into_iter()
         .filter(|(code, _, _)| code == codes::KQL_UNKNOWN_COLUMN)
         .map(|(_, message, suggestion)| (message, suggestion))
@@ -29,7 +33,7 @@ fn column_errors(src: &str) -> Vec<(String, Option<String>)> {
 }
 
 fn type_errors(src: &str) -> Vec<String> {
-    errors(src, Profile::Sentinel)
+    errors(src, Dialect::Sentinel)
         .into_iter()
         .filter(|(code, _, _)| code == codes::KQL_TYPE_MISMATCH)
         .map(|(_, message, _)| message)
@@ -38,7 +42,7 @@ fn type_errors(src: &str) -> Vec<String> {
 
 /// The columns of the query's last pipeline after its last operator.
 fn output(src: &str) -> Vec<String> {
-    let analysis = columns(src, Profile::Sentinel);
+    let analysis = columns(src, Dialect::Sentinel);
     let pipeline = analysis
         .pipelines
         .iter()
@@ -62,7 +66,7 @@ fn hover_at(src: &str, needle: &str, nth: usize) -> String {
     let line = before.matches('\n').count() as u32;
     let col = before.rsplit('\n').next().unwrap().chars().count() as u32;
     let offset = opentide_core::position_to_offset(src, Position::new(line, col));
-    hover(src, offset, Profile::Sentinel).expect("hover")
+    hover(src, offset, Dialect::Sentinel).expect("hover")
 }
 
 #[test]
@@ -81,7 +85,7 @@ fn asim_parser_typo_is_an_error_with_the_column_it_misspells() {
     assert!(
         errors(
             "_Im_NetworkSession(starttime=ago(1d), dstportnumber=22) | take 1",
-            Profile::Sentinel
+            Dialect::Sentinel
         )
         .is_empty()
     );
@@ -96,12 +100,12 @@ fn asim_parsers_and_ingest_time_tables_have_columns() {
         "ASimDns",
         "_Im_ProcessCreate",
     ] {
-        let analysis = columns(&format!("{source} | take 1"), Profile::Sentinel);
+        let analysis = columns(&format!("{source} | take 1"), Dialect::Sentinel);
         let pipeline = &analysis.pipelines[0];
         assert!(pipeline.source.columns.len() > 50, "{source}");
         assert_eq!(pipeline.source.known, Known::Typos, "{source}");
         assert!(
-            analyze(&format!("{source} | take 1"), Profile::Sentinel)
+            analyze(&format!("{source} | take 1"), Dialect::Sentinel)
                 .diagnostics
                 .is_empty(),
             "{source}"
@@ -112,14 +116,14 @@ fn asim_parsers_and_ingest_time_tables_have_columns() {
 #[test]
 fn defender_xdr_tables_are_clean_under_sentinel() {
     assert!(
-        analyze("DeviceProcessEvents | take 1", Profile::Sentinel)
+        analyze("DeviceProcessEvents | take 1", Dialect::Sentinel)
             .diagnostics
             .is_empty()
     );
     assert!(column_errors("DeviceProcessEvents | where Timestamp > ago(1d) and TimeGenerated > ago(1d) | project FileName, ProcessCommandLine").is_empty());
     let found = errors(
         "DeviceProcessEvents | where FileNam == 'x'",
-        Profile::Defender,
+        Dialect::Defender,
     );
     assert_eq!(found.len(), 1, "{found:?}");
     assert_eq!(found[0].2.as_deref(), Some("FileName"));
@@ -202,7 +206,7 @@ fn an_unknown_source_never_yields_a_column_diagnostic() {
 
 #[test]
 fn a_query_that_does_not_parse_gets_no_column_diagnostic() {
-    let r = analyze("SigninLogs | where Bogus == | project", Profile::Sentinel);
+    let r = analyze("SigninLogs | where Bogus == | project", Dialect::Sentinel);
     assert!(
         r.diagnostics
             .iter()
@@ -403,7 +407,7 @@ fn hover_on_an_asim_column_shows_its_schema_and_class() {
 #[test]
 fn column_completion_documents_reference_columns() {
     let src = "SigninLogs | where ";
-    let items = completions(src, src.len(), Profile::Sentinel);
+    let items = completions(src, src.len(), Dialect::Sentinel);
     let item = items
         .iter()
         .find(|i| i.label == "AppliedEventListeners")
@@ -418,7 +422,7 @@ fn column_completion_documents_reference_columns() {
     // With no table named, only the hand-written columns are offered, not
     // every documented column of the reference.
     let src = "print x = 1 | where ";
-    let items = completions(src, src.len(), Profile::Sentinel);
+    let items = completions(src, src.len(), Dialect::Sentinel);
     assert!(items.iter().any(|i| i.label == "UserPrincipalName"));
     assert!(!items.iter().any(|i| i.label == "AppliedEventListeners"));
 }
@@ -426,7 +430,7 @@ fn column_completion_documents_reference_columns() {
 #[test]
 fn asim_parameters_get_signature_help() {
     let src = "_Im_NetworkSession(starttime=ago(1d), dstportnumber=";
-    let help = signature_help(src, src.len(), Profile::Sentinel).expect("help");
+    let help = signature_help(src, src.len(), Dialect::Sentinel).expect("help");
     let sig = &help.signatures[0];
     assert!(
         sig.label
@@ -444,7 +448,7 @@ fn asim_parameters_get_signature_help() {
 #[test]
 fn the_pass_says_which_operator_made_the_columns_a_predicate_reads() {
     let src = "SigninLogs | extend Domain = tostring(split(UserPrincipalName, '@')[1]) | where Domain == 'example.com' and AppId != ''";
-    let analysis = columns(src, Profile::Sentinel);
+    let analysis = columns(src, Dialect::Sentinel);
     let filter = src.find("where").unwrap();
     let span = opentide_core::ByteSpan::new(filter, src.len());
     let reads: Vec<_> = analysis
@@ -527,11 +531,11 @@ fn serialize_as_and_query_parameters_keep_the_column_checks() {
 fn a_tabular_query_parameter_is_a_table() {
     let src = "declare query_parameters(Events:(a:int));\nEvents | where a > 1";
     assert!(
-        analyze(src, Profile::Sentinel)
+        analyze(src, Dialect::Sentinel)
             .diagnostics
             .iter()
             .all(|d| d.code != codes::KQL_UNKNOWN_TABLE && d.severity != Severity::Error),
         "{:?}",
-        analyze(src, Profile::Sentinel).diagnostics
+        analyze(src, Dialect::Sentinel).diagnostics
     );
 }

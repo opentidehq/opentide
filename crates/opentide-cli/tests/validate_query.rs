@@ -520,6 +520,187 @@ fn exabeam_sequences_and_exabeam_files_are_checked_offline() {
     );
     assert_eq!(file.code, 0, "{}", file.stdout);
     assert_eq!(file.json()["queries"][0]["language"], "exabeam");
+    // And under `--platform exabeam`: the platform names the dialect, not the
+    // profile, so the file is still a search (#1912, ADR 0015 §4).
+    std::fs::write(
+        ws.join("x.exabeam"),
+        "SELECT DISTINCT user, src_ip WHERE vendor:\"Microsoft\"\n",
+    )
+    .unwrap();
+    let under_platform = opentide(
+        &ws,
+        &[
+            "--json",
+            "validate",
+            "query",
+            "--platform",
+            "exabeam",
+            "--file",
+            "x.exabeam",
+        ],
+        &[],
+    );
+    assert_eq!(under_platform.code, 0, "{}", under_platform.stdout);
+    let document = under_platform.json();
+    assert_eq!(document["queries"][0]["language"], "exabeam");
+    assert_eq!(document["queries"][0]["platform"], "exabeam");
+    assert_eq!(
+        document["diagnostics"],
+        serde_json::json!([]),
+        "{}",
+        under_platform.stdout
+    );
+    // `--position rule` says the query is a sequence filter: checked as the
+    // Exabeam block checks one, where Search's operators are refused (#1993).
+    let rule = opentide(
+        &ws,
+        &[
+            "--json",
+            "validate",
+            "query",
+            "--platform",
+            "exabeam",
+            "--position",
+            "rule",
+            "--file",
+            "x.exabeam",
+        ],
+        &[],
+    );
+    assert_eq!(rule.code, 1, "{}", rule.stdout);
+    let codes: Vec<String> = rule.json()["diagnostics"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|item| item["code"].as_str().map(str::to_owned))
+        .collect();
+    assert_eq!(codes, ["exabeam_advanced_in_rule"], "{}", rule.stdout);
+}
+
+/// A rule block is a platform's: `--position rule` without `--platform` is a
+/// usage error naming `--platform`, never a search (#1993).
+#[test]
+fn a_rule_position_without_a_platform_is_a_usage_error() {
+    let (_scratch, ws) = corpus();
+    std::fs::write(ws.join("x.exabeam"), "SELECT user WHERE vendor:\"x\"\n").unwrap();
+    let ran = opentide(
+        &ws,
+        &[
+            "--json",
+            "validate",
+            "query",
+            "--position",
+            "rule",
+            "--file",
+            "x.exabeam",
+        ],
+        &[],
+    );
+    assert_eq!(ran.code, 2, "{}", ran.stdout);
+    let document = ran.json();
+    assert_eq!(
+        document["failure"]["code"], "usage_missing_option",
+        "{}",
+        ran.stdout
+    );
+    assert_eq!(
+        document["failure"]["argument"], "--platform",
+        "{}",
+        ran.stdout
+    );
+}
+
+/// `--position` says where a query file's query will sit: without a query
+/// file, or with `--live` (which checks rules, as rules), it would do
+/// nothing, so it is refused rather than ignored (#1993).
+#[test]
+fn a_position_without_a_query_file_or_with_live_is_refused() {
+    let (_scratch, ws) = corpus();
+    let ran = opentide(
+        &ws,
+        &[
+            "--json",
+            "validate",
+            "query",
+            "--platform",
+            "exabeam",
+            "--position",
+            "rule",
+        ],
+        &[],
+    );
+    assert_eq!(ran.code, 2, "{}", ran.stdout);
+    assert_eq!(
+        ran.json()["failure"]["argument"],
+        "--position",
+        "{}",
+        ran.stdout
+    );
+    let live = opentide(
+        &ws,
+        &[
+            "--json",
+            "validate",
+            "query",
+            "--live",
+            "--platform",
+            "exabeam",
+            "--position",
+            "rule",
+        ],
+        &[],
+    );
+    assert_eq!(live.code, 2, "{}", live.stdout);
+    assert_eq!(
+        live.json()["failure"]["argument"],
+        "--position",
+        "{}",
+        live.stdout
+    );
+}
+
+#[test]
+fn datadog_queries_and_datadog_files_are_checked_offline() {
+    let (_scratch, ws) = corpus();
+    let rules = ws.join("objects/rules");
+    std::fs::write(
+        rules.join("datadog.yaml"),
+        "name: Datadog rule\nmetadata:\n  uuid: 00000000-0000-4000-8003-0000000005dd\n  schema: \
+         rule::1.1\n  version: 1\n  created: 2026-01-01\n  modified: 2026-01-02\n  tlp: \
+         clear\ndescription: d\nconfigurations:\n  datadog:\n    schema: \
+         platform::datadog::1.0\n    status: STAGING\n    queries:\n      - query: \
+         'service:(web OR api'\n    cases:\n      - condition: a > 0\n",
+    )
+    .unwrap();
+    let ran = opentide(
+        &ws,
+        &["--json", "validate", "query", "--platform", "datadog"],
+        &[],
+    );
+    let document = ran.json();
+    assert_eq!(ran.code, 1, "{}", ran.stdout);
+    assert_eq!(document["mode"], "offline", "{}", ran.stdout);
+    assert_eq!(document["queries"][0]["language"], "datadog");
+    assert_eq!(
+        document["queries"][0]["field_path"],
+        serde_json::json!(["configurations", "datadog", "queries", "0", "query"])
+    );
+    let codes: Vec<&str> = document["diagnostics"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|item| item["code"].as_str())
+        .collect();
+    assert_eq!(codes, ["datadog_parse_error"], "{}", ran.stdout);
+    // A `.datadog` file is a search.
+    std::fs::write(ws.join("hunt.datadog"), "*:mimikatz service:web\n").unwrap();
+    let file = opentide(
+        &ws,
+        &["--json", "validate", "query", "--file", "hunt.datadog"],
+        &[],
+    );
+    assert_eq!(file.code, 0, "{}", file.stdout);
+    assert_eq!(file.json()["queries"][0]["language"], "datadog");
 }
 
 #[test]
@@ -603,7 +784,7 @@ fn platforms_the_engine_cannot_parse_are_refused() {
 fn live_without_a_platform_is_refused_and_tenant_options_need_it() {
     let (_scratch, ws) = corpus();
     // A live check reads one platform's tenants: a run that names none is
-    // refused as the oracle refuses it (UC-4.4c, #834).
+    // refused as opentide 0.23.0 refuses it (UC-4.4c, #834).
     let live = opentide(&ws, &["--json", "validate", "query", "--live"], &[]);
     assert_eq!(live.code, 2);
     assert_eq!(failure_code(&live.json()), "usage_missing_option");
@@ -770,6 +951,11 @@ fn a_misspelt_sentinel_table_fails_a_query_file() {
         .map(|item| item["code"].as_str().unwrap())
         .collect();
     assert_eq!(codes, ["kql_table_misspelt"], "{document}");
+    // The near miss is a replacement name (#1950).
+    assert_eq!(
+        document["diagnostics"][0]["help"], "did you mean \"SecurityEvent\"?",
+        "{document}"
+    );
     std::fs::write(ws.join("c.kql"), "VendorFirewallEvents | take 1\n").unwrap();
     let run = opentide(
         &ws,

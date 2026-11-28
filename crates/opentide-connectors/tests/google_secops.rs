@@ -10,7 +10,6 @@
 
 use std::path::{Path, PathBuf};
 
-use opentide_compile::Json;
 use opentide_connectors::connector::{QueryRequest, TenantContext, TimeWindow};
 use opentide_connectors::credentials::Mode;
 use opentide_connectors::google_secops::auth::{Authorizer, Clock, load};
@@ -18,6 +17,7 @@ use opentide_connectors::google_secops::client::Client;
 use opentide_connectors::google_secops::deploy::{Action, RuleDeploy, StateChange, deploy_rule};
 use opentide_connectors::google_secops::{GoogleSecops, Instance, check_rule};
 use opentide_connectors::{Environment, HttpClient, HttpSettings, Platform, Tenant, TenantLabel};
+use opentide_schema::objects::platform::google_secops::RunFrequency;
 use opentide_schema::objects::platform::google_secops::assemble::AssembledRule;
 use std::sync::Arc;
 use tempfile::TempDir;
@@ -75,7 +75,7 @@ fn tenant(server: &MockServer) -> (Tenant, HttpClient, Environment, TempDir) {
         .to_string(),
     )
     .unwrap();
-    let mut setup = toml::Table::new();
+    let mut setup = opentide_core::json::Object::new();
     setup.insert("project".into(), PROJECT.into());
     setup.insert("location".into(), LOCATION.into());
     setup.insert("instance".into(), INSTANCE_ID.into());
@@ -179,7 +179,10 @@ fn a_create_verifies_then_creates_then_sets_the_run_state() {
             action: Action::Create,
             assembled: assembled("process"),
             run_state: opentide_compile::google_secops::run_state(
-                &serde_json::from_str::<Json>(r#"{"run_frequency": "LIVE"}"#).unwrap(),
+                &opentide_compile::google_secops::RunSettings {
+                    run_frequency: Some(RunFrequency::Live),
+                    ..Default::default()
+                },
                 opentide_compile::strategy::StatusStrategy::Preview,
             ),
             run_frequency: Some("LIVE".to_owned()),

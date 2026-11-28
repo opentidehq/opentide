@@ -45,7 +45,7 @@ Every check has a code that keeps its meaning. A check that repeats per platform
 | `proxy` | The proxy opentide's requests go through accepts a connection: the one an `https://` request uses, chosen as every command chooses it ([proxy precedence](../usage/configuration.md#proxy)), else the `http://` one | It does not | | No proxy is set, or `--offline` |
 | `vscode_settings` | `.vscode/extensions.json` recommends the opentide VS Code extension (`opentidehq.opentide`), and `.vscode/settings.json` maps no object files to opentide's schemas in `yaml.schemas` | | `settings.json` maps objects to opentide's schemas (a YAML extension would report them a second time), `extensions.json` does not recommend the extension, or either is not valid JSON | No `.vscode/extensions.json`, or it lists the extension under `unwantedRecommendations` |
 | `vscode_snippets` | The snippet file `opentide generate snippets` writes exists | | | It does not |
-| `mcp_config` | An MCP configuration from `opentide setup mcp` runs `opentide mcp start`, with the command on `PATH`; or `.vscode/extensions.json` recommends the opentide extension, which provides the server to VS Code (with both, the message says so) | | No file has such a server, or the command is not on `PATH` | No configuration, and the extension is not recommended |
+| `mcp_config` | An MCP configuration from `opentide setup mcp` runs `opentide mcp start`, with the command on `PATH` (Claude Desktop's counts when its `OPENTIDE_REPO_ROOT` is this workspace); or `.vscode/extensions.json` recommends the opentide extension, which provides the server to VS Code (with both, the message says so) | | No file has such a server, or the command is not on `PATH` | No configuration, and the extension is not recommended |
 
 `credentials` only reports: a variable that is unset is a `warn`, never a `fail`, because most people hold no tenant secret locally (the CI runner does). Its message names the tenant and the variables.
 
@@ -107,6 +107,7 @@ The sign-in and the request for each platform:
 | `graylog` | None: the API token | `GET /api/system` |
 | `exabeam` | OAuth2 token | `GET` the correlation rules named `opentide` |
 | `google_secops` | Google OAuth2 token | `GET` one rule of the instance (`pageSize=1`) |
+| `datadog` | None: the API and application keys | `GET` one detection rule (`page[size]=1`) |
 | `bitdefender` | None | Not checked: the connector only sends rule writes, so there is no read-only request to make (`skip`) |
 
 `--live` and `--offline` contradict each other: together they exit `2` (`usage_error`).
@@ -150,7 +151,7 @@ One line per check, its fix under it, then the outcome line. `✓` is a pass, `!
 ○ No snippets at .vscode/model-templates.code-snippets · vscode_snippets
   → opentide generate snippets
 ○ No MCP configuration: agents in editors cannot call opentide tools · mcp_config
-  → opentide setup mcp --vscode (or --cursor, --claude-code, --generic)
+  → opentide setup mcp --vscode (or --cursor, --claude-code, --claude-desktop, --generic)
 ! 1 warning · 9 passed, 6 skipped
 ```
 

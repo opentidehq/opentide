@@ -1,9 +1,9 @@
-//! SentinelOne's management API (UC-4.2, #832): `platforms/sentinel_one/
-//! client.py` (`SentinelOneService`: STAR custom detection rules and
-//! `validate_query`), the calls its `deployer.py` makes, and `runner.py`
-//! (PowerQuery, submitted then polled until it finishes), request for
-//! request. `validate query --live` checks a rule's queries with the runner,
-//! for one row over the minute before now (`LiveQueryValidator`).
+//! SentinelOne's management API (UC-4.2, #832): the STAR custom detection
+//! rules a deploy creates, replaces, disables and deletes, and the
+//! PowerQuery searches `opentide query` runs, each submitted then polled
+//! until it finishes. `validate query --live` runs each of a rule's queries
+//! as such a search, for one row over the request's window
+//! ([`SentinelOne::check`]).
 //!
 //! Every call carries `Authorization: ApiToken <api_token>` and `Content-Type:
 //! application/json`; the rule bodies are the compiled STAR rule
@@ -21,7 +21,6 @@ use crate::connector::{
 };
 use crate::error::ConnectorError;
 use crate::retry::RetryPolicy;
-use crate::text::json_text;
 use crate::{HttpSettings, Secret};
 
 /// The platform's identifier.
@@ -34,6 +33,9 @@ pub const QUERY_PATH: &str = "/web/api/v2.1/dv/events/pq";
 /// A PowerQuery's progress, under the tenant's `url`.
 pub const PING_PATH: &str = "/web/api/v2.1/dv/events/pq-ping";
 
+/// The first wait between two polls of a running PowerQuery, doubled after
+/// each poll up to [`MAX_POLL_DELAY`].
+pub const FIRST_POLL_DELAY: Duration = Duration::from_millis(500);
 /// The longest wait between two polls of a running PowerQuery.
 pub const MAX_POLL_DELAY: Duration = Duration::from_secs(5);
 
@@ -340,7 +342,7 @@ impl SentinelOne {
                 status,
                 context: answer
                     .quotable_json()
-                    .map_or_else(|| answer.text(), |b| json_text(&b)),
+                    .map_or_else(|| answer.text(), |b| Json::to_text(&b)),
             }),
         }
     }
@@ -387,10 +389,10 @@ impl SentinelOne {
         let query_id = data
             .get("queryId")
             .filter(|id| id.is_filled())
-            .map(json_text)
+            .map(Json::to_text)
             .filter(|id| !id.is_empty());
         let ping = format!("{}{PING_PATH}", setup.url);
-        let mut delay = Duration::from_millis(500);
+        let mut delay = FIRST_POLL_DELAY;
         while !finished(&data, &tenant)? {
             let Some(id) = &query_id else {
                 return Err(ConnectorError::refused(
@@ -451,7 +453,7 @@ impl SentinelOne {
             Some(Json::Array(items)) => items
                 .iter()
                 .filter(|item| item.is_filled())
-                .map(json_text)
+                .map(Json::to_text)
                 .collect(),
             _ => Vec::new(),
         };
@@ -508,7 +510,7 @@ fn refusal_detail(answer: &Answer) -> String {
             _ => None,
         })
         .and_then(|error| error.get("detail"))
-        .map_or_else(|| json_text(&body), json_text)
+        .map_or_else(|| Json::to_text(&body), Json::to_text)
 }
 
 /// The error of a STAR rule call that did not answer 200 (`_http_errors`).
@@ -522,7 +524,7 @@ fn http_error(answer: &Answer) -> SentinelOneError {
             status,
             context: answer
                 .quotable_json()
-                .map_or(detail, |body| json_text(&body)),
+                .map_or(detail, |body| Json::to_text(&body)),
         },
     }
 }
@@ -546,7 +548,7 @@ pub fn powerquery_with_limit(query: &str, limit: usize) -> String {
 fn finished(data: &Json, tenant: &str) -> Result<bool, ConnectorError> {
     let status = data
         .get("status")
-        .map(json_text)
+        .map(Json::to_text)
         .unwrap_or_default()
         .to_uppercase();
     if ["FAILED", "FAILED_CLIENT", "TIMED_OUT", "CANCELLED"].contains(&status.as_str()) {
@@ -555,7 +557,7 @@ fn finished(data: &Json, tenant: &str) -> Result<bool, ConnectorError> {
             .filter(|value| value.is_filled())
             .or_else(|| data.get("error"))
             .filter(|value| value.is_filled())
-            .map(json_text)
+            .map(Json::to_text)
             .filter(|text| !text.is_empty());
         return Err(ConnectorError::refused(
             PLATFORM,
@@ -592,7 +594,7 @@ fn data(answer: &Answer, tenant: &str) -> Result<Json, ConnectorError> {
                     .or_else(|| error.get("title"))
             })
             .filter(|value| value.is_filled())
-            .map(json_text)
+            .map(Json::to_text)
             .filter(|text| !text.is_empty());
         let text: String = answer.text().chars().take(500).collect();
         let detail = detail.or((!text.is_empty()).then_some(text));
@@ -632,7 +634,8 @@ fn data(answer: &Answer, tenant: &str) -> Result<Json, ConnectorError> {
     })
 }
 
-/// A column's name (`_column_name`).
+/// A column's `name`, else its `title`, else empty; a column that is not an
+/// object, as text (`_column_name`).
 fn column_name(column: &Json) -> String {
     match column {
         Json::Object(_) => column
@@ -640,9 +643,9 @@ fn column_name(column: &Json) -> String {
             .filter(|value| value.is_filled())
             .or_else(|| column.get("title"))
             .filter(|value| value.is_filled())
-            .map(json_text)
+            .map(Json::to_text)
             .unwrap_or_default(),
-        other => json_text(other),
+        other => Json::to_text(other),
     }
 }
 

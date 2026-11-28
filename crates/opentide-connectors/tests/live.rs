@@ -35,13 +35,17 @@ use opentide_connectors::{Environment, HttpClient, HttpSettings, Tenant};
 use tokio_util::sync::CancellationToken;
 
 /// The test tenant of *platform*, or `None` when its variable is unset.
-fn tenant(platform: &str, settings: &HttpSettings) -> Option<(Tenant, HttpClient, toml::Table)> {
+fn tenant(
+    platform: &str,
+    settings: &HttpSettings,
+) -> Option<(Tenant, HttpClient, opentide_core::json::Object)> {
     let variable = format!("OPENTIDE_LIVE_{}", platform.to_uppercase());
     let Ok(path) = std::env::var(&variable) else {
         println!("{variable} is unset: skipped");
         return None;
     };
-    let setup: toml::Table = toml::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    let setup: opentide_core::json::Object =
+        toml::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
     let env = Environment::process();
     let tenant =
         Tenant::from_setup(platform, "live", &setup, &env, Resolve::Required, settings).unwrap();
@@ -86,7 +90,10 @@ fn live_microsoft_defender_deploy_validate_query_disable() {
     )
     .unwrap();
     let rule = golden.get("body").unwrap().clone();
-    let id = uuid::Uuid::new_v4().hyphenated().to_string();
+    // The Defender rule id deploy gives a rule, `opentide-<uuid>` (#1886).
+    let id = opentide_compile::microsoft_defender::rule_id_of(
+        &uuid::Uuid::new_v4().hyphenated().to_string(),
+    );
     let connector = MicrosoftDefender::new();
     block_on(async {
         println!("upsert {id}: {:?}", connector.upsert(cx, &id, &rule).await);
@@ -128,7 +135,7 @@ fn live_elastic_deploy_validate_query_disable() {
     };
     let index: Vec<String> = setup
         .get("index")
-        .and_then(toml::Value::as_array)
+        .and_then(opentide_core::json::Json::as_array)
         .map(|items| {
             items
                 .iter()
@@ -281,7 +288,7 @@ fn live_carbon_black_deploy_validate_query_retire() {
     };
     let watchlist = setup
         .get("watchlist")
-        .and_then(toml::Value::as_str)
+        .and_then(opentide_core::json::Json::as_str)
         .unwrap_or("opentide")
         .to_owned();
     let mut plan = ReportDeploy {

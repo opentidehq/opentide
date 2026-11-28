@@ -1,7 +1,7 @@
-//! MISP's REST client against the cassettes the oracle's `share push` and
+//! MISP's REST client against the cassettes opentide 0.23.0's `share push` and
 //! `share retract` recorded on the stand-in of `tests/cassettes/misp/`
 //! (UC-4.4b, #834): the calls the engine makes, in its order, each request
-//! the oracle's (PyMISP's), bodies included (as the same JSON data).
+//! opentide 0.23.0's (PyMISP's), bodies included (as the same JSON data).
 
 #![expect(clippy::unwrap_used, reason = "a test: a failed set-up is a failure")]
 
@@ -13,7 +13,7 @@ use opentide_connectors::misp::{GALAXY_ACTOR, GALAXY_ATTACK, Kind, Misp, MispCli
 
 const KEY: (&str, &str) = ("MISP_API_KEY", "misp-test-key-only");
 
-/// The bodies the oracle sent, in order, by path.
+/// The bodies opentide 0.23.0 sent, in order, by path.
 fn bodies(name: &str, path: &str) -> Vec<Json> {
     let text =
         std::fs::read_to_string(repo().join(format!("tests/cassettes/{name}.json"))).unwrap();

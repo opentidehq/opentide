@@ -1,5 +1,5 @@
 //! An object as `opentide tui` shows it by default: a page, not a file
-//! (`cli/services/object_view.py`, #776).
+//! (#776).
 //!
 //! Each value is placed under the field its schema revision defines, with
 //! the field's title and description, a vocabulary value's meaning, and the
@@ -14,11 +14,10 @@
 //! revision in `metadata.schema`.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 
 use indexmap::IndexMap;
 use opentide_schema::node::{Node, Value};
-use regex::Regex;
 
 use crate::index::Index;
 
@@ -248,15 +247,6 @@ pub struct ObjectView {
     pub unknown_schema: Option<String>,
 }
 
-#[expect(clippy::expect_used, reason = "a regex literal")]
-fn uuid_pattern() -> &'static Regex {
-    static PATTERN: OnceLock<Regex> = OnceLock::new();
-    PATTERN.get_or_init(|| {
-        Regex::new(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
-            .expect("a valid pattern")
-    })
-}
-
 /// `key` read as a title: `detection_model` → `Detection model`.
 fn capitalised(key: &str) -> String {
     let spaced = key.replace('_', " ");
@@ -341,7 +331,7 @@ fn link(value: &Scalar, links: &BTreeMap<String, LinkTarget>) -> Option<LinkTarg
         return None;
     };
     let trimmed = text.trim();
-    if !uuid_pattern().is_match(trimmed) {
+    if !opentide_core::ids::is_hyphenated(trimmed) {
         return None;
     }
     links

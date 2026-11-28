@@ -11,10 +11,10 @@ use std::sync::Arc;
 use opentide_compile::graylog::{self as compile, CompiledDefinition, Version};
 use opentide_compile::{Json, Owned, Rule};
 use opentide_connectors::connector::{
-    DeployError, DeployRequest, DeployScope, Deployer, LiveValidator,
+    CodedError, Operation, QueryRequest, QueryRunner, TenantContext, TimeWindow,
 };
 use opentide_connectors::connector::{
-    Operation, QueryRequest, QueryRunner, TenantContext, TimeWindow,
+    DeployError, DeployRequest, DeployScope, Deployer, LiveValidator,
 };
 use opentide_connectors::credentials::Mode as Resolve;
 use opentide_connectors::graylog::{
@@ -54,7 +54,7 @@ fn tenant(url: &str) -> (Tenant, HttpClient) {
 
 /// The fixture tenant, pointed at `url`, reached with `settings`.
 fn tenant_with(url: &str, settings: &opentide_connectors::HttpSettings) -> (Tenant, HttpClient) {
-    let setup: toml::Table = toml::from_str(&format!(
+    let setup: opentide_core::json::Object = toml::from_str(&format!(
         r#"
 ssl = true
 url = "{url}"
@@ -134,7 +134,7 @@ fn deploy(
     runtime: &tokio::runtime::Runtime,
     server: &MockServer,
     rule: &RuleDeploy,
-) -> Result<RuleOutcome, ConnectorError> {
+) -> Result<RuleOutcome, CodedError> {
     let (tenant, http) = tenant(&server.uri());
     let cancel = CancellationToken::new();
     let cx = TenantContext {
@@ -585,12 +585,16 @@ fn a_refused_token_stops_the_tenant() {
         &step(Action::Create, false, Version(7, 2, 0)),
     )
     .unwrap_err();
+    assert_eq!(error.code, Some("graylog_tenant_unauthorized"));
     assert!(
-        matches!(error, ConnectorError::Authentication { .. }),
+        matches!(*error.error, ConnectorError::Authentication { .. }),
         "{error:?}"
     );
     assert!(
-        error.text().contains("graylog_tenant_unauthorized"),
+        error
+            .error
+            .text()
+            .starts_with("graylog_tenant_unauthorized: "),
         "{error:?}"
     );
 }
@@ -617,11 +621,15 @@ fn the_version_is_read_once_and_bounded_below() {
     };
     let client = opentide_connectors::graylog::Client::new(cx);
     let error = runtime.block_on(client.version()).unwrap_err();
+    assert_eq!(error.code, Some("graylog_version_unsupported"));
     assert!(
-        error.text().contains("graylog_version_unsupported"),
+        error
+            .error
+            .text()
+            .starts_with("graylog_version_unsupported: "),
         "{error:?}"
     );
-    assert!(error.text().contains("\"6.2.9+abc\""), "{error:?}");
+    assert!(error.error.text().contains("\"6.2.9+abc\""), "{error:?}");
 }
 
 #[test]
@@ -643,7 +651,8 @@ fn a_version_graylog_does_not_name_is_unsupported() {
     };
     let client = opentide_connectors::graylog::Client::new(cx);
     let error = runtime.block_on(client.version()).unwrap_err();
-    assert!(error.text().contains("no version"), "{error:?}");
+    assert_eq!(error.code, Some("graylog_version_unsupported"));
+    assert!(error.error.text().contains("no version"), "{error:?}");
 }
 
 fn window() -> TimeWindow {

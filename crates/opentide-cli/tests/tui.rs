@@ -1,11 +1,15 @@
 //! `opentide tui` on ratatui (UC-3.6d, #951), drawn on ratatui's
 //! `TestBackend` against the tutorial repository: what
-//! `tests/test_cli/test_tui.py` asserts of the Python UI, key by key, and
+//! the Python UI's tests asserted of it, key by key, and
 //! the layout at a width: names cut with an ellipsis, counts kept whole,
 //! nothing wider than its column.
 
 // The terminal UI is the `terminal` feature (off in the WASI build).
 #![cfg(feature = "terminal")]
+#![expect(
+    clippy::string_slice,
+    reason = "a test: a slice off a char boundary panics, and a panic is a failed test"
+)]
 #![expect(
     clippy::unwrap_used,
     reason = "test helpers: every workspace here is written to a fresh folder"
@@ -756,7 +760,7 @@ fn visibility_lists_the_log_sources_and_what_reads_them() {
     assert_eq!(app.selected, Node::Object(RULE.into()));
 }
 
-/// A literal credential in a file: never shown (`test_tui_configuration.py`).
+/// A literal credential in a file: never shown.
 const LITERAL: &str = "s3cr3t-literal-do-not-show";
 /// The value of a variable a tenant names: never shown either.
 const VALUE: &str = "value-of-the-variable-do-not-show";

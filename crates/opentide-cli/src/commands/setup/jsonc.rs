@@ -2,13 +2,13 @@
 //! configuration), made on jsonc-parser's concrete syntax tree: only the
 //! members setup merges change, and every other byte stays as it was:
 //! comments, layout, trailing commas, CRLF line endings and a byte-order
-//! mark (#743). The oracle parsed these files with comments stripped and
-//! wrote them back with `json.dumps`, which dropped all of that.
+//! mark (#743). Nothing is parsed and serialised back whole, which would
+//! drop all of that.
 
 use jsonc_parser::ParseOptions;
 use jsonc_parser::cst::{CstInputValue, CstObject, CstRootNode};
 
-use crate::json::Json;
+use crate::json::{Json, Object};
 
 const BOM: &str = "\u{feff}";
 
@@ -81,7 +81,7 @@ impl std::fmt::Display for MergeError {
     }
 }
 
-/// The root object of `root`.
+/// `root`'s value as an object: [`MergeError::NotAnObject`] when it is none or not one.
 fn root_object(root: &CstRootNode) -> Result<CstObject, MergeError> {
     match root.value() {
         Some(value) => value.as_object().ok_or(MergeError::NotAnObject),
@@ -266,12 +266,12 @@ pub fn ordered(text: &str) -> Option<Json> {
 /// One node of the tree as a value.
 fn node_json(node: &jsonc_parser::cst::CstNode) -> Option<Json> {
     if let Some(object) = node.as_object() {
-        let mut members = Vec::new();
+        let mut members = Object::new();
         for prop in object.properties() {
             let name = prop.name()?.decoded_value().ok()?;
-            members.push((name, node_json(&prop.value()?)?));
+            members.insert(name, node_json(&prop.value()?)?);
         }
-        return Some(Json::object(members));
+        return Some(Json::Object(members));
     }
     if let Some(array) = node.as_array() {
         return array
@@ -321,9 +321,7 @@ pub fn has_comments(text: &str) -> bool {
 }
 
 /// The line ending a file uses: CRLF when it has one, else LF.
-pub fn newline(text: &str) -> &'static str {
-    if text.contains("\r\n") { "\r\n" } else { "\n" }
-}
+pub use opentide_core::text::newline_of as newline;
 
 /// `value` as a file: indented by two spaces, UTF-8, every line ending
 /// `newline`, with one after the document.
@@ -364,18 +362,22 @@ mod tests {
             .zip(after.bytes())
             .take_while(|(a, b)| a == b)
             .count();
+        let (before, after) = (before.as_bytes(), after.as_bytes());
         let common_end = before[common_start..]
-            .bytes()
+            .iter()
             .rev()
-            .zip(after[common_start..].bytes().rev())
+            .zip(after[common_start..].iter().rev())
             .take_while(|(a, b)| a == b)
             .count();
         assert_eq!(
             common_start + common_end,
             before.len(),
-            "bytes of the original changed:\n{before}\n---\n{after}"
+            "bytes of the original changed:\n{}\n---\n{}",
+            String::from_utf8_lossy(before),
+            String::from_utf8_lossy(after)
         );
-        after[common_start..after.len() - common_end].to_owned()
+        String::from_utf8(after[common_start..after.len() - common_end].to_vec())
+            .expect("the inserted text is whole characters")
     }
 
     #[test]

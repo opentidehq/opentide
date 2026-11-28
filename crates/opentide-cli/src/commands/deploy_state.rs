@@ -1,5 +1,4 @@
-//! Deployment state shards, read and written as `states/deployment.py` and
-//! `deployment/external_ids.py` do (UC-4.6, #979): one
+//! Deployment state shards (UC-4.6, #979): one
 //! `.opentide/states/deployment/<uuid>.json` per rule, each `(platform,
 //! tenant)` bound to the id the platform gave the rule.
 //!
@@ -66,25 +65,9 @@ pub fn state_dir(workspace: &Path) -> PathBuf {
 }
 
 /// *value* as `uuid.UUID(value.strip())` reads it, in lowercase canonical
-/// form; `None` when it is not a UUID.
+/// form; `None` when it is not a UUID ([`opentide_core::ids::canonical`]).
 pub fn canonical(value: &str) -> Option<String> {
-    let mut hex = value.trim().replace("urn:", "").replace("uuid:", "");
-    hex = hex
-        .trim_start_matches('{')
-        .trim_end_matches('}')
-        .replace('-', "");
-    if hex.len() != 32 || !hex.chars().all(|c| c.is_ascii_hexdigit()) {
-        return None;
-    }
-    let hex = hex.to_ascii_lowercase();
-    Some(format!(
-        "{}-{}-{}-{}-{}",
-        &hex[0..8],
-        &hex[8..12],
-        &hex[12..16],
-        &hex[16..20],
-        &hex[20..32]
-    ))
+    opentide_core::ids::canonical(value)
 }
 
 /// *value*'s canonical form, or `deployment_state_shape` (`canonical_uuid`).
@@ -617,6 +600,20 @@ fn save(shard: &mut Shard) -> Result<(), WriteError> {
     })
 }
 
+/// Held while a shard is read, changed and written back: a rule's one shard
+/// holds every tenant's id, and a deploy sends to several tenants at once
+/// (#1940), so two tenants' writes must not interleave and lose one. The
+/// file's bytes do not depend on which write came first: `render` sorts
+/// the platforms and tenants.
+static WRITING: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// [`WRITING`], held.
+fn writing() -> std::sync::MutexGuard<'static, ()> {
+    WRITING
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
 /// Reads the shard, binds one tenant and writes the rest back
 /// (`record_created`); the id as stored, or `deployment_state_write_failed`
 /// naming the id the platform created (the remote rule is not removed).
@@ -628,6 +625,7 @@ pub fn record_created(
     external_id: &ExternalId,
 ) -> Result<String, StateError> {
     let written = (|| {
+        let _writing = writing();
         let mut shard = Shard::load(workspace, object_uuid).map_err(WriteError::State)?;
         let stored = shard
             .set(platform, tenant, external_id)
@@ -659,6 +657,7 @@ pub fn record_deleted(
     tenant: &str,
 ) -> Result<(), StateError> {
     let written = (|| {
+        let _writing = writing();
         let mut shard = Shard::load(workspace, object_uuid).map_err(WriteError::State)?;
         if shard.remove(platform, tenant).is_some() {
             save(&mut shard)?;
@@ -788,7 +787,7 @@ mod tests {
     }
 
     #[test]
-    fn ids_are_stored_as_the_oracle_stores_them() {
+    fn ids_are_stored_in_their_canonical_form() {
         assert_eq!(
             normalise_external_id("sentinel_one", &ExternalId::Int(17)).unwrap(),
             "17"

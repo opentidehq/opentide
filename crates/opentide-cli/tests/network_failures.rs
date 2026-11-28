@@ -2,13 +2,13 @@
 //! #834), run in-process against stand-ins on the loopback.
 //!
 //! A cassette replays answers, at once: it has no way to say "no answer in
-//! time", and Ctrl-C is not something the oracle's recording proxy sees. So
+//! time", and Ctrl-C is not something opentide 0.23.0's recording proxy sees. So
 //! the timeouts and the cancelled runs of `query`, `validate query --live`,
 //! `deploy`, `share`, `generate extract`, `validate --check cve`, `doctor`
 //! and `setup skills discover` are proven here; a refused connection is in
 //! the goldens (the `*unreachable*` cases of `tests/golden/cases.toml`),
 //! except on HarfangLab, whose 0.23.0 client failed with `AttributeError:
-//! HarfangLab` before it sent anything (CHANGELOG, #895), so the oracle has
+//! HarfangLab` before it sent anything (CHANGELOG, #895), so opentide 0.23.0 has
 //! no unreachable HarfangLab tenant to record.
 //!
 //! A cancelled run is `interrupted` (#1034 made the connectors' cancellation
@@ -314,7 +314,9 @@ fn a_live_check_with_no_answer_within_the_check_timeout_fails() {
         "{message}"
     );
     assert!(
-        message.contains(&format!("no answer from http://{address} within 1s")),
+        message.contains(&format!(
+            "no complete answer from http://{address} within 1s"
+        )),
         "{message}"
     );
     let advice = document["advice"].as_str().unwrap();

@@ -1,12 +1,11 @@
 //! The deploy plan: which rule goes to which platform and tenant, and what
-//! that does there (`deployment/utils.py` `make_deploy_plan`,
-//! `deployment/planning.py` `tenants_resolver`, `platforms/enabled.py`,
-//! `cli/services/deploy_plan.py`).
+//! that does there.
 
 use std::path::{Path, PathBuf};
 
 use indexmap::IndexMap;
 use opentide_schema::node::{Node, Value};
+use opentide_schema::platforms::PlatformKey;
 use opentide_workspace::FileSystem;
 
 use crate::json::{Json, Object};
@@ -94,7 +93,7 @@ fn walk(
     }
 }
 
-/// The warning for rule files in subfolders (`_nested_rules_warning`).
+/// The warning for rule files in subfolders.
 pub fn nested_warning(nested: &[String], folder: &str) -> String {
     let mut names = nested
         .iter()
@@ -115,7 +114,9 @@ pub fn nested_warning(nested: &[String], folder: &str) -> String {
 /// Whether the configuration enables *platform*: its
 /// `platforms.<platform>.platform.enabled` is the boolean `true`. An
 /// `enabled` anywhere else, such as directly under `platforms.<platform>`,
-/// does not count.
+/// does not count. The JSON twin of
+/// [`opentide_schema::configuration::resolve::platform_enabled`], for the
+/// configuration as the compiler holds it; a test keeps the two in step.
 pub fn platform_enabled(config: &Json, platform: &str) -> bool {
     matches!(
         config
@@ -153,10 +154,10 @@ pub fn enabled_with(config: &Json, plugins: &[String]) -> Vec<String> {
 }
 
 /// A platform's configured tenants, as the file holds them.
-pub fn tenants<'c>(config: &'c Json, platform: &str) -> Vec<&'c Json> {
+pub fn tenants<'c>(config: &'c Json, platform: &PlatformKey) -> Vec<&'c Json> {
     match config
         .get("platforms")
-        .and_then(|platforms| platforms.get(platform))
+        .and_then(|platforms| platforms.get(platform.as_str()))
         .and_then(|table| table.get("tenants"))
     {
         Some(Json::Array(items)) => items
@@ -174,7 +175,7 @@ pub struct Skipped {
     pub rule: String,
     /// Its UUID.
     pub uuid: String,
-    /// The platform.
+    /// The block's key under `configurations` (`sentinel`).
     pub platform: String,
     /// The block's status.
     pub status: String,
@@ -266,19 +267,16 @@ fn legacy_keys(rule: &Json) -> Vec<(String, String)> {
 pub const MIGRATE_ADVICE: &str =
     "run 'opentide deploy migrate-state' and commit .opentide/states/deployment/";
 
-/// The rule's UUID as the oracle reads a raw document (`object_uuid`).
+/// The rule's UUID from its raw document: a top-level `uuid`, else
+/// `metadata.uuid`.
 fn object_uuid(rule: &Json) -> Option<String> {
-    let text = |value: &Json| match value {
-        Json::Str(text) => text.clone(),
-        other => other.to_compact(),
-    };
     if let Some(top) = rule.get("uuid").filter(|value| value.is_name()) {
-        return Some(text(top));
+        return Some(top.to_text());
     }
     rule.get("metadata")
         .and_then(|metadata| metadata.get("uuid"))
         .filter(|value| value.is_name())
-        .map(text)
+        .map(Json::to_text)
 }
 
 /// The rule files of `scope`, read with `read`, selected for the run.
@@ -350,12 +348,10 @@ pub fn select(
                 let status = block
                     .get("status")
                     .filter(|status| status.is_filled())
-                    .map(|status| match status {
-                        Json::Str(text) => text.clone(),
-                        other => other.to_compact(),
-                    })
+                    .map(Json::to_text)
                     .ok_or_else(|| {
-                        // The oracle's `get_platform_status` logs it, then raises.
+                        // Logged with its fix (`platform_status_missing`),
+                        // then the plan fails.
                         let detail = format!(
                             "Rule {name:?} ({uuid}) has no 'status' in its {platform} \
                              configuration block. Add a status, e.g. 'status: STAGING', then \
@@ -374,8 +370,8 @@ pub fn select(
                         ))
                     })?;
                 if !options.enabled.iter().any(|known| known == platform) {
-                    // Logged whatever `log` says: `make_deploy_plan` logs it
-                    // for every caller, a deploy too.
+                    // Logged whatever `log` says: every caller of the plan,
+                    // a deploy too, gets the warning.
                     tracing::warn!(
                         system = platform.to_uppercase().as_str(),
                         rule = name.as_str(),
@@ -494,7 +490,7 @@ pub struct Tenant {
     pub name: String,
     /// `strategies`: every deployable one when unset.
     pub strategies: RunStrategies,
-    /// `manual`.
+    /// `manual`: only rules that list the tenant under `tenants` reach it.
     pub manual: bool,
 }
 
@@ -708,9 +704,9 @@ pub fn state_ids(
         let stem = name
             .len()
             .checked_sub(5)
-            .filter(|at| name.is_char_boundary(*at))
-            .filter(|at| name[*at..].eq_ignore_ascii_case(".json"))
-            .map(|at| &name[..at]);
+            .and_then(|at| name.split_at_checked(at))
+            .filter(|(_, suffix)| suffix.eq_ignore_ascii_case(".json"))
+            .map(|(stem, _)| stem);
         name != &file && stem.is_some_and(|stem| canonical_uuid(stem) == canonical)
     });
     if variants || !names.contains(&file) {
@@ -741,7 +737,7 @@ pub fn state_ids(
     Some(found)
 }
 
-/// What a change does (`_action`).
+/// What a change does.
 pub fn action(
     statuses: &Statuses,
     platform: &str,
@@ -848,8 +844,9 @@ pub fn env_reference(value: &str) -> Option<&str> {
 }
 
 /// The unset variables the `setup` of the planned `(platform, tenant)` pairs
-/// name, in the order the oracle reads them, each once. A tenant the plan
-/// sends nothing to (another strategy's, another platform's) needs none.
+/// name, in plan order then each `setup`'s key order, each once. A tenant
+/// the plan sends nothing to (another strategy's, another platform's) needs
+/// none.
 pub fn unset_variables(
     config: &Json,
     planned: &[(&str, &str)],
@@ -857,7 +854,7 @@ pub fn unset_variables(
 ) -> Vec<String> {
     let mut names: Vec<String> = Vec::new();
     for (platform, name) in planned {
-        for tenant in tenants(config, platform) {
+        for tenant in tenants(config, &PlatformKey::new(platform)) {
             if tenant.get("name").and_then(Json::as_str) != Some(*name) {
                 continue;
             }
@@ -878,7 +875,7 @@ pub fn unset_variables(
 }
 
 /// `a real deploy would need $A and $B, which are unset`
-/// (`unset_variables_warning`), counting past three.
+/// counting past three.
 pub fn unset_warning(names: &[String]) -> String {
     let shown: Vec<String> = names.iter().map(|name| format!("${name}")).collect();
     if shown.len() > 3 {
@@ -949,7 +946,7 @@ mod tests {
     }
 
     #[test]
-    fn tenants_are_skipped_as_the_oracle_skips_them() {
+    fn tenants_are_skipped_when_unlisted_or_manual() {
         let listed = ["a".to_owned()];
         assert_eq!(tenant_skip_reason("a", true, &listed), None);
         assert_eq!(
@@ -1062,6 +1059,9 @@ mod tests {
         let dir = "/ws/.opentide/states/deployment";
         fs.write(format!("{dir}/{uuid}.json"), shard.clone());
         fs.write(format!("{dir}/\u{212a}é.json"), "{}");
+        // #1946: names whose last five bytes split a character are skipped.
+        fs.write(format!("{dir}/é😀"), "{}");
+        fs.write(format!("{dir}/a😀"), "{}");
         let root = Path::new("/ws");
         assert_eq!(
             state_id(&fs, root, uuid, "crowdstrike", "t").as_deref(),
@@ -1072,6 +1072,59 @@ mod tests {
         // Another spelling of the same rule's shard makes the state unusable.
         fs.write(format!("{dir}/{}.JSON", uuid.to_uppercase()), shard);
         assert_eq!(state_id(&fs, root, uuid, "crowdstrike", "t"), None);
+    }
+
+    /// The compiler's JSON reading of "enabled" agrees with the model's rule,
+    /// whether the configuration says `systems` (0.x) or `platforms` (#1935).
+    #[test]
+    fn enabled_agrees_with_the_resolved_configuration_for_systems_and_platforms() {
+        use opentide_schema::configuration::resolve::{Folder, Instance, resolve};
+        let configure = |files: &[(&str, &str)], folders: &[&str]| {
+            let folder = Folder {
+                path: "/w/.opentide/configurations".to_owned(),
+                files: files
+                    .iter()
+                    .map(|(path, text)| ((*path).to_owned(), (*text).to_owned()))
+                    .collect(),
+                folders: folders.iter().map(|name| (*name).to_owned()).collect(),
+            };
+            resolve(&Instance {
+                workspace: Some(&folder),
+                ..Instance::default()
+            })
+            .unwrap()
+        };
+        let by_systems = configure(
+            &[(
+                "systems.toml",
+                "[sentinel.platform]\nenabled = true\n[acme.platform]\nenabled = true\n\
+                 [splunk]\nenabled = true\n",
+            )],
+            &[],
+        );
+        let by_platforms = configure(
+            &[
+                ("platforms/sentinel.toml", "[platform]\nenabled = true\n"),
+                ("platforms/acme.toml", "[platform]\nenabled = true\n"),
+                ("platforms/splunk.toml", "enabled = true\n"),
+            ],
+            &["platforms"],
+        );
+        for resolved in [by_systems, by_platforms] {
+            let config = Json::from_node(&resolved.tree);
+            let model: Vec<&str> = resolved
+                .enabled_platforms()
+                .into_iter()
+                .map(opentide_schema::platforms::PlatformId::as_str)
+                .collect();
+            assert_eq!(model, ["sentinel"]);
+            assert_eq!(enabled(&config), model);
+            assert_eq!(
+                enabled_with(&config, &["acme".to_owned()]),
+                ["sentinel", "acme"]
+            );
+            assert!(resolved.platform_enabled("acme"));
+        }
     }
 
     #[test]

@@ -1,4 +1,4 @@
-//! What `opentide tui` shows, without a terminal (`cli/services/tui.py`):
+//! What `opentide tui` shows, without a terminal:
 //! a snapshot of the workspace, built off the UI thread and read on it.
 //!
 //! The catalogue comes from the workspace's index, the coverage table from
@@ -880,11 +880,7 @@ fn check_files(
             .into_iter()
             .map(|diagnostic| {
                 let item = crate::queries::finding(text, &lines, diagnostic);
-                let help = crate::queries::engine_help(
-                    &item.code,
-                    &item.message,
-                    item.suggestion.as_deref(),
-                );
+                let help = crate::queries::engine_help(&item.code, item.suggestion.as_deref());
                 Finding {
                     severity: match item.severity {
                         opentide_core::Severity::Error => "error",

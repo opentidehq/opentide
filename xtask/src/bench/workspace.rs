@@ -141,7 +141,7 @@ pub fn disable_platform(text: &str) -> Option<String> {
         } else if in_platform && !found {
             let compact: String = trimmed.chars().filter(|c| !c.is_whitespace()).collect();
             if compact == "enabled=true" || compact.starts_with("enabled=true#") {
-                let indent = &line[..line.len() - line.trim_start().len()];
+                let indent = line.strip_suffix(line.trim_start()).unwrap_or_default();
                 let ending = if line.ends_with("\r\n") {
                     "\r\n"
                 } else if line.ends_with('\n') {
@@ -189,6 +189,10 @@ mod tests {
         assert_eq!(disable_platform("[platform]\nenabled = false\n"), None);
         assert_eq!(disable_platform("[platform]\n#enabled = true\n"), None);
         assert_eq!(disable_platform("[other]\nenabled = true\n"), None);
+        assert_eq!(
+            disable_platform("# é😀\n[platform]\n\u{3000}enabled = true # 😀\n").unwrap(),
+            "# é😀\n[platform]\n\u{3000}enabled = false\n"
+        );
     }
 
     #[test]

@@ -36,12 +36,12 @@ macro_rules! kinds {
         /// The reserved words: lower-case text and kind. Never a name, except
         /// where a name is read whatever its spelling (a rule name, a meta
         /// key, a path segment).
-        pub(crate) const KEYWORDS: &[(&str, SyntaxKind)] = &[$(($text, SyntaxKind::$kw)),*];
+        pub const KEYWORDS: &[(&str, SyntaxKind)] = &[$(($text, SyntaxKind::$kw)),*];
 
         /// The words that are keywords only where the grammar takes them: the
         /// lexer reads them as [`SyntaxKind::IDENT`] and the parser re-kinds
         /// the ones it expects.
-        pub(crate) const CONTEXTUAL: &[(&str, SyntaxKind)] = &[$(($ctext, SyntaxKind::$ckw)),*];
+        pub const CONTEXTUAL: &[(&str, SyntaxKind)] = &[$(($ctext, SyntaxKind::$ckw)),*];
     };
 }
 
@@ -408,11 +408,12 @@ mod tests {
         let macro_source = include_str!("syntax.rs");
         let mut rest = text.as_str();
         let mut tokens = BTreeSet::new();
-        while let Some(open) = rest.find('\'') {
-            let after = &rest[open + 1..];
-            let Some(close) = after.find('\'') else { break };
-            tokens.insert(after[..close].to_owned());
-            rest = &after[close + 1..];
+        while let Some((_, after)) = rest.split_once('\'') {
+            let Some((token, next)) = after.split_once('\'') else {
+                break;
+            };
+            tokens.insert(token.to_owned());
+            rest = next;
         }
         assert!(tokens.len() > 60, "{} tokens", tokens.len());
         for token in &tokens {

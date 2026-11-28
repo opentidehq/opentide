@@ -8,7 +8,7 @@ use std::path::Path;
 use serde_json::{Map, Value, json};
 
 use super::args::Args;
-use super::{catalog, deploy, queries};
+use super::{catalog, deploy, graph, queries};
 use crate::env::Env;
 use crate::json::{Json, Object, document_text};
 
@@ -37,8 +37,25 @@ enum Payload {
     List(Vec<Json>),
 }
 
-/// The `tools/call` result of the tool `name`.
+/// The `tools/call` result of the tool `name`, on the process's warm
+/// workspace (#1942): a call that only reads opens it through the session
+/// ([`opentide_workspace::session`]), which re-reads only the files changed
+/// on disk since the last call. A deploy that is not a dry run may write the
+/// workspace: it opens it afresh, and the session then forgets what it kept,
+/// as `serve` does after a run that may write.
 pub fn call(name: &str, arguments: &Map<String, Value>, context: &Context<'_>) -> Value {
+    let writes = name == "deploy_rule" && Args::new(arguments).boolean("dry_run", true) != Ok(true);
+    if writes {
+        let result = answer(name, arguments, context);
+        opentide_workspace::session::clear();
+        return result;
+    }
+    let _warm = opentide_workspace::session::activate();
+    answer(name, arguments, context)
+}
+
+/// [`call`]'s answer.
+fn answer(name: &str, arguments: &Map<String, Value>, context: &Context<'_>) -> Value {
     let args = Args::new(arguments);
     let payload = match name {
         "explain" => args
@@ -89,6 +106,7 @@ pub fn call(name: &str, arguments: &Map<String, Value>, context: &Context<'_>) -
                 &tactic,
             )))
         })(),
+        "graph" => graph::tool(&args, context).map(Payload::One),
         "validate_rule" => (|| {
             let uuid = args.required("uuid")?;
             catalog::validate_rule(context, &uuid).map(Payload::One)
@@ -105,6 +123,7 @@ pub fn call(name: &str, arguments: &Map<String, Value>, context: &Context<'_>) -
                 live: args.boolean("live", false)?,
                 language: args.string("language", "")?,
                 stack: args.string("stack", "")?,
+                position: args.string("position", "search")?,
             };
             queries::validate_query(&request, context).map(Payload::One)
         })(),
@@ -221,7 +240,7 @@ pub fn failed_result(payload: &Json) -> Value {
 /// - `validation_report`: a `queries` mode that is not one, an invalid
 ///   argument (the payload is `{"ok": false, "error": ...}`).
 ///
-/// What stays an answer, as the Python server had it: the findings of
+/// What stays an answer, not a failure: the findings of
 /// `validation_report` and `validate_rule`, and a lookup that finds nothing
 /// (`found: false`).
 fn is_failure(name: &str, payload: &Json) -> bool {
@@ -394,7 +413,7 @@ fn diagnostics_of(payload: &Object) -> Vec<Json> {
 /// The same report again, as an MCP call and as the command line that keeps
 /// the selection and a `--queries` mode that is not the default.
 fn again_action(file: &str, uuid: &str, object_type: &str, queries: &str) -> Json {
-    let mut arguments = Vec::new();
+    let mut arguments = Object::new();
     let mut flags = String::new();
     for (key, flag, value) in [
         ("file", "file", file),
@@ -402,17 +421,17 @@ fn again_action(file: &str, uuid: &str, object_type: &str, queries: &str) -> Jso
         ("object_type", "type", object_type),
     ] {
         if !value.is_empty() {
-            arguments.push((key, Json::str(value)));
+            arguments.insert(key.to_owned(), Json::str(value));
             flags.push_str(&format!(" --{flag} {}", quote(value)));
         }
     }
     if queries != "error" {
         flags.push_str(&format!(" --queries {queries}"));
-        arguments.push(("queries", Json::str(queries)));
+        arguments.insert("queries".to_owned(), Json::str(queries));
     }
     next_action(
         "validation_report",
-        Json::object(arguments),
+        Json::Object(arguments),
         &format!("opentide --json validate{flags}"),
         "",
     )
@@ -420,7 +439,7 @@ fn again_action(file: &str, uuid: &str, object_type: &str, queries: &str) -> Jso
 
 /// A word of a command line, quoted for a POSIX shell when it needs it.
 pub fn quote(word: &str) -> String {
-    shlex::try_quote(word).map_or_else(|_| format!("{word:?}"), std::borrow::Cow::into_owned)
+    opentide_core::text::shell_word(word).into_owned()
 }
 
 /// A tool call worth making next: the CLI's `{command, reason}` plus the MCP call.
@@ -442,7 +461,7 @@ fn set(object: &mut Json, key: &str, value: Json) {
 }
 
 /// Explain the first error's code, then validate again once the fixes are
-/// written (`_validation_next_actions`).
+/// written.
 pub fn validation_next_actions(diagnostics: &[Json], again: Json) -> Vec<Json> {
     let string = |item: &Json, key: &str| match item.get(key) {
         Some(Json::Str(text)) => Some(text.clone()),

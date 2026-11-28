@@ -1,5 +1,5 @@
-# The object models against the oracle (UC-1.3, #809): each case is a Tide
-# object file and its family, read by the oracle's validate path
+# The object models against the Pydantic models (UC-1.3, #809): each case is a Tide
+# object file and its family, read by the Pydantic models' validate path
 # (`parse_yaml`, then `load_object_for_validation`) and by opentide-schema's
 # (`node::load`, then `from_node` into the revision `metadata.schema` names).
 # `objects_table.py` runs every case, and every object file of
@@ -17,42 +17,42 @@
 
 [[difference]]
 id = "one-union-error"
-reason = "A value that may be one of several types (`str | list[str]`, `str | int`, a string or a model) is reported as serde and JSON Schema validators report it, not as Pydantic's smart union: when no member's kind of value fits, one error at the value's own path, of the first member's type (`string_type`, `int_type`, `model_type`), naming what is accepted (`expected a string or a list of strings`); when a member's kind fits (a list for `list[str]`, a mapping for a model), that member's errors at their own paths (`killchain.1`). The oracle reported one error per member, each under a path segment naming the member (`killchain.str`, `killchain.list[str].1`), which is no key of the file; with the path now in the file, the error also has its span and `yaml_line`."
+reason = "A value that may be one of several types (`str | list[str]`, `str | int`, a string or a model) is reported as serde and JSON Schema validators report it, not as Pydantic's smart union: when no member's kind of value fits, one error at the value's own path, of the first member's type (`string_type`, `int_type`, `model_type`), naming what is accepted (`expected a string or a list of strings`); when a member's kind fits (a list for `list[str]`, a mapping for a model), that member's errors at their own paths (`killchain.1`). The Pydantic models reported one error per member, each under a path segment naming the member (`killchain.str`, `killchain.list[str].1`), which is no key of the file; with the path now in the file, the error also has its span and `yaml_line`."
 changelog = "**A value of the wrong type is reported once, at its own path**"
 
 [[difference]]
 id = "messages-quote-values"
-reason = "Every message quotes a value with Rust's string formatting, in double quotes with Rust's escapes (`\"x\"`, `\"a\\u{a0}b\"`), and writes any other value as YAML and JSON write it (`null`, `true`, `1.5`), where the oracle used Python's `repr` (`'x'`, `'a\\xa0b'`, `None`, `True`). Codes, paths and the rest of each message are unchanged."
+reason = "Every message quotes a value with Rust's string formatting, in double quotes with Rust's escapes (`\"x\"`, `\"a\\u{a0}b\"`), and writes any other value as YAML and JSON write it (`null`, `true`, `1.5`), where the Pydantic models used Python's `repr` (`'x'`, `'a\\xa0b'`, `None`, `True`). Codes, paths and the rest of each message are unchanged."
 changelog = "**Messages quote values the same way everywhere**"
 
 [[difference]]
 id = "yaml-1-2-dates"
-reason = "YAML 1.2 has no timestamp type (crates/opentide-schema/YAML.md, `timestamps`): `2026-01-01 10:00:00` stays as written where the oracle rewrote it `2026-01-01T10:00:00`, and `2026-02-30` reaches the field's check, which refuses it as a date that does not exist (`value_error` on `metadata.reviewed`), where the oracle refused the file (`yaml_parse`)."
+reason = "YAML 1.2 has no timestamp type (crates/opentide-schema/YAML.md, `timestamps`): `2026-01-01 10:00:00` stays as written where the Pydantic models rewrote it `2026-01-01T10:00:00`, and `2026-02-30` reaches the field's check, which refuses it as a date that does not exist (`value_error` on `metadata.reviewed`), where the Pydantic models refused the file (`yaml_parse`)."
 changelog = "**Tide objects are read as YAML 1.2**"
 
 [[difference]]
 id = "date-fields-are-strings"
-reason = "`metadata.created` and `metadata.modified` take a string, as the editor schema (`type: string`, `format: date`) says. The oracle turned any value into text first (`_coerce_dates`: `20260101` became `'20260101'`, `true` `'True'`, `null` `'None'`); a number, a boolean or null is now `string_type`. A date written `2026-01-01` is a string in YAML 1.2 and reads as before."
+reason = "`metadata.created` and `metadata.modified` take a string, as the editor schema (`type: string`, `format: date`) says. The Pydantic models turned any value into text first (`_coerce_dates`: `20260101` became `'20260101'`, `true` `'True'`, `null` `'None'`); a number, a boolean or null is now `string_type`. A date written `2026-01-01` is a string in YAML 1.2 and reads as before."
 changelog = "**`created` and `modified` are text**"
 
 [[difference]]
 id = "reviewed-validity-message"
-reason = "A `metadata.reviewed` of the right shape whose date, time or offset cannot exist is refused as before (`value_error`), with jiff's explanation (`metadata.reviewed is not a valid date or time: parameter 'day' for `2026-02` is invalid, must be in range `1..=28``) instead of Python's `datetime` message (`day 30 must be in range 1..28 for month 2 in year 2026`). The year, and the instant in UTC, are 0001 to 9999, as Python's `datetime` holds them: year 0 is refused in the Rust model's words (`the year 0000 is not between 0001 and 9999`, where Python said `year must be in 1..9999, not 0`), and an offset that moves the instant out of those years (`0001-01-01T00:00:00+23:59`, `9999-12-31T23:59:59-23:59`) is `the time in UTC is not between the years 0001 and 9999`, where the oracle crashed (`OverflowError`, no finding). A date written in other digits than ASCII's (`٢٠٢٦-٠٩-٠١`) has the shape message (`must be an ISO 8601 date (YYYY-MM-DD) or datetime`) where Python said `Invalid isoformat string`, and a date padded with a control character U+001C to U+001F, which Python's `strip()` removed and Unicode's `White_Space` (Rust's `trim()`) does not include, is refused with the shape message where the oracle accepted it."
+reason = "A `metadata.reviewed` of the right shape whose date, time or offset cannot exist is refused as before (`value_error`), with jiff's explanation (`metadata.reviewed is not a valid date or time: parameter 'day' for `2026-02` is invalid, must be in range `1..=28``) instead of Python's `datetime` message (`day 30 must be in range 1..28 for month 2 in year 2026`). The year, and the instant in UTC, are 0001 to 9999, as Python's `datetime` holds them: year 0 is refused in the Rust model's words (`the year 0000 is not between 0001 and 9999`, where Python said `year must be in 1..9999, not 0`), and an offset that moves the instant out of those years (`0001-01-01T00:00:00+23:59`, `9999-12-31T23:59:59-23:59`) is `the time in UTC is not between the years 0001 and 9999`, where the Pydantic models crashed (`OverflowError`, no finding). A date written in other digits than ASCII's (`٢٠٢٦-٠٩-٠١`) has the shape message (`must be an ISO 8601 date (YYYY-MM-DD) or datetime`) where Python said `Invalid isoformat string`, and a date padded with a control character U+001C to U+001F, which Python's `strip()` removed and Unicode's `White_Space` (Rust's `trim()`) does not include, is refused with the shape message where the Pydantic models accepted it."
 changelog = "**An impossible `reviewed` date is explained by the date library**"
 
 [[difference]]
 id = "date-fields-are-dates"
-reason = "`metadata.created` and `metadata.modified` must be a date (`2026-01-01`) or a datetime, with or without an offset (`2026-01-01 10:00:00`), as the editor schema's `format: date` says; any other text (`'1 January 2026'`, `yesterday`) is a `value_error` at the value (`metadata.created must be an ISO 8601 date (YYYY-MM-DD) or datetime`), where the oracle accepted any string (smoke test B1, #1663)."
+reason = "`metadata.created` and `metadata.modified` must be a date (`2026-01-01`) or a datetime, with or without an offset (`2026-01-01 10:00:00`), as the editor schema's `format: date` says; any other text (`'1 January 2026'`, `yesterday`) is a `value_error` at the value (`metadata.created must be an ISO 8601 date (YYYY-MM-DD) or datetime`), where the Pydantic models accepted any string (smoke test B1, #1663)."
 changelog = "**`validate` rejects a `created` or `modified` that is not a date**"
 
 [[difference]]
 id = "public-reference-keys"
-reason = "A key of `references.public` is a reference number: an integer, or a string of ASCII decimal digits with an optional sign (`\"2\"`, `\"-1\"`, `\"+3\"`), within a 64-bit signed integer. The oracle ran Python's `int()` on every key before validating: it crashed on a word (`ValueError`, no finding) and accepted, and rewrote, keys that are not reference numbers as written: a padded string (`' 12 '`), `_` separators (`'1_000'`), other digits than ASCII's (`'١٢'`), a float, which it truncated (`1.5` became `1`), a boolean (`true` became `1`) and an integer wider than 64 bits. The Rust model reports each of these at the key (`references.public.<key>.[key]`), as Pydantic reports a dictionary key: a string (`'9223372036854775808'` too) is `int_parsing`, a float or a boolean `int_type`; an integer wider than 64 bits written as a number refuses the file (`yaml_parse`, crates/opentide-schema/YAML.md `integer-range`)."
+reason = "A key of `references.public` is a reference number: an integer, or a string of ASCII decimal digits with an optional sign (`\"2\"`, `\"-1\"`, `\"+3\"`), within a 64-bit signed integer. The Pydantic models ran Python's `int()` on every key before validating: it crashed on a word (`ValueError`, no finding) and accepted, and rewrote, keys that are not reference numbers as written: a padded string (`' 12 '`), `_` separators (`'1_000'`), other digits than ASCII's (`'١٢'`), a float, which it truncated (`1.5` became `1`), a boolean (`true` became `1`) and an integer wider than 64 bits. The Rust model reports each of these at the key (`references.public.<key>.[key]`), as Pydantic reports a dictionary key: a string (`'9223372036854775808'` too) is `int_parsing`, a float or a boolean `int_type`; an integer wider than 64 bits written as a number refuses the file (`yaml_parse`, crates/opentide-schema/YAML.md `integer-range`)."
 changelog = "**A public reference number must be written as an integer**"
 
 [[difference]]
 id = "positions"
-reason = "As crates/opentide-schema/tests/oracle/from_node_cases.toml `positions`: positions come from the parser's node marks. A value written `null` has a `yaml_line` (the oracle gave none), and an error under an integer key (`references.public.1`) is found at that key, where the oracle could not find the key and pointed at its parent."
+reason = "As crates/opentide-schema/tests/oracle/from_node_cases.toml `positions`: positions come from the parser's node marks. A value written `null` has a `yaml_line` (the Pydantic models gave none), and an error under an integer key (`references.public.1`) is found at that key, where the Pydantic models could not find the key and pointed at its parent."
 changelog = "**Findings point at the key or value they are about**"
 
 [[difference]]
@@ -62,12 +62,12 @@ changelog = "**Field types are checked as declared**"
 
 [[difference]]
 id = "unknown-revision"
-reason = "A `metadata.schema` that names a revision of the object's family the registry does not hold (`rule::7.0`, `Rule::1.1`, `threat::1.5`) is checked against the family's newest revision (`rule::1.1`), without the unknown-key check, as the language server already did (ADR 0009). The object still fails: the error at `metadata.schema` stays (`value_error`, `unknown schema identifier: 'rule::7.0'; checked against rule::1.1, the newest rule revision, without the unknown-key check`), followed by every other error the newest revision finds. The oracle stopped at the identifier (`unknown schema identifier: 'rule::7.0'`) and reported nothing else. An identifier of another family, or one that is not `family::major.minor`, is refused as before, with the same code; its message quotes it as `identifier-quoting` says."
+reason = "A `metadata.schema` that names a revision of the object's family the registry does not hold (`rule::7.0`, `Rule::1.1`, `threat::1.5`) is checked against the family's newest revision (`rule::1.1`), without the unknown-key check, as the language server already did (ADR 0009). The object still fails: the error at `metadata.schema` stays (`value_error`, `unknown schema identifier: 'rule::7.0'; checked against rule::1.1, the newest rule revision, without the unknown-key check`), followed by every other error the newest revision finds. The Pydantic models stopped at the identifier (`unknown schema identifier: 'rule::7.0'`) and reported nothing else. An identifier of another family, or one that is not `family::major.minor`, is refused as before, with the same code; its message quotes it as `identifier-quoting` says."
 changelog = "**An unknown schema revision is checked against the newest revision of its family**"
 
 [[difference]]
 id = "identifier-quoting"
-reason = "A `metadata.schema` that is not a registered revision nor a revision of the object's family is refused as before (`schema_validation`, `unknown schema identifier: ...`), but the identifier is quoted the same way whatever it holds: in double quotes, as written in the file (`\"rule's::1.1\"`), a boolean as YAML 1.2 spells it (`\"true\"`, where the oracle printed Python's `'True'`), a list as `\"[...]\"` and a mapping as `\"{...}\"` (where the oracle printed Python's repr, `\"['rule::1.1']\"`). Codes and exit codes are unchanged."
+reason = "A `metadata.schema` that is not a registered revision nor a revision of the object's family is refused as before (`schema_validation`, `unknown schema identifier: ...`), but the identifier is quoted the same way whatever it holds: in double quotes, as written in the file (`\"rule's::1.1\"`), a boolean as YAML 1.2 spells it (`\"true\"`, where the Pydantic models printed Python's `'True'`), a list as `\"[...]\"` and a mapping as `\"{...}\"` (where the Pydantic models printed Python's repr, `\"['rule::1.1']\"`). Codes and exit codes are unchanged."
 changelog = "**An unknown schema identifier is quoted the same way whatever it holds**"
 
 [[case]]
@@ -1866,7 +1866,7 @@ objective:
 # is checked against the family's newest revision without the unknown-key
 # check (`unknown-revision`), and an identifier that is refused is quoted in
 # single quotes as written (`identifier-quoting`); every other verdict is the
-# oracle's.
+# Pydantic models'.
 
 [[case]]
 id = "revision-unknown-rule"

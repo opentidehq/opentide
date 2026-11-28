@@ -1,6 +1,5 @@
 //! `opentide generate docs` (UC-3.2b, #915): a Markdown page per rule,
-//! objective and threat, the folders' index pages and the root README
-//! (`documentation/`).
+//! objective and threat, the folders' index pages and the root README.
 //!
 //! - [`catalog`]: the objects read into their models, sorted by name, each with
 //!   a unique page slug; the relations the pages show (the flat relation walk,
@@ -116,7 +115,7 @@ impl FlavorHints {
     }
 }
 
-/// The flavour of the forge hosting `url` (`_flavor_for_host`).
+/// The flavour of the forge hosting `url`.
 pub fn flavor_for_url(url: &str) -> Option<Flavor> {
     let host = if let Some((_, rest)) = url.split_once("://") {
         let authority = rest.split(['/', '?', '#']).next().unwrap_or_default();
@@ -289,7 +288,8 @@ fn page(text: &str) -> String {
 
 /// The pages of the objects of `scopes`, in parallel, and how many of each;
 /// only the objects of `targets` when given. Threats, objectives, then rules,
-/// each by name, as the oracle writes them.
+/// each by name: the outputs, and the failure reported, follow that order
+/// whichever page renders first.
 ///
 /// # Errors
 ///

@@ -82,7 +82,7 @@ fn a_rejected_query_is_an_error_at_its_place_with_the_engine_s_context() {
     // The span ends on the line of its last character, not at column 1 of
     // the next one.
     assert_eq!(json["end_line"], json!(line));
-    // The context's keys in the oracle's order (the serialised text keeps it).
+    // The context's keys in opentide 0.23.0's order (the serialised text keeps it).
     let text = serde_json::to_string(&errors[0].context).unwrap();
     assert!(
         text.starts_with(
@@ -163,6 +163,45 @@ fn a_hunt_is_reported_at_its_own_path_on_its_system_s_platform() {
     assert_eq!(json["context"]["platform"], "splunk");
     assert_eq!(json["context"]["language"], "spl");
     assert_eq!(json["line"], 10);
+}
+
+/// A Sentinel block's query is a rule, a hunt's search is not (#1915): `union *`
+/// is the error `kql_rule_union_star` in the block, which `validate` fails on,
+/// and stays the scope warning in a Sentinel hunt.
+#[test]
+fn a_sentinel_rule_may_not_union_every_table_but_a_hunt_may() {
+    let text = format!(
+        "{}response:\n  procedure:\n    searches:\n      - purpose: hunt\n        system: \
+         sentinel\n        query: union * | take 1\n",
+        rule("  sentinel:\n    query: union * | take 1\n")
+    );
+    let (errors, warnings, queries) = check(&text, false);
+    assert_eq!(queries, 2);
+    let at = |found: &[Diagnostic], code: &str| -> Vec<serde_json::Value> {
+        found
+            .iter()
+            .filter_map(|d| serde_json::to_value(d).ok())
+            .filter(|json| json["code"] == code)
+            .map(|json| json["field_path"].clone())
+            .collect()
+    };
+    assert_eq!(
+        at(&errors, "kql_rule_union_star"),
+        [json!(["configurations", "sentinel", "query"])],
+        "{errors:#?}"
+    );
+    assert!(at(&warnings, "kql_rule_union_star").is_empty());
+    // `lint` reports style, not `validate`'s errors: the hunt keeps the
+    // performance warning, and the block's has given way to the error.
+    let lint: Vec<(String, String, usize)> = lint_check(&text)
+        .into_iter()
+        .filter(|(code, _, _)| code.starts_with("kql_unscoped") || code.starts_with("kql_rule"))
+        .collect();
+    assert_eq!(
+        lint,
+        [("kql_unscoped_union".to_owned(), "warning".to_owned(), 13)],
+        "{lint:?}"
+    );
 }
 
 #[test]
@@ -911,9 +950,206 @@ fn lint_reports_the_exabeam_block_advisories() {
     );
 }
 
+#[test]
+fn lint_reports_the_datadog_block_advisories() {
+    let text = rule(
+        "  datadog:\n    status: PREVIEW\n    queries:\n      - query: source:a\n      - query: \
+         source:b\n      - query: source:c\n    cases:\n      - condition: a > 1 || b > 1 && c > \
+         1\n",
+    );
+    let found = lint_check(&text);
+    let advisories: Vec<(String, String)> = found
+        .into_iter()
+        .filter(|(code, _, _)| code.starts_with("datadog_condition"))
+        .map(|(code, severity, _)| (code, severity))
+        .collect();
+    assert_eq!(
+        advisories,
+        [("datadog_condition_mixed".to_owned(), "warning".to_owned())]
+    );
+}
+
+/// A block's query is a detection rule's (profile `rule`): full-text
+/// `*:term` is a warning there; the same text in a `system: datadog` hunt is
+/// a search (profile `search`), where it is not (RFC rfc-datadog-cloud-siem
+/// §6.1).
+#[test]
+fn lint_checks_a_datadog_block_query_as_a_rule_and_a_hunt_as_a_search() {
+    let text = format!(
+        "{}response:\n  procedure:\n    searches:\n      - purpose: p\n        system: \
+         datadog\n        query: '*:mimikatz'\n",
+        rule(
+            "  datadog:\n    status: PREVIEW\n    queries:\n      - query: '*:mimikatz'\n    \
+             cases:\n      - condition: a > 0\n"
+        )
+    );
+    let found: Vec<(String, String, usize)> = lint_check(&text)
+        .into_iter()
+        .filter(|(code, _, _)| code == "datadog_full_text_in_rule")
+        .collect();
+    assert_eq!(
+        found,
+        [(
+            "datadog_full_text_in_rule".to_owned(),
+            "warning".to_owned(),
+            9
+        )]
+    );
+}
+
+/// Advanced hunting's own functions (#1914): a Sentinel block that calls one
+/// gets lint's warning `kql_function_unavailable` at the function's name; a
+/// Defender block that calls it gets nothing, and `validate` fails neither.
+#[test]
+fn lint_reports_a_defender_function_in_a_sentinel_query() {
+    let query =
+        "query: |\n      DeviceFileEvents\n      | project SHA1\n      | invoke FileProfile()\n";
+    let sentinel = rule(&format!("  sentinel:\n    status: STAGING\n    {query}"));
+    let found: Vec<(String, String, usize)> = lint_check(&sentinel)
+        .into_iter()
+        .filter(|(code, _, _)| code == "kql_function_unavailable")
+        .collect();
+    assert_eq!(
+        found,
+        [(
+            "kql_function_unavailable".to_owned(),
+            "warning".to_owned(),
+            11
+        )]
+    );
+    let (errors, warnings, _) = check(&sentinel, false);
+    assert!(
+        errors
+            .iter()
+            .chain(&warnings)
+            .all(|d| d.code != "kql_function_unavailable"),
+        "{errors:?} {warnings:?}"
+    );
+    let defender = rule(&format!(
+        "  microsoft_defender:\n    status: STAGING\n    schedule:\n      frequency: 1H\n    {query}"
+    ));
+    assert!(
+        lint_check(&defender)
+            .iter()
+            .all(|(code, _, _)| code != "kql_function_unavailable"),
+        "{:?}",
+        lint_check(&defender)
+    );
+}
+
+/// Microsoft's documented custom detection limits (#1890): the alert's are
+/// block advisories, which lint reports like `validate`; a continuous rule's
+/// query is the engine's warning, lint's and not `validate`'s.
+#[test]
+fn lint_reports_the_microsoft_defender_documented_limits() {
+    let details = (1..=21)
+        .map(|n| format!("        Detail{n}: Column{n}\n"))
+        .collect::<Vec<_>>()
+        .concat();
+    let text = rule(&format!(
+        "  microsoft_defender:\n    status: STAGING\n    schedule:\n      frequency: NRT\n    \
+         query: |\n      DeviceEvents\n      | join (DeviceInfo) on DeviceId\n    entities:\n      \
+         hosts: [{{device_id: DeviceId}}]\n    alert:\n      title: \"{{{{A}}}} {{{{B}}}} {{{{C}}}} \
+         {{{{D}}}}\"\n      custom_details:\n{details}"
+    ));
+    // #1885's output findings on the same block are its own tests'.
+    let limits = [
+        "microsoft_defender_custom_details_limit",
+        "microsoft_defender_nrt_query",
+        "microsoft_defender_placeholder_limit",
+    ];
+    let found: Vec<(String, String, usize)> = lint_check(&text)
+        .into_iter()
+        .filter(|(code, _, _)| limits.contains(&code.as_str()))
+        .collect();
+    let warning = |code: &str, line: usize| (code.to_owned(), "warning".to_owned(), line);
+    assert_eq!(
+        found,
+        [
+            warning("microsoft_defender_nrt_query", 12),
+            warning("microsoft_defender_nrt_query", 12),
+            warning("microsoft_defender_custom_details_limit", 17),
+            warning("microsoft_defender_placeholder_limit", 16),
+        ]
+    );
+    // `validate`'s queries check reports the engine's errors only.
+    let (errors, warnings, _) = check(&text, false);
+    assert!(
+        errors.is_empty() && warnings.is_empty(),
+        "{errors:#?} {warnings:#?}"
+    );
+}
+
+/// #1890: `lint --strict` fails on the three Defender limit warnings, and
+/// `[queries.codes]` in lint.toml, the changelog's Upgrade step, sets each
+/// to `info`, which keeps them reported without failing: the block
+/// advisories as the engine's NRT finding.
+#[test]
+fn lint_strict_fails_on_the_defender_limits_unless_lint_toml_lowers_them() {
+    let details = (1..=21)
+        .map(|n| format!("        Detail{n}: Column{n}\n"))
+        .collect::<Vec<_>>()
+        .concat();
+    let text = rule(&format!(
+        "  microsoft_defender:\n    status: STAGING\n    schedule:\n      frequency: NRT\n    \
+         query: |\n      // all devices\n      DeviceEvents\n    entities:\n      hosts: \
+         [{{device_id: DeviceId}}]\n    alert:\n      title: \"{{{{A}}}} {{{{B}}}} {{{{C}}}} \
+         {{{{D}}}}\"\n      custom_details:\n{details}"
+    ));
+    const CODES: [&str; 3] = [
+        "microsoft_defender_custom_details_limit",
+        "microsoft_defender_nrt_query",
+        "microsoft_defender_placeholder_limit",
+    ];
+    let defender = |document: &Value| -> Vec<(String, String)> {
+        let mut found: Vec<(String, String)> = document["findings"]
+            .as_array()
+            .unwrap_or_else(|| panic!("{document}"))
+            .iter()
+            .filter(|finding| CODES.contains(&finding["code"].as_str().unwrap()))
+            .map(|finding| {
+                (
+                    finding["code"].as_str().unwrap().to_owned(),
+                    finding["severity"].as_str().unwrap().to_owned(),
+                )
+            })
+            .collect();
+        found.sort();
+        found
+    };
+    let strict = lint_run(&text, &["--strict"]);
+    assert_eq!(strict["exit_code"], 1, "{strict}");
+    assert_eq!(
+        defender(&strict),
+        CODES.map(|code| (code.to_owned(), "warning".to_owned())),
+        "{strict}"
+    );
+    let lowered = lint_run_with(
+        &text,
+        Some(
+            "[queries.codes]\nmicrosoft_defender_custom_details_limit = \"info\"\n\
+             microsoft_defender_placeholder_limit = \"info\"\n\
+             microsoft_defender_nrt_query = \"info\"\n",
+        ),
+        &["--strict"],
+    );
+    assert_eq!(
+        defender(&lowered),
+        CODES.map(|code| (code.to_owned(), "info".to_owned())),
+        "{lowered}"
+    );
+    assert_eq!(lowered["exit_code"], 0, "{lowered}");
+}
+
 /// `opentide --json lint` with `words` after it, in-process, in a workspace
 /// on disk holding `text` as its one rule: the JSON document.
 fn lint_run(text: &str, words: &[&str]) -> Value {
+    lint_run_with(text, None, words)
+}
+
+/// [`lint_run`] with `lint_toml`, when given, as the workspace's
+/// `.opentide/configurations/lint.toml`.
+fn lint_run_with(text: &str, lint_toml: Option<&str>, words: &[&str]) -> Value {
     use std::sync::Mutex;
     #[derive(Clone, Default)]
     struct Sink(Arc<Mutex<Vec<u8>>>);
@@ -931,6 +1167,9 @@ fn lint_run(text: &str, words: &[&str]) -> Value {
     std::fs::create_dir_all(ws.join(".opentide/configurations")).unwrap();
     std::fs::create_dir_all(ws.join("objects/rules")).unwrap();
     std::fs::write(ws.join("objects/rules/a.yaml"), text).unwrap();
+    if let Some(lint_toml) = lint_toml {
+        std::fs::write(ws.join(".opentide/configurations/lint.toml"), lint_toml).unwrap();
+    }
     let home = scratch.path().join("home");
     std::fs::create_dir_all(&home).unwrap();
     let host = opentide_cli::Host {

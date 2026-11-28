@@ -23,10 +23,10 @@ use opentide_parse::{
 /// two levels in the parenthesis). The tree-sitter engine took 10,000 levels; the floor every language keeps is
 /// `deep_queries`' `NESTING_CEILING` (1,000). Elasticsearch itself stops at 250 (the
 /// `eql_expression_depth` check).
-pub(crate) const MAX_DEPTH: u32 = 1_024;
+pub const MAX_DEPTH: u32 = 1_024;
 
 /// The toolkit's view of EQL's kinds.
-pub(crate) const GRAMMAR: Grammar = Grammar {
+pub const GRAMMAR: Grammar = Grammar {
     eof: K::EOF.raw(),
     error: K::ERROR.raw(),
     trivia: K::set(&[K::WHITESPACE, K::LINE_COMMENT, K::BLOCK_COMMENT]),
@@ -120,15 +120,19 @@ const MULTIPLICATIVE: u8 = 6;
 const UNARY: u8 = 7;
 
 /// Error messages the analysis words as its own.
-pub(crate) const EXPECTED_EXPRESSION: &str = "an expression is missing";
-pub(crate) const UNEXPECTED: &str = "unexpected token";
+pub const EXPECTED_EXPRESSION: &str = "an expression is missing";
+pub const UNEXPECTED: &str = "unexpected token";
 
 /// Re-kinds the reserved words: Elasticsearch reserves every keyword, so a word with a
 /// keyword's text is that keyword wherever it stands.
 fn keywords(source: &str, mut lexemes: Vec<Lexeme>) -> Vec<Lexeme> {
     for lexeme in &mut lexemes {
         if lexeme.kind == K::WORD.raw() {
-            let text = &source[std::ops::Range::<usize>::from(lexeme.range)];
+            let text = crate::cut(
+                source,
+                lexeme.range.start().into(),
+                lexeme.range.end().into(),
+            );
             if let Some((_, kind)) = KEYWORDS.iter().find(|(word, _)| *word == text) {
                 lexeme.kind = kind.raw();
             }
@@ -138,7 +142,7 @@ fn keywords(source: &str, mut lexemes: Vec<Lexeme>) -> Vec<Lexeme> {
 }
 
 /// Parses `source`.
-pub(crate) fn parse(source: &str) -> Parse {
+pub fn parse(source: &str) -> Parse {
     let input = Input::new(source, keywords(source, lex(source)), GRAMMAR);
     let mut p = Parser::new(&input);
     let root = p.start();
@@ -163,7 +167,7 @@ pub(crate) fn parse(source: &str) -> Parse {
     dead_code,
     reason = "the snapshot tests include this file by path and call it; the crate does not"
 )]
-pub(crate) fn debug(source: &str) -> String {
+pub fn debug(source: &str) -> String {
     let parse = parse(source);
     let root = SyntaxNode::new_root(parse.green.clone());
     let mut out = debug_tree(&root, |k| format!("{k:?}"));

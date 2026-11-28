@@ -10,7 +10,9 @@ mod index {
     use std::path::{Path, PathBuf};
     use std::sync::Arc;
 
-    use opentide_workspace::{Change, FileSystem, MemoryFs, Options, RootOptions, Workspace};
+    use opentide_workspace::{
+        Change, FileSystem, Invalidation, MemoryFs, Options, RootOptions, Workspace,
+    };
     use proptest::prelude::*;
 
     const ROOT: &str = "/ws";
@@ -217,6 +219,154 @@ mod index {
                 );
             }
         }
+    }
+
+    /// An object file of the in-place tests: its UUID is its own (`u-<file>`)
+    /// unless `uuid` names another file's, so most edits keep the object it
+    /// is and some give it another's UUID.
+    fn edited(file: usize, kind: usize, uuid: Option<usize>, other: usize) -> Vec<u8> {
+        let uuid = format!("u-{}", uuid.unwrap_or(file));
+        let other = format!("u-{other}");
+        match kind % 9 {
+            0 => format!("metadata:\n  uuid: {uuid}\nname: é😀 {file}\n").into_bytes(),
+            1 => format!("metadata:\n  uuid: {uuid}\ndetection_model: {other}\n").into_bytes(),
+            2 => format!("metadata:\n  uuid: {uuid}\ndetection_model: s-{other}\n").into_bytes(),
+            3 => format!(
+                "metadata:\n  uuid: {uuid}\nthreat:\n  chaining:\n    - {{relation: precedes, vector: {other}}}\n    - {{relation: follows, vector: {other}}}\n"
+            )
+            .into_bytes(),
+            4 => format!("metadata:\n  uuid: {uuid}\nthreat:\n  chaining: []\n").into_bytes(),
+            5 => format!(
+                "metadata:\n  uuid: {uuid}\nobjective:\n  threats: [{other}]\n  signals:\n    - uuid: s-{other}\n"
+            )
+            .into_bytes(),
+            6 => b"metadata: [unclosed\n".to_vec(),
+            7 => b"metadata:\n  name: no uuid\n".to_vec(),
+            _ => format!("uuid: {uuid}\n").into_bytes(),
+        }
+    }
+
+    /// The file `file` of the in-place tests: rules, threats and objectives.
+    fn edited_path(file: usize) -> PathBuf {
+        let folder = ["objects/rules", "objects/threats", "objects/objectives"][file % 3];
+        Path::new(ROOT).join(folder).join(format!("f{file}.yaml"))
+    }
+
+    /// Everything the index holds, the documents and the references' field
+    /// paths included: a stricter comparison than [`index_json`].
+    fn whole(workspace: &Workspace) -> String {
+        format!("{:?}", workspace.index())
+    }
+
+    #[expect(clippy::unwrap_used, reason = "a test helper: the workspace resolves")]
+    fn whole_from_scratch(fs: &Arc<MemoryFs>) -> String {
+        whole(&Workspace::open(Arc::clone(fs) as Arc<dyn FileSystem>, options()).unwrap())
+    }
+
+    proptest! {
+        #![proptest_config(ProptestConfig { cases: 256, ..ProptestConfig::default() })]
+
+        /// An edit of a file's content puts its document in place in the
+        /// index when it can (#2122): the index is then, document for
+        /// document and reference for reference, the one a full load makes,
+        /// and the invalidation says what the index assembled again from
+        /// every parse says (a clone held across the edit shares the index,
+        /// so that workspace assembles it again).
+        #[test]
+        fn an_index_edited_in_place_equals_one_assembled_again(
+            seed in proptest::collection::vec((0usize..9, 0usize..9), 1..12),
+            edits in proptest::collection::vec(
+                (
+                    0usize..12,
+                    0usize..9,
+                    proptest::option::weighted(0.1, 0usize..12),
+                    0usize..12,
+                ),
+                1..24,
+            ),
+        ) {
+            let fs = Arc::new(MemoryFs::new());
+            fs.create_dir(Path::new(ROOT).join(".opentide/configurations"));
+            for (file, (kind, other)) in seed.iter().enumerate() {
+                fs.write(edited_path(file), edited(file, *kind, None, *other));
+            }
+            let open = || Workspace::open(Arc::clone(&fs) as Arc<dyn FileSystem>, options()).unwrap();
+            let mut in_place = open();
+            let mut assembled = open();
+            for (file, kind, uuid, other) in &edits {
+                let path = edited_path(*file);
+                let change = if fs.is_file(&path) {
+                    Change::changed(&path)
+                } else {
+                    Change::created(&path)
+                };
+                fs.write(&path, edited(*file, *kind, *uuid, *other));
+                let held = assembled.clone();
+                let expected = assembled.invalidate(std::slice::from_ref(&change)).unwrap();
+                drop(held);
+                let done = in_place.invalidate(&[change]).unwrap();
+                prop_assert_eq!(&done, &expected, "{}", path.display());
+                prop_assert_eq!(whole(&in_place), whole_from_scratch(&fs), "{}", path.display());
+                prop_assert_eq!(whole(&assembled), whole(&in_place));
+            }
+        }
+    }
+
+    /// Which edits put the new document in place in the index (it is then the
+    /// same allocation) and which assemble it again.
+    #[test]
+    fn an_edit_that_keeps_each_object_what_it_was_is_made_in_place() {
+        let fs = Arc::new(MemoryFs::new());
+        for file in 0..6 {
+            fs.write(edited_path(file), edited(file, 1, None, 0));
+        }
+        let mut ws = Workspace::open(Arc::clone(&fs) as Arc<dyn FileSystem>, options()).unwrap();
+        // A rule's reference, then its name: in place.
+        let (kept, done) = edit(&fs, &mut ws, 0, 2, None);
+        assert!(kept);
+        assert!(
+            done.affected.contains("u-0") && done.affected.contains("s-u-4"),
+            "{done:?}"
+        );
+        assert!(!done.identity_changed);
+        let (kept, done) = edit(&fs, &mut ws, 0, 0, None);
+        assert!(kept, "{done:?}");
+        assert!(done.identity_changed, "{done:?}");
+        // A threat's chaining links, from none to two: in place.
+        assert!(edit(&fs, &mut ws, 1, 4, None).0);
+        assert!(edit(&fs, &mut ws, 1, 3, None).0);
+        // An objective, a UUID changed, a file that does not load or has no
+        // UUID: assembled again.
+        assert!(!edit(&fs, &mut ws, 2, 5, None).0);
+        assert!(!edit(&fs, &mut ws, 3, 0, Some(5)).0);
+        assert!(!edit(&fs, &mut ws, 3, 6, None).0);
+        assert!(!edit(&fs, &mut ws, 4, 7, None).0);
+        // Back to an object: assembled again; then in place again.
+        assert!(!edit(&fs, &mut ws, 3, 0, None).0);
+        assert!(edit(&fs, &mut ws, 3, 1, None).0);
+        // A clone shares the index: assembled again.
+        let held = ws.clone();
+        assert!(!edit(&fs, &mut ws, 0, 1, None).0);
+        drop(held);
+    }
+
+    /// Writes file `file` of the in-place tests and reports the edit: whether
+    /// the index is the same allocation after it, and the invalidation.
+    #[expect(clippy::unwrap_used, reason = "a test helper: the workspace resolves")]
+    fn edit(
+        fs: &Arc<MemoryFs>,
+        workspace: &mut Workspace,
+        file: usize,
+        kind: usize,
+        uuid: Option<usize>,
+    ) -> (bool, Invalidation) {
+        let before = Arc::as_ptr(workspace.index());
+        fs.write(edited_path(file), edited(file, kind, uuid, 4));
+        let done = workspace
+            .invalidate(&[Change::changed(edited_path(file))])
+            .unwrap();
+        assert_eq!(whole(workspace), whole_from_scratch(fs));
+        (std::ptr::eq(before, Arc::as_ptr(workspace.index())), done)
     }
 
     #[test]

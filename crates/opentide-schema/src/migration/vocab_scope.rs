@@ -194,7 +194,7 @@ impl ScopeIndex {
                 .map(|stage| format!("{stage}{SCOPE_SEPARATOR}{key}"))
                 .collect();
             // Two forms or keys that differ only by case: the later one in
-            // the vocabulary wins, as the oracle's dicts keep the last.
+            // the vocabulary wins.
             for form in &forms {
                 index.key_by_scoped.insert(form.clone(), key.clone());
                 index
@@ -404,7 +404,9 @@ pub fn rewrite(document: &node::Document, plan: &Plan<'_>) -> (String, usize) {
             let Some(replacement) = mapping.get(&scalar.value) else {
                 continue;
             };
-            let original = &text[scalar.start..scalar.end];
+            let Some(original) = text.get(scalar.start..scalar.end) else {
+                continue;
+            };
             let quote = original.chars().next().filter(|c| matches!(c, '"' | '\''));
             let rendered = match quote {
                 Some(quote) if original.len() > 1 && original.ends_with(quote) => {
@@ -565,7 +567,7 @@ name = "Security::Kerberos"
     #[test]
     fn a_case_collision_keeps_the_later_key() {
         // Two keys, and two scoped forms, that differ only by case: the
-        // oracle's dict comprehensions keep the later one.
+        // later one is kept.
         let vocabulary = Vocabulary::from_file(
             "signal.entities.vocab.toml",
             r#"
@@ -666,9 +668,10 @@ platforms:
             ]
         );
         // Quotes are part of the span.
-        assert_eq!(&OBJECT[found[1].start..found[1].end], "'host::process'");
-        assert_eq!(&OBJECT[found[2].start..found[2].end], "\"Account\"");
-        assert_eq!(&OBJECT[found[3].start..found[3].end], "Process");
+        let span = |at: usize| OBJECT.get(found[at].start..found[at].end);
+        assert_eq!(span(1), Some("'host::process'"));
+        assert_eq!(span(2), Some("\"Account\""));
+        assert_eq!(span(3), Some("Process"));
     }
 
     #[test]
@@ -710,7 +713,10 @@ objective:
 ";
         let document = node::load(text).unwrap();
         let found = scalars(&document, SCOPED_FIELDS[0].path);
-        let spans: Vec<&str> = found.iter().map(|s| &text[s.start..s.end]).collect();
+        let spans: Vec<&str> = found
+            .iter()
+            .map(|s| text.get(s.start..s.end).unwrap())
+            .collect();
         assert_eq!(
             spans,
             ["'host::process'", "\"Process\"", "'it''s'", "\"a \\\" b\""]

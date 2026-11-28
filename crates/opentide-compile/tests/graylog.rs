@@ -1,7 +1,7 @@
 //! The Graylog compiler on the repository's fixtures (`tests/fixtures/graylog`,
 //! from 0.28.0): each `*.api.json` is the request a rule deploys on the
 //! fixture tenant at one server version, compared as data. The other cases
-//! are 0.28.0's `tests/test_platforms/test_graylog_compile.py`.
+//! are 0.28.0's Graylog compile tests.
 #![expect(
     clippy::unwrap_used,
     reason = "test helpers: every fixture opens and every workspace loads"
@@ -15,6 +15,7 @@ use opentide_compile::graylog::{
     update_request, validate_body,
 };
 use opentide_compile::{Json, Owned, Rule};
+use opentide_schema::platforms::PlatformKey;
 use opentide_schema::vocab::Vocabularies;
 use opentide_workspace::{FileSystem, MemoryFs, Options, RootOptions, Workspace};
 
@@ -344,6 +345,190 @@ fn definition(compiled: &CompiledDefinition) -> serde_json::Value {
     data(&Json::Object(compiled.definition.clone()))
 }
 
+/// #2005: a duration whose milliseconds do not fit an i64 saturated at
+/// `i64::MAX` in the payload; the compiler now refuses the rule, as the model
+/// does, naming the field.
+#[test]
+fn a_duration_past_the_deployable_bound_refuses_the_rule() {
+    let over = "9223372036854776s";
+    let huge = "9".repeat(40) + "s";
+    let cases: [(String, &[&str]); 5] = [
+        (
+            format!("schedule: {{every: {over}}}"),
+            &["schedule", "every"],
+        ),
+        (
+            format!("schedule: {{every: 5m, window: {huge}}}"),
+            &["schedule", "window"],
+        ),
+        (
+            format!("schedule: {{cron: '0 */5 * * * ?', window: {over}}}"),
+            &["schedule", "window"],
+        ),
+        (format!("grace_period: {over}"), &["grace_period"]),
+        (
+            "schedule: {every: 106751991167301d}".to_owned(),
+            &["schedule", "every"],
+        ),
+    ];
+    for (extra, field) in cases {
+        let rule = block_rule(&extra);
+        let workspace = workspace(&rule);
+        let owned = Owned::new(
+            &Vocabularies::bundled(),
+            &workspace.configuration().resolved,
+        );
+        let index = workspace.index().clone();
+        let cx = owned.context(&index);
+        let object = index.get("rule", &uuid_of(&rule)).unwrap();
+        let rule = Rule::new(object.root().unwrap(), None);
+        let Err(error) = compile_definition(&cx, &rule, PREVIEW_VERSION, None, None) else {
+            panic!("{extra} compiled");
+        };
+        assert_eq!(error.code, "compile_invalid_rule", "{error}");
+        let mut path = vec!["configurations", "graylog"];
+        path.extend(field);
+        assert_eq!(error.field, path, "{error}");
+        assert!(
+            error
+                .reason
+                .contains(&format!("configurations.graylog.{}", field.join("."))),
+            "{error}"
+        );
+        assert!(
+            error.reason.contains("at most 9223372036854775 seconds"),
+            "{error}"
+        );
+    }
+    // At the bound, each duration is exact in milliseconds.
+    let max = "9223372036854775s";
+    let rule = block_rule(&format!(
+        "schedule: {{every: {max}, window: {max}}}\ngrace_period: {max}"
+    ));
+    let compiled = compiled(&rule, PREVIEW_VERSION, None).unwrap();
+    let definition = definition(&compiled);
+    let millis = serde_json::json!(9_223_372_036_854_775_000_i64);
+    assert_eq!(definition["config"]["search_within_ms"], millis);
+    assert_eq!(definition["config"]["execute_every_ms"], millis);
+    assert_eq!(
+        definition["notification_settings"]["grace_period_ms"],
+        millis
+    );
+}
+
+/// The error `rule` fails to compile with, offline at the preview version.
+fn error_of(rule: &str) -> opentide_compile::CompileError {
+    let workspace = workspace(rule);
+    let owned = Owned::new(
+        &Vocabularies::bundled(),
+        &workspace.configuration().resolved,
+    );
+    let index = workspace.index().clone();
+    let cx = owned.context(&index);
+    let object = index.get("rule", &uuid_of(rule)).unwrap();
+    let parsed = Rule::new(object.root().unwrap(), None);
+    match compile_definition(&cx, &parsed, PREVIEW_VERSION, None, None) {
+        Ok(_) => panic!("compiled:\n{rule}"),
+        Err(error) => error,
+    }
+}
+
+/// #1951: the block is read by `GraylogConfig`, the model `validate` checks
+/// it with. A block whose shape the model refuses fails with
+/// `compile_failed` at the field the rule got wrong, where it used to deploy
+/// with a fallback (`alert: true`, the field dropped, `query: null`).
+#[test]
+fn a_block_the_model_refuses_fails_at_its_field() {
+    let cases: [(String, &str); 4] = [
+        (block_rule("alert: 'yes'"), "alert"),
+        (block_rule("surprise: 1"), "surprise"),
+        // The items' type, which `graylog_list_shape` also refuses: the
+        // refusal names the first item, not the check's finding (#1951).
+        (block_rule("streams: [1, 2]"), "streams.0"),
+        (
+            fixture("block-graylog.yaml").replace(
+                "    query: 'EventID:1 AND image_lc:/.*\\\\mshta\\.exe/'",
+                "",
+            ),
+            "query",
+        ),
+    ];
+    for (rule, field) in cases {
+        let error = error_of(&rule);
+        assert_eq!(error.code, "compile_failed", "{field}: {error}");
+        let at: Vec<&str> = ["configurations", "graylog"]
+            .into_iter()
+            .chain(field.split('.'))
+            .collect();
+        assert_eq!(error.field, at, "{field}: {error}");
+        assert!(
+            error
+                .reason
+                .contains(&format!("configurations.graylog.{field}")),
+            "{field}: {error}"
+        );
+        assert!(
+            error
+                .hint
+                .as_deref()
+                .is_some_and(|hint| hint.contains("opentide validate")),
+            "{field}: {error}"
+        );
+    }
+}
+
+/// #1951: a value only the block's own check refuses does not hide a fault
+/// of the block's shape. `graylog_constraints` refuses the event limit, and
+/// its refusal stops the model's conversion of the fields; the refusal still
+/// names each field whose shape is wrong, not the check's finding.
+#[test]
+fn a_value_the_check_refuses_does_not_hide_a_shape_error() {
+    let rule = block_rule("event_limit: 5000\nalert: 'yes'\nsurprisé: 😀");
+    let error = error_of(&rule);
+    assert_eq!(error.code, "compile_failed", "{error}");
+    assert_eq!(
+        error.field,
+        ["configurations", "graylog", "alert"],
+        "{error}"
+    );
+    for part in [
+        "configurations.graylog.alert: Input should be a valid boolean",
+        "configurations.graylog.surprisé: Extra inputs are not permitted",
+    ] {
+        assert!(error.reason.contains(part), "{part} not in {error}");
+    }
+    assert!(!error.reason.contains("event_limit"), "{error}");
+}
+
+/// #1951: a value only the block's own check refuses (`graylog_constraints`:
+/// an event limit past 1,000) is compiled as before; `validate` reports it.
+/// Text the rule writes is sent as written: a YAML timestamp, non-ASCII text,
+/// and the event fields in the rule's order.
+#[test]
+fn a_value_the_check_refuses_compiles_and_text_is_kept() {
+    let rule = block_rule(
+        "event_limit: 5000\nsummary: 2026-01-01\nremediation: Isoler l'hôte 😀\n\
+         event_fields: {zé: source, a😀: '${source.x}', m: {template: 'é ${source.y}'}}",
+    );
+    let compiled = compiled(&rule, PREVIEW_VERSION, None).unwrap();
+    let definition = definition(&compiled);
+    assert_eq!(definition["config"]["event_limit"], 5000);
+    assert_eq!(definition["event_summary_template"], "2026-01-01");
+    assert_eq!(definition["remediation_steps"], "Isoler l'hôte 😀");
+    let spec = Json::Object(compiled.definition.clone());
+    let Some(Json::Object(fields)) = spec.get("field_spec") else {
+        panic!("no field_spec");
+    };
+    assert_eq!(
+        fields.keys().map(String::as_str).collect::<Vec<_>>(),
+        ["zé", "a😀", "m"]
+    );
+    let template = |name: &str| definition["field_spec"][name]["providers"][0]["template"].clone();
+    assert_eq!(template("zé"), "${source.source}");
+    assert_eq!(template("a😀"), "${source.x}");
+    assert_eq!(template("m"), "é ${source.y}");
+}
+
 #[test]
 fn tags_are_normalised_unique_and_capped() {
     let mut tenant = tenant();
@@ -539,7 +724,10 @@ fn preview_entry(rule: &str, tenants: &[&str]) -> serde_json::Value {
     let rule = Rule::new(object.root().unwrap(), None);
     let tenants: Vec<String> = tenants.iter().map(|name| (*name).to_owned()).collect();
     data(&opentide_compile::preview::preview_on(
-        &cx, "graylog", &rule, &tenants,
+        &cx,
+        &PlatformKey::new("graylog"),
+        &rule,
+        &tenants,
     ))
 }
 

@@ -1,19 +1,18 @@
-//! HarfangLab: the Sigma rule or YARA file a deploy sends to one tenant
-//! (`platforms/harfanglab/deployer.py` `compile_sigma_deployment`,
-//! `compile_yara_deployment`, its deploy, and the client's
-//! `create_or_update_sigma_rule`, `create_or_update_yara_rule` and its
-//! deletes). The rule's UUID is its id on the platform: no deployment state.
+//! HarfangLab: the Sigma rule or YARA file a deploy sends to one tenant to
+//! create, update or delete it. The rule's UUID is its id on the platform:
+//! no deployment state.
 //!
 //! The Sigma rule is written as YAML by serde-saphyr (four-space indents,
 //! lists indented under their key, a multi-line string as a `|` block, no
-//! folding), not by PyYAML: the text differs where the two emitters quote
-//! or lay out a scalar differently, and reads back to the same document.
+//! folding), and reads back to the same document.
 
 use crate::Context;
 use crate::deploy::{self, Write};
 use crate::json::{Json, Object};
 use crate::rule::{CompileError, Rule};
 use crate::strategy::StatusStrategy;
+// A string inside a YARA `meta` value (`escape_yara_string`).
+use opentide_core::yara::escape_string as escape;
 
 /// The platform's key under `configurations`.
 pub const PLATFORM: &str = "harfanglab";
@@ -79,7 +78,7 @@ fn string<'j>(value: Option<&'j Json>, key: &str) -> Option<&'j str> {
 
 fn strings(value: Option<&Json>) -> Vec<String> {
     match value {
-        Some(Json::Array(items)) => items.iter().map(deploy::text).collect(),
+        Some(Json::Array(items)) => items.iter().map(Json::to_text).collect(),
         _ => Vec::new(),
     }
 }
@@ -226,14 +225,6 @@ fn sigma(
     Ok(crate::sentinel_one::without_nulls(Json::Object(body)))
 }
 
-/// A string inside a YARA `meta` value (`escape_yara_string`).
-fn escape(text: &str) -> String {
-    text.replace('\\', "\\\\")
-        .replace('"', "\\\"")
-        .replace('\n', "\\n")
-        .replace('\r', "")
-}
-
 /// The YARA rule name of a rule name: lowercase, every character but a
 /// letter, a digit or `_` an underscore, and `rule_` before a leading digit.
 pub fn yara_name(name: &str) -> String {
@@ -258,7 +249,7 @@ pub fn yara_name(name: &str) -> String {
 /// The lines of `text` stripped, each indented eight spaces.
 #[expect(
     clippy::str_split_at_newline,
-    reason = "the oracle splits at `\\n` alone: a `\\r` stays in the line, as `lines` would not keep it"
+    reason = "split at `\\n` alone: a CRLF line keeps its `\\r`, which `lines` would drop"
 )]
 fn indented(lines: &mut Vec<String>, text: &str) {
     for line in text.trim().split('\n') {
@@ -297,7 +288,7 @@ fn yara(rule: &Rule, block: &Json, yara: &Json, tenant: &Json) -> Json {
     Json::Object(body)
 }
 
-/// The one YARA rule the decomposed form builds (`_assemble_yara`): imports,
+/// The one YARA rule the decomposed form builds: imports,
 /// the derived name, the meta deploy generates, and the bodies.
 fn assembled(rule: &Rule, block: &Json, yara: &Json) -> String {
     let settings = common(block, rule);
@@ -324,13 +315,13 @@ fn assembled(rule: &Rule, block: &Json, yara: &Json) -> String {
     for (key, field) in [("created", "date"), ("modified", "modified")] {
         if let Some(value) = deploy::rule_value(rule, &["metadata", key]).filter(|v| v.is_filled())
         {
-            lines.push(format!("        {field} = \"{}\"", deploy::text(value)));
+            lines.push(format!("        {field} = \"{}\"", Json::to_text(value)));
         }
     }
     if let Some(Json::Object(public)) = deploy::rule_value(rule, &["references", "public"])
         && !public.is_empty()
     {
-        let references: Vec<String> = public.values().map(deploy::text).collect();
+        let references: Vec<String> = public.values().map(Json::to_text).collect();
         lines.push(format!(
             "        references = \"{}\"",
             references.join("\\n")
@@ -363,7 +354,7 @@ fn assembled(rule: &Rule, block: &Json, yara: &Json) -> String {
     lines.push(format!("        os = \"{os}\""));
     match meta.and_then(|meta| meta.get("arch")) {
         Some(Json::Array(items)) if !items.is_empty() => {
-            let arch: Vec<String> = items.iter().map(deploy::text).collect();
+            let arch: Vec<String> = items.iter().map(Json::to_text).collect();
             lines.push(format!("        arch = \"{}\"", arch.join(",")));
         }
         Some(Json::Str(arch)) if !arch.is_empty() => {
@@ -495,9 +486,60 @@ pub fn compile(cx: &Context<'_>, rule: &Rule, tenant: &Json) -> Result<Vec<Write
     }])
 }
 
+/// A rule compiled for one tenant ([`crate::compiler::Harfanglab`]): the
+/// block's kind (`None` when it has neither) and the writes the dry run
+/// shows ([`compile`]).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Compiled {
+    /// The block's own kind, which picks the endpoint ([`Kind::of`]).
+    pub kind: Option<Kind>,
+    /// The Sigma rule's or YARA file's write, a delete, or none.
+    pub writes: Vec<Write>,
+}
+
+/// The deploy request's body for the rule `compiled` holds
+/// ([`request_body`]): its kind and the first write's body, which a delete
+/// leaves out (its body is `null`). `null` for a block with neither kind.
+pub fn deploy_body(compiled: &Compiled) -> Json {
+    let Some(kind) = compiled.kind else {
+        return Json::Null;
+    };
+    let rule = compiled
+        .writes
+        .first()
+        .map(|write| &write.body)
+        .filter(|body| !body.is_null());
+    request_body(kind, rule)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_deploy_body_is_the_kind_and_the_first_writes_body() {
+        let mut rule = Object::new();
+        rule.insert("name".into(), "é😀".into());
+        let compiled = Compiled {
+            kind: Some(Kind::Sigma),
+            writes: vec![Write::new("PUT", "u", Json::Object(rule.clone()))],
+        };
+        assert_eq!(
+            deploy_body(&compiled),
+            request_body(Kind::Sigma, Some(&Json::Object(rule)))
+        );
+        // A delete names the kind alone.
+        let deletion = Compiled {
+            kind: Some(Kind::Yara),
+            writes: vec![Write::new("DELETE", "u", Json::Null)],
+        };
+        assert_eq!(deploy_body(&deletion), request_body(Kind::Yara, None));
+        let neither = Compiled {
+            kind: None,
+            writes: Vec::new(),
+        };
+        assert_eq!(deploy_body(&neither), Json::Null);
+    }
 
     #[test]
     fn yara_names_are_identifiers() {
@@ -509,7 +551,7 @@ mod tests {
     }
 
     #[test]
-    fn mappings_default_as_the_oracle_does() {
+    fn unknown_values_map_to_their_defaults() {
         assert_eq!(global_state("Alert & Block"), "block");
         assert_eq!(global_state("other"), "alert");
         assert_eq!(hl_status("Testing"), "testing");
@@ -518,6 +560,8 @@ mod tests {
         assert_eq!(score("Critical"), Some(90));
         assert_eq!(score("x"), None);
         assert_eq!(escape("a\"b\\c\nd\r"), "a\\\"b\\\\c\\nd");
+        // No raw tab or control character in a meta value (#1939).
+        assert_eq!(escape("é\t😀\u{7}"), "é\\t😀\\x07");
     }
 
     /// The YARA content of a rule whose `meta.arch` is written `arch`.
@@ -564,7 +608,7 @@ mod tests {
         let os_then = |arch: &str| format!("\n        os = \"Linux\"\n        arch = \"{arch}\"\n");
         let content = yara_content("[x64, arm64]");
         assert!(content.contains(&os_then("x64,arm64")), "{content}");
-        // One string, as the oracle's deployer takes it (`isinstance`).
+        // One string: the architecture as written.
         let content = yara_content("x86");
         assert!(content.contains(&os_then("x86")), "{content}");
         // Empty: no `arch` line.

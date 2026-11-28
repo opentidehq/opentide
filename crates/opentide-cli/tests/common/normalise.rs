@@ -43,10 +43,14 @@
 //! ANSI escape codes are kept: they are part of what human mode prints.
 //!
 //! Written for `cargo xtask golden` (UC-0.5, #803), then held in
-//! `opentide-compare` (deleted with the oracle, #1142); it lives here, with
+//! `opentide-compare` (deleted with opentide 0.23.0, #1142); it lives here, with
 //! the snapshots that use it ([`crate::snapshot`], #1139).
 
 #![allow(dead_code, reason = "each test binary uses part of the helpers")]
+#![expect(
+    clippy::string_slice,
+    reason = "a test: a slice off a char boundary panics, and a panic is a failed test"
+)]
 
 use regex::{Captures, Regex};
 use serde::{Deserialize, Serialize};
@@ -720,7 +724,7 @@ mod tests {
         );
     }
 
-    /// `deploy`'s live region as two runs of the oracle printed it: the first
+    /// `deploy`'s live region as two runs of opentide 0.23.0 printed it: the first
     /// frame is the bare platform row on one, and already shows the worker's
     /// progress on the other.
     fn deploy_region(frame: &str, warning: &str, summary: &str) -> String {

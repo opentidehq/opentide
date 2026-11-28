@@ -1,6 +1,6 @@
 //! `validate` over a workspace in memory: each check's findings, their
 //! places and steps, the scope options, the verdict and the counts. The
-//! CLI's `validate` snapshots hold what `validate --json` prints (the oracle
+//! CLI's `validate` snapshots hold what `validate --json` prints (opentide 0.23.0
 //! comparison, `cargo xtask validate diff`, was retired in #1142).
 
 #![expect(
@@ -417,6 +417,175 @@ mod validate {
         );
     }
 
+    /// #1884: an account mapped by name alone is a warning `--strict` reports
+    /// without failing, as `platform_not_enabled` is: Microsoft advises a
+    /// strong identifier, and nothing says Graph refuses the mapping.
+    #[test]
+    fn a_defender_asset_without_a_strong_identifier_warns_without_failing_strict() {
+        let fs = workspace();
+        fs.write(
+            "/ws/objects/rules/a.yaml",
+            format!(
+                "{}configurations:\n  microsoft_defender:\n    status: X\n    query: Q\n    \
+                 schedule:\n      frequency: 1H\n    entities:\n      accounts:\n        - \
+                 name: AccountName\n",
+                rule(U1, "A")
+            ),
+        );
+        let validation = run(
+            &fs,
+            &Options {
+                strict: true,
+                ..Options::default()
+            },
+        );
+        let warnings = with_code(&validation, "microsoft_defender_impacted_asset_identifier");
+        assert_eq!(warnings.len(), 1, "{:?}", all(&validation));
+        assert_eq!(warnings[0].severity, Severity::Warning);
+        assert_eq!(
+            warnings[0].field_path,
+            [
+                "configurations",
+                "microsoft_defender",
+                "entities",
+                "accounts",
+                "0"
+            ]
+        );
+        assert!(
+            validation.report.warnings.iter().all(|warning| {
+                opentide_workspace::validate::STRICT_EXEMPT_WARNINGS
+                    .contains(&warning.code.as_str())
+            }),
+            "{:?}",
+            validation.report.warnings
+        );
+        assert!(
+            !validation.warned,
+            "microsoft_defender_impacted_asset_identifier is exempt from --strict"
+        );
+    }
+
+    /// #1890: the limits Microsoft's custom detection docs set on an alert
+    /// are warnings `--strict` reports without failing until a tenant
+    /// check says what Graph does past them.
+    #[test]
+    fn defender_documented_limits_warn_without_failing_strict() {
+        let fs = workspace();
+        let details = (1..=21)
+            .map(|n| format!("        Detail{n}: Column{n}\n"))
+            .collect::<Vec<_>>()
+            .concat();
+        fs.write(
+            "/ws/objects/rules/a.yaml",
+            format!(
+                "{}configurations:\n  microsoft_defender:\n    status: X\n    query: Q\n    \
+                 schedule:\n      frequency: 1H\n    entities:\n      hosts:\n        - \
+                 device_id: DeviceId\n    alert:\n      title: '{{{{A}}}} {{{{B}}}} {{{{C}}}} \
+                 {{{{D}}}}'\n      custom_details:\n{details}",
+                rule(U1, "A")
+            ),
+        );
+        let validation = run(
+            &fs,
+            &Options {
+                strict: true,
+                ..Options::default()
+            },
+        );
+        let path = |warning: &Diagnostic| warning.field_path.join(".");
+        let details = with_code(&validation, "microsoft_defender_custom_details_limit");
+        assert_eq!(details.len(), 1, "{:?}", all(&validation));
+        assert_eq!(
+            path(details[0]),
+            "configurations.microsoft_defender.alert.custom_details"
+        );
+        let columns = with_code(&validation, "microsoft_defender_placeholder_limit");
+        assert_eq!(columns.len(), 1, "{:?}", all(&validation));
+        assert_eq!(
+            path(columns[0]),
+            "configurations.microsoft_defender.alert.title"
+        );
+        assert!(
+            validation.report.warnings.iter().all(|warning| {
+                opentide_workspace::validate::STRICT_EXEMPT_WARNINGS
+                    .contains(&warning.code.as_str())
+            }),
+            "{:?}",
+            validation.report.warnings
+        );
+        assert!(!validation.warned, "the limits are exempt from --strict");
+    }
+
+    /// Sentinel's documented scheduled-rule bounds (#1916): frequency and
+    /// lookback each 5 minutes to 14 days, the lookback at least the
+    /// frequency. Each is an error at its key that fails the `schema` check;
+    /// a near-real-time rule is not judged.
+    #[test]
+    fn sentinel_schedule_bounds_fail_the_schema_check() {
+        let block = |scheduling: &str| {
+            format!(
+                "configurations:\n  sentinel:\n    status: X\n    query: SecurityEvent\n    \
+                 scheduling:\n{scheduling}    alert:\n      title: T\n"
+            )
+        };
+        let cases = [
+            (
+                "      frequency: 1m\n      lookback: 1h\n",
+                vec![("sentinel_frequency", "frequency")],
+            ),
+            (
+                "      frequency: PT1H\n      lookback: 15d\n",
+                vec![("sentinel_lookback", "lookback")],
+            ),
+            (
+                "      frequency: 2h\n      lookback: PT1H\n",
+                vec![("sentinel_lookback", "lookback")],
+            ),
+            (
+                "      frequency: 4m\n      lookback: 4m\n",
+                vec![
+                    ("sentinel_frequency", "frequency"),
+                    ("sentinel_lookback", "lookback"),
+                ],
+            ),
+            ("      frequency: 5m\n      lookback: P14D\n", vec![]),
+            ("      nrt: true\n      frequency: 1m\n", vec![]),
+        ];
+        for (scheduling, expected) in cases {
+            let fs = workspace();
+            fs.write(
+                "/ws/objects/rules/a.yaml",
+                format!("{}{}", rule(U1, "A"), block(scheduling)),
+            );
+            let validation = run(&fs, &Options::default());
+            let found: Vec<(String, String)> = all(&validation)
+                .into_iter()
+                .filter(|d| d.code.starts_with("sentinel_"))
+                .map(|d| (d.code.clone(), d.field_path.join(".")))
+                .collect();
+            let expected: Vec<(String, String)> = expected
+                .iter()
+                .map(|(code, key)| {
+                    (
+                        (*code).to_owned(),
+                        format!("configurations.sentinel.scheduling.{key}"),
+                    )
+                })
+                .collect();
+            assert_eq!(found, expected, "{scheduling}");
+            if !expected.is_empty() {
+                assert_eq!(status(&validation, Check::Schema), "failed", "{scheduling}");
+                assert!(
+                    with_code(&validation, &expected[0].0)
+                        .iter()
+                        .all(|d| d.severity == Severity::Error),
+                    "{scheduling}"
+                );
+            }
+        }
+    }
+
     #[test]
     fn google_secops_advisories_warn_and_shared_rule_names_fail() {
         let fs = workspace();
@@ -491,10 +660,10 @@ mod validate {
             "configurations.bitdefender.yara.signature is a YAML alias; write the YARA \
              signature out in the block"
         );
-        // On the anchor's line, as the oracle's reader places an alias.
+        // On the anchor's line, as opentide 0.23.0's reader places an alias.
         let anchor = rule(U2, "B").lines().count();
         assert_eq!(aliased[0].yaml_line, Some(anchor));
-        // The aliased text, `&sig |`, as the oracle spans it.
+        // The aliased text, `&sig |`, as opentide 0.23.0 spans it.
         assert_eq!(
             (aliased[0].line, aliased[0].column, aliased[0].end_column),
             (Some(anchor + 1), Some(14), Some(20))
@@ -605,7 +774,7 @@ mod validate {
     /// #913 (0.26.0): a legacy `rule_id::<tenant>` key whose id is text, on
     /// blocks whose models refuse unknown keys (Sysdig) and accept them as
     /// legacy keys (SentinelOne), is `external_id_in_rule`, and nothing reads
-    /// the tenant in its name as a vocabulary or schema version: the oracle
+    /// the tenant in its name as a vocabulary or schema version: opentide 0.23.0
     /// (0.23.0) crashed with `invalid literal for int() with base 10`.
     #[test]
     fn a_legacy_tenant_key_with_a_text_id_is_external_id_in_rule() {
@@ -891,6 +1060,64 @@ mod validate {
         let found = all(&validation);
         assert!(found.is_empty(), "{found:#?}");
         assert_eq!(status(&validation, Check::Schema), "passed");
+    }
+
+    /// A rule whose only error is a platform block's constraint code (a
+    /// finding its model reports under its own code, not
+    /// `schema_validation`) fails the `schema` check, which runs the models
+    /// (#1893): a run with `ok: false` never shows every check passed.
+    #[test]
+    fn a_platform_constraint_code_alone_fails_the_schema_check() {
+        let fixture = |path: &str| {
+            std::fs::read_to_string(
+                Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .join("../../tests/fixtures")
+                    .join(path),
+            )
+            .unwrap()
+        };
+        let cases = [
+            (
+                "microsoft_defender/microsoft-defender.yaml",
+                "      severity: High\n",
+                "      severity: Severe\n",
+                "microsoft_defender_severity",
+            ),
+            (
+                "graylog/rule-graylog-aggregation-1.0.yaml",
+                "    streams: sysmon\n",
+                "    streams: sysmon\n    priority: Severe\n",
+                "graylog_priority",
+            ),
+        ];
+        let only = |fs: &Arc<MemoryFs>, code: &str, label: &str| {
+            let validation = run(fs, &Options::default());
+            let codes: std::collections::BTreeSet<&str> = validation
+                .report
+                .issues
+                .iter()
+                .map(|issue| issue.code.as_str())
+                .collect();
+            assert_eq!(codes, [code].into(), "{label}");
+            assert!(validation.failed, "{label}");
+            assert_eq!(status(&validation, Check::Schema), "failed", "{label}");
+        };
+        for (path, find, replace, code) in cases {
+            let text = fixture(path);
+            assert_eq!(text.matches(find).count(), 1, "{path}");
+            let fs = workspace();
+            fs.write("/ws/objects/rules/a.yaml", text.replace(find, replace));
+            only(&fs, code, path);
+        }
+        // Two enabled Exabeam blocks that resolve to one name: the run's
+        // check on the workspace, not a model's, and the `schema` check's.
+        let text = fixture("exabeam/rule-exabeam-threshold-1.0.yaml");
+        let uuid = "00000000-0000-4000-8003-000000000071";
+        assert_eq!(text.matches(uuid).count(), 1);
+        let fs = workspace();
+        fs.write("/ws/objects/rules/a.yaml", text.replace(uuid, U1));
+        fs.write("/ws/objects/rules/b.yaml", text.replace(uuid, U2));
+        only(&fs, "exabeam_name_duplicate", "exabeam");
     }
 
     #[test]
@@ -1388,6 +1615,52 @@ mod validate {
         assert!(with_code(&other, "deployment_state_shape").is_empty());
     }
 
+    /// #1938: `validate`'s `states` check reads a shard's name as `deploy`
+    /// does. `deploy` refuses a rule whose shard sits beside another file
+    /// naming the same rule (`{<32 hex digits>}.json`, `uuid:<uuid>.json`);
+    /// `validate` used to read those names with `Uuid::try_parse`, which
+    /// refuses them, so it passed the rule `deploy` then refused.
+    #[test]
+    fn a_shard_named_in_another_uuid_spelling_is_the_mismatch_deploy_reports() {
+        let compact = U1.replace('-', "");
+        for variant in [format!("{{{compact}}}"), format!("uuid:{U1}")] {
+            let fs = workspace();
+            fs.write("/ws/objects/rules/a.yaml", rule(U1, "A"));
+            fs.write(
+                format!("/ws/.opentide/states/deployment/{U1}.json"),
+                format!(
+                    r#"{{"schema":"deployment.state::1.0","object_uuid":"{U1}","platforms":{{}}}}"#
+                ),
+            );
+            fs.write(
+                format!("/ws/.opentide/states/deployment/{variant}.json"),
+                format!(
+                    r#"{{"schema":"deployment.state::1.0","object_uuid":"{U1}","platforms":{{}}}}"#
+                ),
+            );
+            // The rule's own check, as `validate --file` and the editor run it.
+            let own = narrowed(&fs, None, &uuids(&[U1]));
+            let mismatches = with_code(&own, "deployment_state_uuid_mismatch");
+            assert_eq!(mismatches.len(), 1, "{variant}: {mismatches:?}");
+            assert!(
+                mismatches[0].message.contains(&format!(
+                    "holds {variant}.json for rule {U1}; the only valid name is {U1}.json"
+                )),
+                "{}",
+                mismatches[0].message
+            );
+            // A full run names both files as one rule's.
+            let full = run(&fs, &Options::default());
+            assert!(
+                with_code(&full, "deployment_state_uuid_mismatch")
+                    .iter()
+                    .any(|d| d.message.contains(&format!("all name rule {U1}"))),
+                "{variant}: {:?}",
+                with_code(&full, "deployment_state_uuid_mismatch")
+            );
+        }
+    }
+
     /// `Workspace::rule_shard_findings` is what `validate --file` files on
     /// each selected rule for its own shard, placed the same way: the editor
     /// adds it to an open rule when it keeps a full run's findings (#1750).
@@ -1667,18 +1940,18 @@ mod validate {
             assert_eq!(platform, "acme");
             let mut found = Vec::new();
             if !block["severity"].is_i64() {
-                found.push(opentide_workspace::validate::PlatformFinding {
-                    field_path: vec!["severity".to_owned()],
-                    message: "Input should be a valid integer".to_owned(),
-                    warning: false,
-                });
+                found.push(opentide_workspace::validate::PlatformFinding::new(
+                    vec!["severity".to_owned()],
+                    "Input should be a valid integer",
+                    false,
+                ));
             }
             if block.get("note").is_some() {
-                found.push(opentide_workspace::validate::PlatformFinding {
-                    field_path: vec!["note".to_owned()],
-                    message: "note is deprecated".to_owned(),
-                    warning: true,
-                });
+                found.push(opentide_workspace::validate::PlatformFinding::new(
+                    vec!["note".to_owned()],
+                    "note is deprecated",
+                    true,
+                ));
             }
             found
         }
@@ -1831,6 +2104,64 @@ mod validate {
     }
 
     #[test]
+    fn graylog_durations_past_the_deployable_bound_fail_validate() {
+        // #2005: their milliseconds saturated at `i64::MAX`, `validate` passed
+        // them and deploy wrote `9223372036854775807` into the payload.
+        let fs = workspace();
+        let block = |every: &str, grace: &str| {
+            format!(
+                "    enabled: true\n    status: STAGING\n    query: 'message:\"é\"'\n    \
+                 schedule:\n      every: {every}\n    grace_period: {grace}\n"
+            )
+        };
+        let over = "9223372036854776s";
+        let max = "9223372036854775s";
+        fs.write(
+            "/ws/objects/rules/a.yaml",
+            rule_with(U1, "A", "graylog", &block(over, "0s")),
+        );
+        fs.write(
+            "/ws/objects/rules/b.yaml",
+            rule_with(U2, "B", "graylog", &block("5m", &("9".repeat(40) + "s"))),
+        );
+        fs.write(
+            "/ws/objects/rules/c.yaml",
+            rule_with(U3, "C", "graylog", &block(max, max)),
+        );
+        let validation = run(&fs, &Options::default());
+        let mut found: Vec<(&str, &str, String)> = all(&validation)
+            .into_iter()
+            .filter(|d| d.message.contains("longer than a rule can be deployed"))
+            .map(|d| {
+                (
+                    d.object_uuid.as_str(),
+                    d.code.as_str(),
+                    d.field_path.join("."),
+                )
+            })
+            .collect();
+        found.sort();
+        assert_eq!(
+            found,
+            [
+                (
+                    U1,
+                    "graylog_schedule",
+                    "configurations.graylog.schedule.every".to_owned()
+                ),
+                (
+                    U2,
+                    "schema_validation",
+                    "configurations.graylog.grace_period".to_owned()
+                ),
+            ],
+            "{:?}",
+            all(&validation)
+        );
+        assert_eq!(status(&validation, Check::Schema), "failed");
+    }
+
+    #[test]
     fn two_exabeam_blocks_with_one_name_are_a_duplicate_whatever_its_case() {
         let fs = workspace();
         let block =
@@ -1869,6 +2200,72 @@ mod validate {
             rule_with(U2, "B", "exabeam", &block("SAME", false)),
         );
         assert!(on(&run(&fs, &Options::default()), "exabeam_name_duplicate").is_empty());
+    }
+
+    #[test]
+    fn an_elastic_lookback_past_the_deployable_bound_fails_validate() {
+        // #1982: its seconds saturated, `validate` passed it and deploy wrote
+        // `now-340282366920938463463374607431768211455s`.
+        let fs = workspace();
+        let block = |lookback: &str| {
+            format!(
+                "    status: STAGING\n    type: query\n    query: 'process.name: \"é\"'\n    \
+                 scheduling:\n      interval: 5m\n      lookback: {lookback}\n"
+            )
+        };
+        let huge = "9".repeat(40) + "s";
+        fs.write(
+            "/ws/objects/rules/a.yaml",
+            rule_with(U1, "A", "elastic", &block(&huge)),
+        );
+        fs.write(
+            "/ws/objects/rules/b.yaml",
+            rule_with(U2, "B", "elastic", &block("9223372036854775807s")),
+        );
+        let validation = run(&fs, &Options::default());
+        let found: Vec<(&str, &str)> = all(&validation)
+            .into_iter()
+            .filter(|d| d.message.contains("longer than a rule can be deployed"))
+            .map(|d| (d.object_uuid.as_str(), d.code.as_str()))
+            .collect();
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(found[0].0, U1);
+        assert_eq!(status(&validation, Check::Schema), "failed");
+    }
+
+    #[test]
+    fn exabeam_names_that_are_one_under_full_case_folding_are_a_duplicate() {
+        // Deploy matches names under full case folding (`exabeam_name_conflict`):
+        // `ﬁ` folds to `fi` and `ß` to `ss`, which lowercasing leaves apart.
+        let fs = workspace();
+        let block = |name: &str| format!("    enabled: true\n    name: {name}\n");
+        fs.write(
+            "/ws/objects/rules/a.yaml",
+            rule_with(U1, "A", "exabeam", &block("ﬁle Access")),
+        );
+        fs.write(
+            "/ws/objects/rules/b.yaml",
+            rule_with(U2, "B", "exabeam", &block("file access")),
+        );
+        fs.write(
+            "/ws/objects/rules/c.yaml",
+            rule_with(U3, "C", "exabeam", &block("Straße")),
+        );
+        let validation = run(&fs, &Options::default());
+        assert_eq!(on(&validation, "exabeam_name_duplicate"), [U1, U2]);
+        let finding = with_code(&validation, "exabeam_name_duplicate")[0];
+        assert_eq!(
+            finding.context.get("value").and_then(|v| v.as_str()),
+            Some("ﬁle Access")
+        );
+        fs.write(
+            "/ws/objects/rules/b.yaml",
+            rule_with(U2, "B", "exabeam", &block("STRASSE")),
+        );
+        assert_eq!(
+            on(&run(&fs, &Options::default()), "exabeam_name_duplicate"),
+            [U2, U3]
+        );
     }
 
     #[test]

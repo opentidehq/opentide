@@ -63,23 +63,23 @@ fn is_content(text: &str) -> bool {
 }
 
 /// The key a mapping line names, and its span within the line.
-fn line_key(text: &str) -> Option<(String, usize, usize)> {
-    let start = indent(text);
-    let rest = &text[start..];
+fn line_key(text: &str) -> Option<(String, usize, usize, &str)> {
+    let rest = text.trim_start_matches(' ');
+    let start = text.len() - rest.len();
     if rest.starts_with(['#', '-']) || rest.starts_with("---") {
         return None;
     }
-    let colon = rest.find(':')?;
-    let after = &rest[colon + 1..];
+    let (key, after) = rest.split_once(':')?;
+    let colon = key.len();
     if !(after.is_empty() || after.starts_with([' ', '\t'])) {
         return None;
     }
-    let key = rest[..colon].trim_end();
+    let key = key.trim_end();
     let key = key.trim_matches(['"', '\'']);
     if key.is_empty() {
         return None;
     }
-    Some((key.to_string(), start, start + colon))
+    Some((key.to_string(), start, start + colon, after))
 }
 
 /// The keys at the shallowest indentation within `lines[from..to]`, deeper
@@ -141,14 +141,14 @@ pub fn outline(source: &str) -> Vec<OutlineNode> {
         if indent(lines[start].text) != 0 {
             break;
         }
-        let Some((key, from, to)) = line_key(lines[start].text) else {
+        let Some((key, from, to, after)) = line_key(lines[start].text) else {
             continue;
         };
         let at = lines[start].start;
         let selection = ByteSpan::new(at + from, at + to);
         let span = line_span(&lines, start, end);
         if key == "name" {
-            let value = lines[start].text[to + 1..].trim();
+            let value = after.trim();
             let value = value.trim_matches(['"', '\'']);
             if !value.is_empty() {
                 let offset = lines[start].text.find(value).unwrap_or(to + 1);
@@ -160,19 +160,14 @@ pub fn outline(source: &str) -> Vec<OutlineNode> {
         }
         if key == "metadata" {
             uuid = (start..end).find_map(|i| {
-                let (k, _, to) = line_key(lines[i].text)?;
-                (k == "uuid").then(|| {
-                    lines[i].text[to + 1..]
-                        .trim()
-                        .trim_matches(['"', '\''])
-                        .to_string()
-                })
+                let (k, _, _, after) = line_key(lines[i].text)?;
+                (k == "uuid").then(|| after.trim().trim_matches(['"', '\'']).to_string())
             });
         }
         let mut children = Vec::new();
         if key == "configurations" {
             for (p_start, p_end) in child_keys(&lines, start + 1, end, Some(0)) {
-                let Some((platform, p_from, p_to)) = line_key(lines[p_start].text) else {
+                let Some((platform, p_from, p_to, _)) = line_key(lines[p_start].text) else {
                     continue;
                 };
                 let p_at = lines[p_start].start;
@@ -268,18 +263,6 @@ fn attack_pattern() -> &'static Regex {
     PATTERN.get_or_init(|| Regex::new(r"\b(?:TA\d{4}|T\d{4}(?:\.\d{3})?)\b").expect("ATT&CK id"))
 }
 
-#[expect(
-    clippy::expect_used,
-    reason = "a regex literal: an invalid pattern fails every test that reaches it"
-)]
-fn uuid_pattern() -> &'static Regex {
-    static PATTERN: OnceLock<Regex> = OnceLock::new();
-    PATTERN.get_or_init(|| {
-        Regex::new(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
-            .expect("UUID")
-    })
-}
-
 /// The ATT&CK page of a technique (`T1059`, `T1059.001`) or tactic
 /// (`TA0002`) id.
 pub fn attack_url(id: &str) -> Option<String> {
@@ -311,7 +294,7 @@ pub fn document_links(source: &str, workspace: &[IndexedObject]) -> Vec<TideLink
             });
         }
     }
-    for m in uuid_pattern().find_iter(source) {
+    for m in opentide_core::ids::finder().find_iter(source) {
         if own.as_deref() == Some(m.as_str()) {
             continue;
         }
@@ -335,20 +318,21 @@ fn own_uuid(source: &str) -> Option<(String, ByteSpan)> {
     let mut in_metadata = false;
     for line in &lines {
         if indent(line.text) == 0 && is_content(line.text) {
-            in_metadata = line_key(line.text).is_some_and(|(k, _, _)| k == "metadata");
+            in_metadata = line_key(line.text).is_some_and(|(k, _, _, _)| k == "metadata");
             continue;
         }
         if !in_metadata {
             continue;
         }
-        let Some((key, _, to)) = line_key(line.text) else {
+        let Some((key, _, to, after)) = line_key(line.text) else {
             continue;
         };
         if key != "uuid" {
             continue;
         }
-        let m = uuid_pattern().find(&line.text[to..])?;
-        let start = line.start + to + m.start();
+        let m = opentide_core::ids::finder().find(after)?;
+        // `after` starts past the one-byte `:` at `to`.
+        let start = line.start + to + 1 + m.start();
         return Some((
             m.as_str().to_string(),
             ByteSpan::new(start, start + m.len()),
@@ -433,10 +417,15 @@ mod tests {
             }
         }
         assert_eq!(
-            &RULE[sentinel.selection.start..sentinel.selection.end],
+            RULE.get(sentinel.selection.start..sentinel.selection.end)
+                .unwrap(),
             "sentinel"
         );
-        assert!(RULE[sentinel.span.start..sentinel.span.end].ends_with("4688"));
+        assert!(
+            RULE.get(sentinel.span.start..sentinel.span.end)
+                .unwrap()
+                .ends_with("4688")
+        );
     }
 
     #[test]
@@ -463,7 +452,7 @@ mod tests {
         let links = document_links(RULE, &[]);
         let ids: Vec<&str> = links
             .iter()
-            .map(|l| &RULE[l.span.start..l.span.end])
+            .map(|l| RULE.get(l.span.start..l.span.end).unwrap())
             .collect();
         assert_eq!(ids, ["T1059.001", "TA0002"]);
     }
@@ -506,9 +495,27 @@ mod tests {
         let objective = format!("name: M\nmetadata:\n  uuid: {model}\n  schema: objective::1.0\n");
         let lens = reference_lens(&objective, &workspace).unwrap();
         assert_eq!(lens.uuid, model);
-        assert_eq!(&objective[lens.span.start..lens.span.end], model);
+        assert_eq!(
+            objective.get(lens.span.start..lens.span.end).unwrap(),
+            model
+        );
         assert_eq!(lens.referenced_by.len(), 1);
         assert_eq!(lens.referenced_by[0].object_type, "rule");
         assert!(reference_lens("name: x\n", &workspace).is_none());
+    }
+
+    /// #1946: the name and the own UUID read after multi-byte text.
+    #[test]
+    fn the_name_and_uuid_after_multi_byte_text() {
+        let uuid = "00000000-0000-4000-8003-000000000001";
+        let source =
+            format!("# é😀\nname: 'Règle 😀'\nmetadata:\n  clé: é\n  uuid: \"{uuid}\" # é\n");
+        let (found, span) = own_uuid(&source).unwrap();
+        assert_eq!(found, uuid);
+        assert_eq!(source.get(span.start..span.end), Some(uuid));
+        assert_eq!(line_key("  é😀: x"), Some(("é😀".into(), 2, 8, " x")));
+        assert_eq!(line_key("é😀:x"), None);
+        let nodes = outline(&source);
+        assert!(nodes.iter().any(|n| n.name == "Règle 😀"), "{nodes:?}");
     }
 }

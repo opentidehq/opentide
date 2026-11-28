@@ -20,10 +20,10 @@ pub struct ParseError {
     /// Where, when the parser says so: line and column from 1, columns in
     /// code points.
     pub line: Option<usize>,
-    /// The column.
+    /// The column of that place, from 1, in code points.
     pub column: Option<usize>,
-    /// The tables nest deeper than [`MAX_DEPTH`] (the oracle's
-    /// `RecursionError`): `config_parse`, "The document is nested too deeply."
+    /// The tables nest deeper than [`MAX_DEPTH`]: `config_parse`, "The
+    /// document is nested too deeply."
     pub too_deep: bool,
 }
 
@@ -45,9 +45,12 @@ impl<'t> Positions<'t> {
         let mut line_chars = vec![0];
         let mut chars = 0;
         let mut previous = 0;
-        for (at, _) in text.match_indices('\n') {
-            chars += text[previous..=at].chars().count();
-            previous = at + 1;
+        for line in text.split_inclusive('\n') {
+            if !line.ends_with('\n') {
+                break;
+            }
+            chars += line.chars().count();
+            previous += line.len();
             line_starts.push(previous);
             line_chars.push(chars);
         }
@@ -64,7 +67,12 @@ impl<'t> Positions<'t> {
         let byte = self.text.floor_char_boundary(byte);
         let line = self.line_starts.partition_point(|start| *start <= byte);
         let start = self.line_starts[line.saturating_sub(1)];
-        let before = self.text[start..byte].chars().count();
+        // `start` is a line's first byte and `byte` was floored to a char
+        // boundary, so the range is always there.
+        let before = self
+            .text
+            .get(start..byte)
+            .map_or(0, |line| line.chars().count());
         #[cfg(test)]
         self.scanned.set(self.scanned.get() + (byte - start));
         Mark::new(
@@ -322,7 +330,7 @@ mod tests {
         );
         let last = marks.last().unwrap();
         assert_eq!((last.line(), last.column()), (2_000, 7));
-        let expected = text[..text.rfind('=').unwrap()].chars().count();
+        let expected = text.rsplit_once('=').unwrap().0.chars().count();
         assert_eq!(last.index(), expected);
         let node = parse(&text).unwrap();
         let value = node.get("k1999").unwrap();
@@ -338,5 +346,20 @@ mod tests {
             (b.start.line(), b.start.column(), b.start.index()),
             (2, 5, 12)
         );
+    }
+
+    #[test]
+    fn marks_count_characters_on_multi_byte_lines() {
+        // #1946: line starts and columns are char counts, never a byte slice.
+        let text = "\"é\" = 1\n\"😀\" = 2\n";
+        let positions = Positions::new(text);
+        let at = text.rfind('=').unwrap();
+        let mark = positions.mark(at);
+        assert_eq!((mark.line(), mark.column(), mark.index()), (2, 5, 12));
+        // A byte inside the emoji floors to its first byte.
+        let inside = positions.mark(text.find('😀').unwrap() + 1);
+        assert_eq!((inside.line(), inside.column()), (2, 2));
+        let node = parse(text).unwrap();
+        assert_eq!(node.get("😀").unwrap().start.column(), 7);
     }
 }

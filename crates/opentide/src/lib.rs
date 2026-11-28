@@ -4,7 +4,7 @@
 //! for agentic detection engineering: open a Tide workspace (threat vectors,
 //! detection objectives and detection rules as YAML, with their
 //! configuration), validate and lint it, read its catalogue and its ATT&CK
-//! coverage, plan a deploy to the thirteen platforms opentide deploys to, and run
+//! coverage, plan a deploy to the fourteen platforms opentide deploys to, and run
 //! the `opentide` command line.
 //!
 //! This crate is opentide's public Rust API, and the only opentide crate with
@@ -46,7 +46,7 @@
 //! | `cli-core` | no | `cli::main(argv)` and `cli::run_json(argv)` without the terminal UI and the `setup` wizard's prompts (`opentide tui` and the questions refuse, as under WASI); implies `compile` and `queries`. `cli` adds the terminal |
 //! | `lsp` | no | `lsp`: the language server, on stdio or one message at a time |
 //! | `connectors` | no | [`connectors`]: the tenants a workspace configures ([`Workspace::tenants`]), and on each a query run, a live query check and a rule deploy (async, on tokio); implies `compile` |
-//! | `plugins` | no | [`plugins`]: the platform plugin host a binding embeds to add platforms (the connectors' traits, [`plugins::set_host`]); implies `connectors`. Heavy |
+//! | `plugins` | no | [`plugins`]: the platform plugin host a binding embeds to add platforms (the connectors' traits, [`plugins::set_host`]); implies `connectors`, not the command line |
 //! | `python` | no | [`python`]: the Tide models as Python classes ([`python::register`]); brings PyO3 |
 //! | `stubs` | no | PyO3 introspection behind `python`, for `cargo xtask stubs` |
 //!
@@ -108,15 +108,24 @@
 //! ## Stability
 //!
 //! This crate follows [semantic versioning](https://semver.org) as Cargo reads
-//! it: while it is `0.x`, a release that breaks the API raises the minor
-//! version (0.12 to 0.13) and a patch release never does. Every item this
+//! it: a release that breaks the API raises the major version and a minor or
+//! patch release never does. Every item this
 //! crate exports is covered, re-exported types included; the `opentide-*`
 //! crates are not, and their APIs change with the engine.
 //! `cargo semver-checks` runs on this crate in CI. The `connectors` feature
 //! re-exports `jiff::Timestamp` ([`connectors::Timestamp`], the time of a
 //! query's window): a jiff release that breaks it is a breaking release here. Structs that may gain a
-//! field and enums that may gain a variant are `#[non_exhaustive]`. The
-//! JSON documents ([`Document`], [`cli::run_json`] when built) follow the
+//! field and enums that may gain a variant are `#[non_exhaustive]`.
+//!
+//! Platforms, query languages and diagnostic codes are open sets. Adding one
+//! is a minor release; match them with a wildcard arm. `analysis::LanguageId`
+//! is `#[non_exhaustive]`; [`models::RuleConfigurations`], a field per
+//! platform, is too, so build it from `Default`. The lists of them
+//! (`LanguageId::QUERY_LANGUAGES`, `RuleConfigurations::PLATFORMS`,
+//! [`validate::STRICT_EXEMPT_WARNINGS`]) are slices, whose type does not
+//! change when one is added.
+//!
+//! The JSON documents ([`Document`], [`cli::run_json`] when built) follow the
 //! command line's contract (`docs/cli/json-output.md`), which only grows.
 //! The minimum supported Rust version is the `rust-version` of the
 //! manifest; raising it is a minor release.
@@ -192,6 +201,44 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 #[cfg(doctest)]
 #[doc = include_str!("../../../docs/sdk/rust.md")]
 pub struct RustSdkPage;
+
+/// The report structs are `#[non_exhaustive]` (#1937): code outside the
+/// crate cannot build one with a struct expression, so a new field is not a
+/// breaking change. Each sample compiles once the attribute is removed.
+///
+/// ```compile_fail,E0639
+/// fn edit(found: opentide::Diagnostic) -> opentide::Diagnostic {
+///     opentide::Diagnostic { code: String::new(), ..found }
+/// }
+/// ```
+///
+/// ```compile_fail,E0639
+/// fn edit(report: opentide::Report) -> opentide::Report {
+///     opentide::Report { ok: true, ..report }
+/// }
+/// ```
+///
+/// ```compile_fail,E0639
+/// fn edit(report: opentide::lint::LintReport) -> opentide::lint::LintReport {
+///     opentide::lint::LintReport { exit_code: 0, ..report }
+/// }
+/// ```
+///
+/// The fields those samples name exist and are public, so each fails for the
+/// attribute alone: a renamed field fails here instead (#1985). The error
+/// code of a `compile_fail` sample is checked on nightly only.
+///
+/// ```
+/// fn read(
+///     found: &opentide::Diagnostic,
+///     report: &opentide::Report,
+///     lint: &opentide::lint::LintReport,
+/// ) -> (String, bool, i32) {
+///     (found.code.clone(), report.ok, lint.exit_code)
+/// }
+/// ```
+#[cfg(all(doctest, feature = "workspace"))]
+pub struct NonExhaustiveReports;
 
 /// The crate's README, whose sample runs as a doctest.
 #[cfg(doctest)]

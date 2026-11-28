@@ -4,8 +4,8 @@
 //! each runs here with the time fixed, against its connector's cassette
 //! recorded from the Python client (`tests/cassettes/<platform>/validate.json`):
 //! the rules of a workspace, through the deploy plan, the tenant's batch and
-//! the connector, send exactly the requests the oracle sent, and the result
-//! reads as the oracle's.
+//! the connector, send exactly the requests opentide 0.23.0 sent, and the result
+//! reads as opentide 0.23.0's.
 
 #![cfg(unix)]
 #![expect(clippy::unwrap_used, reason = "a test: a failed set-up is a failure")]
@@ -14,10 +14,11 @@ use std::io::Write as _;
 use std::path::Path;
 
 use opentide_cassette::{Cassette, Mode, Proxy, Redaction};
+use opentide_cli::commands::result::ExitCode;
 use opentide_cli::commands::validate_live::{Context, Live, run};
 use opentide_cli::commands::validate_query::Args;
 use opentide_cli::env::Env;
-use opentide_cli::json::Json;
+use opentide_cli::json::{Json, Object};
 use opentide_connectors::connector::{
     BoxFuture, LiveCheck, LiveValidator, Platform, QueryRequest, TenantContext,
 };
@@ -114,14 +115,23 @@ fn live(
     (result, proxy.verify())
 }
 
-/// The result's value at `key`.
-fn value<'a>(live: &'a Live, key: &str) -> &'a Json {
-    &live
-        .result
-        .iter()
-        .find(|(name, _)| name == key)
+/// The result's value at `key`: one of its own keys, `status`, `message`
+/// or `warnings`.
+fn value(live: &Live, key: &str) -> Json {
+    live.result_json()
+        .get(key)
+        .cloned()
         .unwrap_or_else(|| panic!("no {key} in {:?}", live.result))
-        .1
+}
+
+/// Whether the result has its own key `key`.
+fn has(live: &Live, key: &str) -> bool {
+    live.result.data.iter().any(|(name, _)| name == key)
+}
+
+/// The result's `failure.code`.
+fn failure_code(live: &Live) -> Option<&str> {
+    live.result.failure.code.as_deref()
 }
 
 /// Microsoft Defender whose check counts its data's retention from the
@@ -189,12 +199,12 @@ fn defender_rules_are_checked_with_their_custom_detection_columns() {
         &registry,
     );
     assert_eq!(mismatches, Vec::new());
-    assert_eq!(value(&live, "status"), &Json::str("failed"));
+    assert_eq!(&value(&live, "status"), &Json::str("failed"));
     assert_eq!(
-        value(&live, "message"),
+        &value(&live, "message"),
         &Json::str("Queries rejected on microsoft_defender · 2 checked on 1 tenant")
     );
-    assert_eq!(value(&live, "_exit_code"), &Json::Int(1));
+    assert_eq!(live.result.exit, ExitCode::Failure);
     let report = live.report(&Env::from_pairs::<&str, &str>([]));
     assert_eq!(report.steps[0].name, "Stand-in queries");
     assert_eq!(report.steps[0].count, Some(2));
@@ -227,14 +237,14 @@ fn sentinel_one_checks_each_correlation_sub_query() {
         &opentide_connectors::builtin(),
     );
     assert_eq!(mismatches, Vec::new());
-    assert_eq!(value(&live, "status"), &Json::str("passed"));
+    assert_eq!(&value(&live, "status"), &Json::str("passed"));
     // The rule counts once, its two sub-queries checked one by one.
     assert_eq!(
-        value(&live, "message"),
+        &value(&live, "message"),
         &Json::str("1 query valid on 1 tenant")
     );
     assert_eq!(
-        value(&live, "queries_per_tenant"),
+        &value(&live, "queries_per_tenant"),
         &Json::object([("lab", Json::Int(1))])
     );
 }
@@ -279,14 +289,17 @@ fn sentinel_signs_in_once_and_searches_each_rule() {
         &registry,
     );
     assert_eq!(mismatches, Vec::new());
-    assert_eq!(value(&live, "status"), &Json::str("passed"));
+    assert_eq!(&value(&live, "status"), &Json::str("passed"));
     assert_eq!(
-        value(&live, "message"),
+        &value(&live, "message"),
         &Json::str("2 queries valid on 1 tenant")
     );
     assert_eq!(
-        value(&live, "_summary"),
-        &Json::object([("queries", Json::Int(2)), ("tenants", Json::Int(1))])
+        live.result.summary,
+        Object::from([
+            ("queries".to_owned(), Json::Int(2)),
+            ("tenants".to_owned(), Json::Int(1))
+        ])
     );
 }
 
@@ -429,7 +442,7 @@ fn read_timeout() -> ConnectorError {
 }
 
 #[test]
-fn each_outcome_of_a_check_is_the_oracles() {
+fn each_outcome_of_a_check_is_the_recorded_one() {
     let ws = splunk_rules(5);
     let accepted = LiveCheck {
         warnings: vec!["the parser timed out".into()],
@@ -456,15 +469,15 @@ fn each_outcome_of_a_check_is_the_oracles() {
             Ok(accepted),
         ],
     );
-    assert_eq!(value(&live, "status"), &Json::str("failed"));
+    assert_eq!(&value(&live, "status"), &Json::str("failed"));
     assert_eq!(
-        value(&live, "message"),
+        &value(&live, "message"),
         &Json::str(
             "Queries rejected on splunk · 5 checked on 1 tenant · 3 with no answer within 5s"
         )
     );
-    assert_eq!(value(&live, "check_timeout"), &Json::Float(5.0));
-    let Json::Array(timed_out) = value(&live, "timed_out") else {
+    assert_eq!(&value(&live, "check_timeout"), &Json::Float(5.0));
+    let Json::Array(timed_out) = &value(&live, "timed_out") else {
         panic!("timed_out is a list")
     };
     assert_eq!(timed_out.len(), 3);
@@ -473,21 +486,21 @@ fn each_outcome_of_a_check_is_the_oracles() {
     assert_eq!(
         first.get("errors"),
         Some(&Json::Array(vec![Json::str(
-            "no answer within the 5s check timeout (no answer from \
+            "no answer within the 5s check timeout (no complete answer from \
              https://splunk.invalid:8089 within 5s). Raise it with --check-timeout or \
              OPENTIDE_QUERY_CHECK_TIMEOUT, or make the query cheaper"
         )]))
     );
     assert_eq!(
-        value(&live, "warnings"),
+        &value(&live, "warnings"),
         &Json::Array(vec![Json::str(
             "Query validation reported warnings for splunk"
         )])
     );
     // A refusal fails the run too, so the timeouts are not its only failures:
     // `query_check_timeout` does not name it. It was `command_failed`; the run
-    // now says a tenant rejected a query (a departure from the oracle).
-    assert_eq!(value(&live, "_failure_code"), &Json::str("query_rejected"));
+    // now says a tenant rejected a query (a departure from opentide 0.23.0).
+    assert_eq!(failure_code(&live), Some("query_rejected"));
     // A run that rejected a query has no tick (#1658, E8).
     assert_eq!(
         live.step.as_ref().unwrap().status,
@@ -498,7 +511,7 @@ fn each_outcome_of_a_check_is_the_oracles() {
         report.stderr_first,
         "{\"event\":\"progress\",\"step\":\"Stand-in queries\",\"done\":1,\"total\":1}\n"
     );
-    assert_eq!(report.outcome.exit_code, 1);
+    assert_eq!(report.outcome.exit_code, ExitCode::Failure);
 }
 
 /// A buffer the test's log layer writes to.
@@ -562,10 +575,7 @@ fn checks_that_only_timed_out_name_their_code() {
         ws.path(),
         vec![Err(read_timeout()), Ok(LiveCheck::default())],
     );
-    assert_eq!(
-        value(&live, "_failure_code"),
-        &Json::str("query_check_timeout")
-    );
+    assert_eq!(failure_code(&live), Some("query_check_timeout"));
 }
 
 #[test]
@@ -579,8 +589,8 @@ fn three_timeouts_in_a_row_report_the_tenant_unreachable() {
             Err(read_timeout()),
         ],
     );
-    assert_eq!(value(&live, "host"), &Json::str("splunk.invalid:8089"));
-    let Json::Str(message) = value(&live, "message") else {
+    assert_eq!(&value(&live, "host"), &Json::str("splunk.invalid:8089"));
+    let Json::Str(message) = &value(&live, "message") else {
         panic!("a message")
     };
     assert!(
@@ -590,7 +600,7 @@ fn three_timeouts_in_a_row_report_the_tenant_unreachable() {
         ),
         "{message}"
     );
-    let Json::Str(advice) = value(&live, "advice") else {
+    let Json::Str(advice) = &value(&live, "advice") else {
         panic!("advice")
     };
     assert!(
@@ -607,7 +617,7 @@ fn three_timeouts_in_a_row_report_the_tenant_unreachable() {
 fn a_tenant_that_only_timed_out_never_answered() {
     let ws = splunk_rules(1);
     let live = scripted(ws.path(), vec![Err(read_timeout())]);
-    let Json::Str(message) = value(&live, "message") else {
+    let Json::Str(message) = &value(&live, "message") else {
         panic!("a message")
     };
     assert!(
@@ -630,15 +640,15 @@ fn a_refused_credential_or_an_unreachable_tenant_stops_the_check() {
     // The tenant refused the credential: a tenant's failure, with its host
     // and what to check, and no query counted as checked (#1658, E8).
     assert_eq!(
-        value(&live, "message"),
+        &value(&live, "message"),
         &Json::str(
             "splunk tenant 'lab' refused the check: Cannot authenticate with the tenant \
              configuration"
         )
     );
-    assert_eq!(value(&live, "tenant"), &Json::str("lab"));
-    assert_eq!(value(&live, "host"), &Json::str("splunk.invalid:8089"));
-    let Json::Str(advice) = value(&live, "advice") else {
+    assert_eq!(&value(&live, "tenant"), &Json::str("lab"));
+    assert_eq!(&value(&live, "host"), &Json::str("splunk.invalid:8089"));
+    let Json::Str(advice) = &value(&live, "advice") else {
         panic!("advice")
     };
     assert!(
@@ -648,13 +658,8 @@ fn a_refused_credential_or_an_unreachable_tenant_stops_the_check() {
         ),
         "{advice}"
     );
-    assert!(
-        !live
-            .result
-            .iter()
-            .any(|(key, _)| key == "queries_validated")
-    );
-    assert_eq!(value(&live, "_exit_code"), &Json::Int(1));
+    assert!(!has(&live, "queries_validated"));
+    assert_eq!(live.result.exit, ExitCode::Failure);
     assert_eq!(
         live.step.as_ref().unwrap().status,
         opentide_cli::render::progress::StepStatus::Failed
@@ -669,16 +674,16 @@ fn a_refused_credential_or_an_unreachable_tenant_stops_the_check() {
         })],
     );
     assert_eq!(
-        value(&live, "message"),
+        &value(&live, "message"),
         &Json::str(
             "Cannot reach splunk tenant 'lab' at https://splunk.invalid:8089: connection refused"
         )
     );
     assert_eq!(
-        value(&live, "host"),
+        &value(&live, "host"),
         &Json::str("https://splunk.invalid:8089")
     );
-    assert_eq!(value(&live, "tenant"), &Json::str("lab"));
+    assert_eq!(&value(&live, "tenant"), &Json::str("lab"));
 }
 
 /// A tenant that stops the check after a query it refused as invalid does
@@ -699,11 +704,8 @@ fn a_tenant_that_stops_the_check_keeps_the_query_it_rejected() {
             }),
         ],
     );
-    assert_eq!(
-        value(&live, "_failure_code"),
-        &Json::str("tenant_unreachable")
-    );
-    let Json::Array(rejected) = value(&live, "rejected") else {
+    assert_eq!(failure_code(&live), Some("tenant_unreachable"));
+    let Json::Array(rejected) = &value(&live, "rejected") else {
         panic!("rejected is a list")
     };
     assert_eq!(rejected.len(), 1);
@@ -738,23 +740,20 @@ fn usage_errors_and_skips_answer_before_any_check() {
         ..Args::default()
     };
     let removed = run(&args(Some("splunk"), &[]), &cx(env));
-    assert_eq!(value(&removed, "_exit_code"), &Json::Int(2));
+    assert_eq!(removed.result.exit, ExitCode::Usage);
     let missing = run(&args(None, &[]), &cx(plain));
     assert_eq!(
-        value(&missing, "_failure_argument"),
-        &Json::str("--platform")
+        missing.result.failure.argument.as_deref(),
+        Some("--platform")
     );
     let typo = run(&args(Some("splunk"), &["STAGING"]), &cx(plain));
-    assert_eq!(
-        value(&typo, "_failure_code"),
-        &Json::str("usage_invalid_choice")
-    );
+    assert_eq!(failure_code(&typo), Some("usage_invalid_choice"));
     let disabled = run(&args(Some("elastic"), &[]), &cx(plain));
-    assert_eq!(value(&disabled, "platform_enabled"), &Json::Bool(false));
+    assert_eq!(&value(&disabled, "platform_enabled"), &Json::Bool(false));
     let none = run(&args(Some("splunk"), &["RELEASE"]), &cx(plain));
-    assert_eq!(value(&none, "status"), &Json::str("skipped"));
+    assert_eq!(&value(&none, "status"), &Json::str("skipped"));
     assert_eq!(
-        value(&none, "message"),
+        &value(&none, "message"),
         &Json::str("No rule for this platform has a status that maps to the run's strategies")
     );
     // A RELEASE rule reaches no tenant: the lab tenant takes PREVIEW only.
@@ -768,11 +767,8 @@ fn usage_errors_and_skips_answer_before_any_check() {
     )
     .unwrap();
     let unreached = run(&args(Some("splunk"), &["RELEASE"]), &cx(plain));
-    assert_eq!(value(&unreached, "_exit_code"), &Json::Int(2));
-    assert_eq!(
-        value(&unreached, "_failure_code"),
-        &Json::str("no_tenant_reached")
-    );
+    assert_eq!(unreached.result.exit, ExitCode::Usage);
+    assert_eq!(failure_code(&unreached), Some("no_tenant_reached"));
     // With --wide the rule goes to the lab tenant under PREVIEW, a strategy
     // the run left out: a skip, not a failure.
     let elsewhere = run(
@@ -782,22 +778,21 @@ fn usage_errors_and_skips_answer_before_any_check() {
         },
         &cx(plain),
     );
-    assert_eq!(value(&elsewhere, "status"), &Json::str("skipped"));
+    assert_eq!(&value(&elsewhere, "status"), &Json::str("skipped"));
     assert_eq!(
-        value(&elsewhere, "message"),
+        &value(&elsewhere, "message"),
         &Json::str(
             "None of the 1 splunk rule(s) goes to a tenant accepting RELEASE; they are checked \
              by a run with the strategy that deploys them, or without --strategy"
         )
     );
-    assert!(
-        !elsewhere
-            .result
-            .iter()
-            .any(|(key, _)| key == "_exit_code" || key == "_failure_code"),
+    assert_eq!(
+        elsewhere.result.exit,
+        ExitCode::Success,
         "{:?}",
         elsewhere.result
     );
+    assert_eq!(failure_code(&elsewhere), None);
 }
 
 /// A tenant that refuses the credential stops only its own rules: the next
@@ -833,17 +828,17 @@ fn a_refused_tenant_does_not_drop_the_next_tenants_checks() {
             Ok(LiveCheck::default()),
         ],
     );
-    assert_eq!(value(&live, "tenant"), &Json::str("lab"));
+    assert_eq!(&value(&live, "tenant"), &Json::str("lab"));
     assert_eq!(
-        value(&live, "message"),
+        &value(&live, "message"),
         &Json::str(
             "splunk tenant 'lab' refused the check: Splunk refused the credential (HTTP 401)"
         )
     );
     // lab2's two queries were checked, one rejected.
-    assert_eq!(value(&live, "queries_validated"), &Json::Int(2));
-    assert_eq!(value(&live, "queries_rejected"), &Json::Int(1));
-    assert_eq!(value(&live, "_exit_code"), &Json::Int(1));
+    assert_eq!(&value(&live, "queries_validated"), &Json::Int(2));
+    assert_eq!(&value(&live, "queries_rejected"), &Json::Int(1));
+    assert_eq!(live.result.exit, ExitCode::Failure);
 }
 
 /// An Elastic tenant that refuses the API key fails the tenant: no query
@@ -903,14 +898,14 @@ fn an_elastic_tenant_that_refuses_the_key_fails_the_tenant() {
         },
     );
     assert_eq!(
-        value(&live, "status"),
+        &value(&live, "status"),
         &Json::str("failed"),
         "{:?}",
         live.result
     );
-    assert_eq!(value(&live, "tenant"), &Json::str("lab"));
-    assert_eq!(value(&live, "host"), &Json::str(uri.as_str()));
-    let Json::Str(message) = value(&live, "message") else {
+    assert_eq!(&value(&live, "tenant"), &Json::str("lab"));
+    assert_eq!(&value(&live, "host"), &Json::str(uri.as_str()));
+    let Json::Str(message) = &value(&live, "message") else {
         panic!("a message")
     };
     assert!(
@@ -918,12 +913,7 @@ fn an_elastic_tenant_that_refuses_the_key_fails_the_tenant() {
         "{message}"
     );
     assert!(!message.contains("Queries rejected"), "{message}");
-    assert!(
-        !live
-            .result
-            .iter()
-            .any(|(key, _)| key == "queries_validated")
-    );
+    assert!(!has(&live, "queries_validated"));
     assert_eq!(
         live.step.as_ref().unwrap().status,
         opentide_cli::render::progress::StepStatus::Failed
@@ -1006,7 +996,7 @@ fn graylog_checks_resolve_stream_aliases_through_the_tenants_table() {
         },
     );
     assert_eq!(
-        value(&live, "status"),
+        &value(&live, "status"),
         &Json::str("passed"),
         "{:?}",
         live.result
@@ -1062,12 +1052,12 @@ fn a_refused_tenant_is_named_when_the_next_one_is_unreachable() {
             }),
         ],
     );
-    assert_eq!(value(&live, "tenant"), &Json::str("lab2"));
+    assert_eq!(&value(&live, "tenant"), &Json::str("lab2"));
     assert_eq!(
-        value(&live, "refused_tenants"),
+        &value(&live, "refused_tenants"),
         &Json::Array(vec![Json::str("lab")])
     );
-    assert_eq!(value(&live, "_exit_code"), &Json::Int(1));
+    assert_eq!(live.result.exit, ExitCode::Failure);
 }
 
 /// An Elastic tenant whose first rule timed out and whose second the key
@@ -1137,7 +1127,7 @@ fn an_elastic_refusal_after_a_timeout_is_a_refusal() {
             debug: false,
         },
     );
-    let Json::Str(message) = value(&live, "message") else {
+    let Json::Str(message) = &value(&live, "message") else {
         panic!("a message: {:?}", live.result)
     };
     assert!(
@@ -1145,7 +1135,7 @@ fn an_elastic_refusal_after_a_timeout_is_a_refusal() {
         "{message}"
     );
     // The timed-out check is kept beside the refusal.
-    let Json::Array(timed_out) = value(&live, "timed_out") else {
+    let Json::Array(timed_out) = &value(&live, "timed_out") else {
         panic!("timed_out")
     };
     assert_eq!(timed_out.len(), 1);
@@ -1210,27 +1200,37 @@ fn a_splunk_tenant_refusing_the_token_is_the_tenants_failure_end_to_end() {
         },
     );
     assert_eq!(proxy.verify(), Vec::new());
-    let report = opentide_cli::commands::validate_live::report_of("validate query", &live.result);
+    let report = live.result.clone().report("validate query");
     let failure = report.outcome.failure.as_ref().unwrap();
     assert_eq!(failure.code, "authentication_failed");
-    let keys: Vec<&str> = live.result.iter().map(|(key, _)| key.as_str()).collect();
+    let Json::Object(document) = report.outcome.document(0) else {
+        panic!("the document is an object")
+    };
+    let keys: Vec<&str> = document.keys().map(String::as_str).collect();
     assert_eq!(
         keys,
         [
             "platform",
             "mode",
-            "status",
             "supported",
             "tenant",
             "host",
-            "message",
             "advice",
-            "_exit_code",
-            "_failure_code"
+            "ok",
+            "status",
+            "message",
+            "error",
+            "schema_version",
+            "command",
+            "duration_ms",
+            "exit_code",
+            "summary",
+            "next_actions",
+            "failure"
         ]
     );
     assert_eq!(
-        value(&live, "message"),
+        &value(&live, "message"),
         &Json::str(
             "splunk tenant 'lab' refused the check: Splunk refused the credential (HTTP \
              401): call not properly authenticated"
@@ -1339,13 +1339,13 @@ fn a_push_checks_the_rules_it_will_promote_on_their_release_tenants() {
         },
     );
     assert_eq!(
-        value(&live, "status"),
+        &value(&live, "status"),
         &Json::str("passed"),
         "{:?}",
         live.result
     );
     assert_eq!(
-        value(&live, "queries_per_tenant"),
+        &value(&live, "queries_per_tenant"),
         &Json::object([("lab", Json::Int(1))])
     );
     assert_eq!(
@@ -1420,7 +1420,249 @@ fn a_splunk_check_sends_the_query_as_written() {
             debug: false,
         },
     );
-    assert_eq!(value(&live, "status"), &Json::str("passed"));
+    assert_eq!(&value(&live, "status"), &Json::str("passed"));
     let searches = searches.0.lock().unwrap();
     assert_eq!(searches[..], ["index=main n=1"], "{searches:?}");
+}
+
+/// A Splunk stand-in whose tenants answer after a delay of their own
+/// (`lab` the slowest), counting the searches in flight: in all, and on
+/// each tenant. `lab2` rejects its first rule's query; `unreachable` names
+/// a tenant whose searches cannot connect; `stalled` one whose searches
+/// all time out at once, as a TLS handshake that never completes.
+struct Paced {
+    delayed: bool,
+    unreachable: Option<&'static str>,
+    stalled: Option<&'static str>,
+    flight: std::sync::Mutex<Flight>,
+}
+
+/// The searches in flight, now and at most: in all, and by tenant.
+#[derive(Default)]
+struct Flight {
+    now: usize,
+    most: usize,
+    tenants: std::collections::HashMap<String, (usize, usize)>,
+    /// The searches each tenant was asked, by tenant.
+    asked: std::collections::HashMap<String, usize>,
+}
+
+impl Paced {
+    fn leaked(delayed: bool, unreachable: Option<&'static str>) -> &'static Paced {
+        Box::leak(Box::new(Paced {
+            delayed,
+            unreachable,
+            stalled: None,
+            flight: std::sync::Mutex::new(Flight::default()),
+        }))
+    }
+
+    /// A [`Paced`], delayed, whose tenant `tenant` stalls.
+    fn stalling(tenant: &'static str) -> &'static Paced {
+        Box::leak(Box::new(Paced {
+            delayed: true,
+            unreachable: None,
+            stalled: Some(tenant),
+            flight: std::sync::Mutex::new(Flight::default()),
+        }))
+    }
+
+    /// The searches *tenant* was asked.
+    fn asked(&self, tenant: &str) -> usize {
+        let flight = self.flight.lock().unwrap();
+        flight.asked.get(tenant).copied().unwrap_or(0)
+    }
+
+    /// The most searches in flight at once: in all, and on one tenant.
+    fn most(&self) -> (usize, usize) {
+        let flight = self.flight.lock().unwrap();
+        let per_tenant = flight.tenants.values().map(|(_, most)| *most).max();
+        (flight.most, per_tenant.unwrap_or(0))
+    }
+}
+
+impl LiveValidator for Paced {
+    fn validate<'a>(
+        &'a self,
+        cx: TenantContext<'a>,
+        request: &'a QueryRequest,
+    ) -> BoxFuture<'a, Result<LiveCheck, ConnectorError>> {
+        let tenant = cx.tenant.label.tenant.clone();
+        Box::pin(async move {
+            {
+                let mut flight = self.flight.lock().unwrap();
+                flight.now += 1;
+                flight.most = flight.most.max(flight.now);
+                let mine = flight.tenants.entry(tenant.clone()).or_default();
+                mine.0 += 1;
+                mine.1 = mine.1.max(mine.0);
+                *flight.asked.entry(tenant.clone()).or_default() += 1;
+            }
+            if self.stalled == Some(tenant.as_str()) {
+                let mut flight = self.flight.lock().unwrap();
+                flight.now -= 1;
+                if let Some(mine) = flight.tenants.get_mut(&tenant) {
+                    mine.0 -= 1;
+                }
+                return Err(ConnectorError::Timeout {
+                    platform: "splunk".into(),
+                    tenant: tenant.clone(),
+                    address: format!("https://{tenant}.invalid:8089"),
+                    seconds: 5,
+                });
+            }
+            if self.delayed {
+                let millis = if tenant == "lab" { 150 } else { 40 };
+                tokio::time::sleep(std::time::Duration::from_millis(millis)).await;
+            }
+            {
+                let mut flight = self.flight.lock().unwrap();
+                flight.now -= 1;
+                if let Some(mine) = flight.tenants.get_mut(&tenant) {
+                    mine.0 -= 1;
+                }
+            }
+            if self.unreachable == Some(tenant.as_str()) {
+                return Err(ConnectorError::Unreachable {
+                    platform: "splunk".into(),
+                    tenant: tenant.clone(),
+                    address: format!("https://{tenant}.invalid:8089"),
+                    reason: "connection refused".into(),
+                });
+            }
+            let errors = if tenant == "lab2" && request.text.ends_with("n=1") {
+                vec!["Unknown search command 'stat' 😀".to_owned()]
+            } else {
+                Vec::new()
+            };
+            Ok(LiveCheck {
+                errors,
+                ..LiveCheck::default()
+            })
+        })
+    }
+}
+
+/// Registers a [`Paced`] as `splunk`.
+struct PacedPlatform(&'static Paced);
+
+impl Platform for PacedPlatform {
+    fn id(&self) -> &'static str {
+        "splunk"
+    }
+
+    fn live_validator(&self) -> Option<&dyn LiveValidator> {
+        Some(self.0)
+    }
+}
+
+/// `validate query --live` of `rules` Splunk rules on the tenants `lab`,
+/// `lab2` and `lab3`, checked by `validator`; the result, and the time the
+/// run took.
+fn paced(rules: usize, validator: &'static Paced) -> (Live, std::time::Duration) {
+    paced_on(rules, &["lab2", "lab3"], validator)
+}
+
+/// [`paced`] on `lab` and the tenants `more`, in that order.
+fn paced_on(rules: usize, more: &[&str], validator: &'static Paced) -> (Live, std::time::Duration) {
+    keep_callsites_enabled();
+    let ws = splunk_rules(rules);
+    let config = ws
+        .path()
+        .join(".opentide/configurations/platforms/splunk.toml");
+    let mut text = std::fs::read_to_string(&config).unwrap();
+    for tenant in more {
+        text.push_str(&format!(
+            "\n[[tenants]]\nname = \"{tenant}\"\nstrategies = [\"PREVIEW\"]\n[tenants.setup]\nurl \
+             = \"{tenant}.invalid\"\nport = 8089\napp = \"search\"\ntoken = \"$SPLUNK_TOKEN\"\n"
+        ));
+    }
+    std::fs::write(&config, text).unwrap();
+    let mut registry = Registry::new();
+    registry
+        .register(Box::new(PacedPlatform(validator)))
+        .unwrap();
+    let env = Env::from_pairs([("SPLUNK_TOKEN", SECRET)]);
+    let args = Args {
+        platform: Some("splunk".to_owned()),
+        live: true,
+        check_timeout: Some("5".to_owned()),
+        ..Args::default()
+    };
+    let never = || false;
+    let started = std::time::Instant::now();
+    let live = run(
+        &args,
+        &Context {
+            repo: Some(ws.path().to_str().unwrap()),
+            env: &env,
+            cwd: ws.path(),
+            proxy: None,
+            interrupted: &never,
+            now: now(),
+            registry: &registry,
+            debug: false,
+        },
+    );
+    (live, started.elapsed())
+}
+
+/// The tenants of a platform are checked at once, each tenant's queries
+/// one after another (its streak of timeouts counts them in order), and the
+/// result is the one a serial run gives, whichever tenant answers first
+/// (#1941).
+#[test]
+fn tenants_are_checked_at_once_and_reported_in_order() {
+    let instant = Paced::leaked(false, None);
+    let (serial, _) = paced(3, instant);
+    assert_eq!(
+        instant.most(),
+        (1, 1),
+        "answers that never wait come one by one"
+    );
+    let delayed = Paced::leaked(true, None);
+    let (concurrent, took) = paced(3, delayed);
+    // The wall time, which a serial run spends on every query in turn.
+    eprintln!("3 tenants x 3 queries, lab 150 ms a query, the others 40 ms: {took:?}");
+    let (most, per_tenant) = delayed.most();
+    assert!(most >= 2, "the tenants were checked one after another");
+    assert_eq!(per_tenant, 1, "a tenant's queries overlapped");
+    assert_eq!(concurrent.result, serial.result);
+    assert_eq!(&value(&concurrent, "queries_validated"), &Json::Int(9));
+    let Json::Array(rejected) = &value(&concurrent, "rejected") else {
+        panic!("rejected is a list")
+    };
+    assert_eq!(rejected.len(), 1);
+    assert_eq!(rejected[0].get("tenant"), Some(&Json::str("lab2")));
+}
+
+/// A tenant that stops the check stops it there, as in a serial run: the
+/// tenants after it, checked meanwhile, are not reported (#1941).
+#[test]
+fn a_tenant_that_stops_the_check_hides_the_tenants_after_it() {
+    let instant = Paced::leaked(false, Some("lab"));
+    let (serial, _) = paced(2, instant);
+    let delayed = Paced::leaked(true, Some("lab"));
+    let (concurrent, _) = paced(2, delayed);
+    assert_eq!(&value(&serial, "tenant"), &Json::str("lab"));
+    assert_eq!(concurrent.result, serial.result);
+}
+
+/// A tenant whose every query times out, on fewer queries than the streak
+/// of three needs, is unreachable once its batch ends, and stops the check
+/// there: the tenants after it that had not started are never asked, as in
+/// a serial run (#1941).
+#[test]
+fn a_stalled_tenant_stops_the_tenants_not_yet_started() {
+    let stalled = Paced::stalling("lab");
+    let (live, _) = paced_on(2, &["lab2", "lab3", "lab4", "lab5", "lab6"], stalled);
+    assert_eq!(&value(&live, "tenant"), &Json::str("lab"));
+    assert_eq!(stalled.asked("lab"), 2);
+    for later in ["lab5", "lab6"] {
+        assert_eq!(
+            stalled.asked(later),
+            0,
+            "{later} was asked after lab stopped the check"
+        );
+    }
 }

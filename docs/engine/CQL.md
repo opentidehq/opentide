@@ -163,7 +163,7 @@ Not checked, on purpose:
 |------------|----------|
 | `configurations.crowdstrike.query` | CQL, with Next-Gen SIEM correlation checks |
 | hunts `searches[].query` with `system: crowdstrike` | CQL |
-| raw `*.cql` | CQL |
+| raw `*.cql` | CQL, plain LogScale: no correlation-rule checks, whatever platform the host names (`validate query --platform crowdstrike`, `analyze_query`), unless the host names position `rule` (`--position rule`), which checks it as the block's correlation rule |
 
 Diagnostics map back onto the YAML (block scalar indent stripped), with `field_path` set to the injected key.
 

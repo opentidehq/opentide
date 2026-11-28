@@ -79,10 +79,11 @@ schema = ["dep:opentide-schema"]
 # `analyze_query` and `highlight` build on it (UC-5.1, #836).
 analysis = ["dep:opentide-analysis"]
 # The platform plugin host (`opentide::plugins`, UC-4.5, #835): the connectors'
-# traits a platform plugin implements, and the command line's host the Python
+# traits a platform plugin implements, and the process's plugin host the Python
 # package installs so a run reaches the platforms its entry points register.
-# Heavy: it brings the connectors and the command line.
-plugins = ["connectors", "dep:opentide-cli"]
+# The host is the connectors' (`opentide_connectors::plugin::host`), which the
+# command line reads too: this feature does not build the command line (#1966).
+plugins = ["connectors"]
 # The Tide models as Python classes (`opentide::python`, UC-1.9, #815): the
 # `opentide._native.models` registration the Python package compiles in. Brings
 # PyO3 (opentide-schema's `python`).
@@ -119,7 +120,6 @@ connectors = [
     "dep:tokio",
     "dep:tokio-util",
     "dep:jiff",
-    "dep:toml",
 ]
 
 [dependencies]
@@ -131,12 +131,11 @@ opentide-cli = { workspace = true, optional = true }
 opentide-lsp = { workspace = true, optional = true }
 opentide-connectors = { workspace = true, optional = true }
 # `connectors`: a connection's cancellation, a window's time
-# (`connectors::Timestamp`), a tenant's setup table.
+# (`connectors::Timestamp`).
 tokio-util = { workspace = true, optional = true }
 # `connectors`: the process's runtime the bindings run their operations on.
 tokio = { workspace = true, optional = true, features = ["rt"] }
 jiff = { workspace = true, optional = true }
-toml = { workspace = true, optional = true }
 # The documents the facade hands back as JSON: the deploy plan's payload,
 # `cli::run_json`'s envelope.
 serde_json.workspace = true
@@ -145,7 +144,7 @@ thiserror.workspace = true
 
 [dev-dependencies]
 # The tests lay a workspace out under a temporary folder, never in the checkout.
-tempfile = "3"
+tempfile.workspace = true
 # `connectors`: a stand-in tenant (tests/connectors.rs), and the runtime the
 # tests await a connection's operations on.
 wiremock.workspace = true

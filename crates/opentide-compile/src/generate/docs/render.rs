@@ -1,5 +1,5 @@
-//! Pages from the catalogue (`documentation/objects/`, `parts/`,
-//! `publish/index.py`).
+//! Pages from the catalogue: each object's page, the folders' indexes and
+//! the root README.
 //!
 //! Every page has one layout ([`super::page`]): a breadcrumb, the title, a
 //! subtitle (kind, schema, version, modification date, TLP), a TLP banner
@@ -1571,7 +1571,7 @@ impl Pages<'_, '_> {
         join(parts)
     }
 
-    /// One record's row of the CVE table (`_cve_row`).
+    /// One record's row of the CVE table.
     fn cve_row(record: &cve::CveRecord, id: &str, link: &dyn Fn(&str) -> String) -> [String; 6] {
         let ident = if record.identifier.is_empty() {
             id
@@ -2558,13 +2558,7 @@ fn entry_link(entry: &Enriched, fallback: &str, label: Option<&str>) -> String {
 
 /// `values` each once, in order.
 fn unique(values: &[String]) -> Vec<&String> {
-    let mut out: Vec<&String> = Vec::new();
-    for value in values {
-        if !out.contains(&value) {
-            out.push(value);
-        }
-    }
-    out
+    opentide_core::text::unique(values)
 }
 
 /// Whether detecting `detected` detects `wanted`: the same technique, or

@@ -1,5 +1,4 @@
-//! The pieces of text the UI lays out (`tui_app.py`'s `pill`,
-//! `masthead_brand`, `fit_label`, `empty_state`): pure functions over
+//! The pieces of text the UI lays out: pure functions over
 //! ratatui's [`Line`], widths in terminal cells by `unicode-width`.
 
 use std::path::Path;

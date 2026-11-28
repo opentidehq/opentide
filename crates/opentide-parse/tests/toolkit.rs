@@ -2,6 +2,10 @@
 //! words, lexed with logos.
 
 #![expect(
+    clippy::string_slice,
+    reason = "a test: a slice off a char boundary panics, and a panic is a failed test"
+)]
+#![expect(
     clippy::unwrap_used,
     reason = "test helpers outside #[test] functions: a panic fails the test"
 )]
@@ -129,6 +133,21 @@ fn on_small_stack(run: impl FnOnce() + Send + 'static) {
 
 fn at(start: u32, end: u32) -> TextRange {
     TextRange::new(TextSize::from(start), TextSize::from(end))
+}
+
+/// Errors on multi-byte characters restart the lexer on a char boundary:
+/// every suffix of such a text lexes back to itself (#1946).
+#[test]
+fn every_suffix_of_multi_byte_text_lexes_losslessly() {
+    let source = "é😀 a(é) 😀?é\n😀";
+    for (at, _) in source.char_indices() {
+        let rest = source.get(at..).unwrap();
+        let text: String = toy_lex(rest)
+            .iter()
+            .map(|l| rest.get(std::ops::Range::<usize>::from(l.range)).unwrap())
+            .collect();
+        assert_eq!(text, rest);
+    }
 }
 
 #[test]

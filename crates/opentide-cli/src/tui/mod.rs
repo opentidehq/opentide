@@ -1,5 +1,5 @@
-//! `opentide tui` on ratatui (UC-3.6d, #951; `cli/tui_app.py`,
-//! `cli/tui_tabs/`): the catalogue as a tree, each object as a page or as
+//! `opentide tui` on ratatui (UC-3.6d, #951): the catalogue as a tree, each
+//! object as a page or as
 //! its file with what the language server and the last validate run report
 //! in place, ATT&CK coverage, the Results of the commands run from it, the
 //! Visibility report and threat chaining, in a terminal UI drawn through
@@ -28,6 +28,10 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use crate::env::Env;
+
+/// How long the event loop waits for a key or a mouse event before it
+/// redraws.
+const EVENT_POLL: Duration = Duration::from_millis(100);
 
 /// What the UI needs of the run that opened it.
 #[derive(Debug, Clone)]
@@ -102,7 +106,7 @@ fn event_loop(
         if ui.quit {
             return Ok(());
         }
-        if event::poll(Duration::from_millis(100))? {
+        if event::poll(EVENT_POLL)? {
             match event::read()? {
                 Event::Key(key) if key.kind != KeyEventKind::Release => ui.on_key(key),
                 Event::Mouse(mouse) => ui.on_mouse(mouse),

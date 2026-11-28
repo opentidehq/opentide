@@ -97,7 +97,7 @@ fn rule_info(rule: &Rule) -> RuleInfo {
     for pattern in rule.patterns.iter().flatten() {
         let ident = pattern.identifier();
         info.strings.push(StringUse {
-            name: ident.name[1..].to_string(),
+            name: unsigiled(ident.name).to_string(),
             span: span_of(&ident.span()),
             wildcard: false,
             definition: true,
@@ -108,9 +108,18 @@ fn rule_info(rule: &Rule) -> RuleInfo {
     info
 }
 
+/// A string's name without its sigil: `$a`, `#a`, `@a` and `!a` are `a`.
+/// The parser's identifiers always have one; a name without fails a debug
+/// assertion and is kept whole.
+pub(crate) fn unsigiled(name: &str) -> &str {
+    let bare = name.strip_prefix(['$', '#', '@', '!']);
+    debug_assert!(bare.is_some(), "{name:?} has no sigil");
+    bare.unwrap_or(name)
+}
+
 fn string_use(name: &str, span: Span) -> StringUse {
     StringUse {
-        name: name[1..].to_string(),
+        name: unsigiled(name).to_string(),
         span,
         wildcard: false,
         definition: false,
@@ -242,10 +251,12 @@ pub(crate) fn symbols_of(source: &str, ast: &AST<'_>) -> Vec<Symbol> {
 }
 
 fn line_at(source: &str, offset: usize) -> Option<&str> {
-    let start = source[..offset].rfind('\n').map_or(0, |i| i + 1);
-    let end = source[offset..]
-        .find('\n')
-        .map_or(source.len(), |i| offset + i);
+    // The callers' offsets start a word or a definition: char boundaries.
+    let split = source.split_at_checked(offset);
+    debug_assert!(split.is_some(), "{offset} in {} bytes", source.len());
+    let (before, after) = split?;
+    let start = before.rfind('\n').map_or(0, |i| i + 1);
+    let end = after.find('\n').map_or(source.len(), |i| offset + i);
     source.get(start..end)
 }
 
@@ -289,10 +300,16 @@ impl<'a, I: Iterator<Item = (usize, usize)>> StringDetails<'a, I> {
     /// The line around `offset`, without its `\n`.
     fn line(&self, offset: usize) -> (usize, usize) {
         if self.table.is_empty() {
-            let start = self.source[..offset].rfind('\n').map_or(0, |i| i + 1);
-            let end = self.source[offset..]
-                .find('\n')
-                .map_or(self.source.len(), |i| offset + i);
+            // In bytes: a `\n` is one, and the line's ends are next to one.
+            let bytes = self.source.as_bytes();
+            let start = bytes[..offset]
+                .iter()
+                .rposition(|&b| b == b'\n')
+                .map_or(0, |i| i + 1);
+            let end = bytes[offset..]
+                .iter()
+                .position(|&b| b == b'\n')
+                .map_or(bytes.len(), |i| offset + i);
             return (start, end);
         }
         let line = self.table.partition_point(|&s| s <= offset) - 1;
@@ -479,7 +496,11 @@ fn chain_before(source: &str, offset: usize) -> (usize, &str) {
         }
         i -= 1;
     }
-    (i, &source[i..offset.min(source.len())])
+    // `i` follows a whole character (the walk stops after a byte no chain
+    // holds, or a `[`), and the callers' offsets are char boundaries.
+    let chain = source.get(i..offset.min(source.len()));
+    debug_assert!(chain.is_some(), "{i}..{offset} in {} bytes", source.len());
+    (i, chain.unwrap_or_default())
 }
 
 /// `pe.sections[0].name` -> (`pe`, `sections[].name`).
@@ -722,7 +743,10 @@ fn word_at(source: &str, offset: usize) -> (usize, &str) {
     while end < bytes.len() && (bytes[end].is_ascii_alphanumeric() || bytes[end] == b'_') {
         end += 1;
     }
-    (start, &source[start..end])
+    // Runs of ASCII name bytes around a char boundary (the callers').
+    let word = source.get(start..end);
+    debug_assert!(word.is_some(), "{start}..{end} in {} bytes", source.len());
+    (start, word.unwrap_or_default())
 }
 
 /// Hover at `offset`: a module member, a module, a string, a rule, or a
@@ -846,21 +870,23 @@ fn imported(source: &str) -> BTreeSet<String> {
 /// The strings defined in the rule whose text holds `offset`, read from the
 /// text so a half-written condition still completes.
 fn strings_in_rule(source: &str, offset: usize) -> Vec<String> {
-    let head = &source[..offset.min(source.len())];
-    let rule_start = head.rfind("rule ").unwrap_or(0);
-    let tail_end = source[offset.min(source.len())..]
-        .find("\nrule ")
-        .map_or(source.len(), |i| offset + i);
-    let region = &source[rule_start..tail_end];
+    let offset = offset.min(source.len());
+    // The caller's offset is a char boundary, and `rule ` and `\nrule ` are
+    // ASCII: the region's ends are too.
+    let region = source.split_at_checked(offset).and_then(|(head, tail)| {
+        let rule_start = head.rfind("rule ").unwrap_or(0);
+        let tail_end = tail.find("\nrule ").map_or(source.len(), |i| offset + i);
+        source.get(rule_start..tail_end)
+    });
+    debug_assert!(region.is_some(), "{offset} in {} bytes", source.len());
     let mut out = Vec::new();
-    for line in region.lines() {
+    for line in region.unwrap_or_default().lines() {
         let t = line.trim_start();
         if let Some(rest) = t.strip_prefix('$') {
-            let name: String = rest
-                .chars()
-                .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
-                .collect();
-            if rest[name.len()..].trim_start().starts_with('=') && !out.contains(&name) {
+            let is_name = |c: char| c.is_ascii_alphanumeric() || c == '_';
+            let after = rest.trim_start_matches(is_name);
+            let name: String = rest.chars().take_while(|&c| is_name(c)).collect();
+            if after.trim_start().starts_with('=') && !out.contains(&name) {
                 out.push(name);
             }
         }
@@ -872,12 +898,11 @@ fn strings_in_rule(source: &str, offset: usize) -> Vec<String> {
 pub fn completions(source: &str, offset: usize) -> Vec<CompletionItem> {
     let offset = offset.min(source.len());
     // An offset inside a character (a decoded escape) completes nothing.
-    if !source.is_char_boundary(offset) {
+    let Some(head) = source.get(..offset) else {
         return Vec::new();
-    }
+    };
     let catalog = Catalog::cached();
-    let line_start = source[..offset].rfind('\n').map_or(0, |i| i + 1);
-    let before = &source[line_start..offset];
+    let before = head.rsplit_once('\n').map_or(head, |(_, line)| line);
     // `import "`.
     if before.trim_start().starts_with("import") {
         return catalog
@@ -908,43 +933,41 @@ pub fn completions(source: &str, offset: usize) -> Vec<CompletionItem> {
     }
     // A member of a module chain.
     let (_, chain) = chain_before(source, offset);
-    if let Some(dot) = chain.rfind('.') {
-        let parent = &chain[..dot];
-        if let Some((module, path)) = chain_path(parent)
-            && catalog.known_modules.contains(&module)
-        {
-            let parent_path = if path.is_empty() {
-                String::new()
-            } else if let Some(m) = resolve(catalog, &module, &path) {
-                m.path.clone()
-            } else if let Some(container) = path.strip_suffix("[]") {
-                // An element: `sections[0].` lists `sections[].*`.
-                match resolve(catalog, &module, container) {
-                    Some(m) if m.kind == Kind::Array => format!("{}[]", m.path),
-                    Some(m) if m.kind == Kind::Dict => format!("{}{{}}", m.path),
-                    _ => return Vec::new(),
-                }
-            } else {
-                return Vec::new();
-            };
-            return catalog
-                .children(&module, &parent_path)
-                .map(|m| {
-                    let label = leaf_name(&m.path).to_string();
-                    let kind = if m.kind == Kind::Function {
-                        "function"
-                    } else {
-                        "property"
-                    };
-                    item(
-                        &label,
-                        kind,
-                        Some(kind_name(m)),
-                        Some(member_hover(&module, m)),
-                    )
-                })
-                .collect();
-        }
+    if let Some((parent, _)) = chain.rsplit_once('.')
+        && let Some((module, path)) = chain_path(parent)
+        && catalog.known_modules.contains(&module)
+    {
+        let parent_path = if path.is_empty() {
+            String::new()
+        } else if let Some(m) = resolve(catalog, &module, &path) {
+            m.path.clone()
+        } else if let Some(container) = path.strip_suffix("[]") {
+            // An element: `sections[0].` lists `sections[].*`.
+            match resolve(catalog, &module, container) {
+                Some(m) if m.kind == Kind::Array => format!("{}[]", m.path),
+                Some(m) if m.kind == Kind::Dict => format!("{}{{}}", m.path),
+                _ => return Vec::new(),
+            }
+        } else {
+            return Vec::new();
+        };
+        return catalog
+            .children(&module, &parent_path)
+            .map(|m| {
+                let label = leaf_name(&m.path).to_string();
+                let kind = if m.kind == Kind::Function {
+                    "function"
+                } else {
+                    "property"
+                };
+                item(
+                    &label,
+                    kind,
+                    Some(kind_name(m)),
+                    Some(member_hover(&module, m)),
+                )
+            })
+            .collect();
     }
     // Anywhere else in a rule: keywords, readers, modules, rules.
     let mut out: Vec<CompletionItem> = KEYWORDS
@@ -971,7 +994,7 @@ pub fn completions(source: &str, offset: usize) -> Vec<CompletionItem> {
             .into_iter()
             .map(|m| item(&m, "module", Some("imported module".into()), None)),
     );
-    let rule_start = source[..offset].rfind("rule ").unwrap_or(0);
+    let rule_start = head.rfind("rule ").unwrap_or(0);
     out.extend(
         rules(source)
             .into_iter()
@@ -1004,7 +1027,14 @@ pub fn signature_help(source: &str, offset: usize) -> Option<SignatureHelp> {
             b'(' if depth == 0 => break,
             b'(' => depth -= 1,
             b',' if depth == 0 => commas += 1,
-            b'\n' if depth == 0 && source[i..offset].contains("condition") => return None,
+            b'\n'
+                if depth == 0
+                    && bytes[i..offset]
+                        .windows("condition".len())
+                        .any(|w| w == b"condition") =>
+            {
+                return None;
+            }
             _ => {}
         }
         if i == 0 {
@@ -1133,9 +1163,9 @@ mod tests {
     #[test]
     fn definition_and_references_of_a_string() {
         let def = definition(SIG, at("#cfg") + 1).unwrap();
-        assert_eq!(&SIG[def.0..def.1], "$cfg");
+        assert_eq!(SIG.get(def.0..def.1).unwrap(), "$cfg");
         let refs = references(SIG, at("@cfg") + 2, true);
-        let texts: Vec<&str> = refs.iter().map(|s| &SIG[s.0..s.1]).collect();
+        let texts: Vec<&str> = refs.iter().map(|s| SIG.get(s.0..s.1).unwrap()).collect();
         assert_eq!(texts, ["$cfg", "#cfg", "@cfg", "$cfg*"]);
     }
 
@@ -1240,8 +1270,12 @@ mod tests {
     #[test]
     fn folding_rules_and_sections() {
         let spans = folding(SIG);
-        assert!(spans.iter().any(|s| &SIG[s.0..s.0 + 4] == "rule"));
-        assert!(spans.iter().any(|s| SIG[s.0..].starts_with("strings:")));
+        assert!(spans.iter().any(|s| SIG.get(s.0..s.0 + 4) == Some("rule")));
+        assert!(
+            spans
+                .iter()
+                .any(|s| SIG.get(s.0..).unwrap().starts_with("strings:"))
+        );
     }
 
     #[test]
@@ -1253,5 +1287,40 @@ mod tests {
         assert!(completions(src, inside).is_empty());
         assert_eq!(hover(src, inside), None);
         assert!(signature_help(src, inside).is_none());
+    }
+
+    /// The text the helpers cut around multi-byte text is read whole.
+    #[test]
+    fn helpers_read_multi_byte_text() {
+        assert_eq!(unsigiled("$é"), "é");
+        assert_eq!(unsigiled("#😀"), "😀");
+        assert_eq!(unsigiled("@a"), "a");
+        assert_eq!(unsigiled("!a"), "a");
+        assert_eq!(crate::catalog::parent_of("é.😀.x"), "é.😀");
+        assert_eq!(crate::catalog::parent_of("é😀"), "");
+        let source = "é\nrule é😀 {\n  strings:\n    $é = \"😀\"\n    $b😀 = \"x\"\n    $c = \"é\"\n  condition:\n    $\n}\nrule z { strings: $z = \"z\" condition: $z }";
+        let cursor = source.find("$\n").unwrap() + 1;
+        // `$é` and `$b😀` are not YARA names: only `$c` is defined.
+        assert_eq!(strings_in_rule(source, cursor), ["c"]);
+        assert_eq!(
+            line_at(source, source.find("rule").unwrap()),
+            Some("rule é😀 {")
+        );
+        assert_eq!(line_at(source, 0), Some("é"));
+        assert_eq!(word_at("é abc😀", "é a".len()), ("é ".len(), "abc"));
+        let chain = "é pe.sections[é].name";
+        assert_eq!(
+            chain_before(chain, chain.len()),
+            ("é ".len(), "pe.sections[é].name")
+        );
+        let labels: Vec<String> = completions(source, cursor)
+            .into_iter()
+            .map(|c| c.label)
+            .collect();
+        assert_eq!(labels, ["$c"]);
+        let call = "rule é { condition: uint16(\né😀";
+        assert!(signature_help(call, call.len()).is_some());
+        let after = "rule é {\n condition: é😀 }\n é";
+        assert!(signature_help(after, after.len()).is_none());
     }
 }

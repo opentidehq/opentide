@@ -35,8 +35,8 @@ pub struct ConfigIssue {
 pub fn configuration_path(path: &str) -> Option<String> {
     let path = path.replace('\\', "/");
     let marker = format!("/{CONFIGURATIONS_DIRECTORY}");
-    let rest = match path.rfind(&marker) {
-        Some(index) => &path[index + marker.len()..],
+    let rest = match path.rsplit_once(marker.as_str()) {
+        Some((_, rest)) => rest,
         None => path.strip_prefix(CONFIGURATIONS_DIRECTORY)?,
     };
     let stem = rest.strip_suffix(".toml")?;
@@ -113,10 +113,14 @@ fn first_line(text: &str) -> Range {
 /// Whether `text` holds `word` on its own, not inside a longer name.
 fn names_word(text: &str, word: &str) -> bool {
     let is_name = |ch: char| ch.is_alphanumeric() || ch == '_' || ch == '-';
-    text.match_indices(word).any(|(start, _)| {
-        let before = text[..start].chars().next_back();
-        let after = text[start + word.len()..].chars().next();
-        !before.is_some_and(is_name) && !after.is_some_and(is_name)
+    text.match_indices(word).any(|(start, found)| {
+        #[expect(
+            clippy::string_slice,
+            reason = "a match from `match_indices` starts and ends on char boundaries"
+        )]
+        let (before, after) = (&text[..start], &text[start + found.len()..]);
+        !before.chars().next_back().is_some_and(is_name)
+            && !after.chars().next().is_some_and(is_name)
     })
 }
 
@@ -480,23 +484,39 @@ fn is_object(node: &Value) -> bool {
     node.get("type").and_then(Value::as_str) == Some("object") || node.get("properties").is_some()
 }
 
-/// A JSON value written as TOML writes it.
+/// A JSON value written as TOML writes it: `toml_edit` escapes strings and
+/// quotes keys that are not bare (#1929). TOML has no null, so a value that
+/// holds one is written as JSON writes it.
 fn toml_value(value: &Value) -> String {
-    match value {
-        Value::String(text) => format!("\"{}\"", text.replace('\\', "\\\\").replace('"', "\\\"")),
-        Value::Array(items) => format!(
-            "[{}]",
-            items.iter().map(toml_value).collect::<Vec<_>>().join(", ")
-        ),
-        Value::Object(map) => format!(
-            "{{ {} }}",
-            map.iter()
-                .map(|(key, value)| format!("{key} = {}", toml_value(value)))
-                .collect::<Vec<_>>()
-                .join(", ")
-        ),
-        other => other.to_string(),
-    }
+    to_toml(value).map_or_else(|| value.to_string(), |value| value.to_string())
+}
+
+fn to_toml(value: &Value) -> Option<toml_edit::Value> {
+    Some(match value {
+        Value::Null => return None,
+        Value::Bool(flag) => toml_edit::Value::from(*flag),
+        Value::Number(number) => match number.as_i64() {
+            Some(int) => toml_edit::Value::from(int),
+            None => toml_edit::Value::from(number.as_f64()?),
+        },
+        Value::String(text) => toml_edit::Value::from(text.as_str()),
+        Value::Array(items) => {
+            let mut array = items
+                .iter()
+                .map(to_toml)
+                .collect::<Option<toml_edit::Array>>()?;
+            array.fmt();
+            toml_edit::Value::Array(array)
+        }
+        Value::Object(map) => {
+            let mut table = map
+                .iter()
+                .map(|(key, value)| Some((toml_edit::Key::new(key.as_str()), to_toml(value)?)))
+                .collect::<Option<toml_edit::InlineTable>>()?;
+            table.fmt();
+            toml_edit::Value::InlineTable(table)
+        }
+    })
 }
 
 // --- Where the cursor is ------------------------------------------------------
@@ -553,23 +573,45 @@ fn dotted(text: &str) -> Vec<String> {
     parts
 }
 
-/// The table the line holding `offset` belongs to: the last header above it.
-fn table_at(text: &str, line_start: usize) -> (Vec<String>, usize) {
+/// The table the line starting at `line_start` belongs to: the last header
+/// above it, and where that table's body starts. `None` when `line_start` is
+/// not a char boundary of `text`; every caller passes the start of a line.
+fn table_at(text: &str, line_start: usize) -> Option<(Vec<String>, usize)> {
+    debug_assert!(
+        text.is_char_boundary(line_start),
+        "{text:?} cut at {line_start}"
+    );
+    let (above, _) = text.split_at_checked(line_start)?;
     let mut table = Vec::new();
     let mut body_start = 0;
     let mut position = 0;
-    for line in text[..line_start].split_inclusive('\n') {
+    for line in above.split_inclusive('\n') {
         if let Some((_, path)) = header(line) {
             table = path;
             body_start = position + line.len();
         }
         position += line.len();
     }
-    (table, body_start)
+    Some((table, body_start))
 }
 
-/// Where `=` is on `line`, outside strings, before any comment.
-fn equals(line: &str) -> Option<usize> {
+/// The line holding `offset` (floored to a char boundary): where it starts
+/// in `text`, its text up to `offset`, and its text from `offset` to its end.
+fn line_at(text: &str, offset: usize) -> (usize, &str, &str) {
+    let offset = text.floor_char_boundary(offset);
+    #[expect(
+        clippy::string_slice,
+        reason = "`floor_char_boundary` returns a char boundary of `text`"
+    )]
+    let (before, after) = (&text[..offset], &text[offset..]);
+    let head = before.rsplit_once('\n').map_or(before, |(_, line)| line);
+    let tail = after.split_once('\n').map_or(after, |(line, _)| line);
+    (before.len() - head.len(), head, tail)
+}
+
+/// Where `=` is on `line`, outside strings, before any comment, and the text
+/// before it.
+fn equals(line: &str) -> Option<(usize, &str)> {
     let mut quote: Option<char> = None;
     for (index, ch) in line.char_indices() {
         match quote {
@@ -577,7 +619,10 @@ fn equals(line: &str) -> Option<usize> {
             Some(_) => {}
             None if ch == '"' || ch == '\'' => quote = Some(ch),
             None if ch == '#' => return None,
-            None if ch == '=' => return Some(index),
+            None if ch == '=' => {
+                #[expect(clippy::string_slice, reason = "`char_indices` yields char boundaries")]
+                return Some((index, &line[..index]));
+            }
             None => {}
         }
     }
@@ -585,9 +630,7 @@ fn equals(line: &str) -> Option<usize> {
 }
 
 fn cursor(text: &str, offset: usize) -> Cursor {
-    let offset = text.floor_char_boundary(offset);
-    let line_start = text[..offset].rfind('\n').map_or(0, |index| index + 1);
-    let prefix = &text[line_start..offset];
+    let (line_start, prefix, _) = line_at(text, offset);
     if prefix.trim_start().starts_with('[') {
         let inner = prefix.trim_start();
         if inner.contains(']') {
@@ -598,16 +641,27 @@ fn cursor(text: &str, offset: usize) -> Cursor {
         parent.pop();
         return Cursor::Header { array, parent };
     }
-    let (table, body_start) = table_at(text, line_start);
+    let Some((table, body_start)) = table_at(text, line_start) else {
+        return Cursor::Nothing;
+    };
+    // The body starts after a header's newline, at or before `line_start`.
+    debug_assert!(
+        text.is_char_boundary(body_start),
+        "{text:?} cut at {body_start}"
+    );
+    let Some(body) = text.get(body_start..line_start + prefix.len()) else {
+        return Cursor::Nothing;
+    };
     // Inside the table's body, read up to the cursor: open brackets and
     // strings, and the key of the value being written.
     let mut depth: i32 = 0;
     let mut quote: Option<char> = None;
     let mut key: Option<String> = None;
-    let mut statement_start = body_start;
+    // The statement read so far, up to and including `ch`.
+    let mut statement = String::new();
     let mut in_comment = false;
-    for (index, ch) in text[body_start..offset].char_indices() {
-        let index = body_start + index;
+    for ch in body.chars() {
+        statement.push(ch);
         if in_comment {
             if ch == '\n' {
                 in_comment = false;
@@ -630,11 +684,13 @@ fn cursor(text: &str, offset: usize) -> Cursor {
             '[' | '{' if key.is_some() => depth += 1,
             ']' | '}' => depth = (depth - 1).max(0),
             '=' if depth == 0 && key.is_none() => {
-                key = Some(text[statement_start..index].trim().to_string());
+                // The key is the statement before this `=`.
+                statement.pop();
+                key = Some(statement.trim().to_string());
             }
             '\n' if depth == 0 => {
                 key = None;
-                statement_start = index + 1;
+                statement.clear();
             }
             _ => {}
         }
@@ -657,15 +713,21 @@ fn cursor(text: &str, offset: usize) -> Cursor {
     }
 }
 
-/// Keys already set in the table whose body starts at `body_start`.
+/// Keys already set in the table whose body starts at `body_start`; none
+/// when `body_start` is not a char boundary of `text`, which no caller
+/// passes.
 fn present_keys(text: &str, body_start: usize) -> Vec<String> {
+    debug_assert!(
+        text.is_char_boundary(body_start),
+        "{text:?} cut at {body_start}"
+    );
     let mut keys = Vec::new();
-    for line in text[body_start..].lines() {
+    for line in text.get(body_start..).unwrap_or_default().lines() {
         if header(line).is_some() {
             break;
         }
-        if let Some(index) = equals(line)
-            && let Some(first) = dotted(&line[..index]).into_iter().next()
+        if let Some((_, key)) = equals(line)
+            && let Some(first) = dotted(key).into_iter().next()
             && !first.is_empty()
         {
             keys.push(first);
@@ -687,22 +749,22 @@ pub fn configuration_hover(
     let walker = Walker {
         root: schemas.for_file(&relative)?,
     };
-    let offset = text.floor_char_boundary(offset);
-    let line_start = text[..offset].rfind('\n').map_or(0, |index| index + 1);
-    let line_end = text[offset..]
-        .find('\n')
-        .map_or(text.len(), |index| offset + index);
-    let line = &text[line_start..line_end];
-    let column = offset - line_start;
+    let (line_start, head, tail) = line_at(text, offset);
+    // The line runs from `line_start` to the end of `tail`: char boundaries.
+    debug_assert!(
+        text.is_char_boundary(line_start),
+        "{text:?} cut at {line_start}"
+    );
+    let line = text.get(line_start..line_start + head.len() + tail.len())?;
     let path: Vec<String> = if let Some((_, segments)) = header(line) {
         segments
-    } else if let Some(index) = equals(line) {
-        let (table, _) = table_at(text, line_start);
-        let key = &line[..index];
+    } else if let Some((index, key)) = equals(line) {
+        let (table, _) = table_at(text, line_start)?;
         let mut segments = dotted(key);
-        if column <= index {
-            // The segment under the cursor and the ones before it.
-            let before = dotted(&key[..column.min(key.len())]).len();
+        if head.len() <= index {
+            // The segment under the cursor and the ones before it: `head` is
+            // the key up to the cursor.
+            let before = dotted(head).len();
             segments.truncate(before.max(1));
         }
         table.into_iter().chain(segments).collect()
@@ -763,10 +825,10 @@ pub fn configuration_completions(
                 .collect()
         }
         Cursor::Key { table, parent } => {
-            let line_start = text[..text.floor_char_boundary(offset)]
-                .rfind('\n')
-                .map_or(0, |index| index + 1);
-            let (_, body_start) = table_at(text, line_start);
+            let (line_start, _, _) = line_at(text, offset);
+            let Some((_, body_start)) = table_at(text, line_start) else {
+                return Vec::new();
+            };
             let present = if parent.is_empty() {
                 present_keys(text, body_start)
             } else {
@@ -846,6 +908,32 @@ pub fn configuration_completions(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// What `toml_value` writes parses back as TOML to the same value (#1929).
+    #[test]
+    fn toml_values_escape_control_characters_and_quote_keys() {
+        let value = serde_json::json!({
+            "plain": "line\nbreak\r\u{7f}\u{1}\t\"quoted\" \\ é😀",
+            "dotted.key": ["a\u{0}b", 1, 2.5, true],
+            "spaced key": { "inner key": "x" },
+            "é": "😀",
+        });
+        let text = format!("v = {}", toml_value(&value));
+        let parsed: toml::Table = toml::from_str(&text).unwrap_or_else(|e| panic!("{text}: {e}"));
+        let back = serde_json::to_value(&parsed["v"]).unwrap();
+        assert_eq!(back, value, "{text}");
+    }
+
+    #[test]
+    fn toml_values_keep_their_short_form() {
+        let value = serde_json::json!({"type": "string", "list": ["a", "b"]});
+        assert_eq!(
+            toml_value(&value),
+            r#"{ list = ["a", "b"], type = "string" }"#
+        );
+        assert_eq!(toml_value(&serde_json::json!("a")), r#""a""#);
+        assert_eq!(toml_value(&serde_json::json!(null)), "null");
+    }
 
     #[test]
     fn configuration_paths_are_toml_files_under_the_directory() {
@@ -931,6 +1019,50 @@ mod tests {
     }
 
     #[test]
+    fn multi_byte_text_reads_the_same_paths_keys_and_cursor() {
+        // #1946: the text around the cursor is cut by characters and lines,
+        // never by a byte index that could fall inside `é` or `😀`.
+        assert_eq!(
+            configuration_path("/w/é😀/.opentide/configurations/sharing.toml").as_deref(),
+            Some("sharing.toml")
+        );
+        assert!(names_word("le bloc « é » n'a pas d'url.", "url"));
+        assert!(names_word("😀url😀", "url"));
+        assert!(!names_word("éurl", "url"));
+        assert!(!names_word("urlé", "url"));
+        let text = "# é😀\n[[misp]]\nname = \"é😀\" # 😀\nmax_tlp = \"😀";
+        let inside = |needle: &str| text.rfind(needle).unwrap() + 1;
+        assert_eq!(
+            cursor(text, inside("😀")),
+            Cursor::Value {
+                path: vec!["misp".into(), "max_tlp".into()],
+                in_array: false,
+                quoted: true
+            }
+        );
+        assert_eq!(
+            cursor(text, inside("é😀\" #")),
+            Cursor::Value {
+                path: vec!["misp".into(), "name".into()],
+                in_array: false,
+                quoted: true
+            }
+        );
+        let keys = format!("{text}\"\n");
+        assert_eq!(
+            cursor(&keys, keys.len()),
+            Cursor::Key {
+                table: vec!["misp".into()],
+                parent: vec![]
+            }
+        );
+        assert_eq!(
+            present_keys(&keys, "# é😀\n[[misp]]\n".len()),
+            ["name", "max_tlp"]
+        );
+    }
+
+    #[test]
     fn a_multi_line_array_value_is_still_a_value() {
         let text = "[[misp]]\nobject_types = [\n  \"threat\",\n  ";
         assert_eq!(
@@ -950,7 +1082,7 @@ mod tests {
         let span = |path: &[&str]| {
             let path: Vec<String> = path.iter().map(|s| s.to_string()).collect();
             let (span, resolved) = locate(document.as_table(), &path);
-            (span.map(|s| &text[s]), resolved)
+            (span.map(|s| text.get(s).unwrap()), resolved)
         };
         assert_eq!(span(&["promotion", "enabeld"]), (Some("enabeld"), true));
         assert_eq!(span(&["misp", "1", "max_tlp"]), (Some("max_tlp"), true));

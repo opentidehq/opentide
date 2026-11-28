@@ -15,11 +15,9 @@
 //! `platforms/elastic.toml` (8.19 when none says), and the datasets
 //! `visibility.toml` declares are the ones the engines know.
 //!
-//! This module ports the oracle's `opentide.analysis.check_queries`,
-//! `opentide.validation.queries` and `diagnostic_from_engine`: a query `opentide
-//! new` left as a placeholder is not counted; only the engine's errors are
-//! `validate`'s (its warnings and notes are `lint`'s); `--queries warn`
-//! reports them as warnings with a note.
+//! What counts: a query `opentide new` left as a placeholder is not checked;
+//! only the engine's errors are `validate`'s (its warnings and notes are
+//! `lint`'s); `--queries warn` reports them as warnings with a note.
 //!
 //! The datasets a workspace declares are its [`Profiles`]': each check
 //! enters them on the thread that runs it, so checks of different
@@ -76,7 +74,7 @@ pub const DECLARED_DATASET_CODES: [&str; 3] = [
 
 /// Code prefix, then the language and the reference a finding without a
 /// suggestion points at.
-pub const ENGINE_REFERENCES: [(&str, &str, &str); 13] = [
+pub const ENGINE_REFERENCES: [(&str, &str, &str); 14] = [
     ("kql_", "KQL", "https://learn.microsoft.com/kusto/query/"),
     (
         "spl_",
@@ -134,25 +132,37 @@ pub const ENGINE_REFERENCES: [(&str, &str, &str); 13] = [
         "YARA-L 2.0",
         "https://cloud.google.com/chronicle/docs/detection/yara-l-2-0-syntax",
     ),
+    (
+        "datadog_",
+        "Datadog log search syntax",
+        "https://docs.datadoghq.com/logs/explorer/search_syntax/",
+    ),
 ];
 
 /// Whether `opentide lint` reports an engine warning of `code`: a query
 /// language's (one with a reference), an Elastic advisory, Sysdig's list
-/// self-reference, or an undeclared dataset. 0.28.1 added Graylog's dialect:
+/// self-reference, a continuous Defender rule's NRT finding, or an
+/// undeclared dataset. 0.28.1 added Graylog's dialect:
 /// before, `graylog_analyzed_field` and `graylog_regex_operator` reached the
 /// editor alone.
 pub fn lint_owned(code: &str) -> bool {
     opentide_schema::objects::platform::harfanglab::yara::ADVISORY_CODES.contains(&code)
+        || code == opentide_core::codes::MICROSOFT_DEFENDER_NRT_QUERY
         || ENGINE_REFERENCES
             .iter()
             .any(|(prefix, _, _)| code.starts_with(prefix))
         || ELASTIC_ADVISORIES.contains(&code)
         || code == opentide_core::codes::SYSDIG_LIST_SELF_REFERENCE
         || DECLARED_DATASET_CODES.contains(&code)
+        || DEFENDER_OUTPUT_ADVISORIES.contains(&code)
 }
 
-/// Words in an engine message that make its `suggestion` a replacement name.
-const ENGINE_UNKNOWN: [&str; 3] = ["unknown", "deprecated", "not a command"];
+/// The warnings of a Microsoft Defender block checked against its query's
+/// output (#1885): lint's, as its errors are `validate`'s.
+const DEFENDER_OUTPUT_ADVISORIES: [&str; 2] = [
+    opentide_core::codes::MICROSOFT_DEFENDER_COLUMN_TYPE,
+    opentide_core::codes::MICROSOFT_DEFENDER_UNPROJECTED_OUTPUT,
+];
 
 /// Held by a host while it installs datasets or catalogs for the whole
 /// process. Nothing in opentide takes it any more (#1142): the queries
@@ -316,16 +326,17 @@ impl Profiles {
         one_secops_rule(checked)
     }
 
-    /// [`check_query_on_stack`] with these profiles' declared datasets.
+    /// [`check_query_at`] with these profiles' declared datasets.
     pub fn check_query(
         &self,
         text: &str,
         language: crate::LanguageId,
         platform: Option<&str>,
         stack: Option<&str>,
+        position: crate::QueryPosition,
     ) -> Vec<Finding> {
         self.datasets
-            .scope(|| check_query_on_stack(text, language, platform, stack))
+            .scope(|| check_query_at(text, language, platform, stack, position))
     }
 
     /// These profiles' declared datasets in use on this thread until the
@@ -336,8 +347,8 @@ impl Profiles {
 
     /// The Graylog queries of `text` without `graylog_leading_wildcard` when
     /// every tenant the rule's Graylog block reaches sets
-    /// `allow_leading_wildcard = true` (`_graylog_findings`): those servers take
-    /// a leading `*` or `?`. With no tenant the code stays an error.
+    /// `allow_leading_wildcard = true`: those servers take a leading `*` or
+    /// `?`. With no tenant the code stays an error.
     fn allow_leading_wildcards(&self, text: &str, checked: &mut [CheckedQuery]) {
         let wildcard = |finding: &Finding| finding.code == LEADING_WILDCARD;
         if !checked
@@ -426,8 +437,9 @@ impl Profiles {
     }
 }
 
-/// One query on its own (a query file), in its own coordinates, with
-/// `platform`'s profile when one is given (`check_query`), with the
+/// One query on its own (a query file), in its own coordinates, under
+/// `platform`'s dialect when one is given (`check_query`), checked as a
+/// file of its language is, whatever the platform, with the
 /// datasets in use on this thread: [`Profiles::check_query`] checks it with
 /// a workspace's.
 pub fn check_query_text(
@@ -435,7 +447,7 @@ pub fn check_query_text(
     language: crate::LanguageId,
     platform: Option<&str>,
 ) -> Vec<Finding> {
-    check_query_on_stack(text, language, platform, None)
+    check_query_at(text, language, platform, None, crate::QueryPosition::Search)
 }
 
 /// [`check_query_text`] for an Elastic `stack` (`9.5`), which ES|QL's
@@ -446,14 +458,33 @@ pub fn check_query_on_stack(
     platform: Option<&str>,
     stack: Option<&str>,
 ) -> Vec<Finding> {
+    check_query_at(
+        text,
+        language,
+        platform,
+        stack,
+        crate::QueryPosition::Search,
+    )
+}
+
+/// [`check_query_on_stack`] at `position`: [`crate::QueryPosition::Rule`]
+/// checks the query as `platform`'s rule block checks its own. The caller
+/// refuses a rule without a platform first ([`crate::validate_position`]).
+pub fn check_query_at(
+    text: &str,
+    language: crate::LanguageId,
+    platform: Option<&str>,
+    stack: Option<&str>,
+    position: crate::QueryPosition,
+) -> Vec<Finding> {
     let text = universal_newlines(text);
     let lines = LineStarts::new(&text);
-    crate::analyze_query(&crate::QueryRequest {
-        language,
-        platform: platform.map(str::to_owned),
-        stack: stack.map(str::to_owned),
-        text: text.clone().into_owned(),
-    })
+    crate::analyze_query_at(
+        &crate::QueryRequest::new(language, text.clone().into_owned())
+            .with_platform(platform)
+            .with_stack(stack),
+        position,
+    )
     .into_iter()
     .map(|diagnostic| finding(&text, &lines, diagnostic))
     .collect()
@@ -471,8 +502,8 @@ pub fn is_stand_in(line: &str) -> bool {
     PLACEHOLDER_MARK.replace(line, "").trim() == "..."
 }
 
-/// Whether `finding` sits in a `...` stand-in under a marked key
-/// (`_in_placeholder`); `marked` holds the 1-based marked lines.
+/// Whether `finding` sits in a `...` stand-in under a marked key; `marked`
+/// holds the 1-based marked lines.
 fn in_placeholder(finding: &Finding, lines: &[&str], marked: &[usize]) -> bool {
     let line = finding.line;
     if !(marked.contains(&line) || marked.contains(&(line.wrapping_sub(1))))
@@ -497,7 +528,7 @@ const ELASTIC_ADVISORIES: [&str; 5] = [
     "technique_not_enterprise",
 ];
 
-/// `lint`'s queries check on the query engines (`_query_findings`): each
+/// `lint`'s queries check on the query engines: each
 /// object's query warnings and notes and its platform blocks' advisories. A
 /// query the engine rejects is `validate`'s; a placeholder query is the
 /// placeholders check's. Build it with [`EngineLintQueries::install`].
@@ -614,7 +645,7 @@ use opentide_schema::objects::platform::harfanglab::yara::{
     ADVISORY_CODES as HARFANGLAB_ADVISORIES, CONTEXT_PATH, SIGNATURE_PATH,
 };
 
-/// The HarfangLab profile's advisories on a rule file (`_harfanglab_yara_findings`):
+/// The HarfangLab profile's advisories on a rule file:
 /// `yara_meta_missing` and `harfanglab_yara_context` are warnings, which
 /// HarfangLab takes, but may not scan where the author meant. opentide's own,
 /// on a `yara.signature` or the decomposed form's `meta.context`, placed in
@@ -771,15 +802,22 @@ fn signature_lines<'v>(
     let first = node.start.line().saturating_sub(1);
     move |offset: usize| {
         if literal {
-            first + value[..offset.min(value.len())].matches('\n').count()
+            // Newlines are single bytes, so an offset inside a character
+            // counts the same as the character's start.
+            first
+                + value
+                    .bytes()
+                    .take(offset)
+                    .filter(|byte| *byte == b'\n')
+                    .count()
         } else {
             first
         }
     }
 }
 
-/// The platforms' block advisories of an object file
-/// (`_platform_advisory_findings`): each a `queries` warning at its field
+/// The platforms' block advisories of an object file: each a `queries`
+/// warning at its field
 /// path. A file that does not load as YAML has none: the parse error is
 /// another check's finding.
 fn block_advisories(
@@ -834,13 +872,7 @@ pub fn decode(bytes: &[u8]) -> Result<String, String> {
 
 /// `text` with `\r\n` and a lone `\r` read as `\n`, as a text-mode read reads
 /// a file: the positions the CLI reports count lines so.
-pub fn universal_newlines(text: &str) -> Cow<'_, str> {
-    if text.contains('\r') {
-        Cow::Owned(text.replace("\r\n", "\n").replace('\r', "\n"))
-    } else {
-        Cow::Borrowed(text)
-    }
-}
+pub use opentide_core::text::universal_newlines;
 
 /// An engine finding in the CLI's coordinates: lines and columns from 1,
 /// columns in code points (`opentide tui` places the language server's so).
@@ -894,13 +926,16 @@ fn span_end(
     }
 }
 
-/// The help line of an engine finding: `did you mean …?` for an unknown or
-/// deprecated name, the step to take otherwise; without a suggestion, the
-/// language reference, or the code's `opentide explain`.
-pub fn engine_help(code: &str, message: &str, suggestion: Option<&str>) -> String {
+/// The help line of an engine finding: `did you mean …?` when its code
+/// declares its suggestion a replacement name
+/// ([`suggestion_kind`](opentide_core::codes::suggestion_kind)), `try: …`
+/// otherwise; without a suggestion, the language reference, or the code's
+/// `opentide explain`. The message's words never decide it (#1950).
+pub fn engine_help(code: &str, suggestion: Option<&str>) -> String {
     if let Some(suggestion) = suggestion.filter(|text| !text.is_empty()) {
-        let lower = message.to_lowercase();
-        if ENGINE_UNKNOWN.iter().any(|word| lower.contains(word)) {
+        if opentide_core::codes::suggestion_kind(code)
+            == Some(opentide_core::codes::SuggestionKind::Replacement)
+        {
             return format!(
                 "did you mean {}?",
                 opentide_schema::vocab::quote(suggestion)
@@ -919,7 +954,7 @@ pub fn engine_help(code: &str, message: &str, suggestion: Option<&str>) -> Strin
 }
 
 /// An engine finding in `file` as a diagnostic, placed where the engine
-/// placed it (`diagnostic_from_engine`).
+/// placed it.
 pub fn engine_diagnostic(
     finding: &Finding,
     severity: Severity,
@@ -935,11 +970,7 @@ pub fn engine_diagnostic(
     diagnostic.column = Some(finding.column);
     diagnostic.end_line = Some(finding.end_line);
     diagnostic.end_column = Some(finding.end_column);
-    diagnostic.help = Some(engine_help(
-        &finding.code,
-        &finding.message,
-        finding.suggestion.as_deref(),
-    ));
+    diagnostic.help = Some(engine_help(&finding.code, finding.suggestion.as_deref()));
     diagnostic
 }
 
@@ -1212,6 +1243,27 @@ mod tests {
     }
 
     #[test]
+    fn a_signature_offset_inside_a_character_is_on_that_character_s_line() {
+        // #1946: an advisory's offset into a literal block counts the
+        // newlines before it, wherever it falls in a multi-byte character.
+        let text = "yara:\n  signature: |\n    é😀\n    rule x {}\n";
+        let document = opentide_schema::node::load(text).unwrap();
+        let signature = document
+            .root()
+            .unwrap()
+            .get("yara")
+            .unwrap()
+            .get("signature")
+            .unwrap();
+        let value = signature.value.as_str().unwrap();
+        let line_of = signature_lines(text, signature, value);
+        assert_eq!(line_of(0), 2);
+        assert_eq!(line_of("é".len() + 1), 2, "inside 😀");
+        assert_eq!(line_of(value.find("rule").unwrap()), 3);
+        assert_eq!(line_of(value.len() + 10), 4);
+    }
+
+    #[test]
     fn a_span_ending_after_a_newline_ends_on_its_own_line() {
         let text = "a\n| where (\nnext\n";
         // From line 2 column 9 to the start of line 3: the `(` and its newline.
@@ -1239,7 +1291,10 @@ mod tests {
         let reported: Vec<&str> = ELASTIC_ADVISORIES
             .into_iter()
             .chain(DECLARED_DATASET_CODES)
-            .chain([opentide_core::codes::SYSDIG_LIST_SELF_REFERENCE])
+            .chain([
+                opentide_core::codes::SYSDIG_LIST_SELF_REFERENCE,
+                opentide_core::codes::MICROSOFT_DEFENDER_NRT_QUERY,
+            ])
             .chain(graylog::ADVISORY_CODES)
             .chain(harfanglab::yara::ADVISORY_CODES)
             .chain(bitdefender::advisories::ADVISORY_CODES)
@@ -1267,6 +1322,12 @@ mod tests {
             assert!(lint_owned(code), "{code}");
         }
         assert!(lint_owned(opentide_core::codes::SYSDIG_LIST_SELF_REFERENCE));
+        assert!(lint_owned(
+            opentide_core::codes::MICROSOFT_DEFENDER_UNPROJECTED_OUTPUT
+        ));
+        assert!(lint_owned(
+            opentide_core::codes::MICROSOFT_DEFENDER_COLUMN_TYPE
+        ));
         assert!(!lint_owned("vocab_unknown"));
         // A Graylog finding names Graylog's search syntax page.
         assert!(
@@ -1285,32 +1346,84 @@ mod tests {
     #[test]
     fn help_names_the_replacement_the_step_the_reference_or_the_page() {
         assert_eq!(
-            engine_help("kql_unknown_table", "unknown table 'X'", Some("Y")),
+            engine_help("kql_unknown_table", Some("Y")),
             "did you mean \"Y\"?"
         );
         assert_eq!(
-            engine_help("spl_x", "is Not A Command here", Some("stats")),
+            engine_help("spl_unknown_command", Some("stats")),
             "did you mean \"stats\"?"
         );
+        assert_eq!(engine_help("spl_search_operator", Some("=")), "try: =");
+        // A code that declares no kind gets the step.
         assert_eq!(
-            engine_help("esql_x", "needs a source", Some("FROM logs-*")),
+            engine_help("esql_x", Some("FROM logs-*")),
             "try: FROM logs-*"
         );
         assert_eq!(
-            engine_help("falco_value_type", "abc is not a number", None),
+            engine_help("falco_value_type", None),
             "the Falco condition reference: https://falco.org/docs/concepts/rules/conditions/"
         );
         assert_eq!(
-            engine_help("kql_table_not_declared", "not declared", None),
+            engine_help("kql_table_not_declared", None),
             "opentide explain kql_table_not_declared describes it"
         );
         assert_eq!(
-            engine_help("sysdig_list_self_reference", "x", None),
+            engine_help("sysdig_list_self_reference", None),
             "opentide explain sysdig_list_self_reference describes it"
         );
         assert_eq!(
-            engine_help("kql_x", "x", Some("")),
+            engine_help("kql_x", Some("")),
             "the KQL reference: https://learn.microsoft.com/kusto/query/"
+        );
+    }
+
+    /// A near miss of a known name is a replacement whatever its message
+    /// says (#1950): these printed `try: …` while their messages named none
+    /// of "unknown", "deprecated" or "not a command".
+    #[test]
+    fn a_near_miss_is_a_replacement() {
+        for (code, suggestion) in [
+            (opentide_core::codes::KQL_TABLE_MISSPELT, "SecurityEvent"),
+            (
+                opentide_core::codes::SPL_UNKNOWN_DATAMODEL,
+                "Endpoint.Processes",
+            ),
+            (
+                opentide_core::codes::SPL_UNKNOWN_DATAMODEL_FIELD,
+                "Endpoint.Processes.process_name",
+            ),
+            (opentide_core::codes::ECS_UNKNOWN_FIELD, "process.name"),
+            (opentide_core::codes::CBC_UNKNOWN_FIELD, "process_name"),
+            (opentide_core::codes::KQL_UNKNOWN_COLUMN, "FileName"),
+            (opentide_core::codes::FALCO_UNKNOWN_FIELD, "proc.name"),
+            (opentide_core::codes::FALCO_UNKNOWN_MACRO, "spawned_process"),
+            (
+                opentide_core::codes::FALCO_UNKNOWN_RULE,
+                "Terminal shell in container",
+            ),
+            (opentide_core::codes::CQL_UNKNOWN_EVENT, "ProcessRollup2"),
+            (opentide_core::codes::CQL_UNKNOWN_PARAMETER, "function"),
+            (opentide_core::codes::ESQL_UNKNOWN_TYPE, "long"),
+        ] {
+            assert_eq!(
+                engine_help(code, Some(suggestion)),
+                format!("did you mean \"{suggestion}\"?"),
+                "{code}"
+            );
+        }
+    }
+
+    /// ES|QL's parse errors and gates suggest the text to write, even where
+    /// their message explains an "unknown command" (#1950).
+    #[test]
+    fn an_esql_fix_is_a_step() {
+        assert_eq!(
+            engine_help(opentide_core::codes::ESQL_PARSE_ERROR, Some("FROM é😀")),
+            "try: FROM é😀"
+        );
+        assert_eq!(
+            engine_help(opentide_core::codes::ESQL_UNAVAILABLE, Some("FROM (")),
+            "try: FROM ("
         );
     }
 
@@ -1359,5 +1472,231 @@ mod tests {
         assert_eq!(decode(b"\xef\xbb\xbfa\r\nb\rc\n").unwrap(), "a\nb\nc\n");
         assert!(decode(b"\xff").is_err());
         assert!(matches!(universal_newlines("a\nb"), Cow::Borrowed(_)));
+    }
+
+    /// #1962: the queries check spreads its objects over rayon's pool, and a
+    /// thread-local scope does not follow work to a pool thread. Each job
+    /// enters the profiles' datasets itself, so the check run in parallel
+    /// reports what it reports run serially, whatever catalog the calling
+    /// thread entered.
+    #[test]
+    fn a_parallel_check_sees_the_datasets_a_serial_one_sees() {
+        use rayon::prelude::*;
+        let declares = |table: &str| {
+            format!(
+                "[[logsources]]\nname = \"{table}\"\ndescription = \"x\"\nsystem = \"sentinel\"\n"
+            )
+        };
+        let profiles = |visibility: Option<&str>| Profiles {
+            host: MemoryWorkspace { files: Vec::new() },
+            datasets: crate::Datasets::of_workspace(visibility).unwrap(),
+            visibility_problem: None,
+            graylog_tenants: Vec::new(),
+        };
+        let workspace = profiles(Some(&declares("Declared_CL")));
+        let objects: Vec<String> = (0..64)
+            .map(|i| {
+                let table = if i % 2 == 0 {
+                    "Declared_CL"
+                } else {
+                    "Other_CL"
+                };
+                format!(
+                    "name: Rule {i}\nconfigurations:\n  sentinel:\n    query: |\n      \
+                     {table} | take {i}\n"
+                )
+            })
+            .collect();
+        let codes = |checked: Vec<CheckedQuery>| -> Vec<String> {
+            checked
+                .into_iter()
+                .flat_map(|query| query.findings)
+                .map(|finding| finding.code)
+                .collect()
+        };
+        // The calling thread uses another catalog, which declares the
+        // other table: neither run may see it.
+        let _caller = crate::enter_catalog(&crate::Catalog {
+            visibility: Some(declares("Other_CL")),
+            ..crate::Catalog::default()
+        })
+        .unwrap();
+        let serial: Vec<Vec<String>> = objects
+            .iter()
+            .map(|text| codes(workspace.check_object(text)))
+            .collect();
+        let parallel: Vec<Vec<String>> = objects
+            .par_iter()
+            .map(|text| codes(workspace.check_object(text)))
+            .collect();
+        assert_eq!(parallel, serial);
+        // The workspace's datasets are the ones in use: the table it
+        // declares is known, the other is not, and with no declarations
+        // neither is.
+        let unknown = |codes: &[String]| codes.iter().any(|code| code == "kql_unknown_table");
+        assert!(!unknown(&serial[0]), "{serial:?}");
+        assert!(unknown(&serial[1]), "{serial:?}");
+        let undeclared = profiles(None);
+        assert!(unknown(&codes(undeclared.check_object(&objects[0]))));
+        // What the jobs enter is what makes them agree: a pool thread does
+        // not see the calling thread's scope.
+        let on_the_pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(2)
+            .build()
+            .unwrap()
+            .install(|| crate::declared_datasets().declares("sentinel"));
+        assert!(crate::declared_datasets().declares("sentinel"));
+        assert!(!on_the_pool);
+    }
+
+    /// 64 rule files of a workspace in memory whose `visibility.toml` is
+    /// `visibility`: rule `i` reads `table(i)` on `platform`'s query.
+    fn parallel_workspace(
+        visibility: &str,
+        platform: &str,
+        query: impl Fn(usize) -> String,
+    ) -> (
+        std::sync::Arc<opentide_workspace::MemoryFs>,
+        Vec<(std::path::PathBuf, String, String)>,
+    ) {
+        let fs = std::sync::Arc::new(opentide_workspace::MemoryFs::new());
+        fs.create_dir("/ws/.opentide/configurations");
+        fs.create_dir("/ws/objects/rules");
+        fs.write("/ws/.opentide/configurations/visibility.toml", visibility);
+        let rules = (0..64)
+            .map(|i| {
+                let uuid = format!("11111111-1111-4111-8111-{i:012}");
+                let path = std::path::PathBuf::from(format!("/ws/objects/rules/rule_{i}.yaml"));
+                let text = format!(
+                    "name: Rule {i}\nmetadata:\n  uuid: {uuid}\n  schema: rule::1.1\n\
+                     configurations:\n  {platform}:\n    query: |\n      {}\n",
+                    query(i)
+                );
+                fs.write(&path, text.as_str());
+                (path, uuid, text)
+            })
+            .collect();
+        (fs, rules)
+    }
+
+    /// #1962: `validate`'s queries check ([`EngineQueries::check`]) runs its
+    /// objects on rayon's pool; each job enters the workspace's datasets, so
+    /// every job sees the table `visibility.toml` declares, and only the
+    /// other table is unknown (an error in Defender's closed schema). Without
+    /// the job's scope a pool thread has no declarations, and every rule's
+    /// table would be unknown.
+    #[test]
+    fn validate_s_parallel_check_sees_the_workspace_s_datasets_on_every_job() {
+        let visibility = "[[logsources]]\nname = \"DeclaredEvents\"\ndescription = \"x\"\n\
+                          system = \"microsoft_defender\"\n";
+        let table = |i: usize| {
+            if i.is_multiple_of(2) {
+                "DeclaredEvents"
+            } else {
+                "OtherEvents"
+            }
+        };
+        let (fs, rules) = parallel_workspace(visibility, "microsoft_defender", |i| {
+            format!("{} | take {i}", table(i))
+        });
+        let ws = Workspace::open(
+            fs as std::sync::Arc<dyn FileSystem>,
+            opentide_workspace::Options {
+                roots: opentide_workspace::RootOptions {
+                    repo: Some(std::path::PathBuf::from("/ws")),
+                    cwd: std::path::PathBuf::from("/ws"),
+                    ..opentide_workspace::RootOptions::default()
+                },
+            },
+        )
+        .unwrap();
+        let objects: Vec<QueryObject<'_>> = rules
+            .iter()
+            .map(|(path, uuid, text)| QueryObject {
+                path,
+                uuid,
+                family: "rule",
+                source: text,
+            })
+            .collect();
+        // The calling thread's catalog declares the other table: no job sees it.
+        let _caller = crate::enter_catalog(&crate::Catalog {
+            visibility: Some(visibility.replace("DeclaredEvents", "OtherEvents")),
+            ..crate::Catalog::default()
+        })
+        .unwrap();
+        let found = EngineQueries.check(&ws, &objects, false);
+        assert_eq!(found.queries, 64);
+        let mut unknown: Vec<String> = found
+            .errors
+            .iter()
+            .filter(|error| error.code == "kql_unknown_table")
+            .map(|error| error.object_uuid.clone())
+            .collect();
+        unknown.sort();
+        let expected: Vec<String> = rules
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| table(*i) == "OtherEvents")
+            .map(|(_, (_, uuid, _))| uuid.clone())
+            .collect();
+        assert_eq!(unknown, expected, "{:#?}", found.errors);
+    }
+
+    /// #1962: `lint`'s queries check runs each chunk's files on rayon's pool
+    /// through [`EngineLintQueries`]' `check_parsed`; each job enters the
+    /// workspace's datasets, so exactly the rules that read a sourcetype
+    /// `visibility.toml` does not declare are warned about. Without the
+    /// job's scope a pool thread has no declarations, and none would be.
+    #[test]
+    fn lint_s_parallel_check_sees_the_workspace_s_datasets_on_every_job() {
+        use opentide_workspace::lint::{LintCheck, LintOptions, lint};
+        let visibility = "[[logsources]]\nname = \"main\"\ndescription = \"x\"\n\
+                          system = \"splunk\"\n[[logsources]]\nname = \"linux_secure\"\n\
+                          description = \"x\"\nsystem = \"splunk\"\n";
+        let sourcetype = |i: usize| {
+            if i.is_multiple_of(2) {
+                "linux_secure"
+            } else {
+                "other"
+            }
+        };
+        let (fs, rules) = parallel_workspace(visibility, "splunk", |i| {
+            format!("index=main sourcetype={} | head {i}", sourcetype(i))
+        });
+        let check = EngineLintQueries::install(fs.as_ref(), Path::new("/ws"));
+        // The calling thread's catalog declares the other sourcetype: no job
+        // sees it.
+        let _caller = crate::enter_catalog(&crate::Catalog {
+            visibility: Some(visibility.replace("linux_secure", "other")),
+            ..crate::Catalog::default()
+        })
+        .unwrap();
+        let report = lint(
+            fs.as_ref(),
+            None,
+            Path::new("/ws"),
+            &opentide_schema::configuration::lint::LintConfig::default(),
+            &LintOptions {
+                checks: vec![LintCheck::Queries],
+                cwd: std::path::PathBuf::from("/ws"),
+                query_check: Some(&check),
+                ..LintOptions::default()
+            },
+        );
+        let mut undeclared: Vec<String> = report
+            .findings
+            .iter()
+            .filter(|finding| finding.code() == "spl_dataset_not_declared")
+            .filter_map(|finding| finding.entry.uuid.clone())
+            .collect();
+        undeclared.sort();
+        let expected: Vec<String> = rules
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| sourcetype(*i) == "other")
+            .map(|(_, (_, uuid, _))| uuid.clone())
+            .collect();
+        assert_eq!(undeclared, expected, "{:#?}", report.findings);
     }
 }

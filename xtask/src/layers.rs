@@ -814,6 +814,14 @@ mod tests {
             ],
         ),
         (
+            "opentide-datadog",
+            &[
+                ("opentide-core", None),
+                ("opentide-parse", None),
+                ("opentide-highlight", None),
+            ],
+        ),
+        (
             "opentide-esql",
             &[
                 ("opentide-core", None),
@@ -863,6 +871,7 @@ mod tests {
                 ("opentide-falco", None),
                 ("opentide-cql", None),
                 ("opentide-exabeam", None),
+                ("opentide-datadog", None),
                 ("opentide-yara", None),
                 ("opentide-yaral", None),
                 ("opentide-ecs", None),
@@ -942,7 +951,7 @@ mod tests {
     fn the_repository_table_places_todays_workspace() {
         let report = check(&table(REPOSITORY_TABLE), &metadata(WORKSPACE));
         assert_eq!(report.violations, []);
-        assert_eq!(report.crates, 31);
+        assert_eq!(report.crates, 32);
     }
 
     #[test]

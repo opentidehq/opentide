@@ -159,6 +159,31 @@ fn on_a_feature_branch(checkout: &Path, branch: &str) {
     git(checkout, &["checkout", "-qb", "feature"]);
 }
 
+/// #1955: the work tree is read with gix, so `generate inflight` and
+/// `generate docs --changed` see an uncommitted change with no `git` program
+/// on `PATH`. They once asked the program, and found nothing without it.
+#[test]
+fn changed_objects_are_read_without_the_git_program() {
+    let (_dir, root) = scratch();
+    let ws = root.join("no-git-program");
+    catalogue(&ws);
+    on_a_feature_branch(&ws, "main");
+    bump_rule(&ws);
+    let empty = root.join("empty-path");
+    std::fs::create_dir_all(&empty).unwrap();
+    let repo = ["--repo", ws.to_str().unwrap()];
+    let env = [
+        ("OPENTIDE_REPO_ROOT", ws.as_path()),
+        ("OPENTIDE_TIDE_WORKSPACE", ws.as_path()),
+        ("PATH", empty.as_path()),
+    ];
+    let run = |args: &[&str]| opentide(&ws, &[&repo[..], args].concat(), &env);
+    let docs = run(&["generate", "docs", "--changed"]).ok();
+    assert_eq!(changed_paths(&docs), [tutorial::RULE_FILE], "{docs}");
+    run(&["generate", "inflight"]).ok();
+    assert_eq!(shards(&ws), the_rule_shard());
+}
+
 /// The tutorial rule's version raised: a change to it.
 fn bump_rule(ws: &Path) {
     tutorial::edit(ws, tutorial::RULE_FILE, "version: 1", "version: 2");
@@ -1153,4 +1178,48 @@ fn a_new_rule_validates_and_generates_on_every_platform() {
         let generated = in_workspace(&workspace, &["generate"]);
         assert_eq!(generated.code, Some(0), "{id}: generate: {generated:?}");
     }
+}
+
+/// `deploy replay-state` reads the commit's deployment-state delta with gix,
+/// so a runner without the `git` program replays it (#1955): `PATH` names an
+/// empty folder.
+#[test]
+fn deployment_state_replays_without_the_git_program() {
+    let (_dir, root) = scratch();
+    let checkout = root.join("dépôt");
+    let states = checkout.join(".opentide/states/deployment");
+    std::fs::create_dir_all(&states).unwrap();
+    let shard = |platforms: &str| {
+        format!(
+            "{{\n  \"object_uuid\": \"00000000-0000-4000-8003-000000000001\",\n  \
+             \"platforms\": {platforms},\n  \"schema\": \"deployment.state::1.0\"\n}}\n"
+        )
+    };
+    let path = states.join("00000000-0000-4000-8003-000000000001.json");
+    git(&checkout, &["init", "-q"]);
+    std::fs::write(&path, shard(r#"{"crowdstrike": {"lab": "1"}}"#)).unwrap();
+    git(&checkout, &["add", "-A"]);
+    git(&checkout, &["commit", "-qm", "base"]);
+    std::fs::write(&path, shard(r#"{"crowdstrike": {"lab": "1", "soc": "2"}}"#)).unwrap();
+    git(&checkout, &["commit", "-qam", "ours"]);
+    // The tip, as a concurrent merge left it.
+    std::fs::write(&path, shard(r#"{"crowdstrike": {"lab": "9"}}"#)).unwrap();
+    let no_git = root.join("empty-path");
+    std::fs::create_dir_all(&no_git).unwrap();
+    let run = opentide(
+        &checkout,
+        &["deploy", "replay-state", "HEAD"],
+        &[("PATH", &no_git)],
+    );
+    let document = run.ok();
+    assert_eq!(
+        document["written"],
+        serde_json::json!([
+            ".opentide/states/deployment/00000000-0000-4000-8003-000000000001.json"
+        ]),
+        "{document}"
+    );
+    let text = std::fs::read_to_string(&path).unwrap();
+    assert!(text.contains(r#""lab": "9""#), "{text}");
+    assert!(text.contains(r#""soc": "2""#), "{text}");
 }

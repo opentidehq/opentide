@@ -2,6 +2,11 @@
 //! a byte outside the fix spans, and the result parses; a file that changed
 //! after it was read is not written; the fixes run through `validate`.
 
+#![expect(
+    clippy::string_slice,
+    reason = "a test: a slice off a char boundary panics, and a panic is a failed test"
+)]
+
 use std::path::Path;
 
 use opentide_schema::node;
@@ -132,16 +137,10 @@ proptest! {
                 let end_column = end_column.checked_add_signed(isize::from(shift)).unwrap_or(1).max(1);
                 let mut diagnostic = Diagnostic::error("vocab_unknown", "m").file("/w/objects/rules/r.yaml");
                 diagnostic.path = Some("objects/rules/r.yaml".to_owned());
-                diagnostic.fix = Some(Fix {
+                diagnostic.fix = Some(Fix::new(
                     safe,
-                    edits: vec![TextEdit {
-                        line,
-                        column,
-                        end_line: line,
-                        end_column,
-                        replacement: WORDS[word].to_owned(),
-                    }],
-                });
+                    vec![TextEdit::new(line, column, line, end_column, WORDS[word])],
+                ));
                 diagnostic
             })
             .collect();
@@ -187,16 +186,7 @@ fn a_fix_is_not_written_when_the_file_changed_after_it_was_read() {
     fs.write("/w/r.yaml", "severity: high\n");
     let mut diagnostic = Diagnostic::error("vocab_unknown", "m").file("/w/r.yaml");
     diagnostic.path = Some("r.yaml".to_owned());
-    diagnostic.fix = Some(Fix {
-        safe: true,
-        edits: vec![TextEdit {
-            line: 1,
-            column: 11,
-            end_line: 1,
-            end_column: 15,
-            replacement: "High".to_owned(),
-        }],
-    });
+    diagnostic.fix = Some(Fix::new(true, vec![TextEdit::new(1, 11, 1, 15, "High")]));
     let plan: FixPlan = fix::plan(&fs, [&diagnostic]);
     assert_eq!(plan.changes.len(), 1);
     // Saved again, with the same typo and a comment, after the plan read it.

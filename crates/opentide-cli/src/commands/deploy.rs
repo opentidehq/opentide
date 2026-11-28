@@ -1,6 +1,5 @@
 //! `opentide deploy --dry-run` (UC-3.1c, #896): the plan `opentide-compile`
-//! makes (`cli/commands/deploy.py`, `cli/services/deploy.py` with
-//! `dry_run`), as the envelope, the plan view, the compile failures' frames,
+//! makes, as the envelope, the plan view, the compile failures' frames,
 //! the CI job summary and the progress events.
 //!
 //! A deploy that sends (no `--dry-run`) is `deploy_send`'s (UC-4.6).
@@ -13,10 +12,11 @@ use opentide_compile::plan::Scope;
 use opentide_schema::vocab::Vocabularies;
 use opentide_workspace::{OsFs, root};
 
+use super::result::{ExitCode, Status};
 use super::{COMMAND_FAILED, placement};
 use crate::env::Env;
-use crate::envelope::{Failure, NextAction, Outcome, USAGE_EXIT_CODE, code};
-use crate::json::Json;
+use crate::envelope::{Failure, NextAction, Outcome, code};
+use crate::json::{Json, Object};
 use crate::render::diagnostic::{Diagnostic, Severity};
 use crate::render::glyphs;
 use crate::render::progress::{columns, plural};
@@ -86,13 +86,7 @@ impl From<&crate::tree::DeployArgs> for Args {
             skip_promotion: args.skip_promotion,
             prune: args.prune,
             wide: args.wide,
-            keep_deprecated: if args.keep_deprecated {
-                Some(true)
-            } else if args.drop_deprecated {
-                Some(false)
-            } else {
-                None
-            },
+            keep_deprecated: args.keep_deprecated.get(),
         }
     }
 }
@@ -145,14 +139,10 @@ impl DryRun {
     }
 
     fn data_str(&self, key: &str) -> Option<String> {
-        self.outcome
-            .data
-            .iter()
-            .find(|(name, _)| name == key)
-            .and_then(|(_, value)| match value {
-                Json::Str(text) if !text.is_empty() => Some(text.clone()),
-                _ => None,
-            })
+        self.outcome.data.get(key).and_then(|value| match value {
+            Json::Str(text) if !text.is_empty() => Some(text.clone()),
+            _ => None,
+        })
     }
 
     /// The JSON document, `duration_ms` as given: the command's keys, then
@@ -377,17 +367,16 @@ fn with_retirements(
     workspace: &opentide_workspace::Workspace,
     owned: &Owned,
 ) {
-    if dry.outcome.status == "failed" {
+    if !dry.outcome.ok() {
         return;
     }
     let found = &retirements(args, cx, workspace, owned);
     dry.warnings.extend(found.warnings.iter().cloned());
     // What `--prune` would retire, sent nowhere.
     if let Some(retirable) = found.retirable_json() {
-        let retirable = convert(&retirable);
         dry.outcome
             .data
-            .push(("retirable".to_owned(), retirable.clone()));
+            .insert("retirable".to_owned(), retirable.clone());
         if let Json::Object(members) = &mut dry.result {
             members.insert("retirable".to_owned(), retirable);
         }
@@ -398,7 +387,7 @@ fn with_retirements(
     let rows: Vec<Json> = found
         .retirements
         .iter()
-        .map(|retirement| convert(&retirement.change().to_json()))
+        .map(|retirement| retirement.change().to_json())
         .collect();
     let mut changes: Vec<Json> = match dry.result.get("changes") {
         Some(Json::Array(items)) => items.clone(),
@@ -417,49 +406,38 @@ fn with_retirements(
     tenants.sort_unstable();
     tenants.dedup();
     let message = opentide_compile::plan::message(&planned);
-    let summary = convert(&opentide_compile::plan::summary(
-        &planned,
-        platforms.len(),
-        tenants.len(),
-    ));
+    let summary = opentide_compile::plan::summary(&planned, platforms.len(), tenants.len());
     let changes = Json::Array(changes);
-    let set = |items: &mut Vec<(String, Json)>, key: &str, value: Json| match items
-        .iter_mut()
-        .find(|(name, _)| name == key)
-    {
-        Some(entry) => entry.1 = value,
-        None => items.push((key.to_owned(), value)),
-    };
-    let was_skipped = dry.outcome.status == "skipped";
+    let was_skipped = dry.outcome.status == Status::Skipped;
     if was_skipped {
         // Nothing else to deploy: the retirements are the plan.
-        "completed".clone_into(&mut dry.outcome.status);
-        dry.outcome.exit_code = 0;
+        dry.outcome.status = Status::Completed;
+        dry.outcome.exit_code = ExitCode::Success;
         dry.outcome.failure = None;
         dry.outcome.next_actions.clear();
         dry.outcome
             .data
-            .retain(|(key, _)| !matches!(key.as_str(), "advice" | "detail" | "_outcome"));
+            .retain(|key, _| !matches!(key.as_str(), "advice" | "detail"));
         dry.plan_kind = true;
     }
-    set(&mut dry.outcome.data, "changes", changes.clone());
+    dry.outcome
+        .data
+        .insert("changes".to_owned(), changes.clone());
     dry.outcome.message.clone_from(&message);
     dry.outcome_line = Some(message.clone());
     // The plan's counts again, the rest of the summary (`skipped`) kept.
     if let Json::Object(members) = summary {
         for (key, count) in members {
-            set(&mut dry.outcome.summary, &key, count);
+            dry.outcome.summary.insert(key, count);
         }
     }
     if let Json::Object(members) = &mut dry.result {
-        let mut items: Vec<(String, Json)> = std::mem::take(members).into_iter().collect();
-        set(&mut items, "changes", changes);
-        set(&mut items, "message", Json::str(message));
-        set(&mut items, "status", Json::str(dry.outcome.status.clone()));
+        members.insert("changes".to_owned(), changes);
+        members.insert("message".to_owned(), Json::str(message));
+        members.insert("status".to_owned(), Json::str(dry.outcome.status.as_str()));
         if was_skipped {
-            items.retain(|(key, _)| !matches!(key.as_str(), "advice" | "detail"));
+            members.retain(|key, _| !matches!(key.as_str(), "advice" | "detail"));
         }
-        *members = items.into_iter().collect();
     }
 }
 
@@ -558,7 +536,7 @@ fn promotion_warnings(args: &Args, cx: &Context, owned: &Owned) -> Vec<String> {
 fn refused(message: String, failure_code: &str, argument: &str) -> DryRun {
     let mut failure = Failure::new(failure_code, message);
     failure.argument = Some(argument.to_owned());
-    let outcome = Outcome::failed(COMMAND, USAGE_EXIT_CODE, failure);
+    let outcome = Outcome::failed(COMMAND, ExitCode::Usage, failure);
     DryRun {
         result: Json::Null,
         outcome,
@@ -573,7 +551,11 @@ fn refused(message: String, failure_code: &str, argument: &str) -> DryRun {
 
 /// A run that stopped on an error of its own (the workspace did not open).
 fn failed(message: String) -> DryRun {
-    let outcome = Outcome::failed(COMMAND, 1, Failure::new(COMMAND_FAILED, message.clone()));
+    let outcome = Outcome::failed(
+        COMMAND,
+        ExitCode::Failure,
+        Failure::new(COMMAND_FAILED, message.clone()),
+    );
     DryRun {
         result: Json::object([
             ("status", Json::str("failed")),
@@ -589,32 +571,12 @@ fn failed(message: String) -> DryRun {
     }
 }
 
-/// `opentide-compile`'s JSON as this crate's.
-pub fn convert(value: &opentide_compile::Json) -> Json {
-    use opentide_compile::Json as From;
-    match value {
-        From::Null => Json::Null,
-        From::Bool(flag) => Json::Bool(*flag),
-        From::Int(integer) => Json::Int(*integer),
-        From::UInt(integer) => Json::UInt(*integer),
-        From::Float(float) => Json::Float(*float),
-        From::Str(text) => Json::Str(text.clone()),
-        From::Array(items) => Json::Array(items.iter().map(convert).collect()),
-        From::Object(members) => Json::Object(
-            members
-                .iter()
-                .map(|(key, value)| (key.clone(), convert(value)))
-                .collect(),
-        ),
-    }
-}
-
 /// The envelope's parts of a service result (`CommandResult.from_payload`):
 /// `message`, `status` and `warnings` leave the command's keys, the usage
 /// failure or the status names `failure.code`.
 fn from_outcome(outcome: dry_run::Outcome, at_root: bool) -> DryRun {
-    let result = convert(&opentide_compile::Json::Object(outcome.payload.clone()));
-    let mut data: Vec<(String, Json)> = Vec::new();
+    let result = Json::Object(outcome.payload.clone());
+    let mut data = Object::new();
     let mut message = "Deployment completed".to_owned();
     let mut status = "completed".to_owned();
     let mut warnings: Vec<String> = Vec::new();
@@ -634,7 +596,9 @@ fn from_outcome(outcome: dry_run::Outcome, at_root: bool) -> DryRun {
                         })
                         .collect();
                 }
-                _ => data.push((key.clone(), value.clone())),
+                _ => {
+                    data.insert(key.clone(), value.clone());
+                }
             }
         }
     }
@@ -652,9 +616,8 @@ fn from_outcome(outcome: dry_run::Outcome, at_root: bool) -> DryRun {
             _ => COMMAND_FAILED,
         };
         let error = data
-            .iter()
-            .find(|(key, _)| key == "error")
-            .and_then(|(_, value)| match value {
+            .get("error")
+            .and_then(|value| match value {
                 Json::Str(text) if !text.is_empty() => Some(text.clone()),
                 _ => None,
             })
@@ -667,9 +630,9 @@ fn from_outcome(outcome: dry_run::Outcome, at_root: bool) -> DryRun {
     if status == "skipped" && !at_root {
         next_actions.push(NextAction::new(NO_WORKSPACE_STEP.0, NO_WORKSPACE_STEP.1));
     }
-    let summary = match outcome.summary.as_ref().map(convert) {
-        Some(Json::Object(members)) => members.into_iter().collect(),
-        _ => Vec::new(),
+    let summary = match outcome.summary.clone() {
+        Some(Json::Object(members)) => members,
+        _ => Object::new(),
     };
     let diagnostics = result
         .get("diagnostics")
@@ -685,11 +648,11 @@ fn from_outcome(outcome: dry_run::Outcome, at_root: bool) -> DryRun {
     DryRun {
         outcome: Outcome {
             command: COMMAND.to_owned(),
-            status,
+            status: Status::from_text(&status),
             message,
-            data,
-            exit_code,
-            summary,
+            data: Object::from_iter(data),
+            exit_code: ExitCode::of_service(exit_code),
+            summary: Object::from_iter(summary),
             next_actions,
             failure,
         },
@@ -708,18 +671,17 @@ fn from_outcome(outcome: dry_run::Outcome, at_root: bool) -> DryRun {
 fn quoted(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     let mut rest = text;
-    while let Some(start) = rest.find('`') {
-        let after = &rest[start + 1..];
-        match after.find('`') {
-            Some(end) if end > 0 => {
-                out.push_str(&rest[..start]);
+    while let Some((head, after)) = rest.split_once('`') {
+        out.push_str(head);
+        match after.split_once('`') {
+            Some((code, tail)) if !code.is_empty() => {
                 out.push('\'');
-                out.push_str(&after[..end]);
+                out.push_str(code);
                 out.push('\'');
-                rest = &after[end + 1..];
+                rest = tail;
             }
             _ => {
-                out.push_str(&rest[..=start]);
+                out.push('`');
                 rest = after;
             }
         }
@@ -803,7 +765,7 @@ fn json_text(value: Option<&Json>) -> String {
 
 /// The plan grouped by platform, then tenant (`plan_view`).
 #[expect(clippy::too_many_lines, reason = "kept whole; split when next touched")]
-fn plan_view(result: &Json, summary: &[(String, Json)]) -> Vec<(Text, Option<usize>)> {
+fn plan_view(result: &Json, summary: &Object) -> Vec<(Text, Option<usize>)> {
     let Some(Json::Array(changes)) = result.get("changes") else {
         return Vec::new();
     };
@@ -811,13 +773,10 @@ fn plan_view(result: &Json, summary: &[(String, Json)]) -> Vec<(Text, Option<usi
         return Vec::new();
     }
     let count = |key: &str| {
-        summary
-            .iter()
-            .find(|(name, _)| name == key)
-            .and_then(|(_, value)| match value {
-                Json::Int(number) => usize::try_from(*number).ok(),
-                _ => None,
-            })
+        summary.get(key).and_then(|value| match value {
+            Json::Int(number) => usize::try_from(*number).ok(),
+            _ => None,
+        })
     };
     let scope = match (count("platforms"), count("tenants")) {
         (Some(platforms), Some(tenants)) => Some(format!(
@@ -947,6 +906,10 @@ mod tests {
         assert_eq!(quoted("set `response` and `x`"), "set 'response' and 'x'");
         assert_eq!(quoted("a lone ` stays"), "a lone ` stays");
         assert_eq!(quoted("``"), "``");
+        // #1946: code spans among multi-byte text.
+        assert_eq!(quoted("é `réponse😀` et `x` 😀"), "é 'réponse😀' et 'x' 😀");
+        assert_eq!(quoted("😀`é"), "😀`é");
+        assert_eq!(quoted("é``😀`x`"), "é`'😀'x`");
     }
 
     #[test]
@@ -1080,5 +1043,18 @@ mod from_cli_tests {
             parse(&["deploy", "--drop-deprecated", "--keep-deprecated"]).keep_deprecated,
             Some(true)
         );
+        // #1967: every spelling the command line accepts, repeats included.
+        for (typed, want) in crate::tree::toggle::spellings::SPELLINGS {
+            let matches = crate::tree::toggle::spellings::matches::<crate::tree::KeepDeprecated>(
+                &["deploy"],
+                typed,
+            );
+            let Ok(Some(RootCommand::Deploy(deploy))) =
+                <Cli as clap::FromArgMatches>::from_arg_matches(&matches).map(|cli| cli.command)
+            else {
+                panic!("not a deploy command: {typed:?}");
+            };
+            assert_eq!(Args::from(&deploy).keep_deprecated, want, "{typed:?}");
+        }
     }
 }

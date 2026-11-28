@@ -15,7 +15,7 @@ past `-timeout`, is a failure.
 
 | Target | Seeds |
 | --- | --- |
-| `kql`, `spl`, `esql`, `eql`, `kuery`, `lucene`, `falco`, `cql`, `yara`, `exabeam`, `yaral` | `crates/testdata/corpus/<lang>/`, `crates/testdata/conformance/external/<lang>/` |
+| `kql`, `spl`, `esql`, `eql`, `kuery`, `lucene`, `falco`, `cql`, `yara`, `exabeam`, `yaral`, `datadog` | `crates/testdata/corpus/<lang>/`, `crates/testdata/conformance/external/<lang>/` |
 | `tide` | `crates/testdata/objects/`, `crates/testdata/workspaces/tide_corpus/objects/` |
 | `protocol` | `fuzz/seeds/protocol/` |
 | `framing` | `fuzz/seeds/framing/` (the protocol seeds, framed) |
@@ -23,6 +23,15 @@ past `-timeout`, is a failure.
 | `cli` | `fuzz/seeds/cli/` (`\0`-separated command lines: the framework goldens' usage errors, hoisting, `--version`, `--help`) |
 | `serve` | `fuzz/seeds/serve/` (sessions: the recorded `serve` goldens' input, protocol problems, cancels, `invalidate`, shutdown) |
 | `from_node` | `fuzz/seeds/from_node/` (every document of `crates/opentide-schema/tests/oracle/*_cases.toml`, and the sample fixture) |
+| `semantic` | `fuzz/seeds/semantic/` (a rule with a valid block for every built-in platform, and the inputs of #1926, #1927 and #1928 on it) |
+
+`semantic` (#1946) is the layer behind the parsers: its input is a rule file,
+written into a workspace in memory that enables every built-in platform
+(`fuzz/src/lib.rs::semantic`), then `validate` runs (the models, the platform
+checks, the compile check, the queries) and the dry run compiles every block
+for `PREVIEW` and `RELEASE`, with `Json::from_node` on the way. Inputs over
+16 KiB are skipped. A panic, a dry run that ends in an exit code the command
+does not have, or an issue without a code is the failure.
 
 ## Targets the plan adds later
 
@@ -58,9 +67,10 @@ input to `fuzz/regressions/<target>/` with a name that says what it was
 (`spl-prev-sibling-cycle`): `crates/opentide-analysis/tests/fuzz_regressions.rs`,
 `crates/opentide-analysis/tests/config_fuzz_regressions.rs`,
 `crates/opentide-lsp/tests/fuzz_regressions.rs` and
-`crates/opentide-cli/tests/fuzz_regressions.rs`, `crates/opentide-cli/tests/serve.rs` (`serve`) and
+`crates/opentide-cli/tests/fuzz_regressions.rs`, `crates/opentide-cli/tests/serve.rs` (`serve`),
+`crates/opentide-cli/tests/semantic_fuzz_regressions.rs` (`semantic`) and
 `crates/opentide-schema/tests/fuzz_regressions.rs` replay every saved input (and
-the `protocol`, `framing`, `config`, `cli`, `serve` and `from_node` seeds) on stable Rust in the normal
+the `protocol`, `framing`, `config`, `cli`, `serve`, `from_node` and `semantic` seeds) on stable Rust in the normal
 test run. Add a unit test that names what was wrong, too, failing before the
 fix (`crates/opentide-lsp/src/protocol.rs`,
 `a_length_longer_than_the_input_ends_it_without_allocating_the_length`, came

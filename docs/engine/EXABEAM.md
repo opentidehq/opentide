@@ -25,8 +25,10 @@ The repository's rule that "SQL is out of scope" is about a generic SQL dialect:
 
 | Profile | Used for | Layers |
 |---------|----------|--------|
-| `rule` | `configurations.exabeam.sequences[].query`; `analyze_query` with `platform: exabeam` | the filter; the advanced form is `exabeam_advanced_in_rule` |
-| `search` | hunts with `system: exabeam`; `.exabeam` files; `analyze_query` without a platform | the filter and the advanced operators |
+| `rule` | `configurations.exabeam.sequences[].query`; `analyze_query` at position `rule` (`validate query --position rule`, MCP `position: rule`) | the filter; the advanced form is `exabeam_advanced_in_rule` |
+| `search` | hunts with `system: exabeam`; `.exabeam` files; `analyze_query` at position `search`, whatever its `platform` | the filter and the advanced operators |
+
+The profile comes from where the text sits, never from the platform ([ADR 0015](../internal/adr/0015-languages-and-dialects.md) §4).
 
 ## Conformance results
 

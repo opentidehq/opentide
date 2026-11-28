@@ -9,7 +9,7 @@
 //! subquery, a `FORK` branch, `EXPLAIN (…)`). Words are not keywords here:
 //! every word is [`K::WORD`] and the parser decides.
 //!
-//! The scanner's job is [`block_comment`]: Elasticsearch nests `/* */`, and
+//! The scanner's job is `block_comment`: Elasticsearch nests `/* */`, and
 //! the scanner simulated its lexer's readings of a nested opener. The lexer
 //! tiles the source, whitespace and comments included, and never skips.
 
@@ -341,7 +341,11 @@ fn quoted_identifier(rest: &str) -> Option<usize> {
             }
             i += 2;
         } else {
-            i += rest[i..].chars().next().map_or(1, char::len_utf8);
+            // `i` steps whole characters, or a backtick pair.
+            i += crate::cut(rest, i, rest.len())
+                .chars()
+                .next()
+                .map_or(1, char::len_utf8);
         }
         count += 1;
     }
@@ -369,7 +373,9 @@ struct Driver<'s> {
 impl Driver<'_> {
     /// The next token's kind and length.
     fn token(&mut self) -> (K, usize) {
-        let rest = &self.source[self.pos..];
+        // `pos` is the end of the last token, whose length is a whole
+        // number of characters.
+        let rest = crate::cut(self.source, self.pos, self.source.len());
         let spaces = take(rest, char::is_whitespace);
         if spaces > 0 {
             return (K::WHITESPACE, spaces);
@@ -421,7 +427,7 @@ impl Driver<'_> {
             Some(Ok(tok)) => {
                 let mut len = lexer.span().end;
                 if self.frame.mode == Mode::Names && matches!(tok, Tok::Word | Tok::Star) {
-                    len += take(&rest[len..], |c| {
+                    len += take(crate::cut(rest, len, rest.len()), |c| {
                         c.is_ascii_alphanumeric() || c == '_' || c == '*'
                     });
                 }
@@ -541,8 +547,11 @@ impl Driver<'_> {
                 return;
             }
             (Mode::Expr, _) if after_in => {
-                let rest = self.source[self.pos..].trim_start();
-                let word = &rest[..take(rest, |c| c.is_ascii_alphanumeric() || c == '_')];
+                let rest = crate::cut(self.source, self.pos, self.source.len()).trim_start();
+                let word = rest
+                    .split(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+                    .next()
+                    .unwrap_or_default();
                 ["from", "ts", "row"]
                     .iter()
                     .any(|w| word.eq_ignore_ascii_case(w))
@@ -557,7 +566,7 @@ impl Driver<'_> {
 }
 
 /// The lexemes of `source`: they tile it, trivia included.
-pub(crate) fn lex(source: &str) -> Vec<Lexeme> {
+pub fn lex(source: &str) -> Vec<Lexeme> {
     let mut driver = Driver {
         source,
         pos: 0,
@@ -572,7 +581,7 @@ pub(crate) fn lex(source: &str) -> Vec<Lexeme> {
     while driver.pos < source.len() {
         let (kind, len) = driver.token();
         let end = driver.pos + len.max(1);
-        let text = &source[driver.pos..end];
+        let text = crate::cut(source, driver.pos, end);
         let offset = |n: usize| TextSize::from(u32::try_from(n).unwrap_or(u32::MAX));
         let range = TextRange::new(offset(driver.pos), offset(end));
         driver.pos = end;
@@ -596,7 +605,10 @@ mod tests {
             .filter(|l| l.kind != K::WHITESPACE.raw())
             .map(|l| {
                 let kind = <crate::syntax::Lang as rowan::Language>::kind_from_raw(l.kind);
-                (kind, &source[std::ops::Range::<usize>::from(l.range)])
+                (
+                    kind,
+                    source.get(std::ops::Range::<usize>::from(l.range)).unwrap(),
+                )
             })
             .collect()
     }

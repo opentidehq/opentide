@@ -1,11 +1,11 @@
 //! `opentide share` and its `push`, `preview`, `status`, `retract` and
-//! `targets` (UC-4.4b, #834; `cli/services/share.py` and `sharing/`): one
+//! `targets` (UC-4.4b, #834): one
 //! MISP Event per Tide object, over MISP's REST API
 //! (`opentide_connectors::misp`).
 //!
 //! The run checks its options, loads `sharing.toml` ([`config`]), picks the
 //! destinations, reads the catalogue ([`document`]) and runs the engine
-//! ([`engine`]); the result is the oracle's payload: `preflight` codes for a
+//! ([`engine`]); the result's payload holds `preflight` codes for a
 //! run stopped before any object, records per object and destination, and
 //! the exit status sharing 1.0 defines (0, 1, 2 for authentication or
 //! connectivity failures, 3 for a partial run). A secret never reaches the
@@ -26,10 +26,11 @@ use opentide_workspace::Workspace;
 
 use self::config::{Block, Sharing};
 use self::engine::{Filters, Record, ShareRun};
+use super::result::{ExitCode, Status};
 use super::{Block as BodyBlock, Report, USAGE_INVALID_CHOICE, USAGE_INVALID_VALUE, placement};
 use crate::env::Env;
 use crate::envelope::{Failure, USAGE_EXIT_CODE};
-use crate::json::Json;
+use crate::json::{Json, Object};
 use crate::render::glyphs;
 use crate::render::outcome::OutcomeKind;
 use crate::render::progress::{columns, plural};
@@ -94,8 +95,7 @@ impl Args {
         let unset = |selection: &ShareSelection, workers: i64| SharePushArgs {
             selection: selection.clone(),
             dry_run: false,
-            publish: false,
-            no_publish: false,
+            publish: crate::tree::Toggle::default(),
             workers: ShareWorkers { workers },
             changed: false,
             since: None,
@@ -132,16 +132,16 @@ impl Args {
             if group_wins(id) { typed } else { own }.clone()
         };
         // Each of the pair is the group's or the subcommand's alone.
-        let publish = if group_wins("publish") {
-            typed.publish
-        } else {
-            own.publish
+        let typed_last = |id: &str| {
+            if group_wins(id) {
+                typed.publish
+            } else {
+                own.publish
+            }
+            .get()
         };
-        let no_publish = if group_wins("no_publish") {
-            typed.no_publish
-        } else {
-            own.no_publish
-        };
+        let publish = typed_last("publish") == Some(true);
+        let no_publish = typed_last("no_publish") == Some(false);
         Args {
             mode,
             targets: pick("target", &own.selection.target, &typed.selection.target),
@@ -239,11 +239,11 @@ struct Payload {
     status: String,
     exit_code: i32,
     warnings: Vec<String>,
-    data: Vec<(String, Json)>,
+    data: Object,
     failure_code: Option<String>,
     failure_argument: Option<String>,
     failure_suggestion: Option<String>,
-    summary: Vec<(String, Json)>,
+    summary: Object,
     plan: bool,
     outcome: Option<String>,
     /// The rows the text modes print.
@@ -262,13 +262,10 @@ impl Payload {
     }
 
     fn put(&mut self, key: &str, value: Json) {
-        match self.data.iter_mut().find(|(name, _)| name == key) {
-            Some((_, existing)) => *existing = value,
-            None => self.data.push((key.to_owned(), value)),
-        }
+        self.data.insert(key.to_owned(), value);
     }
 
-    /// `_failed`: a usage error the run found itself.
+    /// A usage error the run found itself.
     fn usage(message: &str, code: &str, argument: &str) -> Self {
         let mut payload = Self::result(message, USAGE_EXIT_CODE, "failed", Vec::new());
         payload.put("error", Json::str(message));
@@ -277,7 +274,7 @@ impl Payload {
         payload
     }
 
-    /// `_preflight`: a run stopped before any object.
+    /// A run stopped before any object.
     fn preflight(code: &str, sharing: &Sharing, records: &[Record], message: Option<&str>) -> Self {
         let mut payload = Self::result(
             message.unwrap_or_else(|| preflight_message(code)),
@@ -291,7 +288,7 @@ impl Payload {
         payload
     }
 
-    /// `_quiet`: nothing to do, and that is fine.
+    /// Nothing to do, and that is fine.
     fn quiet(message: &str, sharing: &Sharing) -> Self {
         let mut payload = Self::result(message, 0, "completed", sharing.warnings());
         payload.put("records", Json::Array(Vec::new()));
@@ -303,7 +300,7 @@ impl Payload {
         self
     }
 
-    /// Every string with each secret replaced (`_redact`).
+    /// Every string with each secret replaced.
     fn redacted(mut self, secrets: &[String]) -> Self {
         if secrets.is_empty() {
             return self;
@@ -329,9 +326,9 @@ impl Payload {
     fn report(self, command: &str) -> Report {
         let mut report = Report::completed(command, self.data);
         report.outcome.message = self.message;
-        report.outcome.status = self.status;
-        report.outcome.exit_code = self.exit_code;
-        report.outcome.summary = self.summary;
+        report.outcome.status = Status::from_text(&self.status);
+        report.outcome.exit_code = ExitCode::of_service(self.exit_code);
+        report.outcome.summary = Object::from_iter(self.summary);
         report.warnings = self.warnings;
         report.body = self.body;
         if self.exit_code != 0 {
@@ -594,7 +591,7 @@ fn shared(args: &Args, cx: &Context<'_>, workspace: &Workspace, sharing: &Sharin
     from_run(&outcome, sharing, effective, &names).with_warnings(&nested)
 }
 
-/// The destinations the run uses (`_select_blocks`); `None` is
+/// The destinations the run uses; `None` is
 /// `scope_no_match`.
 fn select_blocks(blocks: &[Block], targets: &[String]) -> Option<Vec<Block>> {
     if !targets.is_empty() {
@@ -618,8 +615,8 @@ fn select_blocks(blocks: &[Block], targets: &[String]) -> Option<Vec<Block>> {
     (!enabled.is_empty()).then_some(enabled)
 }
 
-/// Narrows `filters` to the push's diff, read up to the checkout's HEAD
-/// (`_changed_files`): the diff starts where the production deploy's starts,
+/// Narrows `filters` to the push's diff, read up to the checkout's HEAD:
+/// the diff starts where the production deploy's starts,
 /// or at `since`. `Ok(None)` when the diff selects nothing; the error is the
 /// message of the `changed_diff` preflight.
 fn changed_files(
@@ -695,8 +692,7 @@ fn changed_files(
     }))
 }
 
-/// The object folder of each family sharing knows, resolved
-/// (`_object_directories`).
+/// The object folder of each family sharing knows, resolved.
 fn object_directories(workspace: &Workspace) -> Vec<(String, PathBuf)> {
     let configuration = workspace.configuration();
     OBJECT_FAMILIES
@@ -710,8 +706,7 @@ fn object_directories(workspace: &Workspace) -> Vec<(String, PathBuf)> {
 }
 
 /// The changed paths that are object files directly in an object folder,
-/// each once, resolved (`_direct_object_files`): a relative path is read from
-/// the workspace, as the oracle joined it.
+/// each once, resolved: a relative path is read from the workspace root.
 fn direct_object_files(
     workspace: &Path,
     changed: &[String],
@@ -744,7 +739,7 @@ fn direct_object_files(
     selected
 }
 
-/// The filters the run's options make (`_filters`); `None` when none narrows.
+/// The filters the run's options make; `None` when none narrows.
 fn filters(
     workspace: &Path,
     uuids: &[String],
@@ -775,7 +770,7 @@ fn filters(
     })
 }
 
-/// The objects' names by UUID (`_object_names`).
+/// The objects' names by UUID.
 fn object_names(workspace: &Workspace) -> BTreeMap<String, String> {
     let mut names = BTreeMap::new();
     for family in workspace.index().objects.values() {
@@ -793,7 +788,7 @@ fn object_names(workspace: &Workspace) -> BTreeMap<String, String> {
     names
 }
 
-/// `share targets`' payload (`_targets_payload`).
+/// `share targets`' payload.
 fn targets_payload(sharing: &Sharing) -> Payload {
     let rows: Vec<Json> = sharing
         .blocks
@@ -859,7 +854,7 @@ fn action_word(action: &str) -> &str {
 
 /// `Shared 4 objects to misp-prod · 3 new, 1 updated`, and the counts
 /// behind it (`share_outcome`).
-fn share_outcome(mode: Mode, records: &[Record]) -> (String, Vec<(String, Json)>) {
+fn share_outcome(mode: Mode, records: &[Record]) -> (String, Object) {
     let mut targets: Vec<&str> = records
         .iter()
         .map(|record| record.target.as_str())
@@ -935,12 +930,12 @@ fn share_outcome(mode: Mode, records: &[Record]) -> (String, Vec<(String, Json)>
             })
         })
         .collect();
-    let mut summary: Vec<(String, Json)> = vec![("objects".into(), Json::from(done))];
+    let mut summary = Object::from([("objects".into(), Json::from(done))]);
     for word in order {
-        summary.push((
+        summary.insert(
             word.into(),
             Json::from(counts.get(word).copied().unwrap_or(0)),
-        ));
+        );
     }
     let message = if facts.is_empty() {
         lead
@@ -950,7 +945,7 @@ fn share_outcome(mode: Mode, records: &[Record]) -> (String, Vec<(String, Json)>
     (message, summary)
 }
 
-/// The payload of a run that reached the engine (`_from_run`).
+/// The payload of a run that reached the engine.
 fn from_run(
     outcome: &ShareRun,
     sharing: &Sharing,
@@ -987,7 +982,7 @@ fn from_run(
     }
     // A preview sends nothing, with or without a failure: its rows always
     // use the planned words and the dry-run note, even when a failure makes
-    // the run a result rather than a plan (`_outcome_kind`). Status sends
+    // the run a result rather than a plan. Status sends
     // nothing either: its rows compare each object with the local ledger
     // (#1661).
     let words = if payload.plan || mode == Mode::Preview {
@@ -1205,6 +1200,74 @@ mod from_cli_tests {
         let args = parse(&["share", "push", "--no-publish"], &[]);
         assert_eq!(args.publish, Some(false));
         assert_eq!(parse(&["share", "push"], &[]).publish, None);
+    }
+
+    #[test]
+    fn publish_is_read_as_its_two_flags_were_for_every_spelling() {
+        // #1967: `--publish` / `--no-publish` typed on the group, on `push`,
+        // or both, in every spelling clap accepts, give what the two
+        // booleans gave: `--publish` from where it was looked for first,
+        // then `--no-publish` from where it was.
+        use crate::tree::Publish;
+        use crate::tree::toggle::Pair as _;
+        use crate::tree::toggle::spellings::SPELLINGS;
+        use clap::FromArgMatches as _;
+        let flags = |typed: &[bool]| -> Vec<String> {
+            typed
+                .iter()
+                .map(|on| {
+                    format!(
+                        "--{}",
+                        if *on {
+                            Publish::ON_LONG
+                        } else {
+                            Publish::OFF_LONG
+                        }
+                    )
+                })
+                .collect()
+        };
+        for (group, _) in SPELLINGS {
+            for (push, _) in SPELLINGS {
+                let line: Vec<String> = ["opentide", "share"]
+                    .into_iter()
+                    .map(str::to_owned)
+                    .chain(flags(group))
+                    .chain(["push".to_owned()])
+                    .chain(flags(push))
+                    .collect();
+                let matches = crate::catalog::root().try_get_matches_from(&line).unwrap();
+                let share_matches = matches.subcommand_matches("share").unwrap();
+                let given = |id: &str| {
+                    share_matches.value_source(id) == Some(clap::parser::ValueSource::CommandLine)
+                };
+                let Ok(Some(RootCommand::Share(share))) =
+                    Cli::from_arg_matches(&matches).map(|cli| cli.command)
+                else {
+                    panic!("not a share command: {line:?}");
+                };
+                let args = Args::from_cli(&share, given);
+                // The two booleans: each true when its flag was typed last
+                // where it is read from.
+                let last = |typed: &[bool], on: bool| typed.last() == Some(&on);
+                let publish = if given("publish") {
+                    last(group, true)
+                } else {
+                    last(push, true)
+                };
+                let no_publish = if given("no_publish") {
+                    last(group, false)
+                } else {
+                    last(push, false)
+                };
+                let want = match (publish, no_publish) {
+                    (true, _) => Some(true),
+                    (_, true) => Some(false),
+                    _ => None,
+                };
+                assert_eq!(args.publish, want, "{line:?}");
+            }
+        }
     }
 
     fn record(uuid: &str, action: &str) -> Record {

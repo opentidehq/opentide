@@ -72,17 +72,21 @@ pub const MAX_ROWS: usize = 3000;
 pub const NAME_LIMIT: usize = opentide_schema::objects::platform::exabeam::NAME_LIMIT;
 
 /// A refused API key, at the token endpoint or on a call.
-pub const UNAUTHORIZED: &str = "exabeam_tenant_unauthorized";
+pub const UNAUTHORIZED: &str = crate::tenant_codes::EXABEAM.unauthorized;
 /// The subscription lacks the feature (`409`).
 pub const FEATURE_UNAVAILABLE: &str = "exabeam_feature_unavailable";
 /// No token could be had, or the tenant did not answer.
-pub const UNREACHABLE: &str = "exabeam_tenant_unreachable";
+pub const UNREACHABLE: &str = crate::tenant_codes::EXABEAM.unreachable;
+
+/// The connect timeout and the read timeout of each request to the tenant;
+/// with retries, a whole request can take longer.
+pub const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// How an Exabeam tenant is reached: 30 s and no transport retries (a
 /// create is never sent twice).
 pub fn http_defaults() -> HttpSettings {
     HttpSettings {
-        timeout: Duration::from_secs(30),
+        timeout: REQUEST_TIMEOUT,
         ..HttpSettings::default()
     }
 }
@@ -186,35 +190,26 @@ impl From<ConnectorError> for Failure {
     }
 }
 
-/// A value as text: a string as itself, any other value in its JSON form
-/// (`null`, `true`, `false`, `42`), as the Rust messages write it (#1068).
-fn scalar_text(value: &Json) -> String {
-    match value {
-        Json::Str(text) => text.clone(),
-        other => other.to_compact(),
-    }
-}
-
 /// One `errors[]` entry as `code: message (fields: a, b)` (`_error_entry`).
 fn error_entry(entry: &Object) -> String {
     let code = entry.get("code").filter(|code| code.is_filled());
     let message = entry
         .get("message")
         .filter(|message| message.is_filled())
-        .map(|message| scalar_text(message).trim().to_owned())
+        .map(|message| Json::to_text(message).trim().to_owned())
         .unwrap_or_default();
     let mut text = match code {
-        Some(code) if !message.is_empty() => format!("{}: {message}", scalar_text(code)),
-        Some(code) => scalar_text(code),
+        Some(code) if !message.is_empty() => format!("{}: {message}", Json::to_text(code)),
+        Some(code) => Json::to_text(code),
         None => message,
     };
     match entry.get("fields") {
         Some(Json::Array(fields)) if !fields.is_empty() => {
-            let names: Vec<String> = fields.iter().map(scalar_text).collect();
+            let names: Vec<String> = fields.iter().map(Json::to_text).collect();
             text.push_str(&format!(" (fields: {})", names.join(", ")));
         }
         Some(fields @ (Json::Str(_) | Json::Object(_))) if fields.is_filled() => {
-            text.push_str(&format!(" (fields: {})", scalar_text(fields)));
+            text.push_str(&format!(" (fields: {})", Json::to_text(fields)));
         }
         _ => {}
     }
@@ -237,7 +232,7 @@ pub fn api_error(action: &str, reply: &Reply) -> ApiError {
         error.trace_id = payload
             .get("traceId")
             .filter(|trace| trace.is_filled())
-            .map(scalar_text);
+            .map(Json::to_text);
         message = error
             .errors
             .iter()
@@ -250,7 +245,7 @@ pub fn api_error(action: &str, reply: &Reply) -> ApiError {
                 .get("message")
                 .filter(|value| value.is_filled())
                 .or_else(|| payload.get("error").filter(|value| value.is_filled()))
-                .map(scalar_text)
+                .map(Json::to_text)
                 .unwrap_or_default();
         }
     }
@@ -890,9 +885,11 @@ impl TenantFailure {
 /// (`returned_rule_id`).
 pub fn returned_rule_id(result: &Object) -> Option<String> {
     let value = result.get("id")?.as_str()?.trim();
-    let canonical = uuid::Uuid::try_parse(value).ok()?;
-    // Only the hyphenated 8-4-4-4-12 form, as the oracle's pattern takes it.
-    (value.len() == 36).then(|| canonical.hyphenated().to_string())
+    // Only the hyphenated 8-4-4-4-12 form is an id: a bare 32-digit or a
+    // braced UUID is `None`.
+    opentide_core::ids::is_hyphenated(value)
+        .then(|| opentide_core::ids::canonical(value))
+        .flatten()
 }
 
 /// The rules whose name is `name`, compared case-insensitively and exactly:
@@ -902,17 +899,15 @@ pub fn name_matches<'r>(rules: &'r [Object], name: &str) -> Vec<&'r Object> {
     rules
         .iter()
         .filter(|rule| {
-            caseless_fold(&rule.get("name").map(scalar_text).unwrap_or_default()) == wanted
+            caseless_fold(&rule.get("name").map(Json::to_text).unwrap_or_default()) == wanted
         })
         .collect()
 }
 
-/// `str.casefold()`, for the names Exabeam compares.
+/// `str.casefold()` (Unicode full case folding), for the names Exabeam
+/// compares.
 fn caseless_fold(text: &str) -> String {
-    text.chars()
-        .flat_map(char::to_lowercase)
-        .collect::<String>()
-        .replace('ß', "ss")
+    caseless::default_case_fold_str(text)
 }
 
 /// Whether the rule a `PUT` returned keeps a schedule the block no longer
@@ -953,7 +948,10 @@ fn failed(error: &ApiError) -> Event {
         }
         event
     } else {
-        Event::new("exabeam_request_failed", error.to_string())
+        Event::new(
+            crate::tenant_codes::EXABEAM.request_failed,
+            error.to_string(),
+        )
     }
 }
 
@@ -1079,7 +1077,7 @@ async fn create_unnamed(
     if !existing.is_empty() {
         let ids = existing
             .iter()
-            .map(|rule| rule.get("id").map_or_else(|| "?".to_owned(), scalar_text))
+            .map(|rule| rule.get("id").map_or_else(|| "?".to_owned(), Json::to_text))
             .collect::<Vec<_>>()
             .join(", ");
         outcome.failure = Some(
@@ -1149,7 +1147,7 @@ async fn create_unnamed(
             || "null".to_owned(),
             |id| match id {
                 Json::Str(text) => opentide_schema::configuration::repr::quote(text),
-                other => scalar_text(other),
+                other => Json::to_text(other),
             },
         );
         outcome.failure = Some(Event::new(
@@ -1256,9 +1254,10 @@ pub fn selected_columns(query: &str) -> Vec<String> {
     let Some(head) = select.find(query) else {
         return Vec::new();
     };
-    let rest = &query[head.end()..];
+    // A regex match's bounds are char boundaries.
+    let rest = crate::cut(query, head.end(), query.len());
     let end = clause.find(rest).map_or(rest.len(), |found| found.start());
-    let columns = split_columns(&rest[..end]);
+    let columns = split_columns(crate::cut(rest, 0, end));
     if columns.is_empty() || columns == ["*"] {
         return Vec::new();
     }

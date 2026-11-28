@@ -1,5 +1,5 @@
 //! What telemetry a workspace declares, and which detections use it
-//! (`cli/services/visibility.py`, #776): the report `generate explorer
+//! (#776): the report `generate explorer
 //! --include-visibility` writes.
 //!
 //! `visibility.toml` declares each log source: its `name` is the dataset (a
@@ -16,6 +16,7 @@
 
 use indexmap::IndexMap;
 use opentide_core::datasets::glob_matches;
+use opentide_core::text::unique;
 use opentide_schema::configuration::models::VisibilityConfig;
 use opentide_schema::from_node::{Context, FromNode};
 use opentide_schema::node::{Node, Value};
@@ -145,7 +146,7 @@ pub struct Inputs {
     pub problem: Option<String>,
 }
 
-/// A value or values as a list (`_as_list`): a blank string is none.
+/// A value or values as a list: a blank string is none.
 fn as_list(node: Option<&Node>) -> Vec<&Node> {
     match node.map(|node| &node.value) {
         Some(Value::Str(text)) if !text.trim().is_empty() => node.into_iter().collect(),
@@ -159,16 +160,6 @@ fn or_empty(node: Option<&Node>) -> String {
     node.filter(|value| opentide_workspace::index::holds_name(value))
         .map(node_text)
         .unwrap_or_default()
-}
-
-fn unique<T: Clone + PartialEq>(items: impl IntoIterator<Item = T>) -> Vec<T> {
-    let mut out: Vec<T> = Vec::new();
-    for item in items {
-        if !out.contains(&item) {
-            out.push(item);
-        }
-    }
-    out
 }
 
 fn strings(items: &[String]) -> Json {

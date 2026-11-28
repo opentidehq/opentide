@@ -1,8 +1,8 @@
 //! `lint` over a workspace in memory (UC-2.3, #818): every rule of
 //! `LINT_CODES`, `lint.toml`, `--check`, `--file`, `--changed`, `--strict`,
-//! `--fix`, the JSON entry of each finding (its keys in the oracle's order)
+//! `--fix`, the JSON entry of each finding (its keys in opentide 0.23.0's order)
 //! and the frame's diagnostic. The CLI's `lint` snapshots hold what
-//! `lint --json` prints (the oracle comparison was retired in #1142).
+//! `lint --json` prints (opentide 0.23.0 comparison was retired in #1142).
 
 #![expect(
     clippy::unwrap_used,
@@ -127,12 +127,14 @@ mod lint {
             )
         );
         assert_eq!(report.status, LintStatus::Issues);
+        let next: Vec<(&str, &str)> = report
+            .next_actions
+            .iter()
+            .map(|next: &NextAction| (next.command.as_str(), next.reason.as_str()))
+            .collect();
         assert_eq!(
-            report.next_actions,
-            [NextAction {
-                command: "opentide lint --fix".to_owned(),
-                reason: "rename 1 file to match their names".to_owned(),
-            }]
+            next,
+            [("opentide lint --fix", "rename 1 file to match their names")]
         );
         assert_eq!(report.outcome.as_deref(), Some("1 finding in 1 file"));
     }
@@ -998,6 +1000,41 @@ mod lint {
                 ),
                 ("objects/rules/y.yaml", "objects/rules/STRASSE.yaml"),
             ]
+        );
+    }
+
+    /// #1957: a NUL in a `--file` value once emptied the quoted flags, and
+    /// the rename step fell back to a bare `opentide lint --fix`, which
+    /// renames every file in the workspace. The step keeps the scope.
+    #[test]
+    fn the_rename_step_keeps_a_file_flag_that_holds_a_nul() {
+        let fs = workspace();
+        fs.write(
+            "/ws/objects/rules/é\0😀.yaml",
+            rule(U1, "Sentinel KQL Rule"),
+        );
+        fs.write("/ws/objects/rules/other.yaml", rule(U2, "Other Rule"));
+        let report = run(
+            &fs,
+            &LintConfig::default(),
+            &LintOptions {
+                files: vec!["objects/rules/é\0😀.yaml".to_owned()],
+                ..options()
+            },
+        );
+        assert_eq!(report.scope, Some("selected"));
+        assert_eq!(
+            codes(&report),
+            [("filename_mismatch", "objects/rules/é\0😀.yaml")]
+        );
+        let commands: Vec<&str> = report
+            .next_actions
+            .iter()
+            .map(|next| next.command.as_str())
+            .collect();
+        assert_eq!(
+            commands,
+            [r#"opentide lint --fix --file "objects/rules/é\0😀.yaml""#]
         );
     }
 

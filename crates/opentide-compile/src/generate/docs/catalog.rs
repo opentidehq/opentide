@@ -1,7 +1,5 @@
 //! The objects a documentation run writes pages for, read into their models,
-//! and the relations between them the pages show
-//! (`documentation/catalog.py`, `generation/framework.py` `relations_list`,
-//! `keep_active_rules`, `chain_resolver`).
+//! and the relations between them the pages show.
 
 use std::collections::{HashMap, HashSet};
 
@@ -87,16 +85,16 @@ pub struct Record {
     pub name: String,
     /// Its page's file name stem, unique in its folder.
     pub slug: String,
-    /// Its model.
+    /// Its document, read into its model's types.
     pub model: Model,
 }
 
 /// A signal, which lives on its objective's page.
 #[derive(Debug, Clone)]
 pub struct SignalRecord {
-    /// Its UUID.
+    /// The `uuid` its objective's `signals` entry gives.
     pub uuid: String,
-    /// Its name.
+    /// The `name` its objective's `signals` entry gives.
     pub name: String,
     /// Its objective.
     pub owner: String,
@@ -109,7 +107,7 @@ pub enum Direction {
     Upstream,
     /// Children, down to the rules.
     Downstream,
-    /// Both.
+    /// Upstream and downstream.
     Both,
 }
 
@@ -160,7 +158,7 @@ pub struct GraphNode {
     pub uuid: String,
     /// Its name.
     pub name: String,
-    /// Its type.
+    /// Its object type, such as `threat`.
     pub object_type: &'static str,
     /// A threat's first kill chain stage.
     pub killchain: Option<String>,
@@ -173,7 +171,7 @@ pub struct GraphEdge {
     pub source: String,
     /// To.
     pub target: String,
-    /// The label.
+    /// The text drawn on the edge, if any.
     pub label: Option<String>,
     /// Drawn both ways.
     pub both_ways: bool,
@@ -254,9 +252,8 @@ impl<'i> Catalog<'i> {
     ///
     /// # Errors
     ///
-    /// An object that does not read into its model, as the oracle's
-    /// `ValidationError` names the first error of the first such object:
-    /// rules first, then threats, then objectives.
+    /// The first object that does not read into its model, with its first
+    /// error: rules are read first, then threats, then objectives.
     pub fn build(index: &'i Index, statuses: Statuses) -> Result<Self, PhaseError> {
         let mut rules = Vec::new();
         let mut written = HashMap::new();
@@ -785,7 +782,7 @@ impl<'i> Catalog<'i> {
         graph
     }
 
-    /// A rule page's own path (`_add_rule_lineage`): the threats, its
+    /// A rule page's own path: the threats, its
     /// objective, its signal, the rule. Sibling rules of the objective are
     /// left out: they belong on the objective's page, and on a rule page
     /// they buried the rule itself.
@@ -868,7 +865,8 @@ pub fn chain_target(entry: &indexmap::IndexMap<String, String>) -> Option<&str> 
     })
 }
 
-/// A rule's `detection_model`.
+/// A rule's `detection_model`, in either rule model version; `None` when it
+/// is unset or `model` is not a rule's.
 pub fn rule_detection_model(model: &Model) -> Option<&str> {
     match model {
         Model::Rule(RuleModel::V1_0(rule)) => rule.detection_model.as_deref(),
@@ -914,8 +912,8 @@ enum Tree {
     Leaf,
 }
 
-/// Sets `key` as a dict does: a key met again keeps its place, its value
-/// replaced.
+/// Sets `key` as an insertion-ordered map does: a key met again keeps its
+/// place, its value replaced.
 fn insert(entries: &mut Vec<(String, Tree)>, key: String, value: Tree) {
     if let Some(slot) = entries.iter_mut().find(|(existing, _)| *existing == key) {
         slot.1 = value;
@@ -1023,7 +1021,7 @@ fn rule_model(document: &opentide_schema::node::Document) -> Result<RuleModel, P
 
 /// The document's model, read and then checked against the model's
 /// constraints (garde, with the pins of the revision `metadata.schema`
-/// names), as the oracle's pydantic model validates both.
+/// names): an object must pass both to be documented.
 fn typed<T>(document: &opentide_schema::node::Document) -> Result<T, PhaseError>
 where
     T: opentide_schema::FromNode + garde::Validate<Context = Pins>,
@@ -1086,10 +1084,11 @@ fn sentence(root: Option<&Node>, location: &str, message: &str, count: usize) ->
     } else {
         location
     };
-    let mut message = message.to_owned();
-    if let Some(head) = message.chars().next() {
-        message = head.to_lowercase().collect::<String>() + &message[head.len_utf8()..];
-    }
+    let mut rest = message.chars();
+    let message = match rest.next() {
+        Some(head) => head.to_lowercase().collect::<String>() + rest.as_str(),
+        None => String::new(),
+    };
     let more = if count > 1 {
         format!(" (and {} more)", count - 1)
     } else {
@@ -1291,5 +1290,17 @@ mod tests {
             chain_target(&entry(&[("vector", ""), ("relation", "r")])),
             None
         );
+    }
+
+    #[test]
+    fn the_sentence_lowers_a_multi_byte_first_letter() {
+        // #1946: the first character is split off whole.
+        assert_eq!(
+            sentence(None, "", "École 😀", 2),
+            "an object does not validate: the object: école 😀 (and 1 more); \
+             opentide validate shows each finding"
+        );
+        assert!(sentence(None, "x", "😀 é", 1).contains(": x: 😀 é;"));
+        assert!(sentence(None, "x", "", 1).contains(": x: ;"));
     }
 }

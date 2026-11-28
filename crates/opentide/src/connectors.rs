@@ -123,7 +123,7 @@ fn capabilities_of(platform: &dyn Platform) -> Capabilities {
 pub struct TenantConfig {
     platform: String,
     name: String,
-    setup: toml::Table,
+    setup: opentide_compile::json::Object,
 }
 
 impl TenantConfig {
@@ -148,7 +148,7 @@ impl TenantConfig {
             name: name.into(),
             setup: setup
                 .into_iter()
-                .map(|(key, value)| (key.into(), toml::Value::String(value.into())))
+                .map(|(key, value)| (key.into(), opentide_compile::Json::Str(value.into())))
                 .collect(),
         }
     }
@@ -165,7 +165,9 @@ impl TenantConfig {
 
     /// The keys of its `setup`, in name order.
     pub fn setup_keys(&self) -> impl Iterator<Item = &str> {
-        self.setup.keys().map(String::as_str)
+        let mut keys: Vec<&str> = self.setup.keys().map(String::as_str).collect();
+        keys.sort_unstable();
+        keys.into_iter()
     }
 }
 
@@ -174,7 +176,7 @@ impl std::fmt::Debug for TenantConfig {
         f.debug_struct("TenantConfig")
             .field("platform", &self.platform)
             .field("name", &self.name)
-            .field("setup", &self.setup.keys().collect::<Vec<_>>())
+            .field("setup", &self.setup_keys().collect::<Vec<_>>())
             .finish()
     }
 }

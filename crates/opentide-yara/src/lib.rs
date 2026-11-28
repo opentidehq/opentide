@@ -29,6 +29,7 @@
     clippy::too_many_lines,
     reason = "engine dispatchers match every node kind in one function"
 )]
+
 mod atoms;
 pub mod catalog;
 mod catalog_model;
@@ -51,33 +52,35 @@ use opentide_highlight::{HighlightSpec, HighlightToken, tokens_from_spans};
 use yara_x_parser::Parser;
 use yara_x_parser::ast::AST;
 
-/// A platform's YARA profile (yara-1.0 "Platform profiles").
+/// The product a YARA rule runs on (ADR 0015 §1: a dialect, chosen by
+/// platform). yara-1.0's heading "Platform profiles" becomes "dialects" in
+/// the specification's next revision (ADR 0015 §7, step 2).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Profile {
+pub enum Dialect {
     Harfanglab,
     Bitdefender,
 }
 
-impl Profile {
+impl Dialect {
     pub fn key(self) -> &'static str {
         match self {
-            Profile::Harfanglab => "harfanglab",
-            Profile::Bitdefender => "bitdefender",
+            Dialect::Harfanglab => "harfanglab",
+            Dialect::Bitdefender => "bitdefender",
         }
     }
 
     pub fn display(self) -> &'static str {
         match self {
-            Profile::Harfanglab => "HarfangLab",
-            Profile::Bitdefender => "Bitdefender",
+            Dialect::Harfanglab => "HarfangLab",
+            Dialect::Bitdefender => "Bitdefender",
         }
     }
 
-    /// The profile of a Tide platform block, by its key under `configurations`.
+    /// The dialect of a Tide platform block, by its key under `configurations`.
     pub fn for_platform(platform: &str) -> Option<Self> {
         match platform {
-            "harfanglab" => Some(Profile::Harfanglab),
-            "bitdefender" => Some(Profile::Bitdefender),
+            "harfanglab" => Some(Dialect::Harfanglab),
+            "bitdefender" => Some(Dialect::Bitdefender),
             _ => None,
         }
     }
@@ -87,13 +90,13 @@ impl Profile {
 /// syntax allowed, no module set to confirm, no recommended meta.
 #[derive(Debug, Clone, Default)]
 pub struct Context {
-    pub profile: Option<Profile>,
+    pub profile: Option<Dialect>,
     pub yara_x_syntax: YaraXSyntax,
 }
 
 impl Context {
-    /// The profile's context, with its `yara_x_syntax` setting.
-    pub fn for_profile(profile: Profile) -> Self {
+    /// The dialect's context, with its `yara_x_syntax` setting.
+    pub fn for_profile(profile: Dialect) -> Self {
         let data = &catalog::Catalog::cached().profiles[profile.key()];
         Self {
             profile: Some(profile),
@@ -192,6 +195,63 @@ pub fn analyze_document(source: &str) -> (AnalyzeResult, Vec<editor::Symbol>) {
 /// Analyze a YARA signature on its own (a raw `.yar` file).
 pub fn analyze(source: &str) -> AnalyzeResult {
     analyze_with(source, &Context::default())
+}
+
+/// The YARA [`QueryEngine`](opentide_highlight::QueryEngine) (#1953):
+/// [`analyze`] behind the shared interface.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Engine;
+
+impl opentide_highlight::QueryEngine for Engine {
+    fn language(&self) -> opentide_core::LanguageId {
+        opentide_core::LanguageId::Yara
+    }
+
+    fn analyze_for(
+        &self,
+        source: &str,
+        setting: &opentide_highlight::Setting<'_>,
+    ) -> opentide_highlight::AnalyzeResult {
+        let ctx = Dialect::for_platform(setting.platform)
+            .map(Context::for_profile)
+            .unwrap_or_default();
+        let r = analyze_with(source, &ctx);
+        opentide_highlight::AnalyzeResult {
+            diagnostics: r.diagnostics,
+            tokens: r.tokens,
+        }
+    }
+
+    fn highlight(&self, source: &str) -> Vec<HighlightToken> {
+        highlight(source)
+    }
+
+    fn hover(
+        &self,
+        source: &str,
+        offset: usize,
+        _setting: &opentide_highlight::Setting<'_>,
+    ) -> Option<String> {
+        editor::hover(source, offset)
+    }
+
+    fn completions(
+        &self,
+        source: &str,
+        offset: usize,
+        _setting: &opentide_highlight::Setting<'_>,
+    ) -> Vec<opentide_core::CompletionItem> {
+        editor::completions(source, offset)
+    }
+
+    fn signature_help(
+        &self,
+        source: &str,
+        offset: usize,
+        _setting: &opentide_highlight::Setting<'_>,
+    ) -> Option<opentide_core::SignatureHelp> {
+        editor::signature_help(source, offset)
+    }
 }
 
 /// Analyze a YARA signature where `ctx` says it runs.
@@ -562,6 +622,54 @@ rule Loader_Stage1 : loader {
             assert_eq!(result.diagnostics, analyze(source).diagnostics);
             assert_eq!(result.tokens, analyze(source).tokens);
             assert_eq!(symbols, editor::symbols(source), "{source}");
+        }
+    }
+
+    /// Rules with multi-byte text, and the same rules with `é` or `😀`
+    /// written at every character: every error the parser gives, and every
+    /// editor feature at every offset, reads the text whole.
+    const MULTI_BYTE: &[&str] = &[
+        "import \"pe\"\nrule é { strings: $é = \"😀\" condition: $é and pe.sections[0].name == \"é\" }",
+        "rule a { strings: $h = { 01 [1-é] 02 } condition: $h }",
+        "rule a { strings: $h = { é 01 } $s = \"x\" xor(1-😀) condition: any of (é*) }",
+        "rule a { condition: uint16(é) == 0x5A4D and any of (b, é😀*) }",
+        "rule a { strings: $s = \"x\" xor(é condition: $s }",
+        "rule a : é😀 { meta: d = \"é😀\" condition: true }",
+        "rule a { condition: 99999999999999999999😀 }",
+        "rule a { strings: $h = { 01 [99999999999é] 02 } condition: $h }",
+    ];
+
+    #[test]
+    fn multi_byte_text_is_read_whole_everywhere() {
+        let mut sources: Vec<String> = MULTI_BYTE.iter().map(|s| (*s).to_owned()).collect();
+        for base in MULTI_BYTE.iter().take(4) {
+            for (at, _) in base.char_indices() {
+                for wide in ["é", "😀"] {
+                    let mut text = (*base).to_owned();
+                    text.insert_str(at, wide);
+                    sources.push(text);
+                }
+            }
+        }
+        for source in &sources {
+            let result = analyze(source);
+            for diagnostic in &result.diagnostics {
+                let start = opentide_core::position_to_offset(source, diagnostic.range.start);
+                let end = opentide_core::position_to_offset(source, diagnostic.range.end);
+                assert!(source.get(start..end).is_some(), "{source}");
+            }
+            let _ = editor::symbols(source);
+            let _ = editor::folding(source);
+        }
+        // Every byte offset: an offset inside a character answers nothing.
+        for source in MULTI_BYTE {
+            for offset in 0..=source.len() + 1 {
+                let _ = editor::hover(source, offset);
+                let _ = editor::completions(source, offset);
+                let _ = editor::signature_help(source, offset);
+                let _ = editor::definition(source, offset);
+                let _ = editor::references(source, offset, true);
+            }
         }
     }
 }

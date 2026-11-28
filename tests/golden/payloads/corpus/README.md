@@ -8,7 +8,7 @@ schedule, skew and `[[modifiers]]`, SentinelOne's site or account, CrowdStrike's
 Carbon Black's watchlist). `.opentide/states/deployment/` records ids on some
 tenants, so Defender, SentinelOne and CrowdStrike rules are created on one tenant and updated or
 deleted on the other.
-`tests/golden/payloads/oracle.json` is what the oracle compiled from it (recorded by `cargo xtask
-payloads`, retired with the oracle in #1142: never edit); `opentide-compile`'s `tests/oracle.rs`
+`tests/golden/payloads/recorded.json` is what opentide 0.23.0 compiled from it (recorded by `cargo xtask
+payloads`, retired with opentide 0.23.0 in #1142: never edit); `opentide-compile`'s `tests/payload_corpus.rs`
 compares with it. Credentials are `$VARIABLE` references and hosts are on
 example domains.

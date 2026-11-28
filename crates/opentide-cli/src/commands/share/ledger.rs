@@ -1,5 +1,5 @@
-//! The current-state ledger, `.opentide/states/sharing.jsonl`
-//! (`sharing/ledger.py`): one JSON object per line, what was shared, keyed
+//! The current-state ledger, `.opentide/states/sharing.jsonl`: one JSON
+//! object per line, what was shared, keyed
 //! by object, integration and target. A line that is not a JSON object is
 //! kept where it is; a duplicate key keeps its last line. A skip or a
 //! failure never writes it, and no secret goes in it.

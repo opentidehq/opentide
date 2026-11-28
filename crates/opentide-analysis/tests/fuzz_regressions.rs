@@ -50,6 +50,7 @@ fn saved_fuzz_inputs_do_not_crash_or_hang() {
         ("yara", LanguageId::Yara),
         ("exabeam", LanguageId::Exabeam),
         ("yaral", LanguageId::Yaral),
+        ("datadog", LanguageId::Datadog),
         ("tide", LanguageId::TideYaml),
     ];
     let mut ran = 0;

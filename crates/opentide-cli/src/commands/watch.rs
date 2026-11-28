@@ -1,5 +1,4 @@
-//! `opentide validate --watch` (`cli/commands/validate.py` `_watch`,
-//! `cli/ui/watch.py`'s views): `opentide-workspace`'s watcher, shown as a
+//! `opentide validate --watch`: `opentide-workspace`'s watcher, shown as a
 //! live view redrawn in place and cropped to the terminal (`human`), or as
 //! each pass's frames and one outcome line (`plain`). `validate::refuse`
 //! has already refused the other modes. Ctrl-C stops it with exit 0.
@@ -56,15 +55,12 @@ pub fn describe(run: &WatchRun) -> String {
             run.elapsed.as_secs_f64()
         );
     }
-    let summary = Summary {
-        objects: run.objects,
-        errors: run.errors,
-        warnings: run.warnings,
-        files: run.files,
-        warning_files: 0,
-        queries: None,
-        fixable: run.fixable,
-    };
+    let mut summary = Summary::default();
+    summary.objects = run.objects;
+    summary.errors = run.errors;
+    summary.warnings = run.warnings;
+    summary.files = run.files;
+    summary.fixable = run.fixable;
     outcome_line(&summary, run.failed, run.elapsed.as_secs_f64(), None)
 }
 
@@ -177,7 +173,7 @@ pub fn run(
         validate,
         args.strict,
         args.selection.is_empty(),
-        &STRICT_EXEMPT_WARNINGS,
+        STRICT_EXEMPT_WARNINGS,
     )
     // `--strict` fails a full run that finds no object, as one run does.
     .requiring_objects(

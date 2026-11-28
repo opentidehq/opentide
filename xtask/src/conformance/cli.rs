@@ -44,7 +44,7 @@ const MARKER: &str = ".xtask-conformance";
 /// conformance`, the Python SDK's pytest under `uv run`, the Node SDK's `node
 /// --test`), and requires their documents byte-identical; a difference is
 /// reported by its JSON pointer. The first runner is the reference. The
-/// stand-in tenants of the manifest (`tests/cassettes/<name>/tenant.py`, run with
+/// stand-in tenants of the manifest (each platform's `tenant.py` under `tests/cassettes/`, run with
 /// $PYTHON, else python3) start once, on loopback, and every runner talks to
 /// them; each is reset before each runner.
 ///

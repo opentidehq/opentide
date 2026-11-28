@@ -1,4 +1,4 @@
-//! What the pages know about each platform (`documentation/facts/platforms.py`):
+//! What the pages know about each platform:
 //! the name a page shows, and the language of each block setting that holds
 //! code, so a query is fenced and captioned in its own language (KQL, SPL,
 //! ES|QL, YARA) rather than as text.
@@ -6,6 +6,8 @@
 //! The labels are the platform registry's ([`opentide_schema::platforms::PLATFORMS`]);
 //! `every_platform_has_a_profile` fails when the rule model gains a platform
 //! this table does not name.
+
+use opentide_schema::platforms::PlatformId;
 
 use crate::json::Json;
 
@@ -22,23 +24,23 @@ const fn language(name: &'static str, fence: &'static str) -> CodeLanguage {
     CodeLanguage { name, fence }
 }
 
-/// KQL.
+/// The Kusto Query Language (Sentinel, Defender).
 pub const KQL: CodeLanguage = language("KQL", "kql");
-/// SPL.
+/// Splunk's Search Processing Language.
 pub const SPL: CodeLanguage = language("SPL", "spl");
 /// `SentinelOne`'s S1QL.
 pub const S1QL: CodeLanguage = language("S1QL", "sql");
 /// `CrowdStrike`'s CQL.
 pub const CQL: CodeLanguage = language("CQL", "cql");
-/// Lucene.
+/// The Lucene query syntax.
 pub const LUCENE: CodeLanguage = language("Lucene", "lucene");
 /// Kibana's KQL.
 pub const KUERY: CodeLanguage = language("Kibana KQL", "kql");
-/// EQL.
+/// Elastic's Event Query Language.
 pub const EQL: CodeLanguage = language("EQL", "eql");
 /// ES|QL.
 pub const ESQL: CodeLanguage = language("ES|QL", "esql");
-/// YARA.
+/// A YARA rule.
 pub const YARA: CodeLanguage = language("YARA", "yara");
 /// A Falco condition.
 pub const FALCO: CodeLanguage = language("Falco condition", "text");
@@ -46,9 +48,11 @@ pub const FALCO: CodeLanguage = language("Falco condition", "text");
 pub const GRAYLOG: CodeLanguage = language("Graylog search", "lucene");
 /// The Exabeam Query Language.
 pub const EXABEAM: CodeLanguage = language("Exabeam Query Language", "text");
+/// The Datadog search syntax.
+pub const DATADOG: CodeLanguage = language("Datadog search syntax", "text");
 /// YARA-L.
 pub const YARAL: CodeLanguage = language("YARA-L", "yaral");
-/// Markdown.
+/// Markdown text: an Elastic `guide.` field, Datadog's `message`.
 pub const MARKDOWN: CodeLanguage = language("Markdown", "markdown");
 /// Anything else.
 pub const TEXT: CodeLanguage = language("Text", "text");
@@ -56,27 +60,34 @@ pub const TEXT: CodeLanguage = language("Text", "text");
 /// The code languages of a platform's settings, by path (list indices
 /// removed: `exclusions.query`).
 fn languages(platform: &str) -> &'static [(&'static str, CodeLanguage)] {
+    let Some(platform) = PlatformId::parse(platform) else {
+        return &[];
+    };
     match platform {
-        "sentinel" | "microsoft_defender" => &[("query", KQL), ("exclusions.query", KQL)],
-        "splunk" => &[("query", SPL), ("actions.notable.drilldown.search", SPL)],
-        "sentinel_one" => &[
+        PlatformId::Sentinel | PlatformId::MicrosoftDefender => {
+            &[("query", KQL), ("exclusions.query", KQL)]
+        }
+        PlatformId::Splunk => &[("query", SPL), ("actions.notable.drilldown.search", SPL)],
+        PlatformId::SentinelOne => &[
             ("condition.single_event.query", S1QL),
             ("condition.correlation.sub_queries.query", S1QL),
         ],
-        "crowdstrike" => &[("query", CQL)],
-        "harfanglab" | "bitdefender" => &[("yara.signature", YARA)],
-        "carbon_black_cloud" => &[("query", LUCENE)],
-        "sysdig" => &[("condition", FALCO), ("macros.condition", FALCO)],
-        "graylog" => &[("query", GRAYLOG)],
-        "exabeam" => &[("sequences.query", EXABEAM)],
-        "google_secops" => &[
+        PlatformId::Crowdstrike => &[("query", CQL)],
+        PlatformId::Harfanglab | PlatformId::Bitdefender => &[("yara.signature", YARA)],
+        PlatformId::CarbonBlackCloud => &[("query", LUCENE)],
+        PlatformId::Sysdig => &[("condition", FALCO), ("macros.condition", FALCO)],
+        PlatformId::Graylog => &[("query", GRAYLOG)],
+        PlatformId::Exabeam => &[("sequences.query", EXABEAM)],
+        PlatformId::Datadog => &[("queries.query", DATADOG), ("message", MARKDOWN)],
+        PlatformId::GoogleSecops => &[
             ("setup", YARAL),
             ("events", YARAL),
             ("outcome", YARAL),
             ("condition", YARAL),
             ("export", YARAL),
         ],
-        _ => &[],
+        // Its languages depend on the rule: [`elastic_language`].
+        PlatformId::Elastic => &[],
     }
 }
 
@@ -173,7 +184,7 @@ mod tests {
 
     #[test]
     fn every_platform_has_a_profile() {
-        for platform in opentide_schema::objects::RuleConfigurations::PLATFORMS {
+        for &platform in opentide_schema::objects::RuleConfigurations::PLATFORMS {
             assert!(
                 opentide_schema::platforms::get(platform).is_some(),
                 "{platform} has no label"

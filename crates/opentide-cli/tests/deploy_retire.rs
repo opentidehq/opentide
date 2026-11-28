@@ -13,6 +13,7 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use opentide_cli::commands::deploy_send::{Args, Context, Lines, Sent, run};
+use opentide_cli::commands::result::{ExitCode, Status};
 use opentide_cli::env::Env;
 use opentide_cli::json::Json;
 use opentide_cli::render::outcome::Console;
@@ -43,7 +44,8 @@ const SENTINEL_SETUP: &str = "ssl = true\nresource_group = \"soc-rg\"\nworkspace
 fn sentinel_block(status: &str) -> String {
     format!(
         "  sentinel:\n    status: {status}\n    query: SecurityEvent\n    scheduling:\n      \
-         frequency: PT1H\n      lookback: PT1H\n    grouping:\n      event: SingleAlert\n      \
+         frequency: PT1H\n      lookback: PT1H\n    alert:\n      create_incident: true\n    \
+         grouping:\n      event: SingleAlert\n      \
          alert:\n        enabled: false\n"
     )
 }
@@ -207,29 +209,17 @@ fn deploy(ws: &Path, args: &Args, registry: &Registry) -> (Sent, String) {
 /// The result's value at `key`.
 fn value<'a>(sent: &'a Sent, key: &str) -> &'a Json {
     sent.result
-        .iter()
-        .find(|(name, _)| name == key)
-        .map(|(_, value)| value)
+        .get(key)
         .unwrap_or_else(|| panic!("no {key} in {:?}", sent.result))
 }
 
 fn get<'a>(sent: &'a Sent, key: &str) -> Option<&'a Json> {
-    sent.result
-        .iter()
-        .find(|(name, _)| name == key)
-        .map(|(_, value)| value)
+    sent.result.get(key)
 }
 
-/// The run's warnings, as text.
+/// The run's warnings.
 fn warnings(sent: &Sent) -> Vec<String> {
-    match get(sent, "warnings") {
-        Some(Json::Array(items)) => items
-            .iter()
-            .filter_map(Json::as_str)
-            .map(str::to_owned)
-            .collect(),
-        _ => Vec::new(),
-    }
+    sent.result.warnings.clone()
 }
 
 /// Each result row: `(id, status, action, retired)`.
@@ -359,12 +349,10 @@ fn a_deleted_sentinel_rule_is_retired_by_its_uuid_with_prune() {
             true
         )]
     );
-    assert_eq!(value(&sent, "status"), &Json::str("completed"));
-    assert_eq!(value(&sent, "_exit_code"), &Json::Int(0));
-    let Json::Object(summary) = value(&sent, "_summary") else {
-        panic!("a summary")
-    };
-    assert_eq!(summary.get("delete"), Some(&Json::Int(1)));
+    assert_eq!(sent.result.status, Status::Completed);
+    assert_eq!(sent.result.exit, ExitCode::Success);
+    let summary = &sent.result.summary;
+    assert!(summary.get("delete") == Some(&Json::Int(1)), "{summary:?}");
     let Json::Array(changes) = value(&sent, "changes") else {
         panic!("changes")
     };
@@ -381,7 +369,7 @@ fn without_prune_a_deleted_rule_is_only_warned_about() {
     let (registry, recorder) = recorder("sentinel", Vec::new());
     let (sent, _) = deploy(ws.path(), &release("sentinel", false), &registry);
     assert!(recorder.seen.lock().unwrap().is_empty());
-    assert_eq!(value(&sent, "status"), &Json::str("skipped"));
+    assert_eq!(sent.result.status, Status::Skipped);
     // A CI script sees the drift without --prune: nothing was sent.
     assert_eq!(
         value(&sent, "retirable"),
@@ -413,15 +401,15 @@ fn prune_needs_a_release_run_and_no_selection() {
     let mut args = release("sentinel", true);
     args.strategies = vec!["PREVIEW".into()];
     let (sent, _) = deploy(ws.path(), &args, &registry);
-    assert_eq!(value(&sent, "_exit_code"), &Json::Int(2));
+    assert_eq!(sent.result.exit, ExitCode::Usage);
     assert_eq!(
-        value(&sent, "message"),
-        &Json::str("--prune retires rules, which only a --strategy RELEASE run does")
+        sent.result.message.as_deref(),
+        Some("--prune retires rules, which only a --strategy RELEASE run does")
     );
     let mut args = release("sentinel", true);
     args.uuids = vec![KEPT.into()];
     let (sent, _) = deploy(ws.path(), &args, &registry);
-    assert_eq!(value(&sent, "_exit_code"), &Json::Int(2));
+    assert_eq!(sent.result.exit, ExitCode::Usage);
     assert!(recorder.seen.lock().unwrap().is_empty());
 }
 
@@ -517,6 +505,65 @@ fn a_deleted_splunk_rule_is_retired_by_its_name_and_marked_uuid() {
     assert!(rows(&sent)[0].3);
 }
 
+/// #1894: a retirement the connector fails with a code of its own (Splunk's
+/// `splunk_renamed_search_not_deleted`) keeps that code in the row's error.
+#[test]
+fn a_retirement_failed_with_its_own_code_keeps_it_in_the_row() {
+    let block = "  splunk:\n    status: PRODUCTION\n    query: index=main\n";
+    let ws = workspace(
+        "splunk",
+        SPLUNK_SETUP,
+        &[("gone.yaml", rule("Gone search", GONE, block))],
+    );
+    deleted_in_last_commit(ws.path(), "gone.yaml");
+    let cleanup = DeployError::rule(DeployFailure::new(
+        "splunk_renamed_search_not_deleted",
+        "saved search \"Gone search\" was deleted (or already absent), but \"Old search\" \
+         could not be deleted",
+    ));
+    let (registry, _) = recorder("splunk", vec![Err(cleanup)]);
+    let (sent, _) = deploy(ws.path(), &release("splunk", true), &registry);
+    let Some(Json::Array(results)) = get(&sent, "results") else {
+        panic!("results")
+    };
+    assert_eq!(results[0].get("status"), Some(&Json::str("failed")));
+    let error = results[0]
+        .get("error")
+        .and_then(Json::as_str)
+        .unwrap_or_default();
+    assert!(
+        error.starts_with("splunk_renamed_search_not_deleted: saved search \"Gone search\""),
+        "{error}"
+    );
+}
+
+/// A retirement refused with the generic `tenant_refused` (not a 404, and
+/// not Defender) reads as the tenant's message, with no code before it.
+#[test]
+fn a_retirement_refused_with_no_code_of_its_own_reads_as_its_message() {
+    let block = "  splunk:\n    status: PRODUCTION\n    query: index=main\n";
+    let ws = workspace(
+        "splunk",
+        SPLUNK_SETUP,
+        &[("gone.yaml", rule("Gone search", GONE, block))],
+    );
+    deleted_in_last_commit(ws.path(), "gone.yaml");
+    let refused = DeployError::rule(
+        DeployFailure::new("tenant_refused", "Splunk refused the delete (HTTP 400)")
+            .with_status(400),
+    );
+    let (registry, _) = recorder("splunk", vec![Err(refused)]);
+    let (sent, _) = deploy(ws.path(), &release("splunk", true), &registry);
+    let Some(Json::Array(results)) = get(&sent, "results") else {
+        panic!("results")
+    };
+    assert_eq!(results[0].get("status"), Some(&Json::str("failed")));
+    assert_eq!(
+        results[0].get("error"),
+        Some(&Json::str("Splunk refused the delete (HTTP 400)"))
+    );
+}
+
 #[test]
 fn a_deleted_elastic_rule_is_retired_by_its_uuid() {
     let block = "  elastic:\n    status: PRODUCTION\n    query: process.name:cmd.exe\n";
@@ -540,10 +587,10 @@ fn a_deleted_elastic_rule_is_retired_by_its_uuid() {
 }
 
 /// Microsoft Defender keeps no deployment state: a deleted rule is retired
-/// by its uuid, which is the Defender rule id
-/// (`platform::microsoft_defender::1.0`).
+/// by its Defender rule id, `opentide-<uuid>` (#1886: Graph refuses an id
+/// that begins with a digit, as this uuid does).
 #[test]
-fn a_deleted_microsoft_defender_rule_is_retired_by_its_uuid() {
+fn a_deleted_microsoft_defender_rule_is_retired_by_its_rule_id() {
     let block = "  microsoft_defender:\n    status: PRODUCTION\n    query: DeviceEvents\n    \
                  schedule:\n      frequency: 1H\n";
     let ws = workspace(
@@ -557,7 +604,7 @@ fn a_deleted_microsoft_defender_rule_is_retired_by_its_uuid() {
     assert_eq!(
         *recorder.seen.lock().unwrap(),
         [Seen {
-            rule_id: GONE.into(),
+            rule_id: format!("opentide-{GONE}"),
             operation: Operation::Delete,
             body: String::new(),
         }]
@@ -641,7 +688,7 @@ fn an_all_run_retires_what_deployment_state_records_and_forgets_it() {
             true
         )]
     );
-    assert_eq!(value(&sent, "_exit_code"), &Json::Int(0));
+    assert_eq!(sent.result.exit, ExitCode::Success);
 }
 
 #[test]
@@ -671,7 +718,7 @@ fn a_retirement_the_tenant_no_longer_has_is_skipped_and_forgotten() {
             .join(format!(".opentide/states/deployment/{GONE}.json"))
             .exists()
     );
-    assert_eq!(value(&sent, "_exit_code"), &Json::Int(0));
+    assert_eq!(sent.result.exit, ExitCode::Success);
 }
 
 #[test]

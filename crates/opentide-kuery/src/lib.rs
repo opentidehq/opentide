@@ -22,6 +22,15 @@ use rowan::{NodeOrToken, TextRange, TextSize};
 use std::sync::OnceLock;
 use syntax::{SyntaxElement, SyntaxKind as K, SyntaxNode, SyntaxToken};
 
+/// `text[start..end]`, a range this crate computes: a token's bounds, or an
+/// ASCII byte's, so its ends are char boundaries. A range that is not fails a
+/// debug assertion and reads as empty.
+pub(crate) fn cut(text: &str, start: usize, end: usize) -> &str {
+    let piece = text.get(start..end);
+    debug_assert!(piece.is_some(), "{start}..{end} in {} bytes", text.len());
+    piece.unwrap_or_default()
+}
+
 mod ecs;
 mod parser;
 mod syntax;
@@ -154,6 +163,53 @@ pub fn analyze(source: &str, lucene_parses: fn(&str) -> bool) -> AnalyzeResult {
     }
 }
 
+/// The Kibana KQL [`QueryEngine`](opentide_highlight::QueryEngine) (#1953).
+///
+/// The engine tells a Lucene query from a Kibana one partly by whether the
+/// Lucene grammar accepts it, and Lucene sits above this crate: the registry
+/// passes [`Engine::lucene_parses`], as [`analyze`]'s callers do.
+#[derive(Debug, Clone, Copy)]
+pub struct Engine {
+    /// Whether the Lucene grammar accepts a query (`opentide_lucene::parses`).
+    pub lucene_parses: fn(&str) -> bool,
+}
+
+impl opentide_highlight::QueryEngine for Engine {
+    fn language(&self) -> opentide_core::LanguageId {
+        opentide_core::LanguageId::Kuery
+    }
+
+    fn analyze_for(
+        &self,
+        source: &str,
+        _setting: &opentide_highlight::Setting<'_>,
+    ) -> opentide_highlight::AnalyzeResult {
+        let r = analyze(source, self.lucene_parses);
+        opentide_highlight::AnalyzeResult {
+            diagnostics: r.diagnostics,
+            tokens: r.tokens,
+        }
+    }
+
+    fn hover(
+        &self,
+        source: &str,
+        offset: usize,
+        _setting: &opentide_highlight::Setting<'_>,
+    ) -> Option<String> {
+        hover(source, offset)
+    }
+
+    fn completions(
+        &self,
+        source: &str,
+        offset: usize,
+        _setting: &opentide_highlight::Setting<'_>,
+    ) -> Vec<opentide_core::CompletionItem> {
+        completions(source, offset)
+    }
+}
+
 /// The first syntax error, in words: what is missing or which rule was
 /// broken. (Kibana's own text, `Expected AND, OR, or end of input but ":"
 /// found.`, comes from its PEG parser's furthest failure.)
@@ -165,8 +221,9 @@ fn parse_error(
     error_nodes: &[SyntaxNode],
 ) -> Option<Diagnostic> {
     let err = parse.errors.first()?;
+    // The gap starts at a token's bound.
     let at = usize::from(err.gap.start());
-    let before = source[..at].trim_end();
+    let before = cut(source, 0, at).trim_end();
     let (message, span) = match err.message.as_str() {
         parser::MISSING_PAREN => ("KQL syntax error: a `(` is never closed".into(), point(at)),
         parser::MISSING_BRACE => (
@@ -228,7 +285,8 @@ fn parse_error(
 /// The expected set says what would fit there (Kibana's own message names
 /// it too: `Expected AND, OR, or end of input but ":" found.`).
 fn unexpected_message(source: &str, span: ByteSpan, expected: TokenSet) -> String {
-    let before = source[..span.start].trim_end();
+    // The span starts at a token's bound.
+    let before = cut(source, 0, span.start).trim_end();
     // An unclosed quote anywhere breaks the query; recovery reads past the
     // first error, and the quote is what to fix (tree-sitter's error ran to
     // the end of the text and said so).
@@ -372,8 +430,8 @@ fn lucene_syntax(node: &SyntaxNode, source: &str, lines: &LineIndex<'_>) -> Opti
 /// `not(a:1)` and `a:1 and(b:2)` are syntax errors.
 fn keyword_spacing(token: &SyntaxToken, source: &str, lines: &LineIndex<'_>) -> Option<Diagnostic> {
     let (start, end) = bounds(token.text_range());
-    let before = source[..start].chars().next_back();
-    let after = source[end..].chars().next();
+    let before = cut(source, 0, start).chars().next_back();
+    let after = cut(source, end, source.len()).chars().next();
     let needs_before = token.kind() != K::NotKw;
     let missing =
         (needs_before && !before.is_some_and(is_kql_space)) || !after.is_some_and(is_kql_space);
@@ -590,7 +648,8 @@ fn is_kql_space(c: char) -> bool {
 /// error: two clauses with no `and` between them.
 fn implicit_and(source: &str, start: usize, end: usize) -> Option<(String, char)> {
     // Back up to the start of the clause the error is in.
-    let from = source[..start]
+    // `start` is a token's or an error's bound.
+    let from = cut(source, 0, start)
         .rfind(['(', ')', ':', '<', '>', '"'])
         .map_or(0, |i| i + 1);
     let to = (end + 1).min(source.len());
@@ -657,10 +716,9 @@ fn unclosed_quote(source: &str) -> Option<usize> {
 /// `/…/` with a regex metacharacter. A plain path such as
 /// `/var/lib/tool/` is not one.
 fn looks_like_regex(word: &str) -> bool {
-    word.len() > 2
-        && word.starts_with('/')
-        && word.ends_with('/')
-        && word[1..word.len() - 1].contains(['^', '$', '+', '?', '|', '[', ']', '\\'])
+    word.strip_prefix('/')
+        .and_then(|rest| rest.strip_suffix('/'))
+        .is_some_and(|inner| inner.contains(['^', '$', '+', '?', '|', '[', ']', '\\']))
 }
 
 fn fuzzy_or_boost(word: &str) -> bool {
@@ -1222,7 +1280,7 @@ mod tests {
         assert!(std::rc::Rc::ptr_eq(&first, &parser::parse_memo(src)));
         assert!(!std::rc::Rc::ptr_eq(&first, &parser::parse_memo("a:1")));
         // A text past the cap is parsed but not kept.
-        let large = "a:1 or ".repeat(parser::MEMO_MAX / 7 + 1) + "b:2";
+        let large = "a:1 or ".repeat(opentide_parse::MEMO_MAX / 7 + 1) + "b:2";
         let once = parser::parse_memo(&large);
         assert!(!std::rc::Rc::ptr_eq(&once, &parser::parse_memo(&large)));
     }
@@ -1283,5 +1341,49 @@ mod tests {
         let inside = src.find('\u{e9}').unwrap() + 1;
         assert!(completions(src, inside).is_empty());
         assert_eq!(hover(src, inside), None);
+    }
+
+    /// Queries with multi-byte text in every place the crate cuts: parse
+    /// errors, keyword spacing, implicit `and`, regex-looking values and the
+    /// word lexer's escapes. The ranges are checked in debug builds (`cut`).
+    const MULTI_BYTE: &[&str] = &[
+        "é😀:(é or 😀 and(é😀:1) not(😀) é:{😀:é} é😀 😀:é é:/é^😀/ é:/é/😀/",
+        "é:\\é\\😀\\u00e9\\:é\\and😀 or é\u{a0}or\u{a0}😀 é:\"😀 é",
+        "é😀 é: < é > 😀 é:(é😀 é:\"😀\" é😀:é😀~2 é:é^😀",
+        "not é😀:é and",
+    ];
+
+    #[test]
+    fn multi_byte_text_is_read_whole_everywhere() {
+        for query in MULTI_BYTE {
+            let result = analyze(query);
+            for token in &result.tokens {
+                assert!(
+                    query.get(token.span.start..token.span.end).is_some(),
+                    "{query}"
+                );
+            }
+            let _ = fields(query);
+            for (offset, _) in query.char_indices().chain([(query.len(), ' ')]) {
+                let _ = hover(query, offset);
+                let _ = completions(query, offset);
+                let _ = super::analyze(query.get(..offset).unwrap(), |_| true);
+            }
+        }
+    }
+
+    #[test]
+    fn a_regex_looking_value_reads_multi_byte_text() {
+        assert!(looks_like_regex("/é^😀/"));
+        assert!(!looks_like_regex("/é😀/"));
+        assert!(!looks_like_regex("/😀"));
+        assert!(!looks_like_regex("//"));
+        assert!(!looks_like_regex("/"));
+    }
+
+    #[test]
+    fn cut_reads_a_range_on_char_boundaries() {
+        assert_eq!(cut("é😀x", 0, 2), "é");
+        assert_eq!(cut("é😀x", 2, 7), "😀x");
     }
 }

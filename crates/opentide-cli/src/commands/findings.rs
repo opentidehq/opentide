@@ -1,4 +1,4 @@
-//! Where findings go besides the terminal (`cli/findings.py`): the
+//! Where findings go besides the terminal: the
 //! `--format` report, written to `--output` or as the whole of stdout, and
 //! the CI sinks (annotations and the job summary). `validate`, `validate
 //! query` and `lint` share them.
@@ -161,16 +161,10 @@ mod tests {
         item.column = Some(5);
         item.end_column = Some(9);
         item.notes.push(("note".into(), "text".into()));
-        item.fix = Some(ws::Fix {
-            safe: true,
-            edits: vec![ws::TextEdit {
-                line: 3,
-                column: 5,
-                end_line: 3,
-                end_column: 9,
-                replacement: "High".into(),
-            }],
-        });
+        item.fix = Some(ws::Fix::new(
+            true,
+            vec![ws::TextEdit::new(3, 5, 3, 9, "High")],
+        ));
         let shown = diagnostic(&item);
         assert_eq!(shown.severity, Severity::Warning);
         assert_eq!(shown.object_uuid, None);

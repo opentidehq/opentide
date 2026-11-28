@@ -19,7 +19,7 @@ use crate::node::{Entry, Mark, Node, Value};
 pub struct Any(pub Arc<Node>);
 
 impl Any {
-    /// The node.
+    /// The YAML tree the value holds, its positions included.
     pub fn node(&self) -> &Node {
         &self.0
     }

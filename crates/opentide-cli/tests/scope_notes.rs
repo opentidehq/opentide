@@ -3,6 +3,10 @@
 //! object files a scope leaves out (F-05), the Azure push that reads only its
 //! last commit (OT-12) and the `OPENTIDE_PUSH_BASE` override.
 #![expect(
+    clippy::string_slice,
+    reason = "a test: a slice off a char boundary panics, and a panic is a failed test"
+)]
+#![expect(
     clippy::unwrap_used,
     reason = "test helpers: every workspace here is written to a fresh folder"
 )]

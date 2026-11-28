@@ -1,6 +1,6 @@
-//! A Sentinel or Defender query with its exclusions (`platforms/kql.py`
-//! `compile_kql_query`): the `let` statements of every exclusion that applies
-//! to the tenant before the query, their filters after it.
+//! A Sentinel or Defender query with its exclusions: the `let` statements of
+//! every exclusion that applies to the tenant before the query, their filters
+//! after it.
 
 use indexmap::IndexMap;
 
@@ -44,7 +44,8 @@ fn kql_real(float: f64) -> String {
 }
 
 /// A `let` value as KQL writes it, or `None` for a type KQL has no literal for
-/// (the oracle skips it with a warning).
+/// (`null`, a list or a mapping): [`compile_query`] then leaves that
+/// variable out, without a warning.
 fn let_literal(value: &Json) -> Option<String> {
     match value {
         Json::Bool(flag) => Some(if *flag { "true" } else { "false" }.to_owned()),

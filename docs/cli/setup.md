@@ -63,7 +63,7 @@ The wizard needs a terminal and a stdout it can draw on, so it is incompatible w
 | `--app-token` / `--no-app-token` | GitHub only: the jobs that push to the default branch use a GitHub App token instead of `GITHUB_TOKEN` (see [setup ci](#setup-ci)); omit to keep what the existing pipeline has; gitlab and azure warn that `--app-token` is ignored |
 | `--default-branch` | Branch that deploys and receives inflight shards (see [setup ci](#setup-ci)) |
 | `--vscode-setup` | Run [`setup vscode`](#setup-vscode): recommend the opentide extension, write snippets (generate-first) |
-| `--mcp` | MCP configuration for `vscode`, `cursor`, `claude-code` or `generic` (repeatable): the [setup mcp](#setup-mcp) step |
+| `--mcp` | MCP configuration for `vscode`, `cursor`, `claude-code`, `claude-desktop` or `generic` (repeatable): the [setup mcp](#setup-mcp) step |
 | `--skills` | Agent skills for `claude-code`, `cursor`, `github-copilot` or `generic` (repeatable): the [setup skills](#setup-skills) step, with its default skills |
 | `--plugin` | Register the opentidehq/skills Agent Plugin for Claude Code, as `setup skills --plugin` |
 | `--hooks` | Validate-on-commit hooks: the [setup hooks](#setup-hooks) step |
@@ -168,6 +168,7 @@ opentide setup platforms --sentinel --microsoft-defender --yes
 | `--graylog` | Graylog |
 | `--exabeam` | Exabeam New-Scale SIEM |
 | `--google-secops` | Google Security Operations (YARA-L) |
+| `--datadog` | Datadog Cloud SIEM (Datadog search syntax) |
 
 ### setup ci
 
@@ -218,6 +219,8 @@ Without `--default-branch`, GitHub and Azure pipelines target the first of:
 3. the `init.defaultBranch` Git setting, for a target outside any Git repository or on a detached `HEAD`;
 4. `main`.
 
+opentide reads these from the repository and the Git configuration files itself, so the `git` program need not be installed. It finds the configuration files as Git does, from `HOME`, `XDG_CONFIG_HOME`, `GIT_CONFIG_GLOBAL`, `GIT_CONFIG_SYSTEM` and `GIT_CONFIG_NOSYSTEM`, and applies `GIT_CONFIG_COUNT` overrides. Conditional includes (`includeIf`) are not followed.
+
 The JSON result reports the branch used as `default_branch`. It adds a `warnings` entry, and logs a warning, when the pipeline falls back to a `main` branch the repository does not have, or targets the checked-out branch while other local branches exist. Pass `--default-branch` in either case. A name the pipelines cannot hold unquoted (spaces, shell characters, or a value YAML reads as a number or boolean such as `2024` or `on`) is rejected with exit code 2.
 
 The pipeline has no promotion job: `opentide deploy --strategy RELEASE` promotes rules as the merged `deployment.toml` [configures](../usage/configuration.md#promotion). Omitting the flags keeps that setting. An explicit flag writes the `[promotion]` table of `.opentide/configurations/deployment.toml` when the value differs from the bundled default and the file has no `[promotion]` table yet, and the result lists that file under `files`. The same flags on `opentide setup` without `--ci` write that table too:
@@ -247,6 +250,8 @@ Copy `.env.example` to `.env` and adjust the path if the working directory is no
 ### setup hooks
 
 Configure validate-on-commit hooks. Writes `.pre-commit-config.yaml` (a local `opentide-validate` hook) and a versioned script at `.opentide/hooks/pre-commit`. When the path is inside a Git repository, copies that script into the repository's hooks directory (`.git/hooks/pre-commit`, the shared directory for a linked worktree, or a `core.hooksPath` inside the repository) unless a third-party hook is already there. A `core.hooksPath` outside the repository, such as a user-wide one, serves every repository on the machine, so setup leaves it alone and warns; call `.opentide/hooks/pre-commit` from that shared hook yourself.
+
+opentide finds the repository, its hooks directory and `core.hooksPath` itself, so the `git` program need not be installed to set the hooks up (the hooks themselves run git). `core.hooksPath` is read from the Git configuration files as [`setup ci`](#setup-ci) reads `init.defaultBranch`; a leading `~/` is the home folder and a relative path is taken from the repository's top level, as Git takes it. A linked worktree's own `core.hooksPath` (`git config --worktree`, with `extensions.worktreeConfig` on) is read too. The repository is found as Git finds it, `GIT_DIR`, `GIT_WORK_TREE` and `GIT_CEILING_DIRECTORIES` included; inside the `.git` folder, or inside a bare repository nested in the checkout, there is no work tree to set up, as with Git.
 
 ```bash
 opentide setup hooks --yes
@@ -284,6 +289,7 @@ opentide setup mcp --cursor --vscode --yes
 | `--vscode` | `.vscode/mcp.json` | `${workspaceFolder}` |
 | `--cursor` | `.cursor/mcp.json` | `${workspaceFolder}` |
 | `--claude-code` | `.mcp.json` | `${CLAUDE_PROJECT_DIR}` |
+| `--claude-desktop` | Claude Desktop's `claude_desktop_config.json`, outside the repository ([below](#claude-desktop)) | the workspace's absolute path |
 | `--generic` | `opentide.mcp.json` | omitted (cwd discovery) |
 
 Every file runs a bare `opentide`, which the editor looks up on its `PATH`. When `opentide` is not on the `PATH` setup runs with (an install in a virtual environment that is not activated, for instance), the files are still written, and setup warns that the editor cannot start the server: JSON output has `"mcp_available": false` and the warning in `warnings`. Put `opentide` on `PATH`, or set its full path as the server `command`. [`opentide doctor`](./doctor.md) checks the same for the configurations already written.
@@ -293,6 +299,28 @@ The opentide VS Code extension (`opentidehq.opentide`) provides the opentide MCP
 An existing file is merged in place (comments, layout, line endings and a byte-order mark stay). An `opentide` server it already has is yours: setup adds the fields and `env` entries it lacks and keeps the ones it has, so a customised `command`, `args` or `env` survives a re-run. When a kept field differs from what setup writes, a warning names it; remove the entry and re-run to reset it.
 
 VS Code and Cursor expand `${workspaceFolder}`. Claude Code expands `${CLAUDE_PROJECT_DIR}`. Generic hosts that do not interpolate editor placeholders should omit the variable so the server discovers the detection workspace from cwd, or set an absolute path. See [MCP configuration](../mcp/configuration.md).
+
+#### Claude Desktop
+
+Claude Desktop's chat does not start the local MCP servers of an installed plugin, and it reads one configuration file per user rather than one per project. `--claude-desktop` adds an `opentide` server to that file:
+
+```bash
+opentide setup mcp --claude-desktop --yes --path ~/detections
+```
+
+| OS | File |
+|----|------|
+| macOS | `~/Library/Application Support/Claude/claude_desktop_config.json` |
+| Windows | `%APPDATA%\Claude\claude_desktop_config.json` (`~\AppData\Roaming` when `APPDATA` is unset) |
+| Linux and others | `$XDG_CONFIG_HOME/Claude/claude_desktop_config.json` (`~/.config` when `XDG_CONFIG_HOME` is unset or not absolute) |
+
+- **Absolute command.** Claude Desktop started from the Dock or the Start menu does not have your shell's `PATH`, so the entry's `command` is an absolute path: the `opentide` binary that ran setup; run as the PyPI console script, the `opentide` script beside the Python that runs it (a virtual environment's or pipx's); else the `opentide` on `PATH`; else that Python, with `-m opentide` in `args`. A script that starts `#!/usr/bin/env node` (the npm bin) would look for `node` on the `PATH` Claude Desktop does not have: run from npm, the entry runs Node.js by its path with the script as its first argument; otherwise such a script is passed over. Since the command is absolute, `opentide` need not be on `PATH`, and setup does not warn that it is not. When nothing is found, the entry runs a bare `opentide`, and setup warns and reports `"mcp_available": false`.
+- **Workspace.** Claude Desktop has no project folder, so the entry sets `OPENTIDE_REPO_ROOT` to the detection workspace (`--path`, default `.`), as an absolute path with `..` and links resolved.
+- **Merged.** Every other server and setting in the file stays, byte for byte. In an existing `opentide` entry, setup's fields (`command`, `args` and `env.OPENTIDE_REPO_ROOT`) are replaced and the rest stays, such as another variable of `env` (`HTTPS_PROXY`); so the file serves one workspace at a time: run setup from another workspace to point Claude Desktop there. An empty file is written as a new one. A file that is not a JSON object is left unchanged, with a warning. The folders are made when Claude Desktop has never written the file, the write is atomic, and a file that is a link is written through, not replaced; a link whose target does not exist is left unchanged, with a warning. A file that cannot be written is a warning, and the other hosts are still written.
+- **Output.** `files` and `claude_desktop_config` name the absolute path written, and `advice` says to quit and reopen Claude Desktop.
+- **`--plan`** lists the file by its absolute path (`create`, `merge`, or `skip` when it cannot be merged) and writes nothing to it, on `setup mcp` and on `setup --mcp claude-desktop`.
+
+`opentide doctor` counts Claude Desktop among the hosts of `mcp_config` when the file's opentide server names this workspace in `OPENTIDE_REPO_ROOT`; a server for another workspace is not this one's.
 
 ### setup skills
 

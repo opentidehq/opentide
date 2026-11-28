@@ -516,7 +516,12 @@ mod tests {
     fn pieces(source: &str) -> Vec<(SyntaxKind, &str)> {
         lex(source)
             .iter()
-            .map(|l| (SyntaxKind::from_raw(l.kind), &source[l.range]))
+            .map(|l| {
+                (
+                    SyntaxKind::from_raw(l.kind),
+                    source.get(std::ops::Range::<usize>::from(l.range)).unwrap(),
+                )
+            })
             .collect()
     }
 

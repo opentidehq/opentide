@@ -1,4 +1,4 @@
-//! `validate --watch` as a library (UC-2.3, #818; `cli/ui/watch.py`,
+//! `validate --watch` as a library (UC-2.3, #818;
 //! `docs/internal/cli-experience.md`): which files changed, and whether a
 //! pass validates them alone or the whole scope. Drawing a pass (the live
 //! view, the plain lines, cropping) is the command line's (UC-3.5).
@@ -25,7 +25,6 @@ pub mod events;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
-use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
 use crate::diagnostic::{Diagnostic, Severity};
@@ -62,17 +61,6 @@ pub fn take_snapshot(fs: &dyn FileSystem, roots: &[PathBuf]) -> Snapshot {
         .collect()
 }
 
-fn uuid_pattern() -> &'static regex::Regex {
-    static PATTERN: OnceLock<regex::Regex> = OnceLock::new();
-    PATTERN.get_or_init(|| {
-        #[expect(clippy::expect_used, reason = "a literal pattern")]
-        regex::Regex::new(
-            r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
-        )
-        .expect("the pattern compiles")
-    })
-}
-
 /// The UUIDs written in `path`, lower case: the object's own and every one
 /// it points at. A file that cannot be read writes none.
 pub fn references(fs: &dyn FileSystem, path: &Path) -> BTreeSet<String> {
@@ -80,7 +68,7 @@ pub fn references(fs: &dyn FileSystem, path: &Path) -> BTreeSet<String> {
         return BTreeSet::new();
     };
     let text = String::from_utf8_lossy(&bytes);
-    uuid_pattern()
+    opentide_core::ids::finder()
         .find_iter(&text)
         .map(|found| found.as_str().to_lowercase())
         .collect()
@@ -336,7 +324,7 @@ impl<'fs, V: Validate> Watcher<'fs, V> {
         self
     }
 
-    /// The validator.
+    /// What validates each pass, as given to [`Watcher::new`].
     pub fn validator(&self) -> &V {
         &self.validate
     }

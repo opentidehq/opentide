@@ -9,7 +9,7 @@
 //! crates log through `tracing` and never print: this layer is the one place
 //! that writes their events.
 
-use crate::json::{Json, document_text};
+use crate::json::{Json, Object, document_text};
 use crate::redact::Redactor;
 use std::fmt::Write as _;
 use std::io::Write;
@@ -209,16 +209,16 @@ impl LogLayer {
         let own = || fields.pairs.iter().filter(|(key, _)| key != CRITICAL_FIELD);
         if self.config.json_lines {
             // The event's fields, then the event, its level and its time.
-            let mut members: Vec<(String, Json)> = own()
+            let mut members: Object = own()
                 .map(|(key, value)| (key.clone(), value.json()))
                 .collect();
-            members.push(("event".to_owned(), Json::str(&fields.message)));
+            members.insert("event".to_owned(), Json::str(&fields.message));
             let level = if critical { "critical" } else { label(level) };
             members.extend([
                 ("level".to_owned(), Json::str(level)),
                 ("timestamp".to_owned(), Json::Str((self.clock)())),
             ]);
-            return document_text(&Json::object(members), false);
+            return document_text(&Json::Object(members), false);
         }
         let mut line = String::new();
         if self.config.debug {

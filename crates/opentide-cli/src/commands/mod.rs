@@ -34,6 +34,7 @@ pub mod plugin;
 pub mod promotion_preview;
 pub mod query;
 pub mod query_rule;
+pub mod result;
 pub mod rules;
 pub mod setup;
 pub mod share;
@@ -50,9 +51,10 @@ use std::sync::Arc;
 
 use opentide_workspace::{OsFs, RootOptions, Workspace, root};
 
+use crate::commands::result::{ExitCode, Status};
 use crate::env::Env;
-use crate::envelope::{Failure, NextAction, Outcome, USAGE_EXIT_CODE, code};
-use crate::json::Json;
+use crate::envelope::{Failure, NextAction, Outcome, code};
+use crate::json::{Json, Object};
 use crate::render::outcome::OutcomeKind;
 use crate::render::text::Text;
 
@@ -81,11 +83,11 @@ pub struct Report {
     /// The checklist's steps, printed on stderr before anything else.
     pub steps: Vec<crate::render::progress::Step>,
     /// The checklist's total when each finished step writes its
-    /// `OPENTIDE_PROGRESS=json` event (`Checklist._finished`, in every mode):
+    /// `OPENTIDE_PROGRESS=json` event (in every mode):
     /// `generate`, with its phases named or none.
     pub step_events: Option<usize>,
-    /// Log lines the run writes once its checklist rows are printed, where
-    /// the oracle logs them after its last step.
+    /// Log lines the run writes once its checklist rows are printed, after
+    /// its last step, so they are not drawn inside the checklist.
     pub after_steps: Vec<AfterSteps>,
     /// The whole of stdout in the text modes, instead of the body and the
     /// outcome (a `--format` report printed without `--output`).
@@ -100,11 +102,11 @@ pub struct Report {
     /// sequence the reader follows step by step (`setup`).
     pub numbered_next: bool,
     /// The CI job summary's section (Markdown), appended in a text mode
-    /// before the result is printed (`publish_summary`).
+    /// before the result is printed.
     pub ci_summary: Option<String>,
     /// The run ends with its exit code and prints nothing more, in every
-    /// mode: no document, no outcome line (the oracle's `sys.exit` in the
-    /// middle of a run, `deploy`'s invalid promotion target).
+    /// mode: no document, no outcome line (`deploy`'s invalid promotion
+    /// target, which stops the run in the middle).
     pub bare_exit: bool,
     /// A usage error the command found once it ran (a value refused
     /// after parsing): printed as clap prints a parse error, with the
@@ -227,7 +229,7 @@ impl Terminal {
             )
             .chain(added.iter().copied())
             .collect();
-        shlex::try_join(words.iter().copied()).unwrap_or_else(|_| words.join(" "))
+        opentide_core::text::shell_line(words.iter().copied())
     }
 
     /// `next` with the step that shows the `hidden` notes the code frames
@@ -265,11 +267,11 @@ impl Report {
         Report {
             outcome: Outcome {
                 command: command.to_owned(),
-                status: "completed".into(),
+                status: Status::Completed,
                 message: "Completed successfully".into(),
                 data: data.into_iter().collect(),
-                exit_code: 0,
-                summary: Vec::new(),
+                exit_code: ExitCode::Success,
+                summary: Object::new(),
                 next_actions: Vec::new(),
                 failure: None,
             },
@@ -291,7 +293,7 @@ impl Report {
     }
 
     /// A failure, with `failure.code` `code`.
-    pub fn failed(command: &str, exit_code: i32, failure: Failure) -> Report {
+    pub fn failed(command: &str, exit_code: ExitCode, failure: Failure) -> Report {
         Report {
             outcome: Outcome::failed(command, exit_code, failure),
             warnings: Vec::new(),
@@ -329,12 +331,16 @@ impl Report {
                     .filter(|choice| *choice != value)
             })
             .map(str::to_owned);
-        Report::failed(command, USAGE_EXIT_CODE, failure)
+        Report::failed(command, ExitCode::Usage, failure)
     }
 
     /// An error the command stopped on: exit 1, `command_failed`.
     pub fn error(command: &str, message: impl Into<String>) -> Report {
-        Report::failed(command, 1, Failure::new(COMMAND_FAILED, message))
+        Report::failed(
+            command,
+            ExitCode::Failure,
+            Failure::new(COMMAND_FAILED, message),
+        )
     }
 
     /// Adds a next step.
@@ -356,11 +362,11 @@ pub fn json<T: serde::Serialize>(value: &T) -> Json {
         .unwrap_or(Json::Null)
 }
 
-/// Where a run's workspace is, as the oracle's context places it: the
-/// repository (`--repo`, else `OPENTIDE_REPO_ROOT`, else the nearest
-/// workspace root) as it prints it, and the options that open it, with
-/// `OPENTIDE_REPO_ROOT` and `OPENTIDE_TIDE_WORKSPACE` set as
-/// `apply_environment` sets them.
+/// Where a run's workspace is: the repository (`--repo`, else
+/// `OPENTIDE_REPO_ROOT`, else the nearest workspace root) as it prints it,
+/// and the options that open it: `OPENTIDE_REPO_ROOT` is the repository, and
+/// `OPENTIDE_TIDE_WORKSPACE` the repository too unless the environment names
+/// one and `--repo` is not given.
 pub fn placement(repo: Option<&str>, env: &Env, cwd: &Path) -> (String, RootOptions) {
     let from_env = |name: &str| env.get(name).filter(|value| !value.is_empty());
     let given = repo.or_else(|| from_env("OPENTIDE_REPO_ROOT"));
@@ -418,7 +424,7 @@ pub fn no_workspace(command: &str, repo: Option<&str>, env: &Env, cwd: &Path) ->
     let root = unplaced_root(repo, env, cwd)?;
     let mut report = Report::failed(
         command,
-        1,
+        ExitCode::Failure,
         Failure::new(
             new::WORKSPACE_NOT_FOUND,
             format!(
@@ -522,11 +528,15 @@ pub fn open_for(command: &str, options: RootOptions) -> Result<Workspace, Box<Re
     } else {
         format!("{place}: {problem}")
     };
-    let mut report = Report::failed(command, 1, Failure::new(CONFIG_PARSE, message));
+    let mut report = Report::failed(
+        command,
+        ExitCode::Failure,
+        Failure::new(CONFIG_PARSE, message),
+    );
     report
         .outcome
         .data
-        .push(("diagnostics".to_owned(), Json::Array(vec![diagnostic])));
+        .insert("diagnostics".to_owned(), Json::Array(vec![diagnostic]));
     Err(Box::new(report))
 }
 
@@ -537,12 +547,7 @@ pub fn refusal_parts(report: &Report) -> (String, String, Option<Json>) {
         || (COMMAND_FAILED.to_owned(), report.outcome.message.clone()),
         |failure| (failure.code.clone(), failure.message.clone()),
     );
-    let diagnostics = report
-        .outcome
-        .data
-        .iter()
-        .find(|(key, _)| key == "diagnostics")
-        .map(|(_, value)| value.clone());
+    let diagnostics = report.outcome.data.get("diagnostics").cloned();
     (code, message, diagnostics)
 }
 
@@ -600,18 +605,13 @@ mod tests {
         };
         let failure = report.outcome.failure.as_ref().unwrap();
         assert_eq!(failure.code, "config_parse");
-        assert_eq!(report.outcome.exit_code, 1);
+        assert_eq!(report.outcome.exit_code, ExitCode::Failure);
         assert!(
             report.outcome.message.contains("sentinel.toml:2:"),
             "{}",
             report.outcome.message
         );
-        let Some((_, Json::Array(diagnostics))) = report
-            .outcome
-            .data
-            .iter()
-            .find(|(key, _)| key == "diagnostics")
-        else {
+        let Some(Json::Array(diagnostics)) = report.outcome.data.get("diagnostics") else {
             panic!("no diagnostics: {:?}", report.outcome.data);
         };
         let Json::Object(first) = &diagnostics[0] else {
@@ -680,10 +680,10 @@ mod tests {
             Some("rulez"),
             &["rules", "threats"],
         );
+        assert_eq!(report.outcome.exit_code, ExitCode::Usage);
         let failure = report.outcome.failure.unwrap();
         assert_eq!(failure.suggestion.as_deref(), Some("rules"));
         assert_eq!(failure.argument.as_deref(), Some("section"));
-        assert_eq!(report.outcome.exit_code, 2);
         let none = Report::usage(
             "info",
             "bad",

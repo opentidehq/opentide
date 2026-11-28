@@ -20,6 +20,9 @@ use super::runner::{EventSink, Job, RunOutcome, RunRequest, Runner, compact, fai
 use crate::envelope::INTERRUPTED_EXIT_CODE;
 use crate::json::{Json, Object};
 
+/// How long the loop waits for a message before it checks `stop` again.
+const STOP_POLL: Duration = Duration::from_millis(100);
+
 /// `initialize`'s `protocol`: bumped only when a message changes meaning.
 pub const PROTOCOL_VERSION: i64 = 1;
 
@@ -141,14 +144,6 @@ fn parse_message(text: &str) -> Result<Json, serde_json::Error> {
     serde_json::from_str::<serde_json::Value>(text).and_then(Json::deserialize)
 }
 
-/// A path `invalidate` names: a string as is, anything else as its JSON.
-fn path_text(value: &Json) -> String {
-    match value {
-        Json::Str(text) => text.clone(),
-        other => compact(other),
-    }
-}
-
 /// A protocol problem, answered with a JSON-RPC error.
 struct ProtocolError(i64, &'static str);
 
@@ -224,12 +219,12 @@ pub fn commands_digest(document: &Json) -> String {
     fn sorted(value: &Json) -> Json {
         match value {
             Json::Object(members) => {
-                let mut members: Vec<(String, Json)> = members
+                let mut members: Object = members
                     .iter()
                     .map(|(key, value)| (key.clone(), sorted(value)))
                     .collect();
-                members.sort_by(|a, b| a.0.cmp(&b.0));
-                Json::object(members)
+                members.sort_keys();
+                Json::Object(members)
             }
             Json::Array(items) => Json::Array(items.iter().map(sorted).collect()),
             other => other.clone(),
@@ -245,7 +240,7 @@ pub fn commands_digest(document: &Json) -> String {
         ),
         other => other.clone(),
     };
-    crate::digest::sha256_hex(compact(&sorted(&stable)).as_bytes())
+    opentide_core::text::sha256_hex(compact(&sorted(&stable)).as_bytes())
 }
 
 impl Server {
@@ -607,7 +602,7 @@ impl Server {
                     queue = self
                         .inner
                         .ready
-                        .wait_timeout(queue, Duration::from_millis(100))
+                        .wait_timeout(queue, STOP_POLL)
                         .unwrap_or_else(PoisonError::into_inner)
                         .0;
                 }
@@ -639,7 +634,7 @@ impl Server {
         };
         if method == "invalidate" {
             if let Some(Json::Array(paths)) = params.get("paths") {
-                let paths: Vec<String> = paths.iter().map(path_text).collect();
+                let paths: Vec<String> = paths.iter().map(Json::to_text).collect();
                 self.inner.runner.invalidate(&paths);
                 tracing::debug!(paths = paths.len(), "serve_invalidated");
             }

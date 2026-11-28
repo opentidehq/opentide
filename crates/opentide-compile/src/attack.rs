@@ -1,6 +1,5 @@
 //! MITRE ATT&CK for the compilers: the techniques a rule inherits through its
-//! detection model (`generation/framework.py` `techniques_resolver`), and the
-//! `att&ck` vocabulary's names, links and stages (`get_vocab_entry`).
+//! detection model, and the `att&ck` vocabulary's names, links and stages.
 
 use opentide_schema::node::{Node, Value};
 use opentide_schema::vocab::{Entry, Vocabularies, Vocabulary};
@@ -9,9 +8,9 @@ use opentide_workspace::Index;
 /// The vocabulary field of ATT&CK techniques.
 pub const ATTACK: &str = "att&ck";
 
-/// Why the resolver could not finish: an object it walked lacks a key the
-/// oracle indexes without a default (`threat.mitre_attack`), which the oracle
-/// raises as a `KeyError`.
+/// Why the resolver could not finish: an object it walked lacks a key the walk
+/// requires (an objective's `objective`, a threat's `threat` or
+/// `threat.mitre_attack`). The string is the missing key.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MissingKey(pub String);
 
@@ -52,8 +51,8 @@ pub fn techniques(index: &Index, uuid: &str) -> Result<Vec<String>, MissingKey> 
     resolve(index, uuid, 0)
 }
 
-/// Objects link at most this deep before the walk stops: the oracle recursed
-/// without a bound, a cycle being a `RecursionError`.
+/// Objects link at most this deep: a link past it adds no techniques, so a
+/// cycle of links ends instead of recursing forever.
 const MAX_DEPTH: usize = 64;
 
 fn resolve(index: &Index, uuid: &str, depth: usize) -> Result<Vec<String>, MissingKey> {
@@ -110,13 +109,7 @@ fn resolve(index: &Index, uuid: &str, depth: usize) -> Result<Vec<String>, Missi
         }
         _ => {}
     }
-    let mut unique: Vec<String> = Vec::with_capacity(found.len());
-    for technique in found {
-        if !unique.contains(&technique) {
-            unique.push(technique);
-        }
-    }
-    Ok(unique)
+    Ok(opentide_core::text::unique(found))
 }
 
 /// The vocabulary entries the compilers read.

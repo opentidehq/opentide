@@ -1,4 +1,4 @@
-//! `opentide lsp start` (`cli/lsp_app.py`, `cli/services/lsp.py`): the
+//! `opentide lsp start`: the
 //! language server of `opentide-lsp` (UC-2.6, #821), hosted by the command
 //! line on this process's stdin and stdout until the editor exits or closes
 //! stdin.

@@ -6,6 +6,10 @@
 //! `OPENTIDE_REPLAY_FIXTURES` ([`generated`]).
 
 #![allow(dead_code, reason = "each test binary uses part of the helpers")]
+#![expect(
+    clippy::string_slice,
+    reason = "a test: a slice off a char boundary panics, and a panic is a failed test"
+)]
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -51,6 +55,25 @@ pub fn case_root() -> tempfile::TempDir {
         .unwrap()
 }
 
+/// Stops a run whose case root folds case (macOS's default volume): the
+/// `tide-corpus` fixtures hold `Objects/` and `objects/` side by side, which
+/// would be one folder there, so a snapshot recorded on it is not Linux's,
+/// and git, which records `Objects/rules/...`, and the workspace, which reads
+/// `objects/rules/...`, no longer name the same file.
+pub fn assert_case_sensitive(root: &Path) {
+    let probe = root.join("Case-Probe");
+    std::fs::write(&probe, "").unwrap();
+    let folds = root.join("case-probe").exists();
+    std::fs::remove_file(&probe).unwrap();
+    assert!(
+        !folds,
+        "{} is on a case-insensitive volume, where `Objects/` and `objects/` are one folder: \
+         set OPENTIDE_CASE_ROOT to a folder on a case-sensitive volume \
+         (tests/golden/README.md, \"Snapshots\")",
+        root.display()
+    );
+}
+
 /// The folder the case roots are made in: `OPENTIDE_CASE_ROOT`, else `/tmp`
 /// (the recordings' place), else the host's temporary directory.
 pub fn case_root_parent() -> PathBuf {
@@ -87,6 +110,8 @@ pub const FIXTURES: &[&str] = &[
     "tide-corpus-folders",
     "tide-corpus-typo",
     "tide-corpus-bad-values",
+    "tide-corpus-defender-entity-identifier",
+    "tide-corpus-defender-limits",
     "tide-corpus-lint-code-note",
     "tide-corpus-lint-unknown-code",
     "tide-corpus-lint-engine-warning",
@@ -109,6 +134,7 @@ pub const FIXTURES: &[&str] = &[
     "vscode-own-pipeline",
     "tenants",
     "live-tenants",
+    "defender-output",
     "deploy-tenants",
     "deploy-tenants-sysdig",
     "deploy-push",
@@ -219,6 +245,7 @@ pub fn fixture(name: &str, ws: &Path) {
         // The stand-in tenants of the cassette cases (UC-4.2c): `query`'s.
         "tenants" => copy_tree(&repo().join("tests/golden/fixtures/tenants"), ws),
         "live-tenants" => copy_tree(&repo().join("tests/golden/fixtures/live-tenants"), ws),
+        "defender-output" => copy_tree(&repo().join("tests/golden/fixtures/defender-output"), ws),
         "deploy-tenants" => copy_tree(&repo().join("tests/golden/fixtures/deploy-tenants"), ws),
         // Every platform but Sysdig disabled (UC-4.4c): a deploy without
         // --platform sends to Sysdig's stand-in alone.
@@ -325,7 +352,9 @@ pub fn fixture(name: &str, ws: &Path) {
         | "tide-corpus-lint-unknown-code"
         | "tide-corpus-lint-engine-warning"
         | "tide-corpus-lint-retired-code"
-        | "tide-corpus-bad-values" => {
+        | "tide-corpus-bad-values"
+        | "tide-corpus-defender-entity-identifier"
+        | "tide-corpus-defender-limits" => {
             fixture("tide-corpus", ws);
             apply_edits(name, ws);
         }

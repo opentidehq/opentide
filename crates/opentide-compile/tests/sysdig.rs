@@ -1,7 +1,7 @@
 //! The Sysdig compiler on blocks the compile corpus does not hold: the
 //! failures a block's definitions give, the expansion's corners and the
-//! tuning's body. The corpus's bodies are compared with the oracle by
-//! `tests/oracle.rs`.
+//! tuning's body. The corpus's bodies are compared with opentide 0.23.0 by
+//! `tests/payload_corpus.rs`.
 #![expect(
     clippy::unwrap_used,
     reason = "test helpers: every workspace here opens"
@@ -13,6 +13,7 @@ use std::sync::Arc;
 use opentide_compile::preview;
 use opentide_compile::strategy::StatusStrategy;
 use opentide_compile::{Json, Owned, Rule, sysdig};
+use opentide_schema::platforms::PlatformKey;
 use opentide_schema::vocab::Vocabularies;
 use opentide_workspace::{FileSystem, MemoryFs, Options, RootOptions, Workspace};
 
@@ -361,7 +362,7 @@ fn a_rule_without_a_block_fails() {
     {
         block.insert("status".into(), "NOPE".into());
     }
-    let entry = preview::preview(&cx, "sysdig", &unknown);
+    let entry = preview::preview(&cx, &PlatformKey::new("sysdig"), &unknown);
     assert_eq!(entry.get("status").and_then(Json::as_str), Some("failed"));
     assert!(
         entry
@@ -398,7 +399,7 @@ fn the_preview_lists_the_blocks_own_policies() {
         let cx = owned.context(&index);
         let object = index.get("rule", UUID).unwrap();
         let rule = Rule::new(object.root().unwrap(), None);
-        preview::preview(&cx, "sysdig", &rule)
+        preview::preview(&cx, &PlatformKey::new("sysdig"), &rule)
     };
     let named = entry("    status: STAGING\n    condition: proc.name = x\n    policies: [a, b]\n");
     assert_eq!(
@@ -422,7 +423,7 @@ fn an_empty_policies_list_replaces_the_tenants_policies_with_none() {
         let workspace = workspace(block);
         let index = workspace.index().clone();
         let object = index.get("rule", UUID).unwrap();
-        sysdig::block_policies(&Rule::new(object.root().unwrap(), None))
+        sysdig::block_policies(&Rule::new(object.root().unwrap(), None)).unwrap()
     };
     let base = "    status: STAGING\n    condition: proc.name = x\n";
     assert_eq!(policies(base), None);
@@ -443,9 +444,83 @@ fn an_empty_policies_list_replaces_the_tenants_policies_with_none() {
     let index = workspace.index().clone();
     let cx = owned.context(&index);
     let object = index.get("rule", UUID).unwrap();
-    let entry = preview::preview(&cx, "sysdig", &Rule::new(object.root().unwrap(), None));
+    let entry = preview::preview(
+        &cx,
+        &PlatformKey::new("sysdig"),
+        &Rule::new(object.root().unwrap(), None),
+    );
     assert_eq!(
         entry.get("policies").map(Json::to_compact).as_deref(),
         Some("[]")
     );
+}
+
+/// The block is read by the model `opentide validate` checks it with
+/// (`SysdigConfig`, #1951): a block whose shape the model refuses fails with
+/// `compile_failed` at the field, in the model's words, with a hint to run
+/// `validate`.
+#[test]
+fn a_block_the_model_refuses_fails_at_its_field() {
+    for (extra, field, reason) in [
+        ("    tags: soc\n", "tags", "Input should be a valid list"),
+        (
+            "    surprisé: 😀\n",
+            "surprisé",
+            "Extra inputs are not permitted",
+        ),
+        (
+            "    output: [é]\n",
+            "output",
+            "Input should be a valid string",
+        ),
+        (
+            "    minimum_engine_version: 1.5\n",
+            "minimum_engine_version",
+            "Input should be a valid integer",
+        ),
+    ] {
+        let workspace = workspace(&format!(
+            "    status: STAGING\n    condition: proc.name = x\n{extra}"
+        ));
+        let owned = Owned::new(
+            &Vocabularies::bundled(),
+            &workspace.configuration().resolved,
+        );
+        let index = workspace.index().clone();
+        let cx = owned.context(&index);
+        let object = index.get("rule", UUID).unwrap();
+        let rule = Rule::new(object.root().unwrap(), None);
+        let error = sysdig::compile_body(&cx, &rule, None).unwrap_err();
+        let at: Vec<&str> = ["configurations", "sysdig"]
+            .into_iter()
+            .chain(field.split('.'))
+            .collect();
+        assert_eq!(error.code, "compile_failed", "{field}: {error}");
+        assert_eq!(error.field, at, "{field}: {error}");
+        assert!(
+            error
+                .reason
+                .contains(&format!("configurations.sysdig.{field}: {reason}")),
+            "{field}: {error}"
+        );
+        assert!(
+            error
+                .hint
+                .as_deref()
+                .is_some_and(|hint| hint.contains("opentide validate")),
+            "{field}: {error}"
+        );
+    }
+}
+
+/// A value only a check of the model refuses is not the block's shape: the
+/// compile reads it as it always has, and `validate` reports it. A negative
+/// `minimum_engine_version` is sent as written.
+#[test]
+fn a_value_only_a_check_refuses_still_compiles() {
+    let out = details(
+        "    status: STAGING\n    condition: proc.name = x\n    minimum_engine_version: -1\n",
+    );
+    let Json::Str(text) = out else { panic!() };
+    assert!(text.contains("\"minimumEngineVersion\":-1"), "{text}");
 }

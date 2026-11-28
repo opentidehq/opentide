@@ -5,7 +5,7 @@
 //! (P1.5).
 
 use crate::server::{host_info, path_to_uri_value};
-use crate::session::{Document, Root, ScopeKind, Session, path_key};
+use crate::session::{Document, Root, ScopeKind, Session, SessionHost, path_key};
 use crate::uri::{path_to_uri, uri_to_path};
 use lsp_server::{ErrorCode, Request, Response};
 use lsp_types as lsp;
@@ -155,11 +155,51 @@ pub mod custom {
         const METHOD: &'static str = "opentide/__sleep";
     }
 
+    /// `until`: a path the sleep ends at as soon as it exists, so a test
+    /// decides when a batch goes on (at most `ms` milliseconds).
     #[cfg(all(debug_assertions, not(fuzzing)))]
     #[derive(Debug, Default, Deserialize, Serialize)]
     #[serde(default)]
     pub struct SleepParams {
         pub ms: u64,
+        pub until: Option<std::path::PathBuf>,
+    }
+
+    /// Debug builds: the batch that takes this request ends exactly
+    /// `frames` frames after it; the source waits for them (#2010). The
+    /// tests queue a batch with it, without a timing window.
+    #[cfg(all(debug_assertions, not(fuzzing)))]
+    pub enum Hold {}
+    #[cfg(all(debug_assertions, not(fuzzing)))]
+    impl lsp_types::request::Request for Hold {
+        type Params = HoldParams;
+        type Result = ();
+        const METHOD: &'static str = "opentide/__hold";
+    }
+
+    /// The source reads these params to find where the batch ends
+    /// (`protocol::Hold::take`); the handler only answers.
+    #[cfg(all(debug_assertions, not(fuzzing)))]
+    #[derive(Debug, Default, Deserialize, Serialize)]
+    #[serde(default)]
+    pub struct HoldParams {
+        pub frames: u64,
+    }
+
+    /// Debug builds: answers once the field catalogs the warm-up thread
+    /// generates for the bundled configuration are ready (#2164). The
+    /// first request of a root after they arrive installs them
+    /// (`Sighting::First`), a new environment for every engine analysis
+    /// made before, which the next edit then runs again: a test that counts
+    /// engine analyses sends this before it opens anything, rather than
+    /// race the warm-up thread.
+    #[cfg(all(debug_assertions, not(fuzzing)))]
+    pub enum Catalogs {}
+    #[cfg(all(debug_assertions, not(fuzzing)))]
+    impl lsp_types::request::Request for Catalogs {
+        type Params = Option<Value>;
+        type Result = ();
+        const METHOD: &'static str = "opentide/__catalogs";
     }
 
     /// Debug builds: how many analyses ran, and what the roots' workspaces
@@ -357,34 +397,25 @@ pub(crate) fn request(session: &mut Session, request: Request) -> Response {
     #[cfg(all(debug_assertions, not(fuzzing)))]
     let dispatcher = dispatcher
         .on::<custom::Panic>(|_, _| panic!("opentide/__panic was requested"))
-        .on::<custom::Stats>(|s, _| {
-            let loading = s.workspace_stats();
-            json!({
-                "analyses": s.analyses.get(),
-                "closedAnalyses": s.closed_analyses.get(),
-                "workspaceReportHits": s.workspace_report_hits.get(),
-                "pullYields": s.pull_yields.get(),
-                "validateStops": s.validate_stops(),
-                "validations": { "full": s.validation_runs().0, "partial": s.validation_runs().1 },
-                "editorIndexed": s.editor_indexed(),
-                "editorParsed": s.editor_parsed(),
-                "roots": s
-                    .workspace_stats_by_root()
-                    .iter()
-                    .map(|stats| json!({
-                        "fileReads": stats.file_reads,
-                        "parses": stats.parses,
-                        "configResolutions": stats.config_resolutions,
-                    }))
-                    .collect::<Vec<_>>(),
-                "workspace": {
-                    "fileReads": loading.file_reads,
-                    "parses": loading.parses,
-                    "configResolutions": loading.config_resolutions,
-                },
-            })
-        })
-        .on::<custom::Sleep>(|_, p| std::thread::sleep(std::time::Duration::from_millis(p.ms)));
+        .on::<custom::Stats>(|s, _| debug_stats(s))
+        .on::<custom::Hold>(|_, _| ())
+        .on::<custom::Catalogs>(|_, _| wait_for_catalogs())
+        .on::<custom::Sleep>(|_, p| {
+            let wait = std::time::Duration::from_millis(p.ms);
+            match p.until {
+                None => std::thread::sleep(wait),
+                Some(path) => {
+                    // A deadline past what `Instant` holds is none: the
+                    // sleep then waits for the path alone (#2041).
+                    let deadline = std::time::Instant::now().checked_add(wait);
+                    while !path.exists()
+                        && deadline.is_none_or(|deadline| std::time::Instant::now() < deadline)
+                    {
+                        std::thread::sleep(std::time::Duration::from_millis(10));
+                    }
+                }
+            }
+        });
     dispatcher
         .on::<Initialize>(|s, p| initialize(s, p, raw.as_ref().unwrap_or(&Value::Null)))
         .on::<Shutdown>(|_, ()| ())
@@ -472,6 +503,54 @@ fn resolves(text: Option<&lsp::TextDocumentClientCapabilities>, property: &str) 
         .and_then(|c| c.completion_item.as_ref())
         .and_then(|i| i.resolve_support.as_ref())
         .is_some_and(|support| support.properties.iter().any(|name| name == property))
+}
+
+/// `opentide/__stats`: what the cache and invalidation tests count.
+#[cfg(all(debug_assertions, not(fuzzing)))]
+fn debug_stats(s: &Session) -> Value {
+    let loading = s.workspace_stats();
+    json!({
+        "analyses": s.analyses.get(),
+        "digestedObjects": s.digested_objects.get(),
+        "baseObjects": s.base_objects.get(),
+        "textCopies": s.text_copies.get(),
+        "docPathKeys": s.doc_path_keys.get(),
+        "engineAnalyses": s.engine_analyses.get(),
+        "catalogsBuilt": crate::models::test_hooks::BUILT
+            .load(std::sync::atomic::Ordering::Relaxed),
+        "catalogInstalled": opentide_analysis::catalog_is_workspace(),
+        "closedAnalyses": s.closed_analyses.get(),
+        "workspaceReportHits": s.workspace_report_hits.get(),
+        "pullYields": s.pull_yields.get(),
+        "validateStops": s.validate_stops(),
+        "validations": { "full": s.validation_runs().0, "partial": s.validation_runs().1 },
+        "editorIndexed": s.editor_indexed(),
+        "editorParsed": s.editor_parsed(),
+        "roots": s
+            .workspace_stats_by_root()
+            .iter()
+            .map(|stats| json!({
+                "fileReads": stats.file_reads,
+                "parses": stats.parses,
+                "configResolutions": stats.config_resolutions,
+            }))
+            .collect::<Vec<_>>(),
+        "workspace": {
+            "fileReads": loading.file_reads,
+            "parses": loading.parses,
+            "configResolutions": loading.config_resolutions,
+        },
+    })
+}
+
+/// `opentide/__catalogs`: generating the bundled configuration's catalogs
+/// while the warm-up thread is at it waits for that thread's run
+/// (`OnceLock::get_or_init`). The WebAssembly builds have no warm-up
+/// thread: they keep the engine's own.
+#[cfg(all(debug_assertions, not(fuzzing)))]
+fn wait_for_catalogs() {
+    #[cfg(not(target_family = "wasm"))]
+    crate::models::default_catalog();
 }
 
 fn read_caps(caps: &lsp::ClientCapabilities, raw: &Value) -> crate::session::ClientCaps {
@@ -735,6 +814,7 @@ fn did_open(session: &mut Session, params: lsp::DidOpenTextDocumentParams) {
     // A byte-order mark is not text: the editor counts no column for it.
     let text = opentide_core::strip_bom(&item.text).to_string();
     let root = session.root_for(&path);
+    let serial = session.next_text();
     session.docs.insert(
         uri.to_string(),
         Document {
@@ -742,8 +822,10 @@ fn did_open(session: &mut Session, params: lsp::DidOpenTextDocumentParams) {
             text,
             version: Some(item.version),
             root,
+            serial,
         },
     );
+    session.docs_changed();
     document_changed(session, uri, language, root);
     session.opened(uri);
 }
@@ -774,13 +856,18 @@ fn did_change(session: &mut Session, params: lsp::DidChangeTextDocumentParams) {
             None => return,
         },
     };
+    // The document's text is edited in place, not copied (#1943): it is
+    // replaced below whatever the edits are.
     let current = session
         .docs
-        .get(&uri)
-        .map(|d| d.text.clone())
+        .get_mut(&uri)
+        .map(|d| std::mem::take(&mut d.text))
         .unwrap_or_default();
-    let text = apply_content_changes(&current, &params.content_changes);
-    let text = opentide_core::strip_bom(&text).to_string();
+    let mut text = apply_content_changes(current, params.content_changes);
+    if text.starts_with('\u{feff}') {
+        text.drain(..'\u{feff}'.len_utf8());
+    }
+    let serial = session.next_text();
     session.docs.insert(
         uri.clone(),
         Document {
@@ -788,8 +875,12 @@ fn did_change(session: &mut Session, params: lsp::DidChangeTextDocumentParams) {
             text,
             version: Some(version),
             root,
+            serial,
         },
     );
+    if known.is_none() {
+        session.docs_changed();
+    }
     document_changed(session, &uri, language, root);
 }
 
@@ -798,6 +889,8 @@ fn did_close(session: &mut Session, params: lsp::DidCloseTextDocumentParams) {
     let Some(closed) = session.docs.remove(uri) else {
         return;
     };
+    session.docs_changed();
+    session.forget_analysis(uri);
     if closed.language == LanguageId::TideYaml {
         session.touch_object();
     } else {
@@ -881,21 +974,20 @@ fn mark_configuration(session: &Session) {
     }
 }
 
-fn apply_content_changes(text: &str, changes: &[lsp::TextDocumentContentChangeEvent]) -> String {
-    let mut current = text.to_string();
+fn apply_content_changes(
+    text: impl Into<String>,
+    changes: impl IntoIterator<Item = lsp::TextDocumentContentChangeEvent>,
+) -> String {
+    let mut current = text.into();
     for change in changes {
-        current = match change.range {
+        match change.range {
             Some(range) => {
                 let start = offset(&current, range.start);
                 let end = offset(&current, range.end).max(start);
-                let mut out = String::with_capacity(current.len() + change.text.len());
-                out.push_str(&current[..start]);
-                out.push_str(&change.text);
-                out.push_str(&current[end..]);
-                out
+                current.replace_range(start..end, &change.text);
             }
-            None => change.text.clone(),
-        };
+            None => current = change.text,
+        }
     }
     current
 }
@@ -1086,18 +1178,17 @@ fn markup(plain: bool, value: String) -> lsp::MarkupContent {
     }
 }
 
-/// Markdown read as text: emphasis and code marks dropped, a fenced block's
-/// fences dropped and its body kept.
+/// Markdown read as text (`opentide_core::markdown`): its lines kept, a
+/// link as `text (url)`, as SARIF's `help.text` reads.
 fn plain_text(markdown: &str) -> String {
-    markdown
-        .lines()
-        .filter(|line| !line.trim_start().starts_with("```"))
-        .map(|line| {
-            let line = line.trim_start_matches('#').trim_start_matches(' ');
-            line.replace("**", "").replace('`', "")
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
+    use opentide_core::markdown::{Lines, Links, Options, to_text};
+    to_text(
+        markdown,
+        Options {
+            links: Links::TextAndUrl,
+            lines: Lines::Keep,
+        },
+    )
 }
 
 /// The open document a position names, with the byte offset of the position.
@@ -1165,7 +1256,7 @@ fn duplicates(
     path: &str,
     d: &opentide_core::Diagnostic,
 ) -> Vec<lsp::DiagnosticRelatedInformation> {
-    let Some(uuid) = uuid_pattern()
+    let Some(uuid) = opentide_core::ids::finder()
         .find(&d.message)
         .map(|m| m.as_str().to_string())
     else {
@@ -1177,12 +1268,15 @@ fn duplicates(
         .iter()
         .filter(|o| o.uuid == uuid && crate::session::path_key(&o.path) != own)
         .filter_map(|o| {
-            let text = host.document(&o.path)?;
-            let span = opentide_tide::uuid_span(&text, &uuid)?;
+            let range = host
+                .with_text(&o.path, |text| {
+                    opentide_tide::uuid_span(text, &uuid).map(|span| span_range(text, span))
+                })
+                .flatten()?;
             Some(lsp::DiagnosticRelatedInformation {
                 location: lsp::Location {
                     uri: file_uri(&o.path)?,
-                    range: span_range(&text, span),
+                    range,
                 },
                 message: format!("{} {} also has this UUID", o.object_type, o.name),
             })
@@ -1574,10 +1668,11 @@ fn handle_completion(session: &mut Session, params: lsp::CompletionParams) -> Op
     // A dotted field label (`process.parent.name`) replaces the whole dotted
     // prefix already typed. Editors split words at `.`, so plain insertText
     // would append after `process.`.
-    let before = &doc.text[..offset.min(doc.text.len())];
-    let dotted = &before[opentide_core::word_start(before, |c| {
+    let before = crate::cut(&doc.text, 0, offset.min(doc.text.len()));
+    let word_start = opentide_core::word_start(before, |c| {
         c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '@' | '-')
-    })..];
+    });
+    let dotted = crate::cut(before, word_start, before.len());
     let start = lsp::Position::new(
         position.line,
         position
@@ -1832,20 +1927,6 @@ fn handle_signature_help(
 // ---------------------------------------------------------------------------
 // Navigation.
 
-#[expect(
-    clippy::expect_used,
-    reason = "a regex literal: an invalid pattern fails every test that reaches it"
-)]
-fn uuid_pattern() -> &'static regex::Regex {
-    static PATTERN: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
-    PATTERN.get_or_init(|| {
-        regex::Regex::new(
-            r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
-        )
-        .expect("UUID pattern")
-    })
-}
-
 /// The UUID under the cursor, the cursor touching either end. A column past
 /// the end of its line is on no UUID.
 pub(crate) fn uuid_at(text: &str, position: lsp::Position) -> Option<String> {
@@ -1854,7 +1935,7 @@ pub(crate) fn uuid_at(text: &str, position: lsp::Position) -> Option<String> {
         return None;
     }
     let at = offset(text, position);
-    uuid_pattern()
+    opentide_core::ids::finder()
         .find_iter(text)
         .find(|m| m.start() <= at && at <= m.end())
         .map(|m| m.as_str().to_string())
@@ -1862,10 +1943,12 @@ pub(crate) fn uuid_at(text: &str, position: lsp::Position) -> Option<String> {
 
 /// Where an object's UUID is in its file (the open buffer first), or its
 /// first line.
-fn object_location(host: &dyn WorkspaceHost, path: &str, uuid: &str) -> Option<lsp::Location> {
-    let source = host.document(path).unwrap_or_default();
-    let range = opentide_tide::uuid_span(&source, uuid)
-        .map(|span| span_range(&source, span))
+fn object_location(host: &SessionHost<'_>, path: &str, uuid: &str) -> Option<lsp::Location> {
+    let range = host
+        .with_text(path, |source| {
+            opentide_tide::uuid_span(source, uuid).map(|span| span_range(source, span))
+        })
+        .flatten()
         .unwrap_or_default();
     Some(lsp::Location {
         uri: file_uri(path)?,
@@ -1929,11 +2012,14 @@ fn handle_references(
         opentide_tide::find_refs(&workspace, &uuid)
             .into_iter()
             .filter_map(|o| {
-                let source = host.document(&o.path)?;
-                let span = opentide_tide::uuid_span(&source, &uuid)?;
+                let range = host
+                    .with_text(&o.path, |source| {
+                        opentide_tide::uuid_span(source, &uuid).map(|span| span_range(source, span))
+                    })
+                    .flatten()?;
                 Some(lsp::Location {
                     uri: file_uri(&o.path)?,
-                    range: span_range(&source, span),
+                    range,
                 })
             })
             .collect(),
@@ -2051,11 +2137,11 @@ fn handle_workspace_symbol(
             if !seen.insert(crate::session::path_key(&o.path)) {
                 continue;
             }
-            // The open buffer, else the file the index read.
-            let text = host.document(&o.path).unwrap_or_default();
             let Some(uri) = file_uri(&o.path) else {
                 continue;
             };
+            // Where the index found the name, in the open buffer or the
+            // file it read: no copy of the file (#1944).
             symbols.push(lsp::SymbolInformation {
                 name: o.name.clone(),
                 kind: lsp::SymbolKind::CLASS,
@@ -2063,22 +2149,13 @@ fn handle_workspace_symbol(
                 deprecated: None,
                 location: lsp::Location {
                     uri,
-                    range: name_token_range(&text, &o.name),
+                    range: lsp_range(o.name_range),
                 },
                 container_name: Some(o.object_type.clone()),
             });
         }
     }
     Some(lsp::WorkspaceSymbolResponse::Flat(symbols))
-}
-
-fn name_token_range(text: &str, name: &str) -> lsp::Range {
-    match text.find(name) {
-        Some(start) if !name.is_empty() => {
-            span_range(text, ByteSpan::new(start, start + name.len()))
-        }
-        _ => lsp::Range::new(lsp::Position::new(0, 0), lsp::Position::new(0, 1)),
-    }
 }
 
 /// ATT&CK ids to their pages, and UUIDs to the object's file (P3.2).
@@ -2276,9 +2353,15 @@ fn handle_code_action(
             let range = finding.diagnostic.range;
             let start = Position::new(range.start.line, range.start.character);
             let end = Position::new(range.end.line, range.end.character);
-            let replaced = suggestion_range(&finding.code, Range::new(start, end), text);
+            let (replaced, new_text) =
+                suggestion_edit(&finding.code, Range::new(start, end), suggestion, text);
+            let title = if finding.code == codes::MICROSOFT_DEFENDER_UNPROJECTED_OUTPUT {
+                format!("Append {suggestion}")
+            } else {
+                format!("Apply suggestion: {suggestion}")
+            };
             actions.push(lsp::CodeActionOrCommand::CodeAction(lsp::CodeAction {
-                title: format!("Apply suggestion: {suggestion}"),
+                title,
                 kind: Some(lsp::CodeActionKind::QUICKFIX),
                 diagnostics: Some(vec![finding.diagnostic.clone()]),
                 edit: Some(lsp::WorkspaceEdit {
@@ -2286,7 +2369,7 @@ fn handle_code_action(
                         uri.clone(),
                         vec![lsp::TextEdit {
                             range: lsp_range(replaced),
-                            new_text: suggestion.clone(),
+                            new_text,
                         }],
                     )])),
                     ..Default::default()
@@ -2498,6 +2581,22 @@ fn declare_actions(
     actions
 }
 
+/// The edit a suggestion makes: it replaces [`suggestion_range`], except
+/// `microsoft_defender_unprojected_output`'s, a `| project` appended after
+/// the query's last operator, which the finding underlines (#1885): on the
+/// same line, so a block scalar's indentation and a trailing comment stay.
+fn suggestion_edit(
+    code: &str,
+    range: Range,
+    suggestion: &str,
+    text: Option<&str>,
+) -> (Range, String) {
+    if code == codes::MICROSOFT_DEFENDER_UNPROJECTED_OUTPUT {
+        return (Range::new(range.end, range.end), format!(" {suggestion}"));
+    }
+    (suggestion_range(code, range, text), suggestion.to_owned())
+}
+
 /// What a suggestion replaces: the diagnostic's range, but for the codes
 /// whose range is a whole pipe stage (an unknown KQL operator, an unknown SPL
 /// command), only the word the stage starts with, so applying the suggestion
@@ -2510,7 +2609,7 @@ fn suggestion_range(code: &str, range: Range, text: Option<&str>) -> Range {
         return range;
     };
     let start = opentide_core::position_to_offset(text, range.start);
-    let word = text[start..]
+    let word = crate::cut(text, start, text.len())
         .split(|c: char| !(c.is_alphanumeric() || c == '_' || c == '-'))
         .next()
         .unwrap_or_default();
@@ -2539,13 +2638,19 @@ fn fix_all(session: &Session, uri: &lsp::Uri) -> Option<lsp::CodeActionOrCommand
     let mut fixes: Vec<(Range, String)> = analysis
         .diagnostics
         .iter()
-        // A file name is not an edit of the text (#215).
-        .filter(|d| d.code != FILENAME_MISMATCH)
+        // A file name is not an edit of the text (#215). The `| project`
+        // of an unprojected Defender query changes what the rule returns:
+        // only its own quick fix applies it (#1885).
+        .filter(|d| {
+            d.code != FILENAME_MISMATCH && d.code != codes::MICROSOFT_DEFENDER_UNPROJECTED_OUTPUT
+        })
         .filter_map(|d| {
             let text = session.docs.get(uri.as_str()).map(|doc| doc.text.as_str());
-            Some((
-                suggestion_range(&d.code, d.range, text),
-                d.suggestion.clone()?,
+            Some(suggestion_edit(
+                &d.code,
+                d.range,
+                d.suggestion.as_deref()?,
+                text,
             ))
         })
         .collect();
@@ -2654,7 +2759,7 @@ fn handle_prepare_rename(
     let doc = session.docs.get(params.text_document.uri.as_str())?;
     let at = offset(&doc.text, params.position);
     let definition = opentide_analysis::definition(doc.language, &doc.text, at)?;
-    if !doc.text[definition.start..].starts_with('$') {
+    if !crate::cut(&doc.text, definition.start, doc.text.len()).starts_with('$') {
         return None;
     }
     let span = opentide_analysis::references(doc.language, &doc.text, at, true)
@@ -2720,11 +2825,13 @@ fn handle_folding(
                 .map(|s| lsp::FoldingRange {
                     start_line: lines.position(s.start).line,
                     end_line: lines.position(s.end.saturating_sub(1)).line,
-                    kind: Some(if doc.text[s.start..].starts_with("/*") {
-                        lsp::FoldingRangeKind::Comment
-                    } else {
-                        lsp::FoldingRangeKind::Region
-                    }),
+                    kind: Some(
+                        if crate::cut(&doc.text, s.start, doc.text.len()).starts_with("/*") {
+                            lsp::FoldingRangeKind::Comment
+                        } else {
+                            lsp::FoldingRangeKind::Region
+                        },
+                    ),
                     ..Default::default()
                 })
                 .collect(),
@@ -2913,7 +3020,7 @@ fn requested_language(language: Option<&str>, default: LanguageId) -> Result<Lan
         Some(language) => Ok(language),
         None => {
             let known: Vec<&str> = std::iter::once(LanguageId::TideYaml)
-                .chain(LanguageId::QUERY_LANGUAGES)
+                .chain(LanguageId::QUERY_LANGUAGES.iter().copied())
                 .map(LanguageId::as_str)
                 .collect();
             Err(format!(
@@ -3110,15 +3217,21 @@ mod tests {
             suggestion_range(codes::KQL_UNKNOWN_OPERATOR, stage(4, 20), None),
             stage(4, 20)
         );
+        // Multi-byte text before and in the word: UTF-16 columns.
+        let text = "é😀 | éà-wy 😀";
+        assert_eq!(
+            suggestion_range(codes::KQL_UNKNOWN_OPERATOR, stage(6, 20), Some(text)),
+            stage(6, 11)
+        );
     }
 
     #[test]
     fn incremental_edits_apply_in_order_and_full_replace_wins() {
         let text = "name: Rule\n";
         let edited =
-            apply_content_changes(text, &[change(0, 6, 0, 6, "X"), change(0, 7, 0, 7, "Y")]);
+            apply_content_changes(text, [change(0, 6, 0, 6, "X"), change(0, 7, 0, 7, "Y")]);
         assert_eq!(edited, "name: XYRule\n");
-        assert_eq!(apply_content_changes(text, &[whole("other")]), "other");
+        assert_eq!(apply_content_changes(text, [whole("other")]), "other");
     }
 
     #[test]
@@ -3131,19 +3244,16 @@ mod tests {
         // An emoji is two UTF-16 units; column 3 is `b`.
         let src = "a😀b";
         assert_eq!(at(src, 0, 3), 1 + "😀".len());
-        assert_eq!(
-            apply_content_changes(src, &[change(0, 1, 0, 3, "X")]),
-            "aXb"
-        );
+        assert_eq!(apply_content_changes(src, [change(0, 1, 0, 3, "X")]), "aXb");
         let src = "ab\ncd";
         assert_eq!(at(src, 0, 99), 2);
         assert_eq!(at(src, 9, 0), src.len());
         assert_eq!(
-            apply_content_changes(src, &[change(0, 99, 0, 99, "Z")]),
+            apply_content_changes(src, [change(0, 99, 0, 99, "Z")]),
             "abZ\ncd"
         );
         assert_eq!(
-            apply_content_changes("ab", &[change(5, 0, 5, 0, "Z")]),
+            apply_content_changes("ab", [change(5, 0, 5, 0, "Z")]),
             "abZ"
         );
         // The CR stays in the line the splice indexes.
@@ -3156,22 +3266,22 @@ mod tests {
     #[test]
     fn edits_after_multi_byte_characters_land_where_the_editor_put_them() {
         let src = "T | where Name == \"日本\"";
-        let edited = apply_content_changes(src, &[change(0, 20, 0, 20, "x")]);
+        let edited = apply_content_changes(src, [change(0, 20, 0, 20, "x")]);
         assert_eq!(edited, "T | where Name == \"日x本\"");
-        let edited = apply_content_changes(src, &[change(0, 21, 0, 21, "x")]);
+        let edited = apply_content_changes(src, [change(0, 21, 0, 21, "x")]);
         assert_eq!(edited, "T | where Name == \"日本x\"");
         assert_eq!(
-            apply_content_changes("é😀", &[change(0, 3, 0, 3, "!")]),
+            apply_content_changes("é😀", [change(0, 3, 0, 3, "!")]),
             "é😀!"
         );
         // A column inside a surrogate pair moves past the character, never into it.
         assert_eq!(
-            apply_content_changes("😀z", &[change(0, 1, 0, 1, "!")]),
+            apply_content_changes("😀z", [change(0, 1, 0, 1, "!")]),
             "😀!z"
         );
         // A reversed range inserts at its start.
         assert_eq!(
-            apply_content_changes("abc", &[change(0, 2, 0, 1, "!")]),
+            apply_content_changes("abc", [change(0, 2, 0, 1, "!")]),
             "ab!c"
         );
     }
@@ -3230,12 +3340,51 @@ mod tests {
         assert!(!wanted(Some(&quick), &fix_all));
     }
 
+    /// A hover for a client that renders no Markdown reads as SARIF's
+    /// `help.text` does (#1957).
     #[test]
     fn plain_text_drops_markdown_marks() {
-        assert_eq!(
-            plain_text("**SecurityEvent**\n\n```kql\nT | take 1\n```\n`x` column"),
-            "SecurityEvent\n\nT | take 1\nx column"
-        );
+        for (markdown, text) in [
+            (
+                "**SecurityEvent**\n\n```kql\nT | take 1\n```\n`x` column",
+                "SecurityEvent\n\nT | take 1\n\nx column",
+            ),
+            (
+                "# Título\n\nUne **règle** et __gras__ avec `code` 😀.\n",
+                "Título\n\nUne règle et gras avec code 😀.",
+            ),
+            (
+                "Voir [la page](https://exemple.fr/é) et <https://x.y>.",
+                "Voir la page (https://exemple.fr/é) et https://x.y.",
+            ),
+            (
+                "Ligne une\nligne deux\n\nParagraphe 2",
+                "Ligne une\nligne deux\n\nParagraphe 2",
+            ),
+            (
+                "- élément un\n- élément *deux*\n\n1. premier\n2. second",
+                "- élément un\n- élément deux\n\n1. premier\n2. second",
+            ),
+            (
+                "```kql\n// é\nT | where Name == \"`é`\"\n```\nAprès",
+                "// é\nT | where Name == \"`é`\"\n\nAprès",
+            ),
+            (
+                "_italique_ et snake_case_name et **open",
+                "italique et snake_case_name et **open",
+            ),
+            (
+                "## Section\nTexte sous le titre:\n\n---\n\n**Label:** valeur",
+                "Section\n\nTexte sous le titre:\n\n---\n\nLabel: valeur",
+            ),
+            ("a\\*b &amp; c", "a*b & c"),
+            (
+                "| a | b |\n|---|---|\n| `x` | y |",
+                "| a | b |\n|---|---|\n| x | y |",
+            ),
+        ] {
+            assert_eq!(plain_text(markdown), text, "{markdown:?}");
+        }
     }
 
     #[test]

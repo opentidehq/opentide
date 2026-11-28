@@ -1,0 +1,16 @@
+---
+source: crates/opentide-datadog/tests/trees.rs
+expression: "debug_tree(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/datadog/cidr_call__invalid.datadog
+---
+QUERY@0..35
+  CIDR_CALL@0..35
+    CIDR_KW@0..4 "CIDR"
+    L_PAREN@4..5 "("
+    ATTRIBUTE@5..23
+      WORD@5..23 "@network.client.ip"
+    COMMA@23..24 ","
+    WHITESPACE@24..25 " "
+    CIDR_BLOCK@25..35
+      WORD@25..35 "10.0.0.0/8"
+35..35: missing `)` (expected COMMA, R_PAREN)

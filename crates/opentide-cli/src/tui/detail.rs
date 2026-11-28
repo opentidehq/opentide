@@ -1,5 +1,4 @@
-//! The Catalogue tab's detail pane, as lines laid out at a width
-//! (`tui_app.py`'s `diagnostic_text`, `source_view`, `object_page`): the
+//! The Catalogue tab's detail pane, as lines laid out at a width: the
 //! counts of what the language server and the last validate run report, the
 //! object as a page read from its schema, or its file with line numbers,
 //! coloured by the engine, each finding in place under its line.
@@ -19,7 +18,8 @@ use super::text::{WHITE, inside, slashed};
 /// The frame's blue.
 const FRAME: Color = Color::Blue;
 
-/// A severity's style.
+/// The style a severity is shown in: bold, and red for an error, yellow for a
+/// warning, blue for a note.
 pub fn severity_style(severity: &str) -> Style {
     let bold = Style::new().add_modifier(Modifier::BOLD);
     match severity {

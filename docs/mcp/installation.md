@@ -11,7 +11,7 @@ The server ships in the base package:
 
 ```bash
 pip install opentide              # the latest release
-pip install 'opentide==1.0.0'     # or pin it
+pip install 'opentide==1.1.0'     # or pin it
 ```
 
 Command: **`opentide mcp start`**. The server is the command line's own, in Rust (rmcp, the official Rust MCP SDK): it needs no Python package of its own.
@@ -20,7 +20,7 @@ Command: **`opentide mcp start`**. The server is the command line's own, in Rust
 Until 0.23.0 the server was Python, on the `mcp` package, which opentide declared as a base dependency (`mcp>=2.3,<3`). The Rust server replaced it, and opentide no longer depends on `mcp`.
 </Callout>
 
-All thirteen platform adapters ship in the same wheel — enable them in the repo with `opentide setup platforms`.
+All fourteen platform adapters ship in the same wheel — enable them in the repo with `opentide setup platforms`.
 
 ## Verify
 
@@ -43,6 +43,7 @@ Logging on `opentide mcp start` goes to stderr. stdout is JSON-RPC only.
 ```bash
 opentide setup mcp --cursor --yes
 opentide setup mcp --vscode --claude-code --generic --yes
+opentide setup mcp --claude-desktop --yes   # Claude Desktop's own config, outside the repository
 ```
 
 See [Configuration](./configuration.md).

@@ -1,4 +1,4 @@
-//! `opentide rules unreviewed` (`cli/rules_app.py`, `cli/services/rules.py`).
+//! `opentide rules unreviewed`.
 
 use std::path::Path;
 
@@ -6,9 +6,10 @@ use jiff::Timestamp;
 use opentide_workspace::OsFs;
 use opentide_workspace::review::{Window, unreviewed, window_text};
 
+use super::result::Status;
 use super::{Block, Report, USAGE_INVALID_VALUE, counted, json, placement};
 use crate::env::Env;
-use crate::json::Json;
+use crate::json::{Json, Object};
 use crate::render::outcome::OutcomeKind;
 use crate::render::text::Text;
 
@@ -60,7 +61,7 @@ pub fn run(
     };
     let count = findings.rules.len();
     let span = window_text(older_than);
-    let mut data: Vec<(String, Json)> = vec![
+    let mut data = Object::from([
         ("evaluated_at".into(), Json::str(evaluated_at(now))),
         ("window".into(), Json::str(older_than.trim())),
         (
@@ -68,10 +69,10 @@ pub fn run(
             Json::Int(i64::try_from(count).unwrap_or(i64::MAX)),
         ),
         ("rules".into(), json(&findings.rules)),
-    ];
+    ]);
     let mut warnings = Vec::new();
     if !findings.unreadable.is_empty() {
-        data.push((
+        data.insert(
             "unreadable".into(),
             Json::Object(
                 findings
@@ -80,7 +81,7 @@ pub fn run(
                     .map(|(path, reason)| (path.clone(), Json::str(reason)))
                     .collect(),
             ),
-        ));
+        );
         warnings = findings
             .unreadable
             .iter()
@@ -90,10 +91,10 @@ pub fn run(
             .collect();
     }
     let mut report = Report::completed(COMMAND, data);
-    report.outcome.summary = vec![(
+    report.outcome.summary = Object::from([(
         "unreviewed".into(),
         Json::Int(i64::try_from(count).unwrap_or(i64::MAX)),
-    )];
+    )]);
     report.warnings = warnings;
     if count > 0 {
         let noun = counted(count, "rule");
@@ -101,7 +102,7 @@ pub fn run(
         report.outcome_kind = Some(OutcomeKind::Warning);
     } else if !findings.any_rule_files {
         report.outcome.message = "No rules yet".into();
-        report.outcome.status = "skipped".into();
+        report.outcome.status = Status::Skipped;
         report.next("opentide new rule", "scaffold your first rule");
     } else {
         report.outcome.message = format!("Every rule reviewed in the last {span}");
@@ -129,6 +130,7 @@ pub fn run(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::commands::result::ExitCode;
 
     #[test]
     fn evaluated_at_is_rfc3339_utc_to_the_microsecond() {
@@ -149,7 +151,7 @@ mod tests {
             Timestamp::UNIX_EPOCH,
             false,
         );
-        assert_eq!(report.outcome.exit_code, 2);
+        assert_eq!(report.outcome.exit_code, ExitCode::Usage);
         let failure = report.outcome.failure.unwrap();
         assert_eq!(failure.message, "window must look like 90d, 12h, or 30m");
         assert_eq!(failure.argument.as_deref(), Some("--older-than"));
@@ -178,8 +180,8 @@ mod tests {
         let report = run("90d", root.to_str(), &env, &root, now(), false);
         std::fs::remove_dir_all(&root).unwrap();
         let outcome = &report.outcome;
-        assert_eq!(outcome.status, "skipped");
-        assert_eq!(outcome.exit_code, 0);
+        assert_eq!(outcome.status, Status::Skipped);
+        assert_eq!(outcome.exit_code, ExitCode::Success);
         assert_eq!(outcome.message, "No rules yet");
         let next: Vec<(&str, &str)> = outcome
             .next_actions
@@ -205,13 +207,13 @@ mod tests {
         let stale = run("3d", root.to_str(), &env, &root, now(), true);
         std::fs::remove_dir_all(&root).unwrap();
         let outcome = &report.outcome;
-        assert_eq!(outcome.status, "completed");
-        assert_eq!(outcome.exit_code, 0);
+        assert_eq!(outcome.status, Status::Completed);
+        assert_eq!(outcome.exit_code, ExitCode::Success);
         assert_eq!(outcome.message, "Every rule reviewed in the last 90 days");
         assert!(outcome.next_actions.is_empty());
         assert_eq!(report.outcome_kind, None);
         // The same rule, past a shorter window, is reported.
-        assert_eq!(stale.outcome.status, "completed");
+        assert_eq!(stale.outcome.status, Status::Completed);
         assert_eq!(stale.outcome.message, "1 rule unreviewed for 3 days");
         assert_eq!(stale.outcome_kind, Some(OutcomeKind::Warning));
     }

@@ -1,11 +1,10 @@
-//! Elastic Security: a rule as a Detection Engine rule body
-//! (`platforms/elastic/compile.py` `compile_rule`, `attack.py`
-//! `resolve_elastic_threat`), in the oracle's key order.
+//! Elastic Security: a rule as a Detection Engine rule body, its ATT&CK
+//! `threat` included, with its keys in a fixed order.
 //!
-//! The oracle compiles the rule's model dump (`by_alias`, `exclude_none`): the
-//! nested models' defaults are present, and their keys are in the model's
-//! field order whatever order the file writes them in. [`model_order`] puts
-//! those back, so the body does not depend on how the YAML is laid out.
+//! The nested objects are compiled as the model reads them: their defaults
+//! are present, `null` values are left out, and their keys are in the model's
+//! field order whatever order the file writes them in. [`model_order`] does
+//! that, so the body does not depend on how the YAML is laid out.
 
 use indexmap::IndexMap;
 
@@ -15,6 +14,8 @@ use crate::duration;
 use crate::json::{Json, Object};
 use crate::rule::{CompileError, Rule, codes};
 use crate::strategy::StatusStrategy;
+use opentide_core::duration::{ELASTIC_MAX_SECONDS, duration_seconds};
+use opentide_core::text;
 
 /// The platform's display name, in messages.
 pub const DISPLAY: &str = "Elastic";
@@ -116,8 +117,8 @@ const THRESHOLD: Fields = &[
     ("cardinality", None),
 ];
 
-/// An object as the oracle's model dump holds it: the model's fields in their
-/// order, defaults filled in, `null` left out.
+/// An object as its model reads it: the model's fields in their order,
+/// defaults filled in, `null` and keys the model does not have left out.
 pub fn model_order(value: &Json, fields: Fields) -> Json {
     let Some(object) = value.as_object() else {
         return value.clone();
@@ -146,15 +147,17 @@ fn list_in_order(value: Option<&Json>, fields: Fields) -> Vec<Json> {
     }
 }
 
-/// The value at `key`, unless absent or `null` (the model dump drops `None`).
+/// The value at `key`, unless absent or `null`: an explicit `null` reads as unset.
 fn get<'j>(object: &'j Json, key: &str) -> Option<&'j Json> {
     object.get(key).filter(|value| !value.is_null())
 }
 
 /// A duration field's text; anything but a string refuses the rule, naming
-/// `field` (under `configurations.elastic`).
+/// `field` (under `configurations.elastic`), and so does a duration longer
+/// than [`ELASTIC_MAX_SECONDS`], which the model refuses too (`duration`,
+/// #1982): its seconds would saturate into the payload.
 fn text_of<'j>(value: &'j Json, field: &str) -> Result<&'j str, CompileError> {
-    value.as_str().ok_or_else(|| {
+    let text = value.as_str().ok_or_else(|| {
         let kind = match value {
             Json::Null => "null",
             Json::Bool(_) => "a boolean",
@@ -171,7 +174,17 @@ fn text_of<'j>(value: &'j Json, field: &str) -> Result<&'j str, CompileError> {
             None,
         )
         .at(&path)
-    })
+    })?;
+    if duration_seconds(text, true).is_ok_and(|seconds| seconds > ELASTIC_MAX_SECONDS) {
+        let mut path = vec!["configurations", "elastic"];
+        path.extend(field.split('.'));
+        return Err(CompileError::invalid_rule(format!(
+            "configurations.elastic.{field} {text:?} is longer than a rule can be deployed \
+             with: at most {ELASTIC_MAX_SECONDS} seconds"
+        ))
+        .at(&path));
+    }
+    Ok(text)
 }
 
 /// `configurations.elastic.<field>` is absent.
@@ -192,10 +205,7 @@ fn failed(message: String) -> CompileError {
 
 /// The phrase filter of the `field`/`value` shorthand.
 fn phrase(field: &Json, value: &Json, negate: bool) -> Json {
-    let field_name = match field {
-        Json::Str(text) => text.clone(),
-        other => other.to_compact(),
-    };
+    let field_name = field.to_text();
     let mut params = Object::new();
     params.insert("query".into(), value.clone());
     let mut meta = Object::new();
@@ -282,7 +292,7 @@ fn related_integration(entry: &Json) -> Json {
     }
 }
 
-/// The rule's alert level (`_alert_level`).
+/// The rule's alert level.
 fn alert_level(block: &Json, rule: &Rule) -> &'static str {
     let response_severity = || {
         rule.response()
@@ -313,9 +323,11 @@ fn alert_level(block: &Json, rule: &Rule) -> &'static str {
 /// tenant does (`index` and `tags` unset, suppression on).
 #[derive(Debug, Clone, Default)]
 pub struct Setup {
-    /// `index`.
+    /// `index`: the index patterns of a block that sets neither `index` nor
+    /// `data_view_id` and is neither ES|QL nor machine learning.
     pub index: Option<Vec<String>>,
-    /// `tags`.
+    /// `tags`: added to every rule's tags, after the marker tag and before the
+    /// block's own.
     pub tags: Vec<String>,
     /// `suppression`: whether the tenant sends alert suppression.
     pub suppression: bool,
@@ -356,6 +368,30 @@ impl Setup {
     }
 }
 
+/// A rule compiled for one tenant ([`crate::compiler::Elastic`]): the
+/// Kibana rule, and the rule's `elastic` block as the model dumps it, which
+/// the Elasticsearch checks read before the rule is written.
+#[derive(Debug, Clone)]
+pub struct ElasticRule {
+    /// The Detection Engine body ([`compile`]).
+    pub payload: Json,
+    /// The block as the model dumps it ([`crate::preview::config_dump`]);
+    /// `None` when the rule has no filled `elastic` block.
+    pub block: Option<Json>,
+}
+
+/// The body a deploy sends for `compiled` (the connector's deploy body):
+/// `{"payload": <Kibana rule>, "block": <elastic block>}`, without `block`
+/// when there is none.
+pub fn deploy_body(compiled: &ElasticRule) -> Json {
+    let mut request = Object::new();
+    request.insert("payload".into(), compiled.payload.clone());
+    if let Some(block) = &compiled.block {
+        request.insert("block".into(), block.clone());
+    }
+    Json::Object(request)
+}
+
 /// The tag every rule opentide writes to Kibana carries first: the product
 /// name, lower case, as every other platform's marker writes it.
 pub const MARKER_TAG: &str = "opentide";
@@ -370,24 +406,9 @@ pub fn is_marker_tag(tag: &str) -> bool {
     tag == MARKER_TAG || tag == LEGACY_MARKER_TAG
 }
 
-/// Pushes each string not already there.
-fn extend_unique(into: &mut Vec<String>, items: impl IntoIterator<Item = String>) {
-    for item in items {
-        if !into.contains(&item) {
-            into.push(item);
-        }
-    }
-}
-
 fn strings(value: Option<&Json>) -> Vec<String> {
     match value {
-        Some(Json::Array(items)) => items
-            .iter()
-            .map(|item| match item {
-                Json::Str(text) => text.clone(),
-                other => other.to_compact(),
-            })
-            .collect(),
+        Some(Json::Array(items)) => items.iter().map(Json::to_text).collect(),
         _ => Vec::new(),
     }
 }
@@ -798,24 +819,22 @@ pub fn compile(cx: &Context<'_>, rule: &Rule, setup: &Setup) -> Result<Json, Com
             body.insert("exceptions_list".into(), Json::Array(lists));
         }
     }
-    let mut tags = vec![MARKER_TAG.to_owned()];
-    extend_unique(&mut tags, setup.tags.iter().cloned());
-    extend_unique(&mut tags, strings(get(block, "tags")));
+    let tags = text::unique(
+        std::iter::once(MARKER_TAG.to_owned())
+            .chain(setup.tags.iter().cloned())
+            .chain(strings(get(block, "tags"))),
+    );
     body.insert("tags".into(), tags.into());
 
     let metadata = rule.data.get("metadata");
-    let mut authors: Vec<String> = Vec::new();
     let author = metadata.and_then(|metadata| get(metadata, "author"));
     let contributors = strings(metadata.and_then(|metadata| get(metadata, "contributors")));
     let candidates = author
         .into_iter()
-        .map(|author| match author {
-            Json::Str(text) => text.clone(),
-            other => other.to_compact(),
-        })
+        .map(Json::to_text)
         .chain(contributors)
         .filter(|name| !name.is_empty());
-    extend_unique(&mut authors, candidates);
+    let authors = text::unique(candidates);
     if !authors.is_empty() {
         body.insert("author".into(), authors.into());
     }
@@ -846,10 +865,7 @@ pub fn compile(cx: &Context<'_>, rule: &Rule, setup: &Setup) -> Result<Json, Com
         .filter(|value| value.is_filled())
         .or(analysis);
     if let Some(note) = note {
-        let text = match note {
-            Json::Str(text) => text.clone(),
-            other => other.to_compact(),
-        };
+        let text = note.to_text();
         body.insert("note".into(), text.trim_end().into());
     }
     let threat = threat(cx, rule);
@@ -869,9 +885,7 @@ pub fn rule_techniques(cx: &Context<'_>, rule: &Rule) -> Vec<String> {
     {
         raw.extend(inherited);
     }
-    let mut unique = Vec::with_capacity(raw.len());
-    extend_unique(&mut unique, raw);
-    unique
+    text::unique(raw)
 }
 
 /// The `threat` array (`resolve_elastic_threat`): tactics in matrix order,

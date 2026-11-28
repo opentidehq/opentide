@@ -703,7 +703,13 @@ mod tests {
                 );
                 gates
             })
-            .map(|g| (g.subject, &query[g.span.start..g.span.end], g.suggestion))
+            .map(|g| {
+                (
+                    g.subject,
+                    query.get(g.span.start..g.span.end).unwrap(),
+                    g.suggestion,
+                )
+            })
             .collect()
     }
 
@@ -818,7 +824,7 @@ mod tests {
         );
         let join = "a `LOOKUP JOIN` condition with several fields or an expression";
         let q = "FROM a | LOOKUP JOIN t ON x, y";
-        assert_eq!(gates(q), one(join, &q[9..], None));
+        assert_eq!(gates(q), one(join, q.get(9..).unwrap(), None));
         assert_eq!(
             gates("ROW a = 1 | LIMIT 1 BY a"),
             one("`LIMIT … BY`", "LIMIT", None)

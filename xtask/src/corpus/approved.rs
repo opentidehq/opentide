@@ -151,11 +151,7 @@ fn engine_suggestions(oracle: Option<&Json>, rust: Option<&Json>, _: &[Json]) ->
     let (Some(oracle), Some(rust)) = (oracle, rust) else {
         return false;
     };
-    let reference = opentide_cli::queries::engine_help(
-        code(rust),
-        rust["message"].as_str().unwrap_or(""),
-        None,
-    );
+    let reference = opentide_cli::queries::engine_help(code(rust), None);
     oracle.pointer("/context/source") == Some(&json!("engine"))
         && !oracle["suggestion"].is_null()
         && rust["suggestion"].is_null()

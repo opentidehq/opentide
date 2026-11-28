@@ -4,14 +4,15 @@
 //!
 //! The JSON keys, in order: `code`, `severity`, `object_uuid`,
 //! `object_type`, `file_path`, `yaml_line`, `field_path`, `message`,
-//! `suggestion`, `context` (the validation issue, `validation/issues.py`),
-//! then `path`, `line`, `column`, `end_line`, `end_column`, `help`, `fix`,
-//! `explain` (the place and the step, `cli/ui/diagnostics.py` `annotate`).
+//! `suggestion`, `context` (the validation issue), then `path`, `line`,
+//! `column`, `end_line`, `end_column`, `help`, `fix`, `explain` (the place
+//! and the step, [`crate::validate::annotate::annotate`]).
 //!
 //! Positions are 1-based; columns count Unicode code points; a span runs
 //! from (`line`, `column`) up to (`end_line`, `end_column`), `end_column`
 //! exclusive and on `end_line` (`docs/cli/diagnostics.md`). `yaml_line` is
-//! the 0-based line of the value as the oracle's JSON writes it (a block's
+//! the value's line from 0 ([`opentide_schema::node::Document::yaml_line`]:
+//! a scalar's key's line, else the line the value starts on, a block's
 //! first child), kept for consumers that read it.
 //!
 //! What only the code frames read (the label under the underline, further
@@ -155,6 +156,7 @@ pub type Context = IndexMap<String, ContextValue>;
 
 /// Replace the text from (`line`, `column`) up to (`end_line`, `end_column`).
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct TextEdit {
     /// 1-based.
     pub line: usize,
@@ -168,9 +170,30 @@ pub struct TextEdit {
     pub replacement: String,
 }
 
+impl TextEdit {
+    /// Replace the text from (`line`, `column`) up to (`end_line`,
+    /// `end_column`) with `replacement`.
+    pub fn new(
+        line: usize,
+        column: usize,
+        end_line: usize,
+        end_column: usize,
+        replacement: impl Into<String>,
+    ) -> Self {
+        Self {
+            line,
+            column,
+            end_line,
+            end_column,
+            replacement: replacement.into(),
+        }
+    }
+}
+
 /// Edits that resolve a finding; `safe` ones `validate --fix` applies
 /// without review.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct Fix {
     /// Whether the fix is certainly what the author meant.
     pub safe: bool,
@@ -178,8 +201,17 @@ pub struct Fix {
     pub edits: Vec<TextEdit>,
 }
 
+impl Fix {
+    /// A fix of `edits`, in order; `safe` when it is certainly what the
+    /// author meant.
+    pub fn new(safe: bool, edits: Vec<TextEdit>) -> Self {
+        Self { safe, edits }
+    }
+}
+
 /// One finding.
 #[derive(Clone, Debug, PartialEq, Deserialize)]
+#[non_exhaustive]
 pub struct Diagnostic {
     /// The stable code, with its `opentide explain` page.
     pub code: String,
@@ -194,7 +226,8 @@ pub struct Diagnostic {
     /// The file, absolute, when one is at fault.
     #[serde(default)]
     pub file_path: Option<PathBuf>,
-    /// The value's line from 0, as the oracle's JSON writes it.
+    /// The value's line from 0: a scalar's key's line, else the line the
+    /// value starts on (`Document::yaml_line`).
     #[serde(default)]
     pub yaml_line: Option<usize>,
     /// The field at fault, keys and list indexes as strings.
@@ -276,12 +309,12 @@ impl Diagnostic {
         self.headline.as_deref().unwrap_or(&self.message)
     }
 
-    /// An error.
+    /// A finding of severity error, with no location yet.
     pub fn error(code: impl Into<String>, message: impl Into<String>) -> Self {
         Self::new(code, Severity::Error, message)
     }
 
-    /// A warning.
+    /// A finding of severity warning, with no location yet.
     pub fn warning(code: impl Into<String>, message: impl Into<String>) -> Self {
         Self::new(code, Severity::Warning, message)
     }

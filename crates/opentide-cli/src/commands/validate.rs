@@ -1,5 +1,4 @@
-//! `opentide validate` (`cli/commands/validate.py`,
-//! `cli/services/validation.py`): the checks of `opentide-workspace`, the
+//! `opentide validate`: the checks of `opentide-workspace`, the
 //! queries check on the query engines ([`crate::queries::EngineQueries`]),
 //! `--fix` and `--dry-run` as text splices, `--format`/`--output` reports,
 //! the CI sinks and `--watch` ([`super::watch`]).
@@ -15,9 +14,10 @@ use opentide_workspace::validate::{
 use opentide_workspace::{OsFs, root};
 
 use super::findings::{self, diagnostic};
+use super::result::{ExitCode, Status};
 use super::{Block, ISSUES_FOUND, Report, Terminal, placement};
 use crate::env::Env;
-use crate::envelope::{Failure, NextAction, USAGE_EXIT_CODE, code};
+use crate::envelope::{Failure, NextAction, code};
 use crate::json::{Json, Object};
 use crate::mode::Mode;
 use crate::queries::EngineQueries;
@@ -110,11 +110,7 @@ pub struct Context<'a> {
 
 /// `--queries`'s name.
 pub fn queries_name(queries: QueriesMode) -> &'static str {
-    match queries {
-        QueriesMode::Error => "error",
-        QueriesMode::Warn => "warn",
-        QueriesMode::Off => "off",
-    }
+    queries.as_str()
 }
 
 /// `--queries MODE` when not the default, so a rerun keeps it.
@@ -126,14 +122,14 @@ fn queries_flag(queries: QueriesMode) -> Option<&'static str> {
 pub fn usage(message: impl Into<String>, argument: &str, failure_code: &str) -> Report {
     let mut failure = Failure::new(failure_code, message);
     failure.argument = Some(argument.to_owned());
-    Report::failed(COMMAND, USAGE_EXIT_CODE, failure)
+    Report::failed(COMMAND, ExitCode::Usage, failure)
 }
 
 /// The usage errors the options make, before anything runs.
 pub fn refuse(args: &Args, mode: Mode) -> Option<Report> {
     let format = args.format;
     if let Some(failure) = check_report_options(format, args.output.is_some(), mode == Mode::Json) {
-        return Some(Report::failed(COMMAND, USAGE_EXIT_CODE, failure));
+        return Some(Report::failed(COMMAND, ExitCode::Usage, failure));
     }
     if let Some(refusal) = opentide_workspace::validate::unknown_types(&args.selection.types) {
         return Some(Report::usage(
@@ -210,7 +206,7 @@ pub fn refuse(args: &Args, mode: Mode) -> Option<Report> {
 }
 
 /// `path` as `validate` shows a workspace: `./` or `./sub` from inside,
-/// `../` above, absolute elsewhere (`_shown_directory`).
+/// `../` above, absolute elsewhere.
 pub fn shown_directory(path: &Path, cwd: &Path) -> String {
     let path = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
     let cwd = std::fs::canonicalize(cwd).unwrap_or_else(|_| cwd.to_path_buf());
@@ -417,7 +413,7 @@ fn change_json(change: &opentide_workspace::fix::FixChange) -> Json {
 /// `opentide validate`.
 #[expect(
     clippy::too_many_lines,
-    reason = "the command's phases in the oracle's order (validate.py validate_group), read top to bottom"
+    reason = "the command's phases in order, read top to bottom"
 )]
 pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     let started = Instant::now();
@@ -503,14 +499,14 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     } else {
         "Validation passed".to_owned()
     };
-    let mut data: Vec<(String, Json)> = vec![
+    let mut data = Object::from([
         ("checks".into(), checks_json(validation)),
         ("report".into(), super::json(&validation.report)),
-    ];
+    ]);
     if let Some(name) = check_name {
-        data.push(("check".into(), Json::str(name)));
+        data.insert("check".into(), Json::str(name));
     }
-    data.push(("workspace".into(), Json::str(root.to_string_lossy())));
+    data.insert("workspace".into(), Json::str(root.to_string_lossy()));
     let mut warnings = Vec::new();
     if validation.warned {
         warnings.push("Validation reported warnings".to_owned());
@@ -576,11 +572,11 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     if let Some(fix) = &fix_run {
         let changes = Json::Array(fix.changes.iter().map(change_json).collect());
         if args.dry_run {
-            data.push(("would_fix".into(), changes));
-            data.push((
+            data.insert("would_fix".into(), changes);
+            data.insert(
                 "diff".into(),
                 Json::str(fix.diff.clone().unwrap_or_default()),
-            ));
+            );
             if !fix.changes.is_empty() {
                 next = vec![NextAction::new(
                     rerun_fix.clone(),
@@ -595,7 +591,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
                 unwritten_lines.push(warning);
             }
             summary_json.insert("fixed".into(), Json::from(fix.changes.len()));
-            data.push(("fixed".into(), changes));
+            data.insert("fixed".into(), changes);
         }
         if !fix.changes.is_empty() || fix.unwritten_fixes > 0 || failed {
             fix_phrase_text = Some(fix_phrase(
@@ -607,17 +603,16 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
         }
     }
     let exit_code = if strict_empty {
-        1
+        ExitCode::Failure
     } else {
-        validation.exit_code()
+        ExitCode::of_service(validation.exit_code())
     };
     let mut report = Report::completed(COMMAND, data);
     report.outcome.status = if failed || strict_empty {
-        "failed"
+        Status::Failed
     } else {
-        "passed"
-    }
-    .into();
+        Status::Passed
+    };
     report.outcome.message.clone_from(&message);
     report.outcome.exit_code = exit_code;
     report.outcome.summary = summary_json.into_iter().collect();
@@ -714,7 +709,10 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
         &run.diagnostics,
         COMMAND,
         &line,
-        findings::kind_name(&report.outcome.status, exit_code == 0),
+        findings::kind_name(
+            report.outcome.status.as_str(),
+            exit_code == ExitCode::Success,
+        ),
         terminal.mode,
         cx.env,
         cx.cwd,
@@ -764,15 +762,10 @@ mod tests {
     use opentide_workspace::validate::Summary;
 
     fn summary() -> Summary {
-        Summary {
-            objects: 3,
-            errors: 0,
-            warnings: 0,
-            files: 0,
-            warning_files: 0,
-            queries: Some(1),
-            fixable: 0,
-        }
+        let mut summary = Summary::default();
+        summary.objects = 3;
+        summary.queries = Some(1);
+        summary
     }
 
     #[test]
@@ -829,7 +822,7 @@ mod tests {
         let report = refuse(&args, Mode::Json).unwrap();
         let failure = report.outcome.failure.clone().unwrap();
         assert_eq!(failure.code, USAGE_WATCH_NEEDS_TTY);
-        assert_eq!(report.outcome.exit_code, 2);
+        assert_eq!(report.outcome.exit_code, ExitCode::Usage);
         assert_eq!(report.outcome.next_actions[0].command, "opentide validate");
         // Every mode a program reads refuses it; a person's modes run it.
         for mode in [Mode::Agent, Mode::Mcp] {

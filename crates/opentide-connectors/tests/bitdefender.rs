@@ -1,5 +1,5 @@
 //! Bitdefender GravityZone deploys against a fake Incidents API: the cases
-//! of 0.28.0's `tests/test_platforms/test_bitdefender_deployer.py`, whose
+//! of 0.28.0's Bitdefender deployer tests, whose
 //! `FakeGravityZone` answers here as a wiremock responder, JSON-RPC errors
 //! in HTTP 200 included. Everything above the HTTP boundary is real: the
 //! client, the pacing, the deploy steps and `opentide-compile`'s params;
@@ -22,7 +22,7 @@ use opentide_connectors::bitdefender::{
     deploy_rule_with,
 };
 use opentide_connectors::connector::{
-    BoxFuture, DeployEvent, DeployScope, Deployer as _, TenantContext,
+    BoxFuture, CodedError, DeployEvent, DeployScope, Deployer as _, TenantContext,
 };
 use opentide_connectors::credentials::Mode;
 use opentide_connectors::pace::{Clock, Pacer};
@@ -216,7 +216,7 @@ impl Run {
 
     /// [`Run::tenant`] with the API key `key`.
     fn tenant_with_key(&self, key: &str, extra: &str, timeout: Duration) -> (Tenant, HttpClient) {
-        let setup: toml::Table = toml::from_str(&format!(
+        let setup: opentide_core::json::Object = toml::from_str(&format!(
             "ssl = false\nurl = \"{}/api\"\napi_key = \"$GRAVITYZONE_API_KEY\"\n{extra}",
             self.server.uri()
         ))
@@ -244,7 +244,7 @@ impl Run {
         rule: &RuleDeploy,
         extra: &str,
         timeout: Duration,
-    ) -> Result<RuleOutcome, ConnectorError> {
+    ) -> Result<RuleOutcome, CodedError> {
         self.deploy_with_key(rule, "key", extra, timeout)
     }
 
@@ -254,7 +254,7 @@ impl Run {
         key: &str,
         extra: &str,
         timeout: Duration,
-    ) -> Result<RuleOutcome, ConnectorError> {
+    ) -> Result<RuleOutcome, CodedError> {
         let (tenant, http) = self.tenant_with_key(key, extra, timeout);
         let cancel = CancellationToken::new();
         let cx = TenantContext {
@@ -265,7 +265,7 @@ impl Run {
         block_on(deploy_rule_with(cx, rule, &self.pacer)).unwrap()
     }
 
-    fn deploy(&self, rule: &RuleDeploy) -> Result<RuleOutcome, ConnectorError> {
+    fn deploy(&self, rule: &RuleDeploy) -> Result<RuleOutcome, CodedError> {
         self.deploy_on(rule, "", Duration::from_secs(5))
     }
 
@@ -708,7 +708,7 @@ fn a_kind_change_fails_the_update() {
 
 #[test]
 fn an_unauthorized_tenant_stops() {
-    let answers: Vec<(Scripted, &str)> = vec![
+    let answers: Vec<(Scripted, &str, &str)> = vec![
         (
             Box::new(|body: &Value| {
                 answer(
@@ -718,14 +718,17 @@ fn an_unauthorized_tenant_stops() {
             }),
             "bitdefender_tenant_unauthorized: tenant gravityzone-eu refused the API key: API Key \
              is not allowed",
+            bitdefender::TENANT_UNAUTHORIZED,
         ),
         (
             Box::new(|_: &Value| ResponseTemplate::new(401)),
             "bitdefender_tenant_unauthorized: tenant gravityzone-eu refused the API key: HTTP 401",
+            bitdefender::TENANT_UNAUTHORIZED,
         ),
         (
             Box::new(|_: &Value| answer(403, &json!({"message": "forbidden"}))),
             "bitdefender_tenant_unauthorized: tenant gravityzone-eu refused the API key: HTTP 403",
+            bitdefender::TENANT_UNAUTHORIZED,
         ),
         (
             Box::new(|body: &Value| {
@@ -733,13 +736,15 @@ fn an_unauthorized_tenant_stops() {
             }),
             "bitdefender_incidents_api_unavailable: tenant gravityzone-eu has no \
              createCustomRule (on-premises GravityZone has no Incidents API)",
+            bitdefender::INCIDENTS_API_UNAVAILABLE,
         ),
     ];
-    for (scripted, message) in answers {
+    for (scripted, message, code) in answers {
         let run = Run::new();
         run.state().script.push_back(scripted);
         let error = run.deploy(&create()).unwrap_err();
         assert_eq!(error.to_string(), message);
+        assert_eq!(error.code, Some(code));
         assert_eq!(
             run.methods().len(),
             1,
@@ -755,6 +760,7 @@ fn an_unreachable_tenant_stops() {
     let error = run
         .deploy_on(&update(FIRST_ID), "", Duration::from_millis(300))
         .unwrap_err();
+    assert_eq!(error.code, Some(bitdefender::TENANT_UNREACHABLE));
     assert!(
         error
             .to_string()
@@ -799,7 +805,10 @@ impl opentide_connectors::transport::TransportFactory for ScriptedFactory {
     fn make(
         &self,
         spec: &opentide_connectors::transport::TransportSpec<'_>,
-    ) -> Result<Arc<dyn opentide_connectors::transport::Transport>, String> {
+    ) -> Result<
+        Arc<dyn opentide_connectors::transport::Transport>,
+        opentide_connectors::transport::SetupError,
+    > {
         if spec.label.tenant == SCRIPTED {
             Ok(self.0.clone())
         } else {
@@ -815,14 +824,14 @@ impl opentide_connectors::transport::TransportFactory for ScriptedFactory {
 fn create_with(
     run: &Run,
     failures: Vec<opentide_connectors::transport::TransportFailure>,
-) -> (Result<RuleOutcome, ConnectorError>, usize) {
+) -> (Result<RuleOutcome, CodedError>, usize) {
     let scripted = Arc::new(ScriptedWire {
         failures: Mutex::new(failures.into()),
         sent: AtomicUsize::new(0),
     });
     let _installed =
         opentide_connectors::transport::install(Arc::new(ScriptedFactory(scripted.clone())));
-    let setup: toml::Table = toml::from_str(
+    let setup: opentide_core::json::Object = toml::from_str(
         "ssl = false\nurl = \"https://gz.invalid/api\"\napi_key = \"$GRAVITYZONE_API_KEY\"\n",
     )
     .unwrap();
@@ -1064,7 +1073,7 @@ fn deploy_never_lists_rules() {
 #[test]
 fn an_unset_api_key_variable_is_refused_before_any_call() {
     let run = Run::new();
-    let setup: toml::Table = toml::from_str(&format!(
+    let setup: opentide_core::json::Object = toml::from_str(&format!(
         "url = \"{}/api\"\napi_key = \"$GRAVITYZONE_API_KEY\"\n",
         run.server.uri()
     ))
@@ -1099,8 +1108,9 @@ fn an_unset_api_key_variable_is_refused_before_any_call() {
     let error = block_on(deploy_rule_with(cx, &create(), &run.pacer))
         .unwrap()
         .unwrap_err();
+    assert_eq!(error.code, None);
     assert!(
-        matches!(error, ConnectorError::MissingCredential { .. }),
+        matches!(*error.error, ConnectorError::MissingCredential { .. }),
         "{error}"
     );
     assert!(run.methods().is_empty());
@@ -1230,8 +1240,12 @@ fn an_update_with_no_answer_counts_as_a_write_the_tenant_may_have_taken() {
     let Err(error) = outcome else {
         panic!("the tenant's error: {outcome:?}");
     };
+    assert_eq!(error.code, Some(bitdefender::TENANT_UNREACHABLE));
     assert!(
-        error.text().starts_with("bitdefender_tenant_unreachable: "),
+        error
+            .error
+            .text()
+            .starts_with("bitdefender_tenant_unreachable: "),
         "{error}"
     );
     assert_eq!((http.requests_sent(), http.writes_taken()), (1, 1));

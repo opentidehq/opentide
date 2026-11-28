@@ -34,7 +34,10 @@ mod analysis;
 pub mod catalog;
 mod catalog_model;
 pub mod editor;
-mod lexer;
+// The lexer: public but hidden, as the kinds, for the crate's corpus test (`tests/`). Not an
+// API.
+#[doc(hidden)]
+pub mod lexer;
 mod parser;
 #[doc(hidden)]
 pub mod syntax;
@@ -51,6 +54,15 @@ pub mod ast;
 
 use opentide_core::{Diagnostic, Severity};
 use opentide_highlight::HighlightToken;
+
+/// `text[start..end]`, a range this crate's scanners cut: a token's or a
+/// character's bounds, or an ASCII byte's, so its ends are char boundaries. A
+/// range that is not fails a debug assertion and reads as empty.
+pub(crate) fn cut(text: &str, start: usize, end: usize) -> &str {
+    let piece = text.get(start..end);
+    debug_assert!(piece.is_some(), "{start}..{end} in {} bytes", text.len());
+    piece.unwrap_or_default()
+}
 
 /// Which sections, functions and limits a text may use (yara-l-1.0
 /// "Profiles").
@@ -142,6 +154,65 @@ pub fn infer_profile(source: &str) -> Profile {
 /// Analyze a YARA-L file (`.yaral`, `.yl2`).
 pub fn analyze(source: &str) -> AnalyzeResult {
     analyze_with(source, &Context::FILE)
+}
+
+/// The YARA-L 2.0 [`QueryEngine`](opentide_highlight::QueryEngine) (#1953):
+/// [`analyze`] behind the shared interface.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Engine;
+
+impl opentide_highlight::QueryEngine for Engine {
+    fn language(&self) -> opentide_core::LanguageId {
+        opentide_core::LanguageId::Yaral
+    }
+
+    fn analyze_for(
+        &self,
+        source: &str,
+        setting: &opentide_highlight::Setting<'_>,
+    ) -> opentide_highlight::AnalyzeResult {
+        let ctx = match setting.profile {
+            opentide_highlight::Profile::File => Context::FILE,
+            opentide_highlight::Profile::Search => Context::SEARCH,
+            opentide_highlight::Profile::Rule => Context::SECTIONS,
+        };
+        let r = analyze_with(source, &ctx);
+        opentide_highlight::AnalyzeResult {
+            diagnostics: r.diagnostics,
+            tokens: r.tokens,
+        }
+    }
+
+    fn highlight(&self, source: &str) -> Vec<HighlightToken> {
+        highlight(source)
+    }
+
+    fn hover(
+        &self,
+        source: &str,
+        offset: usize,
+        _setting: &opentide_highlight::Setting<'_>,
+    ) -> Option<String> {
+        editor::hover(source, offset)
+    }
+
+    fn completions(
+        &self,
+        source: &str,
+        offset: usize,
+        _setting: &opentide_highlight::Setting<'_>,
+    ) -> Vec<opentide_core::CompletionItem> {
+        editor::completions(source, offset)
+    }
+
+    fn signature_help(
+        &self,
+        source: &str,
+        offset: usize,
+        _setting: &opentide_highlight::Setting<'_>,
+    ) -> Option<opentide_core::SignatureHelp> {
+        editor::signature_help(source, offset)
+    }
 }
 
 /// Analyze YARA-L text where `ctx` says it runs: one parse for the
@@ -329,5 +400,48 @@ mod tests {
         assert_eq!(at("#e").as_deref(), Some("variable"));
         assert_eq!(at("2\n").as_deref(), Some("number"));
         assert_eq!(at("events").as_deref(), Some("keyword"));
+    }
+
+    /// Rules and searches with multi-byte text in every place the crate
+    /// cuts: regex literals and their escapes, strings, variables, durations,
+    /// paths being typed and calls. The ranges are checked in debug builds
+    /// (`cut`).
+    const MULTI_BYTE: &[&str] = &[
+        "rule é😀 {\n meta:\n  a = \"é😀\\é\\😀\"\n events:\n  $é.principal.hostname = /é😀\\é\\😀{é}\\Qé😀\\E\\1é/ nocase\n  re.regex($e.target.file.full_path, `(?i).*é😀`)\n match:\n  $e over 5é😀\n condition:\n  $e and $é\n}",
+        "metadata.event_type = \"é\" and principal.hostname = /\\0é\\12😀\\Cé/\nmatch:\n  principal.hostname over 1h😀\noutcome:\n  $n = count_distinct(é😀.é\n",
+        "rule r { events: $e.principal.ip = \"😀 condition: $e.é[\"😀\"]. and strings.concat(é, \"😀\",\n é",
+        "\u{feff}rule r { events: é😀 / é /😀/ $e.metadata.é😀 = re.capture(\"é\", /a{2,é}/) condition: #e > 1 }",
+    ];
+
+    #[test]
+    fn multi_byte_text_is_read_whole_everywhere() {
+        for query in MULTI_BYTE {
+            let result = analyze(query);
+            for token in &result.tokens {
+                assert!(
+                    query.get(token.span.start..token.span.end).is_some(),
+                    "{query}"
+                );
+            }
+            let _ = analyze_with(
+                query,
+                &Context {
+                    profile: Some(Profile::Search),
+                    ..Context::default()
+                },
+            );
+            for (offset, _) in query.char_indices().chain([(query.len(), ' ')]) {
+                let _ = editor::hover(query, offset);
+                let _ = editor::completions(query, offset);
+                let _ = editor::signature_help(query, offset);
+            }
+        }
+    }
+
+    #[test]
+    fn cut_reads_a_range_on_char_boundaries() {
+        assert_eq!(cut("é😀x", 0, 2), "é");
+        assert_eq!(cut("é😀x", 2, 7), "😀x");
+        assert_eq!(cut("é😀x", 7, 7), "");
     }
 }

@@ -667,6 +667,134 @@ fn a_uri_removed_and_added_in_one_change_is_there_with_its_new_text() {
     assert!(hover.to_string().contains("After"), "{hover}");
 }
 
+/// A Sentinel schedule outside the bounds Microsoft documents (#1916): the
+/// editor shows `validate`'s errors, each on its key.
+#[test]
+fn a_sentinel_schedule_out_of_bounds_is_shown() {
+    let mut session = start(Value::Null);
+    let text = "name: Sentinel rule
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000098
+  schema: rule::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: A Sentinel rule.
+configurations:
+  sentinel:
+    enabled: true
+    status: STAGING
+    query: SecurityEvent | take 1
+    scheduling:
+      frequency: 1m
+      lookback: 15d
+    alert:
+      title: Sentinel rule
+";
+    let found = open(
+        &mut session,
+        "objects/rules/sentinel.yaml",
+        "opentide-yaml",
+        text,
+    );
+    let line = |needle: &str| {
+        u64::try_from(text.lines().position(|l| l.contains(needle)).unwrap()).unwrap()
+    };
+    let at = |code: &str| -> Vec<u64> {
+        found
+            .iter()
+            .filter(|d| d["code"] == code)
+            .map(|d| {
+                assert_eq!(d["severity"], 1, "{d}");
+                d["range"]["start"]["line"].as_u64().unwrap()
+            })
+            .collect()
+    };
+    assert_eq!(at("sentinel_frequency"), [line("frequency:")], "{found:#?}");
+    assert_eq!(at("sentinel_lookback"), [line("lookback:")], "{found:#?}");
+}
+
+/// A Microsoft Defender block past the limits Microsoft documents (#1890):
+/// the editor shows the alert's advisories (`validate`'s) and a continuous
+/// rule's NRT finding (the query's analysis), where each is broken.
+#[test]
+fn a_defender_block_past_its_documented_limits_is_shown() {
+    let mut session = start(Value::Null);
+    let details = (1..=21)
+        .map(|n| format!("        Detail{n}: Column{n}\n"))
+        .collect::<Vec<_>>()
+        .concat();
+    let text = format!(
+        "name: Defender rule
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000099
+  schema: rule::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: A Defender rule.
+configurations:
+  microsoft_defender:
+    enabled: true
+    status: STAGING
+    schedule:
+      frequency: NRT
+    query: |
+      // servers only
+      DeviceProcessEvents
+    entities:
+      hosts: [{{device_id: DeviceId}}]
+    alert:
+      title: \"{{{{A}}}} {{{{B}}}} {{{{C}}}} {{{{D}}}}\"
+      custom_details:
+{details}"
+    );
+    let found = open(
+        &mut session,
+        "objects/rules/defender.yaml",
+        "opentide-yaml",
+        &text,
+    );
+    let line_of = |needle: &str| text.lines().position(|l| l.contains(needle)).unwrap();
+    let at = |code: &str| -> Vec<(u64, u64)> {
+        found
+            .iter()
+            .filter(|d| d["code"] == code)
+            .map(|d| {
+                assert_eq!(d["severity"], 2, "{d}");
+                (
+                    d["range"]["start"]["line"].as_u64().unwrap(),
+                    d["range"]["start"]["character"].as_u64().unwrap(),
+                )
+            })
+            .collect()
+    };
+    let line = |needle: &str| u64::try_from(line_of(needle)).unwrap();
+    assert_eq!(
+        at("microsoft_defender_nrt_query"),
+        [(line("// servers only"), 6)],
+        "{found:#?}"
+    );
+    assert_eq!(
+        at("microsoft_defender_placeholder_limit")
+            .into_iter()
+            .map(|(line, _)| line)
+            .collect::<Vec<_>>(),
+        [line("title:")],
+        "{found:#?}"
+    );
+    assert_eq!(
+        at("microsoft_defender_custom_details_limit")
+            .into_iter()
+            .map(|(line, _)| line)
+            .collect::<Vec<_>>(),
+        [line("custom_details:")],
+        "{found:#?}"
+    );
+}
+
 /// A Bitdefender block in the editor: `validate`'s findings (the model's
 /// `yara_empty_signature`, the advisories), and completion and hover from
 /// the criteria catalogue.
@@ -734,4 +862,137 @@ configurations:
         .filter_map(|item| item["label"].as_str())
         .collect();
     assert!(labels.contains(&"registry"), "{labels:?}");
+}
+
+/// #1884: a Microsoft Defender entity mapping Graph refuses is shown as the
+/// author types, as `validate` reports it: an error on the mapping that
+/// names the missing field, and the impacted-asset warning on an account
+/// mapped by name alone. With its key, the error goes.
+#[test]
+fn a_defender_entity_mapping_graph_refuses_is_shown_as_you_type() {
+    let mut session = start(Value::Null);
+    let head = "name: Defender rule
+metadata:
+  uuid: 00000000-0000-4000-8003-000000000097
+  schema: rule::1.0
+  version: 1
+  created: 2026-01-01
+  modified: 2026-01-02
+  tlp: clear
+description: A Defender rule.
+status: STAGING
+detection_model: 00000000-0000-4000-8002-000000000001
+configurations:
+  microsoft_defender:
+    status: STAGING
+    query: |
+      DeviceRegistryEvents
+    schedule:
+      frequency: 1H
+    entities:
+      accounts:
+        - upn: InitiatingProcessAccountUpn
+        - name: AccountName
+      registry_values:
+";
+    let uri = "objects/rules/defender.yaml";
+    let text = format!("{head}        - value_name: RegistryValueName\n");
+    let found = open(&mut session, uri, "opentide-yaml", &text);
+    let line = |needle: &str| text.lines().position(|l| l.contains(needle)).unwrap();
+    let error = found
+        .iter()
+        .find(|d| d["code"] == "microsoft_defender_entity_identifier")
+        .unwrap_or_else(|| panic!("{found:#?}"));
+    assert_eq!(error["severity"], 1, "an error: {error}");
+    assert_eq!(
+        error["range"]["start"]["line"],
+        line("- value_name: RegistryValueName"),
+        "{error}"
+    );
+    let message = error["message"].as_str().unwrap();
+    assert!(message.contains("RegKey"), "{message}");
+    let warning = found
+        .iter()
+        .find(|d| d["code"] == "microsoft_defender_impacted_asset_identifier")
+        .unwrap_or_else(|| panic!("{found:#?}"));
+    assert_eq!(warning["severity"], 2, "a warning: {warning}");
+    assert_eq!(
+        warning["range"]["start"]["line"],
+        line("- name: AccountName"),
+        "{warning}"
+    );
+
+    let keyed =
+        format!("{head}        - key: RegistryKey\n          value_name: RegistryValueName\n");
+    let replies = send(
+        &mut session,
+        json!({
+            "method": "textDocument/didChange",
+            "params": {
+                "textDocument": { "uri": uri, "version": 2 },
+                "contentChanges": [{ "text": keyed }],
+            },
+        }),
+    );
+    let published = replies
+        .iter()
+        .find(|m| m["method"] == "textDocument/publishDiagnostics")
+        .expect("didChange publishes diagnostics");
+    let after = codes(published["params"]["diagnostics"].as_array().unwrap());
+    assert!(
+        !after.contains(&"microsoft_defender_entity_identifier"),
+        "{after:?}"
+    );
+    assert!(
+        after.contains(&"microsoft_defender_impacted_asset_identifier"),
+        "{after:?}"
+    );
+}
+
+/// #2002: what a host with no filesystem supplied is digested once, not on
+/// every rebuild of the index: a keystroke in an open object digests that
+/// object alone.
+#[test]
+fn a_keystroke_digests_no_supplied_object_again() {
+    const SUPPLIED: usize = 20;
+    let documents: Vec<Value> = (0..SUPPLIED)
+        .map(|n| {
+            json!({
+                "uri": format!("objects/objectives/o-{n}.yaml"),
+                "text": format!(
+                    "name: Objectif é😀 {n}\nmetadata:\n  uuid: 00000000-0000-4000-8002-0000000001{n:02}\n  schema: objective::1.0\n"
+                ),
+            })
+        })
+        .collect();
+    let mut session = start(json!({ "workspace": { "documents": documents } }));
+    let digested = |session: &mut MessageSession, id: u64| {
+        request(session, id, "opentide/__stats", Value::Null)["digestedObjects"]
+            .as_u64()
+            .unwrap()
+    };
+    let count = |catalog: &Value| catalog["roots"][0]["objects"].as_array().unwrap().len();
+    let rule = "objects/rules/process-creation.yaml";
+    open(&mut session, rule, "opentide-yaml", RULE);
+    let catalog = request(&mut session, 2, "opentide/catalog", json!({}));
+    assert_eq!(count(&catalog), SUPPLIED + 1, "{catalog}");
+    let before = digested(&mut session, 3);
+    for version in 2..4 {
+        let text = RULE.replace("Process creation", &format!("Création é😀 {version}"));
+        send(
+            &mut session,
+            json!({
+                "method": "textDocument/didChange",
+                "params": {
+                    "textDocument": { "uri": rule, "version": version },
+                    "contentChanges": [{ "text": text }],
+                },
+            }),
+        );
+        let catalog = request(&mut session, 10 + version, "opentide/catalog", json!({}));
+        assert_eq!(count(&catalog), SUPPLIED + 1, "{catalog}");
+    }
+    // Two keystrokes: the open rule, once per rebuild of the index.
+    let after = digested(&mut session, 20);
+    assert_eq!(after - before, 2, "{before} then {after}");
 }

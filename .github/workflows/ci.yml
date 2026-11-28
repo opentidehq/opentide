@@ -36,7 +36,7 @@ run-name: >-
 #
 # Byte-for-byte comparison with the frozen Python CLI is no requirement
 # anywhere: the command line's behaviour is held by Rust-owned snapshots
-# (tests/golden/README.md), and the oracle's recordings and their comparison
+# (tests/golden/README.md), and the Python CLI's recordings and their comparison
 # tooling were retired (#1142); `cargo xtask corpus` still runs by hand.
 
 on:
@@ -97,7 +97,10 @@ env:
 #   engine-variants `engine-lint-variants`: clippy without `terminal`, on
 #                   wasm32 and on opentide-schema's `stubs`
 #   wasm            `wasm`: the browser module, the WASI server and command line
-#   full-set-Linux  `node`, `facade` and the nightly's Linux Rust jobs:
+#   facade-semver-Linux, facade-reexports-Linux
+#                   the two facade jobs that build rustdoc JSON (`cargo rustdoc
+#                   --all-features` builds each package's dependencies again)
+#   full-set-Linux  `node`, the other `facade-*` jobs and the nightly's Linux Rust jobs:
 #                   `conformance` saves it, by the nightly and on pushes to
 #                   development and integration/unified-core
 #
@@ -1117,15 +1120,20 @@ jobs:
 
 
   # The opentide facade crate (UC-5.1, #836), when its public API changes
-  # (crates/opentide/): its docs with every feature, as docs.rs builds them,
-  # and its API against the branch it merges into (cargo-semver-checks). Its
-  # tests and doctests run in `build` with the tests'
-  # features (every feature but `stubs`, which `native`'s stubs check builds).
-  facade:
-    name: Facade crate (every feature's docs, semver checks)
+  # (crates/opentide/, or the sources, Cargo.toml or build.rs of a crate it
+  # re-exports from: FACADE_SOURCES in scripts/ci/changes.py), as five
+  # parallel jobs, each restoring the full set's compiler cache: one job ran
+  # the steps back to back for 20+ minutes (2026-11-28, run 46146921946). Its
+  # tests and doctests run in `build` with the tests' features (every feature
+  # but `stubs`, which `native`'s stubs check builds).
+  #
+  # `facade-docs`: its docs with every feature, as docs.rs builds them.
+  facade-docs:
+    name: Facade crate (every feature's docs)
     needs: changes
     if: needs.changes.outputs.facade == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: read
     env:
@@ -1140,23 +1148,15 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # The merge commit and its first parent (a pull request's base
-          # branch, or the branch before a push): the semver baseline.
-          fetch-depth: 2
           persist-credentials: false
 
       # The full set's compiler cache for this OS; `conformance` saves it.
       # By content: a stale one still serves every crate that did not change.
       - name: Set up Rust
-        id: sccache
         uses: ./.github/actions/rust-setup
         with:
           tools: sccache@0.19.0
           cache: full-set-${{ runner.os }}
-
-      - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
-        with:
-          tool: cargo-semver-checks@0.51.0
 
       # docs.rs builds every feature (`[package.metadata.docs.rs]`).
       - name: rustdoc, every feature
@@ -1164,11 +1164,39 @@ jobs:
           RUSTDOCFLAGS: "-D warnings"
         run: cargo doc -p opentide --all-features --no-deps --locked
 
-      # Each feature with the command line in reach, built on its own: every
-      # other job unifies features, which hides a feature that leans on
-      # another for a dependency (`cli` once took opentide-cli from
-      # `queries`). `queries` brings the query engines from the domain layer
-      # and never the command line (#1142).
+  # `facade-features`: each feature with the command line in reach, built on
+  # its own: every other job unifies features, which hides a feature that
+  # leans on another for a dependency (`cli` once took opentide-cli from
+  # `queries`). `queries` brings the query engines from the domain layer and
+  # never the command line (#1142).
+  facade-features:
+    name: Facade crate (the cli and queries features on their own)
+    needs: changes
+    if: needs.changes.outputs.facade == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      RUSTFLAGS: "-Dwarnings"
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
+      CARGO_TERM_COLOR: always
+      RUSTC_WRAPPER: sccache
+      SCCACHE_DIR: ${{ github.workspace }}/.sccache
+      SCCACHE_CACHE_SIZE: 2G
+      # The server stays up for the whole job: its statistics are the run's.
+      SCCACHE_IDLE_TIMEOUT: "0"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Rust
+        uses: ./.github/actions/rust-setup
+        with:
+          tools: sccache@0.19.0
+          cache: full-set-${{ runner.os }}
+
       - name: The `cli` and `queries` features on their own
         run: |
           cargo check -p opentide --no-default-features --features cli --locked
@@ -1179,15 +1207,205 @@ jobs:
             exit 1
           fi
 
-      # `queries` is a default feature (a first program that validates with the
-      # default options needs the engines), so the build without them is the
-      # one that needs its own run: its tests (`cfg(not(feature = "queries"))`,
-      # the `engine_unavailable` message that names the feature) and, on the
-      # default features, the doctests that validate with the default options.
+  # `facade-tests`: `queries` is a default feature (a first program that
+  # validates with the default options needs the engines), so the build
+  # without them is the one that needs its own run: its tests
+  # (`cfg(not(feature = "queries"))`, the `engine_unavailable` message that
+  # names the feature) and, on the default features, the doctests that
+  # validate with the default options.
+  facade-tests:
+    name: Facade crate (default features, and without the query engines)
+    needs: changes
+    if: needs.changes.outputs.facade == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      RUSTFLAGS: "-Dwarnings"
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
+      CARGO_TERM_COLOR: always
+      RUSTC_WRAPPER: sccache
+      SCCACHE_DIR: ${{ github.workspace }}/.sccache
+      SCCACHE_CACHE_SIZE: 2G
+      # The server stays up for the whole job: its statistics are the run's.
+      SCCACHE_IDLE_TIMEOUT: "0"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Rust
+        uses: ./.github/actions/rust-setup
+        with:
+          tools: sccache@0.19.0
+          cache: full-set-${{ runner.os }}
+
       - name: The default features, and the facade without the query engines
         run: |
           cargo test -p opentide --doc --locked
           cargo test -p opentide --no-default-features --features compile --locked
+
+  # `facade-semver`: the facade's own API against the base.
+  #
+  # The baseline's rustdoc JSON is kept by actions/cache under
+  # `facade-semver-rustdoc-<toolchain hash>-<commit>`: a push saves its own
+  # commit's, built as cargo-semver-checks builds it (every feature, private
+  # and hidden items), and a pull request reads its base's (the first parent
+  # of the merge commit). A miss, as for a base that is not a push to a
+  # base branch, builds the baseline from a checkout, as before. Both
+  # documents are handed to cargo-semver-checks, which builds nothing.
+  facade-semver:
+    name: API against the base (cargo semver-checks)
+    needs: changes
+    if: needs.changes.outputs.facade == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      RUSTFLAGS: "-Dwarnings"
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
+      CARGO_TERM_COLOR: always
+      RUSTC_WRAPPER: sccache
+      SCCACHE_DIR: ${{ github.workspace }}/.sccache
+      SCCACHE_CACHE_SIZE: 2G
+      # The server stays up for the whole job: its statistics are the run's.
+      SCCACHE_IDLE_TIMEOUT: "0"
+      # The change and the baseline build from two directories: strip both
+      # from the paths in a key, so that identical sources share entries.
+      BASELINE_ROOT: ${{ github.workspace }}-baseline
+      SCCACHE_BASEDIRS: ${{ github.workspace }}:${{ github.workspace }}-baseline
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The merge commit and its first parent (a pull request's base
+          # branch, or the branch before a push): the semver baseline.
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Set up Rust
+        id: sccache
+        uses: ./.github/actions/rust-setup
+        with:
+          tools: sccache@0.19.0,cargo-semver-checks@0.51.0
+          cache: facade-semver-${{ runner.os }}
+
+      - name: Baseline commit
+        id: base
+        run: echo "sha=$(git rev-parse HEAD^1)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore the baseline's rustdoc JSON
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/facade-rustdoc-baseline
+          key: facade-semver-rustdoc-${{ hashFiles('rust-toolchain.toml') }}-${{ steps.base.outputs.sha }}
+
+      # Against the first parent until the crate is on crates.io; then the
+      # last published version is the baseline (docs/sdk/rust.md, Stability).
+      # A commit that adds the crate has no baseline to compare with. The
+      # baseline is checked out on its own, when its JSON is not cached, and
+      # only its crates/opentide is documented: publishing/placeholders/crates/opentide
+      # is a second `opentide`. The two trees build at once, in target
+      # directories of their own. The flags are cargo-semver-checks' own
+      # (data_generation/generate.rs), with every feature as `--all-features`
+      # asks: a document built any other way would not be the one it reads.
+      - name: API against the base (cargo semver-checks)
+        env:
+          BASELINE: ${{ steps.base.outputs.sha }}
+        run: |
+          rustdoc_json() { # <tree> <target dir> <output file>
+            (
+              cd "$1"
+              RUSTC_BOOTSTRAP=1 CARGO_TARGET_DIR="$2" cargo rustdoc --quiet --locked \
+                --package opentide --all-features --lib -- -Zunstable-options \
+                --document-private-items --document-hidden-items \
+                --output-format json --cap-lints allow
+            ) && mkdir -p "$(dirname "$3")" && cp "$2/doc/opentide.json" "$3"
+          }
+          current="${RUNNER_TEMP}/facade-rustdoc-current/opentide.json"
+          baseline_json="${RUNNER_TEMP}/facade-rustdoc-baseline/opentide.json"
+          if ! git cat-file -e "${BASELINE}:crates/opentide/Cargo.toml" 2>/dev/null; then
+            echo "::notice::crates/opentide is new in this change: no baseline API to check against"
+            exit 0
+          fi
+          pid=""
+          if [[ ! -f "${baseline_json}" ]]; then
+            git worktree add --detach "${BASELINE_ROOT}" "${BASELINE}"
+            rustdoc_json "${BASELINE_ROOT}" "${RUNNER_TEMP}/baseline-target" "${baseline_json}" &
+            pid=$!
+          fi
+          rustdoc_json "${PWD}" "${RUNNER_TEMP}/current-target" "${current}"
+          if [[ -n "${pid}" ]]; then wait "${pid}"; fi
+          cargo semver-checks --current-rustdoc "${current}" --baseline-rustdoc "${baseline_json}"
+
+      - name: Keep this commit's rustdoc JSON for the pull requests that start from it
+        if: github.event_name == 'push' && success()
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/facade-rustdoc-current
+          key: facade-semver-rustdoc-${{ hashFiles('rust-toolchain.toml') }}-${{ github.sha }}
+
+      - name: Save the compiler cache
+        if: ${{ !cancelled() }}
+        uses: ./.github/actions/sccache-save
+        with:
+          key: ${{ steps.sccache.outputs.key }}
+          save: ${{ job.status == 'success' && steps.sccache.outputs.save == 'true' }}
+
+  # `facade-reexports`: what the facade re-exports, in the crates that define it,
+  # and items that moved between them at their facade path (#1985).
+  #
+  # The script builds every crate's rustdoc JSON on both trees at once, and each
+  # once. The baseline's documents are kept by actions/cache under
+  # `facade-reexports-rustdoc-<toolchain and script hash>-<commit>`, saved by a
+  # push (`--save-dir`) and read by a pull request (`--baseline-cache`) as the
+  # facade-semver job's are; a crate the cache lacks is built.
+  facade-reexports:
+    name: Re-exported API against the base (facade_semver.py)
+    needs: changes
+    if: needs.changes.outputs.facade == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      RUSTFLAGS: "-Dwarnings"
+      CARGO_PROFILE_DEV_DEBUG: line-tables-only
+      CARGO_TERM_COLOR: always
+      RUSTC_WRAPPER: sccache
+      SCCACHE_DIR: ${{ github.workspace }}/.sccache
+      SCCACHE_CACHE_SIZE: 2G
+      # The server stays up for the whole job: its statistics are the run's.
+      SCCACHE_IDLE_TIMEOUT: "0"
+      # The change and the baseline build from two directories: strip both
+      # from the paths in a key, so that identical sources share entries.
+      BASELINE_ROOT: ${{ github.workspace }}-baseline
+      SCCACHE_BASEDIRS: ${{ github.workspace }}:${{ github.workspace }}-baseline
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The merge commit and its first parent (a pull request's base
+          # branch, or the branch before a push): the semver baseline.
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Set up Rust
+        id: sccache
+        uses: ./.github/actions/rust-setup
+        with:
+          tools: sccache@0.19.0,cargo-semver-checks@0.51.0
+          cache: facade-reexports-${{ runner.os }}
+
+      - name: Baseline commit
+        id: base
+        run: echo "sha=$(git rev-parse HEAD^1)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore the baseline's rustdoc JSON
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/facade-rustdoc-baseline
+          key: facade-reexports-rustdoc-${{ hashFiles('rust-toolchain.toml', 'scripts/ci/facade_semver.py') }}-${{ steps.base.outputs.sha }}
 
       # Against the first parent until the crate is on crates.io; then the
       # last published version is the baseline (docs/sdk/rust.md, Stability).
@@ -1195,18 +1413,42 @@ jobs:
       # baseline is checked out on its own and only its crates/opentide is
       # handed over: --baseline-rev searches the whole tree for the package,
       # and publishing/placeholders/crates/opentide is a second `opentide`.
-      - name: API against the base (cargo semver-checks)
+      - name: Re-exported API against the base (facade_semver.py)
+        env:
+          BASELINE: ${{ steps.base.outputs.sha }}
         run: |
-          baseline="$(git rev-parse HEAD^1)"
-          if git cat-file -e "${baseline}:crates/opentide/Cargo.toml" 2>/dev/null; then
-            git worktree add --detach "${RUNNER_TEMP}/opentide-baseline" "${baseline}"
-            # -p names the crate: semver-checks skips a `publish = false`
-            # crate it is not asked for by name, and still exits 0.
-            cargo semver-checks -p opentide --manifest-path crates/opentide/Cargo.toml --all-features \
-              --baseline-root "${RUNNER_TEMP}/opentide-baseline/crates/opentide"
+          if git cat-file -e "${BASELINE}:crates/opentide/Cargo.toml" 2>/dev/null; then
+            git worktree add --detach "${BASELINE_ROOT}" "${BASELINE}"
+            args=(--baseline-cache "${RUNNER_TEMP}/facade-rustdoc-baseline")
+            if [[ "${GITHUB_EVENT_NAME}" == push ]]; then
+              args+=(--save-dir "${RUNNER_TEMP}/facade-rustdoc-current")
+            fi
+            # `facade-semver` reads the facade's rustdoc JSON alone, where an
+            # item it re-exports from another crate is never present
+            # (cargo-semver-checks#638): #1902 added a variant to the exhaustive
+            # LanguageId (opentide-core) and passed. This checks, in each crate
+            # the facade re-exports from, what the facade exposes (#1911).
+            python3 scripts/ci/facade_semver.py \
+              --baseline-root "${BASELINE_ROOT}" \
+              --work-dir "${RUNNER_TEMP}/facade-semver" \
+              "${args[@]}"
           else
             echo "::notice::crates/opentide is new in this change: no baseline API to check against"
           fi
+
+      - name: Keep this commit's rustdoc JSON for the pull requests that start from it
+        if: github.event_name == 'push' && success()
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/facade-rustdoc-current
+          key: facade-reexports-rustdoc-${{ hashFiles('rust-toolchain.toml', 'scripts/ci/facade_semver.py') }}-${{ github.sha }}
+
+      - name: Save the compiler cache
+        if: ${{ !cancelled() }}
+        uses: ./.github/actions/sccache-save
+        with:
+          key: ${{ steps.sccache.outputs.key }}
+          save: ${{ job.status == 'success' && steps.sccache.outputs.save == 'true' }}
 
   # The Node binding (bindings/node, UC-5.3, #838): @opentide/opentide built
   # with napi-rs for linux-x64-gnu (the other seven targets are declared, and
@@ -1727,7 +1969,11 @@ jobs:
       - gitlab-ci-lint
       - docs
       - website
-      - facade
+      - facade-docs
+      - facade-features
+      - facade-tests
+      - facade-semver
+      - facade-reexports
       - node
       - wasm
       - textmate

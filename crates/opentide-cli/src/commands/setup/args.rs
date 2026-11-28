@@ -7,8 +7,8 @@ use clap::ValueEnum;
 use super::files::RepoOptions;
 use super::run::GroupArgs;
 use crate::tree::{
-    Ci, CiPlatform, Mcp, SetupArgs, SetupMcpArgs, SetupPipelineFields, SetupPlatformsArgs,
-    SetupRepoFields, SetupSkillsArgs, Skills,
+    Ci, CiPlatform, Mcp, SetupArgs, SetupMcpArgs, SetupPlatformsArgs, SetupRepoFields,
+    SetupSkillsArgs, Skills,
 };
 
 /// The names the command line spells `values` with, each once, in order.
@@ -40,41 +40,16 @@ impl From<&SetupRepoFields> for RepoOptions {
     }
 }
 
-impl SetupPipelineFields {
-    /// `--promotion/--no-promotion`; `None` keeps the repository's setting.
-    pub fn promotion_choice(&self) -> Option<bool> {
-        if self.promotion {
-            Some(true)
-        } else if self.no_promotion {
-            Some(false)
-        } else {
-            None
-        }
-    }
-}
-
-impl SetupPipelineFields {
-    /// `--app-token/--no-app-token`; `None` keeps what the existing pipeline has.
-    pub fn app_token_choice(&self) -> Option<bool> {
-        if self.app_token {
-            Some(true)
-        } else if self.no_app_token {
-            Some(false)
-        } else {
-            None
-        }
-    }
-}
-
-impl SetupPipelineFields {
-    /// `--prune/--no-prune`; `None` keeps what the existing pipeline has.
-    pub fn prune_choice(&self) -> Option<bool> {
-        if self.prune {
-            Some(true)
-        } else if self.no_prune {
-            Some(false)
-        } else {
-            None
+impl Ci {
+    /// The provider `--ci` writes a pipeline for; `None` for `--ci none`,
+    /// which writes none.
+    pub fn provider(self) -> Option<opentide_compile::ci::Provider> {
+        use opentide_compile::ci::Provider;
+        match self {
+            Ci::Github => Some(Provider::GitHub),
+            Ci::Gitlab => Some(Provider::GitLab),
+            Ci::Azure => Some(Provider::Azure),
+            Ci::None => None,
         }
     }
 }
@@ -95,21 +70,17 @@ impl From<&SetupArgs> for GroupArgs {
         GroupArgs {
             path: args.path.clone(),
             repo: RepoOptions::from(&args.repo),
-            ci: args
-                .ci
-                .as_ref()
-                .and_then(Ci::to_possible_value)
-                .map(|value| value.get_name().to_owned()),
+            ci: args.ci,
             pipeline: None,
-            staging: !pipeline.no_staging,
-            inflight: !pipeline.no_inflight,
-            sharing: pipeline.sharing,
-            lint_changed: pipeline.lint_changed,
-            explorer_pages: pipeline.explorer_pages,
+            staging: pipeline.staging.or(true),
+            inflight: pipeline.inflight.or(true),
+            sharing: pipeline.sharing.or(false),
+            lint_changed: pipeline.lint_changed.or(false),
+            explorer_pages: pipeline.explorer_pages.or(false),
             variable_group: pipeline.variable_group.clone(),
-            app_token: pipeline.app_token_choice(),
-            prune: pipeline.prune_choice(),
-            promotion: pipeline.promotion_choice(),
+            app_token: pipeline.app_token.get(),
+            prune: pipeline.prune.get(),
+            promotion: pipeline.promotion.get(),
             promotion_target: pipeline.promotion_target.clone(),
             python_version: pipeline.python_version.clone(),
             default_branch: pipeline.default_branch.clone(),
@@ -143,6 +114,7 @@ impl SetupPlatformsArgs {
             ("graylog", self.graylog),
             ("exabeam", self.exabeam),
             ("google_secops", self.google_secops),
+            ("datadog", self.datadog),
         ];
         opentide_schema::platforms::IDS
             .into_iter()
@@ -159,6 +131,7 @@ impl SetupMcpArgs {
             ("vscode", self.vscode),
             ("cursor", self.cursor),
             ("claude-code", self.claude_code),
+            ("claude-desktop", self.claude_desktop),
             ("generic", self.generic),
         ]
         .into_iter()
@@ -215,6 +188,76 @@ mod tests {
             panic!("not setup platforms");
         };
         assert_eq!(platforms.enabled(), ["sentinel", "google_secops"]);
+    }
+
+    #[test]
+    fn each_ci_choice_reaches_the_group_as_its_provider() {
+        use opentide_compile::ci::Provider;
+        for (word, provider) in [
+            ("github", Some(Provider::GitHub)),
+            ("gitlab", Some(Provider::GitLab)),
+            ("azure", Some(Provider::Azure)),
+            ("none", None),
+        ] {
+            let group = GroupArgs::from(&parse(&["setup", "--ci", word]));
+            assert_eq!(group.ci.and_then(Ci::provider), provider, "--ci {word}");
+        }
+        assert_eq!(GroupArgs::from(&parse(&["setup"])).ci, None);
+    }
+
+    /// The group of `setup` and the flags of `typed`, as the command line
+    /// parses them.
+    fn group_of<P: crate::tree::toggle::Pair>(typed: &[bool]) -> GroupArgs {
+        use clap::FromArgMatches as _;
+        let matches = crate::tree::toggle::spellings::matches::<P>(&["setup"], typed);
+        match Cli::from_arg_matches(&matches).map(|cli| cli.command) {
+            Ok(Some(RootCommand::Setup(args))) => GroupArgs::from(&args),
+            other => panic!("not a setup command: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn each_flag_pair_reaches_the_group_as_its_two_flags_did() {
+        // #1967: what the group got from the two booleans of each pair
+        // before they became one `Toggle`, for every spelling clap accepts:
+        // `on` and `off` are whether that flag of the pair was typed last.
+        use crate::tree::toggle::spellings::SPELLINGS;
+        use crate::tree::{
+            AppToken, ExplorerPages, Inflight, LintChanged, Promotion, Prune, Sharing, Staging,
+        };
+        let choice = |on: bool, off: bool| {
+            if on {
+                Some(true)
+            } else if off {
+                Some(false)
+            } else {
+                None
+            }
+        };
+        for (typed, _) in SPELLINGS {
+            let on = typed.last() == Some(&true);
+            let off = typed.last() == Some(&false);
+            assert_eq!(group_of::<Staging>(typed).staging, !off, "{typed:?}");
+            assert_eq!(group_of::<Inflight>(typed).inflight, !off, "{typed:?}");
+            assert_eq!(group_of::<Sharing>(typed).sharing, on, "{typed:?}");
+            assert_eq!(group_of::<LintChanged>(typed).lint_changed, on, "{typed:?}");
+            assert_eq!(
+                group_of::<ExplorerPages>(typed).explorer_pages,
+                on,
+                "{typed:?}"
+            );
+            assert_eq!(
+                group_of::<AppToken>(typed).app_token,
+                choice(on, off),
+                "{typed:?}"
+            );
+            assert_eq!(group_of::<Prune>(typed).prune, choice(on, off), "{typed:?}");
+            assert_eq!(
+                group_of::<Promotion>(typed).promotion,
+                choice(on, off),
+                "{typed:?}"
+            );
+        }
     }
 
     #[test]

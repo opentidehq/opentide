@@ -1,6 +1,5 @@
-//! `opentide setup` and its file-writing subcommands (`setup_app.py`,
-//! `services/setup/orchestrator.py`, `services/setup/plan.py`,
-//! `ui/setup.py`): the target, the confirmation, the steps run through a
+//! `opentide setup` and its file-writing subcommands: the target, the
+//! confirmation, the steps run through a
 //! [`Stage`], `--plan`, and what a person reads afterwards (the files
 //! written, the outcome line, the numbered next steps).
 
@@ -10,14 +9,17 @@ use super::files::{self, StepResult, strings};
 use super::skills::{self as install, Catalogue};
 use super::stage::Stage;
 use super::{CiArgs, Context, bad_parameter, confirm_write, needs_input_for, resolved};
+use crate::commands::result::{ExitCode, Status};
 use crate::commands::{Block, Report};
-use crate::envelope::{Failure, NextAction, USAGE_EXIT_CODE, code};
+use crate::envelope::{Failure, NextAction, code};
 use crate::json::{Json, Object};
 use crate::mode::Mode;
 use crate::render::outcome::OutcomeKind;
 use crate::render::table::columns;
 use crate::render::text::Text;
+use crate::tree::Ci;
 use anstyle::Style;
+use opentide_compile::ci::Provider;
 
 /// Where a subcommand writes, as the command line names it.
 #[derive(Clone, Debug, Default)]
@@ -108,7 +110,7 @@ impl Step {
     }
 }
 
-/// The target the group and the subcommand agree on (`_group_path`), as
+/// The target the group and the subcommand agree on, as
 /// given (`.` by default), `--repo` standing in for `.`.
 pub(crate) fn target(
     cx: &Context<'_>,
@@ -190,7 +192,7 @@ fn retitled(mut report: Box<Report>, command: &str) -> Box<Report> {
 fn usage(command: &str, failure_code: &str, message: &str) -> Report {
     Report::failed(
         command,
-        USAGE_EXIT_CODE,
+        ExitCode::Usage,
         Failure::new(failure_code, message),
     )
 }
@@ -203,7 +205,7 @@ fn empty_option(command: &str, flag: &str, value: Option<&str>) -> Option<Report
         let mut failure =
             Failure::new(code::USAGE_INVALID_VALUE, format!("{flag} cannot be empty"));
         failure.argument = Some(flag.to_owned());
-        Report::failed(command, USAGE_EXIT_CODE, failure)
+        Report::failed(command, ExitCode::Usage, failure)
     })
 }
 
@@ -258,8 +260,8 @@ fn wizard(command: &str, cx: &Context<'_>, flags: &str, kind: Wizard, shown: &Pa
 }
 
 /// The refusal of a wizard nobody can answer here, naming the flags that
-/// answer it: `json_flags` under `--json` (`_require_scripted_for_json`),
-/// `flags` elsewhere (`_refuse_wizard`).
+/// answer it: `json_flags` under `--json`,
+/// `flags` elsewhere.
 fn wizard_refusal(
     command: &str,
     cx: &Context<'_>,
@@ -333,7 +335,7 @@ fn interactive(
                             command,
                             vec![("steps".to_owned(), Json::Array(Vec::new()))],
                         );
-                        report.outcome.status = "skipped".into();
+                        report.outcome.status = Status::Skipped;
                         "Setup cancelled; no files were written"
                             .clone_into(&mut report.outcome.message);
                         report.warnings = warnings;
@@ -343,7 +345,7 @@ fn interactive(
                         let args = GroupArgs {
                             path: shown_text,
                             repo: answers.repo.clone(),
-                            ci: answers.ci.clone(),
+                            ci: answers.ci,
                             staging: answers.staging,
                             inflight: answers.inflight,
                             sharing: answers.sharing,
@@ -354,7 +356,7 @@ fn interactive(
                             skills: answers.skills.clone().unwrap_or_default(),
                             ..GroupArgs::default()
                         };
-                        let run_ci = args.ci.is_some();
+                        let run_ci = args.ci.and_then(Ci::provider);
                         execute(
                             &args,
                             &root,
@@ -411,7 +413,7 @@ fn promotion_enabled(root: &Path, cx: &Context<'_>) -> bool {
 /// A cancelled confirmation.
 fn cancelled(command: &str, message: &str) -> Report {
     let mut report = Report::completed(command, Vec::new());
-    report.outcome.status = "skipped".into();
+    report.outcome.status = Status::Skipped;
     message.clone_into(&mut report.outcome.message);
     report
 }
@@ -450,13 +452,13 @@ pub fn subcommand(step: &Step, paths: &Paths, yes: bool, plan: bool, cx: &Contex
                 return usage(
                     &command,
                     code::USAGE_MISSING_OPTION,
-                    "Choose at least one MCP host (--vscode, --cursor, --claude-code, --generic)",
+                    "Choose at least one MCP host (--vscode, --cursor, --claude-code, --claude-desktop, --generic)",
                 );
             }
             return wizard(
                 &command,
                 cx,
-                "--vscode, --cursor, --claude-code",
+                "--vscode, --cursor, --claude-code, --claude-desktop",
                 Wizard::Mcp,
                 &shown,
             );
@@ -671,6 +673,8 @@ fn run_step(command: &str, step: &Step, root: &Path, cx: &Context<'_>) -> Report
     if let Err(message) = stage.commit() {
         return Report::error(command, message);
     }
+    let mut result = result;
+    unwritten(&mut stage, &mut result);
     finish(command, result, None, root, cx)
 }
 
@@ -710,14 +714,55 @@ fn vscode(options: super::vscode::Options, shown: &Path, plan: bool, cx: &Contex
 /// `report` as a run that failed with `message`: status `failed`, exit 1,
 /// `command_failed` (a service's `status: failed` with `_exit_code`).
 fn failed(report: &mut Report, message: &str) {
-    report.outcome.status = "failed".into();
+    report.outcome.status = Status::Failed;
     message.clone_into(&mut report.outcome.message);
-    report.outcome.exit_code = 1;
+    report.outcome.exit_code = ExitCode::Failure;
     report.outcome.failure = Some(Failure::new(crate::commands::COMMAND_FAILED, message));
     report.outcome.next_actions.clear();
 }
 
 // ---------------------------------------------------------------- the plan
+
+/// Moves each file of the user's the last commit could not write
+/// ([`Stage::write_outside`]) from `result`'s `files` to its `skipped`, with
+/// a warning: the run goes on, and says what it left undone.
+fn unwritten(stage: &mut Stage, result: &mut StepResult) {
+    let failed = stage.unwritten();
+    if failed.is_empty() {
+        return;
+    }
+    let (mut files, mut skipped, mut warnings) = (
+        result.strings("files"),
+        result.strings("skipped"),
+        result.strings("warnings"),
+    );
+    for (path, error) in failed {
+        let shown = files::shown(&path);
+        files.retain(|file| *file != shown);
+        // Nothing to reopen Claude Desktop for.
+        if result.text("claude_desktop_config") == Some(shown.as_str()) {
+            result.take("claude_desktop_config");
+            let advice = result
+                .text("advice")
+                .unwrap_or_default()
+                .replace(super::desktop::ADVICE, "")
+                .trim()
+                .to_owned();
+            if advice.is_empty() {
+                result.take("advice");
+            } else {
+                result.set("advice", Json::str(advice));
+            }
+        }
+        skipped.push(shown.clone());
+        warnings.push(format!(
+            "Could not write {shown} ({error}); add the opentide server to it by hand."
+        ));
+    }
+    result.set("files", strings(&files));
+    result.set("skipped", strings(&skipped));
+    result.set("warnings", strings(&warnings));
+}
 
 /// One step of a plan: its files and warnings.
 #[derive(Clone, Debug)]
@@ -737,13 +782,23 @@ fn planned(stage: &mut Stage, root: &Path, name: &str, result: &StepResult) -> P
             change.path.to_string_lossy().into_owned(),
         )
     });
+    // A file of the user's outside the repository is listed by its path.
     let mut files: Vec<(String, &'static str)> = changes
         .into_iter()
-        .map(|change| (super::shown_relative(&change.path, root), change.action))
+        .map(|change| {
+            let shown = if stage.is_outside(&change.path) {
+                files::shown(&change.path)
+            } else {
+                super::shown_relative(&change.path, root)
+            };
+            (shown, change.action)
+        })
         .collect();
     for skipped in result.strings("skipped") {
         let path = Path::new(&skipped);
-        let shown = if path.is_absolute() {
+        let shown = if stage.is_outside(path) {
+            skipped.clone()
+        } else if path.is_absolute() {
             super::shown_relative(path, root)
         } else {
             skipped.replace('\\', "/")
@@ -839,13 +894,13 @@ fn plan_report(
         count("create"),
         count("merge")
     );
-    report.outcome.summary = vec![
+    report.outcome.summary = Object::from([
         ("create".into(), Json::from(count("create"))),
         ("merge".into(), Json::from(count("merge"))),
         ("skip".into(), Json::from(count("skip"))),
         ("delete".into(), Json::from(count("delete"))),
         ("steps".into(), Json::from(steps.len())),
-    ];
+    ]);
     report.outcome_kind = Some(OutcomeKind::Plan);
     report.warnings = warnings;
     if cx.mode != Mode::Json {
@@ -905,6 +960,9 @@ const PURPOSES: [(&str, &str); 14] = [
 ];
 
 fn purpose(path: &str) -> &'static str {
+    if path.ends_with(super::desktop::CONFIG_FILE) {
+        return "MCP server for Claude Desktop";
+    }
     PURPOSES
         .iter()
         .find(|(prefix, _)| path.starts_with(prefix) || path == prefix.trim_end_matches('/'))
@@ -1001,8 +1059,7 @@ fn outcome(
         };
         let mut actions = Vec::new();
         if !here {
-            let word = shlex::try_quote(shown.trim_end_matches('/'))
-                .map_or_else(|_| shown.clone(), std::borrow::Cow::into_owned);
+            let word = opentide_core::text::shell_word(shown.trim_end_matches('/'));
             actions.push(NextAction::new(format!("cd {word}"), ""));
         }
         actions.push(NextAction::new(
@@ -1063,7 +1120,7 @@ fn summary(result: &StepResult) -> Vec<Text> {
     lines
 }
 
-/// A finished run's report (`_emit_setup`).
+/// A finished run's report.
 fn finish(
     command: &str,
     mut result: StepResult,
@@ -1114,7 +1171,7 @@ fn finish(
             let message = report.outcome.message.clone();
             failed(&mut report, &message);
         } else {
-            report.outcome.status = status;
+            report.outcome.status = Status::from_text(&status);
         }
     }
     report
@@ -1134,7 +1191,7 @@ pub struct GroupArgs {
     /// `--name`, `--org`, `--description`, `--platform`.
     pub repo: files::RepoOptions,
     /// `--ci`: `github`, `gitlab`, `azure` or `none`.
-    pub ci: Option<String>,
+    pub ci: Option<Ci>,
     /// The pipeline's options, as `setup ci` takes them (its provider unused).
     pub pipeline: Option<CiArgs>,
     /// `--staging/--no-staging`.
@@ -1179,9 +1236,9 @@ pub struct GroupArgs {
     pub yes: bool,
 }
 
-/// The CI flags given without a pipeline to write (`_ignored_ci_flag_warnings`).
+/// The CI flags given without a pipeline to write.
 fn ignored_ci_flags(args: &GroupArgs) -> Vec<String> {
-    if args.ci.as_deref().is_some_and(|ci| ci != "none") {
+    if args.ci.and_then(Ci::provider).is_some() {
         return Vec::new();
     }
     let mut ignored = Vec::new();
@@ -1242,12 +1299,13 @@ struct Recorder<'a> {
 }
 
 impl Recorder<'_> {
-    fn record(&mut self, name: &str, result: StepResult) -> Result<(), String> {
+    fn record(&mut self, name: &str, mut result: StepResult) -> Result<(), String> {
         if self.plan {
             let planned = planned(&mut self.stage, &self.root, name, &result);
             self.planned.push(planned);
         } else {
             self.stage.commit()?;
+            unwritten(&mut self.stage, &mut result);
         }
         for warning in result.strings("warnings") {
             if !self.warnings.contains(&warning) {
@@ -1271,11 +1329,8 @@ pub fn group(args: &GroupArgs, cx: &Context<'_>) -> Report {
         || !args.repo.platforms.is_empty();
     let answers =
         !args.mcp.is_empty() || !args.skills.is_empty() || args.plugin || args.hooks || args.env;
-    let only_ci_none = args.ci.as_deref() == Some("none")
-        && !args.yes
-        && !has_repo
-        && !args.vscode_setup
-        && !answers;
+    let only_ci_none =
+        args.ci == Some(Ci::None) && !args.yes && !has_repo && !args.vscode_setup && !answers;
     let scripted = args.plan
         || (!only_ci_none
             && (args.yes || has_repo || args.ci.is_some() || args.vscode_setup || answers));
@@ -1307,9 +1362,9 @@ pub fn group(args: &GroupArgs, cx: &Context<'_>) -> Report {
         }
     }
     let consent = args.yes || args.plan;
-    let run_ci = args.ci.as_deref().is_some_and(|ci| ci != "none");
+    let run_ci = args.ci.and_then(Ci::provider);
     // The other steps asked for, like --ci, leave the scaffold alone.
-    let run_repo = has_repo || (consent && !run_ci && !answers && !args.vscode_setup);
+    let run_repo = has_repo || (consent && run_ci.is_none() && !answers && !args.vscode_setup);
     with_catalogue(cx, |catalogue| {
         execute(
             args,
@@ -1348,7 +1403,7 @@ fn execute(
     root: &Path,
     warnings: Vec<String>,
     run_repo: bool,
-    run_ci: bool,
+    run_ci: Option<Provider>,
     name: Option<&str>,
     cx: &Context<'_>,
     catalogue: &Catalogue<'_>,
@@ -1417,7 +1472,7 @@ fn run_steps(
     recorder: &mut Recorder<'_>,
     args: &GroupArgs,
     run_repo: bool,
-    run_ci: bool,
+    run_ci: Option<Provider>,
 ) -> Result<(), Box<Report>> {
     const COMMAND: &str = "setup";
     let cx = recorder.cx;
@@ -1432,7 +1487,9 @@ fn run_steps(
             statuses,
         )
         .map_err(|report| retitled(report, COMMAND))?;
-        if !run_ci && let Some(override_) = override_ {
+        if run_ci.is_none()
+            && let Some(override_) = override_
+        {
             let mut written = Vec::new();
             if let Some(content) = override_.content {
                 recorder.stage.write(&override_.path, content);
@@ -1459,8 +1516,8 @@ fn run_steps(
             files::platforms(&mut recorder.stage, &root, &args.repo.platforms).map_err(failed)?;
         recorder.record("platforms", result).map_err(failed)?;
     }
-    if run_ci {
-        let mut ci_args = base_ci_args(args);
+    if let Some(provider) = run_ci {
+        let mut ci_args = base_ci_args(args, provider);
         ci_args.promotion = args.promotion;
         ci_args.promotion_target.clone_from(&args.promotion_target);
         let result = ci_step(&mut recorder.stage, &ci_args, &root, cx)
@@ -1542,14 +1599,8 @@ fn run_steps(
     Ok(())
 }
 
-/// The group's pipeline options as `setup ci` takes them.
-fn base_ci_args(args: &GroupArgs) -> CiArgs {
-    use opentide_compile::ci::Provider;
-    let provider = match args.ci.as_deref() {
-        Some("gitlab") => Provider::GitLab,
-        Some("azure") => Provider::Azure,
-        _ => Provider::GitHub,
-    };
+/// The group's pipeline options as `setup ci` takes them, for `provider`.
+fn base_ci_args(args: &GroupArgs, provider: Provider) -> CiArgs {
     CiArgs {
         provider,
         path: None,
@@ -1625,6 +1676,10 @@ mod tests {
         assert_eq!(purpose(".vscode/extensions.json"), "editor settings");
         assert_eq!(purpose(".gitlab-ci.yml"), "GitLab CI pipeline");
         assert_eq!(purpose(".opentide/hooks/pre-commit"), "");
+        assert_eq!(
+            purpose("/home/é😀/.config/Claude/claude_desktop_config.json"),
+            "MCP server for Claude Desktop"
+        );
     }
 
     #[test]
@@ -1662,7 +1717,7 @@ mod tests {
             ]
         );
         let with_ci = GroupArgs {
-            ci: Some("github".into()),
+            ci: Some(Ci::Github),
             ..args
         };
         assert!(ignored_ci_flags(&with_ci).is_empty());
@@ -1684,13 +1739,7 @@ mod tests {
     }
 
     fn files_of(report: &Report) -> Vec<(String, String, String)> {
-        let Some(Json::Array(steps)) = report
-            .outcome
-            .data
-            .iter()
-            .find(|(k, _)| k == "steps")
-            .map(|(_, v)| v)
-        else {
+        let Some(Json::Array(steps)) = report.outcome.data.get("steps") else {
             return Vec::new();
         };
         let mut out = Vec::new();
@@ -1740,7 +1789,12 @@ mod tests {
             ..GroupArgs::default()
         };
         let plan = group(&args, &cx);
-        assert_eq!(plan.outcome.exit_code, 0, "{:?}", plan.outcome);
+        assert_eq!(
+            plan.outcome.exit_code,
+            ExitCode::Success,
+            "{:?}",
+            plan.outcome
+        );
         let listed = files_of(&plan);
         assert!(
             listed.contains(&("repo".into(), ".gitignore".into(), "merge".into())),
@@ -1785,7 +1839,12 @@ mod tests {
             },
             &cx,
         );
-        assert_eq!(run.outcome.exit_code, 0, "{:?}", run.outcome);
+        assert_eq!(
+            run.outcome.exit_code,
+            ExitCode::Success,
+            "{:?}",
+            run.outcome
+        );
         for (_, path, action) in &listed {
             if action != "skip" {
                 assert!(cwd.join(path).is_file(), "{path}");

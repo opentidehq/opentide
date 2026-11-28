@@ -1,16 +1,20 @@
 //! A deploy that sends, on the platforms a golden case cannot replay (UC-4.6,
 //! #979): Sentinel (MSAL's and azure-core's random request ids), a Carbon
 //! Black Cloud report built or updated (the SDK stamps it with the time) and
-//! HarfangLab (the oracle's deploy stopped before any request). Each runs here
+//! HarfangLab (opentide 0.23.0's deploy stopped before any request). Each runs here
 //! through the CLI flow, the ids and the time fixed, against the requests of
 //! its connector's cassette recorded from the Python client
 //! (`tests/cassettes/<platform>/deploy.json`): the rules of a workspace,
 //! through the deploy plan, the tenant's batch and the connector, send
-//! exactly the requests the oracle sent. The flow's own rules (a refused
+//! exactly the requests opentide 0.23.0 sent. The flow's own rules (a refused
 //! rule fails alone and the run goes on; deployment state written
 //! only when the platform accepted the rule) run against a scripted deployer.
 
 #![cfg(unix)]
+#![expect(
+    clippy::string_slice,
+    reason = "a test: a slice off a char boundary panics, and a panic is a failed test"
+)]
 #![expect(clippy::unwrap_used, reason = "a test: a failed set-up is a failure")]
 
 use std::io::Write as _;
@@ -19,6 +23,7 @@ use std::sync::{Arc, Mutex};
 
 use opentide_cassette::{Cassette, Mode, Proxy, Redaction};
 use opentide_cli::commands::deploy_send::{Args, Context, Lines, Sent, run};
+use opentide_cli::commands::result::{ExitCode, Status};
 use opentide_cli::env::Env;
 use opentide_cli::json::Json;
 use opentide_cli::render::outcome::Console;
@@ -108,7 +113,18 @@ fn deploy(ws: &Path, platform: &str, env: &Env, registry: &Registry, now: i64) -
 
 /// Runs `deploy` with `args` in `ws`, with `env`, at `now`.
 fn deploy_with(ws: &Path, args: &Args, env: &Env, registry: &Registry, now: i64) -> (Sent, String) {
-    let buffer = Buffer::default();
+    deploy_into(ws, args, env, registry, now, &Buffer::default())
+}
+
+/// [`deploy_with`], its lines written to `buffer`.
+fn deploy_into(
+    ws: &Path,
+    args: &Args,
+    env: &Env,
+    registry: &Registry,
+    now: i64,
+    buffer: &Buffer,
+) -> (Sent, String) {
     let lines = Lines {
         sink: Arc::new(Mutex::new(buffer.clone())),
         console: Console {
@@ -183,14 +199,16 @@ fn replay_with(
     (proxy, env, ca)
 }
 
-/// The result's value at `key`.
+/// The value of the result's own key `key`.
 fn value<'a>(sent: &'a Sent, key: &str) -> &'a Json {
-    &sent
-        .result
-        .iter()
-        .find(|(name, _)| name == key)
+    sent.result
+        .get(key)
         .unwrap_or_else(|| panic!("no {key} in {:?}", sent.result))
-        .1
+}
+
+/// The value of the result's summary at `key`.
+fn summary<'a>(sent: &'a Sent, key: &str) -> Option<&'a Json> {
+    sent.result.summary.get(key)
 }
 
 /// Each result row's `status` and `error`.
@@ -247,8 +265,8 @@ fn sentinel_retires_a_rule_as_the_python_deployer_did() {
     let (sent, stderr) = deploy(ws.path(), "sentinel", &env, &sentinel_registry(), 0);
     assert_eq!(proxy.verify(), Vec::new());
     assert_eq!(rows(&sent), [("deployed".to_owned(), None)]);
-    assert_eq!(value(&sent, "status"), &Json::str("completed"));
-    assert_eq!(value(&sent, "_exit_code"), &Json::Int(0));
+    assert_eq!(sent.result.status, Status::Completed);
+    assert_eq!(sent.result.exit, ExitCode::Success);
     assert!(
         stderr.contains(
             "Deploying to sentinel / soc · 1 rule\n  [1/1] ✓ deleted   Encoded PowerShell"
@@ -288,15 +306,15 @@ fn sentinel_stops_the_run_on_a_refusal_with_the_platforms_words() {
         error.starts_with("DELETE https://management.azure.com/"),
         "{error}"
     );
-    assert_eq!(value(&sent, "_exit_code"), &Json::Int(1));
-    assert_eq!(value(&sent, "_failure_code"), &Json::str("issues_found"));
+    assert_eq!(sent.result.exit, ExitCode::Failure);
+    assert_eq!(sent.result.failure.code.as_deref(), Some("issues_found"));
     assert_eq!(
         value(&sent, "error"),
         &Json::str(format!(
             "Deployment to sentinel failed on Encoded PowerShell: {error}"
         ))
     );
-    let Json::Str(message) = value(&sent, "message") else {
+    let Some(message) = &sent.result.message else {
         panic!("a message")
     };
     assert!(
@@ -331,8 +349,8 @@ const CBC_NOW: i64 = 1_793_088_000;
 #[test]
 fn carbon_black_creates_the_report_as_the_python_deployer_did() {
     let ws = cbc_workspace();
-    // The watchlists read twice, the other rule's report, the new report, the watchlist.
-    let (proxy, env, _ca) = replay("carbon_black/deploy", &[0, 1, 2, 3, 4], "CBC_TOKEN");
+    // The watchlists read once (#1932), the other rule's report, the new report, the watchlist.
+    let (proxy, env, _ca) = replay("carbon_black/deploy", &[0, 1, 2, 3], "CBC_TOKEN");
     let (sent, stderr) = deploy(
         ws.path(),
         "carbon_black_cloud",
@@ -352,7 +370,7 @@ fn carbon_black_creates_the_report_as_the_python_deployer_did() {
 fn carbon_black_updates_the_report_as_the_python_deployer_did() {
     let ws = cbc_workspace();
     // The watchlists, both reports, then the rule's own report replaced.
-    let (proxy, env, _ca) = replay("carbon_black/deploy", &[5, 6, 7, 8, 9], "CBC_TOKEN");
+    let (proxy, env, _ca) = replay("carbon_black/deploy", &[4, 5, 6, 7], "CBC_TOKEN");
     let (sent, _) = deploy(
         ws.path(),
         "carbon_black_cloud",
@@ -362,7 +380,7 @@ fn carbon_black_updates_the_report_as_the_python_deployer_did() {
     );
     assert_eq!(proxy.verify(), Vec::new());
     assert_eq!(rows(&sent), [("deployed".to_owned(), None)]);
-    assert_eq!(value(&sent, "status"), &Json::str("completed"));
+    assert_eq!(sent.result.status, Status::Completed);
 }
 
 #[test]
@@ -393,7 +411,7 @@ fn harfanglab_deletes_a_yara_file_as_the_python_client_did() {
     );
     assert_eq!(proxy.verify(), Vec::new());
     assert_eq!(rows(&sent), [("deployed".to_owned(), None)]);
-    assert_eq!(value(&sent, "_exit_code"), &Json::Int(0));
+    assert_eq!(sent.result.exit, ExitCode::Success);
 }
 
 /// A HarfangLab tenant that still sets the removed `type` fails before
@@ -431,7 +449,7 @@ fn harfanglab_refuses_a_tenant_that_still_sets_type() {
             &opentide_connectors::builtin(),
             0,
         );
-        assert_eq!(value(&sent, "status"), &Json::str("failed"), "{kind}");
+        assert_eq!(sent.result.status, Status::Failed, "{kind}");
         assert_eq!(rows(&sent), [("not_attempted".to_owned(), None)], "{kind}");
         let Json::Array(failures) = value(&sent, "failures") else {
             panic!("no failures")
@@ -515,7 +533,7 @@ fn harfanglab_deploys_sigma_and_yara_to_one_tenant() {
     );
     rt.block_on(server.verify());
     assert_eq!(rows(&sent), vec![("deployed".to_owned(), None); 4]);
-    assert_eq!(value(&sent, "status"), &Json::str("completed"));
+    assert_eq!(sent.result.status, Status::Completed);
 }
 
 /// A registered platform that forwards to a [`Scripted`] the test keeps.
@@ -531,24 +549,34 @@ impl Platform for Forward {
     }
 }
 
-/// A deployer that answers each request in turn with `outcomes`.
+/// A deployer that answers each request in turn with `outcomes`: every
+/// tenant's, or with `only` the requests of that tenant alone (the others
+/// answered `Ok`), as tenants deploy at once.
 struct Scripted {
     id: &'static str,
     outcomes: Mutex<std::collections::VecDeque<Result<(), ConnectorError>>>,
     seen: Mutex<Vec<(String, Operation)>>,
+    only: Option<&'static str>,
 }
 
 impl Deployer for Scripted {
     fn deploy<'a>(
         &'a self,
-        _cx: TenantContext<'a>,
+        cx: TenantContext<'a>,
         request: &'a DeployRequest,
     ) -> BoxFuture<'a, Result<DeployOutcome, DeployError>> {
         self.seen
             .lock()
             .unwrap()
             .push((request.rule_id.clone(), request.operation));
-        let next = self.outcomes.lock().unwrap().pop_front().unwrap_or(Ok(()));
+        let next = if self
+            .only
+            .is_none_or(|tenant| cx.tenant.label.tenant == tenant)
+        {
+            self.outcomes.lock().unwrap().pop_front().unwrap_or(Ok(()))
+        } else {
+            Ok(())
+        };
         deploying(async move { next.map(|()| DeployOutcome::new(None, request.operation)) })
     }
 }
@@ -589,10 +617,21 @@ fn scripted(
     platform: &'static str,
     outcomes: Vec<Result<(), ConnectorError>>,
 ) -> (Registry, &'static Scripted) {
+    scripted_on(platform, None, outcomes)
+}
+
+/// [`scripted`], `outcomes` answering only the requests of the tenant
+/// `only` when it is set.
+fn scripted_on(
+    platform: &'static str,
+    only: Option<&'static str>,
+    outcomes: Vec<Result<(), ConnectorError>>,
+) -> (Registry, &'static Scripted) {
     let scripted: &'static Scripted = Box::leak(Box::new(Scripted {
         id: platform,
         outcomes: Mutex::new(outcomes.into()),
         seen: Mutex::new(Vec::new()),
+        only,
     }));
     let mut registry = Registry::new();
     registry.register(Box::new(Forward(scripted))).unwrap();
@@ -665,8 +704,8 @@ fn a_sentinel_technique_warning_reaches_the_run_once_per_rule() {
         "one request each tenant"
     );
     assert_eq!(
-        value(&sent, "warnings"),
-        &Json::Array(vec![Json::str("Some rules reported deployment warnings")])
+        sent.result.warnings,
+        ["Some rules reported deployment warnings"]
     );
     let log = String::from_utf8(captured.0.lock().unwrap().clone()).unwrap();
     assert_eq!(
@@ -715,8 +754,8 @@ fn a_refused_rule_fails_alone_and_the_rules_after_it_are_deployed() {
             )),
             "{stderr}"
         );
-        assert_eq!(value(&sent, "_exit_code"), &Json::Int(1), "{platform}");
-        assert_eq!(value(&sent, "status"), &Json::str("failed"), "{platform}");
+        assert_eq!(sent.result.exit, ExitCode::Failure, "{platform}");
+        assert_eq!(sent.result.status, Status::Failed, "{platform}");
         assert_eq!(
             value(&sent, "error"),
             &Json::str(
@@ -771,8 +810,9 @@ fn a_tenant_refusing_the_credentials_stops_only_its_own_rules() {
     );
     let tenants = &second[second.find("[[tenants]]").unwrap()..];
     std::fs::write(&config, format!("{text}\n{tenants}")).unwrap();
-    let (registry, deployer) = scripted(
+    let (registry, deployer) = scripted_on(
         "sentinel",
+        Some("soc"),
         vec![Err(ConnectorError::Authentication {
             platform: "sentinel".into(),
             tenant: "soc".into(),
@@ -833,11 +873,7 @@ fn a_tenant_refusing_the_credentials_stops_only_its_own_rules() {
         )
     );
     // No rule failed: the run's code is not `issues_found`.
-    assert!(
-        !sent.result.iter().any(|(key, _)| key == "_failure_code"),
-        "{:?}",
-        sent.result
-    );
+    assert!(sent.result.failure.code.is_none(), "{:?}", sent.result);
     assert_eq!(
         value(&sent, "deployed"),
         &Json::Array(vec![Json::str("sentinel")])
@@ -855,7 +891,7 @@ fn a_rule_refused_before_planning_is_listed_with_the_failures() {
     let env = Env::from_pairs([("AZURE_CLIENT_SECRET", SECRET)]);
     let (sent, _) = deploy(ws.path(), "sentinel", &env, &registry, 0);
     assert_eq!(deployer.seen.lock().unwrap().len(), 2);
-    assert_eq!(value(&sent, "_exit_code"), &Json::Int(1));
+    assert_eq!(sent.result.exit, ExitCode::Failure);
     let Json::Array(failures) = value(&sent, "failures") else {
         panic!("no failures")
     };
@@ -893,7 +929,7 @@ fn an_interrupt_stops_the_run_and_keeps_the_failures_before_it() {
     let statuses: Vec<String> = rows(&sent).into_iter().map(|(status, _)| status).collect();
     assert_eq!(statuses, ["failed", "failed", "not_attempted"]);
     assert_eq!(deployer.seen.lock().unwrap().len(), 2);
-    assert_eq!(value(&sent, "_exit_code"), &Json::Int(1));
+    assert_eq!(sent.result.exit, ExitCode::Failure);
     assert_eq!(
         value(&sent, "error"),
         &Json::str("Deployment to sentinel failed on Second: interrupted")
@@ -941,11 +977,13 @@ fn a_refused_rule_on_one_platform_leaves_the_next_platform_to_deploy() {
         id: "sentinel",
         outcomes: Mutex::new([Err(refused)].into()),
         seen: Mutex::new(Vec::new()),
+        only: None,
     }));
     let splunk: &'static Scripted = Box::leak(Box::new(Scripted {
         id: "splunk",
         outcomes: Mutex::new(std::collections::VecDeque::new()),
         seen: Mutex::new(Vec::new()),
+        only: None,
     }));
     let mut registry = Registry::new();
     registry.register(Box::new(Forward(sentinel))).unwrap();
@@ -980,7 +1018,7 @@ fn a_refused_rule_on_one_platform_leaves_the_next_platform_to_deploy() {
             .map(|(platform, status)| (platform.to_owned(), status.to_owned()))
     );
     assert_eq!(splunk.seen.lock().unwrap().len(), 1);
-    assert_eq!(value(&sent, "_exit_code"), &Json::Int(1));
+    assert_eq!(sent.result.exit, ExitCode::Failure);
     // Both platforms' sends ran on the process's one runtime (#1558).
     assert_eq!(opentide_connectors::runtime::started(), 1);
 }
@@ -1010,17 +1048,17 @@ fn a_platform_without_tenants_is_refused_before_anything_is_sent() {
     let env = Env::from_pairs(Vec::<(String, String)>::new());
     let (sent, stderr) = deploy(dir.path(), "sentinel", &env, &Registry::new(), 0);
     assert_eq!(stderr, "");
-    assert_eq!(value(&sent, "status"), &Json::str("failed"));
+    assert_eq!(sent.result.status, Status::Failed);
     assert_eq!(
-        value(&sent, "message"),
-        &Json::str(
+        sent.result.message.as_deref(),
+        Some(
             "Cannot deploy: sentinel has no tenants configured in \
              .opentide/configurations/platforms/sentinel.toml"
         )
     );
-    assert_eq!(value(&sent, "_exit_code"), &Json::Int(1));
+    assert_eq!(sent.result.exit, ExitCode::Failure);
     let report = sent.report();
-    assert_eq!(report.outcome.exit_code, 1);
+    assert_eq!(report.outcome.exit_code, ExitCode::Failure);
     assert_eq!(
         report.outcome.failure.map(|failure| failure.code),
         Some("command_failed".to_owned())
@@ -1046,13 +1084,13 @@ fn a_platform_with_no_rule_to_deploy_is_skipped_and_counts_the_blocks_left_out()
     let env = Env::from_pairs([("GITHUB_ACTIONS", "true")]);
     let (sent, stderr) = deploy(ws.path(), "sentinel", &env, &Registry::new(), 0);
     assert_eq!(stderr, "");
-    assert_eq!(value(&sent, "status"), &Json::str("skipped"));
+    assert_eq!(sent.result.status, Status::Skipped);
     assert_eq!(
-        value(&sent, "message"),
-        &Json::str("No rules to deploy for this platform")
+        sent.result.message.as_deref(),
+        Some("No rules to deploy for this platform")
     );
     let report = sent.report();
-    assert_eq!(report.outcome.exit_code, 0);
+    assert_eq!(report.outcome.exit_code, ExitCode::Success);
     assert_eq!(
         report.outcome_line.as_deref(),
         Some("No rule has a status PREVIEW or RELEASE deploys · 1 rule in DESIGN")
@@ -1127,7 +1165,7 @@ fn deployment_state_refuses_or_skips_rules_before_any_request() {
             .contains("records object_uuid \"x\""),
         "{rows:?}"
     );
-    assert_eq!(value(&sent, "_exit_code"), &Json::Int(1));
+    assert_eq!(sent.result.exit, ExitCode::Failure);
     assert!(stderr.contains("[2/3] · skipped "), "{stderr}");
     // `--persist-state-externally` lifts the CI refusal: the create would be sent.
     let persist = Args {
@@ -1172,8 +1210,8 @@ fn usage_errors_and_selections_that_match_nothing_are_refused_before_planning() 
     };
     let (sent, _) = deploy_with(ws.path(), &base, &none, &Registry::new(), 0);
     assert_eq!(
-        value(&sent, "_failure_code"),
-        &Json::str("usage_missing_option")
+        sent.result.failure.code.as_deref(),
+        Some("usage_missing_option")
     );
     let typo = Args {
         strategies: vec!["PREVEW".into()],
@@ -1181,10 +1219,10 @@ fn usage_errors_and_selections_that_match_nothing_are_refused_before_planning() 
     };
     let (sent, _) = deploy_with(ws.path(), &typo, &none, &Registry::new(), 0);
     assert_eq!(
-        value(&sent, "_failure_code"),
-        &Json::str("usage_invalid_choice")
+        sent.result.failure.code.as_deref(),
+        Some("usage_invalid_choice")
     );
-    assert_eq!(value(&sent, "_failure_suggestion"), &Json::str("PREVIEW"));
+    assert_eq!(sent.result.failure.suggestion.as_deref(), Some("PREVIEW"));
     let plan = Env::from_pairs([("DEPLOYMENT_PLAN", "STAGING")]);
     let preview = Args {
         strategies: vec!["PREVIEW".into()],
@@ -1192,8 +1230,8 @@ fn usage_errors_and_selections_that_match_nothing_are_refused_before_planning() 
     };
     let (sent, _) = deploy_with(ws.path(), &preview, &plan, &Registry::new(), 0);
     assert_eq!(
-        value(&sent, "_failure_code"),
-        &Json::str("usage_invalid_value")
+        sent.result.failure.code.as_deref(),
+        Some("usage_invalid_value")
     );
     let unmatched = Args {
         all: false,
@@ -1202,14 +1240,14 @@ fn usage_errors_and_selections_that_match_nothing_are_refused_before_planning() 
     };
     let (sent, _) = deploy_with(ws.path(), &unmatched, &none, &Registry::new(), 0);
     assert_eq!(value(&sent, "scope"), &Json::str("selected"));
-    assert_eq!(value(&sent, "_exit_code"), &Json::Int(1));
+    assert_eq!(sent.result.exit, ExitCode::Failure);
     // No git checkout: the changed rules cannot be read.
     let changed = Args {
         all: false,
         ..preview.clone()
     };
     let (sent, _) = deploy_with(ws.path(), &changed, &none, &Registry::new(), 0);
-    let Json::Str(message) = value(&sent, "message") else {
+    let Some(message) = &sent.result.message else {
         panic!("a message")
     };
     assert!(message.contains("needs a git checkout"), "{message}");
@@ -1219,7 +1257,7 @@ fn usage_errors_and_selections_that_match_nothing_are_refused_before_planning() 
         ..preview.clone()
     };
     let (sent, _) = deploy_with(ws.path(), &other, &none, &Registry::new(), 0);
-    assert_eq!(value(&sent, "status"), &Json::str("skipped"));
+    assert_eq!(sent.result.status, Status::Skipped);
     assert_eq!(value(&sent, "platform"), &Json::str("crowdstrike"));
 }
 
@@ -1254,11 +1292,9 @@ fn every_platform_without_tenants_can_be_skipped_with_skip_unconfigured() {
     };
     let env = Env::from_pairs(Vec::<(String, String)>::new());
     let (sent, _) = deploy_with(dir.path(), &args, &env, &Registry::new(), 0);
-    assert_eq!(value(&sent, "status"), &Json::str("skipped"));
-    assert!(
-        matches!(value(&sent, "message"), Json::Str(text) if text.starts_with("Skipped deploy: "))
-    );
-    assert_eq!(sent.report().outcome.exit_code, 0);
+    assert_eq!(sent.result.status, Status::Skipped);
+    assert!(matches!(&sent.result.message, Some(text) if text.starts_with("Skipped deploy: ")));
+    assert_eq!(sent.report().outcome.exit_code, ExitCode::Success);
 }
 
 /// A workspace of `platform` whose rules each have their id `state` on the
@@ -1372,10 +1408,10 @@ fn sysdig_forgets_a_rule_to_disable_the_tenant_lost_and_stops_on_a_refused_read(
             .join(format!(".opentide/states/deployment/{denied}.json"))
             .is_file()
     );
-    assert_eq!(value(&sent, "status"), &Json::str("failed"));
+    assert_eq!(sent.result.status, Status::Failed);
     assert_eq!(
-        value(&sent, "warnings"),
-        &Json::Array(vec![Json::str("Some rules reported deployment warnings")])
+        sent.result.warnings,
+        ["Some rules reported deployment warnings"]
     );
 }
 
@@ -1543,6 +1579,130 @@ fn exabeam_records_a_created_rule_and_fails_one_whose_name_is_taken() {
     );
 }
 
+/// A Datadog tenant on `server`, and the environment with its keys.
+fn datadog_stand(server: &wiremock::MockServer) -> (String, Env) {
+    let setup = format!(
+        "site = \"datadoghq.eu\"\napi_key = \"$DD_API_KEY\"\napp_key = \"$DD_APP_KEY\"\napi_url = \
+         \"{}/\"\n[tenants.setup.notifications]\nsoc = \"@slack-soc\"\n",
+        server.uri()
+    );
+    let env = Env::from_pairs([
+        ("DD_API_KEY".to_owned(), "api".to_owned()),
+        ("DD_APP_KEY".to_owned(), "app".to_owned()),
+    ]);
+    (setup, env)
+}
+
+const DATADOG_BLOCK: &str = "  datadog:\n    schema: platform::datadog::1.0\n    status: \
+                             PRODUCTION\n    queries:\n      - query: source:okta \
+                             @evt.outcome:FAILURE\n    cases:\n      - condition: a > 5\n        \
+                             notify: [soc]\n";
+
+/// Datadog through the command line (RFC rfc-datadog-cloud-siem §8.2): a
+/// created rule is validated first and its id recorded; the next run reads
+/// the rule by that id, finds it unchanged and sends no `PUT`, and its row
+/// says `unchanged`.
+#[test]
+fn datadog_records_a_created_rule_and_leaves_an_unchanged_one_alone() {
+    use wiremock::matchers::{body_partial_json, header, method, path};
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let server = rt.block_on(wiremock::MockServer::start());
+    let (setup, env) = datadog_stand(&server);
+    let uuid = "00000000-0000-4000-8099-0000000000d1";
+    let ws = workspace(
+        "datadog",
+        "eu",
+        &setup,
+        &[(
+            "a.yaml",
+            rule("Failed logins", uuid, "Failed logins.", DATADOG_BLOCK),
+        )],
+    );
+    let body: std::sync::Arc<std::sync::Mutex<Option<serde_json::Value>>> =
+        std::sync::Arc::default();
+    let kept = std::sync::Arc::clone(&body);
+    rt.block_on(async {
+        wiremock::Mock::given(method("POST"))
+            .and(path("/api/v2/security_monitoring/rules/validation"))
+            .and(header("DD-API-KEY", "api"))
+            .respond_with(wiremock::ResponseTemplate::new(204))
+            .expect(1)
+            .mount(&server)
+            .await;
+        wiremock::Mock::given(method("POST"))
+            .and(path("/api/v2/security_monitoring/rules"))
+            .and(body_partial_json(serde_json::json!({
+                "name": "Failed logins",
+                "type": "log_detection",
+                "cases": [{"status": "high", "condition": "a > 5",
+                           "notifications": ["@slack-soc"]}],
+            })))
+            .respond_with(move |request: &wiremock::Request| {
+                let sent: serde_json::Value = serde_json::from_slice(&request.body).unwrap();
+                *kept.lock().unwrap() = Some(sent.clone());
+                let mut stored = sent;
+                stored["id"] = "abc-def-ghi".into();
+                stored["version"] = 1.into();
+                wiremock::ResponseTemplate::new(200).set_body_json(stored)
+            })
+            .expect(1)
+            .mount(&server)
+            .await;
+    });
+    let (sent, _) = deploy(
+        ws.path(),
+        "datadog",
+        &env,
+        &opentide_connectors::builtin(),
+        0,
+    );
+    rt.block_on(server.verify());
+    assert_eq!(rows(&sent)[0].0, "deployed", "{:?}", rows(&sent));
+    let state = std::fs::read_to_string(
+        ws.path()
+            .join(format!(".opentide/states/deployment/{uuid}.json")),
+    )
+    .unwrap();
+    assert!(state.contains("\"eu\": \"abc-def-ghi\""), "{state}");
+    // The second run: the rule Datadog holds is the one the run would write.
+    let mut stored = body.lock().unwrap().clone().unwrap();
+    stored["id"] = "abc-def-ghi".into();
+    stored["version"] = 1.into();
+    stored["isDefault"] = false.into();
+    rt.block_on(async {
+        server.reset().await;
+        wiremock::Mock::given(method("GET"))
+            .and(path("/api/v2/security_monitoring/rules/abc-def-ghi"))
+            .respond_with(wiremock::ResponseTemplate::new(200).set_body_json(stored))
+            .expect(1)
+            .mount(&server)
+            .await;
+        for verb in ["PUT", "POST", "DELETE"] {
+            wiremock::Mock::given(method(verb))
+                .respond_with(wiremock::ResponseTemplate::new(500))
+                .expect(0)
+                .mount(&server)
+                .await;
+        }
+    });
+    let (sent, _) = deploy(
+        ws.path(),
+        "datadog",
+        &env,
+        &opentide_connectors::builtin(),
+        0,
+    );
+    rt.block_on(server.verify());
+    let Json::Array(results) = value(&sent, "results") else {
+        panic!("no results")
+    };
+    assert_eq!(
+        results[0].get("action").and_then(Json::as_str),
+        Some("unchanged"),
+        "{results:?}"
+    );
+}
+
 /// An Exabeam rule the tenant lost, while git ignores deployment state: it
 /// is not created again, the run warns that it was missing and fails the
 /// rule with the state's refusal.
@@ -1696,8 +1856,8 @@ fn bitdefender_records_created_rules_and_fails_one_whose_name_is_taken() {
     assert!(!recorded.contains("cccccccccccccccccccccccc"), "{recorded}");
     // The lost rule's `bitdefender_rule_recreated` warning.
     assert_eq!(
-        value(&sent, "warnings"),
-        &Json::Array(vec![Json::str("Some rules reported deployment warnings")])
+        sent.result.warnings,
+        ["Some rules reported deployment warnings"]
     );
 }
 
@@ -1743,8 +1903,8 @@ fn bitdefender_forgets_a_lost_rule_to_disable_and_stops_a_tenant_refusing_the_ke
             .exists()
     );
     assert_eq!(
-        value(&sent, "warnings"),
-        &Json::Array(vec![Json::str("Some rules reported deployment warnings")])
+        sent.result.warnings,
+        ["Some rules reported deployment warnings"]
     );
 
     let refusing = rt.block_on(wiremock::MockServer::start());
@@ -1837,8 +1997,8 @@ fn assert_failed_before_any_rule(sent: &Sent, platform: &str, tenant: &str, erro
     assert_eq!(theirs[0].get("id"), None, "{failures:?}");
     let text = theirs[0].get("error").and_then(Json::as_str).unwrap();
     assert!(text.starts_with(error), "{text}");
-    assert_eq!(value(sent, "_exit_code"), &Json::Int(1));
-    assert_eq!(value(sent, "status"), &Json::str("failed"));
+    assert_eq!(sent.result.exit, ExitCode::Failure);
+    assert_eq!(sent.result.status, Status::Failed);
 }
 
 /// The run of a platform whose only tenant, `tenant`, failed on a rule: the
@@ -1981,7 +2141,7 @@ fn pushed_files(ws: &Path, files: &[&str]) {
 }
 
 /// A RELEASE deploy on a push promotes the rule the push changed (UC-4.6c,
-/// #979); an invalid promotion target ends the run as the oracle's
+/// #979); an invalid promotion target ends the run as opentide 0.23.0's
 /// `sys.exit(1)` does: exit 1, no document, the failed step on stderr.
 #[test]
 fn a_push_promotes_its_rules_and_an_invalid_target_exits_without_a_document() {
@@ -2192,7 +2352,7 @@ fn push_promotes_the_whole_folder(extra: &[(&str, &str)]) -> bool {
 /// VS Code's integrated terminal (`TERM_PROGRAM=vscode`) does not turn on
 /// debug promotion: a push promotes the rule it changed and leaves the other
 /// rule files in the rules folder as they are, as it does from any terminal.
-/// The oracle promoted every rule file from that terminal.
+/// Opentide 0.23.0 promoted every rule file from that terminal.
 #[test]
 fn a_push_from_vs_codes_terminal_promotes_only_the_changed_rules() {
     assert!(!push_promotes_the_whole_folder(&[(
@@ -2635,6 +2795,725 @@ fn graylog_deploy_resolves_the_tenants_stream_and_notification_aliases() {
     assert!(shard_of(ws.path(), unknown).is_empty(), "{err}");
 }
 
+/// The `api_request` of each rule `deploy --dry-run --json` shows for
+/// `platform` in `ws`, as compact JSON text (`Json` keeps the members'
+/// order: the text is the bytes a deploy would send), with the tenant the
+/// entry names.
+fn dry_run_requests(ws: &Path, platform: &str) -> Vec<(String, Option<String>)> {
+    let (code, stdout, stderr) = cli(
+        ws,
+        &[
+            "--json",
+            "deploy",
+            "--dry-run",
+            "--platform",
+            platform,
+            "--strategy",
+            "PREVIEW",
+            "--strategy",
+            "RELEASE",
+            "--all",
+            "--keep-deprecated",
+        ],
+        &[],
+    );
+    assert_eq!(code, 0, "{stdout}\n{stderr}");
+    let document = Json::parse(&stdout).unwrap();
+    let result = document.get("result").unwrap_or(&document);
+    result
+        .get("payloads")
+        .and_then(|payloads| payloads.get(platform))
+        .and_then(Json::as_array)
+        .unwrap()
+        .iter()
+        .map(|entry| {
+            let request = entry
+                .get("api_request")
+                .unwrap_or_else(|| panic!("no api_request: {}", entry.to_compact()));
+            (
+                request.to_compact(),
+                entry
+                    .get("tenant")
+                    .and_then(Json::as_str)
+                    .map(str::to_owned),
+            )
+        })
+        .collect()
+}
+
+/// The body a Sentinel deploy sends to each tenant is, byte for byte, the
+/// `api_request` the dry run shows for that tenant (#1952: both compile
+/// through `compiler::Sentinel`; #2081: the dry run compiles for the run's
+/// tenants, not a placeholder): the exclusions that apply everywhere, the one
+/// scoped to that tenant, their `let` statements, the non-ASCII text of the
+/// query, and an exclusion scoped to a tenant the run does not reach, left
+/// out of both; and the `[[modifiers]]` scoped to that tenant, which the dry
+/// run ignored before. The dry run shows the first tenant's body and
+/// names it, so each tenant of the run is put first in turn.
+#[test]
+fn a_sentinel_deploy_sends_the_body_its_dry_run_shows() {
+    let block = format!(
+        "{SENTINEL_STAGING}    exclusions:\n      - query: '| where Account != \"é😀\"'\n        \
+         reason: Everywhere\n        let:\n          allowed: \"svc é\"\n      - query: '| \
+         where Computer != \"elsewhere\"'\n        reason: Another tenant\n        tenant: \
+         elsewhere\n      - query: '| where Computer != \"soc-only é\"'\n        reason: The \
+         SOC\n        tenant: soc\n      - query: '| where Computer != \"lab-only 😀\"'\n        \
+         reason: The lab\n        tenant: lab\n"
+    )
+    .replace(
+        "query: SecurityEvent\n",
+        "query: SecurityEvent | where Account == 'é😀'\n",
+    );
+    let text = rule(
+        "Ünïcode rule 😀",
+        "00000000-0000-4000-8099-000000000201",
+        "d.",
+        &block,
+    );
+    for (first, second) in [("soc", "lab"), ("lab", "soc")] {
+        let ws = workspace(
+            "sentinel",
+            first,
+            SENTINEL_SETUP,
+            &[("a.yaml", text.clone())],
+        );
+        let config = ws
+            .path()
+            .join(".opentide/configurations/platforms/sentinel.toml");
+        let mut toml = std::fs::read_to_string(&config).unwrap();
+        // A modifier scoped to `soc` alone: in `soc`'s body, not `lab`'s.
+        toml.push_str(&format!(
+            "\n[[tenants]]\nname = \"{second}\"\nstrategies = [\"PREVIEW\", \
+             \"RELEASE\"]\n[tenants.setup]\n{SENTINEL_SETUP}\n[[modifiers]]\nname = \"soc \
+             every two hours\"\n[modifiers.conditions]\ntenants = [\"soc\"]\n\
+             [modifiers.modifications]\n\"scheduling.frequency\" = \"PT2H\"\n\
+             \"scheduling.lookback\" = \"PT2H\"\n"
+        ));
+        std::fs::write(&config, toml).unwrap();
+        let shown = dry_run_requests(ws.path(), "sentinel");
+        let recording: &'static TenantRecording =
+            Box::leak(Box::new(TenantRecording(Mutex::new(Vec::new()))));
+        let mut registry = Registry::new();
+        registry
+            .register(Box::new(TenantRecorded("sentinel", recording)))
+            .unwrap();
+        let env = Env::from_pairs([("AZURE_CLIENT_SECRET", SECRET)]);
+        let (sent, err) = deploy(ws.path(), "sentinel", &env, &registry, 0);
+        assert_eq!(rows(&sent), vec![("deployed".to_owned(), None); 2], "{err}");
+        let bodies = recording.0.lock().unwrap().clone();
+        assert_eq!(bodies.len(), 2, "{err}");
+        let body_of = |tenant: &str| -> String {
+            let (_, body) = bodies.iter().find(|(name, _)| name == tenant).unwrap();
+            String::from_utf8(body.clone()).unwrap()
+        };
+        let (body, other) = (body_of(first), body_of(second));
+        let (own, foreign) = if first == "soc" {
+            ("soc-only é", "lab-only 😀")
+        } else {
+            ("lab-only 😀", "soc-only é")
+        };
+        assert!(
+            body.contains("é😀") && body.contains("let allowed") && body.contains(own),
+            "{body}"
+        );
+        assert!(
+            !body.contains("elsewhere") && !body.contains(foreign),
+            "{body}"
+        );
+        assert!(other.contains(foreign) && !other.contains(own), "{other}");
+        let soc = if first == "soc" { &body } else { &other };
+        let lab = if first == "soc" { &other } else { &body };
+        let every_two_hours = "\"queryFrequency\":\"PT02H00M00S\"";
+        assert!(soc.contains(every_two_hours), "{soc}");
+        assert!(!lab.contains(every_two_hours), "{lab}");
+        assert_eq!(shown, vec![(body, Some(first.to_owned()))]);
+    }
+}
+
+/// The create body a Graylog deploy sends is, byte for byte, the body of the
+/// `api_request` the dry run shows for that tenant (#1952: both compile
+/// through `compiler::Graylog`), on a server of the version a dry run
+/// compiles for: the tenant's stream and notification ids, its tags, and the
+/// non-ASCII text of the rule.
+#[test]
+fn a_graylog_deploy_sends_the_body_its_dry_run_shows() {
+    const STREAM: &str = "65f1c0de2a3b4c5d6e7f2222";
+    const NOTIFICATION: &str = "65f1c0de2a3b4c5d6e7f3333";
+    let preview = opentide_compile::graylog::PREVIEW_VERSION;
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let server = graylog_stand(&rt, &format!("{}.{}.{}", preview.0, preview.1, preview.2));
+    let setup = format!(
+        "url = \"{}\"\ntoken = \"$GRAYLOG_TOKEN\"\nstreams = [\"endpoint\"]\ntags = \
+         [\"tenant-tag\"]\n[tenants.setup.stream_ids]\nendpoint = \"{STREAM}\"\n\
+         [tenants.setup.notification_ids]\npager = \"{NOTIFICATION}\"\n",
+        server.uri()
+    );
+    let block = format!(
+        "{}    notifications:\n      - pager\n",
+        graylog_block("STAGING", "message:\"é😀\"")
+    );
+    let text = rule(
+        "Ünïcode rule 😀",
+        "00000000-0000-4000-8099-000000000202",
+        "Dé😀.",
+        &block,
+    );
+    let ws = workspace("graylog", "lab", &setup, &[("a.yaml", text)]);
+    let shown = dry_run_requests(ws.path(), "graylog");
+    let (code, err) = graylog_deploy(ws.path());
+    rt.block_on(server.verify());
+    assert_eq!(code, 0, "{err}");
+    let received = rt.block_on(server.received_requests()).unwrap();
+    let created: Vec<&[u8]> = received
+        .iter()
+        .filter(|request| {
+            request.method == wiremock::http::Method::POST
+                && request.url.path() == "/api/events/definitions"
+        })
+        .map(|request| request.body.as_slice())
+        .collect();
+    assert_eq!(created.len(), 1, "{err}");
+    let body = String::from_utf8(created[0].to_vec()).unwrap();
+    for part in [STREAM, NOTIFICATION, "tenant-tag", "é😀"] {
+        assert!(body.contains(part), "{part} not in {body}");
+    }
+    assert_eq!(shown.len(), 1);
+    assert_eq!(shown[0].1.as_deref(), Some("lab"));
+    let request = Json::parse(&shown[0].0).unwrap();
+    assert_eq!(request.get("body").unwrap().to_compact(), body);
+}
+
+/// The bodies of the requests `server` received with `verb` on `path`, as
+/// text.
+fn bodies_on(
+    rt: &tokio::runtime::Runtime,
+    server: &wiremock::MockServer,
+    verb: &wiremock::http::Method,
+    path: &str,
+) -> Vec<String> {
+    rt.block_on(server.received_requests())
+        .unwrap()
+        .iter()
+        .filter(|request| request.method == *verb && request.url.path() == path)
+        .map(|request| String::from_utf8(request.body.clone()).unwrap())
+        .collect()
+}
+
+/// The create body an Exabeam deploy sends is, byte for byte, the body of
+/// the `api_request` the dry run shows for that tenant (#1952: both compile
+/// through `compiler::Exabeam`): the tenant's `test_mode`, and the non-ASCII
+/// text of the rule.
+#[test]
+fn an_exabeam_deploy_sends_the_body_its_dry_run_shows() {
+    use wiremock::matchers::{method, path};
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let server = rt.block_on(wiremock::MockServer::start());
+    let (setup, env) = exabeam_stand(&server, &rt);
+    rt.block_on(async {
+        wiremock::Mock::given(method("GET"))
+            .and(path("/correlation-rules/v2/rules"))
+            .respond_with(wiremock::ResponseTemplate::new(200).set_body_string("[]"))
+            .mount(&server)
+            .await;
+        wiremock::Mock::given(method("POST"))
+            .and(path("/correlation-rules/v2/rules"))
+            .respond_with(wiremock::ResponseTemplate::new(200).set_body_string(
+                r#"{"id": "016dbc1d-a727-43df-a143-9546dcc81a5a", "name": "Ünïcode rule 😀"}"#,
+            ))
+            .expect(1)
+            .mount(&server)
+            .await;
+    });
+    let block = EXABEAM_BLOCK.replace(
+        "activity_type:\"process-create\"",
+        "activity_type:\"process-create\" AND user:\"é😀\"",
+    );
+    let text = rule(
+        "Ünïcode rule 😀",
+        "00000000-0000-4000-8099-000000000203",
+        "Dé😀.",
+        &block,
+    );
+    let ws = workspace(
+        "exabeam",
+        "lab",
+        &format!("{setup}test_mode = true\n"),
+        &[("a.yaml", text)],
+    );
+    let shown = dry_run_requests(ws.path(), "exabeam");
+    let (sent, err) = deploy(
+        ws.path(),
+        "exabeam",
+        &env,
+        &opentide_connectors::builtin(),
+        0,
+    );
+    rt.block_on(server.verify());
+    assert_eq!(rows(&sent), vec![("deployed".to_owned(), None)], "{err}");
+    let created = bodies_on(
+        &rt,
+        &server,
+        &wiremock::http::Method::POST,
+        "/correlation-rules/v2/rules",
+    );
+    assert_eq!(created.len(), 1, "{err}");
+    let body = &created[0];
+    assert!(
+        body.contains("é😀") && body.contains(r#""testMode":true"#),
+        "{body}"
+    );
+    assert_eq!(shown.len(), 1);
+    assert_eq!(shown[0].1.as_deref(), Some("lab"));
+    let request = Json::parse(&shown[0].0).unwrap();
+    assert_eq!(&request.get("body").unwrap().to_compact(), body);
+}
+
+/// The create body a Datadog deploy sends, and the validation that comes
+/// before it, are, byte for byte, the body of the `api_request` the dry run
+/// shows for that tenant (#1952: both compile through `compiler::Datadog`):
+/// the handle the tenant gives the case's notification alias, its tags, and
+/// the non-ASCII text of the rule.
+#[test]
+fn a_datadog_deploy_sends_the_body_its_dry_run_shows() {
+    use wiremock::matchers::{method, path};
+    const RULES: &str = "/api/v2/security_monitoring/rules";
+    const VALIDATION: &str = "/api/v2/security_monitoring/rules/validation";
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let server = rt.block_on(wiremock::MockServer::start());
+    let (setup, env) = datadog_stand(&server);
+    rt.block_on(async {
+        wiremock::Mock::given(method("POST"))
+            .and(path(VALIDATION))
+            .respond_with(wiremock::ResponseTemplate::new(204))
+            .expect(1)
+            .mount(&server)
+            .await;
+        wiremock::Mock::given(method("POST"))
+            .and(path(RULES))
+            .respond_with(
+                wiremock::ResponseTemplate::new(200)
+                    .set_body_string(r#"{"id": "abc-def-ghi", "version": 1}"#),
+            )
+            .expect(1)
+            .mount(&server)
+            .await;
+    });
+    let block = DATADOG_BLOCK.replace("@evt.outcome:FAILURE", "@usr.name:\"é😀\"");
+    let text = rule(
+        "Ünïcode rule 😀",
+        "00000000-0000-4000-8099-000000000204",
+        "Dé😀.",
+        &block,
+    );
+    let setup = setup.replace(
+        "[tenants.setup.notifications]",
+        "tags = [\"team:soc\"]\n[tenants.setup.notifications]",
+    );
+    let ws = workspace("datadog", "eu", &setup, &[("a.yaml", text)]);
+    let shown = dry_run_requests(ws.path(), "datadog");
+    let (sent, err) = deploy(
+        ws.path(),
+        "datadog",
+        &env,
+        &opentide_connectors::builtin(),
+        0,
+    );
+    rt.block_on(server.verify());
+    assert_eq!(rows(&sent), vec![("deployed".to_owned(), None)], "{err}");
+    let created = bodies_on(&rt, &server, &wiremock::http::Method::POST, RULES);
+    let validated = bodies_on(&rt, &server, &wiremock::http::Method::POST, VALIDATION);
+    assert_eq!((created.len(), validated.len()), (1, 1), "{err}");
+    let body = &created[0];
+    for part in ["@slack-soc", "team:soc", "é😀"] {
+        assert!(body.contains(part), "{part} not in {body}");
+    }
+    assert_eq!(&validated[0], body);
+    assert_eq!(shown.len(), 1);
+    assert_eq!(shown[0].1.as_deref(), Some("eu"));
+    let request = Json::parse(&shown[0].0).unwrap();
+    assert_eq!(&request.get("body").unwrap().to_compact(), body);
+}
+
+/// The rule body a Sysdig deploy sends is, byte for byte, the `api_request`
+/// the dry run shows for that tenant (#1952: both compile through
+/// `compiler::Sysdig`), and the policy the rule is added to is the one the
+/// dry run shows beside it. The dry run compiles for the run's first tenant,
+/// so the body carries the tenant's tags; it used to compile for no tenant
+/// and leave them out. The rule's non-ASCII text goes through as written.
+#[test]
+fn a_sysdig_deploy_sends_the_body_its_dry_run_shows() {
+    use wiremock::matchers::{method, path};
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let server = rt.block_on(wiremock::MockServer::start());
+    rt.block_on(async {
+        wiremock::Mock::given(method("POST"))
+            .and(path("/api/secure/rules"))
+            .respond_with(wiremock::ResponseTemplate::new(201).set_body_string(r#"{"id": 43}"#))
+            .expect(1)
+            .mount(&server)
+            .await;
+        wiremock::Mock::given(method("GET"))
+            .and(path("/api/v2/policies"))
+            .respond_with(wiremock::ResponseTemplate::new(200).set_body_string(
+                r#"[{"id": 7, "name": "Blöck 😀", "ruleNames": []}, {"id": 8, "name": "managed"}]"#,
+            ))
+            .mount(&server)
+            .await;
+        wiremock::Mock::given(method("PUT"))
+            .and(path("/api/v2/policies/7"))
+            .respond_with(wiremock::ResponseTemplate::new(200).set_body_string("{}"))
+            .expect(1)
+            .mount(&server)
+            .await;
+    });
+    let block = "  sysdig:\n    schema: platform::sysdig::1.0\n    status: STAGING\n    condition: \
+                 spawned_process and proc.name = \"é😀\"\n    tags: [container]\n    \
+                 policies: [\"Blöck 😀\"]\n";
+    let ws = workspace(
+        "sysdig",
+        "lab",
+        &format!(
+            "url = \"{}\"\napi_token = \"$SYSDIG_SECURE_API_TOKEN\"\npolicies = [\"managed\"]\n\
+             tags = [\"team:é😀\"]\n",
+            server.uri()
+        ),
+        &[(
+            "a.yaml",
+            rule(
+                "Ünïcode rule 😀",
+                "00000000-0000-4000-8099-000000000205",
+                "Dé😀.",
+                block,
+            ),
+        )],
+    );
+    let (code, stdout, stderr) = cli(
+        ws.path(),
+        &[
+            "--json",
+            "deploy",
+            "--dry-run",
+            "--platform",
+            "sysdig",
+            "--strategy",
+            "PREVIEW",
+            "--strategy",
+            "RELEASE",
+            "--all",
+        ],
+        &[],
+    );
+    assert_eq!(code, 0, "{stdout}\n{stderr}");
+    let document = Json::parse(&stdout).unwrap();
+    let entry = document
+        .get("result")
+        .unwrap_or(&document)
+        .get("payloads")
+        .and_then(|payloads| payloads.get("sysdig"))
+        .and_then(Json::as_array)
+        .and_then(|entries| entries.first())
+        .unwrap()
+        .clone();
+    let env = Env::from_pairs([("SYSDIG_SECURE_API_TOKEN".to_owned(), "token".to_owned())]);
+    let (sent, err) = deploy(
+        ws.path(),
+        "sysdig",
+        &env,
+        &opentide_connectors::builtin(),
+        0,
+    );
+    rt.block_on(server.verify());
+    assert_eq!(rows(&sent), vec![("deployed".to_owned(), None)], "{err}");
+    let created = bodies_on(
+        &rt,
+        &server,
+        &wiremock::http::Method::POST,
+        "/api/secure/rules",
+    );
+    assert_eq!(created.len(), 1, "{err}");
+    let body = &created[0];
+    assert!(body.contains("team:é😀") && body.contains("é😀"), "{body}");
+    assert_eq!(&entry.get("api_request").unwrap().to_compact(), body);
+    assert_eq!(entry.get("tenant").and_then(Json::as_str), Some("lab"));
+    assert_eq!(
+        entry.get("policies").map(Json::to_compact).as_deref(),
+        Some(r#"["Blöck 😀"]"#)
+    );
+}
+
+/// The API root of the Google SecOps instance the stand serves.
+const SECOPS_INSTANCE: &str = "/v1/projects/p/locations/eu/instances/i";
+
+/// Mounts on `server` what a Google SecOps create reaches: the token, one
+/// `verify`, one create on `rules` that answers `rule_id`, and one
+/// `deployment` update.
+fn mount_secops_create(
+    rt: &tokio::runtime::Runtime,
+    server: &wiremock::MockServer,
+    verify: &str,
+    rules: &str,
+    deployment: &str,
+    rule_id: &str,
+) {
+    use wiremock::matchers::{method, path, path_regex};
+    rt.block_on(async {
+        let ok = |body: serde_json::Value| wiremock::ResponseTemplate::new(200).set_body_json(body);
+        wiremock::Mock::given(method("POST"))
+            .and(path("/token"))
+            .respond_with(ok(
+                serde_json::json!({"access_token": "t", "expires_in": 3600}),
+            ))
+            .mount(server)
+            .await;
+        wiremock::Mock::given(method("POST"))
+            .and(path(verify))
+            .respond_with(ok(serde_json::json!({
+                "success": true,
+                "allowedRunFrequencies": ["LIVE", "HOURLY", "DAILY"]
+            })))
+            .expect(1)
+            .mount(server)
+            .await;
+        wiremock::Mock::given(method("POST"))
+            .and(path(rules))
+            .respond_with(ok(
+                serde_json::json!({"name": format!("{}/rules/{rule_id}", &SECOPS_INSTANCE[4..])}),
+            ))
+            .expect(1)
+            .mount(server)
+            .await;
+        wiremock::Mock::given(method("PATCH"))
+            .and(path_regex(format!("^{deployment}$")))
+            .respond_with(ok(serde_json::json!({})))
+            .expect(1)
+            .mount(server)
+            .await;
+    });
+}
+
+/// What a Google SecOps deploy sends is, byte for byte, what the dry run
+/// shows (#1952: both compile through `compiler::GoogleSecops`): the
+/// `rules.create` body is the shown `text` (the tenant names no scope), the
+/// text verified is that text, and the deployment the new rule gets is the
+/// shown `run_state` (its body, and its mask as `updateMask`). The rule's
+/// non-ASCII text goes through as written.
+#[test]
+fn a_google_secops_deploy_sends_the_body_its_dry_run_shows() {
+    const RULE_ID: &str = "ru_0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let server = rt.block_on(wiremock::MockServer::start());
+    let uri = server.uri();
+    let rules = format!("{SECOPS_INSTANCE}/rules");
+    let verify = format!("{SECOPS_INSTANCE}:verifyRuleText");
+    let deployment = format!("{SECOPS_INSTANCE}/rules/{RULE_ID}/deployment");
+    mount_secops_create(&rt, &server, &verify, &rules, &deployment, RULE_ID);
+    let text = std::fs::read_to_string(
+        repo().join("tests/fixtures/google_secops/rule-google-secops-process-1.0.yaml"),
+    )
+    .unwrap()
+    .replace("Microsoft Sysmon", "Sysmon é😀")
+    .replace("// Office parent", "// Parent Office (Wörd 😀)");
+    let setup = format!(
+        "ssl = false\nproject = \"p\"\nlocation = \"eu\"\ninstance = \"i\"\nendpoint = \"{uri}\"\n"
+    );
+    let ws = workspace("google_secops", "lab", &setup, &[("a.yaml", text)]);
+    let adc = ws.path().join("adc.json");
+    std::fs::write(
+        &adc,
+        format!(
+            r#"{{"type": "authorized_user", "client_id": "c", "client_secret": "s",
+                "refresh_token": "r", "token_uri": "{uri}/token"}}"#
+        ),
+    )
+    .unwrap();
+    let env = Env::from_pairs([(
+        "GOOGLE_APPLICATION_CREDENTIALS".to_owned(),
+        adc.display().to_string(),
+    )]);
+    let shown = dry_run_requests(ws.path(), "google_secops");
+    let (sent, err) = deploy(
+        ws.path(),
+        "google_secops",
+        &env,
+        &opentide_connectors::builtin(),
+        0,
+    );
+    rt.block_on(server.verify());
+    assert_eq!(rows(&sent), vec![("deployed".to_owned(), None)], "{err}");
+    assert_eq!(shown.len(), 1);
+    let payload = Json::parse(&shown[0].0).unwrap();
+    let shown_text = payload.get("text").unwrap().to_compact();
+    assert!(
+        shown_text.contains("é😀") && shown_text.contains("Wörd 😀"),
+        "{shown_text}"
+    );
+    let created = bodies_on(&rt, &server, &wiremock::http::Method::POST, &rules);
+    assert_eq!(created, [format!("{{\"text\":{shown_text}}}")], "{err}");
+    let verified = bodies_on(&rt, &server, &wiremock::http::Method::POST, &verify);
+    assert_eq!(verified, [format!("{{\"ruleText\":{shown_text}}}")]);
+    let run_state = payload.get("run_state").unwrap();
+    let deployed = rt.block_on(server.received_requests()).unwrap();
+    let patch = deployed
+        .iter()
+        .find(|request| request.url.path() == deployment)
+        .unwrap();
+    assert_eq!(
+        String::from_utf8(patch.body.clone()).unwrap(),
+        run_state.get("body").unwrap().to_compact()
+    );
+    let mask = patch
+        .url
+        .query_pairs()
+        .find(|(key, _)| key == "updateMask")
+        .map(|(_, value)| value.into_owned());
+    assert_eq!(
+        mask.as_deref(),
+        run_state.get("mask").and_then(Json::as_str)
+    );
+}
+
+/// The `createCustomRule` request a Bitdefender deploy sends is, byte for
+/// byte and but for its per-request `id`, the `api_request` the dry run
+/// shows for that tenant (#1952: both compile through
+/// `compiler::Bitdefender`): the tenant's tags and `companyId`, and the
+/// non-ASCII text of the rule.
+#[test]
+fn a_bitdefender_deploy_sends_the_body_its_dry_run_shows() {
+    use wiremock::matchers::{method, path};
+    const RPC: &str = "/api/v1.0/jsonrpc/incidents";
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let server = rt.block_on(wiremock::MockServer::start());
+    rt.block_on(
+        wiremock::Mock::given(method("POST"))
+            .and(path(RPC))
+            .respond_with(|request: &wiremock::Request| {
+                let body: serde_json::Value = serde_json::from_slice(&request.body).unwrap();
+                wiremock::ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                    "jsonrpc": "2.0", "id": body["id"], "result": "aaaaaaaaaaaaaaaaaaaaaaaa"
+                }))
+            })
+            .expect(1)
+            .mount(&server),
+    );
+    let block = bitdefender_block(false).replace("evil.exe", "é😀.exe");
+    let setup = format!(
+        "ssl = false\nurl = \"{}/api\"\napi_key = \"$GRAVITYZONE_API_KEY\"\ncompany_id = \
+         \"c0ffee\"\ntags = [\"équipe 😀\"]\n",
+        server.uri()
+    );
+    let ws = workspace(
+        "bitdefender",
+        "lab",
+        &setup,
+        &[(
+            "a.yaml",
+            rule(
+                "Ünïcode rule 😀",
+                "00000000-0000-4000-8099-000000000206",
+                "Dé😀.",
+                &block,
+            ),
+        )],
+    );
+    let shown = dry_run_requests(ws.path(), "bitdefender");
+    let env = Env::from_pairs([("GRAVITYZONE_API_KEY".to_owned(), "key".to_owned())]);
+    let (sent, err) = deploy(
+        ws.path(),
+        "bitdefender",
+        &env,
+        &opentide_connectors::builtin(),
+        0,
+    );
+    rt.block_on(server.verify());
+    assert_eq!(rows(&sent), vec![("deployed".to_owned(), None)], "{err}");
+    let posted = bodies_on(&rt, &server, &wiremock::http::Method::POST, RPC);
+    assert_eq!(posted.len(), 1, "{err}");
+    let Json::Object(mut members) = Json::parse(&posted[0]).unwrap() else {
+        panic!("not an object: {}", posted[0]);
+    };
+    assert!(members.shift_remove("id").is_some(), "{}", posted[0]);
+    let body = Json::Object(members).to_compact();
+    for part in ["c0ffee", "équipe 😀", "é😀.exe", "Ünïcode rule 😀"] {
+        assert!(body.contains(part), "{part} not in {body}");
+    }
+    assert_eq!(shown.len(), 1);
+    assert_eq!(shown[0].1.as_deref(), Some("lab"));
+    assert_eq!(shown[0].0, body);
+}
+
+/// The Kibana rule an Elastic deploy creates is, byte for byte, the
+/// `payload` of the `api_request` the dry run shows for that tenant (#1952:
+/// both compile through `compiler::Elastic`): the tenant's `tags` and
+/// `index`, the `[[modifiers]]` scoped to it, and the non-ASCII text of the
+/// rule. The `block` beside it is the rule's block with the modifier.
+#[test]
+fn an_elastic_deploy_sends_the_body_its_dry_run_shows() {
+    use wiremock::matchers::{method, path, path_regex};
+    const RULES: &str = "/api/detection_engine/rules";
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let server = rt.block_on(wiremock::MockServer::start());
+    rt.block_on(async {
+        wiremock::Mock::given(method("GET"))
+            .and(path_regex("/_field_caps$"))
+            .respond_with(
+                wiremock::ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({"indices": ["soc-1"], "fields": {}})),
+            )
+            .mount(&server)
+            .await;
+        wiremock::Mock::given(method("GET"))
+            .and(path(RULES))
+            .respond_with(wiremock::ResponseTemplate::new(404))
+            .mount(&server)
+            .await;
+        wiremock::Mock::given(method("POST"))
+            .and(path(RULES))
+            .respond_with(wiremock::ResponseTemplate::new(200).set_body_json(serde_json::json!({})))
+            .expect(1)
+            .mount(&server)
+            .await;
+    });
+    // No index of its own: the tenant's applies.
+    let block = "  elastic:\n    status: STAGING\n    type: query\n    language: kuery\n    \
+                 query: 'user.name: \"é😀\"'\n    scheduling:\n      interval: 5m\n";
+    let text = rule(
+        "Ünïcode rule 😀",
+        "00000000-0000-4000-8099-000000000204",
+        "Dé😀.",
+        block,
+    );
+    let setup = format!(
+        "url = \"{0}\"\nelasticsearch_url = \"{0}\"\napi_key = \"$ELASTIC_API_KEY\"\ntags = \
+         [\"équipe 😀\"]\nindex = [\"soc-*\"]\n\n[[modifiers]]\nname = \"lab hourly\"\n\
+         [modifiers.conditions]\ntenants = [\"lab\"]\n[modifiers.modifications]\n\
+         \"scheduling.interval\" = \"1h\"\n",
+        server.uri()
+    );
+    let ws = workspace("elastic", "lab", &setup, &[("a.yaml", text)]);
+    let shown = dry_run_requests(ws.path(), "elastic");
+    let (code, err) = elastic_deploy(ws.path());
+    rt.block_on(server.verify());
+    assert_eq!(code, 0, "{err}");
+    let created = bodies_on(&rt, &server, &wiremock::http::Method::POST, RULES);
+    assert_eq!(created.len(), 1, "{err}");
+    let body = &created[0];
+    for part in [
+        "é😀",
+        "Ünïcode rule 😀",
+        "\"équipe 😀\"",
+        "\"index\":[\"soc-*\"]",
+        "\"interval\":\"1h\"",
+    ] {
+        assert!(body.contains(part), "{part} not in {body}");
+    }
+    assert_eq!(shown.len(), 1);
+    assert_eq!(shown[0].1.as_deref(), Some("lab"));
+    let request = Json::parse(&shown[0].0).unwrap();
+    assert_eq!(&request.get("payload").unwrap().to_compact(), body);
+    let shown_block = request.get("block").unwrap().to_compact();
+    assert!(shown_block.contains("\"interval\":\"1h\""), "{shown_block}");
+}
+
 /// A definition the tenant lost while git ignores deployment state is not
 /// created again: the warning, then the state's refusal; and a tenant that
 /// refuses the token on a rule stops there.
@@ -3041,7 +3920,7 @@ fn sentinel_one_stops_a_tenant_refusing_the_key() {
         &sent,
         "sentinel_one",
         "lab",
-        "could not create the rule on tenant 'lab': ",
+        "sentinel_one_unauthorized: could not create the rule on tenant 'lab': ",
     );
 }
 
@@ -3139,7 +4018,7 @@ fn a_platform_whose_every_tenant_failed_on_a_rule_is_not_deployed() {
     );
     rt.block_on(server.verify());
     assert_eq!(value(&sent, "deployed"), &Json::Array(Vec::new()));
-    assert_eq!(value(&sent, "status"), &Json::str("failed"));
+    assert_eq!(sent.result.status, Status::Failed);
     let rows = rows(&sent);
     let statuses: Vec<&str> = rows.iter().map(|(status, _)| status.as_str()).collect();
     assert_eq!(
@@ -3656,13 +4535,6 @@ fn sent_and_unsent() -> tempfile::TempDir {
     ws
 }
 
-fn text_of(json: &Json) -> String {
-    match json {
-        Json::Str(text) => text.clone(),
-        other => format!("{other:?}"),
-    }
-}
-
 /// A promoted file the run cannot put back fails the run (exit 1), naming
 /// the file: its commit would carry a status no tenant received (#1653).
 /// The rules folder is made read-only while the rule is sent; a privileged
@@ -3689,9 +4561,9 @@ fn a_promotion_the_run_cannot_undo_fails_the_run() {
         Vec::new(),
     );
     mode(0o755).unwrap();
-    assert_eq!(value(&sent, "_exit_code"), &Json::Int(1), "{text}");
-    assert_eq!(value(&sent, "status"), &Json::str("failed"), "{text}");
-    let message = text_of(value(&sent, "message"));
+    assert_eq!(sent.result.exit, ExitCode::Failure, "{text}");
+    assert_eq!(sent.result.status, Status::Failed, "{text}");
+    let message = sent.result.message.clone().unwrap_or_default();
     assert!(
         message.contains("Could not undo the status promotion of") && message.contains("b.yaml"),
         "{message}"
@@ -3738,21 +4610,18 @@ fn a_promoted_file_changed_during_the_run_is_left_as_it_is() {
             Vec::new(),
         );
         if deleted {
-            assert_eq!(value(&sent, "_exit_code"), &Json::Int(0), "{text}");
-            let Json::Array(warnings) = value(&sent, "warnings") else {
-                panic!("{:?}", sent.result)
-            };
+            assert_eq!(sent.result.exit, ExitCode::Success, "{text}");
+            let warnings = &sent.result.warnings;
             assert!(
                 warnings.iter().any(|warning| {
-                    let warning = text_of(warning);
                     warning.contains("was deleted during the deploy") && warning.contains("b.yaml")
                 }),
                 "{warnings:?}"
             );
             assert!(!unsent.exists(), "the deleted file was made again");
         } else {
-            assert_eq!(value(&sent, "_exit_code"), &Json::Int(1), "{text}");
-            let message = text_of(value(&sent, "message"));
+            assert_eq!(sent.result.exit, ExitCode::Failure, "{text}");
+            let message = sent.result.message.clone().unwrap_or_default();
             assert!(
                 message.contains("b.yaml") && message.contains("changed during the deploy"),
                 "{message}"
@@ -3805,7 +4674,7 @@ fn a_promoted_rule_that_reached_one_tenant_of_two_stays_promoted() {
             )),
         ],
     );
-    assert_eq!(value(&sent, "_exit_code"), &Json::Int(1), "{text}");
+    assert_eq!(sent.result.exit, ExitCode::Failure, "{text}");
     let mut statuses: Vec<String> = rows(&sent).into_iter().map(|(status, _)| status).collect();
     statuses.sort();
     assert_eq!(statuses, ["deployed", "failed"], "{text}");
@@ -3864,7 +4733,7 @@ fn a_platform_run_with_nothing_to_deploy_names_its_strategies() {
         &Registry::new(),
         0,
     );
-    assert_eq!(value(&sent, "status"), &Json::str("skipped"));
+    assert_eq!(sent.result.status, Status::Skipped);
     let Json::Str(advice) = value(&sent, "advice") else {
         panic!("advice")
     };
@@ -3874,8 +4743,8 @@ fn a_platform_run_with_nothing_to_deploy_names_its_strategies() {
         "{advice}"
     );
     assert_eq!(
-        value(&sent, "_outcome"),
-        &Json::str("No rule has a status PREVIEW deploys · 1 rule in PRODUCTION")
+        sent.result.outcome_line.as_deref(),
+        Some("No rule has a status PREVIEW deploys · 1 rule in PRODUCTION")
     );
     let Json::Array(skipped) = value(&sent, "skipped") else {
         panic!("skipped")
@@ -4497,11 +5366,11 @@ fn a_tenant_failing_the_unchanged_lookup_follows_the_failure_before_any_rule() {
     );
     let statuses: Vec<String> = rows(&sent).into_iter().map(|(status, _)| status).collect();
     assert_eq!(statuses, ["deployed", "failed", "not_attempted"], "{text}");
-    assert_eq!(value(&sent, "_exit_code"), &Json::Int(1));
+    assert_eq!(sent.result.exit, ExitCode::Failure);
     assert_eq!(kibana.writes.lock().unwrap().len(), writes, "{text}");
 }
 
-/// A Splunk deployer that keeps the body of each request it receives.
+/// A deployer that keeps the body of each request it receives.
 struct Recording(Mutex<Vec<Vec<u8>>>);
 
 impl Deployer for Recording {
@@ -4515,16 +5384,47 @@ impl Deployer for Recording {
     }
 }
 
-/// [`Recording`] registered as the Splunk platform.
-struct Recorded(&'static Recording);
+/// [`Recording`] registered as the platform it names.
+struct Recorded(&'static str, &'static Recording);
 
 impl Platform for Recorded {
     fn id(&self) -> &'static str {
-        "splunk"
+        self.0
     }
 
     fn deployer(&self) -> Option<&dyn Deployer> {
-        Some(self.0)
+        Some(self.1)
+    }
+}
+
+/// A deployer that keeps the tenant and the body of each request it
+/// receives.
+struct TenantRecording(Mutex<Vec<(String, Vec<u8>)>>);
+
+impl Deployer for TenantRecording {
+    fn deploy<'a>(
+        &'a self,
+        cx: TenantContext<'a>,
+        request: &'a DeployRequest,
+    ) -> BoxFuture<'a, Result<DeployOutcome, DeployError>> {
+        self.0
+            .lock()
+            .unwrap()
+            .push((cx.tenant.label.tenant.clone(), request.body.clone()));
+        deploying(async move { Ok(DeployOutcome::new(None, request.operation)) })
+    }
+}
+
+/// [`TenantRecording`] registered as the platform it names.
+struct TenantRecorded(&'static str, &'static TenantRecording);
+
+impl Platform for TenantRecorded {
+    fn id(&self) -> &'static str {
+        self.0
+    }
+
+    fn deployer(&self) -> Option<&dyn Deployer> {
+        Some(self.1)
     }
 }
 
@@ -4544,7 +5444,9 @@ fn a_drawn_splunk_schedule_is_the_same_on_every_deploy() {
     );
     let recording: &'static Recording = Box::leak(Box::new(Recording(Mutex::new(Vec::new()))));
     let mut registry = Registry::new();
-    registry.register(Box::new(Recorded(recording))).unwrap();
+    registry
+        .register(Box::new(Recorded("splunk", recording)))
+        .unwrap();
     let env = Env::from_pairs([("SPLUNK_TOKEN", SECRET)]);
     let cron = |body: &[u8]| -> String {
         let settings: serde_json::Value = serde_json::from_slice(body).unwrap();
@@ -4704,10 +5606,7 @@ fn a_shown_url_is_the_whole_url_sent() {
 
 /// A value as a Splunk form sends it (`json_text`).
 fn form_text(value: &Json) -> String {
-    match value {
-        Json::Str(text) => text.clone(),
-        other => other.to_compact(),
-    }
+    value.to_text()
 }
 
 /// Whether `shown`, a write's body, is `body`, a request's: the same JSON,
@@ -4814,6 +5713,221 @@ fn golden_send(platform: &str, scenario: &str, variable: &str) -> (Vec<Json>, Ve
     (planned, received_writes(replayed(&proxy)))
 }
 
+/// #1886: a rule whose create Graph refuses because another rule holds its
+/// alert title (one 1.0.0 left under the bare uuid) fails with
+/// `microsoft_defender_rule_conflict` in its row's `error`, and a delete that
+/// finds no `opentide-<uuid>` says so rather than "already gone".
+#[test]
+fn a_defender_rule_another_rule_blocks_fails_with_its_code() {
+    let scenario = "golden/deploy-defender-continues";
+    let ws = fixture("deploy-tenants");
+    let text =
+        std::fs::read_to_string(repo().join(format!("tests/cassettes/{scenario}.json"))).unwrap();
+    let all: Vec<usize> = (0..Cassette::parse(&text).unwrap().interactions.len()).collect();
+    let (proxy, env, _ca) = replay(scenario, &all, "DEFENDER_CLIENT_SECRET");
+    let (sent, _) = deploy(
+        ws.path(),
+        "microsoft_defender",
+        &env,
+        &opentide_connectors::builtin(),
+        0,
+    );
+    assert_eq!(proxy.verify(), Vec::new(), "{:?}", sent.result);
+    let Json::Array(results) = value(&sent, "results") else {
+        panic!("no results")
+    };
+    let row = |uuid: &str| {
+        results
+            .iter()
+            .find(|row| row.get("id").and_then(Json::as_str) == Some(uuid))
+            .unwrap_or_else(|| panic!("no row {uuid}"))
+    };
+    let text = |row: &Json, key: &str| row.get(key).and_then(Json::as_str).map(str::to_owned);
+    let held = row("00000000-0000-4000-8047-0000000000d7");
+    assert_eq!(text(held, "status").as_deref(), Some("failed"));
+    let error = text(held, "error").unwrap_or_default();
+    assert!(
+        error.starts_with("microsoft_defender_rule_conflict: Graph refused to create"),
+        "{error}"
+    );
+    let gone = row("00000000-0000-4000-8047-0000000000d5");
+    assert_eq!(text(gone, "status").as_deref(), Some("skipped"));
+    assert_eq!(
+        text(gone, "reason").as_deref(),
+        Some("no rule opentide-00000000-0000-4000-8047-0000000000d5 on the tenant")
+    );
+    // A refusal with no code of its own keeps its message as it was.
+    let refused = row("00000000-0000-4000-8047-0000000000d6");
+    assert!(
+        text(refused, "error")
+            .unwrap_or_default()
+            .starts_with("Graph refused to update"),
+        "{refused:?}"
+    );
+}
+
+/// #1894: a Splunk rule written under its name whose old saved search (an
+/// earlier name of the rule) Splunk's stand-in tenant refuses to delete
+/// fails with `splunk_renamed_search_not_deleted` leading its row's error,
+/// not the refusal's message alone.
+#[test]
+fn a_splunk_rename_cleanup_the_tenant_refuses_fails_with_its_code() {
+    use opentide_cassette::cassette::Body;
+    let ws = fixture("deploy-tenants");
+    let text =
+        std::fs::read_to_string(repo().join("tests/cassettes/golden/deploy-splunk.json")).unwrap();
+    let mut cassette = Cassette::parse(&text).unwrap();
+    let recorded = cassette.interactions.clone();
+    // The listing of the saved searches naming the created rule holds one
+    // an earlier name of it left, owned by `nobody` as opentide's are.
+    let at = recorded
+        .iter()
+        .position(|interaction| {
+            interaction.request.method == "GET"
+                && interaction
+                    .request
+                    .url
+                    .ends_with("saved/searches?search=00000000-0000-4000-8047-000000000041&count=0")
+        })
+        .expect("the listing of the created rule's saved searches");
+    let mut listed = recorded[at].clone();
+    let Body::Text(feed) = &listed.response.body else {
+        panic!("the listing is a feed")
+    };
+    let entry = &feed[feed.find("<entry>").unwrap()..feed.find("</entry>").unwrap() + 8];
+    let old = entry
+        .replace("Splunk create rule", "Old create rule")
+        .replace("Splunk%20create%20rule", "Old%20create%20rule");
+    listed.response.body = Body::Text(feed.replacen("</feed>", &format!("{old}</feed>"), 1));
+    let mut delete = recorded[at].clone();
+    delete.request.method = "DELETE".into();
+    delete.request.url =
+        "https://splunk.invalid:8089/servicesNS/nobody/search/saved/searches/Old+create+rule"
+            .into();
+    delete.response.status = 403;
+    delete.response.body = Body::Text(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<response>\n  <messages>\n    <msg \
+         type=\"ERROR\">You do not have permission to delete this object</msg>\n  \
+         </messages>\n</response>\n"
+            .into(),
+    );
+    cassette.interactions = recorded[..at]
+        .iter()
+        .cloned()
+        .chain([listed, delete])
+        .chain(recorded[at + 1..].iter().cloned())
+        .collect();
+    let proxy = Proxy::start(
+        Mode::Replay { cassette },
+        Redaction::new([SECRET.to_owned()]),
+    )
+    .unwrap();
+    let mut ca = tempfile::NamedTempFile::new().unwrap();
+    ca.write_all(proxy.ca_pem().as_bytes()).unwrap();
+    let env = Env::from_pairs(
+        proxy
+            .client_env(ca.path().to_str().unwrap())
+            .into_iter()
+            .chain([("SPLUNK_TOKEN".to_owned(), SECRET.to_owned())]),
+    );
+    let (sent, text) = deploy(
+        ws.path(),
+        "splunk",
+        &env,
+        &opentide_connectors::builtin(),
+        0,
+    );
+    assert_eq!(proxy.verify(), Vec::new(), "{text}");
+    let Json::Array(results) = value(&sent, "results") else {
+        panic!("no results: {text}")
+    };
+    let created = results
+        .iter()
+        .find(|row| {
+            row.get("id").and_then(Json::as_str) == Some("00000000-0000-4000-8047-000000000041")
+        })
+        .unwrap_or_else(|| panic!("{results:?}"));
+    assert_eq!(
+        created.get("status").and_then(Json::as_str),
+        Some("failed"),
+        "{text}"
+    );
+    let error = created
+        .get("error")
+        .and_then(Json::as_str)
+        .unwrap_or_default();
+    assert!(
+        error.starts_with(
+            "splunk_renamed_search_not_deleted: saved search \"Splunk create rule\" was \
+             written, but \"Old create rule\""
+        ),
+        "{error}"
+    );
+}
+
+/// A HarfangLab deployer that refuses every request as one it cannot read
+/// (`harfanglab_request_invalid`, which its connector raises before any
+/// request reaches the tenant).
+struct HarfangLabRefusing;
+
+impl Deployer for HarfangLabRefusing {
+    fn deploy<'a>(
+        &'a self,
+        _cx: TenantContext<'a>,
+        _request: &'a DeployRequest,
+    ) -> BoxFuture<'a, Result<DeployOutcome, DeployError>> {
+        use opentide_connectors::connector::DeployFailure;
+        Box::pin(async move {
+            Err(DeployError::rule(DeployFailure::new(
+                opentide_connectors::harfanglab::REQUEST_INVALID,
+                "A HarfangLab deploy request's body is {\"kind\": \"Sigma\" or \"YARA\", \
+                 \"rule\": <the compiled rule>}: it is empty",
+            )))
+        })
+    }
+}
+
+impl Platform for HarfangLabRefusing {
+    fn id(&self) -> &'static str {
+        "harfanglab"
+    }
+
+    fn deployer(&self) -> Option<&dyn Deployer> {
+        Some(self)
+    }
+}
+
+/// #1894: a HarfangLab rule its connector refuses with a code of its own
+/// fails with that code leading its row's error.
+#[test]
+fn a_harfanglab_failure_with_its_own_code_keeps_it_in_the_row() {
+    let fixture = |file: &str| {
+        std::fs::read_to_string(repo().join(format!(
+            "tests/golden/fixtures/deploy-tenants/objects/rules/{file}"
+        )))
+        .unwrap()
+    };
+    let ws = workspace(
+        "harfanglab",
+        "lab",
+        "url = \"https://harfanglab.invalid\"\napi_token = \"$HARFANGLAB_API_TOKEN\"\n\
+         source_id = \"s\"\n",
+        &[("a.yaml", fixture("harfanglab-a-sigma.yaml"))],
+    );
+    let mut registry = Registry::new();
+    registry.register(Box::new(HarfangLabRefusing)).unwrap();
+    let env = Env::from_pairs([("HARFANGLAB_API_TOKEN".to_owned(), "token".to_owned())]);
+    let (sent, text) = deploy(ws.path(), "harfanglab", &env, &registry, 0);
+    let rows = rows(&sent);
+    assert_eq!(rows.len(), 1, "{rows:?}\n{text}");
+    assert_eq!(rows[0].0, "failed", "{text}");
+    let error = rows[0].1.clone().unwrap_or_default();
+    assert!(
+        error.starts_with("harfanglab_request_invalid: A HarfangLab deploy request's body"),
+        "{error}"
+    );
+}
+
 #[test]
 fn a_defender_dry_run_shows_the_requests_the_tenant_receives() {
     let (planned, received) = golden_send(
@@ -4822,7 +5936,8 @@ fn a_defender_dry_run_shows_the_requests_the_tenant_receives() {
         "DEFENDER_CLIENT_SECRET",
     );
     // Defender's dry run shows each rule's first request: the PATCH of its
-    // uuid (an upsert or a disablement), or the DELETE of a deletion. What
+    // rule id, `opentide-<uuid>` (an upsert or a disablement), or the DELETE
+    // of a deletion. What
     // follows on the tenant's answer (a POST after a 404, one more PATCH
     // after a 409) is not planned, so each planned write is the first
     // request the tenant received at its URL.
@@ -4832,8 +5947,28 @@ fn a_defender_dry_run_shows_the_requests_the_tenant_receives() {
             .iter()
             .map(|write| at(write, "method"))
             .collect::<Vec<_>>(),
-        ["PATCH", "PATCH", "PATCH", "PATCH", "DELETE", "PATCH"].map(Json::str)
+        [
+            "PATCH", "PATCH", "PATCH", "PATCH", "DELETE", "PATCH", "PATCH"
+        ]
+        .map(Json::str)
     );
+    // #1886: every uuid here begins with a digit, which Graph refuses as an
+    // id; each request names `opentide-<uuid>`.
+    for (write, number) in planned
+        .iter()
+        .zip(["d1", "d2", "d3", "d4", "d5", "d6", "d7"])
+    {
+        assert_eq!(
+            write.get("url").and_then(Json::as_str),
+            Some(
+                format!(
+                    "https://graph.microsoft.com/beta/security/rules/detectionRules/\
+                     opentide-00000000-0000-4000-8047-0000000000{number}"
+                )
+                .as_str()
+            )
+        );
+    }
     for write in &planned {
         let shown = write.to_compact();
         let text = |key: &str| write.get(key).and_then(Json::as_str).unwrap_or_default();
@@ -4897,7 +6032,7 @@ fn a_carbon_black_dry_run_shows_the_requests_the_tenant_receives() {
         Some(&Json::str("<send-time:timestamp>"))
     );
     assert_eq!(body(&planned[1]), Json::str("<tenant-read:watchlist>"));
-    let (proxy, env, _ca) = replay("carbon_black/deploy", &[0, 1, 2, 3, 4], "CBC_TOKEN");
+    let (proxy, env, _ca) = replay("carbon_black/deploy", &[0, 1, 2, 3], "CBC_TOKEN");
     let (sent, _) = deploy(
         ws.path(),
         "carbon_black_cloud",
@@ -5228,7 +6363,7 @@ fn the_summary_counts_skipped_rows_and_rules_left_out() {
     );
     assert_eq!(rows(&sent), [("skipped".to_owned(), None)], "{text}");
     assert_eq!(
-        value(&sent, "_summary").get("skipped"),
+        summary(&sent, "skipped"),
         Some(&Json::Int(2)),
         "{:?}",
         sent.result
@@ -5344,7 +6479,7 @@ fn a_tenant_that_signs_in_then_refuses_the_first_rule_fails_before_any_rule() {
         let checked = std::panic::catch_unwind(|| {
             let statuses: Vec<String> = rows(&sent).into_iter().map(|(status, _)| status).collect();
             assert_eq!(statuses, ["not_attempted"], "{platform}: {text}");
-            assert_eq!(value(&sent, "_exit_code"), &Json::Int(1), "{platform}");
+            assert_eq!(sent.result.exit, ExitCode::Failure, "{platform}");
         });
         if checked.is_err() {
             failed.push(platform);
@@ -5660,7 +6795,7 @@ fn the_summary_counts_a_skipped_rule_once() {
     };
     assert_eq!(left.len(), 1, "the Sentinel block is left out: {left:?}");
     assert_eq!(
-        value(&sent, "_summary").get("skipped"),
+        summary(&sent, "skipped"),
         Some(&Json::Int(1)),
         "{text}\n{:?}",
         sent.result
@@ -5937,8 +7072,9 @@ fn sentinel_reports_what_arm_did_for_a_rule_it_read_first() {
     assert_eq!(proxy.verify(), Vec::new(), "{:?}", sent.result);
     assert_eq!(only_action(&sent), "unchanged");
     assert!(
-        value(&sent, "message")
-            .as_str()
+        sent.result
+            .message
+            .as_deref()
             .is_some_and(|message| message.contains("1 deleted, 1 unchanged")),
         "{:?}",
         sent.result
@@ -6297,4 +7433,447 @@ fn harfanglab_fails_each_rule_whose_source_id_variable_is_unset() {
     let (rows, bodies) = harfanglab_source("source_id = \"$HL_SOURCE\"", &[]);
     assert_unset_variable_fails_each_rule(&rows, &[], "HL_SOURCE");
     assert_eq!(bodies, Vec::<String>::new());
+}
+
+/// A deployer that holds each rule until a second rule is in flight at the
+/// same time (or five seconds pass), and keeps the most it saw at once.
+struct Meeting {
+    in_flight: std::sync::atomic::AtomicUsize,
+    most: std::sync::atomic::AtomicUsize,
+}
+
+impl Deployer for Meeting {
+    fn deploy<'a>(
+        &'a self,
+        _cx: TenantContext<'a>,
+        request: &'a DeployRequest,
+    ) -> BoxFuture<'a, Result<DeployOutcome, DeployError>> {
+        use std::sync::atomic::Ordering;
+        deploying(async move {
+            let now = self.in_flight.fetch_add(1, Ordering::SeqCst) + 1;
+            self.most.fetch_max(now, Ordering::SeqCst);
+            let until = std::time::Instant::now() + std::time::Duration::from_secs(5);
+            while self.most.load(Ordering::SeqCst) < 2 && std::time::Instant::now() < until {
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            }
+            self.in_flight.fetch_sub(1, Ordering::SeqCst);
+            Ok(DeployOutcome::new(None, request.operation))
+        })
+    }
+}
+
+/// [`Meeting`] as the Sentinel platform.
+struct Meets(&'static Meeting);
+
+impl Platform for Meets {
+    fn id(&self) -> &'static str {
+        "sentinel"
+    }
+
+    fn deployer(&self) -> Option<&dyn Deployer> {
+        Some(self.0)
+    }
+}
+
+/// The tenants of a platform deploy at once (#1940): two Sentinel tenants
+/// each have a rule in flight at the same time. One tenant after another,
+/// the first rule would wait alone.
+#[test]
+fn the_tenants_of_a_platform_deploy_at_once() {
+    let ws = workspace(
+        "sentinel",
+        "soc",
+        SENTINEL_SETUP,
+        &three_rules(SENTINEL_STAGING)[..1],
+    );
+    let config = ws
+        .path()
+        .join(".opentide/configurations/platforms/sentinel.toml");
+    let text = std::fs::read_to_string(&config).unwrap();
+    let second = text.replacen(
+        "[[tenants]]\nname = \"soc\"",
+        "[[tenants]]\nname = \"lab\"",
+        1,
+    );
+    let tenants = &second[second.find("[[tenants]]").unwrap()..];
+    std::fs::write(&config, format!("{text}\n{tenants}")).unwrap();
+    let meeting: &'static Meeting = Box::leak(Box::new(Meeting {
+        in_flight: std::sync::atomic::AtomicUsize::new(0),
+        most: std::sync::atomic::AtomicUsize::new(0),
+    }));
+    let mut registry = Registry::new();
+    registry.register(Box::new(Meets(meeting))).unwrap();
+    let env = Env::from_pairs([("AZURE_CLIENT_SECRET", SECRET)]);
+    let (sent, stderr) = deploy(ws.path(), "sentinel", &env, &registry, 0);
+    assert_eq!(
+        meeting.most.load(std::sync::atomic::Ordering::SeqCst),
+        2,
+        "{stderr}"
+    );
+    assert_eq!(
+        rows(&sent),
+        [("deployed".to_owned(), None), ("deployed".to_owned(), None)]
+    );
+}
+
+/// Tenants deploying at once end in any order, and the run is still the
+/// one a run sending to one tenant after another makes (#1940): four Sysdig
+/// tenants, the first the slowest to answer, two of them refusing every
+/// create. The rows are in the plan's order (tenant by tenant, as
+/// configured), the failures and the run's error name the first tenant's
+/// first, and each rule's deployment state shard holds the ids of the
+/// tenants that created it, the same bytes whichever wrote first.
+#[test]
+fn tenants_deploying_at_once_report_and_record_in_the_plans_order() {
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    // Each tenant's stand-in: (name, delay in ms, the status a create gets).
+    let stands = [
+        ("t1", 400, 500),
+        ("t2", 300, 201),
+        ("t3", 200, 500),
+        ("t4", 100, 201),
+    ];
+    let uuids = [
+        "00000000-0000-4000-8099-000000000191",
+        "00000000-0000-4000-8099-000000000192",
+    ];
+    let (ws, _servers) = sysdig_stands(&rt, &stands, &uuids);
+    let env = Env::from_pairs([("SYSDIG_SECURE_API_TOKEN".to_owned(), "token".to_owned())]);
+    let (sent, stderr) = deploy(
+        ws.path(),
+        "sysdig",
+        &env,
+        &opentide_connectors::builtin(),
+        0,
+    );
+    let Json::Array(results) = value(&sent, "results") else {
+        panic!("no results")
+    };
+    let placed: Vec<(String, String, String)> = results
+        .iter()
+        .map(|row| {
+            let text = |key| row.get(key).and_then(Json::as_str).unwrap().to_owned();
+            (text("tenant"), text("id"), text("status"))
+        })
+        .collect();
+    let mut expected = Vec::new();
+    for (name, _, status) in stands {
+        let outcome = if status == 201 { "deployed" } else { "failed" };
+        for uuid in uuids {
+            expected.push((name.to_owned(), uuid.to_owned(), outcome.to_owned()));
+        }
+    }
+    assert_eq!(placed, expected, "{stderr}");
+    let Json::Array(failures) = value(&sent, "failures") else {
+        panic!("no failures")
+    };
+    let failed_on: Vec<&str> = failures
+        .iter()
+        .map(|failure| failure.get("tenant").and_then(Json::as_str).unwrap())
+        .collect();
+    assert_eq!(failed_on, ["t1", "t1", "t3", "t3"], "{failures:?}");
+    // t1's answer (its id 10), though t3 refused first.
+    assert_eq!(
+        value(&sent, "error"),
+        &Json::str(
+            "Deployment to sysdig failed on First: create rule: HTTP 500: {\"id\": 10} (and 3 \
+             more failures)"
+        )
+    );
+    for uuid in uuids {
+        let shard = std::fs::read_to_string(
+            ws.path()
+                .join(format!(".opentide/states/deployment/{uuid}.json")),
+        )
+        .unwrap();
+        assert_eq!(
+            shard,
+            format!(
+                "{{\n  \"object_uuid\": \"{uuid}\",\n  \"platforms\": {{\n    \"sysdig\": {{\n      \
+                 \"t2\": \"20\",\n      \"t4\": \"40\"\n    }}\n  }},\n  \"schema\": \
+                 \"deployment.state::1.0\"\n}}\n"
+            )
+        );
+    }
+}
+
+/// A Sysdig workspace with a tenant for each of `stands` (name, delay in
+/// ms, the status a create gets), each on a stand-in of its own that
+/// answers every create after the delay, with an id of its own (10, 20,
+/// …), and a rule for each of `uuids`.
+fn sysdig_stands(
+    rt: &tokio::runtime::Runtime,
+    stands: &[(&str, u64, u16)],
+    uuids: &[&str; 2],
+) -> (tempfile::TempDir, Vec<wiremock::MockServer>) {
+    use wiremock::matchers::{method, path};
+    let mut servers = Vec::new();
+    for (index, (_, delay, status)) in stands.iter().enumerate() {
+        let server = rt.block_on(wiremock::MockServer::start());
+        rt.block_on(
+            wiremock::Mock::given(method("POST"))
+                .and(path("/api/secure/rules"))
+                .respond_with(
+                    wiremock::ResponseTemplate::new(*status)
+                        .set_body_string(format!(r#"{{"id": {}}}"#, (index + 1) * 10))
+                        .set_delay(std::time::Duration::from_millis(*delay)),
+                )
+                .mount(&server),
+        );
+        servers.push(server);
+    }
+    let block = "  sysdig:\n    schema: platform::sysdig::1.0\n    status: STAGING\n    condition: \
+                 spawned_process and container\n    tags: [container]\n";
+    let ws = workspace(
+        "sysdig",
+        "t1",
+        &format!(
+            "url = \"{}\"\napi_token = \"$SYSDIG_SECURE_API_TOKEN\"\n",
+            servers[0].uri()
+        ),
+        &[
+            ("a.yaml", rule("First", uuids[0], "First.", block)),
+            ("b.yaml", rule("Second", uuids[1], "Second.", block)),
+        ],
+    );
+    let config = ws
+        .path()
+        .join(".opentide/configurations/platforms/sysdig.toml");
+    let mut text = std::fs::read_to_string(&config).unwrap();
+    for ((name, ..), server) in stands.iter().zip(&servers).skip(1) {
+        text.push_str(&format!(
+            "\n[[tenants]]\nname = \"{name}\"\nstrategies = [\"PREVIEW\", \"RELEASE\"]\n\
+             [tenants.setup]\nurl = \"{}\"\napi_token = \"$SYSDIG_SECURE_API_TOKEN\"\n",
+            server.uri()
+        ));
+    }
+    std::fs::write(&config, text).unwrap();
+    (ws, servers)
+}
+
+/// A Sentinel workspace with a tenant for each of `names`, each taking
+/// `rules`.
+fn sentinel_tenants(names: &[&str], rules: &[(&'static str, String)]) -> tempfile::TempDir {
+    let ws = workspace("sentinel", names[0], SENTINEL_SETUP, rules);
+    let config = ws
+        .path()
+        .join(".opentide/configurations/platforms/sentinel.toml");
+    let text = std::fs::read_to_string(&config).unwrap();
+    let first = &text[text.find("[[tenants]]").unwrap()..];
+    let mut all = text.clone();
+    for name in &names[1..] {
+        let tenant = first.replacen(
+            &format!("[[tenants]]\nname = \"{}\"", names[0]),
+            &format!("[[tenants]]\nname = \"{name}\""),
+            1,
+        );
+        all.push('\n');
+        all.push_str(&tenant);
+    }
+    std::fs::write(&config, all).unwrap();
+    ws
+}
+
+/// A deployer that panics on the tenant `t1` once the four tenants deploying
+/// at once have all started, and holds every other tenant's rule until the
+/// worker thread that ran `t1` has ended (a minute at most), keeping the
+/// tenants it was asked to deploy to.
+struct Panicking {
+    opened: Mutex<Vec<String>>,
+}
+
+/// Set when the worker thread that panicked on `t1` has ended: [`Exited`].
+static T1_WORKER_EXITED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Sets [`T1_WORKER_EXITED`] when dropped.
+struct Exited;
+
+impl Drop for Exited {
+    fn drop(&mut self) {
+        T1_WORKER_EXITED.store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
+thread_local! {
+    /// `t1`'s [`Exited`], kept by the worker thread that polls `t1`'s deploy
+    /// (`runtime::block_on` polls it on the calling thread). A thread-local's
+    /// destructor runs when its thread exits: by then the worker caught the
+    /// panic, stopped the run and returned, so what waits for it needs no
+    /// margin.
+    static T1_WORKER: std::cell::RefCell<Option<Exited>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Waits until `ready` says so. The minute only keeps a broken run from
+/// hanging the test; a passing one ends on the event.
+async fn wait_until(ready: impl Fn() -> bool) {
+    let until = std::time::Instant::now() + std::time::Duration::from_secs(60);
+    while !ready() && std::time::Instant::now() < until {
+        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+    }
+}
+
+impl Deployer for Panicking {
+    fn deploy<'a>(
+        &'a self,
+        cx: TenantContext<'a>,
+        request: &'a DeployRequest,
+    ) -> BoxFuture<'a, Result<DeployOutcome, DeployError>> {
+        let tenant = cx.tenant.label.tenant.clone();
+        self.opened.lock().unwrap().push(tenant.clone());
+        deploying(async move {
+            use std::sync::atomic::Ordering;
+            if tenant == "t1" {
+                // A barrier: every worker has taken its tenant, so none
+                // finds the run stopped before it took one.
+                wait_until(|| self.opened.lock().unwrap().len() >= 4).await;
+                T1_WORKER.with(|worker| *worker.borrow_mut() = Some(Exited));
+                panic!("the stand-in's crash");
+            }
+            // Once `t1`'s worker has exited, it had stopped the run: the
+            // worker that finishes this tenant finds it stopped. No margin.
+            wait_until(|| T1_WORKER_EXITED.load(Ordering::SeqCst)).await;
+            Ok(DeployOutcome::new(None, request.operation))
+        })
+    }
+}
+
+/// [`Panicking`] as the Sentinel platform.
+struct Panics(&'static Panicking);
+
+impl Platform for Panics {
+    fn id(&self) -> &'static str {
+        "sentinel"
+    }
+
+    fn deployer(&self) -> Option<&dyn Deployer> {
+        Some(self.0)
+    }
+}
+
+/// A panic on one of the tenants deploying at once stops the run as it
+/// did one tenant after another (#1998): of five Sentinel tenants, the
+/// four first start, `t1` panics, and no tenant starts after it while the
+/// three others finish.
+#[test]
+fn a_panic_on_a_tenant_deploying_at_once_starts_no_other_tenant() {
+    let ws = sentinel_tenants(
+        &["t0", "t1", "t2", "t3", "t4"],
+        &three_rules(SENTINEL_STAGING)[..1],
+    );
+    let panicking: &'static Panicking = Box::leak(Box::new(Panicking {
+        opened: Mutex::new(Vec::new()),
+    }));
+    let mut registry = Registry::new();
+    registry.register(Box::new(Panics(panicking))).unwrap();
+    let env = Env::from_pairs([("AZURE_CLIENT_SECRET", SECRET)]);
+    let (sent, stderr) = deploy(ws.path(), "sentinel", &env, &registry, 0);
+    assert_eq!(
+        sent.result.message.as_deref(),
+        Some("the deploy stopped unexpectedly"),
+        "{stderr}"
+    );
+    let mut opened = panicking.opened.lock().unwrap().clone();
+    opened.sort();
+    assert_eq!(opened, ["t0", "t1", "t2", "t3"], "{stderr}");
+}
+
+/// A deployer that answers the rules of the tenants in `order`, one after
+/// another: the n-th answer waits until n rules' lines are printed in
+/// `buffer`.
+struct Turns {
+    order: &'static [&'static str],
+    asked: Mutex<std::collections::HashMap<String, usize>>,
+    buffer: Buffer,
+}
+
+impl Deployer for Turns {
+    fn deploy<'a>(
+        &'a self,
+        cx: TenantContext<'a>,
+        request: &'a DeployRequest,
+    ) -> BoxFuture<'a, Result<DeployOutcome, DeployError>> {
+        let tenant = cx.tenant.label.tenant.clone();
+        let nth = {
+            let mut asked = self.asked.lock().unwrap();
+            let count = asked.entry(tenant.clone()).or_default();
+            *count += 1;
+            *count
+        };
+        let turn = self
+            .order
+            .iter()
+            .enumerate()
+            .filter(|(_, name)| **name == tenant)
+            .nth(nth - 1)
+            .map(|(turn, _)| turn)
+            .unwrap();
+        deploying(async move {
+            let until = std::time::Instant::now() + std::time::Duration::from_secs(10);
+            while self.buffer.text().matches(" ✓ ").count() < turn
+                && std::time::Instant::now() < until
+            {
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            }
+            Ok(DeployOutcome::new(None, request.operation))
+        })
+    }
+}
+
+/// [`Turns`] as the Sentinel platform.
+struct Takes(&'static Turns);
+
+impl Platform for Takes {
+    fn id(&self) -> &'static str {
+        "sentinel"
+    }
+
+    fn deployer(&self) -> Option<&dyn Deployer> {
+        Some(self.0)
+    }
+}
+
+/// The lines of tenants deploying at once interleave, and each rule's line
+/// stays under its own tenant's header (#1998): a line that follows
+/// another tenant's prints its `Deploying to` header again first.
+#[test]
+fn interleaved_rule_lines_each_come_under_their_tenants_header() {
+    let ws = sentinel_tenants(&["soc", "lab"], &three_rules(SENTINEL_STAGING)[..2]);
+    let buffer = Buffer::default();
+    let turns: &'static Turns = Box::leak(Box::new(Turns {
+        order: &["soc", "lab", "lab", "soc"],
+        asked: Mutex::new(std::collections::HashMap::new()),
+        buffer: buffer.clone(),
+    }));
+    let mut registry = Registry::new();
+    registry.register(Box::new(Takes(turns))).unwrap();
+    let env = Env::from_pairs([("AZURE_CLIENT_SECRET", SECRET)]);
+    let args = Args {
+        strategies: vec!["PREVIEW".into(), "RELEASE".into()],
+        all: true,
+        platform: Some("sentinel".to_owned()),
+        keep_deprecated: Some(true),
+        ..Args::default()
+    };
+    let (sent, stderr) = deploy_into(ws.path(), &args, &env, &registry, 0, &buffer);
+    // Each header, and each rule's line up to its mark.
+    let lines: Vec<&str> = stderr
+        .lines()
+        .skip_while(|line| !line.starts_with("Deploying to"))
+        .filter(|line| !line.is_empty())
+        .map(|line| &line[..line.find(" ✓ ").unwrap_or(line.len())])
+        .collect();
+    assert_eq!(
+        lines[..7],
+        [
+            "Deploying to sentinel / soc · 2 rules",
+            "  [1/2]",
+            "Deploying to sentinel / lab · 2 rules",
+            "  [1/2]",
+            "  [2/2]",
+            "Deploying to sentinel / soc · 2 rules",
+            "  [2/2]",
+        ],
+        "{stderr}"
+    );
+    assert_eq!(rows(&sent).len(), 4, "{stderr}");
 }

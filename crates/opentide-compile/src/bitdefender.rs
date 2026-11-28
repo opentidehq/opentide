@@ -1,5 +1,5 @@
-//! The Bitdefender GravityZone JSON-RPC params (bitdefender-1.0, Deploy;
-//! 0.28.0's `platforms/bitdefender/compile.py`): what a block deploys,
+//! The Bitdefender GravityZone JSON-RPC params (bitdefender-1.0, Deploy):
+//! what a block deploys,
 //! derived from the rule (the GravityZone name, description, severity and
 //! tags) and the tenant (targets, tags, the partner company), as the
 //! `params` of `createCustomRule`, `updateCustomRule` and `deleteCustomRule`.
@@ -16,6 +16,7 @@ use opentide_schema::objects::platform::bitdefender::{
 };
 
 use crate::Context;
+use crate::compiler::{self, Compiler};
 use crate::deploy::{Action, setup};
 use crate::json::{Json, Object};
 use crate::rule::{CompileError, Rule};
@@ -71,11 +72,14 @@ pub struct GravityZoneRule {
     pub kind: Kind,
     /// The GravityZone name.
     pub name: String,
-    /// The description.
+    /// The rule's description, whitespace collapsed and cut at 1024 characters
+    /// ([`derive_description`]).
     pub description: String,
-    /// The tags.
+    /// The block's, ATT&CK, `opentide` and tenant tags, normalised and unique
+    /// ([`derive_tags`]).
     pub tags: Vec<String>,
-    /// `settings`.
+    /// The request's `settings`: status, severity, then the YARA query or the
+    /// detection criteria ([`derive_settings`]).
     pub settings: Object,
     /// `targets`, resolved against the tenant; `None` for the whole company.
     pub targets: Option<Json>,
@@ -149,7 +153,7 @@ pub fn block_of(rule: &Rule) -> Result<BitdefenderConfig, CompileError> {
     serde_json::from_value(value).map_err(|error| CompileError::failed(DISPLAY, &error.to_string()))
 }
 
-/// The strategy the block's status maps to (`_strategy`).
+/// The strategy the block's status maps to.
 pub fn strategy(cx: &Context<'_>, rule: &Rule) -> Result<StatusStrategy, CompileError> {
     let status = block_of(rule)?.status;
     crate::deploy::strategy(cx, DISPLAY, &status)
@@ -180,7 +184,7 @@ pub fn derive_severity(rule: &Rule, block: &BitdefenderConfig) -> i64 {
     else {
         return DEFAULT_SEVERITY;
     };
-    let text = crate::deploy::text(written);
+    let text = Json::to_text(written);
     alert_severity(&text.trim().to_lowercase()).unwrap_or(DEFAULT_SEVERITY)
 }
 
@@ -258,7 +262,7 @@ pub fn automatic_actions(kind: Kind, actions: Option<&BitdefenderActions>) -> Ve
 /// The signature with `\n` line endings and one trailing newline
 /// (`yara_query`).
 pub fn yara_query(signature: &str) -> String {
-    let text = signature.replace("\r\n", "\n").replace('\r', "\n");
+    let text = opentide_core::text::universal_newlines(signature).into_owned();
     if text.ends_with('\n') {
         text
     } else {
@@ -333,7 +337,7 @@ pub fn derive_settings(
 
 fn aliases(value: Option<&Json>) -> Vec<String> {
     match value {
-        Some(Json::Array(items)) => items.iter().map(crate::deploy::text).collect(),
+        Some(Json::Array(items)) => items.iter().map(Json::to_text).collect(),
         _ => Vec::new(),
     }
 }
@@ -478,7 +482,7 @@ pub fn compile_rule(
             )
         })?;
         tenant_tags = aliases(setup(tenant, "tags"));
-        company_id = setup(tenant, "company_id").map(crate::deploy::text);
+        company_id = setup(tenant, "company_id").map(Json::to_text);
     }
     Ok(GravityZoneRule {
         uuid: rule.uuid.clone(),
@@ -522,7 +526,7 @@ pub fn create_params(compiled: &GravityZoneRule) -> Json {
 }
 
 /// `settings` with `filters: []` on a Basic rule without `alert`, where a
-/// create puts `filters`: before the actions (`_update_settings`).
+/// create puts `filters`: before the actions.
 fn update_settings(compiled: &GravityZoneRule) -> Object {
     if compiled.kind != Kind::Detection || compiled.settings.contains_key("filters") {
         return compiled.settings.clone();
@@ -589,10 +593,11 @@ pub fn request(
     if let Action::Delete(rule_id) = action {
         return Ok(request_body(DELETE, delete_params(rule_id)));
     }
-    let compiled = compile_rule(cx, rule, strategy(cx, rule)?, Some(tenant))?;
+    // The dry run's and the deploy's compile (#1952).
+    let compiled = <compiler::Bitdefender as Compiler>::compile(cx, rule, Some(tenant))?;
     Ok(match action {
         Action::Update(rule_id) => request_body(UPDATE, update_params(&compiled, rule_id)),
-        _ => request_body(CREATE, create_params(&compiled)),
+        _ => request_body(CREATE, <compiler::Bitdefender as Compiler>::body(&compiled)),
     })
 }
 

@@ -2,12 +2,12 @@
 //! table is a token of the lexer, and the lexer cuts no other fixed token (an operator, a
 //! bracket, a delimiter, a sigil) the table lacks.
 
-#![expect(dead_code, reason = "the included modules are used in part")]
+#![expect(
+    clippy::string_slice,
+    reason = "a test: a slice off a char boundary panics, and a panic is a failed test"
+)]
 
-#[path = "../src/lexer.rs"]
-mod lexer;
-#[path = "../src/syntax.rs"]
-mod syntax;
+use opentide_cql::{lexer, syntax};
 
 use opentide_core::LanguageId;
 use opentide_highlight::keywords;

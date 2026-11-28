@@ -5,8 +5,9 @@
 
 use opentide_core::LanguageId;
 
-/// How the help and the page spell a language. No wildcard: a language
-/// added to [`LanguageId`] must be given its spelling here.
+/// How the help and the page spell a language. [`LanguageId`] is
+/// non-exhaustive, so the wildcard panics: a language added to
+/// `QUERY_LANGUAGES` fails the tests below until it is given its spelling.
 fn spelling(language: LanguageId) -> &'static str {
     match language {
         LanguageId::Kql => "KQL",
@@ -20,8 +21,10 @@ fn spelling(language: LanguageId) -> &'static str {
         LanguageId::Yara => "YARA",
         LanguageId::Exabeam => "Exabeam",
         LanguageId::Yaral => "YARA-L",
+        LanguageId::Datadog => "Datadog",
         LanguageId::TideYaml => "Tide YAML",
         LanguageId::Config => "configuration",
+        other => panic!("give {other:?} its spelling in spelling()"),
     }
 }
 

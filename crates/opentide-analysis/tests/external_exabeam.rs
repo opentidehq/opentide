@@ -6,10 +6,14 @@
 //!
 //! `FAULTS.toml` names each twin's fault and the code it must report. Every
 //! clean query must come out with no finding of any severity under its
-//! profile (`.rule.` or `.search.`), as a raw query and through
-//! `analyze_query` (`platform: exabeam` is the `rule` profile).
+//! profile (`.rule.` or `.search.`), through `analyze_query`. A search is
+//! checked as a `.exabeam` file is, with and without `platform: exabeam`,
+//! which names no profile (ADR 0015 §4); a rule sequence at position `rule`
+//! (#1993), as its block's field path checks it.
 
-use opentide_analysis::{LanguageId, QueryRequest, analyze_query};
+use opentide_analysis::{
+    Diagnostic, LanguageId, QueryPosition, QueryRequest, analyze_query, analyze_query_at,
+};
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
@@ -17,13 +21,21 @@ fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../testdata/conformance/external/exabeam")
 }
 
-fn request(text: &str, profile: &str) -> QueryRequest {
-    QueryRequest {
-        language: LanguageId::Exabeam,
-        platform: (profile == "rule").then(|| "exabeam".to_string()),
-        stack: None,
-        text: text.to_string(),
+/// The findings on `text` under `profile`: a rule sequence's as its block
+/// is checked, a search's as a file is, whichever platform is named.
+fn check(text: &str, profile: &str) -> Vec<Diagnostic> {
+    if profile == "rule" {
+        return analyze_query_at(
+            &QueryRequest::new(LanguageId::Exabeam, text).with_platform(Some("exabeam")),
+            QueryPosition::Rule,
+        );
     }
+    let request = |platform: Option<&str>| {
+        QueryRequest::new(LanguageId::Exabeam, text).with_platform(platform)
+    };
+    let plain = analyze_query(&request(None));
+    assert_eq!(plain, analyze_query(&request(Some("exabeam"))), "{text}");
+    plain
 }
 
 #[test]
@@ -42,14 +54,14 @@ fn clean_queries_are_clean_and_every_twin_reports_its_fault() {
         faults.insert(entry["fault"].as_str().unwrap().to_string());
         listed.insert(file.to_string());
         let clean = std::fs::read_to_string(root().join(file)).unwrap();
-        let found = analyze_query(&request(&clean, profile));
+        let found = check(&clean, profile);
         assert!(found.is_empty(), "{file}: {found:?}");
         let twin = file.replace(
             &format!(".{profile}.exabeam"),
             &format!(".broken.{profile}.exabeam"),
         );
         let broken = std::fs::read_to_string(root().join(&twin)).unwrap();
-        let found = analyze_query(&request(&broken, profile));
+        let found = check(&broken, profile);
         assert!(
             found.iter().any(|d| d.code == code),
             "{twin}: expected {code}, got {:?}",

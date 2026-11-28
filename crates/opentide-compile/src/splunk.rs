@@ -1,7 +1,4 @@
-//! Splunk: the saved search a deploy writes on one tenant
-//! (`platforms/splunk/deployer.py` `config_mdr`, `_apply_flat_modifiers`,
-//! `_build_actions_config`, `_apply_saved_search`; `client.py`
-//! `create_query`, `cron_to_timeframe`, `splunk_timerange`).
+//! Splunk: the saved search a deploy writes on one tenant.
 //!
 //! A write's `url` is the one the Splunk client sends to: the tenant's
 //! saved searches under its app's namespace ([`saved_searches`]), and the
@@ -59,19 +56,10 @@ impl Clock {
 pub fn rule_minute_and_hour(uuid: &str) -> (u32, u32) {
     const OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
     const PRIME: u64 = 0x0100_0000_01b3;
-    let hex: String = uuid
-        .trim()
-        .trim_start_matches("urn:uuid:")
-        .chars()
-        .filter(|c| !matches!(c, '-' | '{' | '}'))
-        .collect();
-    let digits: Vec<u8> = Some(hex)
-        .filter(|hex| hex.len() == 32 && hex.chars().all(|c| c.is_ascii_hexdigit()))
-        .and_then(|hex| u128::from_str_radix(&hex, 16).ok())
-        .map_or_else(
-            || uuid.as_bytes().to_vec(),
-            |value| value.to_be_bytes().to_vec(),
-        );
+    let digits: Vec<u8> = opentide_core::ids::parse(uuid).map_or_else(
+        || uuid.as_bytes().to_vec(),
+        |parsed| parsed.as_bytes().to_vec(),
+    );
     let hash = digits.iter().fold(OFFSET, |hash, byte| {
         (hash ^ u64::from(*byte)).wrapping_mul(PRIME)
     });
@@ -178,23 +166,44 @@ pub fn splunk_timerange(time: &str, skew: f64, offset: i64) -> Result<String, Co
             "lookback {time:?} must be a whole number followed by m, h or d"
         ))
     })?;
+    let too_long = || {
+        invalid(&format!(
+            "lookback {time:?} is too long to express in minutes"
+        ))
+    };
     let minutes = match unit {
-        Some('h') => count * 60,
-        Some('d') => count * 1440,
-        Some('m') => count,
+        Some('h') => count.checked_mul(60),
+        Some('d') => count.checked_mul(1440),
+        Some('m') => Some(count),
         _ => {
             return Err(invalid(
                 "Time unit not supported by the Splunk earliest-time converter (expects m, h or d)",
             ));
         }
-    };
+    }
+    .ok_or_else(too_long)?;
     #[expect(
         clippy::cast_precision_loss,
-        clippy::cast_possible_truncation,
-        reason = "a lookback in minutes is far inside f64's exact integers"
+        reason = "a lookback past 2^53 minutes (17 billion years) may round; it cannot wrap"
     )]
-    let stretched = (minutes as f64 * (skew + 1.0)).round_ties_even() as i64;
-    Ok(format!("-{}m@m", offset + stretched))
+    let stretched = (minutes as f64 * (skew + 1.0)).round_ties_even();
+    // `i64::MAX as f64` rounds up to 2^63, itself out of range: the bound is exclusive.
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "the bounds of i64 as f64 are exactly -2^63 and 2^63"
+    )]
+    let in_range =
+        stretched.is_finite() && stretched >= i64::MIN as f64 && stretched < i64::MAX as f64;
+    if !in_range {
+        return Err(too_long());
+    }
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "checked above: a whole number inside i64's range"
+    )]
+    let stretched = stretched as i64;
+    let total = offset.checked_add(stretched).ok_or_else(too_long)?;
+    Ok(format!("-{total}m@m"))
 }
 
 /// The tenant's settings (`use_tenant`).
@@ -209,21 +218,21 @@ struct Settings {
 
 fn strings(value: Option<&Json>) -> Vec<String> {
     match value {
-        Some(Json::Array(items)) => items.iter().map(deploy::text).collect(),
+        Some(Json::Array(items)) => items.iter().map(Json::to_text).collect(),
         _ => Vec::new(),
     }
 }
 
 fn settings(tenant: &Json) -> Result<Settings, CompileError> {
     let skew = match deploy::setup(tenant, "allow_skew").filter(|value| value.is_filled()) {
-        Some(value) => deploy::text(value)
+        Some(value) => Json::to_text(value)
             .replace('%', "e-2")
             .trim()
             .parse::<f64>()
             .map_err(|_| {
                 invalid(&format!(
                     "allow_skew must be a number or a percentage, got {:?}",
-                    deploy::text(value)
+                    Json::to_text(value)
                 ))
             })?,
         None => 0.0,
@@ -231,10 +240,10 @@ fn settings(tenant: &Json) -> Result<Settings, CompileError> {
     let offset = match deploy::setup(tenant, "schedule_offset") {
         None => 0,
         Some(Json::Int(offset)) => *offset,
-        Some(value) => count(&deploy::text(value)).ok_or_else(|| {
+        Some(value) => count(&Json::to_text(value)).ok_or_else(|| {
             invalid(&format!(
                 "schedule_offset must be an integer, got {:?}",
-                deploy::text(value)
+                Json::to_text(value)
             ))
         })?,
     };
@@ -322,10 +331,10 @@ pub fn marked_rule(description: &str) -> Option<&str> {
         .filter(|uuid| !uuid.is_empty())
 }
 
-/// The saved search's settings from the block (0.28.1's `config_mdr`).
+/// The saved search's settings from the block.
 #[expect(
     clippy::too_many_lines,
-    reason = "one setting after another, in the oracle's order"
+    reason = "one setting after another, in the order the request sends them"
 )]
 fn saved_search_settings(
     cx: &Context<'_>,
@@ -338,7 +347,7 @@ fn saved_search_settings(
     let mut config = Object::new();
     let name = rule.name.trim();
     if let Some(scheduling) = filled(Some(block), "scheduling") {
-        let kind = filled(Some(scheduling), "type").map(deploy::text);
+        let kind = filled(Some(scheduling), "type").map(Json::to_text);
         let schedule = filled(Some(scheduling), "schedule");
         if kind.as_deref().map(str::to_lowercase).as_deref() == Some("real time") {
             config.insert("dispatch.earliest_time".into(), "rt".into());
@@ -353,7 +362,7 @@ fn saved_search_settings(
             if let Some(cron) = filled(Some(schedule), "cron") {
                 config.insert("cron_schedule".into(), cron.clone());
             } else if let Some(frequency) = filled(Some(schedule), "frequency") {
-                let frequency = deploy::text(frequency);
+                let frequency = Json::to_text(frequency);
                 // A drawn schedule is the rule's own, known without a
                 // clock; the current one is the send's (#1711).
                 let random =
@@ -363,7 +372,7 @@ fn saved_search_settings(
                     Some(custom) => timeframe(
                         &frequency,
                         "custom",
-                        Some(&deploy::text(custom)),
+                        Some(&Json::to_text(custom)),
                         Some(random),
                         now,
                     )?,
@@ -376,7 +385,7 @@ fn saved_search_settings(
             if let Some(lookback) = filled(Some(timerange), "lookback") {
                 config.insert(
                     "dispatch.earliest_time".into(),
-                    splunk_timerange(&deploy::text(lookback), settings.skew, settings.offset)?
+                    splunk_timerange(&Json::to_text(lookback), settings.skew, settings.offset)?
                         .into(),
                 );
             }
@@ -409,7 +418,7 @@ fn saved_search_settings(
             config.insert("alert_condition".into(), value.clone());
         }
         if let Some(kind) = filled(Some(trigger), "type") {
-            let once = deploy::text(kind).to_lowercase() == "once";
+            let once = Json::to_text(kind).to_lowercase() == "once";
             config.insert(
                 "alert.digest_mode".into(),
                 if once { "true" } else { "false" }.into(),
@@ -498,7 +507,7 @@ fn saved_search_settings(
             if let Some(domain) = filled(Some(notable), "security_domain") {
                 config.insert(
                     "action.notable.param.security_domain".into(),
-                    deploy::text(domain).to_lowercase().into(),
+                    Json::to_text(domain).to_lowercase().into(),
                 );
             }
         }
@@ -593,7 +602,7 @@ fn saved_search_value(value: &Json) -> String {
     match value {
         Json::Null => String::new(),
         Json::Bool(flag) => if *flag { "1" } else { "0" }.to_owned(),
-        other => deploy::text(other),
+        other => Json::to_text(other),
     }
 }
 
@@ -601,7 +610,7 @@ fn member(value: &Json, key: &str) -> Json {
     value.get(key).cloned().unwrap_or(Json::Null)
 }
 
-/// Applies the platform's `[[modifiers]]` (`_apply_flat_modifiers`): a
+/// Applies the platform's `[[modifiers]]`: a
 /// default modifier fills gaps, any other overrides; `allowed_actions`
 /// narrows the actions. The actions left allowed.
 fn apply_modifiers(
@@ -666,7 +675,7 @@ fn apply_modifiers(
     allowed
 }
 
-/// The actions the saved search runs (`_build_actions_config`).
+/// The actions the saved search runs.
 fn actions_config(
     config: &mut Object,
     settings: &Settings,
@@ -716,7 +725,7 @@ fn actions_config(
         if let Some(domain) = config
             .get("action.notable.param.security_domain")
             .filter(|value| value.is_filled())
-            .map(deploy::text)
+            .map(Json::to_text)
         {
             config.insert(
                 "action.notable.param.security_domain".into(),
@@ -754,7 +763,7 @@ pub fn compile(
     };
     let mut config = saved_search_settings(cx, rule, block, &settings, clock, correlation)?;
     let mut name = rule.name.trim().to_owned();
-    let status = block.get("status").map(deploy::text).unwrap_or_default();
+    let status = block.get("status").map(Json::to_text).unwrap_or_default();
     let query = create_query(block);
     if correlation {
         name.push_str(" - Rule");
@@ -783,7 +792,7 @@ pub fn compile(
     }
     let description = first
         .get("description")
-        .map(deploy::text)
+        .map(Json::to_text)
         .unwrap_or_default();
     first.insert(
         "description".into(),
@@ -816,6 +825,26 @@ pub fn compile(
     ])
 }
 
+/// A rule compiled for one tenant ([`crate::compiler::Splunk`]): the
+/// writes a deploy that creates its saved search sends ([`compile`]).
+pub type Compiled = Vec<Write>;
+
+/// The settings a deploy sends for the saved search the `writes` create
+/// ([`compile`]): every update's body after the create, merged in order, so
+/// the late settings follow the others and the `search` comes first. An
+/// empty object when there is nothing to send.
+pub fn settings_body(writes: &[Write]) -> Json {
+    let mut settings = Object::new();
+    for write in writes.iter().skip(1) {
+        if let Json::Object(members) = &write.body {
+            for (key, value) in members {
+                settings.insert(key.clone(), value.clone());
+            }
+        }
+    }
+    Json::Object(settings)
+}
+
 /// The port a tenant that names none is reached on.
 pub const DEFAULT_PORT: &str = "8089";
 
@@ -836,13 +865,13 @@ pub fn saved_searches(tenant: &Json) -> String {
     let port = deploy::setup(tenant, "port").map_or_else(
         || DEFAULT_PORT.to_owned(),
         |port| {
-            let text = deploy::text(port);
+            let text = Json::to_text(port);
             let text = text.trim();
             text.parse::<u16>()
                 .map_or_else(|_| text.to_owned(), |port| port.to_string())
         },
     );
-    let app = deploy::setup(tenant, "app").map_or_else(|| "search".to_owned(), deploy::text);
+    let app = deploy::setup(tenant, "app").map_or_else(|| "search".to_owned(), Json::to_text);
     format!(
         "https://{}:{port}/servicesNS/nobody/{}/saved/searches/",
         host.trim(),
@@ -947,6 +976,43 @@ mod tests {
         assert_eq!(splunk_timerange("5m", 0.5, 0).unwrap(), "-8m@m");
         assert_eq!(splunk_timerange("3m", 0.5, 0).unwrap(), "-4m@m");
         assert!(splunk_timerange("3s", 0.0, 0).is_err());
+    }
+
+    /// A lookback whose minutes do not fit is an error naming the field,
+    /// never a wrapped number (#1928): release builds do not check
+    /// overflow, so `9999999999999999d` once wrote `--4046744073709553152m@m`.
+    #[test]
+    fn lookbacks_that_overflow_name_the_field() {
+        let reason = |error: CompileError| error.reason;
+        let too_long = |time: &str| {
+            format!(
+                "Splunk cannot compile this rule: lookback {time:?} is too long to \
+                 express in minutes"
+            )
+        };
+        for time in ["9999999999999999d", "9223372036854775807h"] {
+            assert_eq!(
+                reason(splunk_timerange(time, 0.0, 0).unwrap_err()),
+                too_long(time)
+            );
+        }
+        // The stretch and the offset overflow too.
+        let max = i64::MAX.to_string();
+        let minutes = format!("{max}m");
+        assert_eq!(
+            reason(splunk_timerange(&minutes, 1.0, 0).unwrap_err()),
+            too_long(&minutes)
+        );
+        let near = format!("{}m", 1_i64 << 53);
+        assert_eq!(
+            reason(splunk_timerange(&near, 0.0, i64::MAX).unwrap_err()),
+            too_long(&near)
+        );
+        // A long lookback that fits still compiles.
+        assert_eq!(
+            splunk_timerange("1000000000d", 0.0, 0).unwrap(),
+            "-1440000000000m@m"
+        );
     }
 
     /// A count or a setting that does not read as a number names itself

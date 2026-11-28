@@ -1,4 +1,4 @@
-//! `opentide lint`: catalogue hygiene (`cli/services/lint.py`, UC-2.3 #818).
+//! `opentide lint`: catalogue hygiene (UC-2.3, #818).
 //!
 //! Every rule of `LINT_CODES`: a file that does not parse (`yaml_parse`), an
 //! object without a name (`name_missing`), a file name that is not the one
@@ -101,6 +101,7 @@ pub const NO_COMMITS_ADVICE: &str = "commit the files, or drop --changed to lint
 /// A lint check.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize)]
 #[serde(rename_all = "lowercase")]
+#[non_exhaustive]
 pub enum LintCheck {
     /// File names, parse errors, names, nested files.
     Filenames,
@@ -144,6 +145,7 @@ impl LintCheck {
 
 /// A command `next_actions` suggests.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[non_exhaustive]
 pub struct NextAction {
     /// The command, as a person types it (`opentide lint --fix`).
     pub command: String,
@@ -267,6 +269,7 @@ impl std::fmt::Debug for LintOptions<'_> {
 
 /// One finding: its JSON entry and its diagnostic.
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub struct LintFinding {
     /// The check that found it.
     pub check: LintCheck,
@@ -393,6 +396,7 @@ impl Serialize for LintFinding {
 /// `lint`'s status.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
+#[non_exhaustive]
 pub enum LintStatus {
     /// Nothing found.
     Completed,
@@ -402,8 +406,21 @@ pub enum LintStatus {
     Failed,
 }
 
+impl LintStatus {
+    /// The status as `lint --json` writes it: `completed`, `issues` or
+    /// `failed`.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Completed => "completed",
+            Self::Issues => "issues",
+            Self::Failed => "failed",
+        }
+    }
+}
+
 /// The counts of `summary`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+#[non_exhaustive]
 pub struct LintSummary {
     /// Files linted.
     pub files: usize,
@@ -421,6 +438,7 @@ pub struct LintSummary {
 
 /// What `lint` reports.
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub struct LintReport {
     /// The workspace, resolved.
     pub path: PathBuf,
@@ -430,7 +448,7 @@ pub struct LintReport {
     pub findings: Vec<LintFinding>,
     /// How many `--fix` fixed.
     pub fixed: usize,
-    /// The status.
+    /// Whether the run found nothing, found findings, or failed.
     pub status: LintStatus,
     /// One sentence.
     pub message: String,
@@ -555,7 +573,65 @@ pub fn lint(
 /// Object files already parsed, by path: what a [`crate::Workspace`]'s
 /// index holds. Lint reads such a file from its parse, not the disk; the
 /// parse is the same (`load::parse` reads a file as lint does).
-type Parses = std::collections::HashMap<PathBuf, std::sync::Arc<node::Document>>;
+///
+/// The first few files are looked for one by one, then a table of every
+/// file is made once: an editor's run reports on the file it edits, and
+/// made a table of every object file for it on each keystroke (#2122).
+#[derive(Default)]
+struct Parses<'a> {
+    sources: &'a [crate::index::Source],
+    looked_up: std::sync::atomic::AtomicUsize,
+    table: std::sync::OnceLock<
+        std::collections::HashMap<&'a Path, &'a std::sync::Arc<node::Document>>,
+    >,
+}
+
+impl<'a> Parses<'a> {
+    /// How many files are looked for one by one before the table is made.
+    const LOOKED_UP_ONE_BY_ONE: usize = 8;
+
+    /// None: every file is read from the disk.
+    fn new() -> Self {
+        Self::default()
+    }
+
+    /// The documents of `sources`, the last one where several name a file.
+    fn of(sources: &'a [crate::index::Source]) -> Self {
+        Self {
+            sources,
+            ..Self::default()
+        }
+    }
+
+    /// The parse of `path`, if there is one.
+    fn get(&self, path: &Path) -> Option<&'a std::sync::Arc<node::Document>> {
+        if self.sources.is_empty() {
+            return None;
+        }
+        if self.table.get().is_none()
+            && self
+                .looked_up
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+                < Self::LOOKED_UP_ONE_BY_ONE
+        {
+            return self
+                .sources
+                .iter()
+                .rev()
+                .find(|source| source.path == path)
+                .map(|source| &source.document);
+        }
+        self.table
+            .get_or_init(|| {
+                self.sources
+                    .iter()
+                    .map(|source| (source.path.as_path(), &source.document))
+                    .collect()
+            })
+            .get(path)
+            .copied()
+    }
+}
 
 /// What a host that runs `lint` again and again over one workspace
 /// ([`crate::Workspace::editor_lint`], once per keystroke) keeps between runs:
@@ -617,9 +693,9 @@ impl RecordCache {
     }
 
     /// Forgets the files `parses` does not hold any more.
-    fn retain(&self, parses: &Parses) {
+    fn retain(&self, parses: &Parses<'_>) {
         if let Ok(mut cache) = self.records.lock() {
-            cache.retain(|path, _| parses.contains_key(path));
+            cache.retain(|path, _| parses.get(path).is_some());
         }
     }
 
@@ -679,7 +755,7 @@ fn lint_with(
     root: &Path,
     config: &LintConfig,
     options: &LintOptions<'_>,
-    parses: &Parses,
+    parses: &Parses<'_>,
     cache: Option<&RecordCache>,
 ) -> LintReport {
     let target = fs.resolve(root);
@@ -744,7 +820,7 @@ fn lint_with(
             .par_iter()
             .map(|path| {
                 let light = !in_scope(path);
-                match (cache.filter(|_| light), parses.get(*path)) {
+                match (cache.filter(|_| light), parses.get(path)) {
                     (Some(cache), Some(document)) => cache.record(path, document, || {
                         load_record(fs, &target, path, Some(document), true)
                     }),
@@ -784,7 +860,13 @@ fn lint_with(
             record.document = None;
         }
     }
-    if let Some(cache) = cache {
+    // A run that read every object file forgets the ones that are gone. One
+    // that read only the files it reports on keeps the others: a kept record
+    // stands only for the document it was made from, so one of a file gone
+    // is never used, and the next run over every file forgets it.
+    if let Some(cache) = cache
+        && candidates.len() == object_files.len()
+    {
         cache.retain(parses);
     }
     let shown: Vec<usize> = (0..records.len())
@@ -947,7 +1029,7 @@ fn editor_findings(
     config: &LintConfig,
     files: Option<Vec<PathBuf>>,
     named: bool,
-    parses: &Parses,
+    parses: &Parses<'_>,
     cache: Option<&RecordCache>,
 ) -> Vec<LintFinding> {
     let checks: Vec<LintCheck> = enabled_checks(config)
@@ -1058,10 +1140,17 @@ fn narrow_selected(
     options: &LintOptions<'_>,
 ) -> Option<Result<Option<Narrowed>, Box<LintReport>>> {
     let selected = options.selected.as_ref()?;
-    let known: std::collections::HashSet<&PathBuf> = candidates.iter().collect();
+    // An editor selects the file it edits: a few files are looked for in the
+    // listing one by one, not by hashing every file it lists (#2122).
+    let known: Option<std::collections::HashSet<&PathBuf>> =
+        (selected.len() > 16).then(|| candidates.iter().collect());
+    let listed = |path: &PathBuf| match &known {
+        Some(known) => known.contains(path),
+        None => candidates.contains(path),
+    };
     let unmatched: Vec<String> = selected
         .iter()
-        .filter(|path| !known.contains(path))
+        .filter(|path| !listed(path))
         .map(|path| relative(target, path))
         .collect();
     if !unmatched.is_empty() {
@@ -1337,9 +1426,9 @@ fn patterns() -> &'static Patterns {
     })
 }
 
-/// Code points in `text[..byte]`.
+/// Code points in `text[..byte]`; `byte` is a regex match's bound.
 fn chars_before(text: &str, byte: usize) -> usize {
-    text[..byte].chars().count()
+    crate::cut(text, 0, byte).chars().count()
 }
 
 /// `text` without leading whitespace.
@@ -1381,11 +1470,11 @@ fn placeholder_lines(text: &str) -> Vec<Marked> {
         let Some(comment) = patterns().placeholder.find(line) else {
             continue;
         };
-        let content = line[..comment.start()].trim_end();
+        let content = crate::cut(line, 0, comment.start()).trim_end();
         let (start, end, label) = if let Some(key) = patterns().marked_key.captures(content) {
             let whole = key.get(0).map_or(0, |m| m.end());
             let name = key.name("key").map_or((0, 0), |m| (m.start(), m.end()));
-            let rest = &content[whole..];
+            let rest = crate::cut(content, whole, content.len());
             if ["", "|", ">", "|-", ">-"].contains(&rest) {
                 (
                     chars_before(content, name.0),
@@ -2191,7 +2280,7 @@ fn report(
         } else {
             format!(
                 " {}",
-                shlex::try_join(flags.iter().map(String::as_str)).unwrap_or_default()
+                opentide_core::text::shell_line(flags.iter().map(String::as_str))
             )
         };
         next_actions = vec![NextAction {
@@ -2238,12 +2327,7 @@ impl crate::Workspace {
         ) else {
             return Vec::new();
         };
-        let parses: Parses = self
-            .index()
-            .sources
-            .iter()
-            .map(|source| (source.path.clone(), std::sync::Arc::clone(&source.document)))
-            .collect();
+        let parses = Parses::of(&self.index().sources);
         // The files as the index names them: a symbolic link is named by its
         // link, and a file asked for by what it resolves to.
         let selected = files.map(|files| {
@@ -2288,5 +2372,31 @@ impl crate::Workspace {
                 report
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod multi_byte_tests {
+    use super::*;
+
+    /// The marked values' columns (from 1) count code points of multi-byte
+    /// text.
+    #[test]
+    fn placeholder_columns_count_code_points() {
+        let text = "é😀: x # opentide:placeholder\nname: é😀 # opentide:placeholder\ndescription: | # opentide:placeholder\n  é\nlist:\n  - 😀é # opentide:placeholder\n é😀 # opentide:placeholder\n";
+        let marked: Vec<(usize, String, usize, usize)> = placeholder_lines(text)
+            .into_iter()
+            .map(|m| (m.line, m.label, m.column, m.end_column))
+            .collect();
+        assert_eq!(
+            marked,
+            [
+                (0, "value".to_owned(), 1, 6),
+                (1, "name".to_owned(), 7, 9),
+                (2, "description".to_owned(), 1, 12),
+                (5, "list[0]".to_owned(), 5, 7),
+                (6, "value".to_owned(), 2, 4),
+            ]
+        );
     }
 }

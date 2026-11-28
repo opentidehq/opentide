@@ -10,6 +10,8 @@ from opentide._native import models as models
 from opentide._native import sdk as sdk
 
 Severity = Literal["error", "warning", "information", "hint"]
+#: Where a query on its own will sit: a search (the default) or a rule block's query.
+Position = Literal["search", "rule"]
 Language = Literal[
     "kql",
     "spl",
@@ -22,6 +24,7 @@ Language = Literal[
     "yara",
     "exabeam",
     "yaral",
+    "datadog",
     "opentide-yaml",
 ]
 
@@ -56,7 +59,11 @@ class Diagnostic:
     def suggestion(self) -> str | None: ...
 
 def analyze_query(
-    text: str, language: str, platform: str | None = None, stack: str | None = None
+    text: str,
+    language: str,
+    platform: str | None = None,
+    stack: str | None = None,
+    position: Position = "search",
 ) -> list[Diagnostic]: ...
 def highlight(text: str, language: str) -> list[tuple[int, int, int, int, str]]: ...
 def describe_code(code: str) -> str | None: ...

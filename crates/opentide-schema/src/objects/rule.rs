@@ -1,6 +1,5 @@
-//! Detection rule models, schemas `rule::1.0` and `rule::1.1`
-//! (`models/rule.py`), with the `configurations` container
-//! (`models/platform.py` `RuleConfigurations`).
+//! Detection rule models, schemas `rule::1.0` and `rule::1.1`, with the
+//! `configurations` container ([`RuleConfigurations`]).
 //!
 //! The platform blocks are [`crate::objects::platform`]'s (UC-1.4, #810).
 
@@ -13,16 +12,22 @@ use crate::FromNode;
 use crate::objects::any::Any;
 use crate::objects::metadata::{ObjectMetadata, ObjectReferences, RuleMetadata};
 use crate::objects::platform::{
-    BitdefenderConfig, CarbonBlackConfig, CrowdstrikeConfig, ElasticConfig, ExabeamConfig,
-    GoogleSecopsConfig, GraylogConfig, HarfangLabConfig, MicrosoftDefenderConfig, PlatformBlock,
-    SentinelConfig, SentinelOneConfig, SplunkConfig, SysdigConfig,
+    BitdefenderConfig, CarbonBlackConfig, CrowdstrikeConfig, DatadogConfig, ElasticConfig,
+    ExabeamConfig, GoogleSecopsConfig, GraylogConfig, HarfangLabConfig, MicrosoftDefenderConfig,
+    PlatformBlock, SentinelConfig, SentinelOneConfig, SplunkConfig, SysdigConfig,
 };
 use crate::objects::response::RuleResponse;
 use crate::pins::Pins;
 use crate::revision::revisions;
 
+// Non-exhaustive (ADR 0015 §6, #1911): a new platform is a new field and a
+// minor release. Outside this crate, a caller starts from `Default` and sets
+// the blocks it needs. A plain comment: the doc comment is the JSON schema's
+// description, which editors show.
 /// Dynamically composed rule platform configurations.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, Validate, FromNode)]
+#[derive(
+    Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema, Validate, FromNode,
+)]
 #[from_node(model = "RuleConfigurations")]
 #[serde(deny_unknown_fields)]
 #[garde(context(Pins))]
@@ -44,6 +49,7 @@ use crate::revision::revisions;
         reason = "the `unsafe` is PyO3's FFI glue, which relies on no invariant of the fields"
     )
 )]
+#[non_exhaustive]
 pub struct RuleConfigurations {
     /// Microsoft Sentinel analytics rule (`platform::sentinel::1.0`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -97,11 +103,16 @@ pub struct RuleConfigurations {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[garde(dive)]
     pub google_secops: Option<GoogleSecopsConfig>,
+    /// Datadog Cloud SIEM detection rule (`platform::datadog::1.0`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[garde(dive)]
+    pub datadog: Option<DatadogConfig>,
 }
 
 impl RuleConfigurations {
     /// The platforms, in the container's order ([`crate::platforms`]).
-    pub const PLATFORMS: [&'static str; crate::platforms::COUNT] = crate::platforms::IDS;
+    /// A slice, not an array, so a new platform does not change its type.
+    pub const PLATFORMS: &'static [&'static str] = &crate::platforms::IDS;
 
     /// Each block's `status`, keyed by platform, in the container's order,
     /// for the blocks that are set and have one: what deploy and promotion
@@ -121,9 +132,11 @@ impl RuleConfigurations {
             self.graylog.as_ref().map(PlatformBlock::status),
             self.exabeam.as_ref().map(PlatformBlock::status),
             self.google_secops.as_ref().map(PlatformBlock::status),
+            self.datadog.as_ref().map(PlatformBlock::status),
         ];
         Self::PLATFORMS
-            .into_iter()
+            .iter()
+            .copied()
             .zip(statuses)
             .filter_map(|(platform, status)| Some((platform, status.filter(|s| !s.is_empty())?)))
             .collect()

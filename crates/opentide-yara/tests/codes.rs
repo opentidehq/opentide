@@ -3,12 +3,16 @@
 //! check that starts firing elsewhere fails here too.
 
 #![expect(
+    clippy::string_slice,
+    reason = "a test: a slice off a char boundary panics, and a panic is a failed test"
+)]
+#![expect(
     clippy::cast_possible_truncation,
     reason = "positions and counts in test documents of a few lines"
 )]
 
 use opentide_core::Severity;
-use opentide_yara::{Context, Profile, WARNING_CODES, YaraXSyntax, always_warning, analyze_with};
+use opentide_yara::{Context, Dialect, WARNING_CODES, YaraXSyntax, always_warning, analyze_with};
 
 fn codes(source: &str, ctx: &Context) -> Vec<(String, Severity)> {
     let mut out: Vec<_> = analyze_with(source, ctx)
@@ -865,8 +869,8 @@ fn a_refused_module_says_why() {
 
 #[test]
 fn profiles() {
-    let hl = Context::for_profile(Profile::Harfanglab);
-    let bd = Context::for_profile(Profile::Bitdefender);
+    let hl = Context::for_profile(Dialect::Harfanglab);
+    let bd = Context::for_profile(Dialect::Bitdefender);
     let ok = "rule a { meta: context = \"file\" condition: true }";
     assert_eq!(codes(ok, &hl), []);
     assert_eq!(codes(ok, &bd), []);
@@ -990,8 +994,8 @@ fn warning_codes_are_warnings_in_every_context() {
     let contexts = [
         raw(),
         Context::default(),
-        Context::for_profile(Profile::Harfanglab),
-        Context::for_profile(Profile::Bitdefender),
+        Context::for_profile(Dialect::Harfanglab),
+        Context::for_profile(Dialect::Bitdefender),
     ];
     let mut sources: Vec<&str> = RAW.iter().map(|(source, _)| *source).collect();
     // The profile-only warnings.
@@ -1049,11 +1053,11 @@ rule Loader_Stage1 : loader {
 "#;
     assert_eq!(codes(example, &raw()), []);
     assert_eq!(
-        codes(example, &Context::for_profile(Profile::Harfanglab)),
+        codes(example, &Context::for_profile(Dialect::Harfanglab)),
         []
     );
     assert_eq!(
-        codes(example, &Context::for_profile(Profile::Bitdefender)),
+        codes(example, &Context::for_profile(Dialect::Bitdefender)),
         []
     );
 }
@@ -1231,7 +1235,7 @@ fn yara_x_syntax_is_taken_when_allowed() {
 /// Both profiles start at `refused`: an error naming the construct and the profile.
 #[test]
 fn yara_x_syntax_is_refused_by_both_profiles() {
-    for profile in [Profile::Harfanglab, Profile::Bitdefender] {
+    for profile in [Dialect::Harfanglab, Dialect::Bitdefender] {
         for source in YARA_X_ONLY {
             let found = analyze_with(source, &Context::for_profile(profile)).diagnostics;
             let hit: Vec<_> = found

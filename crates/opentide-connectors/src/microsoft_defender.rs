@@ -1,6 +1,6 @@
 //! Microsoft Defender through the Microsoft Graph beta security API
-//! (microsoft-defender-1.0, RFC 0021): custom detection rules addressed by the
-//! rule's `metadata.uuid`, advanced hunting (`runHuntingQuery`) for
+//! (microsoft-defender-1.0, RFC 0021): custom detection rules addressed by
+//! `opentide-<metadata.uuid>` (#1886), advanced hunting (`runHuntingQuery`) for
 //! `opentide query` and `validate query --live`, and the columns a custom
 //! detection needs.
 //!
@@ -10,12 +10,16 @@
 //! new token and one resend), and sends every call to Graph's beta security
 //! API with the bearer token and `Content-Type: application/json`.
 //!
-//! Deploy keeps no deployment state ([`MicrosoftDefender::deploy`]): an
-//! active status sends `PATCH {base}/{uuid}`, and on a `404` `POST {base}`
-//! with `id`; a `409` on that `POST` (a concurrent create) is followed by one
-//! more `PATCH`. A DISABLEMENT is a `PATCH` with `status: disabled`, and a
-//! `404` there creates nothing ([`RULE_ABSENT`]). A DELETION is a `DELETE`,
-//! whose `404` is the rule already gone.
+//! Deploy keeps no deployment state ([`MicrosoftDefender::deploy`]): the
+//! rule id is `opentide-` and the rule's lowercase canonical uuid
+//! ([`opentide_compile::microsoft_defender::rule_id_of`]), since Graph
+//! refuses an id that begins with a digit. An active status sends
+//! `PATCH {base}/{id}`, and on a `404` `POST {base}` with `id`; a `409` on
+//! that `POST` (a concurrent create) is followed by one more `PATCH`, and
+//! when that one finds no rule either, the `409` was another rule holding
+//! the name ([`RULE_CONFLICT`]). A DISABLEMENT is a `PATCH` with
+//! `status: disabled`, and a `404` there creates nothing ([`RULE_ABSENT`]).
+//! A DELETION is a `DELETE`, whose `404` is the rule already gone.
 
 use std::sync::Arc;
 
@@ -25,12 +29,11 @@ use crate::answer::Answer;
 use crate::connector::{
     BoxFuture, DeployOutcome, DeployRequest, DeployWarning, Deployer, LiveCheck, LiveValidator,
     Operation, Platform, Prober, QueryColumn, QueryOutcome, QueryRequest, QueryRunner, Row,
-    TenantContext, kql_code, kql_with_limit, probe_verdict, utc_z,
+    TenantContext, kql_with_limit, probe_verdict, utc_z,
 };
 use crate::entra::CredentialNames;
 use crate::error::ConnectorError;
 use crate::retry::RetryPolicy;
-use crate::text::json_text;
 use crate::token::TokenCache;
 use crate::{HttpSettings, Secret};
 
@@ -334,8 +337,8 @@ impl MicrosoftDefender {
                     let name = first_filled(column.get("name"), column.get("Name"));
                     let kind = first_filled(column.get("type"), column.get("Type"));
                     Some(QueryColumn {
-                        name: name.map_or_else(|| "null".to_owned(), json_text),
-                        kind: kind.map(json_text),
+                        name: name.map_or_else(|| "null".to_owned(), Json::to_text),
+                        kind: kind.map(Json::to_text),
                     })
                 })
                 .collect(),
@@ -411,7 +414,7 @@ fn error_body_value(answer: &Answer) -> Json {
 
 /// `str(_error_body(response))`.
 fn error_body(answer: &Answer) -> String {
-    json_text(&error_body_value(answer))
+    Json::to_text(&error_body_value(answer))
 }
 
 /// `str(_error_message(response))`: Graph's `error.message`, or the body.
@@ -422,7 +425,7 @@ fn error_message(answer: &Answer) -> String {
         .filter(|error| error.as_object().is_some())
         .and_then(|error| error.get("message"))
         .filter(|message| message.is_filled());
-    json_text(message.unwrap_or(&body))
+    Json::to_text(message.unwrap_or(&body))
 }
 
 /// `body.get(a, body.get(b, None))`.
@@ -438,166 +441,10 @@ fn first_filled<'j>(first: Option<&'j Json>, second: Option<&'j Json>) -> Option
         .filter(|value| value.is_filled())
 }
 
-/// The Defender XDR advanced hunting tables a custom detection names, with
-/// their family (`DEFENDER_XDR_TABLES`).
-pub const DEFENDER_XDR_TABLES: [(&str, &str); 33] = [
-    ("DeviceEvents", "endpoint"),
-    ("DeviceFileCertificateInfo", "endpoint"),
-    ("DeviceFileEvents", "endpoint"),
-    ("DeviceImageLoadEvents", "endpoint"),
-    ("DeviceInfo", "endpoint"),
-    ("DeviceLogonEvents", "endpoint"),
-    ("DeviceNetworkEvents", "endpoint"),
-    ("DeviceNetworkInfo", "endpoint"),
-    ("DeviceProcessEvents", "endpoint"),
-    ("DeviceRegistryEvents", "endpoint"),
-    ("AlertEvidence", "alert"),
-    ("AlertInfo", "alert"),
-    ("CampaignInfo", "xdr"),
-    ("EmailAttachmentInfo", "xdr"),
-    ("EmailEvents", "xdr"),
-    ("EmailPostDeliveryEvents", "xdr"),
-    ("EmailUrlInfo", "xdr"),
-    ("FileMaliciousContentInfo", "xdr"),
-    ("MessageEvents", "xdr"),
-    ("MessagePostDeliveryEvents", "xdr"),
-    ("MessageUrlInfo", "xdr"),
-    ("UrlClickEvents", "xdr"),
-    ("AADSignInEventsBeta", "xdr"),
-    ("AADSpnSignInEventsBeta", "xdr"),
-    ("CloudAppEvents", "xdr"),
-    ("EntraIdSignInEvents", "xdr"),
-    ("EntraIdSpnSignInEvents", "xdr"),
-    ("IdentityAccountInfo", "xdr"),
-    ("IdentityDirectoryEvents", "xdr"),
-    ("IdentityInfo", "xdr"),
-    ("IdentityLogonEvents", "xdr"),
-    ("IdentityQueryEvents", "xdr"),
-    ("OAuthAppInfo", "xdr"),
-];
-
-const TIMESTAMP_COLUMNS: [&str; 2] = ["Timestamp", "TimeGenerated"];
-const IMPACTED_ASSET_IDENTIFIER_COLUMNS: [&str; 14] = [
-    "DeviceId",
-    "DeviceName",
-    "RemoteDeviceName",
-    "RecipientEmailAddress",
-    "SenderFromAddress",
-    "SenderMailFromAddress",
-    "SenderObjectId",
-    "RecipientObjectId",
-    "AccountObjectId",
-    "AccountSid",
-    "AccountUpn",
-    "InitiatingProcessAccountSid",
-    "InitiatingProcessAccountUpn",
-    "InitiatingProcessAccountObjectId",
-];
-
-fn is_word(character: char) -> bool {
-    character.is_alphanumeric() || character == '_'
-}
-
-/// The Defender XDR tables *query* names (`defender_xdr_tables_in_query`).
-///
-/// Comments and string literals are blanked with [`kql_code`], which reads a
-/// string before a `//` inside it: `let u = "http://x"; DeviceEvents` names
-/// `DeviceEvents`.
-pub fn defender_xdr_tables_in_query(query: &str) -> Vec<String> {
-    let query = kql_code(query);
-    let mut tables: Vec<String> = Vec::new();
-    let preceded_ok = |at: usize| {
-        query[..at]
-            .chars()
-            .next_back()
-            .is_none_or(|c| !is_word(c) && c != '.')
-    };
-    for (table, _) in DEFENDER_XDR_TABLES {
-        let found = query.match_indices(table).any(|(at, _)| {
-            let followed_ok = query[at + table.len()..]
-                .chars()
-                .next()
-                .is_none_or(|c| !is_word(c));
-            preceded_ok(at) && followed_ok
-        });
-        if found {
-            tables.push(table.to_owned());
-        }
-    }
-    let mut from = 0;
-    while let Some(offset) = query[from..].find("Observation") {
-        let at = from + offset;
-        let rest = &query[at + "Observation".len()..];
-        let tail: usize = rest
-            .chars()
-            .take_while(|&c| is_word(c))
-            .map(char::len_utf8)
-            .sum();
-        if preceded_ok(at) && tail > 0 {
-            let name = &query[at..at + "Observation".len() + tail];
-            if name != "ObservationId" && !tables.iter().any(|known| known == name) {
-                tables.push(name.to_owned());
-            }
-            from = at + "Observation".len() + tail;
-        } else {
-            from = at + "Observation".len();
-        }
-    }
-    tables.sort();
-    tables
-}
-
-/// The column groups a custom detection's output needs, each an OR group
-/// (`required_column_groups`).
-pub fn required_column_groups(query: &str) -> Vec<Vec<&'static str>> {
-    let tables = defender_xdr_tables_in_query(query);
-    let categories: Vec<&str> = tables
-        .iter()
-        .map(|table| {
-            if table.starts_with("Observation") {
-                "observation"
-            } else {
-                DEFENDER_XDR_TABLES
-                    .iter()
-                    .find(|(name, _)| name == table)
-                    .map_or("xdr", |(_, category)| *category)
-            }
-        })
-        .collect();
-    let has = |category: &str| categories.contains(&category);
-    let mut groups: Vec<Vec<&'static str>> = vec![if categories.is_empty() {
-        TIMESTAMP_COLUMNS.to_vec()
-    } else {
-        vec!["Timestamp"]
-    }];
-    if has("endpoint") {
-        groups.push(vec!["DeviceId"]);
-        groups.push(vec!["ReportId"]);
-    }
-    if has("observation") {
-        groups.push(vec!["ObservationId"]);
-    }
-    if (has("xdr") || categories.is_empty()) && !groups.iter().any(|group| group == &["ReportId"]) {
-        groups.push(vec!["ReportId"]);
-    }
-    if !has("endpoint") {
-        groups.push(IMPACTED_ASSET_IDENTIFIER_COLUMNS.to_vec());
-    }
-    groups
-}
-
-/// The groups none of whose columns *returned* holds, each as `A or B`
-/// (`missing_required_column_groups`).
-pub fn missing_required_column_groups(query: &str, returned: &[&str]) -> Vec<String> {
-    required_column_groups(query)
-        .into_iter()
-        .filter(|group| !group.iter().any(|column| returned.contains(column)))
-        .map(|mut group| {
-            group.sort_unstable();
-            group.join(" or ")
-        })
-        .collect()
-}
+pub use opentide_schema::objects::platform::microsoft_defender::required_columns::{
+    DEFENDER_XDR_TABLES, defender_xdr_tables_in_query, missing_required_column_groups,
+    required_column_groups,
+};
 
 impl MicrosoftDefender {
     /// What a deploy does before its first rule: the Entra ID sign-in
@@ -648,9 +495,15 @@ pub const RULE_CREATED: &str = "microsoft_defender_rule_created";
 pub const RULE_UPDATED: &str = "microsoft_defender_rule_updated";
 /// The event of a rule deleted.
 pub const RULE_DELETED: &str = "microsoft_defender_rule_deleted";
-/// The warning of a DISABLEMENT that found no rule with the uuid on the
+/// The warning of a DISABLEMENT that found no rule with the id on the
 /// tenant: nothing is created (microsoft-defender-1.0, Diagnostics).
 pub const RULE_ABSENT: &str = "microsoft_defender_rule_absent";
+/// The failure of a create Graph refused with `409` while no rule has the
+/// id: another rule most likely holds the display name or the alert title
+/// (one an earlier opentide release created, under its bare uuid or in 0.x,
+/// or one created by hand), which Graph keeps reserved for a disabled rule
+/// too (#1886).
+pub const RULE_CONFLICT: &str = "microsoft_defender_rule_conflict";
 
 /// What one rule's deploy did.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -723,7 +576,10 @@ impl MicrosoftDefender {
     /// An active status (microsoft-defender-1.0, Deploy): `PATCH
     /// {base}/{id}` with *body*; on `404`, `POST {base}` with the body and
     /// `id`; a `409` on that `POST` (the rule was created meanwhile) gets one
-    /// more `PATCH`, never another `POST`.
+    /// more `PATCH`, never another `POST`. When that `PATCH` answers `404`
+    /// too, no rule has the id and the `409` was another rule's display
+    /// name: [`RULE_CONFLICT`]. *id* is the Defender rule id
+    /// ([`opentide_compile::microsoft_defender::rule_id_of`]).
     pub async fn upsert(
         &self,
         cx: TenantContext<'_>,
@@ -749,11 +605,41 @@ impl MicrosoftDefender {
         if answer.status != 409 {
             return Err(Self::refused(cx, "create", id, &answer));
         }
+        let conflict = answer;
         let answer = self.send(cx, Method::PATCH, &url, Some(body)).await?;
         if succeeded(answer.status) {
             return Ok(Sent::Updated);
         }
+        if answer.status == 404 {
+            return Err(Self::conflict(cx, id, &conflict));
+        }
         Err(Self::refused(cx, "update", id, &answer))
+    }
+
+    /// [`RULE_CONFLICT`]: Graph refused to create *id* with *answer*'s `409`,
+    /// and no rule has the id.
+    fn conflict(cx: TenantContext<'_>, id: &str, answer: &Answer) -> crate::connector::DeployError {
+        let tenant = &cx.tenant.label.tenant;
+        crate::connector::DeployError::rule(
+            crate::connector::DeployFailure::new(
+                RULE_CONFLICT,
+                format!(
+                    "Graph refused to create detection rule {id} on tenant {tenant}: HTTP {} \
+                     ({}). No rule has this id, so another rule most likely holds its \
+                     display name or alert title: one an earlier opentide release created \
+                     (under the bare uuid in 1.0.0, or in 0.x), or one created by hand. \
+                     Graph keeps them reserved for a disabled rule too: delete that rule in \
+                     the Defender portal (or rename both its name and its alert title), \
+                     then deploy again",
+                    answer.status,
+                    error_message(answer)
+                ),
+            )
+            .with_status(answer.status)
+            .with_field("platform", PLATFORM)
+            .with_field("tenant", tenant.as_str())
+            .with_field("detail", error_body(answer)),
+        )
     }
 
     /// A DISABLEMENT: `PATCH {base}/{id}` with *body* (`status: disabled`);
@@ -802,10 +688,12 @@ impl Deployer for MicrosoftDefender {
         crate::connector::opening(self.open_tenant(cx))
     }
 
-    /// One rule by its uuid (`request.rule_id`, lower-cased), with the
-    /// compiled update body: [`MicrosoftDefender::upsert`] for a create or an
-    /// update, [`MicrosoftDefender::disable`], [`MicrosoftDefender::delete`].
-    /// No id is recorded: `remote_id` is the uuid while the rule exists.
+    /// One rule by its Defender rule id
+    /// ([`opentide_compile::microsoft_defender::rule_id_of`] of
+    /// `request.rule_id`, the rule's uuid or that id), with the compiled
+    /// update body: [`MicrosoftDefender::upsert`] for a create or an update,
+    /// [`MicrosoftDefender::disable`], [`MicrosoftDefender::delete`]. No id
+    /// is recorded: `remote_id` is the rule id while the rule exists.
     fn deploy<'a>(
         &'a self,
         cx: TenantContext<'a>,
@@ -820,7 +708,7 @@ impl Deployer for MicrosoftDefender {
                 failed.scope = crate::connector::DeployScope::Tenant;
                 failed
             })?;
-            let id = request.rule_id.trim().to_ascii_lowercase();
+            let id = opentide_compile::microsoft_defender::rule_id_of(&request.rule_id);
             let body = || -> Result<Json, crate::connector::DeployError> {
                 serde_json::from_slice(&request.body).map_err(|error| {
                     ConnectorError::Setup {
@@ -923,87 +811,6 @@ mod tests {
         assert!(
             shown.contains("bad ***") && !shown.contains(TEST_BEARER),
             "{shown}"
-        );
-    }
-
-    #[test]
-    fn a_double_slash_in_a_string_does_not_hide_the_table() {
-        // `validate query --live` passed this query: the URL's `//` blanked
-        // the rest of the query as a comment, so no table was found and the
-        // endpoint columns were not required.
-        let returned = ["Timestamp", "ReportId", "DeviceName"];
-        assert_eq!(
-            missing_required_column_groups(
-                "let u = \"http://x\"; DeviceNetworkEvents | where RemoteUrl == u \
-                 | project Timestamp, ReportId, DeviceName",
-                &returned
-            ),
-            ["DeviceId"]
-        );
-        // A verbatim string has no escapes, and doubles a quote inside it.
-        assert_eq!(
-            missing_required_column_groups(
-                r#"let u = @"\\host//share\"; DeviceFileEvents | project Timestamp, ReportId, DeviceName"#,
-                &returned
-            ),
-            ["DeviceId"]
-        );
-        assert_eq!(
-            defender_xdr_tables_in_query(
-                r#"let p = @'C:\'; let q = @"//a""\"; EmailEvents | where 'b//' != p"#
-            ),
-            ["EmailEvents"]
-        );
-        // An escaped quote does not end a string; a comment still hides a table.
-        assert_eq!(
-            defender_xdr_tables_in_query(r#"print "a\"// DeviceEvents" // AlertInfo"#),
-            Vec::<String>::new()
-        );
-        // A multi-line string has no escapes and ends at its own chord.
-        assert_eq!(
-            missing_required_column_groups(
-                "let s = ```http://x```; DeviceEvents | project Timestamp, ReportId, DeviceName",
-                &returned
-            ),
-            ["DeviceId"]
-        );
-        assert_eq!(
-            defender_xdr_tables_in_query("let s = ~~~a```//~~~; EmailEvents | take 1"),
-            ["EmailEvents"]
-        );
-        // Kusto has no block comments: a table inside `/* */` is read as
-        // code, so its columns are required (the check fails closed).
-        assert_eq!(
-            defender_xdr_tables_in_query("/* DeviceEvents */ print 1"),
-            ["DeviceEvents"]
-        );
-    }
-
-    #[test]
-    fn column_groups_follow_the_tables_the_query_names() {
-        assert_eq!(
-            missing_required_column_groups(
-                "DeviceProcessEvents | project Timestamp, DeviceName",
-                &["Timestamp", "DeviceName"]
-            ),
-            ["DeviceId", "ReportId"]
-        );
-        // A table named in a comment or a string is not one the query reads.
-        assert_eq!(
-            defender_xdr_tables_in_query("// EmailEvents\nT | where x == 'DeviceEvents'"),
-            Vec::<String>::new()
-        );
-        assert_eq!(
-            defender_xdr_tables_in_query("ObservationFoo | join ObservationId x.DeviceEvents"),
-            ["ObservationFoo"]
-        );
-        assert_eq!(
-            missing_required_column_groups("print 1", &[]),
-            [
-                "TimeGenerated or Timestamp",
-                "ReportId",
-                "AccountObjectId or AccountSid or AccountUpn or DeviceId or DeviceName or InitiatingProcessAccountObjectId or InitiatingProcessAccountSid or InitiatingProcessAccountUpn or RecipientEmailAddress or RecipientObjectId or RemoteDeviceName or SenderFromAddress or SenderMailFromAddress or SenderObjectId"
-            ]
         );
     }
 }

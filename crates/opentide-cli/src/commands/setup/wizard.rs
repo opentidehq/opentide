@@ -15,6 +15,7 @@ use crate::render::brand::pill;
 use crate::render::outcome::Console;
 use crate::render::table::columns;
 use crate::render::text::{Colour, Text};
+use crate::tree::Ci;
 use anstyle::Style;
 
 /// Why a wizard stopped before it was answered.
@@ -74,17 +75,18 @@ pub fn platforms() -> Vec<(&'static str, &'static str)> {
 }
 
 /// The CI choices (`CI_LABELS`), after "Configure later".
-pub const CI: [(&str, &str); 3] = [
-    ("github", "GitHub Actions"),
-    ("gitlab", "GitLab CI"),
-    ("azure", "Azure Pipelines"),
+pub const CI: [(Ci, &str); 3] = [
+    (Ci::Github, "GitHub Actions"),
+    (Ci::Gitlab, "GitLab CI"),
+    (Ci::Azure, "Azure Pipelines"),
 ];
 
 /// The MCP hosts (`MCP_LABELS`).
-pub const MCP: [(&str, &str); 4] = [
+pub const MCP: [(&str, &str); 5] = [
     ("vscode", "VS Code"),
     ("cursor", "Cursor"),
     ("claude-code", "Claude Code"),
+    ("claude-desktop", "Claude Desktop"),
     ("generic", "Generic (opentide.mcp.json)"),
 ];
 
@@ -136,8 +138,8 @@ fn shown_labels(choices: &[(&str, &str)], keys: &[String]) -> Vec<String> {
 pub struct Setup {
     /// The repository's name, organisation, description and platforms.
     pub repo: RepoOptions,
-    /// The CI provider; `None`: configure later.
-    pub ci: Option<String>,
+    /// The CI provider; `None`: configure later (never [`Ci::None`]).
+    pub ci: Option<Ci>,
     /// Staging deployments on pull requests.
     pub staging: bool,
     /// Inflight preview shards.
@@ -229,20 +231,20 @@ pub fn setup(
     };
     answers.repo = repo_questions(prompter, root)?;
     let mut choices = vec!["Configure later"];
-    choices.extend(labels(&CI));
+    choices.extend(CI.iter().map(|(_, label)| *label));
     let ci = prompter.select("CI/CD platform", &choices, 0)?;
     answers.ci = ci
         .checked_sub(1)
         .and_then(|index| CI.get(index))
-        .map(|(key, _)| (*key).to_owned());
-    if let Some(ci) = answers.ci.as_deref() {
+        .map(|(ci, _)| *ci);
+    if let Some(ci) = answers.ci {
         let mut features: Vec<(&str, &str)> = vec![
             ("Staging deployments on pull requests", "staging"),
             ("Inflight preview shards", "inflight"),
             ("Automatic status promotion", "promotion"),
             ("Sharing on the default branch", "sharing"),
         ];
-        if ci == "github" {
+        if ci == Ci::Github {
             features.push(("Explorer pages", "explorer"));
         }
         let mut checked = vec![0, 1];
@@ -288,8 +290,8 @@ pub fn setup(
         &shown_labels(&platforms(), &answers.repo.platforms),
         answers
             .ci
-            .as_deref()
-            .map(|ci| shown_labels(&CI, &[ci.to_owned()]).join("")),
+            .and_then(|ci| CI.iter().find(|(choice, _)| *choice == ci))
+            .map(|(_, label)| (*label).to_owned()),
         (!answers.mcp.is_empty()).then(|| shown_labels(&MCP, &answers.mcp)),
         answers
             .skills
@@ -799,10 +801,9 @@ pub(crate) mod tests {
         }
     }
 
-    /// The questions, their defaults and their order are the oracle's
-    /// (`run_interactive_setup`).
+    /// The questions the wizard asks, their defaults and their order.
     #[test]
-    fn the_setup_wizard_asks_the_oracles_questions_in_its_order() {
+    fn the_setup_wizard_asks_its_questions_in_order() {
         let mut script = Script::new(vec![
             Reply::Text(None),
             Reply::Text(Some("SOC")),
@@ -831,11 +832,11 @@ pub(crate) mod tests {
                 "text Repository name [detections] Some(\"a name\")",
                 "text Organisation / team (optional) [] None",
                 "text Description (optional) [] None",
-                "checkbox Detection platforms [\"Microsoft Sentinel\", \"Microsoft Defender\", \"Splunk Enterprise Security\", \"SentinelOne\", \"CrowdStrike Falcon\", \"HarfangLab\", \"Carbon Black Cloud\", \"Elastic Security\", \"Sysdig Secure\", \"Bitdefender GravityZone\", \"Graylog\", \"Exabeam New-Scale SIEM\", \"Google Security Operations\"] [] required=true",
+                "checkbox Detection platforms [\"Microsoft Sentinel\", \"Microsoft Defender\", \"Splunk Enterprise Security\", \"SentinelOne\", \"CrowdStrike Falcon\", \"HarfangLab\", \"Carbon Black Cloud\", \"Elastic Security\", \"Sysdig Secure\", \"Bitdefender GravityZone\", \"Graylog\", \"Exabeam New-Scale SIEM\", \"Google Security Operations\", \"Datadog Cloud SIEM\"] [] required=true",
                 "select CI/CD platform [\"Configure later\", \"GitHub Actions\", \"GitLab CI\", \"Azure Pipelines\"] [0]",
                 "checkbox CI workflow features [\"Staging deployments on pull requests\", \"Inflight preview shards\", \"Automatic status promotion\", \"Sharing on the default branch\", \"Explorer pages\"] [0, 1] required=false",
                 "confirm Configure opentide MCP? [false]",
-                "checkbox MCP hosts [\"VS Code\", \"Cursor\", \"Claude Code\", \"Generic (opentide.mcp.json)\"] [] required=true",
+                "checkbox MCP hosts [\"VS Code\", \"Cursor\", \"Claude Code\", \"Claude Desktop\", \"Generic (opentide.mcp.json)\"] [] required=true",
                 "confirm Install agent skills? [false]",
                 "confirm Apply this setup plan? [true]",
             ]
@@ -847,7 +848,7 @@ pub(crate) mod tests {
         assert_eq!(answers.repo.org.as_deref(), Some("SOC"));
         assert_eq!(answers.repo.description, None);
         assert_eq!(answers.repo.platforms, ["sentinel", "elastic"]);
-        assert_eq!(answers.ci.as_deref(), Some("github"));
+        assert_eq!(answers.ci, Some(Ci::Github));
         assert!(answers.staging && !answers.inflight && !answers.sharing && answers.explorer_pages);
         assert_eq!(answers.promotion, Some(true));
         assert_eq!(answers.mcp, ["cursor"]);
@@ -917,7 +918,7 @@ pub(crate) mod tests {
             panic!();
         };
         assert_eq!(answers.promotion, None);
-        assert_eq!(answers.ci.as_deref(), Some("gitlab"));
+        assert_eq!(answers.ci, Some(Ci::Gitlab));
     }
 
     fn skills_script() -> Script {
@@ -1066,7 +1067,7 @@ pub(crate) mod tests {
         );
         assert!(String::from_utf8(out).unwrap().ends_with("Target: /r/x\n"));
         let mut script = Script::new(vec![
-            Reply::Checkbox(Some(vec![0, 3])),
+            Reply::Checkbox(Some(vec![0, 4])),
             Reply::Confirm(Some(false)),
         ]);
         let mut out = Vec::new();

@@ -22,6 +22,7 @@
     clippy::too_many_lines,
     reason = "engine dispatchers match every node kind in one function"
 )]
+
 pub mod assist;
 pub mod catalog;
 mod catalog_model;
@@ -83,6 +84,59 @@ pub fn is_warning(code: &str) -> bool {
 /// Analyze a query on its own (a `.exabeam` file): the `search` profile.
 pub fn analyze(source: &str) -> AnalyzeResult {
     analyze_with(source, &Context::default())
+}
+
+/// The Exabeam Query Language [`QueryEngine`](opentide_highlight::QueryEngine) (#1953):
+/// [`analyze`] behind the shared interface.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Engine;
+
+impl opentide_highlight::QueryEngine for Engine {
+    fn language(&self) -> opentide_core::LanguageId {
+        opentide_core::LanguageId::Exabeam
+    }
+
+    fn analyze_for(
+        &self,
+        source: &str,
+        setting: &opentide_highlight::Setting<'_>,
+    ) -> opentide_highlight::AnalyzeResult {
+        let ctx = if setting.profile == opentide_highlight::Profile::Rule {
+            Context::RULE
+        } else {
+            Context::SEARCH
+        };
+        let r = analyze_with(source, &ctx);
+        opentide_highlight::AnalyzeResult {
+            diagnostics: r.diagnostics,
+            tokens: r.tokens,
+        }
+    }
+
+    fn highlight(&self, source: &str) -> Vec<HighlightToken> {
+        let Ok(spec) = HighlightSpec::shared() else {
+            return Vec::new();
+        };
+        highlight(spec, source)
+    }
+
+    fn hover(
+        &self,
+        source: &str,
+        offset: usize,
+        _setting: &opentide_highlight::Setting<'_>,
+    ) -> Option<String> {
+        hover(source, offset)
+    }
+
+    fn completions(
+        &self,
+        source: &str,
+        offset: usize,
+        _setting: &opentide_highlight::Setting<'_>,
+    ) -> Vec<opentide_core::CompletionItem> {
+        completions(source, offset)
+    }
 }
 
 /// Analyze a query where `ctx` says it runs.

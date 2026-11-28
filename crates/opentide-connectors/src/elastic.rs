@@ -1,10 +1,12 @@
 //! Elastic Security: Kibana's detection engine and Elasticsearch (UC-4.2,
-//! #832): `platforms/elastic/client.py` (`ElasticClient`), `deployer.py`
-//! (`ElasticDeploy._deploy_rule`), `es_checks.py` (the pre-flight and mapping
-//! checks of RFC 0007 §6), `runner.py` (ES|QL, EQL and Lucene on
-//! Elasticsearch; KQL through a rule preview, the one write, into the preview
-//! index) and `validator.py` (each rule previewed as deploy would create it;
-//! the RFC 0007 advisories), request for request.
+//! #832). A deploy runs a rule's pre-flight and mapping checks (RFC 0007
+//! §6, [`Elastic::checks`]), then creates, replaces or deletes the rule
+//! ([`Elastic::deploy_rule`]). A query runs ES|QL, EQL and Lucene on
+//! Elasticsearch, and KQL through a rule preview, the one write, into the
+//! preview index ([`Elastic::run`]). `validate query --live` runs a rule's
+//! checks and previews the rule as deploy would create it
+//! ([`Elastic::validate_rule`]), and reports the RFC 0007 advisories
+//! ([`advisories`]).
 //!
 //! Every call carries the session's headers: `Accept` and `Content-Type`
 //! `application/json`, `elastic-api-version: 2023-10-31` and, with a key,
@@ -33,7 +35,6 @@ use crate::connector::{
 };
 use crate::error::ConnectorError;
 use crate::retry::RetryPolicy;
-use crate::text::json_text;
 use crate::{Credential, HttpSettings};
 
 /// The platform's identifier.
@@ -168,6 +169,9 @@ fn is_empty(value: &Json) -> bool {
     }
 }
 
+/// The read timeout of a deploy (it takes no `--timeout`).
+pub const DEPLOY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
 /// The HTTP settings of an Elastic tenant: the connectors' retries and
 /// *timeout* (whole seconds, at least one).
 pub fn http_settings(timeout: std::time::Duration) -> HttpSettings {
@@ -211,7 +215,8 @@ pub struct ElasticRule {
     pub rule_id: String,
     /// Its name.
     pub name: String,
-    /// Its strategy.
+    /// What its deploy does: create or update it, enabled or disabled, or
+    /// delete it.
     pub strategy: Strategy,
     /// Its `elastic` block, as the model dumps it (`by_alias`, nulls kept).
     pub block: Json,
@@ -394,7 +399,7 @@ impl Client {
         )
     }
 
-    /// `get_rule`.
+    /// `get_rule`: `GET` the rule by its `rule_id`.
     async fn get_rule(
         &self,
         cx: TenantContext<'_>,
@@ -410,7 +415,7 @@ impl Client {
         .await
     }
 
-    /// `create_rule`.
+    /// `create_rule`: `POST` the payload to the rules endpoint.
     async fn create_rule(
         &self,
         cx: TenantContext<'_>,
@@ -433,14 +438,14 @@ impl Client {
         payload: &Json,
     ) -> Result<Answer, ConnectorError> {
         let url = match payload.get("rule_id").filter(|id| id.is_filled()) {
-            Some(id) => self.rule_query(&json_text(id)),
+            Some(id) => self.rule_query(&Json::to_text(id)),
             None => self.rules(),
         };
         self.call(cx, crate::transport::Method::PUT, &url, Some(payload), true)
             .await
     }
 
-    /// `delete_rule`.
+    /// `delete_rule`: `DELETE` the rule by its `rule_id`.
     async fn delete_rule(
         &self,
         cx: TenantContext<'_>,
@@ -489,7 +494,7 @@ impl Client {
         format!("{}{endpoint}", self.elasticsearch)
     }
 
-    /// `esql_query`.
+    /// `esql_query`: `POST` *query* to Elasticsearch's `/_query`.
     async fn esql_query(
         &self,
         cx: TenantContext<'_>,
@@ -507,7 +512,8 @@ impl Client {
         .await
     }
 
-    /// `resolve_index`.
+    /// `resolve_index`: `GET /_resolve/index/<pattern>`; a pattern that matches
+    /// nothing is not an error.
     async fn resolve_index(
         &self,
         cx: TenantContext<'_>,
@@ -521,7 +527,8 @@ impl Client {
             .await
     }
 
-    /// `field_caps`.
+    /// `field_caps`: `GET /<sources>/_field_caps` for *fields*; missing indices
+    /// are not an error.
     async fn field_caps(
         &self,
         cx: TenantContext<'_>,
@@ -560,7 +567,7 @@ fn object_or_empty<'j>(block: &'j Json, key: &str) -> Option<&'j Object> {
 /// The strings of a list value, each as text.
 fn strings(value: Option<&Json>) -> Vec<String> {
     match value {
-        Some(Json::Array(items)) => items.iter().map(json_text).collect(),
+        Some(Json::Array(items)) => items.iter().map(Json::to_text).collect(),
         _ => Vec::new(),
     }
 }
@@ -604,12 +611,12 @@ fn error_payload(answer: &Answer) -> (String, String, String) {
     let kind = error
         .get("type")
         .filter(|value| value.is_filled())
-        .map(json_text)
+        .map(Json::to_text)
         .unwrap_or_default();
     let reason = error
         .get("reason")
         .filter(|value| value.is_filled())
-        .map_or_else(|| text.clone(), json_text);
+        .map_or_else(|| text.clone(), Json::to_text);
     (kind, reason, error.to_compact())
 }
 
@@ -633,7 +640,7 @@ async fn read_caps(
     if answer.status != 200 {
         return Err(ElasticError::Rule(failed(answer.status, answer.text())));
     }
-    let data = answer.json().unwrap_or(Json::Null);
+    let data = json_answer(&answer, cx, "_field_caps")?;
     if matches!(data.get("indices"), Some(Json::Array(items)) if items.is_empty()) {
         return Ok(Caps::NotOnboarded);
     }
@@ -642,6 +649,21 @@ async fn read_caps(
             .cloned()
             .unwrap_or(Json::Object(Object::new())),
     ))
+}
+
+/// The JSON of a 200 answer to *what*; a body that is not JSON (a proxy's
+/// page, a truncated answer) is the tenant's refusal, never an empty answer
+/// (#1936).
+fn json_answer(answer: &Answer, cx: TenantContext<'_>, what: &str) -> Result<Json, ConnectorError> {
+    answer.json().ok_or_else(|| {
+        let tenant = &cx.tenant.label.tenant;
+        ConnectorError::refused(
+            PLATFORM,
+            tenant,
+            format!("Elastic answered {what} on {tenant} with a body that is not JSON"),
+            answer.not_json_detail(),
+        )
+    })
 }
 
 /// `any(isinstance(cap, dict) and cap.get(flag) is True for cap in caps.values())`.
@@ -670,14 +692,14 @@ impl Elastic {
             let query = block
                 .get("query")
                 .filter(|q| q.is_filled())
-                .map(json_text)
+                .map(Json::to_text)
                 .unwrap_or_default();
             let sources = esql_sources(&query);
             let explicit = !sources.is_empty();
             return Ok((explicit.then_some(sources), explicit));
         }
         if let Some(view) = block.get("data_view_id").filter(|id| id.is_filled()) {
-            let view = json_text(view);
+            let view = Json::to_text(view);
             let answer = client.data_view(cx, &view).await?;
             if matches!(answer.status, 401 | 403) {
                 return Err(ElasticError::Tenant(format!(
@@ -691,7 +713,7 @@ impl Elastic {
                     answer.status
                 )));
             }
-            let data = answer.json().unwrap_or(Json::Null);
+            let data = json_answer(&answer, cx, "the data view lookup")?;
             let title = data_view_title(&data);
             return Ok((title, true));
         }
@@ -717,12 +739,11 @@ impl Elastic {
             return Err(tenant_error("_query", answer.status));
         }
         if answer.status == 200 {
-            return Ok(
-                match answer.json().as_ref().and_then(|data| data.get("columns")) {
-                    Some(Json::Array(columns)) => columns.clone(),
-                    _ => Vec::new(),
-                },
-            );
+            let data = json_answer(&answer, cx, "the ES|QL pre-flight")?;
+            return Ok(match data.get("columns") {
+                Some(Json::Array(columns)) => columns.clone(),
+                _ => Vec::new(),
+            });
         }
         let (kind, reason, blob) = error_payload(&answer);
         if kind == "parsing_exception" || blob.contains("parsing_exception") {
@@ -738,7 +759,7 @@ impl Elastic {
                     return Err(tenant_error("_resolve/index", resolved.status));
                 }
                 if resolved.status == 200 {
-                    let data = resolved.json().unwrap_or(Json::Null);
+                    let data = json_answer(&resolved, cx, "_resolve/index")?;
                     let empty = |key: &str| !data.get(key).is_some_and(Json::is_filled);
                     if empty("indices") && empty("aliases") && empty("data_streams") {
                         warnings.push(format!("ES|QL sources not onboarded yet: {sources}"));
@@ -770,7 +791,7 @@ impl Elastic {
         let rule_type = get_or(block, "type", &query_type).clone();
         let mut esql_columns: Option<Vec<Json>> = None;
         if rule_type.as_str() == Some("esql") && block.get("query").is_some_and(Json::is_filled) {
-            let query = block.get("query").map(json_text).unwrap_or_default();
+            let query = block.get("query").map(Json::to_text).unwrap_or_default();
             esql_columns = Some(Self::esql_preflight(&client, cx, &query, &mut warnings).await?);
         }
         let resolved = Self::resolve_rule_sources(&client, cx, block, setup_index).await?;
@@ -805,14 +826,14 @@ impl Elastic {
         fields.extend(strings(group_by));
         if let Some(threshold) = object_or_empty(block, "threshold") {
             match threshold.get("field").filter(|f| f.is_filled()) {
-                Some(Json::Array(items)) => fields.extend(items.iter().map(json_text)),
-                Some(other) => fields.push(json_text(other)),
+                Some(Json::Array(items)) => fields.extend(items.iter().map(Json::to_text)),
+                Some(other) => fields.push(Json::to_text(other)),
                 None => {}
             }
             if let Some(cardinality) = threshold.get("cardinality").and_then(Json::as_object)
                 && let Some(field) = cardinality.get("field").filter(|f| f.is_filled())
             {
-                fields.push(json_text(field));
+                fields.push(Json::to_text(field));
             }
         }
         if let Some(new_terms) = object_or_empty(block, "new_terms") {
@@ -827,7 +848,7 @@ impl Elastic {
             if let (false, Some(columns)) = (group_by.is_empty(), esql_columns) {
                 let mut names: Vec<String> = columns
                     .iter()
-                    .filter_map(|column| column.get("name").map(json_text))
+                    .filter_map(|column| column.get("name").map(Json::to_text))
                     .collect();
                 if names.is_empty() {
                     return Ok(());
@@ -894,7 +915,7 @@ impl Elastic {
                 .into_iter()
                 .flatten()
                 .filter(|field| field.is_filled())
-                .map(json_text)
+                .map(Json::to_text)
                 .filter(|field| field != "@timestamp")
                 .collect(),
         );
@@ -1000,10 +1021,10 @@ impl Elastic {
                 if let Some(Json::Array(entries)) = group.get("entries") {
                     for entry in entries.iter().filter(|e| e.as_object().is_some()) {
                         if let Some(field) = entry.get("field").filter(|f| f.is_filled()) {
-                            event_fields.push(json_text(field));
+                            event_fields.push(Json::to_text(field));
                         }
                         if let Some(value) = entry.get("value").filter(|v| v.is_filled()) {
-                            indicator_fields.push(json_text(value));
+                            indicator_fields.push(Json::to_text(value));
                         }
                     }
                 }
@@ -1015,7 +1036,7 @@ impl Elastic {
             Some(Json::Array(items)) => items
                 .iter()
                 .filter(|item| item.is_filled())
-                .map(json_text)
+                .map(Json::to_text)
                 .collect::<Vec<_>>()
                 .join(","),
             _ => String::new(),
@@ -1309,10 +1330,10 @@ impl Elastic {
         if let Some(Json::Array(logs)) = preview.get("logs") {
             for entry in logs.iter().filter(|entry| entry.as_object().is_some()) {
                 if let Some(Json::Array(items)) = entry.get("warnings") {
-                    warnings.extend(items.iter().map(json_text));
+                    warnings.extend(items.iter().map(Json::to_text));
                 }
                 if let Some(Json::Array(items)) = entry.get("errors") {
-                    for error in items.iter().map(json_text) {
+                    for error in items.iter().map(Json::to_text) {
                         if error.contains("preview-index") || error.contains("preview.alerts") {
                             return Err(ElasticError::Tenant(format!(
                                 "Tenant configuration error: missing preview-index privilege ({error})"
@@ -1711,7 +1732,7 @@ fn write_failed(
 fn kibana_error(answer: &Answer) -> String {
     match answer.quotable_json() {
         Some(body) => match body.get("message").filter(|m| m.is_filled()) {
-            Some(message) if body.as_object().is_some() => json_text(message),
+            Some(message) if body.as_object().is_some() => Json::to_text(message),
             _ => answer.text(),
         },
         None => answer.text(),
@@ -1749,7 +1770,8 @@ fn gateway(cx: TenantContext<'_>, answer: &Answer, status: u16, step: &str) -> E
     })
 }
 
-/// `_is_prebuilt_rule`.
+/// Whether *remote* is an Elastic prebuilt rule: `immutable`, or a
+/// `rule_source.type` of `external` (`_is_prebuilt_rule`).
 fn is_prebuilt_rule(remote: &Json) -> bool {
     if matches!(remote.get("immutable"), Some(Json::Bool(true))) {
         return true;
@@ -1767,7 +1789,9 @@ fn data_view_title(body: &Json) -> Option<String> {
         .get("data_view")
         .filter(|view| view.is_filled())
         .unwrap_or(body);
-    view.get("title").filter(|t| t.is_filled()).map(json_text)
+    view.get("title")
+        .filter(|t| t.is_filled())
+        .map(Json::to_text)
 }
 
 /// `format_utc_ms`: UTC to the second, `.000Z`.
@@ -1860,16 +1884,22 @@ fn body(answer: &Answer, tenant: &str, what: &str) -> Result<Json, ConnectorErro
                         .filter(|root| root.as_object().is_some())
                         .and_then(|root| root.get("reason"))
                         .filter(|r| r.is_filled())
-                        .map(json_text);
+                        .map(Json::to_text);
                     if reason.is_none() {
-                        reason = error.get("reason").filter(|r| r.is_filled()).map(json_text);
+                        reason = error
+                            .get("reason")
+                            .filter(|r| r.is_filled())
+                            .map(Json::to_text);
                     }
                 }
-                Some(error) if error.is_filled() => reason = Some(json_text(error)),
+                Some(error) if error.is_filled() => reason = Some(Json::to_text(error)),
                 _ => {}
             }
             if reason.is_none() {
-                reason = body.get("message").filter(|m| m.is_filled()).map(json_text);
+                reason = body
+                    .get("message")
+                    .filter(|m| m.is_filled())
+                    .map(Json::to_text);
             }
         }
         let detail = reason.unwrap_or_else(|| answer.text().chars().take(500).collect());
@@ -2008,8 +2038,13 @@ async fn esql(
         .iter()
         .filter(|column| column.as_object().is_some())
         .map(|column| QueryColumn {
-            name: column.get("name").map_or_else(|| "null".into(), json_text),
-            kind: column.get("type").filter(|t| !t.is_null()).map(json_text),
+            name: column
+                .get("name")
+                .map_or_else(|| "null".into(), Json::to_text),
+            kind: column
+                .get("type")
+                .filter(|t| !t.is_null())
+                .map(Json::to_text),
         })
         .collect();
     let rows: Vec<Json> = list(body.get("values"))
@@ -2200,7 +2235,7 @@ async fn kuery_preview(
         .iter()
         .filter(|entry| entry.as_object().is_some())
         .flat_map(|entry| list(entry.get("errors")))
-        .map(|error| json_text(&error))
+        .map(|error| Json::to_text(&error))
         .collect();
     if !errors.is_empty() {
         return Err(ConnectorError::refused(
@@ -2213,7 +2248,7 @@ async fn kuery_preview(
     let preview_id = preview
         .get("previewId")
         .filter(|id| id.is_filled())
-        .map(json_text)
+        .map(Json::to_text)
         .unwrap_or_default();
     if preview_id.is_empty() {
         return Err(ConnectorError::refused(
@@ -2347,7 +2382,7 @@ async fn indices(
     ))
 }
 
-// ---- query text (`platforms/elastic/query_text.py`) ----
+// ---- query text: masking, ES|QL sources and aggregates, EQL sequences ----
 
 /// `mask_query`: comments, and the contents of string literals and
 /// backquoted identifiers, blanked; newlines kept. Each blanked character
@@ -2391,7 +2426,10 @@ pub fn mask_query(text: &str, keep_strings: bool) -> String {
             blank(&mut out, i, end);
             i = end;
         } else if bytes[i..].starts_with(b"\"\"\"") {
-            let close = text[i + 3..].find("\"\"\"").map(|offset| i + 3 + offset);
+            // Past the ASCII `"""` at `i`.
+            let close = crate::cut(text, i + 3, length)
+                .find("\"\"\"")
+                .map(|offset| i + 3 + offset);
             let content_end = close.unwrap_or(length);
             let mut end = length.min(content_end + 3);
             while end < length && end < content_end + 5 && bytes[end] == b'"' {
@@ -2439,18 +2477,27 @@ fn edge(character: Option<char>) -> bool {
 
 /// Where `METADATA` starts as a keyword (`_METADATA`), any case.
 fn metadata_at(masked: &str) -> Option<usize> {
+    metadata_keywords(masked).next()
+}
+
+/// Where each `METADATA` keyword starts in *masked*, any case. ASCII
+/// lowercasing keeps every byte where it is, so a match in the lowered text
+/// is one in *masked*, and its ends are char boundaries.
+fn metadata_keywords(masked: &str) -> impl Iterator<Item = usize> + '_ {
     let lowered = masked.to_ascii_lowercase();
     let mut from = 0;
-    while let Some(offset) = lowered[from..].find("metadata") {
-        let at = from + offset;
-        let before = masked[..at].chars().next_back();
-        let after = masked[at + 8..].chars().next();
-        if !edge(before) && !edge(after) {
-            return Some(at);
+    std::iter::from_fn(move || {
+        while let Some(offset) = crate::cut(&lowered, from, lowered.len()).find("metadata") {
+            let at = from + offset;
+            from = at + "metadata".len();
+            let before = crate::cut(masked, 0, at).chars().next_back();
+            let after = crate::cut(masked, from, masked.len()).chars().next();
+            if !edge(before) && !edge(after) {
+                return Some(at);
+            }
         }
-        from = at + 8;
-    }
-    None
+        None
+    })
 }
 
 /// `esql_sources`: the index sources of the `FROM` or `TS` command, comma-joined.
@@ -2465,13 +2512,14 @@ pub fn esql_sources(query: &str) -> String {
     let masked = mask_query(query, false);
     let plain = mask_query(query, true);
     let mut start = 0;
-    while let Some(statement) = set.find(&masked[start..]) {
+    // `start` adds up match ends.
+    while let Some(statement) = set.find(crate::cut(&masked, start, masked.len())) {
         if statement.end() == 0 {
             break;
         }
         start += statement.end();
     }
-    let Some(command) = source.find(&masked[start..]) else {
+    let Some(command) = source.find(crate::cut(&masked, start, masked.len())) else {
         return String::new();
     };
     let begin = start + command.end();
@@ -2533,25 +2581,15 @@ pub fn esql_has_metadata_id(query: &str) -> bool {
         return false;
     };
     let masked = mask_query(query, false);
-    let lowered = masked.to_ascii_lowercase();
-    let mut from = 0;
-    while let Some(offset) = lowered[from..].find("metadata") {
-        let at = from + offset;
-        let before = masked[..at].chars().next_back();
-        let after = masked[at + 8..].chars().next();
-        if !edge(before) && !edge(after) {
-            let rest = &masked[at + 8..];
-            let segment = rest.split('|').next().unwrap_or_default();
-            if id.is_match(segment) {
-                return true;
-            }
-        }
-        from = at + 8;
-    }
-    false
+    metadata_keywords(&masked).any(|at| {
+        let rest = crate::cut(&masked, at + "metadata".len(), masked.len());
+        let segment = rest.split('|').next().unwrap_or_default();
+        id.is_match(segment)
+    })
 }
 
-/// `eql_is_sequence`.
+/// Whether the EQL *query*, comments and literals masked, starts with
+/// `sequence` (`eql_is_sequence`).
 pub fn eql_is_sequence(query: &str) -> bool {
     static SEQUENCE: std::sync::OnceLock<Option<regex::Regex>> = std::sync::OnceLock::new();
     SEQUENCE
@@ -2576,7 +2614,10 @@ pub fn eql_maxspan(query: &str) -> Option<(String, u128)> {
         "h" => 3_600_000,
         _ => 86_400_000,
     };
-    Some((found.get(1)?.as_str().to_owned(), amount * unit))
+    Some((
+        found.get(1)?.as_str().to_owned(),
+        amount.saturating_mul(unit),
+    ))
 }
 
 // ---- advisories (`validator._emit_rule_advisories`) ----
@@ -2631,7 +2672,7 @@ pub fn advisories(
         scheduling
             .and_then(|s| s.get(key))
             .filter(|value| !value.is_null())
-            .map_or_else(|| default.to_owned(), json_text)
+            .map_or_else(|| default.to_owned(), Json::to_text)
     };
     let interval = text("interval", "5m");
     let lookback = text("lookback", "1m");
@@ -2647,7 +2688,10 @@ pub fn advisories(
     if rule_type == "threshold" && lookback_secs > interval_secs {
         warnings.push(opentide_core::codes::THRESHOLD_LOOKBACK.to_owned());
     }
-    let query = block.get("query").filter(|q| q.is_filled()).map(json_text);
+    let query = block
+        .get("query")
+        .filter(|q| q.is_filled())
+        .map(Json::to_text);
     if rule_type == "esql"
         && let Some(query) = &query
         && !esql_aggregates(query)
@@ -2674,10 +2718,16 @@ pub fn advisories(
         && eql_is_sequence(query)
         && let Some((_, maxspan_ms)) = eql_maxspan(query)
     {
-        let window_ms = (interval_secs + lookback_secs) * 1000;
+        // `elastic_seconds` bounds a duration at `ELASTIC_MAX_SECONDS` (#1982), so
+        // these stay exact in `u128`; the saturating arithmetic still keeps the
+        // milliseconds from ever wrapping into a small window (#1928).
+        let lookback_ms = lookback_secs.saturating_mul(1000);
+        let window_ms = interval_secs
+            .saturating_add(lookback_secs)
+            .saturating_mul(1000);
         if maxspan_ms > window_ms {
             warnings.push(opentide_core::codes::EQL_MAXSPAN_WINDOW.to_owned());
-        } else if maxspan_ms > lookback_secs * 1000 {
+        } else if maxspan_ms > lookback_ms {
             warnings.push(opentide_core::codes::EQL_MAXSPAN_LOOKBACK.to_owned());
         }
     }
@@ -2902,5 +2952,79 @@ mod tests {
                 "technique_not_enterprise"
             ]
         );
+    }
+
+    /// A lookback too long for its milliseconds saturates instead of
+    /// wrapping into a small window that a short maxspan exceeds (#1928).
+    #[test]
+    fn advisories_saturate_a_huge_lookback() {
+        // #1928: a lookback's milliseconds never wrap into a small window, at the
+        // largest lookback the bound allows (#1982).
+        let block = |lookback: &str| -> Json {
+            serde_json::from_str(&format!(
+                r#"{{"type": "eql", "query": "sequence with maxspan=1h [a] [b]", "scheduling": {{"interval": "5m", "lookback": "{lookback}"}}}}"#
+            ))
+            .unwrap_or(Json::Null)
+        };
+        assert_eq!(
+            advisories(&block("9223372036854775807s"), "high", true, false).unwrap_or_default(),
+            ["lookback_long"]
+        );
+        // Past the bound the lookback cannot be deployed: an error, not advisories.
+        let huge = "9".repeat(40) + "d";
+        let error = advisories(&block(&huge), "high", true, false)
+            .err()
+            .unwrap_or_default();
+        assert!(
+            error.contains("longer than a rule can be deployed with"),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn a_huge_maxspan_saturates_instead_of_overflowing() {
+        // The multiplication panicked in debug and wrapped in release.
+        let span = format!("{}d", "9".repeat(36));
+        let query = format!("sequence with maxspan={span} [a] [b]");
+        assert_eq!(eql_maxspan(&query), Some((span, u128::MAX)));
+        let block: Json = serde_json::from_str(&format!(
+            r#"{{"type": "eql", "query": "{query}", "scheduling": {{"interval": "5m", "lookback": "1h"}}}}"#
+        ))
+        .unwrap_or(Json::Null);
+        assert_eq!(
+            advisories(&block, "high", true, false).unwrap_or_default(),
+            ["eql_maxspan_window"]
+        );
+    }
+
+    /// The query scanners read multi-byte text whole: strings, comments,
+    /// `METADATA` next to `é` and `😀`, every prefix of each query.
+    #[test]
+    fn query_scanners_read_multi_byte_text() {
+        let queries = [
+            "SET é = \"😀\"; FROM é😀-*, \"😀\" METADATA _id // é\n| WHERE é😀 == \"\"\"é😀\"\"\"\" | STATS é",
+            "FROM logs-é METADATAé _id | é METADATA😀 _id /* é😀",
+            "FROM \"é😀 METADATA _id `é``😀` \"\"\"😀",
+            "sequence by é😀 [process where é == \"😀\"]",
+        ];
+        for query in queries {
+            for (offset, _) in query.char_indices().chain([(query.len(), ' ')]) {
+                let prefix = query.get(..offset).unwrap();
+                assert_eq!(mask_query(prefix, false).len(), prefix.len());
+                let _ = esql_sources(prefix);
+                let _ = esql_aggregates(prefix);
+                let _ = esql_has_metadata_id(prefix);
+                let _ = eql_is_sequence(prefix);
+            }
+        }
+        assert!(esql_has_metadata_id("FROM é😀 METADATA _id"));
+        assert!(!esql_has_metadata_id(
+            "FROM é METADATAé _id | 😀éMETADATA _id"
+        ));
+        assert!(esql_has_metadata_id(
+            "FROM é METADATAé _id | é😀 METADATA _id"
+        ));
+        assert_eq!(metadata_at("é😀 metadata"), Some(7));
+        assert_eq!(esql_sources("FROM é😀-* METADATA _id"), "é😀-*");
     }
 }

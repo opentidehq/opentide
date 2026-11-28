@@ -1,4 +1,4 @@
-//! The pages behind `opentide explain <code>` (`cli/services/explain.py`).
+//! The pages behind `opentide explain <code>`.
 //!
 //! One Markdown page per diagnostic code and per `failure.code` lives in
 //! `src/opentide/data/diagnostics/`, compiled in by `build.rs`. The analysis
@@ -15,7 +15,7 @@ mod pages {
 /// A code's page.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Page {
-    /// The code.
+    /// The code the page explains (`vocab_unknown`).
     pub code: String,
     /// The first paragraph: what the code means, in one sentence.
     pub summary: String,
@@ -28,7 +28,7 @@ pub struct Page {
 /// A code nothing reports any more, which stays explainable.
 #[derive(Clone, Copy, Debug)]
 pub struct Retired {
-    /// The code.
+    /// The code that is no longer reported.
     pub code: &'static str,
     /// The release that stopped reporting it.
     pub retired_in: &'static str,
@@ -244,6 +244,7 @@ pub fn page(code: &str) -> Option<Page> {
 /// made LF: a checkout that converted the file to CRLF (Windows) builds a
 /// binary whose summary and Markdown are the same as an LF checkout's.
 fn file_page(code: &str, markdown: &str) -> Page {
+    // Only CRLF: not `opentide_core::text::universal_newlines` (a lone `\r` is kept).
     let markdown = markdown.replace("\r\n", "\n");
     Page {
         code: code.to_owned(),
@@ -462,7 +463,7 @@ pub fn reference_markdown() -> String {
 }
 
 /// `line` with each `<` that cannot open a tag written `&lt;`, code spans
-/// left alone (`_mdx_prose`). opentide.org renders the docs as MDX, which
+/// left alone. opentide.org renders the docs as MDX, which
 /// reads `<=>` in prose as a broken tag and refuses the page. The engine's
 /// sentences are plain text, so the reference escapes them, not the engine,
 /// and `opentide explain` prints them as they are.
@@ -502,7 +503,7 @@ fn backtick_run_end(chars: &[char], start: usize) -> usize {
 
 /// The end of the code span that opens at `start` (a run of backticks, at
 /// least one other character, then a run of backticks), or `None` when no
-/// backtick closes it: the regex `` `+(?:(?!`).)+?`+ `` of the oracle.
+/// backtick closes it. The same span as the regex `` `+(?:(?!`).)+?`+ ``.
 fn code_span_end(chars: &[char], start: usize) -> Option<usize> {
     let content = backtick_run_end(chars, start);
     let close = content + chars[content..].iter().position(|c| *c == '`')?;
@@ -695,6 +696,28 @@ mod tests {
                 "{code}: {}",
                 page.markdown
             );
+        }
+    }
+
+    /// Every tenant code `opentide_connectors::tenant_codes` builds from a
+    /// platform's prefix has its own page, which names the code and the
+    /// platform's deploy (#1960).
+    #[test]
+    fn every_platform_tenant_code_has_its_own_page() {
+        for codes in opentide_connectors::tenant_codes::ALL {
+            for code in codes.codes() {
+                let (_, markdown) = pages::PAGES
+                    .iter()
+                    .find(|(page, _)| *page == code)
+                    .unwrap_or_else(|| panic!("{code}: no page of its own"));
+                let markdown = markdown();
+                assert!(markdown.starts_with(&format!("# {code}\n")), "{code}");
+                assert!(
+                    markdown.contains(&format!("`{}` ", codes.platform)),
+                    "{code}: the page does not name `{}`",
+                    codes.platform
+                );
+            }
         }
     }
 

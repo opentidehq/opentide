@@ -1,7 +1,7 @@
 //! The Graylog block model (`platform::graylog::1.0`): every constraint code
 //! at the path graylog-1.0 fixes for it, the nested models, and the
 //! repository's fixtures. The cases are 0.28.0's
-//! `tests/test_platforms/test_graylog_model.py`.
+//! 0.28.0's Graylog model tests.
 #![expect(
     clippy::unwrap_used,
     reason = "test helpers outside #[test]: a fixture that cannot be read fails the test"
@@ -210,7 +210,7 @@ fn each_code_is_reported_at_its_spec_path() {
 }
 
 #[test]
-fn the_messages_are_the_oracles() {
+fn the_messages_are_the_models() {
     let message = |extra: &str| {
         let (_, errors) = convert(&block(extra));
         errors
@@ -333,6 +333,54 @@ fn a_bad_grace_period_fails() {
     assert_eq!(errors[0].message, "Invalid duration format: \"soon\"");
     let (value, _) = convert(&block("grace_period: 0s"));
     assert_eq!(value.unwrap().grace_period.as_deref(), Some("0s"));
+}
+
+#[test]
+fn durations_past_the_deployable_bound_fail() {
+    // #2005: deploy writes milliseconds as an i64; past `i64::MAX / 1000`
+    // seconds they saturated into the payload.
+    assert_eq!(
+        graylog::MAX_DURATION_SECONDS,
+        u128::try_from(i64::MAX / 1000).unwrap()
+    );
+    let over = "9223372036854776s";
+    let max = "9223372036854775s";
+    let (value, errors) = convert(&block(&format!("grace_period: {over}")));
+    assert!(value.is_none());
+    assert_eq!(
+        errors[0].message,
+        format!(
+            "grace_period \"{over}\" is longer than a rule can be deployed with: at most \
+             9223372036854775 seconds"
+        )
+    );
+    let (value, _) = convert(&block(&format!("grace_period: {max}")));
+    assert_eq!(value.unwrap().grace_period.as_deref(), Some(max));
+    for key in ["every", "window"] {
+        let found = block_findings(&block(&format!("schedule: {{{key}: {over}}}")));
+        assert_eq!(found.len(), 1, "{key}: {found:?}");
+        assert_eq!(found[0].code, "graylog_schedule");
+        assert_eq!(found[0].path, ["schedule", key]);
+        assert_eq!(
+            found[0].message,
+            format!(
+                "{key} \"{over}\" is longer than a rule can be deployed with: at most \
+                 9223372036854775 seconds"
+            )
+        );
+        assert!(
+            codes(&format!("schedule: {{{key}: {max}}}")).is_empty(),
+            "{key}"
+        );
+        // A 40-digit duration, and one long only in days, too.
+        for long in ["9".repeat(40) + "s", "106751991167301d".to_owned()] {
+            assert_eq!(
+                codes(&format!("schedule: {{{key}: {long}}}")),
+                set(&["graylog_schedule"]),
+                "{key}: {long}"
+            );
+        }
+    }
 }
 
 #[test]
@@ -604,7 +652,7 @@ fn a_tenant_id_is_24_lower_case_hex() {
     assert!(!errors.is_empty());
 }
 
-// --- advisories (test_graylog_advisories.py) ------------------------------------
+// --- advisories (0.28.0's Graylog advisory tests) ------------------------------------
 
 use opentide_schema::objects::platform::graylog::{
     TenantView, advisories, leading_wildcard_allowed,

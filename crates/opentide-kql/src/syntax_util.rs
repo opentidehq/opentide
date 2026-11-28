@@ -79,8 +79,16 @@ fn to_span(range: TextRange) -> ByteSpan {
 
 /// A node's text without the trivia at its ends.
 pub(crate) fn text<'s>(source: &'s str, node: &SyntaxNode) -> &'s str {
-    let r = range(node);
-    &source[usize::from(r.start())..usize::from(r.end())]
+    slice(source, range(node))
+}
+
+/// `source[range]`, a range of the lexer's or of the tree built from
+/// `source`: tokens are whole characters, so its ends are char boundaries.
+/// A range that is not fails a debug assertion and reads as empty.
+pub(crate) fn slice(source: &str, range: TextRange) -> &str {
+    let text = source.get(usize::from(range.start())..usize::from(range.end()));
+    debug_assert!(text.is_some(), "{range:?} in {} bytes", source.len());
+    text.unwrap_or_default()
 }
 
 /// The significant tokens directly under `node`.

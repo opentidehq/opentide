@@ -365,6 +365,25 @@ pub const PLATFORMS: &[Platform] = &[
         offline_languages: &["yaral"],
         query_file_suffixes: &["yaral", "yl2"],
     },
+    Platform {
+        id: "datadog",
+        label: "Datadog Cloud SIEM",
+        configuration_name: "Datadog Cloud SIEM",
+        config_class: "DatadogConfig",
+        // The rule id Datadog assigns. Its format is unverified (RFC
+        // rfc-datadog-cloud-siem.md §8.5, open question 4), so no pattern
+        // refuses a real shard.
+        external_id: ExternalId::Text { pattern: None },
+        deploys: true,
+        compiles_offline: true,
+        live_check: true,
+        query_runner: true,
+        runner_languages: &["datadog"],
+        // A block's queries, profile `rule`, and a `.datadog` file or a
+        // `system: datadog` hunt, profile `search` (RFC §6.1).
+        offline_languages: &["datadog"],
+        query_file_suffixes: &["datadog"],
+    },
 ];
 
 /// How many platforms are built in.
@@ -421,6 +440,8 @@ pub enum PlatformId {
     Exabeam,
     /// `google_secops`: Google Security Operations.
     GoogleSecops,
+    /// `datadog`: Datadog Cloud SIEM.
+    Datadog,
 }
 
 impl PlatformId {
@@ -439,6 +460,7 @@ impl PlatformId {
         Self::Graylog,
         Self::Exabeam,
         Self::GoogleSecops,
+        Self::Datadog,
     ];
 
     /// Its row of [`PLATFORMS`].
@@ -469,6 +491,7 @@ impl PlatformId {
             Self::Graylog => "graylog",
             Self::Exabeam => "exabeam",
             Self::GoogleSecops => "google_secops",
+            Self::Datadog => "datadog",
         }
     }
 
@@ -516,6 +539,159 @@ const _: () = {
 impl std::fmt::Display for PlatformId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.as_str())
+    }
+}
+
+/// Text that names no built-in platform: a plugin's identifier, a typo, or
+/// an identifier in another case (`Sentinel`). It carries the text as given.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("{0:?} is not a built-in platform")]
+pub struct UnknownPlatform(pub String);
+
+impl std::str::FromStr for PlatformId {
+    type Err = UnknownPlatform;
+
+    /// [`PlatformId::parse`], with the text kept in the error.
+    fn from_str(id: &str) -> Result<Self, Self::Err> {
+        Self::parse(id).ok_or_else(|| UnknownPlatform(id.to_owned()))
+    }
+}
+
+/// Written as its identifier (`"sentinel_one"`), as `configurations` and
+/// `platforms` hold it.
+impl serde::Serialize for PlatformId {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.as_str())
+    }
+}
+
+/// Read from its identifier, exactly: any other text, a plugin's included,
+/// is an `unknown variant` error listing the built-in identifiers.
+impl<'de> serde::Deserialize<'de> for PlatformId {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct Visitor;
+
+        impl serde::de::Visitor<'_> for Visitor {
+            type Value = PlatformId;
+
+            fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.write_str("a built-in platform identifier")
+            }
+
+            fn visit_str<E: serde::de::Error>(self, id: &str) -> Result<PlatformId, E> {
+                PlatformId::parse(id).ok_or_else(|| E::unknown_variant(id, &IDS))
+            }
+        }
+
+        deserializer.deserialize_str(Visitor)
+    }
+}
+
+/// The identifier of a platform plugin: text that names no built-in platform.
+/// Only [`PlatformKey`] makes one, so it never holds a built-in identifier.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct PluginId(String);
+
+impl PluginId {
+    /// The identifier, as the configuration's `platforms` table keys it.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::fmt::Display for PluginId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+/// A platform a run reaches: a built-in one, or a platform plugin's. Code
+/// that serves plugins as well as the built-in platforms (the plan, the dry
+/// run, the deploy, the modifiers) takes it in place of the identifier's
+/// text; code for built-in platforms alone takes [`PlatformId`].
+///
+/// Every text is a key: a built-in identifier reads as
+/// [`PlatformKey::BuiltIn`], any other text (`Sentinel` included) as
+/// [`PlatformKey::Plugin`]. [`FromStr`](std::str::FromStr), `Display` and
+/// serde round-trip the text exactly.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum PlatformKey {
+    /// A row of [`PLATFORMS`].
+    BuiltIn(PlatformId),
+    /// A platform plugin's identifier.
+    Plugin(PluginId),
+}
+
+impl PlatformKey {
+    /// The key `id` names: the built-in platform, else a plugin's.
+    pub fn new(id: &str) -> Self {
+        PlatformId::parse(id).map_or_else(|| Self::Plugin(PluginId(id.to_owned())), Self::BuiltIn)
+    }
+
+    /// The identifier: the key under a rule's `configurations` and the
+    /// configuration's `platforms`.
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::BuiltIn(platform) => platform.as_str(),
+            Self::Plugin(plugin) => plugin.as_str(),
+        }
+    }
+
+    /// The built-in platform, if it is one.
+    pub const fn builtin(&self) -> Option<PlatformId> {
+        match self {
+            Self::BuiltIn(platform) => Some(*platform),
+            Self::Plugin(_) => None,
+        }
+    }
+}
+
+impl From<PlatformId> for PlatformKey {
+    fn from(platform: PlatformId) -> Self {
+        Self::BuiltIn(platform)
+    }
+}
+
+impl std::fmt::Display for PlatformKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl std::str::FromStr for PlatformKey {
+    type Err = std::convert::Infallible;
+
+    /// [`PlatformKey::new`]: every text names a platform.
+    fn from_str(id: &str) -> Result<Self, Self::Err> {
+        Ok(Self::new(id))
+    }
+}
+
+/// Written as its identifier, as [`PlatformId`] is.
+impl serde::Serialize for PlatformKey {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.as_str())
+    }
+}
+
+/// Read from any string ([`PlatformKey::new`]).
+impl<'de> serde::Deserialize<'de> for PlatformKey {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct Visitor;
+
+        impl serde::de::Visitor<'_> for Visitor {
+            type Value = PlatformKey;
+
+            fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.write_str("a platform identifier")
+            }
+
+            fn visit_str<E: serde::de::Error>(self, id: &str) -> Result<PlatformKey, E> {
+                Ok(PlatformKey::new(id))
+            }
+        }
+
+        deserializer.deserialize_str(Visitor)
     }
 }
 
@@ -606,6 +782,84 @@ mod tests {
         assert_eq!(super::PlatformId::parse("Sentinel"), None);
     }
 
+    /// `FromStr`, `Display` and serde round-trip every identifier exactly;
+    /// anything else (a plugin's id, another case, padding, non-ASCII text)
+    /// is refused, its text kept in the error.
+    #[test]
+    fn platform_ids_round_trip_through_text_and_serde() {
+        use super::{PlatformId, UnknownPlatform};
+        for platform in PlatformId::ALL {
+            let text = platform.to_string();
+            assert_eq!(text.parse::<PlatformId>(), Ok(platform));
+            let json = serde_json::to_string(&platform).unwrap();
+            assert_eq!(json, format!("\"{text}\""));
+            assert_eq!(serde_json::from_str::<PlatformId>(&json).unwrap(), platform);
+        }
+        for unknown in [
+            "",
+            "my_plugin",
+            "Sentinel",
+            "SENTINEL",
+            " sentinel",
+            "sentinel ",
+            "sentinel-one",
+            "sentinél",
+            "😀",
+            "sentinel\u{0}",
+        ] {
+            assert_eq!(
+                unknown.parse::<PlatformId>(),
+                Err(UnknownPlatform(unknown.to_owned()))
+            );
+            let json = serde_json::to_string(unknown).unwrap();
+            let error = serde_json::from_str::<PlatformId>(&json).unwrap_err();
+            assert!(error.to_string().contains("unknown variant"), "{error}");
+        }
+        assert_eq!(
+            "sentinél".parse::<PlatformId>().unwrap_err().to_string(),
+            "\"sentinél\" is not a built-in platform"
+        );
+        assert!(serde_json::from_str::<PlatformId>("1").is_err());
+    }
+
+    /// A built-in identifier is a built-in key, any other text a plugin's;
+    /// `FromStr`, `Display` and serde round-trip both exactly, non-ASCII
+    /// text included.
+    #[test]
+    fn platform_keys_round_trip_built_in_and_plugin_ids() {
+        use super::{PlatformId, PlatformKey};
+        let round_trip = |text: &str| {
+            let key: PlatformKey = text.parse().unwrap();
+            assert_eq!(key, PlatformKey::new(text));
+            assert_eq!(key.as_str(), text);
+            assert_eq!(key.to_string(), text);
+            let json = serde_json::to_string(&key).unwrap();
+            assert_eq!(json, serde_json::to_string(text).unwrap());
+            assert_eq!(serde_json::from_str::<PlatformKey>(&json).unwrap(), key);
+            key
+        };
+        for platform in PlatformId::ALL {
+            let key = round_trip(platform.as_str());
+            assert_eq!(key, PlatformKey::BuiltIn(platform));
+            assert_eq!(key, PlatformKey::from(platform));
+            assert_eq!(key.builtin(), Some(platform));
+        }
+        for plugin in [
+            "my_plugin",
+            "Sentinel",
+            " sentinel",
+            "sentinel-one",
+            "sentinél",
+            "😀",
+            "",
+        ] {
+            let key = round_trip(plugin);
+            assert!(matches!(&key, PlatformKey::Plugin(id) if id.as_str() == plugin));
+            assert_eq!(key.builtin(), None);
+        }
+        assert!(serde_json::from_str::<PlatformKey>("1").is_err());
+    }
+
     use super::{
         COUNT, ExternalId, IDS, PLATFORMS, ids, ids_where, query_file_suffixes, state_platforms,
     };
@@ -636,7 +890,8 @@ mod tests {
                 "bitdefender",
                 "graylog",
                 "exabeam",
-                "google_secops"
+                "google_secops",
+                "datadog"
             ]
         );
     }
@@ -653,7 +908,8 @@ mod tests {
                 "bitdefender",
                 "graylog",
                 "exabeam",
-                "google_secops"
+                "google_secops",
+                "datadog"
             ]
         );
         assert_eq!(
@@ -671,7 +927,8 @@ mod tests {
                 "elastic",
                 "graylog",
                 "exabeam",
-                "google_secops"
+                "google_secops",
+                "datadog"
             ]
         );
         assert_eq!(ids_where(|p| p.query_runner).len(), PLATFORMS.len() - 2);
@@ -684,14 +941,15 @@ mod tests {
                 "bitdefender",
                 "graylog",
                 "exabeam",
-                "google_secops"
+                "google_secops",
+                "datadog"
             ]
         );
         assert_eq!(
             query_file_suffixes(),
             [
                 "kql", "spl", "cql", "yar", "yara", "lucene", "esql", "eql", "kuery", "falco",
-                "exabeam", "yaral", "yl2"
+                "exabeam", "yaral", "yl2", "datadog"
             ]
         );
     }

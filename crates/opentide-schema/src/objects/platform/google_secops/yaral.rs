@@ -1,5 +1,4 @@
-//! The parts of YARA-L 2.0 opentide checks without a parser (yara-l-1.0),
-//! ported from 0.28.0's `platforms/google_secops/yaral.py`.
+//! The parts of YARA-L 2.0 opentide checks without a parser (yara-l-1.0).
 //!
 //! A `configurations.google_secops` block carries a rule's sections as keys:
 //! `setup`, `events`, `outcome`, `condition` and `export` as YARA-L text,
@@ -152,7 +151,7 @@ fn is_variable(value: &str) -> bool {
 
 /// Line endings as `\n`.
 pub fn normalise_newlines(text: &str) -> String {
-    text.replace("\r\n", "\n").replace('\r', "\n")
+    opentide_core::text::universal_newlines(text).into_owned()
 }
 
 /// Only whitespace, or nothing.
@@ -410,7 +409,7 @@ pub fn window_minutes(window: &str) -> Option<u64> {
         'd' => 1440,
         _ => return None,
     };
-    positive_number(&window[..window.len() - 1]).map(|count| count.saturating_mul(factor))
+    positive_number(window.strip_suffix(unit)?).map(|count| count.saturating_mul(factor))
 }
 
 /// `[1-9][0-9]*`, as a number.

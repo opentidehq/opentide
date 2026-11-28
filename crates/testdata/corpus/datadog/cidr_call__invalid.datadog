@@ -1,0 +1,2 @@
+# prod:cidr_call invalid
+CIDR(@network.client.ip, 10.0.0.0/8

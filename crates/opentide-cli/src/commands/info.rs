@@ -1,6 +1,6 @@
 //! `opentide info`: the repository and the platforms; with a section, the
 //! objects of a family, a technique's coverage, the vocabularies or the
-//! catalogue (`cli/commands/info.py`, `cli/services/info.py`).
+//! catalogue.
 
 use std::collections::{BTreeSet, HashMap};
 use std::path::Path;
@@ -17,9 +17,10 @@ use super::{
     Block, ISSUES_FOUND, Report, USAGE_INVALID_CHOICE, USAGE_INVALID_VALUE, USAGE_MISSING_OPTION,
     counted, json, placement,
 };
+use crate::commands::result::{ExitCode, Status};
 use crate::env::Env;
 use crate::envelope::Failure;
-use crate::json::Json;
+use crate::json::{Json, Object};
 use crate::render::glyphs::SEPARATOR;
 use crate::render::table::{Column, Table, columns};
 use crate::render::text::Text;
@@ -40,7 +41,8 @@ pub const SECTIONS: [&str; 6] = [
 pub struct Args {
     /// `--platform`.
     pub platform: Option<String>,
-    /// The section.
+    /// The section to show, one of [`SECTIONS`]; `None` for the repository and
+    /// the platforms.
     pub section: Option<String>,
     /// The vocabulary, with `vocab`.
     pub name: Option<String>,
@@ -156,7 +158,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     let vocabularies = Vocabularies::bundled();
     let is_set = |name: &str| cx.env.get(name).is_some_and(|value| !value.is_empty());
     let platforms = data::platforms(
-        workspace.configuration().resolved.get("systems"),
+        workspace.configuration().resolved.platforms(),
         args.platform.as_deref(),
         &is_set,
     );
@@ -164,7 +166,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     let load_errors = index.load_errors.len() + index.duplicates.len();
     // Without a section the document is the overview; with one it holds
     // only that section's keys (`info vocab --json | jq .vocabularies`).
-    let overview: Vec<(String, Json)> = vec![
+    let overview = Object::from([
         ("version".into(), Json::str(cx.version)),
         ("repo".into(), Json::str(&repo)),
         (
@@ -177,19 +179,19 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
         ),
         ("parse_error_count".into(), count_json(load_errors)),
         ("platforms".into(), json(&platforms)),
-    ];
-    let mut out: Vec<(String, Json)> = Vec::new();
-    let mut summary: Vec<(String, Json)> = vec![
+    ]);
+    let mut out = Object::new();
+    let mut summary = Object::from([
         ("rules".into(), count_json(count("rule"))),
         ("threats".into(), count_json(count("threat"))),
         ("objectives".into(), count_json(count("objective"))),
         ("load_errors".into(), count_json(load_errors)),
-    ];
+    ]);
     let mut body: Vec<Block> = Vec::new();
     match section {
         Some(family @ ("rules" | "threats" | "objectives")) => {
             let uuids = uuids(index, singular(family));
-            out.push((family.to_owned(), json(&uuids)));
+            out.insert(family.to_owned(), json(&uuids));
             body.push(if uuids.is_empty() {
                 Block::Lines(vec![Text::plain(&format!("No {family} found"))])
             } else {
@@ -198,16 +200,13 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
         }
         Some("catalog") => {
             let catalogue = catalogue::build(&workspace);
-            out.push(("objects".into(), json(&catalogue.objects)));
-            out.push(("edges".into(), json(&catalogue.edges)));
-            out.push(("signals".into(), json(&catalogue.signals)));
-            out.push(("attack".into(), json(&catalogue.attack)));
+            out.insert("objects".into(), json(&catalogue.objects));
+            out.insert("edges".into(), json(&catalogue.edges));
+            out.insert("signals".into(), json(&catalogue.signals));
+            out.insert("attack".into(), json(&catalogue.attack));
             if let Json::Object(members) = json(&catalogue.summary) {
                 for (key, value) in members {
-                    match summary.iter_mut().find(|(k, _)| *k == key) {
-                        Some(slot) => slot.1 = value,
-                        None => summary.push((key, value)),
-                    }
+                    summary.insert(key, value);
                 }
             }
             if cx.text {
@@ -218,7 +217,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
         Some("coverage") => {
             let technique = args.technique.clone().unwrap_or_default();
             let found = match_technique(&technique, &rule_technique_index(index));
-            out.push(("coverage".into(), json(&found)));
+            out.insert("coverage".into(), json(&found));
             let split = if found.count > 0 {
                 format!(
                     " ({} own, {} inherited)",
@@ -244,7 +243,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
                 None => {
                     let rows: Vec<data::VocabOverview> =
                         files.iter().map(|v| data::overview(v)).collect();
-                    out.push(("vocabularies".into(), json(&rows)));
+                    out.insert("vocabularies".into(), json(&rows));
                     body.push(Block::Table(vocab_list_table(&rows)));
                 }
                 Some(name) => {
@@ -263,7 +262,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
                         );
                     };
                     let detail = data::detail(vocabulary);
-                    out.push(("vocabulary".into(), json(&detail)));
+                    out.insert("vocabulary".into(), json(&detail));
                     body.extend(vocab_detail_tables(&detail).into_iter().map(Block::Table));
                 }
             }
@@ -278,16 +277,16 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
         load_errors,
     );
     let mut report = Report::completed(COMMAND, if section.is_some() { out } else { overview });
-    report.outcome.summary = summary;
+    report.outcome.summary = Object::from_iter(summary);
     report.outcome_line = Some(outcome);
     if load_errors > 0 {
         report.next("opentide validate", "show where each object failed to load");
-        report.outcome.status = "issues".into();
+        report.outcome.status = Status::Issues;
     }
     if args.strict && load_errors > 0 {
-        report.outcome.status = "failed".into();
+        report.outcome.status = Status::Failed;
         report.outcome.message = "Repository has objects that failed to load".into();
-        report.outcome.exit_code = 1;
+        report.outcome.exit_code = ExitCode::Failure;
         report.outcome.failure = Some(Failure::new(
             ISSUES_FOUND,
             "Repository has objects that failed to load",
@@ -644,13 +643,13 @@ mod tests {
 
     #[test]
     fn the_version_does_not_widen_the_platform_column() {
-        let platform = |name: &str, enabled: bool| PlatformInfo {
-            name: name.into(),
-            enabled,
-            can_deploy: true,
-            can_validate: false,
-            can_query: true,
-            tenants: Vec::new(),
+        let platform = |name: &str, enabled: bool| {
+            let mut platform = PlatformInfo::default();
+            platform.name = name.into();
+            platform.enabled = enabled;
+            platform.can_deploy = true;
+            platform.can_query = true;
+            platform
         };
         let platforms = [platform("sentinel", false), platform("splunk", true)];
         let plain = |version: &str| -> Vec<String> {
@@ -749,7 +748,7 @@ mod tests {
             },
             &cx,
         );
-        assert_eq!(report.outcome.exit_code, 2);
+        assert_eq!(report.outcome.exit_code, ExitCode::Usage);
         assert_eq!(report.outcome.failure.unwrap().code, USAGE_INVALID_VALUE);
     }
 }

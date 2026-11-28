@@ -44,6 +44,9 @@ export interface OpentideLanguage {
  * `exabeam` is the Exabeam Query Language (New-Scale SIEM), which Exabeam's
  * guides call "EQL"; `eql` stays Elastic's. A `.exabeam` file is a search.
  *
+ * `datadog` is the Datadog log search syntax (Datadog Cloud SIEM detection-rule
+ * queries). A `.datadog` file is a search.
+ *
  * `opentide-config` is configuration TOML (`.opentide/configurations/`). The
  * host that runs the server checks it (`opentide lsp start`); `opentide-lsp`
  * on its own reports nothing for it, so `analyze` and `highlight` refuse it.
@@ -62,6 +65,7 @@ export const LANGUAGES: readonly OpentideLanguage[] = [
   { id: "yara", name: "YARA", patterns: ["**/*.yar", "**/*.yara"] },
   { id: "exabeam", name: "Exabeam Query Language", patterns: ["**/*.exabeam"] },
   { id: "yaral", name: "YARA-L", patterns: ["**/*.yaral", "**/*.yl2"] },
+  { id: "datadog", name: "Datadog search syntax", patterns: ["**/*.datadog"] },
   { id: "opentide-config", name: "opentide configuration", patterns: ["**/.opentide/configurations/**/*.toml"] },
 ];
 

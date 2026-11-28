@@ -62,6 +62,7 @@ pub type Keywords = &'static [(&'static str, Capture)];
 
 /// The table of each language, one file each.
 mod cql;
+mod datadog;
 mod eql;
 mod esql;
 mod exabeam;
@@ -89,8 +90,13 @@ pub const fn keywords(language: LanguageId) -> Option<Keywords> {
         LanguageId::Yara => yara::KEYWORDS,
         LanguageId::Exabeam => exabeam::KEYWORDS,
         LanguageId::Yaral => yaral::KEYWORDS,
+        LanguageId::Datadog => datadog::KEYWORDS,
         // Not query languages: no keywords of their own.
         LanguageId::TideYaml | LanguageId::Config => None,
+        // `LanguageId` is non-exhaustive: a language this crate does not know
+        // yet has no table. The test below holds every language of
+        // `QUERY_LANGUAGES` to one.
+        _ => None,
     }
 }
 
@@ -121,21 +127,13 @@ mod tests {
     use super::*;
     use crate::{HighlightSpec, generate_tm_language, generate_tm_language_from};
 
-    const ALL: [LanguageId; 13] = [
-        LanguageId::Kql,
-        LanguageId::Spl,
-        LanguageId::TideYaml,
-        LanguageId::Esql,
-        LanguageId::Eql,
-        LanguageId::Kuery,
-        LanguageId::Lucene,
-        LanguageId::Config,
-        LanguageId::Falco,
-        LanguageId::Cql,
-        LanguageId::Yara,
-        LanguageId::Exabeam,
-        LanguageId::Yaral,
-    ];
+    /// Every variant: the query languages and the two documents.
+    fn all() -> impl Iterator<Item = LanguageId> {
+        LanguageId::QUERY_LANGUAGES
+            .iter()
+            .copied()
+            .chain([LanguageId::TideYaml, LanguageId::Config])
+    }
 
     #[test]
     fn a_table_is_grouped_and_ordered_by_capture() {
@@ -159,7 +157,7 @@ mod tests {
     #[test]
     fn every_query_language_has_a_table_and_the_others_none() {
         let spec = HighlightSpec::load().expect("spec");
-        for language in ALL {
+        for language in all() {
             let query = LanguageId::QUERY_LANGUAGES.contains(&language);
             assert_eq!(keywords(language).is_some(), query, "{language}");
             if !query {
@@ -211,7 +209,7 @@ mod tests {
         // or an empty token (which would
         // generate an empty pattern) fails it.
         let spec = HighlightSpec::load().expect("spec");
-        for language in ALL {
+        for language in all() {
             for (token, capture) in keywords(language).unwrap_or_default() {
                 assert!(!token.is_empty(), "{language}: an empty token");
                 assert!(

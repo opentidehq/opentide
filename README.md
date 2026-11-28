@@ -5,17 +5,17 @@
 
 **opentide** — spec-driven development for agentic detection engineering.
 
-opentide gives every detection an ontology and a taxonomy, so it stays threat-aligned, maintainable and fast to ship, with or without agents. It validates objects, generates schemas, deploys rules, and documents content across thirteen security platforms: Microsoft Sentinel, Microsoft Defender, Splunk Enterprise Security, SentinelOne, CrowdStrike Falcon, HarfangLab, Carbon Black Cloud, Elastic Security, Sysdig Secure, Bitdefender GravityZone, Graylog, Exabeam New-Scale SIEM and Google Security Operations.
+opentide gives every detection an ontology and a taxonomy, so it stays threat-aligned, maintainable and fast to ship, with or without agents. It validates objects, generates schemas, deploys rules, and documents content across fourteen security platforms: Microsoft Sentinel, Microsoft Defender, Splunk Enterprise Security, SentinelOne, CrowdStrike Falcon, HarfangLab, Carbon Black Cloud, Elastic Security, Sysdig Secure, Bitdefender GravityZone, Graylog, Exabeam New-Scale SIEM, Google Security Operations and Datadog Cloud SIEM.
 
 ## Install
 
 ```bash
-pip install opentide==1.0.0
+pip install opentide==1.1.0
 export OPENTIDE_REPO_ROOT=/path/to/detection-repo
 opentide validate
 ```
 
-opentide 1.0.0 runs on one Rust core. The same release is on [crates.io](https://crates.io/crates/opentide) (`cargo install opentide --features cli`) and [npm](https://www.npmjs.com/package/@opentide/opentide) (`npm install @opentide/opentide`).
+opentide 1.1.0 runs on one Rust core. The same release is on [crates.io](https://crates.io/crates/opentide) (`cargo install opentide --features cli`) and [npm](https://www.npmjs.com/package/@opentide/opentide) (`npm install @opentide/opentide`).
 
 Release notes: [CHANGELOG.md](https://github.com/opentidehq/opentide/blob/development/CHANGELOG.md) · [Usage → Releases](https://opentide.org/docs/usage/releases/)
 

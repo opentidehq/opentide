@@ -12,9 +12,10 @@
 
 use crate::syntax::{SyntaxKind as K, SyntaxNode, SyntaxToken, lex};
 use opentide_core::ByteSpan;
-use opentide_parse::{Grammar, Input, Parse, Parser, TokenSet, build, debug_errors, debug_tree};
+use opentide_parse::{
+    Grammar, Input, LastParse, Parse, Parser, TokenSet, build, debug_errors, debug_tree,
+};
 use rowan::{NodeOrToken, TextSize, WalkEvent};
-use std::cell::RefCell;
 use std::collections::BTreeSet;
 use std::rc::Rc;
 
@@ -68,25 +69,10 @@ pub(crate) type Parsed = (SyntaxNode, Parse);
 /// kept.
 pub(crate) fn parse_memo(source: &str) -> Rc<Parsed> {
     thread_local! {
-        static LAST: RefCell<Option<(String, Rc<Parsed>)>> = const { RefCell::new(None) };
+        static LAST: LastParse<Parsed> = const { LastParse::new() };
     }
-    LAST.with(|last| {
-        let mut last = last.borrow_mut();
-        if let Some((text, parsed)) = last.as_ref()
-            && text == source
-        {
-            return Rc::clone(parsed);
-        }
-        let parsed = Rc::new(parse(source));
-        // A text past the cap is not kept: an idle thread would hold it and
-        // its tree until its next query.
-        *last = (source.len() <= MEMO_MAX).then(|| (source.to_owned(), Rc::clone(&parsed)));
-        parsed
-    })
+    LAST.with(|last| last.get(source, parse))
 }
-
-/// The largest text [`parse_memo`] keeps, in bytes.
-const MEMO_MAX: usize = 64 * 1024;
 
 /// Parses `source`.
 pub(crate) fn parse(source: &str) -> Parsed {

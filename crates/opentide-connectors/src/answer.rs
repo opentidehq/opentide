@@ -1,6 +1,6 @@
 //! A tenant's answer, read whole: its status, its type, its bytes and how
 //! long it took, and what to say about one that is not the API's JSON
-//! (`platforms/transport.py` `describe_answer`, `not_json_detail`).
+//! ([`describe_answer`], [`Answer::not_json_detail`]).
 
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
@@ -27,7 +27,7 @@ pub struct Answer {
     pub status: u16,
     /// The `Content-Type` header.
     pub content_type: Option<String>,
-    /// The body.
+    /// The response body as received; the quoting methods mask credentials in it.
     pub body: Vec<u8>,
     /// From sending the request to its headers (`requests`' `elapsed`).
     pub elapsed: Duration,

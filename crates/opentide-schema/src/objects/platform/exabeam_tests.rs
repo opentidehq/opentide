@@ -1,6 +1,5 @@
-//! `ExabeamConfig` and its constraint codes, ported from 0.28.0's
-//! `tests/test_platforms/test_exabeam_model.py`: each block is a JSON
-//! value, read as the node the YAML would give.
+//! `ExabeamConfig` and its constraint codes: each block is a JSON value,
+//! read as the node the YAML would give.
 
 use std::collections::BTreeSet;
 
@@ -859,6 +858,38 @@ fn duplicate_names_compare_case_insensitively_among_enabled_blocks() {
 }
 
 #[test]
+fn duplicate_names_compare_under_full_case_folding() {
+    // The connector matches names with `caseless` on deploy: lowercasing
+    // keeps `ﬁ` and `fi`, `ß` and `ss` apart, folding does not.
+    let ligature = rule_node(&rule_with("ﬁle Access", &json!({"enabled": true})));
+    let plain = rule_node(&rule_with("file access", &json!({"enabled": true})));
+    let sharp = rule_node(&rule_with("Straße", &json!({"enabled": true})));
+    let double = rule_node(&rule_with("STRASSE", &json!({"enabled": true})));
+    let accent = rule_node(&rule_with("Café 😀", &json!({"enabled": true})));
+    let rules = [
+        ("a", &ligature),
+        ("b", &plain),
+        ("c", &sharp),
+        ("d", &double),
+        ("e", &accent),
+    ];
+    let found = name_findings(&rules, ["a", "b", "c", "d", "e"]);
+    let summary: Vec<(&str, Option<&str>)> = found
+        .iter()
+        .map(|f| (f.uuid.as_str(), f.value.as_deref()))
+        .collect();
+    assert_eq!(
+        summary,
+        [
+            ("a", Some("ﬁle Access")),
+            ("b", Some("file access")),
+            ("c", Some("Straße")),
+            ("d", Some("STRASSE")),
+        ]
+    );
+}
+
+#[test]
 fn advisories_of_a_block() {
     let silent = rule_node(&rule_with("r", &json!({"outcome": "none"})));
     let found = advisories(&silent);
@@ -923,4 +954,35 @@ fn advisories_of_a_block() {
         _ => Vec::new(),
     };
     assert_eq!(ordered_minutes(&sequences), Some(3));
+}
+
+/// #1945: each rule in scope is found by its UUID, not by a scan of every
+/// rule, so the work grows with the rules, not with their square.
+#[test]
+fn name_findings_look_at_each_rule_a_bounded_number_of_times() {
+    let steps = |n: usize| {
+        let nodes: Vec<(String, Node)> = (0..n)
+            .map(|i| {
+                // Every tenth rule shares its name with the one before it.
+                let name = format!("Rule {}", i - usize::from(i % 10 == 9));
+                (
+                    format!("{i:08}"),
+                    rule_node(&rule_with(&name, &json!({"enabled": true}))),
+                )
+            })
+            .collect();
+        let rules: Vec<(&str, &Node)> = nodes
+            .iter()
+            .map(|(uuid, node)| (uuid.as_str(), node))
+            .collect();
+        let before = name_steps();
+        let found = name_findings(&rules, rules.iter().map(|(uuid, _)| *uuid));
+        assert_eq!(found.len(), n / 10 * 2);
+        name_steps() - before
+    };
+    let (small, large) = (steps(500), steps(2_000));
+    assert!(
+        large < small * 8,
+        "{small} steps for 500 rules, {large} for 2,000"
+    );
 }

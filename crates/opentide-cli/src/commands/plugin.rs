@@ -20,12 +20,14 @@ use opentide_compile::Json as Compiled;
 use opentide_connectors::connector::{LiveCheck, QueryRequest, TenantContext, TimeWindow};
 use opentide_connectors::credentials::Mode as Resolve;
 use opentide_connectors::{ConnectorError, Environment, HttpClient, HttpSettings, Tenant};
+use opentide_schema::platforms::PlatformKey;
 use tokio_util::sync::CancellationToken;
 
 use super::{Report, open, placement};
+use crate::commands::result::{ExitCode, Status};
 use crate::env::Env;
 use crate::envelope::{Failure, Outcome};
-use crate::json::Json;
+use crate::json::{Json, Object};
 
 /// What a run reads besides its options.
 pub struct Context<'a> {
@@ -87,7 +89,7 @@ struct Rule {
 /// One configured tenant.
 struct Configured {
     name: String,
-    setup: toml::Table,
+    setup: opentide_compile::json::Object,
 }
 
 /// The workspace's rules with the platform's block that *selection* takes,
@@ -128,21 +130,14 @@ fn read(
         }
     }
     let config = Compiled::from_node(&workspace.configuration().resolved.tree);
-    let tenants = opentide_compile::plan::tenants(&config, platform)
+    let tenants = opentide_compile::plan::tenants(&config, &PlatformKey::new(platform))
         .into_iter()
         .map(|tenant| Configured {
             name: opentide_compile::deploy::tenant_name(tenant).to_owned(),
             setup: tenant
                 .get("setup")
                 .and_then(Compiled::as_object)
-                .map(|setup| {
-                    setup
-                        .iter()
-                        .filter_map(|(key, value)| {
-                            super::query::toml_value(value).map(|value| (key.clone(), value))
-                        })
-                        .collect()
-                })
+                .cloned()
                 .unwrap_or_default(),
         })
         .collect();
@@ -201,29 +196,29 @@ fn failure_text(error: &ConnectorError) -> String {
 
 fn finished(
     command: &str,
-    data: Vec<(String, Json)>,
-    summary: Vec<(String, Json)>,
+    data: Object,
+    summary: Object,
     failed: Option<String>,
     message: String,
 ) -> Report {
-    let mut report = Report::failed(command, 1, Failure::new("", ""));
+    let mut report = Report::failed(command, ExitCode::Failure, Failure::new("", ""));
     report.outcome = match failed {
         Some(first) => Outcome {
             command: command.to_owned(),
-            status: "failed".into(),
+            status: Status::Failed,
             message: first.clone(),
             data,
-            exit_code: 1,
+            exit_code: ExitCode::Failure,
             summary,
             next_actions: Vec::new(),
             failure: Some(Failure::new(super::COMMAND_FAILED, first)),
         },
         None => Outcome {
             command: command.to_owned(),
-            status: "completed".into(),
+            status: Status::Completed,
             message,
             data,
-            exit_code: 0,
+            exit_code: ExitCode::Success,
             summary,
             next_actions: Vec::new(),
             failure: None,
@@ -254,17 +249,17 @@ pub fn validate_live(
     else {
         let mut report = Report::failed(
             COMMAND,
-            1,
+            ExitCode::Failure,
             Failure::new(
                 super::COMMAND_FAILED,
                 format!("query validation not supported for {platform}"),
             ),
         );
-        report.outcome.data = vec![
+        report.outcome.data = Object::from([
             ("platform".into(), Json::str(platform)),
             ("valid".into(), Json::Null),
             ("supported".into(), Json::Bool(false)),
-        ];
+        ]);
         return report;
     };
     let all = Selection {
@@ -348,16 +343,16 @@ pub fn validate_live(
             ]));
         }
     }
-    let data = vec![
+    let data = Object::from([
         ("platform".to_owned(), Json::str(platform)),
         ("supported".to_owned(), Json::Bool(true)),
         ("valid".to_owned(), Json::Bool(failures.is_empty())),
         ("results".to_owned(), Json::Array(results)),
-    ];
-    let summary = vec![
+    ]);
+    let summary = Object::from([
         ("checked".to_owned(), Json::from(checked)),
         ("failed".to_owned(), Json::from(failures.len())),
-    ];
+    ]);
     let failed = failures.first().map(|first| {
         format!(
             "{} of {} live checks failed on {platform}: {first}",

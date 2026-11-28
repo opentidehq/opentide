@@ -1,4 +1,4 @@
-//! `opentide explain [CODE]` (`cli/commands/explain.py`): what a diagnostic
+//! `opentide explain [CODE]`: what a diagnostic
 //! code means and how to fix it, or the list of every code.
 //!
 //! `human` mode renders the page's Markdown for the terminal (parsed by
@@ -9,7 +9,7 @@ use pulldown_cmark::{Event, HeadingLevel, Parser, Tag, TagEnd};
 
 use super::{Block, Report, Terminal, USAGE_INVALID_CHOICE};
 use crate::explain::{self, Page};
-use crate::json::Json;
+use crate::json::{Json, Object};
 use crate::mode::Mode;
 use crate::render::text::{Text, layer};
 use anstyle::{AnsiColor, Style};
@@ -91,7 +91,7 @@ fn list(terminal: &Terminal) -> Report {
     );
     let mut report = Report::completed("explain", vec![("codes".into(), codes)]);
     report.outcome.message = format!("{} diagnostic codes", pages.len());
-    report.outcome.summary = vec![("codes".into(), Json::from(pages.len()))];
+    report.outcome.summary = Object::from([("codes".into(), Json::from(pages.len()))]);
     if terminal.text() {
         report.body.push(Block::Raw(index_text(&pages, terminal)));
     }
@@ -247,6 +247,7 @@ pub fn render_markdown(markdown: &str, terminal: &Terminal) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::commands::result::ExitCode;
 
     #[test]
     fn a_page_is_its_document_and_its_source_in_plain_mode() {
@@ -274,7 +275,7 @@ mod tests {
     fn a_code_the_value_starts_is_suggested_before_a_near_one() {
         // B19 (smoke test): `explain kql_parse` suggested "yaml_parse".
         let report = run(Some("kql_parse"), &Terminal::plain(Mode::Json));
-        assert_eq!(report.outcome.exit_code, 2);
+        assert_eq!(report.outcome.exit_code, ExitCode::Usage);
         let failure = report.outcome.failure.unwrap();
         assert_eq!(failure.suggestion.as_deref(), Some("kql_parse_error"));
         let report = run(Some("SPL_PARSE"), &Terminal::plain(Mode::Json));
@@ -285,7 +286,7 @@ mod tests {
     #[test]
     fn an_unknown_code_is_a_usage_error_with_the_closest_code() {
         let report = run(Some("vocab_unknwn"), &Terminal::plain(Mode::Json));
-        assert_eq!(report.outcome.exit_code, 2);
+        assert_eq!(report.outcome.exit_code, ExitCode::Usage);
         let failure = report.outcome.failure.unwrap();
         assert_eq!(failure.code, "usage_invalid_choice");
         assert_eq!(failure.argument.as_deref(), Some("code"));

@@ -1,54 +1,78 @@
 //! `opentide deploy` without `--dry-run` on the connectors (UC-4.6, #979):
-//! `cli/services/deploy.py` `run_deploy` and `_deploy`, the platforms'
-//! deployers (`platforms/<platform>/deployer.py`), `deployment/external_ids.py`
-//! and `cli/ui/deploy_log.py`, step by step.
+//! the run's plan, each platform's sender (`deploy_send/<platform>.rs`), the
+//! vendor ids kept in deployment state, and the log printed as rules finish.
 //!
 //! The plan is the dry run's (`opentide_compile::plan`): the rules the run
 //! reads, their platforms, the tenants each reaches, with the platform's
 //! `[[modifiers]]` applied per tenant. Each rule is then sent through its
-//! platform's connector, one tenant after another, and each finished rule
-//! prints one line on stderr as it ends (`DeployLog`). A platform that
+//! platform's connector, the platforms one after another and up to
+//! `TENANTS_AT_ONCE` tenants of a platform at once, and each finished rule
+//! prints one line on stderr as it ends (`DeployLog`): the lines of tenants
+//! deploying at once may interleave, while the result keeps the plan's order
+//! and deployment state is the same as one tenant after another. A platform that
 //! raises stops the run: the rules it never reached are not attempted. The
 //! ids CrowdStrike, Microsoft Defender, SentinelOne and Sysdig give a
 //! rule are kept in deployment state ([`super::deploy_state`]).
 //!
-//! The run's result is the oracle's dictionary, keys in its order, read into
-//! the envelope as `CommandResult.from_payload` reads it
-//! ([`super::validate_live::report_of`]).
+//! The run's result is a [`CommandResult`]: its data keys in the order `--json`
+//! prints them (the contract the `deploy` snapshot cases hold), and the status,
+//! exit code, failure, summary and outcome line as its fields.
 
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use super::interrupt::watched;
 use indexmap::IndexMap;
 use opentide_compile::Json as CJson;
-use opentide_compile::plan::{self, Change, Scope, SelectOptions};
+use opentide_compile::plan::{self, Scope, SelectOptions};
 use opentide_compile::strategy::{self, RunStrategies, StatusStrategy};
-use opentide_connectors::connector::{
-    DeployError, DeployFailure, DeployOutcome, DeployRequest, DeployScope, Deployer, Operation,
-    TenantContext,
-};
+use opentide_connectors::connector::{DeployError, Deployer, Operation, TenantContext};
 use opentide_connectors::credentials::Mode as Resolve;
 use opentide_connectors::{ConnectorError, Environment, HttpClient, Registry, Tenant};
 use opentide_schema::vocab::Vocabularies;
-use opentide_workspace::{OsFs, Workspace, root};
+use opentide_workspace::Workspace;
 use tokio_util::sync::CancellationToken;
 
+use super::Report;
+use super::deploy_retire;
 use super::deploy_state::{self, ExternalId, StateError};
-use super::query::{Configured, log_unset, toml_value};
+use super::query::{Configured, log_unset};
+use super::result::{CommandResult, ExitCode, Status};
 use super::validate_live::{Batch, batches};
-use super::{Report, placement};
 use crate::env::Env;
 use crate::envelope::code;
 use crate::json::{Json, Object};
 use crate::logging::Sink;
 use crate::render::glyphs;
 use crate::render::outcome::Console;
-use crate::render::progress::{Step, StepStatus, plural, seconds_text};
+use crate::render::progress::{Step, StepStatus};
 use crate::render::text::Text;
-use anstyle::{AnsiColor, Style};
-use opentide_schema::platforms::PlatformId;
+use anstyle::Style;
+use opentide_schema::platforms::{PlatformId, PlatformKey};
+
+mod bitdefender;
+mod by_uuid;
+mod crowdstrike;
+mod datadog;
+mod elastic;
+mod exabeam;
+mod google_secops;
+mod graylog;
+mod log;
+mod planning;
+mod plugin;
+mod raised;
+#[cfg(test)]
+mod results;
+mod retire;
+mod sentinel_one;
+mod sysdig;
+
+use log::{DeployLog, LogPlan, RuleResult, bounded, counts_text, outcome_message, run_summary};
+use planning::{Unpromote, plan_changes, reached, run_deploy};
+use raised::{
+    Raised, Stops, Unusable, coded_failure, failures, more_failures, raised, scoped, unset_variable,
+};
 
 /// The command path.
 pub const COMMAND: &str = "deploy";
@@ -84,6 +108,10 @@ const VERBS: [(&str, &str); 6] = [
     ("delete", "deleted"),
     ("unchanged", "unchanged"),
 ];
+/// At most this many tenants of a platform deploy at once (#1940); the
+/// platforms still deploy one after another. A platform plugin's tenants
+/// deploy one at a time.
+const TENANTS_AT_ONCE: usize = 4;
 /// The action of a rule the tenant already held as the run would write it.
 const UNCHANGED: &str = "unchanged";
 /// Codes that skip the rule on that tenant without failing the run.
@@ -236,83 +264,122 @@ impl std::fmt::Debug for Context<'_> {
     }
 }
 
-/// A run's result, keys in the oracle's order, `_`-keys included.
+/// A run's result.
 #[derive(Clone, Debug)]
 pub struct Sent {
     /// The result.
-    pub result: Vec<(String, Json)>,
+    pub result: CommandResult,
 }
 
 impl Sent {
     /// The result as one JSON object (the CI job summary reads it).
     pub fn result_json(&self) -> Json {
-        Json::Object(
-            self.result
-                .iter()
-                .filter(|(key, _)| !key.starts_with('_'))
-                .cloned()
-                .collect(),
-        )
+        self.result.to_json()
     }
 
     /// The report the command prints.
     pub fn report(&self) -> Report {
-        let mut report = super::validate_live::report_of(COMMAND, &self.result);
-        report.outcome_line = text_of(&self.result, "_outcome");
-        report.bare_exit = has(&self.result, super::deploy_promote::BARE_EXIT);
-        report
+        self.result.clone().report(COMMAND)
     }
-}
-
-fn text_of(result: &[(String, Json)], key: &str) -> Option<String> {
-    result
-        .iter()
-        .find(|(name, _)| name == key)
-        .and_then(|(_, value)| match value {
-            Json::Str(text) => Some(text.clone()),
-            _ => None,
-        })
-}
-
-/// `value` set on `result`, in place when the key is there, else last.
-fn set(result: &mut Vec<(String, Json)>, key: &str, value: Json) {
-    match result.iter_mut().find(|(name, _)| name == key) {
-        Some(entry) => entry.1 = value,
-        None => result.push((key.to_owned(), value)),
-    }
-}
-
-fn has(result: &[(String, Json)], key: &str) -> bool {
-    result.iter().any(|(name, _)| name == key)
-}
-
-fn convert(value: &CJson) -> Json {
-    super::deploy::convert(value)
 }
 
 fn names(runs: &[StatusStrategy]) -> Json {
     Json::Array(runs.iter().map(|run| Json::str(run.name())).collect())
 }
 
-fn usage(message: &str, failure_code: &str, argument: Option<&str>) -> Vec<(String, Json)> {
-    let mut result = vec![
-        ("status".to_owned(), Json::str("failed")),
-        ("message".to_owned(), Json::str(message)),
-        ("_exit_code".to_owned(), Json::Int(2)),
-        ("_failure_code".to_owned(), Json::str(failure_code)),
-    ];
-    if let Some(argument) = argument {
-        result.push(("_failure_argument".to_owned(), Json::str(argument)));
-    }
+/// A usage refusal: failed, exit 2, `failure.code` `failure_code` and the
+/// argument at fault.
+fn usage(message: &str, failure_code: &str, argument: Option<&str>) -> CommandResult {
+    let mut result = CommandResult::failed(message, ExitCode::Usage).with_code(failure_code);
+    result.failure.argument = argument.map(str::to_owned);
     result
 }
 
-fn failed(message: &str) -> Vec<(String, Json)> {
-    vec![
-        ("status".to_owned(), Json::str("failed")),
-        ("message".to_owned(), Json::str(message)),
-        ("_exit_code".to_owned(), Json::Int(1)),
-    ]
+/// A failed run, exit 1.
+fn failed(message: &str) -> CommandResult {
+    CommandResult::failed(message, ExitCode::Failure)
+}
+
+/// A workspace that would not open: failed, exit 1, with its code, and the
+/// diagnostics of a TOML file that does not parse (`config_parse`).
+fn refusal(code: String, message: &str, diagnostics: Option<Json>) -> CommandResult {
+    let mut result = failed(message).with_code(code);
+    result
+        .data
+        .extend(diagnostics.map(|found| ("diagnostics".to_owned(), found)));
+    result
+}
+
+/// `--uuid` or `--file` named rules no file in `folder` holds: failed,
+/// exit 1.
+fn unmatched_files(folder: &str, unmatched: &[String]) -> CommandResult {
+    let mut result = failed(&format!(
+        "No rule file directly in {folder} matched: {}",
+        unmatched.join(", ")
+    ));
+    result.data = Object::from([
+        ("scope".into(), Json::str("selected")),
+        (
+            "unmatched".into(),
+            Json::Array(unmatched.iter().map(Json::str).collect()),
+        ),
+        ("dry_run".into(), Json::Bool(false)),
+    ]);
+    result
+}
+
+/// What a run whose platforms have no tenants does.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Tenantless {
+    /// `--skip-unconfigured`, every platform tenantless and no rule
+    /// refused: skipped, exit 0.
+    Skipped,
+    /// Planning refused rules as well: failed, exit 1.
+    Refused,
+    /// Failed, exit 1.
+    Failed,
+}
+
+/// The result of a run that planned rules for platforms with no tenants:
+/// `detail` says which, `advice` how to add one, `missing` maps each to its
+/// file.
+fn no_tenants(
+    kind: Tenantless,
+    detail: &str,
+    advice: &str,
+    missing: Json,
+    plan: Json,
+) -> CommandResult {
+    let (status, message, exit) = match kind {
+        Tenantless::Skipped => (
+            Status::Skipped,
+            format!("Skipped deploy: {detail}"),
+            ExitCode::Success,
+        ),
+        Tenantless::Refused => (
+            Status::Failed,
+            format!("Planning refused rules; {detail}"),
+            ExitCode::Failure,
+        ),
+        Tenantless::Failed => (
+            Status::Failed,
+            format!("Cannot deploy: {detail}"),
+            ExitCode::Failure,
+        ),
+    };
+    CommandResult {
+        status,
+        message: Some(message),
+        exit,
+        data: Object::from([
+            ("advice".into(), Json::str(advice)),
+            ("missing_tenants".into(), missing),
+            ("deployed".into(), Json::Array(Vec::new())),
+            ("dry_run".into(), Json::Bool(false)),
+            ("plan".into(), plan),
+        ]),
+        ..CommandResult::default()
+    }
 }
 
 /// Runs `deploy` without `--dry-run` on the process's runtime: here, or on
@@ -328,259 +395,30 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Sent {
     }
 }
 
-/// `run_deploy`: the plan and the sends, then the warnings and the blocks
-/// a status kept out.
-fn run_deploy(args: &Args, cx: &Context<'_>) -> Vec<(String, Json)> {
-    let (_, options) = placement(cx.repo, cx.env, cx.cwd);
-    let workspace = match super::open_for(COMMAND, options) {
-        Ok(workspace) => workspace,
-        Err(refused) => {
-            // A TOML file that does not parse keeps `config_parse`.
-            let (code, message, diagnostics) = super::refusal_parts(&refused);
-            let mut result = failed(&message);
-            result.push(("_failure_code".to_owned(), Json::Str(code)));
-            if let Some(diagnostics) = diagnostics {
-                result.insert(2, ("diagnostics".to_owned(), diagnostics));
-            }
-            return result;
-        }
-    };
-    let mut warnings: Vec<String> = Vec::new();
-    let mut skipped: Vec<plan::Skipped> = Vec::new();
-    let mut promoted = Unpromote::default();
-    let mut retirable: Option<Json> = None;
-    let mut result = deploy(
-        args,
-        cx,
-        &workspace,
-        &mut warnings,
-        &mut skipped,
-        &mut promoted,
-        &mut retirable,
-    );
-    promoted.finish().apply(&mut result, &mut warnings);
-    // What `--prune` would retire, sent nowhere (#1713).
-    if let Some(retirable) = retirable {
-        result.push(("retirable".into(), retirable));
-    }
-    if (!args.uuids.is_empty() || !args.files.is_empty()) && !has(&result, "scope") {
-        result.push(("scope".into(), Json::str("selected")));
-    }
-    let unread = opentide_compile::dry_run::unread_files(&workspace, cx.cwd);
-    if !unread.is_empty() {
-        warnings.push(format!(
-            "{} could not be read: {}; opentide validate shows where",
-            plan::plural(unread.len(), "object file"),
-            unread.join(", ")
-        ));
-    }
-    if !warnings.is_empty() {
-        let mut all: Vec<Json> = warnings.iter().map(Json::str).collect();
-        if let Some((_, Json::Array(own))) = result.iter().find(|(key, _)| key == "warnings") {
-            all.extend(own.iter().cloned());
-        }
-        set(&mut result, "warnings", Json::Array(all));
-    }
-    if !skipped.is_empty() {
-        report_skipped(&mut result, &skipped, &workspace, &args.strategies);
-    }
-    let skipped_run = text_of(&result, "status").as_deref() == Some("skipped");
-    if skipped_run
-        && !has(&result, "_next_actions")
-        && !root::is_workspace_root(&OsFs, workspace.root())
-    {
-        result.push((
-            "_next_actions".into(),
-            Json::Array(vec![Json::object([
-                ("command", Json::str("opentide setup")),
-                ("reason", Json::str("no workspace here: create one")),
-            ])]),
-        ));
-    }
-    crate::app::release(workspace);
-    result
-}
-
-/// How many rules a status kept out of the plan, and what it says of them
-/// (`3 rules in DESIGN`, `3 rules left out: 2 in DESIGN, 1 in DRAFT`).
-fn left_out(skipped: &[plan::Skipped]) -> (usize, String) {
-    let mut rules: Vec<&str> = Vec::new();
-    let mut counts: IndexMap<&str, usize> = IndexMap::new();
-    for entry in skipped {
-        if !rules.contains(&entry.uuid.as_str()) {
-            rules.push(&entry.uuid);
-        }
-        *counts.entry(entry.status.as_str()).or_default() += 1;
-    }
-    let in_status = if counts.len() == 1 {
-        format!(
-            "{} in {}",
-            plan::plural(rules.len(), "rule"),
-            counts.keys().next().copied().unwrap_or_default()
-        )
-    } else {
-        let mut ordered: Vec<(&str, usize)> = counts.into_iter().collect();
-        ordered.sort_by_key(|entry| std::cmp::Reverse(entry.1));
-        let listed: Vec<String> = ordered
-            .iter()
-            .map(|(status, count)| format!("{count} in {status}"))
-            .collect();
-        format!(
-            "{} left out: {}",
-            plan::plural(rules.len(), "rule"),
-            listed.join(", ")
-        )
-    };
-    (rules.len(), in_status)
-}
-
-/// The run's strategies, as the result's `strategies` names them.
-fn run_strategies(result: &[(String, Json)]) -> Vec<StatusStrategy> {
-    match result.iter().find(|(key, _)| key == "strategies") {
-        Some((_, Json::Array(items))) => items
-            .iter()
-            .filter_map(Json::as_str)
-            .filter_map(|name| {
-                strategy::DEPLOYABLE
-                    .iter()
-                    .chain([StatusStrategy::Disablement, StatusStrategy::Deletion].iter())
-                    .find(|run| run.name() == name)
-                    .copied()
-            })
-            .collect(),
-        _ => Vec::new(),
-    }
-}
-
-/// Counts the blocks a status kept out of the plan (`_report_skipped`).
-fn report_skipped(
-    result: &mut Vec<(String, Json)>,
-    skipped: &[plan::Skipped],
-    workspace: &Workspace,
-    strategies: &[String],
-) {
-    let (_, in_status) = left_out(skipped);
-    let owned = opentide_compile::Owned::new(
-        &Vocabularies::bundled(),
-        &workspace.configuration().resolved,
-    );
-    // The result's `strategies`, else `--strategy`'s: a run that planned
-    // nothing for its `--platform` names the platform instead (#1662, D11).
-    let mut runs = run_strategies(result);
-    if runs.is_empty() {
-        runs = strategy::parse_strategies(strategies, &owned.statuses, "--strategy")
-            .unwrap_or_default();
-    }
-    let run_names = if runs.is_empty() {
-        "this run".to_owned()
-    } else {
-        runs.iter()
-            .map(|run| run.name())
-            .collect::<Vec<_>>()
-            .join(" or ")
-    };
-    result.push((
-        "skipped".into(),
-        Json::Array(
-            skipped
-                .iter()
-                .map(|entry| convert(&entry.to_json()))
-                .collect(),
-        ),
-    ));
-    let mut summary = match result.iter().find(|(key, _)| key == "_summary") {
-        Some((_, Json::Object(members))) => members.clone(),
-        _ => Object::new(),
-    };
-    // The rows the run skipped (a rule no tenant takes, an `INERT` block),
-    // and the rules a status left out that have no such row: a rule is
-    // never counted twice.
-    let rows = match summary.get("skipped") {
-        Some(Json::Int(rows)) => usize::try_from(*rows).unwrap_or(0),
-        _ => 0,
-    };
-    let skipped_rows: std::collections::HashSet<String> =
-        match result.iter().find(|(key, _)| key == "results") {
-            Some((_, Json::Array(rows))) => rows
-                .iter()
-                .filter(|row| row.get("status").and_then(Json::as_str) == Some("skipped"))
-                .filter_map(|row| row.get("id").and_then(Json::as_str))
-                .map(opentide_compile::rule::canonical_uuid)
-                .collect(),
-            _ => std::collections::HashSet::new(),
-        };
-    let mut left: Vec<String> = skipped
-        .iter()
-        .map(|entry| opentide_compile::rule::canonical_uuid(&entry.uuid))
-        .filter(|uuid| !skipped_rows.contains(uuid))
-        .collect();
-    left.sort_unstable();
-    left.dedup();
-    summary.insert("skipped".into(), Json::from(rows + left.len()));
-    set(result, "_summary", Json::Object(summary));
-    let deployable = if runs.is_empty() {
-        Vec::new()
-    } else {
-        owned.statuses.deployed_by(&runs)
-    };
-    let listed = match deployable.as_slice() {
-        [] => String::new(),
-        [one] => (*one).to_owned(),
-        [rest @ .., last] => format!("{} or {last}", rest.join(", ")),
-    };
-    let advice = if listed.is_empty() {
-        format!("no configured status deploys with {run_names}")
-    } else {
-        format!("set a platform block's status to {listed} for {run_names} to deploy it")
-    };
-    let planned = matches!(
-        result.iter().find(|(key, _)| key == "plan"),
-        Some((_, Json::Object(members))) if !members.is_empty()
-    );
-    if text_of(result, "status").as_deref() == Some("skipped") && !planned {
-        result.push((
-            "_outcome".into(),
-            Json::str(format!(
-                "No rule has a status {run_names} deploys {} {in_status}",
-                glyphs::SEPARATOR
-            )),
-        ));
-        if !has(result, "advice") {
-            result.push(("advice".into(), Json::str(advice)));
-        }
-    } else if !has(result, "detail") {
-        result.push((
-            "detail".into(),
-            Json::str(format!("not in the plan: {in_status}; {advice}")),
-        ));
-    }
-}
-
 /// A skipped deploy, in the same envelope as one that planned rules
 /// (`_nothing_to_deploy`); a run whose planning refused a rule failed.
-fn nothing(message: &str, refused: bool, field: (&str, Json)) -> Vec<(String, Json)> {
-    let mut result = vec![
-        (field.0.to_owned(), field.1),
+fn nothing(message: &str, refused: bool, field: (&str, Json)) -> CommandResult {
+    let (status, message, exit) = if refused {
         (
-            "status".into(),
-            Json::str(if refused { "failed" } else { "skipped" }),
-        ),
-        (
-            "message".into(),
-            Json::str(if refused {
-                format!("{message}; planning reported rule errors")
-            } else {
-                message.to_owned()
-            }),
-        ),
-        ("deployed".into(), Json::Array(Vec::new())),
-        ("dry_run".into(), Json::Bool(false)),
-        ("plan".into(), Json::Object(Object::new())),
-    ];
-    if refused {
-        result.push(("_exit_code".into(), Json::Int(1)));
+            Status::Failed,
+            format!("{message}; planning reported rule errors"),
+            ExitCode::Failure,
+        )
+    } else {
+        (Status::Skipped, message.to_owned(), ExitCode::Success)
+    };
+    CommandResult {
+        status,
+        message: Some(message),
+        exit,
+        data: Object::from([
+            (field.0.to_owned(), field.1),
+            ("deployed".into(), Json::Array(Vec::new())),
+            ("dry_run".into(), Json::Bool(false)),
+            ("plan".into(), Json::Object(Object::new())),
+        ]),
+        ..CommandResult::default()
     }
-    result
 }
 
 /// Whether the run would promote statuses (`StatusStrategy.RELEASE in run`
@@ -647,10 +485,11 @@ fn retire_mode(args: &Args) -> super::deploy_retire::Mode {
     }
 }
 
-/// `_deploy` for a run that sends.
+/// A run that sends: checks the run's options, plans, compiles, sends each
+/// rule and builds the result.
 #[expect(
     clippy::too_many_lines,
-    reason = "the oracle's steps in order (_deploy), read top to bottom"
+    reason = "the run's steps in order, read top to bottom; split by #1959's split 9"
 )]
 fn deploy(
     args: &Args,
@@ -660,7 +499,7 @@ fn deploy(
     plan_skipped: &mut Vec<plan::Skipped>,
     promoted: &mut Unpromote,
     retirable: &mut Option<Json>,
-) -> Vec<(String, Json)> {
+) -> CommandResult {
     if let Some(value) = cx
         .env
         .get(strategy::REMOVED_PLAN_ENV)
@@ -688,11 +527,8 @@ fn deploy(
             Ok(runs) => runs,
             Err(message) => {
                 let mut result = usage(&message, code::USAGE_INVALID_CHOICE, Some("--strategy"));
-                if let Some(suggestion) =
-                    opentide_compile::dry_run::strategy_suggestion(&args.strategies)
-                {
-                    result.push(("_failure_suggestion".into(), Json::str(suggestion)));
-                }
+                result.failure.suggestion =
+                    opentide_compile::dry_run::strategy_suggestion(&args.strategies);
                 return result;
             }
         };
@@ -719,21 +555,7 @@ fn deploy(
         let (scope, unmatched) =
             opentide_compile::dry_run::selected_scope(fs, workspace, &local, &request, cx.cwd);
         if !unmatched.is_empty() {
-            let mut result = failed(&format!(
-                "No rule file directly in {folder} matched: {}",
-                unmatched.join(", ")
-            ));
-            let at = result.len() - 1;
-            result.insert(at, ("scope".into(), Json::str("selected")));
-            result.insert(
-                at + 1,
-                (
-                    "unmatched".into(),
-                    Json::Array(unmatched.iter().map(Json::str).collect()),
-                ),
-            );
-            result.insert(at + 2, ("dry_run".into(), Json::Bool(false)));
-            return result;
+            return unmatched_files(&folder, &unmatched);
         }
         scope
     } else if args.all {
@@ -872,7 +694,7 @@ fn deploy(
         prune: args.prune,
     });
     plan_warnings.extend(found.warnings.iter().cloned());
-    *retirable = found.retirable_json().as_ref().map(convert);
+    *retirable = found.retirable_json();
     let retiring = !found.retirements.is_empty();
     // The commits changed no rule file: say so, rather than blame a status.
     let unchanged = !selecting && !args.all && scope.files.is_empty() && scope.nested.is_empty();
@@ -925,7 +747,7 @@ fn deploy(
     let config = &owned.config;
     let tenantless: Vec<&String> = deployment
         .keys()
-        .filter(|platform| plan::tenants(config, platform).is_empty())
+        .filter(|platform| plan::tenants(config, &PlatformKey::new(platform)).is_empty())
         .collect();
     if !tenantless.is_empty() {
         let path = |platform: &str| format!(".opentide/configurations/platforms/{platform}.toml");
@@ -950,31 +772,19 @@ fn deploy(
         );
         let detail = detail.join("; ");
         let skip = args.skip_unconfigured && tenantless.len() == deployment.len() && !refused;
-        let mut result = vec![
-            (
-                "status".to_owned(),
-                Json::str(if skip { "skipped" } else { "failed" }),
-            ),
-            (
-                "message".into(),
-                Json::str(if skip {
-                    format!("Skipped deploy: {detail}")
-                } else if refused {
-                    format!("Planning refused rules; {detail}")
-                } else {
-                    format!("Cannot deploy: {detail}")
-                }),
-            ),
-            ("advice".into(), Json::str(advice.join("; "))),
-            ("missing_tenants".into(), missing),
-            ("deployed".into(), Json::Array(Vec::new())),
-            ("dry_run".into(), Json::Bool(false)),
-            ("plan".into(), plan_payload),
-        ];
-        if !skip {
-            result.push(("_exit_code".into(), Json::Int(1)));
-        }
-        return result;
+        return no_tenants(
+            if skip {
+                Tenantless::Skipped
+            } else if refused {
+                Tenantless::Refused
+            } else {
+                Tenantless::Failed
+            },
+            &detail,
+            &advice.join("; "),
+            missing,
+            plan_payload,
+        );
     }
     // Each platform's tenants, resolved before anything is sent.
     let mut targets: IndexMap<String, IndexMap<String, Vec<String>>> = IndexMap::new();
@@ -982,7 +792,7 @@ fn deploy(
     let mut unrouted: Vec<(String, String, String)> = Vec::new();
     let index = workspace.index();
     for (platform, uuids) in &deployment {
-        let tables = plan::tenants(config, platform);
+        let tables = plan::tenants(config, &PlatformKey::new(platform));
         let configured: Vec<Configured> = tables
             .iter()
             .map(|table| Configured {
@@ -1089,7 +899,8 @@ fn deploy(
         false,
     );
     let compile_cx = owned.context(index);
-    let mut log = DeployLog::new(&cx.lines, &changes);
+    let log_plan = LogPlan::new(&changes);
+    let mut log = DeployLog::new(&cx.lines, &log_plan);
     // A rule no tenant takes was never sent: skipped, with why, never
     // `deployed` (#1653).
     for (platform, uuid, reason) in &unrouted {
@@ -1101,6 +912,7 @@ fn deploy(
             .unwrap_or_else(|| uuid.clone());
         log.unrouted(platform, uuid, &name, reason);
     }
+    let sentinel_warned = std::sync::Mutex::new(std::collections::HashSet::new());
     let mut sender = Sender {
         cx,
         workspace,
@@ -1116,7 +928,7 @@ fn deploy(
         failures: Vec::new(),
         stopped_tenants: Vec::new(),
         warned: false,
-        sentinel_warned: std::collections::HashSet::new(),
+        sentinel_warned: &sentinel_warned,
         environment: Environment::from_pairs(cx.env.iter()),
         cancel: CancellationToken::new(),
         runtime: opentide_connectors::runtime::shared(),
@@ -1239,39 +1051,16 @@ fn deploy(
     let seconds = started.elapsed().as_secs_f64();
     let results = log.results.clone();
     let platforms = order.len();
-    let common = |result: &mut Vec<(String, Json)>| {
-        result.push((
-            "deployed".into(),
-            Json::Array(deployed.iter().map(Json::str).collect()),
-        ));
-        result.push(("dry_run".into(), Json::Bool(false)));
-        result.push(("plan".into(), plan_payload.clone()));
+    let ran = Ran {
+        deployed,
+        plan: plan_payload,
+        strategies: run_names,
+        changes: Json::Array(changes.iter().map(|change| change.to_json()).collect()),
+        results: Json::Array(results.iter().map(RuleResult::to_json).collect()),
+        summary: run_summary(&results, platforms, tenant_count, seconds),
     };
-    let changes_json = Json::Array(
-        changes
-            .iter()
-            .map(|change| convert(&change.to_json()))
-            .collect(),
-    );
-    let results_json = Json::Array(results.iter().map(RuleResult::to_json).collect());
     if let Some((system, raised)) = failure {
         let error = raised.error();
-        let mut result = vec![
-            ("status".to_owned(), Json::str("failed")),
-            (
-                "message".into(),
-                Json::str(format!("Deployment to {system} failed: {error}")),
-            ),
-        ];
-        common(&mut result);
-        result.push(("strategies".into(), run_names));
-        result.push(("changes".into(), changes_json));
-        result.push(("results".into(), results_json));
-        result.push((
-            "_summary".into(),
-            run_summary(&results, platforms, tenant_count, seconds),
-        ));
-        result.push(("_exit_code".into(), Json::Int(1)));
         // The rule the stop came on: its error is the stop's own (a rule
         // refused before it on the same platform is not the culprit).
         let culprit = results.iter().rev().find(|result| {
@@ -1279,26 +1068,12 @@ fn deploy(
                 && result.status == "failed"
                 && result.error.as_deref() == Some(raised.describe().as_str())
         });
-        if let Some(culprit) = culprit {
+        if culprit.is_some() {
             tracing::debug!(
                 system = system.as_str(),
                 detail = error.as_str(),
                 "platform_deployment_failed"
             );
-            set(
-                &mut result,
-                "message",
-                Json::str(outcome_message(&results, seconds, true)),
-            );
-            result.push((
-                "error".into(),
-                Json::str(format!(
-                    "Deployment to {system} failed on {}: {}",
-                    culprit.name,
-                    culprit.error.clone().unwrap_or_default()
-                )),
-            ));
-            result.push(("_failure_code".into(), Json::str(super::ISSUES_FOUND)));
         } else {
             tracing::error!(
                 system = system.as_str(),
@@ -1317,11 +1092,21 @@ fn deploy(
             });
         }
         let failures = failures(&results, &unusable, &refused_rules);
-        result.push((
-            "failures".into(),
-            Json::Array(failures.into_iter().map(|(_, failure)| failure).collect()),
-        ));
-        return result;
+        let culprit = culprit.map(|culprit| {
+            (
+                outcome_message(&results, seconds, true),
+                format!(
+                    "Deployment to {system} failed on {}: {}",
+                    culprit.name,
+                    culprit.error.clone().unwrap_or_default()
+                ),
+            )
+        });
+        return ran.stopped(
+            format!("Deployment to {system} failed: {error}"),
+            culprit,
+            failures,
+        );
     }
     let outcome_failed = sender.failed || refused;
     let any_failed = results.iter().any(|result| result.status == "failed");
@@ -1336,982 +1121,135 @@ fn deploy(
     } else {
         outcome_message(&results, seconds, outcome_failed)
     };
-    let mut result = vec![
-        ("message".to_owned(), Json::str(message)),
-        (
-            "status".into(),
-            Json::str(if outcome_failed {
-                "failed"
-            } else {
-                "completed"
-            }),
-        ),
-    ];
-    common(&mut result);
-    result.push(("changes".into(), changes_json));
-    result.push((
-        "_summary".into(),
-        run_summary(&results, platforms, tenant_count, seconds),
-    ));
-    result.push(("_exit_code".into(), Json::Int(i64::from(outcome_failed))));
-    result.push(("results".into(), results_json));
-    if outcome_failed && any_failed {
-        result.push(("_failure_code".into(), Json::str(super::ISSUES_FOUND)));
+    ran.ended(&Ending {
+        message,
+        failed: outcome_failed,
+        rule_failed: any_failed,
+        failures,
+        warned: sender.warned,
+    })
+}
+
+/// What a run that sent to its platforms ends with, however it ends.
+struct Ran {
+    /// `deployed`: the platforms the run deployed to.
+    deployed: Vec<String>,
+    /// `plan`: each platform's rules.
+    plan: Json,
+    /// `strategies`.
+    strategies: Json,
+    /// `changes`: the plan's rows.
+    changes: Json,
+    /// `results`: a row per rule and tenant.
+    results: Json,
+    /// `summary` ([`run_summary`]).
+    summary: Object,
+}
+
+/// How a run that sent to every platform ended.
+struct Ending {
+    /// `message`.
+    message: String,
+    /// The run failed: a rule, a tenant or a platform, or planning.
+    failed: bool,
+    /// A rule failed (`issues_found`).
+    rule_failed: bool,
+    /// Each failure, its line and its `failures` entry ([`failures`]).
+    failures: Vec<(String, Json)>,
+    /// Some rules reported deployment warnings.
+    warned: bool,
+}
+
+impl Ran {
+    /// The keys every such result starts with.
+    fn head(&self) -> Object {
+        Object::from([
+            (
+                "deployed".into(),
+                Json::Array(self.deployed.iter().map(Json::str).collect()),
+            ),
+            ("dry_run".into(), Json::Bool(false)),
+            ("plan".into(), self.plan.clone()),
+        ])
     }
-    if let Some((first, _)) = failures.first() {
-        // The run's error names its first failure, as the Python deployer's
-        // did when that failure stopped it.
-        let more = more_failures(failures.len());
-        result.push(("error".into(), Json::str(format!("{first}{more}"))));
-        result.push((
+
+    /// A run a platform stopped: failed, exit 1, with `message`, or, when
+    /// the stop came on a rule (`culprit`: the run's outcome message and the
+    /// rule's error), that message, the error and `issues_found`.
+    fn stopped(
+        self,
+        message: String,
+        culprit: Option<(String, String)>,
+        failures: Vec<(String, Json)>,
+    ) -> CommandResult {
+        let mut result = failed(&message);
+        result.data = self.head();
+        result.data.insert("strategies".into(), self.strategies);
+        result.data.insert("changes".into(), self.changes);
+        result.data.insert("results".into(), self.results);
+        result.summary = self.summary;
+        if let Some((outcome, error)) = culprit {
+            result.message = Some(outcome);
+            result.data.insert("error".into(), Json::Str(error));
+            result.failure.code = Some(super::ISSUES_FOUND.to_owned());
+        }
+        result.data.insert(
             "failures".into(),
             Json::Array(failures.into_iter().map(|(_, failure)| failure).collect()),
-        ));
-    }
-    if sender.warned {
-        result.push((
-            "warnings".into(),
-            Json::Array(vec![Json::str("Some rules reported deployment warnings")]),
-        ));
-    }
-    result.push(("strategies".into(), names(&runs)));
-    result
-}
-
-/// The files a status promotion rewrote: put back as they were before the
-/// result is built ([`Unpromote::finish`]) unless a tenant received their
-/// rule, so the write-back commits no status that was never deployed
-/// (#1653). A file is kept promoted when any platform block of its rule
-/// reached any tenant. Dropping the guard puts back what `finish` did not
-/// (a panic); a forced exit puts back what is still pending
-/// ([`super::deploy_promote::restore_pending`]).
-#[derive(Default)]
-struct Unpromote {
-    files: Vec<super::deploy_promote::Promoted>,
-    /// The canonical UUIDs of the rules a tenant received.
-    sent: std::collections::HashSet<String>,
-}
-
-/// What putting the promoted files back did: warnings for the files left
-/// as they were, failures for the files that could not be written.
-#[derive(Debug, Default)]
-struct Settled {
-    warnings: Vec<String>,
-    failures: Vec<(String, String)>,
-}
-
-impl Unpromote {
-    /// The rules of `results` a tenant received (`deployed`): their files
-    /// are kept promoted, and a forced exit no longer puts them back.
-    fn received(&mut self, results: &[RuleResult]) {
-        self.sent.extend(
-            results
-                .iter()
-                .filter(|result| reached(result))
-                .map(|result| opentide_compile::rule::canonical_uuid(&result.id)),
         );
-        let kept: Vec<_> = self
-            .files
-            .iter()
-            .filter(|file| self.keeps(file))
-            .cloned()
-            .collect();
-        super::deploy_promote::settle(&kept);
+        result
     }
 
-    fn keeps(&self, file: &super::deploy_promote::Promoted) -> bool {
-        file.uuid
-            .as_ref()
-            .is_some_and(|uuid| self.sent.contains(uuid))
-    }
-
-    /// Puts back every file no tenant received the rule of, once, holding
-    /// the pending files' lock: a signal meanwhile waits for it, then finds
-    /// nothing left to put back.
-    fn finish(&mut self) -> Settled {
-        use super::deploy_promote::Restored;
-        let files = std::mem::take(&mut self.files);
-        let mut settled = Settled::default();
-        // Restored under the pending lock, logged once it is released: a
-        // log line may wait for stderr, which a signal's thread can hold
-        // while it waits for the pending files.
-        let mut undone = Vec::new();
-        let mut held = super::deploy_promote::pending();
-        for file in files.iter().filter(|file| !self.keeps(file)) {
-            let path = file.path.display().to_string();
-            match file.restore() {
-                Ok(Restored::Done) => undone.push(path),
-                Ok(Restored::Missing) => settled.warnings.push(format!(
-                    "{path} was deleted during the deploy, so its status promotion was not undone"
-                )),
-                // The write-back would commit the edit, and with it a
-                // status no tenant received.
-                Ok(Restored::Edited) => settled.failures.push((
-                    path,
-                    "the file changed during the deploy, so it was left as it is; set its \
-                     status back before committing"
-                        .to_owned(),
-                )),
-                Err(error) => settled.failures.push((path, error)),
-            }
-        }
-        held.retain(|pending| !files.iter().any(|file| file.path == pending.path));
-        drop(held);
-        for path in undone {
-            tracing::info!(
-                path = path.as_str(),
-                detail = "no tenant received the rule, so its status stays as it was",
-                "rule_promotion_undone"
-            );
-        }
-        for (path, error) in &settled.failures {
-            tracing::error!(
-                path = path.as_str(),
-                detail = error.as_str(),
-                critical = true,
-                "rule_promotion_undo_failed"
-            );
-        }
-        settled
-    }
-}
-
-/// A result a tenant received: `deployed`, on a tenant.
-fn reached(result: &RuleResult) -> bool {
-    result.status == "deployed" && result.tenant.is_some()
-}
-
-impl Settled {
-    /// The run's result with the files left as they were among its
-    /// warnings, and a file that could not be put back as a failure: the
-    /// run fails (exit 1), since a commit would carry a status no tenant
-    /// received.
-    fn apply(self, result: &mut Vec<(String, Json)>, warnings: &mut Vec<String>) {
-        warnings.extend(self.warnings);
-        if self.failures.is_empty() {
-            return;
-        }
-        let lines: Vec<String> = self
-            .failures
-            .iter()
-            .map(|(path, error)| {
-                format!(
-                    "Could not undo the status promotion of {path}, which no tenant received: \
-                     {error}"
-                )
-            })
-            .collect();
-        let entries = self.failures.iter().zip(&lines).map(|((path, _), line)| {
-            Json::object([("path", Json::str(path)), ("error", Json::str(line))])
-        });
-        let mut all = match result.iter().find(|(key, _)| key == "failures") {
-            Some((_, Json::Array(own))) => own.clone(),
-            _ => Vec::new(),
-        };
-        all.extend(entries);
-        set(result, "failures", Json::Array(all));
-        if text_of(result, "status").as_deref() != Some("failed") {
-            set(result, "status", Json::str("failed"));
-            set(result, "message", Json::str(&lines[0]));
-            set(result, "error", Json::str(&lines[0]));
-        }
-        set(result, "_exit_code", Json::Int(1));
-    }
-}
-
-impl Drop for Unpromote {
-    fn drop(&mut self) {
-        let settled = self.finish();
-        for warning in settled.warnings {
-            tracing::warn!(detail = warning.as_str(), "rule_promotion_not_undone");
-        }
-    }
-}
-
-/// Every rule on every tenant the targets resolved; rules on tenantless
-/// platforms once (`plan_changes`).
-fn plan_changes(
-    workspace: &Workspace,
-    owned: &opentide_compile::Owned,
-    deployment: &IndexMap<String, Vec<String>>,
-    targets: &IndexMap<String, IndexMap<String, Vec<String>>>,
-) -> Vec<Change> {
-    let fs = workspace.fs().as_ref();
-    let index = workspace.index();
-    let root = workspace.root().to_path_buf();
-    let mut changes = Vec::new();
-    for (platform, uuids) in deployment {
-        // A platform whose tenants were resolved plans what they take: a
-        // rule none takes is reported skipped, never sent (#1653).
-        let pairs: Vec<(Option<String>, String)> = match targets.get(platform) {
-            Some(tenants) => tenants
-                .iter()
-                .flat_map(|(tenant, ids)| ids.iter().map(|id| (Some(tenant.clone()), id.clone())))
-                .collect(),
-            None => uuids.iter().map(|uuid| (None, uuid.clone())).collect(),
-        };
-        for (tenant, uuid) in pairs {
-            let data = index
-                .get("rule", &uuid)
-                .and_then(|object| object.root())
-                .map(CJson::from_node);
-            let name = data
-                .as_ref()
-                .and_then(|data| data.get("name"))
-                .and_then(CJson::as_str)
-                .unwrap_or(&uuid)
-                .to_owned();
-            let status = data
-                .as_ref()
-                .and_then(|data| data.get("configurations"))
-                .and_then(|configurations| configurations.get(platform))
-                .and_then(|block| block.get("status"))
-                .and_then(CJson::as_str)
-                .unwrap_or_default()
-                .to_owned();
-            let known = || match &tenant {
-                Some(tenant) => plan::state_id(fs, &root, &uuid, platform, tenant),
-                None => None,
-            };
-            let action = plan::action(&owned.statuses, platform, tenant.is_some(), &status, &known);
-            changes.push(Change {
-                platform: platform.clone(),
-                tenant,
-                uuid,
-                name,
-                status,
-                action,
-                fails: false,
-                retired: false,
-            });
-        }
-    }
-    changes
-}
-
-// ------------------------------------------------------------------ results
-
-/// One rule on one tenant: what was sent and how it went (`RuleResult`).
-#[derive(Clone, Debug)]
-struct RuleResult {
-    platform: String,
-    tenant: Option<String>,
-    id: String,
-    name: String,
-    status: &'static str,
-    action: Option<String>,
-    seconds: Option<f64>,
-    error: Option<String>,
-    reason: Option<String>,
-    /// Old copies the platform deleted beside the rule (a renamed Splunk
-    /// rule's saved searches).
-    removed: Vec<String>,
-    /// A rule whose file is gone, retired by `--prune` (#1713).
-    retired: bool,
-    started: Instant,
-}
-
-impl RuleResult {
-    fn new(platform: &str, tenant: Option<&str>, id: &str, name: &str) -> Self {
-        Self {
-            platform: platform.to_owned(),
-            tenant: tenant.map(str::to_owned),
-            id: id.to_owned(),
-            name: name.to_owned(),
-            status: "deployed",
-            action: None,
-            seconds: None,
-            error: None,
-            reason: None,
-            removed: Vec::new(),
-            retired: false,
-            started: Instant::now(),
-        }
-    }
-
-    /// Records a failure the deployer reports without raising (`fail`).
-    fn fail(&mut self, error: &str) {
-        if self.status != "failed" {
-            self.status = "failed";
-            self.error = Some(bounded(error));
-        }
-    }
-
-    /// Records that the engine chose not to send it (`skip`).
-    fn skip(&mut self, reason: &str) {
-        if self.status != "failed" {
-            self.status = "skipped";
-            self.reason = Some(reason.to_owned());
-        }
-    }
-
-    /// The row `results` carries (`to_dict`).
-    fn to_json(&self) -> Json {
-        let text = |value: &Option<String>| value.as_ref().map_or(Json::Null, Json::str);
-        let mut members = vec![
-            ("platform", Json::str(&self.platform)),
-            ("tenant", text(&self.tenant)),
-            ("id", Json::str(&self.id)),
-            ("name", Json::str(&self.name)),
-            ("status", Json::str(self.status)),
-            ("action", text(&self.action)),
-            (
-                "seconds",
-                self.seconds.map_or(Json::Null, |seconds| {
-                    Json::Float((seconds * 1000.0).round() / 1000.0)
-                }),
-            ),
-            ("error", text(&self.error)),
-            ("reason", text(&self.reason)),
-        ];
-        // Only a rule that deleted an old copy says so (#1657).
-        if !self.removed.is_empty() {
-            members.push((
-                "removed",
-                Json::Array(self.removed.iter().map(Json::str).collect()),
-            ));
-        }
-        // Only a rule whose file is gone says so (#1713).
-        if self.retired {
-            members.push(("retired", Json::Bool(true)));
-        }
-        Json::object(members)
-    }
-}
-
-/// *text* on one line, cut at [`MAX_ERROR_LENGTH`] (`_bounded`).
-fn bounded(text: &str) -> String {
-    let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
-    if text.chars().count() > MAX_ERROR_LENGTH {
-        let cut: String = text.chars().take(MAX_ERROR_LENGTH - 1).collect();
-        return format!("{}…", cut.trim_end());
-    }
-    text
-}
-
-/// `2 deployed, 1 failed, 88 not attempted` (`counts_text`).
-fn counts_text(results: &[&RuleResult]) -> String {
-    let count = |status: &str| {
-        results
-            .iter()
-            .filter(|result| result.status == status)
-            .count()
-    };
-    let mut parts = vec![
-        format!("{} deployed", count("deployed")),
-        format!("{} failed", count("failed")),
-    ];
-    if count("skipped") > 0 {
-        parts.push(format!("{} skipped", count("skipped")));
-    }
-    parts.push(format!("{} not attempted", count("not_attempted")));
-    parts.join(", ")
-}
-
-/// What a real run did, rule by rule (`run_counts`).
-fn run_counts(results: &[RuleResult]) -> IndexMap<&'static str, usize> {
-    let mut counts: IndexMap<&'static str, usize> =
-        DONE.iter().map(|(action, _)| (*action, 0)).collect();
-    for key in ["failed", "skipped", "not_attempted"] {
-        counts.insert(key, 0);
-    }
-    for result in results {
-        let key = if result.status == "deployed" {
-            let action = result.action.as_deref().unwrap_or("upsert");
-            DONE.iter()
-                .find(|(name, _)| *name == action)
-                .map_or("upsert", |(name, _)| *name)
+    /// A run that sent to every platform: completed, or failed (exit 1) with
+    /// `issues_found` when a rule failed; the first failure is its `error`.
+    fn ended(self, ending: &Ending) -> CommandResult {
+        let (status, exit) = if ending.failed {
+            (Status::Failed, ExitCode::Failure)
         } else {
-            result.status
+            (Status::Completed, ExitCode::Success)
         };
-        *counts.entry(key).or_default() += 1;
-    }
-    counts
-}
-
-/// The JSON `summary` of a real run (`run_summary`).
-fn run_summary(results: &[RuleResult], platforms: usize, tenants: usize, seconds: f64) -> Json {
-    let counts = run_counts(results);
-    let mut members: Vec<(String, Json)> = counts
-        .iter()
-        .map(|(key, count)| ((*key).to_owned(), Json::from(*count)))
-        .collect();
-    members.push((
-        "seconds".into(),
-        Json::Float((seconds * 1000.0).round() / 1000.0),
-    ));
-    members.push(("platforms".into(), Json::from(platforms)));
-    members.push(("tenants".into(), Json::from(tenants)));
-    Json::object(members)
-}
-
-/// The run's last line, for a pass and for a failure alike (`outcome_message`).
-fn outcome_message(results: &[RuleResult], seconds: f64, failed: bool) -> String {
-    let counts = run_counts(results);
-    let mut done: Vec<String> = DONE
-        .iter()
-        .filter(|(action, _)| counts[action] > 0)
-        .map(|(action, word)| format!("{} {word}", counts[action]))
-        .collect();
-    if counts["skipped"] > 0 {
-        done.push(format!("{} skipped", counts["skipped"]));
-    }
-    let sent: Vec<&RuleResult> = results.iter().filter(|r| r.status == "deployed").collect();
-    let mut rules: Vec<&str> = sent.iter().map(|r| r.id.as_str()).collect();
-    rules.sort_unstable();
-    rules.dedup();
-    let mut tenants: Vec<(&str, &str)> = sent
-        .iter()
-        .filter_map(|r| {
-            r.tenant
-                .as_deref()
-                .map(|tenant| (r.platform.as_str(), tenant))
-        })
-        .collect();
-    tenants.sort_unstable();
-    tenants.dedup();
-    let tail = format!(
-        "{} failed, {} not attempted",
-        counts["failed"], counts["not_attempted"]
-    );
-    let mut parts: Vec<String> = Vec::new();
-    if failed {
-        parts.push("Deployment failed".into());
-        done.push(tail);
-        parts.push(done.join(", "));
-    } else {
-        parts.push(format!(
-            "Deployed {} to {}",
-            plural(rules.len(), "rule", None),
-            plural(tenants.len(), "tenant", None)
-        ));
-        if !done.is_empty() {
-            parts.push(done.join(", "));
+        let mut result = CommandResult {
+            status,
+            message: Some(ending.message.clone()),
+            exit,
+            summary: self.summary.clone(),
+            data: self.head(),
+            ..CommandResult::default()
+        };
+        result.data.insert("changes".into(), self.changes);
+        result.data.insert("results".into(), self.results);
+        if ending.failed && ending.rule_failed {
+            result.failure.code = Some(super::ISSUES_FOUND.to_owned());
         }
-        parts.push(tail);
-    }
-    parts.push(seconds_text(seconds));
-    parts.join(&format!(" {} ", glyphs::SEPARATOR))
-}
-
-// ---------------------------------------------------------------- the log
-
-type Key = (String, Option<String>);
-
-/// Follows a deploy: one line per finished rule (`DeployLog`).
-struct DeployLog<'l> {
-    lines: &'l Lines,
-    results: Vec<RuleResult>,
-    planned: IndexMap<Key, Vec<Change>>,
-    actions: HashMap<(String, Option<String>, String), String>,
-    printed: HashMap<Key, usize>,
-}
-
-impl<'l> DeployLog<'l> {
-    fn new(lines: &'l Lines, changes: &[Change]) -> Self {
-        let mut planned: IndexMap<Key, Vec<Change>> = IndexMap::new();
-        let mut actions = HashMap::new();
-        for change in changes {
-            planned
-                .entry((change.platform.clone(), change.tenant.clone()))
-                .or_default()
-                .push(change.clone());
-            actions.insert(
-                (
-                    change.platform.clone(),
-                    change.tenant.clone(),
-                    change.uuid.clone(),
+        if let Some((first, _)) = ending.failures.first() {
+            // The run's error names its first failure, as the Python
+            // deployer's did when that failure stopped it.
+            let more = more_failures(ending.failures.len());
+            result
+                .data
+                .insert("error".into(), Json::str(format!("{first}{more}")));
+            result.data.insert(
+                "failures".into(),
+                Json::Array(
+                    ending
+                        .failures
+                        .iter()
+                        .map(|(_, failure)| failure.clone())
+                        .collect(),
                 ),
-                change.action.to_owned(),
             );
         }
-        Self {
-            lines,
-            results: Vec::new(),
-            planned,
-            actions,
-            printed: HashMap::new(),
+        if ending.warned {
+            result
+                .warnings
+                .push("Some rules reported deployment warnings".to_owned());
         }
+        result.data.insert("strategies".into(), self.strategies);
+        result
     }
-
-    /// A rule ended (`rule_finished`).
-    fn finished(&mut self, mut result: RuleResult) {
-        if result.seconds.is_none() {
-            result.seconds = Some(result.started.elapsed().as_secs_f64());
-        }
-        if result.action.is_none() {
-            for tenant in [result.tenant.clone(), None] {
-                if let Some(action) =
-                    self.actions
-                        .get(&(result.platform.clone(), tenant, result.id.clone()))
-                {
-                    result.action = Some(action.clone());
-                    break;
-                }
-            }
-        }
-        if reached(&result) {
-            // Kept promoted from now on, whatever ends the run (#1653).
-            super::deploy_promote::received(&opentide_compile::rule::canonical_uuid(&result.id));
-        }
-        self.print(&result);
-        self.results.push(result);
-    }
-
-    /// The plan's action for a rule on a tenant (else on its platform).
-    fn planned_action(&self, platform: &str, tenant: Option<&str>, id: &str) -> Option<&str> {
-        [tenant.map(str::to_owned), None]
-            .into_iter()
-            .find_map(|tenant| {
-                self.actions
-                    .get(&(platform.to_owned(), tenant, id.to_owned()))
-            })
-            .map(String::as_str)
-    }
-
-    /// A rule planning refused before anything was sent (`refused`).
-    fn refused(&mut self, platform: &str, tenant: &str, id: &str, name: &str, error: &str) {
-        let mut result = RuleResult::new(platform, Some(tenant), id, name);
-        result.status = "failed";
-        result.error = Some(bounded(error));
-        result.seconds = Some(0.0);
-        self.finished(result);
-    }
-
-    /// A rule the engine decided not to send (`skipped`).
-    fn skipped(&mut self, platform: &str, tenant: &str, id: &str, name: &str, reason: &str) {
-        let mut result = RuleResult::new(platform, Some(tenant), id, name);
-        result.status = "skipped";
-        result.reason = Some(reason.to_owned());
-        result.seconds = Some(0.0);
-        self.finished(result);
-    }
-
-    /// Whether a rule of *tenant* on *platform* was deployed.
-    fn deployed_on(&self, platform: &str, tenant: &str) -> bool {
-        self.results.iter().any(|result| {
-            result.platform == platform
-                && result.tenant.as_deref() == Some(tenant)
-                && result.status == "deployed"
-        })
-    }
-
-    /// A rule no tenant of `platform` takes: skipped before anything is
-    /// sent, with no tenant.
-    fn unrouted(&mut self, platform: &str, id: &str, name: &str, reason: &str) {
-        let mut result = RuleResult::new(platform, None, id, name);
-        result.status = "skipped";
-        result.reason = Some(reason.to_owned());
-        result.seconds = Some(0.0);
-        self.finished(result);
-    }
-
-    fn platform_results(&self, platform: &str) -> Vec<&RuleResult> {
-        self.results
-            .iter()
-            .filter(|result| result.platform == platform)
-            .collect()
-    }
-
-    /// A platform returned without raising (`settle`).
-    fn settle(&mut self, platform: &str) {
-        let mine = self.platform_results(platform);
-        if mine.is_empty() {
-            let mut added = Vec::new();
-            for ((name, tenant), changes) in &self.planned {
-                if name != platform {
-                    continue;
-                }
-                for change in changes {
-                    let mut result =
-                        RuleResult::new(name, tenant.as_deref(), &change.uuid, &change.name);
-                    result.action = Some(change.action.to_owned());
-                    added.push(result);
-                }
-            }
-            self.results.extend(added);
-            return;
-        }
-        if mine.iter().any(|result| result.status == "failed") {
-            self.unreached(Some(platform), "not_attempted", NOT_ATTEMPTED);
-        } else {
-            self.unreached(Some(platform), "skipped", "not reported by the engine");
-        }
-    }
-
-    /// Reports each planned rule that has no result (`unreached`).
-    fn unreached(&mut self, platform: Option<&str>, status: &'static str, reason: &str) {
-        self.unreached_where(platform, None, status, reason);
-    }
-
-    /// Reports each rule planned on one tenant that has no result.
-    fn unreached_on(&mut self, platform: &str, tenant: &str, status: &'static str, reason: &str) {
-        self.unreached_where(Some(platform), Some(tenant), status, reason);
-    }
-
-    /// Reports each planned rule of `platform` (every one when `None`) and of
-    /// `tenant` (every tenant when `None`) that has no result.
-    fn unreached_where(
-        &mut self,
-        platform: Option<&str>,
-        tenant: Option<&str>,
-        status: &'static str,
-        reason: &str,
-    ) {
-        let done: Vec<(String, String)> = self
-            .results
-            .iter()
-            .map(|result| (result.platform.clone(), result.id.clone()))
-            .collect();
-        let tenanted: Vec<(String, Option<String>, String)> = self
-            .results
-            .iter()
-            .map(|result| {
-                (
-                    result.platform.clone(),
-                    result.tenant.clone(),
-                    result.id.clone(),
-                )
-            })
-            .collect();
-        let mut missing = Vec::new();
-        for ((name, planned_on), changes) in &self.planned {
-            if platform.is_some_and(|platform| platform != name)
-                || tenant.is_some_and(|tenant| planned_on.as_deref() != Some(tenant))
-            {
-                continue;
-            }
-            let tenant = planned_on;
-            for change in changes {
-                if tenanted.contains(&(name.clone(), tenant.clone(), change.uuid.clone()))
-                    || (tenant.is_none() && done.contains(&(name.clone(), change.uuid.clone())))
-                {
-                    continue;
-                }
-                let mut result =
-                    RuleResult::new(name, tenant.as_deref(), &change.uuid, &change.name);
-                result.status = status;
-                result.action = Some(change.action.to_owned());
-                result.seconds = Some(0.0);
-                result.reason = Some(reason.to_owned());
-                missing.push(result);
-            }
-        }
-        for result in missing {
-            self.print(&result);
-            self.results.push(result);
-        }
-    }
-
-    fn key(&self, result: &RuleResult) -> Key {
-        for key in [
-            (result.platform.clone(), result.tenant.clone()),
-            (result.platform.clone(), None),
-        ] {
-            if self.planned.contains_key(&key) {
-                return key;
-            }
-        }
-        (result.platform.clone(), result.tenant.clone())
-    }
-
-    fn print(&mut self, result: &RuleResult) {
-        let key = self.key(result);
-        let planned = self
-            .planned
-            .get(&key)
-            .map(Vec::as_slice)
-            .unwrap_or_default();
-        let total_planned = planned.len();
-        let name_width = planned
-            .iter()
-            .map(|change| change.name.chars().count())
-            .max()
-            .unwrap_or(0)
-            .min(NAME_WIDTH);
-        if !self.printed.contains_key(&key) {
-            self.lines.line(&Text::default(), false);
-            self.lines.line(
-                &header_line(
-                    &key.0,
-                    key.1.as_deref(),
-                    (total_planned > 0).then_some(total_planned),
-                ),
-                false,
-            );
-            self.printed.insert(key.clone(), 0);
-        }
-        let printed = self.printed.entry(key).or_default();
-        *printed += 1;
-        let index = *printed;
-        let total = total_planned.max(index);
-        let width = if self.lines.terminal {
-            self.lines.console.width
-        } else {
-            None
-        };
-        self.lines.line(
-            &result_line(result, index, total, name_width, width),
-            result.status == "failed",
-        );
-    }
-}
-
-/// `Deploying to sentinel / contoso · 91 rules` (`header_line`).
-fn header_line(platform: &str, tenant: Option<&str>, rules: Option<usize>) -> Text {
-    let place = match tenant {
-        Some(tenant) if !tenant.is_empty() => format!("{platform} / {tenant}"),
-        _ => platform.to_owned(),
-    };
-    let bold = Style::new().bold();
-    let mut line = Text::styled("Deploying to ", &bold);
-    line.append(&place, &bold);
-    if let Some(rules) = rules {
-        line.append(
-            &format!(" {} {}", glyphs::SEPARATOR, plural(rules, "rule", None)),
-            &Style::new().bold().dimmed(),
-        );
-    }
-    line
-}
-
-/// What a finished rule is called (`verb`).
-fn verb(result: &RuleResult) -> &'static str {
-    match result.status {
-        "deployed" => VERBS
-            .iter()
-            .find(|(action, _)| Some(*action) == result.action.as_deref())
-            .map_or("deployed", |(_, verb)| verb),
-        "skipped" | "not_attempted" => "skipped",
-        _ => "failed",
-    }
-}
-
-/// `  [ 2/91] ✓ updated   <name>   0.9s` for one finished rule (`result_line`).
-fn result_line(
-    result: &RuleResult,
-    index: usize,
-    total: usize,
-    name_width: usize,
-    width: Option<usize>,
-) -> Text {
-    let digits = total.to_string().len();
-    let failed = result.status == "failed";
-    let skipped = matches!(result.status, "skipped" | "not_attempted");
-    let mark = if failed {
-        glyphs::FAILED
-    } else if skipped {
-        glyphs::SEPARATOR
-    } else {
-        glyphs::OK
-    };
-    let style = if failed {
-        AnsiColor::Red.on_default().bold()
-    } else if skipped {
-        Style::new().dimmed()
-    } else {
-        AnsiColor::Green.on_default()
-    };
-    let mut line = Text::plain("  ");
-    line.append(
-        &format!("[{index:>digits$}/{total}]"),
-        &Style::new().dimmed(),
-    );
-    line.push_str(" ");
-    line.append(&format!("{mark} {:<9} ", verb(result)), &style);
-    let pad = name_width.saturating_sub(result.name.chars().count());
-    let name = format!("{}{}", result.name, " ".repeat(pad));
-    if failed {
-        line.append(&name, &Style::new().bold());
-    } else {
-        line.push_str(&name);
-    }
-    line.push_str("  ");
-    if failed {
-        let mut detail = result.error.clone().unwrap_or_else(|| "failed".to_owned());
-        if let Some(width) = width {
-            let lead = line.as_plain().chars().count();
-            let mut pieces: Vec<String> =
-                textwrap::wrap(&detail, width.saturating_sub(lead).max(MIN_ERROR_WIDTH))
-                    .into_iter()
-                    .map(|piece| piece.into_owned())
-                    .collect();
-            if pieces.is_empty() {
-                pieces.push(detail.clone());
-            }
-            if pieces.len() > MAX_ERROR_LINES {
-                pieces.truncate(MAX_ERROR_LINES);
-                if let Some(last) = pieces.last_mut() {
-                    *last = format!("{}…", last.trim_end());
-                }
-            }
-            detail = pieces.join(&format!("\n{}", " ".repeat(lead)));
-        }
-        line.append(&detail, &AnsiColor::Red.on_default());
-    } else if skipped {
-        line.append(
-            result.reason.as_deref().unwrap_or_default(),
-            &Style::new().dimmed(),
-        );
-    } else {
-        line.append(
-            &seconds_text(result.seconds.unwrap_or(0.0)),
-            &Style::new().dimmed(),
-        );
-    }
-    line
 }
 
 // ---------------------------------------------------------------- sending
-
-/// A tenant (or a whole platform, with no tenant) that could not deploy.
-#[derive(Debug, Clone)]
-struct Unusable {
-    platform: String,
-    tenant: Option<String>,
-    error: String,
-}
-
-impl Unusable {
-    fn to_json(&self) -> Json {
-        let mut fields = vec![("platform".to_owned(), Json::str(&self.platform))];
-        if let Some(tenant) = &self.tenant {
-            fields.push(("tenant".into(), Json::str(tenant)));
-        }
-        fields.push(("error".into(), Json::str(&self.error)));
-        Json::Object(fields.into_iter().collect())
-    }
-}
-
-/// What a failure stops: one rule, the rest of its tenant, or the run.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Stops {
-    /// The rule fails; the run goes on with the next one.
-    Rule,
-    /// The tenant cannot be used (its credentials, its connection): its
-    /// remaining rules are not attempted, the other tenants go on.
-    Tenant,
-    /// An interrupt: nothing more is sent.
-    Run,
-}
-
-/// A failure, in words: the failed rule's line and the run's message say it
-/// (`failure`), and what it stops.
-#[derive(Debug, Clone)]
-struct Raised {
-    problem: String,
-    stops: Stops,
-}
-
-impl Raised {
-    /// A failure of the rule being sent.
-    fn new(problem: impl Into<String>) -> Self {
-        Self {
-            problem: problem.into(),
-            stops: Stops::Rule,
-        }
-    }
-
-    /// The same failure, stopping `stops`.
-    fn stopping(self, stops: Stops) -> Self {
-        Self { stops, ..self }
-    }
-
-    /// The problem, for the run's message.
-    fn error(&self) -> String {
-        self.problem.trim().to_owned()
-    }
-
-    /// The problem on one bounded line, for the rule being sent.
-    fn describe(&self) -> String {
-        bounded(&self.problem)
-    }
-}
-
-/// What follows the first of `count` failures in the run's error.
-fn more_failures(count: usize) -> String {
-    match count.saturating_sub(1) {
-        0 => String::new(),
-        1 => " (and 1 more failure)".to_owned(),
-        more => format!(" (and {more} more failures)"),
-    }
-}
-
-/// Every failure of a run, each with its line for the run's `error`: the
-/// failed rules (platform, tenant, id, name, error), then the tenants and
-/// platforms that could not deploy.
-fn failures(
-    results: &[RuleResult],
-    unusable: &[Unusable],
-    refused: &[String],
-) -> Vec<(String, Json)> {
-    // Rules refused before any platform was planned (`external_id_in_rule`).
-    let refused = refused.iter().map(|uuid| {
-        let error = "external_id_in_rule: the rule still carries vendor ids; deploy reads them \
-                     only from .opentide/states/deployment/";
-        (
-            format!("Deployment refused rule {uuid}: {error}"),
-            Json::object([("id", Json::str(uuid)), ("error", Json::str(error))]),
-        )
-    });
-    let rules = results
-        .iter()
-        .filter(|result| result.status == "failed")
-        .map(|result| {
-            let error = result.error.clone().unwrap_or_default();
-            let mut fields = vec![("platform".to_owned(), Json::str(&result.platform))];
-            if let Some(tenant) = &result.tenant {
-                fields.push(("tenant".into(), Json::str(tenant)));
-            }
-            fields.push(("id".into(), Json::str(&result.id)));
-            fields.push(("name".into(), Json::str(&result.name)));
-            fields.push(("error".into(), Json::str(&error)));
-            (
-                format!(
-                    "Deployment to {} failed on {}: {error}",
-                    result.platform, result.name
-                ),
-                Json::Object(fields.into_iter().collect()),
-            )
-        });
-    let tenants = unusable.iter().map(|failure| {
-        let line = match &failure.tenant {
-            Some(tenant) => format!(
-                "Deployment to {} failed on tenant {tenant}: {}",
-                failure.platform, failure.error
-            ),
-            None => format!(
-                "Deployment to {} failed: {}",
-                failure.platform, failure.error
-            ),
-        };
-        (line, failure.to_json())
-    });
-    refused.chain(rules).chain(tenants).collect()
-}
-
-/// A connector error as a failure: of the rule for an answer the tenant
-/// refused, of the tenant for its connection or credentials, of the run for
-/// an interrupt.
-fn raised(error: &ConnectorError) -> Raised {
-    let stops = match error {
-        ConnectorError::Cancelled => Stops::Run,
-        ConnectorError::Unreachable { .. }
-        | ConnectorError::Timeout { .. }
-        | ConnectorError::Setup { .. }
-        | ConnectorError::MissingCredential { .. }
-        | ConnectorError::Crashed { .. }
-        | ConnectorError::Authentication { .. }
-        | ConnectorError::Gateway { .. }
-        | ConnectorError::NetworkUnavailable { .. } => Stops::Tenant,
-        // Exhaustive: a new kind must say what it stops, as
-        // `DeployError::from` must say what it fails.
-        ConnectorError::Answer { .. }
-        | ConnectorError::Refused { .. }
-        | ConnectorError::QueryTimedOut { .. } => Stops::Rule,
-    };
-    described(error).stopping(stops)
-}
 
 /// The tenant's table with each `setup` string that names a variable
 /// (`$NAME`, `${NAME}`) replaced by what the variable holds, for the compile
@@ -2346,46 +1284,6 @@ fn resolved_table(table: &CJson, tenant: &Tenant) -> Result<CJson, ConnectorErro
     Ok(resolved)
 }
 
-/// A rule's failure for an unset variable of the setup: the rule only.
-fn unset_variable(error: &ConnectorError) -> Raised {
-    raised(error).stopping(Stops::Rule)
-}
-
-/// A `Deployer`'s failure, raised by `raise` from its connector error: the
-/// tenant stopped whenever the `Deployer` says the tenant failed, as the SDKs
-/// report it (`DeployError::scope`), whatever the error's kind.
-fn scoped(failed: DeployError, raise: impl FnOnce(ConnectorError) -> Raised) -> Raised {
-    let tenant = failed.scope == DeployScope::Tenant;
-    let raised = raise(failed.into_connector());
-    if tenant && raised.stops == Stops::Rule {
-        raised.stopping(Stops::Tenant)
-    } else {
-        raised
-    }
-}
-
-/// A connector error's words: its own message, the tenant's reason after a
-/// refusal, and the tenant that refused the credentials.
-fn described(error: &ConnectorError) -> Raised {
-    match error {
-        ConnectorError::Cancelled => Raised::new("interrupted"),
-        ConnectorError::Authentication {
-            platform,
-            tenant,
-            message,
-            ..
-        } => Raised::new(format!("{platform} tenant '{tenant}': {message}")),
-        ConnectorError::Refused {
-            message,
-            detail: Some(detail),
-            ..
-        } if !detail.trim().is_empty() && !message.contains(detail.trim()) => {
-            Raised::new(format!("{message}: {}", detail.trim()))
-        }
-        other => Raised::new(other.to_string()),
-    }
-}
-
 /// `create`, `update` or `delete`: what a planned change does.
 fn action_verb(action: &Planned) -> &'static str {
     match action {
@@ -2398,7 +1296,7 @@ fn action_verb(action: &Planned) -> &'static str {
 /// The run's state while it sends.
 #[expect(
     clippy::struct_excessive_bools,
-    reason = "the oracle's flags (`DEPLOYMENT_ERROR_RAISED`, `DEPLOYMENT_WARNING_RAISED`) and the run's options"
+    reason = "whether a rule failed or warned, and the run's options: independent flags"
 )]
 struct Sender<'s, 'c> {
     cx: &'s Context<'c>,
@@ -2407,17 +1305,20 @@ struct Sender<'s, 'c> {
     runs: &'s [StatusStrategy],
     wide: bool,
     persist: bool,
-    /// `DEPLOYMENT_ERROR_RAISED`.
+    /// Whether a rule or tenant failed: the run's status is `failed` and it
+    /// exits 1.
     failed: bool,
     /// The tenants and platforms that could not deploy, in order: each
     /// failed rule is in the log's results.
     failures: Vec<Unusable>,
     /// Every tenant that stopped before its last rule (platform, tenant).
     stopped_tenants: Vec<(String, String)>,
-    /// `DEPLOYMENT_WARNING_RAISED`.
+    /// Whether a rule reported a deployment warning: the result carries
+    /// `warnings`.
     warned: bool,
-    /// The Sentinel rules whose technique warnings were logged.
-    sentinel_warned: std::collections::HashSet<String>,
+    /// The Sentinel and Microsoft Defender rules whose technique warnings
+    /// were logged, shared by every tenant's sender ([`Sender::fork`]).
+    sentinel_warned: &'s std::sync::Mutex<std::collections::HashSet<String>>,
     environment: Environment,
     cancel: CancellationToken,
     /// The process's network runtime, or why it could not start: a run
@@ -2473,6 +1374,172 @@ impl Connection {
     }
 }
 
+impl Sender<'_, '_> {
+    /// A sender for one tenant's deploy: the run's options, its
+    /// cancellation and its once-per-rule warnings, but an outcome of its
+    /// own, which [`absorb`](Self::absorb) adds to the run's.
+    fn fork(&self) -> Self {
+        Self {
+            cx: self.cx,
+            workspace: self.workspace,
+            compile: self.compile,
+            runs: self.runs,
+            wide: self.wide,
+            persist: self.persist,
+            failed: false,
+            failures: Vec::new(),
+            stopped_tenants: Vec::new(),
+            warned: false,
+            sentinel_warned: self.sentinel_warned,
+            environment: self.environment.clone(),
+            cancel: self.cancel.clone(),
+            runtime: self.runtime.clone(),
+        }
+    }
+
+    /// Adds the outcome of a tenant's sender ([`fork`](Self::fork)) after
+    /// the run's.
+    fn absorb(&mut self, tenant: Self) {
+        self.failed |= tenant.failed;
+        self.warned |= tenant.warned;
+        self.failures.extend(tenant.failures);
+        self.stopped_tenants.extend(tenant.stopped_tenants);
+    }
+
+    /// Whether the technique warnings of `key` (a rule, on a platform) are
+    /// to be logged: the first time only, whichever tenant asks.
+    fn warn_once(&self, key: String) -> bool {
+        self.sentinel_warned
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(key)
+    }
+
+    /// Each tenant's deploy, `unit`, at most `at_once` tenants at a time
+    /// (#1940): each on its own sender and log ([`fork`](Self::fork),
+    /// [`DeployLog::fork`]), on a thread of its own when several run, whose
+    /// results and outcome are added to the run's in the order of `batches`
+    /// once every tenant ended, whatever order they ended in. Only the lines
+    /// each prints as its rules end may interleave. A tenant that stops the
+    /// run (an interrupt) starts no tenant after it; the first stop in the
+    /// order of `batches` is returned.
+    fn tenants<'b, 'l>(
+        &mut self,
+        at_once: usize,
+        batches: &'b [Batch],
+        log: &mut DeployLog<'l>,
+        unit: impl Fn(&mut Self, &'b Batch, &mut DeployLog<'l>) -> Result<(), Raised> + Sync,
+    ) -> Result<(), Raised> {
+        let at_once = if crate::threads::AVAILABLE {
+            at_once.min(batches.len())
+        } else {
+            1
+        };
+        if at_once <= 1 {
+            for batch in batches {
+                let mut sender = self.fork();
+                let mut tenant_log = log.fork();
+                let outcome = unit(&mut sender, batch, &mut tenant_log);
+                self.absorb(sender);
+                log.merge(tenant_log);
+                outcome?;
+            }
+            return Ok(());
+        }
+        // Each row says its tenant: its header again whenever the row
+        // before it was another tenant's.
+        log.interleave();
+        let next = std::sync::atomic::AtomicUsize::new(0);
+        let stopped = std::sync::atomic::AtomicBool::new(false);
+        type Ended<'s, 'c, 'l> = (Sender<'s, 'c>, DeployLog<'l>, Result<(), Raised>);
+        let ended: Vec<std::sync::Mutex<Option<Ended<'_, '_, 'l>>>> = batches
+            .iter()
+            .map(|_| std::sync::Mutex::new(None))
+            .collect();
+        // The run's log lines go where the calling thread's go.
+        let dispatch = tracing::dispatcher::get_default(Clone::clone);
+        let panicked = {
+            let (run, run_log, unit) = (&*self, &*log, &unit);
+            let (next, stopped, ended, dispatch) = (&next, &stopped, &ended, &dispatch);
+            std::thread::scope(|scope| {
+                let workers: Vec<_> = (0..at_once)
+                    .map(|_| {
+                        scope.spawn(move || {
+                            tracing::dispatcher::with_default(dispatch, || {
+                                use std::sync::atomic::Ordering;
+                                // The next tenant in plan order, until none
+                                // is left or one stopped the run.
+                                while !stopped.load(Ordering::SeqCst) {
+                                    let at = next.fetch_add(1, Ordering::SeqCst);
+                                    let (Some(batch), Some(slot)) =
+                                        (batches.get(at), ended.get(at))
+                                    else {
+                                        break;
+                                    };
+                                    let mut sender = run.fork();
+                                    let mut tenant_log = run_log.fork();
+                                    // A panic stops the run as it did one
+                                    // tenant after another: no tenant starts
+                                    // after it, and it is raised again on
+                                    // the calling thread with its trace.
+                                    let outcome = match crate::app::catch_panic(|| {
+                                        unit(&mut sender, batch, &mut tenant_log)
+                                    }) {
+                                        Ok(outcome) => outcome,
+                                        Err(caught) => {
+                                            stopped.store(true, Ordering::SeqCst);
+                                            return Some(caught);
+                                        }
+                                    };
+                                    if let Err(raised) = &outcome {
+                                        // Only an interrupt leaves a unit:
+                                        // the tenants in flight go on.
+                                        debug_assert_eq!(raised.stops, Stops::Run, "{raised:?}");
+                                        stopped.store(true, Ordering::SeqCst);
+                                    }
+                                    *slot
+                                        .lock()
+                                        .unwrap_or_else(std::sync::PoisonError::into_inner) =
+                                        Some((sender, tenant_log, outcome));
+                                }
+                                None
+                            })
+                        })
+                    })
+                    .collect();
+                let mut panicked = None;
+                for worker in workers {
+                    let caught = worker.join().unwrap_or_else(|payload| {
+                        Some(crate::app::CaughtPanic::from_payload(payload))
+                    });
+                    if let Some(caught) = caught {
+                        panicked.get_or_insert(caught);
+                    }
+                }
+                panicked
+            })
+        };
+        if let Some(caught) = panicked {
+            caught.resume();
+        }
+        let mut stop = Ok(());
+        for slot in ended {
+            let Some((sender, tenant_log, outcome)) = slot
+                .into_inner()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+            else {
+                continue;
+            };
+            self.absorb(sender);
+            log.merge(tenant_log);
+            if stop.is_ok() {
+                stop = outcome;
+            }
+        }
+        stop
+    }
+}
+
 /// What screening planned for one rule on a tenant that records ids.
 enum Planned {
     Create,
@@ -2517,17 +1584,11 @@ impl Sender<'_, '_> {
 
     /// The tenant's connection (`Tenant.from_setup`, one client per tenant).
     fn connect(&self, platform: &str, batch: &Batch) -> Result<Connection, Raised> {
-        let setup: toml::Table = batch
-            .tenant
-            .setup
-            .iter()
-            .filter_map(|(key, value)| toml_value(value).map(|value| (key.clone(), value)))
-            .collect();
         let settings = opentide_connectors::deploy_http_settings(platform);
         let tenant = Tenant::from_setup(
             platform,
             &batch.tenant.name,
-            &setup,
+            &batch.tenant.setup,
             &self.environment,
             Resolve::Counting,
             &settings,
@@ -2545,7 +1606,7 @@ impl Sender<'_, '_> {
 
     /// The tenants' batches of *uuids* (`TideDeployment`).
     fn batches(&self, platform: &str, uuids: &[String]) -> Result<Vec<Batch>, Raised> {
-        let tables = plan::tenants(&self.compile.config.clone(), platform)
+        let tables = plan::tenants(&self.compile.config.clone(), &PlatformKey::new(platform))
             .into_iter()
             .cloned()
             .collect::<Vec<CJson>>();
@@ -2575,6 +1636,7 @@ impl Sender<'_, '_> {
             Some(PlatformId::Sysdig) => self.sysdig(&batches, log),
             Some(PlatformId::Bitdefender) => self.bitdefender(&batches, log),
             Some(PlatformId::Exabeam) => self.exabeam(&batches, log),
+            Some(PlatformId::Datadog) => self.datadog(&batches, log),
             Some(PlatformId::GoogleSecops) => self.google_secops(&batches, log),
             Some(PlatformId::Graylog) => self.graylog(&batches, log),
             Some(PlatformId::SentinelOne | PlatformId::Crowdstrike) => {
@@ -2860,232 +1922,6 @@ impl Sender<'_, '_> {
         result.fail(message);
     }
 
-    /// Sentinel, Splunk, Carbon Black Cloud and HarfangLab: the rule's UUID
-    /// (or name) addresses it, nothing is kept in deployment state.
-    fn by_uuid(
-        &mut self,
-        platform: &str,
-        batches: &[Batch],
-        log: &mut DeployLog<'_>,
-    ) -> Result<(), Raised> {
-        let cx = self.cx;
-        for batch in batches {
-            let tenant = batch.tenant.name.clone();
-            // The registry's engine opens the tenant and deploys its rules.
-            let deployer = match cx
-                .registry
-                .get(platform)
-                .and_then(opentide_connectors::Platform::deployer)
-            {
-                Some(deployer) => deployer,
-                None => &NoOpen,
-            };
-            let Some(connection) = self.open_or_fail(platform, batch, log, deployer)? else {
-                continue;
-            };
-            for sent in &batch.rules {
-                let rule = &sent.rule;
-                // A HarfangLab tenant takes both kinds: each rule goes to the
-                // endpoint of its own block's kind.
-                if PlatformId::parse(platform) == Some(PlatformId::Harfanglab) {
-                    let block = rule.block(platform);
-                    if block.is_none() {
-                        tracing::warn!(
-                            detail = rule.name.as_str(),
-                            "skipping_rule_no_harfanglab_config"
-                        );
-                        log.skipped(
-                            platform,
-                            &tenant,
-                            &rule.uuid,
-                            &rule.name,
-                            "no HarfangLab configuration",
-                        );
-                        continue;
-                    }
-                    if opentide_compile::harfanglab::Kind::of(rule).is_none() {
-                        log.skipped(
-                            platform,
-                            &tenant,
-                            &rule.uuid,
-                            &rule.name,
-                            "neither a sigma nor a yara rule",
-                        );
-                        continue;
-                    }
-                }
-                let mut result = RuleResult::new(platform, Some(&tenant), &rule.uuid, &rule.name);
-                connection.rule_begins();
-                // Sentinel's `upsert` reads as what ARM did (OT-3).
-                let upsert =
-                    log.planned_action(platform, Some(&tenant), &rule.uuid) == Some("upsert");
-                let outcome =
-                    self.by_uuid_rule(platform, &connection, batch, rule, &mut result, upsert);
-                if self.raised_before_any_rule(&connection, platform, &tenant, log, &outcome) {
-                    break;
-                }
-                if let Err(raised) = self.close(log, result, outcome) {
-                    self.tenant_failed(platform, &tenant, log, raised, true)?;
-                    break;
-                }
-            }
-        }
-        Ok(())
-    }
-
-    /// The rules of *platform* whose file is gone, retired tenant by tenant
-    /// (`--prune`, #1713): each a delete through the platform's `Deployer`,
-    /// by the id deployment state records (then forgotten) or, on a platform
-    /// that keeps none, by the rule's UUID or Splunk name. A platform that
-    /// cannot retire a deleted rule skips it and says why; a rule the
-    /// tenant no longer has (`404`) is skipped as already gone.
-    fn retire(
-        &mut self,
-        platform: &str,
-        retirements: &[&super::deploy_retire::Retirement],
-        log: &mut DeployLog<'_>,
-    ) -> Result<(), Raised> {
-        use super::deploy_retire::Request;
-        let mut tenants: Vec<&str> = Vec::new();
-        for retirement in retirements {
-            if !tenants.contains(&retirement.tenant.as_str()) {
-                tenants.push(&retirement.tenant);
-            }
-        }
-        let tables: Vec<CJson> = plan::tenants(&self.compile.config.clone(), platform)
-            .into_iter()
-            .cloned()
-            .collect();
-        for tenant in tenants {
-            // A tenant the platform's own rules stopped: its retirements
-            // are not attempted ([`DeployLog::settle`]).
-            if self
-                .stopped_tenants
-                .iter()
-                .any(|(name, stopped)| name == platform && stopped == tenant)
-            {
-                continue;
-            }
-            let mine: Vec<&super::deploy_retire::Retirement> = retirements
-                .iter()
-                .copied()
-                .filter(|retirement| retirement.tenant == tenant)
-                .collect();
-            let row = |retirement: &super::deploy_retire::Retirement| {
-                let mut result =
-                    RuleResult::new(platform, Some(tenant), &retirement.uuid, &retirement.name);
-                result.action = Some("delete".to_owned());
-                result.retired = true;
-                result
-            };
-            // A platform that cannot retire it says so, before any tenant
-            // is opened.
-            let mut sendable = Vec::new();
-            for retirement in mine {
-                match &retirement.request {
-                    Request::Unsupported(reason) => {
-                        let mut result = row(retirement);
-                        result.skip(reason);
-                        result.seconds = Some(0.0);
-                        log.finished(result);
-                    }
-                    Request::Delete {
-                        rule_id,
-                        body,
-                        state,
-                    } => sendable.push((retirement, rule_id, body, *state)),
-                }
-            }
-            if sendable.is_empty() {
-                continue;
-            }
-            let Some(deployer) = self
-                .cx
-                .registry
-                .get(platform)
-                .and_then(opentide_connectors::Platform::deployer)
-            else {
-                for (retirement, ..) in sendable {
-                    let mut result = row(retirement);
-                    self.rule_error(
-                        &mut result,
-                        &format!("Cannot find a deployment engine for {platform}"),
-                    );
-                    log.finished(result);
-                }
-                continue;
-            };
-            let batch = tenant_batch(&tables, tenant);
-            let Some(connection) = self.open_or_fail(platform, &batch, log, deployer)? else {
-                continue;
-            };
-            for (retirement, rule_id, body, state) in sendable {
-                let mut result = row(retirement);
-                connection.rule_begins();
-                let request = DeployRequest::new(rule_id.clone(), Operation::Delete, body.clone())
-                    .at(self.cx.now);
-                let outcome = self.retire_rule(
-                    platform,
-                    tenant,
-                    deployer,
-                    &connection,
-                    &request,
-                    state,
-                    &mut result,
-                );
-                if self.raised_before_any_rule(&connection, platform, tenant, log, &outcome) {
-                    break;
-                }
-                if let Err(raised) = self.close(log, result, outcome) {
-                    self.tenant_failed(platform, tenant, log, raised, true)?;
-                    break;
-                }
-            }
-        }
-        Ok(())
-    }
-
-    /// One retirement's delete on an open tenant: a recorded id is forgotten
-    /// once the tenant deleted the rule, or once it says it has none (`404`,
-    /// skipped as already gone).
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "one retirement on its open tenant, and the row it fills"
-    )]
-    fn retire_rule(
-        &mut self,
-        platform: &str,
-        tenant: &str,
-        deployer: &dyn Deployer,
-        connection: &Connection,
-        request: &DeployRequest,
-        state: bool,
-        result: &mut RuleResult,
-    ) -> Result<(), Raised> {
-        let context = self.context(connection);
-        let answer = self
-            .block(async { Ok(deployer.deploy(context, request).await) })
-            .map_err(|error| raised(&error))?;
-        match answer {
-            Ok(done) => {
-                for warning in &done.warnings {
-                    if warning.code == opentide_connectors::splunk::RENAMED_DELETED {
-                        result.removed.push(warning.message.clone());
-                    }
-                }
-            }
-            // Gone already: nothing to retire, and nothing to keep.
-            Err(failed) if failed.failure.status == Some(404) => {
-                result.skip("already gone from the tenant");
-            }
-            Err(failed) => return Err(scoped(failed, |error| raised(&error))),
-        }
-        if state {
-            self.record_deleted(result, platform, tenant);
-        }
-        Ok(())
-    }
-
     fn strategy_of(
         &self,
         rule: &opentide_compile::Rule,
@@ -3094,382 +1930,12 @@ impl Sender<'_, '_> {
         let status = rule
             .block(platform)
             .and_then(|block| block.get("status"))
-            .map(opentide_compile::deploy::text)
+            .map(Json::to_text)
             .unwrap_or_default();
         self.compile
             .statuses
             .strategy(&status)
             .map_err(|error| Raised::new(error.to_string()))
-    }
-
-    fn deployer(
-        &self,
-        platform: &str,
-    ) -> Result<&dyn opentide_connectors::connector::Deployer, Raised> {
-        self.cx
-            .registry
-            .get(platform)
-            .and_then(opentide_connectors::Platform::deployer)
-            .ok_or_else(|| Raised::new(format!("Cannot find a deployment engine for {platform}")))
-    }
-
-    /// The request a Sentinel rule sends: the compiled analytic rule, or its
-    /// deletion (announced).
-    fn sentinel_request(
-        &mut self,
-        platform: &str,
-        batch: &Batch,
-        rule: &opentide_compile::Rule,
-        deletion: bool,
-    ) -> Result<DeployRequest, Raised> {
-        let tenant = batch.tenant.name.as_str();
-        let compile_error = |error: opentide_compile::rule::CompileError| {
-            Raised::new(format!("Rule {} ({}): {error}", rule.uuid, rule.name))
-        };
-        // The engine is found before the rule compiles, as before.
-        self.deployer(platform)?;
-        Ok(if deletion {
-            tracing::warn!(
-                arg0 = rule.name.as_str(),
-                "the_rule_will_be_removed_from_the_sentinel_workspace"
-            );
-            DeployRequest::delete(rule.uuid.clone())
-        } else {
-            let (body, warnings) =
-                opentide_compile::sentinel::compile_with_warnings(self.compile, rule, tenant)
-                    .map_err(compile_error)?;
-            // Once per rule, not once per tenant: the body, and so the
-            // warning, is the same on each.
-            if !warnings.is_empty() && self.sentinel_warned.insert(rule.uuid.clone()) {
-                self.warned = true;
-                for (code, message) in warnings {
-                    tracing::warn!(detail = message.as_str(), "{code}");
-                }
-            }
-            DeployRequest::new(
-                rule.uuid.clone(),
-                Operation::Update,
-                body.to_compact().into_bytes(),
-            )
-        })
-    }
-
-    /// The request a Microsoft Defender rule sends (microsoft-defender-1.0,
-    /// Deploy): addressed by its lowercase canonical uuid, with the compiled
-    /// update body; a DELETION carries none. The objective's techniques
-    /// left out of the alert's tactics are warned about once per rule.
-    fn microsoft_defender_request(
-        &mut self,
-        platform: &str,
-        batch: &Batch,
-        rule: &opentide_compile::Rule,
-        strategy: StatusStrategy,
-    ) -> Result<DeployRequest, Raised> {
-        use opentide_compile::microsoft_defender::{body_with_warnings, rule_id};
-        let tenant = batch.tenant.name.as_str();
-        self.deployer(platform)?;
-        let id = rule_id(rule);
-        if strategy == StatusStrategy::Deletion {
-            return Ok(DeployRequest::delete(id));
-        }
-        let (body, warnings) = body_with_warnings(self.compile, rule, tenant)
-            .map_err(|error| Raised::new(format!("Rule {} ({}): {error}", rule.uuid, rule.name)))?;
-        if !warnings.is_empty()
-            && self
-                .sentinel_warned
-                .insert(format!("{platform}:{}", rule.uuid))
-        {
-            self.warned = true;
-            for (code, message) in warnings {
-                tracing::warn!(detail = message.as_str(), "{code}");
-            }
-        }
-        let operation = if strategy == StatusStrategy::Disablement {
-            Operation::Disable
-        } else {
-            Operation::Update
-        };
-        Ok(DeployRequest::new(
-            id,
-            operation,
-            body.to_compact().into_bytes(),
-        ))
-    }
-
-    /// The request a Splunk rule sends: its saved search's settings under its
-    /// name (` - Rule` for a correlation search), or its deletion.
-    fn splunk_request(
-        &self,
-        platform: &str,
-        batch: &Batch,
-        rule: &opentide_compile::Rule,
-        deletion: bool,
-    ) -> Result<DeployRequest, Raised> {
-        let compile_error = |error: opentide_compile::rule::CompileError| {
-            Raised::new(format!("Rule {} ({}): {error}", rule.uuid, rule.name))
-        };
-        let splunk_cx = self.compile;
-        // A schedule drawn at random takes its minute and hour from the
-        // rule's UUID: the same on every deploy, so a rule redeployed as it
-        // is stays unchanged on the tenant (#1711), and rules still spread
-        // over the day.
-        let clock = opentide_compile::splunk::Clock::for_rule(&rule.uuid, self.cx.now);
-        let writes = opentide_compile::splunk::compile(splunk_cx, rule, &batch.table, Some(clock))
-            .map_err(compile_error)?;
-        let mut name = rule.name.trim().to_owned();
-        let correlation = match rule
-            .block(platform)
-            .and_then(|block| block.get("correlation_search"))
-        {
-            Some(CJson::Bool(set)) => *set,
-            _ => opentide_compile::splunk::enterprise_security(&batch.table)
-                .map_err(compile_error)?,
-        };
-        if correlation {
-            name.push_str(" - Rule");
-        }
-        let mut settings = opentide_compile::json::Object::new();
-        for write in writes.iter().skip(1) {
-            if let CJson::Object(members) = &write.body {
-                for (key, value) in members {
-                    settings.insert(key.clone(), value.clone());
-                }
-            }
-        }
-        Ok(DeployRequest::new(
-            name,
-            if deletion {
-                Operation::Delete
-            } else {
-                Operation::Update
-            },
-            if deletion {
-                // A retirement names the rule too, so the connector deletes
-                // the saved searches an earlier name of it left (#1657).
-                let mut named = opentide_compile::json::Object::new();
-                named.insert(
-                    "description".into(),
-                    opentide_compile::splunk::retired_description(rule).into(),
-                );
-                CJson::Object(named).to_compact().into_bytes()
-            } else {
-                CJson::Object(settings).to_compact().into_bytes()
-            },
-        ))
-    }
-
-    /// The request a Carbon Black Cloud rule sends: its report, retired when
-    /// it is not deployed; `None` when the rule compiles to no report.
-    fn carbon_black_request(
-        &self,
-        connection: &Connection,
-        batch: &Batch,
-        rule: &opentide_compile::Rule,
-    ) -> Result<Option<DeployRequest>, Raised> {
-        let compile_error = |error: opentide_compile::rule::CompileError| {
-            Raised::new(format!("Rule {} ({}): {error}", rule.uuid, rule.name))
-        };
-        let table =
-            resolved_table(&batch.table, &connection.tenant).map_err(|e| unset_variable(&e))?;
-        let Some(report) = opentide_compile::carbon_black::report(self.compile, rule, &table)
-            .map_err(compile_error)?
-        else {
-            return Ok(None);
-        };
-        // The report's fields, as the Deployer reads them; a rule that
-        // is not deployed retires its IOC.
-        let body = serde_json::json!({
-            "uuid": rule.uuid,
-            "name": report.name,
-            "description": report.description,
-            "query": report.query,
-            "tags": report.tags,
-            "severity": report.severity,
-            "watchlist": report.watchlist,
-            "report": report.report,
-        });
-        let operation = if report.deployment {
-            Operation::Update
-        } else {
-            Operation::Delete
-        };
-        Ok(Some(
-            DeployRequest::new(
-                rule.uuid.clone(),
-                operation,
-                serde_json::to_vec(&body).unwrap_or_default(),
-            )
-            .at(self.cx.now),
-        ))
-    }
-
-    /// The request a HarfangLab rule sends: its own kind and the rule
-    /// compiled for it (`harfanglab::request_body`); a delete names the kind.
-    fn harfanglab_request(
-        &self,
-        connection: &Connection,
-        batch: &Batch,
-        rule: &opentide_compile::Rule,
-        deletion: bool,
-    ) -> Result<DeployRequest, Raised> {
-        let compile_error = |error: opentide_compile::rule::CompileError| {
-            Raised::new(format!("Rule {} ({}): {error}", rule.uuid, rule.name))
-        };
-        // The block's own kind picks the endpoint (platform-harfanglab 1.6).
-        let Some(kind) = opentide_compile::harfanglab::Kind::of(rule) else {
-            return Err(Raised::new(format!(
-                "HarfangLab rule {} is neither a sigma nor a yara rule",
-                rule.uuid
-            )));
-        };
-        let table =
-            resolved_table(&batch.table, &connection.tenant).map_err(|e| unset_variable(&e))?;
-        let writes = opentide_compile::harfanglab::compile(self.compile, rule, &table)
-            .map_err(compile_error)?;
-        let Some(write) = writes.first() else {
-            return Err(Raised::new(format!(
-                "HarfangLab compiled no request for rule {}",
-                rule.uuid
-            )));
-        };
-        let body = opentide_compile::harfanglab::request_body(
-            kind,
-            (!write.body.is_null()).then_some(&write.body),
-        );
-        Ok(DeployRequest::new(
-            rule.uuid.clone(),
-            if deletion {
-                Operation::Delete
-            } else {
-                Operation::Update
-            },
-            serde_json::to_vec(&body).unwrap_or_default(),
-        ))
-    }
-
-    fn by_uuid_rule(
-        &mut self,
-        platform: &str,
-        connection: &Connection,
-        batch: &Batch,
-        rule: &opentide_compile::Rule,
-        result: &mut RuleResult,
-        upsert: bool,
-    ) -> Result<(), Raised> {
-        let strategy = self.strategy_of(rule, platform)?;
-        let deletion = strategy == StatusStrategy::Deletion;
-        let id = PlatformId::parse(platform);
-        let request = match id {
-            Some(PlatformId::Sentinel) => self.sentinel_request(platform, batch, rule, deletion)?,
-            Some(PlatformId::MicrosoftDefender) => {
-                self.microsoft_defender_request(platform, batch, rule, strategy)?
-            }
-            Some(PlatformId::Splunk) => self.splunk_request(platform, batch, rule, deletion)?,
-            Some(PlatformId::CarbonBlackCloud) => {
-                match self.carbon_black_request(connection, batch, rule)? {
-                    Some(request) => request,
-                    None => return Ok(()),
-                }
-            }
-            _ => self.harfanglab_request(connection, batch, rule, deletion)?,
-        };
-        let deployer = self.deployer(platform)?;
-        let context = self.context(connection);
-        let answer = self
-            .block(async { Ok(deployer.deploy(context, &request).await) })
-            .map_err(|error| raised(&error))?;
-        let answer = match answer {
-            // A DELETION whose rule the tenant no longer has: already gone.
-            Err(failed)
-                if id == Some(PlatformId::MicrosoftDefender)
-                    && deletion
-                    && failed.failure.status == Some(404) =>
-            {
-                result.skip("already gone from the tenant");
-                return Ok(());
-            }
-            other => other,
-        };
-        let (outcome, failed) = match answer {
-            Ok(outcome) => (outcome, None),
-            // What the deploy did before it failed (the old saved searches
-            // a Splunk rule's cleanup deleted) is still reported.
-            Err(mut failed) => {
-                let done = failed
-                    .partial
-                    .take()
-                    .map(|done| *done)
-                    .unwrap_or_else(|| DeployOutcome::new(None, request.operation));
-                (done, Some(failed))
-            }
-        };
-        for warning in &outcome.warnings {
-            match id {
-                // `splunk_alert_deleted`: the saved search the tenant had;
-                // `splunk_renamed_search_deleted`: one an earlier name of
-                // the rule left, which the result lists (#1657).
-                Some(PlatformId::Splunk) => {
-                    tracing::warn!(name = warning.message.as_str(), "{}", warning.code);
-                    if warning.code == opentide_connectors::splunk::RENAMED_DELETED {
-                        result.removed.push(warning.message.clone());
-                    }
-                }
-                // `report_deleted_with_rule`, `report_auto_deleted`: said, not raised.
-                Some(PlatformId::CarbonBlackCloud) => {
-                    tracing::warn!(report = warning.message.as_str(), "{}", warning.code);
-                }
-                // `microsoft_defender_rule_absent`: a DISABLEMENT found no
-                // rule with the uuid; nothing was created.
-                Some(PlatformId::MicrosoftDefender) => {
-                    self.warned |= warning.raised;
-                    tracing::warn!(detail = warning.message.as_str(), "{}", warning.code);
-                    if warning.code == opentide_connectors::microsoft_defender::RULE_ABSENT {
-                        result.skip("not on the tenant: nothing to disable");
-                    }
-                }
-                _ => {}
-            }
-        }
-        // The tenant already held it: nothing was written (#1711). A
-        // rename's cleanup may still have deleted old copies (`removed`).
-        if failed.is_none() && outcome.unchanged() {
-            result.action = Some(UNCHANGED.to_owned());
-        } else if failed.is_none() && id == Some(PlatformId::MicrosoftDefender) && upsert {
-            // Defender's `PATCH` first (microsoft-defender-1.0, Deploy): an
-            // `upsert` reads as what Graph did, a create after a `404` or an
-            // update.
-            if let Some(action) =
-                outcome
-                    .events
-                    .iter()
-                    .find_map(|event| match event.name.as_str() {
-                        opentide_connectors::microsoft_defender::RULE_CREATED => Some("create"),
-                        opentide_connectors::microsoft_defender::RULE_UPDATED => Some("update"),
-                        _ => None,
-                    })
-            {
-                result.action = Some(action.to_owned());
-            }
-        } else if failed.is_none() && id == Some(PlatformId::Sentinel) && upsert {
-            // Sentinel reads before it writes (OT-3): an `upsert` reads as
-            // what ARM did, a create or an update; none found keeps the plan's.
-            if let Some(action) =
-                outcome
-                    .events
-                    .iter()
-                    .find_map(|event| match event.name.as_str() {
-                        opentide_connectors::sentinel::RULE_CREATED => Some("create"),
-                        opentide_connectors::sentinel::RULE_UPDATED => Some("update"),
-                        _ => None,
-                    })
-            {
-                result.action = Some(action.to_owned());
-            }
-        }
-        match failed {
-            Some(failed) => Err(scoped(failed, |error| raised(&error))),
-            None => Ok(()),
-        }
     }
 
     /// `report_failure`: a coded refusal of one rule on one tenant.
@@ -3693,201 +2159,80 @@ impl Sender<'_, '_> {
         batches: &[Batch],
         log: &mut DeployLog<'_>,
     ) -> Result<(), Raised> {
-        for batch in batches {
-            let planned = self.screen(platform, batch, log);
-            if planned.is_empty() {
-                continue;
-            }
-            let crowdstrike = opentide_connectors::crowdstrike::Crowdstrike::new();
-            let opener: &dyn Deployer = match PlatformId::parse(platform) {
-                Some(PlatformId::Crowdstrike) => &crowdstrike,
-                _ => &opentide_connectors::sentinel_one::SentinelOne,
-            };
-            let Some(connection) = self.open_or_fail(platform, batch, log, opener)? else {
-                continue;
-            };
-            let cancel = self.cancel.clone();
-            let context = TenantContext {
-                tenant: &connection.tenant,
-                http: &connection.http,
-                cancel: &cancel,
-            };
-            let session = match PlatformId::parse(platform) {
-                // A platform of the tenant's own, signed in once before any
-                // rule: its Deployer sends every rule on that token.
-                Some(PlatformId::Crowdstrike) => self
-                    .block(crowdstrike.sign_in(context))
-                    .map(|()| Some(&crowdstrike)),
-                _ => Ok(None),
-            };
-            // No token or session: no rule on the tenant can deploy.
-            let session = match session {
-                Ok(session) => session,
-                Err(error) => {
-                    let stops = if matches!(error, ConnectorError::Cancelled) {
-                        Stops::Run
-                    } else {
-                        Stops::Tenant
-                    };
-                    let failure = raised(&error).stopping(stops);
-                    self.tenant_failed(platform, &batch.tenant.name, log, failure, false)?;
-                    continue;
-                }
-            };
-            connection.mark_opened();
-            for (rule, action) in planned {
-                let tenant = batch.tenant.name.as_str();
-                let mut result = RuleResult::new(platform, Some(tenant), &rule.uuid, &rule.name);
-                connection.rule_begins();
-                let outcome = self.state_rule(
-                    platform,
-                    &batch.table,
-                    tenant,
-                    context,
-                    session,
-                    rule,
-                    &action,
-                    &mut result,
-                );
-                if self.raised_before_any_rule(&connection, platform, tenant, log, &outcome) {
-                    break;
-                }
-                if let Err(raised) = self.close(log, result, outcome) {
-                    self.tenant_failed(platform, tenant, log, raised, true)?;
-                    break;
-                }
-            }
-        }
-        Ok(())
+        self.tenants(TENANTS_AT_ONCE, batches, log, |sender, batch, log| {
+            sender.with_state_tenant(platform, batch, log)
+        })
     }
 
-    /// A platform plugin (UC-4.5b, #835): each rule planned from deployment
-    /// state as the built-in platforms that keep ids are, then sent through
-    /// the plugin's `Deployer`: created (the id it returns recorded), updated
-    /// or disabled (by the stored id), or deleted (the id forgotten).
-    fn plugin(
+    /// One tenant's rules of [`with_state`](Self::with_state).
+    fn with_state_tenant(
         &mut self,
         platform: &str,
-        batches: &[Batch],
+        batch: &Batch,
         log: &mut DeployLog<'_>,
     ) -> Result<(), Raised> {
-        let cx = self.cx;
-        let deployer = cx
-            .registry
-            .get(platform)
-            .and_then(opentide_connectors::Platform::deployer)
-            .ok_or_else(|| Raised::new(format!("platform plugin {platform} cannot deploy")))?;
-        for batch in batches {
-            let planned = self.screen(platform, batch, log);
-            if planned.is_empty() {
-                continue;
-            }
-            let Some(connection) = self.open_or_fail(platform, batch, log, deployer)? else {
-                continue;
-            };
-            for (rule, action) in planned {
-                let tenant = batch.tenant.name.as_str();
-                let mut result = RuleResult::new(platform, Some(tenant), &rule.uuid, &rule.name);
-                connection.rule_begins();
-                let outcome =
-                    self.plugin_rule(deployer, platform, &connection, rule, &action, &mut result);
-                if self.raised_before_any_rule(&connection, platform, tenant, log, &outcome) {
-                    break;
-                }
-                if let Err(raised) = self.close(log, result, outcome) {
-                    self.tenant_failed(platform, tenant, log, raised, true)?;
-                    break;
-                }
-            }
+        let planned = self.screen(platform, batch, log);
+        if planned.is_empty() {
+            return Ok(());
         }
-        Ok(())
-    }
-
-    /// A plugin tenant's connection: every `$NAME` of its setup must be set,
-    /// since no built-in check names the keys a plugin reads.
-    fn connect_plugin(&self, platform: &str, batch: &Batch) -> Result<Connection, Raised> {
-        let setup: toml::Table = batch
-            .tenant
-            .setup
-            .iter()
-            .filter_map(|(key, value)| toml_value(value).map(|value| (key.clone(), value)))
-            .collect();
-        let tenant = Tenant::from_setup(
-            platform,
-            &batch.tenant.name,
-            &setup,
-            &self.environment,
-            Resolve::Required,
-            &opentide_connectors::HttpSettings::default(),
-        )
-        .map_err(|error| Raised::new(error.to_string()))?;
-        let http = HttpClient::new(
-            &tenant.label,
-            &tenant.http,
-            &self.environment,
-            self.cx.proxy,
-        )
-        .map_err(|error| Raised::new(error.to_string()))?;
-        Ok(Connection::new(tenant, http))
-    }
-
-    /// One rule on a plugin's tenant: the request the plugin receives (its
-    /// `body` the rule, its block for the platform, and the stored id), then
-    /// the deployment state the answer changes.
-    fn plugin_rule(
-        &mut self,
-        deployer: &dyn opentide_connectors::connector::Deployer,
-        platform: &str,
-        connection: &Connection,
-        rule: &opentide_compile::Rule,
-        action: &Planned,
-        result: &mut RuleResult,
-    ) -> Result<(), Raised> {
-        let tenant = connection.tenant.label.tenant.clone();
-        let disables = self.strategy_of(rule, platform)? == StatusStrategy::Disablement;
-        let (operation, stored) = match action {
-            Planned::Create => (Operation::Create, None),
-            Planned::Update(id) if disables => (Operation::Disable, Some(id.as_str())),
-            Planned::Update(id) => (Operation::Update, Some(id.as_str())),
-            Planned::Delete(id) => (Operation::Delete, Some(id.as_str())),
+        let crowdstrike = opentide_connectors::crowdstrike::Crowdstrike::new();
+        let opener: &dyn Deployer = match PlatformId::parse(platform) {
+            Some(PlatformId::Crowdstrike) => &crowdstrike,
+            _ => &opentide_connectors::sentinel_one::SentinelOne,
         };
-        let request = DeployRequest::new(
-            rule.uuid.clone(),
-            operation,
-            plugin_body(rule, platform, stored)
-                .to_compact()
-                .into_bytes(),
-        );
-        let context = self.context(connection);
-        // The plugin sends from Python, outside the tenant's client: what it
-        // sent and what the tenant took cannot be counted, so from its first
-        // call the tenant may have taken a rule.
-        connection.sends_elsewhere();
-        let done = self
-            .block(async { Ok(deployer.deploy(context, &request).await) })
-            .map_err(|error| plugin_raised(&error))?
-            .map_err(|failed| scoped(failed, |error| plugin_raised(&error)))?;
-        match (operation, done.remote_id) {
-            (Operation::Delete, _) => self.record_deleted(result, platform, &tenant),
-            (Operation::Create, Some(id)) if !id.trim().is_empty() => {
-                self.record_created(result, platform, &tenant, &ExternalId::Text(id));
+        let Some(connection) = self.open_or_fail(platform, batch, log, opener)? else {
+            return Ok(());
+        };
+        let cancel = self.cancel.clone();
+        let context = TenantContext {
+            tenant: &connection.tenant,
+            http: &connection.http,
+            cancel: &cancel,
+        };
+        let session = match PlatformId::parse(platform) {
+            // A platform of the tenant's own, signed in once before any
+            // rule: its Deployer sends every rule on that token.
+            Some(PlatformId::Crowdstrike) => self
+                .block(crowdstrike.sign_in(context))
+                .map(|()| Some(&crowdstrike)),
+            _ => Ok(None),
+        };
+        // No token or session: no rule on the tenant can deploy.
+        let session = match session {
+            Ok(session) => session,
+            Err(error) => {
+                let stops = if matches!(error, ConnectorError::Cancelled) {
+                    Stops::Run
+                } else {
+                    Stops::Tenant
+                };
+                let failure = raised(&error).stopping(stops);
+                self.tenant_failed(platform, &batch.tenant.name, log, failure, false)?;
+                return Ok(());
             }
-            (Operation::Create, _) => self.rule_error(
-                result,
-                &format!(
-                    "platform plugin {platform} created rule {} on tenant {} but returned no \
-                     remote_id, so deployment state cannot record it: the next deploy creates \
-                     it again",
-                    rule.uuid,
-                    tenant.trim()
-                ),
-            ),
-            (_, Some(id)) if Some(id.as_str()) != stored && !id.trim().is_empty() => {
-                // The plugin answered another id for the rule (it recreated
-                // it): the state follows the platform.
-                self.record_created(result, platform, &tenant, &ExternalId::Text(id));
+        };
+        connection.mark_opened();
+        for (rule, action) in planned {
+            let tenant = batch.tenant.name.as_str();
+            let mut result = RuleResult::new(platform, Some(tenant), &rule.uuid, &rule.name);
+            connection.rule_begins();
+            let outcome = self.state_rule(
+                platform,
+                &batch.table,
+                tenant,
+                context,
+                session,
+                rule,
+                &action,
+                &mut result,
+            );
+            if self.raised_before_any_rule(&connection, platform, tenant, log, &outcome) {
+                break;
             }
-            _ => {}
+            if let Err(raised) = self.close(log, result, outcome) {
+                self.tenant_failed(platform, tenant, log, raised, true)?;
+                break;
+            }
         }
         Ok(())
     }
@@ -3907,19 +2252,23 @@ impl Sender<'_, '_> {
         action: &Planned,
         result: &mut RuleResult,
     ) -> Result<(), Raised> {
+        use opentide_compile::compiler::{Compiler, Crowdstrike, SentinelOne};
         let compile_error = |error: opentide_compile::rule::CompileError| {
             Raised::new(format!("Rule {} ({}): {error}", rule.uuid, rule.name))
         };
+        // The body the dry run shows in its create or update write.
         let body = match PlatformId::parse(platform) {
             Some(PlatformId::SentinelOne) => {
                 let table =
                     resolved_table(table, context.tenant).map_err(|e| unset_variable(&e))?;
-                opentide_compile::sentinel_one::body(self.compile, rule, &table)
+                SentinelOne::compile(self.compile, rule, &table)
+                    .map(|compiled| SentinelOne::body(&compiled))
             }
             _ => {
                 let table =
                     resolved_table(table, context.tenant).map_err(|e| unset_variable(&e))?;
-                opentide_compile::crowdstrike::body(self.compile, rule, &table)
+                Crowdstrike::compile(self.compile, rule, &table)
+                    .map(|compiled| Crowdstrike::body(&compiled))
             }
         }
         .map_err(compile_error)?;
@@ -3965,1760 +2314,6 @@ impl Sender<'_, '_> {
         }
         Ok(())
     }
-
-    /// One rule sent to SentinelOne: the id the tenant gave it. The console's
-    /// refusal is raised by its code, a refused key failing the tenant.
-    fn sentinel_one_deploy(
-        &mut self,
-        tenant: &str,
-        context: TenantContext<'_>,
-        rule: &opentide_compile::Rule,
-        action: &Planned,
-        body: &CJson,
-    ) -> Result<Option<String>, Raised> {
-        use opentide_connectors::sentinel_one::SentinelOne;
-        // The console's refusal, by its code: each kind's event.
-        let refused = |error: DeployError, action: &Planned| {
-            let failure = &error.failure;
-            let detail = failure.field("detail").unwrap_or_default();
-            match failure.code {
-                _ if error.connector.is_some() => {
-                    return raised(&error.into_connector());
-                }
-                "sentinel_one_rule_invalid" => tracing::error!(
-                    detail,
-                    critical = true,
-                    "received_code_400_invalid_user_input_received"
-                ),
-                "sentinel_one_unauthorized" => tracing::error!(
-                    detail,
-                    advice = "Check your configuration and API permissions again",
-                    critical = true,
-                    "received_code_401_unauthorized_access"
-                ),
-                "sentinel_one_rule_not_found" => tracing::error!(
-                    detail,
-                    advice = "Check in the SentinelOne console whether the rule still exists. If not, remove its sentinel_one entry from the rule's deployment state in .opentide/states/deployment/",
-                    critical = true,
-                    "fatal_error"
-                ),
-                "sentinel_one_request_failed" => tracing::error!(
-                    detail = format!(
-                        "Unforeseen error with code [{}]",
-                        failure.status.unwrap_or_default()
-                    )
-                    .as_str(),
-                    context = detail,
-                    critical = true,
-                    "fatal_error"
-                ),
-                _ => {}
-            }
-            // A refused key (`sentinel_one_unauthorized`) fails the
-            // tenant: its other rules are not attempted.
-            let stops = if error.scope == DeployScope::Tenant {
-                Stops::Tenant
-            } else {
-                Stops::Rule
-            };
-            Raised::new(format!(
-                "could not {} the rule on tenant '{tenant}': {}",
-                action_verb(action),
-                failure.message
-            ))
-            .stopping(stops)
-        };
-        // The Deployer's request: the stored id addresses an update
-        // or a delete; the body is the compiled rule.
-        let compiled = || body.to_compact().into_bytes();
-        let request = match action {
-            Planned::Delete(id) => DeployRequest::delete(id.clone()),
-            Planned::Update(id) => DeployRequest::new(id.clone(), Operation::Update, compiled()),
-            Planned::Create => DeployRequest::new(rule.uuid.clone(), Operation::Create, compiled()),
-        };
-        let outcome = self
-            .block(async { Ok(SentinelOne.deploy(context, &request).await) })
-            .map_err(|error| raised(&error))?
-            .map_err(|error| refused(error, action))?;
-        Ok(outcome.remote_id)
-    }
-
-    /// One rule sent to CrowdStrike through a signed-in session: the id the
-    /// tenant gave it. The tenant's refusal is raised with its answer.
-    fn crowdstrike_deploy(
-        &mut self,
-        context: TenantContext<'_>,
-        session: &opentide_connectors::crowdstrike::Crowdstrike,
-        rule: &opentide_compile::Rule,
-        action: &Planned,
-        body: &CJson,
-    ) -> Result<Option<String>, Raised> {
-        let refused = |error: ConnectorError, action: &Planned| match &error {
-            ConnectorError::Refused {
-                message, detail, ..
-            } => {
-                let context = detail
-                    .as_deref()
-                    .and_then(|text| serde_json::from_str::<CJson>(text).ok())
-                    .map(|value| opentide_connectors::text::json_text(&value))
-                    .unwrap_or_default();
-                tracing::error!(
-                    detail = message.as_str(),
-                    context = context.as_str(),
-                    critical = true,
-                    "fatal_error"
-                );
-                Raised::new(format!(
-                    "could not {} the rule: {message}",
-                    action_verb(action)
-                ))
-            }
-            other => raised(other),
-        };
-        // The Deployer's request: the stored id addresses an update
-        // (its one-rule list, the id in it) or a delete.
-        let request = match action {
-            Planned::Delete(id) => DeployRequest::delete(id.clone()),
-            Planned::Update(id) => {
-                let mut list = body.clone();
-                if let CJson::Object(object) = &mut list {
-                    object.insert("id".into(), id.clone().into());
-                }
-                let bytes = serde_json::to_vec(&CJson::Array(vec![list])).unwrap_or_default();
-                DeployRequest::new(id.clone(), Operation::Update, bytes)
-            }
-            Planned::Create => DeployRequest::new(
-                rule.uuid.clone(),
-                Operation::Create,
-                serde_json::to_vec(&body).unwrap_or_default(),
-            ),
-        };
-        let outcome = self
-            .block(async { Ok(session.deploy(context, &request).await) })
-            .map_err(|error| refused(error, action))?
-            .map_err(|failed| scoped(failed, |error| refused(error, action)))?;
-        Ok(outcome.remote_id)
-    }
-
-    /// Elastic: each rule deleted, or checked then created or updated; a
-    /// tenant that refuses the key stops its batch (`ElasticDeploy`).
-    fn elastic(&mut self, batches: &[Batch], log: &mut DeployLog<'_>) -> Result<(), Raised> {
-        const PLATFORM: &str = PlatformId::Elastic.as_str();
-        for batch in batches {
-            let opener = opentide_connectors::elastic::Elastic;
-            let Some(connection) = self.open_or_fail(PLATFORM, batch, log, &opener)? else {
-                continue;
-            };
-            let mut tenant_state = ElasticTenant {
-                setup: opentide_compile::elastic::Setup::from_tenant(&batch.table),
-                suppression_off: matches!(
-                    opentide_compile::deploy::setup(&batch.table, "suppression"),
-                    Some(CJson::Bool(false))
-                ),
-                warned_rules: Vec::new(),
-            };
-            for sent in &batch.rules {
-                connection.rule_begins();
-                if self.elastic_rule(&connection, batch, &sent.rule, &mut tenant_state, log)? {
-                    break;
-                }
-            }
-        }
-        Ok(())
-    }
-
-    /// An Elastic deploy the tenant failed on (unreachable, or a key or
-    /// privilege it refuses): the rule fails, an interrupt stops the run, and
-    /// otherwise the tenant's other rules are not attempted.
-    fn elastic_tenant_failed(
-        &mut self,
-        connection: &Connection,
-        error: DeployError,
-        mut result: RuleResult,
-        tenant: &str,
-        log: &mut DeployLog<'_>,
-    ) -> Result<(), Raised> {
-        const PLATFORM: &str = PlatformId::Elastic.as_str();
-        let before_any = self.before_any_rule(connection, PLATFORM, tenant, log);
-        let stopped = match error.connector {
-            // The tenant could not be reached.
-            Some(connector) => {
-                result.fail(&raised(&connector).describe());
-                connector.to_string()
-            }
-            // A key or privilege the tenant refuses.
-            None => {
-                result.fail(&error.failure.message);
-                error.failure.message
-            }
-        };
-        tracing::error!(
-            tenant = tenant,
-            error = stopped.as_str(),
-            critical = true,
-            "elastic_tenant_deployment_failed"
-        );
-        if before_any {
-            // The key or the connection failed on the tenant's first
-            // request: no rule was sent (#1701).
-            self.unused(PLATFORM, tenant, log, &stopped);
-            return Ok(());
-        }
-        log.finished(result);
-        // An interrupt stops the run, not the tenant.
-        if self.interrupted() {
-            return Err(Raised::new("interrupted").stopping(Stops::Run));
-        }
-        self.stop_tenant(PlatformId::Elastic.as_str(), tenant, log);
-        Ok(())
-    }
-
-    /// One Elastic rule: screened by its status, compiled, sent, and its
-    /// result logged. `true` when the tenant failed and the rest of its rules
-    /// are left out.
-    fn elastic_rule(
-        &mut self,
-        connection: &Connection,
-        batch: &Batch,
-        rule: &opentide_compile::Rule,
-        tenant_state: &mut ElasticTenant,
-        log: &mut DeployLog<'_>,
-    ) -> Result<bool, Raised> {
-        const PLATFORM: &str = PlatformId::Elastic.as_str();
-        use opentide_connectors::elastic::{Elastic, FAILURE_EVENTS};
-        let tenant = batch.tenant.name.clone();
-        let mut result = RuleResult::new(PLATFORM, Some(&tenant), &rule.uuid, &rule.name);
-        let Some(raw) = rule.block(PLATFORM).filter(|block| block.is_filled()) else {
-            result.skip("no Elastic configuration");
-            log.finished(result);
-            return Ok(false);
-        };
-        let status = raw
-            .get("status")
-            .map(opentide_compile::deploy::text)
-            .unwrap_or_default();
-        let strategy = match self.compile.statuses.strategy(&status) {
-            Ok(strategy) => strategy,
-            Err(error) => {
-                self.rule_error(&mut result, &error.to_string());
-                log.finished(result);
-                return Ok(false);
-            }
-        };
-        if strategy == StatusStrategy::Inert {
-            result.skip(&format!("status {status} is inert"));
-            log.finished(result);
-            return Ok(false);
-        }
-        let request = match self.elastic_request(rule, raw, strategy, tenant_state, &tenant) {
-            Ok(request) => request,
-            Err(text) => {
-                self.rule_error(&mut result, &text);
-                log.finished(result);
-                return Ok(false);
-            }
-        };
-        let context = self.context(connection);
-        let deployed = self
-            .block(async { Ok(Elastic.deploy(context, &request).await) })
-            .unwrap_or_else(|error| {
-                let mut failed = DeployError::from(error);
-                failed.scope = DeployScope::Tenant;
-                Err(failed)
-            });
-        match deployed {
-            Ok(done) => {
-                self.elastic_warnings(rule, &done);
-                // An `upsert` reads as what Kibana did: a create, or an
-                // update (#1662, E10); a rule Kibana already held as it is,
-                // whatever the plan, is unchanged (#1711).
-                if done.unchanged() {
-                    result.action = Some(UNCHANGED.to_owned());
-                } else if log.planned_action(PLATFORM, Some(&tenant), &rule.uuid) == Some("upsert")
-                {
-                    result.action = elastic_done_action(&done).map(str::to_owned);
-                }
-                log.finished(result);
-            }
-            // The rule itself failed: the other rules go on.
-            Err(error) if error.scope == DeployScope::Rule => {
-                if let Some(done) = &error.partial {
-                    self.elastic_warnings(rule, done);
-                }
-                let failure = &error.failure;
-                if FAILURE_EVENTS.contains(&failure.code) {
-                    self.elastic_failure(
-                        &mut result,
-                        rule,
-                        failure.code,
-                        failure.status,
-                        &failure.message,
-                    );
-                } else {
-                    self.rule_error(&mut result, &failure.message);
-                }
-                log.finished(result);
-            }
-            Err(error) if error.is_interrupted() => {
-                result.fail("interrupted");
-                log.finished(result);
-                self.failed = true;
-                tracing::error!(
-                    tenant = tenant.as_str(),
-                    error = "interrupted",
-                    critical = true,
-                    "elastic_tenant_deployment_failed"
-                );
-                return Err(Raised::new("interrupted").stopping(Stops::Run));
-            }
-            Err(error) => {
-                self.elastic_tenant_failed(connection, error, result, &tenant, log)?;
-                return Ok(true);
-            }
-        }
-        Ok(false)
-    }
-
-    /// The request an Elastic rule sends, compiled for its tenant (a
-    /// deletion compiles nothing), after its warnings: suppression the
-    /// tenant's licence omits, techniques outside the enterprise matrix.
-    /// `Err` is the reason the rule fails.
-    fn elastic_request(
-        &mut self,
-        rule: &opentide_compile::Rule,
-        raw: &CJson,
-        strategy: StatusStrategy,
-        tenant_state: &mut ElasticTenant,
-        tenant: &str,
-    ) -> Result<DeployRequest, String> {
-        const PLATFORM: &str = PlatformId::Elastic.as_str();
-        let block = opentide_compile::preview::config_dump(PLATFORM, raw);
-        if strategy != StatusStrategy::Deletion
-            && tenant_state.suppression_off
-            && block
-                .get("suppression")
-                .is_some_and(|value| !value.is_null())
-            && !tenant_state.warned_rules.contains(&rule.uuid)
-        {
-            self.warned = true;
-            tracing::warn!(
-                rule = rule.name.as_str(),
-                rule_id = rule.uuid.as_str(),
-                tenant,
-                "suppression_omitted_basic_license"
-            );
-            tenant_state.warned_rules.push(rule.uuid.clone());
-        }
-        let payload = if strategy == StatusStrategy::Deletion {
-            CJson::Null
-        } else {
-            match opentide_compile::elastic::compile(self.compile, rule, &tenant_state.setup) {
-                Ok(payload) => payload,
-                Err(error) => {
-                    return Err(format!("Rule {} ({}): {error}", rule.uuid, rule.name));
-                }
-            }
-        };
-        let non_enterprise = strategy != StatusStrategy::Deletion
-            && opentide_compile::elastic::rule_techniques(self.compile, rule)
-                .iter()
-                .any(|id| {
-                    self.compile
-                        .attack
-                        .name(id)
-                        .is_some_and(opentide_compile::attack::non_enterprise)
-                });
-        if non_enterprise {
-            self.warned = true;
-        }
-        Ok(match strategy {
-            StatusStrategy::Deletion => DeployRequest::delete(rule.uuid.clone()),
-            _ => {
-                // The body `deploy_plan` shows for it.
-                let body = opentide_compile::preview::elastic_request(rule, payload);
-                let operation = if strategy == StatusStrategy::Disablement {
-                    Operation::Disable
-                } else {
-                    Operation::Update
-                };
-                match serde_json::to_vec(&body) {
-                    Ok(body) => DeployRequest::new(rule.uuid.clone(), operation, body),
-                    Err(error) => {
-                        return Err(format!("the compiled rule is not JSON: {error}"));
-                    }
-                }
-            }
-        })
-    }
-
-    /// The Elasticsearch checks' warnings of an Elastic deploy, failed or not.
-    fn elastic_warnings(&mut self, rule: &opentide_compile::Rule, done: &DeployOutcome) {
-        for warning in &done.warnings {
-            if warning.code != opentide_connectors::elastic::CHECK_WARNING {
-                continue;
-            }
-            self.warned = true;
-            tracing::warn!(
-                rule_id = rule.uuid.as_str(),
-                rule = rule.name.as_str(),
-                warning = warning.message.as_str(),
-                "elasticsearch_check_warning"
-            );
-        }
-    }
-
-    /// `_deployment_error` for an Elastic rule, with the fields its event logs.
-    fn elastic_failure(
-        &mut self,
-        result: &mut RuleResult,
-        rule: &opentide_compile::Rule,
-        event: &str,
-        status: Option<u16>,
-        error: &str,
-    ) {
-        let rule_id = rule.uuid.as_str();
-        match (event, status) {
-            ("elasticsearch_checks_failed", _) => {
-                tracing::error!(rule_id, rule = rule.name.as_str(), error, "{}", event);
-            }
-            ("refusing_to_modify_prebuilt_rule", _) => {
-                tracing::error!(rule_id, name = rule.name.as_str(), "{}", event);
-            }
-            (_, Some(status)) => {
-                tracing::error!(rule_id, status_code = status, error, "{}", event);
-            }
-            (_, None) => tracing::error!(rule_id, error, "{}", event),
-        }
-        if event == "recreate_elastic_rule_failed" {
-            tracing::error!(rule_id, "elastic_rule_deleted_not_recreated");
-        }
-        let message = match status {
-            Some(status) => format!("HTTP {status}: {error}"),
-            None if event == "refusing_to_modify_prebuilt_rule" => event.replace('_', " "),
-            None => error.to_owned(),
-        };
-        self.rule_error(result, &message);
-    }
-
-    /// Sysdig: each rule planned from deployment state, then created and
-    /// added to its runtime policies, updated, disabled or deleted
-    /// (`SysdigDeploy`).
-    fn sysdig(&mut self, batches: &[Batch], log: &mut DeployLog<'_>) -> Result<(), Raised> {
-        const PLATFORM: &str = PlatformId::Sysdig.as_str();
-        for batch in batches {
-            let planned = self.screen(PLATFORM, batch, log);
-            if planned.is_empty() {
-                continue;
-            }
-            let opener = opentide_connectors::sysdig::Sysdig;
-            let Some(connection) = self.open_or_fail(PLATFORM, batch, log, &opener)? else {
-                continue;
-            };
-            let tenant_policies: Vec<String> =
-                match opentide_compile::deploy::setup(&batch.table, "policies") {
-                    Some(CJson::Array(items)) => {
-                        items.iter().map(opentide_compile::deploy::text).collect()
-                    }
-                    _ => Vec::new(),
-                };
-            for (rule, action) in planned {
-                connection.rule_begins();
-                if self.sysdig_rule(&connection, batch, rule, &action, &tenant_policies, log)? {
-                    break;
-                }
-            }
-        }
-        Ok(())
-    }
-
-    /// One Sysdig rule: compiled, sent, and its result logged. `true` when
-    /// the tenant failed and the rest of its rules are left out.
-    fn sysdig_rule(
-        &mut self,
-        connection: &Connection,
-        batch: &Batch,
-        rule: &opentide_compile::Rule,
-        action: &Planned,
-        tenant_policies: &[String],
-        log: &mut DeployLog<'_>,
-    ) -> Result<bool, Raised> {
-        const PLATFORM: &str = PlatformId::Sysdig.as_str();
-        use opentide_connectors::sysdig::Sysdig;
-        let tenant = batch.tenant.name.clone();
-        let mut result = RuleResult::new(PLATFORM, Some(&tenant), &rule.uuid, &rule.name);
-        let strategy = self.strategy_of(rule, PLATFORM);
-        let body = strategy.clone().and_then(|_| {
-            opentide_compile::sysdig::compile_body(self.compile, rule, Some(&batch.table)).map_err(
-                |error| Raised::new(format!("Rule {} ({}): {error}", rule.uuid, rule.name)),
-            )
-        });
-        let (strategy, body) = match (strategy, body) {
-            (Ok(strategy), Ok(body)) => (strategy, body),
-            (Err(raised), _) | (_, Err(raised)) => {
-                self.close(log, result, Err(raised.clone()))?;
-                return Ok(false);
-            }
-        };
-        let policies = opentide_compile::sysdig::block_policies(rule)
-            .unwrap_or_else(|| tenant_policies.to_vec());
-        let recreate_refusal = self.recreate_refusal(&rule.uuid, PLATFORM, &tenant);
-        let (operation, stored) = operation_of(action, strategy);
-        let mut request = DeployRequest::new(
-            stored.unwrap_or_default(),
-            operation,
-            serde_json::to_vec(&body).unwrap_or_default(),
-        )
-        .with_policies(Some(policies));
-        if let Some(refusal) = &recreate_refusal {
-            request = request
-                .refusing_recreate(DeployFailure::new(refusal.code, refusal.message.clone()));
-        }
-        let context = self.context(connection);
-        let deployed = self
-            .block(async { Ok(Sysdig.deploy(context, &request).await) })
-            .unwrap_or_else(|error| Err(DeployError::from(error)));
-        match deployed {
-            Ok(done) => {
-                let forget = done.remote_id.is_none();
-                self.sysdig_done(&mut result, &rule.uuid, &tenant, &done, stored);
-                if forget {
-                    self.record_deleted(&mut result, PLATFORM, &tenant);
-                }
-                log.finished(result);
-            }
-            Err(error) if error.scope == DeployScope::Rule => {
-                if let Some(done) = &error.partial {
-                    self.sysdig_done(&mut result, &rule.uuid, &tenant, done, stored);
-                }
-                match recreate_refusal
-                    .as_ref()
-                    .filter(|refusal| refusal.code == error.failure.code)
-                {
-                    Some(refusal) => {
-                        self.report_failure(refusal, &rule.uuid, PLATFORM, &tenant);
-                        result.fail(&refusal.message);
-                    }
-                    None => {
-                        tracing::error!(
-                            uuid = rule.uuid.as_str(),
-                            tenant = tenant.as_str(),
-                            status_code = error.failure.status,
-                            error = error.failure.message.as_str(),
-                            "sysdig_request_failed"
-                        );
-                        self.rule_error(&mut result, &error.failure.message);
-                    }
-                }
-                log.finished(result);
-            }
-            Err(error) => {
-                self.tenant_deploy_failed(
-                    connection,
-                    PlatformId::Sysdig.as_str(),
-                    "sysdig_tenant_deployment_failed",
-                    &tenant,
-                    error,
-                    result,
-                    log,
-                )?;
-                return Ok(true);
-            }
-        }
-        Ok(false)
-    }
-
-    /// What a Sysdig deploy did, failed or not: its warnings, then the id
-    /// of a rule it created (its `sysdig_rule_created` event), recorded
-    /// when it is not the `stored` one.
-    fn sysdig_done(
-        &mut self,
-        result: &mut RuleResult,
-        uuid: &str,
-        tenant: &str,
-        done: &DeployOutcome,
-        stored: Option<&str>,
-    ) {
-        const PLATFORM: &str = PlatformId::Sysdig.as_str();
-        for warning in &done.warnings {
-            self.warned = true;
-            tracing::warn!(
-                uuid,
-                tenant,
-                detail = warning.message.as_str(),
-                "{}",
-                warning.code
-            );
-        }
-        for event in &done.events {
-            tracing::info!(
-                uuid,
-                rule_id = event
-                    .fields
-                    .iter()
-                    .find(|(key, _)| key == "rule_id")
-                    .map_or("", |(_, id)| id.as_str()),
-                "{}",
-                event.name
-            );
-        }
-        if let Some(id) = done.remote_id.as_deref().filter(|id| Some(*id) != stored) {
-            let external = id
-                .parse::<i64>()
-                .map_or_else(|_| ExternalId::Text(id.to_owned()), ExternalId::Int);
-            self.record_created(result, PLATFORM, tenant, &external);
-        }
-    }
-    /// Bitdefender GravityZone: each rule planned from deployment state,
-    /// compiled for the tenant (its targets resolved), then created (its id
-    /// recorded), updated or disabled with the whole payload, or deleted
-    /// (its id forgotten) (`BitdefenderDeploy.deploy_tenant`).
-    fn bitdefender(&mut self, batches: &[Batch], log: &mut DeployLog<'_>) -> Result<(), Raised> {
-        const PLATFORM: &str = PlatformId::Bitdefender.as_str();
-        for batch in batches {
-            let planned = self.screen(PLATFORM, batch, log);
-            let planned = self.bitdefender_yara_limit(batch, planned, log);
-            if planned.is_empty() {
-                continue;
-            }
-            let opener = opentide_connectors::bitdefender::Bitdefender;
-            let Some(connection) = self.open_or_fail(PLATFORM, batch, log, &opener)? else {
-                continue;
-            };
-            // A value that is not a boolean fails each rule `compile_rule` compiles,
-            // naming the key; a deletion compiles nothing and sends no actions.
-            let automatic =
-                opentide_compile::bitdefender::automatic_actions_on(&batch.table).unwrap_or(true);
-            for (rule, action) in planned {
-                connection.rule_begins();
-                if self.bitdefender_rule(&connection, batch, rule, &action, automatic, log)? {
-                    break;
-                }
-            }
-        }
-        Ok(())
-    }
-
-    /// The request a Bitdefender rule sends: a delete names the recorded id
-    /// alone; anything else sends the compiled rule's `params`, and says when
-    /// the tenant runs no automatic actions while the rule has some.
-    fn bitdefender_request(
-        &self,
-        batch: &Batch,
-        rule: &opentide_compile::Rule,
-        action: &Planned,
-        strategy: StatusStrategy,
-        automatic: bool,
-    ) -> Result<DeployRequest, opentide_compile::rule::CompileError> {
-        use opentide_compile::bitdefender::{compile_rule, create_params};
-        const PLATFORM: &str = PlatformId::Bitdefender.as_str();
-        if let Planned::Delete(id) = action {
-            // A delete sends the recorded id alone.
-            return Ok(DeployRequest::delete(id.clone()));
-        }
-        let (operation, stored) = operation_of(action, strategy);
-        let actions_unsupported = !automatic
-            && rule
-                .block(PLATFORM)
-                .and_then(|block| block.get("actions"))
-                .is_some_and(|actions| !actions.is_null());
-        let compiled = compile_rule(self.compile, rule, strategy, Some(&batch.table))?;
-        let mut body = opentide_compile::json::Object::new();
-        body.insert("params".into(), create_params(&compiled));
-        if actions_unsupported {
-            body.insert("actions_unsupported".into(), CJson::Bool(true));
-        }
-        Ok(DeployRequest::new(
-            stored.unwrap_or_default(),
-            operation,
-            serde_json::to_vec(&CJson::Object(body)).unwrap_or_default(),
-        ))
-    }
-
-    /// One Bitdefender rule: compiled, sent, and its result logged. `true` when
-    /// the tenant failed and the rest of its rules are left out.
-    fn bitdefender_rule(
-        &mut self,
-        connection: &Connection,
-        batch: &Batch,
-        rule: &opentide_compile::Rule,
-        action: &Planned,
-        automatic: bool,
-        log: &mut DeployLog<'_>,
-    ) -> Result<bool, Raised> {
-        use opentide_connectors::bitdefender::Bitdefender;
-        const PLATFORM: &str = PlatformId::Bitdefender.as_str();
-        let tenant = batch.tenant.name.clone();
-        let mut result = RuleResult::new(PLATFORM, Some(&tenant), &rule.uuid, &rule.name);
-        let strategy = match self.strategy_of(rule, PLATFORM) {
-            Ok(strategy) => strategy,
-            Err(raised) => {
-                self.close(log, result, Err(raised.clone()))?;
-                return Ok(false);
-            }
-        };
-        let (_, stored) = operation_of(action, strategy);
-        let mut request = match self.bitdefender_request(batch, rule, action, strategy, automatic) {
-            Ok(request) => request,
-            Err(error) => {
-                let message = format!("{}: {}", error.code, error.reason);
-                tracing::error!(
-                    code = error.code,
-                    uuid = rule.uuid.as_str(),
-                    tenant = tenant.as_str(),
-                    name = rule.name.as_str(),
-                    error = message.as_str(),
-                    "{}",
-                    error.code
-                );
-                self.rule_error(&mut result, &message);
-                log.finished(result);
-                return Ok(false);
-            }
-        };
-        let recreate_refusal = self.recreate_refusal(&rule.uuid, PLATFORM, &tenant);
-        if let Some(refusal) = &recreate_refusal {
-            request = request
-                .refusing_recreate(DeployFailure::new(refusal.code, refusal.message.clone()));
-        }
-        let context = self.context(connection);
-        let deployed = self
-            .block(async { Ok(Bitdefender.deploy(context, &request).await) })
-            .unwrap_or_else(|error| Err(DeployError::from(error)));
-        match deployed {
-            Ok(done) => {
-                self.bitdefender_done(&rule.uuid, &tenant, &done);
-                match done.remote_id.as_deref() {
-                    None => self.record_deleted(&mut result, PLATFORM, &tenant),
-                    Some(id) if Some(id) != stored => self.record_created(
-                        &mut result,
-                        PLATFORM,
-                        &tenant,
-                        &ExternalId::Text(id.to_owned()),
-                    ),
-                    Some(_) => {}
-                }
-                log.finished(result);
-            }
-            Err(error) if error.scope == DeployScope::Rule => {
-                if let Some(done) = &error.partial {
-                    self.bitdefender_done(&rule.uuid, &tenant, done);
-                }
-                let failure = &error.failure;
-                if let Some(refusal) = recreate_refusal
-                    .as_ref()
-                    .filter(|refusal| refusal.code == failure.code)
-                {
-                    self.report_failure(refusal, &rule.uuid, PLATFORM, &tenant);
-                    self.failed = true;
-                    result.fail(&refusal.message);
-                } else {
-                    tracing::error!(
-                        code = failure.code,
-                        uuid = rule.uuid.as_str(),
-                        tenant = tenant.as_str(),
-                        error = failure.message.as_str(),
-                        detail = failure.field("detail").unwrap_or_default(),
-                        "{}",
-                        failure.code
-                    );
-                    self.rule_error(
-                        &mut result,
-                        &format!("{}: {}", failure.code, failure.message),
-                    );
-                }
-                log.finished(result);
-            }
-            Err(error) => {
-                self.tenant_deploy_failed(
-                    connection,
-                    PlatformId::Bitdefender.as_str(),
-                    "bitdefender_tenant_deployment_failed",
-                    &tenant,
-                    error,
-                    result,
-                    log,
-                )?;
-                return Ok(true);
-            }
-        }
-        Ok(false)
-    }
-
-    /// What a Bitdefender deploy did, failed or not: its warnings (the
-    /// unraised ones only said), then what was done.
-    fn bitdefender_done(&mut self, uuid: &str, tenant: &str, done: &DeployOutcome) {
-        for warning in &done.warnings {
-            if warning.raised {
-                self.warned = true;
-            }
-            tracing::warn!(
-                uuid,
-                tenant,
-                detail = warning.message.as_str(),
-                "{}",
-                warning.code
-            );
-        }
-        for event in &done.events {
-            match event.fields.iter().find(|(key, _)| key == "rule_id") {
-                Some((_, rule_id)) => {
-                    tracing::info!(uuid, rule_id = rule_id.as_str(), "{}", event.name);
-                }
-                None => tracing::info!(uuid, "{}", event.name),
-            }
-        }
-    }
-
-    /// GravityZone's cap on YARA rules per company: when the YARA rules
-    /// deployment state records on the tenant plus those the run creates pass
-    /// the limit, each YARA create is refused before anything is sent.
-    /// Updates and deletes go on; a deletion makes no room in the same run,
-    /// since the rules are sent in plan order. A recorded rule is counted by
-    /// the kind its workspace block has now; one the workspace no longer
-    /// holds, or whose block does not read, is not counted.
-    fn bitdefender_yara_limit<'b>(
-        &mut self,
-        batch: &Batch,
-        planned: Vec<(&'b opentide_compile::Rule, Planned)>,
-        log: &mut DeployLog<'_>,
-    ) -> Vec<(&'b opentide_compile::Rule, Planned)> {
-        use opentide_compile::bitdefender::{
-            PLATFORM, YARA_RULE_LIMIT_CODE, is_yara, yara_rule_limit,
-        };
-        let tenant = batch.tenant.name.as_str();
-        let created = planned
-            .iter()
-            .filter(|(rule, action)| matches!(action, Planned::Create) && is_yara(rule))
-            .count();
-        if created == 0 {
-            return planned;
-        }
-        let root = self.workspace.root().to_path_buf();
-        let recorded = deploy_state::recorded(&root, PLATFORM, tenant)
-            .iter()
-            .filter(|uuid| {
-                crate::commands::validate_live::rule_of(self.workspace, uuid)
-                    .is_some_and(|rule| is_yara(&rule))
-            })
-            .count();
-        let Some(message) = yara_rule_limit(tenant, recorded, created) else {
-            return planned;
-        };
-        let error = StateError {
-            code: YARA_RULE_LIMIT_CODE,
-            message,
-        };
-        planned
-            .into_iter()
-            .filter(|(rule, action)| {
-                let refused = matches!(action, Planned::Create) && is_yara(rule);
-                if refused {
-                    self.report_failure(&error, &rule.uuid, PLATFORM, tenant);
-                    log.refused(PLATFORM, tenant, &rule.uuid, &rule.name, &error.message);
-                }
-                !refused
-            })
-            .collect()
-    }
-
-    /// Google Security Operations: each rule verified, created, updated,
-    /// disabled, archived or deleted by the id deployment state records
-    /// (`GoogleSecopsDeploy`). Credentials that cannot be loaded, refused
-    /// credentials or an instance that cannot be reached stop the tenant.
-    fn google_secops(&mut self, batches: &[Batch], log: &mut DeployLog<'_>) -> Result<(), Raised> {
-        use opentide_connectors::google_secops::{GoogleSecops, Instance};
-        let platform = PlatformId::GoogleSecops.as_str();
-        let connector = GoogleSecops::new(self.environment.clone());
-        for batch in batches {
-            let tenant = batch.tenant.name.clone();
-            let planned = self.screen(platform, batch, log);
-            if planned.is_empty() {
-                continue;
-            }
-            let Some(connection) = self.connect_or_fail(platform, batch, log)? else {
-                continue;
-            };
-            // The instance and credentials, then the sign-in, once: the
-            // rules reuse the token (#1701).
-            let ready = Instance::of(&connection.tenant)
-                .and_then(|_| connector.authorizer(&connection.tenant))
-                .and_then(|_| {
-                    self.block(async {
-                        Ok(connector
-                            .open(self.context(&connection))
-                            .await
-                            .map_err(DeployError::into_connector))
-                    })
-                    .and_then(|opened| opened)
-                });
-            match ready {
-                Ok(()) => connection.mark_opened(),
-                Err(error) => {
-                    // Unset or unreadable credentials: no rule on the tenant can deploy.
-                    let text = error.text();
-                    self.google_secops_tenant_failed(&tenant, &text);
-                    self.unusable(platform, Some(&tenant), &text);
-                    log.unreached_on(
-                        platform,
-                        &tenant,
-                        "not_attempted",
-                        &format!("not attempted: tenant {tenant} failed"),
-                    );
-                    continue;
-                }
-            }
-            for (rule, action) in planned {
-                connection.rule_begins();
-                if self.google_secops_rule(&connection, batch, rule, &action, &connector, log)? {
-                    break;
-                }
-            }
-        }
-        Ok(())
-    }
-
-    /// A Google SecOps rule the tenant refused: what the deploy did before
-    /// the failure, then each failure, a refused re-creation as its own.
-    fn google_secops_rule_failed(
-        &mut self,
-        result: &mut RuleResult,
-        rule: &opentide_compile::Rule,
-        tenant: &str,
-        stored: Option<&str>,
-        error: &DeployError,
-        recreate_refusal: Option<&StateError>,
-    ) {
-        let platform = PlatformId::GoogleSecops.as_str();
-        if let Some(done) = &error.partial {
-            self.google_secops_done(result, &rule.uuid, tenant, done, stored);
-            // A rule to retire that the tenant lost: its id
-            // is forgotten, before the failure that preceded it.
-            if done
-                .warnings
-                .iter()
-                .any(|warning| warning.code == "google_secops_rule_missing")
-            {
-                self.record_deleted(result, platform, tenant);
-            }
-        }
-        for failure in std::iter::once(&error.failure).chain(&error.more) {
-            match recreate_refusal.filter(|refusal| refusal.code == failure.code) {
-                Some(refusal) => {
-                    self.report_failure(refusal, &rule.uuid, platform, tenant);
-                    result.fail(&refusal.message);
-                }
-                None => {
-                    tracing::error!(
-                        uuid = rule.uuid.as_str(),
-                        tenant = tenant,
-                        name = rule.name.as_str(),
-                        code = failure.code,
-                        error = failure.message.as_str(),
-                        "{}",
-                        failure.code
-                    );
-                    self.rule_error(result, &format!("{}: {}", failure.code, failure.message));
-                }
-            }
-        }
-    }
-
-    /// One Google SecOps rule: compiled, sent, and its result logged. `true`
-    /// when the tenant failed and the rest of its rules are left out.
-    fn google_secops_rule(
-        &mut self,
-        connection: &Connection,
-        batch: &Batch,
-        rule: &opentide_compile::Rule,
-        action: &Planned,
-        connector: &opentide_connectors::google_secops::GoogleSecops,
-        log: &mut DeployLog<'_>,
-    ) -> Result<bool, Raised> {
-        let platform = PlatformId::GoogleSecops.as_str();
-        let tenant = batch.tenant.name.clone();
-        let mut result = RuleResult::new(platform, Some(&tenant), &rule.uuid, &rule.name);
-        let strategy = match self.strategy_of(rule, platform) {
-            Ok(strategy) => strategy,
-            Err(raised) => {
-                self.close(log, result, Err(raised))?;
-                return Ok(false);
-            }
-        };
-        // The plan's payload: the text, and the run state, run
-        // frequency and sections the deploy reads beside it.
-        let payload = match opentide_compile::google_secops::compile_deployment(self.compile, rule)
-        {
-            Ok(payload) => payload,
-            Err(error) => {
-                tracing::error!(
-                    uuid = rule.uuid.as_str(),
-                    tenant = tenant.as_str(),
-                    name = rule.name.as_str(),
-                    error = error.reason.as_str(),
-                    "compile_failed"
-                );
-                self.rule_error(&mut result, &format!("compile_failed: {}", error.reason));
-                log.finished(result);
-                return Ok(false);
-            }
-        };
-        let recreate_refusal = self.recreate_refusal(&rule.uuid, platform, &tenant);
-        let (operation, stored) = operation_of(action, strategy);
-        let body = match serde_json::to_vec(&payload) {
-            Ok(body) => body,
-            Err(error) => {
-                self.rule_error(&mut result, &format!("compile_failed: {error}"));
-                log.finished(result);
-                return Ok(false);
-            }
-        };
-        let mut request = DeployRequest::new(stored.unwrap_or_default(), operation, body);
-        if let Some(refusal) = &recreate_refusal {
-            request = request
-                .refusing_recreate(DeployFailure::new(refusal.code, refusal.message.clone()));
-        }
-        let context = self.context(connection);
-        let deployed = self
-            .block(async { Ok(connector.deploy(context, &request).await) })
-            .unwrap_or_else(|error| Err(DeployError::from(error)));
-        match deployed {
-            Ok(done) => {
-                self.google_secops_done(&mut result, &rule.uuid, &tenant, &done, stored);
-                if done.remote_id.is_none() {
-                    self.record_deleted(&mut result, platform, &tenant);
-                }
-                log.finished(result);
-            }
-            Err(error) if error.scope == DeployScope::Rule => {
-                self.google_secops_rule_failed(
-                    &mut result,
-                    rule,
-                    &tenant,
-                    stored,
-                    &error,
-                    recreate_refusal.as_ref(),
-                );
-                log.finished(result);
-            }
-            Err(error) => {
-                // Refused credentials or an unreachable instance fail every rule on it.
-                let before_any = self.before_any_rule(connection, platform, &tenant, log);
-                let text = error.into_connector().text();
-                self.google_secops_tenant_failed(&tenant, &text);
-                if before_any {
-                    // The sign-in or the connection failed on the tenant's
-                    // first request: no rule was sent (#1701).
-                    self.unused(platform, &tenant, log, &text);
-                    return Ok(true);
-                }
-                result.fail(&text);
-                log.finished(result);
-                // An interrupt stops the run, not the tenant.
-                if self.interrupted() {
-                    return Err(Raised::new("interrupted").stopping(Stops::Run));
-                }
-                self.stop_tenant(PlatformId::GoogleSecops.as_str(), &tenant, log);
-                return Ok(true);
-            }
-        }
-        Ok(false)
-    }
-
-    /// What a Google SecOps deploy did, failed or not: its warnings, then the
-    /// id of a rule it created (`google_secops_rule_created`), recorded when
-    /// it is not the `stored` one.
-    fn google_secops_done(
-        &mut self,
-        result: &mut RuleResult,
-        uuid: &str,
-        tenant: &str,
-        done: &DeployOutcome,
-        stored: Option<&str>,
-    ) {
-        const PLATFORM: &str = PlatformId::GoogleSecops.as_str();
-        for warning in &done.warnings {
-            self.warned = true;
-            tracing::warn!(
-                uuid,
-                tenant,
-                code = warning.code.as_str(),
-                detail = warning.message.as_str(),
-                "{}",
-                warning.code
-            );
-        }
-        for event in &done.events {
-            let rule_id = event
-                .fields
-                .iter()
-                .find(|(key, _)| key == "rule_id")
-                .map_or("", |(_, id)| id.as_str());
-            tracing::info!(uuid, rule_id, "{}", event.name);
-        }
-        if let Some(id) = done.remote_id.as_deref().filter(|id| Some(*id) != stored) {
-            self.record_created(result, PLATFORM, tenant, &ExternalId::Text(id.to_owned()));
-        }
-    }
-
-    /// A Google SecOps tenant no rule can deploy to (`_tenant_failed`): its
-    /// code (`google_secops_credentials_missing`,
-    /// `google_secops_tenant_unauthorized`) when the error names one, else
-    /// `google_secops_tenant_unreachable`.
-    fn google_secops_tenant_failed(&mut self, tenant: &str, text: &str) {
-        let code = text
-            .split_once(": ")
-            .map(|(code, _)| code)
-            .filter(|code| code.starts_with("google_secops_") && !code.contains(' '))
-            .unwrap_or("google_secops_tenant_unreachable");
-        tracing::error!(
-            code,
-            tenant,
-            error = text,
-            critical = true,
-            "google_secops_tenant_deployment_failed"
-        );
-        self.failed = true;
-    }
-
-    /// Graylog: the version is read once per tenant (a vulnerable one warned
-    /// about), then each rule's event definition, compiled for it, is
-    /// created, updated, unscheduled or deleted through the platform's
-    /// `Deployer` (`GraylogDeploy`).
-    fn graylog(&mut self, batches: &[Batch], log: &mut DeployLog<'_>) -> Result<(), Raised> {
-        const PLATFORM: &str = PlatformId::Graylog.as_str();
-        use opentide_connectors::graylog::Client;
-        for batch in batches {
-            let tenant = batch.tenant.name.clone();
-            let planned = self.screen(PLATFORM, batch, log);
-            if planned.is_empty() {
-                continue;
-            }
-            let Some(connection) = self.connect_or_fail(PLATFORM, batch, log)? else {
-                continue;
-            };
-            // The version is read once, before any write. A refused token, an
-            // unsupported version or an unreachable tenant stops the tenant.
-            let version = match self.block(Client::new(self.context(&connection)).version()) {
-                Ok(Ok(version)) => version,
-                Ok(Err(error)) => {
-                    let code = if error.forbidden() {
-                        "graylog_forbidden"
-                    } else {
-                        "graylog_request_failed"
-                    };
-                    self.unusable(PLATFORM, Some(&tenant), &error.reason());
-                    log.unreached_on(
-                        PLATFORM,
-                        &tenant,
-                        "not_attempted",
-                        &format!("not attempted: tenant {tenant} failed"),
-                    );
-                    tracing::error!(
-                        tenant = tenant.as_str(),
-                        code,
-                        error = error.reason().as_str(),
-                        critical = true,
-                        "graylog_tenant_deployment_failed"
-                    );
-                    continue;
-                }
-                Err(error) => {
-                    let code = match &error {
-                        ConnectorError::Refused { .. } => "graylog_version_unsupported",
-                        ConnectorError::Authentication { .. } => "graylog_tenant_unauthenticated",
-                        _ => "graylog_tenant_unreachable",
-                    };
-                    self.unusable(PLATFORM, Some(&tenant), &error.text());
-                    log.unreached_on(
-                        PLATFORM,
-                        &tenant,
-                        "not_attempted",
-                        &format!("not attempted: tenant {tenant} failed"),
-                    );
-                    tracing::error!(
-                        tenant = tenant.as_str(),
-                        code,
-                        error = error.text().as_str(),
-                        critical = true,
-                        "graylog_tenant_deployment_failed"
-                    );
-                    continue;
-                }
-            };
-            if opentide_compile::graylog::is_vulnerable(version) {
-                self.warned = true;
-                tracing::warn!(
-                    tenant = tenant.as_str(),
-                    detail = format!(
-                        "Graylog {version} does not revoke access tokens reliably ({}); upgrade \
-                         to 6.3.12, 7.0.16, 7.1.12 or later",
-                        opentide_compile::graylog::ADVISORY
-                    ),
-                    "graylog_version_vulnerable"
-                );
-            }
-            // The version read was the tenant's opening: what follows is a rule's.
-            connection.mark_opened();
-            for (rule, action) in planned {
-                connection.rule_begins();
-                if self.graylog_rule(&connection, batch, rule, &action, version, log)? {
-                    break;
-                }
-            }
-        }
-        Ok(())
-    }
-
-    /// A Graylog rule the tenant refused: what the deploy did before the
-    /// failure, then the failure; a refused re-creation is logged as the
-    /// request it stopped.
-    fn graylog_rule_failed(
-        &mut self,
-        result: &mut RuleResult,
-        rule: &opentide_compile::Rule,
-        tenant: &str,
-        error: &DeployError,
-        recreate_refusal: Option<&StateError>,
-    ) {
-        if let Some(done) = &error.partial {
-            self.graylog_done(&rule.uuid, tenant, done);
-        }
-        let failure = &error.failure;
-        // The state's refusal is logged as the request it
-        // stopped, as before.
-        let code = if recreate_refusal.is_some_and(|refusal| refusal.code == failure.code) {
-            "graylog_request_failed"
-        } else {
-            failure.code
-        };
-        match failure.status {
-            Some(status) => tracing::error!(
-                uuid = rule.uuid.as_str(),
-                tenant = tenant,
-                status_code = status,
-                code,
-                error = failure.message.as_str(),
-                "{}",
-                code
-            ),
-            None => tracing::error!(
-                uuid = rule.uuid.as_str(),
-                tenant = tenant,
-                code,
-                error = failure.message.as_str(),
-                detail = failure.field("detail").unwrap_or_default(),
-                "{}",
-                code
-            ),
-        }
-        self.rule_error(result, &failure.message);
-    }
-
-    /// The request a Graylog rule sends: a delete names the recorded id
-    /// alone (no compile); anything else sends the definition compiled for
-    /// the tenant's version, after logging that version's warnings. `Err` is
-    /// the reason the rule fails, a compile failure logged with its code.
-    fn graylog_request(
-        &mut self,
-        batch: &Batch,
-        rule: &opentide_compile::Rule,
-        action: &Planned,
-        version: opentide_compile::graylog::Version,
-        operation: Operation,
-        stored: Option<&str>,
-    ) -> Result<DeployRequest, String> {
-        use opentide_compile::graylog::create_body;
-        if let Planned::Delete(id) = action {
-            // A delete sends the recorded id alone: no rule compile.
-            return Ok(DeployRequest::delete(id.clone()));
-        }
-        let tenant = batch.tenant.name.as_str();
-        // The tenant's whole `setup` table: its `stream_ids` and
-        // `notification_ids` resolve the block's aliases, as in a dry run.
-        let setup = opentide_compile::graylog::tenant_setup(&batch.table);
-        let compiled = opentide_compile::graylog::compile_definition(
-            self.compile,
-            rule,
-            version,
-            setup,
-            Some(tenant),
-        )
-        .map_err(|error| {
-            // An alias the tenant does not define (or any other compile
-            // failure) fails the rule with its own code
-            // (`_deployment_error(exc.code)`), and the reason keeps the
-            // hint the dry run shows (what to add to which table).
-            tracing::error!(
-                uuid = rule.uuid.as_str(),
-                tenant,
-                name = rule.name.as_str(),
-                code = error.code,
-                error = error.reason.as_str(),
-                "{}",
-                error.code
-            );
-            error.to_string()
-        })?;
-        // The version's own warnings (a field it cannot take, a priority it
-        // collapses).
-        for (code, message) in &compiled.warnings {
-            self.warned = true;
-            tracing::warn!(
-                uuid = rule.uuid.as_str(),
-                tenant,
-                detail = message.as_str(),
-                "{code}"
-            );
-        }
-        serde_json::to_vec(&create_body(&compiled))
-            .map(|body| DeployRequest::new(stored.unwrap_or(&rule.uuid), operation, body))
-            .map_err(|error| format!("the compiled definition is not JSON: {error}"))
-    }
-
-    /// One Graylog rule: compiled for the tenant's version, sent, and its
-    /// result logged. `true` when the tenant failed and the rest of its rules
-    /// are left out.
-    fn graylog_rule(
-        &mut self,
-        connection: &Connection,
-        batch: &Batch,
-        rule: &opentide_compile::Rule,
-        action: &Planned,
-        version: opentide_compile::graylog::Version,
-        log: &mut DeployLog<'_>,
-    ) -> Result<bool, Raised> {
-        const PLATFORM: &str = PlatformId::Graylog.as_str();
-        // The version is read: the deployer reads it no more.
-        let graylog = opentide_connectors::graylog::Graylog::on_version(version);
-        let tenant = batch.tenant.name.clone();
-        let mut result = RuleResult::new(PLATFORM, Some(&tenant), &rule.uuid, &rule.name);
-        let disable = self.strategy_of(rule, PLATFORM)? == StatusStrategy::Disablement;
-        let (operation, stored) = match &action {
-            Planned::Create => (Operation::Create, None),
-            Planned::Update(id) if disable => (Operation::Disable, Some(id.as_str())),
-            Planned::Update(id) => (Operation::Update, Some(id.as_str())),
-            Planned::Delete(id) => (Operation::Delete, Some(id.as_str())),
-        };
-        let mut request =
-            match self.graylog_request(batch, rule, action, version, operation, stored) {
-                Ok(request) => request,
-                Err(reason) => {
-                    self.rule_error(&mut result, &reason);
-                    log.finished(result);
-                    return Ok(false);
-                }
-            };
-        let recreate_refusal = self.recreate_refusal(&rule.uuid, PLATFORM, &tenant);
-        if let Some(refusal) = &recreate_refusal {
-            request = request
-                .refusing_recreate(DeployFailure::new(refusal.code, refusal.message.clone()));
-        }
-        let context = self.context(connection);
-        let deployed = self
-            .block(async { Ok(graylog.deploy(context, &request).await) })
-            .unwrap_or_else(|error| Err(DeployError::from(error)));
-        match deployed {
-            Ok(done) => {
-                self.graylog_done(&rule.uuid, &tenant, &done);
-                match done.remote_id.as_deref() {
-                    None => self.record_deleted(&mut result, PLATFORM, &tenant),
-                    Some(id) if Some(id) != stored => self.record_created(
-                        &mut result,
-                        PLATFORM,
-                        &tenant,
-                        &ExternalId::Text(id.to_owned()),
-                    ),
-                    Some(_) => {}
-                }
-                log.finished(result);
-            }
-            Err(error) if error.scope == DeployScope::Rule => {
-                self.graylog_rule_failed(
-                    &mut result,
-                    rule,
-                    &tenant,
-                    &error,
-                    recreate_refusal.as_ref(),
-                );
-                log.finished(result);
-            }
-            Err(error) => {
-                let before_any = self.before_any_rule(connection, PLATFORM, &tenant, log);
-                let error = error.into_connector();
-                let text = error.text();
-                let code = match &error {
-                    ConnectorError::Authentication { .. } => "graylog_tenant_unauthenticated",
-                    _ => "graylog_tenant_unreachable",
-                };
-                self.failed = true;
-                tracing::error!(
-                    tenant = tenant.as_str(),
-                    code,
-                    error = text.as_str(),
-                    critical = true,
-                    "graylog_tenant_deployment_failed"
-                );
-                if before_any {
-                    // No write was taken yet: no rule was sent (#1701).
-                    self.unused(PLATFORM, &tenant, log, &text);
-                    return Ok(true);
-                }
-                result.fail(&text);
-                log.finished(result);
-                // An interrupt stops the run, not the tenant.
-                if self.interrupted() {
-                    return Err(Raised::new("interrupted").stopping(Stops::Run));
-                }
-                self.stop_tenant(PlatformId::Graylog.as_str(), &tenant, log);
-                return Ok(true);
-            }
-        }
-        Ok(false)
-    }
-
-    /// What a Graylog deploy did, failed or not: its warnings, but the
-    /// version's, which the tenant warned of once; then what was done.
-    fn graylog_done(&mut self, uuid: &str, tenant: &str, done: &DeployOutcome) {
-        for warning in &done.warnings {
-            if warning.code == opentide_connectors::graylog::VERSION_VULNERABLE {
-                continue;
-            }
-            self.warned = true;
-            tracing::warn!(
-                uuid,
-                tenant,
-                detail = warning.message.as_str(),
-                "{}",
-                warning.code
-            );
-        }
-        for event in &done.events {
-            let definition_id = event
-                .fields
-                .iter()
-                .find(|(key, _)| key == "definition_id")
-                .map_or("", |(_, id)| id.as_str());
-            tracing::info!(uuid, definition_id, "{}", event.name);
-        }
-    }
-}
-
-impl Sender<'_, '_> {
-    /// Exabeam New-Scale SIEM (`ExabeamDeploy`): each rule planned from
-    /// deployment state, then created after a name check, updated (or
-    /// disabled) by the recorded id, or deleted. A refused key, a tenant
-    /// without the licence or with no answer stops its batch.
-    fn exabeam(&mut self, batches: &[Batch], log: &mut DeployLog<'_>) -> Result<(), Raised> {
-        use opentide_connectors::exabeam::Exabeam;
-        let platform = opentide_compile::exabeam::PLATFORM;
-        let exabeam = Exabeam::new();
-        for batch in batches {
-            let tenant = batch.tenant.name.clone();
-            let planned = self.screen(platform, batch, log);
-            if planned.is_empty() {
-                continue;
-            }
-            let Some(connection) = self.connect_or_fail(platform, batch, log)? else {
-                continue;
-            };
-            let cancel = self.cancel.clone();
-            let context = TenantContext {
-                tenant: &connection.tenant,
-                http: &connection.http,
-                cancel: &cancel,
-            };
-            // The credentials, then the sign-in, once: the rules reuse the
-            // token (#1701).
-            let opened = self
-                .block(async { Ok(exabeam.open(context).await) })
-                .map_err(DeployError::from)
-                .and_then(|opened| opened);
-            if let Err(error) = opened {
-                // An unset credential variable, or a sign-in refused or never
-                // answered: no rule on the tenant can deploy.
-                let text = error.into_connector().text();
-                tracing::error!(
-                    tenant = tenant.as_str(),
-                    error = text.as_str(),
-                    critical = true,
-                    "exabeam_tenant_deployment_failed"
-                );
-                self.unusable(platform, Some(&tenant), &text);
-                log.unreached_on(
-                    platform,
-                    &tenant,
-                    "not_attempted",
-                    &format!("not attempted: tenant {tenant} failed"),
-                );
-                continue;
-            }
-            connection.mark_opened();
-            for (rule, action) in planned {
-                connection.rule_begins();
-                if self.exabeam_rule(&connection, batch, rule, &action, &exabeam, log)? {
-                    break;
-                }
-            }
-        }
-        Ok(())
-    }
-
-    /// An Exabeam rule the tenant refused: what the deploy did before the
-    /// failure, then the failure, a refused re-creation as its own.
-    fn exabeam_rule_failed(
-        &mut self,
-        result: &mut RuleResult,
-        rule: &opentide_compile::Rule,
-        tenant: &str,
-        error: &DeployError,
-        recreate_refusal: Option<&StateError>,
-        object_name: Option<&str>,
-    ) {
-        let platform = opentide_compile::exabeam::PLATFORM;
-        if let Some(done) = &error.partial {
-            self.exabeam_done(&rule.uuid, &rule.name, tenant, done);
-        }
-        let failure = &error.failure;
-        match recreate_refusal.filter(|refusal| refusal.code == failure.code) {
-            Some(refusal) => {
-                self.report_failure(refusal, &rule.uuid, platform, tenant);
-                result.fail(&refusal.message);
-            }
-            None => {
-                tracing::error!(
-                    code = failure.code,
-                    error = failure.message.as_str(),
-                    detail = failure.field("detail"),
-                    existing_id = failure.field("existing_id"),
-                    errors = failure.field("errors"),
-                    trace_id = failure.field("trace_id"),
-                    uuid = rule.uuid.as_str(),
-                    tenant = tenant,
-                    name = failure.field("name").or(object_name),
-                    "{}",
-                    failure.code
-                );
-                self.rule_error(result, &format!("{}: {}", failure.code, failure.message));
-            }
-        }
-    }
-
-    /// One Exabeam rule: compiled, sent, and its result logged. `true` when
-    /// the tenant failed and the rest of its rules are left out.
-    fn exabeam_rule(
-        &mut self,
-        connection: &Connection,
-        batch: &Batch,
-        rule: &opentide_compile::Rule,
-        action: &Planned,
-        exabeam: &opentide_connectors::exabeam::Exabeam,
-        log: &mut DeployLog<'_>,
-    ) -> Result<bool, Raised> {
-        let platform = opentide_compile::exabeam::PLATFORM;
-        let tenant = batch.tenant.name.clone();
-        let mut result = RuleResult::new(platform, Some(&tenant), &rule.uuid, &rule.name);
-        let strategy = match self.strategy_of(rule, platform) {
-            Ok(strategy) => strategy,
-            Err(raised) => {
-                self.close(log, result, Err(raised))?;
-                return Ok(false);
-            }
-        };
-        let compiled = if matches!(action, Planned::Delete(_)) {
-            // A delete sends no body.
-            Ok(None)
-        } else {
-            opentide_compile::exabeam::compile_rule(
-                self.compile,
-                rule,
-                strategy,
-                Some(&batch.table),
-            )
-            .map(Some)
-            .map_err(|error| Raised::new(format!("Rule {} ({}): {error}", rule.uuid, rule.name)))
-        };
-        let compiled = match compiled {
-            Ok(compiled) => compiled,
-            Err(raised) => {
-                self.close(log, result, Err(raised))?;
-                return Ok(false);
-            }
-        };
-        let recreate_refusal = self.recreate_refusal(&rule.uuid, platform, &tenant);
-        let (operation, stored) = operation_of(action, strategy);
-        let body = compiled.map_or(CJson::Null, |compiled| compiled.body);
-        let mut request = DeployRequest::new(
-            stored.unwrap_or_default(),
-            operation,
-            serde_json::to_vec(&body).unwrap_or_default(),
-        );
-        if let Some(refusal) = &recreate_refusal {
-            request = request
-                .refusing_recreate(DeployFailure::new(refusal.code, refusal.message.clone()));
-        }
-        // The update path's lines name the object; the create path's
-        // name the Exabeam rule (the event carries it); a delete's none.
-        let object_name = (!matches!(action, Planned::Delete(_))).then_some(rule.name.as_str());
-        let context = self.context(connection);
-        match self
-            .block(async { Ok(exabeam.deploy(context, &request).await) })
-            .map_err(|error| raised(&error))?
-        {
-            Ok(done) => {
-                self.exabeam_done(&rule.uuid, &rule.name, &tenant, &done);
-                match done.remote_id.as_deref() {
-                    None => self.record_deleted(&mut result, platform, &tenant),
-                    Some(id) if Some(id) != stored => self.record_created(
-                        &mut result,
-                        platform,
-                        &tenant,
-                        &ExternalId::Text(id.to_owned()),
-                    ),
-                    Some(_) => {}
-                }
-                log.finished(result);
-            }
-            Err(error) if error.scope == DeployScope::Rule => {
-                self.exabeam_rule_failed(
-                    &mut result,
-                    rule,
-                    &tenant,
-                    &error,
-                    recreate_refusal.as_ref(),
-                    object_name,
-                );
-                log.finished(result);
-            }
-            Err(error) => {
-                self.exabeam_tenant_failed(connection, &tenant, &error, result, log)?;
-                return Ok(true);
-            }
-        }
-        Ok(false)
-    }
-
-    /// An Exabeam deploy the tenant failed on: the rule fails, an interrupt
-    /// stops the run, and otherwise the tenant's other rules are not
-    /// attempted. A failure before the tenant took anything
-    /// ([`Sender::before_any_rule`]) leaves the rule `not attempted` too.
-    fn exabeam_tenant_failed(
-        &mut self,
-        connection: &Connection,
-        tenant: &str,
-        error: &DeployError,
-        mut result: RuleResult,
-        log: &mut DeployLog<'_>,
-    ) -> Result<(), Raised> {
-        let platform = PlatformId::Exabeam.as_str();
-        tracing::error!(
-            code = error.failure.code,
-            tenant,
-            error = error.failure.message.as_str(),
-            critical = true,
-            "exabeam_tenant_deployment_failed"
-        );
-        if self.before_any_rule(connection, platform, tenant, log) {
-            // The sign-in or the connection failed on the tenant's first
-            // request: no rule was sent (#1701).
-            self.unused(platform, tenant, log, &error.failure.message);
-            return Ok(());
-        }
-        self.failed = true;
-        result.fail(&error.failure.message);
-        log.finished(result);
-        // An interrupt stops the run, not the tenant.
-        if self.interrupted() {
-            return Err(Raised::new("interrupted").stopping(Stops::Run));
-        }
-        self.stop_tenant(platform, tenant, log);
-        Ok(())
-    }
-
-    /// What an Exabeam deploy did, failed or not: its warnings (the two
-    /// about the deployed rule name it), then what was done.
-    fn exabeam_done(&mut self, uuid: &str, name: &str, tenant: &str, done: &DeployOutcome) {
-        for warning in &done.warnings {
-            self.warned = true;
-            let named = matches!(
-                warning.code.as_str(),
-                "exabeam_schedule_retained" | "exabeam_rule_auto_disabled"
-            );
-            tracing::warn!(
-                code = warning.code.as_str(),
-                uuid,
-                tenant,
-                name = named.then_some(name),
-                detail = warning.message.as_str(),
-                "{}",
-                warning.code
-            );
-        }
-        for event in &done.events {
-            let rule_id = event
-                .fields
-                .iter()
-                .find(|(key, _)| key == "rule_id")
-                .map_or("", |(_, id)| id.as_str());
-            tracing::info!(uuid, rule_id, "{}", event.name);
-        }
-    }
-}
-
-/// A platform with no engine opens nothing: its first rule says so
-/// (`Sender::deployer`).
-struct NoOpen;
-
-impl Deployer for NoOpen {
-    fn deploy<'a>(
-        &'a self,
-        _cx: TenantContext<'a>,
-        _request: &'a DeployRequest,
-    ) -> opentide_connectors::connector::BoxFuture<'a, Result<DeployOutcome, DeployError>> {
-        Box::pin(async {
-            Err(DeployError::rule(DeployFailure::new(
-                "deployer_missing",
-                "no deployment engine",
-            )))
-        })
-    }
-}
-
-/// What a platform plugin's `Deployer` receives as the body (UC-4.5b): the
-/// rule's document with the tenant's modifiers applied, its block for the
-/// platform, and, for an update, a disable or a delete, the id deployment
-/// state holds. `opentide.plugins` hands the plugin `remote_id` as the
-/// request's own field.
-fn plugin_body(rule: &opentide_compile::Rule, platform: &str, stored: Option<&str>) -> CJson {
-    let mut body = opentide_compile::json::Object::new();
-    body.insert("rule".into(), rule.data.clone());
-    body.insert(
-        "configuration".into(),
-        rule.block(platform).cloned().unwrap_or(CJson::Null),
-    );
-    if let Some(id) = stored {
-        body.insert("remote_id".into(), CJson::Str(id.to_owned()));
-    }
-    CJson::Object(body)
-}
-
-/// A plugin's failure as the exception that stops the run: the tenant
-/// refused the rule or the credentials, or the plugin raised.
-fn plugin_raised(error: &ConnectorError) -> Raised {
-    match error {
-        ConnectorError::Refused {
-            message,
-            detail: Some(detail),
-            ..
-        } => Raised::new(format!("PlatformRefused: {message}: {detail}")),
-        ConnectorError::Refused { message, .. } => {
-            Raised::new(format!("PlatformRefused: {message}"))
-        }
-        ConnectorError::Authentication { message, .. } => {
-            Raised::new(format!("PlatformAuthenticationError: {message}")).stopping(Stops::Tenant)
-        }
-        ConnectorError::Crashed { message, .. } => Raised::new(format!("PluginError: {message}")),
-        other => raised(other),
-    }
 }
 
 /// The path the rule's state shard is written to, for messages and tests.
@@ -5742,29 +2337,12 @@ fn operation_of(action: &Planned, strategy: StatusStrategy) -> (Operation, Optio
     }
 }
 
-/// What an Elastic deploy did to a rule, as a plan's action: `create` for a
-/// rule Kibana did not have, `update` for one it replaced or recreated.
-fn elastic_done_action(done: &DeployOutcome) -> Option<&'static str> {
-    done.events
-        .iter()
-        .find_map(|event| match event.name.as_str() {
-            "elastic_rule_created" => Some("create"),
-            "elastic_rule_updated" | "elastic_rule_recreated" => Some("update"),
-            _ => None,
-        })
-}
-
-/// What an Elastic tenant's rules share: its `setup`, whether it turns
-/// suppression off, and the rules already warned about that.
-struct ElasticTenant {
-    setup: opentide_compile::elastic::Setup,
-    suppression_off: bool,
-    warned_rules: Vec<String>,
-}
-
 #[cfg(test)]
 mod tests {
+    use super::log::{header_line, result_line, verb};
+    use super::plugin::plugin_raised;
     use super::*;
+    use opentide_connectors::connector::{DeployFailure, DeployScope};
 
     /// Every `action` a deploy result row can carry (`DONE` and `VERBS` name
     /// them all; a row's action is a plan's action or `unchanged`) is in the
@@ -5918,10 +2496,8 @@ mod tests {
         );
         let refs: Vec<&RuleResult> = results.iter().collect();
         assert_eq!(counts_text(&refs), "2 deployed, 1 failed, 1 not attempted");
-        let Json::Object(summary) = run_summary(&results, 1, 1, 0.0) else {
-            panic!("an object")
-        };
-        let keys: Vec<&str> = summary.iter().map(|(key, _)| key.as_str()).collect();
+        let summary = run_summary(&results, 1, 1, 0.0);
+        let keys: Vec<&str> = summary.keys().map(String::as_str).collect();
         assert_eq!(
             keys,
             [

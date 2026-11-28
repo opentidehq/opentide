@@ -297,6 +297,162 @@ exit: 0
       "meaning": "A threat lists CVE identifiers, but Vulnerability-Lookup could not be reached to check them."
     },
     {
+      "code": "datadog_calculated_field_in_rule",
+      "meaning": "A detection rule's query names a calculated field (`#name`): real-time detection rules have none."
+    },
+    {
+      "code": "datadog_cidr",
+      "meaning": "A Datadog `CIDR()` call does not name an `@attribute` first, has no block, or has an argument that is not an IPv4 or IPv6 CIDR block."
+    },
+    {
+      "code": "datadog_concurrent_modification",
+      "meaning": "The Datadog rule changed between deploy's read and its update."
+    },
+    {
+      "code": "datadog_condition",
+      "meaning": "A case's condition does not parse, names an unknown query, or does not suit the method."
+    },
+    {
+      "code": "datadog_condition_mixed",
+      "meaning": "A condition mixes `&&` and `||`, whose precedence Datadog does not document."
+    },
+    {
+      "code": "datadog_create_unconfirmed",
+      "meaning": "A Datadog create got no answer, or a server error, so it may or may not have happened."
+    },
+    {
+      "code": "datadog_curly_quote",
+      "meaning": "A Datadog search holds a curly quote, which is not a quote: the words around it are searched as separate terms."
+    },
+    {
+      "code": "datadog_detached_operator",
+      "meaning": "A Datadog exclusion `-` is followed by a space."
+    },
+    {
+      "code": "datadog_detection_option",
+      "meaning": "A `detection` key the method does not take, or `new_value` without `forget_after`."
+    },
+    {
+      "code": "datadog_duration",
+      "meaning": "A duration is not one of the values its key accepts."
+    },
+    {
+      "code": "datadog_full_text_in_rule",
+      "meaning": "A detection rule's query searches every attribute with `*:term`, which Datadog documents for monitors, dashboards and notebooks, not for detection rules."
+    },
+    {
+      "code": "datadog_lowercase_operator",
+      "meaning": "A lower-case `and`, `or` or `not` stands between field clauses or in a value group, where Datadog reads it as a search term, not an operator."
+    },
+    {
+      "code": "datadog_measure",
+      "meaning": "A query sets more than one measure, or `new_value` does not match the method."
+    },
+    {
+      "code": "datadog_method_unsupported",
+      "meaning": "`detection.method` is not a detection method of `platform::datadog::1.0`."
+    },
+    {
+      "code": "datadog_mixed_boolean",
+      "meaning": "A Datadog search puts OR beside an AND, written or implied, without parentheses: AND binds tighter, as VRL reads it (unverified on Cloud SIEM)."
+    },
+    {
+      "code": "datadog_notification_alias",
+      "meaning": "A case's `notify` names an alias the tenant does not define."
+    },
+    {
+      "code": "datadog_parse_error",
+      "meaning": "The Datadog search does not parse: an unbalanced bracket, a dangling operator, an empty group, a field with no value, two modifiers in a row, or an unclosed phrase."
+    },
+    {
+      "code": "datadog_pipelines_only",
+      "meaning": "A Datadog search uses Observability Pipelines syntax (`_exists_:`, `_missing_:`, a quoted field name), which log search does not read the same way."
+    },
+    {
+      "code": "datadog_query_name",
+      "meaning": "A query name is not `[a-z][a-z0-9_]*`, is a duplicate, or is set on a `new_value` query."
+    },
+    {
+      "code": "datadog_range",
+      "meaning": "A Datadog range is malformed (a missing bound, a lower-case `to`), or mixes an inclusive and an exclusive bound."
+    },
+    {
+      "code": "datadog_rate_limited",
+      "meaning": "Datadog's rate limit held after the waits a deploy allows."
+    },
+    {
+      "code": "datadog_regex",
+      "meaning": "A Datadog search term holds `~` or `^`: the search syntax has no regular expression, fuzzy or boost operator."
+    },
+    {
+      "code": "datadog_request_failed",
+      "meaning": "Datadog answered a rule's request with an error other than a refusal of the rule."
+    },
+    {
+      "code": "datadog_rule_default",
+      "meaning": "The id a deployment state names is a Datadog default rule, which opentide never changes."
+    },
+    {
+      "code": "datadog_rule_invalid",
+      "meaning": "Datadog refused the rule: its validation, or a write, answered `400`."
+    },
+    {
+      "code": "datadog_rule_missing",
+      "meaning": "The rule a deployment state names no longer exists on the Datadog tenant."
+    },
+    {
+      "code": "datadog_rule_recreated",
+      "meaning": "The rule a deployment state names was gone, and deploy created it again."
+    },
+    {
+      "code": "datadog_severity",
+      "meaning": "A case severity is not one of Datadog's five statuses."
+    },
+    {
+      "code": "datadog_signal_group_by",
+      "meaning": "A `signal.group_by` field is in no query's `group_by`."
+    },
+    {
+      "code": "datadog_site",
+      "meaning": "A tenant's `site` is not a Datadog site, and no `api_url` is set."
+    },
+    {
+      "code": "datadog_symbol_operator",
+      "meaning": "`&&` or `||` stands between Datadog search clauses: Datadog's docs list them as characters to escape; write AND or OR."
+    },
+    {
+      "code": "datadog_tag",
+      "meaning": "A tag Datadog would refuse or rewrite."
+    },
+    {
+      "code": "datadog_tenant_unauthorized",
+      "meaning": "Datadog refused the tenant's API or application key."
+    },
+    {
+      "code": "datadog_tenant_unreachable",
+      "meaning": "The Datadog tenant did not answer."
+    },
+    {
+      "code": "datadog_unescaped_colon",
+      "meaning": "A Datadog search value holds an unescaped `:`, which Datadog's docs say to escape."
+    },
+    {
+      "code": "datadog_unescaped_special",
+      "meaning": "A Datadog search term holds an unescaped `!`, `<` or `>`, or a value starts with an unescaped `-`, which Datadog reads as an exclusion: escape it with `\\`."
+    },
+    {
+      "code": "datadog_unknown_attribute",
+      "meaning": "A Datadog search field is a dotted bare key, searched as a tag, where an `@attribute` was probably meant."
+    },
+    {
+      "code": "datadog_wildcard_in_phrase",
+      "meaning": "A `*` or `?` touches a word inside a quoted phrase, where it is punctuation, not a wildcard."
+    },
+    {
+      "code": "datadog_window_order",
+      "meaning": "`detection.window` is longer than `signal.keep_alive` or `signal.max_duration`."
+    },
+    {
       "code": "defender_output_columns",
       "meaning": "A Defender custom detection must return the columns Defender requires."
     },
@@ -1153,6 +1309,10 @@ exit: 0
       "meaning": "The KQL scalar operator is a legacy spelling (containscs); use the current name (contains_cs)."
     },
     {
+      "code": "kql_function_unavailable",
+      "meaning": "A KQL query calls a function that exists in another product's dialect, not in this one: a Microsoft Defender advanced hunting function in a Microsoft Sentinel query."
+    },
+    {
       "code": "kql_join_summarize_before_project",
       "meaning": "A `join` runs while the pipeline it sits in still carries every column, and a later `project` would have narrowed it."
     },
@@ -1163,6 +1323,18 @@ exit: 0
     {
       "code": "kql_render_not_valid",
       "meaning": "render draws a chart; it has no effect in a detection rule."
+    },
+    {
+      "code": "kql_rule_search_star",
+      "meaning": "A Microsoft Sentinel analytics rule's query contains `search *`, which Microsoft does not allow in a scheduled rule."
+    },
+    {
+      "code": "kql_rule_too_long",
+      "meaning": "A Microsoft Sentinel analytics rule's query is longer than the 10,000 characters Microsoft allows."
+    },
+    {
+      "code": "kql_rule_union_star",
+      "meaning": "A Microsoft Sentinel analytics rule's query contains `union *`, which Microsoft does not allow in a scheduled rule."
     },
     {
       "code": "kql_table_misspelt",
@@ -1306,7 +1478,7 @@ exit: 0
     },
     {
       "code": "mcp_config",
-      "meaning": "An MCP configuration from `opentide setup mcp` runs `opentide mcp start`."
+      "meaning": "An MCP configuration from `opentide setup mcp` runs `opentide mcp start`. Claude Desktop's configuration counts when its server's `OPENTIDE_REPO_ROOT` is this workspace."
     },
     {
       "code": "metadata_recommended",
@@ -1325,8 +1497,24 @@ exit: 0
       "meaning": "A Microsoft Defender column name is blank or not a string."
     },
     {
+      "code": "microsoft_defender_column_not_in_output",
+      "meaning": "A column a Microsoft Defender block names is not a column of its query's output."
+    },
+    {
+      "code": "microsoft_defender_column_type",
+      "meaning": "A Microsoft Defender entity or action is mapped from a column that holds no identifier, name or address."
+    },
+    {
       "code": "microsoft_defender_custom_details",
       "meaning": "A Microsoft Defender block's `alert.custom_details` is not a mapping of non-blank names to result columns."
+    },
+    {
+      "code": "microsoft_defender_custom_details_limit",
+      "meaning": "A Microsoft Defender block's `alert.custom_details` is past the limits Microsoft documents."
+    },
+    {
+      "code": "microsoft_defender_entity_identifier",
+      "meaning": "A Microsoft Defender entity mapping lacks an identifier Graph requires of its kind."
     },
     {
       "code": "microsoft_defender_entity_kind",
@@ -1345,6 +1533,10 @@ exit: 0
       "meaning": "A Microsoft Defender block's `alert.grouping` is not `alert_per_event` or `single_alert`."
     },
     {
+      "code": "microsoft_defender_impacted_asset_identifier",
+      "meaning": "A Microsoft Defender device or user mapping sets no strong identifier of its impacted asset."
+    },
+    {
       "code": "microsoft_defender_incident",
       "meaning": "A Microsoft Defender block's `incident` is not a mapping whose `exclude_from_correlation` is `true` or `false`."
     },
@@ -1361,8 +1553,24 @@ exit: 0
       "meaning": "A Microsoft Defender block maps no entity."
     },
     {
+      "code": "microsoft_defender_nrt_query",
+      "meaning": "A Microsoft Defender rule runs continuously (`frequency: NRT`), and its query is one Microsoft documents NRT cannot run."
+    },
+    {
+      "code": "microsoft_defender_placeholder_limit",
+      "meaning": "A Microsoft Defender alert title or description references more than three columns."
+    },
+    {
+      "code": "microsoft_defender_required_columns",
+      "meaning": "A Microsoft Defender query's output lacks a column a custom detection needs."
+    },
+    {
       "code": "microsoft_defender_rule_absent",
       "meaning": "A Microsoft Defender rule to disable is not on the tenant, so nothing was disabled or created."
+    },
+    {
+      "code": "microsoft_defender_rule_conflict",
+      "meaning": "Graph refused to create a Microsoft Defender rule because another rule most likely holds its display name or alert title."
     },
     {
       "code": "microsoft_defender_schema",
@@ -1375,6 +1583,10 @@ exit: 0
     {
       "code": "microsoft_defender_severity",
       "meaning": "A Microsoft Defender block's `alert.severity` is not one of opentide's five severities."
+    },
+    {
+      "code": "microsoft_defender_unprojected_output",
+      "meaning": "A Microsoft Defender query returns columns nothing in its block uses."
     },
     {
       "code": "missing_author",
@@ -1489,6 +1701,10 @@ exit: 0
       "meaning": "A `//` comment in a query that YAML folds into one line comments out the lines after it."
     },
     {
+      "code": "query_position_needs_platform",
+      "meaning": "A query on its own is to be checked as a rule's query, but no platform says whose rule block it is."
+    },
+    {
       "code": "query_rejected",
       "meaning": "`validate query --live` failed because a tenant refused a rule's query as invalid."
     },
@@ -1535,6 +1751,14 @@ exit: 0
     {
       "code": "scope_no_match",
       "meaning": "A `--file`, `--uuid` or `--type` selection matched no object, so nothing was validated."
+    },
+    {
+      "code": "sentinel_frequency",
+      "meaning": "A Microsoft Sentinel block's `scheduling.frequency` is shorter than 5 minutes or longer than 14 days."
+    },
+    {
+      "code": "sentinel_lookback",
+      "meaning": "A Microsoft Sentinel block's `scheduling.lookback` is shorter than 5 minutes, longer than 14 days, or shorter than its frequency."
     },
     {
       "code": "share_failed",
@@ -1977,13 +2201,13 @@ exit: 0
   "duration_ms": 0,
   "exit_code": 0,
   "failure": null,
-  "message": "491 diagnostic codes",
+  "message": "547 diagnostic codes",
   "next_actions": [],
   "ok": true,
   "schema_version": 1,
   "status": "completed",
   "summary": {
-    "codes": 491
+    "codes": 547
   }
 }
 

@@ -1,4 +1,4 @@
-//! The conversion's API beyond the oracle tables: garde after a successful
+//! The conversion's API beyond the Pydantic models tables: garde after a successful
 //! conversion ([`from_node::validate`]), the work budget on a document of
 //! nested aliases, open and tolerant models, and the field types no table
 //! model uses.
@@ -10,9 +10,10 @@
 
 use opentide_schema::FromNode;
 use opentide_schema::from_node::{self, Context, Invalid};
-use opentide_schema::node;
+use opentide_schema::node::{self, Entry, Mark, Node, Value};
 use opentide_schema::sample::SampleV1_1;
 use opentide_schema::{ErrorKind, Pins, SchemaError};
+use std::sync::Arc;
 
 const VALID: &str = "name: n\nuuid: u\nschema: sample::1.1\ndescription: d\nseverity: Low\n";
 
@@ -53,12 +54,16 @@ fn an_empty_document_is_null_to_the_model() {
 
 #[test]
 fn a_tree_of_aliases_stops_at_the_budget() {
+    // Eight aliases of a mapping of 13,000 unknown keys: about 104,000
+    // errors, past the budget. The text writes about 26,000 nodes, so the
+    // loader admits the expansion (ten times what is written, #1927) and the
+    // conversion's own budget is what stops it.
     let mut text = String::from("base: &m {");
-    for key in 0..600 {
+    for key in 0..13_000 {
         text.push_str(&format!("k{key}: 1, "));
     }
     text.push_str("}\nexamples: [");
-    text.push_str(&"*m, ".repeat(200));
+    text.push_str(&"*m, ".repeat(8));
     text.push_str("]\n");
     let document = node::load(&text).unwrap();
     let errors = from_node::from_document::<SampleV1_1>(&document).unwrap_err();
@@ -78,7 +83,7 @@ fn boxes_maps_and_unchecked_nodes() {
     let mut cx = Context::new();
     let boxed = <Box<std::collections::BTreeMap<String, Vec<i64>>>>::from_node(root, &mut cx);
     assert_eq!(boxed.unwrap()["a"], [1, 2]);
-    let any = <std::sync::Arc<node::Node>>::from_node(root, &mut cx).unwrap();
+    let any = <Arc<Node>>::from_node(root, &mut cx).unwrap();
     assert!(any.get("a").is_some());
     assert_eq!(cx.error_count(), 0);
     assert!(cx.path().is_empty());
@@ -112,17 +117,36 @@ enum TreeOrInt {
     Int(#[expect(dead_code, reason = "read only by the conversion")] i64),
 }
 
-/// A document of `levels` nested anchors, each level's `next` holding the
-/// level below `fan_out` times: `fan_out ^ levels` valid nodes, a few lines
-/// of text. The top level is anchored `t`.
-fn alias_tree(levels: usize, fan_out: usize) -> String {
-    let mut text = String::from("l0: &l0 {next: []}\n");
-    for level in 1..levels {
-        let below = format!("*l{}, ", level - 1).repeat(fan_out);
-        text.push_str(&format!("l{level}: &l{level} {{next: [{below}]}}\n"));
+/// A tree of `levels` nested levels, each level's `next` holding the one
+/// below `fan_out` times, shared as an alias shares it: `fan_out ^ levels`
+/// valid nodes from `levels` written ones. Built directly, as no YAML text
+/// past the loader's alias budget (#1927) reaches the conversion: the
+/// conversion's budget still guards a tree from any other source (TOML, an
+/// SDK caller). Returns each level, the top one last.
+fn alias_tree(levels: usize, fan_out: usize) -> Vec<Arc<Node>> {
+    let mut tree: Vec<Arc<Node>> = Vec::with_capacity(levels);
+    for level in 0..levels {
+        let below = match level.checked_sub(1) {
+            Some(previous) => vec![Arc::clone(&tree[previous]); fan_out],
+            None => Vec::new(),
+        };
+        tree.push(built(Value::Map(vec![Entry {
+            key: built(Value::Str("next".into())),
+            value: built(Value::Seq(below)),
+        }])));
     }
-    text.push_str(&format!("t: *l{}\n", levels - 1));
-    text
+    tree
+}
+
+/// A node no text wrote.
+fn built(value: Value) -> Arc<Node> {
+    let mark = Mark::new(0, 1, 1);
+    Arc::new(Node {
+        value,
+        start: mark,
+        end: mark,
+        text: None,
+    })
 }
 
 fn limits(errors: &[SchemaError]) -> usize {
@@ -134,7 +158,10 @@ fn limits(errors: &[SchemaError]) -> usize {
 
 fn convert<T: FromNode>(text: &str, key: &str) -> (Option<T>, Vec<SchemaError>) {
     let document = node::load(text).unwrap();
-    let node = document.root().unwrap().get(key).unwrap();
+    convert_node(document.root().unwrap().get(key).unwrap())
+}
+
+fn convert_node<T: FromNode>(node: &Node) -> (Option<T>, Vec<SchemaError>) {
     let mut cx = Context::new();
     let value = T::from_node(node, &mut cx);
     (value, cx.into_errors())
@@ -142,15 +169,14 @@ fn convert<T: FromNode>(text: &str, key: &str) -> (Option<T>, Vec<SchemaError>) 
 
 #[test]
 fn a_tree_of_valid_aliases_stops_at_the_budget() {
-    // 10^6 valid nodes from a few hundred bytes: no error but the limit.
-    let text = alias_tree(7, 10);
-    assert!(text.len() < 1_000, "{}", text.len());
-    let (value, errors) = convert::<Level>(&text, "t");
+    // 10^6 valid nodes from seven written ones: no error but the limit.
+    let tree = alias_tree(7, 10);
+    let (value, errors) = convert_node::<Level>(tree.last().unwrap());
     assert!(value.is_none());
     assert_eq!(errors.len(), 1, "{errors:#?}");
     assert_eq!(limits(&errors), 1);
     // A smaller tree of the same shape is converted.
-    let (value, errors) = convert::<Level>(&alias_tree(3, 10), "t");
+    let (value, errors) = convert_node::<Level>(alias_tree(3, 10).last().unwrap());
     assert!(value.is_some(), "{errors:#?}");
     assert!(errors.is_empty());
 }
@@ -160,13 +186,12 @@ fn a_union_member_spends_the_callers_budget() {
     // Each item is a tree of 10^4 levels that the union's first member
     // converts; 20 of them cost twice the budget, which a trial that did not
     // pass its spending back to its caller would never reach.
-    let mut text = alias_tree(5, 10);
-    text.push_str("items: [");
-    text.push_str(&"*l4, ".repeat(20));
-    text.push_str("]\n");
-    let (one, errors) = convert::<TreeOrInt>(&text, "t");
+    let tree = alias_tree(5, 10);
+    let top = tree.last().unwrap();
+    let (one, errors) = convert_node::<TreeOrInt>(top);
     assert!(matches!(one, Some(TreeOrInt::Tree(_))), "{errors:#?}");
-    let (value, errors) = convert::<Vec<TreeOrInt>>(&text, "items");
+    let items = built(Value::Seq(vec![Arc::clone(top); 20]));
+    let (value, errors) = convert_node::<Vec<TreeOrInt>>(&items);
     assert!(value.is_none());
     assert_eq!(limits(&errors), 1, "{errors:#?}");
     assert_eq!(errors.last().unwrap().kind, ErrorKind::Limit);

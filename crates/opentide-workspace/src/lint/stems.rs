@@ -1,6 +1,6 @@
-//! The file stem an object's name gives (`core/lint_config.py`
-//! `expected_stem`, `documentation/markdown/links.py` `slugify`,
-//! `registry/catalogue.py` `split_object_name`).
+//! The file stem an object's name gives ([`expected_stem`], [`slugify`]),
+//! and an object file name split into that stem and its suffix
+//! ([`split_object_name`]).
 
 use std::path::{Path, PathBuf};
 

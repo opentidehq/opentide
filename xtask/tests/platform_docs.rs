@@ -8,6 +8,10 @@
 //! column that disagrees.
 
 #![expect(
+    clippy::string_slice,
+    reason = "a test: a slice off a char boundary panics, and a panic is a failed test"
+)]
+#![expect(
     clippy::expect_used,
     reason = "test helpers: a panic naming the missing page or section is how the test fails"
 )]
@@ -141,6 +145,7 @@ fn display_names(language: &str) -> &'static [&'static str] {
         "yara" => &["YARA"],
         "exabeam" => &["Exabeam Query Language"],
         "yaral" => &["YARA-L"],
+        "datadog" => &["Datadog search syntax"],
         "powerquery" => &["PowerQuery"],
         "telemetry" => &["telemetry"],
         other => panic!("no display name for the registry language {other:?}: add one here"),
@@ -380,7 +385,7 @@ fn validate_md_s_offline_and_live_tables_are_the_registry_s() {
     let words = |n: usize| {
         [
             "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
-            "eleven", "twelve", "thirteen",
+            "eleven", "twelve", "thirteen", "fourteen",
         ]
         .get(n)
         .copied()
@@ -430,7 +435,7 @@ fn the_platforms_page_s_capability_matrix_is_the_registry_s() {
 fn count_word(n: usize) -> &'static str {
     [
         "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
-        "eleven", "twelve", "thirteen",
+        "eleven", "twelve", "thirteen", "fourteen",
     ]
     .get(n)
     .copied()

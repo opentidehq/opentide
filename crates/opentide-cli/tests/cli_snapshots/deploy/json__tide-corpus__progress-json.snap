@@ -302,7 +302,7 @@ exit: 0
                   "entityMappings": {
                     "hosts": [
                       {
-                        "deviceIdColumn": "device_id"
+                        "deviceIdColumn": "DeviceId"
                       }
                     ]
                   },
@@ -322,7 +322,7 @@ exit: 0
               },
               "displayName": "Defender KQL Rule",
               "queryCondition": {
-                "queryText": "DeviceProcessEvents\n| take 1\n"
+                "queryText": "DeviceProcessEvents\n| take 1\n| project Timestamp, DeviceId, ReportId\n"
               },
               "schedule": {
                 "frequency": "PT1H"
@@ -330,7 +330,7 @@ exit: 0
               "status": "enabled"
             },
             "method": "PATCH",
-            "url": "https://graph.microsoft.com/beta/security/rules/detectionRules/00000000-0000-4000-8003-000000000002"
+            "url": "https://graph.microsoft.com/beta/security/rules/detectionRules/opentide-00000000-0000-4000-8003-000000000002"
           }
         ],
         "name": "Defender KQL Rule",
@@ -539,6 +539,7 @@ exit: 0
           ]
         },
         "name": "Sysdig Falco Rule",
+        "tenant": "staging",
         "uuid": "00000000-0000-4000-8003-0000005d1a90"
       }
     ]

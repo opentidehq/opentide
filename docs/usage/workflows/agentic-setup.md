@@ -28,7 +28,7 @@ opentide exposes the engine to AI agents through an [MCP server](../../mcp/index
 ## Install and configure the server
 
 ```bash
-pip install 'opentide==1.0.0'
+pip install 'opentide==1.1.0'
 opentide setup mcp --cursor --yes
 ```
 
@@ -55,6 +55,7 @@ The server uses **stdio transport**. It must know where your content lives, so s
 | VS Code | `--vscode` | `.vscode/mcp.json` (`servers`, not `mcpServers`) | `${workspaceFolder}` |
 | Cursor | `--cursor` | `.cursor/mcp.json` | `${workspaceFolder}` |
 | Claude Code | `--claude-code` | `.mcp.json` | `${CLAUDE_PROJECT_DIR}` |
+| Claude Desktop | `--claude-desktop` | Claude Desktop's `claude_desktop_config.json`, outside the repository ([details](../../mcp/configuration.md#claude-desktop)) | the workspace's absolute path |
 | Generic | `--generic` | `opentide.mcp.json` | omitted (cwd discovery) |
 
 ## Install agent skills

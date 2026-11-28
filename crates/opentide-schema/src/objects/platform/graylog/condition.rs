@@ -1,6 +1,6 @@
 //! The aggregation condition grammar (graylog-1.0, "Condition grammar"):
-//! `aggregation.condition` compiled into Graylog's series and condition tree
-//! (`platforms/graylog/constraints.py` `parse_condition`).
+//! `aggregation.condition` compiled into Graylog's series and condition
+//! tree.
 //!
 //! The parser is language-server 0.16.0's (`opentide-tide/src/graylog.rs`),
 //! moved here so the model, deploy and the editor share one copy: it keeps
@@ -222,13 +222,12 @@ impl Token<'_> {
     }
 }
 
-/// The oracle's `_tokens`: comparisons, parentheses and commas, and words of
-/// field-name characters, around whitespace.
+/// The condition's tokens: comparisons, parentheses and commas, and words
+/// of field-name characters, around whitespace.
 fn tokenize(text: &str) -> Result<Vec<Token<'_>>, ConditionError> {
     let mut tokens = Vec::new();
     let mut at = 0;
-    while at < text.len() {
-        let rest = &text[at..];
+    while let Some(rest) = text.get(at..) {
         let Some(ch) = rest.chars().next() else {
             break;
         };
@@ -243,15 +242,19 @@ fn tokenize(text: &str) -> Result<Vec<Token<'_>>, ConditionError> {
         } else if field_char(ch) {
             rest.find(|ch: char| !field_char(ch)).unwrap_or(rest.len())
         } else {
-            let shown: String = text[at..].trim().chars().take(12).collect();
+            let shown: String = rest.trim().chars().take(12).collect();
             return Err(ConditionError {
                 message: format!("unexpected {}", quote(&shown)),
                 start: at,
                 end: at + ch.len_utf8(),
             });
         };
+        // Every length above ends a run of ASCII characters.
+        let Some((token, _)) = rest.split_at_checked(len) else {
+            break;
+        };
         tokens.push(Token {
-            text: &rest[..len],
+            text: token,
             start: at,
         });
         at += len;
@@ -281,11 +284,9 @@ impl<'a> Parser<'a> {
         let (start, end) = match at {
             Some(token) => (token.start, token.end()),
             None => {
-                let end = self.text.trim_end().len();
-                let start = self.text[..end]
-                    .char_indices()
-                    .next_back()
-                    .map_or(0, |(at, _)| at);
+                let trimmed = self.text.trim_end();
+                let end = trimmed.len();
+                let start = trimmed.char_indices().next_back().map_or(0, |(at, _)| at);
                 (start, end)
             }
         };
@@ -296,8 +297,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// The oracle's `take`: the next token, which must be `expected` when
-    /// one is given.
+    /// The next token, which must be `expected` when one is given.
     fn take(&mut self, expected: Option<&str>) -> Result<Token<'a>, ConditionError> {
         match self.peek() {
             Some(token) if expected.is_none_or(|expected| token.text == expected) => {
@@ -379,7 +379,7 @@ impl<'a> Parser<'a> {
         Ok(Expr::Compare { op, series, value })
     }
 
-    /// The oracle's `_number`.
+    /// A number token, or the error `<token> is not a number`.
     fn number(&self, token: Token<'_>) -> Result<Number, ConditionError> {
         Number::parse(token.text).ok_or_else(|| {
             self.error(
@@ -410,8 +410,13 @@ impl<'a> Parser<'a> {
             }
         }
         let close = self.take(Some(")"))?;
+        #[expect(
+            clippy::string_slice,
+            reason = "both ends are token ends, which `tokenize` cuts at char boundaries"
+        )]
+        let text = &self.text[head.start..close.end()];
         let call = Token {
-            text: &self.text[head.start..close.end()],
+            text,
             start: head.start,
         };
         let wrong = |message: &str| self.error(message.to_owned(), Some(call));
@@ -549,7 +554,7 @@ mod tests {
     }
 
     #[test]
-    fn errors_name_what_the_oracle_names() {
+    fn errors_name_the_offending_token() {
         assert_eq!(error(""), "the condition is empty");
         assert_eq!(error("   "), "the condition is empty");
         assert_eq!(error("count() >= 3 $x"), "unexpected \"$x\"");
@@ -614,5 +619,17 @@ mod tests {
         assert!(Number::parse("1.").is_none());
         assert!(Number::parse("-").is_none());
         assert!(Number::parse(".5").is_none());
+    }
+
+    #[test]
+    fn a_multi_byte_character_is_an_error_at_its_bytes() {
+        // #1946: the tokenizer and the end-of-text error never slice inside
+        // a character.
+        let failed = parse_condition("count() >= é").unwrap_err();
+        assert_eq!((failed.start, failed.end), (11, 13));
+        assert!(failed.message.contains('é'), "{}", failed.message);
+        // Trailing non-ASCII whitespace: the error is on the last character.
+        let failed = parse_condition("count() >=\u{3000}").unwrap_err();
+        assert_eq!((failed.start, failed.end), (9, 10));
     }
 }

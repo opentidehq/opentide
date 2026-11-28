@@ -1,0 +1,20 @@
+---
+source: crates/opentide-datadog/tests/trees.rs
+expression: "debug_tree(&body.join(\"\\n\"))"
+input_file: crates/testdata/corpus/datadog/range__invalid.datadog
+---
+QUERY@0..29
+  FIELD_CLAUSE@0..29
+    ATTRIBUTE@0..17
+      WORD@0..17 "@http.status_code"
+    COLON@17..18 ":"
+    RANGE@18..29
+      L_BRACK@18..19 "["
+      RANGE_BOUND@19..22
+        NUMBER@19..22 "400"
+      WHITESPACE@22..23 " "
+      TO_KW@23..25 "TO"
+      WHITESPACE@25..26 " "
+      RANGE_BOUND@26..29
+        NUMBER@26..29 "499"
+29..29: the range is never closed: missing `]` or `}` (expected R_BRACK, R_BRACE)

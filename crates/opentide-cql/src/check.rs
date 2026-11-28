@@ -6,7 +6,7 @@
 
 use crate::catalog::{Catalog, Function, Parameter};
 use crate::syntax::{SyntaxKind as K, SyntaxNode, SyntaxToken};
-use crate::{Context, child, nth, range, text};
+use crate::{Profile, child, nth, range, text};
 use opentide_core::{Diagnostic, codes};
 use opentide_parse::SyntaxError;
 use rowan::WalkEvent;
@@ -24,7 +24,7 @@ pub(crate) fn diagnostics(
     root: &SyntaxNode,
     errors: &[SyntaxError],
     source: &str,
-    ctx: Context,
+    ctx: Profile,
 ) -> Vec<Diagnostic> {
     diagnostics_with(root, errors, source, ctx, |_| {})
 }
@@ -36,7 +36,7 @@ pub(crate) fn diagnostics_with(
     root: &SyntaxNode,
     errors: &[SyntaxError],
     source: &str,
-    ctx: Context,
+    ctx: Profile,
     token: impl FnMut(&SyntaxToken),
 ) -> Vec<Diagnostic> {
     let catalog = Catalog::cached();
@@ -1094,7 +1094,10 @@ mod walk_tests {
         let mut out: Vec<String> = SAMPLES.iter().map(|s| (*s).to_owned()).collect();
         let cut: Vec<String> = SAMPLES
             .iter()
-            .flat_map(|t| t.char_indices().map(|(i, _)| t[..i].to_owned()))
+            .flat_map(|t| {
+                t.char_indices()
+                    .map(|(i, _)| t.get(..i).unwrap().to_owned())
+            })
             .collect();
         out.extend(cut);
         out
@@ -1152,13 +1155,13 @@ mod walk_tests {
         let mut correlated = 0;
         for source in texts() {
             let (root, parse) = parser::parse(&source);
-            for ctx in [Context::default(), Context::CORRELATION_RULE] {
+            for ctx in [Profile::default(), Profile::CORRELATION_RULE] {
                 let mut spans = Vec::new();
                 let one = diagnostics_with(&root, &parse.errors, &source, ctx, |t| {
                     spans.extend(highlight::span(t, &source));
                 });
                 // The correlation rule's findings came last, from a walk of their own.
-                let mut two = diagnostics(&root, &parse.errors, &source, Context::default());
+                let mut two = diagnostics(&root, &parse.errors, &source, Profile::default());
                 if ctx.correlation_rule {
                     correlation_rule_walk(&root, &source, &mut two);
                 }
@@ -1189,7 +1192,7 @@ mod walk_tests {
             let (root, _) = parser::parse(source);
             let elements = root.descendants_with_tokens().count();
             let before = visits();
-            crate::analyze_with(source, &Context::CORRELATION_RULE);
+            crate::analyze_with(source, &Profile::CORRELATION_RULE);
             assert_eq!(visits() - before, 2 * elements, "{source:?}");
         }
     }

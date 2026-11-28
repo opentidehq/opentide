@@ -3,11 +3,11 @@
 #   scripts/engine/fuzz.sh <target> [seconds]     default 300
 set -euo pipefail
 root="$(cd "$(dirname "$0")/../.." && pwd)"
-target="${1:?target: kql spl esql eql kuery lucene falco cql yara exabeam yaral tide protocol framing config cli serve from_node}"
+target="${1:?target: kql spl esql eql kuery lucene falco cql yara exabeam yaral datadog tide protocol framing config cli serve from_node semantic}"
 seconds="${2:-300}"
 seeds=()
 case "$target" in
-  kql|spl|esql|eql|kuery|lucene|falco|cql|yara|exabeam|yaral)
+  kql|spl|esql|eql|kuery|lucene|falco|cql|yara|exabeam|yaral|datadog)
     [[ -d "$root/crates/testdata/corpus/$target" ]] && seeds+=("$root/crates/testdata/corpus/$target")
     [[ -d "$root/crates/testdata/conformance/external/$target" ]] && seeds+=("$root/crates/testdata/conformance/external/$target") ;;
   tide) seeds+=("$root/crates/testdata/objects" "$root/crates/testdata/workspaces/tide_corpus/objects") ;;
@@ -17,6 +17,7 @@ case "$target" in
   cli) seeds+=("$root/fuzz/seeds/cli") ;;
   serve) seeds+=("$root/fuzz/seeds/serve") ;;
   from_node) seeds+=("$root/fuzz/seeds/from_node") ;;
+  semantic) seeds+=("$root/fuzz/seeds/semantic") ;;
   *) echo "unknown target: $target" >&2; exit 2 ;;
 esac
 [[ -d "$root/fuzz/regressions/$target" ]] && seeds+=("$root/fuzz/regressions/$target")

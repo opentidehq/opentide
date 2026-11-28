@@ -4,7 +4,7 @@
 //! The expected side reads each file with the workspace's YAML reader
 //! (`opentide_core::node`, as `validate` does) and follows the rules
 //! `scripts/engine/oracles/oracle.py` (`embedded`, `elastic_embedded`) uses to feed
-//! the reference parsers, so the oracles check the text the engine checks.
+//! the reference parsers, so the reference parsers check the text the engine checks.
 
 #![expect(
     clippy::unwrap_used,

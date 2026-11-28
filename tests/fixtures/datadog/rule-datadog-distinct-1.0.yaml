@@ -1,0 +1,26 @@
+# A threshold on distinct values (RFC §5.7): many users fail to log in from
+# one address.
+name: Okta password spraying from one address
+metadata:
+  uuid: 00000000-0000-4000-8004-000000000005
+  schema: rule::1.0
+  version: 1
+  created: "2026-11-27"
+  modified: "2026-11-27"
+  tlp: clear
+  author: Detection Engineering
+description: |
+  More than twenty users fail to log in to Okta from one address in ten minutes.
+configurations:
+  datadog:
+    schema: platform::datadog::1.0
+    status: PRODUCTION
+    queries:
+      - name: failures
+        query: source:okta @evt.outcome:FAILURE
+        group_by: ["@network.client.ip"]
+        count_distinct: "@usr.email"
+    detection:
+      window: 10m
+    cases:
+      - condition: failures > 20

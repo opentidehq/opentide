@@ -52,19 +52,13 @@ pub fn declare_dataset(toml: Option<&str>, platform: &str, name: &str) -> Datase
     }
 }
 
+/// `text` as a TOML string, in the style `toml_edit` picks: a basic string; a
+/// literal one (`'A"B'`) where that spares escaping a `"` or `\`; or a
+/// multi-line basic string (`"""`) when it holds a newline, or both `'` and
+/// `"`. A newline stays a line break there; every other control character is
+/// escaped (#1929).
 fn quote(text: &str) -> String {
-    let mut out = String::with_capacity(text.len() + 2);
-    out.push('"');
-    for c in text.chars() {
-        match c {
-            '"' => out.push_str("\\\""),
-            '\\' => out.push_str("\\\\"),
-            '\n' => out.push_str("\\n"),
-            c => out.push(c),
-        }
-    }
-    out.push('"');
-    out
+    toml_edit::Value::from(text).to_string()
 }
 
 #[expect(
@@ -80,6 +74,19 @@ fn point(line: usize, character: u32) -> Range {
 mod tests {
     use super::*;
 
+    /// Control characters in a dataset name stay escaped, so the file still
+    /// parses (#1929).
+    #[test]
+    fn names_with_control_characters_write_valid_toml() {
+        let name = "a\rb\u{7f}c\u{1}d\ne\t\"f\" \\ é😀";
+        let edit = declare_dataset(None, "sentinel", name);
+        let parsed: toml::Table =
+            toml::from_str(&edit.new_text).unwrap_or_else(|e| panic!("{}: {e}", edit.new_text));
+        let entry = &parsed["logsources"][0];
+        assert_eq!(entry["name"].as_str(), Some(name));
+        assert_eq!(entry["system"].as_str(), Some("sentinel"));
+    }
+
     fn apply(text: &str, edit: &DatasetEdit) -> String {
         let mut lines: Vec<String> = text.split('\n').map(str::to_string).collect();
         let line = edit.range.start.line as usize;
@@ -90,7 +97,8 @@ mod tests {
             .nth(col)
             .map(|(i, _)| i)
             .unwrap_or(current.len());
-        let joined = format!("{}{}{}", &current[..byte], edit.new_text, &current[byte..]);
+        let (head, tail) = current.split_at_checked(byte).unwrap();
+        let joined = format!("{head}{}{tail}", edit.new_text);
         lines[line] = joined;
         lines.join("\n")
     }
@@ -120,8 +128,10 @@ FlowType_s = { type = "string" }
         let applied = apply(VISIBILITY, &edit);
         assert!(applied.starts_with(VISIBILITY), "{applied}");
         assert_eq!(
-            &applied[VISIBILITY.len()..],
-            "\n[[logsources]]\nname = \"NTAIpDetails\"\ndescription = \"\"\nsystem = \"sentinel\"\n"
+            applied.strip_prefix(VISIBILITY),
+            Some(
+                "\n[[logsources]]\nname = \"NTAIpDetails\"\ndescription = \"\"\nsystem = \"sentinel\"\n"
+            )
         );
         // The result still parses, with both tables declared, and the new
         // entry does not join the previous one's columns.
@@ -159,7 +169,7 @@ FlowType_s = { type = "string" }
         assert_eq!(edit.range, point(2, 17));
         assert!(
             edit.new_text
-                .starts_with("\n\n[[logsources]]\nname = \"A\\\"B\"\n")
+                .starts_with("\n\n[[logsources]]\nname = 'A\"B'\n")
         );
     }
 }

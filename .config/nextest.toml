@@ -33,10 +33,11 @@ threads-required = 2
 
 [profile.fast]
 # Leaves out what spawns a server, runs Python or walks a long corpus: the
-# language server over stdio, the Pydantic comparison (it needs `uv sync`), the
-# deep-nesting stack test, the public detection corpora and the binary's E2E
-# tests on scratch git repositories (`opentide-cli::workspace_e2e`). `-p <crate>`
-# narrows it further; `--ignore-default-filter` runs everything.
+# language server over stdio, the comparisons with outside tools (`external_*`;
+# `external_difflib` runs CPython), the deep-nesting stack test, the public
+# detection corpora and the binary's E2E tests on scratch git repositories
+# (`opentide-cli::workspace_e2e`). `-p <crate>` narrows it further;
+# `--ignore-default-filter` runs everything.
 default-filter = """
 not (
     binary_id(opentide-lsp::catalog)

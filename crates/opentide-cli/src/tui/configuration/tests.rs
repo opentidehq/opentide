@@ -1,4 +1,4 @@
-//! The redaction and the view (`tests/test_cli/test_tui_configuration.py`).
+//! The redaction and the view.
 
 use super::*;
 
@@ -280,5 +280,133 @@ fn a_platform_is_enabled_only_by_the_boolean_true() {
     assert_eq!(
         tenants,
         [("lab", &["r".to_owned()][..]), ("tenant 2", &[][..])]
+    );
+}
+
+/// Every way the raw view writes a file, pinned byte for byte: comments and
+/// layout kept (a comment's URL user hidden), non-ASCII keys and values, every
+/// string form, escapes, multi-line strings and arrays, inline tables (nested,
+/// dotted), arrays of tables, a secret array and number hidden whole, a
+/// variable reference with whether it is set (on a top-level value only).
+const PINNED_INPUT: &str = concat!(
+    "# Proxy: https://admin:hunter2@proxy.example/ (é)\n",
+    "title = \"Détection 😀\" # trailing, see ftp://bob:pw@files.example\n",
+    "\"clé\" = 'literal é'\n",
+    "\"日本\" = \"\\u00e9\\t😀\"\n",
+    "url = \"https://user:pa@ss@host.example/é\"\n",
+    "plain_url = 'https://host.example/path'\n",
+    "escaped_url = \"https://u\\u0040x:p@host.example\"\n",
+    "notes = \"\"\"\n",
+    "line one, https://carol:pw@wiki.example\n",
+    "  line two \\\"quoted\\\" \"\"\"\n",
+    "raw = '''\n",
+    "C:\\path\\é\n",
+    "'''\n",
+    "numbers = [ 1, 2.5, # one, https://dan:pw@x.example\n",
+    "  3,\n",
+    "]\n",
+    "when = 1979-05-27T07:32:00Z\n",
+    "\n",
+    "[auth]\n",
+    "enabled = true   # a switch stays\n",
+    "token = \"$OT_PIN_SET\"   # from the environment\n",
+    "password = '${OT_PIN_UNSET}'\n",
+    "api_key = \"\"\"\n",
+    "multi-sec\n",
+    "line-sec é\"\"\"\n",
+    "keys = [\"sec-a\", 'sec-b', # inside\n",
+    "  \"sec-c\"]\n",
+    "port = 8443\n",
+    "since = 2024-01-01\n",
+    "\n",
+    "[[tenants]]\n",
+    "name = \"Zürich\"\n",
+    "setup.client_id = \"id-é\"\n",
+    "setup.region = \"$OT_PIN_SET\"\n",
+    "endpoints = [ { name = \"a\", secret = \"sec-s1\" }, { name = \"b\", token = \"${OT_PIN_SET}\" } ]\n",
+    "\n",
+    "[[tenants]]\n",
+    "name = \"Αθήνα\"\n",
+    "setup = { client_secret = \"sec-s2\", nested = { key = 'sec-k' }, dotted.cookie = \"sec-cookie\", flag = false }\n",
+    "[ tenants . 'options' ]   # spaced header, https://eve:pw@h.example\n",
+    "\"quoted name\" = \"value # not a comment\"\n",
+);
+
+/// What the raw view shows of [`PINNED_INPUT`], with `OT_PIN_SET` set.
+const PINNED_OUTPUT: &str = concat!(
+    "# Proxy: https://•••• hidden@proxy.example/ (é)\n",
+    "title = \"Détection 😀\" # trailing, see ftp://•••• hidden@files.example\n",
+    "\"clé\" = 'literal é'\n",
+    "\"日本\" = \"\\u00e9\\t😀\"\n",
+    "url = \"https://•••• hidden@host.example/é\"\n",
+    "plain_url = 'https://host.example/path'\n",
+    "escaped_url = \"https://•••• hidden@host.example\"\n",
+    "notes = \"line one, https://•••• hidden@wiki.example\\n  line two \\\"quoted\\\" \"\n",
+    "raw = '''\n",
+    "C:\\path\\é\n",
+    "'''\n",
+    "numbers = [ 1, 2.5, # one, https://•••• hidden@x.example\n",
+    "  3,\n",
+    "]\n",
+    "when = 1979-05-27T07:32:00Z\n",
+    "\n",
+    "[auth]\n",
+    "enabled = true   # a switch stays\n",
+    "token = \"${OT_PIN_SET}\"  # set   # from the environment\n",
+    "password = \"${OT_PIN_UNSET}\"  # unset\n",
+    "api_key = \"•••• hidden\"\n",
+    "keys = \"•••• hidden\"\n",
+    "port = \"•••• hidden\"\n",
+    "since = \"•••• hidden\"\n",
+    "\n",
+    "[[tenants]]\n",
+    "name = \"Zürich\"\n",
+    "setup.client_id = \"•••• hidden\"\n",
+    "setup.region = \"${OT_PIN_SET}\"  # set\n",
+    "endpoints = [ { name = \"a\", secret = \"•••• hidden\" }, { name = \"b\", token = \"${OT_PIN_SET}\" } ]\n",
+    "\n",
+    "[[tenants]]\n",
+    "name = \"Αθήνα\"\n",
+    "setup = { client_secret = \"•••• hidden\", nested = { key = \"•••• hidden\" }, dotted.cookie = \"•••• hidden\", flag = false }\n",
+    "[ tenants . 'options' ]   # spaced header, https://•••• hidden@h.example\n",
+    "\"quoted name\" = \"value # not a comment\"\n",
+);
+
+/// The raw view of every form a value takes, byte for byte (#1956: the
+/// redactor's rewrite keeps it).
+#[test]
+fn redaction_output_is_pinned() {
+    let redacted = redact_toml(PINNED_INPUT, &env(&[("OT_PIN_SET", SECRET)])).unwrap();
+    assert_eq!(redacted, PINNED_OUTPUT);
+    // Line endings stay as written.
+    let crlf = redact_toml(
+        "[proxy]\r\ntoken = \"x-sec\" # c https://a:b@h\r\nname = \"plain\"\r\n",
+        &env(&[]),
+    )
+    .unwrap();
+    assert_eq!(
+        crlf,
+        "[proxy]\r\ntoken = \"•••• hidden\" # c https://•••• hidden@h\r\nname = \"plain\"\r\n"
+    );
+}
+
+/// #1946: comments and quoted keys among multi-byte text are cut between
+/// characters; a comment's URL user is still hidden.
+#[test]
+fn multi_byte_text_between_values_is_kept_and_its_comment_urls_hidden() {
+    assert_eq!(
+        between_values("é😀 # https://usé😀r@hôte.example 😀\n\"clé # 😀\" = ").unwrap(),
+        format!("é😀 # https://{HIDDEN}@hôte.example 😀\n\"clé # 😀\" = ")
+    );
+    assert_eq!(between_values("'é😀' = ").unwrap(), "'é😀' = ");
+    assert_eq!(between_values("😀\"é").unwrap(), "😀\"é");
+    let text =
+        "# é😀 https://usér@hôte.example\n[[tenants]]\nname = \"é😀\" # 😀\n\"clé é\" = 'x😀'\n";
+    let redacted = redact_toml(text, &env(&[])).unwrap();
+    assert_eq!(
+        redacted,
+        format!(
+            "# é😀 https://{HIDDEN}@hôte.example\n[[tenants]]\nname = \"é😀\" # 😀\n\"clé é\" = 'x😀'\n"
+        )
     );
 }

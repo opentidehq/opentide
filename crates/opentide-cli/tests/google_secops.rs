@@ -15,10 +15,11 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use opentide_cli::commands::deploy_send::{self, Lines, Sent};
+use opentide_cli::commands::result::{ExitCode, Status};
 use opentide_cli::commands::validate_live::{self, Live};
 use opentide_cli::commands::validate_query::Args as QueryArgs;
 use opentide_cli::env::Env;
-use opentide_cli::json::Json;
+use opentide_cli::json::{Json, Object};
 use opentide_cli::render::outcome::Console;
 use opentide_cli::render::text::Colour;
 use opentide_connectors::Registry;
@@ -186,17 +187,15 @@ fn live(ws: &Path, env: &Env) -> Live {
     )
 }
 
-fn value<'a>(result: &'a [(String, Json)], key: &str) -> &'a Json {
-    &result
-        .iter()
-        .find(|(name, _)| name == key)
+fn value<'a>(result: &'a Object, key: &str) -> &'a Json {
+    result
+        .get(key)
         .unwrap_or_else(|| panic!("no {key} in {result:?}"))
-        .1
 }
 
 /// Each result row's `status` and `error`.
 fn rows(sent: &Sent) -> Vec<(String, Option<String>)> {
-    let Json::Array(results) = value(&sent.result, "results") else {
+    let Json::Array(results) = value(&sent.result.data, "results") else {
         panic!("no results")
     };
     results
@@ -240,7 +239,7 @@ fn a_created_rule_records_its_id_in_deployment_state() {
     let (ws, env) = workspace(&server.uri(), "STAGING");
     let (sent, stderr) = deploy(ws.path(), &env);
     assert_eq!(rows(&sent), [("deployed".to_owned(), None)], "{stderr}");
-    assert_eq!(value(&sent.result, "status"), &Json::str("completed"));
+    assert_eq!(sent.result.status, Status::Completed);
     let shard = std::fs::read_to_string(
         opentide_cli::commands::deploy_state::state_dir(ws.path()).join(format!("{UUID}.json")),
     )
@@ -426,12 +425,8 @@ fn unreadable_credentials_fail_the_tenant() {
         ws.path().join("missing.json").to_str().unwrap().to_owned(),
     )]);
     let (sent, stderr) = deploy(ws.path(), &env);
-    assert_eq!(
-        value(&sent.result, "status"),
-        &Json::str("failed"),
-        "{stderr}"
-    );
-    assert_ne!(value(&sent.result, "_exit_code"), &Json::Int(0));
+    assert_eq!(sent.result.status, Status::Failed, "{stderr}");
+    assert_ne!(sent.result.exit, ExitCode::Success);
 }
 
 #[test]
@@ -454,17 +449,17 @@ fn the_live_check_reports_googles_errors_and_warnings() {
     });
     let (ws, env) = workspace(&server.uri(), "STAGING");
     let found = live(ws.path(), &env);
-    assert_eq!(value(&found.result, "status"), &Json::str("failed"));
+    assert_eq!(found.result.status, Status::Failed);
     // Each diagnostic is logged on its rule; the result counts them.
     assert_eq!(
-        value(&found.result, "error"),
-        &Json::str("Queries rejected on google_secops · 1 checked on 1 tenant")
+        found.result_json().get("error"),
+        Some(&Json::str(
+            "Queries rejected on google_secops · 1 checked on 1 tenant"
+        ))
     );
     assert_eq!(
-        value(&found.result, "warnings"),
-        &Json::Array(vec![Json::str(
-            "Query validation reported warnings for google_secops"
-        )])
+        found.result.warnings,
+        ["Query validation reported warnings for google_secops"]
     );
 
     // An instance that compiles the rule passes it.
@@ -481,12 +476,7 @@ fn the_live_check_reports_googles_errors_and_warnings() {
     });
     let (ws, env) = workspace(&server.uri(), "STAGING");
     let found = live(ws.path(), &env);
-    assert_eq!(
-        value(&found.result, "status"),
-        &Json::str("passed"),
-        "{:?}",
-        found.result
-    );
+    assert_eq!(found.result.status, Status::Passed, "{:?}", found.result);
 }
 
 #[test]
@@ -497,12 +487,7 @@ fn the_live_check_fails_every_rule_when_credentials_cannot_be_read() {
         ws.path().join("missing.json").to_str().unwrap().to_owned(),
     )]);
     let found = live(ws.path(), &env);
-    assert_eq!(
-        value(&found.result, "status"),
-        &Json::str("failed"),
-        "{:?}",
-        found.result
-    );
+    assert_eq!(found.result.status, Status::Failed, "{:?}", found.result);
 }
 
 /// A tenant that signs in, then refuses the token on the first rule's
@@ -536,13 +521,13 @@ fn a_tenant_refusing_the_token_on_a_rule_stops_and_is_not_deployed() {
     let (sent, stderr) = deploy(ws.path(), &env);
     runtime.block_on(server.verify());
     assert_eq!(
-        value(&sent.result, "deployed"),
+        value(&sent.result.data, "deployed"),
         &Json::Array(Vec::new()),
         "{stderr}"
     );
     let statuses: Vec<String> = rows(&sent).into_iter().map(|(status, _)| status).collect();
     assert_eq!(statuses, ["not_attempted", "not_attempted"], "{stderr}");
-    let Json::Array(results) = value(&sent.result, "results") else {
+    let Json::Array(results) = value(&sent.result.data, "results") else {
         panic!("no results")
     };
     assert_eq!(

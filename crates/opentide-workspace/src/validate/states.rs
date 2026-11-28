@@ -1,4 +1,4 @@
-//! Deployment state shards (RFC 0010, `states/deployment.py`): the files
+//! Deployment state shards (RFC 0010): the files
 //! under `.opentide/states/deployment/` that hold each rule's vendor ids,
 //! checked for shape, and the vendor-id keys a rule must no longer carry.
 
@@ -81,12 +81,10 @@ pub fn legacy_external_id_keys(rule: &Node) -> Vec<(String, String)> {
 }
 
 /// `metadata.uuid` in lowercase canonical form, or `None` when it is not a
-/// UUID; surrounding white space, braces, `urn:uuid:` and the unhyphenated
-/// form are taken too.
+/// UUID ([`opentide_core::ids::canonical`]): surrounding white space, braces,
+/// `urn:uuid:` and the unhyphenated form are taken too.
 pub fn canonical_uuid(value: &str) -> Option<String> {
-    uuid::Uuid::try_parse(value.trim())
-        .ok()
-        .map(|parsed| parsed.hyphenated().to_string())
+    opentide_core::ids::canonical(value)
 }
 
 /// `.opentide/states/deployment/` of `workspace`.
@@ -109,8 +107,10 @@ fn shard_names(fs: &dyn FileSystem, directory: &Path) -> Vec<String> {
         .unwrap_or_default()
 }
 
+/// The name without its `.json` suffix, in any case: the five ASCII bytes
+/// [`shard_names`] kept it for (no other character lowercases to them).
 fn stem_of(name: &str) -> &str {
-    &name[..name.len() - ".json".len()]
+    crate::cut(name, 0, name.len().saturating_sub(".json".len()))
 }
 
 /// The shard of rule `object_uuid`, checked (`DeploymentState.load`): `Ok`
@@ -572,5 +572,11 @@ mod tests {
                 ("sentinel_one".to_owned(), "rule_id::prod".to_owned())
             ]
         );
+    }
+
+    #[test]
+    fn a_shard_stem_keeps_its_multi_byte_text() {
+        assert_eq!(stem_of("é😀.json"), "é😀");
+        assert_eq!(stem_of("é😀.JSON"), "é😀");
     }
 }

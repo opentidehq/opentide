@@ -1,16 +1,20 @@
-//! The object models against the oracle (UC-1.3, #809): every case of
+//! The object models' table (UC-1.3, #809): every case of
 //! `tests/oracle/objects_cases.toml` and every object file of
 //! `tests/fixtures/tide_corpus` and of the VS Code fixture workspace, read by
 //! `node::load` and dispatched by the revision registry
-//! ([`crate::revisions::read`]) into the revision `metadata.schema` names. `tests/oracle/objects_table.json` is what the
-//! oracle reports (`objects_table.py`): each error's type, path, message,
-//! input, context, span and `yaml_line`, or the validated value.
+//! ([`crate::revisions::read`]) into the revision `metadata.schema` names.
+//! `tests/oracle/objects_table.json` holds each case's input and the
+//! recorded result of the frozen Python models (`objects_table.py`): each
+//! error's type, path, message, input, context, span and `yaml_line`, or the
+//! validated value.
 //!
-//! A case that differs from the oracle names a `[[difference]]` of the cases
-//! file (its reason and the bold lead of its CHANGELOG.md entry); one that
-//! names a difference and does not differ fails, as does an entry no case
-//! uses. The platform blocks (UC-1.4, #810) are compared whole, errors and
-//! values; their own cases, `tests/oracle/platform_cases.toml`, are compared
+//! A case whose result differs from the recorded one names a `[[difference]]`
+//! of the cases file (its reason and the bold lead of its CHANGELOG.md
+//! entry). [`compare`] lists the cases that differ without naming one, the
+//! cases that name one and do not differ, and the entries no case uses; the
+//! recorded results drift by design (#1139), so the tests drop that list and
+//! assert the reviewed snapshot. The platform blocks (UC-1.4, #810) are
+//! compared whole, errors and values; their own cases, `tests/oracle/platform_cases.toml`, are compared
 //! by `objects::platform::table` with [`compare`]. Every Rust result is the
 //! reviewed snapshot in `src/objects/snapshots/`. It reads nothing from
 //! the disk (the crate's sources stay I/O-free,
@@ -80,8 +84,9 @@ struct Cases {
 }
 
 /// Compares the table's cases that `select` picks, and the file cases when
-/// `files`, with the oracle, by the notes (`[[case]]` and `[[difference]]`)
-/// of a cases file. The failures, and every Rust result by case id.
+/// `files`, with their recorded results, by the notes (`[[case]]` and
+/// `[[difference]]`) of a cases file. The mismatches, and every Rust result
+/// by case id.
 pub(crate) fn compare(
     notes: &str,
     select: fn(&str) -> bool,
@@ -137,10 +142,10 @@ pub(crate) fn compare(
         let listed = named.get(id).copied().unwrap_or_default();
         match (listed.is_empty(), actual == expected) {
             (true, false) => failures.push(format!(
-                "{id}: differs from the oracle without a difference entry\n  oracle: {expected}\n  rust:   {actual}"
+                "{id}: differs from its recorded result without a difference entry\n  recorded: {expected}\n  rust:     {actual}"
             )),
             (false, true) => failures.push(format!(
-                "{id}: names {listed:?} but converts as the oracle does"
+                "{id}: names {listed:?} but converts as recorded"
             )),
             _ => {}
         }
@@ -161,14 +166,14 @@ pub(crate) fn compare(
 }
 
 #[test]
-fn every_case_is_compared_with_the_oracle_and_every_difference_is_explained() {
+fn every_case_converts_as_its_reviewed_snapshot() {
     let (failures, results) = compare(
         include_str!("../../tests/oracle/objects_cases.toml"),
         |id| !id.starts_with("platform-"),
         true,
     );
-    // The Python oracle's verdicts are no longer asserted (they had drifted by
-    // design, #1139): the reviewed snapshot below is the contract.
+    // The recorded results are not asserted (they drift by design, #1139):
+    // the reviewed snapshot below is the contract.
     drop(failures);
     insta::assert_snapshot!(
         "rust_results",

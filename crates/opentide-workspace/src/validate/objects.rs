@@ -1,7 +1,6 @@
-//! The checks of one object (`validation/session.py` `_validate_work_item`):
-//! its UUID's format, its schema, its vocabulary values, its configured
-//! values, its deprecated fields, its platform blocks, its vendor ids, its
-//! references and its chaining relations.
+//! The checks of one object: its UUID's format, its schema, its vocabulary
+//! values, its configured values, its deprecated fields, its platform
+//! blocks, its vendor ids, its references and its chaining relations.
 
 use std::collections::{BTreeSet, HashMap};
 use std::path::Path;
@@ -37,12 +36,14 @@ const VOCAB_SHAPE_ERRORS: [&str; 2] = ["vocab_list_type", "vocab_packed_names"];
 /// What the per-object checks read about the whole workspace, built once
 /// per run (`PreflightGraph`).
 pub struct Graph<'a> {
-    /// The index.
+    /// The workspace's loaded objects.
     pub index: &'a Index,
     /// The bundled vocabularies and the workspace's object vocabularies.
     pub vocabularies: Vocabularies,
-    /// Each object's and signal's name, by UUID, with its family.
-    names: HashMap<&'a str, (&'a str, String)>,
+    /// Each object's and signal's name, by UUID, with its family: made on
+    /// the first reference that names no object, which a run narrowed to one
+    /// file of a large workspace seldom has (#2122).
+    names: std::sync::OnceLock<HashMap<String, (String, String)>>,
     /// `[[statuses]]` names of `deployment.toml`.
     pub statuses: Vec<String>,
     /// `[[responders]]` names of `deployment.toml`.
@@ -75,21 +76,6 @@ impl<'a> Graph<'a> {
         mut vocabularies: Vocabularies,
         deployment: Option<&Node>,
     ) -> Self {
-        let mut names: HashMap<&'a str, (&'a str, String)> = HashMap::new();
-        for (family, objects) in &index.objects {
-            for object in objects.values() {
-                names.insert(object.uuid.as_str(), (family.as_str(), object_name(object)));
-            }
-        }
-        for signal in index.signals.values() {
-            let name = signal
-                .node
-                .get("name")
-                .map_or_else(|| signal.uuid.clone(), |name| name.value.to_string());
-            names
-                .entry(signal.uuid.as_str())
-                .or_insert(("signal", name));
-        }
         for family in opentide_schema::vocab::OBJECT_TYPES {
             if let Some(vocabulary) = object_vocabulary(index, family) {
                 vocabularies.insert(vocabulary);
@@ -102,7 +88,7 @@ impl<'a> Graph<'a> {
         Self {
             index,
             vocabularies,
-            names,
+            names: std::sync::OnceLock::new(),
             statuses,
             responders,
             enabled: None,
@@ -135,6 +121,28 @@ impl<'a> Graph<'a> {
         resolved
     }
 
+    /// Each object's and signal's name, by UUID, with its family.
+    fn names(&self) -> &HashMap<String, (String, String)> {
+        self.names.get_or_init(|| {
+            let mut names: HashMap<String, (String, String)> = HashMap::new();
+            for (family, objects) in &self.index.objects {
+                for object in objects.values() {
+                    names.insert(object.uuid.clone(), (family.clone(), object_name(object)));
+                }
+            }
+            for signal in self.index.signals.values() {
+                let name = signal
+                    .node
+                    .get("name")
+                    .map_or_else(|| signal.uuid.clone(), |name| name.value.to_string());
+                names
+                    .entry(signal.uuid.clone())
+                    .or_insert(("signal".to_owned(), name));
+            }
+            names
+        })
+    }
+
     /// Whether `uuid` is an object of `family` (or a signal, for `signal`).
     fn has(&self, family: &str, uuid: &str) -> bool {
         if family == "signal" {
@@ -150,10 +158,10 @@ impl<'a> Graph<'a> {
     /// means (`suggest_ref`), by the engines' one suggestion rule.
     fn suggest_ref(&self, family: &str, value: &str) -> Option<String> {
         let mut candidates: Vec<(&str, &str)> = self
-            .names
+            .names()
             .iter()
-            .filter(|(_, (kind, _))| *kind == family)
-            .map(|(uuid, (_, name))| (*uuid, name.as_str()))
+            .filter(|(_, (kind, _))| kind == family)
+            .map(|(uuid, (_, name))| (uuid.as_str(), name.as_str()))
             .collect();
         candidates.sort_unstable();
         let name = opentide_core::suggest::closest(value, candidates.iter().map(|(_, n)| *n))?;
@@ -167,7 +175,7 @@ impl<'a> Graph<'a> {
         match self.suggest_ref(family, value) {
             Some(uuid) => {
                 let label = self
-                    .names
+                    .names()
                     .get(uuid.as_str())
                     .map_or_else(|| uuid.clone(), |(_, name)| name.clone());
                 format!(
@@ -587,12 +595,9 @@ fn deprecated_warnings(subject: &Subject<'_>, root: &Node, schema: &Json) -> Vec
 }
 
 /// Whether a node is a version 4 UUID written `8-4-4-4-12`, hex digits in
-/// either case (`_is_uuid_v4`).
+/// either case (`_is_uuid_v4`, [`opentide_core::ids::is_v4`]).
 fn is_uuid_v4(node: &Node) -> bool {
-    let text = node.value.to_string();
-    uuid::Uuid::try_parse(&text).is_ok_and(|parsed| {
-        parsed.get_version_num() == 4 && parsed.hyphenated().to_string() == text.to_lowercase()
-    })
+    opentide_core::ids::is_v4(&node.value.to_string())
 }
 
 /// A scalar as the messages that quote a value show it: a string quoted as

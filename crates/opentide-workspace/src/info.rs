@@ -1,12 +1,13 @@
 //! `opentide info`: the counts, the platforms with their tenants, and the
-//! vocabularies (`cli/services/info.py`). The tenants are the VS Code
-//! extension's contract (`docs/CONTRACTS.md`): name, description,
+//! vocabularies. The tenants are the VS Code extension's contract
+//! (`docs/CONTRACTS.md`): name, description,
 //! strategies, manual, and the variables each tenant's `setup` names with
 //! whether they are set, never a value.
 
 use std::collections::BTreeMap;
 use std::sync::OnceLock;
 
+use opentide_schema::configuration::resolve::platform_enabled;
 use opentide_schema::node::{Node, Value};
 use opentide_schema::objects::fields::{model_schema, newest_model_schema, property};
 use opentide_schema::pins::PinTable;
@@ -14,7 +15,7 @@ use opentide_schema::vocab::{Version, Vocabularies, Vocabulary};
 use regex::Regex;
 use serde::Serialize;
 
-use crate::fields::{get, mapping};
+use crate::fields::get;
 
 /// Every platform, in the table's order ([`opentide_schema::platforms`]).
 fn all_platforms() -> Vec<&'static opentide_schema::platforms::Platform> {
@@ -26,6 +27,7 @@ pub const DEPLOYABLE_STRATEGIES: [&str; 2] = ["PREVIEW", "RELEASE"];
 
 /// A variable a tenant's `setup` names.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[non_exhaustive]
 pub struct Variable {
     /// Its name.
     pub name: String,
@@ -35,6 +37,7 @@ pub struct Variable {
 
 /// A tenant as written.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[non_exhaustive]
 pub struct Tenant {
     /// Its name, else `tenant <n>`.
     pub name: String,
@@ -49,11 +52,12 @@ pub struct Tenant {
 }
 
 /// One platform's row.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 #[expect(
     clippy::struct_excessive_bools,
     reason = "the document's four flags (vscode-extension docs/CONTRACTS.md)"
 )]
+#[non_exhaustive]
 pub struct PlatformInfo {
     /// Its key.
     pub name: String,
@@ -65,7 +69,7 @@ pub struct PlatformInfo {
     pub can_validate: bool,
     /// Whether `opentide query` runs on it.
     pub can_query: bool,
-    /// Its tenants.
+    /// The tenants its configuration declares.
     pub tenants: Vec<Tenant>,
 }
 
@@ -166,9 +170,9 @@ pub fn tenants(configured: Option<&Node>, is_set: &dyn Fn(&str) -> bool) -> Vec<
 }
 
 /// The platforms, all or the one `only` names, with their tenants, from the
-/// resolved `systems` table.
+/// resolved `platforms` table.
 pub fn platforms(
-    systems: Option<&Node>,
+    platforms: Option<&Node>,
     only: Option<&str>,
     is_set: &dyn Fn(&str) -> bool,
 ) -> Vec<PlatformInfo> {
@@ -176,11 +180,8 @@ pub fn platforms(
         .into_iter()
         .filter(|platform| only.is_none_or(|only| only == platform.id))
         .map(|platform| {
-            let config = systems.and_then(|systems| get(systems, platform.id));
-            let enabled = config
-                .and_then(|config| mapping(config, "platform"))
-                .and_then(|block| get(block, "enabled"))
-                .is_some_and(|enabled| matches!(enabled.value, Value::Bool(true)));
+            let config = platforms.and_then(|platforms| get(platforms, platform.id));
+            let enabled = platform_enabled(platforms, platform.id);
             PlatformInfo {
                 name: platform.id.to_owned(),
                 enabled,
@@ -233,7 +234,7 @@ pub struct Revision {
 pub struct Pin {
     /// The schema revision.
     pub schema: String,
-    /// The field.
+    /// The field of that schema the vocabulary fills.
     pub field: String,
     /// The pinned revision.
     pub revision: String,

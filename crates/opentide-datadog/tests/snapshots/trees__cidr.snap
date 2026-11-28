@@ -1,0 +1,27 @@
+---
+source: crates/opentide-datadog/tests/trees.rs
+expression: "debug_tree(\"NOT(CIDR(@network.client.ip, 10.0.0.0/8, fc00::/7))\")"
+---
+QUERY@0..51
+  NOT_EXPR@0..51
+    NOT_KW@0..3 "NOT"
+    GROUP@3..51
+      L_PAREN@3..4 "("
+      CIDR_CALL@4..50
+        CIDR_KW@4..8 "CIDR"
+        L_PAREN@8..9 "("
+        ATTRIBUTE@9..27
+          WORD@9..27 "@network.client.ip"
+        COMMA@27..28 ","
+        WHITESPACE@28..29 " "
+        CIDR_BLOCK@29..39
+          WORD@29..39 "10.0.0.0/8"
+        COMMA@39..40 ","
+        WHITESPACE@40..41 " "
+        CIDR_BLOCK@41..49
+          WORD@41..45 "fc00"
+          COLON@45..46 ":"
+          COLON@46..47 ":"
+          WORD@47..49 "/7"
+        R_PAREN@49..50 ")"
+      R_PAREN@50..51 ")"

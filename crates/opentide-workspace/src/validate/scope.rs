@@ -1,4 +1,4 @@
-//! Which objects a run validates (`validation/scope.py`): every object, or
+//! Which objects a run validates: every object, or
 //! the ones `--file`, `--uuid` and `--type` select.
 
 use std::collections::BTreeSet;
@@ -126,10 +126,24 @@ impl Scope {
     /// [`matches_file`](Self::matches_file), with `resolve` giving `path`
     /// resolved, called only when a `--file` target names a path.
     pub fn matches_file_with(&self, path: &Path, resolve: impl FnOnce() -> PathBuf) -> bool {
-        if !self.file_paths.is_empty() && self.file_paths.contains(&resolve()) {
+        if !self.file_paths.is_empty() && self.names_path(&resolve()) {
             return true;
         }
         file_name(path).is_some_and(|name| self.file_names.contains(&name))
+    }
+
+    /// Whether a `--file` target names `path` (resolved). A run asks it for
+    /// each object, and a few targets are compared one by one: a path's
+    /// order compares it from its first component, and every object's
+    /// shares a long prefix with the target (#2122). The answer is the
+    /// set's either way.
+    fn names_path(&self, path: &Path) -> bool {
+        const COMPARED: usize = 16;
+        if self.file_paths.len() <= COMPARED {
+            self.file_paths.iter().any(|named| named == path)
+        } else {
+            self.file_paths.contains(path)
+        }
     }
 
     /// Whether the object `uuid` of `family` in `path` is selected.

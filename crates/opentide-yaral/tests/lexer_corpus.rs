@@ -1,20 +1,13 @@
 //! The lexer over every YARA-L file of the corpora: it tiles them, a valid one
 //! has no error token, and the highlight keyword table names every reserved
 //! word.
-//!
-//! The lexer is private to the crate, so this test includes its source.
 
-#![expect(dead_code, reason = "the included modules are used in part")]
-
-#[path = "../src/lexer.rs"]
-mod lexer;
-#[expect(
-    clippy::upper_case_acronyms,
-    reason = "the included syntax.rs names its kinds as rust-analyzer does; the crate's own copy is public API, where the lint does not fire"
+#![expect(
+    clippy::string_slice,
+    reason = "a test: a slice off a char boundary panics, and a panic is a failed test"
 )]
-#[path = "../src/syntax.rs"]
-mod syntax;
 
+use opentide_yaral::{lexer, syntax};
 use std::path::{Path, PathBuf};
 use syntax::SyntaxKind as K;
 

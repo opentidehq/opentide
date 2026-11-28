@@ -58,3 +58,12 @@ pub use index::{Index, Object};
 pub use root::RootOptions;
 pub use session::{Session, SessionStats};
 pub use workspace::{Change, ChangeKind, Invalidation, OpenError, Options, Stats, Workspace};
+
+/// `text[start..end]`, a range this crate computes: a match's bounds, a
+/// character's, or an ASCII byte's, so its ends are char boundaries. A range
+/// that is not fails a debug assertion and reads as empty.
+pub(crate) fn cut(text: &str, start: usize, end: usize) -> &str {
+    let piece = text.get(start..end);
+    debug_assert!(piece.is_some(), "{start}..{end} in {} bytes", text.len());
+    piece.unwrap_or_default()
+}

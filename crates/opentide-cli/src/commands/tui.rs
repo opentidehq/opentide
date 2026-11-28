@@ -1,4 +1,4 @@
-//! `opentide tui` (`cli/commands/tui.py`): whether the terminal UI can open.
+//! `opentide tui`: whether the terminal UI can open.
 //!
 //! The UI reads keys from stdin and draws on stdout, so it opens only in
 //! `human` mode with a terminal on both. Anywhere else it is refused with
@@ -10,8 +10,9 @@
 //! on ratatui.
 
 use super::Report;
+use super::result::ExitCode;
 use crate::env::Env;
-use crate::envelope::{Failure, USAGE_EXIT_CODE};
+use crate::envelope::Failure;
 use crate::json::Json;
 use crate::mode::{Mode, detect_ci};
 
@@ -62,7 +63,7 @@ pub fn gate(place: &Place<'_>) -> Option<Report> {
     };
     let mut report = Report::failed(
         COMMAND,
-        USAGE_EXIT_CODE,
+        ExitCode::Usage,
         Failure::new(USAGE_TUI_NEEDS_TTY, message),
     );
     report.outcome.data.extend(data);
@@ -77,7 +78,7 @@ pub fn gate(place: &Place<'_>) -> Option<Report> {
 pub fn unavailable() -> Report {
     let mut report = Report::failed(
         COMMAND,
-        USAGE_EXIT_CODE,
+        ExitCode::Usage,
         Failure::new(
             USAGE_TUI_NEEDS_TTY,
             "opentide tui is not in this build of opentide (it has no terminal UI); run the opentide CLI to open it",
@@ -129,6 +130,7 @@ fn plain_reason(place: &Place<'_>) -> Option<&'static str> {
 #[cfg(test)]
 mod tests {
     use super::{Place, USAGE_TUI_NEEDS_TTY, gate};
+    use crate::commands::result::ExitCode;
     use crate::env::Env;
     use crate::json::Json;
     use crate::mode::Mode;
@@ -147,7 +149,7 @@ mod tests {
             env: &env,
         })?;
         let outcome = report.outcome;
-        assert_eq!(outcome.exit_code, 2);
+        assert_eq!(outcome.exit_code, ExitCode::Usage);
         let failure = outcome.failure.expect("a refusal fails");
         assert_eq!(failure.code, USAGE_TUI_NEEDS_TTY);
         assert_eq!(outcome.next_actions.len(), 2);

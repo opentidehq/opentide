@@ -1,6 +1,6 @@
-"""Write yaml_table.json: what the oracle's YAML loader reads for each case of yaml_cases.toml.
+"""Write yaml_table.json: what the Pydantic models' YAML loader reads for each case of yaml_cases.toml.
 
-Run it with the oracle's interpreter (tests/corpora/oracle.in, tests/corpora/README.md):
+Run it with the Pydantic models' interpreter (tests/corpora/oracle.in, tests/corpora/README.md):
 
     <oracle python> crates/opentide-schema/tests/oracle/yaml_table.py
 

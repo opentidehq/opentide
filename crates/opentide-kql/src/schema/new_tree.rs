@@ -31,7 +31,28 @@ pub(crate) fn analyze(
     catalog: &Catalog,
     clean: bool,
 ) -> Analysis {
-    run(root, source, lines, catalog, clean).out
+    run(root, source, lines, catalog, clean, true).out
+}
+
+/// What a query returns: the schema of its one tabular statement, and where
+/// that statement's last operator (or its source, when it has none) is.
+/// `None` when the query has no tabular statement or several of them.
+///
+/// The pass runs without the comma quirk ([`comma_quirk`], #1386): a
+/// `project`, `extend` or `summarize` list of several items leaves the
+/// columns it names, as Kusto does. No diagnostic is made. A schema the pass
+/// cannot follow is [`Known::Open`]; the caller says "unknown" for it.
+pub(crate) fn output(
+    root: &SyntaxNode,
+    source: &str,
+    lines: &LineIndex<'_>,
+    catalog: &Catalog,
+) -> Option<(Schema, ByteSpan)> {
+    let pass = run(root, source, lines, catalog, false, false);
+    match pass.queries.as_slice() {
+        [(schema, at)] => Some((schema.clone(), *at)),
+        _ => None,
+    }
 }
 
 fn run<'a>(
@@ -40,6 +61,7 @@ fn run<'a>(
     lines: &'a LineIndex<'a>,
     catalog: &'a Catalog,
     clean: bool,
+    quirk: bool,
 ) -> Pass<'a> {
     let mut pass = Pass {
         source,
@@ -47,9 +69,11 @@ fn run<'a>(
         lines,
         out: Analysis::default(),
         diagnose: clean,
+        quirk,
         depth: 0,
         function_schemas: HashMap::new(),
         bodies_read: 0,
+        queries: Vec::new(),
     };
     let mut scope = Scope::default();
     for child in root.children() {
@@ -58,7 +82,24 @@ fn run<'a>(
             K::QUERY_PARAMETERS_STATEMENT => pass.query_parameters(&child, &mut scope),
             K::QUERY => {
                 if let Some(body) = child_of(&child, K::TABULAR_EXPRESSION) {
-                    pass.tabular(&body, &scope);
+                    let schema = pass.tabular(&body, &scope);
+                    // Only [`output`] (the pass without the comma quirk)
+                    // reads what each statement returns: the diagnostics
+                    // pass neither walks to its last operator nor keeps its
+                    // schema (ADR 0014's allocation budget).
+                    if !pass.quirk {
+                        // The last operator, else the source.
+                        let last = body
+                            .children()
+                            .filter(|c| c.kind() != K::ERROR)
+                            .last()
+                            .map_or_else(|| span(&body), |node| span(&node));
+                        pass.queries.push((schema, last));
+                    }
+                } else if !pass.quirk {
+                    // A statement the pass does not read: what the query
+                    // returns is not known.
+                    pass.queries.push((Schema::open(), span(&child)));
                 }
             }
             _ => {}
@@ -118,6 +159,12 @@ struct Pass<'a> {
     lines: &'a LineIndex<'a>,
     out: Analysis,
     diagnose: bool,
+    /// Whether [`comma_quirk`] applies: on for the diagnostics, off for
+    /// [`output`].
+    quirk: bool,
+    /// Each tabular statement's schema and its last operator's span, in
+    /// order ([`output`]).
+    queries: Vec<(Schema, ByteSpan)>,
     /// What the walk down the tree has spent of [`BUDGET`].
     depth: u32,
     /// What each `let` function's body returns, read once where the
@@ -189,10 +236,19 @@ impl Defined {
 /// diagnostic after it). Kept for parity with the engine this one replaces
 /// (epic #1219); #1386 removes it after the port, behind a measurement of
 /// every new `kql_unknown_column` over the corpora.
-fn comma_quirk(out: &mut Schema, items: usize) {
-    if items >= 2 {
+/// [`output`] runs the pass without it, so the schema it returns is what
+/// Kusto returns.
+fn comma_quirk(quirk: bool, out: &mut Schema, items: usize) {
+    if quirk && items >= 2 {
         out.make_open();
     }
+}
+
+/// The columns of an `arg_max(T, *)` but the `by` keys the `*` leaves out;
+/// the first, `T`'s, stays.
+fn drop_by_keys(columns: &mut Vec<Column>, by: &[Column]) {
+    let mut first = true;
+    columns.retain(|c| std::mem::take(&mut first) || !by.iter().any(|k| k.name == c.name));
 }
 
 /// The child nodes of an operator that are not one of `skip`.
@@ -229,8 +285,7 @@ impl<'a> Pass<'a> {
 
     /// A token's text, borrowed from the source.
     fn token(&self, token: &SyntaxToken) -> &'a str {
-        let r = token.text_range();
-        &self.source[usize::from(r.start())..usize::from(r.end())]
+        crate::syntax_util::slice(self.source, token.text_range())
     }
 
     fn token_text(token: &SyntaxToken) -> String {
@@ -657,6 +712,18 @@ impl<'a> Pass<'a> {
                     out.narrowed = true;
                     out.reshaped_by = Some(kind);
                     if patterns.is_empty() {
+                        // A kept name the input does not list is still a
+                        // column of the output (a table outgrows its
+                        // reference): the columns are exactly the names.
+                        // Only documented columns can lack one; an open
+                        // input stays open.
+                        if input.known == Known::Typos {
+                            for name in &kept {
+                                if out.column(name).is_none() {
+                                    out.set(Column::new((*name).to_owned(), None));
+                                }
+                            }
+                        }
                         out.known = reshaped(input.known);
                         out.custom_columns = false;
                     }
@@ -694,7 +761,7 @@ impl<'a> Pass<'a> {
             K::EXTEND_OPERATOR | K::SERIALIZE_OPERATOR => {
                 let mut out = input.clone();
                 let mut defined = Defined::default();
-                comma_quirk(&mut out, op.children().count());
+                comma_quirk(self.quirk, &mut out, op.children().count());
                 for item in op.children() {
                     match self.column_item(&item, &input, scope, op_span, Some(&defined)) {
                         Item::Named(names, type_name) => {
@@ -897,7 +964,7 @@ impl<'a> Pass<'a> {
             ..input.clone()
         };
         let mut defined = Defined::default();
-        comma_quirk(&mut out, op.children().count());
+        comma_quirk(self.quirk, &mut out, op.children().count());
         for item in op.children() {
             match self.column_item(&item, &input, scope, op_span, Some(&defined)) {
                 Item::Named(names, type_name) => {
@@ -953,8 +1020,8 @@ impl<'a> Pass<'a> {
         let (by_items, aggregates): (Vec<SyntaxNode>, Vec<SyntaxNode>) = items
             .into_iter()
             .partition(|n| by_at.is_some_and(|at| n.text_range().start() >= at));
-        comma_quirk(&mut out, by_items.len());
-        comma_quirk(&mut out, aggregates.len());
+        comma_quirk(self.quirk, &mut out, by_items.len());
+        comma_quirk(self.quirk, &mut out, aggregates.len());
         let mut by_columns = Vec::new();
         for item in &by_items {
             match self.column_item(item, &ctx_input, scope, op_span, None) {
@@ -996,14 +1063,27 @@ impl<'a> Pass<'a> {
         // Every column the operator makes, in order, named in one batch at
         // the end: a batch per item rebuilt the set of names taken each time,
         // quadratic in the items (#1424). The items read the input, not `out`.
+        // `arg_max(T, *) by K` returns K, T, then the input's other columns:
+        // the `*` leaves out the `by` keys (Kusto's arg_max example, `by
+        // Fruit` gives `Fruit, Version, Color`), and the columns it copies
+        // are only as sure as the input's.
+        // The `by` keys are `made[..by_len]`; whether an item has a `*` is
+        // read with its arguments, which [`Self::aggregate_columns`] walks
+        // anyway: no walk or set of names for every summarize.
+        let by_len = by_columns.len();
+        let mut starred = false;
         let mut made = by_columns;
         for item in &aggregates {
             match self.column_item(item, &ctx_input, scope, op_span, None) {
                 Item::Named(names, _) if names.len() == 1 && self.is_arg_extreme(item) => {
-                    let Some(mut columns) = self.aggregate_columns(item, &ctx_input) else {
+                    let Some((mut columns, star)) = self.aggregate_columns(item, &ctx_input) else {
                         out.make_open();
                         continue;
                     };
+                    if star {
+                        starred = true;
+                        drop_by_keys(&mut columns, &made[..by_len]);
+                    }
                     if let Some(first) = columns.first_mut() {
                         first.name.clone_from(&names[0]);
                     }
@@ -1038,7 +1118,11 @@ impl<'a> Pass<'a> {
                     }
                 }
                 Item::Unnamed(_) => match self.aggregate_columns(item, &ctx_input) {
-                    Some(columns) => {
+                    Some((mut columns, star)) => {
+                        if star {
+                            starred = true;
+                            drop_by_keys(&mut columns, &made[..by_len]);
+                        }
                         made.extend(columns.into_iter().map(|column| Column {
                             made_by: Some(made_by),
                             ..column
@@ -1049,6 +1133,9 @@ impl<'a> Pass<'a> {
             }
         }
         out.push_all_unique(made);
+        if starred {
+            out.weaken(input.known);
+        }
         out
     }
 
@@ -1058,7 +1145,9 @@ impl<'a> Pass<'a> {
             .is_some_and(|n| matches!(n.text(), "arg_max" | "arg_min"))
     }
 
-    fn aggregate_columns(&self, item: &SyntaxNode, input: &Schema) -> Option<Vec<Column>> {
+    /// The columns an unnamed aggregate item makes, and whether one of its
+    /// arguments is `*`.
+    fn aggregate_columns(&self, item: &SyntaxNode, input: &Schema) -> Option<(Vec<Column>, bool)> {
         let call = aggregate_call(item)?;
         let name = ident(&call)?.text().to_ascii_lowercase();
         let args: Vec<AggArg> = call
@@ -1072,7 +1161,10 @@ impl<'a> Pass<'a> {
                 }
             })
             .collect();
-        aggregate_columns_for(&name, &args, input)
+        // Only `arg_max(T, *)` and `arg_min(T, *)` copy the input's columns.
+        let star = matches!(name.as_str(), "arg_max" | "arg_min")
+            && args.iter().any(|a| matches!(a, AggArg::Star));
+        aggregate_columns_for(&name, &args, input).map(|columns| (columns, star))
     }
 
     fn join(&mut self, op: &SyntaxNode, left: Schema, scope: &Scope, made_by: MadeBy) -> Schema {
@@ -1533,19 +1625,20 @@ fn aggregate_call(item: &SyntaxNode) -> Option<SyntaxNode> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Profile;
+    use crate::Dialect;
 
     /// The pass over `source`, against the Sentinel catalog.
     fn pass_over(source: &str, check: impl FnOnce(&Pass<'_>)) {
         let parsed = crate::parser::parse(source);
         let root = SyntaxNode::new_root(parsed.green);
-        let catalog = Catalog::for_workspace(Profile::Sentinel, source);
+        let catalog = Catalog::for_workspace(Dialect::Sentinel, source);
         check(&run(
             &root,
             source,
             &LineIndex::new(source),
             &catalog,
             parsed.errors.is_empty(),
+            true,
         ));
     }
 

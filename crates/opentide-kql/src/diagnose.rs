@@ -569,6 +569,23 @@ fn functions(
                 )
                 .with_suggestion(replacement.clone()),
             );
+        } else if function.is_none() && catalog.unavailable_function(&name).is_some() {
+            // A workspace can save a function of its own under the name, declared as a
+            // log source like any workspace function: then the call is that one's. Only
+            // the exact name counts: a pattern (`Device*`) declares tables.
+            let declared = opentide_core::datasets::current()
+                .names("sentinel")
+                .contains(&name);
+            if !declared {
+                out.push(Diagnostic::warning(
+                    codes::KQL_FUNCTION_UNAVAILABLE,
+                    format!(
+                        "'{name}' is a Microsoft Defender advanced hunting function, which a \
+                         Microsoft Sentinel workspace does not have"
+                    ),
+                    name_range,
+                ));
+            }
         } else if function.is_none() && catalog.operator(&name).is_none() {
             // Only a likely typo of a known function: within two edits. The
             // distance is at least the difference in length, and at least the
@@ -753,7 +770,7 @@ fn tables(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Profile;
+    use crate::Dialect;
 
     /// A tree's nodes in preorder and their depths, as `analyze`'s walk
     /// gives them.
@@ -788,7 +805,7 @@ mod tests {
             "SigninLogs | where UserPrincipalName =~ \"a\" | summ",
             ".show tables",
         ] {
-            let catalog = Catalog::for_workspace(Profile::Sentinel, source);
+            let catalog = Catalog::for_workspace(Dialect::Sentinel, source);
             let elements = SyntaxNode::new_root(parse_once(source).green)
                 .descendants_with_tokens()
                 .count();
@@ -825,7 +842,7 @@ mod tests {
             ));
         }
         source.push_str("let g = (T:(*), U:(*)) { T | union U };\nNopeTable | take 1");
-        let catalog = Catalog::for_workspace(Profile::Sentinel, &source);
+        let catalog = Catalog::for_workspace(Dialect::Sentinel, &source);
         let parsed = parse_once(&source);
         let root = SyntaxNode::new_root(parsed.green.clone());
         let (nodes, depths) = nodes_and_depths(&root);
@@ -867,7 +884,7 @@ mod tests {
     }
 
     fn unknown_tables(source: &str) -> Vec<String> {
-        let catalog = Catalog::for_workspace(Profile::Sentinel, source);
+        let catalog = Catalog::for_workspace(Dialect::Sentinel, source);
         analyze(source, &catalog)
             .diagnostics
             .into_iter()
@@ -911,13 +928,13 @@ mod tests {
         }
         let before = column_passes();
         for offset in (0..q.len()).step_by(7) {
-            let _ = crate::hover(&q, offset, Profile::Sentinel);
+            let _ = crate::hover(&q, offset, Dialect::Sentinel);
         }
         assert_eq!(column_passes() - before, 1);
-        let _ = crate::columns(&q, Profile::Sentinel);
+        let _ = crate::columns(&q, Dialect::Sentinel);
         assert_eq!(column_passes() - before, 1);
-        let _ = crate::columns(&q, Profile::Defender);
-        let _ = crate::columns("SigninLogs | project AppId", Profile::Sentinel);
+        let _ = crate::columns(&q, Dialect::Defender);
+        let _ = crate::columns("SigninLogs | project AppId", Dialect::Sentinel);
         assert_eq!(column_passes() - before, 3);
     }
 
@@ -934,18 +951,18 @@ mod tests {
         let _scope = opentide_core::datasets::scope_thread(Some(declared));
         let q = "Contoso_Audit_CL | where Actor_s == 'a' | join (SecurityEvent) on Account";
         assert!(matches!(
-            Catalog::for_workspace(Profile::Sentinel, q),
+            Catalog::for_workspace(Dialect::Sentinel, q),
             CatalogRef::Declared(_)
         ));
         let before = column_passes();
         for offset in 0..q.len() {
-            let _ = crate::hover(q, offset, Profile::Sentinel);
+            let _ = crate::hover(q, offset, Dialect::Sentinel);
         }
         assert_eq!(column_passes() - before, 1);
     }
 
     fn parse_error(source: &str) -> Diagnostic {
-        let catalog = Catalog::for_workspace(Profile::Sentinel, source);
+        let catalog = Catalog::for_workspace(Dialect::Sentinel, source);
         analyze(source, &catalog)
             .diagnostics
             .into_iter()
@@ -987,7 +1004,7 @@ mod tests {
     #[test]
     fn the_typed_literal_hint_joins_the_syntax_error() {
         for source in ["print x = datetime(2024-01-01", "print a = datetime(2024-"] {
-            let catalog = Catalog::for_workspace(Profile::Sentinel, source);
+            let catalog = Catalog::for_workspace(Dialect::Sentinel, source);
             let diagnostics = analyze(source, &catalog).diagnostics;
             assert_eq!(diagnostics.len(), 1, "{source}: {diagnostics:?}");
             assert!(
@@ -1005,7 +1022,7 @@ mod tests {
     #[test]
     fn the_scope_checks_run_on_broken_input() {
         let source = "search \"a\" | union * |";
-        let catalog = Catalog::for_workspace(Profile::Sentinel, source);
+        let catalog = Catalog::for_workspace(Dialect::Sentinel, source);
         let codes: Vec<String> = analyze(source, &catalog)
             .diagnostics
             .into_iter()
@@ -1143,7 +1160,7 @@ mod tests {
     }
 
     fn codes_of(source: &str) -> Vec<String> {
-        let catalog = Catalog::for_workspace(Profile::Sentinel, source);
+        let catalog = Catalog::for_workspace(Dialect::Sentinel, source);
         analyze(source, &catalog)
             .diagnostics
             .into_iter()
@@ -1171,7 +1188,7 @@ mod tests {
     #[test]
     fn the_typed_literal_hint_joins_an_error_after_the_call() {
         let source = "print a = datetime(2024-01-01\n| where x";
-        let catalog = Catalog::for_workspace(Profile::Sentinel, source);
+        let catalog = Catalog::for_workspace(Dialect::Sentinel, source);
         let diagnostics = analyze(source, &catalog).diagnostics;
         assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
         assert!(

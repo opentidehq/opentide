@@ -11,7 +11,7 @@ The opentide LSP owns Tide diagnostics. Disable yamlls / Red Hat YAML on `object
 
 An object's diagnostics are `opentide validate`'s findings on it (the queries check is the engine's own analysis of the same text), and `opentide lint`'s file name and metadata findings on it (`filename_mismatch` and `metadata_recommended`, as `.opentide/configurations/lint.toml` enables them and at its severities: lint's `info` is information): the same codes and severities, placed from the finding's 1-based line and code-point columns (end column exclusive) to LSP's 0-based lines and UTF-16 columns. A finding without a line is at the start of the file; one with a column and no end column, on its own line, is a point at that column; one with no column covers its line (to its end line's end when it names one). `cargo xtask lsp parity --corpus faults` (the nightly's `lsp-parity` job) compares the server's with `validate`'s and lint's on every fault kind `validate` reports.
 
-Languages: `opentide-yaml`, `kql`, `spl`, `esql`, `eql`, `kuery` (Kibana KQL), `lucene`, `falco`, `cql` (CrowdStrike Query Language), `yara` (YARA, in .yar and .yara files), `exabeam` (Exabeam Query Language, in .exabeam files), `yaral` (YARA-L 2.0, Google Security Operations, in .yaral and .yl2 files) and `opentide-config`. There is no `sql`.
+Languages: `opentide-yaml`, `kql`, `spl`, `esql`, `eql`, `kuery` (Kibana KQL), `lucene`, `falco`, `cql` (CrowdStrike Query Language), `yara` (YARA, in .yar and .yara files), `exabeam` (Exabeam Query Language, in .exabeam files), `yaral` (YARA-L 2.0, Google Security Operations, in .yaral and .yl2 files), `datadog` (the Datadog log search syntax, Datadog Cloud SIEM, in .datadog files) and `opentide-config`. There is no `sql`.
 
 Semantic tokens come from the server. TextMate grammars must be **copied from the language-server highlight zip**, never hand-authored.
 
@@ -42,7 +42,7 @@ See `editors/zed/opentide.json`.
 
 Lives in **opentidehq/vscode-extension** (other repository, #17). MIT client, EUPL engine notices.
 
-Language ids are the server's: `opentide-yaml`, `kql`, `spl`, `esql`, `eql`, `kuery`, `lucene`, `falco`, `cql`, `yara`, `exabeam`, `yaral`, `opentide-config`. Use `DOCUMENT_SELECTOR` from `@opentide/lsp-client`, which matches each language by id and by file pattern (`opentide-config` is `**/.opentide/configurations/**/*.toml`). Its patterns match `file:` URIs only. On vscode.dev and github.dev, where documents are `vscode-vfs:` and other virtual URIs, use `WEB_DOCUMENT_SELECTOR`: the same filters with no scheme ([#197](https://github.com/opentidehq/language-server/issues/197)).
+Language ids are the server's: `opentide-yaml`, `kql`, `spl`, `esql`, `eql`, `kuery`, `lucene`, `falco`, `cql`, `yara`, `exabeam`, `yaral`, `datadog`, `opentide-config`. Use `DOCUMENT_SELECTOR` from `@opentide/lsp-client`, which matches each language by id and by file pattern (`opentide-config` is `**/.opentide/configurations/**/*.toml`). Its patterns match `file:` URIs only. On vscode.dev and github.dev, where documents are `vscode-vfs:` and other virtual URIs, use `WEB_DOCUMENT_SELECTOR`: the same filters with no scheme ([#197](https://github.com/opentidehq/language-server/issues/197)).
 
 Both are plain arrays, so they are vscode-languageclient's `documentSelector` as they are:
 
@@ -61,6 +61,8 @@ const clientOptions: LanguageClientOptions = {
 `cql` is the CrowdStrike Query Language, not Cassandra's CQL, which uses the same `.cql` extension (and, in some VS Code extensions, the `cql` id). The samples here map `.cql` to opentide's `cql`, as each other language's extension is mapped. In a workspace that holds Cassandra scripts, match opentide's `cql` by language id alone (leave out the `**/*.cql` pattern) or by a narrower glob.
 
 `exabeam` is the Exabeam Query Language of Exabeam's New-Scale SIEM. Exabeam's guides call it "EQL"; the id is `exabeam` so it is never taken for Elastic's `eql`.
+
+`datadog` is the Datadog log search syntax (Datadog Cloud SIEM detection-rule queries; [DATADOG.md](DATADOG.md)). A `.datadog` file is a search. The language has no comment syntax.
 
 TextMate scopes ([#195](https://github.com/opentidehq/language-server/issues/195)): `highlights/generated/esql.tmLanguage.json` is `source.opentide.esql`. VS Code keeps one grammar per scope, so a second `source.esql` would replace Elastic's grammar or be replaced by it. `highlights/generated/cql.tmLanguage.json` is `source.opentide.cql` for the same reason: Cassandra CQL extensions already contribute `source.cql`, so CrowdStrike's CQL starts in the opentide namespace, and `yara.tmLanguage.json` is `source.opentide.yara` because the YARA extensions contribute `source.yara`. The other grammars keep `source.<id>` (`source.kql`, `source.spl`, `source.eql`, `source.kuery`, `source.lucene`, `source.falco`, `source.exabeam`, and `source.yaral`, which yara-l-1.0 names so it differs from Google's own `source.yara-l`) and Tide objects `source.opentide-yaml`. No published extension we know of contributes those scopes. Renaming them would break every editor that already includes them, for no collision. A grammar moves to `source.opentide.<id>` when one is found to collide, as ES|QL did, in the same change as its CHANGELOG entry. The scope is not a HighlightSpec capture: renaming it leaves `highlights/spec.toml` at its version, and every capture keeps its TextMate scope. `opentide_highlight::tm_scope_name` gives each grammar's scope.
 
@@ -150,7 +152,7 @@ Requests beyond LSP, for clients that know them (`crates/opentide-lsp/src/handle
 | `opentide/fs/read` | `{ path }` | `{ text }`: the file as the server sees it: the open buffer, else the copy the server indexed or the host supplied; `""` when there is none. `path` is absolute, or relative to a workspace folder (each folder is tried in order; `./` parts are dropped) |
 | `opentide/didChangeWorkspace` (notification) | `{ documents?, objects?, removed?, visibility? }` | None. The workspace a host supplied on `initialize` changed (below): `documents` and `objects` as on `initialize`, added or replacing what has their URI; `removed`, the URIs of files that are gone (`opentide-object:<uuid>` for an object supplied with no `uri`); `visibility`, the new text of `visibility.toml`, or `null` when it is gone (absent: unchanged). The index is rebuilt, open documents are checked again (or the client asked to pull), and a catalog the client got that changed gets `opentide/catalogChanged`. Params that are not an object are logged and ignored |
 
-Debug builds also answer `opentide/__panic`, `opentide/__sleep` and `opentide/__stats`, for the server's own tests. Release builds do not have them.
+Debug builds also answer `opentide/__panic`, `opentide/__hold`, `opentide/__sleep`, `opentide/__catalogs` and `opentide/__stats`, for the server's own tests, and with `OPENTIDE_LSP_HOLD_CATALOGS` set to a path they generate no field catalog before that path exists, so a test decides when the catalogs arrive. Release builds do not have them.
 
 ### `opentide/catalog`
 

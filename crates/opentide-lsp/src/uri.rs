@@ -24,7 +24,7 @@ pub fn uri_to_path(uri: &str) -> String {
             && bytes[1].is_ascii_alphabetic()
             && bytes[2] == b':'
         {
-            return path[1..].to_string();
+            return path.strip_prefix('/').unwrap_or(&path).to_string();
         }
         return path;
     }
@@ -135,6 +135,7 @@ mod tests {
             assert_eq!(uri_to_path(&path_to_uri(path)), path, "{path}");
         }
         assert_eq!(path_to_uri("/a b"), "file:///a%20b");
+        assert_eq!(uri_to_path("file:///C:/d%C3%A9t/%F0%9F%98%80"), "C:/dét/😀");
     }
 
     #[test]

@@ -1,6 +1,5 @@
-//! `opentide new threat|objective|rule` (`cli/commands/new.py`,
-//! `cli/services/new.py`): one object from the workspace's generated
-//! template.
+//! `opentide new threat|objective|rule`: one object from the workspace's
+//! generated template.
 //!
 //! The template (`.opentide/templates/<family>.<M>.<m>.template.yaml`) is the
 //! starting text, filled line by line ([`scaffold`]): the name, a fresh
@@ -38,9 +37,10 @@ use self::scaffold::{FieldPath, Fill, Model, Scalar, collect_fields, fill_templa
 use super::setup::files::ORGANISATION_FILE;
 use super::setup::wizard::{Prompter, Stop};
 use super::{COMMAND_FAILED, Report, placement};
+use crate::commands::result::ExitCode;
 use crate::env::Env;
-use crate::envelope::{Failure, USAGE_EXIT_CODE, code};
-use crate::json::Json;
+use crate::envelope::{Failure, code};
+use crate::json::{Json, Object};
 
 /// `failure.code` when neither `.opentide/` nor `objects/` marks a workspace.
 pub const WORKSPACE_NOT_FOUND: &str = "workspace_not_found";
@@ -59,7 +59,7 @@ pub const USAGE_NEEDS_INPUT: &str = super::setup::USAGE_NEEDS_INPUT;
 
 /// Keys a platform block needs beyond its model's required fields, so it
 /// holds detection logic and deploys (`PLATFORM_EXTRA_KEYS`).
-const PLATFORM_EXTRA_KEYS: [(&str, &[&[&str]]); 8] = [
+const PLATFORM_EXTRA_KEYS: [(&str, &[&[&str]]); 9] = [
     ("microsoft_defender", &[&["scope"], &["scope", "selection"]]),
     ("elastic", &[&["query"]]),
     (
@@ -93,6 +93,8 @@ const PLATFORM_EXTRA_KEYS: [(&str, &[&[&str]]); 8] = [
         "google_secops",
         &[&["events"], &["outcome"], &["condition"]],
     ),
+    // A case's condition is required with `threshold`, the default method.
+    ("datadog", &[&["cases", "condition"]]),
 ];
 
 /// A key under a platform block, its value, and whether it is a placeholder.
@@ -101,7 +103,7 @@ type KnownValue = (&'static [&'static str], &'static str, bool);
 /// Values for those keys that compile, with whether each is a placeholder
 /// (`PLATFORM_VALUES`): a detection decision nobody has made yet, or the
 /// platform's own default.
-const PLATFORM_VALUES: [(&str, &[KnownValue]); 4] = [
+const PLATFORM_VALUES: [(&str, &[KnownValue]); 5] = [
     (
         "crowdstrike",
         // The model holds both to a closed set in any case, which the JSON
@@ -136,6 +138,11 @@ const PLATFORM_VALUES: [(&str, &[KnownValue]); 4] = [
             (&["detection", "criteria", "field"], "Process.Name", true),
             (&["detection", "criteria", "is"], "...", true),
         ],
+    ),
+    (
+        "datadog",
+        // `a` is the first query's default name; the number is a decision.
+        &[(&["cases", "condition"], "a > 0", true)],
     ),
 ];
 
@@ -200,7 +207,7 @@ pub struct Context<'a> {
     pub interrupt: Option<&'a crate::app::Interrupt>,
 }
 
-/// What the platform question says under itself (`_ask_platforms`).
+/// What the platform question says under itself.
 pub const PLATFORMS_HINT: &str = "(space selects, enter for none, arrows move)";
 
 /// The report of a question that was not answered: Ctrl-C stops the run,
@@ -213,7 +220,7 @@ fn stopped(command: &str, stop: Stop, cx: &Context<'_>) -> Report {
             }
             let mut report = Report::failed(
                 command,
-                crate::envelope::INTERRUPTED_EXIT_CODE,
+                ExitCode::Interrupted,
                 Failure::new("interrupted", "Interrupted"),
             );
             report.outcome.message = "Interrupted".into();
@@ -505,14 +512,10 @@ fn inert_status(config: &Node) -> Option<String> {
     })
 }
 
-/// Whether `value` is a UUID in its canonical 8-4-4-4-12 hex form.
+/// Whether `value` is a UUID in its 8-4-4-4-12 hex form, in either case
+/// ([`opentide_core::ids::is_hyphenated`]).
 pub(crate) fn is_uuid(value: &str) -> bool {
-    let parts: Vec<&str> = value.split('-').collect();
-    parts.len() == 5
-        && parts
-            .iter()
-            .zip([8, 4, 4, 4, 12])
-            .all(|(part, len)| part.len() == len && part.bytes().all(|b| b.is_ascii_hexdigit()))
+    opentide_core::ids::is_hyphenated(value)
 }
 
 /// `[filenames]`'s convention for `kind` (`threats`).
@@ -525,7 +528,7 @@ fn for_kind<'c>(config: &'c FilenameConfig, kind: &str) -> &'c FilenameConfig {
 }
 
 /// Whether `folder` holds `stem.yaml` or `stem.yml`, whatever the case of
-/// the stem (`_stem_taken`).
+/// the stem.
 fn stem_taken(folder: &Path, stem: &str) -> bool {
     let wanted = stem.to_lowercase();
     let Ok(entries) = std::fs::read_dir(folder) else {
@@ -581,7 +584,7 @@ fn target_path(
             .any(|suffix| folder.join(format!("{stem}{suffix}")).exists())
     };
     let stem = if taken {
-        format!("{stem}-{}", &uuid[..8.min(uuid.len())])
+        format!("{stem}-{}", uuid.chars().take(8).collect::<String>())
     } else {
         stem
     };
@@ -589,7 +592,7 @@ fn target_path(
 }
 
 /// A folder as the CLI shows it, relative to the working directory or the
-/// workspace, without a trailing `/` (`_relative`).
+/// workspace, without a trailing `/`.
 fn folder_shown(folder: &Path, cwd: &Path, root: &Path) -> String {
     let text = shown(folder, cwd, root);
     match text.trim_end_matches('/') {
@@ -635,7 +638,7 @@ fn needs_input(command: &str, family: &str, missing: &str) -> Report {
         ),
     );
     failure.argument = Some(missing.to_owned());
-    Report::failed(command, USAGE_EXIT_CODE, failure)
+    Report::failed(command, ExitCode::Usage, failure)
 }
 
 /// A name that is empty or only spaces, given or answered: `message`.
@@ -644,7 +647,7 @@ fn empty_name(command: &str, message: &str) -> Report {
         command,
         message.to_owned(),
         code::USAGE_INVALID_VALUE,
-        USAGE_EXIT_CODE,
+        ExitCode::Usage,
         Some("--name"),
     )
 }
@@ -654,7 +657,7 @@ fn new_error(
     command: &str,
     message: String,
     failure_code: &str,
-    exit_code: i32,
+    exit_code: ExitCode,
     argument: Option<&str>,
 ) -> Report {
     let mut failure = Failure::new(failure_code, message);
@@ -665,7 +668,7 @@ fn new_error(
 /// `opentide new <family>`.
 #[expect(
     clippy::too_many_lines,
-    reason = "the command's steps in the oracle's order, kept in one place"
+    reason = "the command's steps in order, kept in one place"
 )]
 pub fn run(args: &NewArgs, cx: &Context<'_>) -> Report {
     let family = args.family.as_str();
@@ -687,7 +690,7 @@ pub fn run(args: &NewArgs, cx: &Context<'_>) -> Report {
                 root.display()
             ),
             WORKSPACE_NOT_FOUND,
-            1,
+            ExitCode::Failure,
             None,
         );
         report.next("opentide setup", "create a workspace first");
@@ -767,7 +770,7 @@ pub fn run(args: &NewArgs, cx: &Context<'_>) -> Report {
         let run = super::generate::run_phases(&generated, &workspace, cx.cwd, cx.version, false);
         steps = run.steps;
         if let Some((phase, detail)) = run.failed {
-            return super::generate::phase_failed(&command, &phase, &detail, Vec::new(), steps);
+            return super::generate::phase_failed(&command, &phase, &detail, Object::new(), steps);
         }
         paths = artifacts(&workspace, &root, family);
         let still = missing(&paths);
@@ -786,7 +789,7 @@ pub fn run(args: &NewArgs, cx: &Context<'_>) -> Report {
                     file(&paths.schema)
                 ),
                 TEMPLATE_MISSING,
-                1,
+                ExitCode::Failure,
                 None,
             );
             report.steps = steps;
@@ -820,7 +823,7 @@ pub fn run(args: &NewArgs, cx: &Context<'_>) -> Report {
                     &command,
                     format!("{argument} takes a UUID, got {value:?}"),
                     code::USAGE_INVALID_VALUE,
-                    USAGE_EXIT_CODE,
+                    ExitCode::Usage,
                     Some(argument),
                 ),
                 &steps,
@@ -852,7 +855,7 @@ pub fn run(args: &NewArgs, cx: &Context<'_>) -> Report {
                         folder_shown(&folder, cx.cwd, &root)
                     ),
                     REFERENCE_NOT_FOUND,
-                    USAGE_EXIT_CODE,
+                    ExitCode::Usage,
                     Some(argument),
                 ),
                 &steps,
@@ -890,7 +893,7 @@ pub fn run(args: &NewArgs, cx: &Context<'_>) -> Report {
         Ok(lint) => lint,
         Err(error) => {
             return with_steps(
-                new_error(&command, error.0, COMMAND_FAILED, USAGE_EXIT_CODE, None),
+                new_error(&command, error.0, COMMAND_FAILED, ExitCode::Usage, None),
                 &steps,
             );
         }
@@ -919,7 +922,7 @@ pub fn run(args: &NewArgs, cx: &Context<'_>) -> Report {
                 shown(destination, cx.cwd, &root)
             ),
             PATH_EXISTS,
-            1,
+            ExitCode::Failure,
             Some(argument),
         )
     };
@@ -927,7 +930,8 @@ pub fn run(args: &NewArgs, cx: &Context<'_>) -> Report {
         return with_steps(exists(&destination), &steps);
     }
 
-    let author = super::super::git_baseline::stdout(cx.env, &root, &["config", "user.name"])
+    let lookup = |name: &str| cx.env.get(name).map(str::to_owned);
+    let author = opentide_compile::git::config_value(&root, "user.name", &lookup)
         .filter(|name| !name.is_empty());
     let OrganisationChoice {
         organisation,
@@ -1082,7 +1086,7 @@ pub fn run(args: &NewArgs, cx: &Context<'_>) -> Report {
             if count == 1 { "" } else { "s" }
         ));
     }
-    let mut data: Vec<(String, Json)> = vec![
+    let mut data = Object::from([
         ("path".into(), Json::str(&shown_path)),
         (
             "file_path".into(),
@@ -1107,7 +1111,7 @@ pub fn run(args: &NewArgs, cx: &Context<'_>) -> Report {
             "placeholders".into(),
             Json::Array(filled.placeholders.iter().map(Json::str).collect()),
         ),
-    ];
+    ]);
     let mut warnings: Vec<String> = Vec::new();
     if !in_catalogue {
         warnings.push(format!(
@@ -1137,20 +1141,20 @@ pub fn run(args: &NewArgs, cx: &Context<'_>) -> Report {
     }
     if count > 0 {
         // A note under the outcome line in the text modes.
-        data.push((
+        data.insert(
             "detail".into(),
             Json::str(format!(
                 "each ends in '{}'; opentide lint lists them",
                 scaffold::PLACEHOLDER_MARKER
             )),
-        ));
+        );
     }
     if !generated.is_empty() {
         // Not a warning: a step new took, and the checklist printed it.
-        data.push((
+        data.insert(
             "generated".into(),
             Json::Array(generated.iter().map(Json::str).collect()),
-        ));
+        );
     }
     for platform in &platforms {
         if !enabled.contains(platform) {
@@ -1189,13 +1193,13 @@ pub fn run(args: &NewArgs, cx: &Context<'_>) -> Report {
     }
     let mut report = Report::completed(&command, data);
     report.outcome.message = message;
-    report.outcome.summary = vec![
+    report.outcome.summary = Object::from([
         ("created".into(), Json::Int(1)),
         (
             "placeholders".into(),
             Json::Int(i64::try_from(count).unwrap_or(i64::MAX)),
         ),
-    ];
+    ]);
     if in_catalogue {
         // Outside the catalogue, validate --file refuses the file.
         report.next(
@@ -1229,7 +1233,7 @@ fn not_writable(
             shown(destination, cx.cwd, root)
         ),
         PATH_NOT_WRITABLE,
-        1,
+        ExitCode::Failure,
         args.path.is_some().then_some("--path"),
     );
     report.next(

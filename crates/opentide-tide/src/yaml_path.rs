@@ -49,11 +49,11 @@ fn line_indent(line: &str) -> usize {
 }
 
 fn strip_comment(body: &str) -> &str {
-    if let Some(idx) = body.find('#') {
-        let before = &body[..idx];
-        if !before.contains('"') && !before.contains('\'') {
-            return before.trim_end();
-        }
+    if let Some((before, _)) = body.split_once('#')
+        && !before.contains('"')
+        && !before.contains('\'')
+    {
+        return before.trim_end();
     }
     body.trim_end()
 }
@@ -228,13 +228,12 @@ fn pop_closed(stack: &mut Vec<Frame>, indent: usize, in_list: bool) {
 }
 
 fn parse_key_value(content: &str) -> Option<(String, String, usize, usize)> {
-    let colon = content.find(':')?;
-    let key = &content[..colon];
+    let (key, rest) = content.split_once(':')?;
     if key.is_empty() || !key.chars().all(is_key_char) {
         return None;
     }
-    let after = content[colon + 1..].trim_start();
-    let value_rel = colon + 1 + (content[colon + 1..].len() - after.len());
+    let after = rest.trim_start();
+    let value_rel = key.len() + 1 + (rest.len() - after.len());
     Some((key.to_string(), after.to_string(), 0, value_rel))
 }
 
@@ -332,7 +331,7 @@ pub fn key_span_in(source: &str, path: &[(&str, Option<usize>)]) -> Option<ByteS
         offset += raw.len();
         let line = raw.trim_end_matches(['\n', '\r']);
         let indent = line_indent(line);
-        let body = &line[indent..];
+        let body = line.trim_start_matches(' ');
         if body.is_empty() {
             continue;
         }
@@ -393,15 +392,16 @@ pub fn key_span_in(source: &str, path: &[(&str, Option<usize>)]) -> Option<ByteS
 /// The mapping key `content` starts with: its name (unquoted), where its
 /// token starts and how long it is, and the text after the colon.
 pub(crate) fn mapping_key(content: &str) -> Option<(String, usize, usize, &str)> {
-    let first = content.chars().next()?;
+    let mut chars = content.chars();
+    let first = chars.next()?;
     if first == '"' || first == '\'' {
-        let close = content[1..].find(first)? + 1;
-        let rest = &content[close + 1..];
+        let (name, rest) = chars.as_str().split_once(first)?;
         let after = rest.strip_prefix(':')?;
         if !(after.is_empty() || after.starts_with(' ')) {
             return None;
         }
-        return Some((content[1..close].to_string(), 0, close + 1, after));
+        // The token is the name between its two one-byte quotes.
+        return Some((name.to_string(), 0, name.len() + 2, after));
     }
     // A flow collection, an alias, a tag or a block scalar is not a key.
     if matches!(
@@ -410,15 +410,22 @@ pub(crate) fn mapping_key(content: &str) -> Option<(String, usize, usize, &str)>
     ) {
         return None;
     }
+    // A space is one byte, and no byte of a multi-byte character is one.
     let colon = content
         .char_indices()
-        .find(|(i, c)| *c == ':' && matches!(content[i + 1..].chars().next(), None | Some(' ')))
+        .find(|(i, c)| *c == ':' && matches!(content.as_bytes().get(i + 1), None | Some(b' ')))
         .map(|(i, _)| i)?;
-    let key = content[..colon].trim_end();
+    #[expect(
+        clippy::string_slice,
+        reason = "`colon` is the `char_indices` offset of a one-byte `:`, so it and the \
+                  byte after it are char boundaries"
+    )]
+    let (key, after) = (&content[..colon], &content[colon + 1..]);
+    let key = key.trim_end();
     if key.is_empty() {
         return None;
     }
-    Some((key.to_string(), 0, key.len(), &content[colon + 1..]))
+    Some((key.to_string(), 0, key.len(), after))
 }
 
 #[cfg(test)]
@@ -530,10 +537,12 @@ configurations:
     #[test]
     fn key_span_finds_the_real_key_by_path() {
         let source = "a:\n  #b: commented\n  c: |\n    b: inside a block\n  b: real\nlist:\n  - x: 1\n    b: item\n";
-        let at = |path: &[&str]| key_span(source, path).map(|span| &source[span.start..span.end]);
+        let at = |path: &[&str]| {
+            key_span(source, path).map(|span| source.get(span.start..span.end).unwrap())
+        };
         let span = key_span(source, &["a", "b"]).expect("a.b");
-        assert_eq!(&source[span.start..span.end], "b");
-        assert_eq!(source[..span.start].matches('\n').count(), 4);
+        assert_eq!(source.get(span.start..span.end), Some("b"));
+        assert_eq!(source.get(..span.start).unwrap().matches('\n').count(), 4);
         assert_eq!(at(&["list", "b"]), Some("b"));
         assert_eq!(at(&["list", "x"]), Some("x"));
         assert_eq!(at(&["b"]), None);
@@ -548,5 +557,27 @@ configurations:
             "rule::1.1"
         );
         assert_eq!(document_schema_id("name: x\n"), "");
+    }
+
+    /// #1946: keys, values and comments with multi-byte characters.
+    #[test]
+    fn keys_and_values_with_multi_byte_text() {
+        assert_eq!(strip_comment("é: 😀 # é"), "é: 😀");
+        assert_eq!(strip_comment("é: \"😀 # é\""), "é: \"😀 # é\"");
+        assert_eq!(
+            parse_key_value("key:  é😀"),
+            Some(("key".into(), "é😀".into(), 0, 6))
+        );
+        assert_eq!(parse_key_value("clé: x"), None);
+        assert_eq!(mapping_key("\"é😀\": x"), Some(("é😀".into(), 0, 8, " x")));
+        assert_eq!(mapping_key("é:😀: x"), Some(("é:😀".into(), 0, 7, " x")));
+        assert_eq!(mapping_key("'é😀: x"), None);
+        let source = "é😀:\n  clé: 1\n  liste:\n    - 😀: 2\n";
+        let span = key_span(source, &["é😀", "liste", "😀"]).unwrap();
+        assert_eq!(source.get(span.start..span.end), Some("😀"));
+        let span = key_span(source, &["é😀", "clé"]).unwrap();
+        assert_eq!(source.get(span.start..span.end), Some("clé"));
+        let cursor = yaml_cursor("name: é😀 # é\n", 8);
+        assert_eq!(cursor.value.as_deref(), Some("é😀"));
     }
 }

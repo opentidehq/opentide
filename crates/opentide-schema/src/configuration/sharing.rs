@@ -1,5 +1,4 @@
-//! `sharing.toml`, merged block by block (`sharing/config.py`
-//! `merge_sharing_documents`).
+//! `sharing.toml`, merged block by block.
 //!
 //! `deep_merge` replaces every list, so a later layer restating only a
 //! block's `name` and `enabled` would drop its `url`: each integration array
@@ -15,7 +14,7 @@ use regex::Regex;
 
 use super::Severity;
 use super::codes;
-use super::models::{MispIntegration, ObjectFamily, is_table_array};
+use super::models::{MispIntegration, ObjectFamily, Redacted, is_table_array};
 use super::repr;
 use crate::from_node::{Context, FromNode};
 use crate::node::{Node, Value};
@@ -127,7 +126,7 @@ impl Merged {
 /// One merged `[[misp]]` destination (`MispBlock`), as the files say it:
 /// the API key is the value written (`${NAME}`, or a literal), which the
 /// host resolves from its environment.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct MispBlock {
     /// The block's name.
     pub name: String,
@@ -149,6 +148,36 @@ pub struct MispBlock {
     pub publish: bool,
     /// `verify_ssl`.
     pub verify_ssl: bool,
+}
+
+impl std::fmt::Debug for MispBlock {
+    /// Every field, the API key as [`REDACTION_MARKER`] (#1933).
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let Self {
+            name,
+            url,
+            max_tlp,
+            api_key,
+            enabled,
+            object_types,
+            rule_statuses,
+            organisation_uuid,
+            publish,
+            verify_ssl,
+        } = self;
+        f.debug_struct("MispBlock")
+            .field("name", name)
+            .field("url", url)
+            .field("max_tlp", max_tlp)
+            .field("api_key", &api_key.as_ref().map(|_| Redacted))
+            .field("enabled", enabled)
+            .field("object_types", object_types)
+            .field("rule_statuses", rule_statuses)
+            .field("organisation_uuid", organisation_uuid)
+            .field("publish", publish)
+            .field("verify_ssl", verify_ssl)
+            .finish()
+    }
 }
 
 /// The merged blocks and the findings (`SharingConfig`); `blocks` is empty

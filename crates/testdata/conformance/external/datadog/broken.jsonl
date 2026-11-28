@@ -1,0 +1,12 @@
+{"line": 1, "fault": "unclosed_group", "code": "datadog_parse_error", "query": "(runtime:jvm"}
+{"line": 238, "fault": "dangling_or", "code": "datadog_parse_error", "query": "@my_attribute:hello?world OR"}
+{"line": 473, "fault": "field_without_value", "code": "datadog_parse_error", "query": "severity:critical @evt.name:"}
+{"line": 759, "fault": "stacked_modifiers", "code": "datadog_parse_error", "query": "NOT NOT (@severity_id:1)"}
+{"line": 991, "fault": "unclosed_phrase", "code": "datadog_parse_error", "query": "@payloadType:dnstap \"unclosed"}
+{"line": 1221, "fault": "unescaped_bang", "code": "datadog_unescaped_special", "query": "source:barracuda_cloudgen_logs @cloudgen_firewall.component:Config @sub_component:changes foo!bar"}
+{"line": 1451, "fault": "leading_minus_value", "code": "datadog_unescaped_special", "query": "source:ibm_spectrum_lsf status:error log_type:job @x:-1"}
+{"line": 1687, "fault": "fuzzy_operator", "code": "datadog_regex", "query": "@nametype:CREATE @msg:foo~2"}
+{"line": 1921, "fault": "cidr_bad_block", "code": "datadog_cidr", "query": "-@severity:* CIDR(@network.client.ip, 10.0.0.300)"}
+{"line": 2151, "fault": "cidr_without_attribute", "code": "datadog_cidr", "query": "source:symantec-endpoint-protection  CIDR(network.client.ip, 10.0.0.0/8)"}
+{"line": 2381, "fault": "lowercase_to", "code": "datadog_range", "query": "@rcode_name:* @http.status_code:[400 to 499]"}
+{"line": 2611, "fault": "unclosed_range", "code": "datadog_range", "query": "source:gigamon @http_method:* @http.status_code:[400 TO 499"}

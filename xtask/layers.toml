@@ -27,7 +27,7 @@
 # - bindings/node is the package `opentide-node` (UC-5.3, #838), compiled into
 #   the npm package @opentide/opentide: it depends on the facade alone.
 # - opentide-compare (UC-0.7, #805), the differential comparator, was deleted
-#   with the oracle's recordings (#1142).
+#   with the Python CLI's recordings (#1142).
 # - opentide-schema (UC-1.1, #807) is the top foundation tier: the plan's
 #   table puts it in the row above core, parse, highlight and the query
 #   crates, so it may build on any of them (spans, UC-1.2) and none of them
@@ -63,6 +63,8 @@
 #   0.13.0 to 0.16.0, E1) are foundation tier 2, beside opentide-cql: query
 #   engines like it, they depend on opentide-core, -parse and -highlight (and
 #   yara-x-parser, yara-x-fmt or regex-syntax) and on no other query engine.
+#   opentide-datadog (rfc-datadog-cloud-siem) joins them for the same reason:
+#   a grammar of its own, not a Lucene dialect (the RFC's section 6.2).
 # - opentide-lucene (#1231) is foundation tier 3, above opentide-kuery: each
 #   Elastic query string engine tells a rule written for the other language
 #   partly by whether the other grammar accepts the text. The Lucene engine
@@ -84,7 +86,7 @@ tiers = [
     ["opentide-core", "opentide-dataset", "opentide-schema-derive", "opentide-cassette"],
     ["opentide-parse", "opentide-highlight", "opentide-ecs"],
     ["opentide-kql", "opentide-spl", "opentide-kuery", "opentide-falco", "opentide-cql",
-     "opentide-yara", "opentide-yaral", "opentide-exabeam"],
+     "opentide-yara", "opentide-yaral", "opentide-exabeam", "opentide-datadog"],
     ["opentide-lucene"],
     ["opentide-esql", "opentide-eql"],
     ["opentide-schema"],

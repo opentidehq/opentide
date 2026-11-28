@@ -14,10 +14,9 @@
 //! - the root's options before its commands, as every other command lists
 //!   its options before its subcommands.
 //!
-//! Every help screen was held to the oracle's by content through the port
-//! (the same usage path, about text, options, arguments, commands,
-//! descriptions, defaults, environment variables and examples); the `help`
-//! snapshots of `tests/cli_snapshots.rs` hold them now (#1142).
+//! The `help` snapshots of `tests/cli_snapshots.rs` hold every help screen's
+//! content (#1142): the usage path, about text, options, arguments,
+//! commands, descriptions, defaults, environment variables and examples.
 
 use clap::builder::StyledStr;
 use clap::{Arg, Command};
@@ -239,8 +238,8 @@ mod tests {
             text.contains("      --keep-deprecated, --drop-deprecated\n          Include rules"),
             "{text}"
         );
-        let block = &text[text.find("--keep-deprecated,").unwrap()..];
-        let block = &block[..block.find("\n\n      --").unwrap()];
+        let (_, block) = text.split_once("--keep-deprecated,").unwrap();
+        let (block, _) = block.split_once("\n\n      --").unwrap();
         assert!(!block.contains("[default:"), "{block}");
     }
 

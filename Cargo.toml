@@ -24,6 +24,7 @@ members = [
     "crates/opentide-ecs",
     "crates/opentide-yara",
     "crates/opentide-yaral",
+    "crates/opentide-datadog",
     "crates/opentide-schema-derive",
     "crates/opentide-schema",
     "crates/opentide-tide",
@@ -42,7 +43,7 @@ members = [
 ]
 
 [workspace.package]
-version = "1.0.0"
+version = "1.1.0"
 edition = "2024"
 rust-version = "1.95"
 license = "EUPL-1.2"
@@ -51,34 +52,35 @@ homepage = "https://opentide.org"
 authors = ["opentide"]
 
 [workspace.dependencies]
-opentide-core = { path = "crates/opentide-core", version = "=1.0.0" }
-opentide-dataset = { path = "crates/opentide-dataset", version = "=1.0.0" }
-opentide-highlight = { path = "crates/opentide-highlight", version = "=1.0.0" }
-opentide-parse = { path = "crates/opentide-parse", version = "=1.0.0" }
-opentide-kql = { path = "crates/opentide-kql", version = "=1.0.0" }
-opentide-spl = { path = "crates/opentide-spl", version = "=1.0.0" }
-opentide-esql = { path = "crates/opentide-esql", version = "=1.0.0" }
-opentide-eql = { path = "crates/opentide-eql", version = "=1.0.0" }
-opentide-kuery = { path = "crates/opentide-kuery", version = "=1.0.0" }
-opentide-lucene = { path = "crates/opentide-lucene", version = "=1.0.0" }
-opentide-falco = { path = "crates/opentide-falco", version = "=1.0.0" }
-opentide-cql = { path = "crates/opentide-cql", version = "=1.0.0" }
-opentide-exabeam = { path = "crates/opentide-exabeam", version = "=1.0.0" }
-opentide-ecs = { path = "crates/opentide-ecs", version = "=1.0.0" }
-opentide-yara = { path = "crates/opentide-yara", version = "=1.0.0" }
-opentide-yaral = { path = "crates/opentide-yaral", version = "=1.0.0" }
-opentide-schema = { path = "crates/opentide-schema", version = "=1.0.0" }
-opentide-schema-derive = { path = "crates/opentide-schema-derive", version = "=1.0.0" }
-opentide-tide = { path = "crates/opentide-tide", version = "=1.0.0" }
-opentide-workspace = { path = "crates/opentide-workspace", version = "=1.0.0" }
+opentide-core = { path = "crates/opentide-core", version = "=1.1.0" }
+opentide-dataset = { path = "crates/opentide-dataset", version = "=1.1.0" }
+opentide-highlight = { path = "crates/opentide-highlight", version = "=1.1.0" }
+opentide-parse = { path = "crates/opentide-parse", version = "=1.1.0" }
+opentide-kql = { path = "crates/opentide-kql", version = "=1.1.0" }
+opentide-spl = { path = "crates/opentide-spl", version = "=1.1.0" }
+opentide-esql = { path = "crates/opentide-esql", version = "=1.1.0" }
+opentide-eql = { path = "crates/opentide-eql", version = "=1.1.0" }
+opentide-kuery = { path = "crates/opentide-kuery", version = "=1.1.0" }
+opentide-lucene = { path = "crates/opentide-lucene", version = "=1.1.0" }
+opentide-falco = { path = "crates/opentide-falco", version = "=1.1.0" }
+opentide-cql = { path = "crates/opentide-cql", version = "=1.1.0" }
+opentide-exabeam = { path = "crates/opentide-exabeam", version = "=1.1.0" }
+opentide-ecs = { path = "crates/opentide-ecs", version = "=1.1.0" }
+opentide-yara = { path = "crates/opentide-yara", version = "=1.1.0" }
+opentide-yaral = { path = "crates/opentide-yaral", version = "=1.1.0" }
+opentide-datadog = { path = "crates/opentide-datadog", version = "=1.1.0" }
+opentide-schema = { path = "crates/opentide-schema", version = "=1.1.0" }
+opentide-schema-derive = { path = "crates/opentide-schema-derive", version = "=1.1.0" }
+opentide-tide = { path = "crates/opentide-tide", version = "=1.1.0" }
+opentide-workspace = { path = "crates/opentide-workspace", version = "=1.1.0" }
 # Without its default `terminal` feature (the terminal UI and the wizard's
 # prompts): the facade's `plugins` feature needs the engines, not a terminal;
 # its `cli` feature turns `terminal` on.
-opentide-cli = { path = "crates/opentide-cli", version = "=1.0.0", default-features = false }
-opentide-compile = { path = "crates/opentide-compile", version = "=1.0.0" }
-opentide-analysis = { path = "crates/opentide-analysis", version = "=1.0.0" }
-opentide-lsp = { path = "crates/opentide-lsp", version = "=1.0.0" }
-opentide-connectors = { path = "crates/opentide-connectors", version = "=1.0.0" }
+opentide-cli = { path = "crates/opentide-cli", version = "=1.1.0", default-features = false }
+opentide-compile = { path = "crates/opentide-compile", version = "=1.1.0" }
+opentide-analysis = { path = "crates/opentide-analysis", version = "=1.1.0" }
+opentide-lsp = { path = "crates/opentide-lsp", version = "=1.1.0" }
+opentide-connectors = { path = "crates/opentide-connectors", version = "=1.1.0" }
 opentide-cassette = { path = "crates/opentide-cassette" }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["float_roundtrip"] }
@@ -103,7 +105,8 @@ regex = "1"
 # already in the graph through `tempfile`.
 rustix = { version = "1.1.6", default-features = false }
 # Look-around and back-references, which `regex` has not: the oracle's
-# Markdown-to-text patterns of the generated schemas (opentide-schema, UC-1.8).
+# Markdown-to-text patterns, the reference opentide-schema's tests hold its
+# `regex` matches to (a dev-dependency only).
 fancy-regex = "0.20"
 # Dates and times (opentide-schema `metadata.reviewed`): the calendar, the
 # clock and UTC offsets, without the time zone database.
@@ -118,6 +121,9 @@ titlecase = { version = "3.6", default-features = false }
 regex-syntax = "0.8"
 # "did you mean" suggestions (opentide-core `suggest`): edit distances. Also clap's.
 strsim = "0.11"
+# Markdown read as text (opentide-core's `markdown` feature) and parsed for the
+# terminal (opentide-cli `explain`): CommonMark, no extension.
+pulldown-cmark = { version = "0.13", default-features = false }
 # A fast hasher seeded per process for the engine's hot-path maps, keyed by
 # query text among others (ADR 0014 §5b): SipHash cost about a seventh of a
 # KQL analysis.
@@ -207,6 +213,32 @@ http-body-util = "0.1"
 # The version wiremock locks.
 base64 = "0.23"
 sha2 = "0.11"
+# Shared by several crates, so one version is named once (#1966). A crate
+# adds the features it needs (indexmap's `serde`).
+# Maps in insertion order, looked up by key.
+indexmap = "2"
+# Text diffs (`validate --fix`'s unified diff, xtask's snapshot comparisons).
+# Version 2: `similar` 3 would be a second shipped copy, which cargo-deny's
+# bans refuse.
+similar = "2.7"
+# Temporary files and folders: `validate --fix`'s writes renamed into place,
+# and the tests' scratch workspaces.
+tempfile = "3"
+# Directory walks with sorted siblings and loop-safe link following.
+walkdir = "2.5"
+# Shell words: commands and arguments split and quoted as a POSIX shell does.
+shlex = "2.0"
+# Log events (the connectors' requests, the CLI's log layer) and their
+# collection.
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["registry", "std"] }
+# Full Unicode case folding (`str.casefold()`): names compared and sorted
+# whatever their case.
+caseless = "0.2"
+# `application/x-www-form-urlencoded` bodies and query strings.
+form_urlencoded = "1.2"
+# JSON Schema validation (the CLI's schema tests, xtask's codegen check).
+jsonschema = { version = "0.61.1", default-features = false }
 # xtask only: `cargo xtask bench` reads each benchmarked process's peak RSS
 # from wait4(2), whose safe wrapper this is (the workspace forbids `unsafe`).
 wait4 = "0.2"
@@ -251,6 +283,13 @@ undocumented_unsafe_blocks = "deny"
 # One unsafe operation per block, so each SAFETY comment answers for one
 # operation (docs/internal/unsafe.md lists every block).
 multiple_unsafe_ops_per_block = "deny"
+# Slicing a `str` by byte index panics off a char boundary, and the engines
+# read user documents and queries: a slice reads through `get`,
+# `split_once`, a crate's debug-asserting `cut`, or says why its index is a
+# char boundary in a narrow `#[expect(clippy::string_slice, reason = "...")]`
+# (#1946). Integration tests (`tests/`) state the lint in their file-level
+# `#![expect]` with unwrap and expect: a panic there is a failed test.
+string_slice = "warn"
 # The pedantic lints the workspace does not follow, each with its reason; the
 # rest of `pedantic` is enforced. The engine crates are published for the
 # facade's sake (plan D-5): their signatures do not change to satisfy a style
@@ -265,7 +304,8 @@ missing_panics_doc = "allow" # `# Panics` sections come with the missing_docs wo
 doc_markdown = "allow" # product and language names (ES|QL, CrowdStrike) are prose
 # `too_many_lines` is enforced (the pedantic default, 100 lines): an engine crate's lib.rs carries
 # one `#![expect]` (its dispatchers match every node kind in one function), any other
-# long function its own `#[expect]`.
+# long function its own `#[expect]`, whose reason says why it is long: the deferred
+# "split when next touched" (or "split when next ...") is only on the functions `xtask/too_many_lines.txt` lists (#1959).
 match_same_arms = "allow" # one arm per language or node kind, even when two arms agree
 map_unwrap_or = "allow" # style, at 57 sites
 redundant_closure_for_method_calls = "allow" # style, at 68 sites

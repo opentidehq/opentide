@@ -3,8 +3,8 @@
 //! validates (an object file's YAML read as YAML 1.2, a configuration file's
 //! TOML, each as JSON; a file that does not parse is no instance).
 //!
-//! What is left of the comparison with the oracle's schemas, retired with
-//! the oracle (#1142): the probes, each with the verdict the generated
+//! What is left of the comparison with the Python CLI's schemas, retired with
+//! it (#1142): the probes, each with the verdict the generated
 //! schemas must give it, checked by codegen's tests.
 
 use anyhow::Result;

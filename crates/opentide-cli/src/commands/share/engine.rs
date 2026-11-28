@@ -1,4 +1,4 @@
-//! MISP push, preview, status and retract (`sharing/engine.py` `run_misp`).
+//! MISP push, preview, status and retract.
 //!
 //! Preview and status make no request. Push and retract first probe each
 //! destination (version, the key's organisation, the object template), then
@@ -16,7 +16,7 @@ use opentide_workspace::validate::{Check, Options as ValidateOptions, QueriesMod
 
 use super::config::{Block, INTEGRATION_MISP};
 use super::document::{TideDocument, resolve};
-use super::event::{self, REQUIRED_RELATIONS, TEMPLATE_VERSION, is_ours, uuid_pattern};
+use super::event::{self, REQUIRED_RELATIONS, TEMPLATE_VERSION, is_canonical_uuid, is_ours};
 use super::ledger::Ledger;
 use super::{Mode, TLP_ORDER};
 use crate::json::Json as OutJson;
@@ -35,15 +35,15 @@ pub struct Filters {
 /// One object on one destination (`ShareRecord`).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Record {
-    /// The object.
+    /// The UUID of the object shared.
     pub object_uuid: String,
     /// The destination.
     pub target: String,
     /// What happened (`created`, `skipped_tlp`, `failed`, ...).
     pub action: String,
-    /// The remote event's UUID.
+    /// The UUID of the destination's event for the object, when it has one.
     pub remote_event_uuid: Option<String>,
-    /// The remote event's id.
+    /// The destination's numeric id for that event, when it has one.
     pub remote_event_id: Option<i64>,
     /// Why it was skipped or failed.
     pub reason: Option<String>,
@@ -96,35 +96,35 @@ impl Record {
 
     /// The record as the result lists it (`as_dict`).
     pub fn to_json(&self) -> OutJson {
-        let mut members = vec![
+        let mut members = Object::from([
             ("object_uuid".to_owned(), OutJson::str(&self.object_uuid)),
             ("integration".to_owned(), OutJson::str(INTEGRATION_MISP)),
             ("target".to_owned(), OutJson::str(&self.target)),
             ("action".to_owned(), OutJson::str(&self.action)),
-        ];
+        ]);
         if let Some(uuid) = &self.remote_event_uuid {
-            members.push(("remote_event_uuid".into(), OutJson::str(uuid)));
+            members.insert("remote_event_uuid".into(), OutJson::str(uuid));
         }
         if let Some(id) = self.remote_event_id {
-            members.push(("remote_event_id".into(), OutJson::Int(id)));
+            members.insert("remote_event_id".into(), OutJson::Int(id));
         }
         if let Some(reason) = &self.reason {
-            members.push(("reason".into(), OutJson::str(reason)));
+            members.insert("reason".into(), OutJson::str(reason));
         }
         if !self.notes.is_empty() {
-            members.push((
+            members.insert(
                 "notes".into(),
                 OutJson::Array(self.notes.iter().map(OutJson::str).collect()),
-            ));
+            );
         }
-        OutJson::object(members)
+        OutJson::Object(members)
     }
 }
 
 /// A run's result (`ShareRun`).
 #[derive(Clone, Debug, Default)]
 pub struct ShareRun {
-    /// The records.
+    /// What happened to each object on each destination.
     pub records: Vec<Record>,
     /// The preflight that stopped the run.
     pub preflight: Option<String>,
@@ -170,7 +170,7 @@ impl ShareRun {
     }
 }
 
-/// The schema and UUID checks a pushed object must pass (`_validator`).
+/// The schema and UUID checks a pushed object must pass.
 pub struct Validator {
     by_uuid: Vec<(String, Vec<String>)>,
     by_file: Vec<(PathBuf, String)>,
@@ -298,7 +298,7 @@ impl Validator {
 pub struct Options<'a> {
     /// `push`, `preview`, `status` or `retract`.
     pub mode: Mode,
-    /// The filters.
+    /// `--uuid`, `--type` and `--file`: the objects to share; `None` for all.
     pub filters: Option<&'a Filters>,
     /// `--publish` / `--no-publish`.
     pub publish: Option<bool>,
@@ -449,7 +449,7 @@ impl Probe {
     }
 }
 
-/// The documents the filters select (`_selected`).
+/// The documents the filters select.
 fn selected<'d>(documents: &'d [TideDocument], filters: Option<&Filters>) -> Vec<&'d TideDocument> {
     let Some(filters) = filters else {
         return documents.iter().collect();
@@ -484,8 +484,7 @@ fn selected<'d>(documents: &'d [TideDocument], filters: Option<&Filters>) -> Vec
         .collect()
 }
 
-/// The shared objects no longer in the catalogue, narrowed by the filters
-/// (`_ledger_uuids`).
+/// The shared objects no longer in the catalogue, narrowed by the filters.
 fn ledger_uuids(
     ledger: &Ledger,
     blocks: &[Block],
@@ -536,8 +535,8 @@ fn ledger_uuids(
     found
 }
 
-/// The statuses a block's `rule_statuses` is matched against
-/// (`_rule_statuses`): those of the enabled platform blocks, else the root's.
+/// The statuses a block's `rule_statuses` is matched against:
+/// those of the enabled platform blocks, else the root's.
 fn rule_statuses(document: &TideDocument) -> Vec<String> {
     let statuses: Vec<String> = match document.body.get("configurations") {
         Some(Json::Object(blocks)) => blocks
@@ -563,7 +562,7 @@ fn rule_statuses(document: &TideDocument) -> Vec<String> {
         .unwrap_or_default()
 }
 
-/// The TLPs at or below `max_tlp` (`_allowed`).
+/// The TLPs at or below `max_tlp`.
 fn allowed(max_tlp: &str) -> &'static [&'static str] {
     match TLP_ORDER.iter().position(|name| *name == max_tlp) {
         Some(ceiling) => &TLP_ORDER[..=ceiling],
@@ -572,7 +571,7 @@ fn allowed(max_tlp: &str) -> &'static [&'static str] {
 }
 
 /// The records of the objects that never reach the destination, and the
-/// ones that do (`_split_local`).
+/// ones that do.
 fn split_local<'d>(
     documents: &[&'d TideDocument],
     block: &Block,
@@ -636,8 +635,8 @@ fn split_local<'d>(
     (local, shareable)
 }
 
-/// Where an object's events belong, and whether that was found
-/// (`_organisation`): `block`, `object`, `invalid` or `missing`.
+/// Where an object's events belong, and whether that was found:
+/// `block`, `object`, `invalid` or `missing`.
 fn organisation(block: &Block, document: &TideDocument) -> (Option<String>, &'static str) {
     if let Some(org) = block
         .organisation_uuid
@@ -651,7 +650,7 @@ fn organisation(block: &Block, document: &TideDocument) -> (Option<String>, &'st
         && !raw.trim().is_empty()
     {
         let text = raw.trim().to_lowercase();
-        if uuid_pattern().is_match(&text) {
+        if is_canonical_uuid(&text) {
             return (Some(text), "object");
         }
         return (None, "invalid");
@@ -686,7 +685,7 @@ fn template_problem(
     (None, None)
 }
 
-/// The events this organisation owns, and the foreign ones (`_matched`).
+/// The events this organisation owns, and the foreign ones.
 fn matched<'e>(
     events: &'e [RemoteEvent],
     org: &str,
@@ -711,7 +710,7 @@ fn matched<'e>(
     (ours, foreign)
 }
 
-/// The body of `events/edit` (`_edit_body`): this object's event, on the
+/// The body of `events/edit`: this object's event, on the
 /// remote's UUID, with the remote's other objects kept first.
 fn edit_body(created: &Json, remote: &RemoteEvent, tide_uuid: &str) -> Result<Json, MispCallError> {
     let Some(Json::Object(raw)) = created.get("Event") else {
@@ -743,8 +742,7 @@ fn edit_body(created: &Json, remote: &RemoteEvent, tide_uuid: &str) -> Result<Js
     Ok(Json::Object(body))
 }
 
-/// Runs `work` over `items`, `workers` at a time, keeping their order
-/// (`_map`).
+/// Runs `work` over `items`, `workers` at a time, keeping their order.
 fn map<T: Sync, R: Send>(workers: usize, items: &[T], work: &(dyn Fn(&T) -> R + Sync)) -> Vec<R> {
     if workers <= 1 || items.len() <= 1 || !crate::threads::AVAILABLE {
         return items.iter().map(work).collect();
@@ -790,7 +788,7 @@ fn write_reason(error: &MispCallError, update: bool) -> String {
     "remote_update_rejected".to_owned()
 }
 
-/// The reason and kind of a destination that failed its probe (`_failure`).
+/// The reason and kind of a destination that failed its probe.
 fn failure(error: Option<&MispCallError>) -> (String, Kind) {
     match error {
         None => ("connectivity_failed".into(), Kind::Connectivity),
@@ -851,7 +849,7 @@ fn push_block(
 
 #[expect(
     clippy::too_many_lines,
-    reason = "the oracle's `_upsert`, step by step, in one place"
+    reason = "one object's push, step by step, kept in one place"
 )]
 fn upsert(
     document: &TideDocument,
@@ -1199,7 +1197,7 @@ fn retract_one(
     }
 }
 
-/// What a push would do, from the ledger alone (`_predict`).
+/// What a push would do, from the ledger alone.
 fn predict(ledger: &Ledger, document: &TideDocument, target: &str, publish: bool) -> &'static str {
     let Some(line) = ledger.get(
         document.uuid().unwrap_or_default(),

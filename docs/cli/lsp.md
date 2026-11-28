@@ -5,7 +5,7 @@ description: The opentide language server, for editors.
 
 # opentide lsp
 
-`pip install opentide` installs the opentide language server: the analysis engine and the server, built from this repository's Rust workspace ([`crates/opentide-lsp`](https://github.com/opentidehq/opentide/tree/development/crates/opentide-lsp)) and compiled into the opentide package. There is no second package and no extra. The same server ships on its own as the `opentide-lsp` binary ([opentide lsp start and opentide-lsp](#opentide-lsp-start-and-opentide-lsp)). It used to come from opentidehq/language-server; if your editor runs a binary from there, see [Moving from the language-server distribution](../usage/migration/language-server.md). It understands KQL (Sentinel and Defender), SPL, ES|QL, EQL, Kibana KQL (`kuery`), Lucene, Falco (Sysdig Secure), CQL (CrowdStrike), YARA (HarfangLab and Bitdefender), Exabeam and YARA-L (Google Security Operations) queries, and Tide YAML objects, including the queries inside a rule, and opentide's configuration files.
+`pip install opentide` installs the opentide language server: the analysis engine and the server, built from this repository's Rust workspace ([`crates/opentide-lsp`](https://github.com/opentidehq/opentide/tree/development/crates/opentide-lsp)) and compiled into the opentide package. There is no second package and no extra. The same server ships on its own as the `opentide-lsp` binary ([opentide lsp start and opentide-lsp](#opentide-lsp-start-and-opentide-lsp)). It used to come from opentidehq/language-server; if your editor runs a binary from there, see [Moving from the language-server distribution](../usage/migration/language-server.md). It understands KQL (Sentinel and Defender), SPL, ES|QL, EQL, Kibana KQL (`kuery`), Lucene, Falco (Sysdig Secure), CQL (CrowdStrike), YARA (HarfangLab and Bitdefender), Exabeam, YARA-L (Google Security Operations) and Datadog (Cloud SIEM) queries, and Tide YAML objects, including the queries inside a rule, and opentide's configuration files.
 
 ```bash
 opentide lsp start
@@ -61,6 +61,7 @@ The server picks each document's language once, when the editor opens it:
 | `yara` | `opentide-yara` | `.yar`, `.yara`: YARA rules (HarfangLab and Bitdefender) |
 | `exabeam` | `opentide-exabeam` | `.exabeam`: the Exabeam Query Language |
 | `yaral` | `opentide-yaral`, `yara-l` | `.yaral`, `.yl2`: YARA-L 2.0 (Google Security Operations) |
+| `datadog` | `opentide-datadog` | `.datadog`: the Datadog log search syntax (Datadog Cloud SIEM), profile `search` |
 | `opentide-config` | — | `.opentide/configurations/**/*.toml` |
 
 There is no `sql` language. Inside a rule, each query is analysed in the language of its block: `configurations.sentinel.query` and `configurations.microsoft_defender.query` as KQL, `configurations.splunk.query` as SPL, `configurations.carbon_black_cloud.query` and `configurations.graylog.query` as Lucene (in each one's dialect), `configurations.sysdig.condition` as Falco, `configurations.crowdstrike.query` as CQL (a Next-Gen SIEM correlation rule), a Google SecOps block's `setup`, `events`, `outcome`, `condition` and `export` as YARA-L (together, as the one rule deploy assembles), a HarfangLab block's `yara.signature` as YARA and its decomposed `imports`, `strings` and `condition` as the one YARA rule deploy assembles (both under the HarfangLab profile), a Bitdefender block's `yara.signature` as YARA under the Bitdefender profile, an Exabeam block's sequence filters in the Exabeam Query Language, and an Elastic query by the block's `type` and `language`. A hunt's search takes the language of its `system`.
@@ -192,6 +193,7 @@ Then add `opentide` to the `language-servers` of the languages you edit. Zed tak
 | Exabeam New-Scale SIEM | the Exabeam Query Language (each sequence's filter, profile `rule`; `system: exabeam` hunts and `.exabeam` files, profile `search`) | ✅ |
 | Google Security Operations | YARA-L 2.0 (the block's sections as the assembled rule; `system: google_secops` hunts as searches; `.yaral` and `.yl2` files) | ✅ |
 | HarfangLab | YARA (`yara.signature`, and the rule the decomposed form assembles) | ✅ |
+| Datadog Cloud SIEM | the Datadog log search syntax (`.datadog` files, profile `search`); the platform's block is not in the registry yet | ✅ (files only) |
 
 ## opentide lsp start and opentide-lsp
 

@@ -33,7 +33,7 @@ opentide validate --check queries
 | `--file` | Validate one YAML file — repo-relative path, absolute path, or bare file name (see [Selecting a file](#selecting-a-file)). Repeatable: each `--file` adds a file to the scope |
 | `--uuid` | Validate specific UUIDs (repeatable) |
 | `--type` | Filter by object type (repeatable) |
-| `--strict` | Treat warnings as failures (exit `1`), except `platform_not_enabled`, and fail a full run that finds no detection objects ([Which workspace was checked](#which-workspace-was-checked)) |
+| `--strict` | Treat warnings as failures (exit `1`), except `platform_not_enabled`, `microsoft_defender_impacted_asset_identifier`, `microsoft_defender_custom_details_limit` and `microsoft_defender_placeholder_limit`, and fail a full run that finds no detection objects ([Which workspace was checked](#which-workspace-was-checked)) |
 | `--allow-empty` | With `--strict` (refused without it): pass a full run that finds no detection objects in a workspace. A folder that is not a workspace still fails. The commit hook `opentide setup hooks` writes passes it, so a new repository commits before its first object |
 | `--fix` | Apply every safe fix, then validate again (see [Fixing typos](#fixing-typos---fix)) |
 | `--dry-run` | With `--fix`: print the edits as a unified diff and change nothing |
@@ -41,7 +41,7 @@ opentide validate --check queries
 | `--format` | `text` (code frames, the default), `sarif` (SARIF 2.1.0 for code scanning) or `codequality` (GitLab Code Quality). See [Reports and CI annotations](#reports-and-ci-annotations) |
 | `--output` | Write the `--format` report to this file and still print the code frames. Without it the report is all of stdout. Required with `--json`. Needs `--format sarif` or `codequality`: with `text` it exits `2` |
 
-`--strict` fails warning runs with exit `1`. Without it, warnings are reported in output and the process still exits `0`. The one exception is `platform_not_enabled` (see [Platforms this workspace has not enabled](#platforms-this-workspace-has-not-enabled)), which `--strict` reports without failing. Validation failures in `--json` mode include the complete report before the process exits.
+`--strict` fails warning runs with exit `1`. Without it, warnings are reported in output and the process still exits `0`. Four warnings are exceptions, which `--strict` reports without failing: `platform_not_enabled` (see [Platforms this workspace has not enabled](#platforms-this-workspace-has-not-enabled)), and three Microsoft Defender advisories until a tenant check confirms what Defender does past them: `microsoft_defender_impacted_asset_identifier`, Microsoft's advice on identifying a device or user, and `microsoft_defender_custom_details_limit` and `microsoft_defender_placeholder_limit`, limits Microsoft's custom detection docs set on an alert's custom details and on the columns its title or description references. Validation failures in `--json` mode include the complete report before the process exits.
 
 `configuration` runs by default on a full run. It checks every merged configuration file the CLI reads (`paths.toml`, `deployment.toml`, `visibility.toml`, `documentation.toml`, and each built-in `platforms/<id>.toml`) against its [model](../sdk/configuration.md), so a misspelt key fails `validate` instead of the next `deploy` or `generate docs`. Each issue's `context.file` names the file and `field_path` the key, for example `unknown_key` at `promotion.enabeld` in `deployment.toml`. A `visibility.toml` log source is one dataset, named by its `name`; a 0.20.0 dataset key (`tables = [...]`, `ecs`) fails with a message that says what to do instead ([upgrading from 0.20.0](../usage/configuration.md#upgrading-from-0200)). A malformed `[[responders]]` entry and an undeclared visibility asset are warnings, as the loaders skip them; a run narrowed with `--file`, `--uuid` or `--type` skips this check unless `--check configuration` asks for it. Values are never printed.
 
@@ -391,6 +391,7 @@ opentide validate query --platform splunk --live --strategy RELEASE --wide
 | `--changed` | Check only the rule files this run changed: the pull or merge request, the push, or outside CI the last commit (see [Which rules are checked](#which-rules-are-checked)) |
 | `--file` | Check only this rule file: a path or a bare file name, matched as in [object validation](#selecting-a-file). A file with a query extension (`.kql`, `.spl`, `.esql`, `.eql`, `.kuery`, `.lucene`, `.falco`, `.cql`, `.yar`, `.yara`, `.exabeam`, `.yaral`, `.yl2`) is one query in that language, checked offline. Repeatable |
 | `--uuid` | Check only the rule with this UUID. Repeatable |
+| `--position` | Offline: where a `--file` query will sit. `search` (the default): as a query file or a hunt. `rule`: as the `--platform`'s rule block checks its query, so a `.cql` file is a Next-Gen SIEM correlation rule (`cql_correlate_aggregate`), a `.exabeam` file a sequence filter (`exabeam_advanced_in_rule`) and a `.datadog` file a detection rule's query; a `.yaral` file the rule a Google SecOps block assembles (its `meta` deploy's), a `.kql` file under `--platform sentinel` a scheduled analytics rule (`kql_rule_union_star`, `kql_rule_search_star`, `kql_rule_too_long`); other languages check a rule's query as a search. `rule` needs `--platform` (exit `2`, `failure.code` `usage_missing_option`, `failure.argument` `--platform`, without it). A rule block's own query is always checked as a rule, so `--position` without a query file, or with `--live`, exits `2` (`failure.argument` `--position`) |
 | `--queries` | Offline: how a rejected query is reported, `error` (the default) or `warn`, as in [`validate`](#queries). `off` exits `2`: it would check nothing. Refused with `--live` |
 | `--strict` | Offline: fail on warnings too (with `--queries warn`). Refused with `--live` |
 | `--strategy` | `--live`: check only the rules a run with this strategy deploys, on the tenants that accept it: `PREVIEW` or `RELEASE`, repeatable. Default: both |
@@ -406,17 +407,18 @@ The engine is [opentidehq/language-server](https://github.com/opentidehq/languag
 | Platform | Language and profile |
 |----------|----------------------|
 | `sentinel` | KQL, Sentinel tables |
-| `microsoft_defender` | KQL, Defender tables |
+| `microsoft_defender` | KQL, Defender tables; the block's entities, actions, custom details and alert `{{Column}}` placeholders against the columns the query returns (`microsoft_defender_column_not_in_output`, `microsoft_defender_required_columns`; `microsoft_defender_column_type` is a lint warning and `microsoft_defender_unprojected_output` a lint note), when the engine can infer them |
 | `splunk` | SPL |
 | `elastic` | ES\|QL, EQL, Kibana KQL or Lucene, by the block's `type` and `language`; ES\|QL against the lowest `setup.version` of the block's tenants |
 | `carbon_black_cloud` | Lucene, Carbon Black dialect |
 | `sysdig` | Falco: the block's `condition`, its `exceptions`, and the macros and lists of the block (and of the Falco default rules) it names |
-| `crowdstrike` | CQL, with the Next-Gen SIEM correlation-rule checks (`cql_correlate_aggregate`): the block's `query` |
+| `crowdstrike` | CQL, with the Next-Gen SIEM correlation-rule checks (`cql_correlate_aggregate`): the block's `query`; a `system: crowdstrike` hunt and a `.cql` file as plain LogScale, without them, `--platform crowdstrike` or not; a `.cql` file with `--position rule` as the block's query |
 | `harfanglab` | YARA, HarfangLab profile: the block's `yara.signature` or the rule its decomposed form assembles, and `.yar` and `.yara` files |
 | `bitdefender` | YARA, Bitdefender profile: the block's `yara.signature`, and `.yar` and `.yara` files |
 | `graylog` | Lucene, Graylog dialect: the block's query |
-| `exabeam` | The Exabeam Query Language: each sequence's filter under the `rule` profile, where Search's advanced operators (SELECT, GROUP-BY, pipes) are refused (`exabeam_advanced_in_rule`); a `system: exabeam` hunt and a `.exabeam` file under the `search` profile |
+| `exabeam` | The Exabeam Query Language: each sequence's filter under the `rule` profile, where Search's advanced operators (SELECT, GROUP-BY, pipes) are refused (`exabeam_advanced_in_rule`); a `system: exabeam` hunt and a `.exabeam` file under the `search` profile, `--platform exabeam` or not; a `.exabeam` file with `--position rule` under the `rule` profile |
 | `google_secops` | YARA-L 2.0: the block's sections as the one rule deploy assembles, and `.yaral` and `.yl2` files |
+| `datadog` | The Datadog search syntax: each `queries[].query` under the `rule` profile, where full-text `*:term` and a calculated field `#name` are warnings; a `system: datadog` hunt and a `.datadog` file under the `search` profile; a `.datadog` file with `--position rule` under the `rule` profile |
 
 Google SecOps's YARA-L is checked offline by the analysis engine, the block's sections as the one rule deploy assembles (yara-l-1.0's `yaral_*` codes), and a `.yaral` or `.yl2` file with `--file`. `--live` sends each rule's assembled text to `verifyRuleText`, Google's compiler, which resolves the instance's reference lists and data tables and creates nothing. An `ERROR` diagnostic fails the rule as `google_secops_compile_error`, a `WARNING` is `google_secops_compile_warning`, each placed on the section key and line it falls in (`configurations.google_secops.events line 3, column 5`), and a block `run_frequency` Google does not allow for the rule is `google_secops_run_frequency_not_allowed`.
 
@@ -456,7 +458,7 @@ error[kql_unknown_operator]: unknown tabular operator 'wher'
 
 It reports the engine's errors, as `validate` does: they fail the run with exit `1` (`failure.code` `issues_found`), or, with `--queries warn`, print as warnings and exit `0` unless `--strict`. The engine's warnings and notes, such as a slow query shape (`kql_where_not_first`, `spl_wildcard`), are style: [`opentide lint`](./lint.md#queries) reports them. A passing run ends `✓ 3 queries valid`; one under `--queries warn` with rejected queries `! 2 warnings in 1 file · 3 queries checked`. With no query to check, the result is `skipped` with exit `0`. When the engine does not load, the run fails with exit `1` and `failure.code` `engine_unavailable`: it never skips.
 
-A query file (`--file hunting/lsass.kql`) holds one query in the language its extension names, in any case (`.KQL` too). With `--platform` it is checked with that platform's profile (`--platform microsoft_defender` knows Defender's tables) and `platform` names it; without, with the language alone, and `platform` is empty. `field_path` is empty for it, and given alone it checks no rule. A query file that does not exist, or whose language the `--platform` does not use (a `.kql` file with `--platform splunk`), exits `2`; one that is not UTF-8 or holds no query fails with exit `1`.
+A query file (`--file hunting/lsass.kql`) holds one query in the language its extension names, in any case (`.KQL` too). With `--platform` it is checked under that platform's dialect (`--platform microsoft_defender` knows Defender's tables, `--platform graylog` reads Graylog's Lucene) and `platform` names it, but it stays a file: a `.cql` file is plain LogScale and a `.exabeam` file a search, unless `--position rule` says it is the platform's rule query; without, with the language alone, and `platform` is empty. `field_path` is empty for it, and given alone it checks no rule. A query file that does not exist, or whose language the `--platform` does not use (a `.kql` file with `--platform splunk`), exits `2`; one that is not UTF-8 or holds no query fails with exit `1`.
 
 `--json` reports `mode` `offline`, `queries_validated`, one entry per query under `queries` (`path`, `platform`, `language`, `field_path`, `line`, `column`, `errors`), every finding under `diagnostics` with the [diagnostic fields](#diagnostic-fields), `engine` (the engine version), and `summary` (`queries`, `files`, `errors`, `warnings`, `notes`, `error_files`, `warning_files`).
 
@@ -494,8 +496,12 @@ answer; see [Slow queries and timeouts](#slow-queries-and-timeouts)) fails the c
 traceback. On Splunk, SentinelOne, Elastic, Carbon Black Cloud and Microsoft
 Defender, `--json` names the `tenant` and the `host` that failed, and `message`
 carries the network error; Sentinel does too, where it used to report only a rejected query. The human output prints the same message as an `error:` line,
-with the `advice` as a `help:` line under it. The platform's remaining tenants are not checked after the
-first one that cannot be reached. The sample is illustrative, because it needs a
+with the `advice` as a `help:` line under it. Up to four tenants of a platform are checked at once (Elastic's
+and Google SecOps' one at a time), each one query at a time, and reported in the configuration's order: a tenant's
+log lines (`validating_query`, `valid_query`, `query_validation_warning`, `query_rejected`, `query_check_timed_out` and `tenant_check_refused` among them) come out once it and every tenant before it
+have finished, so a slow tenant holds back the lines of those after it. The check stops at the
+first tenant that cannot be reached, including one whose every query timed out before three did: the tenants not yet started are not
+checked, those running are stopped, and nothing is reported for any tenant after it. The sample is illustrative, because it needs a
 configured tenant:
 
 ```json illustrative
@@ -568,7 +574,7 @@ A query that gets no answer in that time fails its own check, and the other rule
       "tenant": "Default",
       "status": "failed",
       "code": "query_check_timeout",
-      "errors": ["no answer within the 120s check timeout (The read operation timed out). Raise it with --check-timeout or OPENTIDE_QUERY_CHECK_TIMEOUT, or make the query cheaper"],
+      "errors": ["no answer within the 120s check timeout (no complete answer from https://splunk.example.com:8089 within 120s). Raise it with --check-timeout or OPENTIDE_QUERY_CHECK_TIMEOUT, or make the query cheaper"],
       "warnings": []
     }
   ],
@@ -632,7 +638,7 @@ there is nothing to check.
 
 ### Supported platforms
 
-Live query validation works on **nine platforms**; the offline engine on twelve, eight of them the same:
+Live query validation works on **ten platforms**; the offline engine on thirteen, nine of them the same:
 
 | Platform | `--live` | Offline |
 |----------|:--------:|:-------:|
@@ -649,10 +655,15 @@ Live query validation works on **nine platforms**; the offline engine on twelve,
 | `graylog` (Lucene, Graylog dialect) | ✅ | ✅ |
 | `exabeam` (Exabeam Query Language) | ✅ the filter, through Search | ✅ |
 | `google_secops` (YARA-L 2.0) | ✅ `verifyRuleText` | ✅ YARA-L |
+| `datadog` (Datadog search syntax) | ✅ the whole rule, through `rules/validation` | ✅ |
 
 ### Exabeam live validation
 
 `opentide validate query --platform exabeam --live` sends each sequence query of each rule, on each tenant deploy would send it to, as the `filter` of `POST /search/v2/events`, with `fields: ["*"]`, `limit: 1` and the last 15 minutes, the window the console's "Test Last 15 mins" uses. A `200` passes, the row count information only; a `400` fails the sequence with Exabeam's message; any other answer fails it too, never a pass. Each sequence is its own check, labelled `sequence 1`, `sequence 2`… when the rule has several. The condition, windows, grouping and outcomes are not checked on the tenant: no Exabeam API previews a rule. The API key needs **Search, Analyze and Export**.
+
+### Datadog live validation
+
+`opentide validate query --platform datadog --live` compiles each rule for each tenant deploy would send it to, notification aliases resolved, and sends the body to `POST /api/v2/security_monitoring/rules/validation`, Datadog's own rule check, which creates nothing. A `2xx` passes; a `400` fails the rule with each entry of Datadog's `errors[]` as `datadog_rule_invalid`; a rule that does not compile for the tenant (an alias it lacks, `datadog_notification_alias`) fails with the compiler's reason. Any other answer, or a rate limit that outlasts its waits, fails that rule only, never a pass. A `.datadog` file and a `system: datadog` hunt are checked offline only, as every platform's query files and hunts are: `--live` sends the rules' blocks. The connector's search check (`POST /api/v2/logs/events/search` over the last minute, `page.limit: 1`) serves the SDK's `Connection.validate_query`. The application key needs `security_monitoring_rules_write` for the rule check.
 
 ### Elastic live validation and deploy
 
