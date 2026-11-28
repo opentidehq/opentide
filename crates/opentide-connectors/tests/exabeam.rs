@@ -91,7 +91,7 @@ impl Stand {
              client_secret = \"$EXABEAM_CLIENT_SECRET\"\napi_url = \"{}/\"\n{extra}",
             server.uri()
         );
-        let setup: toml::Table = toml::from_str(&setup).unwrap();
+        let setup: opentide_core::json::Object = toml::from_str(&setup).unwrap();
         let env = Environment::default()
             .with("EXABEAM_CLIENT_ID", "client-id")
             .with("EXABEAM_CLIENT_SECRET", "client-secret");
@@ -795,7 +795,7 @@ async fn an_unreachable_tenant_stops() {
     let closed = tokio::net::TcpSocket::new_v4().unwrap();
     closed.bind("127.0.0.1:0".parse().unwrap()).unwrap();
     let address = closed.local_addr().unwrap();
-    let setup: toml::Table = toml::from_str(&format!(
+    let setup: opentide_core::json::Object = toml::from_str(&format!(
         "region = \"eu\"\nclient_id = \"$A\"\nclient_secret = \"$B\"\napi_url = \"http://{address}\"\n"
     ))
     .unwrap();
@@ -910,7 +910,7 @@ async fn a_long_or_endless_rate_limit_fails_the_rule() {
 #[tokio::test]
 async fn an_unset_credential_fails_before_any_call() {
     let stand = Stand::start().await;
-    let setup: toml::Table = toml::from_str(
+    let setup: opentide_core::json::Object = toml::from_str(
         "region = \"eu\"\nclient_id = \"$UNSET_ID\"\nclient_secret = \"$UNSET_SECRET\"\n",
     )
     .unwrap();
@@ -941,7 +941,7 @@ async fn an_unset_credential_fails_before_any_call() {
 async fn the_region_names_the_api_host() {
     let server = MockServer::start().await;
     let _ = server;
-    let setup: toml::Table =
+    let setup: opentide_core::json::Object =
         toml::from_str("region = \"us-east\"\nclient_id = \"$A\"\nclient_secret = \"$B\"\n")
             .unwrap();
     let env = Environment::default().with("A", "a").with("B", "b");

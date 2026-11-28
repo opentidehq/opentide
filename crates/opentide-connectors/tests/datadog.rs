@@ -127,7 +127,7 @@ impl Stand {
     }
 
     fn tenant(setup: &str) -> Tenant {
-        let setup: toml::Table = toml::from_str(setup).unwrap();
+        let setup: opentide_core::json::Object = toml::from_str(setup).unwrap();
         Tenant::from_setup(
             "datadog",
             "datadog-eu",
@@ -759,7 +759,7 @@ async fn the_site_names_the_api_host_and_an_unknown_one_is_refused() {
 #[tokio::test]
 async fn an_unset_key_fails_before_any_call() {
     let stand = Stand::start().await;
-    let setup: toml::Table = toml::from_str(
+    let setup: opentide_core::json::Object = toml::from_str(
         "site = \"datadoghq.eu\"\napi_key = \"$DD_API_KEY\"\napp_key = \"$DD_APP_KEY\"\n",
     )
     .unwrap();

@@ -470,7 +470,7 @@ fn local_with(
     extra: &str,
 ) -> (opentide_connectors::Tenant, opentide_connectors::HttpClient) {
     let env = opentide_connectors::Environment::from_pairs([(TOKEN.0, TOKEN.1)]);
-    let setup: toml::Table = toml::from_str(&format!(
+    let setup: opentide_core::json::Object = toml::from_str(&format!(
         "url = \"{}\"\napi_token = \"$SYSDIG_SECURE_API_TOKEN\"\n{extra}",
         server.uri()
     ))

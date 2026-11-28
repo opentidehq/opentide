@@ -186,7 +186,7 @@ fn deploy(proxy: &Proxy, rule: &Rule, as_compiled: bool) -> Result<(String, u16)
     ca.write_all(proxy.ca_pem().as_bytes()).unwrap();
     let env = Environment::from_pairs(proxy.client_env(ca.path().to_str().unwrap()))
         .with("MOCK_PLATFORM_TOKEN", "a-test-token-only");
-    let setup: toml::Table =
+    let setup: opentide_core::json::Object =
         toml::from_str("url = \"https://mock-tenant.invalid\"\ntoken = \"$MOCK_PLATFORM_TOKEN\"")
             .unwrap();
     let defaults = HttpSettings {

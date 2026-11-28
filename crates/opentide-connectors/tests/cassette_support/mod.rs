@@ -76,7 +76,7 @@ pub fn tenant(
     setup: &str,
     defaults: &HttpSettings,
 ) -> (Tenant, HttpClient) {
-    let setup: toml::Table = toml::from_str(setup).expect("the setup is TOML");
+    let setup: opentide_core::json::Object = toml::from_str(setup).expect("the setup is TOML");
     let tenant = Tenant::from_setup(
         platform,
         name,

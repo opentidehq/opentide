@@ -12,7 +12,6 @@ use super::{
     Batch, Connection, DeployLog, Planned, Raised, RuleResult, Sender, Stops, raised, scoped,
 };
 use crate::commands::deploy_state::ExternalId;
-use crate::commands::query::toml_value;
 
 impl Sender<'_, '_> {
     /// A platform plugin (UC-4.5b, #835): each rule planned from deployment
@@ -78,16 +77,10 @@ impl Sender<'_, '_> {
         platform: &str,
         batch: &Batch,
     ) -> Result<Connection, Raised> {
-        let setup: toml::Table = batch
-            .tenant
-            .setup
-            .iter()
-            .filter_map(|(key, value)| toml_value(value).map(|value| (key.clone(), value)))
-            .collect();
         let tenant = Tenant::from_setup(
             platform,
             &batch.tenant.name,
-            &setup,
+            &batch.tenant.setup,
             &self.environment,
             Resolve::Required,
             &opentide_connectors::HttpSettings::default(),

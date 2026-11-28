@@ -37,7 +37,7 @@ use opentide_schema::vocab::Vocabularies;
 use opentide_workspace::{FileSystem as _, OsFs, Workspace};
 use tokio_util::sync::CancellationToken;
 
-use super::query::{Configured, http_settings, log_unset, toml_value, unset_credentials};
+use super::query::{Configured, http_settings, log_unset, unset_credentials};
 use super::result::{CommandResult, ExitCode, Status};
 use super::validate_query::{Args, COMMAND};
 use super::{Report, placement};
@@ -1574,16 +1574,11 @@ fn connect(
             code: Some(CREDENTIAL_UNSET),
         });
     }
-    let setup: toml::Table = configured
-        .setup
-        .iter()
-        .filter_map(|(key, value)| toml_value(value).map(|value| (key.clone(), value)))
-        .collect();
     let settings = http_settings(platform, seconds(timeout));
     let tenant = Tenant::from_setup(
         platform,
         &configured.name,
-        &setup,
+        &configured.setup,
         environment,
         Resolve::Counting,
         &settings,

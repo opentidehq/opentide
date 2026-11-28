@@ -597,7 +597,7 @@ fn stand_tenant_at(
     kibana: &str,
     elasticsearch: &str,
 ) -> (opentide_connectors::Tenant, opentide_connectors::HttpClient) {
-    let setup: toml::Table = toml::from_str(&format!(
+    let setup: opentide_core::json::Object = toml::from_str(&format!(
         "url = \"{kibana}\"\nelasticsearch_url = \"{elasticsearch}\"\nindex = [\"logs-*\"]\n"
     ))
     .unwrap();

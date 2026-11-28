@@ -75,7 +75,7 @@ fn tenant(server: &MockServer) -> (Tenant, HttpClient, Environment, TempDir) {
         .to_string(),
     )
     .unwrap();
-    let mut setup = toml::Table::new();
+    let mut setup = opentide_core::json::Object::new();
     setup.insert("project".into(), PROJECT.into());
     setup.insert("location".into(), LOCATION.into());
     setup.insert("instance".into(), INSTANCE_ID.into());

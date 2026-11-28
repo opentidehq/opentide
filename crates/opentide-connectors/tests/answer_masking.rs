@@ -35,7 +35,7 @@ async fn answer_echoing(padding: usize) -> Answer {
         })
         .mount(&server)
         .await;
-    let setup = toml::Table::new();
+    let setup = opentide_core::json::Object::new();
     let env = Environment::default();
     let tenant = Tenant::from_setup(
         "stand",

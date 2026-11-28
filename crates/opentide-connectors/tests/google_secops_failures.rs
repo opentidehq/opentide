@@ -104,7 +104,7 @@ async fn with_tenant<T>(
     let document = json!({"type": "authorized_user", "client_id": "c", "client_secret": CLIENT_SECRET,
         "refresh_token": REFRESH_TOKEN, "token_uri": format!("{}/token", api.uri())});
     std::fs::write(&adc, document.to_string()).unwrap();
-    let setup: toml::Table = toml::from_str(&format!(
+    let setup: opentide_core::json::Object = toml::from_str(&format!(
         "project = \"acme\"\nlocation = \"eu\"\ninstance = \"i-1\"\nendpoint = \"{}\"\n{extra}",
         api.uri()
     ))
@@ -885,7 +885,7 @@ fn an_instance_without_an_endpoint_is_reached_at_its_locations_default() {
     let env = Environment::default();
     for extra in ["", "endpoint = \"\""] {
         let setup = format!("project = \"acme\"\nlocation = \"eu\"\ninstance = \"i-1\"\n{extra}");
-        let setup: toml::Table = toml::from_str(&setup).unwrap();
+        let setup: opentide_core::json::Object = toml::from_str(&setup).unwrap();
         let settings = HttpSettings::default();
         let tenant = Tenant::from_setup(
             "google_secops",
@@ -916,7 +916,7 @@ fn a_token_endpoint_that_cannot_be_reached_is_unreachable_not_unauthorized() {
             "client_secret": CLIENT_SECRET, "refresh_token": REFRESH_TOKEN,
             "token_uri": "http://127.0.0.1:1/token"});
         std::fs::write(&adc, document.to_string()).unwrap();
-        let setup: toml::Table = toml::from_str(
+        let setup: opentide_core::json::Object = toml::from_str(
             "project = \"acme\"\nlocation = \"eu\"\ninstance = \"i-1\"\nendpoint = \"http://127.0.0.1:1\"\n",
         )
         .unwrap();

@@ -1,12 +1,17 @@
 //! A tenant: its name, its HTTP settings and its credentials, read from its
 //! `setup` table (`configurations/platforms/<platform>.toml`).
 //!
+//! The setup is the configuration's own value, an [`Object`] in file order,
+//! never a `toml::Table`: TOML has no null and no integer past `i64`, so a
+//! round trip through it lost both (#1967).
+//!
 //! Each tenant is read on its own, so two tenants of one platform with
 //! different `ssl` settings get different clients (#742: the first tenant's
 //! settings used to apply to all).
 
 use std::collections::BTreeMap;
 
+use opentide_core::json::{Json, Object};
 use opentide_schema::platforms::{PlatformId, PlatformKey};
 
 use crate::credentials::{self, Credential, Mode, Origin};
@@ -61,6 +66,7 @@ pub struct Tenant {
 impl Tenant {
     /// The tenant *name* of *platform* from its `setup` table.
     ///
+    /// A `null` value is unset: the key is read as if it were not written.
     /// `ssl` is read as a boolean, a boolean word, or a `$NAME` whose value is one; an unset
     /// `$NAME` is refused before anything is sent. Every other string value
     /// is resolved as a credential in *mode*. *defaults* are the platform's
@@ -68,7 +74,7 @@ impl Tenant {
     pub fn from_setup(
         platform: &str,
         name: &str,
-        setup: &toml::Table,
+        setup: &Object,
         env: &Environment,
         mode: Mode,
         defaults: &HttpSettings,
@@ -86,12 +92,12 @@ impl Tenant {
             && let Some((key, message)) =
                 opentide_schema::configuration::models::REMOVED_HARFANGLAB_KEYS
                     .iter()
-                    .find(|(key, _)| setup.contains_key(*key))
+                    .find(|(key, _)| setup.get(*key).is_some_and(|value| !value.is_null()))
         {
             return Err(setup_error(format!("{key}: {message}")));
         }
         let mut http = defaults.clone();
-        if let Some(value) = setup.get("ssl") {
+        if let Some(value) = setup.get("ssl").filter(|value| !value.is_null()) {
             http.tls.verify = ssl(value, env, mode).map_err(setup_error)?;
         }
         let mut values = BTreeMap::new();
@@ -103,7 +109,8 @@ impl Tenant {
                 continue;
             }
             let text = match value {
-                toml::Value::Array(items) => {
+                Json::Null => continue,
+                Json::Array(items) => {
                     let texts: Vec<String> = items
                         .iter()
                         .filter_map(|item| item.as_str().map(str::to_owned))
@@ -111,7 +118,7 @@ impl Tenant {
                     lists.insert(key.clone(), texts);
                     continue;
                 }
-                toml::Value::Table(entries) => {
+                Json::Object(entries) => {
                     let texts: Vec<(String, String)> = entries
                         .iter()
                         .filter_map(|(name, item)| {
@@ -121,11 +128,8 @@ impl Tenant {
                     tables.insert(key.clone(), texts);
                     continue;
                 }
-                toml::Value::String(text) => text.clone(),
-                toml::Value::Integer(_) | toml::Value::Float(_) | toml::Value::Boolean(_) => {
-                    value.to_string()
-                }
-                toml::Value::Datetime(_) => continue,
+                Json::Str(text) => text.clone(),
+                Json::Bool(_) | Json::Int(_) | Json::UInt(_) | Json::Float(_) => scalar_text(value),
             };
             let resolved = credentials::resolve(
                 &text,
@@ -189,24 +193,15 @@ impl Tenant {
 
 /// The tenants *config* (a workspace's resolved configuration, as
 /// `opentide_compile::Json`) lists for *platform*, in file order: each one's
-/// `name` and its `setup` table, ready for [`Tenant::from_setup`]. A setup
-/// value with no TOML form (a null) is left out, as the loader leaves it out
-/// of the strings it resolves; a table is kept for [`Tenant::tables`].
-pub fn configured(config: &opentide_compile::Json, platform: &str) -> Vec<(String, toml::Table)> {
+/// `name` and its `setup` table as written, ready for [`Tenant::from_setup`].
+pub fn configured(config: &Json, platform: &str) -> Vec<(String, Object)> {
     opentide_compile::plan::tenants(config, &PlatformKey::new(platform))
         .into_iter()
         .map(|tenant| {
             let setup = tenant
                 .get("setup")
-                .and_then(opentide_compile::Json::as_object)
-                .map(|setup| {
-                    setup
-                        .iter()
-                        .filter_map(|(key, value)| {
-                            toml_value(value).map(|value| (key.clone(), value))
-                        })
-                        .collect()
-                })
+                .and_then(Json::as_object)
+                .cloned()
                 .unwrap_or_default();
             (
                 opentide_compile::deploy::tenant_name(tenant).to_owned(),
@@ -216,35 +211,34 @@ pub fn configured(config: &opentide_compile::Json, platform: &str) -> Vec<(Strin
         .collect()
 }
 
-/// A setup value as `toml` holds it, for [`Tenant::from_setup`]: a table
-/// (Graylog's `stream_ids`) is kept, for [`Tenant::table`]; a null, which
-/// TOML cannot hold, is left out, in a table or a list too.
-pub fn toml_value(value: &opentide_compile::Json) -> Option<toml::Value> {
-    use opentide_compile::Json as J;
-    Some(match value {
-        J::Str(text) => toml::Value::String(text.clone()),
-        J::Int(number) => toml::Value::Integer(*number),
-        // TOML has no integer beyond i64: the nearest float, as before.
-        #[expect(
-            clippy::cast_precision_loss,
-            reason = "only an integer beyond i64 is approximated"
-        )]
-        J::UInt(number) => toml::Value::Float(*number as f64),
-        J::Float(number) => toml::Value::Float(*number),
-        J::Bool(flag) => toml::Value::Boolean(*flag),
-        J::Array(items) => toml::Value::Array(items.iter().filter_map(toml_value).collect()),
-        J::Object(entries) => toml::Value::Table(
-            entries
-                .iter()
-                .filter_map(|(key, value)| toml_value(value).map(|value| (key.clone(), value)))
-                .collect(),
-        ),
-        J::Null => return None,
-    })
+/// A scalar setup value as the text a credential holds: an integer's
+/// digits, whatever its size, a boolean as `true` or `false`, and a float
+/// as TOML writes it (`1.0`, `0.5`, `inf`, `nan`), as the credentials read
+/// from a TOML table always were.
+fn scalar_text(value: &Json) -> String {
+    match value {
+        Json::Int(number) => number.to_string(),
+        Json::UInt(number) => number.to_string(),
+        Json::Float(number) => float_text(*number),
+        Json::Bool(flag) => flag.to_string(),
+        other => other.to_compact(),
+    }
+}
+
+/// *number* as `toml` 0.8 writes a float: any NaN as `nan`.
+fn float_text(number: f64) -> String {
+    if number.is_nan() {
+        return "nan".to_owned();
+    }
+    if number.is_finite() && number.fract() == 0.0 {
+        format!("{number:.1}")
+    } else {
+        number.to_string()
+    }
 }
 
 /// A tenant's `ssl` as the verify flag.
-fn ssl(value: &toml::Value, env: &Environment, mode: Mode) -> Result<bool, String> {
+fn ssl(value: &Json, env: &Environment, mode: Mode) -> Result<bool, String> {
     let word = |text: &str| {
         let lowered = text.trim().to_lowercase();
         if SSL_TRUE_WORDS.contains(&lowered.as_str()) {
@@ -256,8 +250,8 @@ fn ssl(value: &toml::Value, env: &Environment, mode: Mode) -> Result<bool, Strin
         }
     };
     match value {
-        toml::Value::Boolean(flag) => Ok(*flag),
-        toml::Value::String(text) => {
+        Json::Bool(flag) => Ok(*flag),
+        Json::Str(text) => {
             if let Some(variable) = opentide_workspace::info::env_reference(text) {
                 return match env.raw(variable) {
                     Some(found) => word(found).ok_or_else(|| {
@@ -272,7 +266,10 @@ fn ssl(value: &toml::Value, env: &Environment, mode: Mode) -> Result<bool, Strin
             }
             word(text).ok_or_else(|| format!("ssl must be true or false, got {text:?}"))
         }
-        other => Err(format!("ssl must be true or false, got {other}")),
+        other => Err(format!(
+            "ssl must be true or false, got {}",
+            scalar_text(other)
+        )),
     }
 }
 
@@ -326,18 +323,42 @@ mod tests {
         assert_eq!(default_host(PlatformId::Elastic), None);
     }
 
+    /// A setup's numbers and booleans reach a credential as the text the
+    /// `toml::Table` the setup used to go through wrote, for every value
+    /// TOML holds: only an integer past `i64` and a null change (#1967).
     #[test]
-    fn an_integer_beyond_i64_is_the_nearest_float_in_a_setup_value() {
-        use opentide_compile::Json as J;
-        // TOML integers are signed 64-bit: u64::MAX is 2^64 as the nearest float.
-        let Some(toml::Value::Float(float)) = toml_value(&J::UInt(u64::MAX)) else {
-            panic!("a UInt is a TOML float");
-        };
-        assert_eq!(float.to_bits(), 2f64.powi(64).to_bits());
-        // An integer that fits keeps its digits.
-        assert_eq!(
-            toml_value(&J::Int(i64::MAX)),
-            Some(toml::Value::Integer(i64::MAX))
-        );
+    fn a_scalar_setup_value_is_written_as_toml_wrote_it() {
+        for number in [
+            0.0,
+            -0.0,
+            0.5,
+            1.0,
+            -2.0,
+            1e20,
+            1.5e-7,
+            f64::INFINITY,
+            f64::NEG_INFINITY,
+            f64::NAN,
+            -f64::NAN,
+        ] {
+            assert_eq!(
+                scalar_text(&Json::Float(number)),
+                toml::Value::Float(number).to_string(),
+                "{number:?}"
+            );
+        }
+        for number in [0, -1, 8089, i64::MIN, i64::MAX] {
+            assert_eq!(
+                scalar_text(&Json::Int(number)),
+                toml::Value::Integer(number).to_string()
+            );
+        }
+        for flag in [true, false] {
+            assert_eq!(
+                scalar_text(&Json::Bool(flag)),
+                toml::Value::Boolean(flag).to_string()
+            );
+        }
+        assert_eq!(scalar_text(&Json::UInt(u64::MAX)), "18446744073709551615");
     }
 }

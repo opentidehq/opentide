@@ -216,7 +216,7 @@ impl Run {
 
     /// [`Run::tenant`] with the API key `key`.
     fn tenant_with_key(&self, key: &str, extra: &str, timeout: Duration) -> (Tenant, HttpClient) {
-        let setup: toml::Table = toml::from_str(&format!(
+        let setup: opentide_core::json::Object = toml::from_str(&format!(
             "ssl = false\nurl = \"{}/api\"\napi_key = \"$GRAVITYZONE_API_KEY\"\n{extra}",
             self.server.uri()
         ))
@@ -822,7 +822,7 @@ fn create_with(
     });
     let _installed =
         opentide_connectors::transport::install(Arc::new(ScriptedFactory(scripted.clone())));
-    let setup: toml::Table = toml::from_str(
+    let setup: opentide_core::json::Object = toml::from_str(
         "ssl = false\nurl = \"https://gz.invalid/api\"\napi_key = \"$GRAVITYZONE_API_KEY\"\n",
     )
     .unwrap();
@@ -1064,7 +1064,7 @@ fn deploy_never_lists_rules() {
 #[test]
 fn an_unset_api_key_variable_is_refused_before_any_call() {
     let run = Run::new();
-    let setup: toml::Table = toml::from_str(&format!(
+    let setup: opentide_core::json::Object = toml::from_str(&format!(
         "url = \"{}/api\"\napi_key = \"$GRAVITYZONE_API_KEY\"\n",
         run.server.uri()
     ))

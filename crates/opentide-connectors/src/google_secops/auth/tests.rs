@@ -51,7 +51,7 @@ fn tenant() -> (Tenant, HttpClient) {
     let tenant = Tenant::from_setup(
         PLATFORM,
         "secops-eu",
-        &toml::Table::new(),
+        &opentide_core::json::Object::new(),
         &Environment::default(),
         Mode::Required,
         &settings,

@@ -1291,18 +1291,10 @@ impl Doctor<'_> {
         prober: &dyn opentide_connectors::connector::Prober,
         environment: &opentide_connectors::Environment,
     ) -> Result<(), DeployError> {
-        let setup: toml::Table = CJson::from_node(&tenant.node)
+        let setup = CJson::from_node(&tenant.node)
             .get("setup")
             .and_then(CJson::as_object)
-            .map(|setup| {
-                setup
-                    .iter()
-                    .filter_map(|(key, value)| {
-                        opentide_connectors::tenant::toml_value(value)
-                            .map(|value| (key.clone(), value))
-                    })
-                    .collect()
-            })
+            .cloned()
             .unwrap_or_default();
         let settings = opentide_connectors::deploy_http_settings(platform);
         Tenant::from_setup(
