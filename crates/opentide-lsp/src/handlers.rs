@@ -397,38 +397,7 @@ pub(crate) fn request(session: &mut Session, request: Request) -> Response {
     #[cfg(all(debug_assertions, not(fuzzing)))]
     let dispatcher = dispatcher
         .on::<custom::Panic>(|_, _| panic!("opentide/__panic was requested"))
-        .on::<custom::Stats>(|s, _| {
-            let loading = s.workspace_stats();
-            json!({
-                "analyses": s.analyses.get(),
-                "digestedObjects": s.digested_objects.get(),
-                "baseObjects": s.base_objects.get(),
-                "textCopies": s.text_copies.get(),
-                "docPathKeys": s.doc_path_keys.get(),
-                "engineAnalyses": s.engine_analyses.get(),
-                "closedAnalyses": s.closed_analyses.get(),
-                "workspaceReportHits": s.workspace_report_hits.get(),
-                "pullYields": s.pull_yields.get(),
-                "validateStops": s.validate_stops(),
-                "validations": { "full": s.validation_runs().0, "partial": s.validation_runs().1 },
-                "editorIndexed": s.editor_indexed(),
-                "editorParsed": s.editor_parsed(),
-                "roots": s
-                    .workspace_stats_by_root()
-                    .iter()
-                    .map(|stats| json!({
-                        "fileReads": stats.file_reads,
-                        "parses": stats.parses,
-                        "configResolutions": stats.config_resolutions,
-                    }))
-                    .collect::<Vec<_>>(),
-                "workspace": {
-                    "fileReads": loading.file_reads,
-                    "parses": loading.parses,
-                    "configResolutions": loading.config_resolutions,
-                },
-            })
-        })
+        .on::<custom::Stats>(|s, _| debug_stats(s))
         .on::<custom::Hold>(|_, _| ())
         .on::<custom::Catalogs>(|_, _| wait_for_catalogs())
         .on::<custom::Sleep>(|_, p| {
@@ -534,6 +503,44 @@ fn resolves(text: Option<&lsp::TextDocumentClientCapabilities>, property: &str) 
         .and_then(|c| c.completion_item.as_ref())
         .and_then(|i| i.resolve_support.as_ref())
         .is_some_and(|support| support.properties.iter().any(|name| name == property))
+}
+
+/// `opentide/__stats`: what the cache and invalidation tests count.
+#[cfg(all(debug_assertions, not(fuzzing)))]
+fn debug_stats(s: &Session) -> Value {
+    let loading = s.workspace_stats();
+    json!({
+        "analyses": s.analyses.get(),
+        "digestedObjects": s.digested_objects.get(),
+        "baseObjects": s.base_objects.get(),
+        "textCopies": s.text_copies.get(),
+        "docPathKeys": s.doc_path_keys.get(),
+        "engineAnalyses": s.engine_analyses.get(),
+        "catalogsBuilt": crate::models::test_hooks::BUILT
+            .load(std::sync::atomic::Ordering::Relaxed),
+        "catalogInstalled": opentide_analysis::catalog_is_workspace(),
+        "closedAnalyses": s.closed_analyses.get(),
+        "workspaceReportHits": s.workspace_report_hits.get(),
+        "pullYields": s.pull_yields.get(),
+        "validateStops": s.validate_stops(),
+        "validations": { "full": s.validation_runs().0, "partial": s.validation_runs().1 },
+        "editorIndexed": s.editor_indexed(),
+        "editorParsed": s.editor_parsed(),
+        "roots": s
+            .workspace_stats_by_root()
+            .iter()
+            .map(|stats| json!({
+                "fileReads": stats.file_reads,
+                "parses": stats.parses,
+                "configResolutions": stats.config_resolutions,
+            }))
+            .collect::<Vec<_>>(),
+        "workspace": {
+            "fileReads": loading.file_reads,
+            "parses": loading.parses,
+            "configResolutions": loading.config_resolutions,
+        },
+    })
 }
 
 /// `opentide/__catalogs`: generating the bundled configuration's catalogs
