@@ -708,18 +708,17 @@ fn from_outcome(outcome: dry_run::Outcome, at_root: bool) -> DryRun {
 fn quoted(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     let mut rest = text;
-    while let Some(start) = rest.find('`') {
-        let after = &rest[start + 1..];
-        match after.find('`') {
-            Some(end) if end > 0 => {
-                out.push_str(&rest[..start]);
+    while let Some((head, after)) = rest.split_once('`') {
+        out.push_str(head);
+        match after.split_once('`') {
+            Some((code, tail)) if !code.is_empty() => {
                 out.push('\'');
-                out.push_str(&after[..end]);
+                out.push_str(code);
                 out.push('\'');
-                rest = &after[end + 1..];
+                rest = tail;
             }
             _ => {
-                out.push_str(&rest[..=start]);
+                out.push('`');
                 rest = after;
             }
         }
@@ -947,6 +946,10 @@ mod tests {
         assert_eq!(quoted("set `response` and `x`"), "set 'response' and 'x'");
         assert_eq!(quoted("a lone ` stays"), "a lone ` stays");
         assert_eq!(quoted("``"), "``");
+        // #1946: code spans among multi-byte text.
+        assert_eq!(quoted("é `réponse😀` et `x` 😀"), "é 'réponse😀' et 'x' 😀");
+        assert_eq!(quoted("😀`é"), "😀`é");
+        assert_eq!(quoted("é``😀`x`"), "é`'😀'x`");
     }
 
     #[test]

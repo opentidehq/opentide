@@ -486,11 +486,12 @@ pub fn header(path: &Path) -> (Option<String>, Option<String>) {
         return (None, None);
     };
     let text = String::from_utf8_lossy(&bytes);
-    let end = text
-        .match_indices('\n')
-        .nth(HEADER_LINES - 1)
-        .map_or(text.len(), |(at, _)| at);
-    let mut fields = opentide_workspace::catalogue::text_fields(&text[..end]);
+    let head = text
+        .split('\n')
+        .take(HEADER_LINES)
+        .collect::<Vec<_>>()
+        .join("\n");
+    let mut fields = opentide_workspace::catalogue::text_fields(&head);
     (fields.remove("uuid"), fields.remove("name"))
 }
 
@@ -946,6 +947,24 @@ mod tests {
         let platforms = cx.platforms(&platform_names(), "");
         assert!(helps(&platforms).iter().all(String::is_empty));
         assert_eq!(header(&dir.path().join("missing.yaml")), (None, None));
+        // #1946: the first lines are read whatever their characters.
+        let path = dir.path().join("é😀.yaml");
+        std::fs::write(
+            &path,
+            "# é😀\nname: Règle 😀\nuuid: 00000000-0000-4000-8003-000000000001\n",
+        )
+        .unwrap();
+        assert_eq!(
+            header(&path),
+            (
+                Some("00000000-0000-4000-8003-000000000001".to_owned()),
+                Some("Règle 😀".to_owned())
+            )
+        );
+        let mut late = "é😀\n".repeat(HEADER_LINES - 1);
+        late.push_str("name: dernière\nuuid: 00000000-0000-4000-8003-000000000001\n");
+        std::fs::write(&path, late).unwrap();
+        assert_eq!(header(&path), (None, Some("dernière".to_owned())));
     }
 
     #[test]

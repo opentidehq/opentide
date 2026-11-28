@@ -674,33 +674,38 @@ impl Redactor<'_> {
         let mut pos = 0;
         for span in self.values {
             let gap = text.get(pos..span.start).ok_or(ScanError)?;
-            out.push_str(&between_values(gap));
+            out.push_str(&between_values(gap)?);
             match replaced.next_if(|(at, _)| at.start == span.start) {
                 Some((_, shown)) => out.push_str(&shown),
                 None => out.push_str(text.get(span.clone()).ok_or(ScanError)?),
             }
             pos = span.end;
         }
-        out.push_str(&between_values(text.get(pos..).ok_or(ScanError)?));
+        out.push_str(&between_values(text.get(pos..).ok_or(ScanError)?)?);
         Ok(out)
     }
 }
 
 /// Text between two values (keys, table headers, punctuation, blanks and
 /// comments) as the raw view shows it: each comment's URL user hidden, and a
-/// quoted key's when it holds a `#`.
-fn between_values(gap: &str) -> String {
+/// quoted key's when it holds a `#`. A [`ScanError`] if a cut fell off a
+/// char boundary, which no cut does: each is where `find` found a character,
+/// or the end of a quoted key.
+fn between_values(gap: &str) -> Result<String, ScanError> {
     let mut out = String::with_capacity(gap.len());
     let mut rest = gap;
     while let Some(at) = rest.find(['#', '"', '\'']) {
-        out.push_str(&rest[..at]);
-        rest = &rest[at..];
+        debug_assert!(rest.is_char_boundary(at), "{rest:?} cut at {at}");
+        let (plain, from) = rest.split_at_checked(at).ok_or(ScanError)?;
+        out.push_str(plain);
+        rest = from;
         let end = if rest.starts_with('#') {
             rest.find('\n').unwrap_or(rest.len())
         } else {
             quoted_key_end(rest)
         };
-        let (token, after) = rest.split_at(end);
+        debug_assert!(rest.is_char_boundary(end), "{rest:?} cut at {end}");
+        let (token, after) = rest.split_at_checked(end).ok_or(ScanError)?;
         if token.contains('#') {
             out.push_str(&hide_userinfo(token));
         } else {
@@ -709,7 +714,7 @@ fn between_values(gap: &str) -> String {
         rest = after;
     }
     out.push_str(rest);
-    out
+    Ok(out)
 }
 
 /// The length of the quoted key `text` starts with: up to its closing quote

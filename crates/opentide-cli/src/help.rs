@@ -239,8 +239,8 @@ mod tests {
             text.contains("      --keep-deprecated, --drop-deprecated\n          Include rules"),
             "{text}"
         );
-        let block = &text[text.find("--keep-deprecated,").unwrap()..];
-        let block = &block[..block.find("\n\n      --").unwrap()];
+        let (_, block) = text.split_once("--keep-deprecated,").unwrap();
+        let (block, _) = block.split_once("\n\n      --").unwrap();
         assert!(!block.contains("[default:"), "{block}");
     }
 
