@@ -575,7 +575,8 @@ fn report_skipped(
     }
 }
 
-/// A skipped deploy, in the same envelope as one that planned rules; a run whose planning refused a rule failed.
+/// A skipped deploy, in the same envelope as one that planned rules; a run
+/// whose planning refused a rule failed.
 fn nothing(message: &str, refused: bool, field: (&str, Json)) -> Vec<(String, Json)> {
     let mut result = vec![
         (field.0.to_owned(), field.1),
