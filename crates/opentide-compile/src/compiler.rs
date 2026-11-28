@@ -18,7 +18,7 @@ use opentide_schema::platforms::PlatformId;
 use crate::json::Json;
 use crate::rule::{CompileError, Rule};
 use crate::strategy::StatusStrategy;
-use crate::{Context, datadog, deploy, exabeam, graylog, sentinel, sysdig};
+use crate::{Context, datadog, deploy, exabeam, google_secops, graylog, sentinel, sysdig};
 
 /// The compile of one platform's rules, shared by the dry run and the deploy.
 pub trait Compiler {
@@ -170,6 +170,31 @@ impl Compiler for Datadog {
 
     fn body(compiled: &datadog::DatadogRule) -> Json {
         compiled.body.clone()
+    }
+}
+
+/// Google SecOps: what a deploy of the rule reads, the same on every tenant:
+/// the `rules.create` text, and beside it the rule's name, the sections the
+/// text was assembled from, the run state its status deploys and the
+/// block's run frequency ([`google_secops::compile_deployment`]). The
+/// tenant's scope is added as the rule is sent.
+#[derive(Debug, Clone, Copy)]
+pub struct GoogleSecops;
+
+impl Compiler for GoogleSecops {
+    const PLATFORM: PlatformId = PlatformId::GoogleSecops;
+
+    /// Nothing: the text is the same on every tenant.
+    type Target<'t> = ();
+
+    type Compiled = Json;
+
+    fn compile(cx: &Context<'_>, rule: &Rule, (): ()) -> Result<Json, CompileError> {
+        google_secops::compile_deployment(cx, rule)
+    }
+
+    fn body(compiled: &Json) -> Json {
+        compiled.clone()
     }
 }
 
