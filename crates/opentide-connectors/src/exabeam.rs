@@ -1254,9 +1254,10 @@ pub fn selected_columns(query: &str) -> Vec<String> {
     let Some(head) = select.find(query) else {
         return Vec::new();
     };
-    let rest = &query[head.end()..];
+    // A regex match's bounds are char boundaries.
+    let rest = crate::cut(query, head.end(), query.len());
     let end = clause.find(rest).map_or(rest.len(), |found| found.start());
-    let columns = split_columns(&rest[..end]);
+    let columns = split_columns(crate::cut(rest, 0, end));
     if columns.is_empty() || columns == ["*"] {
         return Vec::new();
     }

@@ -2426,7 +2426,10 @@ pub fn mask_query(text: &str, keep_strings: bool) -> String {
             blank(&mut out, i, end);
             i = end;
         } else if bytes[i..].starts_with(b"\"\"\"") {
-            let close = text[i + 3..].find("\"\"\"").map(|offset| i + 3 + offset);
+            // Past the ASCII `"""` at `i`.
+            let close = crate::cut(text, i + 3, length)
+                .find("\"\"\"")
+                .map(|offset| i + 3 + offset);
             let content_end = close.unwrap_or(length);
             let mut end = length.min(content_end + 3);
             while end < length && end < content_end + 5 && bytes[end] == b'"' {
@@ -2474,18 +2477,27 @@ fn edge(character: Option<char>) -> bool {
 
 /// Where `METADATA` starts as a keyword (`_METADATA`), any case.
 fn metadata_at(masked: &str) -> Option<usize> {
+    metadata_keywords(masked).next()
+}
+
+/// Where each `METADATA` keyword starts in *masked*, any case. ASCII
+/// lowercasing keeps every byte where it is, so a match in the lowered text
+/// is one in *masked*, and its ends are char boundaries.
+fn metadata_keywords(masked: &str) -> impl Iterator<Item = usize> + '_ {
     let lowered = masked.to_ascii_lowercase();
     let mut from = 0;
-    while let Some(offset) = lowered[from..].find("metadata") {
-        let at = from + offset;
-        let before = masked[..at].chars().next_back();
-        let after = masked[at + 8..].chars().next();
-        if !edge(before) && !edge(after) {
-            return Some(at);
+    std::iter::from_fn(move || {
+        while let Some(offset) = crate::cut(&lowered, from, lowered.len()).find("metadata") {
+            let at = from + offset;
+            from = at + "metadata".len();
+            let before = crate::cut(masked, 0, at).chars().next_back();
+            let after = crate::cut(masked, from, masked.len()).chars().next();
+            if !edge(before) && !edge(after) {
+                return Some(at);
+            }
         }
-        from = at + 8;
-    }
-    None
+        None
+    })
 }
 
 /// `esql_sources`: the index sources of the `FROM` or `TS` command, comma-joined.
@@ -2500,13 +2512,14 @@ pub fn esql_sources(query: &str) -> String {
     let masked = mask_query(query, false);
     let plain = mask_query(query, true);
     let mut start = 0;
-    while let Some(statement) = set.find(&masked[start..]) {
+    // `start` adds up match ends.
+    while let Some(statement) = set.find(crate::cut(&masked, start, masked.len())) {
         if statement.end() == 0 {
             break;
         }
         start += statement.end();
     }
-    let Some(command) = source.find(&masked[start..]) else {
+    let Some(command) = source.find(crate::cut(&masked, start, masked.len())) else {
         return String::new();
     };
     let begin = start + command.end();
@@ -2568,22 +2581,11 @@ pub fn esql_has_metadata_id(query: &str) -> bool {
         return false;
     };
     let masked = mask_query(query, false);
-    let lowered = masked.to_ascii_lowercase();
-    let mut from = 0;
-    while let Some(offset) = lowered[from..].find("metadata") {
-        let at = from + offset;
-        let before = masked[..at].chars().next_back();
-        let after = masked[at + 8..].chars().next();
-        if !edge(before) && !edge(after) {
-            let rest = &masked[at + 8..];
-            let segment = rest.split('|').next().unwrap_or_default();
-            if id.is_match(segment) {
-                return true;
-            }
-        }
-        from = at + 8;
-    }
-    false
+    metadata_keywords(&masked).any(|at| {
+        let rest = crate::cut(&masked, at + "metadata".len(), masked.len());
+        let segment = rest.split('|').next().unwrap_or_default();
+        id.is_match(segment)
+    })
 }
 
 /// Whether the EQL *query*, comments and literals masked, starts with
@@ -2993,5 +2995,36 @@ mod tests {
             advisories(&block, "high", true, false).unwrap_or_default(),
             ["eql_maxspan_window"]
         );
+    }
+
+    /// The query scanners read multi-byte text whole: strings, comments,
+    /// `METADATA` next to `é` and `😀`, every prefix of each query.
+    #[test]
+    fn query_scanners_read_multi_byte_text() {
+        let queries = [
+            "SET é = \"😀\"; FROM é😀-*, \"😀\" METADATA _id // é\n| WHERE é😀 == \"\"\"é😀\"\"\"\" | STATS é",
+            "FROM logs-é METADATAé _id | é METADATA😀 _id /* é😀",
+            "FROM \"é😀 METADATA _id `é``😀` \"\"\"😀",
+            "sequence by é😀 [process where é == \"😀\"]",
+        ];
+        for query in queries {
+            for (offset, _) in query.char_indices().chain([(query.len(), ' ')]) {
+                let prefix = query.get(..offset).unwrap();
+                assert_eq!(mask_query(prefix, false).len(), prefix.len());
+                let _ = esql_sources(prefix);
+                let _ = esql_aggregates(prefix);
+                let _ = esql_has_metadata_id(prefix);
+                let _ = eql_is_sequence(prefix);
+            }
+        }
+        assert!(esql_has_metadata_id("FROM é😀 METADATA _id"));
+        assert!(!esql_has_metadata_id(
+            "FROM é METADATAé _id | 😀éMETADATA _id"
+        ));
+        assert!(esql_has_metadata_id(
+            "FROM é METADATAé _id | é😀 METADATA _id"
+        ));
+        assert_eq!(metadata_at("é😀 metadata"), Some(7));
+        assert_eq!(esql_sources("FROM é😀-* METADATA _id"), "é😀-*");
     }
 }
