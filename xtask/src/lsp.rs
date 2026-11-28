@@ -211,7 +211,8 @@ fn utf16(line: &str, column: usize) -> u32 {
     let prefix = line
         .char_indices()
         .nth(column.saturating_sub(1))
-        .map_or(line, |(at, _)| &line[..at]);
+        .and_then(|(at, _)| line.split_at_checked(at))
+        .map_or(line, |(prefix, _)| prefix);
     u32::try_from(prefix.encode_utf16().count()).unwrap_or(u32::MAX)
 }
 
@@ -584,5 +585,13 @@ mod tests {
             run(&command).unwrap_err().to_string(),
             "--only: no fault kind `no-such-kind`"
         );
+    }
+
+    #[test]
+    fn utf16_columns_count_multi_byte_characters() {
+        assert_eq!(utf16("é😀x", 1), 0);
+        assert_eq!(utf16("é😀x", 2), 1);
+        assert_eq!(utf16("é😀x", 3), 3);
+        assert_eq!(utf16("é😀x", 9), 4);
     }
 }
