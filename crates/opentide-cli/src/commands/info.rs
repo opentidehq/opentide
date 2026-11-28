@@ -40,7 +40,8 @@ pub const SECTIONS: [&str; 6] = [
 pub struct Args {
     /// `--platform`.
     pub platform: Option<String>,
-    /// The section.
+    /// The section to show, one of [`SECTIONS`]; `None` for the repository and
+    /// the platforms.
     pub section: Option<String>,
     /// The vocabulary, with `vocab`.
     pub name: Option<String>,

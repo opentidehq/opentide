@@ -84,9 +84,9 @@ pub enum Request {
 /// One rule to retire on one tenant.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Retirement {
-    /// The platform.
+    /// The platform's identifier (`splunk`).
     pub platform: String,
-    /// The tenant.
+    /// The tenant's name in the platform's configuration.
     pub tenant: String,
     /// The rule's canonical UUID.
     pub uuid: String,

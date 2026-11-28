@@ -59,7 +59,7 @@ pub const USAGE_NEEDS_INPUT: &str = "usage_needs_input";
     reason = "the command's switches, one field each"
 )]
 pub struct CiArgs {
-    /// The provider.
+    /// The CI provider to write the pipeline for (`setup ci <provider>`).
     pub provider: Provider,
     /// `--path`, when given to the command.
     pub path: Option<String>,

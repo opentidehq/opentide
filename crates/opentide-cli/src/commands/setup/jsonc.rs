@@ -81,7 +81,7 @@ impl std::fmt::Display for MergeError {
     }
 }
 
-/// The root object of `root`.
+/// `root`'s value as an object: [`MergeError::NotAnObject`] when it is none or not one.
 fn root_object(root: &CstRootNode) -> Result<CstObject, MergeError> {
     match root.value() {
         Some(value) => value.as_object().ok_or(MergeError::NotAnObject),

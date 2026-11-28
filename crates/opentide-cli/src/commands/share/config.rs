@@ -98,7 +98,7 @@ pub struct Sharing {
 }
 
 impl Sharing {
-    /// The errors.
+    /// The findings whose severity is an error, in order.
     pub fn errors(&self) -> Vec<&SharingIssue> {
         self.issues
             .iter()

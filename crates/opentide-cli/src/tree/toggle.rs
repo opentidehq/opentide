@@ -16,13 +16,13 @@ pub trait Pair {
     const ON: &'static str;
     /// Its long name (`staging`).
     const ON_LONG: &'static str;
-    /// Its help.
+    /// The help of the flag that turns the option on.
     const ON_HELP: &'static str;
     /// The id of the flag that turns it off (`no_staging`).
     const OFF: &'static str;
     /// Its long name (`no-staging`).
     const OFF_LONG: &'static str;
-    /// Its help.
+    /// The help of the flag that turns the option off.
     const OFF_HELP: &'static str;
 }
 

@@ -15,7 +15,7 @@ mod pages {
 /// A code's page.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Page {
-    /// The code.
+    /// The code the page explains (`vocab_unknown`).
     pub code: String,
     /// The first paragraph: what the code means, in one sentence.
     pub summary: String,
@@ -28,7 +28,7 @@ pub struct Page {
 /// A code nothing reports any more, which stays explainable.
 #[derive(Clone, Copy, Debug)]
 pub struct Retired {
-    /// The code.
+    /// The code that is no longer reported.
     pub code: &'static str,
     /// The release that stopped reporting it.
     pub retired_in: &'static str,

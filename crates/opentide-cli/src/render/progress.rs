@@ -336,7 +336,7 @@ fn count(value: usize) -> Json {
     i64::try_from(value).map_or(Json::UInt(value as u64), Json::Int)
 }
 
-/// A `progress` event.
+/// A `progress` event: the step, how many are done, and the total when known.
 pub fn progress_event(step: &str, done: usize, total: Option<usize>) -> Json {
     Json::object([
         ("event", Json::str("progress")),

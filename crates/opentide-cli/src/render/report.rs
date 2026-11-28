@@ -22,7 +22,7 @@ use std::sync::LazyLock;
 
 /// The SARIF schema a log names.
 pub const SARIF_SCHEMA: &str = "https://json.schemastore.org/sarif-2.1.0.json";
-/// The SARIF version.
+/// The `version` a SARIF log declares.
 pub const SARIF_VERSION: &str = "2.1.0";
 /// The base every `artifactLocation.uri` resolves against: the repository root.
 pub const SRCROOT: &str = "%SRCROOT%";
