@@ -45,6 +45,7 @@ use tokio_util::sync::CancellationToken;
 use super::doctor_network as network;
 use super::generate::phase_outputs;
 use super::interrupt::watched;
+use super::result::{ExitCode, Status};
 use super::{Block, Report, placement};
 use crate::env::Env;
 use crate::envelope::Failure;
@@ -1993,12 +1994,18 @@ fn report(checks: &[Check], text: bool) -> Report {
         if warned > 0 {
             rest.push(plural(warned, "warning"));
         }
-        (format!("{} failed", plural(failed, "check")), "failed")
+        (
+            format!("{} failed", plural(failed, "check")),
+            Status::Failed,
+        )
     } else if warned > 0 {
-        (plural(warned, "warning"), "issues")
+        (plural(warned, "warning"), Status::Issues)
     } else {
         rest.clear();
-        (format!("{} passed", plural(passed, "check")), "completed")
+        (
+            format!("{} passed", plural(passed, "check")),
+            Status::Completed,
+        )
     };
     if skipped > 0 {
         rest.push(format!("{skipped} skipped"));
@@ -2013,7 +2020,7 @@ fn report(checks: &[Check], text: bool) -> Report {
         Json::Array(checks.iter().map(Check::to_json).collect()),
     )];
     let mut report = Report::completed(COMMAND, data);
-    status.clone_into(&mut report.outcome.status);
+    report.outcome.set_status(status);
     report.outcome.message.clone_from(&message);
     report.outcome.summary = vec![
         ("checks".to_owned(), int(checks.len())),
@@ -2023,7 +2030,7 @@ fn report(checks: &[Check], text: bool) -> Report {
         ("skipped".to_owned(), int(skipped)),
     ];
     if failed > 0 {
-        report.outcome.exit_code = 1;
+        report.outcome.set_exit(ExitCode::Failure);
         report.outcome.failure = Some(Failure::new(CHECKS_FAILED, message));
     }
     if text {
@@ -2405,8 +2412,8 @@ mod tests {
             workspace.2.starts_with("No workspace at ./"),
             "{workspace:?}"
         );
-        assert_eq!(report.outcome.exit_code, 1);
-        assert_eq!(report.outcome.status, "failed");
+        assert_eq!(report.outcome.exit(), ExitCode::Failure);
+        assert_eq!(report.outcome.status(), Status::Failed);
         assert_eq!(report.outcome.failure.unwrap().code, CHECKS_FAILED);
         let codes: Vec<&str> = found.iter().map(|(code, ..)| code.as_str()).collect();
         assert_eq!(
@@ -2457,8 +2464,8 @@ mod tests {
                 .starts_with("4 template(s) missing")
         );
         assert_eq!(get("schemas_fresh")[0].0, "warn");
-        assert_eq!(report.outcome.status, "issues");
-        assert_eq!(report.outcome.exit_code, 0);
+        assert_eq!(report.outcome.status(), Status::Issues);
+        assert_eq!(report.outcome.exit(), ExitCode::Success);
     }
 
     #[test]
@@ -2524,7 +2531,12 @@ mod tests {
             version: "9.9.9",
         };
         let report = super::super::generate::phases(&["schemas".to_owned()], &cx, "9.9.9");
-        assert_eq!(report.outcome.exit_code, 0, "{}", report.outcome.message);
+        assert_eq!(
+            report.outcome.exit(),
+            ExitCode::Success,
+            "{}",
+            report.outcome.message
+        );
         dir
     }
 

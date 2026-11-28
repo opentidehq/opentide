@@ -10,9 +10,10 @@ use opentide_workspace::lint::{Changed, LintCheck, LintOptions, NO_COMMITS_ADVIC
 use opentide_workspace::{FileSystem as _, OsFs};
 
 use super::findings::{self, diagnostic};
+use super::result::ExitCode;
 use super::{Block, Report, Terminal, placement};
 use crate::env::Env;
-use crate::envelope::{Failure, NextAction, USAGE_EXIT_CODE};
+use crate::envelope::{Failure, NextAction};
 use crate::json::Json;
 use crate::queries::EngineLintQueries;
 use crate::render::diagnostic::{Diagnostic, SourceFiles};
@@ -125,7 +126,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
         args.output.is_some(),
         terminal.mode == crate::mode::Mode::Json,
     ) {
-        return Report::failed(COMMAND, USAGE_EXIT_CODE, failure);
+        return Report::failed(COMMAND, ExitCode::Usage.code(), failure);
     }
     let (_, root_options) = placement(cx.repo, cx.env, cx.cwd);
     let ws = match super::open_for(COMMAND, root_options) {
@@ -138,7 +139,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
                 failure.code == super::CONFIG_PARSE
                     && failure.message.contains("configurations/lint.toml")
             }) {
-                report.outcome.exit_code = USAGE_EXIT_CODE;
+                report.outcome.set_exit(ExitCode::Usage);
             }
             return *report;
         }

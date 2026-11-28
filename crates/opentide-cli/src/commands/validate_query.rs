@@ -19,7 +19,7 @@ use opentide_workspace::validate::QueriesMode;
 use opentide_workspace::{FileSystem as _, OsFs, Workspace};
 
 use super::findings;
-use super::result::{CommandResult, ExitCode, FailureDetail};
+use super::result::{CommandResult, ExitCode, FailureDetail, Status};
 use super::{Block, ISSUES_FOUND, Report, Terminal, placement};
 use crate::env::Env;
 use crate::envelope::{Failure, NextAction, USAGE_EXIT_CODE, code};
@@ -1092,7 +1092,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
         data.push(("queries_validated".into(), Json::from(0usize)));
         scoped(&mut data);
         let mut report = Report::completed(COMMAND, data);
-        report.outcome.status = "skipped".into();
+        report.outcome.set_status(Status::Skipped);
         report.outcome.message = message;
         report.outcome.summary = vec![
             ("queries".into(), Json::from(0usize)),
@@ -1210,7 +1210,11 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     ));
     scoped(&mut data);
     let mut report = Report::completed(COMMAND, data);
-    report.outcome.status = if failed { "failed" } else { "passed" }.into();
+    report.outcome.set_status(if failed {
+        Status::Failed
+    } else {
+        Status::Passed
+    });
     report.outcome.message = if failed {
         "Queries rejected offline".to_owned()
     } else {
@@ -1218,7 +1222,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     };
     report.outcome.summary = summary;
     if failed {
-        report.outcome.exit_code = 1;
+        report.outcome.set_exit(ExitCode::Failure);
         report.outcome.failure = Some(Failure::new(ISSUES_FOUND, report.outcome.message.clone()));
         let mut next = Vec::new();
         let first = diagnostics
@@ -1314,7 +1318,7 @@ mod tests {
     fn offline_options_that_choose_tenants_are_refused() {
         let failure = |args: &Args| {
             let report = refuse(args).unwrap();
-            assert_eq!(report.outcome.exit_code, 2);
+            assert_eq!(report.outcome.exit(), ExitCode::Usage);
             report.outcome.failure.unwrap()
         };
         let strategy = Args {
@@ -1368,10 +1372,10 @@ mod tests {
                 interrupted: &|| false,
             },
         );
+        assert_eq!(report.outcome.exit(), ExitCode::Usage);
         let failure = report.outcome.failure.unwrap();
         assert_eq!(failure.code, code::USAGE_ERROR);
         assert_eq!(failure.argument.as_deref(), Some("--strict"));
-        assert_eq!(report.outcome.exit_code, 2);
     }
 
     #[test]

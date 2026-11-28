@@ -25,6 +25,7 @@ use indexmap::IndexMap;
 use opentide_compile::git::GitError;
 
 use super::deploy_state::{Shard, StateError};
+use super::result::{ExitCode, Status};
 use super::{Report, counted};
 use crate::env::Env;
 use crate::envelope::Failure;
@@ -270,9 +271,9 @@ pub fn report(cwd: &Path, env: &Env, state_commit: &str) -> Report {
                 COMMAND,
                 [("state_commit".to_owned(), Json::str(state_commit))],
             );
-            "failed".clone_into(&mut report.outcome.status);
+            report.outcome.set_status(Status::Failed);
             report.outcome.message.clone_from(&message);
-            report.outcome.exit_code = 1;
+            report.outcome.set_exit(ExitCode::Failure);
             report.outcome.failure = Some(Failure::new(super::COMMAND_FAILED, message));
             report
         }
@@ -404,7 +405,7 @@ mod tests {
         assert_eq!(result.removed.len(), 1);
         assert!(!path.exists());
         let report = report(root, &no_env(), "HEAD~1");
-        assert_eq!(report.outcome.exit_code, 0);
+        assert_eq!(report.outcome.exit(), ExitCode::Success);
         assert!(
             report
                 .outcome
@@ -414,7 +415,7 @@ mod tests {
             report.outcome.message
         );
         let failed = super::report(root, &no_env(), "no-such-commit");
-        assert_eq!(failed.outcome.exit_code, 1);
-        assert_eq!(failed.outcome.status, "failed");
+        assert_eq!(failed.outcome.exit(), ExitCode::Failure);
+        assert_eq!(failed.outcome.status(), Status::Failed);
     }
 }

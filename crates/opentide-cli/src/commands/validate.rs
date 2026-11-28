@@ -14,9 +14,10 @@ use opentide_workspace::validate::{
 use opentide_workspace::{OsFs, root};
 
 use super::findings::{self, diagnostic};
+use super::result::{ExitCode, Status};
 use super::{Block, ISSUES_FOUND, Report, Terminal, placement};
 use crate::env::Env;
-use crate::envelope::{Failure, NextAction, USAGE_EXIT_CODE, code};
+use crate::envelope::{Failure, NextAction, code};
 use crate::json::{Json, Object};
 use crate::mode::Mode;
 use crate::queries::EngineQueries;
@@ -121,14 +122,14 @@ fn queries_flag(queries: QueriesMode) -> Option<&'static str> {
 pub fn usage(message: impl Into<String>, argument: &str, failure_code: &str) -> Report {
     let mut failure = Failure::new(failure_code, message);
     failure.argument = Some(argument.to_owned());
-    Report::failed(COMMAND, USAGE_EXIT_CODE, failure)
+    Report::failed(COMMAND, ExitCode::Usage.code(), failure)
 }
 
 /// The usage errors the options make, before anything runs.
 pub fn refuse(args: &Args, mode: Mode) -> Option<Report> {
     let format = args.format;
     if let Some(failure) = check_report_options(format, args.output.is_some(), mode == Mode::Json) {
-        return Some(Report::failed(COMMAND, USAGE_EXIT_CODE, failure));
+        return Some(Report::failed(COMMAND, ExitCode::Usage.code(), failure));
     }
     if let Some(refusal) = opentide_workspace::validate::unknown_types(&args.selection.types) {
         return Some(Report::usage(
@@ -602,17 +603,16 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
         }
     }
     let exit_code = if strict_empty {
-        1
+        ExitCode::Failure.code()
     } else {
         validation.exit_code()
     };
     let mut report = Report::completed(COMMAND, data);
-    report.outcome.status = if failed || strict_empty {
-        "failed"
+    report.outcome.set_status(if failed || strict_empty {
+        Status::Failed
     } else {
-        "passed"
-    }
-    .into();
+        Status::Passed
+    });
     report.outcome.message.clone_from(&message);
     report.outcome.exit_code = exit_code;
     report.outcome.summary = summary_json.into_iter().collect();
@@ -819,7 +819,7 @@ mod tests {
         let report = refuse(&args, Mode::Json).unwrap();
         let failure = report.outcome.failure.clone().unwrap();
         assert_eq!(failure.code, USAGE_WATCH_NEEDS_TTY);
-        assert_eq!(report.outcome.exit_code, 2);
+        assert_eq!(report.outcome.exit(), ExitCode::Usage);
         assert_eq!(report.outcome.next_actions[0].command, "opentide validate");
         // Every mode a program reads refuses it; a person's modes run it.
         for mode in [Mode::Agent, Mode::Mcp] {
