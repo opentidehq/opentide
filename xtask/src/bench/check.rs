@@ -301,12 +301,10 @@ impl CommandBudget {
 
 /// Whether a waiver names the issue that closes it (`#123`).
 fn names_an_issue(waiver: &str) -> bool {
-    waiver.match_indices('#').any(|(at, _)| {
-        waiver[at + 1..]
-            .chars()
-            .next()
-            .is_some_and(|c| c.is_ascii_digit())
-    })
+    waiver
+        .split('#')
+        .skip(1)
+        .any(|after| after.chars().next().is_some_and(|c| c.is_ascii_digit()))
 }
 
 /// How one metric's absolute misses stand against its waiver ([`settle`]).
@@ -2438,6 +2436,8 @@ target_s = 0.03
         assert!(names_an_issue("UC-2.6 (#821) rebuilds it"));
         assert!(!names_an_issue("# 12"));
         assert!(!names_an_issue("C# rewrite"));
+        assert!(names_an_issue("é#😀 then #12é"));
+        assert!(!names_an_issue("é#😀 #é"));
     }
 
     #[test]

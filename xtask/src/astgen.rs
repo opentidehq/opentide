@@ -793,7 +793,7 @@ fn plural(name: &str) -> String {
             .nth(1)
             .is_some_and(|c| !"aeiou".contains(c));
     if consonant_y {
-        format!("{}ies", &name[..name.len() - 1])
+        format!("{}ies", name.strip_suffix('y').unwrap_or(name))
     } else if ["s", "x", "z", "ch", "sh"]
         .iter()
         .any(|e| name.ends_with(e))
@@ -801,5 +801,18 @@ fn plural(name: &str) -> String {
         format!("{name}es")
     } else {
         format!("{name}s")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn plurals_read_multi_byte_names() {
+        assert_eq!(plural("entry"), "entries");
+        assert_eq!(plural("éy"), "éies");
+        assert_eq!(plural("é😀"), "é😀s");
+        assert_eq!(plural("key"), "keys");
     }
 }
