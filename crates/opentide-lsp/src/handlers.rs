@@ -186,6 +186,22 @@ pub mod custom {
         pub frames: u64,
     }
 
+    /// Debug builds: answers once the field catalogs the warm-up thread
+    /// generates for the bundled configuration are ready (#2164). The
+    /// first request of a root after they arrive installs them
+    /// (`Sighting::First`), a new environment for every engine analysis
+    /// made before, which the next edit then runs again: a test that counts
+    /// engine analyses sends this before it opens anything, rather than
+    /// race the warm-up thread.
+    #[cfg(all(debug_assertions, not(fuzzing)))]
+    pub enum Catalogs {}
+    #[cfg(all(debug_assertions, not(fuzzing)))]
+    impl lsp_types::request::Request for Catalogs {
+        type Params = Option<Value>;
+        type Result = ();
+        const METHOD: &'static str = "opentide/__catalogs";
+    }
+
     /// Debug builds: how many analyses ran, and what the roots' workspaces
     /// read and parsed, for the cache and invalidation tests.
     #[cfg(all(debug_assertions, not(fuzzing)))]
@@ -383,6 +399,7 @@ pub(crate) fn request(session: &mut Session, request: Request) -> Response {
         .on::<custom::Panic>(|_, _| panic!("opentide/__panic was requested"))
         .on::<custom::Stats>(|s, _| debug_stats(s))
         .on::<custom::Hold>(|_, _| ())
+        .on::<custom::Catalogs>(|_, _| wait_for_catalogs())
         .on::<custom::Sleep>(|_, p| {
             let wait = std::time::Duration::from_millis(p.ms);
             match p.until {
@@ -524,6 +541,16 @@ fn debug_stats(s: &Session) -> Value {
             "configResolutions": loading.config_resolutions,
         },
     })
+}
+
+/// `opentide/__catalogs`: generating the bundled configuration's catalogs
+/// while the warm-up thread is at it waits for that thread's run
+/// (`OnceLock::get_or_init`). The WebAssembly builds have no warm-up
+/// thread: they keep the engine's own.
+#[cfg(all(debug_assertions, not(fuzzing)))]
+fn wait_for_catalogs() {
+    #[cfg(not(target_family = "wasm"))]
+    crate::models::default_catalog();
 }
 
 fn read_caps(caps: &lsp::ClientCapabilities, raw: &Value) -> crate::session::ClientCaps {
