@@ -1478,11 +1478,11 @@ mod index_tests {
 
     fn texts() -> Vec<String> {
         let mut out: Vec<String> = SAMPLES.iter().map(|s| (*s).to_owned()).collect();
-        out.extend(
-            SAMPLES
-                .iter()
-                .flat_map(|t| t.char_indices().step_by(2).map(|(i, _)| t[..i].to_owned())),
-        );
+        out.extend(SAMPLES.iter().flat_map(|t| {
+            t.char_indices()
+                .step_by(2)
+                .map(|(i, _)| t.get(..i).unwrap().to_owned())
+        }));
         out
     }
 

@@ -212,7 +212,7 @@ fn typed_path(before: &str) -> Option<Typed> {
         })
         .last()
         .map(|(i, _)| i)?;
-    let token = &before[start..];
+    let token = crate::cut(before, start, before.len());
     if !token.contains('.') {
         return None;
     }
@@ -341,7 +341,10 @@ pub fn completions(source: &str, offset: usize) -> Vec<CompletionItem> {
     }
     let mut seen = std::collections::BTreeSet::new();
     for word in source.split(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '$')) {
-        if word.len() > 1 && word.starts_with('$') && !is_keyword(&word[1..]) && seen.insert(word) {
+        let variable = word
+            .strip_prefix('$')
+            .is_some_and(|name| !name.is_empty() && !is_keyword(name));
+        if variable && seen.insert(word) {
             items.push(CompletionItem::new(word, "variable"));
         }
     }
@@ -416,7 +419,11 @@ pub fn signature_help(source: &str, offset: usize) -> Option<SignatureHelp> {
             b'(' if depth > 0 => depth -= 1,
             b'(' => break,
             b',' if depth == 0 => commas += 1,
-            b'\n' if depth == 0 && i + 1 < offset && source[i + 1..offset].trim().is_empty() => {}
+            // `i` is a `\n` byte and `offset` a char boundary.
+            b'\n'
+                if depth == 0
+                    && i + 1 < offset
+                    && crate::cut(source, i + 1, offset).trim().is_empty() => {}
             _ => {}
         }
         if i == 0 {
@@ -426,14 +433,15 @@ pub fn signature_help(source: &str, offset: usize) -> Option<SignatureHelp> {
     if bytes.get(i) != Some(&b'(') {
         return None;
     }
-    let head = source[..i].trim_end();
+    // `i` is the `(` byte.
+    let head = crate::cut(source, 0, i).trim_end();
     let name_start = head
         .char_indices()
         .rev()
         .take_while(|(_, c)| c.is_ascii_alphanumeric() || *c == '_' || *c == '.')
         .last()
         .map(|(j, _)| j)?;
-    let name = &head[name_start..];
+    let name = crate::cut(head, name_start, head.len());
     let function = Functions::cached().get(name)?;
     let parameters: Vec<ParameterInformation> = function
         .parameters()
@@ -469,7 +477,12 @@ mod tests {
         let chain = vec!["$e.principal.hostname"; opentide_parse::TREE_BUDGET - 50].join(" = ");
         let source = format!("rule r {{\n events:\n  {chain}\n condition:\n  $e\n}}\n");
         let deepest = source.find("hostname").unwrap_or(0);
-        let middle = source.len() / 2 + source[source.len() / 2..].find("hostname").unwrap_or(0);
+        let middle = source.len() / 2
+            + source
+                .get(source.len() / 2..)
+                .unwrap()
+                .find("hostname")
+                .unwrap_or(0);
         let hovers = std::thread::Builder::new()
             .stack_size(1 << 20)
             .spawn(move || {

@@ -70,11 +70,16 @@ impl Function {
 
     /// The parameter names of its signature, for signature help.
     pub fn parameters(&self) -> Vec<String> {
-        let Some(open) = self.signature.find('(') else {
+        let Some((head, rest)) = self.signature.split_once('(') else {
             return Vec::new();
         };
-        let close = self.signature.rfind(')').unwrap_or(self.signature.len());
-        self.signature[open + 1..close.max(open + 1)]
+        // Up to the last `)`, which must come after the `(`.
+        let inside = match rest.rsplit_once(')') {
+            Some((inside, _)) => inside,
+            None if head.contains(')') => "",
+            None => rest,
+        };
+        inside
             .split(',')
             .map(|p| {
                 p.trim()
@@ -466,5 +471,19 @@ mod tests {
         );
         // Struct keys are the log's.
         assert!(udm.resolve(&path("additional.fields.anything")).free);
+    }
+
+    #[test]
+    fn parameters_read_multi_byte_signatures() {
+        let mut function = Functions::cached().all().next().unwrap().clone();
+        let mut parameters = |signature: &str| {
+            function.signature = signature.to_owned();
+            function.parameters()
+        };
+        assert_eq!(parameters("f(é, [😀])"), ["é", "😀"]);
+        assert_eq!(parameters("f(é"), ["é"]);
+        assert!(parameters(")é(").is_empty());
+        assert!(parameters("é()").is_empty());
+        assert!(parameters("é").is_empty());
     }
 }

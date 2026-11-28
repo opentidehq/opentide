@@ -60,9 +60,10 @@ pub(crate) const DAY: u64 = 24 * 60;
 
 /// A duration's minutes, and its unit.
 pub(crate) fn duration(text: &str) -> Option<(u64, &str)> {
-    let digits = text.chars().take_while(char::is_ascii_digit).count();
-    let amount: u64 = text[..digits].parse().ok()?;
-    let unit = &text[digits..];
+    // ASCII digits: as many bytes as characters.
+    let digits = text.bytes().take_while(u8::is_ascii_digit).count();
+    let (amount, unit) = text.split_at_checked(digits)?;
+    let amount: u64 = amount.parse().ok()?;
     let per = match unit {
         "s" => return Some((amount / 60, unit)),
         "m" => 1,
@@ -95,8 +96,10 @@ pub(crate) fn closest<'a>(
 }
 
 /// An RE2 pattern as Rust's `regex-syntax` reads it: a `{` that does not
-/// start a repetition is a literal in RE2 and must be escaped here.
+/// start a repetition is a literal in RE2 and must be escaped here. `i` steps
+/// a whole character, or ASCII bytes, at a time: it stays on a char boundary.
 fn as_rust_pattern(pattern: &str) -> String {
+    use crate::cut;
     let bytes = pattern.as_bytes();
     let mut out = String::with_capacity(pattern.len() + 4);
     let mut i = 0;
@@ -113,7 +116,7 @@ fn as_rust_pattern(pattern: &str) -> String {
                 .take_while(|b| (b'0'..=b'7').contains(b))
                 .count();
             if octal > 0 && (next == b'0' || octal > 1) {
-                let digits = &pattern[i + 1..i + 1 + octal];
+                let digits = cut(pattern, i + 1, i + 1 + octal);
                 let value = u32::from_str_radix(digits, 8).unwrap_or(0);
                 out.push_str(&format!("\\x{{{value:x}}}"));
                 i += 1 + octal;
@@ -121,9 +124,9 @@ fn as_rust_pattern(pattern: &str) -> String {
             }
             // RE2 `\Q…\E` quotes a literal run (to `\E` or the end).
             if next == b'Q' {
-                let rest = &pattern[i + 2..];
-                let (quoted, consumed) = match rest.find("\\E") {
-                    Some(end) => (&rest[..end], end + 2),
+                let rest = cut(pattern, i + 2, pattern.len());
+                let (quoted, consumed) = match rest.split_once("\\E") {
+                    Some((quoted, _)) => (quoted, quoted.len() + 2),
                     None => (rest, rest.len()),
                 };
                 out.push_str(&regex_syntax::escape(quoted));
@@ -140,7 +143,7 @@ fn as_rust_pattern(pattern: &str) -> String {
             if next == b'/' {
                 out.push('/');
             } else {
-                out.push_str(&pattern[i..i + 2 + utf8_extra(bytes[i + 1])]);
+                out.push_str(cut(pattern, i, i + 2 + utf8_extra(bytes[i + 1])));
                 i += utf8_extra(bytes[i + 1]);
             }
             i += 2;
@@ -151,8 +154,8 @@ fn as_rust_pattern(pattern: &str) -> String {
         } else if c == b']' {
             class = false;
         } else if c == b'{' && !class {
-            let rest = &pattern[i..];
-            let repetition = rest[1..].split_once('}').is_some_and(|(inside, _)| {
+            let rest = cut(pattern, i + 1, pattern.len());
+            let repetition = rest.split_once('}').is_some_and(|(inside, _)| {
                 let (lo, hi) = inside.split_once(',').unwrap_or((inside, "0"));
                 !lo.is_empty()
                     && lo.bytes().all(|b| b.is_ascii_digit())
@@ -165,7 +168,7 @@ fn as_rust_pattern(pattern: &str) -> String {
             }
         }
         let len = 1 + utf8_extra(c);
-        out.push_str(&pattern[i..i + len]);
+        out.push_str(cut(pattern, i, i + len));
         i += len;
     }
     out
@@ -203,13 +206,9 @@ pub(crate) fn leading_wildcard(pattern: &str) -> bool {
     let mut p = pattern;
     // Inline flags first: `(?i).*x`.
     while let Some(rest) = p.strip_prefix("(?") {
-        match rest.find(')') {
-            Some(end)
-                if rest[..end]
-                    .chars()
-                    .all(|c| c.is_ascii_alphabetic() || c == '-') =>
-            {
-                p = &rest[end + 1..];
+        match rest.split_once(')') {
+            Some((flags, after)) if flags.chars().all(|c| c.is_ascii_alphabetic() || c == '-') => {
+                p = after;
             }
             _ => break,
         }
@@ -242,6 +241,27 @@ mod tests {
         assert_eq!(closest("ab", ["ad", "ac"].into_iter()), Some("ac"));
         // Too far: nothing.
         assert_eq!(closest("hostname", names.into_iter()), None);
+    }
+
+    #[test]
+    fn helpers_read_multi_byte_text() {
+        assert_eq!(duration("5é😀"), Some((0, "é😀")));
+        assert_eq!(duration("é"), None);
+        assert_eq!(duration("2h"), Some((120, "h")));
+        assert_eq!(as_rust_pattern("é{😀}"), r"é\{😀}");
+        assert_eq!(as_rust_pattern("é{2,3}😀"), "é{2,3}😀");
+        assert_eq!(as_rust_pattern(r"\é\😀\/"), r"\é\😀/");
+        assert_eq!(as_rust_pattern(r"\Qé😀\Eé"), "é😀é");
+        assert_eq!(as_rust_pattern(r"\Qé😀"), "é😀");
+        assert_eq!(as_rust_pattern(r"\012é"), r"\x{a}é");
+        for pattern in ["é😀", r"(?é).*", r"\é\", r"\Q😀\", "{é", "é{😀,é}"] {
+            for (i, _) in pattern.char_indices() {
+                let _ = regex_problem(pattern.get(i..).unwrap());
+                let _ = leading_wildcard(pattern.get(i..).unwrap());
+            }
+        }
+        assert!(leading_wildcard("(?i).*é"));
+        assert!(!leading_wildcard("(?é).*"));
     }
 
     #[test]
