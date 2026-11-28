@@ -338,7 +338,7 @@ fn the_handshake_names_the_server_its_version_and_workflow() {
         names.push(tool["name"].as_str().unwrap());
     }
     names.sort_unstable();
-    let expected = "coverage deploy_rule deployment_status explain get_chaining run_query \
+    let expected = "coverage deploy_rule deployment_status explain get_chaining graph run_query \
                     search validate_query validate_rule validation_report";
     assert_eq!(names, expected.split(' ').collect::<Vec<_>>());
     client.close();
