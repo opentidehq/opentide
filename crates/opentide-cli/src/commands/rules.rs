@@ -61,7 +61,7 @@ pub fn run(
     };
     let count = findings.rules.len();
     let span = window_text(older_than);
-    let mut data: Vec<(String, Json)> = vec![
+    let mut data = Object::from([
         ("evaluated_at".into(), Json::str(evaluated_at(now))),
         ("window".into(), Json::str(older_than.trim())),
         (
@@ -69,10 +69,10 @@ pub fn run(
             Json::Int(i64::try_from(count).unwrap_or(i64::MAX)),
         ),
         ("rules".into(), json(&findings.rules)),
-    ];
+    ]);
     let mut warnings = Vec::new();
     if !findings.unreadable.is_empty() {
-        data.push((
+        data.insert(
             "unreadable".into(),
             Json::Object(
                 findings
@@ -81,7 +81,7 @@ pub fn run(
                     .map(|(path, reason)| (path.clone(), Json::str(reason)))
                     .collect(),
             ),
-        ));
+        );
         warnings = findings
             .unreadable
             .iter()
@@ -91,7 +91,7 @@ pub fn run(
             .collect();
     }
     let mut report = Report::completed(COMMAND, data);
-    report.outcome.summary = Object::from_iter([(
+    report.outcome.summary = Object::from([(
         "unreviewed".into(),
         Json::Int(i64::try_from(count).unwrap_or(i64::MAX)),
     )]);

@@ -196,8 +196,8 @@ fn failure_text(error: &ConnectorError) -> String {
 
 fn finished(
     command: &str,
-    data: Vec<(String, Json)>,
-    summary: Vec<(String, Json)>,
+    data: Object,
+    summary: Object,
     failed: Option<String>,
     message: String,
 ) -> Report {
@@ -207,9 +207,9 @@ fn finished(
             command: command.to_owned(),
             status: Status::Failed,
             message: first.clone(),
-            data: Object::from_iter(data),
+            data,
             exit_code: ExitCode::Failure,
-            summary: Object::from_iter(summary),
+            summary,
             next_actions: Vec::new(),
             failure: Some(Failure::new(super::COMMAND_FAILED, first)),
         },
@@ -217,9 +217,9 @@ fn finished(
             command: command.to_owned(),
             status: Status::Completed,
             message,
-            data: Object::from_iter(data),
+            data,
             exit_code: ExitCode::Success,
-            summary: Object::from_iter(summary),
+            summary,
             next_actions: Vec::new(),
             failure: None,
         },
@@ -255,7 +255,7 @@ pub fn validate_live(
                 format!("query validation not supported for {platform}"),
             ),
         );
-        report.outcome.data = Object::from_iter([
+        report.outcome.data = Object::from([
             ("platform".into(), Json::str(platform)),
             ("valid".into(), Json::Null),
             ("supported".into(), Json::Bool(false)),
@@ -343,16 +343,16 @@ pub fn validate_live(
             ]));
         }
     }
-    let data = vec![
+    let data = Object::from([
         ("platform".to_owned(), Json::str(platform)),
         ("supported".to_owned(), Json::Bool(true)),
         ("valid".to_owned(), Json::Bool(failures.is_empty())),
         ("results".to_owned(), Json::Array(results)),
-    ];
-    let summary = vec![
+    ]);
+    let summary = Object::from([
         ("checked".to_owned(), Json::from(checked)),
         ("failed".to_owned(), Json::from(failures.len())),
-    ];
+    ]);
     let failed = failures.first().map(|first| {
         format!(
             "{} of {} live checks failed on {platform}: {first}",

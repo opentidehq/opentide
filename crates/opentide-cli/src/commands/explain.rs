@@ -91,7 +91,7 @@ fn list(terminal: &Terminal) -> Report {
     );
     let mut report = Report::completed("explain", vec![("codes".into(), codes)]);
     report.outcome.message = format!("{} diagnostic codes", pages.len());
-    report.outcome.summary = Object::from_iter([("codes".into(), Json::from(pages.len()))]);
+    report.outcome.summary = Object::from([("codes".into(), Json::from(pages.len()))]);
     if terminal.text() {
         report.body.push(Block::Raw(index_text(&pages, terminal)));
     }

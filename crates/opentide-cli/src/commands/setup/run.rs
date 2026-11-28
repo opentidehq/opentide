@@ -894,7 +894,7 @@ fn plan_report(
         count("create"),
         count("merge")
     );
-    report.outcome.summary = Object::from_iter([
+    report.outcome.summary = Object::from([
         ("create".into(), Json::from(count("create"))),
         ("merge".into(), Json::from(count("merge"))),
         ("skip".into(), Json::from(count("skip"))),

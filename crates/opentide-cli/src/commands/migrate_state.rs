@@ -742,7 +742,7 @@ fn outcome(
         ("rules_edited".to_owned(), int(rules)),
     ];
     let mut report = Report::completed(COMMAND, Vec::new());
-    report.outcome.summary = Object::from_iter([
+    report.outcome.summary = Object::from([
         ("ids".to_owned(), int(ids)),
         ("rules".to_owned(), int(rules)),
         ("shards".to_owned(), int(shards_written)),
@@ -789,7 +789,7 @@ fn refused(rule: &deploy_state::IgnoreRule) -> Report {
         deploy_state::ignored_message(rule)
     );
     let mut report = Report::completed(COMMAND, Vec::new());
-    report.outcome.data = Object::from_iter([
+    report.outcome.data = Object::from([
         ("code".to_owned(), Json::str("deployment_state_ignored")),
         (
             "ignore".to_owned(),

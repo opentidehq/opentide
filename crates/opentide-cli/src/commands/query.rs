@@ -208,15 +208,15 @@ fn usage_with(
     failure.argument = Some(argument.to_owned());
     failure.suggestion = suggestion;
     let mut outcome = Outcome::failed(COMMAND, ExitCode::Usage, failure);
-    let mut data = vec![("platform".to_owned(), Json::str(platform))];
+    let mut data = Object::from([("platform".to_owned(), Json::str(platform))]);
     if !choices.is_empty() {
-        data.push((
+        data.insert(
             "choices".to_owned(),
             Json::Array(choices.iter().map(Json::str).collect()),
-        ));
+        );
     }
     // The envelope writes `error` after the message.
-    outcome.data = Object::from_iter(data);
+    outcome.data = data;
     let mut report = Report::failed(COMMAND, ExitCode::Usage, Failure::new("", ""));
     report.outcome = outcome;
     report
@@ -369,20 +369,20 @@ impl TenantResult {
 
     /// The entry of the payload's `results` (`TenantOutcome.to_dict`).
     fn to_json(&self) -> Json {
-        let mut members: Vec<(String, Json)> = vec![
+        let mut members = Object::from([
             ("tenant".into(), Json::str(&self.tenant)),
             (
                 "status".into(),
                 Json::str(if self.ok() { "ok" } else { "failed" }),
             ),
-        ];
+        ]);
         if let Some(label) = &self.label {
-            members.push(("label".into(), Json::str(label)));
+            members.insert("label".into(), Json::str(label));
         }
         let mut warnings: Vec<Json> = self.warnings.iter().map(Json::str).collect();
         if let Some(result) = &self.result {
             warnings.extend(result.warnings.iter().map(Json::str));
-            members.push((
+            members.insert(
                 "columns".into(),
                 Json::Array(
                     result
@@ -396,29 +396,29 @@ impl TenantResult {
                         })
                         .collect(),
                 ),
-            ));
-            members.push(("rows".into(), Json::Array(rows(result))));
-            members.push(("row_count".into(), Json::from(result.rows.len())));
-            members.push(("truncated".into(), Json::Bool(result.truncated)));
-            members.push(("partial".into(), Json::Bool(result.partial)));
+            );
+            members.insert("rows".into(), Json::Array(rows(result)));
+            members.insert("row_count".into(), Json::from(result.rows.len()));
+            members.insert("truncated".into(), Json::Bool(result.truncated));
+            members.insert("partial".into(), Json::Bool(result.partial));
             if let Some(language) = &result.language {
-                members.push(("language".into(), Json::str(language)));
+                members.insert("language".into(), Json::str(language));
             }
             if let Some(sent) = &result.sent {
-                members.push(("sent".into(), Json::str(sent)));
+                members.insert("sent".into(), Json::str(sent));
             }
             if let Some(id) = &result.vendor_query_id {
-                members.push(("vendor_query_id".into(), Json::str(id)));
+                members.insert("vendor_query_id".into(), Json::str(id));
             }
         } else {
-            members.push(("error".into(), Json::opt_str(self.error.clone())));
+            members.insert("error".into(), Json::opt_str(self.error.clone()));
             if let Some(detail) = self.detail.as_ref().filter(|detail| !detail.is_empty()) {
-                members.push(("detail".into(), Json::str(detail)));
+                members.insert("detail".into(), Json::str(detail));
             }
         }
-        members.push(("warnings".into(), Json::Array(warnings)));
-        members.push(("elapsed_ms".into(), Json::Int(self.elapsed_ms)));
-        Json::object(members)
+        members.insert("warnings".into(), Json::Array(warnings));
+        members.insert("elapsed_ms".into(), Json::Int(self.elapsed_ms));
+        Json::Object(members)
     }
 }
 
@@ -911,7 +911,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     // `doctor` do, not as a `--tenant` that names nothing.
     if let Some(mut refused) = super::no_workspace(COMMAND, cx.repo, cx.env, cx.cwd) {
         // Every `query` document names its platform, as `usage_with` does.
-        refused.outcome.data = Object::from_iter([("platform".to_owned(), Json::str(platform))]);
+        refused.outcome.data = Object::from([("platform".to_owned(), Json::str(platform))]);
         return refused;
     }
     let (available, config_path) = configured(cx, platform);
@@ -1045,7 +1045,7 @@ fn payload(
         "{count} {platform} tenant{}",
         if count == 1 { "" } else { "s" }
     );
-    let mut data: Vec<(String, Json)> = vec![
+    let mut data = Object::from([
         ("platform".into(), Json::str(platform)),
         (
             "source".into(),
@@ -1089,12 +1089,12 @@ fn payload(
                 ]),
             ),
         },
-    ];
-    let summary = vec![
+    ]);
+    let summary = Object::from([
         ("tenants".to_owned(), Json::from(count)),
         ("rows".to_owned(), Json::from(rows)),
         ("failed".to_owned(), Json::from(failed.len())),
-    ];
+    ]);
     let outcome = if let Some(first) = failed.first() {
         let message = format!(
             "{} of {} queries failed on {place}: {}: {}",
@@ -1104,15 +1104,15 @@ fn payload(
             first.error.as_deref().unwrap_or("unknown error")
         );
         if let Some(detail) = first.detail.as_ref().filter(|detail| !detail.is_empty()) {
-            data.push(("detail".into(), Json::str(detail)));
+            data.insert("detail".into(), Json::str(detail));
         }
         Outcome {
             command: COMMAND.into(),
             status: Status::Failed,
             message: message.clone(),
-            data: Object::from_iter(data),
+            data,
             exit_code: ExitCode::Failure,
-            summary: Object::from_iter(summary),
+            summary,
             next_actions: Vec::new(),
             failure: Some(Failure::new(super::COMMAND_FAILED, message)),
         }
@@ -1134,9 +1134,9 @@ fn payload(
             command: COMMAND.into(),
             status: Status::Completed,
             message,
-            data: Object::from_iter(data),
+            data,
             exit_code: ExitCode::Success,
-            summary: Object::from_iter(summary),
+            summary,
             next_actions: Vec::new(),
             failure: None,
         }
@@ -1172,17 +1172,14 @@ fn compact(value: &Json) -> String {
 }
 
 /// A row with the tenant (and label) in front.
-fn labelled(outcome: &TenantResult, row: &Json) -> Vec<(String, Json)> {
-    let mut members = vec![("_tenant".to_owned(), Json::str(&outcome.tenant))];
+fn labelled(outcome: &TenantResult, row: &Json) -> Object {
+    let mut members = Object::from([("_tenant".to_owned(), Json::str(&outcome.tenant))]);
     if let Some(label) = outcome.label.as_ref().filter(|label| !label.is_empty()) {
-        members.push(("_label".to_owned(), Json::str(label)));
+        members.insert("_label".to_owned(), Json::str(label));
     }
     if let Json::Object(fields) = row {
         for (key, value) in fields {
-            match members.iter_mut().find(|(name, _)| name == key) {
-                Some(slot) => slot.1 = value.clone(),
-                None => members.push((key.clone(), value.clone())),
-            }
+            members.insert(key.clone(), value.clone());
         }
     }
     members
@@ -1220,7 +1217,7 @@ fn body(
             for outcome in outcomes {
                 if let Some(result) = &outcome.result {
                     for row in rows(result) {
-                        text.push_str(&compact(&Json::object(labelled(outcome, &row))));
+                        text.push_str(&compact(&Json::Object(labelled(outcome, &row))));
                         text.push('\n');
                     }
                 }
@@ -1262,14 +1259,7 @@ fn body(
                         let values = labelled(outcome, &row);
                         let line: Vec<String> = header
                             .iter()
-                            .map(|name| {
-                                csv_field(&csv_value(
-                                    values
-                                        .iter()
-                                        .find(|(key, _)| key == name)
-                                        .map(|(_, value)| value),
-                                ))
-                            })
+                            .map(|name| csv_field(&csv_value(values.get(name))))
                             .collect();
                         text.push_str(&line.join(","));
                         text.push('\n');
@@ -1514,11 +1504,11 @@ mod tests {
         let row = Json::parse(r#"{"a": "x  y", "b": [1, "é"], "c": null, "d": 1.5}"#).unwrap();
         let mut lab = failed("lab", "e", None);
         assert_eq!(
-            compact(&Json::object(labelled(&lab, &row))),
+            compact(&Json::Object(labelled(&lab, &row))),
             r#"{"_tenant":"lab","a":"x  y","b":[1,"é"],"c":null,"d":1.5}"#
         );
         lab.label = Some("sub-query 1".into());
-        let labelled_row = compact(&Json::object(labelled(&lab, &row)));
+        let labelled_row = compact(&Json::Object(labelled(&lab, &row)));
         assert!(
             labelled_row.starts_with(r#"{"_tenant":"lab","_label":"sub-query 1","#),
             "{labelled_row}"
@@ -2057,7 +2047,7 @@ mod tests {
         let choices = vec!["esql".to_owned(), "eql".to_owned()];
         let report = usage_with("elastic", "no", "--language", Some("eql".into()), &choices);
         assert_eq!(
-            compact_of(&Json::object(report.outcome.data.clone())),
+            compact_of(&Json::Object(report.outcome.data.clone())),
             r#"{"platform":"elastic","choices":["esql","eql"]}"#
         );
         let failure = report.outcome.failure.unwrap();
@@ -2066,7 +2056,7 @@ mod tests {
         assert_eq!(suggest("esq", &choices).as_deref(), Some("esql"));
         let refused = no_runner("sysdig");
         assert_eq!(
-            compact_of(&Json::object(refused.outcome.data.clone())),
+            compact_of(&Json::Object(refused.outcome.data.clone())),
             r#"{"platform":"sysdig","choices":["sentinel","microsoft_defender","splunk","sentinel_one","crowdstrike","harfanglab","carbon_black_cloud","elastic","graylog","exabeam","google_secops","datadog"]}"#
         );
         assert_eq!(refused.outcome.exit_code, ExitCode::Usage);

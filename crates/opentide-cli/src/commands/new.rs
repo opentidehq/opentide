@@ -770,7 +770,7 @@ pub fn run(args: &NewArgs, cx: &Context<'_>) -> Report {
         let run = super::generate::run_phases(&generated, &workspace, cx.cwd, cx.version, false);
         steps = run.steps;
         if let Some((phase, detail)) = run.failed {
-            return super::generate::phase_failed(&command, &phase, &detail, Vec::new(), steps);
+            return super::generate::phase_failed(&command, &phase, &detail, Object::new(), steps);
         }
         paths = artifacts(&workspace, &root, family);
         let still = missing(&paths);
@@ -1086,7 +1086,7 @@ pub fn run(args: &NewArgs, cx: &Context<'_>) -> Report {
             if count == 1 { "" } else { "s" }
         ));
     }
-    let mut data: Vec<(String, Json)> = vec![
+    let mut data = Object::from([
         ("path".into(), Json::str(&shown_path)),
         (
             "file_path".into(),
@@ -1111,7 +1111,7 @@ pub fn run(args: &NewArgs, cx: &Context<'_>) -> Report {
             "placeholders".into(),
             Json::Array(filled.placeholders.iter().map(Json::str).collect()),
         ),
-    ];
+    ]);
     let mut warnings: Vec<String> = Vec::new();
     if !in_catalogue {
         warnings.push(format!(
@@ -1141,20 +1141,20 @@ pub fn run(args: &NewArgs, cx: &Context<'_>) -> Report {
     }
     if count > 0 {
         // A note under the outcome line in the text modes.
-        data.push((
+        data.insert(
             "detail".into(),
             Json::str(format!(
                 "each ends in '{}'; opentide lint lists them",
                 scaffold::PLACEHOLDER_MARKER
             )),
-        ));
+        );
     }
     if !generated.is_empty() {
         // Not a warning: a step new took, and the checklist printed it.
-        data.push((
+        data.insert(
             "generated".into(),
             Json::Array(generated.iter().map(Json::str).collect()),
-        ));
+        );
     }
     for platform in &platforms {
         if !enabled.contains(platform) {
@@ -1193,7 +1193,7 @@ pub fn run(args: &NewArgs, cx: &Context<'_>) -> Report {
     }
     let mut report = Report::completed(&command, data);
     report.outcome.message = message;
-    report.outcome.summary = Object::from_iter([
+    report.outcome.summary = Object::from([
         ("created".into(), Json::Int(1)),
         (
             "placeholders".into(),

@@ -312,7 +312,7 @@ fn refused(
 ) -> Report {
     let failure = Failure::new(failure_code, message);
     let mut report = Report::failed(COMMAND, exit_code, failure);
-    report.outcome.data = Object::from_iter([
+    report.outcome.data = Object::from([
         (
             "platform".into(),
             Json::opt_str(platform.map(str::to_owned)),
@@ -400,7 +400,7 @@ pub fn unsupported(args: &Args) -> Option<Report> {
     let message = format!("query validation not supported for {platform}");
     let mut report = Report::error(COMMAND, message);
     // The envelope writes `error` after the message.
-    report.outcome.data = Object::from_iter([
+    report.outcome.data = Object::from([
         ("platform".to_owned(), Json::str(platform)),
         ("valid".to_owned(), Json::Null),
         ("supported".to_owned(), Json::Bool(false)),
@@ -774,7 +774,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
                     format!("query validation not supported for {name}"),
                 ),
             );
-            report.outcome.data = Object::from_iter([
+            report.outcome.data = Object::from([
                 ("platform".into(), Json::str(name)),
                 ("valid".into(), Json::Null),
                 ("supported".into(), Json::Bool(false)),
@@ -1058,20 +1058,20 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
             cannot_read.push(format!("{target}: {problem}"));
         }
     }
-    let base = || -> Vec<(String, Json)> {
-        vec![
+    let base = || -> Object {
+        Object::from([
             (
                 "platform".into(),
                 Json::opt_str(platform.map(str::to_owned)),
             ),
             ("mode".into(), Json::str("offline")),
             ("supported".into(), Json::Bool(true)),
-        ]
+        ])
     };
     if !cannot_read.is_empty() {
         let message = format!("Cannot check {}", cannot_read.join("; "));
         let mut report = Report::error(COMMAND, message);
-        report.outcome.data = Object::from_iter(base());
+        report.outcome.data = base();
         return report;
     }
     let progress = crate::render::progress::Progress::from_env(cx.env);
@@ -1084,9 +1084,9 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     } else {
         String::new()
     };
-    let scoped = |data: &mut Vec<(String, Json)>| {
+    let scoped = |data: &mut Object| {
         if let Some(label) = scope_label {
-            data.push(("scope".into(), Json::str(label)));
+            data.insert("scope".into(), Json::str(label));
         }
     };
     if checks.is_empty() && unreadable.is_empty() {
@@ -1098,12 +1098,12 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
         };
         let message = format!("No {place}rule has a {target}query the engine checks");
         let mut data = base();
-        data.push(("queries_validated".into(), Json::from(0usize)));
+        data.insert("queries_validated".into(), Json::from(0usize));
         scoped(&mut data);
         let mut report = Report::completed(COMMAND, data);
         report.outcome.status = Status::Skipped;
         report.outcome.message = message;
-        report.outcome.summary = Object::from_iter([
+        report.outcome.summary = Object::from([
             ("queries".into(), Json::from(0usize)),
             ("files".into(), Json::from(0usize)),
         ]);
@@ -1149,7 +1149,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
         .iter()
         .map(|check| check.file_path.as_path())
         .collect();
-    let summary = vec![
+    let summary = Object::from([
         ("queries".into(), Json::from(checks.len())),
         ("files".into(), Json::from(files.len())),
         ("errors".into(), Json::from(errors)),
@@ -1157,7 +1157,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
         ("notes".into(), Json::from(notes)),
         ("error_files".into(), Json::from(error_files)),
         ("warning_files".into(), Json::from(warning_files)),
-    ];
+    ]);
     let failed = errors > 0 || (args.strict && warning_count > 0);
     let count = checks.len();
     let checked = format!("{count} {}", if count == 1 { "query" } else { "queries" });
@@ -1177,12 +1177,12 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     platforms.sort_unstable();
     platforms.dedup();
     let mut data = base();
-    data.push((
+    data.insert(
         "platforms".into(),
         Json::Array(platforms.iter().map(|name| Json::str(*name)).collect()),
-    ));
-    data.push(("queries_validated".into(), Json::from(count)));
-    data.push((
+    );
+    data.insert("queries_validated".into(), Json::from(count));
+    data.insert(
         "queries".into(),
         Json::Array(
             checks
@@ -1208,15 +1208,15 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
                 })
                 .collect(),
         ),
-    ));
-    data.push((
+    );
+    data.insert(
         "diagnostics".into(),
         Json::Array(diagnostics.iter().map(diagnostic_json).collect()),
-    ));
-    data.push((
+    );
+    data.insert(
         "engine".into(),
         Json::object([("engine", Json::str(opentide_analysis::VERSION))]),
-    ));
+    );
     scoped(&mut data);
     let mut report = Report::completed(COMMAND, data);
     report.outcome.status = if failed {
@@ -1229,7 +1229,7 @@ pub fn run(args: &Args, cx: &Context<'_>) -> Report {
     } else {
         format!("{checked} valid")
     };
-    report.outcome.summary = Object::from_iter(summary);
+    report.outcome.summary = summary;
     if failed {
         report.outcome.exit_code = ExitCode::Failure;
         report.outcome.failure = Some(Failure::new(ISSUES_FOUND, report.outcome.message.clone()));
