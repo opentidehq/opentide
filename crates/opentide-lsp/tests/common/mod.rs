@@ -36,7 +36,13 @@ pub struct Lsp {
 
 impl Lsp {
     pub fn spawn() -> Self {
+        Self::spawn_with_env(&[])
+    }
+
+    /// [`spawn`](Self::spawn), with these environment variables set.
+    pub fn spawn_with_env(env: &[(&str, &std::ffi::OsStr)]) -> Self {
         let mut child = Command::new(bin())
+            .envs(env.iter().copied())
             .arg("--stdio")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
